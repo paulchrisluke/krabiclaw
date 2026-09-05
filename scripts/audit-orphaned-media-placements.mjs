@@ -4,7 +4,7 @@
 // itself. This audits every declared owner_type against its real owner table
 // and reports any orphaned rows — it should return zero across the board.
 
-import { execFileSync } from 'node:child_process'
+import { spawnYarn } from './utils/spawn-yarn.mjs'
 
 const OWNER_TABLES = {
   site: 'sites',
@@ -39,6 +39,15 @@ const targets = process.argv.slice(2)
 const selected = targets.length ? targets : ['local']
 let failed = false
 
+function runWrangler(args) {
+  const result = spawnYarn(args, { encoding: 'utf8' })
+  if (result.error) throw result.error
+  if (result.status !== 0) {
+    throw new Error((result.stderr || result.stdout || `Wrangler exited ${result.status}`).trim())
+  }
+  return result.stdout
+}
+
 for (const target of selected) {
   if (!['local', 'preview', 'staging', 'production'].includes(target)) {
     throw new Error(`Unsupported environment: ${target}`)
@@ -50,10 +59,10 @@ for (const target of selected) {
     args.push('--remote')
   }
 
-  const orphanRaw = execFileSync('npx', [...args, '--command', query, '--json'], { encoding: 'utf8' })
+  const orphanRaw = runWrangler([...args, '--command', query, '--json'])
   const orphanRows = JSON.parse(orphanRaw)[0]?.results ?? []
 
-  const unknownRaw = execFileSync('npx', [...args, '--command', unknownOwnerTypeQuery, '--json'], { encoding: 'utf8' })
+  const unknownRaw = runWrangler([...args, '--command', unknownOwnerTypeQuery, '--json'])
   const unknownRows = JSON.parse(unknownRaw)[0]?.results ?? []
 
   if (orphanRows.length === 0 && unknownRows.length === 0) {

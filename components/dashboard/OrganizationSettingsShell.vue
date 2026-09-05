@@ -4,9 +4,9 @@
     :ui="{ body: 'min-h-0 gap-0! overflow-hidden! p-0! sm:p-0!' }"
   >
     <template #header>
-      <UDashboardNavbar :title="detailTitle || 'Organization Settings'" :toggle="false">
+      <UDashboardNavbar title="Organization Settings" :toggle="false">
         <template #leading>
-          <DashboardNavbarLeading :to="backTo" :label="backLabel" />
+          <DashboardNavbarLeading :to="levelBackTo" label="Menu" />
         </template>
       </UDashboardNavbar>
     </template>
@@ -18,6 +18,8 @@
         :saving="saving"
         :save-disabled="saveDisabled"
         :wide-detail="wideDetail"
+        :detail-title="detailTitle"
+        :dismiss-to="orgSettingsPath"
         @cancel="closeDetail"
         @save="$emit('save')"
       >
@@ -35,7 +37,7 @@
 import EditorPaneShell from '~/components/dashboard/EditorPaneShell.vue'
 import EditorNavigationList from '~/components/dashboard/EditorNavigationList.vue'
 
-const props = defineProps<{
+defineProps<{
   detailTitle?: string
   showActions?: boolean
   saving?: boolean
@@ -51,12 +53,13 @@ const dashboard = useDashboardSite()
 if (!dashboard.state.value) await dashboard.refresh()
 
 const { settingsPath: orgSettingsPath, groups, activeItem } = useOrganizationSettingsNavigation()
-const { paths } = useDashboardSiteLinks()
+const { orgPaths } = useDashboardSiteLinks()
 
-// Up one level: out of a section back to the settings index, out of the index
-// back to the menu that opened it.
-const backTo = computed(() => props.detailTitle ? orgSettingsPath.value : `${paths.value.org}/menu`)
-const backLabel = computed(() => props.detailTitle ? 'Organization Settings' : 'Menu')
+// The navbar's back leaves settings for the menu that opened it. The open
+// section's own way out is the sheet's close control, which lands on the index
+// beside it — at `lg` that index is already on screen, so the navbar has no
+// reason to point at it.
+const levelBackTo = computed(() => `${orgPaths.value.org}/menu`)
 
 // Leaving a section resets the form. This used to hang off the back button's
 // click handler, which meant browser back left the previous section's edits in

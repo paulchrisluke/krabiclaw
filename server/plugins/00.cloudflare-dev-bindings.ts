@@ -26,7 +26,7 @@ export default definePlugin((nitroApp) => {
     request.runtime.cloudflare = {
       ...request.runtime.cloudflare,
       env: proxy.env,
-      context: proxy.ctx,
+      context: proxy.ctx as NonNullable<typeof request.runtime.cloudflare>['context'],
     }
     request.waitUntil = proxy.ctx.waitUntil.bind(proxy.ctx)
     ;(request as unknown as { cf: PlatformProxy['cf'] }).cf = proxy.cf

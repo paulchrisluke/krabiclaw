@@ -1,14 +1,13 @@
 import { execute, type DbClient } from '~/server/db'
 
 export type OrganizationEventType =
-  | 'contact.created' | 'post.created' | 'post.published'
+  | 'post.created' | 'post.published'
   | 'product.created' | 'product.updated' | 'product.deleted' | 'product.reordered'
-  | 'product.category_renamed' | 'product.category_deleted'
+  | 'product.category_created' | 'product.category_renamed' | 'product.category_deleted'
   | 'content.updated' | 'content.published' | 'media.uploaded' | 'media.deleted'
   | 'review.received' | 'review.replied'
-  | 'reservation.created' | 'reservation.confirmed' | 'reservation.cancelled'
   | 'location.created' | 'location.updated'
-  | 'experience.created' | 'experience.booking_received'
+  | 'experience.created'
   | 'work_request.created' | 'work_request.status_changed'
   | 'domain.connected' | 'domain.verified' | 'domain.failed'
   | 'member.invited' | 'member.role_changed' | 'member.removed' | 'member.access_scope_revoked'

@@ -1,10 +1,7 @@
 import { queryFirst } from '~/server/db'
-import { updateBookingStatusForSite } from '~/server/utils/experiences'
 import type {
   AdapterLoadContext,
   GuestThreadSourceAdapter,
-  OperationExecutionContext,
-  OperationExecutionResult,
   ThreadDetailSourceModel,
   ThreadSummaryProjection,
 } from '../types'
@@ -28,29 +25,8 @@ export interface ExperienceBookingSource {
   experience_title: string | null
 }
 
-export interface ExperienceBookingOpeningSnapshot {
-  schemaVersion: 1
-  submissionType: 'experience_booking'
-  submissionId: string
-  guestName: string
-  guestEmail: string
-  guestPhone: string | null
-  locationTitle: string | null
-  experienceTitle: string | null
-  bookingDate: string
-  timeSlot: string
-  partySize: number
-  notes: string | null
-  submittedAt: string
-}
-
 export type ExperienceBookingAction = 'confirm' | 'cancel'
 
-// updateBookingStatusForSite only supports pending/confirmed/cancelled — there is no
-// backend-supported "complete" transition for experience bookings through the canonical
-// operation path (that state is only reachable via the separate, out-of-scope
-// complete.post.ts route). This is "the equivalent supported source states" referenced
-// by issue #442 Locked Decision #7.
 const EXPERIENCE_BOOKING_TRANSITIONS: Record<string, ExperienceBookingAction[]> = {
   pending: ['confirm', 'cancel'],
   confirmed: ['cancel'],
@@ -58,16 +34,11 @@ const EXPERIENCE_BOOKING_TRANSITIONS: Record<string, ExperienceBookingAction[]> 
   cancelled: [],
 }
 
-const EXPERIENCE_BOOKING_ACTION_TARGET_STATUS: Record<ExperienceBookingAction, 'confirmed' | 'cancelled'> = {
-  confirm: 'confirmed',
-  cancel: 'cancelled',
-}
-
 function normalizePreview(text: string | null | undefined, maxLength = 160): string {
   return String(text ?? '').replace(/\s+/g, ' ').trim().slice(0, maxLength)
 }
 
-export const experienceBookingAdapter: GuestThreadSourceAdapter<ExperienceBookingSource, ExperienceBookingOpeningSnapshot, ExperienceBookingAction> = {
+export const experienceBookingAdapter: GuestThreadSourceAdapter<ExperienceBookingSource, ExperienceBookingAction> = {
   type: 'experience_booking',
 
   async loadSource(ctx: AdapterLoadContext, submissionId: string): Promise<ExperienceBookingSource | null> {
@@ -96,24 +67,6 @@ export const experienceBookingAdapter: GuestThreadSourceAdapter<ExperienceBookin
     `, [submissionId])
   },
 
-  createOpeningSnapshot(source: ExperienceBookingSource): ExperienceBookingOpeningSnapshot {
-    return {
-      schemaVersion: 1,
-      submissionType: 'experience_booking',
-      submissionId: source.id,
-      guestName: source.guest_name,
-      guestEmail: source.guest_email,
-      guestPhone: source.guest_phone,
-      locationTitle: source.location_title,
-      experienceTitle: source.experience_title,
-      bookingDate: source.booking_date,
-      timeSlot: source.time_slot,
-      partySize: source.party_size,
-      notes: source.notes,
-      submittedAt: source.created_at,
-    }
-  },
-
   summarize(source: ExperienceBookingSource): ThreadSummaryProjection {
     return {
       guestName: source.guest_name,
@@ -139,29 +92,6 @@ export const experienceBookingAdapter: GuestThreadSourceAdapter<ExperienceBookin
 
   listAvailableActions(source: ExperienceBookingSource): ExperienceBookingAction[] {
     return EXPERIENCE_BOOKING_TRANSITIONS[source.status] ?? []
-  },
-
-  async executeAction(ctx: OperationExecutionContext, source: ExperienceBookingSource, action: ExperienceBookingAction): Promise<OperationExecutionResult> {
-    const allowed = EXPERIENCE_BOOKING_TRANSITIONS[source.status] ?? []
-    if (!allowed.includes(action)) {
-      return { ok: false, reason: 'invalid_transition', message: `Cannot ${action} a booking in status "${source.status}"` }
-    }
-
-    const targetStatus = EXPERIENCE_BOOKING_ACTION_TARGET_STATUS[action]
-    const updated = await updateBookingStatusForSite(ctx.db, source.site_id, source.id, targetStatus)
-    if (!updated) {
-      return { ok: false, reason: 'not_found', message: 'Booking not found' }
-    }
-
-    const requiresNotification = action === 'confirm' || action === 'cancel'
-
-    return {
-      ok: true,
-      beforeStatus: source.status,
-      afterStatus: targetStatus,
-      requiresNotification,
-      notifyChannel: requiresNotification ? 'email' : null,
-    }
   },
 
   buildCurrentDetail(source: ExperienceBookingSource): ThreadDetailSourceModel {

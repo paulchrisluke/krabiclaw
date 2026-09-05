@@ -275,7 +275,7 @@ const notificationError = ref<string | null>(null)
 const showDomainStep = computed(() => props.plan === 'growth')
 const showSocialStep = computed(() => props.plan === 'growth')
 const domainsSiteSlug = computed(() => props.siteSlug || props.siteId)
-const domainsPath = computed(() => `/dashboard/${props.orgSlug}/sites/${domainsSiteSlug.value}/domains`)
+const domainsPath = computed(() => `/dashboard/${props.orgSlug}/sites/${domainsSiteSlug.value}/settings/domains`)
 
 const connectingFacebook = ref(false)
 const facebookConnected = ref(false)

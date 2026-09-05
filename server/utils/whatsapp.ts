@@ -56,6 +56,7 @@ export type WhatsAppTemplate =
   | 'guest_thread_reply_whatsapp'
   | 'new_reservation'
   | 'reservation_cancelled'
+  | 'booking_change_update'
   | 'domain_update'
   | 'dashboard_access_invitation'
   | 'otp_code'
@@ -165,6 +166,25 @@ const TEMPLATES: Record<
   WhatsAppTemplate,
   (_vars: Record<string, string>) => { name: string; language: { code: string }; components: TemplateComponent[] }
 > = {
+  booking_change_update: (v) => ({
+    name: 'booking_change_update',
+    language: { code: 'en_US' },
+    components: [
+      { type: 'body', parameters: [
+        { type: 'text', text: cleanTemplateText(v.booking_type, 'reservation') },
+        { type: 'text', text: cleanTemplateText(v.guest_name, 'Guest') },
+        { type: 'text', text: cleanTemplateText(v.status, 'requested') },
+        { type: 'text', text: cleanTemplateText(v.location, 'Location') },
+        { type: 'text', text: cleanTemplateText(v.date, 'Date') },
+        { type: 'text', text: cleanTemplateText(v.time, 'Time') },
+        { type: 'text', text: cleanTemplateText(v.guests, '1') },
+        { type: 'text', text: cleanTemplateText(v.message, 'Open the dashboard for details.', 250) },
+      ] },
+      { type: 'button', sub_type: 'url', index: '0', parameters: [
+        { type: 'text', text: cleanTemplateText(v.reply_path, '', 300) },
+      ] },
+    ],
+  }),
   dashboard_access_invitation: (v) => ({
     name: 'dashboard_access_invitation',
     language: { code: 'en_US' },
@@ -362,16 +382,14 @@ export function buildWhatsAppTemplatePayload(template: WhatsAppTemplate, vars: R
   return TEMPLATES[template](normalizeTemplateVars(vars))
 }
 
-export interface SendWhatsAppResult {
-  success: boolean
-  messageId?: string
-  error?: string
-}
+export type SendWhatsAppResult =
+  | { success: true; status: 'sent'; messageId: string | undefined }
+  | { success: false; status: 'failed' | 'unknown'; error: string }
 
-/**
- * Send a WhatsApp template message and log it to the notifications table.
- * Returns immediately — does not retry on failure.
- */
+export type SendWhatsAppNotificationResult =
+  | SendWhatsAppResult
+  | { success: false; status: 'sent'; messageId: string | undefined; error: string }
+
 export async function sendWhatsAppNotification(
   env: WhatsAppEnv,
   db: DbClient,
@@ -382,63 +400,28 @@ export async function sendWhatsAppNotification(
     toPhone: string            // raw phone, will be normalized
     template: WhatsAppTemplate
     vars?: Record<string, string>
-    // Correlates this send attempt back to the domain record that triggered
-    // it (e.g. 'invitation' + invitationId for dashboard_access_invitation),
-    // so failure/status is queryable per-record instead of only visible as a
-    // standalone log line. See issue #293 Section A: "a failed invitation
-    // send must remain visible as a failed/pending assignment."
-    relatedSubmissionType?: string | null
-    relatedSubmissionId?: string | null
   }
-): Promise<SendWhatsAppResult> {
+): Promise<SendWhatsAppNotificationResult> {
   const phoneNumberId = env.WHATSAPP_PHONE_NUMBER_ID
   const accessToken = env.WHATSAPP_ACCESS_TOKEN
 
-  const notificationId = crypto.randomUUID()
-  const now = new Date().toISOString()
+  const attemptId = crypto.randomUUID()
   const normalizedPhone = parsePhoneOrThrow(opts.toPhone, { defaultCountry: 'TH' })
   const vars = normalizeTemplateVars(opts.vars ?? {})
 
-  // Insert pending row first so we always have a record even if the send fails
-  await execute(db, `
-    INSERT INTO notifications (id, organization_id, site_id, location_id, channel, template, recipient, payload, status, related_submission_type, related_submission_id, created_at)
-    VALUES (?, ?, ?, ?, 'whatsapp', ?, ?, ?, 'pending', ?, ?, ?)
-  `, [
-    notificationId,
-    opts.organizationId,
-    opts.siteId ?? null,
-    opts.locationId ?? null,
-    opts.template,
-    normalizedPhone,
-    JSON.stringify({ to: normalizedPhone, ...vars }),
-    opts.relatedSubmissionType ?? null,
-    opts.relatedSubmissionId ?? null,
-    now
-  ])
-
   if (!shouldSendRealWhatsApp(env)) {
     const messageId = logOnlyWhatsAppMessageId('notification')
-    await execute(
-      db,
-      `UPDATE notifications SET status = 'sent', provider_message_id = ?, sent_at = ? WHERE id = ?`,
-      [messageId, now, notificationId],
-    )
-    console.log('whatsapp_delivery_log_only', { notificationId, template: opts.template, to: maskPhone(normalizedPhone) })
-    return { success: true, messageId }
+    console.log('whatsapp_delivery_log_only', { attemptId, template: opts.template, to: maskPhone(normalizedPhone) })
+    return { success: true, status: 'sent', messageId }
   }
 
   if (!phoneNumberId || !accessToken) {
-    await execute(
-      db,
-      `UPDATE notifications SET status = 'failed', error = ?, sent_at = ? WHERE id = ?`,
-      ['WHATSAPP_PHONE_NUMBER_ID or WHATSAPP_ACCESS_TOKEN not configured', now, notificationId],
-    )
-    return { success: false, error: 'WhatsApp env vars not configured' }
+    return { success: false, status: 'failed', error: 'WhatsApp env vars not configured' }
   }
 
   const templatePayload = buildWhatsAppTemplatePayload(opts.template, vars)
 
-  let result: SendWhatsAppResult
+  let result: SendWhatsAppNotificationResult
   try {
     const response = await fetch(
       `${GRAPH_BASE}/${phoneNumberId}/messages`,
@@ -461,59 +444,29 @@ export async function sendWhatsAppNotification(
 
     if (!response.ok || data.error) {
       const errMsg = data.error?.message ?? `HTTP ${response.status}`
-      await execute(
-        db,
-        `UPDATE notifications SET status = 'failed', error = ?, sent_at = ? WHERE id = ?`,
-        [errMsg, now, notificationId],
-      )
-      result = { success: false, error: errMsg }
+      result = { success: false, status: 'failed', error: errMsg }
     } else {
       const messageId = data.messages?.[0]?.id
-      await execute(
-        db,
-        `UPDATE notifications SET status = 'sent', provider_message_id = ?, sent_at = ? WHERE id = ?`,
-        [messageId ?? null, now, notificationId],
-      )
-      result = { success: true, messageId }
+      result = { success: true, status: 'sent', messageId }
     }
   } catch (error) {
     const errMsg = error instanceof Error ? error.message : 'Network error'
-    await execute(
-      db,
-      `UPDATE notifications SET status = 'failed', error = ?, sent_at = ? WHERE id = ?`,
-      [errMsg, now, notificationId],
-    )
-    result = { success: false, error: errMsg }
+    result = { success: false, status: 'unknown', error: errMsg }
   }
 
   if (result.success) {
-    // An exhausted balance is intentionally recorded as `charged: false` and
-    // does not block a notification that already left Meta. Accounting or
-    // query failures are different: preserve the sent/provider evidence on
-    // the durable notification row, mark the accounting failure there, then
-    // throw so callers cannot report an unqualified success.
     try {
       await chargeFlatCredits(db, opts.organizationId, {
         siteId: opts.siteId ?? undefined,
         action: 'whatsapp_notification',
         idempotencyKey: result.messageId
           ? `whatsapp-provider:${result.messageId}`
-          : `whatsapp-notification:${notificationId}`,
+          : `whatsapp-notification:${attemptId}`,
       })
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error)
       const accountingError = `WhatsApp delivery sent but credit accounting failed: ${reason}`
-      try {
-        await execute(
-          db,
-          `UPDATE notifications SET error = ? WHERE id = ?`,
-          [accountingError, notificationId],
-        )
-      } catch (recordError) {
-        const recordReason = recordError instanceof Error ? recordError.message : String(recordError)
-        throw new Error(`${accountingError}; durable notification update failed: ${recordReason}`)
-      }
-      throw new Error(accountingError)
+      return { success: false, status: 'sent', messageId: result.messageId, error: accountingError }
     }
   }
 
@@ -597,14 +550,14 @@ export async function sendWhatsAppText(
     try {
       normalized = parsePhoneOrThrow(toPhone, { defaultCountry: 'TH' })
     } catch (err) {
-      return { success: false, error: err instanceof Error ? err.message : String(err) }
+      return { success: false, status: 'failed', error: err instanceof Error ? err.message : String(err) }
     }
     console.log('whatsapp_delivery_log_only', { kind: 'text', to: maskPhone(normalized) })
-    return { success: true, messageId }
+    return { success: true, status: 'sent', messageId }
   }
 
   if (!phoneNumberId || !accessToken) {
-    return { success: false, error: 'WhatsApp env vars not configured' }
+    return { success: false, status: 'failed', error: 'WhatsApp env vars not configured' }
   }
 
   try {
@@ -625,12 +578,12 @@ export async function sendWhatsAppText(
 
     const data = await response.json().catch(() => ({})) as MetaGraphResponse
     if (!response.ok || data.error) {
-      return { success: false, error: data.error?.message ?? `HTTP ${response.status}` }
+      return { success: false, status: 'failed', error: data.error?.message ?? `HTTP ${response.status}` }
     }
 
-    return { success: true, messageId: data.messages?.[0]?.id }
+    return { success: true, status: 'sent', messageId: data.messages?.[0]?.id }
   } catch (err) {
-    return { success: false, error: err instanceof Error ? err.message : String(err) }
+    return { success: false, status: 'unknown', error: err instanceof Error ? err.message : String(err) }
   }
 }
 

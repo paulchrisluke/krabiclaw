@@ -387,7 +387,7 @@ export async function refreshSocialCard(input: {
       try {
         await deleteMediaAsset(db, env, uploaded.assetId, site.id, input.actorId ?? null)
       } catch (cleanupError) {
-        throw new AggregateError([placementError, cleanupError], 'Social card placement and cleanup failed')
+        throw new AggregateError([placementError, cleanupError], 'Social card placement and cleanup failed', { cause: cleanupError })
       }
       throw placementError
     }

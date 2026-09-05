@@ -1,39 +1,12 @@
-import { HTTPError, defineHandler  } from 'nitro';
+import { defineHandler } from 'nitro'
 
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
+import { assertDevRouteAllowed } from '~/server/utils/dev-route-auth'
 import { queryAll } from '~/server/db'
 
-const enc = new TextEncoder()
-
-function timingSafeEqualText(a: string, b: string): boolean {
-  const left = enc.encode(a)
-  const right = enc.encode(b)
-  if (left.length !== right.length) {
-    let _noop = 0
-    for (let i = 0; i < left.length; i += 1) _noop |= left[i]!
-    return false
-  }
-  let diff = 0
-  for (let i = 0; i < left.length; i += 1) diff |= left[i]! ^ right[i]!
-  return diff === 0
-}
-
 export default defineHandler(async (event) => {
+  assertDevRouteAllowed(event)
   const env = cloudflareEnv(event)
-  const devMode = import.meta.dev
-  const e2eOverride = env.E2E_ALLOW_DEV_ROUTES === 'true'
-  if (!devMode && !e2eOverride) {
-    throw new HTTPError({ statusCode: 404, statusMessage: 'Not found' })
-  }
-
-  if (!devMode && e2eOverride) {
-    const expected = env.E2E_DEV_ROUTE_SECRET || ''
-    const provided = (event.req.headers.get('x-dev-route-secret')) || ''
-    if (!expected || !provided || !timingSafeEqualText(provided, expected)) {
-      throw new HTTPError({ statusCode: 404, statusMessage: 'Not found' })
-    }
-  }
-
   const db = env.DB
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
 
@@ -50,7 +23,7 @@ export default defineHandler(async (event) => {
   // guest_threads so specs that only know the source submission type/id (not the
   // thread id) can still filter, the same way the old submission_messages table did.
   let sql = `
-    SELECT e.id, gt.submission_type, gt.submission_id, e.organization_id, e.site_id, e.actor_kind, e.channel, e.body, e.actor_user_id, e.external_id, e.occurred_at, e.created_at
+    SELECT e.id, gt.submission_type, gt.submission_id, gt.organization_id, gt.site_id, e.actor_kind, e.channel, e.body, e.actor_user_id, e.dedupe_key, e.occurred_at, e.created_at
     FROM guest_thread_entries e
     JOIN guest_threads gt ON gt.id = e.thread_id
     WHERE e.kind = 'message'
@@ -59,7 +32,7 @@ export default defineHandler(async (event) => {
 
   if (submissionType) { sql += ' AND gt.submission_type = ?'; binds.push(submissionType) }
   if (submissionId) { sql += ' AND gt.submission_id = ?'; binds.push(submissionId) }
-  if (siteId) { sql += ' AND e.site_id = ?'; binds.push(siteId) }
+  if (siteId) { sql += ' AND gt.site_id = ?'; binds.push(siteId) }
   if (direction) {
     // Legacy 'in'/'out' direction maps onto actor_kind: guest-authored messages are
     // inbound, member-authored messages are outbound.

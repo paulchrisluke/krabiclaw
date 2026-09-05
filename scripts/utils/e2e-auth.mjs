@@ -1,4 +1,4 @@
-import { findE2eAuthFixture } from '../../config/e2e-auth-fixtures.ts'
+import { findE2eAuthFixture } from '../../config/development-auth-fixtures.ts'
 
 function responseCookies(response) {
   return response.headers.getSetCookie()

@@ -11,6 +11,8 @@ dist
 
 # Node dependencies
 node_modules
+.yarn/
+.pnp.*
 
 # Logs
 logs
@@ -33,6 +35,7 @@ pr_body.txt
 /watch-*.mjs
 
 # AI tool local state (like .claude/ — never commit)
+/.agents/skills/
 .codex/*
 !.codex/config.toml
 !.codex/hooks/

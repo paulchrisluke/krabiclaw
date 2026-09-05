@@ -4,7 +4,7 @@ import { notifyExperienceBookingCancelled } from '~/server/utils/notifications'
 import { hashReservationCancelToken, readBearerToken } from '~/server/utils/reservation-cancel-token'
 import { getClientIp, hashClientIp, incrementHourlyRateLimit } from '~/server/utils/hourly-rate-limit'
 import { publishGuestInboxThreadEvent } from '~/server/cloudflare/guest-inbox-events'
-import { getGuestThreadBySubmission, updateThreadProjection } from '~/server/domain/guest-threads/repository'
+import { getGuestThreadBySubmission } from '~/server/domain/guest-threads/repository'
 
 const IP_HOURLY_LIMIT = 20
 const BOOKING_HOURLY_LIMIT = 5
@@ -96,7 +96,6 @@ export default defineHandler(async (event) => {
 
   const thread = await getGuestThreadBySubmission(db, 'experience_booking', bookingId)
   if (thread) {
-    await updateThreadProjection(db, thread.id, {})
     await publishGuestInboxThreadEvent(env, db, { threadId: thread.id, type: 'thread.changed' })
   }
 

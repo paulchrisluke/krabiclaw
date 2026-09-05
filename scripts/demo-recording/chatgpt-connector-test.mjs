@@ -13,7 +13,7 @@ const devSecret = process.env.E2E_DEV_ROUTE_SECRET ?? ''
 const connectorName = process.env.CHATGPT_CONNECTOR_NAME ?? 'devkrabiclaw'
 const siteId = process.env.MCP_CHATGPT_SITE_ID ?? 'site-mcp-growth-service'
 const fixtureName = process.env.MCP_CHATGPT_FIXTURE_NAME ?? 'MCP Growth Service Fixture'
-const userId = process.env.MCP_CHATGPT_USER_ID ?? 'user-mcp-growth-service'
+const userId = process.env.MCP_CHATGPT_USER_ID ?? 'user-e2e-growth-service-owner'
 const runId = new Date().toISOString().replaceAll(':', '-').replaceAll('.', '-')
 const artifactDir = path.join(rootDir, '.wrangler', 'chatgpt-connector', runId)
 const MCP_VERSION = '2025-06-18'
@@ -64,9 +64,8 @@ async function telemetry(since, toolName, sessionIdHash) {
 
 async function waitForTelemetry(since, predicate, sessionIdHash, timeoutMs = TELEMETRY_TIMEOUT_MS) {
   const deadline = Date.now() + timeoutMs
-  let events = []
   while (Date.now() < deadline) {
-    events = await telemetry(since, undefined, sessionIdHash)
+    const events = await telemetry(since, undefined, sessionIdHash)
     if (predicate(events)) return events
     await pause(500)
   }
@@ -78,9 +77,8 @@ async function waitForTelemetryQuietPeriod({ since, sessionIdHash, quietMs = 5_0
   const deadline = Date.now() + timeoutMs
   let lastChange = Date.now()
   let lastFingerprint = ''
-  let events = []
   while (Date.now() < deadline) {
-    events = await telemetry(since, undefined, sessionIdHash)
+    const events = await telemetry(since, undefined, sessionIdHash)
     const fingerprint = events.map(event => `${event.id}:${event.status}`).sort().join('|')
     if (fingerprint !== lastFingerprint) {
       lastFingerprint = fingerprint
@@ -138,8 +136,7 @@ async function runNoMutationPrompt(browserRunner, title, prompt, { expectedReadT
 
 async function cleanupSession() {
   return credentialCookie(baseUrl, {
-    email: required(process.env.LOCAL_MCP_TEST_EMAIL, 'LOCAL_MCP_TEST_EMAIL'),
-    password: required(process.env.LOCAL_MCP_TEST_PASSWORD, 'LOCAL_MCP_TEST_PASSWORD'),
+    userId,
     organizationId: 'org-mcp-growth-service',
   })
 }

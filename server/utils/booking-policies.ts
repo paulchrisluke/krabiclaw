@@ -1,6 +1,6 @@
 import { HTTPError } from 'nitro';
-import { execute, queryAll, queryFirst, type DbClient } from '../db/index.ts'
 import { sanitizeUrl } from '~/utils/sanitize'
+import { execute, queryAll, queryFirst, type DbClient } from '../db/index.ts'
 export { formatBookingPolicySummary as renderBookingPolicySummary } from './booking-policy-summary.ts'
 export type {
   FormattedBookingPolicySummary as RenderedBookingPolicySummary,
@@ -18,17 +18,12 @@ export interface BookingPolicy {
   scope_type: BookingPolicyScopeType
   location_id: string | null
   experience_id: string | null
-  booking_window_days: number | null
   advance_notice_minutes: number | null
   free_cancellation_until_minutes: number | null
-  late_arrival_grace_minutes: number | null
-  host_confirmation_sla_minutes: number | null
   reschedule_allowed: boolean | null
   reschedule_cutoff_minutes: number | null
   deposit_required: boolean | null
   deposit_trigger_party_size: number | null
-  special_requests_allowed: boolean | null
-  weather_policy: string | null
   minimum_guest_age: number | null
   accessibility_contact_required: boolean | null
   additional_notes_html: string | null
@@ -37,17 +32,12 @@ export interface BookingPolicy {
 }
 
 export interface BookingPolicyPatch {
-  booking_window_days?: number | null
   advance_notice_minutes?: number | null
   free_cancellation_until_minutes?: number | null
-  late_arrival_grace_minutes?: number | null
-  host_confirmation_sla_minutes?: number | null
   reschedule_allowed?: boolean
   reschedule_cutoff_minutes?: number | null
   deposit_required?: boolean
   deposit_trigger_party_size?: number | null
-  special_requests_allowed?: boolean
-  weather_policy?: string | null
   minimum_guest_age?: number | null
   accessibility_contact_required?: boolean
   additional_notes_html?: string | null
@@ -71,11 +61,8 @@ export interface ResolvedBookingPolicy extends Omit<BookingPolicy,
 }
 
 type NumericBookingPolicyField =
-  | 'booking_window_days'
   | 'advance_notice_minutes'
   | 'free_cancellation_until_minutes'
-  | 'late_arrival_grace_minutes'
-  | 'host_confirmation_sla_minutes'
   | 'reschedule_cutoff_minutes'
   | 'deposit_trigger_party_size'
   | 'minimum_guest_age'
@@ -83,13 +70,11 @@ type NumericBookingPolicyField =
 type BooleanBookingPolicyField =
   | 'reschedule_allowed'
   | 'deposit_required'
-  | 'special_requests_allowed'
   | 'accessibility_contact_required'
 
 type OverlayBookingPolicyField =
   | NumericBookingPolicyField
   | BooleanBookingPolicyField
-  | 'weather_policy'
   | 'additional_notes_html'
 
 interface BookingPolicyRow {
@@ -100,17 +85,12 @@ interface BookingPolicyRow {
   scope_type: BookingPolicyScopeType
   location_id: string | null
   experience_id: string | null
-  booking_window_days: number | null
   advance_notice_minutes: number | null
   free_cancellation_until_minutes: number | null
-  late_arrival_grace_minutes: number | null
-  host_confirmation_sla_minutes: number | null
   reschedule_allowed: number | null
   reschedule_cutoff_minutes: number | null
   deposit_required: number | null
   deposit_trigger_party_size: number | null
-  special_requests_allowed: number | null
-  weather_policy: string | null
   minimum_guest_age: number | null
   accessibility_contact_required: number | null
   additional_notes_html: string | null
@@ -133,11 +113,9 @@ interface UpsertBookingPolicyInput extends GetDirectBookingPolicyInput {
 
 const BOOKING_POLICY_SELECT = `
   SELECT id, organization_id, site_id, policy_type, scope_type, location_id, experience_id,
-         booking_window_days, advance_notice_minutes, free_cancellation_until_minutes,
-         late_arrival_grace_minutes, host_confirmation_sla_minutes, reschedule_allowed,
+         advance_notice_minutes, free_cancellation_until_minutes, reschedule_allowed,
          reschedule_cutoff_minutes, deposit_required, deposit_trigger_party_size,
-         special_requests_allowed, weather_policy, minimum_guest_age,
-         accessibility_contact_required, additional_notes_html, created_at, updated_at
+         minimum_guest_age, accessibility_contact_required, additional_notes_html, created_at, updated_at
   FROM booking_policies
 `
 
@@ -147,17 +125,12 @@ const EMPTY_RESERVATION_POLICY: Omit<ResolvedBookingPolicy, 'id' | 'organization
   scope_type: 'site',
   location_id: null,
   experience_id: null,
-  booking_window_days: null,
   advance_notice_minutes: null,
   free_cancellation_until_minutes: null,
-  late_arrival_grace_minutes: null,
-  host_confirmation_sla_minutes: null,
   reschedule_allowed: null,
   reschedule_cutoff_minutes: null,
   deposit_required: null,
   deposit_trigger_party_size: null,
-  special_requests_allowed: null,
-  weather_policy: null,
   minimum_guest_age: null,
   accessibility_contact_required: null,
   additional_notes_html: null,
@@ -169,17 +142,12 @@ const EXPERIENCE_DEFAULTS: Omit<ResolvedBookingPolicy, 'id' | 'organization_id' 
   scope_type: 'site',
   location_id: null,
   experience_id: null,
-  booking_window_days: null,
   advance_notice_minutes: null,
   free_cancellation_until_minutes: 24 * 60,
-  late_arrival_grace_minutes: 15,
-  host_confirmation_sla_minutes: 60,
   reschedule_allowed: true,
   reschedule_cutoff_minutes: 24 * 60,
   deposit_required: false,
   deposit_trigger_party_size: null,
-  special_requests_allowed: true,
-  weather_policy: null,
   minimum_guest_age: null,
   accessibility_contact_required: false,
   additional_notes_html: null,
@@ -190,7 +158,6 @@ function rowToPolicy(row: BookingPolicyRow): BookingPolicy {
     ...row,
     reschedule_allowed: row.reschedule_allowed === null ? null : Boolean(row.reschedule_allowed),
     deposit_required: row.deposit_required === null ? null : Boolean(row.deposit_required),
-    special_requests_allowed: row.special_requests_allowed === null ? null : Boolean(row.special_requests_allowed),
     accessibility_contact_required: row.accessibility_contact_required === null ? null : Boolean(row.accessibility_contact_required),
   }
 }
@@ -223,16 +190,11 @@ function seedDefaultsForScope(
   if (scopeType === 'site') return base
   return {
     ...base,
-    booking_window_days: null,
     advance_notice_minutes: null,
     free_cancellation_until_minutes: null,
-    late_arrival_grace_minutes: null,
-    host_confirmation_sla_minutes: null,
     reschedule_cutoff_minutes: null,
     deposit_trigger_party_size: null,
-    weather_policy: null,
     minimum_guest_age: null,
-    additional_notes_html: null,
   }
 }
 
@@ -252,17 +214,12 @@ function applyPolicy(base: ResolvedBookingPolicy, next: BookingPolicy): Resolved
   }
 
   const overlayKeys: OverlayBookingPolicyField[] = [
-    'booking_window_days',
     'advance_notice_minutes',
     'free_cancellation_until_minutes',
-    'late_arrival_grace_minutes',
-    'host_confirmation_sla_minutes',
     'reschedule_allowed',
     'reschedule_cutoff_minutes',
     'deposit_required',
     'deposit_trigger_party_size',
-    'special_requests_allowed',
-    'weather_policy',
     'minimum_guest_age',
     'accessibility_contact_required',
     'additional_notes_html',
@@ -272,20 +229,11 @@ function applyPolicy(base: ResolvedBookingPolicy, next: BookingPolicy): Resolved
     const value = next[key]
     if (value !== null && value !== undefined) {
       switch (key) {
-        case 'booking_window_days':
-          merged.booking_window_days = value as number
-          break
         case 'advance_notice_minutes':
           merged.advance_notice_minutes = value as number
           break
         case 'free_cancellation_until_minutes':
           merged.free_cancellation_until_minutes = value as number
-          break
-        case 'late_arrival_grace_minutes':
-          merged.late_arrival_grace_minutes = value as number
-          break
-        case 'host_confirmation_sla_minutes':
-          merged.host_confirmation_sla_minutes = value as number
           break
         case 'reschedule_allowed':
           merged.reschedule_allowed = value as boolean
@@ -298,12 +246,6 @@ function applyPolicy(base: ResolvedBookingPolicy, next: BookingPolicy): Resolved
           break
         case 'deposit_trigger_party_size':
           merged.deposit_trigger_party_size = value as number
-          break
-        case 'special_requests_allowed':
-          merged.special_requests_allowed = value as boolean
-          break
-        case 'weather_policy':
-          merged.weather_policy = value as string
           break
         case 'minimum_guest_age':
           merged.minimum_guest_age = value as number
@@ -417,11 +359,8 @@ async function sanitizeAdditionalNotesHtml(value: string | null): Promise<string
 export async function validateBookingPolicyPatch(input: Record<string, unknown>, policyType: BookingPolicyType): Promise<BookingPolicyPatch> {
   const patch: BookingPolicyPatch = {}
   const numericFields: NumericBookingPolicyField[] = [
-    'booking_window_days',
     'advance_notice_minutes',
     'free_cancellation_until_minutes',
-    'late_arrival_grace_minutes',
-    'host_confirmation_sla_minutes',
     'reschedule_cutoff_minutes',
     'deposit_trigger_party_size',
     'minimum_guest_age',
@@ -434,7 +373,6 @@ export async function validateBookingPolicyPatch(input: Record<string, unknown>,
   const booleanFields: BooleanBookingPolicyField[] = [
     'reschedule_allowed',
     'deposit_required',
-    'special_requests_allowed',
     'accessibility_contact_required',
   ]
   for (const field of booleanFields) {
@@ -445,15 +383,7 @@ export async function validateBookingPolicyPatch(input: Record<string, unknown>,
   const notes = normalizeString(input.additional_notes_html, 'additional_notes_html')
   if (notes !== undefined) patch.additional_notes_html = await sanitizeAdditionalNotesHtml(notes)
 
-  if (policyType === 'experience') {
-    const weatherPolicy = normalizeString(input.weather_policy, 'weather_policy')
-    if (weatherPolicy !== undefined) patch.weather_policy = weatherPolicy
-  } else {
-    if ('weather_policy' in input || 'minimum_guest_age' in input || 'accessibility_contact_required' in input) {
-      // minimum_guest_age/accessibility_contact_required are validated above because they are
-      // harmless shared form inputs, but reservation policy responses never render them.
-    }
-  }
+  void policyType
 
   return patch
 }
@@ -631,20 +561,11 @@ export function applyBookingPolicyPatch(
   for (const [key, value] of Object.entries(patch) as Array<[keyof BookingPolicyPatch, BookingPolicyPatch[keyof BookingPolicyPatch]]>) {
     if (value === undefined) continue
     switch (key) {
-      case 'booking_window_days':
-        next.booking_window_days = value as number | null
-        break
       case 'advance_notice_minutes':
         next.advance_notice_minutes = value as number | null
         break
       case 'free_cancellation_until_minutes':
         next.free_cancellation_until_minutes = value as number | null
-        break
-      case 'late_arrival_grace_minutes':
-        next.late_arrival_grace_minutes = value as number | null
-        break
-      case 'host_confirmation_sla_minutes':
-        next.host_confirmation_sla_minutes = value as number | null
         break
       case 'reschedule_cutoff_minutes':
         next.reschedule_cutoff_minutes = value as number | null
@@ -655,15 +576,11 @@ export function applyBookingPolicyPatch(
       case 'minimum_guest_age':
         next.minimum_guest_age = value as number | null
         break
-      case 'weather_policy':
-        next.weather_policy = value as string | null
-        break
       case 'additional_notes_html':
         next.additional_notes_html = value as string | null
         break
       case 'reschedule_allowed':
       case 'deposit_required':
-      case 'special_requests_allowed':
       case 'accessibility_contact_required':
         next[key] = value as boolean
         break
@@ -720,12 +637,10 @@ export async function upsertBookingPolicy(
     db,
     `INSERT INTO booking_policies (
       id, organization_id, site_id, policy_type, scope_type, location_id, experience_id,
-      booking_window_days, advance_notice_minutes, free_cancellation_until_minutes,
-      late_arrival_grace_minutes, host_confirmation_sla_minutes, reschedule_allowed,
+      advance_notice_minutes, free_cancellation_until_minutes, reschedule_allowed,
       reschedule_cutoff_minutes, deposit_required, deposit_trigger_party_size,
-      special_requests_allowed, weather_policy, minimum_guest_age,
-      accessibility_contact_required, additional_notes_html, created_at, updated_at
-    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      minimum_guest_age, accessibility_contact_required, additional_notes_html, created_at, updated_at
+    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [
       id,
       input.organizationId,
@@ -734,17 +649,12 @@ export async function upsertBookingPolicy(
       input.scopeType,
       input.locationId ?? null,
       input.experienceId ?? null,
-      seeded.booking_window_days,
       seeded.advance_notice_minutes,
       seeded.free_cancellation_until_minutes,
-      seeded.late_arrival_grace_minutes,
-      seeded.host_confirmation_sla_minutes,
       insertableBoolean('reschedule_allowed'),
       seeded.reschedule_cutoff_minutes,
       insertableBoolean('deposit_required'),
       seeded.deposit_trigger_party_size,
-      insertableBoolean('special_requests_allowed'),
-      seeded.weather_policy,
       seeded.minimum_guest_age,
       insertableBoolean('accessibility_contact_required'),
       seeded.additional_notes_html,

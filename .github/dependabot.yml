@@ -1,0 +1,39 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: cron
+      # Dependabot uses Fugit: every other Monday, rather than day-of-month steps.
+      cronjob: "0 2 * * mon%2"
+    cooldown:
+      default-days: 30
+
+    ignore:
+      # Keep the proven Node typings major until a toolchain upgrade is qualified (#814).
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
+      # Pinned Better Auth requires better-sqlite3 ^12; revisit with the auth upgrade (#809).
+      - dependency-name: "better-sqlite3"
+        update-types: ["version-update:semver-major"]
+
+    groups:
+      better-auth:
+        patterns: ["better-auth", "@better-auth/*"]
+      typescript:
+        patterns: ["typescript"]
+      routine-dependencies:
+        patterns: ["*"]
+        exclude-patterns: ["better-auth", "@better-auth/*", "typescript"]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: cron
+      # Dependabot uses Fugit: every other Monday, rather than day-of-month steps.
+      cronjob: "0 2 * * mon%2"
+    cooldown:
+      default-days: 30
+    groups:
+      github-actions:
+        patterns: ["*"]

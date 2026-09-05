@@ -6,6 +6,7 @@ import { queryFirst } from '~/server/db'
 import { requireSiteAccess } from '~/server/utils/location-access'
 import { assertResourceAccess } from '~/server/utils/member-access'
 import type { PriceInput } from '~/shared/prices'
+import type { ProductDetail } from '~/server/types/products'
 
 const optionalInteger = (value: unknown) => {
   if (value === null || value === undefined || value === '') return null
@@ -49,24 +50,22 @@ export default defineHandler(async (event) => {
     if (parsed === null) return jsonResponse({ error: 'featured_sort_order must be an integer' }, { status: 400 })
   }
 
-  let highlights: string[] | null
   let includedItems: string[] | null
   let whatToBring: string[] | null
   let media: Array<{ asset_id: string }> | undefined
   try {
-    highlights = stringArrayOrNull(body.highlights)
     includedItems = stringArrayOrNull(body.included_items)
     whatToBring = stringArrayOrNull(body.what_to_bring)
     media = body.media === null || body.media === undefined ? undefined : parseMediaAssetRefs(body.media)
   } catch (err) {
-    if (err instanceof InvalidFieldError) return jsonResponse({ error: 'highlights, included_items, and what_to_bring must be arrays' }, { status: 400 })
+    if (err instanceof InvalidFieldError) return jsonResponse({ error: 'included_items and what_to_bring must be arrays' }, { status: 400 })
     throw err
   }
 
   const experience = await createExperience(db, site.organization_id, siteId, {
-    title, tagline: body.tagline ? String(body.tagline).trim() : null, body: body.body ? String(body.body).trim() : null, media, highlights, included_items: includedItems, what_to_bring: whatToBring, meeting_point: body.meeting_point ? String(body.meeting_point).trim() : null, pricing_note: body.pricing_note ? String(body.pricing_note).trim() : null, price: body.price === null ? null : body.price as PriceInput | undefined, duration_minutes: optionalInteger(body.duration_minutes), max_capacity: optionalInteger(body.max_capacity), time_slots: Array.isArray(body.time_slots) ? body.time_slots.map(String) : null, recurring_slots: body.recurring_slots && typeof body.recurring_slots === 'object' && !Array.isArray(body.recurring_slots)
+    title, tagline: body.tagline ? String(body.tagline).trim() : null, body: body.body ? String(body.body).trim() : null, media, tags: body.tags as string[] | undefined, details: body.details as ProductDetail[] | undefined, included_items: includedItems, what_to_bring: whatToBring, meeting_point: body.meeting_point ? String(body.meeting_point).trim() : null, pricing_note: body.pricing_note ? String(body.pricing_note).trim() : null, price: body.price === null ? null : body.price as PriceInput | undefined, duration_minutes: optionalInteger(body.duration_minutes), max_capacity: optionalInteger(body.max_capacity), time_slots: Array.isArray(body.time_slots) ? body.time_slots.map(String) : null, recurring_slots: body.recurring_slots && typeof body.recurring_slots === 'object' && !Array.isArray(body.recurring_slots)
       ? (body.recurring_slots as Record<string, string[]>)
-      : null, available_note: body.available_note ? String(body.available_note).trim() : null, status: (['active', 'inactive', 'sold_out'].includes(String(body.status)) ? String(body.status) : 'active') as 'active' | 'inactive' | 'sold_out', sort_order: optionalInteger(body.sort_order) ?? 0, featured: typeof body.featured === 'boolean' ? body.featured : false, featured_sort_order: optionalInteger(body.featured_sort_order) ?? 0, location_id: locationId, seo_title: body.seo_title ? String(body.seo_title).trim() : null, seo_description: body.seo_description ? String(body.seo_description).trim() : null, }, session.user.id, env)
+      : null, status: (['active', 'inactive', 'sold_out'].includes(String(body.status)) ? String(body.status) : 'active') as 'active' | 'inactive' | 'sold_out', sort_order: optionalInteger(body.sort_order) ?? 0, featured: typeof body.featured === 'boolean' ? body.featured : false, featured_sort_order: optionalInteger(body.featured_sort_order) ?? 0, location_id: locationId, seo_title: body.seo_title ? String(body.seo_title).trim() : null, seo_description: body.seo_description ? String(body.seo_description).trim() : null, }, session.user.id, env)
 
   return jsonResponse({ experience }, { status: 201 })
 })

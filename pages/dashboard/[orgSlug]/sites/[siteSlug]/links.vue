@@ -3,7 +3,7 @@
     <template #header>
       <UDashboardNavbar title="Links page">
         <template #leading>
-          <DashboardNavbarLeading :to="paths.site" label="Site" />
+          <DashboardNavbarLeading v-if="sitePaths" :to="sitePaths.site" label="Site" />
         </template>
         <template #right>
           <div class="flex items-center gap-2">
@@ -91,37 +91,47 @@
             </div>
           </UCard>
 
-          <div class="space-y-3">
-            <div class="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <h2 class="text-base font-semibold text-highlighted">Links</h2>
-                <p class="mt-1 text-sm text-muted">Add, hide, delete, and reorder the buttons shown on /links.</p>
+          <DashboardListEditor
+            v-model:editing="editing"
+            title="Links"
+            description="Add, hide, and reorder the buttons shown on /links."
+            :items="listItems"
+            empty-title="No links yet"
+            empty-icon="i-lucide-link"
+            add-label="Add a link"
+            reorderable
+            @add="openNew"
+            @open="openExisting"
+            @remove="removeItem"
+            @move="move"
+          >
+            <template #item="{ item }">
+              <div class="flex items-center gap-2">
+                <p class="truncate text-sm font-medium text-highlighted">{{ item.title }}</p>
+                <UBadge v-if="item.row.status === 'hidden'" color="neutral" variant="soft" size="sm">hidden</UBadge>
               </div>
-              <UButton color="neutral" variant="soft" icon="i-lucide-plus" @click="addLink">Add link</UButton>
-            </div>
+              <p class="mt-1 truncate text-sm text-muted">{{ item.row.destination || 'No destination yet' }}</p>
+            </template>
+          </DashboardListEditor>
 
-            <div v-if="items.length === 0" class="rounded-lg border border-dashed border-default px-6 py-12 text-center">
-              <UIcon name="i-lucide-link" class="mx-auto size-8 text-muted" />
-              <p class="mt-3 text-sm font-medium text-highlighted">No links yet</p>
-              <p class="mt-1 text-sm text-muted">Add an active link to make the page available.</p>
-            </div>
-
-            <div v-for="(item, index) in items" :key="item.id" class="rounded-lg border border-default bg-default p-4">
-              <div class="flex flex-wrap items-center gap-2">
-                <span class="flex size-8 shrink-0 items-center justify-center rounded bg-elevated text-xs font-semibold text-muted">{{ index + 1 }}</span>
-                <UInput v-model="item.label" class="min-w-52 flex-1" placeholder="Label" maxlength="120" />
-                <USelect v-model="item.status" :items="itemStatusOptions" class="w-32" />
-                <UButton icon="i-lucide-arrow-up" color="neutral" variant="ghost" :disabled="index === 0" :aria-label="`Move ${item.label || 'link'} up`" @click="moveItem(index, -1)" />
-                <UButton icon="i-lucide-arrow-down" color="neutral" variant="ghost" :disabled="index === items.length - 1" :aria-label="`Move ${item.label || 'link'} down`" @click="moveItem(index, 1)" />
-                <UButton icon="i-lucide-trash-2" color="error" variant="ghost" :aria-label="`Delete ${item.label || 'link'}`" @click="deleteItem(index)" />
-              </div>
-              <div class="mt-4 grid gap-4 sm:grid-cols-2">
-                <UFormField class="sm:col-span-2" label="Destination" required>
-                  <UInput v-model="item.destination" aria-label="Link destination" placeholder="/reservations or https://example.com" maxlength="2048" />
-                </UFormField>
-              </div>
-            </div>
-          </div>
+          <DashboardListItemDialog
+            v-model:open="dialogOpen"
+            :title="editingId ? 'Edit link' : 'Add a link'"
+            :removable="Boolean(editingId)"
+            :save-disabled="!itemForm.label.trim() || !itemForm.destination.trim()"
+            @save="applyItem"
+            @remove="removeEditing"
+          >
+            <UFormField label="Label" required>
+              <UInput v-model="itemForm.label" maxlength="120" autofocus class="w-full" />
+            </UFormField>
+            <UFormField label="Destination" required>
+              <UInput v-model="itemForm.destination" placeholder="/reservations or https://example.com" maxlength="2048" class="w-full" />
+            </UFormField>
+            <UFormField label="Status">
+              <USelect v-model="itemForm.status" :items="itemStatusOptions" class="w-full" />
+            </UFormField>
+          </DashboardListItemDialog>
         </div>
 
         <aside class="xl:sticky xl:top-4 xl:self-start">
@@ -154,10 +164,13 @@
 </template>
 
 <script setup lang="ts">
+import DashboardListEditor from '~/components/dashboard/DashboardListEditor.vue'
+import DashboardListItemDialog from '~/components/dashboard/DashboardListItemDialog.vue'
+
 const dashboardApi = useDashboardApi()
 definePageMeta({ layout: 'dashboard', cmsCapabilityKey: 'site.links' })
 
-const { paths } = useDashboardSiteLinks()
+const { sitePaths } = useDashboardSiteLinks()
 useSeoMeta({ title: 'Links page | KrabiClaw Dashboard', robots: 'noindex, nofollow' })
 
 type ItemStatus = 'active' | 'hidden'
@@ -228,6 +241,64 @@ const form = reactive<LinksPage>({
 })
 const items = ref<LinkItem[]>([])
 
+const listItems = computed(() => items.value.map(row => ({
+  id: row.id,
+  title: row.label || 'Untitled link',
+  row,
+})))
+
+const itemForm = reactive({ label: '', destination: '', status: 'active' as ItemStatus })
+
+// The dialog edits the draft, not the server: this page saves its details and its
+// links together through one endpoint, so "Save" here means "apply to the
+// document" and the navbar's Save is what persists it.
+const { editing, dialogOpen, editingId, openNew, openExisting, close, removeItem, removeEditing } = useListEditor<LinkItem>({
+  find: id => items.value.find(item => item.id === id) ?? null,
+  fill: (row) => {
+    itemForm.label = row.label
+    itemForm.destination = row.destination
+    itemForm.status = row.status
+  },
+  clear: () => {
+    itemForm.label = ''
+    itemForm.destination = ''
+    itemForm.status = 'active'
+  },
+  destroy: async (id) => {
+    items.value = items.value
+      .filter(item => item.id !== id)
+      .map((entry, sortOrder) => ({ ...entry, sort_order: sortOrder }))
+  },
+})
+
+function applyItem() {
+  if (editingId.value) {
+    items.value = items.value.map(item => item.id === editingId.value
+      ? { ...item, label: itemForm.label, destination: itemForm.destination, status: itemForm.status }
+      : item)
+  } else {
+    items.value = [...items.value, {
+      id: `tmp_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      label: itemForm.label,
+      destination: itemForm.destination,
+      sort_order: items.value.length,
+      status: itemForm.status,
+    }]
+  }
+  close()
+}
+
+function move(item: { id: string }, direction: -1 | 1) {
+  const index = items.value.findIndex(entry => entry.id === item.id)
+  const nextIndex = index + direction
+  if (index < 0 || nextIndex < 0 || nextIndex >= items.value.length) return
+  const next = [...items.value]
+  const [moved] = next.splice(index, 1)
+  if (!moved) return
+  next.splice(nextIndex, 0, moved)
+  items.value = next.map((entry, sortOrder) => ({ ...entry, sort_order: sortOrder }))
+}
+
 const { data, pending, refresh } = await useAsyncData(
   `links-page-editor-${siteId}`,
   () => dashboardApi<{ page: ApiLinksPage; items: ApiLinkItem[] }>(
@@ -274,33 +345,8 @@ function serializeState() {
   })
 }
 
-function addLink() {
-  items.value.push({
-    id: `tmp_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-    label: '',
-    destination: '',
-    sort_order: items.value.length,
-    status: 'active',
-  })
-}
 
-function moveItem(index: number, direction: -1 | 1) {
-  const nextIndex = index + direction
-  if (nextIndex < 0 || nextIndex >= items.value.length) return
-  const next = [...items.value]
-  const [item] = next.splice(index, 1)
-  if (!item) return
-  next.splice(nextIndex, 0, item)
-  items.value = next.map((entry, sortOrder) => ({ ...entry, sort_order: sortOrder }))
-}
 
-function deleteItem(index: number) {
-  const item = items.value[index]
-  if (!item) return
-  if (import.meta.client && !window.confirm(`Delete "${item.label || 'this link'}"?`)) return
-  items.value.splice(index, 1)
-  items.value = items.value.map((entry, sortOrder) => ({ ...entry, sort_order: sortOrder }))
-}
 
 async function copyPublicUrl() {
   if (!publicLinksUrl.value) return

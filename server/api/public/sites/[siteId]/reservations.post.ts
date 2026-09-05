@@ -4,13 +4,12 @@ import { isReservedTestDomain, shouldSendRealEmail } from '~/server/utils/email-
 import { notifyReservationCreated } from '~/server/utils/notifications'
 import { createReservationCancelToken, hashReservationCancelToken } from '~/server/utils/reservation-cancel-token'
 import { resolveLocationContact } from '~/server/utils/contact-resolution'
-import { resolveLocationTimezone, isDateBeforeTimezoneToday, isTimeSlotInPast } from '~/server/utils/site-config'
+import { resolveLocationTimezone, isDateBeforeTimezoneToday } from '~/server/utils/site-config'
 import { generateReservationTimes, isStructuredOpeningHours } from '~/shared/reservation-hours'
 import { getReservationSlotAvailability } from '~/server/utils/reservations'
 import { renderBookingPolicySummary, resolveBookingPolicy } from '~/server/utils/booking-policies'
 import { getSourceLocale } from '~/server/utils/site-locales'
 import { deleteCustomerIfUnlinked, findOrCreateCustomer, recordCustomerBooking } from '~/server/utils/customers'
-import { fireOrganizationEventSafe } from '~/server/utils/organization-events'
 import { getAuthSession } from '~/server/utils/auth'
 import { DEFAULT_EMAIL_DAILY_LIMIT as EMAIL_DAILY_LIMIT, DEFAULT_IP_HOURLY_LIMIT as IP_HOURLY_LIMIT, getClientIp, hashClientIp, hashIdentifier, incrementHourlyRateLimit } from '~/server/utils/hourly-rate-limit'
 import { parsePhone } from '~/utils/phone'
@@ -96,17 +95,11 @@ export default defineHandler(async (event) => {
   if (!isStructuredOpeningHours(parsedHours)) {
     return jsonResponse({ error: 'Location hours configuration is invalid. Please contact support.' }, { status: 500 })
   }
-  const validTimes = generateReservationTimes(parsedHours, date)
-    .filter((slot) => !isTimeSlotInPast(date, slot, reservationTimezone))
-  if (!validTimes.includes(time))
-    return jsonResponse({ error: 'Please choose a valid time — this location is closed at that time.' }, { status: 400 })
-
-  // Party size + capacity used by the atomic insert guard below — capacity enforcement is
-  // skipped entirely (party size stays null) when the location has no max_capacity, matching
-  // getReservationSlotAvailability's unlimited-capacity behavior (remaining === null).
-  let partySizeForCapacityCheck: number | null = null
   const availability = await getReservationSlotAvailability(db, siteId, { id: resolvedLocationId, max_capacity: location.max_capacity, opening_hours: parsedHours }, date, reservationTimezone)
   const slotAvailability = availability.find((s) => s.time_slot === time)
+  if (!slotAvailability) {
+    return jsonResponse({ error: 'Please choose a valid time — this location is closed at that time.' }, { status: 400 })
+  }
   if (slotAvailability?.is_closed) {
     return jsonResponse({ error: 'This time is closed for booking.' }, { status: 409 })
   }
@@ -114,8 +107,6 @@ export default defineHandler(async (event) => {
   if (slotAvailability && slotAvailability.remaining !== null && partySize > slotAvailability.remaining) {
     return jsonResponse({ error: `Only ${Math.max(slotAvailability.remaining, 0)} spot(s) left at this time.` }, { status: 409 })
   }
-  if (location.max_capacity != null) partySizeForCapacityCheck = partySize
-
   const id = crypto.randomUUID()
   const clientIp = getClientIp(event)
   const ipHash = await hashClientIp(clientIp)
@@ -144,25 +135,36 @@ export default defineHandler(async (event) => {
     organizationId: site.organization_id, siteId, name, email, phone, source: 'reservation', bookingAt: `${date}T${time}:00`, userId, } as const
   const customer = await findOrCreateCustomer(db, customerInput)
 
-  // Single atomic statement: the capacity re-check and the insert happen in one SQL statement
-  // (D1/SQLite guarantees single-statement atomicity even without BEGIN/COMMIT support) so a
-  // concurrent request can't slip in
-  // between a separate read and write. When partySizeForCapacityCheck is null because the
-  // location has no max_capacity, the WHERE clause is unconditionally true.
   const insertResult = await execute(db, `
     INSERT INTO reservation_submissions (
-      id, organization_id, site_id, customer_id, name, email, phone, date, time, guests, requests, ip_hash, cancellation_token_hash, cancellation_token_expires_at, location_id
+      id, organization_id, site_id, customer_id, name, email, phone, date, time, guests, status, requests, ip_hash, cancellation_token_hash, cancellation_token_expires_at, location_id
     )
-    SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
-    WHERE ? IS NULL OR (
-      COALESCE((
+    SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'confirmed', ?, ?, ?, ?, ?
+    FROM business_locations l
+    LEFT JOIN availability_overrides ao
+      ON ao.owner_type = 'location'
+     AND ao.location_id = l.id
+     AND ao.override_date = ?
+     AND ao.time_slot = ?
+    WHERE l.id = ? AND l.site_id = ?
+      AND l.opening_hours IS ?
+      AND (? = 1 OR ao.status = 'open')
+      AND COALESCE(ao.status, 'open') != 'closed'
+      AND (
+        COALESCE(ao.capacity_override, l.max_capacity) IS NULL
+        OR COALESCE((
         SELECT SUM(CASE WHEN guests = '8+' THEN 8 ELSE CAST(guests AS INTEGER) END)
         FROM reservation_submissions
         WHERE location_id = ? AND date = ? AND time = ? AND status != 'cancelled'
-      ), 0) + ? <= ?
-    )
+        ), 0) + ? <= COALESCE(ao.capacity_override, l.max_capacity)
+      )
   `, [
-    id, site.organization_id, siteId, customer.id, name, email, phone, date, time, guests, requests || null, ipHash, cancellationTokenHash, cancellation.expiresAt, resolvedLocationId, partySizeForCapacityCheck, resolvedLocationId, date, time, partySizeForCapacityCheck, location.max_capacity, ])
+    id, site.organization_id, siteId, customer.id, name, email, phone, date, time, guests,
+    requests || null, ipHash, cancellationTokenHash, cancellation.expiresAt, resolvedLocationId,
+    date, time, resolvedLocationId, siteId,
+    location.opening_hours, generateReservationTimes(parsedHours, date).includes(time) ? 1 : 0,
+    resolvedLocationId, date, time, partySize,
+  ])
 
   if (!insertResult?.meta?.changes) {
     if (customer.created) await deleteCustomerIfUnlinked(db, customer.id)
@@ -170,12 +172,7 @@ export default defineHandler(async (event) => {
   }
   await recordCustomerBooking(db, customer.id, customerInput)
 
-  const [, thread] = await Promise.all([
-    fireOrganizationEventSafe({
-      db, organizationId: site.organization_id, siteId, locationId: resolvedLocationId, eventType: 'reservation.created', entityType: 'reservation_submission', entityId: id, metadata: {
-        date, time, guests, }, }),
-    ensureGuestThread(db, reservationAdapter, id, { publishEnv: env }),
-  ])
+  const thread = await ensureGuestThread(db, reservationAdapter, id, { publishEnv: env })
 
   // Build absolute cancel URL for the confirmation email
   const cancelUrl = `${siteBaseUrl}/reservations/cancel?id=${id}#${cancellation.token}`
@@ -221,5 +218,5 @@ export default defineHandler(async (event) => {
   ])
 
   return jsonResponse({
-    success: true, id, cancellationToken: cancellation.token, message: 'Your reservation request has been received. We will confirm shortly.', policy_summary: policy.id ? renderBookingPolicySummary(policy, locale) : null, }, { status: 201 })
+    success: true, id, cancellationToken: cancellation.token, message: 'Your reservation is confirmed.', policy_summary: policy.id ? renderBookingPolicySummary(policy, locale) : null, }, { status: 201 })
 })

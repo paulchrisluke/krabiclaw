@@ -1,5 +1,6 @@
 import { compileCuratedSiteFixture } from './compile.ts'
 import type { CuratedSiteDefinition } from './contracts.ts'
+import { buildSeedExperienceCategories } from './contracts.ts'
 import { renderCanonicalBillingSql } from './billing-sql.ts'
 import { renderTenantPagesSeedSql } from './tenant-pages.ts'
 
@@ -516,7 +517,6 @@ export const potteryHouseFixture: CuratedSiteDefinition = {
       durationMinutes: 90,
       maxCapacity: 8,
       timeSlots: ['10:00', '12:00', '14:00', '16:00'],
-      availableNote: 'Book online or message us on Instagram @potteryclasseskrabi',
       status: 'active',
       sortOrder: 1,
       featured: true,
@@ -539,7 +539,6 @@ export const potteryHouseFixture: CuratedSiteDefinition = {
       durationMinutes: 180,
       maxCapacity: 12,
       timeSlots: ['19:00'],
-      availableNote: 'Every Friday, 7PM to 10PM. Book in advance as spots fill quickly.',
       status: 'active',
       sortOrder: 2,
       featured: true,
@@ -562,7 +561,6 @@ export const potteryHouseFixture: CuratedSiteDefinition = {
       durationMinutes: 120,
       maxCapacity: 4,
       timeSlots: ['09:00', '15:00'],
-      availableNote: 'Available on selected days. Message us on Instagram @potteryclasseskrabi to check availability.',
       status: 'active',
       sortOrder: 3,
       featured: true,
@@ -585,8 +583,6 @@ export const potteryHouseFixture: CuratedSiteDefinition = {
       durationMinutes: null,
       maxCapacity: null,
       timeSlots: [],
-      availableNote:
-        'Contact us on Instagram @potteryclasseskrabi to discuss membership.',
       status: 'active',
       sortOrder: 4,
       featured: false,
@@ -706,9 +702,6 @@ export const potteryHouseFixture: CuratedSiteDefinition = {
       status: 'published',
       publishedAt: '2026-05-01T10:00:00.000Z',
       createdBy: 'user-pottery-house',
-      channelJobs: [
-        { id: 'pcj-ph-1', channel: 'site', status: 'published', publishedAt: '2026-05-01T10:00:00.000Z' },
-      ],
     },
     {
       id: 'post-ph-2',
@@ -720,23 +713,17 @@ export const potteryHouseFixture: CuratedSiteDefinition = {
       status: 'published',
       publishedAt: '2026-05-15T10:00:00.000Z',
       createdBy: 'user-pottery-house',
-      channelJobs: [
-        { id: 'pcj-ph-2', channel: 'site', status: 'published', publishedAt: '2026-05-15T10:00:00.000Z' },
-      ],
     },
     {
       id: 'post-ph-3',
       locationId: 'loc-pottery-house',
-      postType: 'offer',
+      postType: 'standard',
       title: 'Cocktails & Clay — Every Friday, 7PM to 10PM',
       body: 'Grab a drink, sit at the wheel, and see what your hands can do. Our Friday night Cocktails & Clay session is social, relaxed, and genuinely fun — whether you are a first-timer or you already know your way around a wheel. ฿1,500 per person. Book via Instagram @potteryclasseskrabi.',
       media: [{ asset_id: 'media-ph-post3', slot: 'cover' }],
       status: 'published',
       publishedAt: '2026-05-20T09:00:00.000Z',
       createdBy: 'user-pottery-house',
-      channelJobs: [
-        { id: 'pcj-ph-3', channel: 'site', status: 'published', publishedAt: '2026-05-20T09:00:00.000Z' },
-      ],
     },
   ],
   tenantPageLocaleFields: [
@@ -1049,14 +1036,23 @@ UPDATE sites SET primary_location_id = ${sqlValue(compiledPotteryHouseSeed.site.
 
 export function renderCompiledPotteryHouseExperiencesBlock(): string {
   const experienceMedia = compiledPotteryHouseSeed.experiences.flatMap(experience => experience.media.map((media, index) => ({ experience, media, index })))
+  const { categories: experienceCategories, categoryIdForLocation, sortOrderFor } = buildSeedExperienceCategories(compiledPotteryHouseSeed.experiences, compiledPotteryHouseSeed.identity)
+  const experienceCategoryRows = experienceCategories
+    .map(category => `  (${[
+      sqlValue(category.id), sqlValue(category.organizationId), sqlValue(category.siteId),
+      sqlValue(category.locationId), sqlValue('experience'), sqlValue(category.name),
+      sqlValue(category.slug), sqlValue(category.sortOrder),
+      sqlValue('seed:pottery-house'), sqlValue('seed:pottery-house'),
+    ].join(', ')})`)
+    .join(',\n')
   const experienceProductRows = compiledPotteryHouseSeed.experiences
     .map(experience => `  (${[
       sqlValue(experience.id), sqlValue(experience.organizationId), sqlValue(experience.siteId),
-      sqlValue(experience.locationId), sqlValue('experience'), sqlValue('Experiences'),
+      sqlValue(experience.locationId), sqlValue('experience'), sqlValue(categoryIdForLocation(experience.locationId)),
       sqlValue(experience.title), sqlValue(experience.slug), sqlValue(experience.body),
       sqlValue(experience.status !== 'inactive'), sqlValue(experience.status !== 'sold_out'),
-      sqlValue(experience.featured), sqlValue(experience.featuredSortOrder), sqlValue(experience.sortOrder),
-      sqlValue('[]'), sqlValue('[]'), sqlValue(experience.seoTitle), sqlValue(experience.seoDescription),
+      sqlValue(experience.featured), sqlValue(experience.featuredSortOrder), sqlValue(sortOrderFor(experience.id)),
+      sqlJson(experience.tags), sqlJson(experience.details), sqlValue(experience.seoTitle), sqlValue(experience.seoDescription),
       sqlValue('template'), sqlValue('seed:pottery-house'), sqlValue('seed:pottery-house'),
     ].join(', ')})`)
     .join(',\n')
@@ -1072,7 +1068,6 @@ export function renderCompiledPotteryHouseExperiencesBlock(): string {
       sqlValue(experience.maxCapacity),
       experience.timeSlots.length > 0 ? sqlJson(experience.timeSlots) : 'NULL',
       'NULL',
-      sqlValue(experience.availableNote),
     ].join(', ')})`)
     .join(',\n')
   const experiencePriceRows = compiledPotteryHouseSeed.experiences
@@ -1105,8 +1100,13 @@ ${experienceMedia
 
   return `-- BEGIN GENERATED: pottery_experiences
 -- Experiences for Pottery House Krabi.
+INSERT OR REPLACE INTO product_categories
+  (id, organization_id, site_id, location_id, product_type, name, slug, sort_order, created_by, updated_by)
+VALUES
+${experienceCategoryRows};
+
 INSERT OR REPLACE INTO products
-  (id, organization_id, site_id, location_id, product_type, category, name, slug, description,
+  (id, organization_id, site_id, location_id, product_type, category_id, name, slug, description,
    is_visible, available, featured, featured_sort_order, sort_order, tags_json, details_json,
    seo_title, seo_description, source, created_by, updated_by)
 VALUES
@@ -1114,7 +1114,7 @@ ${experienceProductRows};
 
 INSERT OR REPLACE INTO experiences
   (id, organization_id, site_id, location_id, tagline, pricing_note,
-   duration_minutes, max_capacity, time_slots, recurring_slots, available_note)
+   duration_minutes, max_capacity, time_slots, recurring_slots)
 VALUES
 ${experienceRows};
 
@@ -1202,33 +1202,27 @@ export function renderCompiledPotteryHousePostsBlock(): string {
       sqlValue(post.postType),
       sqlValue(post.title),
       sqlValue(post.body),
+      sqlValue(post.ctaType),
+      sqlValue(post.ctaUrl),
+      sqlValue(post.eventTitle),
+      sqlValue(post.eventStartAt),
+      sqlValue(post.eventEndAt),
+      sqlValue(post.offerCoupon),
+      sqlValue(post.offerTerms),
       sqlValue(post.status),
       sqlValue(post.publishedAt),
       sqlValue(post.createdBy),
     ].join(', ')})`)
     .join(',\n')
 
-  const allChannelJobs = compiledPotteryHouseSeed.posts.flatMap((post) => post.channelJobs)
   const postMediaRows = compiledPotteryHouseSeed.posts.flatMap(post => post.media.map((media, index) => `  (${[
     sqlValue(`placement-post-${post.id}-${media.slot}-${index}`), sqlValue(post.organizationId), sqlValue(post.siteId),
     sqlValue('post'), sqlValue(post.id), sqlValue(media.slot), sqlValue(media.asset_id), index, sqlValue('active'),
   ].join(', ')})`)).join(',\n')
-  const channelJobRows = allChannelJobs
-    .map((job) => `  (${[
-      sqlValue(job.id),
-      sqlValue(job.postId),
-      sqlValue(job.organizationId),
-      sqlValue(job.channel),
-      sqlValue(job.status),
-      sqlValue(job.publishedAt),
-    ].join(', ')})`)
-    .join(',\n')
-
   return `-- BEGIN GENERATED: pottery_posts
--- Posts and channel jobs for Pottery House Krabi.
 INSERT OR IGNORE INTO posts
   (id, organization_id, site_id, location_id,
-   post_type, title, body,
+   post_type, title, body, cta_type, cta_url, event_title, event_start, event_end, offer_coupon, offer_terms,
    status, published_at, created_by)
 VALUES
 ${postRows};
@@ -1238,9 +1232,6 @@ ${postMediaRows ? `INSERT OR REPLACE INTO media_placements
 VALUES
 ${postMediaRows};` : ''}
 
-INSERT OR IGNORE INTO post_channel_jobs (id, post_id, organization_id, channel, status, published_at)
-VALUES
-${channelJobRows};
 -- END GENERATED: pottery_posts`
 }
 

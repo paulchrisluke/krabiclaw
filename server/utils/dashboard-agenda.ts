@@ -4,7 +4,7 @@ import { resolveSiteCmsCapabilities } from '~/server/utils/cms-capabilities'
 import { isOrganizationWideRole, listAccessibleLocationIds } from '~/server/utils/member-access'
 import type { CloudflareEnv } from '~/server/utils/auth'
 
-export const AGENDA_KINDS = ['reservation', 'experience_booking', 'post', 'thread'] as const
+export const AGENDA_KINDS = ['reservation', 'experience_booking', 'post'] as const
 export type AgendaKind = typeof AGENDA_KINDS[number]
 
 export interface AgendaItem {
@@ -21,7 +21,15 @@ export interface AgendaItem {
   siteId: string
   locationId: string | null
   locationTitle: string | null
+  guestImageUrl: string | null
+  resourceImageUrl: string | null
+  resourceTitle: string | null
+  partySize: number | null
   to: string
+}
+
+export interface TodayAgendaPayload extends AgendaPayload {
+  resolvedAt: string
 }
 
 export interface AgendaPrincipal {
@@ -38,14 +46,13 @@ export interface AgendaQuery {
   kinds?: AgendaKind[]
   principal?: AgendaPrincipal
   organizationSlug?: string
-  threadState?: 'needs_attention' | 'waiting_on_guest' | 'resolved'
-  limit?: number
 }
 
 export interface AgendaSite {
   id: string
   label: string
   slug: string
+  vertical: string
 }
 
 export interface AgendaLocation {
@@ -77,7 +84,10 @@ interface SourceRow {
   location_slug: string | null
   location_title: string | null
   timezone: string | null
-  thread_id: string | null
+  guest_image_url: string | null
+  resource_image_url: string | null
+  resource_title: string | null
+  party_size: number | null
 }
 
 interface CapabilitySiteRow {
@@ -163,6 +173,39 @@ function scopeConditions(query: AgendaQuery, alias: string): string {
   ].filter(Boolean).join('\n')
 }
 
+function mediaUrlSelect(
+  alias: string,
+  ownerType: 'business_location' | 'experience' | 'post' | 'site',
+  ownerId: string,
+  slots: string[],
+): string {
+  const slotList = slots.map(slot => `'${slot}'`).join(', ')
+  const slotOrder = slots.map((slot, index) => `WHEN '${slot}' THEN ${index}`).join(' ')
+  return `(SELECT COALESCE(media_asset.thumbnail_url, media_asset.public_url)
+    FROM media_placements placement
+    JOIN media_assets media_asset
+      ON media_asset.id = placement.asset_id
+     AND media_asset.organization_id = placement.organization_id
+     AND media_asset.site_id = placement.site_id
+     AND media_asset.status = 'active'
+    WHERE placement.organization_id = ${alias}.organization_id
+      AND placement.site_id = ${alias}.site_id
+      AND placement.owner_type = '${ownerType}'
+      AND placement.owner_id = ${ownerId}
+      AND placement.slot IN (${slotList})
+      AND placement.status = 'active'
+    ORDER BY CASE placement.slot ${slotOrder} ELSE ${slots.length} END, placement.sort_order
+    LIMIT 1)`
+}
+
+function siteMediaUrlSelect(alias: string): string {
+  return mediaUrlSelect(alias, 'site', `${alias}.site_id`, ['social_card', 'social_share', 'logo'])
+}
+
+function locationMediaUrlSelect(alias: string): string {
+  return mediaUrlSelect(alias, 'business_location', `${alias}.location_id`, ['social_card', 'hero', 'gallery'])
+}
+
 export async function listAgenda(
   db: DbClient,
   organizationId: string,
@@ -194,7 +237,7 @@ export async function listAgenda(
   const capabilitySites = allCapabilitySites.filter(site =>
     !scoped || (accessibleLocationsBySite.get(site.id)?.length ?? 1) > 0)
 
-  const available = new Set<AgendaKind>(['post', 'thread'])
+  const available = new Set<AgendaKind>(['post'])
   for (const site of capabilitySites) {
     const { capabilities } = resolveSiteCmsCapabilities(site.vertical, site.theme_id, {
       siteEnabledFeatures: site.feature_overrides,
@@ -208,7 +251,7 @@ export async function listAgenda(
   if (requestedKinds.size === 0) {
     return {
       items: [], availableKinds,
-      sites: capabilitySites.map(site => ({ id: site.id, label: site.brand_name ?? site.subdomain ?? site.id, slug: site.subdomain ?? site.id })),
+      sites: capabilitySites.map(site => ({ id: site.id, label: site.brand_name ?? site.subdomain ?? site.id, slug: site.subdomain ?? site.id, vertical: site.vertical })),
       locations: [],
     }
   }
@@ -216,38 +259,40 @@ export async function listAgenda(
   const sourceQueries: Promise<SourceRow[]>[] = []
   const broadFrom = `${addDays(query.from, -2)}T00:00:00.000Z`
   const broadTo = `${addDays(query.to, 2)}T23:59:59.999Z`
-  const commonSelect = (alias: string, kind: AgendaKind, fields: string) => `
+  const commonSelect = (alias: string, kind: AgendaKind, fields: string, enrichment: {
+    joins?: string
+    resourceImage?: string
+    resourceTitle?: string
+  } = {}) => `
     SELECT ${alias}.id, '${kind}' AS kind, ${fields}, ${alias}.site_id,
            COALESCE(s.subdomain, s.id) AS site_slug, ${alias}.location_id,
            l.slug AS location_slug, l.title AS location_title,
-           COALESCE(l.timezone, primary_location.timezone) AS timezone, gt.id AS thread_id
-    FROM ${kind === 'reservation' ? 'reservation_submissions' : kind === 'experience_booking' ? 'experience_bookings' : kind === 'post' ? 'posts' : 'guest_threads'} ${alias}
+           COALESCE(l.timezone, primary_location.timezone) AS timezone,
+           NULL AS guest_image_url,
+           ${enrichment.resourceImage ?? `COALESCE(${locationMediaUrlSelect(alias)}, ${siteMediaUrlSelect(alias)})`} AS resource_image_url,
+           ${enrichment.resourceTitle ?? 'COALESCE(l.title, s.brand_name, s.subdomain, s.id)'} AS resource_title
+    FROM ${kind === 'reservation' ? 'reservation_submissions' : kind === 'experience_booking' ? 'experience_bookings' : 'posts'} ${alias}
     JOIN sites s ON s.id = ${alias}.site_id AND s.organization_id = ${alias}.organization_id
     LEFT JOIN business_locations l ON l.id = ${alias}.location_id AND l.site_id = ${alias}.site_id
     LEFT JOIN business_locations primary_location ON primary_location.id = s.primary_location_id AND primary_location.site_id = s.id
-    ${kind === 'thread' ? '' : `LEFT JOIN guest_threads gt ON gt.submission_type = '${kind}' AND gt.submission_id = ${alias}.id`}
-    ${kind === 'thread' ? 'LEFT JOIN guest_threads gt ON gt.id = ' + alias + '.id' : ''}
+    ${enrichment.joins ?? ''}
     WHERE ${alias}.organization_id = ? ${scopeConditions(query, alias)}
   `
   const params = () => scopeParams(organizationId, query)
 
   if (requestedKinds.has('reservation')) sourceQueries.push(queryAll(db, `${commonSelect('r', 'reservation', `r.date AS local_date, r.time AS local_time, NULL AS starts_at, NULL AS ends_at,
-    r.name AS title, printf('%s guests', r.guests) AS subtitle, r.status`)} AND r.date BETWEEN ? AND ?`, [...params(), query.from, query.to]))
+    r.name AS title, printf('%s guests', r.guests) AS subtitle, CAST(r.guests AS INTEGER) AS party_size, r.status`)} AND r.date BETWEEN ? AND ?`, [...params(), query.from, query.to]))
   if (requestedKinds.has('experience_booking')) sourceQueries.push(queryAll(db, `${commonSelect('b', 'experience_booking', `b.booking_date AS local_date, b.time_slot AS local_time, NULL AS starts_at, NULL AS ends_at,
-    b.guest_name AS title, printf('%d guests · %s', b.party_size, b.time_slot) AS subtitle, b.status`)} AND b.booking_date BETWEEN ? AND ?`, [...params(), query.from, query.to]))
+    b.guest_name AS title, printf('%d guests', b.party_size) AS subtitle, b.party_size AS party_size, b.status`, {
+    joins: `LEFT JOIN products agenda_product ON agenda_product.id = b.experience_id AND agenda_product.organization_id = b.organization_id AND agenda_product.site_id = b.site_id`,
+    resourceImage: `COALESCE(${mediaUrlSelect('b', 'experience', 'b.experience_id', ['gallery'])}, ${locationMediaUrlSelect('b')}, ${siteMediaUrlSelect('b')})`,
+    resourceTitle: 'COALESCE(agenda_product.name, l.title, s.brand_name, s.subdomain, s.id)',
+  })} AND b.booking_date BETWEEN ? AND ?`, [...params(), query.from, query.to]))
   if (requestedKinds.has('post')) sourceQueries.push(queryAll(db, `${commonSelect('p', 'post', `NULL AS local_date, NULL AS local_time, CASE WHEN p.status = 'published' AND p.published_at IS NOT NULL THEN p.published_at ELSE COALESCE(p.scheduled_for, p.published_at, p.event_start) END AS starts_at, p.event_end AS ends_at,
-    NULLIF(COALESCE(NULLIF(p.title, ''), NULLIF(p.event_title, '')), '') AS title, p.post_type AS subtitle, p.status`)}
+    NULLIF(COALESCE(NULLIF(p.title, ''), NULLIF(p.event_title, '')), '') AS title, p.post_type AS subtitle, NULL AS party_size, p.status`, {
+    resourceImage: `COALESCE(${mediaUrlSelect('p', 'post', 'p.id', ['cover'])}, ${locationMediaUrlSelect('p')}, ${siteMediaUrlSelect('p')})`,
+  })}
     AND CASE WHEN p.status = 'published' AND p.published_at IS NOT NULL THEN p.published_at ELSE COALESCE(p.scheduled_for, p.published_at, p.event_start) END BETWEEN ? AND ?`, [...params(), broadFrom, broadTo]))
-  if (requestedKinds.has('thread')) sourceQueries.push(queryAll(db, `${commonSelect('t', 'thread', `NULL AS local_date, NULL AS local_time, COALESCE(t.last_inbound_at, t.last_message_at, t.created_at) AS starts_at, NULL AS ends_at,
-    t.guest_name AS title, t.submission_type AS subtitle, t.conversation_state AS status`)}
-    AND COALESCE(t.last_inbound_at, t.last_message_at, t.created_at) BETWEEN ? AND ?
-    ${query.threadState ? 'AND t.conversation_state = ?' : ''}
-    ORDER BY COALESCE(t.last_inbound_at, t.last_message_at, t.created_at) DESC
-    ${query.limit ? 'LIMIT ?' : ''}`, [
-      ...params(), broadFrom, broadTo,
-      ...(query.threadState ? [query.threadState] : []),
-      ...(query.limit ? [Math.max(1, Math.min(query.limit, 100))] : []),
-    ]))
 
   const rows = (await Promise.all(sourceQueries)).flat().filter((row) => {
     if (!scoped) return true
@@ -265,17 +310,18 @@ export async function listAgenda(
     if (dayKey < query.from || dayKey > query.to) return []
     const siteBase = `/dashboard/${organizationSlug}/sites/${row.site_slug}`
     const locationSegment = row.location_slug ? `/locations/${row.location_slug}` : ''
-    const to = row.thread_id
-      ? `${siteBase}/conversations/${row.thread_id}`
-      : row.kind === 'post'
-        ? `${siteBase}${locationSegment}/posts`
-        : `${siteBase}/conversations`
+    const to = row.kind === 'reservation' || row.kind === 'experience_booking'
+      ? `/dashboard/${organizationSlug}/bookings/${row.kind}/${encodeURIComponent(row.id)}`
+      : `${siteBase}${locationSegment}/posts`
     return [{
       id: `${row.kind}:${row.id}`, kind: row.kind, startsAt,
       endsAt: row.ends_at && !Number.isNaN(Date.parse(row.ends_at)) ? new Date(row.ends_at).toISOString() : null,
       dayKey, timeZone, showTimeZone: !validTimeZone(row.timezone), title: row.title,
       subtitle: row.subtitle, status: row.status, siteId: row.site_id,
-      locationId: row.location_id, locationTitle: row.location_title, to,
+      locationId: row.location_id, locationTitle: row.location_title,
+      // Guest avatars are intentionally absent: tenant customer records have no avatar field.
+      guestImageUrl: row.guest_image_url, resourceImageUrl: row.resource_image_url,
+      resourceTitle: row.resource_title, partySize: row.party_size, to,
     }]
   }).sort((left, right) => left.startsAt.localeCompare(right.startsAt) || left.id.localeCompare(right.id))
 
@@ -291,8 +337,30 @@ export async function listAgenda(
   }))
   return {
     items, availableKinds,
-    sites: capabilitySites.map(site => ({ id: site.id, label: site.brand_name ?? site.subdomain ?? site.id, slug: site.subdomain ?? site.id })),
+    sites: capabilitySites.map(site => ({ id: site.id, label: site.brand_name ?? site.subdomain ?? site.id, slug: site.subdomain ?? site.id, vertical: site.vertical })),
     locations: locations.map(location => ({ id: location.id, siteId: location.site_id, title: location.title })),
+  }
+}
+
+export async function listTodayAgenda(
+  db: DbClient,
+  organizationId: string,
+  input: Pick<AgendaQuery, 'organizationSlug' | 'principal'>,
+  now = new Date(),
+): Promise<TodayAgendaPayload> {
+  const utcKey = now.toISOString().slice(0, 10)
+  const nearby = await listAgenda(db, organizationId, {
+    from: addDays(utcKey, -1),
+    to: addDays(utcKey, 1),
+    kinds: ['reservation', 'experience_booking'],
+    organizationSlug: input.organizationSlug,
+    principal: input.principal,
+  })
+  return {
+    ...nearby,
+    availableKinds: nearby.availableKinds.filter(kind => kind === 'reservation' || kind === 'experience_booking'),
+    items: nearby.items.filter(item => item.dayKey === todayKeyForTimeZone(now, item.timeZone)),
+    resolvedAt: now.toISOString(),
   }
 }
 

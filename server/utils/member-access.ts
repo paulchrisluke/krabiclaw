@@ -459,6 +459,7 @@ const SCOPED_ROLE_DASHBOARD_ROUTES = [
   /^\/api\/dashboard\/onboarding-context$/,
   /^\/api\/dashboard\/onboarding\/checklist$/,
   /^\/api\/dashboard\/notifications(?:\/unread-count|\/read-all|\/[^/]+\/read)?$/,
+  /^\/api\/dashboard\/guest-inbox\/socket$/,
 ]
 
 export function canScopedRoleUseDashboardPath(pathname: string): boolean {

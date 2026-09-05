@@ -8,11 +8,27 @@
     <template #body>
       <div class="mx-auto w-full max-w-[var(--ws-page-wide,90rem)] space-y-6 pb-24">
         <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div class="flex items-center gap-1">
-            <UButton icon="i-lucide-chevron-left" color="neutral" variant="ghost" square aria-label="Previous month" @click="moveMonth(-1)" />
-            <UButton label="Today" color="neutral" variant="soft" @click="goToday" />
-            <UButton icon="i-lucide-chevron-right" color="neutral" variant="ghost" square aria-label="Next month" @click="moveMonth(1)" />
-            <h2 class="ml-3 text-lg font-semibold text-highlighted">{{ monthLabel }}</h2>
+          <div class="space-y-3">
+            <div class="flex items-center gap-1">
+              <UButton icon="i-lucide-chevron-left" color="neutral" variant="ghost" square aria-label="Previous month" @click="moveMonth(-1)" />
+              <UButton label="Today" color="neutral" variant="soft" @click="goToday" />
+              <UButton icon="i-lucide-chevron-right" color="neutral" variant="ghost" square aria-label="Next month" @click="moveMonth(1)" />
+              <h2 class="ml-3 text-lg font-semibold text-highlighted">{{ monthLabel }}</h2>
+            </div>
+            <div class="flex gap-2" aria-label="Calendar view">
+              <UButton
+                label="Agenda"
+                :variant="calendarView === 'agenda' ? 'solid' : 'soft'"
+                :color="calendarView === 'agenda' ? 'primary' : 'neutral'"
+                @click="calendarView = 'agenda'"
+              />
+              <UButton
+                label="Availability"
+                :variant="calendarView === 'availability' ? 'solid' : 'soft'"
+                :color="calendarView === 'availability' ? 'primary' : 'neutral'"
+                @click="calendarView = 'availability'"
+              />
+            </div>
           </div>
           <div class="grid grid-cols-1 gap-3 sm:grid-cols-3 lg:w-[38rem]">
             <UFormField label="Site">
@@ -21,22 +37,42 @@
             <UFormField label="Location">
               <USelect v-model="filters.locationId" :items="locationOptions" :disabled="filters.siteId === FILTER_ALL" class="w-full" />
             </UFormField>
-            <UFormField label="Kind">
+            <UFormField v-if="calendarView === 'agenda'" label="Kind">
               <USelect v-model="filters.kind" :items="kindOptions" class="w-full" />
             </UFormField>
           </div>
         </div>
 
-        <UAlert
-          v-if="agendaError"
-          color="error"
-          variant="soft"
-          title="Calendar could not be loaded"
-          :description="getErrorMessage(agendaError, 'Calendar request failed')"
-        />
-        <USkeleton v-if="loading && !agendaData" class="h-[38rem] w-full" />
+        <template v-if="calendarView === 'availability'">
+          <UAlert
+            v-if="filters.siteId === FILTER_ALL || filters.locationId === FILTER_ALL"
+            color="neutral"
+            variant="soft"
+            title="Choose a site and location"
+            description="Availability is managed for one location at a time."
+          />
+          <DashboardAvailabilityCalendar
+            v-else
+            :site-id="filters.siteId"
+            :location-id="filters.locationId"
+            :from="monthStart"
+            :to="monthEnd"
+            :owner-type="availabilityOwnerType"
+            :owner-id="availabilityOwnerId"
+          />
+        </template>
 
-        <template v-else-if="agendaData && !agendaError">
+        <template v-else>
+          <UAlert
+            v-if="agendaError"
+            color="error"
+            variant="soft"
+            title="Calendar could not be loaded"
+            :description="getErrorMessage(agendaError, 'Calendar request failed')"
+          />
+          <USkeleton v-if="loading && !agendaData" class="h-[38rem] w-full" />
+
+          <template v-else-if="agendaData && !agendaError">
           <div data-testid="calendar-month-grid" class="hidden overflow-hidden rounded-lg border border-default lg:block">
             <div class="grid grid-cols-7 border-b border-default bg-muted/30">
               <div v-for="day in weekdayLabels" :key="day" class="px-3 py-2 text-xs font-semibold uppercase tracking-wide text-muted">{{ day }}</div>
@@ -83,6 +119,7 @@
             <p class="font-medium text-highlighted">Nothing scheduled this month</p>
             <p class="mt-1 text-sm text-muted">Try another month or adjust the filters.</p>
           </div>
+          </template>
         </template>
       </div>
     </template>
@@ -90,6 +127,7 @@
 </template>
 
 <script setup lang="ts">
+import DashboardAvailabilityCalendar from '~/components/dashboard/AvailabilityCalendar.vue'
 import { getErrorMessage } from '~/utils/errors'
 import type { AgendaItem, AgendaKind, AgendaLocation, AgendaPayload, AgendaSite } from '~/server/utils/dashboard-agenda'
 
@@ -103,12 +141,25 @@ const dashboardApi = useDashboardApi()
 const requestEvent = useRequestEvent()
 const orgSlug = computed(() => String(route.params.orgSlug ?? ''))
 const currentMonth = ref(new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), 1)))
-const routeKind = typeof route.query.kinds === 'string' && ['reservation', 'experience_booking', 'post', 'thread'].includes(route.query.kinds) ? route.query.kinds : FILTER_ALL
-const filters = reactive({ siteId: FILTER_ALL, locationId: FILTER_ALL, kind: routeKind })
+const routeKind = typeof route.query.kinds === 'string' && ['reservation', 'experience_booking', 'post'].includes(route.query.kinds) ? route.query.kinds : FILTER_ALL
+const routeSiteId = typeof route.query.siteId === 'string' ? route.query.siteId : FILTER_ALL
+const routeLocationId = typeof route.query.locationId === 'string' ? route.query.locationId : FILTER_ALL
+const calendarView = ref(route.query.view === 'availability' ? 'availability' : 'agenda')
+const filters = reactive({ siteId: routeSiteId, locationId: routeLocationId, kind: routeKind })
 const agendaData = ref<AgendaPayload | null>(null)
 const agendaError = ref<unknown>(null)
 const loading = ref(false)
-const selectedDay = ref(new Date().toISOString().slice(0, 10))
+// The viewer's own date, not UTC. toISOString() is a day behind for anyone east
+// of Greenwich in the evening, which made the calendar open on yesterday and
+// ask the availability API about the wrong date.
+function localDayKey(date = new Date()): string {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+const selectedDay = ref(localDayKey())
 
 const monthStart = computed(() => currentMonth.value.toISOString().slice(0, 10))
 const monthEnd = computed(() => new Date(Date.UTC(currentMonth.value.getUTCFullYear(), currentMonth.value.getUTCMonth() + 1, 0)).toISOString().slice(0, 10))
@@ -120,6 +171,8 @@ const query = computed(() => ({
   kinds: filters.kind !== FILTER_ALL ? [filters.kind as AgendaKind] : undefined,
 }))
 const requestKey = computed(() => `dashboard-calendar-${orgSlug.value}-${JSON.stringify(query.value)}`)
+const availabilityOwnerType = computed(() => route.query.ownerType === 'location' || route.query.ownerType === 'experience' ? route.query.ownerType : undefined)
+const availabilityOwnerId = computed(() => typeof route.query.ownerId === 'string' ? route.query.ownerId : undefined)
 
 const isAgendaItem = (value: unknown): value is AgendaItem =>
   isRecord(value) && typeof value.id === 'string' && typeof value.kind === 'string'
@@ -130,7 +183,7 @@ const isSite = (value: unknown): value is AgendaSite => isRecord(value) && typeo
 const isLocation = (value: unknown): value is AgendaLocation => isRecord(value) && typeof value.id === 'string' && typeof value.siteId === 'string' && typeof value.title === 'string'
 const isAgendaPayload = (value: unknown): value is AgendaPayload =>
   isRecord(value) && Array.isArray(value.items) && value.items.every(isAgendaItem)
-  && Array.isArray(value.availableKinds) && value.availableKinds.every(kind => ['reservation', 'experience_booking', 'post', 'thread'].includes(String(kind)))
+  && Array.isArray(value.availableKinds) && value.availableKinds.every(kind => ['reservation', 'experience_booking', 'post'].includes(String(kind)))
   && Array.isArray(value.sites) && value.sites.every(isSite)
   && Array.isArray(value.locations) && value.locations.every(isLocation)
 
@@ -171,7 +224,21 @@ watch(requestKey, async (key) => {
   }
 })
 
-watch(() => filters.siteId, () => { filters.locationId = FILTER_ALL })
+watch(() => filters.siteId, (_, previousSiteId) => {
+  if (previousSiteId !== undefined) filters.locationId = FILTER_ALL
+})
+watch([() => filters.siteId, () => filters.locationId, calendarView], ([siteId, locationId, view]) => {
+  void router.replace({
+    query: {
+      ...route.query,
+      view: view === 'availability' ? view : undefined,
+      siteId: siteId === FILTER_ALL ? undefined : siteId,
+      locationId: locationId === FILTER_ALL ? undefined : locationId,
+      ownerType: undefined,
+      ownerId: undefined,
+    },
+  })
+})
 watch(() => filters.kind, async kind => {
   await router.replace({ query: { ...route.query, kinds: kind === FILTER_ALL ? undefined : kind } })
 })
@@ -184,7 +251,6 @@ const itemsByDay = computed(() => {
   for (const item of agendaData.value?.items ?? []) groups.set(item.dayKey, [...(groups.get(item.dayKey) ?? []), item])
   return groups
 })
-const todayUtcKey = () => new Date().toISOString().slice(0, 10)
 const weekdayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const monthCells = computed(() => {
   const year = currentMonth.value.getUTCFullYear()
@@ -193,7 +259,7 @@ const monthCells = computed(() => {
   return Array.from({ length: 42 }, (_, index) => {
     const date = new Date(Date.UTC(year, month, index - firstWeekday + 1))
     const dayKey = date.toISOString().slice(0, 10)
-    return { dayKey, day: date.getUTCDate(), inMonth: date.getUTCMonth() === month, isToday: dayKey === todayUtcKey(), items: itemsByDay.value.get(dayKey) ?? [] }
+    return { dayKey, day: date.getUTCDate(), inMonth: date.getUTCMonth() === month, isToday: dayKey === localDayKey(), items: itemsByDay.value.get(dayKey) ?? [] }
   })
 })
 const mobileGroups = computed(() => [...itemsByDay.value.entries()].map(([dayKey, items]) => ({ dayKey, items })))
@@ -210,12 +276,12 @@ function dayLabel(dayKey: string) {
   return new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', weekday: 'long', month: 'long', day: 'numeric' }).format(new Date(`${dayKey}T12:00:00Z`))
 }
 function kindLabel(kind: AgendaKind) {
-  return ({ reservation: 'Reservation', experience_booking: 'Experience booking', post: 'Post', thread: 'Thread' })[kind]
+  return ({ reservation: 'Reservation', experience_booking: 'Experience booking', post: 'Post' })[kind]
 }
 function kindIcon(kind: AgendaKind) {
-  return ({ reservation: 'i-lucide-utensils', experience_booking: 'i-lucide-ticket', post: 'i-lucide-send', thread: 'i-lucide-message-square' })[kind]
+  return ({ reservation: 'i-lucide-utensils', experience_booking: 'i-lucide-ticket', post: 'i-lucide-send' })[kind]
 }
 function kindStyle(kind: AgendaKind) {
-  return ({ reservation: 'bg-blue-500/10 text-blue-700 dark:text-blue-300', experience_booking: 'bg-violet-500/10 text-violet-700 dark:text-violet-300', post: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300', thread: 'bg-amber-500/10 text-amber-700 dark:text-amber-300' })[kind]
+  return ({ reservation: 'bg-blue-500/10 text-blue-700 dark:text-blue-300', experience_booking: 'bg-violet-500/10 text-violet-700 dark:text-violet-300', post: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' })[kind]
 }
 </script>

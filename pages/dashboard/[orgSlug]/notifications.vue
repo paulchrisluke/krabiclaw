@@ -3,7 +3,7 @@
     <template #header>
       <UDashboardNavbar title="Notifications">
         <template #leading>
-          <DashboardNavbarLeading :to="paths.org" label="Organization" />
+          <DashboardNavbarLeading :to="orgPaths.org" label="Organization" />
         </template>
         <template #right>
           <UButton
@@ -21,11 +21,26 @@
 
     <template #body>
       <div class="w-full max-w-[var(--ws-page-narrow,45rem)]">
+        <UAlert
+          v-if="loadError || realtimeFailed"
+          color="warning"
+          variant="soft"
+          icon="i-lucide-wifi-off"
+          title="Notifications may be out of date"
+          :description="loadError ? 'Notifications could not be loaded.' : 'The live dashboard connection is unavailable.'"
+          class="mb-4"
+        >
+          <template #actions>
+            <UButton color="warning" variant="soft" size="xs" :loading="loading" @click="retryNotifications">
+              Refresh
+            </UButton>
+          </template>
+        </UAlert>
         <div v-if="loading && notifications.length === 0" class="space-y-3">
           <USkeleton v-for="index in 4" :key="index" class="h-16 rounded-lg" />
         </div>
 
-        <div v-else-if="notifications.length === 0" class="py-16 text-center">
+        <div v-else-if="!loadError && !realtimeFailed && notifications.length === 0" class="py-16 text-center">
           <UIcon name="i-lucide-bell-off" class="mx-auto mb-3 size-7 text-muted" />
           <p class="text-sm text-muted">No notifications yet.</p>
         </div>
@@ -57,16 +72,17 @@
 <script setup lang="ts">
 definePageMeta({ layout: 'dashboard' })
 
-const { paths } = useDashboardSiteLinks()
+const { orgPaths } = useDashboardSiteLinks()
 useSeoMeta({ title: 'Notifications | KrabiClaw Dashboard', robots: 'noindex, nofollow' })
 
 const dashboardApi = useDashboardApi()
+const realtime = useDashboardInvalidations()
 const { formatExactDateTime } = useHumanTime()
 
 interface DashboardNotification {
   id: string
   scope: 'platform' | 'organization' | 'site'
-  event_type: string
+  template: string
   severity: 'info' | 'success' | 'warning' | 'error'
   title: string | null
   message: string | null
@@ -94,7 +110,9 @@ const notifications = ref<DashboardNotification[]>([])
 const unreadCount = ref(0)
 const loading = ref(false)
 const markingAll = ref(false)
-let refreshTimer: ReturnType<typeof setInterval> | undefined
+const loadError = shallowRef<unknown>(null)
+const realtimeFailed = computed(() => realtime.status.value === 'failed')
+let latestRequestId = 0
 
 function severityDot(severity: DashboardNotification['severity']) {
   if (severity === 'error') return 'bg-error'
@@ -117,20 +135,27 @@ function safeDeepLink(value: string | null): string | null {
 }
 
 async function refreshNotifications() {
-  if (loading.value) return
+  const requestId = ++latestRequestId
   loading.value = true
   try {
     const response = await dashboardApi<NotificationResponse>('/api/dashboard/notifications', {
       query: { limit: 50 },
       validate: isNotificationResponse,
     })
+    if (requestId !== latestRequestId) return
     notifications.value = response.notifications
     unreadCount.value = response.unread_count
+    loadError.value = null
   } catch (error) {
-    console.error('notifications_load_failed', error)
+    if (requestId === latestRequestId) loadError.value = error
   } finally {
-    loading.value = false
+    if (requestId === latestRequestId) loading.value = false
   }
+}
+
+function retryNotifications() {
+  realtime.connect()
+  void refreshNotifications()
 }
 
 async function markRead(notification: DashboardNotification) {
@@ -139,8 +164,7 @@ async function markRead(notification: DashboardNotification) {
     method: 'PATCH',
     validate: (value): value is { success: true } => isRecord(value) && value.success === true,
   })
-  notification.read_at = new Date().toISOString()
-  unreadCount.value = Math.max(0, unreadCount.value - 1)
+  await refreshNotifications()
 }
 
 async function markAllRead() {
@@ -168,12 +192,13 @@ async function openNotification(notification: DashboardNotification) {
   if (destination) await navigateTo(destination)
 }
 
-onMounted(() => {
-  refreshNotifications().catch(console.error)
-  refreshTimer = setInterval(() => refreshNotifications().catch(console.error), 60_000)
+watch(realtime.event, (event) => {
+  if (event?.type === 'notification.created' || event?.type === 'notification.read') void refreshNotifications()
 })
 
-onBeforeUnmount(() => {
-  if (refreshTimer) clearInterval(refreshTimer)
+watch(realtime.connectionEpoch, (epoch) => {
+  if (epoch > 0) void refreshNotifications()
 })
+
+onMounted(() => void refreshNotifications())
 </script>

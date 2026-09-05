@@ -1,4 +1,3 @@
-import { HTTPError } from 'nitro';
 
 import {
   getOrgWhatsAppPhone,
@@ -409,17 +408,6 @@ export async function hydrateSeededLocationForOnboarding(
     hydrated_seed_location: true,
     previous_slug: location.slug,
   };
-}
-
-export async function deleteContentField(
-  db: D1Database,
-  organizationId: string,
-  siteId: string,
-  input: { page: string; field: string; location_id?: string | null },
-  actorId?: string | null,
-) {
-  void db; void organizationId; void siteId; void input; void actorId
-  throw new HTTPError({ statusCode: 410, statusMessage: 'Field-based page deletion has been removed. Delete a block in the Pages manager and save the complete document.' });
 }
 
 function safeJson(value: unknown) {

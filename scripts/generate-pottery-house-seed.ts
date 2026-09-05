@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 
-import { execSync } from 'node:child_process'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -15,6 +14,7 @@ import {
   renderCompiledPotteryHouseQaBlock,
   renderCompiledPotteryHouseReviewsBlock,
 } from '../seed-definitions/pottery-house.ts'
+import { spawnYarn } from './utils/spawn-yarn.mjs'
 
 // INCIDENT: Anthropic's Claude (an AI coding assistant) ran this script with
 // --preview believing it was a harmless dry run. It is not. --preview
@@ -95,8 +95,13 @@ if (isStdout) {
 }
 
 if (isPreview) {
-  const checkCmd = `npx wrangler d1 execute DB ${envFlag} ${remoteFlag} --command "SELECT organization_id FROM sites WHERE id = 'site-pottery-house'" --json`.trim()
-  const checkOutput = execSync(checkCmd, { encoding: 'utf8' })
+  const checkResult = spawnYarn(
+    ['wrangler', 'd1', 'execute', 'DB', ...envFlag.split(' '), remoteFlag, '--command', "SELECT organization_id FROM sites WHERE id = 'site-pottery-house'", '--json'],
+    { encoding: 'utf8' },
+  )
+  if (checkResult.error) throw checkResult.error
+  if (checkResult.status !== 0) process.exit(checkResult.status ?? 1)
+  const checkOutput = String(checkResult.stdout)
   const currentOrgId = JSON.parse(checkOutput)?.[0]?.results?.[0]?.organization_id
 
   if (currentOrgId && currentOrgId !== 'org-pottery-house') {
@@ -115,9 +120,11 @@ const sqlPath = join(dir, 'pottery-house-krabi.sql')
 
 try {
   writeFileSync(sqlPath, sql, 'utf8')
-  const cmd = `npx wrangler d1 execute DB ${envFlag} ${remoteFlag} --file "${sqlPath}"`.trim()
-  console.log(`[seed:pottery-house] Applying: ${cmd}`)
-  execSync(cmd, { stdio: 'inherit' })
+  const args = ['wrangler', 'd1', 'execute', 'DB', ...envFlag.split(' '), ...remoteFlag.split(' ').filter(Boolean), '--file', sqlPath]
+  console.log(`[seed:pottery-house] Applying: corepack yarn ${args.join(' ')}`)
+  const result = spawnYarn(args)
+  if (result.error) throw result.error
+  if (result.status !== 0) process.exit(result.status ?? 1)
   console.log('[seed:pottery-house] Done.')
 } finally {
   rmSync(dir, { recursive: true, force: true })

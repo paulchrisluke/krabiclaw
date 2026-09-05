@@ -78,8 +78,9 @@ function resolveSubscriptionInterval(subscription: Stripe.Subscription): Billing
   const baseItems = subscription.items.data.filter(item => planId(stripeProduct(item.price.product)) === 'growth')
   if (baseItems.length !== 1) throw new Error(`Stripe subscription ${subscription.id} must have exactly one Growth base item`)
   const interval = baseItems[0]!.price.recurring?.interval
-  if (interval !== 'month' && interval !== 'year') throw new Error(`Stripe subscription ${subscription.id} has an unsupported Growth interval`)
-  return interval
+  if (interval === 'month') return 'month'
+  if (interval === 'year') return 'year'
+  throw new Error(`Stripe subscription ${subscription.id} has an unsupported Growth interval`)
 }
 
 function languageItem(subscription: Stripe.Subscription): Stripe.SubscriptionItem | null {

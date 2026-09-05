@@ -10,7 +10,7 @@ import { rootDomainForPair } from '~/server/utils/domain-shared'
 import { assertNewSalePlan, type NewSalePlanId } from '~/shared/billing-model'
 import {
   buildTransferDomainSnapshot, cancelPendingSiteTransfer, serializeTransferDomainSnapshot, } from '~/server/utils/site-transfer'
-import { useRender } from 'vue-email'
+import { renderEmail } from '~/server/emails/vue-email'
 import SiteTransferInvite from '~/server/emails/templates/SiteTransferInvite'
 import { getOrgAdapter } from 'better-auth/plugins'
 
@@ -217,9 +217,8 @@ export default defineHandler(async (event) => {
     const discountNote = invitedCoupon ? ' — a discount has been applied automatically at checkout' : ''
     const resolvedPlanLabel = invitedPlan ? `${planLabel[invitedPlan] ?? invitedPlan}${discountNote}` : null
 
-    useRender(SiteTransferInvite, {
-      props: {
-        siteName, initiatorName, transferUrl, platformDomain, domain: invitedDomain ?? null, planLabel: resolvedPlanLabel, personalMessage: body.message?.trim() || null, }, }).then(({ text }) => {
+    renderEmail(SiteTransferInvite, {
+      siteName, initiatorName, transferUrl, platformDomain, domain: invitedDomain ?? null, planLabel: resolvedPlanLabel, personalMessage: body.message?.trim() || null, }).then(({ text }) => {
       if (shouldSendRealEmail(env)) {
         fetch('https://api.resend.com/emails', {
           method: 'POST', headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, 'Content-Type': 'application/json' }, body: JSON.stringify({

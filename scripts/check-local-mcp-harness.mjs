@@ -59,7 +59,7 @@ function parseOrigin(value, label) {
 async function fetchJson(url, options = {}) {
   const res = await fetch(url, options)
   const text = await res.text()
-  let body = null
+  let body
   try {
     body = text ? JSON.parse(text) : null
   } catch {

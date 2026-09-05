@@ -1,39 +1,12 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
-import { HTTPError, defineHandler  } from 'nitro';
+import { assertDevRouteAllowed } from '~/server/utils/dev-route-auth'
+import { defineHandler } from 'nitro'
 import {  getQuery  } from 'nitro/h3';
 import { queryFirst, queryAll } from '~/server/db'
 
-const textEncoder = new TextEncoder()
-
-function timingSafeEqualText(a: string, b: string): boolean {
-  const left = textEncoder.encode(a)
-  const right = textEncoder.encode(b)
-  if (left.length !== right.length) {
-    let _noop = 0
-    for (let i = 0; i < left.length; i += 1) _noop |= left[i]!
-    return false
-  }
-  let diff = 0
-  for (let i = 0; i < left.length; i += 1) diff |= left[i]! ^ right[i]!
-  return diff === 0
-}
-
 export default defineHandler(async (event) => {
+  assertDevRouteAllowed(event)
   const env = cloudflareEnv(event)
-  const devMode = import.meta.dev
-  const e2eOverride = env.E2E_ALLOW_DEV_ROUTES === 'true'
-  if (!devMode && !e2eOverride) {
-    throw new HTTPError({ statusCode: 404, statusMessage: 'Not found' })
-  }
-
-  if (!devMode && e2eOverride) {
-    const expectedSecret = env.E2E_DEV_ROUTE_SECRET || ''
-    const providedSecret = (event.req.headers.get('x-dev-route-secret')) || ''
-    if (!expectedSecret || !providedSecret || !timingSafeEqualText(providedSecret, expectedSecret)) {
-      throw new HTTPError({ statusCode: 403, statusMessage: 'Forbidden' })
-    }
-  }
-
   const db = env.DB
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
 

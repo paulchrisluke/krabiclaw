@@ -8,6 +8,7 @@ interface ScheduledTaskDefinition {
 
 export type ScheduledTaskName =
   | 'blog-scheduled-publish'
+  | 'post-scheduled-publish'
   | 'public-resource-cache-invalidation'
   | 'domain-reconciliation'
   | 'zaraz-analytics-reconciliation'
@@ -23,7 +24,7 @@ type TaskLoader = () => Promise<{ default: ScheduledTaskDefinition }>
 
 /** The single source of truth for cron-to-task dispatch in Nitro's scheduled hook. */
 export const SCHEDULED_TASKS: Readonly<Record<string, readonly ScheduledTaskName[]>> = {
-  '*/5 * * * *': ['blog-scheduled-publish'],
+  '*/5 * * * *': ['blog-scheduled-publish', 'post-scheduled-publish'],
   '*/2 * * * *': ['public-resource-cache-invalidation'],
   '*/10 * * * *': ['domain-reconciliation', 'zaraz-analytics-reconciliation'],
   '0 3 * * *': ['domain-reconciliation-daily', 'analytics-aggregate-daily'],
@@ -34,6 +35,7 @@ export const SCHEDULED_TASKS: Readonly<Record<string, readonly ScheduledTaskName
 
 const TASK_LOADERS: Readonly<Record<ScheduledTaskName, TaskLoader>> = {
   'blog-scheduled-publish': async () => import('./tasks/blog-scheduled-publish'),
+  'post-scheduled-publish': async () => import('./tasks/post-scheduled-publish'),
   'public-resource-cache-invalidation': async () => import('./tasks/public-resource-cache-invalidation'),
   'domain-reconciliation': async () => import('./tasks/domain-reconciliation'),
   'zaraz-analytics-reconciliation': async () => import('./tasks/zaraz-analytics-reconciliation'),

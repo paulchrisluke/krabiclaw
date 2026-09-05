@@ -6,26 +6,17 @@ import { getNotificationAccess } from '~/server/utils/notification-access'
 interface NotificationRow {
   id: string
   scope: 'platform' | 'organization' | 'site'
-  event_type: string
+  template: string
   severity: 'info' | 'success' | 'warning' | 'error'
   organization_id: string | null
   site_id: string | null
   location_id: string | null
-  actor_user_id: string | null
   target_user_id: string | null
   title: string | null
   message: string | null
   deep_link: string | null
-  payload: string | null
   created_at: string
   read_at: string | null
-}
-
-function parsePayload(payload: string | null): Record<string, unknown> | null {
-  if (!payload) return null
-  const parsed = JSON.parse(payload)
-  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('Stored notification payload is invalid')
-  return parsed as Record<string, unknown>
 }
 
 export default defineHandler(async (event) => {
@@ -35,7 +26,7 @@ export default defineHandler(async (event) => {
 
   const [rows, count] = await Promise.all([
     queryAll<NotificationRow>(access.db, `
-      SELECT n.id, n.scope, n.event_type, n.severity, n.organization_id, n.site_id, n.location_id, n.actor_user_id, n.target_user_id, n.title, n.message, n.deep_link, n.payload, n.created_at, COALESCE(nr.read_at, n.read_at) AS read_at
+      SELECT n.id, n.scope, n.template, n.severity, n.organization_id, n.site_id, n.location_id, n.target_user_id, n.title, n.message, n.deep_link, n.created_at, nr.read_at
       FROM notifications n
       LEFT JOIN notification_reads nr ON nr.notification_id = n.id AND nr.user_id = ?
       WHERE ${access.whereSql}
@@ -45,10 +36,10 @@ export default defineHandler(async (event) => {
       SELECT COUNT(*) AS count
       FROM notifications n
       LEFT JOIN notification_reads nr ON nr.notification_id = n.id AND nr.user_id = ?
-      WHERE ${access.whereSql} AND COALESCE(nr.read_at, n.read_at) IS NULL
+      WHERE ${access.whereSql} AND nr.read_at IS NULL
     `, [access.userId, ...access.whereParams]), ])
 
   return jsonResponse({
-    notifications: rows.map(row => ({ ...row, payload: parsePayload(row.payload) })), unread_count: Number(count?.count ?? 0), })
+    notifications: rows, unread_count: Number(count?.count ?? 0), })
 })
 import { defineHandler } from 'nitro';

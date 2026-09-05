@@ -176,14 +176,9 @@ export interface CloudflareEnv {
   EMAIL_FROM?: string
   EMAIL_DELIVERY_MODE?: string
   EMAIL_REPLY_SECRET?: string
-  EMAIL_INBOUND_SECRET?: string
-  DISCORD_DELIVERY_MODE?: string
-  DISCORD_WEBHOOK_URL?: string
   MEDIA_BUCKET?: R2Bucket
   SITE_CACHE?: KVNamespace
-  GUEST_THREAD_COMMANDS?: DurableObjectNamespace
   GUEST_INBOX_HUBS?: DurableObjectNamespace
-  GUEST_DELIVERY_QUEUE?: Queue
   db?: ReturnType<typeof createDb>
   [key: string]: ApiValue
 }
@@ -323,7 +318,7 @@ export function createAuth(env: CloudflareEnv) {
             // way: a signup can never be allowed to fail because this write failed. That
             // means the metric is a best-effort lower bound, not an exact count — see
             // PLATFORM_SIGNUP_LEDGER_START_DATE for the known-gap cutover this implies.
-            await notifyNewUserSignup(db, env, {
+            await notifyNewUserSignup(db, {
               id: user.id,
               email: user.email,
             }).catch((err) => console.error('signup_notification_failed', err))

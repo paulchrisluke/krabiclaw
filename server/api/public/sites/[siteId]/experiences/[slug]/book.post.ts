@@ -1,7 +1,7 @@
 import { cloudflareEnv, jsonResponse, cleanString, readRequiredBody } from '~/server/utils/api-response'
 import { isReservedTestDomain, shouldSendRealEmail } from '~/server/utils/email-delivery'
-import { getExperienceBySlug, createExperienceBookingClaimingCapacity, resolveEffectiveTimeSlots, getSlotAvailability, resolveExperienceTimezone } from '~/server/utils/experiences'
-import { isDateBeforeTimezoneToday, isTimeSlotInPast } from '~/server/utils/site-config'
+import { getExperienceBySlug, createExperienceBookingClaimingCapacity, getSlotAvailability, resolveExperienceTimezone } from '~/server/utils/experiences'
+import { isDateBeforeTimezoneToday } from '~/server/utils/site-config'
 import { fmt12Hour } from '~/shared/reservation-hours'
 import { notifyExperienceBookingCreated } from '~/server/utils/notifications'
 import { recordSubmissionConversionSafe } from '~/server/utils/site-conversions'
@@ -11,7 +11,6 @@ import { queryFirst } from '~/server/db'
 import { renderBookingPolicySummary, resolveBookingPolicy } from '~/server/utils/booking-policies'
 import { getSourceLocale } from '~/server/utils/site-locales'
 import { buildOwnerThreadInboxUrl, getPlatformDomain } from '~/server/utils/dashboard-notification-links'
-import { fireOrganizationEventSafe } from '~/server/utils/organization-events'
 import { getActiveSpecialClosure } from '~/utils/formatters'
 import { createReservationCancelToken, hashReservationCancelToken } from '~/server/utils/reservation-cancel-token'
 import { deleteCustomerIfUnlinked, findOrCreateCustomer, recordCustomerBooking } from '~/server/utils/customers'
@@ -97,28 +96,19 @@ export default defineHandler(async (event) => {
   }
 
   if (!timeSlot) return jsonResponse({ error: 'A time slot is required' }, { status: 400 })
-  const effectiveSlots = resolveEffectiveTimeSlots(experience, bookingDate)
-    .filter((slot) => !isTimeSlotInPast(bookingDate, slot, experienceTimezone))
-  if (effectiveSlots.length === 0) {
+  const availability = await getSlotAvailability(db, siteId, experience, bookingDate, experienceTimezone)
+  if (availability.length === 0) {
     return jsonResponse({ error: 'No available time slots for this date' }, { status: 400 })
   }
-  if (!effectiveSlots.includes(timeSlot)) {
+  const slotAvailability = availability.find(slot => slot.time_slot === timeSlot)
+  if (!slotAvailability) {
     return jsonResponse({ error: 'Invalid time slot' }, { status: 400 })
   }
-  if (experience.max_capacity && partySize > experience.max_capacity) {
-    return jsonResponse({ error: `Maximum party size for this experience is ${experience.max_capacity}` }, { status: 400 })
+  if (slotAvailability.is_closed) {
+    return jsonResponse({ error: 'This time slot is closed for booking.' }, { status: 409 })
   }
-  let slotCapacity: number | null = null
-  if (effectiveSlots.length) {
-    const availability = await getSlotAvailability(db, siteId, experience, bookingDate, experienceTimezone)
-    const slotAvailability = availability.find((s) => s.time_slot === timeSlot)
-    if (slotAvailability?.is_closed) {
-      return jsonResponse({ error: 'This time slot is closed for booking.' }, { status: 409 })
-    }
-    if (slotAvailability && slotAvailability.remaining !== null && partySize > slotAvailability.remaining) {
-      return jsonResponse({ error: `Only ${Math.max(slotAvailability.remaining, 0)} spot(s) left for this time slot.` }, { status: 409 })
-    }
-    slotCapacity = slotAvailability?.capacity ?? null
+  if (slotAvailability.remaining !== null && partySize > slotAvailability.remaining) {
+    return jsonResponse({ error: `Only ${Math.max(slotAvailability.remaining, 0)} spot(s) left for this time slot.` }, { status: 409 })
   }
 
   // Rate limiting (skipped in dev so E2E tests can run repeatedly without hitting limits)
@@ -147,7 +137,7 @@ export default defineHandler(async (event) => {
   const customer = await findOrCreateCustomer(db, customerInput)
 
   const booking = await createExperienceBookingClaimingCapacity(db, {
-    experience_id: experience.id, organization_id: site.organization_id, site_id: siteId, customer_id: customer.id, location_id: experience.location_id, guest_name: guestName, guest_email: guestEmail, guest_phone: normalizedGuestPhone, party_size: partySize, booking_date: bookingDate, time_slot: timeSlot, status: 'pending', notes: notes || null, ip_hash: ipHash, cancellation_token_hash: cancellationTokenHash, cancellation_token_expires_at: cancellation.expiresAt, capacity: slotCapacity, })
+    experience_id: experience.id, organization_id: site.organization_id, site_id: siteId, customer_id: customer.id, location_id: experience.location_id, guest_name: guestName, guest_email: guestEmail, guest_phone: normalizedGuestPhone, party_size: partySize, booking_date: bookingDate, time_slot: timeSlot, status: 'pending', notes: notes || null, ip_hash: ipHash, cancellation_token_hash: cancellationTokenHash, cancellation_token_expires_at: cancellation.expiresAt, })
   // The capacity check above and this insert aren't atomic with each other —
   // another request can claim the last spot in between. createExperienceBookingClaimingCapacity
   // re-checks capacity as part of the insert itself, so this is the authoritative guard.
@@ -157,12 +147,7 @@ export default defineHandler(async (event) => {
   }
   await recordCustomerBooking(db, customer.id, customerInput)
 
-  const [, thread] = await Promise.all([
-    fireOrganizationEventSafe({
-      db, organizationId: site.organization_id, siteId, locationId: experience.location_id, eventType: 'experience.booking_received', entityType: 'experience_booking', entityId: booking.id, metadata: {
-        experience_id: experience.id, booking_date: bookingDate, time_slot: timeSlot, party_size: partySize, }, }),
-    ensureGuestThread(db, experienceBookingAdapter, booking.id, { publishEnv: env }),
-  ])
+  const thread = await ensureGuestThread(db, experienceBookingAdapter, booking.id, { publishEnv: env })
 
   try {
     const [{ contactPhone, contactEmail }, ownerInboxUrl] = await Promise.all([

@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 
-import { execSync } from 'node:child_process'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { spawnYarn } from './utils/spawn-yarn.mjs'
 
 // Sweeps rows that Playwright E2E specs leave behind on local/preview disposable data.
 //
@@ -20,20 +20,7 @@ import { join } from 'node:path'
 //    sites.organization_id cascades from organization (ON DELETE CASCADE), and every org-scoped
 //    table cascades from organization in turn (same pattern already relied on by
 //    generate-demo-seed.ts's org reset), so deleting the organization row is sufficient for most
-//    child tables - except notification_events, whose organization_id/site_id columns are
-//    ON DELETE SET NULL rather than CASCADE, so it's swept explicitly before the org delete.
-//
-// 2. Guest-submitted rows against persistent customer fixtures (bookings,
-//    contact forms, reservations) - these specs already mark every guest email
-//    '...@playwright.example', so they're swept by that marker instead, since there's no
-//    throwaway org/site to cascade from. Every one of these queries scopes to known
-//    fixture site/org IDs FIRST, before the LIKE pattern - contact_submissions,
-//    experience_bookings, and reservation_submissions all already carry a site_id-leading index
-//    (idx_contact_submissions_site, idx_experience_bookings_site, idx_reservation_submissions_site)
-//    and notifications an organization_id-leading one (notifications_organization_created_at_idx) - but a bare
-//    `email LIKE '%@playwright.example'` with no site/org filter can't use any of them (leading
-//    wildcard forces a full scan regardless), which is what still exceeded D1's CPU budget on
-//    preview even after category 1 was fixed to be cheap.
+//    child tables.
 //
 // Age-guarded (default 2 hours) as a practical safety margin, not a hard guarantee: rows created
 // by an in-flight run are always fresher than the cutoff, so a run has to be stuck for the full
@@ -66,7 +53,6 @@ const FIXTURE_ORG_IDS = [
 // The customer fixtures targeted by tenant-guest-journeys.spec.ts. Scoping by
 // indexed site/org columns keeps the email marker queries bounded.
 const GUEST_BOOKING_SITE_IDS = ['site-pottery-house', 'site-kikuzuki', 'site-ncls-blawby']
-const GUEST_BOOKING_ORGANIZATION_IDS = ['org-pottery-house', 'org-kikuzuki', 'org-ncls-blawby']
 
 // Site-transfer E2E creates throwaway `e2e-*` sites in the protected fixture
 // organizations, then moves them between those organizations. They must be
@@ -79,7 +65,6 @@ const E2E_FIXTURE_SITE_RETAINED_TABLES = [
   'stripe_ga4_subscription_intents',
   'canary_runs',
   'mcp_tool_call_events',
-  'notification_events',
   'notifications',
   'chowbot_messages',
   'chowbot_conversations',
@@ -151,7 +136,6 @@ const cutoffUnixSeconds = Math.floor(cutoffDate.getTime() / 1000)
 const fixtureOrgIdList = FIXTURE_ORG_IDS.map((id) => `'${id}'`).join(', ')
 const fixtureUserIdList = FIXTURE_USER_IDS.map((id) => `'${id}'`).join(', ')
 const guestBookingSiteIdList = GUEST_BOOKING_SITE_IDS.map((id) => `'${id}'`).join(', ')
-const guestBookingOrgIdList = GUEST_BOOKING_ORGANIZATION_IDS.map((id) => `'${id}'`).join(', ')
 
 const batchArg = process.argv.find((arg) => arg.startsWith('--batch-size='))
 const batchSize = batchArg ? Number(batchArg.split('=')[1]) : 500
@@ -230,13 +214,8 @@ WHERE stripe_subscription_id IN (${eligibleSubscriptionIds});
 DELETE FROM subscription WHERE referenceId IN (${eligibleOrgIds});
 
 -- Category 1: throwaway sites/orgs.
--- notification_events.organization_id/site_id are ON DELETE SET NULL, not CASCADE, so they'd
--- otherwise survive the org delete below as orphaned rows pointing at a submission_id whose
--- parent row no longer exists. Delete them first, while organization_id is still populated.
-DELETE FROM notification_events WHERE organization_id IN (${eligibleOrgIds});
-
 -- Cascades through sites, content, experiences, locations, guest_threads
--- (and, via guest_threads' own cascading FKs, guest_thread_entries/guest_thread_member_state/
+-- (and, via guest_threads' own cascading FKs, guest_thread_entries/
 -- guest_thread_deliveries), etc. via organization_id -> organization(id) ON DELETE CASCADE.
 DELETE FROM organization WHERE id IN (${eligibleOrgIds});
 
@@ -268,45 +247,14 @@ WHERE site_id IN (${eligibleE2eFixtureSiteIds});
 DELETE FROM sites
 WHERE id IN (${eligibleE2eFixtureSiteIds});
 
--- Category 2: guest-submitted rows on persistent customer fixtures, marked by
--- email. Every query below filters by the known fixture site_id/organization_id FIRST - via
--- idx_contact_submissions_site, idx_experience_bookings_site, idx_reservation_submissions_site,
--- and notifications_organization_created_at_idx (see comment above) - so the
--- unindexable 'LIKE %@playwright.example' only has to scan a handful of fixture-scoped rows,
--- not a full table scan. notification_events is polymorphic (submission_type/submission_id, no
--- FK) so it must be swept explicitly before its parent rows disappear. guest_thread_entries/
--- guest_thread_member_state/guest_thread_deliveries all have real FKs to guest_threads
--- (ON DELETE CASCADE), but they're deleted explicitly here too rather than relied on
--- implicitly, so this block's correctness doesn't depend on the guest_threads delete below
--- succeeding first.
--- Each branch is LIMIT-bounded too, as its own derived table - SQLite rejects a bare
--- parenthesized SELECT as a compound-query operand inside IN(...) ("near UNION: syntax error"),
--- so each branch is wrapped as SELECT id FROM (SELECT ... LIMIT n) instead. Defensive: category 2
--- is already site/org-scoped down to 2 fixtures, so its result sets should be small regardless,
--- but every fix so far in this script underestimated backlog scale.
-DELETE FROM notification_events WHERE submission_id IN (
-  SELECT id FROM (SELECT id FROM contact_submissions WHERE site_id IN (${guestBookingSiteIdList}) AND email LIKE '%@playwright.example' AND created_at < '${cutoff}' LIMIT ${batchSize})
-  UNION ALL
-  SELECT id FROM (SELECT id FROM reservation_submissions WHERE site_id IN (${guestBookingSiteIdList}) AND email LIKE '%@playwright.example' AND created_at < '${cutoff}' LIMIT ${batchSize})
-  UNION ALL
-  SELECT id FROM (SELECT id FROM experience_bookings WHERE site_id IN (${guestBookingSiteIdList}) AND guest_email LIKE '%@playwright.example' AND created_at < '${cutoff}' LIMIT ${batchSize})
-);
-
-DELETE FROM guest_thread_deliveries WHERE thread_id IN (
-  SELECT id FROM guest_threads WHERE site_id IN (${guestBookingSiteIdList}) AND guest_email LIKE '%@playwright.example' AND created_at < '${cutoff}' LIMIT ${batchSize}
-);
-
-DELETE FROM guest_thread_member_state WHERE thread_id IN (
-  SELECT id FROM guest_threads WHERE site_id IN (${guestBookingSiteIdList}) AND guest_email LIKE '%@playwright.example' AND created_at < '${cutoff}' LIMIT ${batchSize}
-);
-
-DELETE FROM guest_thread_entries WHERE thread_id IN (
-  SELECT id FROM guest_threads WHERE site_id IN (${guestBookingSiteIdList}) AND guest_email LIKE '%@playwright.example' AND created_at < '${cutoff}' LIMIT ${batchSize}
-);
-
-DELETE FROM guest_threads WHERE id IN (
-  SELECT id FROM guest_threads WHERE site_id IN (${guestBookingSiteIdList}) AND guest_email LIKE '%@playwright.example' AND created_at < '${cutoff}' LIMIT ${batchSize}
-);
+DELETE FROM guest_threads
+WHERE (submission_type = 'contact' AND submission_id IN (
+  SELECT id FROM contact_submissions WHERE site_id IN (${guestBookingSiteIdList}) AND email LIKE '%@playwright.example' AND created_at < '${cutoff}' LIMIT ${batchSize}
+)) OR (submission_type = 'reservation' AND submission_id IN (
+  SELECT id FROM reservation_submissions WHERE site_id IN (${guestBookingSiteIdList}) AND email LIKE '%@playwright.example' AND created_at < '${cutoff}' LIMIT ${batchSize}
+)) OR (submission_type = 'experience_booking' AND submission_id IN (
+  SELECT id FROM experience_bookings WHERE site_id IN (${guestBookingSiteIdList}) AND guest_email LIKE '%@playwright.example' AND created_at < '${cutoff}' LIMIT ${batchSize}
+));
 
 DELETE FROM contact_submissions WHERE id IN (
   SELECT id FROM contact_submissions WHERE site_id IN (${guestBookingSiteIdList}) AND email LIKE '%@playwright.example' AND created_at < '${cutoff}' LIMIT ${batchSize}
@@ -317,10 +265,6 @@ DELETE FROM reservation_submissions WHERE id IN (
 DELETE FROM experience_bookings WHERE id IN (
   SELECT id FROM experience_bookings WHERE site_id IN (${guestBookingSiteIdList}) AND guest_email LIKE '%@playwright.example' AND created_at < '${cutoff}' LIMIT ${batchSize}
 );
-DELETE FROM notifications WHERE id IN (
-  SELECT id FROM notifications WHERE organization_id IN (${guestBookingOrgIdList}) AND recipient LIKE '%@playwright.example' AND created_at < '${cutoff}' LIMIT ${batchSize}
-);
-
 -- Category 3: historical test users created by the removed dev-login bypass. Keep sweeping these
 -- legacy '<userId>@example.test' rows until every shared environment has aged them out.
 -- member/session/invitation(as inviter) all cascade from user.id
@@ -343,9 +287,11 @@ if (isStdout) {
 
   try {
     writeFileSync(sqlPath, sql, 'utf8')
-    const cmd = `npx wrangler d1 execute DB ${envFlag} ${remoteFlag} --file "${sqlPath}"`.trim()
-    console.log(`[reset-e2e-artifacts] Applying: ${cmd}`)
-    execSync(cmd, { stdio: 'inherit' })
+    const args = ['wrangler', 'd1', 'execute', 'DB', ...envFlag.split(' '), ...remoteFlag.split(' ').filter(Boolean), '--file', sqlPath]
+    console.log(`[reset-e2e-artifacts] Applying: corepack yarn ${args.join(' ')}`)
+    const result = spawnYarn(args)
+    if (result.error) throw result.error
+    if (result.status !== 0) process.exit(result.status ?? 1)
     console.log('[reset-e2e-artifacts] Done.')
   } finally {
     rmSync(dir, { recursive: true, force: true })

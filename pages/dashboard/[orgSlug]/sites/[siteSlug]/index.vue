@@ -5,7 +5,7 @@
         :title="siteName"
         :toggle="false"
       >
-        <template #leading><DashboardNavbarLeading :to="`${paths.org}/sites`" label="Sites" /></template>
+        <template #leading><DashboardNavbarLeading :to="`${orgPaths.org}/sites`" label="Sites" /></template>
       </UDashboardNavbar>
     </template>
 
@@ -123,7 +123,7 @@
             >
               <UIcon :name="page.icon" class="size-5 text-dimmed" /><span class="min-w-0 flex-1 font-medium text-dimmed">{{ page.label }}</span>
             </button>
-            <NuxtLink v-else :to="page.to" class="flex min-h-[66px] items-center gap-4 border-b border-default px-4 last:border-0 hover:bg-elevated">
+            <NuxtLink v-else-if="page.to" :to="page.to" class="flex min-h-[66px] items-center gap-4 border-b border-default px-4 last:border-0 hover:bg-elevated">
               <UIcon :name="page.icon" class="size-5 text-muted" /><span class="min-w-0 flex-1 font-medium text-highlighted">{{ page.label }}</span><UIcon name="i-lucide-chevron-right" class="size-4 text-muted" />
             </NuxtLink>
           </template>
@@ -140,11 +140,12 @@
 
 <script setup lang="ts">
 import { defaultModuleFeaturesForVertical, parseCmsFeatureOverrideDelta, resolveCmsCapabilities, templateCapabilityCatalog, type ProductFeature } from '~/config/cms-registry'
+import { resolveDashboardPrimaryLocationPath, resolveDashboardSitePageDestination } from '~/composables/useDashboardSiteLinks'
 import { resolvePublicTemplate } from '~/utils/template-registry'
 import { normalizeVertical, type SiteVertical } from '~/utils/vertical-copy'
 import type { DashboardHomeData } from '~/server/utils/dashboard-home'
 
-const { paths } = useDashboardSiteLinks()
+const { orgPaths, sitePaths } = useDashboardSiteLinks()
 
 definePageMeta({ layout: 'dashboard' })
 useSeoMeta({ title: 'My site | KrabiClaw', robots: 'noindex, nofollow' })
@@ -155,11 +156,16 @@ const requestEvent = useRequestEvent()
 if (!dashboard.state.value) await dashboard.refresh()
 const siteId = dashboard.siteId.value
 if (!siteId) throw createError({ statusCode: 404, statusMessage: 'Site not found' })
-const route = useRoute()
 const activeTab = ref<'site' | 'pages'>('site')
 const tabs = [{ label: 'My site', value: 'site' as const }, { label: 'Pages', value: 'pages' as const }]
-const siteDashboardPath = computed(() => `/dashboard/${route.params.orgSlug}/sites/${route.params.siteSlug}`)
-const locationsPath = computed(() => `${siteDashboardPath.value}/locations`)
+const siteDashboardPath = computed(() => {
+  if (!sitePaths.value) throw createError({ statusCode: 400, statusMessage: 'Dashboard site scope is required' })
+  return sitePaths.value.site
+})
+const locationsPath = computed(() => {
+  if (!sitePaths.value) throw createError({ statusCode: 400, statusMessage: 'Dashboard site scope is required' })
+  return sitePaths.value.locations
+})
 const siteName = computed(() => dashboard.site.value?.brand_name ?? '')
 const canManageSite = computed(() => dashboard.siteAccess.value !== 'location')
 const template = computed(() => resolvePublicTemplate({ vertical: dashboard.site.value?.vertical }).slug)
@@ -180,14 +186,17 @@ const { data: overviewData, pending } = await useAsyncData(`dashboard-home-${sit
     if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Request context unavailable' })
     const organization = dashboard.organization.value
     if (!organization) throw createError({ statusCode: 403, statusMessage: 'Dashboard organization unavailable' })
-    const [{ cloudflareEnv }, { getDashboardHomeData }, { assertSiteWideAccess }] = await Promise.all([
+    const [{ cloudflareEnv }, { getDashboardHomeData }, { assertSiteWideAccess }, { getAuthSession }] = await Promise.all([
       import('~/server/utils/api-response'),
       import('~/server/utils/dashboard-home'),
       import('~/server/utils/member-access'),
+      import('~/server/utils/auth'),
     ])
     const environment = cloudflareEnv(requestEvent)
     const db = environment.db
     if (!db) throw createError({ statusCode: 500, statusMessage: 'Database not available' })
+    const session = await getAuthSession(requestEvent, environment)
+    if (!session?.user?.id) throw createError({ statusCode: 401, statusMessage: 'Authentication required' })
     await assertSiteWideAccess(db, {
       env: environment,
       memberId: organization.memberId,
@@ -198,6 +207,7 @@ const { data: overviewData, pending } = await useAsyncData(`dashboard-home-${sit
     return await getDashboardHomeData(db, organization.id, siteId, {
       env: environment,
       memberId: organization.memberId,
+      userId: session.user.id,
       role: organization.role,
     })
   }
@@ -228,18 +238,9 @@ const siteType = computed(() => `${vertical.value.replaceAll('_', ' ')} · ${tem
 const mediaSummary = computed(() => media.value.length ? `${media.value.length}${media.value.length === 6 ? '+' : ''} photos` : 'No media yet')
 const pageIcons: Record<string, string> = { '/': 'i-lucide-house', '/about': 'i-lucide-info', '/contact': 'i-lucide-mail', '/menu': 'i-lucide-utensils', '/order': 'i-lucide-shopping-bag', '/reservations': 'i-lucide-calendar-check', '/experiences': 'i-lucide-ticket', '/services': 'i-lucide-briefcase', '/pricing': 'i-lucide-badge-dollar-sign', '/donate': 'i-lucide-heart-handshake', '/schedule': 'i-lucide-calendar-days', '/blog': 'i-lucide-newspaper' }
 const featureByRoute: Record<string, ProductFeature> = { '/menu': 'products', '/products': 'products', '/order': 'ordering', '/reservations': 'reservations', '/experiences': 'experiences', '/services': 'services', '/pricing': 'services', '/donate': 'services', '/schedule': 'services' }
-const primaryLocationPath = computed(() => {
-  const location = locations.value.find(item => item.is_primary) ?? locations.value[0]
-  return location ? `${locationsPath.value}/${location.slug}` : locationsPath.value
-})
+const primaryLocationPath = computed(() => resolveDashboardPrimaryLocationPath(locations.value, locationsPath.value))
 function pageDestination(path: string) {
-  if (path === '/blog') return `${siteDashboardPath.value}/blog`
-  if (path === '/menu' || path === '/products') return `${primaryLocationPath.value}/products`
-  if (path === '/order') return `${siteDashboardPath.value}/orders`
-  if (path === '/reservations') return `${primaryLocationPath.value}/reservations`
-  if (path === '/experiences') return `${primaryLocationPath.value}/experiences`
-  if (['/services', '/pricing', '/donate', '/schedule'].includes(path)) return `${siteDashboardPath.value}/professional-services`
-  return `${siteDashboardPath.value}/pages`
+  return resolveDashboardSitePageDestination(path, siteDashboardPath.value, primaryLocationPath.value)
 }
 const pageRows = computed(() => {
   const catalog = templateCapabilityCatalog[template.value]

@@ -160,7 +160,12 @@ export interface CuratedExperienceDefinition {
   tagline: string
   body: string
   media: CuratedMediaPlacement<'gallery'>[]
-  highlights?: string[] | null
+  tags?: string[]
+  details?: Array<{
+    key: string
+    label: string
+    values: string[]
+  }>
   includedItems?: string[] | null
   whatToBring?: string[] | null
   meetingPoint?: string | null
@@ -170,7 +175,6 @@ export interface CuratedExperienceDefinition {
   durationMinutes: number | null
   maxCapacity: number | null
   timeSlots: string[]
-  availableNote: string
   status: 'active' | 'inactive' | 'sold_out'
   sortOrder: number
   featured: boolean
@@ -204,6 +208,8 @@ export interface CuratedProductDefinition {
   dietaryNotes: string | null
   available: boolean
   sortOrder: number
+  featured?: boolean
+  featuredSortOrder?: number
 }
 
 export interface CuratedLocationQaDefinition {
@@ -220,24 +226,23 @@ export interface CuratedLocationQaDefinition {
   sortOrder: number
 }
 
-export interface CuratedPostChannelJobDefinition {
-  id: string
-  channel: string
-  status: 'published' | 'pending' | 'failed'
-  publishedAt: string
-}
-
 export interface CuratedPostDefinition {
   id: string
   locationId: string | null
-  postType: 'update' | 'standard' | 'offer'
+  postType: 'update' | 'standard' | 'offer' | 'event'
   title: string | null
   body: string
+  ctaType?: string | null
+  ctaUrl?: string | null
+  eventTitle?: string | null
+  eventStartAt?: string | null
+  eventEndAt?: string | null
+  offerCoupon?: string | null
+  offerTerms?: string | null
   media: CuratedMediaPlacement<'cover' | 'gallery'>[]
   status: 'published' | 'scheduled'
   publishedAt: string
   createdBy: string
-  channelJobs: CuratedPostChannelJobDefinition[]
 }
 
 export interface CuratedTenantPageLocaleFieldDefinition {
@@ -320,7 +325,12 @@ export interface CompiledSeedExperience {
   tagline: string
   body: string
   media: CuratedMediaPlacement<'gallery'>[]
-  highlights: string[] | null
+  tags: string[]
+  details: Array<{
+    key: string
+    label: string
+    values: string[]
+  }>
   includedItems: string[] | null
   whatToBring: string[] | null
   meetingPoint: string | null
@@ -330,7 +340,6 @@ export interface CompiledSeedExperience {
   durationMinutes: number | null
   maxCapacity: number | null
   timeSlots: string[]
-  availableNote: string
   status: CuratedExperienceDefinition['status']
   sortOrder: number
   featured: boolean
@@ -368,6 +377,8 @@ export interface CompiledSeedProduct {
   dietaryNotes: string | null
   available: boolean
   sortOrder: number
+  featured: boolean
+  featuredSortOrder: number
 }
 
 export interface CompiledSeedLocationQa {
@@ -386,15 +397,6 @@ export interface CompiledSeedLocationQa {
   sortOrder: number
 }
 
-export interface CompiledSeedPostChannelJob {
-  id: string
-  postId: string
-  organizationId: string
-  channel: string
-  status: CuratedPostChannelJobDefinition['status']
-  publishedAt: string
-}
-
 export interface CompiledSeedPost {
   id: string
   organizationId: string
@@ -403,11 +405,17 @@ export interface CompiledSeedPost {
   postType: CuratedPostDefinition['postType']
   title: string | null
   body: string
+  ctaType: string | null
+  ctaUrl: string | null
+  eventTitle: string | null
+  eventStartAt: string | null
+  eventEndAt: string | null
+  offerCoupon: string | null
+  offerTerms: string | null
   media: CuratedMediaPlacement<'cover' | 'gallery'>[]
   status: CuratedPostDefinition['status']
   publishedAt: string
   createdBy: string
-  channelJobs: CompiledSeedPostChannelJob[]
 }
 
 export interface CompiledSeedTenantPageLocaleField {
@@ -487,4 +495,92 @@ export interface SerializedSeedPublicRouteExpectation {
 export interface SerializedCompiledCuratedSiteBundle
   extends Omit<CompiledCuratedSiteBundle, 'publicRoutes'> {
   publicRoutes: SerializedSeedPublicRouteExpectation[]
+}
+
+export interface CompiledSeedProductCategory {
+  id: string
+  organizationId: string
+  siteId: string
+  locationId: string
+  name: string
+  slug: string
+  sortOrder: number
+}
+
+/**
+ * Derives the product_categories rows a seed needs from the category names its
+ * Products carry. IDs are derived from the location and slug rather than
+ * generated, so re-running a seed produces the same rows.
+ *
+ * Category order follows first appearance in Product sort order, which is how
+ * the flat pre-category seeds already read on the public site.
+ */
+export function buildSeedProductCategories(
+  products: Pick<CompiledSeedProduct, 'id' | 'organizationId' | 'siteId' | 'locationId' | 'category' | 'sortOrder'>[],
+): { categories: CompiledSeedProductCategory[]; categoryIdByProductId: Map<string, string>; sortOrderByProductId: Map<string, number> } {
+  const categories: CompiledSeedProductCategory[] = []
+  const byKey = new Map<string, CompiledSeedProductCategory>()
+  const categoryIdByProductId = new Map<string, string>()
+  // sort_order is per category now, so it restarts at zero inside each one.
+  const sortOrderByProductId = new Map<string, number>()
+  const positionByCategory = new Map<string, number>()
+  const sortOrderByLocation = new Map<string, number>()
+  for (const product of [...products].sort((a, b) => a.locationId.localeCompare(b.locationId) || a.sortOrder - b.sortOrder)) {
+    const key = `${product.locationId}::${product.category}`
+    let category = byKey.get(key)
+    if (!category) {
+      const slug = product.category
+        .normalize('NFKD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+      if (!slug) throw new Error(`Product category "${product.category}" does not produce a usable slug`)
+      const sortOrder = sortOrderByLocation.get(product.locationId) ?? 0
+      sortOrderByLocation.set(product.locationId, sortOrder + 1)
+      category = { id: `category-${product.locationId}-${slug}`, organizationId: product.organizationId, siteId: product.siteId, locationId: product.locationId, name: product.category, slug, sortOrder }
+      byKey.set(key, category)
+      categories.push(category)
+    }
+    categoryIdByProductId.set(product.id, category.id)
+    const position = positionByCategory.get(category.id) ?? 0
+    positionByCategory.set(category.id, position + 1)
+    sortOrderByProductId.set(product.id, position)
+  }
+  return { categories, categoryIdByProductId, sortOrderByProductId }
+}
+
+/**
+ * Experiences all sit in one category per location, scoped to
+ * product_type 'experience' so it never collides with a menu section of the
+ * same name. IDs are derived, so re-running a seed produces the same rows.
+ */
+export function buildSeedExperienceCategories(
+  experiences: { locationId: string; id: string }[],
+  identity: { organizationId: string; siteId: string },
+): { categories: CompiledSeedProductCategory[]; categoryIdForLocation: (_locationId: string) => string; sortOrderFor: (_id: string) => number } {
+  const categoryIdForLocation = (locationId: string) => `category-${locationId}-experience-experiences`
+  const seen = new Set<string>()
+  const categories: CompiledSeedProductCategory[] = []
+  for (const experience of experiences) {
+    if (seen.has(experience.locationId)) continue
+    seen.add(experience.locationId)
+    categories.push({
+      id: categoryIdForLocation(experience.locationId),
+      organizationId: identity.organizationId,
+      siteId: identity.siteId,
+      locationId: experience.locationId,
+      name: 'Experiences',
+      slug: 'experiences',
+      sortOrder: 0,
+    })
+  }
+  const positionByLocation = new Map<string, number>()
+  const sortOrderById = new Map<string, number>()
+  for (const experience of experiences as { locationId: string; id: string }[]) {
+    const position = positionByLocation.get(experience.locationId) ?? 0
+    positionByLocation.set(experience.locationId, position + 1)
+    sortOrderById.set(experience.id, position)
+  }
+  return { categories, categoryIdForLocation, sortOrderFor: (id: string) => sortOrderById.get(id) ?? 0 }
 }

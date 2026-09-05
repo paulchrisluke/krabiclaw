@@ -4,6 +4,7 @@ import { createWriteStream, existsSync, mkdirSync, readFileSync, rmSync } from '
 import { spawn } from 'node:child_process'
 import { createServer } from 'node:net'
 import { resolve } from 'node:path'
+import { resolveYarnCommand } from './utils/spawn-yarn.mjs'
 
 const root = process.cwd()
 const runId = new Date().toISOString().replaceAll(':', '-').replaceAll('.', '-')
@@ -33,10 +34,11 @@ function parseEnv(source) {
   return values
 }
 
-function spawnLogged(command, args, { env = process.env, logName, inherit = false } = {}) {
+function spawnLogged(command, args, { env = process.env, logName, inherit = false, shell = false } = {}) {
   const child = spawn(command, args, {
     cwd: root,
     env,
+    shell,
     stdio: inherit ? 'inherit' : ['ignore', 'pipe', 'pipe'],
   })
   children.add(child)
@@ -67,6 +69,21 @@ async function run(command, args, env = process.env) {
     child.once('error', reject)
   })
   if (code !== 0) throw new Error(`${command} ${args.join(' ')} exited ${code}`)
+}
+
+function spawnYarnLogged(args, options = {}) {
+  const invocation = resolveYarnCommand(args, options.env)
+  return spawnLogged(invocation.command, invocation.args, { ...options, shell: invocation.shell })
+}
+
+async function runYarn(args, env = process.env) {
+  console.log(`> yarn ${args.join(' ')}`)
+  const child = spawnYarnLogged(args, { env, inherit: true })
+  const code = await new Promise((resolveExit, reject) => {
+    child.once('exit', code => resolveExit(code ?? 1))
+    child.once('error', reject)
+  })
+  if (code !== 0) throw new Error(`yarn ${args.join(' ')} exited ${code}`)
 }
 
 async function waitForUrl(url, expectedStatus, timeoutMs = 90_000) {
@@ -132,24 +149,23 @@ async function main() {
   }
 
   const values = parseEnv(readFileSync(resolve(root, '.env'), 'utf8'))
+  const fixturePassword = process.env.E2E_TEST_PASSWORD || values.get('E2E_TEST_PASSWORD')
+  if (!fixturePassword) {
+    throw new Error('E2E_TEST_PASSWORD is required before exposing the local app through a public tunnel.')
+  }
+  values.set('E2E_TEST_PASSWORD', fixturePassword)
+  const preparationEnv = {
+    ...Object.fromEntries(values),
+    ...process.env,
+    E2E_TEST_PASSWORD: fixturePassword,
+    CI: 'true',
+  }
 
   console.log('# Preparing local D1 and the versioned widget asset')
-  await run('yarn', ['schema:local'], { ...process.env, CI: 'true' })
-  await run('yarn', ['seed:local'])
-  await run('node', ['--experimental-strip-types', 'scripts/provision-e2e-auth.ts'])
-  const localCredentials = values
-  if (runChatGPTGate) {
-    const localEmail = process.env.LOCAL_MCP_TEST_EMAIL || localCredentials.get('LOCAL_MCP_TEST_EMAIL') || ''
-    const localPassword = process.env.LOCAL_MCP_TEST_PASSWORD || localCredentials.get('LOCAL_MCP_TEST_PASSWORD') || ''
-    await run('node', ['scripts/provision-local-mcp-test-user.mjs'], {
-      ...process.env,
-      LOCAL_MCP_TEST_EMAIL: localEmail,
-      LOCAL_MCP_TEST_PASSWORD: localPassword,
-      MCP_CHATGPT_USER_ID: process.env.MCP_CHATGPT_USER_ID || 'user-mcp-growth-service',
-    })
-    localCredentials.set('LOCAL_MCP_TEST_EMAIL', localEmail)
-    localCredentials.set('LOCAL_MCP_TEST_PASSWORD', localPassword)
-  }
+  await runYarn(['schema:local'], preparationEnv)
+  await runYarn(['seed:local'], preparationEnv)
+  await run('node', ['--experimental-strip-types', 'scripts/provision-development-auth.ts'], preparationEnv)
+  await runYarn(['fixtures:verify:local'], preparationEnv)
 
   const port = await availablePort()
   const localOrigin = `http://127.0.0.1:${port}`
@@ -166,8 +182,8 @@ async function main() {
   values.set('E2E_DEV_ROUTE_SECRET', devRouteSecret)
 
   const gateEnv = {
-    ...process.env,
     ...Object.fromEntries(values),
+    ...process.env,
     BETTER_AUTH_URL: origin,
     NUXT_PUBLIC_PLATFORM_DOMAIN: origin,
     NUXT_PUBLIC_FREE_SITE_DOMAIN: freeSiteDomain,
@@ -187,9 +203,7 @@ async function main() {
     PLAYWRIGHT_WORKERS: '1',
     PORT: String(port),
     MCP_CHATGPT_SITE_ID: process.env.MCP_CHATGPT_SITE_ID || 'site-mcp-growth-service',
-    MCP_CHATGPT_USER_ID: process.env.MCP_CHATGPT_USER_ID || 'user-mcp-growth-service',
-    LOCAL_MCP_TEST_EMAIL: localCredentials.get('LOCAL_MCP_TEST_EMAIL') || '',
-    LOCAL_MCP_TEST_PASSWORD: localCredentials.get('LOCAL_MCP_TEST_PASSWORD') || '',
+    MCP_CHATGPT_USER_ID: process.env.MCP_CHATGPT_USER_ID || 'user-e2e-growth-service-owner',
   }
 
   console.log('# Building and starting the local Cloudflare Worker')
@@ -198,7 +212,7 @@ async function main() {
     if (!existsSync(workerEntry)) throw new Error('--reuse-build requires an existing .output/server/index.mjs artifact.')
     console.log('# Reusing the existing production build artifact')
   } else {
-    await run('yarn', ['build'], gateEnv)
+    await runYarn(['build'], gateEnv)
   }
   const workerVars = [
     ['BETTER_AUTH_URL', origin],
@@ -224,7 +238,7 @@ async function main() {
     'warn',
   ]
   for (const [name, value] of workerVars) workerArgs.push('--var', `${name}:${value}`)
-  const worker = spawnLogged('yarn', workerArgs, { env: gateEnv, logName: 'worker.log' })
+  const worker = spawnYarnLogged(workerArgs, { env: gateEnv, logName: 'worker.log' })
   worker.once('exit', code => {
     if (!cleaningUp) console.error(`Worker exited unexpectedly (${code ?? 'signal'}). See ${resolve(artifactDir, 'worker.log')}`)
   })
@@ -239,9 +253,9 @@ async function main() {
   await run('node', ['scripts/test-mcp-oauth.mjs', '--base-url', origin], gateEnv)
   await run('node', ['scripts/check-local-mcp-harness.mjs', '--base-url', origin, '--write-smoke'], gateEnv)
   console.log('# Running Playwright MCP gates through the tunnel')
-  await run('yarn', ['test:e2e:mcp', '--workers=1'], gateEnv)
+  await runYarn(['test:e2e:mcp', '--workers=1'], gateEnv)
   console.log('# Running priority tenant browser gates through the tunnel')
-  await run('yarn', ['test:e2e:public-rendering', '--workers=1'], gateEnv)
+  await runYarn(['test:e2e:tenant-rendering', '--workers=1'], gateEnv)
 
   if (runChatGPTGate) {
     console.log('# Running the automated ChatGPT Chrome and telemetry gate')

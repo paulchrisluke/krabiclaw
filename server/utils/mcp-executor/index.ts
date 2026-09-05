@@ -290,11 +290,10 @@ export async function executeMcpToolCall(
     }));
 
     let activeSiteName: string | null = null;
-    let activeSiteContext: Awaited<ReturnType<typeof requireMcpSite>> | null = null;
     const rawSiteId = optionalString(normalizedArguments, "site_id");
     const rawTargetForName = optionalString(normalizedArguments, "target");
     if (rawTargetForName && rawSiteId) {
-      activeSiteContext = await requireMcpSite(event, rawSiteId, "editor", authenticatedUser);
+      const activeSiteContext = await requireMcpSite(event, rawSiteId, "editor", authenticatedUser);
       const siteRow = await queryFirst<{ brand_name: string | null; subdomain: string | null }>(
         activeSiteContext.db,
         `

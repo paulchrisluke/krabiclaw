@@ -1,5 +1,6 @@
 import { compileCuratedSiteFixture } from './compile.ts'
 import type { CuratedProductDefinition, CuratedSiteDefinition } from './contracts.ts'
+import { buildSeedExperienceCategories, buildSeedProductCategories } from './contracts.ts'
 import { renderCanonicalBillingSql } from './billing-sql.ts'
 import { renderTenantPagesSeedSql } from './tenant-pages.ts'
 
@@ -575,11 +576,6 @@ export const demoFixture: CuratedSiteDefinition = {
       title: 'Pizza Making Class',
       slug: 'pizza-making-class',
       tagline: 'Stretch dough, top your pie, and fire it yourself.',
-      highlights: [
-        'Hands-on dough stretching and shaping with a live instructor',
-        'Personal pizza fired in a wood oven and served fresh from the peel',
-        'Small-group class designed for first-timers and returning guests',
-      ],
       includedItems: [
         'Dough, toppings, apron, and all class materials',
         'One personal pizza cooked during the session',
@@ -595,12 +591,16 @@ export const demoFixture: CuratedSiteDefinition = {
       body:
         'Our flagship pizza making class brings guests right up to the bench and oven. You will learn how we stretch our dough, build a balanced pie, and work with high-heat live fire without feeling rushed.\n\nEach booking includes dough, toppings, one personal pizza, and a glass of house wine or sparkling lemonade. Great for couples, visitors, and anyone who wants a hands-on dinner plan in Brooklyn.',
       media: [{ asset_id: 'media-demo-exp-class', slot: 'gallery' }],
+      tags: ['Hands-on', 'Beginner friendly'],
+      details: [
+        { key: 'format', label: 'Format', values: ['Small group class', 'Hands-on instruction'] },
+        { key: 'language', label: 'Language', values: ['English'] },
+      ],
       price: '$95 per guest',
       priceAmount: 95,
       durationMinutes: 120,
       maxCapacity: 10,
       timeSlots: ['14:00', '18:00'],
-      availableNote: 'Thursday to Sunday. Advance booking recommended.',
       status: 'active',
       sortOrder: 1,
       featured: true,
@@ -615,11 +615,6 @@ export const demoFixture: CuratedSiteDefinition = {
       title: 'Natural Wine & Pizza Night',
       slug: 'natural-wine-and-pizza-night',
       tagline: 'Small pours, hot pies, and long-table energy.',
-      highlights: [
-        'Curated natural wine pours paired with off-menu pizza and seasonal plates',
-        'Shared long-table seating that encourages conversation and a lively room',
-        'A rotating menu that changes with the week and the season',
-      ],
       includedItems: [
         'Guided wine tasting pours',
         'Shared dinner of off-menu pies and seasonal antipasti',
@@ -640,7 +635,6 @@ export const demoFixture: CuratedSiteDefinition = {
       durationMinutes: 150,
       maxCapacity: 16,
       timeSlots: ['19:30'],
-      availableNote: 'Fridays only. Shared table seating.',
       status: 'active',
       sortOrder: 2,
       featured: true,
@@ -655,11 +649,6 @@ export const demoFixture: CuratedSiteDefinition = {
       title: 'Family Pizza Night',
       slug: 'family-pizza-night',
       tagline: 'Big-table dinner, easy pacing, and pizza for all ages.',
-      highlights: [
-        'Family-friendly pacing with kids welcome to join the pizza action',
-        'Large-format pizzas and salads shared at the table',
-        'Relaxed Sunday service designed for mixed-age groups',
-      ],
       includedItems: [
         'Mini pies for kids and large-format pizzas for the table',
         'Salads and shared sides',
@@ -680,7 +669,6 @@ export const demoFixture: CuratedSiteDefinition = {
       durationMinutes: 105,
       maxCapacity: 6,
       timeSlots: ['17:00', '18:30'],
-      availableNote: 'Sundays only. Best for groups of 4 to 6.',
       status: 'active',
       sortOrder: 3,
       featured: true,
@@ -1078,9 +1066,6 @@ export const demoFixture: CuratedSiteDefinition = {
       status: 'published',
       publishedAt: '2026-05-01T12:00:00.000Z',
       createdBy: 'user-demo',
-      channelJobs: [
-        { id: 'pcj-demo-1', channel: 'site', status: 'published', publishedAt: '2026-05-01T12:00:00.000Z' },
-      ],
     },
     {
       id: 'post-demo-2',
@@ -1092,9 +1077,6 @@ export const demoFixture: CuratedSiteDefinition = {
       status: 'published',
       publishedAt: '2026-04-18T10:00:00.000Z',
       createdBy: 'user-demo',
-      channelJobs: [
-        { id: 'pcj-demo-2', channel: 'site', status: 'published', publishedAt: '2026-04-18T10:00:00.000Z' },
-      ],
     },
     {
       id: 'post-demo-3',
@@ -1102,13 +1084,30 @@ export const demoFixture: CuratedSiteDefinition = {
       postType: 'offer',
       title: 'Margherita Monday',
       body: 'Every Monday in May: Margherita pies are $14 from open to close. Dine-in only, one per guest.',
+      offerCoupon: 'MONDAY14',
+      offerTerms: 'Dine-in Mondays in May; limit one Margherita pizza per guest.',
+      ctaType: 'order',
+      ctaUrl: '/locations/brooklyn',
       media: [{ asset_id: 'media-demo-post3', slot: 'cover' }],
       status: 'published',
       publishedAt: '2026-04-10T09:00:00.000Z',
       createdBy: 'user-demo',
-      channelJobs: [
-        { id: 'pcj-demo-3', channel: 'site', status: 'published', publishedAt: '2026-04-10T09:00:00.000Z' },
-      ],
+    },
+    {
+      id: 'post-demo-4',
+      locationId: 'loc-demo',
+      postType: 'event',
+      title: 'Harvest Table Supper',
+      body: 'Join us for a one-night family-style supper built around late-summer produce and the wood-fired oven.',
+      eventTitle: 'Harvest Table Supper',
+      eventStartAt: '2026-10-10T23:00:00.000Z',
+      eventEndAt: '2026-10-11T02:00:00.000Z',
+      ctaType: 'book',
+      ctaUrl: '/reservations',
+      media: [],
+      status: 'published',
+      publishedAt: '2026-09-01T09:00:00.000Z',
+      createdBy: 'user-demo',
     },
   ],
   tenantPageLocaleFields: [
@@ -1414,6 +1413,21 @@ ${reviewRows};
 }
 
 export function renderCompiledDemoProductsBlock(): string {
+  const { categories, categoryIdByProductId, sortOrderByProductId } = buildSeedProductCategories(compiledDemoSeed.products)
+  const productCategoryRows = categories
+    .map(category => `  (${[
+      sqlValue(category.id),
+      sqlValue(category.organizationId),
+      sqlValue(category.siteId),
+      sqlValue(category.locationId),
+      sqlValue('standard'),
+      sqlValue(category.name),
+      sqlValue(category.slug),
+      sqlValue(category.sortOrder),
+      sqlValue('seed:demo'),
+      sqlValue('seed:demo'),
+    ].join(', ')})`)
+    .join(',\n')
   const productRows = compiledDemoSeed.products
     .map((product) => `  (${[
       sqlValue(product.id),
@@ -1421,15 +1435,15 @@ export function renderCompiledDemoProductsBlock(): string {
       sqlValue(product.siteId),
       sqlValue(product.locationId),
       sqlValue('standard'),
-      sqlValue(product.category),
+      sqlValue(categoryIdByProductId.get(product.id)!),
       sqlValue(product.name),
       sqlValue(product.slug),
       sqlValue(product.description),
       sqlValue(true),
       sqlValue(product.available),
-      sqlValue(false),
-      sqlValue(0),
-      sqlValue(product.sortOrder),
+      sqlValue(product.featured),
+      sqlValue(product.featuredSortOrder),
+      sqlValue(sortOrderByProductId.get(product.id)!),
       sqlJson([]),
       sqlJson([
         ...(product.allergens ? [{ key: 'allergens', label: 'Allergens', values: JSON.parse(product.allergens) }] : []),
@@ -1470,8 +1484,13 @@ ${productMediaRows};`
     : ''
 
   return `-- BEGIN GENERATED: demo_products
+INSERT OR REPLACE INTO product_categories
+  (id, organization_id, site_id, location_id, product_type, name, slug, sort_order, created_by, updated_by)
+VALUES
+${productCategoryRows};
+
 INSERT OR REPLACE INTO products
-  (id, organization_id, site_id, location_id, product_type, category, name, slug, description,
+  (id, organization_id, site_id, location_id, product_type, category_id, name, slug, description,
    is_visible, available, featured, featured_sort_order, sort_order,
    tags_json, details_json, source, created_by, updated_by)
 VALUES
@@ -1525,33 +1544,27 @@ export function renderCompiledDemoPostsBlock(): string {
       sqlValue(post.postType),
       sqlValue(post.title),
       sqlValue(post.body),
+      sqlValue(post.ctaType),
+      sqlValue(post.ctaUrl),
+      sqlValue(post.eventTitle),
+      sqlValue(post.eventStartAt),
+      sqlValue(post.eventEndAt),
+      sqlValue(post.offerCoupon),
+      sqlValue(post.offerTerms),
       sqlValue(post.status),
       sqlValue(post.publishedAt),
       sqlValue(post.createdBy),
     ].join(', ')})`)
     .join(',\n')
 
-  const allChannelJobs = compiledDemoSeed.posts.flatMap((post) => post.channelJobs)
   const postMediaRows = compiledDemoSeed.posts.flatMap(post => post.media.map((media, index) => `  (${[
     sqlValue(`placement-post-${post.id}-${media.slot}-${index}`), sqlValue(post.organizationId), sqlValue(post.siteId),
     sqlValue('post'), sqlValue(post.id), sqlValue(media.slot), sqlValue(media.asset_id), index, sqlValue('active'),
   ].join(', ')})`)).join(',\n')
-  const channelJobRows = allChannelJobs
-    .map((job) => `  (${[
-      sqlValue(job.id),
-      sqlValue(job.postId),
-      sqlValue(job.organizationId),
-      sqlValue(job.channel),
-      sqlValue(job.status),
-      sqlValue(job.publishedAt),
-    ].join(', ')})`)
-    .join(',\n')
-
   return `-- BEGIN GENERATED: demo_posts
--- Posts and channel jobs for the demo tenant.
 INSERT OR IGNORE INTO posts
   (id, organization_id, site_id, location_id,
-   post_type, title, body,
+   post_type, title, body, cta_type, cta_url, event_title, event_start, event_end, offer_coupon, offer_terms,
    status, published_at, created_by)
 VALUES
 ${postRows};
@@ -1561,9 +1574,6 @@ ${postMediaRows ? `INSERT OR REPLACE INTO media_placements
 VALUES
 ${postMediaRows};` : ''}
 
-INSERT OR IGNORE INTO post_channel_jobs (id, post_id, organization_id, channel, status, published_at)
-VALUES
-${channelJobRows};
 -- END GENERATED: demo_posts`
 }
 
@@ -1629,16 +1639,25 @@ VALUES (${sqlValue(blockId)}, ${sqlValue(documentId)}, NULL, 'markdown', 0, NULL
 -- END GENERATED: demo_blog`
 }
 
-export function renderCompiledDemoExperienceSeedBlock(): string {
+export function renderDemoExperienceSeedBlock(): string {
   const experienceMedia = compiledDemoSeed.experiences.flatMap(experience => experience.media.map((media, index) => ({ experience, media, index })))
+  const { categories: experienceCategories, categoryIdForLocation, sortOrderFor } = buildSeedExperienceCategories(compiledDemoSeed.experiences, compiledDemoSeed.identity)
+  const experienceCategoryRows = experienceCategories
+    .map(category => `  (${[
+      sqlValue(category.id), sqlValue(category.organizationId), sqlValue(category.siteId),
+      sqlValue(category.locationId), sqlValue('experience'), sqlValue(category.name),
+      sqlValue(category.slug), sqlValue(category.sortOrder),
+      sqlValue('seed:demo'), sqlValue('seed:demo'),
+    ].join(', ')})`)
+    .join(',\n')
   const experienceProductRows = compiledDemoSeed.experiences
     .map(experience => `  (${[
       sqlValue(experience.id), sqlValue(experience.organizationId), sqlValue(experience.siteId),
-      sqlValue(experience.locationId), sqlValue('experience'), sqlValue('Experiences'),
+      sqlValue(experience.locationId), sqlValue('experience'), sqlValue(categoryIdForLocation(experience.locationId)),
       sqlValue(experience.title), sqlValue(experience.slug), sqlValue(experience.body),
       sqlValue(experience.status !== 'inactive'), sqlValue(experience.status !== 'sold_out'),
-      sqlValue(experience.featured), sqlValue(experience.featuredSortOrder), sqlValue(experience.sortOrder),
-      sqlJson([]), sqlJson([]), sqlValue(experience.seoTitle), sqlValue(experience.seoDescription),
+      sqlValue(experience.featured), sqlValue(experience.featuredSortOrder), sqlValue(sortOrderFor(experience.id)),
+      sqlJson(experience.tags), sqlJson(experience.details), sqlValue(experience.seoTitle), sqlValue(experience.seoDescription),
       sqlValue('template'), sqlValue('seed:demo'), sqlValue('seed:demo'),
     ].join(', ')})`)
     .join(',\n')
@@ -1654,8 +1673,6 @@ export function renderCompiledDemoExperienceSeedBlock(): string {
       sqlValue(experience.maxCapacity),
       sqlJson(experience.timeSlots),
       'NULL',
-      sqlValue(experience.availableNote),
-      sqlValue(experience.highlights?.length ? JSON.stringify(experience.highlights) : null),
       sqlValue(experience.includedItems?.length ? JSON.stringify(experience.includedItems) : null),
       sqlValue(experience.whatToBring?.length ? JSON.stringify(experience.whatToBring) : null),
       sqlValue(experience.meetingPoint ?? null),
@@ -1696,8 +1713,13 @@ ${experienceMedia
 
   return `-- BEGIN GENERATED: demo_experiences
 -- Hybrid restaurant + experiences showcase for the platform demo.
+INSERT OR REPLACE INTO product_categories
+  (id, organization_id, site_id, location_id, product_type, name, slug, sort_order, created_by, updated_by)
+VALUES
+${experienceCategoryRows};
+
 INSERT OR REPLACE INTO products
-  (id, organization_id, site_id, location_id, product_type, category, name, slug, description,
+  (id, organization_id, site_id, location_id, product_type, category_id, name, slug, description,
    is_visible, available, featured, featured_sort_order, sort_order, tags_json, details_json,
    seo_title, seo_description, source, created_by, updated_by)
 VALUES
@@ -1705,8 +1727,7 @@ ${experienceProductRows};
 
 INSERT OR REPLACE INTO experiences
   (id, organization_id, site_id, location_id, tagline, pricing_note, duration_minutes, max_capacity,
-   time_slots, recurring_slots, available_note,
-   highlights, included_items, what_to_bring, meeting_point, cancellation_policy)
+   time_slots, recurring_slots, included_items, what_to_bring, meeting_point, cancellation_policy)
 VALUES
 ${experienceRows};
 
@@ -1743,54 +1764,34 @@ VALUES
 
 INSERT OR REPLACE INTO guest_threads
   (id, organization_id, site_id, location_id, submission_type, submission_id,
-   guest_name, guest_email, guest_phone, inbox_status, unread_count,
-   last_message_at, last_inbound_at, last_outbound_at, last_message_preview,
-   conversation_state, operational_status, version, resolved_at, created_at, updated_at)
+   conversation_state, created_at, updated_at)
 VALUES
   ('thread-demo-contact-private-event', 'org-demo', 'site-demo', 'loc-demo', 'contact', 'contact-demo-private-event',
-   'Maya Chen', 'maya.chen@example.com', NULL, 'waiting_on_owner', 1,
-   '2026-08-21T02:15:00.000Z', '2026-08-21T02:15:00.000Z', NULL,
-   'Could you host a birthday dinner for 18 people next month?', 'needs_attention', 'new', 0, NULL,
-   '2026-08-21T02:15:00.000Z', '2026-08-21T02:15:00.000Z'),
+   'needs_attention', '2026-08-21T02:15:00.000Z', '2026-08-21T02:15:00.000Z'),
   ('thread-demo-reservation-window-table', 'org-demo', 'site-demo', 'loc-demo-2', 'reservation', 'reservation-demo-window-table',
-   'Daniel Ortiz', 'daniel.ortiz@example.com', '+1 917 555 0142', 'waiting_on_owner', 1,
-   '2026-08-21T03:20:00.000Z', '2026-08-21T03:20:00.000Z', NULL,
-   '2026-08-23 19:30 · 4 guests · Window table if possible; one guest has a dairy allergy.', 'needs_attention', 'new', 0, NULL,
-   '2026-08-21T03:20:00.000Z', '2026-08-21T03:20:00.000Z'),
+   'needs_attention', '2026-08-21T03:20:00.000Z', '2026-08-21T03:20:00.000Z'),
   ('thread-demo-booking-pizza-class', 'org-demo', 'site-demo', 'loc-demo', 'experience_booking', 'booking-demo-pizza-class',
-   'Sophie Laurent', 'sophie.laurent@example.com', '+1 347 555 0109', 'waiting_on_guest', 1,
-   '2026-08-21T04:25:00.000Z', '2026-08-21T04:10:00.000Z', '2026-08-21T04:25:00.000Z',
-   'Yes—we can make the entire class vegetarian. We will reserve three places for you.', 'waiting_on_guest', 'confirmed', 0, NULL,
-   '2026-08-21T04:10:00.000Z', '2026-08-21T04:25:00.000Z'),
+   'waiting_on_guest', '2026-08-21T04:10:00.000Z', '2026-08-21T04:25:00.000Z'),
   ('thread-demo-reservation-completed', 'org-demo', 'site-demo', 'loc-demo', 'reservation', 'reservation-demo-completed',
-   'Priya Shah', 'priya.shah@example.com', '+1 646 555 0188', 'closed', 0,
-   '2026-08-20T13:30:00.000Z', '2026-08-19T08:45:00.000Z', NULL,
-   '2026-08-20 18:00 · 2 guests · Anniversary dinner.', 'resolved', 'completed', 1, '2026-08-20T13:30:00.000Z',
-   '2026-08-19T08:45:00.000Z', '2026-08-20T13:30:00.000Z');
+   'resolved', '2026-08-19T08:45:00.000Z', '2026-08-20T13:30:00.000Z');
 
 INSERT OR REPLACE INTO guest_thread_entries
-  (id, thread_id, organization_id, site_id, kind, actor_kind, actor_user_id, channel,
-   body, event_name, payload_json, sequence, occurred_at, created_at)
+  (id, thread_id, kind, actor_kind, actor_user_id, channel,
+   body, event_name, payload_json, dedupe_key, sequence, occurred_at, created_at)
 VALUES
-  ('entry-demo-contact-private-event-submission', 'thread-demo-contact-private-event', 'org-demo', 'site-demo', 'submission', 'guest', NULL, 'system', NULL, 'contact_submitted',
-   ${sqlJson({ schemaVersion: 1, submissionType: 'contact', submissionId: 'contact-demo-private-event', guestName: 'Maya Chen', guestEmail: 'maya.chen@example.com', subject: 'Private dinner inquiry', message: 'Hi! Could you host a birthday dinner for 18 people next month? We would love a family-style menu.', locationTitle: 'Ember & Slice Brooklyn', experienceTitle: null, submittedAt: '2026-08-21T02:15:00.000Z' })}, 1, '2026-08-21T02:15:00.000Z', '2026-08-21T02:15:00.000Z'),
-  ('entry-demo-reservation-window-table-submission', 'thread-demo-reservation-window-table', 'org-demo', 'site-demo', 'submission', 'guest', NULL, 'system', NULL, 'reservation_submitted',
-   ${sqlJson({ schemaVersion: 1, submissionType: 'reservation', submissionId: 'reservation-demo-window-table', guestName: 'Daniel Ortiz', guestEmail: 'daniel.ortiz@example.com', guestPhone: '+1 917 555 0142', locationTitle: 'Ember & Slice West Village', date: '2026-08-23', time: '19:30', guests: '4', requests: 'Window table if possible; one guest has a dairy allergy.', submittedAt: '2026-08-21T03:20:00.000Z' })}, 1, '2026-08-21T03:20:00.000Z', '2026-08-21T03:20:00.000Z'),
-  ('entry-demo-booking-pizza-class-submission', 'thread-demo-booking-pizza-class', 'org-demo', 'site-demo', 'submission', 'guest', NULL, 'system', NULL, 'experience_booking_submitted',
-   ${sqlJson({ schemaVersion: 1, submissionType: 'experience_booking', submissionId: 'booking-demo-pizza-class', guestName: 'Sophie Laurent', guestEmail: 'sophie.laurent@example.com', guestPhone: '+1 347 555 0109', locationTitle: 'Ember & Slice Brooklyn', experienceTitle: 'Pizza Making Class', bookingDate: '2026-08-24', timeSlot: '14:00', partySize: 3, notes: 'Two adults and one 12-year-old. Is vegetarian dough available?', submittedAt: '2026-08-21T04:10:00.000Z' })}, 1, '2026-08-21T04:10:00.000Z', '2026-08-21T04:10:00.000Z'),
-  ('entry-demo-booking-pizza-class-reply', 'thread-demo-booking-pizza-class', 'org-demo', 'site-demo', 'message', 'member', 'user-demo', 'email',
-   'Yes—we can make the entire class vegetarian. We will reserve three places for you.', NULL, NULL, 2, '2026-08-21T04:25:00.000Z', '2026-08-21T04:25:00.000Z'),
-  ('entry-demo-reservation-completed-submission', 'thread-demo-reservation-completed', 'org-demo', 'site-demo', 'submission', 'guest', NULL, 'system', NULL, 'reservation_submitted',
-   ${sqlJson({ schemaVersion: 1, submissionType: 'reservation', submissionId: 'reservation-demo-completed', guestName: 'Priya Shah', guestEmail: 'priya.shah@example.com', guestPhone: '+1 646 555 0188', locationTitle: 'Ember & Slice Brooklyn', date: '2026-08-20', time: '18:00', guests: '2', requests: 'Anniversary dinner.', submittedAt: '2026-08-19T08:45:00.000Z' })}, 1, '2026-08-19T08:45:00.000Z', '2026-08-19T08:45:00.000Z'),
-  ('entry-demo-reservation-completed-resolution', 'thread-demo-reservation-completed', 'org-demo', 'site-demo', 'resolution', 'member', 'user-demo', 'system',
-   NULL, 'thread.resolved', ${sqlJson({ reason: 'completed' })}, 2, '2026-08-20T13:30:00.000Z', '2026-08-20T13:30:00.000Z');
+  ('entry-demo-contact-private-event-submission', 'thread-demo-contact-private-event', 'submission', 'guest', NULL, 'system', NULL, 'contact_submitted',
+   NULL, 'submission:contact:contact-demo-private-event', 1, '2026-08-21T02:15:00.000Z', '2026-08-21T02:15:00.000Z'),
+  ('entry-demo-reservation-window-table-submission', 'thread-demo-reservation-window-table', 'submission', 'guest', NULL, 'system', NULL, 'reservation_submitted',
+   NULL, 'submission:reservation:reservation-demo-window-table', 1, '2026-08-21T03:20:00.000Z', '2026-08-21T03:20:00.000Z'),
+  ('entry-demo-booking-pizza-class-submission', 'thread-demo-booking-pizza-class', 'submission', 'guest', NULL, 'system', NULL, 'experience_booking_submitted',
+   NULL, 'submission:experience_booking:booking-demo-pizza-class', 1, '2026-08-21T04:10:00.000Z', '2026-08-21T04:10:00.000Z'),
+  ('entry-demo-booking-pizza-class-reply', 'thread-demo-booking-pizza-class', 'message', 'member', 'user-demo', 'email',
+   'Yes—we can make the entire class vegetarian. We will reserve three places for you.', NULL, NULL, 'entry:entry-demo-booking-pizza-class-reply', 2, '2026-08-21T04:25:00.000Z', '2026-08-21T04:25:00.000Z'),
+  ('entry-demo-reservation-completed-submission', 'thread-demo-reservation-completed', 'submission', 'guest', NULL, 'system', NULL, 'reservation_submitted',
+   NULL, 'submission:reservation:reservation-demo-completed', 1, '2026-08-19T08:45:00.000Z', '2026-08-19T08:45:00.000Z'),
+  ('entry-demo-reservation-completed-resolution', 'thread-demo-reservation-completed', 'resolution', 'member', 'user-demo', 'system',
+   NULL, 'thread.resolved', ${sqlJson({ reason: 'completed' })}, 'entry:entry-demo-reservation-completed-resolution', 2, '2026-08-20T13:30:00.000Z', '2026-08-20T13:30:00.000Z');
 
-INSERT OR REPLACE INTO guest_thread_sequence_counters (thread_id, next_sequence, updated_at)
-VALUES
-  ('thread-demo-contact-private-event', 2, '2026-08-21T02:15:00.000Z'),
-  ('thread-demo-reservation-window-table', 2, '2026-08-21T03:20:00.000Z'),
-  ('thread-demo-booking-pizza-class', 3, '2026-08-21T04:25:00.000Z'),
-  ('thread-demo-reservation-completed', 3, '2026-08-20T13:30:00.000Z');
 -- END GENERATED: demo_inbox`
 }
 
@@ -1834,5 +1835,3 @@ export function renderCompiledDemoBillingBlock(): string {
 ${parts.join('\n\n')}
 -- END GENERATED: demo_billing`
 }
-
-export const renderDemoExperienceSeedBlock = renderCompiledDemoExperienceSeedBlock

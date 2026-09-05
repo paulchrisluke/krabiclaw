@@ -1,9 +1,10 @@
+import { defineHandler } from 'nitro'
+import { getRouterParam } from 'nitro/h3'
 import { cloudflareEnv, jsonResponse, readRequiredBody } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
-import { getPost, publishPost } from '~/server/utils/post-management'
-import {
-  getFacebookPagesConnection, publishToPage, getLinkedInstagramAccount, publishToInstagram, } from '~/server/utils/facebook-pages'
-import { execute, queryFirst } from '~/server/db'
+import { publishPost, type PostPublishChannel, type PostSocialPublish } from '~/server/utils/post-management'
+import { getFacebookPagesConnection } from '~/server/utils/facebook-pages'
+import { queryFirst } from '~/server/db'
 import { loadMemberSiteRow } from '~/server/utils/location-access'
 import { assertResourceAccess } from '~/server/utils/member-access'
 
@@ -19,131 +20,61 @@ export default defineHandler(async (event) => {
   const session = await getAuthSession(event, env)
   if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
-  const body = await readRequiredBody<{ channels?: Array<'site' | 'instagram' | 'facebook'> }>(event)
-  const channels: Array<'site' | 'instagram' | 'facebook'> =
-    body?.channels ?? ['site']
-
+  const body = await readRequiredBody<{ channels?: unknown }>(event)
+  const channels = parsePublishChannels(body?.channels)
+  if (!channels) return jsonResponse({ error: 'channels must be a non-empty array of site, facebook, or instagram' }, { status: 400 })
   const site = await loadMemberSiteRow(db, env, siteId, session.user.id)
   if (!site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
 
   const postScope = await queryFirst<{ location_id: string | null }>(db, `
     SELECT location_id FROM posts
-    WHERE id = ? AND organization_id = ? AND site_id = ?
-    LIMIT 1
+     WHERE id = ? AND organization_id = ? AND site_id = ?
+     LIMIT 1
   `, [postId, site.organization_id, siteId])
   if (!postScope) return jsonResponse({ error: 'Post not found' }, { status: 404 })
   await assertResourceAccess(db, {
     env,
-    memberId: site.member_id, role: site.member_role, organizationId: site.organization_id, siteId, resourceLocationId: postScope.location_id, })
+    memberId: site.member_id,
+    role: site.member_role,
+    organizationId: site.organization_id,
+    siteId,
+    resourceLocationId: postScope.location_id,
+  })
 
-  const post = await publishPost(db, site.organization_id, siteId, postId, channels, env)
-  if (!post) return jsonResponse({ error: 'Post not found' }, { status: 404 })
-
-  const socialErrors: Record<string, string> = {}
-  const now = new Date().toISOString()
-
-  const wantsFacebook = channels.includes('facebook')
-  const wantsInstagram = channels.includes('instagram')
-
-  if (wantsFacebook || wantsInstagram) {
-    let connection: Awaited<ReturnType<typeof getFacebookPagesConnection>> | null = null
+  const wantsSocial = channels.includes('facebook') || channels.includes('instagram')
+  let socialPublish: PostSocialPublish | null = null
+  if (wantsSocial) {
     try {
-      connection = await getFacebookPagesConnection(env, site.organization_id, siteId)
-    } catch (err) {
-      console.error('[publish] getFacebookPagesConnection failed:', err)
-      const connErr = 'Facebook connection error'
-      if (wantsFacebook) {
-        socialErrors.facebook = connErr
-        await execute(db, `UPDATE post_channel_jobs SET status = 'failed', error = ? WHERE post_id = ? AND channel = 'facebook'`, [connErr, postId])
-      }
-      if (wantsInstagram) {
-        socialErrors.instagram = connErr
-        await execute(db, `UPDATE post_channel_jobs SET status = 'failed', error = ? WHERE post_id = ? AND channel = 'instagram'`, [connErr, postId])
-      }
-    }
-
-    if (!socialErrors.facebook && !socialErrors.instagram) {
-      if (!connection?.facebook_page_id || !connection.encrypted_page_token) {
-        if (wantsFacebook) {
-          socialErrors.facebook = 'No Facebook Page connected'
-          await execute(db, `UPDATE post_channel_jobs SET status = 'skipped', error = ? WHERE post_id = ? AND channel = 'facebook'`, ['No Facebook Page connected', postId])
-        }
-        if (wantsInstagram) {
-          socialErrors.instagram = 'No Facebook connection (required for Instagram)'
-          await execute(db, `UPDATE post_channel_jobs SET status = 'skipped', error = ? WHERE post_id = ? AND channel = 'instagram'`, ['No Facebook connection (required for Instagram)', postId])
-        }
-      } else {
-        const pageToken = connection.encrypted_page_token
-        const pageId = connection.facebook_page_id
-
-      // Resolve image URL for Instagram (needs a public HTTPS URL)
-      const imageUrl = post.media?.find(item => item.slot === 'cover')?.public_url ?? null
-
-      // Facebook publish
-      if (wantsFacebook) {
-        try {
-          const fbResult = await publishToPage(pageToken, pageId, { message: post.body })
-          await execute(db, `
-            UPDATE post_channel_jobs
-            SET status = 'published', provider_post_id = ?, published_at = ?
-            WHERE post_id = ? AND channel = 'facebook'
-          `, [fbResult.id, now, postId])
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : 'Facebook publish failed'
-          socialErrors.facebook = msg
-          await execute(db, `
-            UPDATE post_channel_jobs SET status = 'failed', error = ?
-            WHERE post_id = ? AND channel = 'facebook'
-          `, [msg, postId])
-        }
-      }
-
-      // Instagram publish (requires an image)
-      if (wantsInstagram) {
-        if (!imageUrl) {
-          const msg = 'Instagram requires an image — add a photo to this post'
-          socialErrors.instagram = msg
-          await execute(db, `
-            UPDATE post_channel_jobs SET status = 'skipped', error = ?
-            WHERE post_id = ? AND channel = 'instagram'
-          `, [msg, postId])
-        } else {
-          try {
-            const igUserId = await getLinkedInstagramAccount(pageToken, pageId)
-            if (!igUserId) {
-              const msg = 'No Instagram Business account linked to this Facebook Page'
-              socialErrors.instagram = msg
-              await execute(db, `
-                UPDATE post_channel_jobs SET status = 'skipped', error = ?
-                WHERE post_id = ? AND channel = 'instagram'
-              `, [msg, postId])
-            } else {
-              const igResult = await publishToInstagram(pageToken, igUserId, {
-                caption: post.body, imageUrl, })
-              await execute(db, `
-                UPDATE post_channel_jobs
-                SET status = 'published', provider_post_id = ?, published_at = ?
-                WHERE post_id = ? AND channel = 'instagram'
-              `, [igResult.id, now, postId])
-            }
-          } catch (err) {
-            const msg = err instanceof Error ? err.message : 'Instagram publish failed'
-            socialErrors.instagram = msg
-            await execute(db, `
-              UPDATE post_channel_jobs SET status = 'failed', error = ?
-              WHERE post_id = ? AND channel = 'instagram'
-            `, [msg, postId])
-          }
-        }
-      }
-      }
+      const connection = await getFacebookPagesConnection(env, site.organization_id, siteId)
+      socialPublish = connection?.facebook_page_id && connection.encrypted_page_token
+        ? { kind: 'connected', pageId: connection.facebook_page_id, pageToken: connection.encrypted_page_token }
+        : { kind: 'unavailable', reason: 'No Facebook Page connected.' }
+    } catch (error) {
+      console.error('[publish] getFacebookPagesConnection failed:', error)
+      socialPublish = { kind: 'unavailable', reason: 'Facebook connection error.' }
     }
   }
 
-  const updatedPost = await getPost(db, site.organization_id, siteId, postId, env)
+  const post = await publishPost(db, site.organization_id, siteId, postId, channels, env, socialPublish)
+  if (!post) return jsonResponse({ error: 'Post not found' }, { status: 404 })
+  const socialErrors = Object.fromEntries(post.channels
+    .filter(job => channels.includes(job.channel) && (job.status === 'failed' || job.status === 'skipped') && job.error)
+    .map(job => [job.channel, job.error]))
 
   return jsonResponse({
-    success: true, post: updatedPost, ...(Object.keys(socialErrors).length > 0 ? { socialErrors } : {}), })
+    success: true,
+    post,
+    ...(Object.keys(socialErrors).length > 0 ? { socialErrors } : {}),
+  })
 })
-import { defineHandler } from 'nitro';
-import { getRouterParam  } from 'nitro/h3';
+
+function parsePublishChannels(value: unknown): PostPublishChannel[] | null {
+  const rawChannels = value === undefined ? ['site'] : value
+  if (!Array.isArray(rawChannels) || rawChannels.length === 0) return null
+  const channels: PostPublishChannel[] = []
+  for (const channel of rawChannels) {
+    if (channel !== 'site' && channel !== 'facebook' && channel !== 'instagram') return null
+    channels.push(channel)
+  }
+  return [...new Set(channels)]
+}

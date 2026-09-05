@@ -29,7 +29,6 @@ import { readdir, stat, mkdir, writeFile, readFile } from "node:fs/promises";
 import { join, extname, basename } from "node:path";
 import { existsSync } from "node:fs";
 import { createHash } from "node:crypto";
-import { spawnSync } from "node:child_process";
 import { spawnYarn } from "./utils/spawn-yarn.mjs";
 import { prepareD1SeedFile } from "./utils/d1-seed-file.mjs";
 
@@ -104,12 +103,6 @@ if (!ORGANIZATION_ID || !SLUG_SAFE_PATTERN.test(ORGANIZATION_ID)) {
 const OUT_DIR = join(process.cwd(), "client-imports", SLUG);
 await mkdir(OUT_DIR, { recursive: true });
 
-function _uid(prefix = "") {
-  return `${prefix}${createHash("sha256")
-    .update(SLUG + Date.now() + Math.random())
-    .digest("hex")
-    .slice(0, 12)}`;
-}
 
 // ── Route parity check ────────────────────────────────────────────────────────
 
@@ -530,7 +523,6 @@ function generateSeedSql(places, mediaManifest) {
   const now = new Date().toISOString();
 
   const primary = places[0];
-  const _secondary = places.slice(1);
 
   const brandName = primary?.name ?? SLUG;
 
@@ -716,8 +708,7 @@ function extractD1JsonArray(output) {
 function queryD1Count(table, siteId, remote) {
   const flag = remote ? "--remote" : "--local";
   try {
-    const result = spawnSync(
-      "yarn",
+    const result = spawnYarn(
       [
         "wrangler",
         "d1",
@@ -746,8 +737,7 @@ function queryD1Count(table, siteId, remote) {
 // never be silently treated the same as "no matching row exists."
 function queryD1Row(query, remote) {
   const flag = remote ? "--remote" : "--local";
-  const result = spawnSync(
-    "yarn",
+  const result = spawnYarn(
     ["wrangler", "d1", "execute", "DB", flag, "--command", query, "--json"],
     { encoding: "utf8", cwd: process.cwd() },
   );
@@ -1214,7 +1204,6 @@ console.log("\n→ Building generated-copy inventory...");
 
 function buildGeneratedCopyInventory(places, mediaManifest) {
   const inventory = [];
-  const _now = new Date().toISOString();
 
   // Location slugs — computed from business name, not from Google Places directly
   for (const place of places.filter((p) => !p.error)) {
@@ -1304,7 +1293,7 @@ console.log(
 
 console.log("\n→ Scanning for forbidden copy...");
 const copyHits = scanForbiddenCopy(seedSql, VERTICAL);
-let copyReport = "";
+let copyReport;
 
 if (copyHits.length === 0) {
   console.log("  ✓ No forbidden copy found in proposed seed");

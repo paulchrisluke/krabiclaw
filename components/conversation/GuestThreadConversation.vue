@@ -27,8 +27,6 @@
     </template>
 
     <template #message="{ message }">
-      <!-- Structured, immutable opening submission card — issue #442's "reservation with
-           zero replies is still a complete thread" requirement. Rendered once, first. -->
       <div v-if="message.kind === 'submission'" class="px-4 py-2">
         <div class="mx-auto max-w-[34rem] rounded-xl border border-default bg-elevated px-4 py-3">
           <div class="flex flex-wrap items-start justify-between gap-3">
@@ -39,7 +37,7 @@
           </div>
 
           <dl class="mt-3 grid gap-2 text-sm sm:grid-cols-2">
-            <div v-for="row in openingRows(message.payload)" :key="row.label" :class="row.wide ? 'sm:col-span-2' : ''">
+            <div v-for="row in openingRows()" :key="row.label" :class="row.wide ? 'sm:col-span-2' : ''">
               <dt class="text-[11px] font-medium uppercase tracking-wide text-dimmed">{{ row.label }}</dt>
               <dd class="mt-0.5 whitespace-pre-wrap break-words text-default">{{ row.value }}</dd>
             </div>
@@ -62,22 +60,10 @@
         </div>
       </div>
 
-      <!-- Compact system events: operation transitions, delivery outcomes, resolve/reopen. -->
-      <div v-else-if="message.kind === 'operation' || message.kind === 'delivery' || message.kind === 'resolution'" class="px-4 py-2">
+      <div v-else-if="message.kind === 'operation' || message.kind === 'resolution'" class="px-4 py-2">
         <div class="mx-auto flex max-w-[26rem] items-center justify-center gap-2 rounded-full bg-muted px-3 py-1.5 text-center text-xs font-medium text-muted">
-          <UIcon :name="systemEventIcon(message)" class="size-3.5 shrink-0" :class="systemEventIconClass(message)" />
+          <UIcon :name="systemEventIcon(message)" class="size-3.5 shrink-0 text-muted" />
           <span>{{ systemEventLabel(message) }}</span>
-          <UButton
-            v-if="isRetryableDelivery(message)"
-            size="xs"
-            color="neutral"
-            variant="soft"
-            class="ml-1 rounded-full"
-            :loading="retryingDeliveryId === deliveryIdFromEntry(message)"
-            @click="$emit('retry-delivery', deliveryIdFromEntry(message)!)"
-          >
-            Retry
-          </UButton>
         </div>
       </div>
 
@@ -114,6 +100,33 @@
       </div>
     </template>
 
+    <template #prompt-before>
+      <div v-if="deliveryFailures.length" class="mb-3 space-y-2" aria-live="polite">
+        <UAlert
+          v-for="failure in deliveryFailures"
+          :key="failure.id"
+          :color="failure.status === 'failed' ? 'error' : 'warning'"
+          variant="soft"
+          icon="i-lucide-mail-warning"
+          :title="deliveryFailureTitle(failure)"
+          :description="deliveryFailureDescription(failure)"
+        >
+          <template v-if="failure.retryable" #actions>
+            <UButton
+              size="xs"
+              :color="failure.status === 'failed' ? 'error' : 'warning'"
+              variant="soft"
+              :loading="retryingDeliveryId === failure.id"
+              :disabled="retryingDeliveryId !== null && retryingDeliveryId !== failure.id"
+              @click="$emit('retry-delivery', failure.id)"
+            >
+              Retry sending
+            </UButton>
+          </template>
+        </UAlert>
+      </div>
+    </template>
+
     <template #prompt-after>
       <p v-if="disabledReason" class="mt-2 text-xs text-warning">{{ disabledReason }}</p>
     </template>
@@ -123,9 +136,19 @@
 <script setup lang="ts">
 import ConversationShell from '~/components/conversation/ConversationShell.vue'
 
-type EntryKind = 'submission' | 'message' | 'operation' | 'delivery' | 'assignment' | 'resolution'
+type EntryKind = 'submission' | 'message' | 'operation' | 'assignment' | 'resolution'
 type ActorKind = 'guest' | 'member' | 'system'
 type Channel = 'web' | 'email' | 'whatsapp' | 'system'
+
+export interface GuestThreadDeliveryFailure {
+  id: string
+  channel: 'email' | 'whatsapp'
+  purpose: 'owner_alert' | 'guest_acknowledgement' | 'member_reply' | 'status_update'
+  error: string | null
+  status: 'failed' | 'unknown'
+  retryable: boolean
+  createdAt: string
+}
 
 export interface GuestThreadEntryMessage {
   id: string
@@ -142,10 +165,18 @@ export interface GuestThreadEntryMessage {
   role: string
 }
 
+const DELIVERY_PURPOSE_LABELS = {
+  owner_alert: 'owner alert',
+  guest_acknowledgement: 'guest acknowledgement',
+  member_reply: 'reply',
+  status_update: 'status update',
+} satisfies Record<GuestThreadDeliveryFailure['purpose'], string>
+
 const draft = defineModel<string>('input', { required: true })
 
 const props = withDefaults(defineProps<{
   entries: GuestThreadEntryMessage[]
+  deliveryFailures?: GuestThreadDeliveryFailure[]
   submissionType: 'contact' | 'reservation' | 'experience_booking'
   placeholder?: string
   loading?: boolean
@@ -176,6 +207,7 @@ const props = withDefaults(defineProps<{
   sourceFields: () => ({}),
   actionItems: () => [],
   pendingAction: null,
+  deliveryFailures: () => [],
 })
 
 defineEmits<{
@@ -192,8 +224,8 @@ const openingTitle = computed(() => {
   return 'Website message'
 })
 
-function openingRows(payload: Record<string, unknown> | null): Array<{ label: string; value: string; wide?: boolean }> {
-  const fields = { ...(payload ?? {}), ...props.sourceFields }
+function openingRows(): Array<{ label: string; value: string; wide?: boolean }> {
+  const fields = props.sourceFields
   const rows: Array<{ label: string; value: string | null; wide?: boolean }> = [
     { label: 'Email', value: props.guestEmail },
     { label: 'Phone', value: props.guestPhone },
@@ -253,18 +285,10 @@ function channelLabel(channel: Channel | null) {
 }
 
 function systemEventIcon(message: GuestThreadEntryMessage) {
-  if (message.kind === 'delivery') {
-    return message.eventName?.includes('failed') ? 'i-lucide-mail-warning' : 'i-lucide-mail-check'
-  }
   if (message.kind === 'resolution') {
     return message.eventName === 'thread.resolved' ? 'i-lucide-check-check' : 'i-lucide-rotate-ccw'
   }
   return 'i-lucide-circle-check'
-}
-
-function systemEventIconClass(message: GuestThreadEntryMessage) {
-  if (message.kind === 'delivery' && message.eventName?.includes('failed')) return 'text-error'
-  return 'text-muted'
 }
 
 function systemEventLabel(message: GuestThreadEntryMessage) {
@@ -278,13 +302,6 @@ function systemEventLabel(message: GuestThreadEntryMessage) {
     if (action === 'cancel') return `${actor}cancelled the ${labelForSubmissionType()}`.trim()
     if (action === 'complete') return `${actor}marked the ${labelForSubmissionType()} complete`.trim()
     return message.eventName ?? 'Operation recorded'
-  }
-
-  if (message.kind === 'delivery') {
-    const failed = message.eventName?.includes('failed')
-    const retry = message.eventName?.includes('retry')
-    if (failed) return retry ? 'Retry failed to send' : 'Notification email failed to send'
-    return retry ? 'Retry sent' : 'Confirmation email sent'
   }
 
   if (message.kind === 'resolution') {
@@ -301,12 +318,18 @@ function labelForSubmissionType() {
   return 'submission'
 }
 
-function isRetryableDelivery(message: GuestThreadEntryMessage) {
-  return message.kind === 'delivery' && Boolean(message.eventName?.includes('failed')) && Boolean(message.payload?.deliveryId)
+function deliveryFailureTitle(failure: GuestThreadDeliveryFailure) {
+  const channel = failure.channel === 'whatsapp' ? 'WhatsApp' : 'Email'
+  const delivery = `${channel} ${DELIVERY_PURPOSE_LABELS[failure.purpose]}`
+  return failure.status === 'failed'
+    ? `${delivery} could not be sent`
+    : `${delivery} delivery could not be confirmed`
 }
 
-function deliveryIdFromEntry(message: GuestThreadEntryMessage): string | null {
-  const id = message.payload?.deliveryId
-  return typeof id === 'string' ? id : null
+function deliveryFailureDescription(failure: GuestThreadDeliveryFailure) {
+  if (failure.error) return failure.error
+  return failure.status === 'failed'
+    ? `The ${failure.channel} provider rejected this delivery.`
+    : `The ${failure.channel} provider did not report a final delivery outcome.`
 }
 </script>

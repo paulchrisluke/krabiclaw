@@ -6,7 +6,6 @@ import type {
   CompiledSeedMediaAsset,
   CompiledSeedProduct,
   CompiledSeedPost,
-  CompiledSeedPostChannelJob,
   CompiledSeedReview,
   CompiledSeedTenantPageContent,
   CompiledSeedTenantPageLocaleField,
@@ -52,7 +51,6 @@ export function compileCuratedSiteFixture(
   uniqueStrings(fixture.products.map((product) => `${product.locationId}:${product.slug}`), 'location Product slug')
   uniqueStrings(fixture.locationQa.map((q) => q.id), 'location qa id')
   uniqueStrings(fixture.posts.map((p) => p.id), 'post id')
-  uniqueStrings(fixture.posts.flatMap((p) => p.channelJobs.map((j) => j.id)), 'post channel job id')
   uniqueStrings((fixture.tenantPageLocaleFields ?? []).map((entry) => entry.id), 'tenant page locale field id')
   uniqueStrings((fixture.businessLocationTranslations ?? []).map((entry) => entry.id), 'business location translation id')
   uniqueStrings(fixture.publicRoutes.map((r) => r.path), 'public route path')
@@ -134,7 +132,11 @@ export function compileCuratedSiteFixture(
       tagline: experience.tagline,
       body: experience.body,
       media,
-      highlights: experience.highlights ?? null,
+      tags: [...(experience.tags ?? [])],
+      details: (experience.details ?? []).map(detail => ({
+        ...detail,
+        values: [...detail.values],
+      })),
       includedItems: experience.includedItems ?? null,
       whatToBring: experience.whatToBring ?? null,
       meetingPoint: experience.meetingPoint ?? null,
@@ -144,7 +146,6 @@ export function compileCuratedSiteFixture(
       durationMinutes: experience.durationMinutes,
       maxCapacity: experience.maxCapacity,
       timeSlots: [...experience.timeSlots],
-      availableNote: experience.availableNote,
       status: experience.status,
       sortOrder: experience.sortOrder,
       featured: experience.featured,
@@ -192,6 +193,10 @@ export function compileCuratedSiteFixture(
       dietaryNotes: product.dietaryNotes,
       available: product.available,
       sortOrder: product.sortOrder,
+      featured: product.featured ?? false,
+      // Non-featured products default to 0; they're filtered out before any
+      // sort-by-featuredSortOrder pass so the value is never used in practice.
+      featuredSortOrder: product.featuredSortOrder ?? 0,
     }
   })
 
@@ -221,14 +226,12 @@ export function compileCuratedSiteFixture(
       throw new Error(`Post "${post.id}" references unknown location "${post.locationId}"`)
     }
     const media = validateMedia(post.media, mediaIds, `Post "${post.id}"`)
-    const channelJobs: CompiledSeedPostChannelJob[] = post.channelJobs.map((job) => ({
-      id: job.id,
-      postId: post.id,
-      organizationId: fixture.organizationId,
-      channel: job.channel,
-      status: job.status,
-      publishedAt: job.publishedAt,
-    }))
+    if (post.postType === 'offer' && !post.offerCoupon?.trim() && !post.offerTerms?.trim()) {
+      throw new Error(`Offer post "${post.id}" requires offerCoupon or offerTerms`)
+    }
+    if (post.postType === 'event' && !post.eventStartAt?.trim()) {
+      throw new Error(`Event post "${post.id}" requires eventStartAt`)
+    }
     return {
       id: post.id,
       organizationId: fixture.organizationId,
@@ -237,11 +240,17 @@ export function compileCuratedSiteFixture(
       postType: post.postType,
       title: post.title,
       body: post.body,
+      ctaType: post.ctaType ?? null,
+      ctaUrl: post.ctaUrl ?? null,
+      eventTitle: post.eventTitle ?? null,
+      eventStartAt: post.eventStartAt ?? null,
+      eventEndAt: post.eventEndAt ?? null,
+      offerCoupon: post.offerCoupon ?? null,
+      offerTerms: post.offerTerms ?? null,
       media,
       status: post.status,
       publishedAt: post.publishedAt,
       createdBy: post.createdBy,
-      channelJobs,
     }
   })
 

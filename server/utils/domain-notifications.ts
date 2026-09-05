@@ -1,11 +1,11 @@
-import { useRender } from 'vue-email'
-import { execute } from '~/server/db'
+import { renderEmail } from '~/server/emails/vue-email'
+import type { DbClient } from '~/server/db'
 import type { CloudflareEnv } from '~/server/utils/auth'
+import { sendEmail } from '~/server/utils/email-delivery'
 import { getOrganizationOwnerEmail } from '~/server/utils/member-access'
-import { sendWhatsAppNotification, getOrgWhatsAppPhone } from '~/server/utils/whatsapp'
-import { hashEmail, logOnlyEmailProviderId, shouldSendRealEmail } from '~/server/utils/email-delivery'
+import { createCanonicalNotification } from '~/server/utils/notification-center'
+import { getOrgWhatsAppPhone, sendWhatsAppNotification } from '~/server/utils/whatsapp'
 import DomainUpdate from '~/server/emails/templates/DomainUpdate'
-import { createCanonicalNotification, NOTIFICATION_EVENT_TYPES } from '~/server/utils/notification-center'
 
 interface DomainNotificationEnv extends CloudflareEnv {
   PLATFORM_OWNER_EMAILS?: string
@@ -14,10 +14,6 @@ interface DomainNotificationEnv extends CloudflareEnv {
   WHATSAPP_ACCESS_TOKEN?: string
   EMAIL_DELIVERY_MODE?: string
   NUXT_PUBLIC_PLATFORM_DOMAIN?: string
-}
-
-interface ResendResponse {
-  id?: string
 }
 
 interface DomainNotificationInput {
@@ -33,184 +29,72 @@ interface DomainNotificationInput {
 function supportEmails(env: DomainNotificationEnv): string[] {
   return String(env.PLATFORM_OWNER_EMAILS || '')
     .split(',')
-    .map((email) => email.trim())
+    .map(email => email.trim())
     .filter(Boolean)
 }
 
 function safeDashboardUrl(raw: string): string {
-  try {
-    const parsed = new URL(raw)
-    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-      throw new Error('Unsupported dashboard URL protocol')
-    }
-    return encodeURI(parsed.toString())
-  } catch {
-    throw new Error('Invalid dashboard URL')
+  const parsed = new URL(raw)
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    throw new Error('Unsupported dashboard URL protocol')
   }
-}
-
-async function sendEmail(
-  env: DomainNotificationEnv,
-  db: D1Database,
-  opts: DomainNotificationInput & { to: string; audience: 'owner' | 'support' }
-) {
-  const id = crypto.randomUUID()
-  const now = new Date().toISOString()
-  const storedRecipient = shouldSendRealEmail(env) ? opts.to : hashEmail(opts.to)
-  await execute(db, `
-    INSERT INTO notifications
-    (id, organization_id, site_id, channel, template, recipient, title, payload, status, created_at)
-    VALUES (?, ?, ?, 'email', 'domain_update', ?, ?, ?, 'pending', ?)
-  `, [
-    id,
-    opts.organizationId,
-    opts.siteId,
-    storedRecipient,
-    opts.title,
-    JSON.stringify({ audience: opts.audience, domain: opts.domain, status: opts.status, message: opts.message, dashboard_url: opts.dashboardUrl }),
-    now
-  ])
-
-  if (!shouldSendRealEmail(env)) {
-    await execute(db, `UPDATE notifications SET status = 'sent', provider_message_id = ?, sent_at = ?, error = NULL WHERE id = ?`, [
-      logOnlyEmailProviderId('domain'),
-      now,
-      id,
-    ])
-    console.info('email_delivery_log_only', {
-      notificationId: id,
-      organizationId: opts.organizationId,
-      siteId: opts.siteId,
-      audience: opts.audience,
-      recipient: hashEmail(opts.to),
-      title: opts.title,
-      template: 'domain_update',
-    })
-    return
-  }
-
-  const timeoutMs = 5000
-  const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), timeoutMs)
-
-  const dashboardUrl = safeDashboardUrl(opts.dashboardUrl)
-  const configuredPlatformDomain = env.NUXT_PUBLIC_PLATFORM_DOMAIN?.trim()
-  if (!configuredPlatformDomain) throw new Error('NUXT_PUBLIC_PLATFORM_DOMAIN is required')
-  const platformDomain = configuredPlatformDomain.replace(/^https?:\/\//, '').replace(/\/$/, '')
-  const { html, text } = await useRender(DomainUpdate, { props: { title: opts.title, message: opts.message, domain: opts.domain, status: opts.status, dashboardUrl, platformDomain } })
-
-  let response: Response
-  try {
-    response = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${env.RESEND_API_KEY}`,
-        'Content-Type': 'application/json'
-      },
-      signal: controller.signal,
-      body: JSON.stringify({
-        from: 'KrabiClaw <hello@krabiclaw.com>',
-        to: [opts.to],
-        subject: opts.title,
-        html,
-        text,
-      })
-    })
-  } catch (error) {
-    const normalizedError = error instanceof Error ? error : new Error('Unknown error')
-    const message = normalizedError.name === 'AbortError'
-      ? `Email request timed out after ${timeoutMs}ms`
-      : `Email request failed: ${normalizedError.message || 'Unknown error'}`
-    console.error('domain_notification_email_send_failed', {
-      to: hashEmail(opts.to),
-      audience: opts.audience,
-      siteId: opts.siteId,
-      organizationId: opts.organizationId,
-      error: message,
-    })
-    await execute(db, `UPDATE notifications SET status = 'failed', error = ?, sent_at = ? WHERE id = ?`, [message, now, id])
-    return
-  } finally {
-    clearTimeout(timeout)
-  }
-
-  if (!response.ok) {
-    let error: string
-    try {
-      error = await response.text()
-    } catch {
-      error = `HTTP ${response.status}`
-    }
-    await execute(db, `UPDATE notifications SET status = 'failed', error = ?, sent_at = ? WHERE id = ?`, [error, now, id])
-    return
-  }
-
-  let data: ResendResponse | null = null
-  try {
-    data = await response.clone().json() as ResendResponse
-  } catch (error) {
-    const normalizedError = error instanceof Error ? error : new Error('Unknown error')
-    const raw = await response.text().catch(() => '<unavailable>')
-    console.error('domain_notification_email_response_parse_failed', {
-      to: hashEmail(opts.to),
-      audience: opts.audience,
-      status: response.status,
-      error: normalizedError.message,
-      raw,
-    })
-    data = null
-  }
-  await execute(db, `UPDATE notifications SET status = 'sent', provider_message_id = ?, sent_at = ? WHERE id = ?`, [data?.id ?? null, now, id])
+  return encodeURI(parsed.toString())
 }
 
 export async function notifyDomainLifecycle(
   env: DomainNotificationEnv,
-  db: D1Database,
-  opts: DomainNotificationInput
+  db: DbClient,
+  opts: DomainNotificationInput,
 ) {
+  const dashboardUrl = safeDashboardUrl(opts.dashboardUrl)
   await createCanonicalNotification(db, {
+    publishEnv: env,
     scope: 'site',
-    eventType: NOTIFICATION_EVENT_TYPES.DOMAIN_UPDATED,
     severity: opts.status === 'active' ? 'success' : 'warning',
     organizationId: opts.organizationId,
     siteId: opts.siteId,
     title: opts.title,
     message: opts.message,
-    deepLink: opts.dashboardUrl,
-    payload: { domain: opts.domain, status: opts.status, dashboard_url: opts.dashboardUrl },
+    deepLink: dashboardUrl,
     template: 'domain_update',
   })
 
-  if (env.RESEND_API_KEY || !shouldSendRealEmail(env)) {
-    const ownerEmail = await getOrganizationOwnerEmail(env, opts.organizationId)
-    if (ownerEmail) await sendEmail(env, db, { ...opts, to: ownerEmail, audience: 'owner' })
-    const supportSendPromises = supportEmails(env).map((email) => sendEmail(env, db, { ...opts, to: email, audience: 'support' }))
-    await Promise.all(supportSendPromises)
-  }
+  const configuredPlatformDomain = env.NUXT_PUBLIC_PLATFORM_DOMAIN?.trim()
+  if (!configuredPlatformDomain) throw new Error('NUXT_PUBLIC_PLATFORM_DOMAIN is required')
+  const platformDomain = configuredPlatformDomain.replace(/^https?:\/\//, '').replace(/\/$/, '')
+  const rendered = await renderEmail(DomainUpdate, {
+    title: opts.title,
+    message: opts.message,
+    domain: opts.domain,
+    status: opts.status,
+    dashboardUrl,
+    platformDomain,
+  })
+  const ownerEmail = await getOrganizationOwnerEmail(env, opts.organizationId)
+  const recipients = [...new Set([ownerEmail, ...supportEmails(env)].filter(Boolean))] as string[]
+  const emailResults = await Promise.all(recipients.map(to => sendEmail(env, {
+    to,
+    subject: opts.title,
+    html: rendered.html,
+    text: rendered.text,
+  })))
+  emailResults.forEach((result) => {
+    if (result.status !== 'sent') console.error('domain_notification_email_send_failed', { siteId: opts.siteId, error: result.error })
+  })
 
   const phone = await getOrgWhatsAppPhone(db, opts.organizationId, opts.siteId)
   if (phone) {
-    try {
-      await sendWhatsAppNotification(env, db, {
-        organizationId: opts.organizationId,
-        siteId: opts.siteId,
-        toPhone: phone,
-        template: 'domain_update',
-        vars: {
-          domain: opts.domain,
-          status: opts.status,
-          dashboard_url: opts.dashboardUrl
-        }
-      })
-    } catch (error) {
-      const normalizedError = error instanceof Error ? error : new Error('Unknown error')
-      console.error('domain_notification_whatsapp_send_failed', {
-        organizationId: opts.organizationId,
-        siteId: opts.siteId,
-        domain: opts.domain,
-        status: opts.status,
-        error: normalizedError.message
-      })
+    const result = await sendWhatsAppNotification(env, db, {
+      organizationId: opts.organizationId,
+      siteId: opts.siteId,
+      toPhone: phone,
+      template: 'domain_update',
+      vars: { domain: opts.domain, status: opts.status, dashboard_url: dashboardUrl },
+    })
+    if (!result.success && result.status === 'sent') {
+      console.error('domain_notification_whatsapp_accounting_failed', { siteId: opts.siteId, error: result.error })
+      throw new Error(result.error)
     }
+    if (!result.success) console.error('domain_notification_whatsapp_send_failed', { siteId: opts.siteId, error: result.error })
   }
 }

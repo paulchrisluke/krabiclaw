@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 
-import { execSync } from 'node:child_process'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -20,6 +19,7 @@ import {
 } from '../seed-definitions/demo.ts'
 import { renderCanonicalBillingSql } from '../seed-definitions/billing-sql.ts'
 import { renderTenantPagesSeedSql } from '../seed-definitions/tenant-pages.ts'
+import { spawnYarn } from './utils/spawn-yarn.mjs'
 
 function escapeSql(value: string) {
   return value.replace(/'/g, "''")
@@ -138,6 +138,53 @@ ${tenantPages}
 ${selectionSite}`
 }
 
+function renderTodayFixtureSeed() {
+  return `-- Local-only rolling data for the dashboard Today page.
+-- Stable IDs make this safe to re-run without accumulating fixture records.
+
+INSERT OR REPLACE INTO reservation_submissions
+  (id, organization_id, site_id, location_id, name, email, phone, date, time, guests, requests, status, created_at, updated_at)
+VALUES
+  ('reservation-demo-today-maya', 'org-demo', 'site-demo', 'loc-demo', 'Maya Chen', 'maya.today@example.test', '+1-555-0101', date('now'), '12:30', '2', 'Window table if available.', 'confirmed', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  ('reservation-demo-today-daniel', 'org-demo', 'site-demo', 'loc-demo-2', 'Daniel Ortiz', 'daniel.today@example.test', '+1-555-0102', date('now'), '19:30', '4', NULL, 'confirmed', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  ('reservation-demo-upcoming-priya', 'org-demo', 'site-demo', 'loc-demo', 'Priya Shah', 'priya.upcoming@example.test', '+1-555-0103', date('now', '+3 days'), '18:00', '3', NULL, 'confirmed', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now'));
+
+INSERT OR REPLACE INTO experience_bookings
+  (id, experience_id, organization_id, site_id, location_id, guest_name, guest_email, guest_phone, party_size, booking_date, time_slot, status, notes, created_at, updated_at)
+VALUES
+  ('booking-demo-today-sophie', 'exp-demo-pizza-class', 'org-demo', 'site-demo', 'loc-demo', 'Sophie Laurent', 'sophie.today@example.test', '+1-555-0104', 3, date('now'), '14:00', 'confirmed', NULL, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  ('booking-demo-upcoming-jordan', 'exp-demo-pizza-class', 'org-demo', 'site-demo', 'loc-demo', 'Jordan Lee', 'jordan.upcoming@example.test', '+1-555-0105', 2, date('now', '+7 days'), '14:00', 'confirmed', NULL, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now'));
+
+INSERT OR REPLACE INTO guest_threads
+  (id, organization_id, site_id, location_id, submission_type, submission_id,
+   conversation_state, resolved_at, created_at, updated_at)
+VALUES
+  ('thread-reservation-demo-today-maya', 'org-demo', 'site-demo', 'loc-demo', 'reservation', 'reservation-demo-today-maya',
+   'needs_attention', NULL,
+   strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  ('thread-reservation-demo-today-daniel', 'org-demo', 'site-demo', 'loc-demo-2', 'reservation', 'reservation-demo-today-daniel',
+   'needs_attention', NULL,
+   strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  ('thread-reservation-demo-upcoming-priya', 'org-demo', 'site-demo', 'loc-demo', 'reservation', 'reservation-demo-upcoming-priya',
+   'needs_attention', NULL,
+   strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now'));
+
+INSERT OR REPLACE INTO guest_thread_entries
+  (id, thread_id, kind, actor_kind, actor_user_id, channel, body, event_name,
+   payload_json, dedupe_key, sequence, occurred_at, created_at)
+VALUES
+  ('entry-reservation-demo-today-maya', 'thread-reservation-demo-today-maya', 'submission', 'guest', NULL, 'system', NULL, 'reservation_submitted',
+   json_object('schemaVersion', 1, 'submissionType', 'reservation', 'submissionId', 'reservation-demo-today-maya'), 'submission:reservation:reservation-demo-today-maya', 1,
+   strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  ('entry-reservation-demo-today-daniel', 'thread-reservation-demo-today-daniel', 'submission', 'guest', NULL, 'system', NULL, 'reservation_submitted',
+   json_object('schemaVersion', 1, 'submissionType', 'reservation', 'submissionId', 'reservation-demo-today-daniel'), 'submission:reservation:reservation-demo-today-daniel', 1,
+   strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  ('entry-reservation-demo-upcoming-priya', 'thread-reservation-demo-upcoming-priya', 'submission', 'guest', NULL, 'system', NULL, 'reservation_submitted',
+   json_object('schemaVersion', 1, 'submissionType', 'reservation', 'submissionId', 'reservation-demo-upcoming-priya'), 'submission:reservation:reservation-demo-upcoming-priya', 1,
+   strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now'));
+`
+}
+
 // INCIDENT: Anthropic's Claude (an AI coding assistant) ran this script with
 // --preview believing it was a harmless dry run. It is not. --preview
 // executes these queries for real against the remote preview D1 database via
@@ -223,7 +270,7 @@ VALUES ('member-demo', 'org-demo', 'user-demo', 'owner', unixepoch());
 ${renderCompiledDemoCoreSeedBlock()}
 
 -- Preserve the canonical credentialed local browser owner across demo-only reseeds.
--- The user/session is provisioned separately by scripts/provision-e2e-auth.ts, while
+-- The user/session is provisioned separately by scripts/provision-development-auth.ts, while
 -- deleting org-demo above cascades its membership; restore that membership when the
 -- credentialed user already exists without inventing another auth path.
 INSERT INTO member (id, organizationId, userId, role, createdAt)
@@ -252,6 +299,8 @@ ${renderCompiledDemoContentBlock()}
 ${renderCompiledDemoTenantPagesBlock()}
 
 ${renderCompiledDemoBillingBlock()}
+
+${renderTodayFixtureSeed()}
 `
 
 if (isStdout) {
@@ -262,9 +311,11 @@ if (isStdout) {
 
   try {
     writeFileSync(sqlPath, sql, 'utf8')
-    const cmd = `npx wrangler d1 execute DB ${envFlag} ${remoteFlag} --file "${sqlPath}"`.trim()
-    console.log(`[seed:demo] Applying: ${cmd}`)
-    execSync(cmd, { stdio: 'inherit' })
+    const args = ['wrangler', 'd1', 'execute', 'DB', ...envFlag.split(' '), ...remoteFlag.split(' ').filter(Boolean), '--file', sqlPath]
+    console.log(`[seed:demo] Applying: corepack yarn ${args.join(' ')}`)
+    const result = spawnYarn(args)
+    if (result.error) throw result.error
+    if (result.status !== 0) process.exit(result.status ?? 1)
     console.log('[seed:demo] Done.')
   } finally {
     rmSync(dir, { recursive: true, force: true })

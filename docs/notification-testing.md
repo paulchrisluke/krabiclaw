@@ -1,181 +1,42 @@
-# Notification Testing
+# Notification testing
 
-KrabiClaw supports both log-only and real provider delivery for email, WhatsApp, and platform Discord alerts. We need
-to be deliberate about which one we are using, because several public product flows send real
-notifications in production.
+KrabiClaw has two distinct records:
 
-## Delivery modes
+- `notifications` is the dashboard acknowledgement feed. A notification is unread for a user until the corresponding `notification_reads` row exists.
+- `guest_thread_deliveries` records external email or WhatsApp outcomes for guest-thread entries. It is not a dashboard feed.
 
-Email is controlled by `EMAIL_DELIVERY_MODE`.
+Do not infer an external send from a dashboard notification, or an unread item from a delivery receipt.
 
-- `log_only`: do not send via Resend; write/log the attempt only
-- `provider`: send via Resend for real
+## Local verification
 
-WhatsApp is controlled by `WHATSAPP_DELIVERY_MODE`.
+Local development and preview use log-only delivery modes. A log-only send must still write a terminal `guest_thread_deliveries` receipt with a `log-only:` provider message ID when the send belongs to a guest thread.
 
-- `log_only`: do not send via Meta WhatsApp; write/log the attempt only
-- `provider`: send via Meta WhatsApp for real
+Verify a guest submission through the real Worker boundary:
 
-Email and WhatsApp use these fail-closed helpers:
+1. Submit a contact message, reservation, or experience booking.
+2. Confirm that one guest thread and its opening entry exist.
+3. Confirm that the owner dashboard notification references that thread and entry.
+4. Confirm that configured owner channels and the guest acknowledgement have delivery receipts with stable idempotency keys.
+5. Open the thread as a dashboard user and confirm that `notification_reads` records the acknowledgement for that user only.
+6. Confirm that the organization WebSocket emits the typed invalidation and that disconnecting it shows the dashboard failure state.
 
-- `server/utils/email-delivery.ts`
-- `server/utils/whatsapp-delivery.ts`
+For inbound replies, use the development inbound email or WhatsApp route. Repeating the same provider message ID must return the existing entry instead of appending another one.
 
-If the mode is missing, blank, or invalid, delivery falls back to `log_only`.
+The development email route does not prove the native MIME entrypoint. Also send
+a raw multipart email through Wrangler's `/cdn-cgi/local/email` endpoint, using a
+reply address signed with the disposable local `EMAIL_REPLY_SECRET`. Verify
+Unicode text decoding, concurrent replay of its `Message-ID`, one persisted
+guest entry, and rejection of an invalid reply token. This endpoint is supplied
+by [Wrangler's local email runtime](https://developers.cloudflare.com/email-service/local-development/routing/),
+not by an application forwarding route.
 
-Discord is controlled by `DISCORD_DELIVERY_MODE` with the same `log_only|provider`
-contract and fail-closed default. Discord is only an outbound channel for selected
-platform events. It is not the notification system of record and is not available to
-tenants in v1. Provider mode additionally requires the `DISCORD_WEBHOOK_URL` Worker
-secret. Never store that URL in `wrangler.toml`, a repository variable, or logs.
+`yarn test:d1` exercises the committed baseline and delivery claim functions
+against real local D1. It proves one concurrent claim, no ambiguous Meta retry,
+bounded Resend retry, and protection from stale completion writes. It does not
+contact either provider or prove their live webhook configuration.
 
-## Environment expectations
+## Production canary
 
-Expected default behavior:
+Production delivery checks are an authorized release operation. Follow [release-flow.md](operations/release-flow.md) and use `yarn canary:notifications` only with the documented production credentials and approval. The canary reads `guest_thread_deliveries` for provider outcomes and writes its result to `canary_runs`.
 
-- Local dev: `log_only`
-- Preview: `log_only`
-- Staging: `log_only`
-- Production: `provider` only where we intentionally want live delivery
-
-Do not assume "it is just a test form" means "it will not send." If production is in
-`provider` mode, public submission paths can send for real.
-
-## Production paths that can send for real
-
-These should be treated as live traffic in production:
-
-- Platform contact: `POST /api/contact`
-- Platform help escalations from `/help`
-  - `components/platform/PublicHelpChowBot.vue` submits `source="help_agent"` through the
-    platform contact flow
-- Tenant contact: `POST /api/public/sites/[siteId]/contact`
-- Tenant reservations: `POST /api/public/sites/[siteId]/reservations`
-- Tenant experience bookings: `POST /api/public/sites/[siteId]/experiences/[slug]/book`
-- Dashboard reply actions for reservation / booking follow-up
-
-If you hit those endpoints in production with real delivery enabled, expect real email and/or
-WhatsApp to be sent.
-
-## Safe testing order
-
-Prefer these in order:
-
-1. Read-only provider checks
-2. Log-only delivery in local/preview/staging
-3. DB/log verification
-4. Explicit real-send canaries with dedicated test identities
-
-### 1. Read-only provider checks
-
-Use these first when you only need to know whether credentials and providers are healthy:
-
-- `yarn canary:status`
-- `GET /api/canary/provider-status`
-
-These confirm Resend and WhatsApp provider connectivity without sending a real email or message.
-
-### 2. Log-only delivery
-
-For implementation work, UI checks, and most regression testing:
-
-- keep `EMAIL_DELIVERY_MODE=log_only`
-- keep `WHATSAPP_DELIVERY_MODE=log_only`
-- keep `DISCORD_DELIVERY_MODE=log_only`
-- use local dev, preview, or staging
-
-This is the default safe mode and should be used unless the specific goal is to verify an
-actual provider send.
-
-### 3. DB and log verification
-
-Before reaching for a live test, inspect the system of record:
-
-- `notifications`
-- `notification_reads`
-- `notification_deliveries`
-- `submission_messages`
-- `platform_contact_submissions`
-- `contact_submissions`
-- `reservations`
-- `experience_bookings`
-- `canary_runs`
-
-Useful dev-only inspection helpers:
-
-- `GET /api/dev/notifications`
-- `GET /api/dev/submission-messages`
-
-### 4. Real-send canaries
-
-Use real provider sends only when we explicitly need end-to-end proof that delivery works.
-
-Rules:
-
-- Use dedicated canary identities only
-- Never use personal email addresses or phone numbers for routine testing
-- Run the manual GitHub Actions workflow `Production Real-Send Canaries`
-- Choose only the specific canary needed for that test window
-- Review `canary_runs` and provider message IDs afterward
-
-Current canaries:
-
-- `yarn canary:prod`: auth / OTP canary
-- `yarn canary:notifications`: real email + WhatsApp notification canary
-
-## Agent rule
-
-LLMs and humans should follow the same rule:
-
-- Do not trigger production public forms or live notifications just to "see if it works"
-  unless the user explicitly asked for a real-send test.
-
-Instead:
-
-- verify the DB write
-- inspect `notifications` / `submission_messages`
-- use read-only provider status checks
-- use preview/staging/local in `log_only`
-- escalate to the manual production canary only when needed
-
-## Why this matters
-
-Accidental live tests create real customer-facing side effects:
-
-- unexpected support emails
-- unexpected WhatsApp messages
-- noisy inbox history
-- cost from provider sends
-- confusion when test data looks like a real lead
-
-The `help_agent` contact submission you saw is a good example: it is a real production path,
-not a fake internal sandbox.
-
-## Notification model
-
-`notifications` holds canonical in-app event records. A record has platform,
-organization, or site scope plus an event type, severity, optional user/actor target,
-and deep link. `notification_reads` records read state per user. Outbound attempts such
-as Discord are related through `notification_deliveries`; delivery channels do not own
-the underlying event.
-
-Email and WhatsApp owner/guest delivery remains unchanged. Existing channel rows in
-`notifications` are retained for delivery audit compatibility while those established
-paths are migrated incrementally.
-
-ChowBot messages are conversation state and may summarize notifications, but they do
-not replace canonical notification records. PWA installation and OS-level push are
-future delivery surfaces and are not required for this in-app center. These future
-delivery surfaces are non-authorizing — they describe planned direction, not current
-implementation permission.
-
-## Discord production rollout
-
-1. Rotate any webhook URL that has appeared in chat, logs, or another non-secret surface.
-2. Provision the rotated URL directly as the Cloudflare Worker secret through
-   the approved secret-management procedure. Release workflows only verify
-   required secret names; they never run `secret put`, because that would
-   create a deployment outside the normal branch flow.
-3. Preview and staging stay `log_only` and do not need the production secret.
-4. Confirm a new signup creates a `platform.user_signup` record and a successful
-   `notification_deliveries` row before relying on Discord operationally.
+Never use a canary to provision resources, change delivery modes, or repair data.

@@ -229,6 +229,15 @@ export async function resolveMcpWorkspace(
   }
 
   if (options.requireLocation && !location) {
+    // A caller who named a location and a caller who named none have failed for
+    // different reasons, and telling the first to "pass location_id explicitly"
+    // sends them looking for a mistake they did not make. Name the id that did
+    // not resolve instead, so a wrong or out-of-site id reads as what it is.
+    if (requestedLocationId) {
+      throw new Error(
+        `Location "${requestedLocationId}" was not found on the active site.`,
+      )
+    }
     throw new Error(
       locations.length === 0
         ? 'No location found for the active site.'

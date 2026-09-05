@@ -51,12 +51,20 @@
       @menu="menuOpen = true"
     />
 
+    <!--
+      The group sits above the nav chrome, not below it. UDashboardGroup is
+      `position: fixed`, which makes it a stacking context, so anything inside it
+      composites at the group's level no matter how high its own z-index is. With
+      the navs at z-40 a leaf sheet at z-50 still painted underneath them. The
+      group's box is inset away from both navs, so nothing overlaps in the normal
+      case; only an element that deliberately spans the viewport reaches them.
+    -->
     <UDashboardGroup
       unit="rem"
       :min-size="14"
       :default-size="18"
       :max-size="24"
-      :ui="{ base: showDashboardChrome ? 'md:top-(--kc-dashboard-top-nav) max-md:bottom-(--kc-dashboard-bottom-nav)' : '' }"
+      :ui="{ base: showDashboardChrome ? 'z-40 md:top-(--kc-dashboard-top-nav) max-md:bottom-(--kc-dashboard-bottom-nav)' : '' }"
     >
       <UDashboardSearch v-model:search-term="dashboardSearchTerm" :groups="dashboardSearchGroups" :loading="dashboardSearchLoading" :color-mode="false" />
 
@@ -65,7 +73,7 @@
 
     <nav
       v-if="showDashboardChrome"
-      class="fixed inset-x-0 bottom-0 z-40 flex h-(--kc-dashboard-bottom-nav) items-stretch border-t border-default bg-default pb-[env(safe-area-inset-bottom)] md:hidden"
+      class="fixed inset-x-0 bottom-0 z-30 flex h-(--kc-dashboard-bottom-nav) items-stretch border-t border-default bg-default pb-[env(safe-area-inset-bottom)] md:hidden"
       aria-label="Dashboard"
       data-testid="dashboard-mobile-nav"
     >
@@ -143,8 +151,7 @@ interface AuthOrganization {
 }
 
 const route = useRoute()
-const _config = useRuntimeConfig()
-const { data: sessionData, refreshSession, signOut: _signOut } = useAuth()
+const { data: sessionData, refreshSession } = useAuth()
 const { trackDashboardVisited, setUserId } = useAnalytics()
 const toast = useToast()
 const stoppingImpersonation = ref(false)
@@ -254,6 +261,8 @@ const impersonatedBy = computed(() => {
 })
 
 const orgSlug = computed(() => organization.value?.slug ?? null)
+const realtimeOrganizationSlug = computed(() => typeof route.params.orgSlug === 'string' ? route.params.orgSlug : null)
+provideDashboardInvalidations(realtimeOrganizationSlug)
 const orgBase = computed(() => orgSlug.value ? `/dashboard/${orgSlug.value}` : null)
 
 const siteSlugFromRoute = computed(() => {
@@ -269,8 +278,12 @@ const siteBase = computed(() => orgBase.value && activeSiteSlug.value ? `${orgBa
 // locationsBase is the dedicated site locations index and the prefix for a
 // specific location's own routes.
 const locationsBase = computed(() => siteBase.value ? `${siteBase.value}/locations` : null)
-const currentLocationSlug = dashboardLocation.routeLocationSlug
-const locationBase = computed(() => locationsBase.value && currentLocationSlug.value ? `${locationsBase.value}/${currentLocationSlug.value}` : null)
+// Read straight off the route, the way mobileNavItems below already does for the
+// same value. This was aliasing the composable's `routeLocationSlug` to the name
+// of a *different* export, `currentLocationSlug`, which resolves a record before
+// answering — a lookup this has no use for, since the prefix it builds is a URL.
+const routeLocationSlug = computed(() => typeof route.params.locationSlug === 'string' ? route.params.locationSlug : null)
+const locationBase = computed(() => locationsBase.value && routeLocationSlug.value ? `${locationsBase.value}/${routeLocationSlug.value}` : null)
 const routeName = computed(() => typeof route.name === 'string' ? route.name : '')
 const isAccountRoute = computed(() => routeName.value.startsWith('dashboard-account'))
 const isAdminRoute = computed(() => routeName.value.startsWith('admin'))
@@ -281,7 +294,9 @@ const vertical = computed(() => {
   return normalizeVertical(raw) as SiteVertical
 })
 const templateSlug = computed(() => vertical.value ? resolvePublicTemplate({ vertical: vertical.value }).slug : null)
-const currentLocationRow = computed(() => dashboard.locations.value.find(l => l.slug === currentLocationSlug.value) ?? null)
+// The composable already resolves the route's slug to its record; this was the
+// same find written out a second time.
+const currentLocationRow = dashboardLocation.currentLocation
 // The resolved definition always reflects BOTH the site's own override and, once drilled into a
 // location, that location's override too — a single resolveCmsCapabilities call feeds nav at
 // every scope rather than each scope re-deriving its own partial capability view.
@@ -290,7 +305,7 @@ const capabilities = computed(() => {
   try {
     return resolveCmsCapabilities(vertical.value, templateSlug.value, {
       site: parseCmsFeatureOverrideDelta(site.value?.feature_overrides),
-      location: currentLocationSlug.value ? parseCmsFeatureOverrideDelta(currentLocationRow.value?.feature_overrides) : undefined,
+      location: routeLocationSlug.value ? parseCmsFeatureOverrideDelta(currentLocationRow.value?.feature_overrides) : undefined,
     })
   } catch {
     return null
@@ -309,7 +324,7 @@ const siteAvatar = (candidate: (typeof sites.value)[number] | undefined) => {
 // there is no separate sidebar shell per scope, only scope-driven content inside
 // the one stable header/nav slots (see issue #316's "one stable sidebar" rule).
 const scope = computed<'organization' | 'site' | 'location'>(() => {
-  if (currentLocationSlug.value) return 'location'
+  if (routeLocationSlug.value) return 'location'
   if (activeSiteSlug.value) return 'site'
   return 'organization'
 })
@@ -394,6 +409,18 @@ function isActivePath(path?: string, exact = false) {
   return route.path === path || (!exact && route.path.startsWith(`${path}/`))
 }
 
+/**
+ * Only the most specific matching item is active. Nav paths nest — a location's
+ * Inbox lives under the Locations path — so plain prefix matching lit up both
+ * Inbox and Locations at once. The longest matching path is the one the route
+ * actually belongs to.
+ */
+function withActiveItem<T extends { to?: string; exact?: boolean }>(items: T[]): Array<T & { active: boolean }> {
+  const depths = items.map(item => isActivePath(item.to, item.exact) ? (item.to?.length ?? 0) : -1)
+  const deepest = Math.max(...depths)
+  return items.map((item, index) => ({ ...item, active: depths[index] === deepest && depths[index] >= 0 }))
+}
+
 const mobileNavItems = computed<DashboardMobileNavItem[]>(() => {
   const routeOrgSlug = typeof route.params.orgSlug === 'string' ? route.params.orgSlug : null
   if (!routeOrgSlug) return []
@@ -417,7 +444,7 @@ const mobileNavItems = computed<DashboardMobileNavItem[]>(() => {
     { key: 'children', label: isOrganization ? 'Sites' : locationsNavLabel.value, icon: isOrganization ? 'i-lucide-globe' : 'i-lucide-map-pin', to: childrenTo ?? undefined },
     { key: 'inbox', label: 'Inbox', icon: 'i-lucide-inbox', to: inboxTo },
   ]
-  return items.map(item => ({ ...item, active: isActivePath(item.to, item.exact) }))
+  return withActiveItem(items)
 })
 
 // The top nav (tablet and desktop, md and up) and the bottom bar (mobile, below

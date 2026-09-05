@@ -75,6 +75,13 @@ yarn test:e2e:guest-journeys
 yarn test:e2e:mcp
 ```
 
+Migration tooling changes also run `yarn test:migrations`. These integration
+tests invoke the real installed Drizzle CLI/API and migration guards against
+disposable schema fixtures. They prove no-change generation, detection of real
+changes and generator failures, and rejection of referenced-parent drops before
+execution. They neither apply migrations to a deployed database nor replace
+the local D1 and existing-data checks required for an actual schema change.
+
 ## 2026-09-01 reduction baseline
 
 | Metric | Before | After |

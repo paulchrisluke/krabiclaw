@@ -3,7 +3,7 @@
     <template #header>
       <UDashboardNavbar title="Orders">
         <template #leading>
-          <DashboardNavbarLeading :to="paths.site" label="Site" />
+          <DashboardNavbarLeading v-if="sitePaths" :to="sitePaths.site" label="Site" />
         </template>
       </UDashboardNavbar>
     </template>
@@ -21,7 +21,7 @@
       <div v-else-if="locations.length === 0" class="rounded-lg border border-dashed border-default px-6 py-12 text-center">
         <UIcon name="i-lucide-map-pin" class="mx-auto size-9 text-muted" />
         <p class="mt-3 text-sm font-medium text-highlighted">Add a location before configuring orders</p>
-        <UButton class="mt-5" :to="`${paths.locations}/new`" icon="i-lucide-plus">Add location</UButton>
+        <UButton v-if="sitePaths" class="mt-5" :to="`${sitePaths.locations}/new`" icon="i-lucide-plus">Add location</UButton>
       </div>
 
       <div v-else class="space-y-4">
@@ -32,7 +32,7 @@
                 <h2 class="font-semibold text-highlighted">{{ location.title }}</h2>
                 <p class="text-sm text-muted">{{ location.city || location.addressText || 'Location ordering links' }}</p>
               </div>
-              <UButton size="sm" color="neutral" variant="soft" icon="i-lucide-map-pin" :to="locationPath(location.id)">Location details</UButton>
+              <UButton v-if="sitePaths" size="sm" color="neutral" variant="soft" icon="i-lucide-map-pin" :to="`${sitePaths.locations}/${location.slug}`">Location details</UButton>
             </div>
           </template>
 
@@ -80,6 +80,7 @@ definePageMeta({ layout: 'dashboard', cmsCapabilityKey: 'site.ordering' })
 
 interface LocationRow {
   id: string
+  slug: string
   title: string
   city: string | null
   address: { addressLines?: string[] } | null
@@ -100,7 +101,7 @@ const locations = ref<Array<LocationRow & { addressText: string; form: OrderForm
 const loading = ref(true)
 const loadError = ref<string | null>(null)
 const savingId = ref<string | null>(null)
-const { paths, locationPath } = useDashboardSiteLinks()
+const { sitePaths } = useDashboardSiteLinks()
 
 function addressText(address: LocationRow['address']) {
   return address?.addressLines?.filter(Boolean).join(', ') ?? ''

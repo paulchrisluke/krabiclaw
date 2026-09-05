@@ -1,0 +1,48 @@
+diff --git a/node_modules/drizzle-kit/bin.cjs b/node_modules/drizzle-kit/bin.cjs
+--- a/node_modules/drizzle-kit/bin.cjs
++++ b/node_modules/drizzle-kit/bin.cjs
+@@ -7173,7 +7173,11 @@
+             it[0],
+             {
+               name: it[1].name,
+-              columns: it[1].columns,
++              columns: mapValues(it[1].columns, (column) =>
++                column.type === "integer" && typeof column.default === "boolean"
++                  ? { ...column, default: Number(column.default) }
++                  : column
++              ),
+               indexes: squashedIndexes,
+               foreignKeys: squashedFKs,
+               compositePrimaryKeys: squashedPKs,
+diff --git a/node_modules/drizzle-kit/api.js b/node_modules/drizzle-kit/api.js
+--- a/node_modules/drizzle-kit/api.js
++++ b/node_modules/drizzle-kit/api.js
+@@ -9409,7 +9409,11 @@
+             it[0],
+             {
+               name: it[1].name,
+-              columns: it[1].columns,
++              columns: mapValues(it[1].columns, (column) =>
++                column.type === "integer" && typeof column.default === "boolean"
++                  ? { ...column, default: Number(column.default) }
++                  : column
++              ),
+               indexes: squashedIndexes,
+               foreignKeys: squashedFKs,
+               compositePrimaryKeys: squashedPKs,
+diff --git a/node_modules/drizzle-kit/api.mjs b/node_modules/drizzle-kit/api.mjs
+--- a/node_modules/drizzle-kit/api.mjs
++++ b/node_modules/drizzle-kit/api.mjs
+@@ -9414,7 +9414,11 @@
+             it[0],
+             {
+               name: it[1].name,
+-              columns: it[1].columns,
++              columns: mapValues(it[1].columns, (column) =>
++                column.type === "integer" && typeof column.default === "boolean"
++                  ? { ...column, default: Number(column.default) }
++                  : column
++              ),
+               indexes: squashedIndexes,
+               foreignKeys: squashedFKs,
+               compositePrimaryKeys: squashedPKs,

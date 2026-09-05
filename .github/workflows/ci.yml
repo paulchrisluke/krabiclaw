@@ -22,14 +22,23 @@ jobs:
       || !(github.base_ref == 'main' && github.head_ref == 'staging')
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
           node-version: "24.18.1"
-          cache: yarn
-      - run: yarn install --frozen-lockfile
+      - run: corepack enable
+      - name: Restore Yarn package cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: ~/.yarn/berry/cache
+          key: yarn-${{ runner.os }}-${{ hashFiles('yarn.lock') }}
+          restore-keys: yarn-${{ runner.os }}-
+      - name: Hardened immutable installs
+        env:
+          YARN_ENABLE_HARDENED_MODE: "1"
+        run: corepack yarn install --immutable
       - run: yarn quality
       - run: yarn test:unit
       - run: yarn test:d1
@@ -38,6 +47,7 @@ jobs:
       - run: yarn lint:seeds
       - run: yarn lint:migrations
       - run: yarn lint:schema-drift
+      - run: yarn test:migrations
 
   e2e-plan:
     name: Plan affected browser coverage
@@ -51,7 +61,7 @@ jobs:
       groups: ${{ steps.plan.outputs.groups }}
       specs: ${{ steps.plan.outputs.specs }}
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
           fetch-depth: 0
@@ -82,17 +92,23 @@ jobs:
       NUXT_PUBLIC_WHATSAPP_NUMBER: "16197200000"
       BETTER_AUTH_URL: https://preview.krabiclaw.com
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
           ref: ${{ github.event.pull_request.head.sha }}
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
           node-version: "24.18.1"
-          cache: yarn
-      - run: yarn install --frozen-lockfile
+      - run: corepack enable
+      - name: Restore Yarn package cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: ~/.yarn/berry/cache
+          key: yarn-${{ runner.os }}-${{ hashFiles('yarn.lock') }}
+          restore-keys: yarn-${{ runner.os }}-
+      - run: corepack yarn install --immutable
       - run: yarn build
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: preview-worker-${{ github.event.pull_request.head.sha }}
           path: .output
@@ -133,16 +149,22 @@ jobs:
       E2E_SELECTION_SCOPE: ${{ needs.e2e-plan.outputs.scope }}
       E2E_SELECTED_SPECS: ${{ needs.e2e-plan.outputs.specs }}
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
           node-version: "24.18.1"
-          cache: yarn
-      - run: yarn install --frozen-lockfile
-      - run: npx playwright install chromium
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+      - run: corepack enable
+      - name: Restore Yarn package cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: ~/.yarn/berry/cache
+          key: yarn-${{ runner.os }}-${{ hashFiles('yarn.lock') }}
+          restore-keys: yarn-${{ runner.os }}-
+      - run: corepack yarn install --immutable
+      - run: corepack yarn playwright install chromium
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
           name: preview-worker-${{ github.event.pull_request.head.sha }}
           path: .output
@@ -162,10 +184,18 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
-          npx wrangler secret list --env preview --format json > "$RUNNER_TEMP/preview-secrets.json"
-          for secret_name in STRIPE_SECRET_KEY STRIPE_WEBHOOK_SECRET PREVIEW_SECRET E2E_DEV_ROUTE_SECRET EMAIL_REPLY_SECRET EMAIL_INBOUND_SECRET; do
+          corepack yarn wrangler secret list --env preview --format json > "$RUNNER_TEMP/preview-secrets.json"
+          for secret_name in STRIPE_SECRET_KEY STRIPE_WEBHOOK_SECRET PREVIEW_SECRET E2E_DEV_ROUTE_SECRET EMAIL_REPLY_SECRET; do
             jq -e --arg name "$secret_name" '.. | objects | select((.name? // .key?) == $name)' "$RUNNER_TEMP/preview-secrets.json" >/dev/null
           done
+      - name: Generate preview fixtures
+        run: |
+          set -euo pipefail
+          node --experimental-strip-types scripts/generate-demo-bundle.ts
+          node --experimental-strip-types scripts/generate-demo-seed.ts --preview --stdout > /tmp/preview-demo-seed.sql
+          node --experimental-strip-types scripts/generate-pottery-house-seed.ts --preview --stdout > /tmp/preview-pottery-seed.sql
+          node --experimental-strip-types scripts/generate-kikuzuki-seed.ts --preview --stdout > /tmp/preview-kikuzuki-seed.sql
+          node --experimental-strip-types scripts/generate-ncls-seed.ts --stdout > /tmp/preview-ncls-seed.sql
       - name: Reset and migrate preview database
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -175,18 +205,13 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: npx wrangler deploy --env preview --strict
+        run: corepack yarn wrangler deploy --env preview --strict
       - name: Seed preview fixtures
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
           set -euo pipefail
-          node --experimental-strip-types scripts/generate-demo-bundle.ts
-          node --experimental-strip-types scripts/generate-demo-seed.ts --preview --stdout > /tmp/preview-demo-seed.sql
-          node --experimental-strip-types scripts/generate-pottery-house-seed.ts --preview --stdout > /tmp/preview-pottery-seed.sql
-          node --experimental-strip-types scripts/generate-kikuzuki-seed.ts --preview --stdout > /tmp/preview-kikuzuki-seed.sql
-          node --experimental-strip-types scripts/generate-ncls-seed.ts --stdout > /tmp/preview-ncls-seed.sql
           node --experimental-strip-types scripts/execute-preview-d1-sql.ts \
             /tmp/preview-demo-seed.sql \
             /tmp/preview-pottery-seed.sql \
@@ -196,18 +221,14 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: node --experimental-strip-types scripts/provision-e2e-auth.ts --preview
+        run: node --experimental-strip-types scripts/provision-development-auth.ts --preview
+      - name: Verify preview fixtures
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: yarn fixtures:verify:preview
       - name: Run tenant public and affected preview coverage
         run: yarn test:e2e:preview:selected
-      - name: Upload Playwright report
-        if: failure()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: playwright-report-preview
-          path: |
-            playwright-report/
-            test-results/
-          retention-days: 7
 
   e2e-staging:
     name: Deploy and test staging
@@ -234,38 +255,41 @@ jobs:
       PLAYWRIGHT_PREVIEW_URL: https://staging.krabiclaw.com
       PLAYWRIGHT_WORKERS: "2"
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
+          fetch-depth: 0
           ref: ${{ github.sha }}
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
           node-version: "24.18.1"
-          cache: yarn
-      - run: yarn install --frozen-lockfile
-      - run: npx playwright install --with-deps chromium
+      - run: corepack enable
+      - name: Restore Yarn package cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: ~/.yarn/berry/cache
+          key: yarn-${{ runner.os }}-${{ hashFiles('yarn.lock') }}
+          restore-keys: yarn-${{ runner.os }}-
+      - run: corepack yarn install --immutable
+      - run: corepack yarn playwright install --with-deps chromium
       - name: Build staging Worker
         run: yarn build
       - name: Deploy staging Worker
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: npx wrangler deploy --env staging --strict
-      - name: Sync staging search reindex secret
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          PLATFORM_SEARCH_REINDEX_SECRET: ${{ secrets.PLATFORM_SEARCH_REINDEX_SECRET }}
-        run: printf '%s' "$PLATFORM_SEARCH_REINDEX_SECRET" | npx wrangler secret put PLATFORM_SEARCH_REINDEX_SECRET --env staging
+        run: corepack yarn wrangler deploy --env staging --strict
       - name: Apply staging migrations
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: npx wrangler d1 migrations apply DB --env staging --remote
+        run: corepack yarn wrangler d1 migrations apply DB --env staging --remote
       - name: Refresh staging AI Search index
         env:
           PLATFORM_SEARCH_REINDEX_SECRET: ${{ secrets.PLATFORM_SEARCH_REINDEX_SECRET }}
-        run: yarn ai-search:sync:staging
+          SEARCH_BASE_SHA: ${{ github.event.before }}
+          SEARCH_HEAD_SHA: ${{ github.sha }}
+        run: yarn ai-search:sync:staging --changed-since "$SEARCH_BASE_SHA" --changed-until "$SEARCH_HEAD_SHA"
       - name: Verify staging AI Search
         run: curl --fail-with-body --retry 5 --retry-all-errors --retry-delay 5 "https://staging.krabiclaw.com/api/public/search?q=booking&type=all&surface=public"
       - name: Run read-only tenant MCP discovery smoke
@@ -274,7 +298,7 @@ jobs:
         run: yarn test:e2e:tenant-rendering
       - name: Upload staging Playwright report
         if: failure()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: playwright-report-staging
           path: |
@@ -307,14 +331,21 @@ jobs:
       NUXT_PUBLIC_WHATSAPP_NUMBER: "16197200000"
       BETTER_AUTH_URL: https://krabiclaw.com
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+          fetch-depth: 0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
           node-version: "24.18.1"
-          cache: yarn
-      - run: yarn install --frozen-lockfile
+      - run: corepack enable
+      - name: Restore Yarn package cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: ~/.yarn/berry/cache
+          key: yarn-${{ runner.os }}-${{ hashFiles('yarn.lock') }}
+          restore-keys: yarn-${{ runner.os }}-
+      - run: corepack yarn install --immutable
       - name: Build production Worker
         run: yarn build
       - name: Capture Nuxt build ID
@@ -326,16 +357,18 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: npx wrangler deploy --strict
+        run: corepack yarn wrangler deploy --strict
       - name: Apply production migrations
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: npx wrangler d1 migrations apply DB --remote
+        run: corepack yarn wrangler d1 migrations apply DB --remote
       - name: Refresh production search index
         env:
           PLATFORM_SEARCH_REINDEX_SECRET: ${{ secrets.PLATFORM_SEARCH_REINDEX_SECRET }}
-        run: yarn ai-search:sync:prod
+          SEARCH_BASE_SHA: ${{ github.event.before }}
+          SEARCH_HEAD_SHA: ${{ github.sha }}
+        run: yarn ai-search:sync:prod --changed-since "$SEARCH_BASE_SHA" --changed-until "$SEARCH_HEAD_SHA"
 
   verify-production:
     name: Verify production
@@ -358,16 +391,22 @@ jobs:
       PLAYWRIGHT_WORKERS: "1"
       EXPECTED_NUXT_BUILD_ID: ${{ needs.deploy-production.outputs.nuxt_build_id }}
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
           ref: ${{ github.sha }}
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
           node-version: "24.18.1"
-          cache: yarn
-      - run: yarn install --frozen-lockfile
-      - run: npx playwright install --with-deps chromium
+      - run: corepack enable
+      - name: Restore Yarn package cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: ~/.yarn/berry/cache
+          key: yarn-${{ runner.os }}-${{ hashFiles('yarn.lock') }}
+          restore-keys: yarn-${{ runner.os }}-
+      - run: corepack yarn install --immutable
+      - run: corepack yarn playwright install --with-deps chromium
       - name: Wait for production assets to converge
         run: >-
           node scripts/wait-for-nuxt-deployment.mjs
@@ -378,7 +417,7 @@ jobs:
         run: yarn test:e2e:tenant-rendering
       - name: Upload production Playwright report
         if: failure()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: playwright-report-production
           path: |

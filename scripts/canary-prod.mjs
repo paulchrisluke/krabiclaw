@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { chromium } from 'playwright'
-import { spawnSync } from 'node:child_process'
+import { spawnYarn } from './utils/spawn-yarn.mjs'
 
 const nowIso = () => new Date().toISOString()
 
@@ -14,7 +14,7 @@ function env(name, opts = {}) {
 }
 
 function d1Query(sql) {
-  const res = spawnSync('yarn', ['-s', 'wrangler', 'd1', 'execute', 'DB', '--remote', '--json', '--command', sql], {
+  const res = spawnYarn(['-s', 'wrangler', 'd1', 'execute', 'DB', '--remote', '--json', '--command', sql], {
     stdio: ['ignore', 'pipe', 'pipe'],
     encoding: 'utf8',
   })
@@ -28,7 +28,7 @@ function sqlEscape(value) {
 }
 
 function d1Exec(sql) {
-  const res = spawnSync('yarn', ['-s', 'wrangler', 'd1', 'execute', 'DB', '--remote', '--json', '--command', sql], {
+  const res = spawnYarn(['-s', 'wrangler', 'd1', 'execute', 'DB', '--remote', '--json', '--command', sql], {
     stdio: ['ignore', 'pipe', 'pipe'],
     encoding: 'utf8',
   })
@@ -39,7 +39,7 @@ function d1Exec(sql) {
 async function fetchJson(request, url, options = {}) {
   const res = await request.fetch(url, options)
   const text = await res.text()
-  let body = null
+  let body
   try { body = text ? JSON.parse(text) : null } catch { body = null }
   return { res, body, text }
 }

@@ -17,7 +17,7 @@
 // After it runs, use the printed asset IDs with the canonical media-placement
 // workflow. Do not paste delivery URLs into documentation Markdown.
 import { chromium } from 'playwright'
-import { findE2eAuthFixture } from '../config/e2e-auth-fixtures.ts'
+import { findE2eAuthFixture } from '../config/development-auth-fixtures.ts'
 
 const BASE = process.env.KRABICLAW_BASE_URL || 'http://localhost:3000'
 const OUT = process.argv[2] || '/tmp/krabiclaw-docs-screenshots'

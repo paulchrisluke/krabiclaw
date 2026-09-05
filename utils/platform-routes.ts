@@ -21,6 +21,7 @@ export const PLATFORM_ROUTE_PREFIXES = [
   "/menu",
   "/preview",
   "/reservations",
+  "/booking-changes",
   "/transfer",
 ];
 

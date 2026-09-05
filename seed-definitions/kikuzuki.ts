@@ -1,5 +1,6 @@
 import { compileCuratedSiteFixture } from './compile.ts'
 import type { CuratedProductDefinition, CuratedSiteDefinition } from './contracts.ts'
+import { buildSeedExperienceCategories, buildSeedProductCategories } from './contracts.ts'
 import { renderCanonicalBillingSql } from './billing-sql.ts'
 import { renderTenantPagesSeedSql } from './tenant-pages.ts'
 
@@ -34,9 +35,12 @@ function cfImg(cloudflareImageId: string, slug: string, mimeType: 'image/jpeg' |
 }
 
 const aoNangProducts: Array<Omit<CuratedProductDefinition, 'locationId'>> = [
+  // Soup and Salad
+  { id: 'item-kiku-donbin-mushi', category: 'Soup and Salad', name: 'Donbin Mushi Mixed Seafood Soup', slug: 'donbin-mushi-mixed-seafood-soup', description: 'Mixed seafood soup served in a traditional donbin pot.', priceAmount: 280, media: [], allergens: null, dietaryNotes: null, available: true, sortOrder: 0, featured: true, featuredSortOrder: 1 },
+  { id: 'item-kiku-miso-soup', category: 'Soup and Salad', name: 'Miso Soup', slug: 'miso-soup', description: 'Traditional Japanese soybean paste soup with tofu and wakame.', priceAmount: 60, media: [], allergens: null, dietaryNotes: null, available: true, sortOrder: 1, featured: true, featuredSortOrder: 2 },
   // Sushi
-  { id: 'item-kiku-tuna-sushi', category: 'Sushi', name: 'Tuna Sushi', slug: 'tuna-sushi', description: 'Tuna', priceAmount: 75, media: [{ asset_id: 'media-kiku-tuna-sushi', slot: 'gallery' }], allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
-  { id: 'item-kiku-salmon-sushi', category: 'Sushi', name: 'Salmon Sushi', slug: 'salmon-sushi', description: 'Salmon', priceAmount: 65, media: [{ asset_id: 'media-kiku-salmon-sushi', slot: 'gallery' }], allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
+  { id: 'item-kiku-tuna-sushi', category: 'Sushi', name: 'Tuna Sushi', slug: 'tuna-sushi', description: 'Tuna', priceAmount: 75, media: [{ asset_id: 'media-kiku-tuna-sushi', slot: 'gallery' }], allergens: null, dietaryNotes: null, available: true, sortOrder: 0, featured: true, featuredSortOrder: 3 },
+  { id: 'item-kiku-salmon-sushi', category: 'Sushi', name: 'Salmon Sushi', slug: 'salmon-sushi', description: 'Salmon', priceAmount: 65, media: [{ asset_id: 'media-kiku-salmon-sushi', slot: 'gallery' }], allergens: null, dietaryNotes: null, available: true, sortOrder: 0, featured: true, featuredSortOrder: 4 },
   { id: 'item-kiku-chutoro-sushi', category: 'Sushi', name: 'Chutoro Sushi', slug: 'chutoro-sushi', description: 'Medium-fatty bluefin tuna', priceAmount: 210, media: [{ asset_id: 'media-kiku-chutoro-sushi', slot: 'gallery' }], allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
   { id: 'item-kiku-ama-ebi-sushi', category: 'Sushi', name: 'Ama Ebi Sushi', slug: 'ama-ebi-sushi', description: 'Sweet shrimp', priceAmount: 100, media: [{ asset_id: 'media-kiku-ama-ebi-sushi', slot: 'gallery' }], allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
   { id: 'item-kiku-a4-beef-sushi-tamago', category: 'Sushi', name: 'A4 Beef Sushi Tamago', slug: 'a4-beef-sushi-tamago', description: 'A4 wagyu beef with egg', priceAmount: 300, media: [{ asset_id: 'media-kiku-a4-beef-sushi-tamago', slot: 'gallery' }], allergens: null, dietaryNotes: null, available: true, sortOrder: 0 },
@@ -529,12 +533,6 @@ export const kikuzukiFixture: CuratedSiteDefinition = {
       title: 'Teppanyaki Experience',
       slug: 'teppanyaki-experience',
       tagline: 'Live Japanese teppanyaki with premium ingredients, chef flair, and an unforgettable dining show.',
-      highlights: [
-        'Live teppanyaki counter with direct chef interaction and tableside cooking',
-        'Premium Japanese wagyu, fresh seafood, and seasonal vegetables prepared to order',
-        'Flames, knife work, and playful chef theatrics for a true dining show',
-        'Intimate seating ideal for celebrations, date nights, and special occasions',
-      ],
       includedItems: [
         'Chef-selected wagyu beef and premium seafood course',
         'Seasonal vegetables, rice, sauces, and teppanyaki accompaniments',
@@ -556,7 +554,6 @@ export const kikuzukiFixture: CuratedSiteDefinition = {
       durationMinutes: 90,
       maxCapacity: 6,
       timeSlots: ['15:00', '17:00', '19:00', '21:00'],
-      availableNote: 'Available on multiple dates. Reserve online or contact the restaurant directly.',
       status: 'active',
       sortOrder: 1,
       featured: true,
@@ -794,6 +791,21 @@ UPDATE sites SET primary_location_id = ${sqlValue(compiledKikuzukiSeed.site.prim
 export function renderKikuzukiProductsBlock(): string {
   const { identity } = compiledKikuzukiSeed
 
+  const { categories, categoryIdByProductId, sortOrderByProductId } = buildSeedProductCategories(compiledKikuzukiSeed.products)
+  const productCategoryRows = categories
+    .map(category => `  (${[
+      sqlValue(category.id),
+      sqlValue(category.organizationId),
+      sqlValue(category.siteId),
+      sqlValue(category.locationId),
+      sqlValue('standard'),
+      sqlValue(category.name),
+      sqlValue(category.slug),
+      sqlValue(category.sortOrder),
+      sqlValue('seed:kikuzuki'),
+      sqlValue('seed:kikuzuki'),
+    ].join(', ')})`)
+    .join(',\n')
   const productRows = compiledKikuzukiSeed.products
     .map((product) => `  (${[
       sqlValue(product.id),
@@ -801,15 +813,15 @@ export function renderKikuzukiProductsBlock(): string {
       sqlValue(identity.siteId),
       sqlValue(product.locationId),
       sqlValue('standard'),
-      sqlValue(product.category),
+      sqlValue(categoryIdByProductId.get(product.id)!),
       sqlValue(product.name),
       sqlValue(product.slug),
       sqlValue(product.description),
       sqlValue(true),
       sqlValue(product.available),
-      sqlValue(false),
-      sqlValue(0),
-      sqlValue(product.sortOrder),
+      sqlValue(product.featured),
+      sqlValue(product.featuredSortOrder),
+      sqlValue(sortOrderByProductId.get(product.id)!),
       sqlJson([]),
       sqlJson([
         ...(product.allergens ? [{ key: 'allergens', label: 'Allergens', values: JSON.parse(product.allergens) }] : []),
@@ -851,8 +863,13 @@ ${productMediaRows};`
     : ''
 
   return `-- BEGIN GENERATED: kikuzuki_products
+INSERT OR REPLACE INTO product_categories
+  (id, organization_id, site_id, location_id, product_type, name, slug, sort_order, created_by, updated_by)
+VALUES
+${productCategoryRows};
+
 INSERT OR REPLACE INTO products
-  (id, organization_id, site_id, location_id, product_type, category, name, slug, description,
+  (id, organization_id, site_id, location_id, product_type, category_id, name, slug, description,
    is_visible, available, featured, featured_sort_order, sort_order,
    tags_json, details_json, source, created_by, updated_by)
 VALUES
@@ -885,14 +902,23 @@ export function renderKikuzukiExperienceBlock(): string {
   if (compiledKikuzukiSeed.experiences.length === 0) return '-- No experiences defined for Kikuzuki'
 
   const experienceMedia = compiledKikuzukiSeed.experiences.flatMap(experience => experience.media.map((media, index) => ({ experience, media, index })))
+  const { categories: experienceCategories, categoryIdForLocation, sortOrderFor } = buildSeedExperienceCategories(compiledKikuzukiSeed.experiences, identity)
+  const experienceCategoryRows = experienceCategories
+    .map(category => `  (${[
+      sqlValue(category.id), sqlValue(category.organizationId), sqlValue(category.siteId),
+      sqlValue(category.locationId), sqlValue('experience'), sqlValue(category.name),
+      sqlValue(category.slug), sqlValue(category.sortOrder),
+      sqlValue('seed:kikuzuki'), sqlValue('seed:kikuzuki'),
+    ].join(', ')})`)
+    .join(',\n')
   const experienceProductRows = compiledKikuzukiSeed.experiences
     .map(experience => `  (${[
       sqlValue(experience.id), sqlValue(identity.organizationId), sqlValue(identity.siteId),
-      sqlValue(experience.locationId), sqlValue('experience'), sqlValue('Experiences'),
+      sqlValue(experience.locationId), sqlValue('experience'), sqlValue(categoryIdForLocation(experience.locationId)),
       sqlValue(experience.title), sqlValue(experience.slug), sqlValue(experience.body),
       sqlValue(experience.status !== 'inactive'), sqlValue(experience.status !== 'sold_out'),
-      sqlValue(experience.featured), sqlValue(experience.featuredSortOrder), sqlValue(experience.sortOrder),
-      sqlValue('[]'), sqlValue('[]'), sqlValue(experience.seoTitle), sqlValue(experience.seoDescription),
+      sqlValue(experience.featured), sqlValue(experience.featuredSortOrder), sqlValue(sortOrderFor(experience.id)),
+      sqlJson(experience.tags), sqlJson(experience.details), sqlValue(experience.seoTitle), sqlValue(experience.seoDescription),
       sqlValue('template'), sqlValue('seed:kikuzuki'), sqlValue('seed:kikuzuki'),
     ].join(', ')})`)
     .join(',\n')
@@ -908,8 +934,6 @@ export function renderKikuzukiExperienceBlock(): string {
       sqlValue(experience.maxCapacity),
       experience.timeSlots.length > 0 ? sqlJson(experience.timeSlots) : 'NULL',
       'NULL',
-      sqlValue(experience.availableNote),
-      (experience.highlights?.length ?? 0) > 0 ? sqlJson(experience.highlights) : 'NULL',
       (experience.includedItems?.length ?? 0) > 0 ? sqlJson(experience.includedItems) : 'NULL',
       (experience.whatToBring?.length ?? 0) > 0 ? sqlJson(experience.whatToBring) : 'NULL',
       sqlValue(experience.meetingPoint),
@@ -948,8 +972,13 @@ ${experienceMedia
     : ''
 
   return `-- BEGIN GENERATED: kikuzuki_experiences
+INSERT OR REPLACE INTO product_categories
+  (id, organization_id, site_id, location_id, product_type, name, slug, sort_order, created_by, updated_by)
+VALUES
+${experienceCategoryRows};
+
 INSERT OR REPLACE INTO products
-  (id, organization_id, site_id, location_id, product_type, category, name, slug, description,
+  (id, organization_id, site_id, location_id, product_type, category_id, name, slug, description,
    is_visible, available, featured, featured_sort_order, sort_order, tags_json, details_json,
    seo_title, seo_description, source, created_by, updated_by)
 VALUES
@@ -957,7 +986,7 @@ ${experienceProductRows};
 
 INSERT OR REPLACE INTO experiences
   (id, organization_id, site_id, location_id, tagline, pricing_note, duration_minutes, max_capacity,
-   time_slots, recurring_slots, available_note, highlights, included_items, what_to_bring, meeting_point, cancellation_policy)
+   time_slots, recurring_slots, included_items, what_to_bring, meeting_point, cancellation_policy)
 VALUES
 ${experienceRows};
 

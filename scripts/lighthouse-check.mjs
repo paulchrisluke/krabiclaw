@@ -20,6 +20,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { mkdir, writeFile, readFile } from "node:fs/promises";
 import path from "node:path";
+import { resolveYarnCommand } from "./utils/spawn-yarn.mjs";
 
 const execFileAsync = promisify(execFile);
 
@@ -75,9 +76,11 @@ async function runOnce(url, formFactor, outDir, index) {
     "--only-categories=performance",
     "--quiet",
   ];
-  await execFileAsync("npx", ["--yes", "lighthouse", ...args], {
+  const invocation = resolveYarnCommand(["lighthouse", ...args]);
+  await execFileAsync(invocation.command, invocation.args, {
     maxBuffer: 1024 * 1024 * 50,
     timeout: 120_000, // 2-minute hard cap per Lighthouse run
+    shell: invocation.shell,
   });
   const report = JSON.parse(await readFile(outPath, "utf8"));
   const audits = report.audits ?? {};

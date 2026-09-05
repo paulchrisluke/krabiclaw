@@ -1,4 +1,4 @@
-import { useRender } from 'vue-email'
+import { renderEmail } from '~/server/emails/vue-email'
 import { shouldSendRealEmail } from '~/server/utils/email-delivery'
 import AuthResetPassword from '~/server/emails/templates/AuthResetPassword'
 import AuthVerifyEmail from '~/server/emails/templates/AuthVerifyEmail'
@@ -80,11 +80,9 @@ export async function sendPasswordResetEmail(
   opts: { email: string, resetUrl: string },
 ) {
   const currentPlatformDomain = platformDomain(env)
-  const { html, text } = await useRender(AuthResetPassword, {
-    props: {
-      resetUrl: opts.resetUrl,
-      platformDomain: currentPlatformDomain,
-    },
+  const { html, text } = await renderEmail(AuthResetPassword, {
+    resetUrl: opts.resetUrl,
+    platformDomain: currentPlatformDomain,
   })
 
   await sendAuthEmail(env, {
@@ -100,11 +98,9 @@ export async function sendVerificationEmail(
   opts: { email: string, verificationUrl: string },
 ) {
   const currentPlatformDomain = platformDomain(env)
-  const { html, text } = await useRender(AuthVerifyEmail, {
-    props: {
-      verificationUrl: opts.verificationUrl,
-      platformDomain: currentPlatformDomain,
-    },
+  const { html, text } = await renderEmail(AuthVerifyEmail, {
+    verificationUrl: opts.verificationUrl,
+    platformDomain: currentPlatformDomain,
   })
 
   await sendAuthEmail(env, {
@@ -123,12 +119,10 @@ export async function sendGuestClaimVerificationEmail(
   opts: { email: string, verifyUrl: string, siteName: string },
 ) {
   const currentPlatformDomain = platformDomain(env)
-  const { html, text } = await useRender(GuestClaimVerify, {
-    props: {
-      verifyUrl: opts.verifyUrl,
-      siteName: opts.siteName,
-      platformDomain: currentPlatformDomain,
-    },
+  const { html, text } = await renderEmail(GuestClaimVerify, {
+    verifyUrl: opts.verifyUrl,
+    siteName: opts.siteName,
+    platformDomain: currentPlatformDomain,
   })
 
   await sendAuthEmail(env, {

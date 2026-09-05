@@ -3,6 +3,7 @@ import { queryAll, type DbClient } from '~/server/db'
 import { assertSiteLanguageEntitlement } from '~/server/utils/localization'
 import type { LocalizedResourceType } from '~/server/utils/localization-registry'
 import { tenantBlogPostPath } from '~/utils/tenant-blog-route'
+import { postPublicPath } from '~/utils/post-slugs'
 import type { PublicLocaleRepresentation } from '~/utils/public-resource-contracts'
 
 interface RepresentationInput {
@@ -40,8 +41,8 @@ export async function resolvePublicLocalizationSourcePath(
     const [row] = await queryAll<{ slug: string; canonical_path: string | null }>(db, 'SELECT slug, canonical_path FROM offerings WHERE site_id = ? AND id = ? LIMIT 1', [siteId, resource.id])
     sourcePath = row ? row.canonical_path || `/services/${row.slug}` : null
   } else if (resource.type === 'site_post') {
-    const [row] = await queryAll<{ public_path: string | null }>(db, 'SELECT public_path FROM posts WHERE site_id = ? AND id = ? LIMIT 1', [siteId, resource.id])
-    sourcePath = row?.public_path ?? null
+    const [row] = await queryAll<{ id: string; slug: string | null }>(db, 'SELECT id, slug FROM posts WHERE site_id = ? AND id = ? LIMIT 1', [siteId, resource.id])
+    sourcePath = row ? postPublicPath(row.slug ?? row.id) : null
   } else if (resource.type === 'tenant_blog_post') {
     const [row] = await queryAll<{ slug: string; vertical: string; theme_id: string }>(db, `
       SELECT p.slug, s.vertical, s.theme_id

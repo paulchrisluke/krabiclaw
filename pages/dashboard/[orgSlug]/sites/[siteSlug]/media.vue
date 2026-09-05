@@ -3,155 +3,91 @@
     <template #header>
       <UDashboardNavbar title="Media library">
         <template #leading>
-          <DashboardNavbarLeading :to="paths.site" label="Site" />
+          <DashboardNavbarLeading v-if="sitePaths" :to="sitePaths.site" label="Site" />
         </template>
       </UDashboardNavbar>
     </template>
 
     <template #body>
-      <!-- Filters -->
-      <div class="mb-4 flex flex-wrap items-center gap-2">
-        <UInput v-model="search" placeholder="Search files…" icon="i-lucide-search" size="sm" />
-        <div class="flex gap-1">
-          <UButton
-            v-for="k in kindTabs"
-            :key="k.value"
-            size="sm"
-            :variant="kindFilter === k.value ? 'soft' : 'ghost'"
-            color="neutral"
-            @click="kindFilter = k.value; load()"
-          >
-            {{ k.label }}
-          </UButton>
-        </div>
-        <div class="ml-auto flex items-center gap-2">
-          <span v-if="selected.size" class="text-sm text-muted">{{ selected.size }} selected</span>
-          <UButton
-            v-if="selected.size"
-            size="sm"
-            color="error"
-            variant="soft"
-            icon="i-lucide-trash-2"
-            :loading="deleting"
-            @click="deleteSelected"
-          >
-            Delete
-          </UButton>
-        </div>
-      </div>
-
-      <!-- Upload zone -->
-      <div
-        class="mb-4 flex flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed px-6 py-8 transition-colors cursor-pointer"
-        @dragenter.prevent="handleDragEnter"
-        @dragover.prevent="handleDragOver"
-        @dragleave.prevent="handleDragLeave"
-        @drop.prevent="handleDrop"
-        :class="[isDragging ? 'border-primary bg-primary/5' : 'border-default hover:border-accented', uploadLoading ? 'pointer-events-none opacity-60' : '']"
-        @click="openUploadPicker"
+      <DashboardGridEditor
+        v-model:selecting="selecting"
+        v-model:selected="selectedIds"
+        title="Media library"
+        description="Site-wide library for page media, posts, galleries, and reusable assets."
+        :items="gridItems"
+        :pending="loading"
+        :error="loadError"
+        :empty-title="search || kindFilter ? 'No matches' : 'No media yet'"
+        :empty-icon="search || kindFilter ? 'i-lucide-search-x' : 'i-lucide-image'"
+        add-label="Upload media"
+        selection-title="Select media"
+        grid-class="grid grid-cols-4 gap-3 sm:grid-cols-5 lg:grid-cols-7"
+        :removing="deleting"
+        @add="openUploadPicker"
+        @open="openEditById"
+        @remove-many="deleteMany"
       >
-        <UIcon name="i-lucide-upload" class="size-7 text-muted" />
-        <p class="text-sm text-muted">Drag and drop images or videos here, or <span class="text-primary cursor-pointer">click to browse</span></p>
-        <p class="text-xs text-muted">Images up to {{ formatSize(IMAGE_MAX_SIZE_BYTES) }} via Cloudflare Images · Videos up to {{ formatSize(VIDEO_MAX_SIZE_BYTES) }} via R2</p>
-        <p class="text-xs text-muted">Use this site-wide library for page media, posts, galleries, and reusable assets.</p>
-      </div>
-
-      <UInput ref="fileInput" type="file" accept="image/*,video/*" class="hidden" :disabled="uploadLoading" @change="onFileSelect" />
-
-      <UAlert v-if="uploadError" color="error" variant="soft" :description="uploadError" icon="i-lucide-triangle-alert" class="mb-4" />
-      <UAlert
-        v-if="loadError"
-        color="error"
-        variant="soft"
-        title="Media could not be loaded"
-        :description="loadError"
-        icon="i-lucide-triangle-alert"
-        class="mb-4"
-      />
-      <div v-if="pendingRetryFile" class="mb-4">
-        <UButton size="sm" color="neutral" variant="soft" :loading="uploadLoading" :disabled="uploadLoading" @click="retryPendingUpload">
-          Retry confirm
-        </UButton>
-      </div>
-
-      <!-- Grid -->
-      <div v-if="loading" class="grid grid-cols-4 gap-3 sm:grid-cols-5 lg:grid-cols-7">
-        <div v-for="i in 14" :key="i" class="aspect-square rounded-lg bg-elevated animate-pulse" />
-      </div>
-
-      <div v-else-if="!loadError && assets.length === 0 && (search || kindFilter)" class="py-16 text-center">
-        <UIcon name="i-lucide-search-x" class="mx-auto size-10 text-muted" />
-        <p class="mt-4 text-sm font-medium text-highlighted">No matches</p>
-        <p class="mt-1 text-xs text-muted">Try a different search term or filter.</p>
-      </div>
-
-      <div v-else-if="!loadError && assets.length === 0" class="py-16 text-center">
-        <UIcon name="i-lucide-image" class="mx-auto size-10 text-muted" />
-        <p class="mt-4 text-sm font-medium text-highlighted">No media yet</p>
-        <p class="mt-1 text-xs text-muted">Upload images or videos to get started.</p>
-      </div>
-
-      <div v-else class="grid grid-cols-4 gap-3 sm:grid-cols-5 lg:grid-cols-7">
-        <div
-          v-for="asset in assets"
-          :key="asset.id"
-          class="group relative aspect-square overflow-hidden rounded-lg border-2 transition-all"
-          :class="selected.has(asset.id) ? 'border-primary' : 'border-transparent'"
-        >
-          <!-- Thumbnail -->
-          <img
-            v-if="asset.thumbnail_url || (asset.kind === 'image' && asset.public_url)"
-            :src="asset.thumbnail_url || asset.public_url || undefined"
-            :alt="asset.alt_text || asset.file_name || ''"
-            class="h-full w-full cursor-pointer object-cover"
-            loading="lazy"
-            @click="toggleSelect(asset.id)"
-          />
-          <div
-            v-else
-            class="flex h-full w-full cursor-pointer items-center justify-center bg-elevated"
-            @click="toggleSelect(asset.id)"
-          >
-            <UIcon
-              :name="asset.kind === 'video' ? 'i-lucide-film' : 'i-lucide-file'"
-              class="size-6 text-muted"
-            />
-          </div>
-
-          <!-- Checkbox -->
-          <div
-            class="absolute left-1.5 top-1.5 opacity-0 transition-opacity group-hover:opacity-100"
-            :class="selected.has(asset.id) ? 'opacity-100' : ''"
-          >
-            <div
-              class="flex size-5 cursor-pointer items-center justify-center rounded"
-              :class="selected.has(asset.id) ? 'bg-primary' : 'bg-black/40'"
-              @click.stop="toggleSelect(asset.id)"
-            >
-              <UIcon v-if="selected.has(asset.id)" name="i-lucide-check" class="size-3 text-white" />
+        <template #filters>
+          <div class="flex flex-wrap items-center gap-2">
+            <UInput v-model="search" placeholder="Search files…" icon="i-lucide-search" size="sm" />
+            <div class="flex gap-1">
+              <UButton
+                v-for="k in kindTabs"
+                :key="k.value"
+                size="sm"
+                :variant="kindFilter === k.value ? 'soft' : 'ghost'"
+                color="neutral"
+                @click="kindFilter = k.value; load()"
+              >
+                {{ k.label }}
+              </UButton>
             </div>
           </div>
 
-          <!-- Kind badge -->
-          <div class="absolute right-1.5 top-1.5 flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-            <button
-              type="button"
-              class="flex size-5 items-center justify-center rounded bg-black/40 text-white hover:bg-black/60"
-              aria-label="Edit alt text"
-              @click.stop="openEdit(asset)"
-            >
-              <UIcon name="i-lucide-pencil" class="size-3" />
-            </button>
-            <UBadge :label="asset.kind" size="xs" color="neutral" variant="solid" class="uppercase" />
+          <div
+            class="mt-4 flex cursor-pointer flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed px-6 py-8 transition-colors"
+            :class="[isDragging ? 'border-primary bg-primary/5' : 'border-default hover:border-accented', uploadLoading ? 'pointer-events-none opacity-60' : '']"
+            @dragenter.prevent="handleDragEnter"
+            @dragover.prevent="handleDragOver"
+            @dragleave.prevent="handleDragLeave"
+            @drop.prevent="handleDrop"
+            @click="openUploadPicker"
+          >
+            <UIcon name="i-lucide-upload" class="size-7 text-muted" />
+            <p class="text-sm text-muted">Drag and drop images or videos here, or <span class="cursor-pointer text-primary">click to browse</span></p>
+            <p class="text-xs text-muted">Images up to {{ formatSize(IMAGE_MAX_SIZE_BYTES) }} via Cloudflare Images · Videos up to {{ formatSize(VIDEO_MAX_SIZE_BYTES) }} via R2</p>
           </div>
 
-          <!-- Filename on hover -->
-          <div class="absolute inset-x-0 bottom-0 translate-y-full bg-black/70 px-2 py-1.5 transition-transform group-hover:translate-y-0">
-            <p class="truncate text-xs text-white">{{ asset.file_name || asset.kind }}</p>
-            <p v-if="asset.file_size" class="text-xs text-white/60">{{ formatSize(asset.file_size) }}</p>
+          <UInput ref="fileInput" type="file" accept="image/*,video/*" class="hidden" :disabled="uploadLoading" @change="onFileSelect" />
+
+          <UAlert v-if="uploadError" color="error" variant="soft" :description="uploadError" icon="i-lucide-triangle-alert" class="mt-4" />
+          <div v-if="pendingRetryFile" class="mt-4">
+            <UButton size="sm" color="neutral" variant="soft" :loading="uploadLoading" :disabled="uploadLoading" @click="retryPendingUpload">
+              Retry confirm
+            </UButton>
           </div>
-        </div>
-      </div>
+        </template>
+
+        <template #tile="{ item }">
+          <img
+            v-if="item.row.thumbnail_url || (item.row.kind === 'image' && item.row.public_url)"
+            :src="item.row.thumbnail_url || item.row.public_url || undefined"
+            :alt="item.row.alt_text || item.row.file_name || ''"
+            class="h-full w-full object-cover"
+            loading="lazy"
+          >
+          <div v-else class="flex h-full w-full items-center justify-center bg-elevated">
+            <UIcon :name="item.row.kind === 'video' ? 'i-lucide-film' : 'i-lucide-file'" class="size-6 text-muted" />
+          </div>
+
+          <UBadge :label="item.row.kind" size="xs" color="neutral" variant="solid" class="absolute right-1.5 top-1.5 uppercase opacity-0 transition-opacity group-hover:opacity-100" />
+
+          <div class="absolute inset-x-0 bottom-0 translate-y-full bg-black/70 px-2 py-1.5 transition-transform group-hover:translate-y-0">
+            <p class="truncate text-xs text-white">{{ item.row.file_name || item.row.kind }}</p>
+            <p v-if="item.row.file_size" class="text-xs text-white/60">{{ formatSize(item.row.file_size) }}</p>
+          </div>
+        </template>
+      </DashboardGridEditor>
 
       <!-- Edit alt text / translations -->
       <UModal v-model:open="editOpen" title="Edit media details" :ui="{ content: 'max-w-lg' }">
@@ -198,10 +134,12 @@
 </template>
 
 <script setup lang="ts">
+import DashboardGridEditor from '~/components/dashboard/DashboardGridEditor.vue'
+
 const dashboardApi = useDashboardApi()
 definePageMeta({ layout: 'dashboard', cmsCapabilityKey: 'site.media' })
 
-const { paths } = useDashboardSiteLinks()
+const { sitePaths } = useDashboardSiteLinks()
 
 import { IMAGE_MAX_SIZE_BYTES, VIDEO_MAX_SIZE_BYTES } from '~/composables/useMediaUpload'
 import { getErrorMessage } from '~/utils/errors'
@@ -244,7 +182,14 @@ const dragCounter = ref(0)
 const fileInput = ref<{ inputRef?: HTMLInputElement | null } | null>(null)
 const search = ref('')
 const kindFilter = ref('')
-const selected = ref(new Set<string>())
+const selecting = ref(false)
+const selectedIds = ref<string[]>([])
+
+const gridItems = computed(() => assets.value.map(row => ({
+  id: row.id,
+  title: row.file_name || row.kind,
+  row,
+})))
 const offset = ref(0)
 const hasMore = ref(false)
 const LIMIT = 50
@@ -281,7 +226,9 @@ async function load() {
   loading.value = true
   loadError.value = null
   offset.value = 0
-  selected.value.clear()
+  // A reload replaces the grid, so a selection made against the old one would be
+  // pointing at rows that may no longer be in it.
+  selectedIds.value = []
   try {
     const params = new URLSearchParams({ limit: String(LIMIT), offset: '0' })
     if (kindFilter.value) params.set('kind', kindFilter.value)
@@ -329,29 +276,39 @@ async function loadMore() {
   }
 }
 
-function toggleSelect(id: string) {
-  if (selected.value.has(id)) {
-    selected.value.delete(id)
-  } else {
-    selected.value.add(id)
-  }
+
+// The grid hands back an id; the page holds the record.
+function openEditById(item: { id: string }) {
+  const asset = assets.value.find(entry => entry.id === item.id)
+  if (!asset) return
+  openEdit(asset)
 }
 
-async function deleteSelected() {
-  if (!selected.value.size) return
+async function deleteMany(ids: string[]) {
+  if (!ids.length) return
   deleting.value = true
-  const selectedIds = [...selected.value]
   try {
-    await Promise.all(selectedIds.map(id =>
+    // allSettled, not all: `all` rejects on the first failure and skips the
+    // filter below, so a batch where nine of ten deletions succeeded left all ten
+    // on screen and told the user nothing had happened.
+    const outcomes = await Promise.allSettled(ids.map(id =>
       dashboardApi(`${siteApiBase}/media/${id}`, {
         method: 'DELETE',
         validate: (value): value is { success: true } => isRecord(value) && value.success === true,
       })
     ))
-    const deleted = new Set(selectedIds)
+    const deleted = new Set(ids.filter((_, index) => outcomes[index]?.status === 'fulfilled'))
     assets.value = assets.value.filter(asset => !deleted.has(asset.id))
-    selected.value.clear()
-    toast.add({ title: `${selectedIds.length} item(s) deleted`, icon: 'i-lucide-circle-check', color: 'success' })
+    // Close selection rather than clear it: leaving the takeover open would show
+    // a count for rows that no longer exist.
+    selecting.value = false
+
+    const failed = ids.length - deleted.size
+    if (failed) {
+      toast.add({ title: `${deleted.size} of ${ids.length} deleted, ${failed} failed`, color: 'error' })
+    } else {
+      toast.add({ title: `${ids.length} item(s) deleted`, icon: 'i-lucide-circle-check', color: 'success' })
+    }
   } catch (error) {
     toast.add({ title: getErrorMessage(error, 'Failed to delete media'), color: 'error' })
   } finally { deleting.value = false }

@@ -161,7 +161,7 @@ export const getActiveSpecialClosure = (
   todayOverride?: GoogleDate,
 ): GoogleSpecialPeriod | undefined => {
   if (!specialHours) return undefined
-  let parsed: GoogleSpecialHours | null = null
+  let parsed: GoogleSpecialHours | null
   if (typeof specialHours === 'string') {
     try {
       parsed = JSON.parse(specialHours)
@@ -355,9 +355,9 @@ export const getIsOpenNow = (regularHours: GoogleRegularHours | GoogleRegularPer
       const closeMins = toMins(closeParsed.hour, closeParsed.minute, closeAmpm)
 
       const nowMins = nowMinsInTz
-      let rangeIsOpen = false
-      if (closeMins < openMins) rangeIsOpen = nowMins >= openMins || nowMins < closeMins
-      else rangeIsOpen = nowMins >= openMins && nowMins < closeMins
+      const rangeIsOpen = closeMins < openMins
+        ? nowMins >= openMins || nowMins < closeMins
+        : nowMins >= openMins && nowMins < closeMins
       
       if (rangeIsOpen) {
         isOpen = true

@@ -1,4 +1,4 @@
-import { spawnSync } from 'node:child_process'
+import { spawnYarn } from './utils/spawn-yarn.mjs'
 
 const selectedSpecs = (process.env.E2E_SELECTED_SPECS || '')
   .split(',')
@@ -19,8 +19,8 @@ if (selectionScope === 'full' && selectedSpecs.length === 0) {
   throw new Error('Full E2E selection cannot be empty')
 }
 
-function run(command, args) {
-  const result = spawnSync(command, args, { stdio: 'inherit', env: process.env })
+function run(args) {
+  const result = spawnYarn(args, { stdio: 'inherit', env: process.env })
   if (result.error) throw result.error
   if (result.status !== 0) process.exit(result.status ?? 1)
 }
@@ -32,7 +32,7 @@ const tenantPublicSpecs = [
 const specs = [...new Set([...tenantPublicSpecs, ...selectedSpecs])]
 
 if (specs.length > 0) {
-  run('yarn', [
+  run([
     'playwright',
     'test',
     ...specs,

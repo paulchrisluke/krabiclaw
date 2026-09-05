@@ -78,7 +78,7 @@ export async function getDashboardHomeData(
   db: DbClient,
   organizationId: string,
   siteId: string,
-  principal: { env: CloudflareEnv; memberId: string; role: string },
+  principal: { env: CloudflareEnv; memberId: string; userId: string; role: string },
 ): Promise<DashboardHomeData> {
   const accessibleLocationIds = await listAccessibleLocationIds(db, {
     env: principal.env,
@@ -141,7 +141,7 @@ export async function getDashboardHomeData(
       principal: scoped && principal
         ? { env: principal.env, memberId: principal.memberId, role: principal.role, organizationId, siteId }
         : null,
-      memberId: principal?.memberId ?? '',
+      userId: principal?.userId ?? '',
     }),
     loadSettingsPayload(db, organizationId, siteId),
     listTenantPages(db, siteId),

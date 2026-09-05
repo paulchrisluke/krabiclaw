@@ -42,6 +42,7 @@ import { loadPublicBase } from "~/server/utils/public-base";
 import { appendPublicShellQueries, buildPublicShellPayload } from "~/server/utils/public-shell-query";
 import { isPublicPagePayload } from '~/utils/public-resource-contracts'
 import type { LocalizedResourceType } from '~/server/utils/localization-registry'
+import { validateProductDetails, validateProductTags } from '~/server/utils/product-validation'
 import { listPublicLocaleRepresentations } from '~/server/utils/public-locale-representations'
 import { normalizeVertical } from '~/utils/vertical-copy'
 import { isPublicSourceRouteRoot } from '~/shared/public-locale-routes'
@@ -236,7 +237,8 @@ function parseExperienceRow(row: Record<string, unknown>): Experience {
       provenance: String(provenance), created_by: String(price_created_by), created_at: String(price_created_at),
     } as Experience['price'],
     status: row.status as Experience["status"],
-    highlights: parseStringArr(row.highlights),
+    tags: validateProductTags(JSON.parse(String(row.tags_json))),
+    details: validateProductDetails(JSON.parse(String(row.details_json))),
     included_items: parseStringArr(row.included_items),
     what_to_bring: parseStringArr(row.what_to_bring),
     meeting_point: row.meeting_point ?? null,
@@ -467,7 +469,8 @@ async function loadPublicPageSource(
       ? [orgId, siteId, locationId ?? '__missing-location__']
       : [orgId, siteId]
     idxProducts = push(
-      `SELECT p.id, p.organization_id, p.site_id, p.location_id, p.product_type, p.category, p.name, p.slug, p.description,
+      `SELECT p.id, p.organization_id, p.site_id, p.location_id, p.product_type, p.category_id, p.name, p.slug, p.description,
+              pc.name AS category_name, pc.slug AS category_slug, pc.sort_order AS category_sort_order,
               p.order_url, p.is_visible, p.available, p.featured, p.featured_sort_order, p.sort_order, p.tags_json,
               p.details_json, p.seo_title, p.seo_description, p.canonical_url, p.robots, p.source,
               p.created_at, p.updated_at, p.created_by, p.updated_by,
@@ -475,10 +478,11 @@ async function loadPublicPageSource(
               pr.compare_at_amount_minor, pr.valid_from, pr.valid_until, pr.provenance,
               pr.created_by AS price_created_by, pr.created_at AS price_created_at
          FROM products p
+         JOIN product_categories pc ON pc.id = p.category_id
          LEFT JOIN prices pr ON pr.product_id = p.id AND pr.valid_from <= strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
            AND (pr.valid_until IS NULL OR pr.valid_until > strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
         WHERE p.organization_id = ? AND p.site_id = ? AND p.product_type = 'standard' AND p.is_visible = 1 ${locationClause.replace('location_id', 'p.location_id')}
-        ORDER BY p.location_id, p.sort_order, p.id`,
+        ORDER BY p.location_id, pc.sort_order, p.sort_order, p.id`,
       productParams,
     )
 
@@ -511,7 +515,7 @@ async function loadPublicPageSource(
                          pr.compare_at_amount_minor, pr.valid_from, pr.valid_until, pr.provenance,
                          pr.created_by AS price_created_by, pr.created_at AS price_created_at,
                          e.duration_minutes, e.max_capacity, e.time_slots, e.recurring_slots,
-                         e.available_note, e.highlights, e.included_items, e.what_to_bring, e.meeting_point,
+                         p.tags_json, p.details_json, e.included_items, e.what_to_bring, e.meeting_point,
                          CASE WHEN p.available = 0 THEN 'sold_out' ELSE 'active' END AS status,
                          p.sort_order, p.featured, p.featured_sort_order,
                          p.seo_title, p.seo_description, p.canonical_url, p.robots, p.created_at, p.updated_at
@@ -536,7 +540,7 @@ async function loadPublicPageSource(
               pr.compare_at_amount_minor, pr.valid_from, pr.valid_until, pr.provenance,
               pr.created_by AS price_created_by, pr.created_at AS price_created_at,
               e.duration_minutes, e.max_capacity, e.time_slots, e.recurring_slots,
-              e.available_note, e.highlights, e.included_items, e.what_to_bring, e.meeting_point,
+              p.tags_json, p.details_json, e.included_items, e.what_to_bring, e.meeting_point,
               CASE WHEN p.is_visible = 0 THEN 'inactive' WHEN p.available = 0 THEN 'sold_out' ELSE 'active' END AS status,
               p.sort_order, p.featured, p.featured_sort_order,
               p.seo_title, p.seo_description, p.canonical_url, p.robots, p.created_at, p.updated_at
@@ -953,10 +957,10 @@ async function loadPublicPageSource(
   ]);
   options.signal?.throwIfAborted();
   const policyLocale = locale ?? sourceLocale!;
-  const localizePolicy = <T extends { id: string | null; weather_policy: string | null; additional_notes_html: string | null }>(policy: T): T => {
+  const localizePolicy = <T extends { id: string | null; additional_notes_html: string | null }>(policy: T): T => {
     if (!localizedLocale || !policy.id) return policy
     const localization = publicLocalizations.find(item => item.resourceType === 'booking_policy' && item.resourceId === policy.id)
-    if (!localization) return { ...policy, weather_policy: null, additional_notes_html: null }
+    if (!localization) return { ...policy, additional_notes_html: null }
     return projectExactLocalizedResource('booking_policy', { ...policy, id: policy.id }, localization)
   }
   const reservationPolicyByLocation = Object.fromEntries(

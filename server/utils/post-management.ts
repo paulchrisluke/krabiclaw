@@ -14,6 +14,8 @@ import {
   resolveLocalizedRouteResourceId,
 } from '~/server/utils/public-localization'
 import { listPublicLocaleRepresentations } from '~/server/utils/public-locale-representations'
+import { getLinkedInstagramAccount, publishToInstagram, publishToPage } from '~/server/utils/facebook-pages'
+import { publicResourceCacheInvalidationQuery } from '~/server/utils/public-resource-cache'
 
 export { normalizePostSlug, postPublicPath }
 
@@ -45,7 +47,6 @@ export interface Post {
   organization_id: string
   site_id: string
   location_id: string | null
-  google_post_id: string | null
   slug: string | null
   post_type: 'standard' | 'offer' | 'event' | 'update'
   title: string | null
@@ -74,8 +75,7 @@ export interface Post {
 export interface PostChannelJob {
   id: string
   post_id: string
-  organization_id: string
-  channel: 'site' | 'instagram' | 'facebook'
+  channel: 'instagram' | 'facebook'
   status: 'pending' | 'published' | 'failed' | 'skipped'
   provider_post_id: string | null
   error: string | null
@@ -86,6 +86,12 @@ export interface PostChannelJob {
 export interface PostWithChannels extends Post {
   channels: PostChannelJob[]
 }
+
+export type PostPublishChannel = 'site' | 'instagram' | 'facebook'
+
+export type PostSocialPublish =
+  | { kind: 'connected'; pageToken: string; pageId: string }
+  | { kind: 'unavailable'; reason: string }
 
 type SqlBindValue = string | number | boolean | null
 
@@ -602,11 +608,18 @@ export async function publishPost(
   organizationId: string,
   siteId: string,
   postId: string,
-  channels: Array<'site' | 'instagram' | 'facebook'>,
+  channels: PostPublishChannel[],
   env: DomainEnv,
+  socialPublish: PostSocialPublish | null,
 ): Promise<PostWithChannels | null> {
   if (!channels.length) {
     throw new Error('At least one publish channel is required')
+  }
+  const socialChannels = channels.filter((channel): channel is PostChannelJob['channel'] =>
+    channel === 'facebook' || channel === 'instagram',
+  )
+  if (socialChannels.length > 0 && !socialPublish) {
+    throw new Error('Social publish capability is required for external channels')
   }
 
   const existing = await queryFirst<Post>(
@@ -631,24 +644,6 @@ export async function publishPost(
     if (Number(updateResult.meta.changes ?? 0) === 0) return null
   }
 
-  const jobQueries = channels.map((channel) => ({
-    query: `
-      INSERT INTO post_channel_jobs (id, post_id, organization_id, channel, status, created_at)
-      VALUES (?, ?, ?, ?, 'pending', ?)
-      ON CONFLICT DO NOTHING
-    `,
-    params: [crypto.randomUUID(), postId, organizationId, channel, now],
-  }))
-  if (jobQueries.length > 0) await executeBatch(db, jobQueries)
-
-  await execute(
-    db,
-    `
-    UPDATE post_channel_jobs SET status = 'published', published_at = ?
-    WHERE post_id = ? AND channel = 'site'
-  `,
-    [now, postId],
-  )
   const publishedChannels = channels.filter(channel => channel === 'site')
 
   const post = await getPost(db, organizationId, siteId, postId, env)
@@ -668,9 +663,189 @@ export async function publishPost(
     })
   }
 
-  if (post) await refreshSocialCard({ db, env, owner: { owner_type: 'post', owner_id: postId } })
+  if (!post) return null
 
-  return post
+  await refreshSocialCard({ db, env, owner: { owner_type: 'post', owner_id: postId } })
+
+  const socialCapability = socialPublish
+  for (const channel of socialChannels) {
+    if (!(await claimPostChannelJob(db, postId, channel, now))) continue
+
+    if (socialCapability?.kind === 'unavailable') {
+      await settlePostChannelJob(db, postId, channel, { kind: 'skipped', reason: socialCapability.reason })
+      continue
+    }
+
+    if (!socialCapability) throw new Error('Social publish capability is required for external channels')
+    await publishPostChannel(db, postId, channel, post, socialCapability)
+  }
+
+  return await getPost(db, organizationId, siteId, postId, env)
+}
+
+async function claimPostChannelJob(
+  db: DbClient,
+  postId: string,
+  channel: PostChannelJob['channel'],
+  now: string,
+): Promise<boolean> {
+  const inserted = await execute(db, `
+    INSERT OR IGNORE INTO post_channel_jobs (id, post_id, channel, status, created_at)
+    VALUES (?, ?, ?, 'pending', ?)
+  `, [crypto.randomUUID(), postId, channel, now])
+  if (Number(inserted.meta?.changes ?? 0) === 1) return true
+
+  const reclaimed = await execute(db, `
+    UPDATE post_channel_jobs
+       SET status = 'pending', provider_post_id = NULL, error = NULL, published_at = NULL
+     WHERE post_id = ? AND channel = ? AND status = 'skipped'
+  `, [postId, channel])
+  return Number(reclaimed.meta?.changes ?? 0) === 1
+}
+
+type PostChannelJobOutcome =
+  | { kind: 'published'; providerPostId: string }
+  | { kind: 'failed' | 'skipped'; reason: string }
+
+async function settlePostChannelJob(
+  db: DbClient,
+  postId: string,
+  channel: PostChannelJob['channel'],
+  outcome: PostChannelJobOutcome,
+) {
+  const now = new Date().toISOString()
+  if (outcome.kind === 'published') {
+    await execute(db, `
+      UPDATE post_channel_jobs
+         SET status = 'published', provider_post_id = ?, error = NULL, published_at = ?
+       WHERE post_id = ? AND channel = ? AND status = 'pending'
+    `, [outcome.providerPostId, now, postId, channel])
+    return
+  }
+  await execute(db, `
+    UPDATE post_channel_jobs
+       SET status = ?, provider_post_id = NULL, error = ?, published_at = NULL
+     WHERE post_id = ? AND channel = ? AND status = 'pending'
+  `, [outcome.kind, outcome.reason, postId, channel])
+}
+
+async function publishPostChannel(
+  db: DbClient,
+  postId: string,
+  channel: PostChannelJob['channel'],
+  post: PostWithChannels,
+  socialPublish: Extract<PostSocialPublish, { kind: 'connected' }>,
+) {
+  if (channel === 'facebook') {
+    let providerPostId: string
+    try {
+      const result = await publishToPage(socialPublish.pageToken, socialPublish.pageId, { message: post.body })
+      providerPostId = result.id
+    } catch (error) {
+      await settlePostChannelJob(db, postId, channel, {
+        kind: 'failed',
+        reason: error instanceof Error ? error.message : 'facebook publish failed',
+      })
+      return
+    }
+    await settlePostChannelJob(db, postId, channel, { kind: 'published', providerPostId })
+    return
+  }
+
+  const imageUrl = post.media?.find(item => item.slot === 'cover' && item.kind === 'image')?.public_url
+  if (!imageUrl) {
+    await settlePostChannelJob(db, postId, channel, {
+      kind: 'skipped',
+      reason: 'Instagram requires an image. Add a photo to this post.',
+    })
+    return
+  }
+
+  let instagramAccountId: string | null
+  try {
+    instagramAccountId = await getLinkedInstagramAccount(socialPublish.pageToken, socialPublish.pageId)
+  } catch (error) {
+    await settlePostChannelJob(db, postId, channel, {
+      kind: 'failed',
+      reason: error instanceof Error ? error.message : 'instagram account lookup failed',
+    })
+    return
+  }
+  if (!instagramAccountId) {
+    await settlePostChannelJob(db, postId, channel, {
+      kind: 'skipped',
+      reason: 'No Instagram Business account is linked to this Facebook Page.',
+    })
+    return
+  }
+
+  let providerPostId: string
+  try {
+    const result = await publishToInstagram(socialPublish.pageToken, instagramAccountId, {
+      caption: post.body,
+      imageUrl,
+    })
+    providerPostId = result.id
+  } catch (error) {
+    await settlePostChannelJob(db, postId, channel, {
+      kind: 'failed',
+      reason: error instanceof Error ? error.message : 'instagram publish failed',
+    })
+    return
+  }
+  await settlePostChannelJob(db, postId, channel, { kind: 'published', providerPostId })
+}
+
+interface DuePostRow {
+  id: string
+  organization_id: string
+  site_id: string
+  location_id: string | null
+  post_type: Post['post_type']
+  scheduled_for: string
+  updated_at: string
+}
+
+export async function publishDuePosts(db: DbClient, now = new Date()) {
+  const nowIso = now.toISOString()
+  const due = await queryAll<DuePostRow>(db, `
+    SELECT id, organization_id, site_id, location_id, post_type, scheduled_for, updated_at
+      FROM posts
+     WHERE status = 'scheduled' AND julianday(scheduled_for) <= julianday(?)
+     ORDER BY julianday(scheduled_for) ASC, id ASC
+     LIMIT 100
+  `, [nowIso])
+  let published = 0
+  for (const post of due) {
+    const previousUpdatedAt = Date.parse(post.updated_at)
+    if (!Number.isFinite(previousUpdatedAt)) throw new Error(`Scheduled post ${post.id} has an invalid updated_at`)
+    const updatedAt = new Date(Math.max(now.getTime(), previousUpdatedAt + 1)).toISOString()
+    const results = await executeBatch(db, [
+      {
+        query: `
+          UPDATE posts
+             SET status = 'published', scheduled_for = NULL,
+                 published_at = COALESCE(published_at, scheduled_for, ?), updated_at = ?
+           WHERE id = ? AND status = 'scheduled' AND scheduled_for = ? AND julianday(scheduled_for) <= julianday(?) AND updated_at = ?
+        `,
+        params: [nowIso, updatedAt, post.id, post.scheduled_for, nowIso, post.updated_at],
+      },
+      publicResourceCacheInvalidationQuery(post.site_id, 'post-scheduled-publish'),
+    ])
+    if (Number(results[0]?.meta?.changes ?? 0) !== 1) continue
+    published += 1
+    await fireOrganizationEventSafe({
+      db,
+      organizationId: post.organization_id,
+      siteId: post.site_id,
+      locationId: post.location_id,
+      eventType: 'post.published',
+      entityType: 'post',
+      entityId: post.id,
+      metadata: { post_type: post.post_type, channels: ['site'] },
+    })
+  }
+  return { published }
 }
 
 export async function deletePost(

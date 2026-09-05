@@ -232,20 +232,20 @@ const locationTitle = (id: string) => {
   if (!location) throw new Error(`Product location is missing: ${id}`)
   return location.title
 }
+// Categories carry their own stable slug and order now, so anchors no longer
+// need a de-duplicating counter over slugified display names.
 const groups = computed(() => {
-  const grouped = new Map<string, Product[]>()
+  const grouped = new Map<string, { id: string; category: string; sort_order: number; products: Product[] }>()
   for (const product of props.products) {
-    const products = grouped.get(product.category) ?? []
-    products.push(product)
-    grouped.set(product.category, products)
+    // Category slugs are unique per location, not per site, so an all-location
+    // collection would emit the same anchor twice. The category ID is the only
+    // identity that stays unique across the whole page.
+    const group = grouped.get(product.category_id)
+      ?? { id: product.category_id, category: product.category.name, sort_order: product.category.sort_order, products: [] }
+    group.products.push(product)
+    grouped.set(product.category_id, group)
   }
-  const seen = new Map<string, number>()
-  return [...grouped].map(([category, products]) => {
-    const base = slugifyCategory(category)
-    const count = seen.get(base) ?? 0
-    seen.set(base, count + 1)
-    return { id: count === 0 ? base : `${base}-${count}`, category, products }
-  })
+  return [...grouped.values()].sort((a, b) => a.sort_order - b.sort_order)
 })
 const categoryTabs = computed(() => groups.value.map(group => ({
   key: group.id,
@@ -271,16 +271,6 @@ const menuUpdated = computed<string | null>(() => {
 watch(groups, () => {
   userSelectedCategory.value = ''
 })
-
-function slugifyCategory(input: string): string {
-  return input
-    .normalize('NFKD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/-+/g, '-')
-    .replace(/^-|-$/g, '') || 'section'
-}
 
 function previewItem(product: Product) {
   return {

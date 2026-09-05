@@ -114,7 +114,6 @@ type VerticalCopy = {
   seoOrderDescription: (_name: string) => string
   thankYouLabel: (_name: string) => string
   confirmationMessage: (_guests: number | string, _guestLabel: string, _date: string, _time: string) => string
-  confirmSoonLabel: (_word: string) => string
   manageLabel: (_word: string) => string
   cancelAnytimeLabel: string
   callUsLabel: (_phone: string) => string
@@ -135,7 +134,7 @@ const registry: Record<LocaleCode, Partial<Record<SiteVertical, VerticalCopy>>> 
       reserveCta: "Reserve a table",
       reservationPageKicker: "Reservations",
       reservationFormTitle: "Make a Reservation",
-      reservationRequestButton: "Request Reservation",
+      reservationRequestButton: "Confirm Reservation",
       reservationWord: "reservation",
       reservationExploreLabel: "View Menu",
       reservationExploreRoute: "/menu",
@@ -233,8 +232,7 @@ const registry: Record<LocaleCode, Partial<Record<SiteVertical, VerticalCopy>>> 
       seoOrderDescription: (_name: string) => `Order online from ${_name}.`,
       thankYouLabel: (_name: string) => `Thank you, ${_name}!`,
       confirmationMessage: (_guests: number | string, _guestLabel: string, _date: string, _time: string) =>
-        `We've received your request for ${_guests} ${_guestLabel} on ${_date} at ${_time}.`,
-      confirmSoonLabel: (_word: string) => `Our team will confirm your ${_word} shortly via email or phone.`,
+        `Your reservation for ${_guests} ${_guestLabel} on ${_date} at ${_time} is confirmed.`,
       manageLabel: (_word: string) => `Manage ${_word}`,
       cancelAnytimeLabel: "Changed your plans? Cancel anytime before your visit.",
       callUsLabel: (_phone: string) => `Call us: ${_phone}`,
@@ -351,7 +349,6 @@ const registry: Record<LocaleCode, Partial<Record<SiteVertical, VerticalCopy>>> 
       thankYouLabel: (_name: string) => `Thank you, ${_name}!`,
       confirmationMessage: (_guests: number | string, _guestLabel: string, _date: string, _time: string) =>
         `We've received your request for ${_guests} ${_guestLabel} on ${_date} at ${_time}.`,
-      confirmSoonLabel: (_word: string) => `Our team will confirm your ${_word} shortly via email or phone.`,
       manageLabel: (_word: string) => `Manage ${_word}`,
       cancelAnytimeLabel: "Changed your plans? Cancel anytime before your visit.",
       callUsLabel: (_phone: string) => `Call us: ${_phone}`,
@@ -371,7 +368,7 @@ const registry: Record<LocaleCode, Partial<Record<SiteVertical, VerticalCopy>>> 
       reserveCta: "จองโต๊ะ",
       reservationPageKicker: "การจอง",
       reservationFormTitle: "ทำรายการจอง",
-      reservationRequestButton: "ขอจอง",
+      reservationRequestButton: "ยืนยันการจอง",
       reservationWord: "การจอง",
       reservationExploreLabel: "ดูเมนู",
       reservationExploreRoute: "/menu",
@@ -469,8 +466,7 @@ const registry: Record<LocaleCode, Partial<Record<SiteVertical, VerticalCopy>>> 
       seoOrderDescription: (_name: string) => `สั่งออนไลน์จาก ${_name}`,
       thankYouLabel: (_name: string) => `ขอบคุณ ${_name}!`,
       confirmationMessage: (_guests: number | string, _guestLabel: string, _date: string, _time: string) =>
-        `เราได้รับคำขอของคุณสำหรับ ${_guests} ${_guestLabel} วันที่ ${_date} เวลา ${_time}`,
-      confirmSoonLabel: (_word: string) => `ทีมของเราจะยืนยัน${_word}ของคุณเร็วๆ นี้ทางอีเมลหรือโทรศัพท์`,
+        `การจองสำหรับ ${_guests} ${_guestLabel} วันที่ ${_date} เวลา ${_time} ได้รับการยืนยันแล้ว`,
       manageLabel: (_word: string) => `จัดการ${_word}`,
       cancelAnytimeLabel: "เปลี่ยนแผนแล้วหรือ? ยกเลิกได้ทุกเมื่อก่อนมาเยือน",
       callUsLabel: (_phone: string) => `โทรหาเรา: ${_phone}`,
@@ -587,7 +583,6 @@ const registry: Record<LocaleCode, Partial<Record<SiteVertical, VerticalCopy>>> 
       thankYouLabel: (_name: string) => `ขอบคุณ ${_name}!`,
       confirmationMessage: (_guests: number | string, _guestLabel: string, _date: string, _time: string) =>
         `เราได้รับคำขอของคุณสำหรับ ${_guests} ${_guestLabel} วันที่ ${_date} เวลา ${_time}`,
-      confirmSoonLabel: (_word: string) => `ทีมของเราจะยืนยัน${_word}ของคุณเร็วๆ นี้ทางอีเมลหรือโทรศัพท์`,
       manageLabel: (_word: string) => `จัดการ${_word}`,
       cancelAnytimeLabel: "เปลี่ยนแผนแล้วหรือ? ยกเลิกได้ทุกเมื่อก่อนมาเยือน",
       callUsLabel: (_phone: string) => `โทรหาเรา: ${_phone}`,
@@ -690,7 +685,6 @@ registry.en.professional_service = {
   seoOrderDescription: (_name: string) => "",
   confirmationMessage: (_guests: number | string, _guestLabel: string, _date: string, _time: string) =>
     `We have received your consultation request for ${_guests} ${_guestLabel} on ${_date} at ${_time}.`,
-  confirmSoonLabel: (_word: string) => `Our team will follow up about your ${_word} shortly.`,
   callUsLabel: (_phone: string) => `Call: ${_phone}`,
 }
 

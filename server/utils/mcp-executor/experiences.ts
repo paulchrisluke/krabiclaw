@@ -1,10 +1,9 @@
 import type { McpExecutorContext } from './shared'
-import { createExperience, deleteExperience, getExperienceBookingsSummary, getExperienceById, getSlotAvailability, listExperienceBookings, listExperienceBookingsForSite, listExperiences, listSlotOverrides, resolveExperienceTimezone, updateBookingStatus, updateExperience, upsertSlotOverride, type CreateExperienceInput, type UpdateExperienceInput } from '~/server/utils/experiences'
-import { MCP_ERROR, mcpProtocolError } from '~/server/utils/mcp-protocol'
+import { createExperience, deleteExperience, getExperienceBookingsSummary, getExperienceById, listExperienceBookings, listExperienceBookingsForSite, listExperiences, updateBookingStatus, updateExperience, type CreateExperienceInput, type UpdateExperienceInput } from '~/server/utils/experiences'
 import { renderStructuredResponse } from '~/server/utils/mcp-render'
 import { paginateMcpCollection } from '~/server/utils/mcp-pagination'
 import { attachViewUrlToRecord, NOT_HANDLED, expandSlotGeneratorArgs, mutationContextPayload, omit, optionalDaysWindow, optionalString, requiredString } from './shared'
-import { getGuestThreadBySubmission, updateThreadProjection } from '~/server/domain/guest-threads/repository'
+import { getGuestThreadBySubmission } from '~/server/domain/guest-threads/repository'
 import { publishGuestInboxThreadEvent } from '~/server/cloudflare/guest-inbox-events'
 
 function attachExperienceViewUrl(experience: object, site: McpExecutorContext["site"]) {
@@ -150,7 +149,6 @@ export async function handleExperiencesTools(ctx: McpExecutorContext): Promise<u
       if (updated) {
         const thread = await getGuestThreadBySubmission(site.db, 'experience_booking', bookingId)
         if (thread) {
-          await updateThreadProjection(site.db, thread.id, {})
           await publishGuestInboxThreadEvent(site.env, site.db, { threadId: thread.id, type: 'thread.changed' })
         }
       }
@@ -159,71 +157,6 @@ export async function handleExperiencesTools(ctx: McpExecutorContext): Promise<u
         context: await mutationContextPayload(site),
       };
     }
-    case "get_experience_availability": {
-      const experienceId = requiredString(args, "experience_id");
-      const experience = await getExperienceById(site.db, site.siteId, experienceId);
-      if (!experience) {
-        throw mcpProtocolError(MCP_ERROR.invalidParams, "Experience not found.");
-      }
-      const startDate = requiredString(args, "date");
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate)) {
-        throw mcpProtocolError(MCP_ERROR.invalidParams, "Date must be YYYY-MM-DD format");
-      }
-      const parsedDate = new Date(`${startDate}T00:00:00Z`);
-      if (isNaN(parsedDate.getTime()) || parsedDate.toISOString().slice(0, 10) !== startDate) {
-        throw mcpProtocolError(MCP_ERROR.invalidParams, "Invalid calendar date");
-      }
-      const daysRaw = (args as Record<string, unknown>).days;
-      if (daysRaw !== undefined && (typeof daysRaw !== "number" || !Number.isInteger(daysRaw))) {
-        throw mcpProtocolError(MCP_ERROR.invalidParams, "days must be an integer");
-      }
-      const days = Math.min(Math.max(typeof daysRaw === "number" ? daysRaw : 1, 1), 31);
-      const timezone = await resolveExperienceTimezone(site.db, site.organizationId, site.siteId, experience);
-      const cursor = new Date(`${startDate}T00:00:00Z`);
-      const dateStrs: string[] = [];
-      for (let i = 0; i < days; i++) {
-        dateStrs.push(cursor.toISOString().slice(0, 10));
-        cursor.setUTCDate(cursor.getUTCDate() + 1);
-      }
-      const dates = await Promise.all(
-        dateStrs.map(async (dateStr) => ({
-          date: dateStr,
-          slots: await getSlotAvailability(site.db, site.siteId, experience, dateStr, timezone),
-        })),
-      );
-      return { dates };
-    }
-    case "set_experience_slot_override":
-      return {
-        override: await upsertSlotOverride(
-          site.db,
-          site.organizationId,
-          site.siteId,
-          requiredString(args, "experience_id"),
-          {
-            override_date: requiredString(args, "date"),
-            time_slot: requiredString(args, "time_slot"),
-            status: requiredString(args, "status") as "closed" | "open",
-            capacity_override: typeof (args as Record<string, unknown>).capacity_override === "number"
-              ? ((args as Record<string, unknown>).capacity_override as number)
-              : null,
-            note: optionalString(args, "note") ?? null,
-          },
-          site.userId,
-        ),
-      };
-    case "list_experience_slot_overrides":
-      return {
-        overrides: await listSlotOverrides(
-          site.db,
-          site.siteId,
-          requiredString(args, "experience_id"),
-          {
-            fromDate: optionalString(args, "from") ?? undefined,
-            toDate: optionalString(args, "to") ?? undefined,
-          },
-        ),
-      };
     default:
       return NOT_HANDLED
   }

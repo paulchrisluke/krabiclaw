@@ -4,8 +4,6 @@ import type { GuestThreadActorKind, GuestThreadChannel, GuestThreadEntryKind, Gu
 
 export interface AppendEntryInput {
   threadId: string
-  organizationId: string
-  siteId: string
   kind: GuestThreadEntryKind
   actorKind: GuestThreadActorKind
   actorUserId?: string | null
@@ -13,7 +11,7 @@ export interface AppendEntryInput {
   body?: string | null
   eventName?: string | null
   payloadJson?: Record<string, unknown> | null
-  externalId?: string | null
+  dedupeKey?: string
   occurredAt?: string
   id?: string
 }
@@ -22,55 +20,58 @@ function isUniqueConstraintError(error: unknown): boolean {
   return /UNIQUE constraint failed/i.test(error instanceof Error ? error.message : String(error))
 }
 
-async function reserveThreadSequence(db: DbClient, threadId: string): Promise<number> {
-  const now = new Date().toISOString()
-  await execute(db, `
-    INSERT INTO guest_thread_sequence_counters (thread_id, next_sequence, updated_at)
-    VALUES (?, COALESCE((SELECT MAX(sequence) + 1 FROM guest_thread_entries WHERE thread_id = ?), 1), ?)
-    ON CONFLICT(thread_id) DO NOTHING
-  `, [threadId, threadId, now])
+function matchingDedupeEntry(
+  entry: GuestThreadEntryRow,
+  input: AppendEntryInput,
+  payloadJson: string | null,
+): GuestThreadEntryRow {
+  const matches = entry.thread_id === input.threadId
+    && entry.kind === input.kind
+    && entry.actor_kind === input.actorKind
+    && entry.actor_user_id === (input.actorUserId ?? null)
+    && entry.channel === (input.channel ?? null)
+    && entry.body === (input.body ?? null)
+    && entry.event_name === (input.eventName ?? null)
+    && entry.payload_json === payloadJson
 
-  const reserved = await queryFirst<{ sequence: number }>(db, `
-    UPDATE guest_thread_sequence_counters
-    SET next_sequence = next_sequence + 1, updated_at = ?
-    WHERE thread_id = ?
-    RETURNING next_sequence - 1 AS sequence
-  `, [now, threadId])
-  if (!reserved) throw new Error('Failed to reserve guest thread entry sequence')
-  return reserved.sequence
+  if (!matches) {
+    throw new Error('Guest thread entry dedupe key belongs to a different ledger fact')
+  }
+  return entry
 }
 
 /**
  * Appends one immutable fact to the canonical guest-thread ledger. Entries are never
  * updated in place — corrections are new entries (issue #442 Locked Decision #2).
  *
- * When `externalId` is provided and already exists, returns the existing entry instead
+ * When `dedupeKey` is provided and already exists, returns the existing entry instead
  * of inserting a duplicate (idempotent inbound ingestion — e.g. inbound email Message-Id,
- * WhatsApp message id). The returned row includes `created` so callers can distinguish
- * a new append from a retry.
+ * WhatsApp message id). Retries return the original fact so callers can safely resume
+ * the remaining idempotent work.
  */
-export async function appendEntry(db: DbClient, input: AppendEntryInput): Promise<GuestThreadEntryRow & { created?: boolean }> {
-  if (input.externalId) {
-    const existing = await findEntryByExternalId(db, input.externalId)
-    if (existing) return { ...existing, created: false }
+export async function appendEntry(db: DbClient, input: AppendEntryInput): Promise<GuestThreadEntryRow> {
+  const payloadJson = input.payloadJson ? JSON.stringify(input.payloadJson) : null
+  if (input.dedupeKey) {
+    const existing = await findEntryByDedupeKey(db, input.dedupeKey)
+    if (existing) return matchingDedupeEntry(existing, input, payloadJson)
   }
 
   const id = input.id ?? crypto.randomUUID()
+  const dedupeKey = input.dedupeKey ?? `entry:${id}`
   const occurredAt = input.occurredAt ?? new Date().toISOString()
   const createdAt = new Date().toISOString()
-  const payloadJson = input.payloadJson ? JSON.stringify(input.payloadJson) : null
 
-  const sequence = await reserveThreadSequence(db, input.threadId)
   try {
-    await execute(db, `
+    const result = await execute(db, `
       INSERT INTO guest_thread_entries
-        (id, thread_id, organization_id, site_id, kind, actor_kind, actor_user_id, channel, body, event_name, payload_json, external_id, sequence, occurred_at, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        (id, thread_id, kind, actor_kind, actor_user_id, channel, body, event_name, payload_json, dedupe_key, sequence, occurred_at, created_at)
+      SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(MAX(sequence), 0) + 1, ?, ?
+      FROM guest_thread_entries
+      WHERE thread_id = ?
+      ON CONFLICT DO NOTHING
     `, [
       id,
       input.threadId,
-      input.organizationId,
-      input.siteId,
       input.kind,
       input.actorKind,
       input.actorUserId ?? null,
@@ -78,15 +79,21 @@ export async function appendEntry(db: DbClient, input: AppendEntryInput): Promis
       input.body ?? null,
       input.eventName ?? null,
       payloadJson,
-      input.externalId ?? null,
-      sequence,
+      dedupeKey,
       occurredAt,
       createdAt,
+      input.threadId,
     ])
+
+    if (Number(result?.meta?.changes ?? 0) === 0) {
+      const duplicate = await findEntryByDedupeKey(db, dedupeKey)
+      if (duplicate) return matchingDedupeEntry(duplicate, input, payloadJson)
+      throw new Error('Guest thread entry conflicted with an existing ledger fact')
+    }
   } catch (error) {
-    if (input.externalId && isUniqueConstraintError(error)) {
-      const concurrent = await findEntryByExternalId(db, input.externalId)
-      if (concurrent) return concurrent
+    if (isUniqueConstraintError(error)) {
+      const concurrent = await findEntryByDedupeKey(db, dedupeKey)
+      if (concurrent) return matchingDedupeEntry(concurrent, input, payloadJson)
     }
     const message = error instanceof Error ? error.message : String(error)
     throw error instanceof Error ? error : new Error(message)
@@ -94,13 +101,13 @@ export async function appendEntry(db: DbClient, input: AppendEntryInput): Promis
 
   const created = await queryFirst<GuestThreadEntryRow>(db, `SELECT * FROM guest_thread_entries WHERE id = ? LIMIT 1`, [id])
   if (!created) throw new Error('Failed to load appended guest thread entry')
-  return { ...created, created: true }
+  return created
 }
 
-export async function findEntryByExternalId(db: DbClient, externalId: string): Promise<GuestThreadEntryRow | null> {
+export async function findEntryByDedupeKey(db: DbClient, dedupeKey: string): Promise<GuestThreadEntryRow | null> {
   return await queryFirst<GuestThreadEntryRow>(db, `
-    SELECT * FROM guest_thread_entries WHERE external_id = ? LIMIT 1
-  `, [externalId])
+    SELECT * FROM guest_thread_entries WHERE dedupe_key = ? LIMIT 1
+  `, [dedupeKey])
 }
 
 export async function getEntryById(db: DbClient, id: string): Promise<GuestThreadEntryRow | null> {

@@ -1,6 +1,7 @@
 # Database epoch 3 schema simplification cutover
 
-**Status: Release candidate runbook**  
+**Status: Historical / Special database-epoch runbook**
+
 **Issue:** #692 and the Epoch 3 schema-simplification PR
 
 Epoch 3 provisions new preview, staging, and production D1 resources and begins from `migrations/0000_epoch_3_baseline.sql`. The baseline must never be applied to an Epoch 2 resource. The old production D1 remains untouched rollback state until post-production verification is complete and it is explicitly retired.
@@ -15,6 +16,11 @@ The owner-present production cutover provisioned `krabiclaw-db-epoch3`
 the rollback resource and is not retired by this release.
 
 Normal schema work still follows [migrations.md](migrations.md). This document is the exceptional database-epoch procedure authorized for the broad schema cleanup.
+
+The committed Epoch 3 migration chain is now the starting point for normal
+changes. Do not repeat this cutover or regenerate its baseline to repair schema
+generation. First prove an unchanged schema generates no diff using the current
+[migration preflight and generator safeguards](migrations.md#normal-schema-change).
 
 ## Canonical ownership after cutover
 

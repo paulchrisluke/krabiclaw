@@ -10,9 +10,6 @@
  * 1. Rejects bare BEGIN/COMMIT/ROLLBACK statements in migrations/*.sql outside
  *    of CREATE TRIGGER ... BEGIN ... END bodies (where BEGIN/END are trigger
  *    body delimiters, not transaction control, and are always allowed).
- * 2. Requires the epoch-3 baseline to remain first and rejects duplicate
- *    migration numbers. Every file applied to an active D1 ID is immutable;
- *    squashing starts a new database epoch instead of rewriting this one.
  * Usage:
  *   node scripts/lint-migrations.mjs
  */
@@ -20,10 +17,11 @@
 import { readdir, readFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { join, relative } from 'node:path'
+import { DatabaseSync, constants } from 'node:sqlite'
 
 const ROOT = process.cwd()
 const MIGRATIONS_DIR = join(ROOT, 'migrations')
-const EPOCH_BASELINE = '0000_epoch_3_baseline.sql'
+const EPOCH_BASELINE = '0000_epoch_4_baseline.sql'
 
 function stripTriggerBodies(sql) {
   // Replace with an equal number of newlines (not '') so line numbers for any
@@ -63,7 +61,7 @@ function lintEpochBaseline(presentFiles) {
   if (names[0] === EPOCH_BASELINE) return []
   return [{
     file: `migrations/${EPOCH_BASELINE}`,
-    message: 'Epoch 3 must start with its immutable generated baseline. A future squash requires new D1 resources and a new database epoch.',
+    message: 'Epoch 4 must start with its generated baseline. Production history is immutable after cutover; an unreleased staging Epoch 4 candidate may be reset and reprovisioned from this baseline.',
   }]
 }
 
@@ -84,6 +82,54 @@ function lintDuplicateMigrationNumbers(presentFiles) {
       file: `migrations/${String(number).padStart(4, '0')}_*.sql`,
       message: `Duplicate migration number: ${names.join(', ')}. Regenerate the later migration on the current target branch.`,
     }))
+}
+
+// Let SQLite parse the SQL and inspect its actual foreign keys. Snapshot metadata
+// alone cannot establish whether a DROP is safe at this point in the chain.
+async function lintReferencedParentDrops(files) {
+  const db = new DatabaseSync(':memory:')
+  let parents = new Set()
+  let blockedTable
+  db.setAuthorizer((action, table) => {
+    if (action === constants.SQLITE_ATTACH) return constants.SQLITE_DENY
+    if (action === constants.SQLITE_DROP_TABLE && parents.has(table.toLowerCase())) {
+      blockedTable = table
+      return constants.SQLITE_DENY
+    }
+    return constants.SQLITE_OK
+  })
+  try {
+    for (const file of files) {
+      let remaining = await readFile(file, 'utf8')
+      try {
+        while (true) {
+          // Strip only leading whitespace, delimiters and comments; SQLite finds
+          // statement boundaries, including quoted text and trigger bodies.
+          remaining = remaining.replace(/^(?:\s|;|--[^\n]*(?:\n|$)|\/\*[\s\S]*?\*\/)+/, '')
+          if (!remaining) break
+          parents = new Set(db.prepare(`
+            SELECT DISTINCT lower(f."table") AS name
+            FROM sqlite_schema AS s, pragma_foreign_key_list(s.name) AS f
+            WHERE s.type = 'table'
+          `).all().map(row => row.name))
+          const statement = db.prepare(remaining)
+          const length = statement.sourceSQL.length
+          statement.run()
+          remaining = remaining.slice(length)
+        }
+      } catch (error) {
+        return [{
+          file: relative(ROOT, file),
+          message: blockedTable
+            ? `Cannot DROP referenced parent table "${blockedTable}". D1 may execute foreign-key actions during a rebuild; follow docs/database/migrations.md.`
+            : `Migration chain cannot be validated: ${error.message}`,
+        }]
+      }
+    }
+    return []
+  } finally {
+    db.close()
+  }
 }
 
 let totalViolations = 0
@@ -111,6 +157,13 @@ for (const file of sqlFiles) {
 
   for (const violation of violations) {
     console.error(`  ✗ ${violation.file}:${violation.line} — ${violation.message}`)
+    totalViolations++
+  }
+}
+
+if (totalViolations === 0) {
+  for (const violation of await lintReferencedParentDrops(sqlFiles)) {
+    console.error(`  ✗ ${violation.file} — ${violation.message}`)
     totalViolations++
   }
 }

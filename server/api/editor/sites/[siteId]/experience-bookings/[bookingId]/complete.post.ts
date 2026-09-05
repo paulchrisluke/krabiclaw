@@ -4,7 +4,7 @@ import { queryFirst } from '~/server/db'
 import { markBookingCompleted } from '~/server/utils/review-requests'
 import { assertResourceAccess } from '~/server/utils/member-access'
 import { loadMemberSiteRow } from '~/server/utils/location-access'
-import { getGuestThreadBySubmission, updateThreadProjection } from '~/server/domain/guest-threads/repository'
+import { getGuestThreadBySubmission } from '~/server/domain/guest-threads/repository'
 import { publishGuestInboxThreadEvent } from '~/server/cloudflare/guest-inbox-events'
 
 export default defineHandler(async (event) => {
@@ -37,7 +37,6 @@ export default defineHandler(async (event) => {
   if (!completed) return jsonResponse({ error: 'Only confirmed bookings can be completed' }, { status: 400 })
   const thread = await getGuestThreadBySubmission(db, 'experience_booking', bookingId)
   if (thread) {
-    await updateThreadProjection(db, thread.id, {})
     await publishGuestInboxThreadEvent(env, db, { threadId: thread.id, type: 'thread.changed' })
   }
 

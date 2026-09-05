@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { spawnSync } from 'node:child_process'
+import { spawnYarn } from './utils/spawn-yarn.mjs'
 
 const nowIso = () => new Date().toISOString()
 
@@ -50,7 +50,7 @@ function isKnownEmailQuotaFailure(row) {
 }
 
 function d1Raw(sql, label = 'd1Raw') {
-  const res = spawnSync('yarn', ['-s', 'wrangler', 'd1', 'execute', 'DB', '--remote', '--json', '--command', sql], {
+  const res = spawnYarn(['-s', 'wrangler', 'd1', 'execute', 'DB', '--remote', '--json', '--command', sql], {
     stdio: ['ignore', 'pipe', 'pipe'],
     encoding: 'utf8',
   })
@@ -79,7 +79,7 @@ async function postJson(url, data, label) {
     throw new Error(`${label} fetch failed for ${url}`, { cause: error })
   }
   const text = await res.text()
-  let body = null
+  let body
   try { body = text ? JSON.parse(text) : null } catch { body = null }
   return { res, body, text }
 }
@@ -127,13 +127,16 @@ async function main() {
   let quotaBlockedEmailRows = []
   while (Date.now() < deadline) {
     const rows = d1Query(`
-      SELECT id, channel, template, status, provider_message_id, error, created_at
-      FROM notifications
-      WHERE organization_id = '${sqlEscape(orgId)}'
-        AND site_id = '${sqlEscape(siteId)}'
-        AND template IN ('new_contact_msg', 'new_reservation')
-        AND created_at >= '${sqlEscape(since)}'
-      ORDER BY created_at DESC
+      SELECT d.id, d.channel, d.purpose, d.status, d.provider_message_id, d.error, d.created_at,
+             gt.submission_type, gt.submission_id
+      FROM guest_thread_deliveries d
+      JOIN guest_thread_entries e ON e.id = d.entry_id
+      JOIN guest_threads gt ON gt.id = e.thread_id
+      WHERE gt.organization_id = '${sqlEscape(orgId)}'
+        AND gt.site_id = '${sqlEscape(siteId)}'
+        AND d.purpose = 'owner_alert'
+        AND d.created_at >= '${sqlEscape(since)}'
+      ORDER BY d.created_at DESC
       LIMIT 100
     `, 'notification poll')
 
@@ -149,12 +152,16 @@ async function main() {
 
   if ((!emailRow && !emailQuotaBlocked) || !whatsappRow) {
     const rows = d1Query(`
-      SELECT id, channel, template, status, provider_message_id, error, created_at
-      FROM notifications
-      WHERE organization_id = '${sqlEscape(orgId)}'
-        AND site_id = '${sqlEscape(siteId)}'
-        AND created_at >= '${sqlEscape(since)}'
-      ORDER BY created_at DESC
+      SELECT d.id, d.channel, d.purpose, d.status, d.provider_message_id, d.error, d.created_at,
+             gt.submission_type, gt.submission_id
+      FROM guest_thread_deliveries d
+      JOIN guest_thread_entries e ON e.id = d.entry_id
+      JOIN guest_threads gt ON gt.id = e.thread_id
+      WHERE gt.organization_id = '${sqlEscape(orgId)}'
+        AND gt.site_id = '${sqlEscape(siteId)}'
+        AND d.purpose = 'owner_alert'
+        AND d.created_at >= '${sqlEscape(since)}'
+      ORDER BY d.created_at DESC
       LIMIT 100
     `, 'notification final read')
     throw new Error(`Provider-level canary assertions failed. email_sent=${Boolean(emailRow)} whatsapp_sent=${Boolean(whatsappRow)} rows=${JSON.stringify(rows)}`)
@@ -187,13 +194,17 @@ async function main() {
   let cancelQuotaBlockedEmailRows = []
   while (Date.now() < cancelDeadline) {
     const rows = d1Query(`
-      SELECT id, channel, template, status, provider_message_id, error, created_at
-      FROM notifications
-      WHERE organization_id = '${sqlEscape(orgId)}'
-        AND site_id = '${sqlEscape(siteId)}'
-        AND template = 'reservation_cancelled'
-        AND created_at >= '${sqlEscape(cancelSince)}'
-      ORDER BY created_at DESC
+      SELECT d.id, d.channel, d.purpose, d.status, d.provider_message_id, d.error, d.created_at,
+             gt.submission_type, gt.submission_id
+      FROM guest_thread_deliveries d
+      JOIN guest_thread_entries e ON e.id = d.entry_id
+      JOIN guest_threads gt ON gt.id = e.thread_id
+      WHERE gt.organization_id = '${sqlEscape(orgId)}'
+        AND gt.site_id = '${sqlEscape(siteId)}'
+        AND gt.submission_type = 'reservation'
+        AND d.purpose = 'owner_alert'
+        AND d.created_at >= '${sqlEscape(cancelSince)}'
+      ORDER BY d.created_at DESC
       LIMIT 100
     `, 'cancellation notification poll')
 
@@ -254,12 +265,17 @@ async function main() {
 
   if ((!cancelEmailRow && !cancelEmailQuotaBlocked) || !cancelWhatsappRow) {
     const rows = d1Query(`
-      SELECT id, channel, template, status, provider_message_id, error, created_at
-      FROM notifications
-      WHERE organization_id = '${sqlEscape(orgId)}'
-        AND site_id = '${sqlEscape(siteId)}'
-        AND created_at >= '${sqlEscape(cancelSince)}'
-      ORDER BY created_at DESC
+      SELECT d.id, d.channel, d.purpose, d.status, d.provider_message_id, d.error, d.created_at,
+             gt.submission_type, gt.submission_id
+      FROM guest_thread_deliveries d
+      JOIN guest_thread_entries e ON e.id = d.entry_id
+      JOIN guest_threads gt ON gt.id = e.thread_id
+      WHERE gt.organization_id = '${sqlEscape(orgId)}'
+        AND gt.site_id = '${sqlEscape(siteId)}'
+        AND gt.submission_type = 'reservation'
+        AND d.purpose = 'owner_alert'
+        AND d.created_at >= '${sqlEscape(cancelSince)}'
+      ORDER BY d.created_at DESC
       LIMIT 100
     `, 'cancellation notification final read')
     throw new Error(`Provider-level cancellation canary assertions failed. email_sent=${Boolean(cancelEmailRow)} whatsapp_sent=${Boolean(cancelWhatsappRow)} rows=${JSON.stringify(rows)}`)

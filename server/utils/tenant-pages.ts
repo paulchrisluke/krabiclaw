@@ -616,8 +616,8 @@ export async function createTenantPagesBatch(
     const now = new Date().toISOString()
     const placementQueries = await tenantPagePlacementQueries(db, input.organizationId, input.siteId, blocks, now)
     const pageQuery: BatchQuery = {
-      query: "INSERT INTO tenant_pages (id, organization_id, site_id, title, slug, page_type, recipe, summary, sort_order, source, updated_at, updated_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 'pages', ?, ?)",
-      params: [pageId, input.organizationId, input.siteId, metadata.title, path === '/' ? 'home' : path.slice(1).replaceAll('/', '-'), metadata.pageType, metadata.recipe, metadata.summary, now, input.userId ?? null],
+      query: "INSERT INTO tenant_pages (id, organization_id, site_id, page_type, recipe, sort_order, source, updated_at, updated_by) VALUES (?, ?, ?, ?, ?, 0, 'pages', ?, ?)",
+      params: [pageId, input.organizationId, input.siteId, metadata.pageType, metadata.recipe, now, input.userId ?? null],
     }
     const variantQuery: BatchQuery = {
       query: "INSERT INTO tenant_page_variants (id, organization_id, site_id, page_id, locale, document_id, path, title, summary, seo_title, seo_description, canonical_url, robots, created_at, updated_at, updated_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
@@ -761,18 +761,14 @@ export async function applyOnboardingTenantPages(
         },
         {
           query: `UPDATE tenant_pages SET
-            title = CASE WHEN EXISTS (SELECT 1 FROM site_locales WHERE site_id = ? AND locale = ? AND is_source = 1) THEN ? ELSE title END,
             page_type = CASE WHEN EXISTS (SELECT 1 FROM site_locales WHERE site_id = ? AND locale = ? AND is_source = 1) THEN ? ELSE page_type END,
             recipe = CASE WHEN EXISTS (SELECT 1 FROM site_locales WHERE site_id = ? AND locale = ? AND is_source = 1) THEN ? ELSE recipe END,
-            summary = CASE WHEN EXISTS (SELECT 1 FROM site_locales WHERE site_id = ? AND locale = ? AND is_source = 1) THEN ? ELSE summary END,
             sort_order = CASE WHEN EXISTS (SELECT 1 FROM site_locales WHERE site_id = ? AND locale = ? AND is_source = 1) THEN COALESCE(?, sort_order) ELSE sort_order END,
             updated_at = ?, updated_by = ?
             WHERE id = ? AND site_id = ? AND organization_id = ?`,
           params: [
-            input.siteId, locale, metadata.title,
             input.siteId, locale, metadata.pageType,
             input.siteId, locale, metadata.recipe,
-            input.siteId, locale, metadata.summary,
             input.siteId, locale, effectiveData.sortOrder ?? null,
             now, input.userId,
             row.page_id, input.siteId, input.organizationId,
@@ -879,8 +875,8 @@ export async function createTenantPage(db: DbClient, input: { organizationId: st
   const now = new Date().toISOString()
   const placementQueries = await tenantPagePlacementQueries(db, input.organizationId, input.siteId, blocks, now)
   const pageQuery: BatchQuery = {
-    query: "INSERT INTO tenant_pages (id, organization_id, site_id, title, slug, page_type, recipe, summary, sort_order, source, updated_at, updated_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 'pages', ?, ?)",
-    params: [pageId, input.organizationId, input.siteId, metadata.title, path === '/' ? 'home' : path.slice(1).replaceAll('/', '-'), metadata.pageType, metadata.recipe, metadata.summary, now, input.userId],
+    query: "INSERT INTO tenant_pages (id, organization_id, site_id, page_type, recipe, sort_order, source, updated_at, updated_by) VALUES (?, ?, ?, ?, ?, 0, 'pages', ?, ?)",
+    params: [pageId, input.organizationId, input.siteId, metadata.pageType, metadata.recipe, now, input.userId],
   }
   const variantQuery: BatchQuery = {
     query: "INSERT INTO tenant_page_variants (id, organization_id, site_id, page_id, locale, document_id, path, title, summary, seo_title, seo_description, canonical_url, robots, created_at, updated_at, updated_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
@@ -975,18 +971,14 @@ export async function updateTenantPage(db: DbClient, variantId: string, input: {
   }
   const updatePage: BatchQuery = {
     query: `UPDATE tenant_pages SET
-      title = CASE WHEN EXISTS (SELECT 1 FROM site_locales WHERE site_id = ? AND locale = ? AND is_source = 1) THEN ? ELSE title END,
       page_type = CASE WHEN EXISTS (SELECT 1 FROM site_locales WHERE site_id = ? AND locale = ? AND is_source = 1) THEN ? ELSE page_type END,
       recipe = CASE WHEN EXISTS (SELECT 1 FROM site_locales WHERE site_id = ? AND locale = ? AND is_source = 1) THEN ? ELSE recipe END,
-      summary = CASE WHEN EXISTS (SELECT 1 FROM site_locales WHERE site_id = ? AND locale = ? AND is_source = 1) THEN ? ELSE summary END,
       sort_order = CASE WHEN EXISTS (SELECT 1 FROM site_locales WHERE site_id = ? AND locale = ? AND is_source = 1) THEN COALESCE(?, sort_order) ELSE sort_order END,
       updated_at = ?, updated_by = ?
       WHERE id = ? AND site_id = ? AND organization_id = ?`,
     params: [
-      input.scope.siteId, row.locale, metadata.title,
       input.scope.siteId, row.locale, metadata.pageType,
       input.scope.siteId, row.locale, metadata.recipe,
-      input.scope.siteId, row.locale, metadata.summary,
       input.scope.siteId, row.locale, input.data.sortOrder ?? null,
       now, input.userId, row.page_id, input.scope.siteId, input.scope.organizationId,
     ],

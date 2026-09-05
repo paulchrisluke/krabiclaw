@@ -33,6 +33,7 @@ const CURATED_FIXTURE_FILES = [
   'seed-definitions/demo.ts',
   'seed-definitions/pottery-house.ts',
   'seed-definitions/kikuzuki.ts',
+  'seed-definitions/ncls.ts',
 ]
 
 async function collectSqlFiles() {

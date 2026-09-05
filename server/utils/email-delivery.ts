@@ -4,7 +4,14 @@ export type EmailDeliveryMode = 'provider' | 'log_only'
 
 type EmailDeliveryEnv = {
   EMAIL_DELIVERY_MODE?: string
+  RESEND_API_KEY?: string
+  EMAIL_FROM?: string
 }
+
+export type EmailSendResult =
+  | { status: 'sent'; messageId: string | null }
+  | { status: 'failed'; error: string }
+  | { status: 'unknown'; error: string }
 
 // Fails closed: an unset/blank/invalid EMAIL_DELIVERY_MODE must never fall through to
 // real sends. Production is the only environment that should send real email, and it does
@@ -73,4 +80,62 @@ export function isReservedTestDomain(email: string): boolean {
     if (domain === reservedDomain || domain.endsWith(`.${reservedDomain}`)) return true
   }
   return false
+}
+
+export async function sendEmail(
+  env: EmailDeliveryEnv,
+  input: {
+    to: string
+    subject: string
+    text: string
+    html?: string
+    replyTo?: string | null
+    fromName?: string
+    idempotencyKey?: string
+  },
+): Promise<EmailSendResult> {
+  if (!shouldSendRealEmail(env) || isReservedTestDomain(input.to)) {
+    return { status: 'sent', messageId: logOnlyEmailProviderId('email') }
+  }
+  if (!env.RESEND_API_KEY) return { status: 'failed', error: 'RESEND_API_KEY not configured' }
+
+  const configuredFrom = env.EMAIL_FROM || 'KrabiClaw <hello@krabiclaw.com>'
+  const from = input.fromName
+    ? configuredFrom.includes('<')
+      ? configuredFrom.replace(/^[^<]*(?=<)/, `${input.fromName} `)
+      : `${input.fromName} <${configuredFrom}>`
+    : configuredFrom
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 10_000)
+
+  try {
+    const response = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${env.RESEND_API_KEY}`,
+        'Content-Type': 'application/json',
+        ...(input.idempotencyKey ? { 'Idempotency-Key': input.idempotencyKey } : {}),
+      },
+      body: JSON.stringify({
+        from,
+        to: [input.to],
+        ...(input.replyTo ? { reply_to: input.replyTo } : {}),
+        subject: input.subject,
+        ...(input.html ? { html: input.html } : {}),
+        text: input.text,
+      }),
+      signal: controller.signal,
+    })
+
+    if (!response.ok) return { status: 'failed', error: await response.text() }
+    const data = await response.json().catch(() => ({})) as { id?: string }
+    return { status: 'sent', messageId: data.id ?? null }
+  } catch (error) {
+    return {
+      status: 'unknown',
+      error: error instanceof Error ? error.message : 'Email request failed',
+    }
+  } finally {
+    clearTimeout(timeout)
+  }
 }

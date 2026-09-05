@@ -1,9 +1,8 @@
 import type { McpExecutorContext } from './shared'
-import { execute, executeBatch, queryAll } from '~/server/db'
 import { MCP_ERROR, mcpProtocolError } from '~/server/utils/mcp-protocol'
 import { HTTPError } from 'nitro';
-import { createPost, deletePost, getPost, listPosts, PostValidationError, publishPost, updatePost } from '~/server/utils/post-management'
-import { getFacebookPagesConnection, getLinkedInstagramAccount, publishToInstagram, publishToPage } from '~/server/utils/facebook-pages'
+import { createPost, deletePost, getPost, listPosts, PostValidationError, publishPost, type PostSocialPublish, updatePost } from '~/server/utils/post-management'
+import { getFacebookPagesConnection } from '~/server/utils/facebook-pages'
 import { hasSiteEntitlement } from '~/server/utils/billing'
 import { isConversationalToolGroupEnabled } from '~/server/utils/conversational-tool-surface'
 import { renderStructuredResponse } from '~/server/utils/mcp-render'
@@ -139,6 +138,11 @@ export async function handlePostsTools(ctx: McpExecutorContext): Promise<unknown
         }
       }
 
+      const socialPublish: PostSocialPublish | null = socialSkipReason
+        ? { kind: 'unavailable', reason: socialSkipReason }
+        : facebookConnection?.facebook_page_id && facebookConnection.encrypted_page_token
+          ? { kind: 'connected', pageId: facebookConnection.facebook_page_id, pageToken: facebookConnection.encrypted_page_token }
+          : null;
       const post = await publishPost(
         site.db,
         site.organizationId,
@@ -146,119 +150,34 @@ export async function handlePostsTools(ctx: McpExecutorContext): Promise<unknown
         postId,
         channels,
         site.env,
+        socialPublish,
       );
       if (!post)
         throw new HTTPError({ statusCode: 404, statusMessage: "Post not found" });
-      const now = new Date().toISOString();
+      const channelJobs = post.channels.filter(job => channels.includes(job.channel));
 
-      if (socialSkipReason) {
-        const unavailableChannels = channels.filter(channel => channel === "facebook" || channel === "instagram");
-        if (unavailableChannels.length > 0) {
-          await executeBatch(site.db, unavailableChannels.map(channel => ({
-            query: `UPDATE post_channel_jobs SET status = 'skipped', error = ? WHERE post_id = ? AND channel = ?`,
-            params: [socialSkipReason, postId, channel],
-          })));
-        }
-      }
-      if ((wantsFacebook || wantsInstagram) && !socialSkipReason) {
-        const pageToken = facebookConnection!.encrypted_page_token!;
-        const pageId = facebookConnection!.facebook_page_id!;
-
-        let imageUrl: string | null = null;
-        imageUrl = post.media?.find(item => item.slot === 'cover' && item.kind === 'image')?.public_url ?? null;
-
-        if (wantsFacebook) {
-          try {
-            const fbResult = await publishToPage(pageToken, pageId, {
-              message: post.body,
-            });
-            await execute(
-              site.db,
-              `UPDATE post_channel_jobs SET status = 'published', provider_post_id = ?, published_at = ? WHERE post_id = ? AND channel = 'facebook'`,
-              [fbResult.id, now, postId],
-            );
-          } catch (err) {
-            const msg =
-              err instanceof Error ? err.message : "Facebook publish failed";
-            await execute(
-              site.db,
-              `UPDATE post_channel_jobs SET status = 'failed', error = ? WHERE post_id = ? AND channel = 'facebook'`,
-              [msg, postId],
-            );
-          }
-        }
-
-        if (wantsInstagram) {
-          if (!imageUrl) {
-            await execute(
-              site.db,
-              `UPDATE post_channel_jobs SET status = 'skipped', error = ? WHERE post_id = ? AND channel = 'instagram'`,
-              ["Instagram requires an image — add a photo to this post", postId],
-            );
-          } else {
-            try {
-              const igUserId = await getLinkedInstagramAccount(
-                pageToken,
-                pageId,
-              );
-              if (!igUserId) {
-                await execute(
-                  site.db,
-                  `UPDATE post_channel_jobs SET status = 'skipped', error = ? WHERE post_id = ? AND channel = 'instagram'`,
-                  ["No Instagram Business account linked to this Facebook Page", postId],
-                );
-              } else {
-                const igResult = await publishToInstagram(
-                  pageToken,
-                  igUserId,
-                  { caption: post.body, imageUrl },
-                );
-                await execute(
-                  site.db,
-                  `UPDATE post_channel_jobs SET status = 'published', provider_post_id = ?, published_at = ? WHERE post_id = ? AND channel = 'instagram'`,
-                  [igResult.id, now, postId],
-                );
-              }
-            } catch (err) {
-              const msg =
-                err instanceof Error
-                  ? err.message
-                  : "Instagram publish failed";
-              await execute(
-                site.db,
-                `UPDATE post_channel_jobs SET status = 'failed', error = ? WHERE post_id = ? AND channel = 'instagram'`,
-                [msg, postId],
-              );
-            }
-          }
-        }
-      }
-
-      const channelJobs = await queryAll<{ channel: string; status: string; error: string | null }>(
-        site.db,
-        `SELECT channel, status, error FROM post_channel_jobs WHERE post_id = ?`,
-        [postId],
-      );
-
-      const publishedChannels = channelJobs.filter(j => j.status === 'published').map(j => j.channel);
+      const publishedChannels = [
+        ...(channels.includes('site') ? ['site'] : []),
+        ...channelJobs.filter(j => j.status === 'published').map(j => j.channel),
+      ];
       const failedChannels = channelJobs.filter(j => j.status === 'failed').map(j => ({ channel: j.channel, error: j.error }));
       const skippedChannels = channelJobs.filter(j => j.status === 'skipped').map(j => ({ channel: j.channel, error: j.error }));
-      const channelOutcomes = Object.fromEntries(channelJobs
-        .filter(job => channels.includes(job.channel as never) && job.status !== 'pending')
-        .map(job => [job.channel, { status: job.status, ...(job.error ? { reason: job.error } : {}) }]));
+      const pendingChannels = channelJobs.filter(j => j.status === 'pending').map(j => j.channel);
+      const channelOutcomes = {
+        ...Object.fromEntries(channelJobs
+          .map(job => [job.channel, { status: job.status, ...(job.error ? { reason: job.error } : {}) }])),
+        ...(channels.includes('site') ? { site: { status: 'published' } } : {}),
+      };
 
       const publishContext = await mutationContextPayload(site, {
         locationId: post && typeof post.location_id === "string" ? post.location_id : null,
       });
 
-      const publishedPost = await getPost(site.db, site.organizationId, site.siteId, postId, site.env);
-      if (!publishedPost)
-        throw new HTTPError({ statusCode: 500, statusMessage: "Published post could not be read" });
-      const hydratedPublishedPost = attachViewUrlToRecord(publishedPost, site, {}, site.env);
+      const hydratedPublishedPost = attachViewUrlToRecord(post, site, {}, site.env);
 
       const hasFailures = failedChannels.length > 0 || skippedChannels.length > 0;
-      const successMessage = hasFailures
-        ? `Published "${post.title ?? post.id}" to ${publishedChannels.join(", ") || 'no channels'}${failedChannels.length > 0 ? `; failed: ${failedChannels.map(f => f.channel).join(", ")}` : ''}${skippedChannels.length > 0 ? `; skipped: ${skippedChannels.map(s => s.channel).join(", ")}` : ''}.`
+      const successMessage = hasFailures || pendingChannels.length > 0
+        ? `Published "${post.title ?? post.id}" to ${publishedChannels.join(", ") || 'no channels'}${failedChannels.length > 0 ? `; failed: ${failedChannels.map(f => f.channel).join(", ")}` : ''}${skippedChannels.length > 0 ? `; skipped: ${skippedChannels.map(s => s.channel).join(", ")}` : ''}${pendingChannels.length > 0 ? `; pending: ${pendingChannels.join(", ")}` : ''}.`
         : `Published "${post.title ?? post.id}" to ${publishedChannels.join(", ")}.`;
 
       return renderStructuredResponse(

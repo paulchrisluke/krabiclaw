@@ -1,81 +1,77 @@
 <template>
   <UDashboardPanel id="site-testimonials">
     <template #header>
-      <UDashboardNavbar title="Testimonials">
+      <UDashboardNavbar title="Site" :toggle="false">
         <template #leading>
-          <DashboardNavbarLeading :to="paths.site" label="Site" />
-        </template>
-        <template #trailing>
-          <UButton icon="i-lucide-refresh-cw" color="neutral" variant="ghost" :loading="pending" aria-label="Refresh testimonials" @click="refresh()" />
+          <DashboardNavbarLeading v-if="sitePaths" :to="sitePaths.site" label="Site" />
         </template>
       </UDashboardNavbar>
     </template>
 
     <template #body>
-      <p class="mb-5 text-sm text-muted">Owner-entered testimonials require provenance and publication authorization.</p>
-
-      <div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_26rem]">
-        <section class="space-y-4">
-          <USkeleton v-if="pending" class="h-36" />
-          <div v-else-if="testimonials.length === 0" class="border border-dashed border-default px-6 py-12 text-center">
-            <UIcon name="i-lucide-star" class="mx-auto size-9 text-muted" />
-            <p class="mt-3 text-sm font-medium text-highlighted">No testimonials yet</p>
+      <DashboardListEditor
+        v-model:editing="editing"
+        title="Testimonials"
+        description="Owner-entered testimonials require provenance and publication authorization."
+        :items="listItems"
+        :pending="pending"
+        empty-title="No testimonials yet"
+        empty-icon="i-lucide-star"
+        add-label="Add a testimonial"
+        :removing-id="removingId"
+        @add="openNew"
+        @open="openExisting"
+        @remove="removeItem"
+      >
+        <template #item="{ item }">
+          <div class="flex flex-wrap items-center gap-2">
+            <strong class="text-sm text-highlighted">{{ item.row.author_name }}</strong>
+            <UBadge color="warning" variant="soft">{{ item.row.rating }} stars</UBadge>
+            <UBadge :color="item.row.status === 'approved' ? 'success' : 'neutral'" variant="soft">{{ item.row.status }}</UBadge>
+            <UBadge color="neutral" variant="subtle">{{ methodLabel(item.row.collection_method) }}</UBadge>
           </div>
-          <template v-else>
-            <article v-for="testimonial in testimonials" :key="testimonial.id" class="border-b border-default pb-4">
-              <div class="flex items-start justify-between gap-4">
-                <div class="min-w-0">
-                  <div class="flex flex-wrap items-center gap-2">
-                    <strong class="text-sm text-highlighted">{{ testimonial.author_name }}</strong>
-                    <UBadge color="warning" variant="soft">{{ testimonial.rating }} stars</UBadge>
-                    <UBadge :color="testimonial.status === 'approved' ? 'success' : 'neutral'" variant="soft">{{ testimonial.status }}</UBadge>
-                    <UBadge color="neutral" variant="subtle">{{ methodLabel(testimonial.collection_method) }}</UBadge>
-                  </div>
-                  <h2 v-if="testimonial.title" class="mt-3 text-sm font-semibold text-highlighted">{{ testimonial.title }}</h2>
-                  <p class="mt-2 text-sm leading-6 text-muted">{{ testimonial.content }}</p>
-                  <p class="mt-2 text-xs text-muted">Owner-entered testimonial · Not KrabiClaw verified</p>
-                </div>
-                <div class="flex shrink-0 gap-1">
-                  <UButton icon="i-lucide-square-pen" size="sm" color="neutral" variant="ghost" aria-label="Edit" @click="edit(testimonial)" />
-                  <UButton icon="i-lucide-trash-2" size="sm" color="error" variant="ghost" aria-label="Delete" @click="remove(testimonial)" />
-                </div>
-              </div>
-            </article>
-          </template>
-        </section>
+          <p v-if="item.row.title" class="mt-2 text-sm font-semibold text-highlighted">{{ item.row.title }}</p>
+          <p class="mt-1 line-clamp-2 text-sm text-muted">{{ item.row.content }}</p>
+        </template>
+      </DashboardListEditor>
 
-        <UCard variant="soft">
-          <template #header><h2 class="font-semibold text-highlighted">{{ editingId ? 'Edit testimonial' : 'Add testimonial' }}</h2></template>
-          <div class="space-y-4">
-            <div class="grid grid-cols-2 gap-3">
-              <UFormField label="Reviewer"><UInput v-model="form.author_name" /></UFormField>
-              <UFormField label="Rating"><UInputNumber v-model="form.rating" :min="1" :max="5" :step="1" class="w-full" /></UFormField>
-            </div>
-            <UFormField label="Title"><UInput v-model="form.title" /></UFormField>
-            <UFormField label="Testimonial"><UTextarea v-model="form.content" :rows="5" /></UFormField>
-            <UFormField label="Collected through">
-              <USelect v-model="form.collection_method" :items="collectionMethods" value-key="value" label-key="label" />
-            </UFormField>
-            <UFormField label="Original date"><UInput v-model="form.original_review_date" type="date" /></UFormField>
-            <UFormField label="Reference"><UInput v-model="form.original_reference" placeholder="Email thread, intake note, or migration source" /></UFormField>
-            <UFormField label="Status"><USelect v-model="form.status" :items="statusItems" /></UFormField>
-            <UCheckbox v-model="form.publication_authorized" label="I confirm the reviewer authorized publication" />
-            <div class="flex gap-2">
-              <UButton v-if="editingId" block color="neutral" variant="ghost" @click="reset">Cancel</UButton>
-              <UButton block :loading="saving" :disabled="!canSave" @click="save">{{ editingId ? 'Save' : 'Add testimonial' }}</UButton>
-            </div>
-          </div>
-        </UCard>
-      </div>
+      <DashboardListItemDialog
+        v-model:open="dialogOpen"
+        :title="editingId ? 'Edit testimonial' : 'Add a testimonial'"
+        :removable="Boolean(editingId)"
+        :saving="saving"
+        :removing="removingId === editingId"
+        :save-disabled="!canSave"
+        @save="save"
+        @remove="removeEditing"
+      >
+        <div class="grid grid-cols-2 gap-3">
+          <UFormField label="Reviewer"><UInput v-model="form.author_name" class="w-full" /></UFormField>
+          <UFormField label="Rating"><UInputNumber v-model="form.rating" :min="1" :max="5" :step="1" class="w-full" /></UFormField>
+        </div>
+        <UFormField label="Title"><UInput v-model="form.title" class="w-full" /></UFormField>
+        <UFormField label="Testimonial"><UTextarea v-model="form.content" :rows="5" class="w-full" /></UFormField>
+        <UFormField label="Collected through">
+          <USelect v-model="form.collection_method" :items="collectionMethods" value-key="value" label-key="label" class="w-full" />
+        </UFormField>
+        <UFormField label="Original date"><UInput v-model="form.original_review_date" type="date" class="w-full" /></UFormField>
+        <UFormField label="Reference"><UInput v-model="form.original_reference" placeholder="Email thread, intake note, or migration source" class="w-full" /></UFormField>
+        <UFormField label="Status"><USelect v-model="form.status" :items="statusItems" class="w-full" /></UFormField>
+        <UCheckbox v-model="form.publication_authorized" label="I confirm the reviewer authorized publication" />
+        <p class="text-xs text-muted">Owner-entered testimonial · Not KrabiClaw verified</p>
+      </DashboardListItemDialog>
     </template>
   </UDashboardPanel>
 </template>
 
 <script setup lang="ts">
+import DashboardListEditor from '~/components/dashboard/DashboardListEditor.vue'
+import DashboardListItemDialog from '~/components/dashboard/DashboardListItemDialog.vue'
+
 const dashboardApi = useDashboardApi()
 definePageMeta({ layout: 'dashboard', cmsCapabilityKey: 'site.testimonials' })
 
-const { paths } = useDashboardSiteLinks()
+const { sitePaths } = useDashboardSiteLinks()
 useSeoMeta({ title: 'Testimonials | KrabiClaw Dashboard', robots: 'noindex, nofollow' })
 const requestEvent = useRequestEvent()
 
@@ -113,7 +109,6 @@ const siteId = await useDashboardSiteId()
 const route = useRoute()
 const toast = useToast()
 const saving = ref(false)
-const editingId = ref<string | null>(null)
 const collectionMethods = [
   { label: 'In person', value: 'in_person' }, { label: 'Email', value: 'email' },
   { label: 'Phone', value: 'phone' }, { label: 'Migration', value: 'migration' }, { label: 'Other', value: 'other' },
@@ -149,6 +144,32 @@ const { data, pending, refresh } = await useAsyncData(
   },
 )
 const testimonials = computed(() => data.value?.reviews ?? [])
+const listItems = computed(() => testimonials.value.map(row => ({ id: row.id, title: row.author_name, row })))
+
+const { editing, dialogOpen, editingId, removingId, openNew, openExisting, close, removeItem, removeEditing } = useListEditor<SiteTestimonial>({
+  find: id => testimonials.value.find(row => row.id === id) ?? null,
+  fill: row => Object.assign(form, {
+    author_name: row.author_name, rating: row.rating, title: row.title ?? '', content: row.content,
+    collection_method: row.collection_method, original_review_date: row.original_review_date ?? '',
+    original_reference: row.original_reference ?? '', publication_authorized: row.publication_authorized, status: row.status,
+  }),
+  clear: reset,
+  destroy: async (id) => {
+    try {
+      await dashboardApi(`/api/editor/sites/${siteId}/reviews/${id}`, {
+        method: 'DELETE',
+        validate: isReviewDeletedResponse,
+      })
+      await refresh()
+    } catch (error) {
+      toast.add({ description: error instanceof Error ? error.message : 'Failed to remove testimonial', color: 'error' })
+      // Rethrow so the sheet stays open on the record that is still there.
+      // Swallowing it here let useListEditor treat the delete as done and close
+      // over a row the server had refused to remove.
+      throw error
+    }
+  },
+})
 const canSave = computed(() => Boolean(form.author_name.trim() && form.content.trim() && Number.isInteger(form.rating) && form.rating >= 1 && form.rating <= 5 && form.publication_authorized))
 
 function methodLabel(method: CollectionMethod) {
@@ -156,18 +177,9 @@ function methodLabel(method: CollectionMethod) {
 }
 
 function reset() {
-  editingId.value = null
   Object.assign(form, { author_name: '', rating: 5, title: '', content: '', collection_method: 'in_person', original_review_date: '', original_reference: '', publication_authorized: false, status: 'pending' })
 }
 
-function edit(testimonial: SiteTestimonial) {
-  editingId.value = testimonial.id
-  Object.assign(form, {
-    author_name: testimonial.author_name, rating: testimonial.rating, title: testimonial.title ?? '', content: testimonial.content,
-    collection_method: testimonial.collection_method, original_review_date: testimonial.original_review_date ?? '',
-    original_reference: testimonial.original_reference ?? '', publication_authorized: testimonial.publication_authorized, status: testimonial.status,
-  })
-}
 
 async function save() {
   saving.value = true
@@ -186,7 +198,7 @@ async function save() {
         validate: isReviewCreatedResponse,
       })
     }
-    reset()
+    close()
     await refresh()
     toast.add({ description: 'Testimonial saved', color: 'success' })
   } catch (error) {
@@ -196,13 +208,4 @@ async function save() {
   }
 }
 
-async function remove(testimonial: SiteTestimonial) {
-  if (!confirm(`Delete the testimonial from ${testimonial.author_name}?`)) return
-  await dashboardApi(`/api/editor/sites/${siteId}/reviews/${testimonial.id}`, {
-    method: 'DELETE',
-    validate: isReviewDeletedResponse,
-  })
-  if (editingId.value === testimonial.id) reset()
-  await refresh()
-}
 </script>

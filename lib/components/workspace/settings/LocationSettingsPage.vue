@@ -6,7 +6,7 @@
     <template #header>
       <UDashboardNavbar :title="navbarTitle" :toggle="false">
         <template #leading>
-          <DashboardNavbarLeading :to="backTo" :label="backLabel" />
+          <DashboardNavbarLeading :to="levelBackTo" label="Location" />
         </template>
       </UDashboardNavbar>
     </template>
@@ -25,6 +25,8 @@
         :show-actions="hasDetail"
         :saving="saving"
         :save-disabled="saveDisabled"
+        :detail-title="detailTitles[editorKey]"
+        :dismiss-to="settingsPath"
         @cancel="cancelEditor"
         @save="saveCurrentEditor"
       >
@@ -34,7 +36,6 @@
 
         <template #detail>
           <div v-if="editorKey === 'profile'" class="space-y-6">
-            <h2 v-if="!hasDetail" class="text-3xl font-semibold text-highlighted">Profile</h2>
             <p class="text-base text-muted">The public identity and contact details for this location.</p>
             <div class="flex flex-wrap gap-6">
               <UCheckbox v-model="detailsForm.is_primary" label="Primary location" />
@@ -53,7 +54,6 @@
           </div>
 
           <div v-else-if="editorKey === 'translations'" class="space-y-6">
-            <h2 v-if="!hasDetail" class="text-3xl font-semibold text-highlighted">Translations</h2>
             <p class="text-base text-muted">Edit this location's public content in another published language. The default-language values above are unaffected.</p>
             <UFormField label="Language">
               <select v-model="translationLocale" aria-label="Translation language" class="rounded-lg border border-default bg-default px-3 py-2">
@@ -216,8 +216,10 @@ const settingsPath = computed(() => `${locationPath.value}/settings`)
 
 // Up one level: out of a section back to the settings index, out of the index
 // back to the location overview.
-const backTo = computed(() => hasDetail.value ? settingsPath.value : locationPath.value)
-const backLabel = computed(() => hasDetail.value ? 'Location settings' : 'Location')
+// The navbar leaves the level for the location overview. The open section's own
+// way out is the sheet's close control, which lands on the settings index — the
+// index that is already beside it at `lg`.
+const levelBackTo = computed(() => locationPath.value)
 const routeSegments = computed(() => {
   const raw = route.params.segments
   if (Array.isArray(raw)) return raw.map(String)
@@ -516,7 +518,9 @@ const detailTitles: Record<string, string> = {
   translations: 'Translations',
 }
 const hasDetail = computed(() => detailKey.value !== null)
-const navbarTitle = computed(() => detailKey.value ? detailTitles[detailKey.value] : location.value?.title || 'Location')
+// Names the level, not the open section: at `lg` the section's title is a
+// heading on its own pane with the index still beside it.
+const navbarTitle = computed(() => location.value?.title || 'Location')
 const saving = computed(() => detailsSaving.value || savingLocationFeatures.value)
 
 function editorSignature(key: string | null): string {

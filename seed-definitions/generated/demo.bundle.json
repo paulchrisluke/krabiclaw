@@ -12,7 +12,6 @@
     "theme": "saya",
     "brandDescription": "A Brooklyn wood-fired trattoria serving blistered pies, seasonal antipasti, and easy neighborhood hospitality.",
     "status": "active",
-    "plan": "free",
     "onboardingStatus": "active",
     "primaryLocationId": "loc-demo",
     "contactEmail": "hello@emberandslice.example",
@@ -819,10 +818,26 @@
           "slot": "gallery"
         }
       ],
-      "highlights": [
-        "Hands-on dough stretching and shaping with a live instructor",
-        "Personal pizza fired in a wood oven and served fresh from the peel",
-        "Small-group class designed for first-timers and returning guests"
+      "tags": [
+        "Hands-on",
+        "Beginner friendly"
+      ],
+      "details": [
+        {
+          "key": "format",
+          "label": "Format",
+          "values": [
+            "Small group class",
+            "Hands-on instruction"
+          ]
+        },
+        {
+          "key": "language",
+          "label": "Language",
+          "values": [
+            "English"
+          ]
+        }
       ],
       "includedItems": [
         "Dough, toppings, apron, and all class materials",
@@ -844,7 +859,6 @@
         "14:00",
         "18:00"
       ],
-      "availableNote": "Thursday to Sunday. Advance booking recommended.",
       "status": "active",
       "sortOrder": 1,
       "featured": true,
@@ -867,11 +881,8 @@
           "slot": "gallery"
         }
       ],
-      "highlights": [
-        "Curated natural wine pours paired with off-menu pizza and seasonal plates",
-        "Shared long-table seating that encourages conversation and a lively room",
-        "A rotating menu that changes with the week and the season"
-      ],
+      "tags": [],
+      "details": [],
       "includedItems": [
         "Guided wine tasting pours",
         "Shared dinner of off-menu pies and seasonal antipasti",
@@ -891,7 +902,6 @@
       "timeSlots": [
         "19:30"
       ],
-      "availableNote": "Fridays only. Shared table seating.",
       "status": "active",
       "sortOrder": 2,
       "featured": true,
@@ -914,11 +924,8 @@
           "slot": "gallery"
         }
       ],
-      "highlights": [
-        "Family-friendly pacing with kids welcome to join the pizza action",
-        "Large-format pizzas and salads shared at the table",
-        "Relaxed Sunday service designed for mixed-age groups"
-      ],
+      "tags": [],
+      "details": [],
       "includedItems": [
         "Mini pies for kids and large-format pizzas for the table",
         "Salads and shared sides",
@@ -939,7 +946,6 @@
         "17:00",
         "18:30"
       ],
-      "availableNote": "Sundays only. Best for groups of 4 to 6.",
       "status": "active",
       "sortOrder": 3,
       "featured": true,
@@ -1078,7 +1084,9 @@
       "allergens": "[\"Gluten\", \"Dairy\"]",
       "dietaryNotes": "[\"Vegetarian\"]",
       "available": true,
-      "sortOrder": 0
+      "sortOrder": 0,
+      "featured": false,
+      "featuredSortOrder": 0
     },
     {
       "id": "mi-2",
@@ -1099,7 +1107,9 @@
       "allergens": "[\"Gluten\", \"Dairy\"]",
       "dietaryNotes": null,
       "available": true,
-      "sortOrder": 1
+      "sortOrder": 1,
+      "featured": false,
+      "featuredSortOrder": 0
     },
     {
       "id": "mi-3",
@@ -1120,7 +1130,9 @@
       "allergens": "[\"Gluten\", \"Dairy\"]",
       "dietaryNotes": "[\"Vegetarian\"]",
       "available": true,
-      "sortOrder": 2
+      "sortOrder": 2,
+      "featured": false,
+      "featuredSortOrder": 0
     },
     {
       "id": "mi-4",
@@ -1136,7 +1148,9 @@
       "allergens": "[\"Gluten\", \"Dairy\"]",
       "dietaryNotes": null,
       "available": true,
-      "sortOrder": 3
+      "sortOrder": 3,
+      "featured": false,
+      "featuredSortOrder": 0
     },
     {
       "id": "mi-5",
@@ -1157,7 +1171,9 @@
       "allergens": "[\"Gluten\", \"Dairy\"]",
       "dietaryNotes": "[\"Vegetarian\"]",
       "available": true,
-      "sortOrder": 4
+      "sortOrder": 4,
+      "featured": false,
+      "featuredSortOrder": 0
     },
     {
       "id": "mi-6",
@@ -1178,7 +1194,9 @@
       "allergens": "[\"Gluten\", \"Dairy\"]",
       "dietaryNotes": "[\"Vegetarian\"]",
       "available": true,
-      "sortOrder": 5
+      "sortOrder": 5,
+      "featured": false,
+      "featuredSortOrder": 0
     },
     {
       "id": "mi-7",
@@ -1194,7 +1212,9 @@
       "allergens": "[\"Gluten\", \"Dairy\", \"Fish\"]",
       "dietaryNotes": null,
       "available": true,
-      "sortOrder": 6
+      "sortOrder": 6,
+      "featured": false,
+      "featuredSortOrder": 0
     },
     {
       "id": "mi-8",
@@ -1210,7 +1230,9 @@
       "allergens": "[\"Gluten\", \"Dairy\"]",
       "dietaryNotes": "[\"Vegetarian\"]",
       "available": true,
-      "sortOrder": 7
+      "sortOrder": 7,
+      "featured": false,
+      "featuredSortOrder": 0
     },
     {
       "id": "mi-9",
@@ -1226,7 +1248,9 @@
       "allergens": null,
       "dietaryNotes": "[\"Vegan\", \"Gluten-free\"]",
       "available": true,
-      "sortOrder": 8
+      "sortOrder": 8,
+      "featured": false,
+      "featuredSortOrder": 0
     },
     {
       "id": "mi-10",
@@ -1242,7 +1266,9 @@
       "allergens": null,
       "dietaryNotes": "[\"Vegan\", \"Gluten-free\"]",
       "available": true,
-      "sortOrder": 9
+      "sortOrder": 9,
+      "featured": false,
+      "featuredSortOrder": 0
     },
     {
       "id": "mi-demo2-1",
@@ -1267,7 +1293,9 @@
       "allergens": "[\"Gluten\", \"Dairy\"]",
       "dietaryNotes": "[\"Vegetarian\"]",
       "available": true,
-      "sortOrder": 0
+      "sortOrder": 0,
+      "featured": false,
+      "featuredSortOrder": 0
     },
     {
       "id": "mi-demo2-2",
@@ -1288,7 +1316,9 @@
       "allergens": "[\"Gluten\", \"Dairy\"]",
       "dietaryNotes": null,
       "available": true,
-      "sortOrder": 1
+      "sortOrder": 1,
+      "featured": false,
+      "featuredSortOrder": 0
     },
     {
       "id": "mi-demo2-3",
@@ -1309,7 +1339,9 @@
       "allergens": "[\"Gluten\", \"Dairy\"]",
       "dietaryNotes": "[\"Vegetarian\"]",
       "available": true,
-      "sortOrder": 2
+      "sortOrder": 2,
+      "featured": false,
+      "featuredSortOrder": 0
     },
     {
       "id": "mi-demo2-4",
@@ -1325,7 +1357,9 @@
       "allergens": null,
       "dietaryNotes": "[\"Vegan\", \"Gluten-free\"]",
       "available": true,
-      "sortOrder": 3
+      "sortOrder": 3,
+      "featured": false,
+      "featuredSortOrder": 0
     }
   ],
   "locationQa": [
@@ -1444,6 +1478,13 @@
       "postType": "update",
       "title": "Weekend lunch now starts at 11",
       "body": "The oven is lighting up earlier on Saturdays and Sundays. Come by for lunch pies, garlic knots, and spritzes from 11am.",
+      "ctaType": null,
+      "ctaUrl": null,
+      "eventTitle": null,
+      "eventStartAt": null,
+      "eventEndAt": null,
+      "offerCoupon": null,
+      "offerTerms": null,
       "media": [
         {
           "asset_id": "media-demo-post1",
@@ -1472,6 +1513,13 @@
       "postType": "standard",
       "title": null,
       "body": "Our Funghi Bianco is back with roasted mushrooms, ricotta crema, thyme, and a little pecorino snow at the pass.",
+      "ctaType": null,
+      "ctaUrl": null,
+      "eventTitle": null,
+      "eventStartAt": null,
+      "eventEndAt": null,
+      "offerCoupon": null,
+      "offerTerms": null,
       "media": [
         {
           "asset_id": "media-demo-post2",
@@ -1500,6 +1548,13 @@
       "postType": "offer",
       "title": "Margherita Monday",
       "body": "Every Monday in May: Margherita pies are $14 from open to close. Dine-in only, one per guest.",
+      "ctaType": "order",
+      "ctaUrl": "/locations/brooklyn",
+      "eventTitle": null,
+      "eventStartAt": null,
+      "eventEndAt": null,
+      "offerCoupon": "MONDAY14",
+      "offerTerms": "Dine-in Mondays in May; limit one Margherita pizza per guest.",
       "media": [
         {
           "asset_id": "media-demo-post3",
@@ -1517,6 +1572,36 @@
           "channel": "site",
           "status": "published",
           "publishedAt": "2026-04-10T09:00:00.000Z"
+        }
+      ]
+    },
+    {
+      "id": "post-demo-4",
+      "organizationId": "org-demo",
+      "siteId": "site-demo",
+      "locationId": "loc-demo",
+      "postType": "event",
+      "title": "Harvest Table Supper",
+      "body": "Join us for a one-night family-style supper built around late-summer produce and the wood-fired oven.",
+      "ctaType": "book",
+      "ctaUrl": "/reservations",
+      "eventTitle": "Harvest Table Supper",
+      "eventStartAt": "2026-10-10T23:00:00.000Z",
+      "eventEndAt": "2026-10-11T02:00:00.000Z",
+      "offerCoupon": null,
+      "offerTerms": null,
+      "media": [],
+      "status": "published",
+      "publishedAt": "2026-09-01T09:00:00.000Z",
+      "createdBy": "user-demo",
+      "channelJobs": [
+        {
+          "id": "pcj-demo-4",
+          "postId": "post-demo-4",
+          "organizationId": "org-demo",
+          "channel": "site",
+          "status": "published",
+          "publishedAt": "2026-09-01T09:00:00.000Z"
         }
       ]
     }

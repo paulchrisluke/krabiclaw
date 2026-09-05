@@ -21,10 +21,6 @@
             </div>
           </div>
         </UCard>
-        <div v-for="page in ['about', 'contact', 'help']" :key="page" class="flex items-center justify-between rounded-xl border border-default px-5 py-4">
-          <span class="font-medium text-default capitalize">{{ page }}</span>
-          <UButton size="sm" variant="outline" :to="`/admin/content/${page}`">Edit</UButton>
-        </div>
       </div>
     </template>
   </UDashboardPanel>

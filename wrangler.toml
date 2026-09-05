@@ -52,9 +52,6 @@ GA4_MEASUREMENT_ID = "G-NJ1BSP9BYG"
 # that default now fails closed (log_only) precisely so a missing var elsewhere never sends real messages.
 EMAIL_DELIVERY_MODE = "provider"
 WHATSAPP_DELIVERY_MODE = "provider"
-DISCORD_DELIVERY_MODE = "provider"
-# DISCORD_WEBHOOK_URL is a secret, never a plaintext var:
-#   yarn wrangler secret put DISCORD_WEBHOOK_URL
 # Internal cron/API endpoints use CRON_SECRET:
 #   yarn wrangler secret put CRON_SECRET
 # GA4_API_SECRET (Measurement Protocol) is a secret, not a var:
@@ -70,14 +67,11 @@ DISCORD_DELIVERY_MODE = "provider"
 # EMAIL_REPLY_SECRET signs reply+<type>-<id>-<token>@reply.<platform-domain> addresses
 # (server/utils/submission-messages.ts) so a customer's inbound reply can be matched back to the
 # right reservation/contact/experience-booking thread without a DB lookup by address alone.
-# EMAIL_INBOUND_SECRET authenticates the separate krabiclaw-email-inbound Worker
-# (workers/email-inbound/) calling POST /api/email/inbound. Both must stay stable across
-# deploys — rotating them invalidates reply-to addresses already sent out in guest emails.
-# staging syncs from the fixed EMAIL_REPLY_SECRET_STAGING / EMAIL_INBOUND_SECRET_STAGING repo
-# secrets on every run (see .github/workflows/ci.yml); production is set once manually and not
+# It must stay stable across deploys because rotating it invalidates reply-to addresses already
+# sent out in guest emails. Staging syncs it from the fixed EMAIL_REPLY_SECRET_STAGING repo
+# secret on every run (see .github/workflows/ci.yml); production is set once manually and not
 # touched by CI:
 #   yarn wrangler secret put EMAIL_REPLY_SECRET
-#   yarn wrangler secret put EMAIL_INBOUND_SECRET
 # PLATFORM_SEARCH_REINDEX_SECRET protects POST /api/internal/search/reindex and is required for
 # yarn ai-search:sync. Production CI syncs it from the PLATFORM_SEARCH_REINDEX_SECRET repo
 # secret and rebuilds the production index. Preview and staging deploys do not rebuild search
@@ -86,14 +80,10 @@ DISCORD_DELIVERY_MODE = "provider"
 
 [[d1_databases]]
 binding = "DB"
-database_name = "krabiclaw-db-epoch3"
-database_id = "4a02e2ec-6fb0-4bed-96ab-925ec1e508df"
+database_name = "krabiclaw-db-epoch4"
+database_id = "73d8e172-b7a0-45b3-b200-ae052de52e57"
 migrations_dir = "migrations"
 remote = false
-
-[[durable_objects.bindings]]
-name = "GUEST_THREAD_COMMANDS"
-class_name = "GuestThreadCommandObject"
 
 [[durable_objects.bindings]]
 name = "GUEST_INBOX_HUBS"
@@ -103,14 +93,9 @@ class_name = "GuestInboxHubObject"
 tag = "v1_guest_inbox_infra"
 new_sqlite_classes = ["GuestThreadCommandObject", "GuestInboxHubObject"]
 
-[[queues.producers]]
-binding = "GUEST_DELIVERY_QUEUE"
-queue = "krabiclaw-guest-delivery"
-
-[[queues.consumers]]
-queue = "krabiclaw-guest-delivery"
-dead_letter_queue = "krabiclaw-guest-delivery-dlq"
-max_retries = 5
+[[migrations]]
+tag = "v2_delete_guest_thread_command"
+deleted_classes = ["GuestThreadCommandObject"]
 
 [[r2_buckets]]
 binding = "MEDIA_BUCKET"
@@ -176,7 +161,6 @@ AI_SEARCH_INSTANCE_ID = "krabiclaw-platform-knowledge-preview"
 GA4_MEASUREMENT_ID = ""
 EMAIL_DELIVERY_MODE = "log_only"
 WHATSAPP_DELIVERY_MODE = "log_only"
-DISCORD_DELIVERY_MODE = "log_only"
 E2E_ALLOW_DEV_ROUTES = "true"
 # E2E_DEV_ROUTE_SECRET is pushed via `wrangler secret put` in ci.yml, not a plaintext var here.
 
@@ -188,10 +172,6 @@ migrations_dir = "migrations"
 remote = false
 
 [[env.preview.durable_objects.bindings]]
-name = "GUEST_THREAD_COMMANDS"
-class_name = "GuestThreadCommandObject"
-
-[[env.preview.durable_objects.bindings]]
 name = "GUEST_INBOX_HUBS"
 class_name = "GuestInboxHubObject"
 
@@ -199,14 +179,9 @@ class_name = "GuestInboxHubObject"
 tag = "v1_guest_inbox_infra"
 new_sqlite_classes = ["GuestThreadCommandObject", "GuestInboxHubObject"]
 
-[[env.preview.queues.producers]]
-binding = "GUEST_DELIVERY_QUEUE"
-queue = "krabiclaw-guest-delivery-preview"
-
-[[env.preview.queues.consumers]]
-queue = "krabiclaw-guest-delivery-preview"
-dead_letter_queue = "krabiclaw-guest-delivery-preview-dlq"
-max_retries = 5
+[[env.preview.migrations]]
+tag = "v2_delete_guest_thread_command"
+deleted_classes = ["GuestThreadCommandObject"]
 
 [[env.preview.r2_buckets]]
 binding = "MEDIA_BUCKET"
@@ -228,7 +203,18 @@ namespace = "default"
 remote = true
 
 [env.preview.observability]
-enabled = false
+enabled = true
+
+[env.preview.observability.logs]
+enabled = true
+head_sampling_rate = 1
+invocation_logs = true
+persist = true
+
+[env.preview.observability.traces]
+enabled = true
+head_sampling_rate = 1
+persist = true
 
 # Stable staging environment — uses dedicated non-production data/resources.
 # Tenant aliases stay at the first subdomain level (for example,
@@ -260,20 +246,15 @@ AI_SEARCH_INSTANCE_ID = "krabiclaw-platform-knowledge-staging"
 GA4_MEASUREMENT_ID = ""
 EMAIL_DELIVERY_MODE = "log_only"
 WHATSAPP_DELIVERY_MODE = "log_only"
-DISCORD_DELIVERY_MODE = "log_only"
 E2E_ALLOW_DEV_ROUTES = "true"
 # E2E_DEV_ROUTE_SECRET is pushed via `wrangler secret put` in ci.yml, not a plaintext var here.
 
 [[env.staging.d1_databases]]
 binding = "DB"
-database_name = "krabiclaw-db-staging-epoch3"
-database_id = "61af16e5-0873-49b9-90ce-aea2ff1991e4"
+database_name = "krabiclaw-db-staging-epoch4-final"
+database_id = "ec6c7ee3-a75f-4445-b445-1addfe78482f"
 migrations_dir = "migrations"
 remote = false
-
-[[env.staging.durable_objects.bindings]]
-name = "GUEST_THREAD_COMMANDS"
-class_name = "GuestThreadCommandObject"
 
 [[env.staging.durable_objects.bindings]]
 name = "GUEST_INBOX_HUBS"
@@ -283,14 +264,9 @@ class_name = "GuestInboxHubObject"
 tag = "v1_guest_inbox_infra"
 new_sqlite_classes = ["GuestThreadCommandObject", "GuestInboxHubObject"]
 
-[[env.staging.queues.producers]]
-binding = "GUEST_DELIVERY_QUEUE"
-queue = "krabiclaw-guest-delivery-staging"
-
-[[env.staging.queues.consumers]]
-queue = "krabiclaw-guest-delivery-staging"
-dead_letter_queue = "krabiclaw-guest-delivery-staging-dlq"
-max_retries = 5
+[[env.staging.migrations]]
+tag = "v2_delete_guest_thread_command"
+deleted_classes = ["GuestThreadCommandObject"]
 
 [[env.staging.r2_buckets]]
 binding = "MEDIA_BUCKET"

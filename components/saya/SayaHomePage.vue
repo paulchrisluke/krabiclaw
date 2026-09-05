@@ -560,6 +560,8 @@ const featuredProductCards = computed(() => {
     if (!locationSlug) throw new Error(`Product location is missing: ${item.location_id}`)
     return {
       name: item.name,
+      category: item.category.name,
+      description: item.description,
       price: formatProductPriceLabel(item),
       compareAtPrice: item.price?.compare_at_amount_minor
         ? formatProductMoney({ ...item.price, amount_minor: item.price.compare_at_amount_minor, compare_at_amount_minor: null })

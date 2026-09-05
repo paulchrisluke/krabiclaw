@@ -302,10 +302,6 @@ export default defineNuxtConfig({
       pathPrefix: false,
     },
     {
-      path: '~/components/menu',
-      pathPrefix: false,
-    },
-    {
       path: '~/components/billing',
       prefix: 'Billing',
       pathPrefix: false,

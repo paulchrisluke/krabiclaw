@@ -5,6 +5,7 @@ export const LOCALIZED_RESOURCE_TYPES = [
   'site',
   'business_location',
   'product',
+  'product_category',
   'experience',
   'offering',
   'site_post',
@@ -58,7 +59,6 @@ export const RESOURCE_LOCALIZATION_REGISTRY: Readonly<Record<LocalizedResourceTy
   product: {
     table: 'products',
     fields: {
-      category: 'text',
       name: 'text',
       description: 'text',
       tags_json: 'string_array',
@@ -68,6 +68,15 @@ export const RESOURCE_LOCALIZATION_REGISTRY: Readonly<Record<LocalizedResourceTy
     },
     route: 'product',
   },
+  // The category name lives on the category row, so it is translated once per
+  // category instead of once per Product that happens to sit in it.
+  product_category: {
+    table: 'product_categories',
+    fields: {
+      name: 'text',
+    },
+    route: 'none',
+  },
   experience: {
     table: 'experiences',
     fields: {
@@ -75,8 +84,6 @@ export const RESOURCE_LOCALIZATION_REGISTRY: Readonly<Record<LocalizedResourceTy
       tagline: 'text',
       body: 'text',
       pricing_note: 'text',
-      available_note: 'text',
-      highlights_json: 'string_array',
       included_items_json: 'string_array',
       what_to_bring: 'string_array',
       meeting_point: 'text',
@@ -130,8 +137,8 @@ export const RESOURCE_LOCALIZATION_REGISTRY: Readonly<Record<LocalizedResourceTy
   },
   location_qa: { table: 'location_qa', fields: { question: 'text', answer: 'text' }, route: 'none' },
   media_asset: { table: 'media_assets', fields: { alt_text: 'text' }, route: 'none' },
-  booking_policy: { table: 'booking_policies', fields: { weather_policy: 'text', additional_notes_html: 'text' }, route: 'none' },
-  site_link_page: { table: 'site_link_pages', fields: { title: 'text', seo_title: 'text', seo_description: 'text' }, route: 'site_link_page' },
+    booking_policy: { table: 'booking_policies', fields: { additional_notes_html: 'text' }, route: 'none' },
+    site_link_page: { table: 'site_link_pages', fields: { title: 'text', seo_title: 'text', seo_description: 'text' }, route: 'site_link_page' },
   site_link_item: { table: 'site_link_items', fields: { label: 'text' }, route: 'none' },
   tenant_compliance: { table: 'tenant_compliance', fields: { service_area: 'text', disclaimer: 'text', footer_disclaimer: 'text' }, route: 'none' },
   site_consultation_settings: { table: 'site_consultation_settings', fields: { cta_label: 'text' }, route: 'none' },
