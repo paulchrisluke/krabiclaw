@@ -225,6 +225,12 @@ test('Today uses the CMS patterns and sends one reservation change request', asy
   await expect(page.getByRole('tab', { name: 'Upcoming', exact: true })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Filter bookings', exact: true })).toBeVisible()
 
+  // Cloudflare injects its own preview toolbar outside the application bundle.
+  // Its empty modal container otherwise covers the page during preview-only CI.
+  const cloudflarePreviewModal = page.locator('.cf_modal_container')
+  if (await cloudflarePreviewModal.count()) {
+    await cloudflarePreviewModal.evaluate(element => element.remove())
+  }
   await page.getByRole('link', { name: /Maya arrives today/i }).click()
   await expect(page.getByRole('heading', { name: 'Currently hosting', exact: true })).toBeVisible()
   await expect(page.getByText('Maya Chen', { exact: true }).first()).toBeVisible()
