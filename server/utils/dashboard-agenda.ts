@@ -220,16 +220,26 @@ export async function listAgenda(
     SELECT ${alias}.id, '${kind}' AS kind, ${fields}, ${alias}.site_id,
            COALESCE(s.subdomain, s.id) AS site_slug, ${alias}.location_id,
            l.slug AS location_slug, l.title AS location_title,
-           COALESCE(l.timezone, primary_location.timezone) AS timezone, gt.id AS thread_id
+           COALESCE(l.timezone, primary_location.timezone) AS timezone,
+           ${kind === 'thread' ? `${alias}.id` : 'gt.id'} AS thread_id
     FROM ${kind === 'reservation' ? 'reservation_submissions' : kind === 'experience_booking' ? 'experience_bookings' : kind === 'post' ? 'posts' : 'guest_threads'} ${alias}
     JOIN sites s ON s.id = ${alias}.site_id AND s.organization_id = ${alias}.organization_id
     LEFT JOIN business_locations l ON l.id = ${alias}.location_id AND l.site_id = ${alias}.site_id
     LEFT JOIN business_locations primary_location ON primary_location.id = s.primary_location_id AND primary_location.site_id = s.id
     ${kind === 'thread' ? '' : `LEFT JOIN guest_threads gt ON gt.submission_type = '${kind}' AND gt.submission_id = ${alias}.id`}
-    ${kind === 'thread' ? 'LEFT JOIN guest_threads gt ON gt.id = ' + alias + '.id' : ''}
+    ${kind === 'thread' ? `
+      LEFT JOIN reservation_submissions thread_reservation ON ${alias}.submission_type = 'reservation' AND thread_reservation.id = ${alias}.submission_id
+      LEFT JOIN experience_bookings thread_booking ON ${alias}.submission_type = 'experience_booking' AND thread_booking.id = ${alias}.submission_id
+      LEFT JOIN contact_submissions thread_contact ON ${alias}.submission_type = 'contact' AND thread_contact.id = ${alias}.submission_id
+    ` : ''}
     WHERE ${alias}.organization_id = ? ${scopeConditions(query, alias)}
   `
   const params = () => scopeParams(organizationId, query)
+  const threadActivity = `COALESCE((
+    SELECT MAX(entry.occurred_at)
+    FROM guest_thread_entries entry
+    WHERE entry.thread_id = t.id
+  ), t.created_at)`
 
   if (requestedKinds.has('reservation')) sourceQueries.push(queryAll(db, `${commonSelect('r', 'reservation', `r.date AS local_date, r.time AS local_time, NULL AS starts_at, NULL AS ends_at,
     r.name AS title, printf('%s guests', r.guests) AS subtitle, r.status`)} AND r.date BETWEEN ? AND ?`, [...params(), query.from, query.to]))
@@ -238,11 +248,11 @@ export async function listAgenda(
   if (requestedKinds.has('post')) sourceQueries.push(queryAll(db, `${commonSelect('p', 'post', `NULL AS local_date, NULL AS local_time, CASE WHEN p.status = 'published' AND p.published_at IS NOT NULL THEN p.published_at ELSE COALESCE(p.scheduled_for, p.published_at, p.event_start) END AS starts_at, p.event_end AS ends_at,
     NULLIF(COALESCE(NULLIF(p.title, ''), NULLIF(p.event_title, '')), '') AS title, p.post_type AS subtitle, p.status`)}
     AND CASE WHEN p.status = 'published' AND p.published_at IS NOT NULL THEN p.published_at ELSE COALESCE(p.scheduled_for, p.published_at, p.event_start) END BETWEEN ? AND ?`, [...params(), broadFrom, broadTo]))
-  if (requestedKinds.has('thread')) sourceQueries.push(queryAll(db, `${commonSelect('t', 'thread', `NULL AS local_date, NULL AS local_time, COALESCE(t.last_inbound_at, t.last_message_at, t.created_at) AS starts_at, NULL AS ends_at,
-    t.guest_name AS title, t.submission_type AS subtitle, t.conversation_state AS status`)}
-    AND COALESCE(t.last_inbound_at, t.last_message_at, t.created_at) BETWEEN ? AND ?
+  if (requestedKinds.has('thread')) sourceQueries.push(queryAll(db, `${commonSelect('t', 'thread', `NULL AS local_date, NULL AS local_time, ${threadActivity} AS starts_at, NULL AS ends_at,
+    COALESCE(thread_reservation.name, thread_booking.guest_name, thread_contact.name) AS title, t.submission_type AS subtitle, t.conversation_state AS status`)}
+    AND ${threadActivity} BETWEEN ? AND ?
     ${query.threadState ? 'AND t.conversation_state = ?' : ''}
-    ORDER BY COALESCE(t.last_inbound_at, t.last_message_at, t.created_at) DESC
+    ORDER BY ${threadActivity} DESC
     ${query.limit ? 'LIMIT ?' : ''}`, [
       ...params(), broadFrom, broadTo,
       ...(query.threadState ? [query.threadState] : []),

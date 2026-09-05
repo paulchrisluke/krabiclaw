@@ -127,6 +127,7 @@
 </template>
 
 <script setup lang="ts">
+import DashboardAvailabilityCalendar from '~/components/dashboard/AvailabilityCalendar.vue'
 import { getErrorMessage } from '~/utils/errors'
 import type { AgendaItem, AgendaKind, AgendaLocation, AgendaPayload, AgendaSite } from '~/server/utils/dashboard-agenda'
 

@@ -24,21 +24,6 @@ export interface ReservationSource {
   location_title: string | null
 }
 
-export interface ReservationOpeningSnapshot {
-  schemaVersion: 1
-  submissionType: 'reservation'
-  submissionId: string
-  guestName: string
-  guestEmail: string
-  guestPhone: string | null
-  locationTitle: string | null
-  date: string
-  time: string
-  guests: string
-  requests: string | null
-  submittedAt: string
-}
-
 export type ReservationAction = 'confirm' | 'cancel' | 'complete'
 
 const RESERVATION_TRANSITIONS: Record<string, ReservationAction[]> = {
@@ -52,7 +37,7 @@ function normalizePreview(text: string | null | undefined, maxLength = 160): str
   return String(text ?? '').replace(/\s+/g, ' ').trim().slice(0, maxLength)
 }
 
-export const reservationAdapter: GuestThreadSourceAdapter<ReservationSource, ReservationOpeningSnapshot, ReservationAction> = {
+export const reservationAdapter: GuestThreadSourceAdapter<ReservationSource, ReservationAction> = {
   type: 'reservation',
 
   async loadSource(ctx: AdapterLoadContext, submissionId: string): Promise<ReservationSource | null> {
@@ -77,23 +62,6 @@ export const reservationAdapter: GuestThreadSourceAdapter<ReservationSource, Res
       WHERE rs.id = ?
       LIMIT 1
     `, [submissionId])
-  },
-
-  createOpeningSnapshot(source: ReservationSource): ReservationOpeningSnapshot {
-    return {
-      schemaVersion: 1,
-      submissionType: 'reservation',
-      submissionId: source.id,
-      guestName: source.name,
-      guestEmail: source.email,
-      guestPhone: source.phone,
-      locationTitle: source.location_title,
-      date: source.date,
-      time: source.time,
-      guests: source.guests,
-      requests: source.requests,
-      submittedAt: source.created_at,
-    }
   },
 
   summarize(source: ReservationSource): ThreadSummaryProjection {

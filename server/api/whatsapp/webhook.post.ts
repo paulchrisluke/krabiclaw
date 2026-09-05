@@ -139,10 +139,14 @@ async function resolveQuotedDelivery(
     location_id: string | null
     guest_email: string | null
   }>(db, `
-    SELECT gt.id AS thread_id, gt.organization_id, gt.site_id, gt.location_id, gt.guest_email
+    SELECT gt.id AS thread_id, gt.organization_id, gt.site_id, gt.location_id,
+           COALESCE(rs.email, eb.guest_email, cs.email) AS guest_email
     FROM guest_thread_deliveries d
     JOIN guest_thread_entries e ON e.id = d.entry_id
     JOIN guest_threads gt ON gt.id = e.thread_id
+    LEFT JOIN reservation_submissions rs ON gt.submission_type = 'reservation' AND rs.id = gt.submission_id
+    LEFT JOIN experience_bookings eb ON gt.submission_type = 'experience_booking' AND eb.id = gt.submission_id
+    LEFT JOIN contact_submissions cs ON gt.submission_type = 'contact' AND cs.id = gt.submission_id
     WHERE d.provider = 'meta' AND d.provider_message_id = ?
     LIMIT 1
   `, [providerMessageId])
@@ -166,10 +170,15 @@ async function listRecentGuestDeliveryCandidates(db: D1Database, env: ApiRecord,
     guestName: string
     submissionType: string
   }>(db, `
-    SELECT gt.id AS threadId, gt.organization_id AS organizationId, gt.site_id AS siteId, gt.location_id AS locationId, gt.guest_name AS guestName, gt.submission_type AS submissionType, MAX(d.created_at) AS createdAt
+    SELECT gt.id AS threadId, gt.organization_id AS organizationId, gt.site_id AS siteId,
+           gt.location_id AS locationId, COALESCE(rs.name, eb.guest_name, cs.name) AS guestName,
+           gt.submission_type AS submissionType, MAX(d.created_at) AS createdAt
     FROM guest_thread_deliveries d
     JOIN guest_thread_entries e ON e.id = d.entry_id
     JOIN guest_threads gt ON gt.id = e.thread_id
+    LEFT JOIN reservation_submissions rs ON gt.submission_type = 'reservation' AND rs.id = gt.submission_id
+    LEFT JOIN experience_bookings eb ON gt.submission_type = 'experience_booking' AND eb.id = gt.submission_id
+    LEFT JOIN contact_submissions cs ON gt.submission_type = 'contact' AND cs.id = gt.submission_id
     WHERE d.channel = 'whatsapp' AND d.created_at > ?
     GROUP BY gt.id
     ORDER BY createdAt DESC

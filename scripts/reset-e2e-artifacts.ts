@@ -247,24 +247,14 @@ WHERE site_id IN (${eligibleE2eFixtureSiteIds});
 DELETE FROM sites
 WHERE id IN (${eligibleE2eFixtureSiteIds});
 
--- Each branch is LIMIT-bounded too, as its own derived table - SQLite rejects a bare
--- parenthesized SELECT as a compound-query operand inside IN(...) ("near UNION: syntax error"),
--- so each branch is wrapped as SELECT id FROM (SELECT ... LIMIT n) instead. Defensive: category 2
--- is already site/org-scoped down to 2 fixtures, so its result sets should be small regardless,
--- but every fix so far in this script underestimated backlog scale.
-DELETE FROM guest_thread_deliveries WHERE entry_id IN (
-  SELECT id FROM guest_thread_entries WHERE thread_id IN (
-    SELECT id FROM guest_threads WHERE site_id IN (${guestBookingSiteIdList}) AND guest_email LIKE '%@playwright.example' AND created_at < '${cutoff}' LIMIT ${batchSize}
-  )
-);
-
-DELETE FROM guest_thread_entries WHERE thread_id IN (
-  SELECT id FROM guest_threads WHERE site_id IN (${guestBookingSiteIdList}) AND guest_email LIKE '%@playwright.example' AND created_at < '${cutoff}' LIMIT ${batchSize}
-);
-
-DELETE FROM guest_threads WHERE id IN (
-  SELECT id FROM guest_threads WHERE site_id IN (${guestBookingSiteIdList}) AND guest_email LIKE '%@playwright.example' AND created_at < '${cutoff}' LIMIT ${batchSize}
-);
+DELETE FROM guest_threads
+WHERE (submission_type = 'contact' AND submission_id IN (
+  SELECT id FROM contact_submissions WHERE site_id IN (${guestBookingSiteIdList}) AND email LIKE '%@playwright.example' AND created_at < '${cutoff}' LIMIT ${batchSize}
+)) OR (submission_type = 'reservation' AND submission_id IN (
+  SELECT id FROM reservation_submissions WHERE site_id IN (${guestBookingSiteIdList}) AND email LIKE '%@playwright.example' AND created_at < '${cutoff}' LIMIT ${batchSize}
+)) OR (submission_type = 'experience_booking' AND submission_id IN (
+  SELECT id FROM experience_bookings WHERE site_id IN (${guestBookingSiteIdList}) AND guest_email LIKE '%@playwright.example' AND created_at < '${cutoff}' LIMIT ${batchSize}
+));
 
 DELETE FROM contact_submissions WHERE id IN (
   SELECT id FROM contact_submissions WHERE site_id IN (${guestBookingSiteIdList}) AND email LIKE '%@playwright.example' AND created_at < '${cutoff}' LIMIT ${batchSize}

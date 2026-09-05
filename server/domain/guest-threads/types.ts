@@ -31,9 +31,6 @@ export interface GuestThreadRow {
   location_id: string | null
   submission_type: GuestThreadSubmissionType
   submission_id: string
-  guest_name: string
-  guest_email: string | null
-  guest_phone: string | null
   conversation_state: ConversationState
   resolved_at: string | null
   created_at: string
@@ -94,10 +91,9 @@ export interface ThreadDetailSourceModel {
   fields: Record<string, unknown>
 }
 
-export interface GuestThreadSourceAdapter<TSource, TSnapshot, TAction extends string> {
+export interface GuestThreadSourceAdapter<TSource, TAction extends string> {
   type: GuestThreadSubmissionType
   loadSource(_ctx: AdapterLoadContext, _submissionId: string): Promise<TSource | null>
-  createOpeningSnapshot(_source: TSource): TSnapshot
   summarize(_source: TSource): ThreadSummaryProjection
   getOperationalStatus(_source: TSource): string
   getOperationalStatusLabel(_status: string): string
@@ -105,7 +101,7 @@ export interface GuestThreadSourceAdapter<TSource, TSnapshot, TAction extends st
   buildCurrentDetail(_source: TSource): ThreadDetailSourceModel
 }
 
-export type AnyGuestThreadSourceAdapter = GuestThreadSourceAdapter<unknown, unknown, string>
+export type AnyGuestThreadSourceAdapter = GuestThreadSourceAdapter<unknown, string>
 
 export interface GuestThreadListItemViewModel {
   id: string

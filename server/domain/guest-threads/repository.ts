@@ -17,6 +17,15 @@ import type {
 import { formatOperationalStatusLabel } from './status-labels'
 import { publishGuestInboxThreadEvent, type GuestInboxPublicationEnv } from '~/server/cloudflare/guest-inbox-events'
 
+const SOURCE_GUEST_NAME_SQL = 'COALESCE(rs.name, eb.guest_name, cs.name)'
+const SOURCE_GUEST_EMAIL_SQL = 'COALESCE(rs.email, eb.guest_email, cs.email)'
+const SOURCE_GUEST_PHONE_SQL = 'COALESCE(rs.phone, eb.guest_phone)'
+const SOURCE_PREVIEW_SQL = `CASE gt.submission_type
+  WHEN 'contact' THEN SUBSTR(TRIM(cs.message), 1, 160)
+  WHEN 'reservation' THEN SUBSTR(COALESCE(NULLIF(TRIM(rs.requests), ''), rs.date || ' ' || rs.time || ' · ' || rs.guests || ' guests'), 1, 160)
+  WHEN 'experience_booking' THEN SUBSTR(COALESCE(NULLIF(TRIM(eb.notes), ''), eb.booking_date || ' ' || eb.time_slot || ' · ' || eb.party_size || ' guests'), 1, 160)
+END`
+
 export async function getGuestThreadBySubmission(
   db: DbClient,
   submissionType: GuestThreadSubmissionType,
@@ -44,7 +53,7 @@ export async function getGuestThreadById(
 
 /**
  * Idempotently creates the thread aggregate for a submission, atomically persisting the
- * immutable opening `submission` ledger entry alongside it in a single D1 batch (issue
+ * immutable opening `submission` marker alongside it in a single D1 batch (issue
  * #442 Locked Decision #3 — the opening submission must never exist without its entry,
  * or vice versa). Safe to call repeatedly; returns the existing thread on subsequent
  * calls without re-appending the opening entry.
@@ -78,16 +87,15 @@ export async function ensureGuestThread(
   const threadId = crypto.randomUUID()
   const entryId = crypto.randomUUID()
   const now = new Date().toISOString()
-  const openingSnapshot = adapter.createOpeningSnapshot(source)
 
   try {
     await executeBatch(db, [
       {
         query: `
           INSERT INTO guest_threads
-            (id, organization_id, site_id, location_id, submission_type, submission_id, guest_name, guest_email, guest_phone,
+            (id, organization_id, site_id, location_id, submission_type, submission_id,
              conversation_state, created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'needs_attention', ?, ?)
+          VALUES (?, ?, ?, ?, ?, ?, 'needs_attention', ?, ?)
         `,
         params: [
           threadId,
@@ -96,9 +104,6 @@ export async function ensureGuestThread(
           summary.locationId,
           adapter.type,
           submissionId,
-          summary.guestName,
-          summary.guestEmail,
-          summary.guestPhone,
           summary.createdAt,
           now,
         ],
@@ -106,15 +111,13 @@ export async function ensureGuestThread(
       {
         query: `
           INSERT INTO guest_thread_entries
-            (id, thread_id, kind, actor_kind, channel, body, event_name, payload_json, dedupe_key, sequence, occurred_at, created_at)
-          VALUES (?, ?, 'submission', 'guest', 'system', ?, ?, ?, ?, 1, ?, ?)
+            (id, thread_id, kind, actor_kind, channel, event_name, dedupe_key, sequence, occurred_at, created_at)
+          VALUES (?, ?, 'submission', 'guest', 'system', ?, ?, 1, ?, ?)
         `,
         params: [
           entryId,
           threadId,
-          summary.contextLabel,
           `${adapter.type}_submitted`,
-          JSON.stringify(openingSnapshot),
           `submission:${adapter.type}:${submissionId}`,
           summary.createdAt,
           now,
@@ -240,12 +243,13 @@ async function countUnreadThreadIds(
 }
 
 interface GuestThreadListRow extends GuestThreadRow {
+  guest_name: string
   location_title: string | null
   site_name?: string | null
   site_slug?: string | null
   latest_message_body: string | null
   latest_message_kind: 'message' | null
-  opening_body: string | null
+  source_preview: string | null
   operational_status: string | null
 }
 
@@ -284,7 +288,7 @@ export async function listGuestThreads(
   }
   if (opts.search?.trim()) {
     const like = `%${opts.search.trim().toLowerCase()}%`
-    where += ' AND (LOWER(gt.guest_name) LIKE ? OR LOWER(COALESCE(gt.guest_email, \'\')) LIKE ? OR LOWER(COALESCE(gt.guest_phone, \'\')) LIKE ?)'
+    where += ` AND (LOWER(${SOURCE_GUEST_NAME_SQL}) LIKE ? OR LOWER(COALESCE(${SOURCE_GUEST_EMAIL_SQL}, '')) LIKE ? OR LOWER(COALESCE(${SOURCE_GUEST_PHONE_SQL}, '')) LIKE ?)`
     params.push(like, like, like)
   }
 
@@ -306,6 +310,7 @@ export async function listGuestThreads(
   const rows = await queryAll<GuestThreadListRow>(db, `
     SELECT
       gt.*,
+      ${SOURCE_GUEST_NAME_SQL} AS guest_name,
       bl.title AS location_title,
       (
         SELECT body FROM guest_thread_entries
@@ -317,11 +322,7 @@ export async function listGuestThreads(
         WHERE thread_id = gt.id AND kind = 'message'
         ORDER BY sequence DESC LIMIT 1
       ) AS latest_message_kind,
-      (
-        SELECT body FROM guest_thread_entries
-        WHERE thread_id = gt.id AND kind = 'submission'
-        ORDER BY sequence ASC LIMIT 1
-      ) AS opening_body,
+      ${SOURCE_PREVIEW_SQL} AS source_preview,
       CASE gt.submission_type
         WHEN 'reservation' THEN rs.status
         WHEN 'experience_booking' THEN eb.status
@@ -348,7 +349,7 @@ export async function listGuestThreads(
       id: row.id,
       guestName: row.guest_name,
       submissionType: row.submission_type,
-      contextLabel: row.opening_body ?? '',
+      contextLabel: row.source_preview ?? '',
       locationLabel: row.location_title,
       conversationState: row.conversation_state,
       conversationStateLabel: CONVERSATION_STATE_LABELS[row.conversation_state],
@@ -358,7 +359,7 @@ export async function listGuestThreads(
       unreadCount: unread ? 1 : 0,
       preview: row.latest_message_kind === 'message'
         ? { kind: 'message', text: row.latest_message_body ?? '' }
-        : (row.opening_body ? { kind: 'submission', text: row.opening_body } : null),
+        : (row.source_preview ? { kind: 'submission', text: row.source_preview } : null),
       lastActivityAt: row.updated_at,
       needsAttention: row.conversation_state === 'needs_attention',
     })
@@ -408,7 +409,7 @@ export async function listOrganizationGuestThreads(
   }
   if (opts.search?.trim()) {
     const like = `%${opts.search.trim().toLowerCase()}%`
-    where += ' AND (LOWER(gt.guest_name) LIKE ? OR LOWER(COALESCE(gt.guest_email, \'\')) LIKE ? OR LOWER(COALESCE(gt.guest_phone, \'\')) LIKE ?)'
+    where += ` AND (LOWER(${SOURCE_GUEST_NAME_SQL}) LIKE ? OR LOWER(COALESCE(${SOURCE_GUEST_EMAIL_SQL}, '')) LIKE ? OR LOWER(COALESCE(${SOURCE_GUEST_PHONE_SQL}, '')) LIKE ?)`
     params.push(like, like, like)
   }
 
@@ -430,6 +431,7 @@ export async function listOrganizationGuestThreads(
   const rows = await queryAll<GuestThreadListRow>(db, `
     SELECT
       gt.*,
+      ${SOURCE_GUEST_NAME_SQL} AS guest_name,
       bl.title AS location_title,
       s.brand_name AS site_name,
       s.subdomain AS site_slug,
@@ -443,11 +445,7 @@ export async function listOrganizationGuestThreads(
         WHERE thread_id = gt.id AND kind = 'message'
         ORDER BY sequence DESC LIMIT 1
       ) AS latest_message_kind,
-      (
-        SELECT body FROM guest_thread_entries
-        WHERE thread_id = gt.id AND kind = 'submission'
-        ORDER BY sequence ASC LIMIT 1
-      ) AS opening_body,
+      ${SOURCE_PREVIEW_SQL} AS source_preview,
       CASE gt.submission_type
         WHEN 'reservation' THEN rs.status
         WHEN 'experience_booking' THEN eb.status
@@ -492,7 +490,7 @@ export async function listOrganizationGuestThreads(
       unreadCount: unread ? 1 : 0,
       preview: row.latest_message_kind === 'message'
         ? { kind: 'message', text: row.latest_message_body ?? '' }
-        : (row.opening_body ? { kind: 'submission', text: row.opening_body } : null),
+        : (row.source_preview ? { kind: 'submission', text: row.source_preview } : null),
       lastActivityAt: row.updated_at,
       needsAttention: row.conversation_state === 'needs_attention',
     })

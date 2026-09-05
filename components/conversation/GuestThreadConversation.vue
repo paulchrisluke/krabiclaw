@@ -27,8 +27,6 @@
     </template>
 
     <template #message="{ message }">
-      <!-- Structured, immutable opening submission card — issue #442's "reservation with
-           zero replies is still a complete thread" requirement. Rendered once, first. -->
       <div v-if="message.kind === 'submission'" class="px-4 py-2">
         <div class="mx-auto max-w-[34rem] rounded-xl border border-default bg-elevated px-4 py-3">
           <div class="flex flex-wrap items-start justify-between gap-3">
@@ -39,7 +37,7 @@
           </div>
 
           <dl class="mt-3 grid gap-2 text-sm sm:grid-cols-2">
-            <div v-for="row in openingRows(message.payload)" :key="row.label" :class="row.wide ? 'sm:col-span-2' : ''">
+            <div v-for="row in openingRows()" :key="row.label" :class="row.wide ? 'sm:col-span-2' : ''">
               <dt class="text-[11px] font-medium uppercase tracking-wide text-dimmed">{{ row.label }}</dt>
               <dd class="mt-0.5 whitespace-pre-wrap break-words text-default">{{ row.value }}</dd>
             </div>
@@ -226,8 +224,8 @@ const openingTitle = computed(() => {
   return 'Website message'
 })
 
-function openingRows(payload: Record<string, unknown> | null): Array<{ label: string; value: string; wide?: boolean }> {
-  const fields = { ...(payload ?? {}), ...props.sourceFields }
+function openingRows(): Array<{ label: string; value: string; wide?: boolean }> {
+  const fields = props.sourceFields
   const rows: Array<{ label: string; value: string | null; wide?: boolean }> = [
     { label: 'Email', value: props.guestEmail },
     { label: 'Phone', value: props.guestPhone },

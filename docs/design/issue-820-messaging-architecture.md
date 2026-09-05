@@ -20,9 +20,9 @@ or reservation change-request behavior.
 
 | Fact | Canonical owner | Disposition | Evidence and invariant |
 | --- | --- | --- | --- |
-| Submission status and guest details | Source submission table | Keep | A thread references the source; it does not copy mutable source status. |
+| Submission status, guest details, and opening context | Source submission table | Keep | A thread references the source; it does not copy source fields into the thread or opening entry. |
 | Conversation identity and workflow state | `guest_threads` | Keep and narrow | One row per `(submission_type, submission_id)`; organization, site, and location live here once. |
-| Ordered message/operation fact | `guest_thread_entries` | Keep and narrow | It contains `thread_id`, sequence, actor, content, semantic dedupe key, and timestamps. Organization/site are derived through the thread. |
+| Ordered message/operation fact | `guest_thread_entries` | Keep and narrow | It contains `thread_id`, sequence, actor, message or operation content, semantic dedupe key, and timestamps. The opening submission entry is a marker; its context derives from the source. Organization/site derive through the thread. |
 | External send outcome and quoted-reply correlation | `guest_thread_deliveries` | Keep and narrow | It references only `entry_id`; thread and tenant derive through the entry. The stable primary key is also the provider idempotency key, so separate `thread_id` and `idempotency_key` columns are deleted. |
 | Member-facing attention | `notifications` | Keep and narrow | It stores audience scope, presentation, optional source entry, and timestamp. Thread derives through `source_entry_id`; `template` is the single discriminator. Duplicate `guest_thread_id`, `event_type`, actor, and payload fields are deleted. |
 | Per-user acknowledgement | `notification_reads` | Keep | This is a normalized many-to-many fact. Folding it into notifications or threads would reintroduce per-user columns/cursors and lose multi-member semantics. |
@@ -37,7 +37,7 @@ typed logical hash.
 ## Write boundaries
 
 Public submission routes perform the capacity-safe source insert, open one
-thread, append its submission entry, create one dashboard notification pointing
+thread, append its submission marker, create one dashboard notification pointing
 to that entry, and send through the existing provider adapters.
 
 Dashboard routes perform Better Auth organization and Teams authorization, then

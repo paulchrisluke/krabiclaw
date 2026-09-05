@@ -22,19 +22,6 @@ export interface ContactSource {
   experience_title: string | null
 }
 
-export interface ContactOpeningSnapshot {
-  schemaVersion: 1
-  submissionType: 'contact'
-  submissionId: string
-  guestName: string
-  guestEmail: string
-  subject: string | null
-  message: string
-  locationTitle: string | null
-  experienceTitle: string | null
-  submittedAt: string
-}
-
 // Contact submissions have zero operational actions (issue #442 Locked Decision #2) —
 // reading and replying are conversation semantics, not lifecycle transitions.
 export type ContactAction = never
@@ -43,7 +30,7 @@ function normalizePreview(text: string | null | undefined, maxLength = 160): str
   return String(text ?? '').replace(/\s+/g, ' ').trim().slice(0, maxLength)
 }
 
-export const contactAdapter: GuestThreadSourceAdapter<ContactSource, ContactOpeningSnapshot, ContactAction> = {
+export const contactAdapter: GuestThreadSourceAdapter<ContactSource, ContactAction> = {
   type: 'contact',
 
   async loadSource(ctx: AdapterLoadContext, submissionId: string): Promise<ContactSource | null> {
@@ -68,21 +55,6 @@ export const contactAdapter: GuestThreadSourceAdapter<ContactSource, ContactOpen
       WHERE ct.id = ?
       LIMIT 1
     `, [submissionId])
-  },
-
-  createOpeningSnapshot(source: ContactSource): ContactOpeningSnapshot {
-    return {
-      schemaVersion: 1,
-      submissionType: 'contact',
-      submissionId: source.id,
-      guestName: source.name,
-      guestEmail: source.email,
-      subject: source.subject,
-      message: source.message,
-      locationTitle: source.location_title,
-      experienceTitle: source.experience_title,
-      submittedAt: source.created_at,
-    }
   },
 
   summarize(source: ContactSource): ThreadSummaryProjection {

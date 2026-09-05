@@ -1085,6 +1085,21 @@ export async function deleteLocation(
     },
     {
       query: `
+      DELETE FROM guest_threads
+      WHERE organization_id = ? AND site_id = ?
+        AND (
+          (submission_type = 'reservation' AND submission_id IN (
+            SELECT id FROM reservation_submissions WHERE location_id = ?
+          ))
+          OR (submission_type = 'experience_booking' AND submission_id IN (
+            SELECT id FROM experience_bookings WHERE location_id = ?
+          ))
+        )
+    `,
+      params: [organizationId, siteId, locationId, locationId],
+    },
+    {
+      query: `
       DELETE FROM business_locations
       WHERE id = ? AND organization_id = ? AND site_id = ?
     `,
@@ -1093,7 +1108,7 @@ export async function deleteLocation(
   ];
 
   const batchResults = await executeBatch(db, statements);
-  const deleteResult = batchResults[3];
+  const deleteResult = batchResults[4];
 
   if (!deleteResult?.meta.changes) {
     return { status: 404, data: { error: "Location not found." } };

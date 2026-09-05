@@ -13,7 +13,7 @@ This note exists so future sessions do not collapse three different systems into
 - Owner WhatsApp is a **ChowBot control surface**, not a guaranteed guest reply channel.
 - Owner replies to guest submissions should be treated as **email-first**.
 - Guest replies can be ingested back into the thread ledger from email, and from WhatsApp only when an inbound message can already be matched to an authorized guest thread by phone.
-- The dashboard inbox is the canonical thread UI for guest work. It renders persisted submission, message, operation, delivery, assignment, and resolution entries from one append-only history.
+- The dashboard inbox is the canonical thread UI for guest work. It renders the opening source submission with persisted message, operation, assignment, and resolution entries from one append-only history.
 
 ## Cleanup direction now
 
@@ -25,7 +25,7 @@ This note exists so future sessions do not collapse three different systems into
 
 - `guest_threads` is the conversation aggregate for one source submission.
 - `guest_thread_entries` is the sole guest-conversation timeline/history store. Entries are facts and corrections are represented by later entries, not rewrites.
-- Every thread starts with a persisted `submission` entry containing the complete opening context captured at submission time.
+- Every thread starts with a persisted `submission` entry that marks when the source submission opened the conversation. Guest identity and opening context are read from that source submission, not copied into the thread or entry.
 - Human replies, operational transitions, delivery attempts/results, assignment changes, and resolution/reopen actions are persisted as typed ledger entries.
 - Conversation state is separate from source lifecycle state. Conversation state is limited to `needs_attention`, `waiting_on_guest`, and `resolved`; operational status remains owned by the source adapter.
 - Per-member read state lives outside the thread aggregate so one manager reading a thread does not mark it read for every other manager.

@@ -42,9 +42,9 @@ export async function getGuestThreadDetail(
 
   return {
     id: thread.id,
-    guestName: thread.guest_name,
-    guestEmail: thread.guest_email,
-    guestPhone: thread.guest_phone,
+    guestName: summary.guestName,
+    guestEmail: summary.guestEmail,
+    guestPhone: summary.guestPhone,
     submissionType: thread.submission_type,
     submissionId: thread.submission_id,
     contextLabel: summary.contextLabel,

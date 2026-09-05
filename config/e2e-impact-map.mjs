@@ -57,6 +57,16 @@ export const IMPACT_GROUPS = [
     specs: ['tests/e2e/tenant-guest-journeys.spec.ts'],
   },
   {
+    id: 'tenant-calendar',
+    patterns: [
+      'components/dashboard/AvailabilityCalendar.vue',
+      'pages/dashboard/**/calendar.vue',
+      'server/api/editor/sites/**/availability.*.ts',
+      'server/utils/availability.ts',
+    ],
+    specs: ['tests/e2e/availability-calendar.spec.ts'],
+  },
+  {
     id: 'tenant-mcp',
     patterns: [
       'components/mcp/**', 'server/api/mcp.post.ts', 'server/api/mcp/**',

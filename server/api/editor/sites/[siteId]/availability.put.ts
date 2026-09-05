@@ -37,14 +37,18 @@ function parseChange(value: unknown): AvailabilityChange {
   if (change.directive !== 'set' || (change.status !== 'open' && change.status !== 'closed')) {
     throw createError({ statusCode: 400, statusMessage: 'Each change must inherit or set open or closed availability' })
   }
+  if (change.capacity_override != null && typeof change.capacity_override !== 'number') {
+    throw createError({ statusCode: 400, statusMessage: 'capacity_override must be a number or null' })
+  }
+  if (change.note != null && typeof change.note !== 'string') {
+    throw createError({ statusCode: 400, statusMessage: 'note must be a string or null' })
+  }
   return {
     ...base,
     directive: 'set',
     status: change.status,
-    capacity_override: change.capacity_override === null || change.capacity_override === undefined
-      ? null
-      : Number(change.capacity_override),
-    note: typeof change.note === 'string' ? change.note : null,
+    capacity_override: change.capacity_override ?? null,
+    note: change.note ?? null,
   }
 }
 

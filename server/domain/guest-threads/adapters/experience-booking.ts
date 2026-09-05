@@ -25,22 +25,6 @@ export interface ExperienceBookingSource {
   experience_title: string | null
 }
 
-export interface ExperienceBookingOpeningSnapshot {
-  schemaVersion: 1
-  submissionType: 'experience_booking'
-  submissionId: string
-  guestName: string
-  guestEmail: string
-  guestPhone: string | null
-  locationTitle: string | null
-  experienceTitle: string | null
-  bookingDate: string
-  timeSlot: string
-  partySize: number
-  notes: string | null
-  submittedAt: string
-}
-
 export type ExperienceBookingAction = 'confirm' | 'cancel'
 
 const EXPERIENCE_BOOKING_TRANSITIONS: Record<string, ExperienceBookingAction[]> = {
@@ -54,7 +38,7 @@ function normalizePreview(text: string | null | undefined, maxLength = 160): str
   return String(text ?? '').replace(/\s+/g, ' ').trim().slice(0, maxLength)
 }
 
-export const experienceBookingAdapter: GuestThreadSourceAdapter<ExperienceBookingSource, ExperienceBookingOpeningSnapshot, ExperienceBookingAction> = {
+export const experienceBookingAdapter: GuestThreadSourceAdapter<ExperienceBookingSource, ExperienceBookingAction> = {
   type: 'experience_booking',
 
   async loadSource(ctx: AdapterLoadContext, submissionId: string): Promise<ExperienceBookingSource | null> {
@@ -81,24 +65,6 @@ export const experienceBookingAdapter: GuestThreadSourceAdapter<ExperienceBookin
       WHERE eb.id = ?
       LIMIT 1
     `, [submissionId])
-  },
-
-  createOpeningSnapshot(source: ExperienceBookingSource): ExperienceBookingOpeningSnapshot {
-    return {
-      schemaVersion: 1,
-      submissionType: 'experience_booking',
-      submissionId: source.id,
-      guestName: source.guest_name,
-      guestEmail: source.guest_email,
-      guestPhone: source.guest_phone,
-      locationTitle: source.location_title,
-      experienceTitle: source.experience_title,
-      bookingDate: source.booking_date,
-      timeSlot: source.time_slot,
-      partySize: source.party_size,
-      notes: source.notes,
-      submittedAt: source.created_at,
-    }
   },
 
   summarize(source: ExperienceBookingSource): ThreadSummaryProjection {

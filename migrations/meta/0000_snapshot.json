@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "75bd52ad-18a4-4d13-8f64-f2eecffaf1ad",
+  "id": "63bf5627-c7cd-424c-b690-d897187acd7d",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "account": {
@@ -3970,27 +3970,6 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false
-        },
-        "guest_name": {
-          "name": "guest_name",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "guest_email": {
-          "name": "guest_email",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "guest_phone": {
-          "name": "guest_phone",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
           "autoincrement": false
         },
         "conversation_state": {
