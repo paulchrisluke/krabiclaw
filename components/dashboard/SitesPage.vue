@@ -2,14 +2,31 @@
   <UDashboardPanel id="org-overview">
     <template #header>
       <UDashboardNavbar title="Sites">
+        <template #right>
+          <UButton
+            v-if="canManageOrganization"
+            :to="`/dashboard/${orgSlug}/sites/new`"
+            icon="i-lucide-plus"
+            color="neutral"
+            variant="soft"
+            square
+            aria-label="Add a site"
+          />
+        </template>
       </UDashboardNavbar>
     </template>
 
     <template #body>
+      <!--
+        The skeleton uses the selector's own grid and card ratio. When it had its
+        own column rule and aspect, the page visibly jumped the moment the sites
+        loaded — a placeholder that does not reserve the real space is worse than
+        none.
+      -->
       <div v-if="pending" class="space-y-6">
         <USkeleton class="h-9 w-40 rounded-lg" />
-        <div class="grid grid-cols-1 gap-6 xl:grid-cols-2">
-          <USkeleton v-for="i in 2" :key="i" class="aspect-[40/21] rounded-2xl" />
+        <div class="grid grid-cols-[repeat(auto-fit,minmax(min(100%,34rem),1fr))] gap-6">
+          <USkeleton v-for="i in 2" :key="i" class="aspect-[4/3] rounded-2xl sm:aspect-[16/10]" />
         </div>
       </div>
 
@@ -32,7 +49,6 @@
         <DashboardSiteLocationSelector
           v-else
           :items="selectorItems"
-          :add-action="addSiteAction"
         />
       </div>
     </template>
@@ -51,15 +67,21 @@ const pending = dashboard.pending
 
 const sites = computed(() => dashboard.sites.value)
 const canManageOrganization = computed(() => ['owner', 'admin'].includes(dashboard.organization.value?.role ?? ''))
-const addSiteAction = computed(() => canManageOrganization.value
-  ? { label: 'Add a site', to: '/dashboard/' + orgSlug.value + '/sites/new' }
-  : undefined)
 const selectorItems = computed(() => sites.value.map(site => ({
   id: site.id,
   label: site.brand_name ?? site.subdomain ?? site.id,
   imageUrl: site.social_image?.url ?? null,
+  eyebrow: verticalLabel(site.vertical),
+  summary: site.subdomain ? `${site.subdomain}.krabiclaw.com` : 'Website setup in progress',
   to: siteDashboardPath(site),
 })))
+
+function verticalLabel(vertical: (typeof sites.value)[number]['vertical']) {
+  if (vertical === 'restaurant') return 'Restaurant'
+  if (vertical === 'experience') return 'Experiences'
+  if (vertical === 'professional_service' || vertical === 'service') return 'Professional services'
+  return 'Website'
+}
 
 function siteDashboardPath(site: (typeof sites.value)[number]) {
   return site.subdomain

@@ -9,6 +9,12 @@ export default defineAppConfig({
       error: 'red',
       neutral: 'zinc'
     },
+    avatar: {
+      defaultVariants: {
+        icon: 'i-lucide-user',
+        color: 'neutral'
+      }
+    },
     button: {
       compoundVariants: [
         {
@@ -60,6 +66,30 @@ export default defineAppConfig({
       defaultVariants: {
         size: 'md',
         variant: 'outline'
+      }
+    },
+    // One pill control for the whole CMS: Today's range switcher, the site and
+    // location tab rows, the experiences editor.
+    //
+    // This overrides `variants.variant.pill` rather than `slots`, because the
+    // variant sets these same slots and a `slots` entry does not outrank it.
+    // Nuxt UI's default pill is a grey `rounded-lg` tray holding `rounded-md`
+    // segments that stretch to fill it; the pills here sit directly on the page
+    // at their content width, which is the shape the dashboard is modelled on.
+    tabs: {
+      variants: {
+        variant: {
+          pill: {
+            list: 'bg-transparent p-0 gap-2',
+            trigger: 'grow-0 rounded-full',
+            indicator: 'rounded-full shadow-sm'
+          }
+        }
+      },
+      // Neutral, not primary: the active pill is the inverted surface, so the
+      // brand colour stays reserved for actions rather than marking position.
+      defaultVariants: {
+        color: 'neutral'
       }
     }
   }

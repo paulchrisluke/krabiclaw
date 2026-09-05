@@ -166,7 +166,6 @@ export const cloudflareEnv = (event: H3Event): CloudflareEnv => {
   const effectiveEnv: Record<string, unknown> = { ...configuredEnv, ...processEnv, ...runtimeEnv }
   const emailDeliveryMode = typeof effectiveEnv.EMAIL_DELIVERY_MODE === 'string' ? effectiveEnv.EMAIL_DELIVERY_MODE : undefined
   const whatsappDeliveryMode = typeof effectiveEnv.WHATSAPP_DELIVERY_MODE === 'string' ? effectiveEnv.WHATSAPP_DELIVERY_MODE : undefined
-  const discordDeliveryMode = typeof effectiveEnv.DISCORD_DELIVERY_MODE === 'string' ? effectiveEnv.DISCORD_DELIVERY_MODE : undefined
 
   const rawD1 = runtimeEnv.DB as D1Database | undefined
   const d1 = rawD1 ? instrumentD1(event, rawD1) : undefined
@@ -191,14 +190,12 @@ export const cloudflareEnv = (event: H3Event): CloudflareEnv => {
       e2eDeliveryOverrides = {
         ...(emailDeliveryMode !== undefined && { EMAIL_DELIVERY_MODE: emailDeliveryMode }),
         ...(whatsappDeliveryMode !== undefined && { WHATSAPP_DELIVERY_MODE: whatsappDeliveryMode }),
-        ...(discordDeliveryMode !== undefined && { DISCORD_DELIVERY_MODE: discordDeliveryMode }),
       }
     }
   } else if (devMode) {
     e2eDeliveryOverrides = {
       ...(emailDeliveryMode !== undefined && { EMAIL_DELIVERY_MODE: emailDeliveryMode }),
       ...(whatsappDeliveryMode !== undefined && { WHATSAPP_DELIVERY_MODE: whatsappDeliveryMode }),
-      ...(discordDeliveryMode !== undefined && { DISCORD_DELIVERY_MODE: discordDeliveryMode }),
     }
   }
 

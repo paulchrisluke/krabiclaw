@@ -56,6 +56,7 @@ export type WhatsAppTemplate =
   | 'guest_thread_reply_whatsapp'
   | 'new_reservation'
   | 'reservation_cancelled'
+  | 'booking_change_update'
   | 'domain_update'
   | 'dashboard_access_invitation'
   | 'otp_code'
@@ -165,6 +166,25 @@ const TEMPLATES: Record<
   WhatsAppTemplate,
   (_vars: Record<string, string>) => { name: string; language: { code: string }; components: TemplateComponent[] }
 > = {
+  booking_change_update: (v) => ({
+    name: 'booking_change_update',
+    language: { code: 'en_US' },
+    components: [
+      { type: 'body', parameters: [
+        { type: 'text', text: cleanTemplateText(v.booking_type, 'reservation') },
+        { type: 'text', text: cleanTemplateText(v.guest_name, 'Guest') },
+        { type: 'text', text: cleanTemplateText(v.status, 'requested') },
+        { type: 'text', text: cleanTemplateText(v.location, 'Location') },
+        { type: 'text', text: cleanTemplateText(v.date, 'Date') },
+        { type: 'text', text: cleanTemplateText(v.time, 'Time') },
+        { type: 'text', text: cleanTemplateText(v.guests, '1') },
+        { type: 'text', text: cleanTemplateText(v.message, 'Open the dashboard for details.', 250) },
+      ] },
+      { type: 'button', sub_type: 'url', index: '0', parameters: [
+        { type: 'text', text: cleanTemplateText(v.reply_path, '', 300) },
+      ] },
+    ],
+  }),
   dashboard_access_invitation: (v) => ({
     name: 'dashboard_access_invitation',
     language: { code: 'en_US' },

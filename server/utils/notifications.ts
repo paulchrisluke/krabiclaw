@@ -18,6 +18,7 @@ import BookingOwnerNew from '~/server/emails/templates/BookingOwnerNew'
 import BookingGuestReceived from '~/server/emails/templates/BookingGuestReceived'
 import BookingOwnerCancelled from '~/server/emails/templates/BookingOwnerCancelled'
 import BookingGuestCancelled from '~/server/emails/templates/BookingGuestCancelled'
+import BookingChange from '~/server/emails/templates/BookingChange'
 import BookingThankYouReviewRequest from '~/server/emails/templates/BookingThankYouReviewRequest'
 import BookingReviewReminder from '~/server/emails/templates/BookingReviewReminder'
 import OrganizationInvite from '~/server/emails/templates/OrganizationInvite'
@@ -519,11 +520,14 @@ async function notifyOwner(
     }
     submissionType?: 'contact' | 'reservation' | 'experience_booking' | 'invitation' | null
     submissionId?: string | null
+    notificationSource?: { threadId: string; entryId: string }
   }
 ) {
-  const threadContext = opts.submissionType && opts.submissionType !== 'invitation' && opts.submissionId
-    ? await getOpeningThreadContext(db, opts.submissionType, opts.submissionId)
-    : null
+  const threadContext = opts.notificationSource
+    ? { guestThreadId: opts.notificationSource.threadId, sourceEntryId: opts.notificationSource.entryId }
+    : opts.submissionType && opts.submissionType !== 'invitation' && opts.submissionId
+      ? await getOpeningThreadContext(db, opts.submissionType, opts.submissionId)
+      : null
   const [, sitePhone, locationPhone, ownerEmail] = await Promise.all([
     createCanonicalNotification(db, {
       publishEnv: env,
@@ -533,6 +537,7 @@ async function notifyOwner(
       siteId: opts.siteId,
       locationId: opts.locationId ?? null,
       sourceEntryId: threadContext?.sourceEntryId ?? null,
+      idempotencyKey: threadContext ? `notification:${threadContext.sourceEntryId}:${opts.template}` : undefined,
       title: opts.title,
       deepLink: opts.payload.deep_link || null,
     }),
@@ -1293,6 +1298,75 @@ export async function notifyExperienceBookingCancelled(
         error: result.reason instanceof Error ? result.reason.message : String(result.reason),
       })
     }
+  })
+}
+
+/** Notify the tenant through the same dashboard/email/WhatsApp path as other booking events. */
+export async function notifyBookingChangeOwner(
+  env: NotificationEnv,
+  db: DbClient,
+  opts: SiteContext & {
+    locationId: string
+    threadId: string
+    submissionType: 'reservation' | 'experience_booking'
+    submissionId: string
+    sourceEntryId: string
+    guestName: string
+    guestEmail: string
+    status: 'requested' | 'accepted' | 'declined'
+    noun: string
+    date: string
+    time: string
+    guests: number
+    locationTitle: string
+  },
+) {
+  const noun = opts.noun
+  const title = opts.status === 'requested'
+    ? `Changes requested for ${opts.guestName}'s ${noun}`
+    : `${opts.guestName} ${opts.status} the ${noun} changes`
+  const message = opts.status === 'requested'
+    ? 'The guest has been asked to accept or decline. The original details remain unchanged until they accept.'
+    : opts.status === 'accepted'
+      ? 'The guest accepted. The updated details are now confirmed.'
+      : 'The guest declined. The original details remain unchanged.'
+  const body = `${message}\n\nRequested location: ${opts.locationTitle}\nDate: ${formatDateHuman(opts.date)}\nTime: ${formatTimeHuman(opts.time)}\nGuests: ${opts.guests}`
+  const replyUrl = await buildOwnerThreadInboxUrl(env, db, opts)
+  const email = await renderEmail(BookingChange, {
+    title,
+    body,
+    siteName: siteName(opts),
+    platformDomain: getPlatformDomain(env),
+    actionUrl: replyUrl ?? undefined,
+    actionLabel: 'View in dashboard',
+  })
+  await notifyOwner(env, db, {
+    ...opts,
+    template: `${noun}.change_${opts.status}`,
+    title,
+    payload: {
+      thread_id: opts.threadId,
+      submission_type: opts.submissionType,
+      submission_id: opts.submissionId,
+      status: opts.status,
+      deep_link: replyUrl ?? '',
+    },
+    notificationSource: { threadId: opts.threadId, entryId: opts.sourceEntryId },
+    email: { subject: title, ...email },
+    whatsapp: {
+      template: 'booking_change_update',
+      vars: {
+        booking_type: noun,
+        guest_name: opts.guestName,
+        status: opts.status,
+        location: opts.locationTitle,
+        date: formatDateHuman(opts.date),
+        time: formatTimeHuman(opts.time),
+        guests: String(opts.guests),
+        message,
+        reply_path: inboxUrlToWhatsAppReplyPath(replyUrl),
+      },
+    },
   })
 }
 
