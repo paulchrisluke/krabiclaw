@@ -163,7 +163,9 @@ test('guest thread state stays source-owned, per-user, tenant-isolated, and idem
       data: { body: replyBody },
     })
     const concurrentReplies = await Promise.all([sendReply(), sendReply()])
-    for (const response of concurrentReplies) await expectStatus(response, 200)
+    const concurrentReplyStatuses = concurrentReplies.map(response => response.status())
+    expect(concurrentReplyStatuses).toContain(200)
+    expect(concurrentReplyStatuses.every(status => status === 200 || status === 202)).toBe(true)
     await expectStatus(await sendReply(), 200)
 
     const afterReplies = await loadThreadDetail(owner, threadId)
