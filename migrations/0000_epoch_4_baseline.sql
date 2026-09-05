@@ -1014,16 +1014,6 @@ CREATE TABLE `platform_contact_submissions` (
 );
 --> statement-breakpoint
 CREATE INDEX `idx_platform_contact_submissions_status_created` ON `platform_contact_submissions` (`status`,`created_at`);--> statement-breakpoint
-CREATE TABLE `platform_content` (
-	`id` text PRIMARY KEY NOT NULL,
-	`page` text NOT NULL,
-	`content` text NOT NULL,
-	`updated_by` text,
-	`updated_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
-	FOREIGN KEY (`updated_by`) REFERENCES `user`(`id`) ON UPDATE no action ON DELETE set null
-);
---> statement-breakpoint
-CREATE UNIQUE INDEX `platform_content_page_unique` ON `platform_content` (`page`);--> statement-breakpoint
 CREATE TABLE `platform_docs` (
 	`id` text PRIMARY KEY NOT NULL,
 	`title` text NOT NULL,
@@ -2105,15 +2095,8 @@ CREATE TABLE `tenant_pages` (
 	`id` text PRIMARY KEY NOT NULL,
 	`organization_id` text NOT NULL,
 	`site_id` text NOT NULL,
-	`title` text NOT NULL,
-	`slug` text,
 	`page_type` text DEFAULT 'custom' NOT NULL,
 	`recipe` text,
-	`summary` text,
-	`seo_title` text,
-	`seo_description` text,
-	`canonical_url` text,
-	`robots` text,
 	`sort_order` integer DEFAULT 0 NOT NULL,
 	`source` text DEFAULT 'manual' NOT NULL,
 	`source_ref` text,

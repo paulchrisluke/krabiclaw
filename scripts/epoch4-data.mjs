@@ -26,6 +26,7 @@ const RESET_TABLES = new Set([
 const DELETED_TABLES = new Set([
   'guest_thread_commands', 'guest_thread_member_state', 'guest_thread_outbox',
   'guest_thread_sequence_counters', 'notification_deliveries', 'notification_events',
+  'platform_content',
 ])
 
 const CONSOLIDATED_AVAILABILITY_TABLES = new Set([
@@ -35,7 +36,7 @@ const CONSOLIDATED_AVAILABILITY_TABLES = new Set([
 /** Tables this transform rewrites rather than copies. */
 const TRANSFORMED_TABLES = new Set([
   'products', 'product_categories', 'booking_policies', 'experiences', 'posts',
-  'post_channel_jobs', 'availability_overrides',
+  'post_channel_jobs', 'availability_overrides', 'tenant_pages',
   ...CONSOLIDATED_AVAILABILITY_TABLES, ...RESET_TABLES,
 ])
 
@@ -70,6 +71,17 @@ function hashRows(records, names) {
 function assertSchemaParity(source, target) {
   assert(tableExists(source, 'products') && columns(source, 'products').some(column => column.name === 'category'), 'Source must be Epoch 3 with products.category')
   assert(!tableExists(source, 'product_categories'), 'Source already contains product_categories')
+  assert(count(source, 'platform_content') === 0, 'platform_content is populated; unmapped platform content cannot be discarded')
+  const pageVariants = source.prepare(`
+    SELECT p.id, v.id AS variant_id,
+      p.title IS v.title AND p.summary IS v.summary
+      AND p.seo_title IS v.seo_title AND p.seo_description IS v.seo_description
+      AND p.canonical_url IS v.canonical_url AND p.robots IS v.robots AS matches
+    FROM tenant_pages p
+    LEFT JOIN site_locales l ON l.site_id = p.site_id AND l.organization_id = p.organization_id AND l.is_source = 1
+    LEFT JOIN tenant_page_variants v ON v.page_id = p.id AND v.site_id = p.site_id AND v.organization_id = p.organization_id AND v.locale = l.locale
+  `).all()
+  assert(pageVariants.every(page => page.variant_id && page.matches === 1), 'tenant_pages has missing source variants or unmapped presentation fields')
   const sourceTables = tables(source)
   const expectedTargetTables = [
     ...sourceTables.filter(table => !DELETED_TABLES.has(table) && !CONSOLIDATED_AVAILABILITY_TABLES.has(table)),
@@ -298,11 +310,12 @@ function verifyDatabases(source, target) {
   assertSchemaParity(source, target)
   const parity = tableParity(source, target)
   for (const table of RESET_TABLES) assert(count(target, table) === 0, `${table}: historical messaging rows were backfilled`)
-  for (const table of ['booking_policies', 'experiences']) {
+  const projections = ['booking_policies', 'experiences', 'tenant_pages'].map(table => {
     const names = columns(target, table).map(column => column.name)
     const projected = rows(source, table).map(row => Object.fromEntries(names.map(name => [name, row[name] ?? null])))
     assert(hashRows(projected, names) === hashRows(rows(target, table), names), `${table}: retained fields changed`)
-  }
+    return { table, columns: names, source_count: projected.length, target_count: count(target, table), hash: hashRows(projected, names) }
+  })
   const postNames = columns(target, 'posts').map(column => column.name)
   assert(hashRows(normalizedPosts(source, target), postNames) === hashRows(rows(target, 'posts'), postNames), 'posts: canonical projection changed')
   const jobNames = columns(target, 'post_channel_jobs').map(column => column.name)
@@ -329,6 +342,7 @@ function verifyDatabases(source, target) {
     generated_at: new Date().toISOString(),
     baseline: baselineSql.map(migration => ({ name: migration.name, sha256: createHash('sha256').update(migration.sql).digest('hex') })),
     tables: parity,
+    projected_tables: projections,
     products: { source: count(source, 'products'), target: count(target, 'products') },
     product_categories: actualCategories.length,
     availability_overrides: {
@@ -338,7 +352,7 @@ function verifyDatabases(source, target) {
     },
     category_hash: hashRows(actualCategories, categoryColumns),
     assignment_hash: hashRows(actualAssignments, assignmentColumns),
-    discarded_messaging_rows: Object.fromEntries(
+    discarded_rows: Object.fromEntries(
       [...RESET_TABLES, ...DELETED_TABLES]
         .filter(table => tableExists(source, table))
         .sort()
@@ -367,7 +381,7 @@ function transform(sourcePath, targetPath) {
   }
 
   transformProducts(source, target, now)
-  for (const table of ['booking_policies', 'experiences']) projectCommonRows(source, target, table)
+  for (const table of ['booking_policies', 'experiences', 'tenant_pages']) projectCommonRows(source, target, table)
   insertRows(target, 'posts', normalizedPosts(source, target))
   insertRows(target, 'post_channel_jobs', normalizedPostChannelJobs(source, target))
   insertRows(target, 'availability_overrides', normalizedAvailabilityOverrides(source, target))

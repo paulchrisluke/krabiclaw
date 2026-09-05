@@ -50,6 +50,12 @@ historical inbox or notification rows are backfilled.
   experience. The split legacy override tables do not exist in Epoch 4.
 - An `open` or `closed` override is a tenant decision. A slot that is full from
   bookings is derived runtime state and does not rewrite that decision.
+- `tenant_page_variants` owns each page's localized title, path, summary, SEO,
+  and document. `tenant_pages` retains only identity, scope, configuration,
+  provenance, and audit fields. Its unused legacy slug is discarded, not used
+  to rewrite any variant route.
+- The unused `platform_content` store and editor are removed. Platform docs,
+  their documents and blocks, media, and redirects remain unchanged.
 
 ## The customer-visible invariant
 
@@ -86,8 +92,11 @@ category translation, or any foreign-key violation.
 - every unrelated application table retains its row count and typed logical
   hash, including Prices, Better Auth identity/session state, bookings, media,
   and every retained Product content, SEO, metadata, and audit field;
-- booking policy, experience, post, availability, and social-channel rows preserve every
+- booking policy, experience, tenant page, post, availability, and social-channel rows preserve every
   retained field through explicit projections;
+- every tenant page has a source-locale variant whose presentation fields match
+  the removed parent copies, all variant rows retain their logical hashes, and
+  `platform_content` is empty before it can be discarded;
 - the invalid legacy offer with neither coupon nor terms becomes `standard`,
   and social provider IDs move from `posts.google_post_id` to
   `post_channel_jobs.provider_post_id`;

@@ -927,14 +927,6 @@ export const platform_contact_submissions = sqliteTable("platform_contact_submis
 	index("idx_platform_contact_submissions_status_created").on(table.status, table.created_at),
 ]);
 
-export const platform_content = sqliteTable("platform_content", {
-	id: text().primaryKey(),
-	page: text().notNull().unique(),
-	content: text().notNull(),
-	updated_by: text().references(() => user.id, { onDelete: "set null" } ),
-	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-});
-
 export const platform_docs = sqliteTable("platform_docs", {
 	id: text().primaryKey(),
 	title: text().notNull(),
@@ -1311,15 +1303,8 @@ export const tenant_pages = sqliteTable("tenant_pages", {
 	id: text().primaryKey(),
 	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
 	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" } ),
-	title: text().notNull(),
-	slug: text(),
 	page_type: text().default("custom").notNull(),
 	recipe: text(),
-	summary: text(),
-	seo_title: text(),
-	seo_description: text(),
-	canonical_url: text(),
-	robots: text(),
 	sort_order: integer().default(0).notNull(),
 	source: text().default("manual").notNull(),
 	source_ref: text(),
