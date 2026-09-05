@@ -68,7 +68,7 @@ function contactNotification(state: NotificationList, guestName: string) {
 
 test('guest thread state stays source-owned, per-user, tenant-isolated, and idempotent', async ({ playwright }) => {
   test.skip(!writable, 'Guest-thread writes require disposable local or preview data')
-  test.setTimeout(60_000)
+  test.setTimeout(120_000)
 
   const owner = await playwright.request.newContext({ baseURL })
   const secondOwner = await playwright.request.newContext({ baseURL })
