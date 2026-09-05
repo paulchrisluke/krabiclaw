@@ -115,8 +115,8 @@ function renderPage(
   const blockSql = blocks.map(block => `INSERT OR REPLACE INTO content_blocks (id, document_id, parent_block_id, type, position, level, data_json, created_at, updated_at) VALUES (${sqlValue(block.id)}, ${sqlValue(documentId)}, NULL, ${sqlValue(block.type)}, ${block.position}, ${block.type === 'heading' ? 2 : 'NULL'}, ${sqlJson(block.data)}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);`).join('\n')
   const placementSql = blocks.flatMap(block => block.media.map((media, index) => `INSERT INTO media_placements (id, organization_id, site_id, owner_type, owner_id, slot, asset_id, sort_order, status, created_at, updated_at) VALUES (${sqlValue(`${block.id}-${media.slot}-${index}`)}, ${sqlValue(organizationId)}, ${sqlValue(siteId)}, 'content_block', ${sqlValue(block.id)}, ${sqlValue(media.slot)}, ${sqlValue(media.asset_id)}, ${index}, 'active', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);`)).join('\n')
   const pageSql = includePageRecord
-    ? `INSERT OR REPLACE INTO tenant_pages (id, organization_id, site_id, title, slug, page_type, recipe, summary, sort_order, source, updated_at)
-VALUES (${sqlValue(pageId)}, ${sqlValue(organizationId)}, ${sqlValue(siteId)}, ${sqlValue(title)}, ${sqlValue(pageKey)}, ${sqlValue(pageTypeForPage(page))}, ${sqlValue(page)}, NULL, 0, 'fixture', CURRENT_TIMESTAMP);
+    ? `INSERT OR REPLACE INTO tenant_pages (id, organization_id, site_id, page_type, recipe, sort_order, source, updated_at)
+VALUES (${sqlValue(pageId)}, ${sqlValue(organizationId)}, ${sqlValue(siteId)}, ${sqlValue(pageTypeForPage(page))}, ${sqlValue(page)}, 0, 'fixture', CURRENT_TIMESTAMP);
 `
     : ''
   return `${pageSql}INSERT OR REPLACE INTO content_documents (id, owner_type, owner_id, created_at, updated_at)
