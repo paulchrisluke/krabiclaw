@@ -3,7 +3,9 @@ import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import { Miniflare } from 'miniflare'
 import { claimDelivery, createDeliveryReceipt, getDeliveryById, getDeliveryRetryEligibility, listDeliveryFailures, recordDeliveryOutcome } from '../../server/domain/guest-threads/deliveries.ts'
+import { appendEntry } from '../../server/domain/guest-threads/entries.ts'
 import { executeGuestThreadOperation } from '../../server/domain/guest-threads/operations.ts'
+import { updateThreadProjectionIfLatestEntry } from '../../server/domain/guest-threads/repository.ts'
 
 test('D1 claims fence concurrent sends and bound ambiguous provider retries', async () => {
   const runtime = new Miniflare({ workers: [{ config: {
@@ -123,6 +125,119 @@ test('D1 claims fence concurrent sends and bound ambiguous provider retries', as
       env: { EMAIL_DELIVERY_MODE: 'provider' },
     })
     assert.deepEqual({ ok: replay.ok, status: replay.status }, { ok: true, status: 200 })
+    assert.equal((await db.prepare('SELECT conversation_state FROM guest_threads WHERE id = ?').bind('thread-proof').first<{ conversation_state: string }>())?.conversation_state, 'waiting_on_guest')
+
+    const resolved = await executeGuestThreadOperation(db, {
+      threadId: 'thread-proof',
+      siteId: 'site-proof',
+      action: 'resolve',
+      actorUserId: 'user-proof',
+      idempotencyKey: 'resolve-after-reply-proof',
+      env: { EMAIL_DELIVERY_MODE: 'provider' },
+    })
+    assert.deepEqual({ ok: resolved.ok, status: resolved.status }, { ok: true, status: 200 })
+
+    const replayAfterResolve = await executeGuestThreadOperation(db, {
+      threadId: 'thread-proof',
+      siteId: 'site-proof',
+      action: 'reply',
+      actorUserId: 'user-proof',
+      body: 'A held reply',
+      idempotencyKey: operationKey,
+      env: { EMAIL_DELIVERY_MODE: 'provider' },
+    })
+    assert.deepEqual({ ok: replayAfterResolve.ok, status: replayAfterResolve.status }, { ok: true, status: 200 })
+    assert.equal((await db.prepare('SELECT conversation_state FROM guest_threads WHERE id = ?').bind('thread-proof').first<{ conversation_state: string }>())?.conversation_state, 'resolved')
+
+    const delayedOperationKey = 'delayed-reply-proof'
+    const delayedOperationDedupeKey = `guest-thread-operation:thread-proof:${delayedOperationKey}`
+    const delayedDeliveryId = `guest-thread-email:thread-proof:${delayedOperationKey}`
+    const delayedReplyEntry = await appendEntry(db, {
+      threadId: 'thread-proof',
+      kind: 'message',
+      actorKind: 'member',
+      actorUserId: 'user-proof',
+      channel: 'email',
+      body: 'A delayed reply',
+      eventName: 'thread.member_reply',
+      dedupeKey: delayedOperationDedupeKey,
+    })
+    const delayedReceipt = await createDeliveryReceipt(db, {
+      entryId: delayedReplyEntry.id,
+      channel: 'email',
+      provider: 'resend',
+      purpose: 'member_reply',
+      idempotencyKey: delayedDeliveryId,
+    })
+    const delayedClaim = await claimDelivery(db, delayedReceipt.id)
+    assert.equal(delayedClaim.claimed, true)
+
+    const inboundEntry = await appendEntry(db, {
+      threadId: 'thread-proof',
+      kind: 'message',
+      actorKind: 'guest',
+      channel: 'email',
+      body: 'A newer guest reply',
+      dedupeKey: 'email:newer-guest-reply-proof',
+    })
+    await updateThreadProjectionIfLatestEntry(db, 'thread-proof', inboundEntry.id, { conversationState: 'needs_attention' })
+    await recordDeliveryOutcome(db, { claim: delayedClaim, status: 'sent', providerMessageId: 'provider-delayed-proof' })
+
+    const delayedCompletion = await executeGuestThreadOperation(db, {
+      threadId: 'thread-proof',
+      siteId: 'site-proof',
+      action: 'reply',
+      actorUserId: 'user-proof',
+      body: 'A delayed reply',
+      idempotencyKey: delayedOperationKey,
+      env: { EMAIL_DELIVERY_MODE: 'provider' },
+    })
+    assert.deepEqual({ ok: delayedCompletion.ok, status: delayedCompletion.status }, { ok: true, status: 200 })
+    assert.equal((await db.prepare('SELECT conversation_state FROM guest_threads WHERE id = ?').bind('thread-proof').first<{ conversation_state: string }>())?.conversation_state, 'needs_attention')
+
+    const retryOperationKey = 'failed-reply-proof'
+    const retryEntry = await appendEntry(db, {
+      threadId: 'thread-proof',
+      kind: 'message',
+      actorKind: 'member',
+      actorUserId: 'user-proof',
+      channel: 'email',
+      body: 'A failed reply',
+      eventName: 'thread.member_reply',
+      dedupeKey: `guest-thread-operation:thread-proof:${retryOperationKey}`,
+    })
+    const retryReceipt = await createDeliveryReceipt(db, {
+      entryId: retryEntry.id,
+      channel: 'email',
+      provider: 'resend',
+      purpose: 'member_reply',
+      idempotencyKey: `guest-thread-email:thread-proof:${retryOperationKey}`,
+    })
+    const retryClaim = await claimDelivery(db, retryReceipt.id)
+    assert.equal(retryClaim.claimed, true)
+    await recordDeliveryOutcome(db, { claim: retryClaim, status: 'failed', error: 'provider rejected request' })
+
+    const resolvedAfterFailure = await executeGuestThreadOperation(db, {
+      threadId: 'thread-proof',
+      siteId: 'site-proof',
+      action: 'resolve',
+      actorUserId: 'user-proof',
+      idempotencyKey: 'resolve-after-failed-reply-proof',
+      env: { EMAIL_DELIVERY_MODE: 'provider' },
+    })
+    assert.deepEqual({ ok: resolvedAfterFailure.ok, status: resolvedAfterFailure.status }, { ok: true, status: 200 })
+
+    const retriedAfterResolve = await executeGuestThreadOperation(db, {
+      threadId: 'thread-proof',
+      siteId: 'site-proof',
+      action: 'retry_delivery',
+      actorUserId: 'user-proof',
+      deliveryId: retryReceipt.id,
+      idempotencyKey: 'retry-after-resolve-proof',
+      env: {},
+    })
+    assert.deepEqual({ ok: retriedAfterResolve.ok, status: retriedAfterResolve.status }, { ok: true, status: 200 })
+    assert.equal((await db.prepare('SELECT conversation_state FROM guest_threads WHERE id = ?').bind('thread-proof').first<{ conversation_state: string }>())?.conversation_state, 'resolved')
     assert.equal((await db.prepare('SELECT count(*) count FROM guest_thread_entries WHERE dedupe_key = ?').bind(operationDedupeKey).first<{ count: number }>())?.count, 1)
     assert.equal((await db.prepare('SELECT count(*) count FROM guest_thread_deliveries WHERE id = ?').bind(deliveryId).first<{ count: number }>())?.count, 1)
   } finally {
