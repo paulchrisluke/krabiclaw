@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { expect, test, type APIRequestContext, type APIResponse, type BrowserContext, type Page } from '@playwright/test'
 import thaiPlatformMessages from '../../i18n/catalogs/th.json' with { type: 'json' }
 import { loginAs } from './helpers/auth'
@@ -30,10 +31,24 @@ async function putLocalization(
   resourceId: string,
   body: Record<string, unknown>,
 ) {
-  const response = await request.put(
-    `/api/editor/sites/${siteId}/localization/${resourceType}/${resourceId}/${locale}`,
-    { data: body },
-  )
+  const requestId = randomUUID()
+  const startedAt = Date.now()
+  console.info('[e2e-localization]', JSON.stringify({ event: 'started', requestId, resourceType }))
+  let response: APIResponse
+  try {
+    response = await request.put(
+      `/api/editor/sites/${siteId}/localization/${resourceType}/${resourceId}/${locale}`,
+      { data: body, headers: { 'x-request-id': requestId } },
+    )
+  } catch {
+    console.error('[e2e-localization]', JSON.stringify({ event: 'transport_failed', requestId, resourceType, durationMs: Date.now() - startedAt }))
+    throw new Error(`Localization transport failed: ${resourceType}; requestId=${requestId}`)
+  }
+  console.info('[e2e-localization]', JSON.stringify({
+    event: 'finished', requestId, resourceType, durationMs: Date.now() - startedAt,
+    status: response.status(), rayId: response.headers()['cf-ray'] ?? null,
+    serverTiming: response.headers()['server-timing'] ?? null,
+  }))
   await expectStatus(response, 200)
 }
 

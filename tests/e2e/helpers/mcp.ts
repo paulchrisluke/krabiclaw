@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { expect, type APIRequestContext } from '@playwright/test'
 import { loginAs } from './auth'
 
@@ -37,17 +38,34 @@ export async function mcpRequest(
     },
   }
 
-  return request.post(`${baseURL}/api/mcp`, {
-    maxRetries: options.idempotent ? 1 : 0,
-    headers: {
-      'content-type': 'application/json',
-      'mcp-protocol-version': MCP_VERSION,
-      'mcp-method': options.method,
-      ...(options.method === 'tools/call' && options.toolName ? { 'mcp-name': options.toolName } : {}),
-      ...(options.extraHeaders ?? {}),
-    },
-    data: payload,
-  })
+  const requestId = randomUUID()
+  const startedAt = Date.now()
+  const diagnostic = { requestId, method: options.method, tool: options.toolName ?? null }
+  console.info('[e2e-mcp]', JSON.stringify({ event: 'started', ...diagnostic }))
+  try {
+    const response = await request.post(`${baseURL}/api/mcp`, {
+      maxRetries: options.idempotent ? 1 : 0,
+      headers: {
+        'content-type': 'application/json',
+        'mcp-protocol-version': MCP_VERSION,
+        'mcp-method': options.method,
+        ...(options.method === 'tools/call' && options.toolName ? { 'mcp-name': options.toolName } : {}),
+        ...(options.extraHeaders ?? {}),
+        'x-request-id': requestId,
+      },
+      data: payload,
+    })
+    console.info('[e2e-mcp]', JSON.stringify({
+      event: 'finished', ...diagnostic, durationMs: Date.now() - startedAt,
+      status: response.status(), rayId: response.headers()['cf-ray'] ?? null,
+      serverTiming: response.headers()['server-timing'] ?? null,
+    }))
+    return response
+  } catch {
+    // Playwright errors include request headers, including session credentials.
+    console.error('[e2e-mcp]', JSON.stringify({ event: 'transport_failed', ...diagnostic, durationMs: Date.now() - startedAt }))
+    throw new Error(`MCP transport failed: ${options.method} ${options.toolName ?? ''}; requestId=${requestId}`)
+  }
 }
 
 // Extracts typed data from a tools/call result and preserves protocol/tool
