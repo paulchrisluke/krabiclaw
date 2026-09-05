@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:0ab11812cbf2bc9539e4f73822e929a40dbefa11dd39d2896b77b9dae77f501d",
+  "fingerprint": "sha256:5e6f9364bdae2602e75dfd13539ea3e2deeaec19be9e948b35de4903781203eb",
   "tools": [
     {
       "name": "analyze_document",
@@ -4720,7 +4720,6 @@
                   "properties": {
                     "channel": {
                       "enum": [
-                        "site",
                         "instagram",
                         "facebook"
                       ],
@@ -8837,7 +8836,6 @@
                     "properties": {
                       "channel": {
                         "enum": [
-                          "site",
                           "instagram",
                           "facebook"
                         ],
@@ -10312,6 +10310,7 @@
                 },
                 "status": {
                   "enum": [
+                    "pending",
                     "published",
                     "skipped",
                     "failed"

@@ -6,7 +6,6 @@ import type {
   CompiledSeedMediaAsset,
   CompiledSeedProduct,
   CompiledSeedPost,
-  CompiledSeedPostChannelJob,
   CompiledSeedReview,
   CompiledSeedTenantPageContent,
   CompiledSeedTenantPageLocaleField,
@@ -52,7 +51,6 @@ export function compileCuratedSiteFixture(
   uniqueStrings(fixture.products.map((product) => `${product.locationId}:${product.slug}`), 'location Product slug')
   uniqueStrings(fixture.locationQa.map((q) => q.id), 'location qa id')
   uniqueStrings(fixture.posts.map((p) => p.id), 'post id')
-  uniqueStrings(fixture.posts.flatMap((p) => p.channelJobs.map((j) => j.id)), 'post channel job id')
   uniqueStrings((fixture.tenantPageLocaleFields ?? []).map((entry) => entry.id), 'tenant page locale field id')
   uniqueStrings((fixture.businessLocationTranslations ?? []).map((entry) => entry.id), 'business location translation id')
   uniqueStrings(fixture.publicRoutes.map((r) => r.path), 'public route path')
@@ -234,14 +232,6 @@ export function compileCuratedSiteFixture(
     if (post.postType === 'event' && !post.eventStartAt?.trim()) {
       throw new Error(`Event post "${post.id}" requires eventStartAt`)
     }
-    const channelJobs: CompiledSeedPostChannelJob[] = post.channelJobs.map((job) => ({
-      id: job.id,
-      postId: post.id,
-      organizationId: fixture.organizationId,
-      channel: job.channel,
-      status: job.status,
-      publishedAt: job.publishedAt,
-    }))
     return {
       id: post.id,
       organizationId: fixture.organizationId,
@@ -261,7 +251,6 @@ export function compileCuratedSiteFixture(
       status: post.status,
       publishedAt: post.publishedAt,
       createdBy: post.createdBy,
-      channelJobs,
     }
   })
 

@@ -657,12 +657,6 @@ export function buildSiteTransferMutationBatch(input: {
     })
   }
 
-  batch.push({
-    query: `UPDATE post_channel_jobs SET organization_id = ?
-         WHERE organization_id = ? AND post_id IN (SELECT id FROM posts WHERE site_id = ?)`,
-    params: [input.toOrgId, input.fromOrgId, input.siteId],
-  })
-
   const siteConfigTable = 'site_config'
   batch.push({
     query: `

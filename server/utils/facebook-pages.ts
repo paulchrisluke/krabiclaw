@@ -515,9 +515,9 @@ export const syncInstagramPosts = async (
         buildMediaPlacementInsertQuery({ organizationId, siteId, ownerType: 'post', ownerId: postId, slot: 'cover', assetId, sortOrder: 0, createdAt: now, updatedAt: now }),
         {
           query: `INSERT INTO post_channel_jobs
-            (id, post_id, organization_id, channel, status, provider_post_id, published_at, created_at)
-            VALUES (?, ?, ?, 'instagram', 'published', ?, ?, ?)`,
-          params: [`ig-job-${item.id}`, postId, organizationId, item.id, item.timestamp, now],
+            (id, post_id, channel, status, provider_post_id, published_at, created_at)
+            VALUES (?, ?, 'instagram', 'published', ?, ?, ?)`,
+          params: [`ig-job-${item.id}`, postId, item.id, item.timestamp, now],
         },
       ])
 
@@ -633,9 +633,9 @@ export const syncFacebookPosts = async (
         buildMediaPlacementInsertQuery({ organizationId, siteId, ownerType: 'post', ownerId: postId, slot: 'cover', assetId, sortOrder: 0, createdAt: now, updatedAt: now }),
         {
           query: `INSERT INTO post_channel_jobs
-            (id, post_id, organization_id, channel, status, provider_post_id, published_at, created_at)
-            VALUES (?, ?, ?, 'facebook', 'published', ?, ?, ?)`,
-          params: [`fb-job-${item.id}`, postId, organizationId, item.id, item.created_time, now],
+            (id, post_id, channel, status, provider_post_id, published_at, created_at)
+            VALUES (?, ?, 'facebook', 'published', ?, ?, ?)`,
+          params: [`fb-job-${item.id}`, postId, item.id, item.created_time, now],
         },
       ])
 

@@ -117,7 +117,7 @@ test('epoch-4 baseline enforces canonical cross-scope and value constraints', ()
       /media_assets_video_thumbnail_check/,
     )
     assert.throws(
-      () => database.prepare("INSERT INTO posts (id, organization_id, site_id, post_type, body, created_by) VALUES ('bad-post', 'org', 'site', 'promotion', 'Body', 'user')").run(),
+      () => database.prepare("INSERT INTO posts (id, organization_id, site_id, post_type, body, status, published_at, created_by) VALUES ('bad-post', 'org', 'site', 'promotion', 'Body', 'published', '2026-01-01T00:00:00.000Z', 'user')").run(),
       /posts_post_type_check/,
     )
     assert.throws(

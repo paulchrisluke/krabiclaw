@@ -392,7 +392,7 @@ export const postPublishResultObject = {
       additionalProperties: {
         type: 'object',
         properties: {
-          status: { type: 'string', enum: ['published', 'skipped', 'failed'] },
+          status: { type: 'string', enum: ['pending', 'published', 'skipped', 'failed'] },
           reason: { type: ['string', 'null'] },
         },
         required: ['status'],
@@ -453,7 +453,7 @@ export const postObject = {
       items: {
         type: 'object',
         properties: {
-          channel: { type: 'string', enum: ['site', 'instagram', 'facebook'] },
+          channel: { type: 'string', enum: ['instagram', 'facebook'] },
           status: { type: 'string', enum: ['pending', 'published', 'failed', 'skipped'] },
           error: { type: ['string', 'null'] },
           published_at: { type: ['string', 'null'] },

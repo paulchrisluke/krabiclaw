@@ -117,7 +117,7 @@ test.describe('stateless MCP server', () => {
       })
       const repeatedPost = mcpData<{ post: { published_at: string, channels: Array<{ channel: string }> } }>(await reread.json()).post
       expect(repeatedPost.published_at).toBe(firstPost.published_at)
-      expect(repeatedPost.channels.filter(job => job.channel === 'site')).toHaveLength(1)
+      expect(repeatedPost.channels.filter(job => job.channel === 'site')).toHaveLength(0)
       expect(repeatedPost.channels.filter(job => job.channel === 'facebook')).toHaveLength(1)
     } finally {
       if (createdPostId) {

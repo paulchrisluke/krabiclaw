@@ -702,9 +702,6 @@ export const potteryHouseFixture: CuratedSiteDefinition = {
       status: 'published',
       publishedAt: '2026-05-01T10:00:00.000Z',
       createdBy: 'user-pottery-house',
-      channelJobs: [
-        { id: 'pcj-ph-1', channel: 'site', status: 'published', publishedAt: '2026-05-01T10:00:00.000Z' },
-      ],
     },
     {
       id: 'post-ph-2',
@@ -716,9 +713,6 @@ export const potteryHouseFixture: CuratedSiteDefinition = {
       status: 'published',
       publishedAt: '2026-05-15T10:00:00.000Z',
       createdBy: 'user-pottery-house',
-      channelJobs: [
-        { id: 'pcj-ph-2', channel: 'site', status: 'published', publishedAt: '2026-05-15T10:00:00.000Z' },
-      ],
     },
     {
       id: 'post-ph-3',
@@ -730,9 +724,6 @@ export const potteryHouseFixture: CuratedSiteDefinition = {
       status: 'published',
       publishedAt: '2026-05-20T09:00:00.000Z',
       createdBy: 'user-pottery-house',
-      channelJobs: [
-        { id: 'pcj-ph-3', channel: 'site', status: 'published', publishedAt: '2026-05-20T09:00:00.000Z' },
-      ],
     },
   ],
   tenantPageLocaleFields: [
@@ -1224,24 +1215,11 @@ export function renderCompiledPotteryHousePostsBlock(): string {
     ].join(', ')})`)
     .join(',\n')
 
-  const allChannelJobs = compiledPotteryHouseSeed.posts.flatMap((post) => post.channelJobs)
   const postMediaRows = compiledPotteryHouseSeed.posts.flatMap(post => post.media.map((media, index) => `  (${[
     sqlValue(`placement-post-${post.id}-${media.slot}-${index}`), sqlValue(post.organizationId), sqlValue(post.siteId),
     sqlValue('post'), sqlValue(post.id), sqlValue(media.slot), sqlValue(media.asset_id), index, sqlValue('active'),
   ].join(', ')})`)).join(',\n')
-  const channelJobRows = allChannelJobs
-    .map((job) => `  (${[
-      sqlValue(job.id),
-      sqlValue(job.postId),
-      sqlValue(job.organizationId),
-      sqlValue(job.channel),
-      sqlValue(job.status),
-      sqlValue(job.publishedAt),
-    ].join(', ')})`)
-    .join(',\n')
-
   return `-- BEGIN GENERATED: pottery_posts
--- Posts and channel jobs for Pottery House Krabi.
 INSERT OR IGNORE INTO posts
   (id, organization_id, site_id, location_id,
    post_type, title, body, cta_type, cta_url, event_title, event_start, event_end, offer_coupon, offer_terms,
@@ -1254,9 +1232,6 @@ ${postMediaRows ? `INSERT OR REPLACE INTO media_placements
 VALUES
 ${postMediaRows};` : ''}
 
-INSERT OR IGNORE INTO post_channel_jobs (id, post_id, organization_id, channel, status, published_at)
-VALUES
-${channelJobRows};
 -- END GENERATED: pottery_posts`
 }
 

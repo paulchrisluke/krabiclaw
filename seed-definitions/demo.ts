@@ -1066,9 +1066,6 @@ export const demoFixture: CuratedSiteDefinition = {
       status: 'published',
       publishedAt: '2026-05-01T12:00:00.000Z',
       createdBy: 'user-demo',
-      channelJobs: [
-        { id: 'pcj-demo-1', channel: 'site', status: 'published', publishedAt: '2026-05-01T12:00:00.000Z' },
-      ],
     },
     {
       id: 'post-demo-2',
@@ -1080,9 +1077,6 @@ export const demoFixture: CuratedSiteDefinition = {
       status: 'published',
       publishedAt: '2026-04-18T10:00:00.000Z',
       createdBy: 'user-demo',
-      channelJobs: [
-        { id: 'pcj-demo-2', channel: 'site', status: 'published', publishedAt: '2026-04-18T10:00:00.000Z' },
-      ],
     },
     {
       id: 'post-demo-3',
@@ -1098,9 +1092,6 @@ export const demoFixture: CuratedSiteDefinition = {
       status: 'published',
       publishedAt: '2026-04-10T09:00:00.000Z',
       createdBy: 'user-demo',
-      channelJobs: [
-        { id: 'pcj-demo-3', channel: 'site', status: 'published', publishedAt: '2026-04-10T09:00:00.000Z' },
-      ],
     },
     {
       id: 'post-demo-4',
@@ -1117,9 +1108,6 @@ export const demoFixture: CuratedSiteDefinition = {
       status: 'published',
       publishedAt: '2026-09-01T09:00:00.000Z',
       createdBy: 'user-demo',
-      channelJobs: [
-        { id: 'pcj-demo-4', channel: 'site', status: 'published', publishedAt: '2026-09-01T09:00:00.000Z' },
-      ],
     },
   ],
   tenantPageLocaleFields: [
@@ -1569,24 +1557,11 @@ export function renderCompiledDemoPostsBlock(): string {
     ].join(', ')})`)
     .join(',\n')
 
-  const allChannelJobs = compiledDemoSeed.posts.flatMap((post) => post.channelJobs)
   const postMediaRows = compiledDemoSeed.posts.flatMap(post => post.media.map((media, index) => `  (${[
     sqlValue(`placement-post-${post.id}-${media.slot}-${index}`), sqlValue(post.organizationId), sqlValue(post.siteId),
     sqlValue('post'), sqlValue(post.id), sqlValue(media.slot), sqlValue(media.asset_id), index, sqlValue('active'),
   ].join(', ')})`)).join(',\n')
-  const channelJobRows = allChannelJobs
-    .map((job) => `  (${[
-      sqlValue(job.id),
-      sqlValue(job.postId),
-      sqlValue(job.organizationId),
-      sqlValue(job.channel),
-      sqlValue(job.status),
-      sqlValue(job.publishedAt),
-    ].join(', ')})`)
-    .join(',\n')
-
   return `-- BEGIN GENERATED: demo_posts
--- Posts and channel jobs for the demo tenant.
 INSERT OR IGNORE INTO posts
   (id, organization_id, site_id, location_id,
    post_type, title, body, cta_type, cta_url, event_title, event_start, event_end, offer_coupon, offer_terms,
@@ -1599,9 +1574,6 @@ ${postMediaRows ? `INSERT OR REPLACE INTO media_placements
 VALUES
 ${postMediaRows};` : ''}
 
-INSERT OR IGNORE INTO post_channel_jobs (id, post_id, organization_id, channel, status, published_at)
-VALUES
-${channelJobRows};
 -- END GENERATED: demo_posts`
 }
 

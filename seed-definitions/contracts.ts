@@ -226,13 +226,6 @@ export interface CuratedLocationQaDefinition {
   sortOrder: number
 }
 
-export interface CuratedPostChannelJobDefinition {
-  id: string
-  channel: string
-  status: 'published' | 'pending' | 'failed'
-  publishedAt: string
-}
-
 export interface CuratedPostDefinition {
   id: string
   locationId: string | null
@@ -250,7 +243,6 @@ export interface CuratedPostDefinition {
   status: 'published' | 'scheduled'
   publishedAt: string
   createdBy: string
-  channelJobs: CuratedPostChannelJobDefinition[]
 }
 
 export interface CuratedTenantPageLocaleFieldDefinition {
@@ -405,15 +397,6 @@ export interface CompiledSeedLocationQa {
   sortOrder: number
 }
 
-export interface CompiledSeedPostChannelJob {
-  id: string
-  postId: string
-  organizationId: string
-  channel: string
-  status: CuratedPostChannelJobDefinition['status']
-  publishedAt: string
-}
-
 export interface CompiledSeedPost {
   id: string
   organizationId: string
@@ -433,7 +416,6 @@ export interface CompiledSeedPost {
   status: CuratedPostDefinition['status']
   publishedAt: string
   createdBy: string
-  channelJobs: CompiledSeedPostChannelJob[]
 }
 
 export interface CompiledSeedTenantPageLocaleField {
