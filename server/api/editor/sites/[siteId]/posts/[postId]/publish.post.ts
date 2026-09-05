@@ -58,7 +58,7 @@ export default defineHandler(async (event) => {
   const post = await publishPost(db, site.organization_id, siteId, postId, channels, env, socialPublish)
   if (!post) return jsonResponse({ error: 'Post not found' }, { status: 404 })
   const socialErrors = Object.fromEntries(post.channels
-    .filter(job => (job.status === 'failed' || job.status === 'skipped') && job.error)
+    .filter(job => channels.includes(job.channel) && (job.status === 'failed' || job.status === 'skipped') && job.error)
     .map(job => [job.channel, job.error]))
 
   return jsonResponse({
