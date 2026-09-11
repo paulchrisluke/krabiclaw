@@ -116,7 +116,7 @@ interface ReviewNotificationInput extends SiteContext {
 interface ReviewRequestNotificationInput extends SiteContext {
   locationId?: string | null
   requestId: string
-  bookingType: 'reservation' | 'experience_booking'
+  bookingType: 'reservation' | 'booking'
   bookingId: string
   kind: 'first' | 'reminder'
   guestName: string
@@ -144,7 +144,7 @@ interface GuestThreadReplyNotificationInput extends SiteContext {
   locationId?: string | null
   threadId: string
   sourceEntryId: string
-  submissionType: 'contact' | 'reservation' | 'experience_booking'
+  submissionType: 'contact' | 'reservation' | 'booking'
   submissionId: string
   guestName: string
   guestEmail?: string | null
@@ -199,7 +199,7 @@ async function buildOwnerInboxUrl(
     submissionId: string
   }
 ): Promise<string | null> {
-  const submissionType = opts.tab === 'contact' ? 'contact' : opts.tab === 'reservations' ? 'reservation' : 'experience_booking'
+  const submissionType = opts.tab === 'contact' ? 'contact' : opts.tab === 'reservations' ? 'reservation' : 'booking'
   try {
     const thread = await getGuestRequest(db, opts.submissionId, opts.siteId, submissionType)
     if (!thread) throw new Error('Submission not found')
@@ -388,7 +388,7 @@ async function sendWhatsAppThreadNotification(
 
 async function getOpeningThreadContext(
   db: DbClient,
-  submissionType: 'contact' | 'reservation' | 'experience_booking',
+  submissionType: 'contact' | 'reservation' | 'booking',
   submissionId: string,
 ): Promise<{ guestThreadId: string; sourceEntryId: string }> {
   const thread = await getGuestRequest(db, submissionId, undefined, submissionType)
@@ -417,7 +417,7 @@ function threadDelivery(
 async function recordGuestCancellation(
   db: DbClient,
   input: {
-    submissionType: 'reservation' | 'experience_booking'
+    submissionType: 'reservation' | 'booking'
     submissionId: string
     organizationId: string
     siteId: string
@@ -461,7 +461,7 @@ async function notifyOwner(
       template: WhatsAppTemplate
       vars: Record<string, string>
     }
-    submissionType?: 'contact' | 'reservation' | 'experience_booking' | 'invitation' | null
+    submissionType?: 'contact' | 'reservation' | 'booking' | 'invitation' | null
     submissionId?: string | null
     notificationSource?: { threadId: string; entryId: string }
   }
@@ -963,7 +963,7 @@ export async function notifyExperienceBookingCreated(
   const prettyTime = formatTime(opts.timeSlot, 'en')
   const platformDomain = getPlatformDomain(env)
   const [replyTo, inboxUrl] = await Promise.all([
-    buildReplyToAddress(env, 'experience_booking', opts.bookingId),
+    buildReplyToAddress(env, 'booking', opts.bookingId),
     opts.ownerInboxUrl !== undefined
       ? opts.ownerInboxUrl
       : buildOwnerInboxUrl(env, db, {
@@ -974,7 +974,7 @@ export async function notifyExperienceBookingCreated(
           submissionId: opts.bookingId,
         }),
   ])
-  const threadContext = await getOpeningThreadContext(db, 'experience_booking', opts.bookingId)
+  const threadContext = await getOpeningThreadContext(db, 'booking', opts.bookingId)
 
   const payload = {
     booking_id: opts.bookingId,
@@ -997,7 +997,7 @@ export async function notifyExperienceBookingCreated(
   const results = await Promise.allSettled([
     notifyOwner(env, db, {
       ...opts,
-      submissionType: 'experience_booking',
+      submissionType: 'booking',
       submissionId: opts.bookingId,
       template: 'new_reservation',
       title: `New booking request from ${opts.guestName}`,
@@ -1022,11 +1022,11 @@ export async function notifyExperienceBookingCreated(
       ...opts,
       to: opts.email,
       replyTo,
-      template: 'experience_booking_customer_received',
+      template: 'booking_customer_received',
       title: `Your booking request was sent — ${opts.experienceTitle}`,
       payload,
       email: { subject: `Your booking request was sent — ${opts.experienceTitle}`, html: guestEmail.html, text: guestEmail.text },
-      delivery: threadDelivery(threadContext, 'guest_acknowledgement', 'email', 'experience_booking_customer_received', opts.email),
+      delivery: threadDelivery(threadContext, 'guest_acknowledgement', 'email', 'booking_customer_received', opts.email),
     }),
   ])
 
@@ -1081,7 +1081,7 @@ export async function notifyExperienceBookingCancelled(
     renderEmail(BookingGuestCancelled, { guestName: opts.guestName, siteName: studio, experienceTitle: opts.experienceTitle, date: prettyDate, time: prettyTime, partySize: opts.partySize, notes: opts.notes, wasConfirmed: confirmed, platformDomain }),
   ])
   const threadContext = await recordGuestCancellation(db, {
-    submissionType: 'experience_booking',
+    submissionType: 'booking',
     submissionId: opts.bookingId,
     organizationId: opts.organizationId,
     siteId: opts.siteId,
@@ -1093,9 +1093,9 @@ export async function notifyExperienceBookingCancelled(
   const results = await Promise.allSettled([
     notifyOwner(env, db, {
       ...opts,
-      submissionType: 'experience_booking',
+      submissionType: 'booking',
       submissionId: opts.bookingId,
-      template: 'experience_booking_cancelled',
+      template: 'booking_cancelled',
       title: ownerCancelTitle,
       payload,
       email: { subject: ownerCancelTitle, html: ownerEmail.html, text: ownerEmail.text },
@@ -1116,11 +1116,11 @@ export async function notifyExperienceBookingCancelled(
     sendEmailNotification(env, db, {
       ...opts,
       to: opts.email,
-      template: 'experience_booking_customer_cancelled',
+      template: 'booking_customer_cancelled',
       title: guestCancelTitle,
       payload,
       email: { subject: guestCancelTitle, html: guestEmail.html, text: guestEmail.text },
-      delivery: threadDelivery(threadContext, 'status_update', 'email', 'experience_booking_customer_cancelled', opts.email),
+      delivery: threadDelivery(threadContext, 'status_update', 'email', 'booking_customer_cancelled', opts.email),
     }),
   ])
 
@@ -1142,15 +1142,19 @@ export async function notifyBookingChangeOwner(
   opts: SiteContext & {
     locationId: string
     threadId: string
-    submissionType: 'reservation' | 'experience_booking'
+    submissionType: 'reservation' | 'booking'
     submissionId: string
     sourceEntryId: string
     guestName: string
     guestEmail: string
     status: 'requested' | 'accepted' | 'declined'
     noun: string
-    date: string
-    time: string
+    /**
+     * The occurrence as the guest sees it, already rendered in the
+     * location's own timezone. A split date/time pair here would be a second
+     * place that has to agree with the session's zone, and it would not.
+     */
+    whenLabel: string
     guests: number
     locationTitle: string
   },
@@ -1164,7 +1168,7 @@ export async function notifyBookingChangeOwner(
     : opts.status === 'accepted'
       ? 'The guest accepted. The updated details are now confirmed.'
       : 'The guest declined. The original details remain unchanged.'
-  const body = `${message}\n\nRequested location: ${opts.locationTitle}\nDate: ${formatCalendarDate(opts.date, 'en')}\nTime: ${formatTime(opts.time, 'en')}\nGuests: ${opts.guests}`
+  const body = `${message}\n\nRequested location: ${opts.locationTitle}\nWhen: ${opts.whenLabel}\nGuests: ${opts.guests}`
   const replyUrl = await buildOwnerThreadInboxUrl(env, db, opts)
   const email = await renderEmail(BookingChange, {
     title,
@@ -1194,8 +1198,7 @@ export async function notifyBookingChangeOwner(
         guest_name: opts.guestName,
         status: opts.status,
         location: opts.locationTitle,
-        date: formatCalendarDate(opts.date, 'en'),
-        time: formatTime(opts.time, 'en'),
+        when: opts.whenLabel,
         guests: String(opts.guests),
         message,
         reply_path: inboxUrlToWhatsAppReplyPath(replyUrl),
@@ -1471,7 +1474,7 @@ export async function getNotificationCopyPreviews(): Promise<NotificationCopyPre
       id: 'guest-experience-booking-received-email',
       audience: 'guest',
       channel: 'email',
-      template: 'experience_booking_customer_received',
+      template: 'booking_customer_received',
       title: 'Guest confirmation — experience booking request sent',
       subject: 'Your booking request was sent — Pottery Wheel Class',
       html: guestBooking.html,

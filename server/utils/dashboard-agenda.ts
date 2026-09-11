@@ -5,7 +5,7 @@ import { resolveSiteCmsCapabilities } from '~/server/utils/cms-capabilities'
 import { isOrganizationWideRole, listAccessibleLocationIds } from '~/server/utils/member-access'
 import type { CloudflareEnv } from '~/server/utils/auth'
 
-export const AGENDA_KINDS = ['reservation', 'experience_booking', 'post'] as const
+export const AGENDA_KINDS = ['reservation', 'booking', 'post'] as const
 export type AgendaKind = typeof AGENDA_KINDS[number]
 
 export interface AgendaItem {
@@ -191,7 +191,7 @@ export async function listAgenda(
     })
     const features = new Set([...capabilities.pages.map(page => page.feature), ...capabilities.managers.map(manager => manager.id)])
     if (features.has('reservations')) available.add('reservation')
-    if (features.has('experiences') || features.has('experience_bookings')) available.add('experience_booking')
+    if (features.has('experiences') || features.has('bookings')) available.add('booking')
   }
   const availableKinds = AGENDA_KINDS.filter(kind => available.has(kind))
   const requestedKinds = new Set((query.kinds?.length ? query.kinds : availableKinds).filter(kind => available.has(kind)))
@@ -229,7 +229,7 @@ export async function listAgenda(
 
   if (requestedKinds.has('reservation')) sourceQueries.push(queryAll(db, `${commonSelect('r', 'reservation', `r.booking_date AS local_date, r.time_slot AS local_time, NULL AS starts_at, NULL AS ends_at,
     json_extract(r.payload_json, '$.guest.name') AS title, printf('%d%s guests', r.party_size, CASE json_extract(r.payload_json, '$.party_size_is_minimum') WHEN 1 THEN '+' ELSE '' END) AS subtitle, r.party_size, r.status`)} AND r.booking_date BETWEEN ? AND ?`, [...params(), query.from, query.to]))
-  if (requestedKinds.has('experience_booking')) sourceQueries.push(queryAll(db, `${commonSelect('b', 'experience_booking', `b.booking_date AS local_date, b.time_slot AS local_time, NULL AS starts_at, NULL AS ends_at,
+  if (requestedKinds.has('booking')) sourceQueries.push(queryAll(db, `${commonSelect('b', 'booking', `b.booking_date AS local_date, b.time_slot AS local_time, NULL AS starts_at, NULL AS ends_at,
     json_extract(b.payload_json, '$.guest.name') AS title, printf('%d guests', b.party_size) AS subtitle, b.party_size AS party_size, b.status`, {
     joins: `LEFT JOIN products agenda_product ON agenda_product.id = b.product_id AND agenda_product.organization_id = b.organization_id AND agenda_product.site_id = b.site_id`,
     resourceImage: `COALESCE(${mediaUrlSelect('b', 'product', 'b.product_id', ['gallery'])}, ${locationMediaUrlSelect('b')}, ${siteMediaUrlSelect('b')})`,
@@ -250,7 +250,7 @@ export async function listAgenda(
   const items = rows.flatMap<AgendaItem>((row) => {
     const timeZone = row.timezone
     if (!isValidTimezone(timeZone)) throw new Error(`Timezone is not configured for agenda item ${row.id}`)
-    const isBooking = row.kind === 'reservation' || row.kind === 'experience_booking'
+    const isBooking = row.kind === 'reservation' || row.kind === 'booking'
     if (isBooking && (!row.local_date || !row.local_time)) throw new Error(`Booking date and time are missing for agenda item ${row.id}`)
     if (!isBooking && !row.starts_at) throw new Error(`Publication time is missing for agenda item ${row.id}`)
     const startsAt = isBooking
@@ -260,7 +260,7 @@ export async function listAgenda(
     if (dayKey < query.from || dayKey > query.to) return []
     const siteBase = `/dashboard/${organizationSlug}/sites/${row.site_slug}`
     const locationSegment = row.location_slug ? `/locations/${row.location_slug}` : ''
-    const to = row.kind === 'reservation' || row.kind === 'experience_booking'
+    const to = row.kind === 'reservation' || row.kind === 'booking'
       ? `/dashboard/${organizationSlug}/bookings/${row.kind}/${encodeURIComponent(row.id)}`
       : `${siteBase}${locationSegment}/posts`
     return [{
@@ -301,13 +301,13 @@ export async function listTodayAgenda(
   const nearby = await listAgenda(db, organizationId, {
     from: addLocalDays(utcKey, -1),
     to: addLocalDays(utcKey, 1),
-    kinds: ['reservation', 'experience_booking'],
+    kinds: ['reservation', 'booking'],
     organizationSlug: input.organizationSlug,
     principal: input.principal,
   })
   return {
     ...nearby,
-    availableKinds: nearby.availableKinds.filter(kind => kind === 'reservation' || kind === 'experience_booking'),
+    availableKinds: nearby.availableKinds.filter(kind => kind === 'reservation' || kind === 'booking'),
     items: nearby.items.filter(item => item.dayKey === todayKeyForTimeZone(now, item.timeZone)),
     resolvedAt: now.toISOString(),
   }

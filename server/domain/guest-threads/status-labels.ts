@@ -8,7 +8,7 @@ const OPERATIONAL_STATUS_LABELS: Record<GuestThreadSubmissionType, Record<string
     completed: 'Completed',
     cancelled: 'Cancelled',
   },
-  experience_booking: {
+  booking: {
     pending: 'Pending',
     confirmed: 'Confirmed',
     completed: 'Completed',

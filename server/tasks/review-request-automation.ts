@@ -45,7 +45,7 @@ interface SendDueRow {
 interface TaskResult {
   completed: number
   reservations_completed?: number
-  experience_bookings_completed?: number
+  bookings_completed?: number
   first_sent: number
   reminders_sent: number
   failed: number
@@ -86,7 +86,7 @@ async function sendDue(db: D1Database, env: ApiRecord, kind: 'first' | 'reminder
              ob.access_plan, ob.access_expires_at, ob.payment_status, ob.paid_through, ob.past_due_since, ob.updated_at
         FROM requests r JOIN customers c ON c.id = r.customer_id
         JOIN organization_billing ob ON ob.organization_id = r.organization_id AND ob.access_plan = 'growth'
-       WHERE r.kind IN ('reservation', 'experience_booking') AND r.status = 'completed'
+       WHERE r.kind IN ('reservation', 'booking') AND r.status = 'completed'
          AND json_extract(r.payload_json, '$.completion.at') IS NOT NULL
          AND json_extract(r.payload_json, '$.review.submitted_at') IS NULL
          AND c.review_request_opted_out_at IS NULL
@@ -126,7 +126,7 @@ export default defineScheduledTask({
     if (!db) throw new Error('DB is required')
 
     const reservationsCompleted = await autoCompleteBookings(db, env, 'reservation')
-    const experiencesCompleted = await autoCompleteBookings(db, env, 'experience_booking')
+    const experiencesCompleted = await autoCompleteBookings(db, env, 'booking')
     const first = await sendDue(db, env, 'first')
     const reminders = await sendDue(db, env, 'reminder')
 
@@ -134,7 +134,7 @@ export default defineScheduledTask({
       result: {
         completed: reservationsCompleted + experiencesCompleted,
         reservations_completed: reservationsCompleted,
-        experience_bookings_completed: experiencesCompleted,
+        bookings_completed: experiencesCompleted,
         first_sent: first.sent,
         reminders_sent: reminders.sent,
         failed: first.failed + reminders.failed,

@@ -24,11 +24,11 @@ export default defineHandler(async (event) => {
     LIMIT 25
   `, [siteId, customerId])
 
-  const experienceBookings = await queryAll<ApiRecord>(db, `
+  const bookings = await queryAll<ApiRecord>(db, `
     SELECT eb.id, eb.location_id, eb.product_id AS experience_id, p.name AS experience_title, json_extract(eb.payload_json, '$.guest.name') AS guest_name, json_extract(eb.payload_json, '$.guest.email') AS guest_email, json_extract(eb.payload_json, '$.guest.phone') AS guest_phone, eb.booking_date, eb.time_slot, eb.party_size, eb.status, json_extract(eb.payload_json, '$.completion.at') AS completed_at, json_extract(eb.payload_json, '$.completion.source') AS completion_source, json_extract(eb.payload_json, '$.review.request_sent_at') AS review_request_sent_at, json_extract(eb.payload_json, '$.review.reminder_sent_at') AS review_reminder_sent_at, json_extract(eb.payload_json, '$.review.submitted_at') AS review_submitted_at, eb.review_id, eb.created_at
     FROM requests eb
     LEFT JOIN products p ON p.id = eb.product_id
-    WHERE eb.kind = 'experience_booking' AND eb.site_id = ? AND eb.customer_id = ?
+    WHERE eb.kind = 'booking' AND eb.site_id = ? AND eb.customer_id = ?
     ORDER BY eb.booking_date DESC, eb.time_slot DESC, eb.created_at DESC
     LIMIT 25
   `, [siteId, customerId])
@@ -50,7 +50,7 @@ export default defineHandler(async (event) => {
   `, [siteId, customerId])
 
   return jsonResponse({
-    customer, reservations, experienceBookings, reviews, reviewRequests, })
+    customer, reservations, bookings, reviews, reviewRequests, })
 })
 import { defineHandler } from 'nitro';
 import { getRouterParam } from 'nitro/h3';

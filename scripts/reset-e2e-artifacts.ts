@@ -175,7 +175,7 @@ DELETE FROM organization WHERE id IN (${eligibleOrgIds});
 DELETE FROM requests WHERE id IN (
   SELECT id FROM requests
   WHERE site_id IN (${guestBookingSiteIdList})
-    AND kind IN ('contact', 'reservation', 'experience_booking')
+    AND kind IN ('contact', 'reservation', 'booking')
     AND payload_json ->> '$.guest.email' LIKE '%@playwright.example'
     AND created_at < '${cutoff}'
   ORDER BY id LIMIT ${batchSize}

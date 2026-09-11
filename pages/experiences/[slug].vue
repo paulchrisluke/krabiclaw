@@ -589,7 +589,7 @@ async function submitBooking() {
       locationSlug: typeof (experienceLocation.value as ApiRecord | null)?.slug === 'string' ? String((experienceLocation.value as ApiRecord | null)?.slug) : null,
       message: res.message,
     })
-    mirrorSubmission('experience_booking_submit', (experienceLocation.value as ApiRecord | null)?.id ? String((experienceLocation.value as ApiRecord).id) : null)
+    mirrorSubmission('booking_submit', (experienceLocation.value as ApiRecord | null)?.id ? String((experienceLocation.value as ApiRecord).id) : null)
     await navigateTo(localePath('/experiences/confirmed'))
   } catch (err: unknown) {
     const errorData = err && typeof err === 'object' && 'data' in err ? (err as Record<string, { error?: string }>).data : null

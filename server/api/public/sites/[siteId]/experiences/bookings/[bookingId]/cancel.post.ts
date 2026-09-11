@@ -37,13 +37,13 @@ export default defineHandler(async (event) => {
 
   const tokenHash = await hashReservationCancelToken(token)
   const now = new Date().toISOString()
-  const cancelled = await cancelBookingRequest(db, { id: bookingId, siteId, kind: 'experience_booking', tokenHash, now })
+  const cancelled = await cancelBookingRequest(db, { id: bookingId, siteId, kind: 'booking', tokenHash, now })
   if (!cancelled) return jsonResponse({ error: 'Booking not found or already cancelled' }, { status: 404 })
   const booking = cancelled.request
   const summary = await requestSummary(db, booking)
   if (summary.productTitle === null) throw new Error('Booked product is missing')
 
-  const thread = await getGuestRequest(db, bookingId, undefined, 'experience_booking')
+  const thread = await getGuestRequest(db, bookingId, undefined, 'booking')
   if (thread) {
     await publishGuestInboxThreadEvent(env, db, { threadId: thread.id, type: 'thread.changed' })
   }
@@ -56,7 +56,7 @@ export default defineHandler(async (event) => {
       organizationId: booking.organization_id, siteId: booking.site_id, siteName: site?.brand_name, locationId: booking.location_id, bookingId, guestName: booking.payload.guest.name, email: booking.payload.guest.email, guestPhone: booking.payload.guest.phone, experienceTitle: summary.productTitle, bookingDate: booking.booking_date, timeSlot: booking.time_slot, partySize: booking.party_size, notes: booking.payload.notes, wasConfirmed: cancelled.wasConfirmed
     })
   } catch (error) {
-    console.error('experience_booking_cancellation_notification_failed', {
+    console.error('booking_cancellation_notification_failed', {
       organizationId: booking.organization_id, siteId: booking.site_id, bookingId, error: error instanceof Error ? error.message : String(error)
     })
   }

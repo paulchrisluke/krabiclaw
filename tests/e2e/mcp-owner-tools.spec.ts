@@ -479,7 +479,7 @@ test.describe('stateless MCP server', () => {
 
       const bookingsList = await mcpRequest(request, baseURL!, {
         method: 'tools/call',
-        toolName: 'list_experience_bookings',
+        toolName: 'list_bookings',
         args: { site_id: siteId, experience_id: experienceId },
       })
       expect(bookingsList.status()).toBe(200)
@@ -491,7 +491,7 @@ test.describe('stateless MCP server', () => {
 
       const bookingUpdate = await mcpRequest(request, baseURL!, {
         method: 'tools/call',
-        toolName: 'update_experience_booking',
+        toolName: 'update_booking',
         args: { site_id: siteId, experience_id: experienceId, booking_id: bookingId, status: 'confirmed' },
       })
       expect(bookingUpdate.status()).toBe(200)

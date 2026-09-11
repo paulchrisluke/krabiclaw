@@ -32,14 +32,14 @@ test('preview reset drops populated bookings and review cycles, then replays the
         experience_json, sort_order, created_by, updated_by
       ) VALUES ('experience', 'org', 'site', 'location', 'category', 'experience', 'Class', 'class', '{}', 0, 'actor', 'actor');
     `.split(';').map(sql => sql.trim()).filter(Boolean).map(sql => database.prepare(sql)))
-    for (const kind of ['reservation', 'experience_booking']) {
+    for (const kind of ['reservation', 'booking']) {
       await database.prepare(`
         INSERT INTO requests (
           id, kind, organization_id, site_id, location_id, product_id, customer_id,
           status, booking_date, time_slot, party_size, conversation_state, payload_json
         ) VALUES (?, ?, 'org', 'site', 'location', ?, 'customer', 'confirmed',
           '2026-09-10', '14:00', 2, 'needs_attention', ?)
-      `).bind(kind, kind, kind === 'experience_booking' ? 'experience' : null, JSON.stringify({
+      `).bind(kind, kind, kind === 'booking' ? 'experience' : null, JSON.stringify({
         guest: { name: 'Reset guest', email: 'reset@playwright.example', phone: '+66812345678' },
         party_size_is_minimum: false, cancellation: {}, completion: {}, review: {},
       })).run()
@@ -52,7 +52,7 @@ test('preview reset drops populated bookings and review cycles, then replays the
         INSERT INTO reviews (
           id, organization_id, site_id, location_id, customer_id, booking_id, booking_type, review_request_id, product_id, rating
         ) VALUES (?, 'org', 'site', 'location', 'customer', ?, ?, ?, ?, 5)
-      `).bind(`review-${kind}`, kind, kind, `invite-${kind}`, kind === 'experience_booking' ? 'experience' : null).run()
+      `).bind(`review-${kind}`, kind, kind, `invite-${kind}`, kind === 'booking' ? 'experience' : null).run()
       await database.prepare('UPDATE requests SET review_id = ? WHERE id = ?').bind(`review-${kind}`, kind).run()
     }
     assert.deepEqual((await database.prepare('PRAGMA foreign_key_check').all()).results, [])

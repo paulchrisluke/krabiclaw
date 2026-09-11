@@ -1,17 +1,17 @@
-export type ReplySubmissionType = 'contact' | 'reservation' | 'experience_booking'
+export type ReplySubmissionType = 'contact' | 'reservation' | 'booking'
 
 const TOKEN_BYTES = 12
 
 const TYPE_TO_CODE: Record<ReplySubmissionType, 'c' | 'r' | 'e'> = {
   contact: 'c',
   reservation: 'r',
-  experience_booking: 'e',
+  booking: 'e',
 }
 
 const CODE_TO_TYPE: Record<'c' | 'r' | 'e', ReplySubmissionType> = {
   c: 'contact',
   r: 'reservation',
-  e: 'experience_booking',
+  e: 'booking',
 }
 
 function compactUuid(value: string): string | null {

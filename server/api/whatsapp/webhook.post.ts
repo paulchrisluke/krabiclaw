@@ -118,7 +118,7 @@ function parsePendingReplyState(raw: string | null | undefined): PendingWhatsApp
 
 function submissionTypeLabel(type: string): string {
   if (type === 'reservation') return 'Reservation'
-  if (type === 'experience_booking') return 'Booking'
+  if (type === 'booking') return 'Booking'
   return 'Message'
 }
 

@@ -11,7 +11,7 @@ import { requestBookingChange } from '~/server/domain/guest-threads/booking-chan
 import { publishGuestInboxThreadEvent } from '~/server/cloudflare/guest-inbox-events'
 import { resolveLocationTimezone } from '~/server/utils/site-config'
 
-export type DashboardBookingType = 'reservation' | 'experience_booking'
+export type DashboardBookingType = 'reservation' | 'booking'
 
 interface BookingRow {
   id: string
@@ -133,7 +133,7 @@ function mediaImage(media: PublicSocialMedia | undefined): string | null {
 }
 
 async function loadResourceImage(db: DbClient, row: BookingRow, type: DashboardBookingType) {
-  if (type === 'experience_booking' && row.experience_id) {
+  if (type === 'booking' && row.experience_id) {
     const experience = await loadPublicSocialMedia(db, row.site_id, 'product', [row.experience_id])
     const image = mediaImage(experience.get(row.experience_id))
     if (image) return image
@@ -277,5 +277,5 @@ export async function addDashboardBookingNote(
 }
 
 export function isDashboardBookingType(value: string | undefined): value is DashboardBookingType {
-  return value === 'reservation' || value === 'experience_booking'
+  return value === 'reservation' || value === 'booking'
 }

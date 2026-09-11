@@ -4,7 +4,7 @@ import { resolveProductPresentation } from '~/utils/product-presentation'
 
 export type CmsSectionId = 'pages' | 'collections' | 'locations' | 'media' | 'site'
 
-// Explicit module identifiers a vertical/template/site/location can turn on. 'experience_bookings',
+// Explicit module identifiers a vertical/template/site/location can turn on. 'bookings',
 // 'consultations' and 'appointments' are declared (not yet wired to any catalog entry below) because
 // no distinct manager/route exists for them yet — today's single 'reservations' feature covers both
 // table-reservation and experience-booking policy management, and blawby's practice management lives
@@ -14,7 +14,7 @@ export type CmsSectionId = 'pages' | 'collections' | 'locations' | 'media' | 'si
 export type ProductFeature =
   | 'contact' | 'locations' | 'settings'
   | 'products' | 'reservations' | 'ordering'
-  | 'experiences' | 'experience_bookings'
+  | 'experiences' | 'bookings'
   | 'services' | 'consultations' | 'appointments'
   | 'blog' | 'qa' | 'testimonials' | 'reviews' | 'media' | 'posts' | 'photos' | 'links'
 

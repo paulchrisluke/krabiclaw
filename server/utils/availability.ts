@@ -325,6 +325,66 @@ export class CapacityUnavailableError extends Error {
  * `idempotencyKey` is the caller's own request identity: replaying a claim
  * returns the booking already made instead of claiming a second time.
  */
+/**
+ * The capacity-claiming INSERT, as a query rather than an execution.
+ *
+ * Exposed so a caller that must move a booking — cancel one claim and take
+ * another — can put both in ONE batch. D1 applies a batch in order and
+ * atomically, so the release lands before this predicate counts seats, and a
+ * failure anywhere leaves the guest's original seat untouched.
+ */
+export function sessionClaimQuery(input: {
+  bookingId: string
+  organizationId: string
+  siteId: string
+  productId: string
+  sessionId: string
+  productVariantId: string
+  partySize: number
+  customerId?: string | null
+  requestId?: string | null
+  holdExpiresAt?: string | null
+  now: string
+}): BatchQuery {
+  return {
+    query: `
+      INSERT INTO bookings (
+        id, organization_id, site_id, product_id, product_session_id, product_variant_id,
+        customer_id, request_id, party_size, status, hold_expires_at, created_at, updated_at
+      )
+      SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?
+      WHERE EXISTS (
+        SELECT 1 FROM product_sessions s
+        WHERE s.id = ? AND s.organization_id = ? AND s.product_id = ?
+          AND s.status = 'scheduled'
+          AND s.starts_at > ?
+          AND (s.capacity IS NULL OR s.capacity >= ? + COALESCE((
+            SELECT SUM(b.party_size) FROM bookings b
+            WHERE b.product_session_id = s.id AND ${CAPACITY_CONSUMING_SQL}
+          ), 0))
+      )
+      ON CONFLICT (id) DO NOTHING
+    `,
+    params: [
+      input.bookingId, input.organizationId, input.siteId, input.productId, input.sessionId, input.productVariantId,
+      input.customerId ?? null, input.requestId ?? null, input.partySize, input.holdExpiresAt ?? null, input.now, input.now,
+      input.sessionId, input.organizationId, input.productId, input.now, input.partySize, input.now,
+    ],
+  }
+}
+
+/**
+ * The single protected capacity operation.
+ *
+ * Every booking claim — guest checkout, dashboard, MCP, ChowBot, WhatsApp —
+ * goes through here or through `sessionClaimQuery`. Session identity alone is
+ * not the concurrency control: the insert carries its own capacity predicate,
+ * so two concurrent claims for the last seat cannot both succeed. D1 applies
+ * each statement atomically, and the second inserts zero rows and raises.
+ *
+ * A thread already holding a booking returns that booking instead of claiming
+ * a second time.
+ */
 export async function claimSessionCapacity(db: DbClient, input: {
   organizationId: string
   siteId: string
@@ -347,35 +407,8 @@ export async function claimSessionCapacity(db: DbClient, input: {
     if (existing) return { bookingId: existing.id }
   }
 
-  const now = new Date().toISOString()
   const bookingId = input.idempotencyKey ?? crypto.randomUUID()
-
-  const claim: BatchQuery = {
-    query: `
-      INSERT INTO bookings (
-        id, organization_id, site_id, product_id, product_session_id, product_variant_id,
-        customer_id, request_id, party_size, status, hold_expires_at, created_at, updated_at
-      )
-      SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?
-      WHERE EXISTS (
-        SELECT 1 FROM product_sessions s
-        WHERE s.id = ? AND s.organization_id = ? AND s.product_id = ?
-          AND s.status = 'scheduled'
-          AND s.starts_at > ?
-          AND (s.capacity IS NULL OR s.capacity >= ? + COALESCE((
-            SELECT SUM(b.party_size) FROM bookings b
-            WHERE b.product_session_id = s.id AND ${CAPACITY_CONSUMING_SQL}
-          ), 0))
-      )
-      ON CONFLICT (id) DO NOTHING
-    `,
-    params: [
-      bookingId, input.organizationId, input.siteId, input.productId, input.sessionId, input.productVariantId,
-      input.customerId ?? null, input.requestId ?? null, input.partySize, input.holdExpiresAt ?? null, now, now,
-      input.sessionId, input.organizationId, input.productId, now, input.partySize, now,
-    ],
-  }
-
+  const claim = sessionClaimQuery({ ...input, bookingId, now: new Date().toISOString() })
   const results = await executeBatch(db, [claim, ...(input.following ?? [])], { operation: 'Claim session capacity' })
   if ((results[0]?.meta?.changes ?? 0) === 0) throw new CapacityUnavailableError()
   return { bookingId }

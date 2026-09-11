@@ -10,7 +10,7 @@ export default defineHandler(async (event) => {
   const query = getQuery(event)
   const locationId = typeof query.location_id === 'string' && query.location_id.trim() ? query.location_id.trim() : null
   const search = typeof query.search === 'string' ? query.search : null
-  const type = query.type === 'contact' || query.type === 'reservation' || query.type === 'experience_booking'
+  const type = query.type === 'contact' || query.type === 'reservation' || query.type === 'booking'
     ? query.type as GuestThreadSubmissionType
     : null
   const conversationState = query.conversation_state === 'needs_attention' || query.conversation_state === 'waiting_on_guest' || query.conversation_state === 'resolved'

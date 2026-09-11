@@ -53,7 +53,7 @@ export function parseReplyToAddress(env: ReplyAddressEnv, address: string): { su
 }
 
 export function isSubmissionType(value: string): value is SubmissionType {
-  return value === 'contact' || value === 'reservation' || value === 'experience_booking'
+  return value === 'contact' || value === 'reservation' || value === 'booking'
 }
 
 export async function getSubmissionOrgSite(db: DbClient, submissionType: SubmissionType, submissionId: string): Promise<{ organizationId: string; siteId: string } | null> {
@@ -81,7 +81,7 @@ export interface SubmissionMatch {
 
 export async function findSubmissionByPhone(db: DbClient, phone: string, organizationId?: string, siteId?: string): Promise<SubmissionMatch | null> {
   return queryFirst<SubmissionMatch>(db, `SELECT kind AS submissionType, id AS submissionId, organization_id AS organizationId, site_id AS siteId FROM requests
-    WHERE kind IN ('reservation', 'experience_booking') AND json_extract(payload_json, '$.guest.phone') = ? AND status != 'cancelled'
+    WHERE kind IN ('reservation', 'booking') AND json_extract(payload_json, '$.guest.phone') = ? AND status != 'cancelled'
     ${organizationId ? 'AND organization_id = ?' : ''} ${siteId ? 'AND site_id = ?' : ''}
     ORDER BY created_at DESC LIMIT 1`, [phone, ...(organizationId ? [organizationId] : []), ...(siteId ? [siteId] : [])])
 }

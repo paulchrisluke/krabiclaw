@@ -13,7 +13,7 @@ export default defineHandler(async (event) => {
   const booking = await queryFirst<{ id: string; location_id: string }>(db, `
     SELECT eb.id, eb.location_id
     FROM requests eb
-    WHERE eb.kind = 'experience_booking' AND eb.id = ? AND eb.site_id = ?
+    WHERE eb.kind = 'booking' AND eb.id = ? AND eb.site_id = ?
     LIMIT 1
   `, [bookingId, siteId])
   if (!booking) return jsonResponse({ error: 'Booking not found or access denied' }, { status: 404 })
@@ -24,7 +24,7 @@ export default defineHandler(async (event) => {
 
   const body = await readBody(event).catch(() => ({})) as { kind?: string }
   const kind = body.kind === 'reminder' ? 'reminder' : 'first'
-  const result = await sendReviewRequestForBooking(env, db, 'experience_booking', bookingId, kind)
+  const result = await sendReviewRequestForBooking(env, db, 'booking', bookingId, kind)
 
   return jsonResponse(result, { status: result.sent ? 200 : 502 })
 })

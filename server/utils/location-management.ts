@@ -893,7 +893,7 @@ export async function deleteLocation(
     },
     {
       query: `
-      DELETE FROM requests WHERE organization_id = ? AND site_id = ? AND location_id = ? AND kind IN ('reservation', 'experience_booking')
+      DELETE FROM requests WHERE organization_id = ? AND site_id = ? AND location_id = ? AND kind IN ('reservation', 'booking')
     `,
       params: [organizationId, siteId, locationId],
     },

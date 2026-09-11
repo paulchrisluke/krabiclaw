@@ -37,7 +37,7 @@ export default defineHandler(async (event) => {
     SELECT json_extract(eb.payload_json, '$.guest.name') AS name, eb.booking_date AS date, eb.time_slot AS time, eb.party_size AS guests, eb.status, eb.location_id, p.name AS experience_title
     FROM requests eb
     JOIN products p ON p.id = eb.product_id
-    WHERE eb.kind = 'experience_booking' AND eb.id = ?
+    WHERE eb.kind = 'booking' AND eb.id = ?
       AND eb.site_id = ?
       AND json_extract(eb.payload_json, '$.cancellation.token_hash') = ?
       AND json_extract(eb.payload_json, '$.cancellation.used_at') IS NULL

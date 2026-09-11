@@ -17,7 +17,25 @@ import { formatOperationalStatusLabel } from './status-labels'
 const SOURCE_GUEST_NAME_SQL = "json_extract(gt.payload_json, '$.guest.name')"
 const SOURCE_GUEST_EMAIL_SQL = "json_extract(gt.payload_json, '$.guest.email')"
 const SOURCE_GUEST_PHONE_SQL = "json_extract(gt.payload_json, '$.guest.phone')"
-const SOURCE_PREVIEW_SQL = `SUBSTR(CASE WHEN gt.kind = 'contact' THEN json_extract(gt.payload_json, '$.message') ELSE COALESCE(NULLIF(TRIM(json_extract(gt.payload_json, '$.notes')), ''), gt.booking_date || ' ' || gt.time_slot || ' - ' || gt.party_size || CASE WHEN json_extract(gt.payload_json, '$.party_size_is_minimum') THEN '+' ELSE '' END || ' guests') END, 1, 160)`
+/**
+ * The operational record a thread refers to.
+ *
+ * A thread carries no time, party size or status of its own any more, so the
+ * inbox reads them from the booking or reservation that links back to it. A
+ * thread with no record yields NULLs, and the surface says the thread has no
+ * booking rather than printing a fabricated slot.
+ */
+const OPERATIONAL_RECORD_SQL = `
+  LEFT JOIN (
+    SELECT b.request_id, b.status, b.party_size, s.starts_at, s.timezone
+      FROM bookings b JOIN product_sessions s ON s.id = b.product_session_id
+     WHERE b.request_id IS NOT NULL
+    UNION ALL
+    SELECT r.request_id, r.status, r.party_size, r.starts_at, r.timezone
+      FROM reservations r WHERE r.request_id IS NOT NULL
+  ) op ON op.request_id = gt.id`
+
+const SOURCE_PREVIEW_SQL = `SUBSTR(CASE WHEN gt.kind = 'contact' THEN json_extract(gt.payload_json, '$.message') ELSE COALESCE(NULLIF(TRIM(json_extract(gt.payload_json, '$.notes')), ''), CASE WHEN op.starts_at IS NULL THEN NULL ELSE op.starts_at || ' - ' || op.party_size || CASE WHEN json_extract(gt.payload_json, '$.party_size_is_minimum') THEN '+' ELSE '' END || ' guests' END) END, 1, 160)`
 
 export interface OperationSummary {
   openThreads: number
@@ -81,9 +99,9 @@ export async function getGuestThreadOperationSummary(
       SUM(CASE WHEN gt.conversation_state != 'resolved' THEN 1 ELSE 0 END) AS openThreads,
       0 AS unreadThreads,
       SUM(CASE WHEN gt.conversation_state != 'resolved' AND gt.kind = 'reservation' THEN 1 ELSE 0 END) AS reservations,
-      SUM(CASE WHEN gt.conversation_state != 'resolved' AND gt.kind = 'experience_booking' THEN 1 ELSE 0 END) AS experienceBookings
-    FROM requests gt
-    WHERE gt.kind IN ('contact', 'reservation', 'experience_booking') AND ${where}
+      SUM(CASE WHEN gt.conversation_state != 'resolved' AND gt.kind = 'booking' THEN 1 ELSE 0 END) AS experienceBookings
+    FROM requests gt${OPERATIONAL_RECORD_SQL}
+    WHERE gt.kind IN ('contact', 'reservation', 'booking') AND ${where}
   `, params)
 
   const unreadThreads = opts.userId
@@ -106,8 +124,8 @@ async function countUnreadThreadIds(
 ): Promise<number> {
   const rows = await queryAll<{ id: string }>(db, `
     SELECT gt.id
-    FROM requests gt
-    WHERE gt.kind IN ('contact', 'reservation', 'experience_booking') AND ${where}
+    FROM requests gt${OPERATIONAL_RECORD_SQL}
+    WHERE gt.kind IN ('contact', 'reservation', 'booking') AND ${where}
       AND EXISTS (
         SELECT 1 FROM activity_entries n
         JOIN activity_entries notification_entry ON notification_entry.id = n.parent_id
@@ -201,10 +219,10 @@ export async function listGuestThreads(
         ORDER BY sequence DESC LIMIT 1
       ) AS latest_message_kind,
       ${SOURCE_PREVIEW_SQL} AS source_preview,
-      gt.status AS operational_status
-    FROM requests gt
+      op.status AS operational_status
+    FROM requests gt${OPERATIONAL_RECORD_SQL}
     LEFT JOIN business_locations bl ON bl.id = gt.location_id
-    WHERE gt.kind IN ('contact', 'reservation', 'experience_booking') AND ${where}
+    WHERE gt.kind IN ('contact', 'reservation', 'booking') AND ${where}
     ${unreadFilter}
     ORDER BY gt.updated_at DESC
     LIMIT ?
@@ -317,11 +335,11 @@ export async function listOrganizationGuestThreads(
         ORDER BY sequence DESC LIMIT 1
       ) AS latest_message_kind,
       ${SOURCE_PREVIEW_SQL} AS source_preview,
-      gt.status AS operational_status
-    FROM requests gt
+      op.status AS operational_status
+    FROM requests gt${OPERATIONAL_RECORD_SQL}
     LEFT JOIN business_locations bl ON bl.id = gt.location_id
     LEFT JOIN sites s ON s.id = gt.site_id
-    WHERE gt.kind IN ('contact', 'reservation', 'experience_booking') AND ${where}
+    WHERE gt.kind IN ('contact', 'reservation', 'booking') AND ${where}
     ${unreadFilter}
     ORDER BY gt.updated_at DESC
     LIMIT ?
@@ -366,7 +384,7 @@ async function listUnreadThreadIds(db: DbClient, threadIds: string[], userId: st
   if (threadIds.length === 0) return []
   const rows = await queryAll<{ request_id: string }>(db, `
     SELECT gt.id AS request_id
-    FROM requests gt
+    FROM requests gt${OPERATIONAL_RECORD_SQL}
     WHERE gt.id IN (SELECT value FROM json_each(?))
       AND EXISTS (
         SELECT 1 FROM activity_entries n

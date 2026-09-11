@@ -29,7 +29,7 @@ export default defineHandler(async (event) => {
   const site = await loadMemberSiteRow(db, env, siteId, session.user.id)
   if (!site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
 
-  const booking = await queryFirst<{ location_id: string; status: string; updated_at: string }>(db, `SELECT location_id, status, updated_at FROM requests WHERE kind = \'experience_booking\' AND id = ? AND site_id = ? LIMIT 1`, [bookingId, siteId])
+  const booking = await queryFirst<{ location_id: string; status: string; updated_at: string }>(db, `SELECT location_id, status, updated_at FROM requests WHERE kind = \'booking\' AND id = ? AND site_id = ? LIMIT 1`, [bookingId, siteId])
   if (!booking) return jsonResponse({ error: 'Booking not found' }, { status: 404 })
 
   await assertResourceAccess(db, {

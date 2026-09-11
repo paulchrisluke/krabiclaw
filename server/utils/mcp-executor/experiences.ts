@@ -110,7 +110,7 @@ export async function handleExperiencesTools(ctx: McpExecutorContext): Promise<u
         ),
         context: await mutationContextPayload(site),
       };
-    case "list_experience_bookings":
+    case "list_bookings":
       {
         const experienceId = requiredString(args, "experience_id");
         const locationId = optionalString(args, "location_id") ?? null;
@@ -123,7 +123,7 @@ export async function handleExperiencesTools(ctx: McpExecutorContext): Promise<u
         const page = paginateMcpCollection(bookings, args, { resource: `experience-bookings:${site.siteId}:${experienceId}:${locationId ?? ''}` });
         return { bookings: page.items, page_info: page.page_info };
       }
-    case "list_all_experience_bookings": {
+    case "list_all_bookings": {
       const [bookings, summary] = await Promise.all([
         listExperienceBookingsForSite(site.db, site.siteId, {
           locationId: optionalString(args, "location_id") ?? null,
@@ -137,11 +137,11 @@ export async function handleExperiencesTools(ctx: McpExecutorContext): Promise<u
       const page = paginateMcpCollection(bookings, args, { resource: `all-experience-bookings:${site.siteId}:${optionalString(args, 'location_id') ?? ''}:${optionalDaysWindow(args, 'days') ?? ''}` });
       return { bookings: page.items, summary, page_info: page.page_info };
     }
-    case "update_experience_booking": {
+    case "update_booking": {
       const bookingId = requiredString(args, "booking_id")
       const status = requiredString(args, 'status')
       const experience = await getExperienceById(site.db, site.siteId, requiredString(args, 'experience_id'))
-      const request = await getGuestRequest(site.db, bookingId, site.siteId, 'experience_booking')
+      const request = await getGuestRequest(site.db, bookingId, site.siteId, 'booking')
       if (!experience || !request || request.product_id !== experience.id) throw new Error('Booking not found')
       const action = status === 'confirmed' ? 'confirm' : status === 'cancelled' ? 'cancel' : status === 'completed' ? 'complete' : null
       if (!action) throw new Error('Status must be confirmed, cancelled, or completed')

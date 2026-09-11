@@ -115,7 +115,7 @@ export default defineHandler(async (event) => {
   const session = await getAuthSession(event, env)
   const userId = session?.user?.id || null
   const customerInput = {
-    organizationId: site.organization_id, siteId, name: guestName, email: guestEmail, phone: normalizedGuestPhone, source: 'experience_booking', userId, } as const
+    organizationId: site.organization_id, siteId, name: guestName, email: guestEmail, phone: normalizedGuestPhone, source: 'booking', userId, } as const
   const customer = await findOrCreateCustomer(db, customerInput)
 
   const booking = await createExperienceBookingClaimingCapacity(db, {
@@ -146,7 +146,7 @@ export default defineHandler(async (event) => {
     await notifyExperienceBookingCreated(env, db, {
       organizationId: site.organization_id, siteId, siteName: site.brand_name, locationId: experience.location_id, bookingId: booking.id, guestName, email: guestEmail, guestPhone: normalizedGuestPhone, experienceTitle: experience.title, bookingDate, timeSlot, partySize, notes: notes || null, cancelUrl, contactPhone, contactEmail, ownerInboxUrl, })
   } catch (error) {
-    console.error('experience_booking_notification_failed', {
+    console.error('booking_notification_failed', {
       organizationId: site.organization_id, siteId, bookingId: booking.id, error: error instanceof Error ? error.message : String(error), })
   }
 
@@ -160,7 +160,7 @@ export default defineHandler(async (event) => {
     recordSubmissionConversionSafe(db, event, {
       organizationId: site.organization_id,
       siteId,
-      eventName: 'experience_booking_submit',
+      eventName: 'booking_submit',
       stage: 'submitted',
       locationId: experience.location_id,
       entityType: 'request',

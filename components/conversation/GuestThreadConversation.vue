@@ -178,7 +178,7 @@ const draft = defineModel<string>('input', { required: true })
 const props = withDefaults(defineProps<{
   entries: GuestThreadEntryMessage[]
   deliveryFailures?: GuestThreadDeliveryFailure[]
-  submissionType: 'contact' | 'reservation' | 'experience_booking'
+  submissionType: 'contact' | 'reservation' | 'booking'
   placeholder?: string
   loading?: boolean
   disabled?: boolean
@@ -221,7 +221,7 @@ const { formatRelativeTime } = useHumanTime()
 
 const openingTitle = computed(() => {
   if (props.submissionType === 'reservation') return 'Reservation request'
-  if (props.submissionType === 'experience_booking') return 'Experience booking request'
+  if (props.submissionType === 'booking') return 'Experience booking request'
   return 'Website message'
 })
 
@@ -240,7 +240,7 @@ function openingRows(): Array<{ label: string; value: string; wide?: boolean }> 
       { label: 'Guests', value: stringField(fields.guests) },
       { label: 'Requests', value: stringField(fields.requests), wide: true },
     )
-  } else if (props.submissionType === 'experience_booking') {
+  } else if (props.submissionType === 'booking') {
     rows.push(
       { label: 'Experience', value: stringField(fields.experienceTitle), wide: true },
       { label: 'Date', value: stringField(fields.bookingDate) },
@@ -315,7 +315,7 @@ function systemEventLabel(message: GuestThreadEntryMessage) {
 
 function labelForSubmissionType() {
   if (props.submissionType === 'reservation') return 'reservation'
-  if (props.submissionType === 'experience_booking') return 'booking'
+  if (props.submissionType === 'booking') return 'booking'
   return 'submission'
 }
 

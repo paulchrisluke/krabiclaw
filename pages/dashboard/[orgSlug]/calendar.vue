@@ -142,7 +142,7 @@ const dashboardApi = useDashboardApi()
 const requestEvent = useRequestEvent()
 const orgSlug = computed(() => String(route.params.orgSlug ?? ''))
 const currentMonth = ref(new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), 1)))
-const routeKind = typeof route.query.kinds === 'string' && ['reservation', 'experience_booking', 'post'].includes(route.query.kinds) ? route.query.kinds : FILTER_ALL
+const routeKind = typeof route.query.kinds === 'string' && ['reservation', 'booking', 'post'].includes(route.query.kinds) ? route.query.kinds : FILTER_ALL
 const routeSiteId = typeof route.query.siteId === 'string' ? route.query.siteId : FILTER_ALL
 const routeLocationId = typeof route.query.locationId === 'string' ? route.query.locationId : FILTER_ALL
 const calendarView = ref(route.query.view === 'availability' ? 'availability' : 'agenda')
@@ -184,7 +184,7 @@ const isSite = (value: unknown): value is AgendaSite => isRecord(value) && typeo
 const isLocation = (value: unknown): value is AgendaLocation => isRecord(value) && typeof value.id === 'string' && typeof value.siteId === 'string' && typeof value.title === 'string'
 const isAgendaPayload = (value: unknown): value is AgendaPayload =>
   isRecord(value) && Array.isArray(value.items) && value.items.every(isAgendaItem)
-  && Array.isArray(value.availableKinds) && value.availableKinds.every(kind => ['reservation', 'experience_booking', 'post'].includes(String(kind)))
+  && Array.isArray(value.availableKinds) && value.availableKinds.every(kind => ['reservation', 'booking', 'post'].includes(String(kind)))
   && Array.isArray(value.sites) && value.sites.every(isSite)
   && Array.isArray(value.locations) && value.locations.every(isLocation)
 
@@ -277,12 +277,12 @@ function dayLabel(dayKey: string) {
   return formatCalendarDate(dayKey, 'en', { weekday: 'long', month: 'long', day: 'numeric' })
 }
 function kindLabel(kind: AgendaKind) {
-  return ({ reservation: 'Reservation', experience_booking: 'Experience booking', post: 'Post' })[kind]
+  return ({ reservation: 'Reservation', booking: 'Experience booking', post: 'Post' })[kind]
 }
 function kindIcon(kind: AgendaKind) {
-  return ({ reservation: 'i-lucide-utensils', experience_booking: 'i-lucide-ticket', post: 'i-lucide-send' })[kind]
+  return ({ reservation: 'i-lucide-utensils', booking: 'i-lucide-ticket', post: 'i-lucide-send' })[kind]
 }
 function kindStyle(kind: AgendaKind) {
-  return ({ reservation: 'bg-blue-500/10 text-blue-700 dark:text-blue-300', experience_booking: 'bg-violet-500/10 text-violet-700 dark:text-violet-300', post: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' })[kind]
+  return ({ reservation: 'bg-blue-500/10 text-blue-700 dark:text-blue-300', booking: 'bg-violet-500/10 text-violet-700 dark:text-violet-300', post: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' })[kind]
 }
 </script>
