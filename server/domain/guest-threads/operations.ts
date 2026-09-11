@@ -132,7 +132,12 @@ function operationEntryQuery(
              COALESCE((SELECT MAX(sequence) FROM activity_entries WHERE request_id = gt.id), 0) + 1,
              ?, ?
       FROM requests gt
-      WHERE gt.id = ? AND gt.site_id = ? AND gt.kind = ? AND gt.status = ?
+      WHERE gt.id = ? AND gt.site_id = ? AND gt.kind = ?
+        -- Guarded on the state of the record that holds the seats, because the
+        -- thread has no status of its own: two dashboards acting at once must
+        -- not both write an entry for the same transition.
+        AND EXISTS (SELECT 1 FROM ${plan.kind === 'reservation' ? 'reservations' : 'bookings'} src
+                     WHERE src.request_id = gt.id AND src.status = ?)
       ON CONFLICT(dedupe_key) DO NOTHING
     `,
     params: [
@@ -172,7 +177,7 @@ function sourceUpdateQuery(context: ThreadContext, plan: SourceMutationPlan, inp
   return {
     query: `
       UPDATE ${table}
-      SET status = ?, updated_at = ?${stamps}${plan.action !== 'complete' ? ', hold_expires_at = NULL' : ''}
+      SET status = ?, updated_at = ?${stamps}${table === 'bookings' && plan.action !== 'complete' ? ', hold_expires_at = NULL' : ''}
       WHERE id = ? AND status = ?
         AND EXISTS (SELECT 1 FROM activity_entries WHERE id = ?)
     `,

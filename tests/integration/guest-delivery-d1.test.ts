@@ -2,7 +2,8 @@ import assert from 'node:assert/strict'
 import { createHmac } from 'node:crypto'
 import { generateSQLiteDrizzleJson, generateSQLiteMigration } from 'drizzle-kit/api'
 import * as schema from '../../server/db/schema.ts'
-import { bookingPayloadForGuest, requestInsertQueries, getGuestRequest } from '../../server/domain/requests.ts'
+import { threadPayloadForGuest, requestInsertQueries, getGuestRequest } from '../../server/domain/requests.ts'
+import { upsertLocationReservationConfig } from '../../server/utils/reservations.ts'
 import test from 'node:test'
 import { Miniflare } from 'miniflare'
 import { claimDelivery, createDeliveryReceipt, getDeliveryById, getDeliveryRetryEligibility, listDeliveryFailures, recordDeliveryOutcome } from '../../server/domain/guest-threads/deliveries.ts'
@@ -34,7 +35,7 @@ test('D1 claims fence concurrent sends and bound ambiguous provider retries', as
       "INSERT INTO member (id, organizationId, userId, role) VALUES ('member-proof','org-proof','user-proof','owner')",
     ]) await db.prepare(statement).run()
     const now = new Date().toISOString()
-    const opening = requestInsertQueries({ id: 'contact-proof', kind: 'contact', organization_id: 'org-proof', site_id: 'site-proof', location_id: null, product_id: null, customer_id: null, review_id: null, status: null, conversation_state: 'needs_attention', resolved_at: null, payload: { guest: { name: 'Proof Guest', email: 'guest@proof.example', phone: null }, subject: null, message: 'Hello', consent_at: null, ip_hash: null }, created_at: now, updated_at: now })
+    const opening = requestInsertQueries({ id: 'contact-proof', kind: 'contact', organization_id: 'org-proof', site_id: 'site-proof', location_id: null, customer_id: null, review_id: null, conversation_state: 'needs_attention', resolved_at: null, payload: { guest: { name: 'Proof Guest', email: 'guest@proof.example', phone: null }, subject: null, message: 'Hello', consent_at: null, ip_hash: null }, created_at: now, updated_at: now })
     await db.batch(opening.map(write => db.prepare(write.query).bind(...write.params)))
     await notifyContactSubmitted(env, db, { organizationId: 'org-proof', siteId: 'site-proof', siteName: 'Proof', locationId: null,
       contactId: 'contact-proof', guestName: 'Proof Guest', email: 'guest@proof.example', subject: null, message: 'Hello' })
@@ -45,13 +46,18 @@ test('D1 claims fence concurrent sends and bound ambiguous provider retries', as
     await db.prepare("INSERT INTO business_locations (id,organization_id,site_id,slug,title,timezone,max_capacity,opening_hours) VALUES ('booking-location','org-proof','site-proof','booking','Booking','Asia/Bangkok',10,?)")
       .bind(JSON.stringify({ periods: [{ open: { day: 1, hour: 16, minute: 0 }, close: { day: 1, hour: 22, minute: 0 } }] })).run()
     const booking = requestInsertQueries({ id: 'change-proof', kind: 'reservation', organization_id: 'org-proof', site_id: 'site-proof', location_id: 'booking-location',
-      product_id: null, customer_id: null, review_id: null, status: 'pending', booking_date: '2099-01-05', time_slot: '16:00', party_size: 1,
-      conversation_state: 'needs_attention', resolved_at: null, payload: bookingPayloadForGuest({ name: 'Guest', email: 'guest@proof.example', phone: '+66812345678' }), created_at: now, updated_at: now })
+      customer_id: null, review_id: null, conversation_state: 'needs_attention', resolved_at: null,
+      payload: threadPayloadForGuest({ name: 'Guest', email: 'guest@proof.example', phone: '+66812345678' }), created_at: now, updated_at: now })
     await db.batch(booking.map(write => db.prepare(write.query).bind(...write.params)))
+    // The seats live on the reservation, not the thread: a change proposal is
+    // read from and applied to this row.
+    await upsertLocationReservationConfig(db, { organizationId: 'org-proof', locationId: 'booking-location', patch: { slot_capacity: 10 }, actorId: 'user-proof' })
+    await db.prepare(`INSERT INTO reservations (id,organization_id,site_id,location_id,request_id,timezone,starts_at,ends_at,party_size,status)
+      VALUES ('reservation-change-proof','org-proof','site-proof','booking-location','change-proof','Asia/Bangkok','2099-01-05T09:00:00.000Z','2099-01-05T11:00:00.000Z',1,'pending')`).run()
     const propose = async (key: string, partySize: number) => {
       const current = await getGuestRequest(db, 'change-proof')
       assert(current)
-      await requestBookingChange(db, env, current, 'user-proof', { bookingDate: '2099-01-05', bookingTime: '16:00', partySize, locationId: 'booking-location', expectedUpdatedAt: current.updated_at }, key)
+      await requestBookingChange(db, env, current, 'user-proof', { kind: 'reservation', bookingDate: '2099-01-05', bookingTime: '16:00', partySize, locationId: 'booking-location', expectedUpdatedAt: current.updated_at }, key)
       const requestId = await db.prepare('SELECT id FROM activity_entries WHERE dedupe_key=?').bind(`booking-change-request:change-proof:${key}`).first<string>('id')
       assert(requestId)
       return { threadId: 'change-proof', requestId, token: createHmac('sha256', env.EMAIL_REPLY_SECRET).update(`booking-change:v1:change-proof:${requestId}`).digest('hex'), decision: 'accept' as const }
@@ -59,7 +65,7 @@ test('D1 claims fence concurrent sends and bound ambiguous provider retries', as
     const proposal = await propose('first-change', 2)
     assert.equal((await respondToBookingChange(db, env, proposal)).status, 'accepted')
     assert.equal((await respondToBookingChange(db, env, proposal)).status, 'accepted')
-    assert.equal(await db.prepare("SELECT party_size FROM requests WHERE id='change-proof'").first('party_size'), 2)
+    assert.equal(await db.prepare("SELECT party_size FROM reservations WHERE request_id='change-proof'").first('party_size'), 2)
     assert.equal(await db.prepare("SELECT count(*) AS count FROM activity_entries WHERE request_id='change-proof' AND event_name='booking_change.accepted'").first('count'), 1)
     const stale = await propose('stale-change', 3)
     await executeGuestThreadOperation(db, { threadId: 'change-proof', siteId: 'site-proof', action: 'confirm', actorUserId: 'user-proof', idempotencyKey: 'owner-confirm', env })
@@ -70,7 +76,7 @@ test('D1 claims fence concurrent sends and bound ambiguous provider retries', as
     assert(cancellation.status === 'fulfilled' && cancellation.value.ok)
     if (decision.status === 'fulfilled') assert.equal(decision.value.status, 'accepted')
     else assert.match(String(decision.reason), /changed|no longer/)
-    assert.equal(await db.prepare("SELECT status FROM requests WHERE id='change-proof'").first('status'), 'cancelled')
+    assert.equal(await db.prepare("SELECT status FROM reservations WHERE request_id='change-proof'").first('status'), 'cancelled')
     assert.equal(await db.prepare("SELECT count(*) AS count FROM activity_entries WHERE request_id='change-proof' AND event_name='reservation.cancel'").first('count'), 1)
     assert.equal(await db.prepare(`SELECT count(*) AS count FROM activity_entries accepted JOIN activity_entries cancelled ON cancelled.request_id=accepted.request_id
       WHERE accepted.request_id='change-proof' AND accepted.event_name='booking_change.accepted' AND cancelled.event_name='reservation.cancel' AND accepted.sequence>cancelled.sequence`).first('count'), 0)
@@ -316,8 +322,12 @@ test('D1 status-email retries preserve recorded content and reject superseded bo
       "INSERT INTO business_locations (id, organization_id, site_id, slug, title) VALUES ('location-status', 'org-status', 'site-status', 'proof', 'Proof')",
     ]) await db.prepare(statement).run()
     const now = new Date().toISOString()
-    const opening = requestInsertQueries({ id: 'booking-status', kind: 'reservation', organization_id: 'org-status', site_id: 'site-status', location_id: 'location-status', product_id: null, customer_id: null, review_id: null, status: 'pending', booking_date: '2026-10-01', time_slot: '18:00', party_size: 2, conversation_state: 'needs_attention', resolved_at: null, payload: bookingPayloadForGuest({ name: 'Guest', email: 'guest@provider-proof.com', phone: '123' }), created_at: now, updated_at: now })
+    const opening = requestInsertQueries({ id: 'booking-status', kind: 'reservation', organization_id: 'org-status', site_id: 'site-status', location_id: 'location-status', customer_id: null, review_id: null, conversation_state: 'needs_attention', resolved_at: null, payload: threadPayloadForGuest({ name: 'Guest', email: 'guest@provider-proof.com', phone: '123' }), created_at: now, updated_at: now })
     await db.batch(opening.map(write => db.prepare(write.query).bind(...write.params)))
+    // The instant and the zone the guest agreed to live on the reservation; the
+    // confirmation email is formatted from them, never from a server clock.
+    await db.prepare(`INSERT INTO reservations (id,organization_id,site_id,location_id,request_id,timezone,starts_at,ends_at,party_size,status)
+      VALUES ('reservation-status','org-status','site-status','location-status','booking-status','Asia/Bangkok','2026-10-01T11:00:00.000Z','2026-10-01T13:00:00.000Z',2,'pending')`).run()
 
     const input = {
       threadId: 'booking-status', siteId: 'site-status', actorUserId: 'user-status',
@@ -329,11 +339,13 @@ test('D1 status-email retries preserve recorded content and reject superseded bo
     const deliveryId = 'guest-thread-email:booking-status:confirm-status'
     assert.equal((await getDeliveryById(db, deliveryId))!.status, 'failed')
     const original = requests[0]!
-    assert.equal(original.text, 'Your reservation is confirmed: 2026-10-01 at 18:00 for 2 guests.')
+    assert.equal(original.text, 'Your reservation is confirmed: Oct 1, 2026, 6:00 PM for 2 guests.')
     assert.equal((await executeGuestThreadOperation(db, { ...input, action: 'retry_delivery', deliveryId, idempotencyKey: 'retry-unchanged' })).status, 502)
     assert.deepEqual(requests[1], original)
 
-    await db.prepare("UPDATE requests SET booking_date = '2026-10-02' WHERE id = 'booking-status'").run()
+    // Moving the reservation is what makes the pending send stale — the thread
+    // carries no copy of the time to move.
+    await db.prepare("UPDATE reservations SET starts_at = '2026-10-02T11:00:00.000Z', ends_at = '2026-10-02T13:00:00.000Z' WHERE request_id = 'booking-status'").run()
     const attemptsBefore = requests.length
     for (const request of [confirm, { ...input, action: 'retry_delivery', deliveryId, idempotencyKey: 'retry-changed' }]) {
       assert.equal((await executeGuestThreadOperation(db, request)).status, 409)
@@ -341,7 +353,7 @@ test('D1 status-email retries preserve recorded content and reject superseded bo
     assert.equal(requests.length, attemptsBefore)
     reject = false
     assert.equal((await executeGuestThreadOperation(db, { ...input, action: 'cancel', idempotencyKey: 'cancel-status' })).ok, true)
-    assert.match(requests.at(-1)!.text, /2026-10-02.*cancelled/)
+    assert.match(requests.at(-1)!.text, /Oct 2, 2026.*cancelled/)
     const afterCancellation = requests.length
     for (const request of [confirm, { ...input, action: 'retry_delivery', deliveryId, idempotencyKey: 'retry-cancelled' }]) {
       assert.equal((await executeGuestThreadOperation(db, request)).status, 409)
