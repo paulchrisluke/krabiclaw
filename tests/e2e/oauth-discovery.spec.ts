@@ -59,18 +59,22 @@ test.describe('OAuth discovery endpoints', () => {
     expect(callback.searchParams.get('state')).toBe('kikuzuki-publisher')
     const token = await request.post(`${baseURL}/api/auth/oauth2/token`, {
       headers: { Origin: baseURL! },
-      form: { grant_type: 'authorization_code', client_id: clientId,
+      form: {
+        grant_type: 'authorization_code', client_id: clientId,
         code: callback.searchParams.get('code')!, redirect_uri: redirectUri,
-        code_verifier: verifier, resource: `${baseURL}/api/mcp` },
+        code_verifier: verifier, resource: `${baseURL}/api/mcp`
+      },
     })
     expect(token.status()).toBe(200)
     const authorizationResult = await token.json() as { access_token: string; refresh_token?: string }
     expect(authorizationResult.refresh_token).toBeUndefined()
     const workspace = await request.post(`${baseURL}/api/mcp`, {
       headers: { Authorization: `Bearer ${authorizationResult.access_token}`, Accept: 'application/json, text/event-stream' },
-      data: { jsonrpc: '2.0', id: 1, method: 'tools/call', params: {
-        name: 'get_workspace_context', arguments: {},
-      } },
+      data: {
+        jsonrpc: '2.0', id: 1, method: 'tools/call', params: {
+          name: 'get_workspace_context', arguments: {},
+        }
+      },
     })
     expect(workspace.status()).toBe(200)
     const result = await workspace.json() as { result: { isError: boolean; structuredContent: { sites: Array<{ id: string }> } } }
@@ -201,10 +205,12 @@ test.describe('OAuth discovery endpoints', () => {
         Accept: 'application/json, text/event-stream',
         Cookie: '',
       },
-      data: { jsonrpc: '2.0', id: 0, method: 'initialize', params: {
-        protocolVersion: '2025-06-18', capabilities: {},
-        clientInfo: { name: 'krabiclaw-release-e2e', version: '1.0.0' },
-      } },
+      data: {
+        jsonrpc: '2.0', id: 0, method: 'initialize', params: {
+          protocolVersion: '2025-06-18', capabilities: {},
+          clientInfo: { name: 'krabiclaw-release-e2e', version: '1.0.0' },
+        }
+      },
     })
     expect(initialized.status(), await initialized.text()).toBe(200)
     expect(await initialized.json()).toMatchObject({ result: { protocolVersion: '2025-06-18' } })
@@ -362,11 +368,48 @@ test.describe('OAuth discovery endpoints', () => {
         client_assertion: assertion,
       },
     })
-    expect(token.status()).toBe(200)
+    expect(token.status(), await token.text()).toBe(200)
     const tokenBody = await token.json() as { access_token?: string, id_token?: string }
     expect(tokenBody.access_token).toBeTruthy()
     expect(tokenBody.id_token).toBeTruthy()
     expect(decodeProtectedHeader(tokenBody.id_token!).alg).toBe('RS256')
+
+    // ChatGPT probes the modern protocol first. A legacy HTTP error must
+    // identify this server before the client retries the initialize handshake.
+    const mcpHeaders = {
+      Authorization: `Bearer ${tokenBody.access_token}`,
+      Accept: 'application/json, text/event-stream',
+      Cookie: '',
+    }
+    const discovered = await request.post(`${baseURL}/api/mcp`, {
+      headers: { ...mcpHeaders, 'MCP-Protocol-Version': '2026-07-28' },
+      data: {
+        jsonrpc: '2.0', id: 'openai-mcp-discover', method: 'server/discover', params: {
+          _meta: { 'io.modelcontextprotocol/protocolVersion': '2026-07-28' },
+        }
+      },
+    })
+    expect(discovered.status()).toBe(400)
+    expect(await discovered.json()).toMatchObject({
+      id: 'openai-mcp-discover', error: { code: -32600, data: { requested: '2026-07-28' } },
+    })
+    const initialized = await request.post(`${baseURL}/api/mcp`, {
+      headers: mcpHeaders,
+      data: {
+        jsonrpc: '2.0', id: 'legacy-init', method: 'initialize', params: {
+          protocolVersion: '2025-11-25', capabilities: {},
+          clientInfo: { name: 'krabiclaw-release-e2e', version: '1.0.0' },
+        }
+      },
+    })
+    expect(initialized.status()).toBe(200)
+    expect(await initialized.json()).toMatchObject({ result: { protocolVersion: '2025-11-25' } })
+    const tools = await request.post(`${baseURL}/api/mcp`, {
+      headers: { ...mcpHeaders, 'MCP-Protocol-Version': '2025-11-25' },
+      data: { jsonrpc: '2.0', id: 'legacy-tools', method: 'tools/list', params: {} },
+    })
+    expect(tools.status()).toBe(200)
+    expect((await tools.json()).result.tools.length).toBeGreaterThan(0)
 
     const secondAuthorize = await request.get(oauthAuthorizeUrl(baseURL!, {
       ...authorizeParams,
@@ -394,8 +437,8 @@ test.describe('OAuth discovery endpoints', () => {
     expect(replayBody.error_description).toMatch(/assertion|replay|already/i)
   })
 
-  test('unauthenticated MCP request returns 401 with WWW-Authenticate header', async ({ request, baseURL }) => {
-    const MCP_VERSION = '2025-06-18'
+  test('unauthenticated modern MCP probe returns OAuth challenge before version validation', async ({ request, baseURL }) => {
+    const MCP_VERSION = '2026-07-28'
     const res = await request.post(`${baseURL}/api/mcp`, {
       headers: {
         'content-type': 'application/json',

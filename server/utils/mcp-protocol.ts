@@ -45,9 +45,8 @@ function metaString(request: McpRpcRequest, key: string) {
 }
 
 /**
- * The single rule for resolving a client's requested MCP protocol version:
- * use it when we speak it, otherwise negotiate to the revision we serve.
- * Never reject — see readMcpRequest.
+ * Legacy initialize negotiates a version; ordinary requests must already use
+ * a supported revision (validated by readMcpRequest).
  */
 function supportedProtocolVersionOrDefault(requested: string | null) {
   return requested && SUPPORTED_PROTOCOL_VERSION_SET.has(requested) ? requested : MCP_PROTOCOL_VERSION
@@ -73,14 +72,19 @@ export function readMcpRequest(event: H3Event, body: unknown): McpRpcRequest {
     ?.params?.protocolVersion === 'string'
     ? (body as { params: { protocolVersion: string } }).params.protocolVersion
     : null
-  // An unrecognized version is negotiated down, never rejected. MCP version
-  // negotiation is the client asking what we speak; `server/discover` exists to
-  // answer it with SUPPORTED_PROTOCOL_VERSIONS. Throwing here made that endpoint
-  // unreachable by exactly the clients that needed it — ChatGPT sends a
-  // future-dated MCP-Protocol-Version and wedged its connector setup on the -32600.
-  const version = supportedProtocolVersionOrDefault(
-    headerVersion ?? metaString(request, 'io.modelcontextprotocol/version') ?? bodyVersion,
-  )
+  const requestedVersion = method === 'initialize'
+    ? bodyVersion
+    : headerVersion
+  // This is a legacy server. HTTP 400 with a legacy error lets dual-era HTTP
+  // clients detect it and initialize; a successful modern discovery would
+  // incorrectly identify us as supporting stateless 2026 semantics.
+  if (method !== 'initialize' && requestedVersion !== null && !SUPPORTED_PROTOCOL_VERSION_SET.has(requestedVersion)) {
+    throw mcpProtocolError(MCP_ERROR.invalidRequest, `Unsupported MCP protocol version: ${requestedVersion}.`, {
+      supported: SUPPORTED_PROTOCOL_VERSIONS,
+      requested: requestedVersion,
+    }, 'protocol')
+  }
+  const version = supportedProtocolVersionOrDefault(requestedVersion)
 
   if (request.jsonrpc && request.jsonrpc !== '2.0') {
     throw mcpProtocolError(MCP_ERROR.invalidRequest, 'Only JSON-RPC 2.0 is supported.')

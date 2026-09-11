@@ -469,6 +469,17 @@ export function createAuth(env: CloudflareEnv) {
         fetchClientMetadataResource: fetchCimdMetadataResource,
         onClientCreated: configureCimdTenantScopes,
         onClientRefreshed: configureCimdTenantScopes,
+        // cimd's default 1s-per-client_id metadata fetch cooldown exists to
+        // stop a caller hammering a third party's jwks_uri. The E2E OAuth/CIMD
+        // suite reuses one fixed (non-nonced) client_id across an initial
+        // exchange and a same-test replay check, and Cloudflare doesn't
+        // guarantee isolate affinity between those requests, so the in-memory
+        // cache can miss twice inside that 1s window and trip the cooldown as
+        // "temporarily_unavailable" — not a real abuse case, just this test's
+        // shape. Lift it only under the E2E dev-route flag (never production).
+        metadataFetchPolicy: env.E2E_ALLOW_DEV_ROUTES === 'true'
+          ? { minimumFetchInterval: 0 }
+          : undefined,
       }),
       organization(configuredOrganizationOptions),
       betterAuthStripe({

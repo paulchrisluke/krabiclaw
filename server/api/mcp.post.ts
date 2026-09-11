@@ -95,6 +95,10 @@ export default defineHandler(async (event) => {
 
     const body = await readBody(event);
     requestEnvelope = safeMcpEnvelopeDetails(event, body);
+    if (isRecord(body)) {
+      const rawId = body.id;
+      if (typeof rawId === 'string' || typeof rawId === 'number' || rawId === null) requestId = rawId;
+    }
 
     const request = readMcpRequest(event, body);
     requestId = request.id;

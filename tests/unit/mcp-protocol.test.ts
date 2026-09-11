@@ -71,26 +71,34 @@ test('readMcpRequest defaults notification requests without protocol metadata to
   assert.equal(request._meta?.['io.modelcontextprotocol/version'], MCP_PROTOCOL_VERSION)
 })
 
-test('readMcpRequest negotiates an unsupported protocol version down instead of rejecting it', () => {
-  // ChatGPT sends a future-dated MCP-Protocol-Version on server/discover. When
-  // this threw, the one endpoint that reports SUPPORTED_PROTOCOL_VERSIONS was
-  // unreachable by the clients that needed to ask.
+test('readMcpRequest rejects unsupported request versions but negotiates during initialize', () => {
   const event = {
     req: new Request('http://localhost/api/mcp', {
       headers: { 'mcp-protocol-version': '2026-07-28' },
     }),
   } as unknown as Parameters<typeof readMcpRequest>[0]
 
+  for (const method of ['server/discover', 'tools/list', 'tools/call']) {
+    assert.throws(() => readMcpRequest(event, {
+      jsonrpc: '2.0', id: 'unsupported', method, params: { name: 'list_sites' },
+    }), error => {
+      const mapped = asMcpError(error)
+      assert.equal(mapped.code, MCP_ERROR.invalidRequest)
+      assert.equal(mapped.kind, 'protocol')
+      assert.match(mapped.message, /Unsupported MCP protocol version/)
+      return true
+    })
+  }
   const request = readMcpRequest(event, {
-    jsonrpc: '2.0',
-    id: 'discover-1',
-    method: 'server/discover',
-    params: {},
+    jsonrpc: '2.0', id: 'initialize', method: 'initialize',
+    params: { protocolVersion: '2026-07-28' },
   })
-
-  assert.equal(request.method, 'server/discover')
-  assert.equal(request._meta?.['io.modelcontextprotocol/version'], MCP_PROTOCOL_VERSION)
   assert.equal(negotiatedMcpProtocolVersion(request), MCP_PROTOCOL_VERSION)
+  const supported = readMcpRequest(event, {
+    jsonrpc: '2.0', id: 'initialize-supported', method: 'initialize',
+    params: { protocolVersion: '2025-06-18' },
+  })
+  assert.equal(negotiatedMcpProtocolVersion(supported), '2025-06-18')
 })
 
 test('readMcpRequest keeps a supported protocol version the client asked for', () => {
