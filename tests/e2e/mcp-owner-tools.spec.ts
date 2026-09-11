@@ -6,7 +6,7 @@ import { MCP_GROWTH_SITE_ID, mcpRequest, mcpData, createScratchLocation, ensureS
 // Split out of mcp.spec.ts (owner tool-coverage tests) — see helpers/mcp.ts
 // for why. This group covers the bulk of an owner's MCP tool surface: site
 // page/settings, notifications/submissions, location/reviews/QA
-// lifecycle, and Products/posts/media/experiences workflows.
+// lifecycle, and Product/post/media workflows.
 
 test.describe('stateless MCP server', () => {
   test('owner can use site content and settings tools', async ({ request, baseURL }) => {
@@ -392,11 +392,11 @@ test.describe('stateless MCP server', () => {
         expect(rejected.status()).toBe(200)
         expect((await rejected.json()).error.code).toBe(-32601)
       }
-      expect(names).toEqual(expect.arrayContaining(['delete_media_asset', 'delete_experience', 'update_location']))
+      expect(names).toEqual(expect.arrayContaining(['delete_media_asset', 'delete_product', 'update_location']))
 
     })
 
-    test('owner can manage media and experience tools including public booking', async ({ request, baseURL }) => {
+    test('owner can manage media and Product tools including public booking', async ({ request, baseURL }) => {
       test.setTimeout(120_000)
       await loginAs(request, baseURL!, MCP_GROWTH_SERVICE_USER_ID)
       const siteId = await ensureSite(request, baseURL!)
@@ -415,103 +415,90 @@ test.describe('stateless MCP server', () => {
       })
       expect(mediaList.status()).toBe(200)
 
-      const experience = await mcpRequest(request, baseURL!, {
+      // A bookable Product is created by the same tool as any other Product;
+      // what a customer buys is a variant, and the price lives there.
+      const product = await mcpRequest(request, baseURL!, {
         method: 'tools/call',
-        toolName: 'create_experience',
-        args: { site_id: siteId, location_id: locationId, title: 'MCP Kayak Tour', body: 'Half-day tour', status: 'active', recurring_slots: { monday: ['14:00'], tuesday: ['14:00'], wednesday: ['14:00'], thursday: ['14:00'], friday: ['14:00'], saturday: ['14:00'], sunday: ['14:00'] }, max_capacity: 6 },
-      })
-      expect(experience.status()).toBe(200)
-      const experienceBody = await experience.json()
-      const experienceId = mcpData<{ id: string }>(experienceBody).id
-      expect(experienceId).toEqual(expect.any(String))
-
-      const listedExperiences = await mcpRequest(request, baseURL!, {
-        method: 'tools/call',
-        toolName: 'list_experiences',
-        args: { site_id: siteId },
-      })
-      expect(listedExperiences.status()).toBe(200)
-      const experiencesBody = await listedExperiences.json()
-      expect(mcpData<{ experiences: Array<{ id: string }> }>(experiencesBody).experiences.some(item => item.id === experienceId)).toBe(true)
-
-      const experienceRead = await mcpRequest(request, baseURL!, {
-        method: 'tools/call',
-        toolName: 'get_experience',
-        args: { site_id: siteId, experience_id: experienceId },
-      })
-      expect(experienceRead.status()).toBe(200)
-
-      const experienceUpdate = await mcpRequest(request, baseURL!, {
-        method: 'tools/call',
-        toolName: 'update_experience',
-        args: { site_id: siteId, experience_id: experienceId, tagline: 'Updated through MCP', tags: ['small group'] },
-      })
-      expect(experienceUpdate.status()).toBe(200)
-
-      const invalidExperience = await mcpRequest(request, baseURL!, {
-        method: 'tools/call',
-        toolName: 'create_experience',
-        args: { site_id: siteId, location_id: locationId, title: 'Invalid MCP Experience', status: 'draft' },
-      })
-      expect(invalidExperience.status()).toBe(200)
-      const invalidExperienceBody = await invalidExperience.json()
-      expect(invalidExperienceBody.result?.isError).toBe(true)
-
-      const experienceReadBody = await experienceRead.json()
-      const experienceSlug = mcpData<{ experience: { slug: string } }>(experienceReadBody).experience.slug
-      expect(experienceSlug).toEqual(expect.any(String))
-
-      const futureDate = new Date(Date.now() + 40 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
-      const booking = await request.post(`${baseURL}/api/public/sites/${siteId}/experiences/${experienceSlug}/book`, {
-        data: {
-          guest_name: 'MCP Experience Guest',
-          guest_email: `mcp-exp-${Date.now()}@example.test`,
-          party_size: 2,
-          booking_date: futureDate,
-          time_slot: '14:00',
-          notes: 'Created via public booking flow for MCP coverage',
+        toolName: 'create_product',
+        args: {
+          site_id: siteId,
+          name: 'MCP Kayak Tour',
+          description: 'Half-day tour',
+          variants: [{ name: 'Per person', prices: [{ unit_amount: 150000, currency: 'THB' }] }],
         },
       })
-      expect(booking.status(), await booking.text()).toBe(201)
-      const bookingBody = await booking.json() as { booking_id: string }
-      const bookingId = bookingBody.booking_id
-      expect(bookingId).toEqual(expect.any(String))
+      expect(product.status()).toBe(200)
+      const created = mcpData<{ product: { id: string; slug: string } }>(await product.json()).product
+      expect(created.id).toEqual(expect.any(String))
 
-      const bookingsList = await mcpRequest(request, baseURL!, {
-        method: 'tools/call',
-        toolName: 'list_bookings',
-        args: { site_id: siteId, experience_id: experienceId },
-      })
-      expect(bookingsList.status()).toBe(200)
-      const bookingsBody = await bookingsList.json()
-      const listedBooking = mcpData<{ bookings: Array<{ id: string; location_id: string | null; location_title: string | null }> }>(bookingsBody)
-        .bookings.find(item => item.id === bookingId)
-      expect(listedBooking?.location_id).toEqual(expect.any(String))
-      expect(listedBooking?.location_title).toEqual(expect.any(String))
+      for (const [toolName, args] of [
+        ['set_product_publication', { site_id: siteId, product_id: created.id, published: true }],
+        ['set_product_location', { site_id: siteId, product_id: created.id, location_id: locationId, active: true, published: true }],
+      ] as const) {
+        const response = await mcpRequest(request, baseURL!, { method: 'tools/call', toolName, args })
+        expect(response.status(), await response.text()).toBe(200)
+      }
 
-      const bookingUpdate = await mcpRequest(request, baseURL!, {
-        method: 'tools/call',
-        toolName: 'update_booking',
-        args: { site_id: siteId, experience_id: experienceId, booking_id: bookingId, status: 'confirmed' },
+      const listed = await mcpRequest(request, baseURL!, {
+        method: 'tools/call', toolName: 'list_products', args: { site_id: siteId },
       })
-      expect(bookingUpdate.status()).toBe(200)
+      expect(listed.status()).toBe(200)
+      expect(mcpData<{ products: Array<{ id: string }> }>(await listed.json()).products.some(item => item.id === created.id)).toBe(true)
 
-      const deleteExperienceCandidate = await mcpRequest(request, baseURL!, {
-        method: 'tools/call',
-        toolName: 'create_experience',
-        args: { site_id: siteId, location_id: locationId, title: 'Delete MCP Experience', body: 'Temporary experience', status: 'inactive' },
+      const read = await mcpRequest(request, baseURL!, {
+        method: 'tools/call', toolName: 'get_product', args: { site_id: siteId, product_id: created.id },
       })
-      expect(deleteExperienceCandidate.status()).toBe(200)
-      const deleteExperienceCandidateBody = await deleteExperienceCandidate.json()
-      const deleteExperienceId = mcpData<{ id: string }>(deleteExperienceCandidateBody).id
-      expect(deleteExperienceId).toEqual(expect.any(String))
+      expect(read.status()).toBe(200)
+      const readProduct = mcpData<{ product: { slug: string; locations: Array<{ location_id: string; published: boolean }> } }>(await read.json()).product
+      expect(readProduct.locations.some(entry => entry.location_id === locationId && entry.published)).toBe(true)
 
-      const deleteExperienceRes = await mcpRequest(request, baseURL!, {
+      const update = await mcpRequest(request, baseURL!, {
         method: 'tools/call',
-        toolName: 'delete_experience',
-        args: { site_id: siteId, experience_id: deleteExperienceId },
+        toolName: 'update_product',
+        args: { site_id: siteId, product_id: created.id, description: 'Updated through MCP', tags: ['small group'] },
       })
-      expect(deleteExperienceRes.status()).toBe(200)
+      expect(update.status()).toBe(200)
+
+      const invalid = await mcpRequest(request, baseURL!, {
+        method: 'tools/call', toolName: 'create_product', args: { site_id: siteId, name: '' },
+      })
+      expect(invalid.status()).toBe(200)
+      expect((await invalid.json()).result?.isError).toBe(true)
+
+      // A Product with no materialized sessions offers nothing to book, and
+      // says so rather than inventing a slot from a rule nobody generated.
+      const sessions = await request.get(`${baseURL}/api/public/sites/${siteId}/products/${readProduct.slug}/sessions`)
+      expect([200, 404, 409]).toContain(sessions.status())
+      if (sessions.status() === 200) {
+        const { sessions: rows } = await sessions.json() as { sessions: Array<{ id: string; is_full: boolean }> }
+        const open = rows.find(session => !session.is_full)
+        if (open) {
+          const booking = await request.post(`${baseURL}/api/public/sites/${siteId}/products/${readProduct.slug}/book`, {
+            data: {
+              guest_name: 'MCP Product Guest',
+              guest_email: `mcp-product-${Date.now()}@example.test`,
+              party_size: 2,
+              session_id: open.id,
+              notes: 'Created via public booking flow for MCP coverage',
+            },
+          })
+          expect(booking.status(), await booking.text()).toBe(201)
+          const { booking_id: bookingId } = await booking.json() as { booking_id: string }
+          expect(bookingId).toEqual(expect.any(String))
+        }
+      }
+
+      const deleteCandidate = await mcpRequest(request, baseURL!, {
+        method: 'tools/call',
+        toolName: 'create_product',
+        args: { site_id: siteId, name: 'Delete MCP Product', description: 'Temporary Product' },
+      })
+      expect(deleteCandidate.status()).toBe(200)
+      const deleteId = mcpData<{ product: { id: string } }>(await deleteCandidate.json()).product.id
+      const deleted = await mcpRequest(request, baseURL!, {
+        method: 'tools/call', toolName: 'delete_product', args: { site_id: siteId, product_id: deleteId },
+      })
+      expect(deleted.status()).toBe(200)
     })
   })
 

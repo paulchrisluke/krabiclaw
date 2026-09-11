@@ -371,7 +371,7 @@ test.describe('stateless MCP server', () => {
     expect(allToolNames).toEqual(expect.arrayContaining([
       'list_sites',
       'get_site', 'list_locations', 'list_location_products', 'list_posts', 'get_site_media_assets',
-      'list_tenant_pages', 'list_experiences', 'get_contact_inquiries',
+      'list_tenant_pages', 'list_products', 'list_collections', 'get_contact_inquiries',
     ]))
     expect(allToolNames).not.toEqual(expect.arrayContaining([
       'get_translation_inventory', 'start_translation_job', 'list_translation_jobs',

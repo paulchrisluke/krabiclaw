@@ -74,7 +74,8 @@ test.beforeAll(async ({ playwright }, testInfo) => {
         short_description: 'โรบาตายากิและซูชิในอ่าวนาง',
       },
     })
-    await putLocalization(owner, 'product_category', 'pc_loc-kikuzuki_standard_sushi', {
+    // Menu sections are collections now; their names localize on the collection.
+    await putLocalization(owner, 'collection', 'collection-kikuzuki-sushi', {
       values: { name: 'ซูชิ' },
     })
     await putLocalization(owner, 'product', 'item-kiku-tuna-sushi', {
@@ -82,8 +83,7 @@ test.beforeAll(async ({ playwright }, testInfo) => {
       values: {
         name: 'ซูชิทูน่า',
         description: 'ทูน่า',
-        tags_json: [],
-        details_json: [],
+        tags: [],
       },
     })
   } finally {
@@ -91,7 +91,7 @@ test.beforeAll(async ({ playwright }, testInfo) => {
   }
 })
 
-test('Kikuzuki keeps its Thai shell and category translations on a hard load', async ({ page }, testInfo) => {
+test('Kikuzuki keeps its Thai shell and collection translations on a hard load', async ({ page }, testInfo) => {
   testInfo.setTimeout(120_000)
   const errors: string[] = []
   page.on('console', message => {
@@ -135,7 +135,7 @@ test('Kikuzuki keeps its Thai shell and category translations on a hard load', a
     await expect(hoursRow).toContainText('23:00')
   }
 
-  for (const path of ['/th/reservations', '/th/experiences']) {
+  for (const path of ['/th/reservations', '/th/menu']) {
     const builtInResponse = await openTenantPage(page, `${kikuzukiTestBaseUrl()}${path}`, kikuzukiTestExtraHeaders())
     expect(builtInResponse?.status()).toBeLessThan(400)
     await expect(page.locator('html')).toHaveAttribute('lang', locale)

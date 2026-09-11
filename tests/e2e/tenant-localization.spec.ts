@@ -136,9 +136,9 @@ test.describe.serial('published Thai content saves through the CMS and renders w
           media: [],
         },
         {
-          type: 'offering_grid',
+          type: 'product_grid',
           position: 1,
-          data: { section: 'services', source: 'site_offerings' },
+          data: { section: 'services' },
           media: [],
         },
       ],
@@ -151,12 +151,12 @@ test.describe.serial('published Thai content saves through the CMS and renders w
     })
 
     await expectStatus(await owner.get(`/api/editor/sites/${siteId}/localization/site/${siteId}/${locale}`), 404)
-    await putLocalization(owner, 'offering', 'offering_ncls_family', {
+    // A practice area is a page, so it localizes like every other page.
+    await putLocalization(owner, 'content_document', 'page_ncls_services_family', {
       route_path: '/th/services/family-th',
       values: {
-        name: 'กฎหมายครอบครัวภาษาไทย',
+        title: 'กฎหมายครอบครัวภาษาไทย',
         summary: 'คำแนะนำเรื่องครอบครัวที่ชัดเจน',
-        body: 'ทีมกฎหมายของเราช่วยอธิบายทางเลือกและขั้นตอนเป็นภาษาไทย',
       },
     })
     await putLocalization(owner, 'content_document', 'blog_ncls_writing-your-own-will-how-it-works', {

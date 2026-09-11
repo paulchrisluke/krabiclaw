@@ -49,22 +49,22 @@ async function chooseFirstAvailableTime(page: Page) {
 test.describe('tenant guest journeys (disposable local/preview data only)', () => {
   test.skip(!writableEnvironment, 'guest writes are forbidden outside local and preview')
 
-  test('Pottery House experience booking persists and creates log-only owner dispatch', async ({ page, request }) => {
+  test('Pottery House Product booking persists and creates log-only owner dispatch', async ({ page, request }) => {
     test.setTimeout(90_000)
     const since = new Date().toISOString()
     const email = `pottery-booking-${Date.now()}@playwright.example`
-    await openTenantPage(page, `${potteryHouseBaseURL}/experiences/pottery-wheel-class`, potteryHouseExtraHeaders)
-    await page.locator('[data-experience-cta="desktop"]').getByRole('button', { name: /book a class/i }).click()
+    await openTenantPage(page, `${potteryHouseBaseURL}/locations/pottery-house-krabi/products/pottery-wheel-class`, potteryHouseExtraHeaders)
+    await page.locator('#product-booking-toggle').first().click()
     await chooseFirstAvailableTime(page)
     await page.getByLabel('Full name').fill('Pottery Journey Test')
     await page.getByLabel('Email address').fill(email)
     await page.getByLabel(/Phone number/i).fill('+66812345678')
-    const submission = page.waitForResponse(response => response.request().method() === 'POST' && response.url().includes('/experiences/pottery-wheel-class/book'))
+    const submission = page.waitForResponse(response => response.request().method() === 'POST' && response.url().includes('/products/pottery-wheel-class/book'))
     await page.getByRole('button', { name: 'Confirm booking' }).click()
     const response = await submission
     expect(response.status()).toBe(201)
     expect((await response.json() as { booking_id?: string }).booking_id).toEqual(expect.any(String))
-    await expect(page).toHaveURL(/\/experiences\/confirmed/)
+    await expect(page).toHaveURL(/\/bookings\/confirmed/)
     await expect(page.locator('main')).toContainText(/booking|received|confirmed/i)
     const state = await waitForNotifications(request, potteryHouseBaseURL, 'site-pottery-house', since, state =>
       state.notifications.some(row => row.template === 'new_reservation')
@@ -137,28 +137,26 @@ test.describe('tenant guest journeys (disposable local/preview data only)', () =
   test('guest validation rejects invalid input and re-used cancellation tokens', async ({ request }) => {
     test.skip(executionHost === 'preview.krabiclaw.com', 'destructive token validation runs only against local disposable D1')
     const baseURL = testBaseUrl()
-    const yesterday = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10)
-    const future = new Date(Date.now() + 30 * 86_400_000).toISOString().slice(0, 10)
     const headers = { ...devLoginHeaders(), 'x-preview-tenant': 'pottery-house' }
-    const book = (name: string, email: string, date: string, time: string) => request.post(`${baseURL}/api/public/sites/site-pottery-house/experiences/pottery-wheel-class/book`, {
-      headers, data: { guest_name: name, guest_email: email, party_size: 1, booking_date: date, time_slot: time },
+    // A guest names a SESSION, not a date and a time: the occurrence is a real
+    // row, so there is nothing to re-derive and no slot to invent.
+    const book = (name: string, email: string, sessionId: string) => request.post(`${baseURL}/api/public/sites/site-pottery-house/products/pottery-wheel-class/book`, {
+      headers, data: { guest_name: name, guest_email: email, party_size: 1, session_id: sessionId },
     })
-    expect((await book('Invalid Date', 'past@playwright.example', yesterday, '10:00')).status()).toBe(400)
-    expect((await book('Invalid Slot', 'slot@playwright.example', future, '03:17')).status()).toBe(400)
+    expect((await book('Missing Session', 'past@playwright.example', '')).status()).toBe(400)
+    expect((await book('Unknown Session', 'slot@playwright.example', 'session-that-does-not-exist')).status()).toBe(404)
     expect((await request.post(`${baseURL}/api/public/sites/site-pottery-house/contact`, { headers, data: {} })).status()).toBe(400)
     expect((await request.post(`${baseURL}/api/public/sites/site-pottery-house/reservations`, { headers, data: {} })).status()).toBe(400)
-    // The slot comes from the experience's own schedule for that day, not a
-    // time the fixture happened to offer when this test was written.
-    const availability = await request.get(`${baseURL}/api/public/sites/site-pottery-house/experiences/pottery-wheel-class/availability?date=${future}`, { headers })
-    expect(availability.status()).toBe(200)
-    const { dates } = await availability.json() as { dates: Array<{ slots: Array<{ time_slot: string; is_closed: boolean }> }> }
-    const openSlot = dates[0]?.slots.find(slot => !slot.is_closed)
-    expect(openSlot, `pottery-wheel-class offers no open slot on ${future}`).toBeTruthy()
-    const created = await book('Cancel Once', 'cancel-once@playwright.example', future, openSlot!.time_slot)
+    const sessions = await request.get(`${baseURL}/api/public/sites/site-pottery-house/products/pottery-wheel-class/sessions`, { headers })
+    expect(sessions.status()).toBe(200)
+    const { sessions: rows } = await sessions.json() as { sessions: Array<{ id: string; is_full: boolean }> }
+    const openSession = rows.find(session => !session.is_full)
+    expect(openSession, 'pottery-wheel-class has no open session materialized').toBeTruthy()
+    const created = await book('Cancel Once', 'cancel-once@playwright.example', openSession!.id)
     expect(created.status()).toBe(201)
     const body = await created.json() as { booking_id: string; cancellation_token: string }
     expect(JSON.stringify(body)).not.toContain('cancel-once@playwright.example')
-    const cancelURL = `${baseURL}/api/public/sites/site-pottery-house/experiences/bookings/${body.booking_id}/cancel`
+    const cancelURL = `${baseURL}/api/public/sites/site-pottery-house/booking-requests/${body.booking_id}/cancel`
     const authHeaders = { ...headers, Authorization: `Bearer ${body.cancellation_token}` }
     expect((await request.post(cancelURL, { headers: authHeaders })).status()).toBe(200)
     expect((await request.post(cancelURL, { headers: authHeaders })).status()).not.toBe(200)

@@ -94,7 +94,7 @@ export const IMPACT_GROUPS = [
     specs: [
       'tests/e2e/mcp-authorization.spec.ts',
       'tests/e2e/mcp-product-large-batch.spec.ts',
-      'tests/e2e/mcp-product-nullable-price.spec.ts',
+      'tests/e2e/mcp-product-pricing.spec.ts',
       'tests/e2e/mcp-content.spec.ts',
       'tests/e2e/mcp-media.spec.ts',
       'tests/e2e/mcp-owner-tools.spec.ts',
