@@ -226,7 +226,6 @@ export async function loadDashboardSettingsResource(
 
 export interface LocationContentCounts {
   photos: number
-  experiences: number
   posts: number
   qa: number
   upcomingReservations: number
@@ -258,16 +257,17 @@ async function loadLocationContentCounts(
          AND ma.status = 'active'
         WHERE mp.site_id = ? AND mp.owner_type = 'business_location' AND mp.owner_id = ?
           AND mp.slot IN ('hero', 'gallery') AND mp.status = 'active') AS photos,
-      (SELECT COUNT(*) FROM products p JOIN product_locations pl ON pl.product_id = p.id JOIN product_booking_configs cfg ON cfg.product_id = p.id JOIN product_publications pub ON pub.product_id = p.id AND pub.site_id = ? WHERE pl.location_id = ?) AS experiences,
       (SELECT COUNT(*) FROM content_documents WHERE kind = 'social_post' AND row_role = 'root' AND site_id = ? AND location_id = ? AND status = 'published') AS posts,
       (SELECT COUNT(*) FROM content_documents WHERE kind = 'qa' AND row_role = 'root' AND site_id = ? AND location_id = ?) AS qa,
-      (SELECT COUNT(*) FROM requests
-        WHERE kind = 'reservation' AND site_id = ? AND location_id = ? AND status IN ('pending', 'confirmed')
-          AND booking_date >= date('now')) AS upcoming_reservations
-  `, Array.from({ length: 5 }, () => [siteId, locationId]).flat())
+      -- Counted on the reservation, not the thread: the thread holds the
+      -- conversation and the reservation holds the seating, including when it
+      -- starts and whether it still stands.
+      (SELECT COUNT(*) FROM reservations
+        WHERE site_id = ? AND location_id = ? AND status IN ('pending', 'confirmed')
+          AND starts_at >= strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) AS upcoming_reservations
+  `, Array.from({ length: 4 }, () => [siteId, locationId]).flat())
   return {
     photos: row?.photos ?? 0,
-    experiences: row?.experiences ?? 0,
     posts: row?.posts ?? 0,
     qa: row?.qa ?? 0,
     upcomingReservations: row?.upcoming_reservations ?? 0,

@@ -78,7 +78,7 @@ export interface TenantPageBlockDefinition {
 const ALL_RECIPES = [
   'custom', 'about', 'pricing', 'donate', 'legal', 'contact', 'schedule', 'home',
   'services', 'privacy', 'terms', 'third-party-notices', 'locations', 'menu', 'order',
-  'experiences', 'reservations', 'qa', 'reviews', 'posts', 'photos', 'blog',
+  'products', 'reservations', 'qa', 'reviews', 'posts', 'photos', 'blog',
 ] as const
 
 export const TENANT_PAGE_RECIPE_REGISTRY = new Set<string>(ALL_RECIPES)
@@ -108,7 +108,7 @@ export const TENANT_PAGE_BLOCK_REGISTRY: Record<TenantPageBlockType, TenantPageB
   // References the canonical catalog: a collection, or explicit products. It
   // carries no prices or names of its own — those are read through the
   // product, so a grid can never show a stale price.
-  product_grid: blockDefinitionWithMetadata('product_grid', 'Product grid', 'References a collection or explicit products.', ['home', 'about', 'pricing', 'custom', 'services', 'menu', 'order', 'experiences'], ['title', 'collection_id', 'product_ids'], { allowedPageTypes: ['custom', 'recipe', 'system'] }),
+  product_grid: blockDefinitionWithMetadata('product_grid', 'Product grid', 'References a collection or explicit products.', ['home', 'about', 'pricing', 'custom', 'services', 'menu', 'order', 'products'], ['title', 'collection_id', 'product_ids'], { allowedPageTypes: ['custom', 'recipe', 'system'] }),
   location_grid: blockDefinitionWithMetadata('location_grid', 'Location grid', 'References canonical locations.', ['home', 'about', 'contact', 'custom'], ['title', 'location_ids'], { allowedPageTypes: ['custom', 'recipe', 'system'] }),
 }
 

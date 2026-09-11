@@ -1,5 +1,5 @@
 <template>
-  <GuestCancelPage kind="reservation" />
+  <GuestCancelPage kind="booking" />
 </template>
 
 <script setup lang="ts">

@@ -12,34 +12,29 @@ export interface ModuleContentGuardResult {
 }
 
 async function productsHaveLiveData(db: DbClient, scope: ModuleContentGuardScope): Promise<boolean> {
-  const row = await queryFirst<{ id: string }>(db, `
-    SELECT id FROM products
-    WHERE site_id = ? ${scope.locationId ? 'AND location_id = ?' : ''} AND is_visible = 1
-    LIMIT 1
-  `, scope.locationId ? [scope.siteId, scope.locationId] : [scope.siteId])
-  return Boolean(row)
-}
-
-async function experiencesHasLiveData(db: DbClient, scope: ModuleContentGuardScope): Promise<boolean> {
+  // Published to this site, offered at this location, and on sale: the three
+  // separate states a customer needs before a Product is live for them.
   const row = await queryFirst<{ id: string }>(db, `
     SELECT p.id FROM products p
-    JOIN product_booking_configs cfg ON cfg.product_id = p.id
-    JOIN product_publications pub ON pub.product_id = p.id AND pub.site_id = ?
-    ${scope.locationId ? 'JOIN product_locations pl ON pl.product_id = p.id AND pl.location_id = ? AND pl.published = 1' : ''}
-    WHERE p.active = 1 AND pub.published = 1
+    JOIN product_publications pub ON pub.product_id = p.id AND pub.organization_id = p.organization_id
+      AND pub.site_id = ? AND pub.published = 1
+    ${scope.locationId ? 'JOIN product_locations pl ON pl.product_id = p.id AND pl.organization_id = p.organization_id AND pl.location_id = ? AND pl.published = 1' : ''}
+    WHERE p.active = 1
     LIMIT 1
   `, scope.locationId ? [scope.siteId, scope.locationId] : [scope.siteId])
   return Boolean(row)
 }
 
 async function reservationsHasLiveData(db: DbClient, scope: ModuleContentGuardScope): Promise<boolean> {
-  const today = new Date().toISOString().slice(0, 10)
+  // Read from the reservation, which holds the seating and its state; the
+  // thread it hangs off holds only the conversation.
   const row = await queryFirst<{ id: string }>(db, `
-    SELECT id FROM requests
-    WHERE kind = 'reservation' AND site_id = ? ${scope.locationId ? 'AND location_id = ?' : ''}
-      AND status NOT IN ('cancelled', 'completed') AND booking_date >= ?
+    SELECT id FROM reservations
+    WHERE site_id = ? ${scope.locationId ? 'AND location_id = ?' : ''}
+      AND status NOT IN ('cancelled', 'completed')
+      AND starts_at >= strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
     LIMIT 1
-  `, scope.locationId ? [scope.siteId, scope.locationId, today] : [scope.siteId, today])
+  `, scope.locationId ? [scope.siteId, scope.locationId] : [scope.siteId])
   return Boolean(row)
 }
 
@@ -54,15 +49,19 @@ async function orderingHasLiveData(db: DbClient, scope: ModuleContentGuardScope)
 }
 
 async function servicesHasLiveData(db: DbClient, scope: ModuleContentGuardScope): Promise<boolean> {
+  // A practice area is a page now, so "has services" is "has a published
+  // services page or a page beneath it".
   const row = await queryFirst<{ id: string }>(db, `
-    SELECT id FROM offerings WHERE site_id = ? LIMIT 1
+    SELECT id FROM content_documents
+    WHERE site_id = ? AND kind = 'page' AND row_role = 'root' AND status = 'published'
+      AND (path = '/services' OR path LIKE '/services/%')
+    LIMIT 1
   `, [scope.siteId])
   return Boolean(row)
 }
 
 const MODULE_LABELS: Partial<Record<ProductFeature, string>> = {
-  products: 'visible Products',
-  experiences: 'active experiences',
+  products: 'live Products',
   reservations: 'upcoming reservations',
   ordering: 'active delivery links',
   services: 'published services',
@@ -70,7 +69,6 @@ const MODULE_LABELS: Partial<Record<ProductFeature, string>> = {
 
 const MODULE_CHECKS: Partial<Record<ProductFeature, (_db: DbClient, _scope: ModuleContentGuardScope) => Promise<boolean>>> = {
   products: productsHaveLiveData,
-  experiences: experiencesHasLiveData,
   reservations: reservationsHasLiveData,
   ordering: orderingHasLiveData,
   services: servicesHasLiveData,

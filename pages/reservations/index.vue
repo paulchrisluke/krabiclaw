@@ -160,7 +160,7 @@ import BookingRecap from '@/components/booking/BookingRecap.vue'
 import BookingTimeStep, { type RawDateAvailability, type TimeSlotSelection } from '@/components/booking/BookingTimeStep.vue'
 import { useBreadcrumbSchema } from '~/composables/useSchemaOrg'
 import { getTodayHoursLabel, isOpenNow } from '~/shared/reservation-hours'
-import { formatTime } from '~/utils/timezone'
+import { formatTime, localDateTimeToInstant } from '~/utils/timezone'
 import { setBookingConfirmation } from '~/composables/useBookingHandoff'
 import { requireProductPresentation } from '~/utils/product-presentation'
 
@@ -208,6 +208,21 @@ const selectedLocation = computed(() =>
 )
 
 
+
+/**
+ * The zone the chosen slot is stated in.
+ *
+ * A reservation is a wall-clock time at a place, so the place's zone is the
+ * only one that can turn it into an instant. A location without one cannot
+ * take reservations, and saying so loudly beats booking the wrong hour.
+ */
+const reservationTimezone = computed(() => {
+  const timezone = selectedLocation.value?.timezone
+  if (typeof timezone !== 'string' || !timezone) {
+    throw createError({ statusCode: 500, statusMessage: 'This location has no timezone set, so a reservation time cannot be read.' })
+  }
+  return timezone
+})
 
 function bookingLocationAddress(location: ApiRecord): unknown {
   if (locale.value === 'en') return location.address
@@ -380,8 +395,10 @@ async function handleReservation() {
       siteId,
       siteName: brandName.value,
       guestName: reservationForm.value.name,
-      date: reservationForm.value.date,
-      time: reservationForm.value.time,
+      // The guest picked a wall-clock slot at this location; the instant it
+      // means is resolved once, here, in that location's zone.
+      startsAt: localDateTimeToInstant(reservationForm.value.date, reservationForm.value.time, reservationTimezone.value).toISOString(),
+      timezone: reservationTimezone.value,
       guests: reservationForm.value.guests,
       requests: reservationForm.value.requests || null,
       cancelUrl: res?.id && res?.cancellationToken ? `/reservations/cancel?id=${res.id}#${res.cancellationToken}` : null,

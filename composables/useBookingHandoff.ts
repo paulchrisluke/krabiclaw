@@ -1,18 +1,24 @@
-// Carries booking confirmation details from the reservation/experience booking form to the
-// dedicated `/reservations/confirmed` or `/experiences/confirmed` page via sessionStorage —
+// Carries booking confirmation details from the reservation or product booking
+// form to the dedicated `/reservations/confirmed` or `/bookings/confirmed` page via sessionStorage —
 // same-tab only, never sent to the server, so it can safely hold guest-entered text like
 // special requests that we don't want round-tripping through the URL.
 
 export interface BookingConfirmation {
-  type: 'reservation' | 'experience'
+  type: 'reservation' | 'booking'
   siteId: string
   siteName: string
   policySummary?: ApiRecord | null
   guestName: string
-  date: string
-  time: string
+  /**
+   * The instant booked and the zone it belongs to.
+   *
+   * Not a date string plus a time string: that pair had no zone of its own, so
+   * every reader guessed, and the guest could be shown an hour nobody booked.
+   */
+  startsAt: string
+  timezone: string
   guests: string | number
-  experienceId?: string | null
+  productId?: string | null
   title?: string
   requests?: string | null
   cancelUrl?: string | null

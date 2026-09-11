@@ -195,13 +195,12 @@ export async function loadPublicDraftPage(
   const page = typeof query.page === 'string' ? query.page : 'home'
   const supportedPages = new Set([
     'home', 'locations', 'location', 'about', 'contact', 'reservations',
-    'order', 'qa', 'reviews', 'posts', 'experiences', 'photos', 'menu', 'products', 'blog',
+    'order', 'qa', 'reviews', 'posts', 'photos', 'menu', 'products', 'blog',
   ])
   if (!supportedPages.has(page)) {
     throw new HTTPError({ statusCode: 400, statusMessage: 'Unsupported draft preview page' })
   }
   const locationSlug = typeof query.location === 'string' ? query.location : null
-  const experienceSlug = typeof query.experience === 'string' ? query.experience : null
   const requestedDatasets = new Set(
     typeof query.datasets === 'string' && query.datasets
       ? query.datasets.split(',')
@@ -214,9 +213,6 @@ export async function loadPublicDraftPage(
   ])
   if ([...requestedDatasets].some(dataset => !supportedDatasets.has(dataset))) {
     throw new HTTPError({ statusCode: 400, statusMessage: 'Unsupported draft preview dataset' })
-  }
-  if (page === 'experiences' || experienceSlug) {
-    throw new HTTPError({ statusCode: 422, statusMessage: 'Draft preview does not contain experience records' })
   }
   if (page === 'blog' || requestedDatasets.has('blog') || requestedDatasets.has('blogPost')) {
     throw new HTTPError({ statusCode: 422, statusMessage: 'Draft preview does not contain blog records' })

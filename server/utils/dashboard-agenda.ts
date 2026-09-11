@@ -191,7 +191,7 @@ export async function listAgenda(
     })
     const features = new Set([...capabilities.pages.map(page => page.feature), ...capabilities.managers.map(manager => manager.id)])
     if (features.has('reservations')) available.add('reservation')
-    if (features.has('experiences') || features.has('bookings')) available.add('booking')
+    if (features.has('products')) available.add('booking')
   }
   const availableKinds = AGENDA_KINDS.filter(kind => available.has(kind))
   const requestedKinds = new Set((query.kinds?.length ? query.kinds : availableKinds).filter(kind => available.has(kind)))

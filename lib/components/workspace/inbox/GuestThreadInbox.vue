@@ -341,7 +341,7 @@ const effectiveFeatureSet = computed(() => new Set<ProductFeature>([
 const typeOptions = computed(() => {
   const options: Array<{ value: SubmissionType; label: string }> = [{ value: 'contact', label: 'Contact' }]
   if (effectiveFeatureSet.value.has('reservations')) options.push({ value: 'reservation', label: 'Reservations' })
-  if (effectiveFeatureSet.value.has('experiences')) options.push({ value: 'booking', label: 'Experience bookings' })
+  if (effectiveFeatureSet.value.has('products')) options.push({ value: 'booking', label: 'Product bookings' })
   return options
 })
 const supportedThreadLabels = computed(() => typeOptions.value.map(option => option.label.toLowerCase()))

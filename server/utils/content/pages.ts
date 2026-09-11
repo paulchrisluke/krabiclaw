@@ -100,14 +100,14 @@ const RESERVED_EXACT_PATHS = new Set([
   '/api', '/_nuxt', '/sitemap.xml', '/robots.txt', '/admin', '/dashboard',
   '/login', '/signup', '/oauth', '/account', '/auth', '/docs', '/dev',
   '/preview', '/templates', '/features', '/privacy', '/terms', '/blog',
-  '/menu', '/order', '/experiences', '/reservations', '/locations', '/contact',
+  '/menu', '/order', '/products', '/bookings', '/reservations', '/locations', '/contact',
   '/links', '/services', '/article',
 ])
 
 const RESERVED_PREFIXES = [
   '/api/', '/_nuxt/', '/dashboard/', '/login/', '/signup/',
   '/oauth/', '/account/', '/auth/', '/docs/', '/dev/', '/preview/',
-  '/templates/', '/features/', '/blog/', '/menu/', '/order/', '/experiences/',
+  '/templates/', '/features/', '/blog/', '/menu/', '/order/', '/products/', '/bookings/',
   '/reservations/', '/locations/', '/services/', '/article/',
 ]
 

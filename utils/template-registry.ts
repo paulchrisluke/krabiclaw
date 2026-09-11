@@ -34,10 +34,10 @@ export const publicTemplateRegistry: Record<PublicTemplateSlug, PublicTemplateDe
       articlePathHasCategory: false,
     },
     sitemap: {
-      exactPaths: ['/', '/menu', '/contact', '/blog', '/experiences', '/locations', '/reservations', '/posts', '/photos', '/qa', '/reviews'],
-      dynamicPrefixes: ['/blog/', '/experiences/', '/locations/', '/posts/'],
+      exactPaths: ['/', '/menu', '/products', '/contact', '/blog', '/locations', '/reservations', '/posts', '/photos', '/qa', '/reviews'],
+      dynamicPrefixes: ['/blog/', '/locations/', '/posts/'],
     },
-    nonIndexableExactPaths: ['/contact/confirmed', '/experiences/cancel', '/experiences/confirmed', '/reservations/cancel', '/reservations/confirmed'],
+    nonIndexableExactPaths: ['/contact/confirmed', '/bookings/cancel', '/bookings/confirmed', '/reservations/cancel', '/reservations/confirmed'],
   },
   blawby: {
     slug: 'blawby',

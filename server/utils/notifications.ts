@@ -63,7 +63,8 @@ interface ReservationNotificationInput extends SiteContext {
   reservationId: string
   guestName: string
   email: string
-  phone: string
+  /** A guest who gave no phone number has none to show; the template says so. */
+  phone: string | null
   date: string
   time: string
   guests: string
@@ -629,7 +630,7 @@ export async function notifyReservationCreated(
     reservation_id: opts.reservationId,
     guest_name: opts.guestName,
     email: opts.email,
-    phone: opts.phone,
+    phone: opts.phone ?? '',
     date: opts.date,
     time: opts.time,
     guests: opts.guests,
@@ -660,7 +661,7 @@ export async function notifyReservationCreated(
           date: prettyDate,
           time: prettyTime,
           guests: opts.guests,
-          phone: opts.phone,
+          phone: opts.phone ?? '',
           email: opts.email,
           context: buildReservationWhatsAppContext(opts.locationName),
           requests: opts.requests ?? '',
@@ -717,7 +718,7 @@ export async function notifyReservationCancelled(
     reservation_id: opts.reservationId,
     guest_name: opts.guestName,
     email: opts.email,
-    phone: opts.phone,
+    phone: opts.phone ?? '',
     date: opts.date,
     time: opts.time,
     guests: opts.guests,
@@ -757,7 +758,7 @@ export async function notifyReservationCancelled(
           date: prettyDate,
           time: prettyTime,
           guests: opts.guests,
-          phone: opts.phone,
+          phone: opts.phone ?? '',
           context: buildReservationWhatsAppContext(opts.locationName),
           requests: opts.requests ?? '',
           reply_path: inboxUrlToWhatsAppReplyPath(inboxUrl),
