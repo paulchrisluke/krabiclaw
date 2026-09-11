@@ -76,6 +76,7 @@ interface ReservationNotificationInput extends SiteContext {
 }
 
 interface ContactNotificationInput extends SiteContext {
+  productTitle?: string | null
   locationId?: string | null
   contactId: string
   guestName: string
@@ -87,15 +88,22 @@ interface ContactNotificationInput extends SiteContext {
   experienceTitle?: string | null
 }
 
-interface ExperienceBookingNotificationInput extends SiteContext {
+interface BookingNotificationInput extends SiteContext {
   locationId?: string | null
   bookingId: string
   guestName: string
   email: string
   guestPhone?: string | null
-  experienceTitle: string
-  bookingDate: string
-  timeSlot: string
+  productTitle: string
+  /**
+   * The session instant and the zone it belongs to.
+   *
+   * One instant plus one zone, not a date string and a time string: the pair
+   * had no zone of its own, so every formatter had to guess, and a 7pm class
+   * became a noon one in whatever zone the worker happened to run in.
+   */
+  startsAt: string
+  timezone: string
   partySize: number
   notes?: string | null
   wasConfirmed?: boolean
@@ -801,14 +809,14 @@ export async function notifyContactSubmitted(
     subject: opts.subject ?? '',
     message_preview: opts.message.slice(0, 200),
     site_name: restaurant,
-    experience_title: opts.experienceTitle ?? '',
+    experience_title: opts.productTitle ?? '',
     consent_acknowledged: opts.consentAcknowledged === true ? 'true' : 'false',
     deep_link: inboxUrl ?? '',
   }
 
   const [ownerEmail, guestEmail] = await Promise.all([
-    renderEmail(ContactOwnerNew, { guestName: opts.guestName, email: opts.email, subject: opts.subject, message: opts.message, siteName: restaurant, platformDomain, replyUrl: inboxUrl, experienceTitle: opts.experienceTitle, consentAcknowledged: opts.consentAcknowledged }),
-    renderEmail(ContactGuestReceived, { guestName: opts.guestName, siteName: restaurant, subject: opts.subject, message: opts.message, platformDomain, experienceTitle: opts.experienceTitle, consentAcknowledged: opts.consentAcknowledged }),
+    renderEmail(ContactOwnerNew, { guestName: opts.guestName, email: opts.email, subject: opts.subject, message: opts.message, siteName: restaurant, platformDomain, replyUrl: inboxUrl, productTitle: opts.productTitle, consentAcknowledged: opts.consentAcknowledged }),
+    renderEmail(ContactGuestReceived, { guestName: opts.guestName, siteName: restaurant, subject: opts.subject, message: opts.message, platformDomain, productTitle: opts.productTitle, consentAcknowledged: opts.consentAcknowledged }),
   ])
 
   const results = await Promise.allSettled([
@@ -953,14 +961,14 @@ export async function notifyReviewRequest(
   })
 }
 
-export async function notifyExperienceBookingCreated(
+export async function notifyBookingCreated(
   env: NotificationEnv,
   db: DbClient,
-  opts: ExperienceBookingNotificationInput
+  opts: BookingNotificationInput
 ) {
   const studio = siteName(opts)
-  const prettyDate = formatCalendarDate(opts.bookingDate, 'en')
-  const prettyTime = formatTime(opts.timeSlot, 'en')
+  const prettyDate = new Intl.DateTimeFormat('en-US', { timeZone: opts.timezone, dateStyle: 'medium' }).format(new Date(opts.startsAt))
+  const prettyTime = new Intl.DateTimeFormat('en-US', { timeZone: opts.timezone, timeStyle: 'short' }).format(new Date(opts.startsAt))
   const platformDomain = getPlatformDomain(env)
   const [replyTo, inboxUrl] = await Promise.all([
     buildReplyToAddress(env, 'booking', opts.bookingId),
@@ -980,9 +988,9 @@ export async function notifyExperienceBookingCreated(
     booking_id: opts.bookingId,
     guest_name: opts.guestName,
     email: opts.email,
-    experience: opts.experienceTitle,
-    date: opts.bookingDate,
-    time: opts.timeSlot,
+    experience: opts.productTitle,
+    starts_at: opts.startsAt,
+    timezone: opts.timezone,
     party_size: String(opts.partySize),
     requests: opts.notes ?? '',
     site_name: studio,
@@ -990,8 +998,8 @@ export async function notifyExperienceBookingCreated(
   }
 
   const [ownerEmail, guestEmail] = await Promise.all([
-    renderEmail(BookingOwnerNew, { guestName: opts.guestName, siteName: studio, experienceTitle: opts.experienceTitle, date: prettyDate, time: prettyTime, partySize: opts.partySize, email: opts.email, phone: opts.guestPhone ?? null, specialRequests: opts.notes, platformDomain, replyUrl: inboxUrl }),
-    renderEmail(BookingGuestReceived, { guestName: opts.guestName, siteName: studio, experienceTitle: opts.experienceTitle, date: prettyDate, time: prettyTime, partySize: opts.partySize, specialRequests: opts.notes, contactPhone: opts.contactPhone ?? null, contactEmail: opts.contactEmail ?? null, cancelUrl: opts.cancelUrl ?? null, platformDomain }),
+    renderEmail(BookingOwnerNew, { guestName: opts.guestName, siteName: studio, productTitle: opts.productTitle, date: prettyDate, time: prettyTime, partySize: opts.partySize, email: opts.email, phone: opts.guestPhone ?? null, specialRequests: opts.notes, platformDomain, replyUrl: inboxUrl }),
+    renderEmail(BookingGuestReceived, { guestName: opts.guestName, siteName: studio, productTitle: opts.productTitle, date: prettyDate, time: prettyTime, partySize: opts.partySize, specialRequests: opts.notes, contactPhone: opts.contactPhone ?? null, contactEmail: opts.contactEmail ?? null, cancelUrl: opts.cancelUrl ?? null, platformDomain }),
   ])
 
   const results = await Promise.allSettled([
@@ -1012,7 +1020,7 @@ export async function notifyExperienceBookingCreated(
           guests: String(opts.partySize),
           phone: opts.guestPhone ?? '',
           email: opts.email,
-          context: buildExperienceWhatsAppContext(opts.experienceTitle, opts.siteName),
+          context: buildExperienceWhatsAppContext(opts.productTitle, opts.siteName),
           requests: opts.notes ?? '',
           reply_path: inboxUrlToWhatsAppReplyPath(inboxUrl),
         },
@@ -1023,16 +1031,16 @@ export async function notifyExperienceBookingCreated(
       to: opts.email,
       replyTo,
       template: 'booking_customer_received',
-      title: `Your booking request was sent — ${opts.experienceTitle}`,
+      title: `Your booking request was sent — ${opts.productTitle}`,
       payload,
-      email: { subject: `Your booking request was sent — ${opts.experienceTitle}`, html: guestEmail.html, text: guestEmail.text },
+      email: { subject: `Your booking request was sent — ${opts.productTitle}`, html: guestEmail.html, text: guestEmail.text },
       delivery: threadDelivery(threadContext, 'guest_acknowledgement', 'email', 'booking_customer_received', opts.email),
     }),
   ])
 
   results.forEach((result, index) => {
     if (result.status === 'rejected') {
-      console.error('notifyExperienceBookingCreated_failed', {
+      console.error('notifyBookingCreated_failed', {
         task: index === 0 ? 'notifyOwner' : 'sendEmailNotification',
         bookingId: opts.bookingId,
         error: result.reason instanceof Error ? result.reason.message : String(result.reason),
@@ -1041,15 +1049,15 @@ export async function notifyExperienceBookingCreated(
   })
 }
 
-export async function notifyExperienceBookingCancelled(
+export async function notifyBookingCancelled(
   env: NotificationEnv,
   db: DbClient,
-  opts: ExperienceBookingNotificationInput
+  opts: BookingNotificationInput
 ) {
   const confirmed = Boolean(opts.wasConfirmed)
   const studio = siteName(opts)
-  const prettyDate = formatCalendarDate(opts.bookingDate, 'en')
-  const prettyTime = formatTime(opts.timeSlot, 'en')
+  const prettyDate = new Intl.DateTimeFormat('en-US', { timeZone: opts.timezone, dateStyle: 'medium' }).format(new Date(opts.startsAt))
+  const prettyTime = new Intl.DateTimeFormat('en-US', { timeZone: opts.timezone, timeStyle: 'short' }).format(new Date(opts.startsAt))
   const platformDomain = getPlatformDomain(env)
   const inboxUrl = await buildOwnerInboxUrl(env, db, {
     organizationId: opts.organizationId,
@@ -1067,9 +1075,9 @@ export async function notifyExperienceBookingCancelled(
     booking_id: opts.bookingId,
     guest_name: opts.guestName,
     email: opts.email,
-    experience: opts.experienceTitle,
-    date: opts.bookingDate,
-    time: opts.timeSlot,
+    experience: opts.productTitle,
+    starts_at: opts.startsAt,
+    timezone: opts.timezone,
     party_size: String(opts.partySize),
     booking_was_confirmed: confirmed ? 'true' : 'false',
     site_name: studio,
@@ -1077,8 +1085,8 @@ export async function notifyExperienceBookingCancelled(
   }
 
   const [ownerEmail, guestEmail] = await Promise.all([
-    renderEmail(BookingOwnerCancelled, { guestName: opts.guestName, siteName: studio, experienceTitle: opts.experienceTitle, date: prettyDate, time: prettyTime, partySize: opts.partySize, email: opts.email, phone: opts.guestPhone, notes: opts.notes, wasConfirmed: confirmed, platformDomain, replyUrl: inboxUrl }),
-    renderEmail(BookingGuestCancelled, { guestName: opts.guestName, siteName: studio, experienceTitle: opts.experienceTitle, date: prettyDate, time: prettyTime, partySize: opts.partySize, notes: opts.notes, wasConfirmed: confirmed, platformDomain }),
+    renderEmail(BookingOwnerCancelled, { guestName: opts.guestName, siteName: studio, productTitle: opts.productTitle, date: prettyDate, time: prettyTime, partySize: opts.partySize, email: opts.email, phone: opts.guestPhone, notes: opts.notes, wasConfirmed: confirmed, platformDomain, replyUrl: inboxUrl }),
+    renderEmail(BookingGuestCancelled, { guestName: opts.guestName, siteName: studio, productTitle: opts.productTitle, date: prettyDate, time: prettyTime, partySize: opts.partySize, notes: opts.notes, wasConfirmed: confirmed, platformDomain }),
   ])
   const threadContext = await recordGuestCancellation(db, {
     submissionType: 'booking',
@@ -1107,7 +1115,7 @@ export async function notifyExperienceBookingCancelled(
           time: prettyTime,
           guests: String(opts.partySize),
           phone: opts.guestPhone ?? '',
-          context: buildExperienceWhatsAppContext(opts.experienceTitle, opts.siteName),
+          context: buildExperienceWhatsAppContext(opts.productTitle, opts.siteName),
           requests: opts.notes ?? '',
           reply_path: inboxUrlToWhatsAppReplyPath(inboxUrl),
         },
@@ -1126,7 +1134,7 @@ export async function notifyExperienceBookingCancelled(
 
   results.forEach((result, index) => {
     if (result.status === 'rejected') {
-      console.error('notifyExperienceBookingCancelled_failed', {
+      console.error('notifyBookingCancelled_failed', {
         task: index === 0 ? 'notifyOwner' : 'sendEmailNotification',
         bookingId: opts.bookingId,
         error: result.reason instanceof Error ? result.reason.message : String(result.reason),
@@ -1394,8 +1402,8 @@ export async function getNotificationCopyPreviews(): Promise<NotificationCopyPre
     renderEmail(ReservationOwnerCancelled, { guestName: 'Alex Carter', siteName: restaurant, date: 'Tue, Jul 14, 2026', time: '7:00 PM', guests: '2', phone: '+1 555 123 4567', email: 'alex@example.com', locationName: 'Main Dining Room', specialRequests: 'Window seat', wasConfirmed: false, platformDomain }),
     renderEmail(ContactOwnerNew, { guestName: 'Jordan Lee', email: 'jordan@example.com', message: 'Hi, do you have vegan options and parking nearby?', siteName: restaurant, platformDomain, replyUrl: 'https://demo.krabiclaw.com/dashboard/ember-slice/sites/ember-slice/inbox/contact-preview-1', consentAcknowledged: true }),
     renderEmail(ContactGuestReceived, { guestName: 'Jordan Lee', siteName: restaurant, subject: 'general', message: 'Hi, do you have vegan options and parking nearby?', platformDomain, consentAcknowledged: true }),
-    renderEmail(BookingOwnerNew, { guestName: 'Mina Park', siteName: studio, experienceTitle: 'Pottery Wheel Class', date: 'Mon, Jul 20, 2026', time: '10:00 AM', partySize: 2, email: 'mina@example.com', phone: '+66 76 000 0002', platformDomain, replyUrl: 'https://demo.krabiclaw.com/dashboard/pottery-house-krabi/sites/pottery-house/locations/main/inbox/booking-preview-1' }),
-    renderEmail(BookingGuestReceived, { guestName: 'Mina Park', siteName: studio, experienceTitle: 'Pottery Wheel Class', date: 'Mon, Jul 20, 2026', time: '10:00 AM', partySize: 2, contactPhone: '+66 76 000 0001', contactEmail: 'hello@example.com', cancelUrl: 'https://demo.krabiclaw.com/experiences/cancel?id=booking-preview-1', platformDomain }),
+    renderEmail(BookingOwnerNew, { guestName: 'Mina Park', siteName: studio, productTitle: 'Pottery Wheel Class', date: 'Mon, Jul 20, 2026', time: '10:00 AM', partySize: 2, email: 'mina@example.com', phone: '+66 76 000 0002', platformDomain, replyUrl: 'https://demo.krabiclaw.com/dashboard/pottery-house-krabi/sites/pottery-house/locations/main/inbox/booking-preview-1' }),
+    renderEmail(BookingGuestReceived, { guestName: 'Mina Park', siteName: studio, productTitle: 'Pottery Wheel Class', date: 'Mon, Jul 20, 2026', time: '10:00 AM', partySize: 2, contactPhone: '+66 76 000 0001', contactEmail: 'hello@example.com', cancelUrl: 'https://demo.krabiclaw.com/bookings/cancel?id=booking-preview-1', platformDomain }),
     renderEmail(OrganizationInvite, { organizationName: studio, inviterName: 'Priya Shah', role: 'admin', inviteUrl: 'https://demo.krabiclaw.com/accept-invitation/invite-preview-1', platformDomain }),
   ])
 

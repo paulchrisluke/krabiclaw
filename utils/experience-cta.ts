@@ -52,12 +52,12 @@ export function resolveExperienceAvailabilityMessage(
 
 export function buildExperienceContactUrl(
   experienceId: string | null | undefined,
-  experienceTitle: string | null | undefined,
+  productTitle: string | null | undefined,
 ): string {
   if (!experienceId) return '/contact'
   const params = new URLSearchParams({
     experienceId,
-    experienceTitle: experienceTitle ?? '',
+    productTitle: productTitle ?? '',
   })
   return `/contact?${params.toString()}`
 }
