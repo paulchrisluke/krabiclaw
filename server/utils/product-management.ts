@@ -179,32 +179,45 @@ async function hydrate(db: DbClient, organizationId: string, products: Product[]
   const ids = d1JsonArray(products.map(product => product.id))
   const byId = new Map(products.map(product => [product.id, product]))
 
-  const [optionRows, valueRows, variantRows, selectionRows, priceRows, publicationRows, locationRows, collectionRows, metafieldRows] = await Promise.all([
-    queryAll<Row>(db, `SELECT id, product_id, name, sort_order FROM product_options
-      WHERE organization_id = ? AND product_id IN (SELECT value FROM json_each(?)) ORDER BY sort_order, id`, [organizationId, ids]),
-    queryAll<Row>(db, `SELECT id, product_id, product_option_id, value, sort_order FROM product_option_values
-      WHERE organization_id = ? AND product_id IN (SELECT value FROM json_each(?)) ORDER BY sort_order, id`, [organizationId, ids]),
-    queryAll<Row>(db, `SELECT id, product_id, name, sku, active, sort_order FROM product_variants
-      WHERE organization_id = ? AND product_id IN (SELECT value FROM json_each(?)) ORDER BY sort_order, id`, [organizationId, ids]),
-    queryAll<Row>(db, `SELECT product_variant_id, product_option_id, product_option_value_id FROM product_variant_option_values
-      WHERE organization_id = ? AND product_id IN (SELECT value FROM json_each(?))`, [organizationId, ids]),
-    queryAll<Row>(db, `SELECT pr.* FROM prices pr
+  // One batch, not nine round trips. The databases are a long way from the
+  // Workers that read them, so each extra statement is real latency on every
+  // catalog page; D1 charges one round trip for the batch.
+  const batched = await executeBatch(db, [
+    { query: `SELECT id, product_id, name, sort_order FROM product_options
+      WHERE organization_id = ? AND product_id IN (SELECT value FROM json_each(?)) ORDER BY sort_order, id`, params: [organizationId, ids] },
+    { query: `SELECT id, product_id, product_option_id, value, sort_order FROM product_option_values
+      WHERE organization_id = ? AND product_id IN (SELECT value FROM json_each(?)) ORDER BY sort_order, id`, params: [organizationId, ids] },
+    { query: `SELECT id, product_id, name, sku, active, sort_order FROM product_variants
+      WHERE organization_id = ? AND product_id IN (SELECT value FROM json_each(?)) ORDER BY sort_order, id`, params: [organizationId, ids] },
+    { query: `SELECT product_variant_id, product_option_id, product_option_value_id FROM product_variant_option_values
+      WHERE organization_id = ? AND product_id IN (SELECT value FROM json_each(?))`, params: [organizationId, ids] },
+    { query: `SELECT pr.* FROM prices pr
       JOIN product_variants v ON v.id = pr.product_variant_id AND v.organization_id = pr.organization_id
       WHERE pr.organization_id = ? AND v.product_id IN (SELECT value FROM json_each(?))
-      ORDER BY pr.product_variant_id, pr.valid_from_at, pr.id`, [organizationId, ids]),
-    queryAll<Row>(db, `SELECT product_id, site_id, published FROM product_publications
-      WHERE organization_id = ? AND product_id IN (SELECT value FROM json_each(?)) ORDER BY site_id`, [organizationId, ids]),
-    queryAll<Row>(db, `SELECT product_id, location_id, active, published FROM product_locations
-      WHERE organization_id = ? AND product_id IN (SELECT value FROM json_each(?)) ORDER BY location_id`, [organizationId, ids]),
-    queryAll<Row>(db, `SELECT product_id, collection_id, sort_order FROM collection_products
-      WHERE organization_id = ? AND product_id IN (SELECT value FROM json_each(?)) ORDER BY collection_id`, [organizationId, ids]),
-    queryAll<Row>(db, `SELECT pm.product_id, pm.value, d.id AS definition_id, d.organization_id AS definition_org,
+      ORDER BY pr.product_variant_id, pr.valid_from_at, pr.id`, params: [organizationId, ids] },
+    { query: `SELECT product_id, site_id, published FROM product_publications
+      WHERE organization_id = ? AND product_id IN (SELECT value FROM json_each(?)) ORDER BY site_id`, params: [organizationId, ids] },
+    { query: `SELECT product_id, location_id, active, published FROM product_locations
+      WHERE organization_id = ? AND product_id IN (SELECT value FROM json_each(?)) ORDER BY location_id`, params: [organizationId, ids] },
+    { query: `SELECT product_id, collection_id, sort_order FROM collection_products
+      WHERE organization_id = ? AND product_id IN (SELECT value FROM json_each(?)) ORDER BY collection_id`, params: [organizationId, ids] },
+    { query: `SELECT pm.product_id, pm.value, d.id AS definition_id, d.organization_id AS definition_org,
         d.namespace, d.key, d.name, d.description, d.value_type, d.validations, d.localizable
       FROM product_metafields pm
       JOIN metafield_definitions d ON d.id = pm.definition_id AND d.organization_id = pm.organization_id
       WHERE pm.organization_id = ? AND pm.product_id IN (SELECT value FROM json_each(?))
-      ORDER BY d.namespace, d.key`, [organizationId, ids]),
-  ])
+      ORDER BY d.namespace, d.key`, params: [organizationId, ids] },
+  ], { operation: 'Hydrate products' })
+  const rowsAt = (index: number): Row[] => (batched[index] as { results?: Row[] })?.results ?? []
+  const optionRows = rowsAt(0)
+  const valueRows = rowsAt(1)
+  const variantRows = rowsAt(2)
+  const selectionRows = rowsAt(3)
+  const priceRows = rowsAt(4)
+  const publicationRows = rowsAt(5)
+  const locationRows = rowsAt(6)
+  const collectionRows = rowsAt(7)
+  const metafieldRows = rowsAt(8)
 
   const valuesByOption = new Map<string, { id: string; value: string; sort_order: number }[]>()
   for (const row of valueRows) {
