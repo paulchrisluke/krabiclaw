@@ -55,7 +55,7 @@ interface TaskResult {
 async function autoCompleteBookings(db: D1Database, env: ApiRecord, kind: ReviewBookingType): Promise<number> {
   const rows = await collectScheduledPaidRows((limit, offset) => queryAll<AutoCompleteRow>(db, `
       SELECT r.id, r.organization_id, r.site_id, r.location_id, r.booking_date, r.time_slot,
-             json_extract(p.experience_json, '$.duration_minutes') AS duration_minutes,
+             cfg.duration_minutes AS duration_minutes,
              ob.access_plan, ob.access_expires_at, ob.payment_status, ob.paid_through, ob.past_due_since, ob.updated_at
         FROM requests r LEFT JOIN products p ON p.id = r.product_id
         JOIN organization_billing ob ON ob.organization_id = r.organization_id AND ob.access_plan = 'growth'

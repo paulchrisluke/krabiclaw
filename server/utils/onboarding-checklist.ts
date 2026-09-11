@@ -43,7 +43,7 @@ interface ChecklistRow {
   has_hero: number
   products: number
   experiences: number
-  offerings: number
+  service_pages: number
   story: number
   post: number
 }
@@ -87,8 +87,8 @@ export async function loadOnboardingChecklist(
         WHERE mp.site_id = s.id AND mp.owner_type = 'business_location' AND mp.slot = 'hero' AND mp.status = 'active'
       ) AS has_hero,
       (SELECT COUNT(*) FROM products WHERE site_id = s.id AND is_visible = 1) AS products,
-      (SELECT COUNT(*) FROM products WHERE product_type = 'experience' AND site_id = s.id) AS experiences,
-      (SELECT COUNT(*) FROM offerings WHERE site_id = s.id) AS offerings,
+      (SELECT COUNT(*) FROM products p JOIN product_publications pub ON pub.product_id = p.id JOIN product_booking_configs cfg ON cfg.product_id = p.id WHERE pub.site_id = s.id) AS experiences,
+      (SELECT COUNT(*) FROM content_documents WHERE site_id = s.id AND row_role = 'root' AND kind = 'page' AND (metadata_json ->> '$.recipe') = 'services') AS service_pages,
       (
         SELECT COUNT(*)
         FROM content_documents v
@@ -121,7 +121,7 @@ export async function loadOnboardingChecklist(
       core_offering: vertical === 'experience'
         ? row.experiences > 0
         : vertical === 'service'
-          ? row.offerings > 0
+          ? row.service_pages > 0
           : row.products > 0,
       story: row.story > 0,
       post: row.post > 0,

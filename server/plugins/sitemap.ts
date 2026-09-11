@@ -170,13 +170,10 @@ export default definePlugin((nitroApp) => {
     // rather than threading template-specific conditionals through the
     // Saya-oriented queries.
     if (template.slug === 'blawby') {
-      const [offerings, tenantPages, posts] = await Promise.all([
-        queryAll<{ slug: string; canonical_path: string | null; updated_at: string | null }>(db, `
-          SELECT slug, canonical_path, updated_at
-            FROM offerings
-           WHERE site_id = ?
-           ORDER BY sort_order ASC, name ASC
-        `, [siteId]),
+      // Practice areas are pages, so they are already in the page list. There
+      // is no separate offering query, and no canonical_path to prefer over
+      // the route the document actually publishes at.
+      const [tenantPages, posts] = await Promise.all([
         listPublishedTenantSitemapPages(db, siteId),
         queryAll<ApiRecord>(
           db,
@@ -190,12 +187,6 @@ export default definePlugin((nitroApp) => {
       ])
 
       for (const loc of template.sitemap.exactPaths) entries.push({ loc })
-      for (const offering of offerings ?? []) {
-        entries.push({
-          loc: offering.canonical_path || `${template.serviceRoutes.offeringDetailPrefix}/${offering.slug}`,
-          lastmod: offering.updated_at ?? undefined,
-        })
-      }
       for (const page of tenantPages ?? []) {
         if (!page.path || /noindex/i.test(page.robots || '')) continue
         entries.push({ loc: page.path, lastmod: page.lastmod ?? undefined })
@@ -214,7 +205,7 @@ export default definePlugin((nitroApp) => {
     }
 
     const productPresentation = resolveProductPresentation(site.vertical)
-    const [locations, products, posts, experiences, tenantPages] = await Promise.all([
+    const [locations, products, posts, tenantPages] = await Promise.all([
       queryAll<ApiRecord>(
         db,
         `SELECT id, slug, updated_at, grab_url, uber_eats_url, foodpanda_url
@@ -228,15 +219,15 @@ export default definePlugin((nitroApp) => {
         db,
         `SELECT p.slug, p.location_id, bl.slug AS location_slug, p.updated_at
          FROM products p
+         JOIN product_publications pub ON pub.product_id = p.id AND pub.organization_id = p.organization_id AND pub.published = 1
+         JOIN product_locations pl ON pl.product_id = p.id AND pl.organization_id = p.organization_id AND pl.published = 1 AND pl.active = 1
          JOIN business_locations bl
-           ON bl.id = p.location_id
-          AND bl.organization_id = p.organization_id
-          AND bl.site_id = p.site_id
+           ON bl.id = pl.location_id
+          AND bl.site_id = pub.site_id
           AND bl.status = 'active'
-         WHERE p.site_id = ? AND p.product_type = 'standard'
-           AND p.is_visible = 1
-           AND (p.robots IS NULL OR p.robots NOT LIKE '%noindex%')
-         ORDER BY p.location_id, p.sort_order, p.id`,
+          AND pub.site_id = ?
+         WHERE p.active = 1
+         ORDER BY pl.location_id, p.name, p.id`,
         [siteId],
       ),
       queryAll<ApiRecord>(
@@ -247,16 +238,6 @@ export default definePlugin((nitroApp) => {
            AND status = 'published'
            AND visibility = 'public'
            AND (robots IS NULL OR robots NOT LIKE '%noindex%')`,
-        [siteId],
-      ),
-      queryAll<ApiRecord>(
-        db,
-        `SELECT p.slug, p.location_id, p.updated_at
-         FROM products p
-         JOIN business_locations bl ON bl.id = p.location_id AND bl.site_id = p.site_id AND bl.organization_id = p.organization_id
-         WHERE p.site_id = ? AND p.product_type = 'experience' AND bl.status = 'active'
-           AND p.is_visible = 1
-           AND (p.robots IS NULL OR p.robots NOT LIKE '%noindex%')`,
         [siteId],
       ),
       listPublishedTenantSitemapPages(db, siteId),
@@ -270,19 +251,8 @@ export default definePlugin((nitroApp) => {
     }
     if (productPresentation && products.length > 0) entries.push({ loc: productPresentation.collectionPath })
     if (posts.length > 0) entries.push({ loc: '/blog' })
-    if (experiences.length > 0) entries.push({ loc: '/experiences' })
     if (locations.some(location => location.grab_url || location.uber_eats_url || location.foodpanda_url)) {
       entries.push({ loc: '/order' })
-    }
-
-    const visibleExperienceCountsByLocation = new Map<string, number>()
-    for (const experience of experiences ?? []) {
-      const locationId = typeof experience.location_id === 'string' ? experience.location_id : ''
-      if (!locationId) continue
-      visibleExperienceCountsByLocation.set(
-        locationId,
-        (visibleExperienceCountsByLocation.get(locationId) ?? 0) + 1,
-      )
     }
 
     const visibleProductCountsByLocation = new Map<string, number>()
@@ -296,16 +266,6 @@ export default definePlugin((nitroApp) => {
       ...locations
         .filter(location => location.slug)
         .map(location => ({ loc: `/locations/${location.slug}`, lastmod: location.updated_at as string | undefined })),
-      ...locations
-        .filter(location =>
-          location.slug &&
-          typeof location.id === 'string' &&
-          (visibleExperienceCountsByLocation.get(location.id) ?? 0) >= 2
-        )
-        .map(location => ({
-          loc: `/locations/${location.slug}/experiences`,
-          lastmod: location.updated_at as string | undefined,
-        })),
       ...(productPresentation
         ? locations
             .filter(location => location.slug && typeof location.id === 'string' && (visibleProductCountsByLocation.get(location.id) ?? 0) > 0)
@@ -325,9 +285,6 @@ export default definePlugin((nitroApp) => {
       ...posts
         .filter(post => post.slug)
         .map(post => ({ loc: `/blog/${post.slug}`, lastmod: post.updated_at as string | undefined })),
-      ...experiences
-        .filter(experience => experience.slug)
-        .map(experience => ({ loc: `/experiences/${experience.slug}`, lastmod: experience.updated_at as string | undefined })),
       ...tenantPages
         .filter(page => page.path && !/noindex/i.test(page.robots || ''))
         .map(page => ({ loc: page.path as string, lastmod: page.lastmod ?? undefined })),

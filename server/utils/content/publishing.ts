@@ -409,10 +409,10 @@ async function normalizeCanonicalBlogBlocks(
 }
 
 function parseTags<T extends Record<string, unknown>>(record: T) {
-  const normalized = { ...record } as T & { tags?: string[]; tags_json?: unknown }
-  if ('tags_json' in record) {
-    normalized.tags = parseStringArray(record.tags_json)
-    delete normalized.tags_json
+  const normalized = { ...record } as T & { tags?: string[]; tags_metadata?: unknown }
+  if ('tags_metadata' in record) {
+    normalized.tags = parseStringArray(record.tags_metadata)
+    delete normalized.tags_metadata
   }
   return normalized
 }
@@ -481,7 +481,7 @@ export async function getPublishedBlogPost(db: DbClient, category: string, slug:
   const platformSiteId = platformSite.id
   const post = await queryFirst<ApiRecord>(db, `
     SELECT
-      p.id, p.title, p.slug, p.summary AS excerpt, (p.metadata_json ->> '$.collection') AS collection, (p.metadata_json ->> '$.category') AS category, json_extract(p.metadata_json, '$.tags') AS tags_json, p.seo_title, p.seo_description, p.seo_keywords,
+      p.id, p.title, p.slug, p.summary AS excerpt, (p.metadata_json ->> '$.collection') AS collection, (p.metadata_json ->> '$.category') AS category, json_extract(p.metadata_json, '$.tags') AS tags_metadata, p.seo_title, p.seo_description, p.seo_keywords,
       p.canonical_url, p.robots, p.visibility, p.sort_order,
       p.published_at, p.created_at, p.updated_at,
       p.author_id,
@@ -567,7 +567,7 @@ export async function listPublicPlatformBlogPosts(db: DbClient, collection: Arti
 
 export async function listBlogPosts(db: DbClient, siteId: string, status?: string | null, env?: CloudflareEnv) {
   let sql = `SELECT
-      p.id, p.title, p.slug, p.summary AS excerpt, (p.metadata_json ->> '$.collection') AS collection, (p.metadata_json ->> '$.category') AS category, json_extract(p.metadata_json, '$.tags') AS tags_json, p.status, p.visibility, p.scheduled_for,
+      p.id, p.title, p.slug, p.summary AS excerpt, (p.metadata_json ->> '$.collection') AS collection, (p.metadata_json ->> '$.category') AS category, json_extract(p.metadata_json, '$.tags') AS tags_metadata, p.status, p.visibility, p.scheduled_for,
       p.seo_title, p.seo_description, p.seo_keywords, p.canonical_url, p.robots,
       ${COVER_SELECT},
       p.published_at, p.created_at, p.updated_at
@@ -594,7 +594,7 @@ export async function getBlogPost(db: DbClient, postIdOrSlug: string, siteId: st
   const post = await queryFirst<ApiRecord | null>(
     db,
     `SELECT
-       p.id, p.title, p.slug, p.summary AS excerpt, (p.metadata_json ->> '$.collection') AS collection, (p.metadata_json ->> '$.category') AS category, json_extract(p.metadata_json, '$.tags') AS tags_json, p.status, p.visibility, p.scheduled_for,
+       p.id, p.title, p.slug, p.summary AS excerpt, (p.metadata_json ->> '$.collection') AS collection, (p.metadata_json ->> '$.category') AS category, json_extract(p.metadata_json, '$.tags') AS tags_metadata, p.status, p.visibility, p.scheduled_for,
        p.first_published_at, (p.metadata_json ->> '$.slug_manually_overridden') AS slug_manually_overridden,
        p.seo_title, p.seo_description, p.seo_keywords, p.canonical_url, p.robots,
        ${COVER_SELECT},
@@ -620,7 +620,7 @@ export async function getBlogPost(db: DbClient, postIdOrSlug: string, siteId: st
   const editorThemeTokens = parseBlogEditorThemeTokens(editorThemeTokenRow?.tokens_json)
   return {
     ...await contentReviewUrls(attachCover(attachPublished(post, Boolean(post.published_at))), publicPath, context, env),
-    tags: parseStringArray(post.tags_json),
+    tags: parseStringArray(post.tags_metadata),
     body: renderContentBlocksToMarkdown(rawBlocks),
     content_document: contentDocument,
     editor_template: site.template.slug,
@@ -633,7 +633,7 @@ export async function getBlogPost(db: DbClient, postIdOrSlug: string, siteId: st
 export async function getPublicSiteBlogPost(db: DbClient, siteId: string, slug: string, env: CloudflareEnv, token?: string) {
   const post = await queryFirst<ApiRecord>(db, `
     SELECT
-      p.id, p.title, p.slug, p.summary AS excerpt, (p.metadata_json ->> '$.category') AS category, json_extract(p.metadata_json, '$.tags') AS tags_json, p.seo_title, p.seo_description, p.seo_keywords,
+      p.id, p.title, p.slug, p.summary AS excerpt, (p.metadata_json ->> '$.category') AS category, json_extract(p.metadata_json, '$.tags') AS tags_metadata, p.seo_title, p.seo_description, p.seo_keywords,
       p.canonical_url, p.robots, p.visibility,
       p.published_at, p.created_at, p.updated_at,
       p.author_id,

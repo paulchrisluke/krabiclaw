@@ -98,7 +98,7 @@ export async function getSiteLocalizationProgress(
   const source = await getPersistedSourceLocale(db, input.organizationId, input.siteId)
   if (input.locale === source.locale) throw new Error('Localization progress requires an additional language')
   const params = [input.locale, input.organizationId, input.siteId]
-  const [site, locations, menu, experiences, posts, blog, qa, media, links, pages] = await Promise.all([
+  const [site, locations, catalog, collections, posts, blog, qa, media, links, pages] = await Promise.all([
     queryAll<LocalizableRow>(db, `SELECT s.id, s.brand_name, s.brand_description, rl.values_json
       FROM sites s LEFT JOIN resource_localizations rl ON rl.resource_type = 'site' AND rl.resource_id = s.id AND rl.locale = ?
         AND rl.organization_id = s.organization_id AND rl.site_id = s.id
@@ -107,24 +107,29 @@ export async function getSiteLocalizationProgress(
       FROM business_locations l LEFT JOIN resource_localizations rl ON rl.resource_type = 'business_location' AND rl.resource_id = l.id AND rl.locale = ?
         AND rl.organization_id = l.organization_id AND rl.site_id = l.site_id
       WHERE l.organization_id = ? AND l.site_id = ? AND l.status = 'active' ORDER BY l.id`, params),
+    // One catalog, one row per product. There is no separate experience query
+    // and no category query: an experience is a product, and a collection is a
+    // site merchandising record localized in its own group below.
     queryAll<LocalizableRow>(db, `
-      SELECT p.id, 'product' AS resource_type, l.slug AS location_slug, p.category_id, p.name, p.description, p.tags_json, p.details_json, rl.values_json
-        FROM products p JOIN business_locations l ON l.id = p.location_id
+      SELECT p.id, 'product' AS resource_type, p.name, p.description, p.tags, p.marketing_features, p.unit_label,
+             (SELECT json_group_object(d.namespace || '.' || d.key, json(pm.value))
+                FROM product_metafields pm JOIN metafield_definitions d ON d.id = pm.definition_id
+               WHERE pm.product_id = p.id AND d.localizable = 1) AS metafields,
+             rl.values_json
+        FROM products p
+        JOIN product_publications pub ON pub.product_id = p.id AND pub.organization_id = p.organization_id
         LEFT JOIN resource_localizations rl ON rl.resource_type = 'product' AND rl.resource_id = p.id AND rl.locale = ?
-          AND rl.organization_id = p.organization_id AND rl.site_id = p.site_id
-       WHERE p.organization_id = ? AND p.site_id = ? AND p.product_type = 'standard' AND p.is_visible = 1
-      UNION ALL
-      SELECT c.id, 'product_category' AS resource_type, l.slug AS location_slug, c.id AS category_id, c.name, NULL, NULL, NULL, rl.values_json
-        FROM product_categories c JOIN business_locations l ON l.id = c.location_id
-        LEFT JOIN resource_localizations rl ON rl.resource_type = 'product_category' AND rl.resource_id = c.id AND rl.locale = ?
+          AND rl.organization_id = p.organization_id AND rl.site_id = pub.site_id
+       WHERE p.organization_id = ? AND pub.site_id = ? AND p.active = 1
+       ORDER BY p.name, p.id`, params),
+    queryAll<LocalizableRow>(db, `
+      SELECT c.id, 'collection' AS resource_type, l.slug AS location_slug, c.name, c.description, rl.values_json
+        FROM collections c
+        LEFT JOIN business_locations l ON l.id = c.location_id
+        LEFT JOIN resource_localizations rl ON rl.resource_type = 'collection' AND rl.resource_id = c.id AND rl.locale = ?
           AND rl.organization_id = c.organization_id AND rl.site_id = c.site_id
-       WHERE c.organization_id = ? AND c.site_id = ? AND c.product_type = 'standard'`, [...params, ...params]),
-    queryAll<LocalizableRow>(db, `SELECT p.id, l.slug AS location_slug, p.name, p.description,
-        p.experience_json AS experience, rl.values_json
-      FROM products p JOIN business_locations l ON l.id = p.location_id
-      LEFT JOIN resource_localizations rl ON rl.resource_type = 'product' AND rl.resource_id = p.id AND rl.locale = ?
-        AND rl.organization_id = p.organization_id AND rl.site_id = p.site_id
-      WHERE p.organization_id = ? AND p.site_id = ? AND p.product_type = 'experience' AND p.is_visible = 1 ORDER BY p.id`, params),
+       WHERE c.organization_id = ? AND c.site_id = ?
+       ORDER BY c.sort_order, c.id`, params),
     queryAll<LocalizableRow>(db, `SELECT p.id, l.slug AS location_slug, p.summary, p.metadata_json AS metadata,
         CASE WHEN t.id IS NULL THEN NULL ELSE json_object('summary',t.summary,'metadata',json(t.metadata_json)) END AS values_json
       FROM content_documents p JOIN business_locations l ON l.id = p.location_id
@@ -172,8 +177,11 @@ export async function getSiteLocalizationProgress(
   const groups = [
     { id: 'brand', label: 'Brand', result: progress(site, ['brand_name', 'brand_description']), path: () => 'brand/name', resourceType: 'site', resourceId: (row: LocalizableRow) => row.id },
     { id: 'locations', label: 'Locations', result: progress(locations, ['title', 'address', 'city', 'neighborhood', 'description', 'short_description']), path: (row: LocalizableRow) => `locations/${row.location_slug}/settings`, resourceType: 'business_location', resourceId: (row: LocalizableRow) => row.id },
-    { id: 'menu', label: 'Menu', result: progress(menu, ['name', 'description', 'tags_json', 'details_json']), path: (row: LocalizableRow) => row.resource_type === 'product_category' ? `locations/${row.location_slug}/products/${row.id}/name` : `locations/${row.location_slug}/products/${row.category_id}/${row.id}`, resourceType: (row: LocalizableRow) => requiredRowString(row, 'resource_type'), resourceId: (row: LocalizableRow) => row.id },
-    { id: 'experiences', label: 'Experiences', result: progress(experiences, ['name', 'description', 'experience.tagline', 'experience.pricing_note', 'experience.included_items', 'experience.what_to_bring', 'experience.meeting_point', 'experience.cancellation_policy']), path: (row: LocalizableRow) => `locations/${row.location_slug}/experiences/${row.id}/details`, resourceType: 'product', resourceId: (row: LocalizableRow) => row.id },
+    // Which product attributes are translatable is the definition's own
+    // declaration, so the field list is the columns plus whatever the tenant
+    // declared — not a list maintained here.
+    { id: 'catalog', label: 'Catalog', result: progress(catalog, ['name', 'description', 'tags', 'marketing_features', 'unit_label', 'metafields']), path: (row: LocalizableRow) => `products/${row.id}`, resourceType: 'product', resourceId: (row: LocalizableRow) => row.id },
+    { id: 'collections', label: 'Collections', result: progress(collections, ['name', 'description']), path: (row: LocalizableRow) => `collections/${row.id}`, resourceType: 'collection', resourceId: (row: LocalizableRow) => row.id },
     { id: 'pages', label: 'Pages', result: progress(pages, ['title', 'summary', 'content']), path: (row: LocalizableRow) => `pages/${row.id}`, resourceType: 'content_document', resourceId: (row: LocalizableRow) => row.id },
     { id: 'posts', label: 'Posts', result: progress(posts, ['summary', 'metadata.event.title', 'metadata.offer.terms_conditions']), path: (row: LocalizableRow) => `locations/${row.location_slug}/posts/${row.id}`, resourceType: 'content_document', resourceId: (row: LocalizableRow) => row.id },
     { id: 'blog', label: 'Blog', result: progress(blog, ['title', 'summary', 'metadata.category', 'metadata.tags']), path: (row: LocalizableRow) => `blog/${row.id}`, resourceType: 'content_document', resourceId: (row: LocalizableRow) => row.id },

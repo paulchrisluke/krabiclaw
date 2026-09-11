@@ -77,7 +77,7 @@ export function appendPublicShellQueries(
                ORDER BY is_source DESC, locale ASC`, [organizationId, siteId]),
     productLocations: push(`SELECT DISTINCT location_id
                               FROM products
-                             WHERE organization_id = ? AND site_id = ? AND product_type = 'standard' AND is_visible = 1
+                             WHERE organization_id = ? AND site_id = ? AND active = 1
                              ORDER BY location_id`, [organizationId, siteId]),
   }
 }
