@@ -2,7 +2,6 @@ import { expect, test } from '@playwright/test'
 import { createHash } from 'node:crypto'
 import { decodeProtectedHeader, importJWK, SignJWT } from 'jose'
 import { loginAs } from './helpers/auth'
-import { devLoginHeaders } from './test-env'
 
 const PRIVATE_CLIENT_TEST_KEY_ID = 'krabiclaw-cimd-e2e-rs256'
 const PRIVATE_CLIENT_TEST_JWK = {
@@ -46,12 +45,12 @@ test.describe('OAuth discovery endpoints', () => {
       scope: 'openid tenant', state: 'kikuzuki-publisher', prompt: 'consent',
       code_challenge: pkceChallenge(verifier), code_challenge_method: 'S256',
       resource: `${baseURL}/api/mcp`,
-    }), { maxRedirects: 0, headers: devLoginHeaders() })
+    }), { maxRedirects: 0 })
     expect(authorization.status(), await authorization.text()).toBe(302)
     const consentUrl = new URL(authorization.headers()['location']!, baseURL)
     expect(consentUrl.pathname).toBe('/oauth/consent')
     const consent = await request.post(`${baseURL}/api/auth/oauth2/consent`, {
-      headers: { Origin: baseURL!, ...devLoginHeaders() },
+      headers: { Origin: baseURL! },
       data: { accept: true, oauth_query: consentUrl.search.slice(1) },
     })
     expect(consent.status()).toBe(200)
@@ -59,7 +58,7 @@ test.describe('OAuth discovery endpoints', () => {
     expect(callback.origin + callback.pathname).toBe(redirectUri)
     expect(callback.searchParams.get('state')).toBe('kikuzuki-publisher')
     const token = await request.post(`${baseURL}/api/auth/oauth2/token`, {
-      headers: { Origin: baseURL!, ...devLoginHeaders() },
+      headers: { Origin: baseURL! },
       form: {
         grant_type: 'authorization_code', client_id: clientId,
         code: callback.searchParams.get('code')!, redirect_uri: redirectUri,
@@ -144,7 +143,7 @@ test.describe('OAuth discovery endpoints', () => {
     const firstAuthorize = await request.get(oauthAuthorizeUrl(baseURL!, {
       ...authorizeParams,
       prompt: 'consent',
-    }), { maxRedirects: 0, headers: devLoginHeaders() })
+    }), { maxRedirects: 0 })
     expect(firstAuthorize.status()).toBe(302)
     const consentLocation = firstAuthorize.headers()['location']
     expect(consentLocation).toContain('/oauth/consent?')
@@ -155,7 +154,6 @@ test.describe('OAuth discovery endpoints', () => {
     const consentRes = await request.post(`${baseURL}/api/auth/oauth2/consent`, {
       headers: {
         Origin: baseURL!,
-        ...devLoginHeaders(),
       },
       data: {
         accept: true,
@@ -170,7 +168,7 @@ test.describe('OAuth discovery endpoints', () => {
     expect(code).toBeTruthy()
 
     const exchangeCode = async () => await request.post(`${baseURL}/api/auth/oauth2/token`, {
-      headers: { Origin: baseURL!, ...devLoginHeaders() },
+      headers: { Origin: baseURL! },
       form: {
         grant_type: 'authorization_code',
         client_id: cimdClientId,
@@ -186,7 +184,7 @@ test.describe('OAuth discovery endpoints', () => {
     expect(tokenBody.refresh_token).toBeTruthy()
 
     const refreshGrant = () => request.post(`${baseURL}/api/auth/oauth2/token`, {
-      headers: { Origin: baseURL!, ...devLoginHeaders() },
+      headers: { Origin: baseURL! },
       form: {
         grant_type: 'refresh_token',
         client_id: cimdClientId,
@@ -240,7 +238,7 @@ test.describe('OAuth discovery endpoints', () => {
     const secondAuthorize = await request.get(oauthAuthorizeUrl(baseURL!, {
       ...authorizeParams,
       state: 'second-pass',
-    }), { maxRedirects: 0, headers: devLoginHeaders() })
+    }), { maxRedirects: 0 })
     expect(secondAuthorize.status()).toBe(302)
     const secondLocation = secondAuthorize.headers()['location']
     expect(secondLocation).toBeTruthy()
@@ -272,14 +270,14 @@ test.describe('OAuth discovery endpoints', () => {
     const authorize = await request.get(oauthAuthorizeUrl(baseURL!, {
       ...authorizeParams,
       prompt: 'consent',
-    }), { maxRedirects: 0, headers: devLoginHeaders() })
+    }), { maxRedirects: 0 })
     expect(authorize.status()).toBe(302)
     const consentLocation = authorize.headers()['location']
     expect(consentLocation).toContain('/oauth/consent?')
 
     const consentUrl = new URL(consentLocation!, baseURL)
     const consentRes = await request.post(`${baseURL}/api/auth/oauth2/consent`, {
-      headers: { Origin: baseURL!, ...devLoginHeaders() },
+      headers: { Origin: baseURL! },
       data: { accept: true, oauth_query: consentUrl.search.slice(1) },
     })
     expect(consentRes.status()).toBe(200)
@@ -288,7 +286,7 @@ test.describe('OAuth discovery endpoints', () => {
     expect(code).toBeTruthy()
 
     const token = await request.post(`${baseURL}/api/auth/oauth2/token`, {
-      headers: { Origin: baseURL!, ...devLoginHeaders() },
+      headers: { Origin: baseURL! },
       form: {
         grant_type: 'authorization_code',
         client_id: cimdClientId,
@@ -332,13 +330,13 @@ test.describe('OAuth discovery endpoints', () => {
     const authorize = await request.get(oauthAuthorizeUrl(baseURL!, {
       ...authorizeParams,
       prompt: 'consent',
-    }), { maxRedirects: 0, headers: devLoginHeaders() })
+    }), { maxRedirects: 0 })
     expect(authorize.status()).toBe(302)
     const consentUrl = new URL(authorize.headers()['location']!, baseURL)
     expect(consentUrl.pathname).toBe('/oauth/consent')
 
     const consent = await request.post(`${baseURL}/api/auth/oauth2/consent`, {
-      headers: { Origin: baseURL!, ...devLoginHeaders() },
+      headers: { Origin: baseURL! },
       data: { accept: true, oauth_query: consentUrl.search.slice(1) },
     })
     expect(consent.status()).toBe(200)
@@ -359,7 +357,7 @@ test.describe('OAuth discovery endpoints', () => {
       .sign(privateKey)
 
     const token = await request.post(`${baseURL}/api/auth/oauth2/token`, {
-      headers: { Origin: baseURL!, ...devLoginHeaders() },
+      headers: { Origin: baseURL! },
       form: {
         grant_type: 'authorization_code',
         client_id: clientId,
@@ -416,13 +414,13 @@ test.describe('OAuth discovery endpoints', () => {
     const secondAuthorize = await request.get(oauthAuthorizeUrl(baseURL!, {
       ...authorizeParams,
       state: 'private-replay',
-    }), { maxRedirects: 0, headers: devLoginHeaders() })
+    }), { maxRedirects: 0 })
     expect(secondAuthorize.status()).toBe(302)
     const replayCode = new URL(secondAuthorize.headers()['location']!, baseURL).searchParams.get('code')
     expect(replayCode).toBeTruthy()
 
     const replay = await request.post(`${baseURL}/api/auth/oauth2/token`, {
-      headers: { Origin: baseURL!, ...devLoginHeaders() },
+      headers: { Origin: baseURL! },
       form: {
         grant_type: 'authorization_code',
         client_id: clientId,
