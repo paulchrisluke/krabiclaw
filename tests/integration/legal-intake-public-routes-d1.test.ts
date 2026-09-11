@@ -5,7 +5,7 @@ import { Miniflare } from 'miniflare'
 import * as schema from '../../server/db/schema.ts'
 import type { CloudflareEnv } from '../../server/utils/auth.ts'
 import { validateLegalPaymentUrl } from '../../server/utils/legal-access.ts'
-import { validateLegalIntakePayload } from '../../server/utils/legal-intake-payload.ts'
+import { buildBlawbyIntakeCreateBody, validateLegalIntakePayload } from '../../server/utils/legal-intake-payload.ts'
 import { claimLegalIntakeReference, findLegalIntakeReferenceForActor } from '../../server/utils/legal-intake-references.ts'
 
 // U6: proves the two genuinely new pieces this task adds (R15's
@@ -82,9 +82,51 @@ test('validateLegalIntakePayload: allowlisted-field shape enforcement (R15)', as
   assert.equal(validateLegalIntakePayload(null), undefined)
   assert.equal(validateLegalIntakePayload(undefined), undefined)
 
-  // Over-length required and optional fields both fail closed.
+  // Over-length required and optional fields both fail closed. email/description
+  // bounds match Blawby's real createPracticeClientIntakeSchema (email max 255,
+  // description max 500) now that R15's judgment call has been reconciled
+  // against the confirmed U8 contract -- an over-bound value here would
+  // otherwise sail past this validator only to be rejected by Blawby's own
+  // schema later, surfacing as an opaque 502 instead of this route's own 400.
   assert.equal(validateLegalIntakePayload({ ...valid, matterType: 'x'.repeat(201) }), undefined)
-  assert.equal(validateLegalIntakePayload({ ...valid, description: 'x'.repeat(5001) }), undefined)
+  assert.equal(validateLegalIntakePayload({ ...valid, email: `${'x'.repeat(250)}@example.com` }), undefined)
+  assert.equal(validateLegalIntakePayload({ ...valid, description: 'x'.repeat(501) }), undefined)
+})
+
+test('buildBlawbyIntakeCreateBody: maps the browser-facing shape onto Blawby\'s real create-intake contract', async () => {
+  // Blawby's createPracticeClientIntakeSchema requires {amount, name, email},
+  // not {matterType, fullName} -- see
+  // src/modules/practice-client-intakes/validations/practice-client-intakes.validation.ts
+  // in blawby-ts. This is a free (no-payment) intake, so amount is always 0;
+  // matterType has no first-class Blawby field, so it rides in custom_fields.
+  const payload = validateLegalIntakePayload({
+    matterType: 'Contract dispute',
+    fullName: 'Jane Doe',
+    email: 'jane.doe@example.com',
+    phone: '555-0100',
+    description: 'Needs help reviewing a signed lease.',
+  })
+  assert.ok(payload)
+
+  assert.deepEqual(buildBlawbyIntakeCreateBody(payload), {
+    amount: 0,
+    name: 'Jane Doe',
+    email: 'jane.doe@example.com',
+    phone: '555-0100',
+    description: 'Needs help reviewing a signed lease.',
+    custom_fields: { matter_type: 'Contract dispute' },
+  })
+
+  // A null phone (Krabi's only optional field) is omitted rather than sent
+  // as null -- Blawby's `phone` is an optional string, not nullable.
+  const withoutPhone = validateLegalIntakePayload({
+    matterType: 'Contract dispute',
+    fullName: 'Jane Doe',
+    email: 'jane.doe@example.com',
+    description: 'Needs help reviewing a signed lease.',
+  })
+  assert.ok(withoutPhone)
+  assert.equal('phone' in buildBlawbyIntakeCreateBody(withoutPhone), false)
 })
 
 test('validateLegalPaymentUrl: HTTPS + exact-origin allowlist + userinfo rejection (R30)', async () => {
