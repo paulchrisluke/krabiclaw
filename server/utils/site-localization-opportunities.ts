@@ -5,7 +5,6 @@ interface LocalizableRow {
   id: string
   values_json: string | null
   location_slug?: string | null
-  category_id?: string | null
   resource_type?: string
   resource_id?: string
   [field: string]: unknown

@@ -499,31 +499,6 @@ export const resolvedMediaAssetObject = {
   required: ['asset_id', 'kind', 'public_url', 'status'],
 }
 
-export const priceObject = {
-  type: ['object', 'null'],
-  properties: {
-    id: { type: 'string' }, amount_minor: { type: 'integer' }, currency: { type: 'string' },
-    unit: { type: 'string', enum: ['item', 'person', 'table'] },
-    tax_behavior: { type: 'string', enum: ['unspecified', 'inclusive', 'exclusive'] },
-    compare_at_amount_minor: { type: ['integer', 'null'] }, valid_from: instantSchema,
-    valid_until: { ...instantSchema, type: ['string', 'null'] }, provenance: { type: 'string' },
-  },
-  required: ['id', 'amount_minor', 'currency', 'unit', 'tax_behavior', 'compare_at_amount_minor', 'valid_from', 'valid_until', 'provenance'],
-}
-
-export const priceWriteObject = {
-  type: ['object', 'null'],
-  properties: {
-    amount_minor: { type: 'integer', minimum: 0 }, currency: { type: 'string' },
-    unit: { type: 'string', enum: ['item', 'person', 'table'] },
-    tax_behavior: { type: 'string', enum: ['unspecified', 'inclusive', 'exclusive'] },
-    compare_at_amount_minor: { type: ['integer', 'null'] }, valid_from: instantSchema,
-    valid_until: { ...instantSchema, type: ['string', 'null'] }, provenance: { type: 'string' },
-  },
-  required: ['amount_minor'],
-  additionalProperties: false,
-}
-
 export const renderedBookingPolicySummaryObject = {
   type: 'object',
   properties: {
@@ -935,7 +910,9 @@ export const EXPECTED_TOOL_ANNOTATIONS = {
   create_collection: W,
   update_collection: W,
   delete_collection: D,
-  set_collection_products: W,
+  // Replaces the whole membership list: products left out lose their place in
+  // the collection, which is a removal the caller must mean.
+  set_collection_products: D,
   reorder_collections: W,
   list_metafield_definitions: R,
   create_metafield_definition: W,

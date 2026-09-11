@@ -101,7 +101,7 @@ const routeData = computed(() => data.value!.route)
 function block(type: string): ApiRecord | null {
   const canonicalType = {
     home_hero: 'hero',
-    services_intro: 'offering_grid',
+    services_intro: 'product_grid',
     video_feature: 'feature_grid',
     qa: 'faq',
     reviews: 'testimonial_grid',

@@ -73,7 +73,13 @@ export default defineHandler(async (event) => {
     locationId = cleanString(body.location_id, 120) || null
     entityId = cleanString(body.product_id, 120) || null
     if (!locationId || !entityId) return jsonResponse({ error: 'location_id and product_id are required' }, { status: 400 })
-    const product = await queryFirst<{ id: string; order_url: string }>(db, `SELECT id, order_url FROM products WHERE id = ? AND site_id = ? AND location_id = ? AND is_visible = 1 AND available = 1 AND order_url IS NOT NULL LIMIT 1`, [entityId, siteId, locationId])
+    // Published to this site, offered at this location, on sale, and carrying the
+    // link the guest just followed. Four separate facts, all required.
+    const product = await queryFirst<{ id: string; order_url: string }>(db, `
+      SELECT p.id, p.order_url FROM products p
+      JOIN product_publications pub ON pub.product_id = p.id AND pub.organization_id = p.organization_id AND pub.site_id = ? AND pub.published = 1
+      JOIN product_locations pl ON pl.product_id = p.id AND pl.organization_id = p.organization_id AND pl.location_id = ? AND pl.published = 1 AND pl.active = 1
+      WHERE p.id = ? AND p.active = 1 AND p.order_url IS NOT NULL LIMIT 1`, [siteId, locationId, entityId])
     if (!product || !destinationHost(product.order_url)) return jsonResponse({ error: 'Product not found' }, { status: 404 })
     const destinationHostname = new URL(product.order_url).hostname.toLowerCase()
     entityType = 'product'; ctaDestination = destinationHostname; pageType = 'product'; metadata = { product_id: product.id, destination_hostname: destinationHostname }

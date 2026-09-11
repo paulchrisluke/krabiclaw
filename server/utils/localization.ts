@@ -570,47 +570,45 @@ export async function getProductCatalogLocalization(
 ) {
   const { locale, source } = await assertSiteLanguageEntitlement(db, organizationId, siteId, localeInput)
   if (source) localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', 'Product catalog localization requires a secondary locale')
-  const [rows, categoryRows] = await Promise.all([queryAll<{
+  // Products belong to the organization and reach this site through a
+  // publication; collections are the site's own merchandising. Both are listed
+  // in the order the public pages render them, so a translator works down the
+  // page rather than down a join.
+  const [rows, collectionRows] = await Promise.all([queryAll<{
     id: string
-    location_id: string
-    category_id: string
-    category_name: string
-    category_slug: string
-    category_sort_order: number
     name: string
     description: string
     localization_id: string | null
     values_json: string | null
     route_path: string | null
   }>(db, `
-    SELECT p.id, p.location_id, p.category_id, pc.name AS category_name,
-           pc.slug AS category_slug, pc.sort_order AS category_sort_order, p.name, p.description,
+    SELECT p.id, p.name, p.description,
            rl.id AS localization_id, rl.values_json, rl.route_path
       FROM products p
-      JOIN product_categories pc ON pc.id = p.category_id
+      JOIN product_publications pub ON pub.product_id = p.id AND pub.organization_id = p.organization_id AND pub.site_id = ?
       LEFT JOIN resource_localizations rl
-        ON rl.organization_id = p.organization_id AND rl.site_id = p.site_id
+        ON rl.organization_id = p.organization_id AND rl.site_id = pub.site_id
        AND rl.resource_type = 'product' AND rl.resource_id = p.id AND rl.locale = ?
-     WHERE p.organization_id = ? AND p.site_id = ?
-     ORDER BY p.location_id, pc.sort_order, p.sort_order, p.id
-  `, [locale, organizationId, siteId]), queryAll<{
+     WHERE p.organization_id = ?
+     ORDER BY p.name, p.id
+  `, [siteId, locale, organizationId]), queryAll<{
     id: string
-    location_id: string
+    location_id: string | null
     name: string
     localization_id: string | null
     values_json: string | null
   }>(db, `
     SELECT c.id, c.location_id, c.name, rl.id AS localization_id, rl.values_json
-      FROM product_categories c
+      FROM collections c
       LEFT JOIN resource_localizations rl
         ON rl.organization_id = c.organization_id AND rl.site_id = c.site_id
-       AND rl.resource_type = 'product_category' AND rl.resource_id = c.id AND rl.locale = ?
-     WHERE c.organization_id = ? AND c.site_id = ? AND c.product_type = 'standard'
-     ORDER BY c.location_id, c.sort_order, c.id
+       AND rl.resource_type = 'collection' AND rl.resource_id = c.id AND rl.locale = ?
+     WHERE c.organization_id = ? AND c.site_id = ?
+     ORDER BY c.sort_order, c.id
   `, [locale, organizationId, siteId])])
   return {
     locale,
-    categories: categoryRows.map(row => ({
+    collections: collectionRows.map(row => ({
       id: row.id,
       location_id: row.location_id,
       source: { name: row.name },
@@ -618,9 +616,6 @@ export async function getProductCatalogLocalization(
     })),
     products: rows.map(row => ({
       id: row.id,
-      location_id: row.location_id,
-      category_id: row.category_id,
-      category: { id: row.category_id, name: row.category_name, slug: row.category_slug, sort_order: row.category_sort_order },
       source: { name: row.name, description: row.description },
       localization: row.localization_id
         ? { values: JSON.parse(row.values_json!), route_path: row.route_path }

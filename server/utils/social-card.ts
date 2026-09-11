@@ -20,7 +20,14 @@ import { resolvePublicTemplate } from '~/utils/template-registry'
 const SOCIAL_CARD_OWNERS = {
   site: { table: 'sites', site: 'o.id', filter: "o.status = 'active'", slots: ['social_share'] },
   business_location: { table: 'business_locations', site: 'o.site_id', filter: "o.status = 'active'", slots: ['hero', 'gallery'] },
-  product: { table: 'products', site: 'o.site_id', filter: 'o.is_visible = 1', slots: ['image', 'gallery'] },
+  // A Product belongs to the organization and reaches a site through a
+  // publication, so its site match is that row rather than a column.
+  product: {
+    table: 'products',
+    site: "(SELECT pub.site_id FROM product_publications pub WHERE pub.product_id = o.id AND pub.organization_id = o.organization_id AND pub.published = 1)",
+    filter: 'o.active = 1',
+    slots: ['image', 'gallery'],
+  },
   // Articles and docs keep their picture in the leading image block, read
   // through `loadCoverBlockId`; `cover` is the social post's own slot.
   content_document: { table: 'content_documents', site: 'o.site_id', filter: "o.kind IN ('page','article','social_post') AND EXISTS (SELECT 1 FROM content_documents root WHERE root.id = COALESCE(o.root_id, o.id) AND (root.kind = 'page' OR root.status = 'published')) AND (o.kind != 'page' OR o.path != '/')", slots: ['cover', 'gallery'] },

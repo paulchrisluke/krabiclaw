@@ -151,18 +151,18 @@ const CORE_ROUTES = [
 ];
 
 const VERTICAL_ROUTES = {
-  experience: ["/experiences", "/reservations"],
+  experience: ["/products", "/reservations"],
   restaurant: ["/menu", "/reservations"],
   retail: ["/locations"],
-  wellness: ["/experiences", "/reservations"],
+  wellness: ["/products", "/reservations"],
   service: ["/reservations"],
 };
 
 const REQUIRED_ROUTES_BY_VERTICAL = {
-  experience: [...CORE_ROUTES, "/experiences", "/reservations"],
+  experience: [...CORE_ROUTES, "/products", "/reservations"],
   restaurant: [...CORE_ROUTES, "/menu", "/reservations"],
   retail: [...CORE_ROUTES],
-  wellness: [...CORE_ROUTES, "/experiences", "/reservations"],
+  wellness: [...CORE_ROUTES, "/products", "/reservations"],
   service: [...CORE_ROUTES, "/reservations"],
 };
 
@@ -288,27 +288,26 @@ if (OUT_DIR) {
 if (SITE_ID && (VERTICAL === "experience" || VERTICAL === "restaurant")) {
   info("── Slug route checks");
 
-  const pageKind = VERTICAL === "experience" ? "experiences" : "menu";
-  const dataset = VERTICAL === "experience" ? "experiences" : "products";
-  const apiPath = `/api/public/sites/${SITE_ID}/page?page=${pageKind}&datasets=${dataset}`;
+  // Every Saya vertical sells Products; only the route segment differs.
+  const pageKind = VERTICAL === "experience" ? "products" : "menu";
+  const apiPath = `/api/public/sites/${SITE_ID}/page?page=${pageKind}&datasets=products`;
   const res = await get(apiPath);
 
   if (res.ok) {
     const data = await res.json();
-    const items =
-      VERTICAL === "experience"
-        ? (data.experiencesList ?? [])
-        : (data.products ?? []);
+    const items = data.products ?? [];
 
     if (items.length === 0) {
-      fail(`Bootstrap returned 0 ${dataset} items — nothing to slug-check`);
+      fail("Bootstrap returned 0 products — nothing to slug-check");
     } else {
       const locationsById = new Map((data.shell?.locations ?? []).map((location) => [location.id, location]));
       for (const item of items.slice(0, 5)) {
         if (!item.slug) continue;
-        const route = VERTICAL === "experience"
-          ? `/experiences/${item.slug}`
-          : `/locations/${locationsById.get(item.location_id)?.slug}/menu/${item.slug}`;
+        // A Product's page lives under the location that offers it, in the
+        // segment this vertical presents its catalogue at.
+        const segment = VERTICAL === "experience" ? "products" : "menu";
+        const owning = (item.locations ?? []).find((entry) => entry.published && locationsById.has(entry.location_id));
+        const route = `/locations/${locationsById.get(owning?.location_id)?.slug}/${segment}/${item.slug}`;
         if (route.includes('/undefined/')) {
           fail(`Product ${item.id ?? item.slug} has no resolvable owning location`);
           continue;
@@ -537,7 +536,7 @@ if (SITE_ID) {
 
   if (data) {
     const imageUrls = new Set();
-    for (const entity of [...(data.locations ?? []), ...(data.experiencesList ?? [])]) {
+    for (const entity of [...(data.locations ?? []), ...(data.products ?? [])]) {
       for (const media of entity.media ?? []) {
         if (media.public_url) imageUrls.add(media.public_url);
         if (media.thumbnail_url) imageUrls.add(media.thumbnail_url);

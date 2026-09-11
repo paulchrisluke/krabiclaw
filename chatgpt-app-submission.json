@@ -56,16 +56,16 @@
         "destructive_justification": "Creates a tenant blog article and its content document, with publication governed by its supplied status and schedule. Existing content is not deleted or overwritten."
       }
     },
-    "create_experience": {
+    "create_collection": {
       "annotations": {
         "readOnlyHint": false,
         "openWorldHint": true,
         "destructiveHint": false
       },
       "justifications": {
-        "read_only_justification": "Creates a bookable experience with pricing and scheduling at the selected location.",
-        "open_world_justification": "Creates a bookable experience with pricing and scheduling at the selected location. Its effects can change content or behavior on the public website.",
-        "destructive_justification": "Creates a bookable experience with pricing and scheduling at the selected location. Existing content is not deleted or overwritten."
+        "read_only_justification": "Creates an empty collection for the selected site; products are added to it separately.",
+        "open_world_justification": "Creates an empty collection for the selected site; products are added to it separately. Its effects can change content or behavior on the public website.",
+        "destructive_justification": "Creates an empty collection for the selected site; products are added to it separately. Existing content is not deleted or overwritten."
       }
     },
     "create_location_qa": {
@@ -78,6 +78,18 @@
         "read_only_justification": "Adds a public question and answer to the selected location.",
         "open_world_justification": "Adds a public question and answer to the selected location. Its effects can change content or behavior on the public website.",
         "destructive_justification": "Adds a public question and answer to the selected location. Existing content is not deleted or overwritten."
+      }
+    },
+    "create_metafield_definition": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Defines a typed product attribute for the organization, which is what makes that attribute storable at all.",
+        "open_world_justification": "Defines a typed product attribute for the organization, which is what makes that attribute storable at all. Its effects can change content or behavior on the public website.",
+        "destructive_justification": "Defines a typed product attribute for the organization, which is what makes that attribute storable at all. Existing content is not deleted or overwritten."
       }
     },
     "create_owner_entered_site_review": {
@@ -116,18 +128,6 @@
         "destructive_justification": "Creates a product with explicit price semantics in the selected location and category. Existing content is not deleted or overwritten."
       }
     },
-    "create_product_category": {
-      "annotations": {
-        "readOnlyHint": false,
-        "openWorldHint": true,
-        "destructiveHint": false
-      },
-      "justifications": {
-        "read_only_justification": "Adds a product category to the selected location.",
-        "open_world_justification": "Adds a product category to the selected location. Its effects can change content or behavior on the public website.",
-        "destructive_justification": "Adds a product category to the selected location. Existing content is not deleted or overwritten."
-      }
-    },
     "create_site_qa": {
       "annotations": {
         "readOnlyHint": false,
@@ -164,16 +164,16 @@
         "destructive_justification": "Deletes the selected tenant blog article and its associated content. Existing state is deleted, replaced or overwritten rather than only appended."
       }
     },
-    "delete_experience": {
+    "delete_collection": {
       "annotations": {
         "readOnlyHint": false,
         "openWorldHint": true,
         "destructiveHint": true
       },
       "justifications": {
-        "read_only_justification": "Deletes the selected experience and associated booking guest threads and media placements; related records may be removed by database cascades.",
-        "open_world_justification": "Deletes the selected experience and associated booking guest threads and media placements; related records may be removed by database cascades. Its effects can change content or behavior on the public website.",
-        "destructive_justification": "Deletes the selected experience and associated booking guest threads and media placements; related records may be removed by database cascades. Existing state is deleted, replaced or overwritten rather than only appended."
+        "read_only_justification": "Deletes the selected collection and every product membership in it; the products themselves are untouched.",
+        "open_world_justification": "Deletes the selected collection and every product membership in it; the products themselves are untouched. Its effects can change content or behavior on the public website.",
+        "destructive_justification": "Deletes the selected collection and every product membership in it; the products themselves are untouched. Existing state is deleted, replaced or overwritten rather than only appended."
       }
     },
     "delete_location_qa": {
@@ -198,6 +198,18 @@
         "read_only_justification": "Removes an asset and its site placements, and deletes backing Cloudflare storage when no other asset references it.",
         "open_world_justification": "Removes an asset and its site placements, and deletes backing Cloudflare storage when no other asset references it. Its effects can change content or behavior on the public website.",
         "destructive_justification": "Removes an asset and its site placements, and deletes backing Cloudflare storage when no other asset references it. Existing state is deleted, replaced or overwritten rather than only appended."
+      }
+    },
+    "delete_metafield_definition": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Deletes a typed product attribute definition and every product value stored under it.",
+        "open_world_justification": "Deletes a typed product attribute definition and every product value stored under it. Its effects can change content or behavior on the public website.",
+        "destructive_justification": "Deletes a typed product attribute definition and every product value stored under it. Existing state is deleted, replaced or overwritten rather than only appended."
       }
     },
     "delete_owner_entered_site_review": {
@@ -236,18 +248,6 @@
         "destructive_justification": "Deletes a product, its reviews and placements, and updates the remaining product order. Existing state is deleted, replaced or overwritten rather than only appended."
       }
     },
-    "delete_product_category": {
-      "annotations": {
-        "readOnlyHint": false,
-        "openWorldHint": true,
-        "destructiveHint": true
-      },
-      "justifications": {
-        "read_only_justification": "Deletes a category and all its standard products, reviews and placements, then updates category order.",
-        "open_world_justification": "Deletes a category and all its standard products, reviews and placements, then updates category order. Its effects can change content or behavior on the public website.",
-        "destructive_justification": "Deletes a category and all its standard products, reviews and placements, then updates category order. Existing state is deleted, replaced or overwritten rather than only appended."
-      }
-    },
     "delete_resource_localization": {
       "annotations": {
         "readOnlyHint": false,
@@ -284,18 +284,6 @@
         "destructive_justification": "Reads the selected tenant blog article and content for editing. Existing content is not deleted or overwritten."
       }
     },
-    "get_booking_policy": {
-      "annotations": {
-        "readOnlyHint": true,
-        "openWorldHint": false,
-        "destructiveHint": false
-      },
-      "justifications": {
-        "read_only_justification": "Reads the selected site, location, or individual experience booking policy and its resolved terms.",
-        "open_world_justification": "Reads the selected site, location, or individual experience booking policy and its resolved terms. It does not publish content or write to an external service.",
-        "destructive_justification": "Reads the selected site, location, or individual experience booking policy and its resolved terms. Existing content is not deleted or overwritten."
-      }
-    },
     "get_contact_inquiries": {
       "annotations": {
         "readOnlyHint": true,
@@ -306,18 +294,6 @@
         "read_only_justification": "Reads authorized customer contact inquiries, including personal contact information.",
         "open_world_justification": "Reads authorized customer contact inquiries, including personal contact information. It does not publish content or write to an external service.",
         "destructive_justification": "Reads authorized customer contact inquiries, including personal contact information. Existing content is not deleted or overwritten."
-      }
-    },
-    "get_experience": {
-      "annotations": {
-        "readOnlyHint": true,
-        "openWorldHint": false,
-        "destructiveHint": false
-      },
-      "justifications": {
-        "read_only_justification": "Reads the selected experience and its pricing and scheduling details.",
-        "open_world_justification": "Reads the selected experience and its pricing and scheduling details. It does not publish content or write to an external service.",
-        "destructive_justification": "Reads the selected experience and its pricing and scheduling details. Existing content is not deleted or overwritten."
       }
     },
     "get_location": {
@@ -368,18 +344,6 @@
         "destructive_justification": "Reads product catalog translations for the selected site and locale. Existing content is not deleted or overwritten."
       }
     },
-    "get_professional_service_content": {
-      "annotations": {
-        "readOnlyHint": true,
-        "openWorldHint": false,
-        "destructiveHint": false
-      },
-      "justifications": {
-        "read_only_justification": "Reads the selected professional-service content.",
-        "open_world_justification": "Reads the selected professional-service content. It does not publish content or write to an external service.",
-        "destructive_justification": "Reads the selected professional-service content. Existing content is not deleted or overwritten."
-      }
-    },
     "get_reservation_inquiries": {
       "annotations": {
         "readOnlyHint": true,
@@ -390,6 +354,18 @@
         "read_only_justification": "Reads authorized reservation inquiries, including guest contact and reservation information.",
         "open_world_justification": "Reads authorized reservation inquiries, including guest contact and reservation information. It does not publish content or write to an external service.",
         "destructive_justification": "Reads authorized reservation inquiries, including guest contact and reservation information. Existing content is not deleted or overwritten."
+      }
+    },
+    "get_reservation_policy": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Reads the reservation policy of the selected location.",
+        "open_world_justification": "Reads the reservation policy of the selected location. It does not publish content or write to an external service.",
+        "destructive_justification": "Reads the reservation policy of the selected location. Existing content is not deleted or overwritten."
       }
     },
     "get_resource_localization": {
@@ -476,18 +452,6 @@
         "destructive_justification": "Reads the authenticated user workspace selection and available context. Existing content is not deleted or overwritten."
       }
     },
-    "list_all_experience_bookings": {
-      "annotations": {
-        "readOnlyHint": true,
-        "openWorldHint": false,
-        "destructiveHint": false
-      },
-      "justifications": {
-        "read_only_justification": "Lists authorized bookings across the selected site, including guest names and contact details.",
-        "open_world_justification": "Lists authorized bookings across the selected site, including guest names and contact details. It does not publish content or write to an external service.",
-        "destructive_justification": "Lists authorized bookings across the selected site, including guest names and contact details. Existing content is not deleted or overwritten."
-      }
-    },
     "list_blog_posts": {
       "annotations": {
         "readOnlyHint": true,
@@ -500,28 +464,16 @@
         "destructive_justification": "Lists the selected site blog articles. Existing content is not deleted or overwritten."
       }
     },
-    "list_experience_bookings": {
+    "list_collections": {
       "annotations": {
         "readOnlyHint": true,
         "openWorldHint": false,
         "destructiveHint": false
       },
       "justifications": {
-        "read_only_justification": "Lists authorized bookings for the selected experience, including guest names and contact details.",
-        "open_world_justification": "Lists authorized bookings for the selected experience, including guest names and contact details. It does not publish content or write to an external service.",
-        "destructive_justification": "Lists authorized bookings for the selected experience, including guest names and contact details. Existing content is not deleted or overwritten."
-      }
-    },
-    "list_experiences": {
-      "annotations": {
-        "readOnlyHint": true,
-        "openWorldHint": false,
-        "destructiveHint": false
-      },
-      "justifications": {
-        "read_only_justification": "Lists the selected site experiences, filtered by an explicit location when provided.",
-        "open_world_justification": "Lists the selected site experiences, filtered by an explicit location when provided. It does not publish content or write to an external service.",
-        "destructive_justification": "Lists the selected site experiences, filtered by an explicit location when provided. Existing content is not deleted or overwritten."
+        "read_only_justification": "Lists the collections of the selected site.",
+        "open_world_justification": "Lists the collections of the selected site. It does not publish content or write to an external service.",
+        "destructive_justification": "Lists the collections of the selected site. Existing content is not deleted or overwritten."
       }
     },
     "list_location_products": {
@@ -572,6 +524,18 @@
         "destructive_justification": "Lists locations accessible in the selected site. Existing content is not deleted or overwritten."
       }
     },
+    "list_metafield_definitions": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Lists the organization typed product attribute definitions.",
+        "open_world_justification": "Lists the organization typed product attribute definitions. It does not publish content or write to an external service.",
+        "destructive_justification": "Lists the organization typed product attribute definitions. Existing content is not deleted or overwritten."
+      }
+    },
     "list_posts": {
       "annotations": {
         "readOnlyHint": true,
@@ -584,16 +548,16 @@
         "destructive_justification": "Lists website announcements for the selected site. Existing content is not deleted or overwritten."
       }
     },
-    "list_product_categories": {
+    "list_products": {
       "annotations": {
         "readOnlyHint": true,
         "openWorldHint": false,
         "destructiveHint": false
       },
       "justifications": {
-        "read_only_justification": "Lists product categories for the selected location.",
-        "open_world_justification": "Lists product categories for the selected location. It does not publish content or write to an external service.",
-        "destructive_justification": "Lists product categories for the selected location. Existing content is not deleted or overwritten."
+        "read_only_justification": "Lists the products of the selected site.",
+        "open_world_justification": "Lists the products of the selected site. It does not publish content or write to an external service.",
+        "destructive_justification": "Lists the products of the selected site. Existing content is not deleted or overwritten."
       }
     },
     "list_site_locales": {
@@ -656,30 +620,6 @@
         "destructive_justification": "Lists tenant pages for the selected site. Existing content is not deleted or overwritten."
       }
     },
-    "move_products": {
-      "annotations": {
-        "readOnlyHint": false,
-        "openWorldHint": true,
-        "destructiveHint": true
-      },
-      "justifications": {
-        "read_only_justification": "Changes the category membership and ordering of selected products.",
-        "open_world_justification": "Changes the category membership and ordering of selected products. Its effects can change content or behavior on the public website.",
-        "destructive_justification": "Changes the category membership and ordering of selected products. Existing state is deleted, replaced or overwritten rather than only appended."
-      }
-    },
-    "preview_booking_policy": {
-      "annotations": {
-        "readOnlyHint": true,
-        "openWorldHint": false,
-        "destructiveHint": false
-      },
-      "justifications": {
-        "read_only_justification": "Computes a booking-policy preview without saving the proposed policy.",
-        "open_world_justification": "Computes a booking-policy preview without saving the proposed policy. It does not publish content or write to an external service.",
-        "destructive_justification": "Computes a booking-policy preview without saving the proposed policy. Existing content is not deleted or overwritten."
-      }
-    },
     "publish_blog_post": {
       "annotations": {
         "readOnlyHint": false,
@@ -740,16 +680,28 @@
         "destructive_justification": "Removes an asset placement from public content while retaining the underlying media asset. Existing state is deleted, replaced or overwritten rather than only appended."
       }
     },
-    "rename_product_category": {
+    "remove_product_location": {
       "annotations": {
         "readOnlyHint": false,
         "openWorldHint": true,
         "destructiveHint": true
       },
       "justifications": {
-        "read_only_justification": "Overwrites the selected product category name.",
-        "open_world_justification": "Overwrites the selected product category name. Its effects can change content or behavior on the public website.",
-        "destructive_justification": "Overwrites the selected product category name. Existing state is deleted, replaced or overwritten rather than only appended."
+        "read_only_justification": "Removes a product from a location, so the location no longer offers it.",
+        "open_world_justification": "Removes a product from a location, so the location no longer offers it. Its effects can change content or behavior on the public website.",
+        "destructive_justification": "Removes a product from a location, so the location no longer offers it. Existing state is deleted, replaced or overwritten rather than only appended."
+      }
+    },
+    "reorder_collections": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Overwrites the order collections are presented in on the selected site.",
+        "open_world_justification": "Overwrites the order collections are presented in on the selected site. Its effects can change content or behavior on the public website.",
+        "destructive_justification": "Overwrites the order collections are presented in on the selected site. Existing content is not deleted or overwritten."
       }
     },
     "reorder_location_qa": {
@@ -774,30 +726,6 @@
         "read_only_justification": "Overwrites media placement ordering for the selected public content collection.",
         "open_world_justification": "Overwrites media placement ordering for the selected public content collection. Its effects can change content or behavior on the public website.",
         "destructive_justification": "Overwrites media placement ordering for the selected public content collection. Existing state is deleted, replaced or overwritten rather than only appended."
-      }
-    },
-    "reorder_product_categories": {
-      "annotations": {
-        "readOnlyHint": false,
-        "openWorldHint": true,
-        "destructiveHint": true
-      },
-      "justifications": {
-        "read_only_justification": "Overwrites category order in the selected location.",
-        "open_world_justification": "Overwrites category order in the selected location. Its effects can change content or behavior on the public website.",
-        "destructive_justification": "Overwrites category order in the selected location. Existing state is deleted, replaced or overwritten rather than only appended."
-      }
-    },
-    "reorder_products": {
-      "annotations": {
-        "readOnlyHint": false,
-        "openWorldHint": true,
-        "destructiveHint": true
-      },
-      "justifications": {
-        "read_only_justification": "Overwrites product order within the selected category.",
-        "open_world_justification": "Overwrites product order within the selected category. Its effects can change content or behavior on the public website.",
-        "destructive_justification": "Overwrites product order within the selected category. Existing state is deleted, replaced or overwritten rather than only appended."
       }
     },
     "reorder_site_qa": {
@@ -828,12 +756,12 @@
       "annotations": {
         "readOnlyHint": false,
         "openWorldHint": true,
-        "destructiveHint": true
+        "destructiveHint": false
       },
       "justifications": {
         "read_only_justification": "Replaces the submitted product translations for one locale; omitted products remain untouched.",
         "open_world_justification": "Replaces the submitted product translations for one locale; omitted products remain untouched. Its effects can change content or behavior on the public website.",
-        "destructive_justification": "Replaces the submitted product translations for one locale; omitted products remain untouched. Existing state is deleted, replaced or overwritten rather than only appended."
+        "destructive_justification": "Replaces the submitted product translations for one locale; omitted products remain untouched. Existing content is not deleted or overwritten."
       }
     },
     "reply_to_review": {
@@ -884,6 +812,18 @@
         "destructive_justification": "Overwrites the selected site public brand color. Existing state is deleted, replaced or overwritten rather than only appended."
       }
     },
+    "set_collection_products": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Overwrites the complete membership and order of the selected collection; products left out lose their place in it.",
+        "open_world_justification": "Overwrites the complete membership and order of the selected collection; products left out lose their place in it. Its effects can change content or behavior on the public website.",
+        "destructive_justification": "Overwrites the complete membership and order of the selected collection; products left out lose their place in it. Existing state is deleted, replaced or overwritten rather than only appended."
+      }
+    },
     "set_default_currency": {
       "annotations": {
         "readOnlyHint": false,
@@ -906,6 +846,30 @@
         "read_only_justification": "Replaces or clears the asset assigned to a single public media placement.",
         "open_world_justification": "Replaces or clears the asset assigned to a single public media placement. Its effects can change content or behavior on the public website.",
         "destructive_justification": "Replaces or clears the asset assigned to a single public media placement. Existing state is deleted, replaced or overwritten rather than only appended."
+      }
+    },
+    "set_product_location": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Records that the selected location offers the product, and whether it is on sale and shown there.",
+        "open_world_justification": "Records that the selected location offers the product, and whether it is on sale and shown there. Its effects can change content or behavior on the public website.",
+        "destructive_justification": "Records that the selected location offers the product, and whether it is on sale and shown there. Existing content is not deleted or overwritten."
+      }
+    },
+    "set_product_publication": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Records whether the selected site carries the product, which is what puts it on that site.",
+        "open_world_justification": "Records whether the selected site carries the product, which is what puts it on that site. Its effects can change content or behavior on the public website.",
+        "destructive_justification": "Records whether the selected site carries the product, which is what puts it on that site. Existing content is not deleted or overwritten."
       }
     },
     "set_workspace_context": {
@@ -956,40 +920,16 @@
         "destructive_justification": "Overwrites supplied fields of an existing tenant blog article. Existing state is deleted, replaced or overwritten rather than only appended."
       }
     },
-    "update_booking_policy": {
+    "update_collection": {
       "annotations": {
         "readOnlyHint": false,
         "openWorldHint": true,
-        "destructiveHint": true
+        "destructiveHint": false
       },
       "justifications": {
-        "read_only_justification": "Overwrites booking rules, including cancellation and deposit terms, for the selected site, location, or individual experience.",
-        "open_world_justification": "Overwrites booking rules, including cancellation and deposit terms, for the selected site, location, or individual experience. Its effects can change content or behavior on the public website.",
-        "destructive_justification": "Overwrites booking rules, including cancellation and deposit terms, for the selected site, location, or individual experience. Existing state is deleted, replaced or overwritten rather than only appended."
-      }
-    },
-    "update_experience": {
-      "annotations": {
-        "readOnlyHint": false,
-        "openWorldHint": true,
-        "destructiveHint": true
-      },
-      "justifications": {
-        "read_only_justification": "Overwrites experience content, price, capacity, status or schedule as requested.",
-        "open_world_justification": "Overwrites experience content, price, capacity, status or schedule as requested. Its effects can change content or behavior on the public website.",
-        "destructive_justification": "Overwrites experience content, price, capacity, status or schedule as requested. Existing state is deleted, replaced or overwritten rather than only appended."
-      }
-    },
-    "update_experience_booking": {
-      "annotations": {
-        "readOnlyHint": false,
-        "openWorldHint": true,
-        "destructiveHint": true
-      },
-      "justifications": {
-        "read_only_justification": "Confirms, cancels, or completes a booking through its guest conversation. Confirmation and cancellation send the applicable guest email notification; cancellation also revokes its review request.",
-        "open_world_justification": "Confirms, cancels, or completes a booking through its guest conversation. Confirmation and cancellation send the applicable guest email notification; cancellation also revokes its review request. Its effects can change content or behavior on the public website.",
-        "destructive_justification": "Confirms, cancels, or completes a booking through its guest conversation. Confirmation and cancellation send the applicable guest email notification; cancellation also revokes its review request. Existing state is deleted, replaced or overwritten rather than only appended."
+        "read_only_justification": "Overwrites the selected collection name, description or placement.",
+        "open_world_justification": "Overwrites the selected collection name, description or placement. Its effects can change content or behavior on the public website.",
+        "destructive_justification": "Overwrites the selected collection name, description or placement. Existing content is not deleted or overwritten."
       }
     },
     "update_location": {
@@ -1064,16 +1004,16 @@
         "destructive_justification": "Overwrites product fields, including public content, availability and price. Existing state is deleted, replaced or overwritten rather than only appended."
       }
     },
-    "update_professional_service_content": {
+    "update_reservation_policy": {
       "annotations": {
         "readOnlyHint": false,
         "openWorldHint": true,
-        "destructiveHint": true
+        "destructiveHint": false
       },
       "justifications": {
-        "read_only_justification": "Creates or overwrites professional-service content for the selected site.",
-        "open_world_justification": "Creates or overwrites professional-service content for the selected site. Its effects can change content or behavior on the public website.",
-        "destructive_justification": "Creates or overwrites professional-service content for the selected site. Existing state is deleted, replaced or overwritten rather than only appended."
+        "read_only_justification": "Creates or overwrites the reservation policy of the selected location, which is what opens reservations there.",
+        "open_world_justification": "Creates or overwrites the reservation policy of the selected location, which is what opens reservations there. Its effects can change content or behavior on the public website.",
+        "destructive_justification": "Creates or overwrites the reservation policy of the selected location, which is what opens reservations there. Existing content is not deleted or overwritten."
       }
     },
     "update_site_qa": {
@@ -1128,34 +1068,34 @@
   "test_cases": [
     {
       "description": "Add a menu item at the explicitly selected demo location.",
-      "user_prompt": "Use Ember & Slice, West Village. In Submission Drinks, add Submission Iced Coffee at 90 THB per item, tax-inclusive, with description “Coffee served over ice.” If that exact item already exists, show it and ask before creating a duplicate.",
+      "user_prompt": "Use Ember & Slice, West Village. In Submission Drinks, add Submission Iced Coffee at 90 THB, tax-inclusive, with description “Coffee served over ice.” If that exact item already exists, show it and ask before creating a duplicate.",
       "file_attachment_urls": null,
-      "tools_triggered": "list_sites, list_locations, list_product_categories, list_location_products, create_product",
-      "expected_output": "Creates one item only in the selected category and location with amount_minor 9000, currency THB, unit item, tax_behavior inclusive, and the supplied description.",
+      "tools_triggered": "list_sites, list_locations, list_collections, list_location_products, create_product, set_product_publication, set_product_location, set_collection_products",
+      "expected_output": "Creates one Product with a single variant priced at unit_amount 9000 THB, publishes it to the selected site, records West Village as offering it, and adds it to the Submission Drinks collection.",
       "expected_output_url": null
     },
     {
       "description": "Update an existing menu item without changing other items.",
-      "user_prompt": "At Ember & Slice, West Village, update Espresso in Submission Drinks to 85 THB per item, tax-inclusive, and description “Freshly brewed espresso.” Keep its name and availability unchanged.",
+      "user_prompt": "At Ember & Slice, West Village, update Espresso to 85 THB, tax-inclusive, and description “Freshly brewed espresso.” Keep its name and availability unchanged.",
       "file_attachment_urls": null,
       "tools_triggered": "list_location_products, get_product, update_product",
-      "expected_output": "Updates the explicitly identified Espresso to amount_minor 8500 and the supplied description; other fields and products remain unchanged.",
+      "expected_output": "Updates the explicitly identified Espresso to a variant price of unit_amount 8500 and the supplied description; other fields and Products remain unchanged.",
       "expected_output_url": null
     },
     {
-      "description": "Create a wording-only price without inventing a numeric amount.",
-      "user_prompt": "At Ember & Slice, West Village, in Submission Drinks, add Submission Seasonal Drink with description “Ask about today’s selection” and price wording “Market Price”. Do not assign a fixed amount; if the exact item exists, ask before duplicating it.",
+      "description": "Refuse to invent a price nobody stated.",
+      "user_prompt": "At Ember & Slice, West Village, in Submission Drinks, add Submission Seasonal Drink with description “Ask about today’s selection”. The price changes daily.",
       "file_attachment_urls": null,
-      "tools_triggered": "list_sites, list_locations, list_product_categories, list_location_products, create_product",
-      "expected_output": "Creates the explicitly located product with price null and an explicit price-note detail reading Market Price; does not substitute zero or an estimated amount.",
+      "tools_triggered": "list_sites, list_locations, list_collections, list_location_products",
+      "expected_output": "Asks what the Product should cost rather than creating it: what a customer buys is a variant and a variant carries its price, so it does not substitute zero, an estimate, or a priceless variant standing in for one.",
       "expected_output_url": null
     },
     {
       "description": "Preview and save a location reservation policy without inventing other terms.",
       "user_prompt": "For Ember & Slice, West Village table reservations, show the current policy and preview a 48-hour free-cancellation window. Show the proposed result before asking me to save it; preserve all other stored terms.",
       "file_attachment_urls": null,
-      "tools_triggered": "list_sites, list_locations, get_booking_policy, preview_booking_policy, update_booking_policy",
-      "expected_output": "Reads the explicit location policy and previews free_cancellation_until_minutes 2880 without saving. Only after the user confirms, saves that field and reads it back; unspecified terms stay unspecified.",
+      "tools_triggered": "list_sites, list_locations, get_reservation_policy, update_reservation_policy",
+      "expected_output": "Reads the explicit location policy and states the proposed free_cancellation_until_minutes 2880 without saving. Only after the user confirms, saves that field and reads it back; unspecified terms stay unspecified.",
       "expected_output_url": null
     },
     {

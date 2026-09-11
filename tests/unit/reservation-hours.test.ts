@@ -1,6 +1,6 @@
 ﻿import assert from 'node:assert/strict'
 import test from 'node:test'
-import { parseOpeningHours, parseSpecialHours, parseRecurringSlots, normalizeGoogleOpeningHours, getDateIntervals, generateReservationTimes, isOpenNow, resolveExperienceScheduleSlots } from '../../shared/reservation-hours.ts'
+import { parseOpeningHours, parseSpecialHours, normalizeGoogleOpeningHours, getDateIntervals, generateReservationTimes, isOpenNow } from '../../shared/reservation-hours.ts'
 
 test('weekly hours retain close weekdays, Sunday rollover and exact 23:59 endpoints', () => {
   const hours = parseOpeningHours({ periods: [{ open: { day: 6, hour: 22, minute: 0 }, close: { day: 0, hour: 2, minute: 0 } }] })
@@ -30,12 +30,10 @@ test('dated exceptions replace incoming overnight hours and closures have inclus
   assert.deepEqual(generateReservationTimes(hours, '2099-01-06', { specialHours: dated }), ['00:00', '00:30', '01:00', '01:30', '02:00'])
 })
 
-test('boundaries reject ambiguous hours and legacy recurrence instead of interpreting them', () => {
+test('boundaries reject ambiguous hours instead of interpreting them', () => {
   for (const hours of ['Monday: 9-5', [], { weekdayDescriptions: ['Monday: 9-5'] }, { periods: [{ open: { day: 1, hour: 9, minute: 0 }, close: { day: 1, hour: 9, minute: 0 } }] }]) assert.throws(() => parseOpeningHours(hours))
   assert.throws(() => parseOpeningHours({ periods: [{ open: { day: 0, hour: 0, minute: 0 } }, { open: { day: 1, hour: 9, minute: 0 }, close: { day: 1, hour: 10, minute: 0 } }] }))
   assert.throws(() => parseSpecialHours([{ kind: 'closure', starts_on: '2099-02-30', ends_on: null, note: null }]))
-  assert.throws(() => parseRecurringSlots({ Monday: ['15:00'] }))
-  assert.deepEqual(resolveExperienceScheduleSlots({ recurring_slots: parseRecurringSlots({ monday: ['15:00'] }) }, '2099-01-05'), ['15:00'])
 })
 
 test('overnight starts retain the opening minute grid and short closures do not erase later continuous days', () => {

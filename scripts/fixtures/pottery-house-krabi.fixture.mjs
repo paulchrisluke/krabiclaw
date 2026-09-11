@@ -145,7 +145,7 @@ section('Route availability (all must 200)')
 
 const REQUIRED_ROUTES = [
   '/', '/locations', '/reviews', '/qa', '/posts', '/about', '/contact',
-  '/experiences', '/blog',
+  '/products', '/blog',
 ]
 
 const pageHtml = {}
@@ -182,19 +182,22 @@ if (bootstrapRes.ok) {
 
 // ── 3. Experience slugs ───────────────────────────────────────────────────────
 
-section('Experience slugs route correctly')
+section('Product slugs route correctly')
 
-const expRes = await get(`/api/public/sites/${SITE_ID}/page?page=experiences&datasets=experiences`)
+const expRes = await get(`/api/public/sites/${SITE_ID}/page?page=products&datasets=products`)
 if (expRes.ok) {
   const expData = await expRes.json()
-  const experiences = expData.experiencesList ?? []
-  assert('At least 1 experience returned from bootstrap', experiences.length >= 1, true)
+  const products = expData.products ?? []
+  const locationsById = new Map((expData.shell?.locations ?? []).map(location => [location.id, location]))
+  assert('At least 1 Product returned from bootstrap', products.length >= 1, true)
 
-  for (const exp of experiences.slice(0, 3)) {
-    if (!exp.slug) continue
-    const route = `/experiences/${exp.slug}`
+  for (const product of products.slice(0, 3)) {
+    if (!product.slug) continue
+    const owning = (product.locations ?? []).find(entry => entry.published && locationsById.has(entry.location_id))
+    if (!owning) continue
+    const route = `/locations/${locationsById.get(owning.location_id).slug}/products/${product.slug}`
     const r = await get(route)
-    assert(`Experience slug routes: GET ${route} → 200`, r.ok, true)
+    assert(`Product slug routes: GET ${route} → 200`, r.ok, true)
     if (r.ok) pageHtml[route] = await r.text()
   }
 } else {

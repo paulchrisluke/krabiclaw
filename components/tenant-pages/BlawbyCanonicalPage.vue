@@ -168,7 +168,7 @@ const reviews = computed<PublicSiteReview[]>(() => arrayRecords(reviewsBlock.val
   google_review_metadata: null,
 })).filter(item => item.id && item.author_name))
 
-const pricingBlock = computed(() => block('offering_grid', data => data.section === 'pricing'))
+const pricingBlock = computed(() => block('product_grid', data => data.section === 'pricing'))
 const pricingPlans = computed(() => arrayRecords(pricingBlock.value?.data.items).map(item => ({
   discount: stringValue(item.title),
   price: stringValue(item.value),

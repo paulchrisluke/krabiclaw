@@ -14,7 +14,7 @@ managed through it, KrabiClaw's own included.
 - OAuth2 authorization at `/api/auth/oauth2/` — ChatGPT handles auth before any tool call
 - MCP endpoint at `/api/mcp` (`server/api/mcp.post.ts`)
 - Scope: `tenant`
-- MCP capabilities cover existing site settings, locations, menus, experiences, posts, articles, media, locale management, feature-flagged Facebook publishing, and analytics. Google Places lookup and domain setup are CMS-only.
+- MCP capabilities cover existing site settings, locations, the Product catalog and its collections, posts, articles, media, locale management, feature-flagged Facebook publishing, and analytics. Google Places lookup and domain setup are CMS-only.
 - Every public tool rejects unknown top-level arguments and declares explicit `readOnlyHint`, `openWorldHint`, and `destructiveHint` values. `server/utils/mcp-tools/shared.ts` contains the registry.
 - Location-scoped mutations require an explicit `location_id`. Product-by-ID mutations resolve the Product's stored owning location.
 - `chatgpt-app-submission.json` contains the review import data. Run `yarn chatgpt:submission:write` after changing the public tool catalog.
@@ -58,14 +58,14 @@ KrabiClaw supports multiple business verticals. Site creation happens in the das
 | Vertical (app-level) | Description | DB-stored as |
 |----------|-------------|-------------|
 | `restaurant` | Food & beverage — menus, reviews, hours, reservations | `restaurant` |
-| `experience` | Activity-based businesses — experiences, bookings, classes | `experience` |
-| `service` | Legal and other professional/advisory services — offerings (practice areas), consultations, pricing/donate pages | `service` |
+| `experience` | Activity-based businesses — classes, tours, workshops, bookings | `experience` |
+| `service` | Legal and other professional/advisory services — practice areas, consultations, pricing/donate pages | `service` |
 
 `service` is the canonical professional-service vertical across the application, database, and import pipeline.
 
-Experiences are one-to-one booking extensions of canonical Products and retain the same stable ID. Product owns shared title/slug/content/visibility/order/SEO/Price fields; `experiences`, `experience_bookings`, experience-specific MCP tools (`list_experiences`, `create_experience`, `list_experience_bookings`, etc.), and Saya routes at `/experiences/[slug]` own the booking-specific behavior.
+A restaurant dish, a pottery class and a consultation are all Products in one catalog; nothing about their storage differs. There is no `product_type` discriminator, because a discriminator that selects a schema is how one model became several half-models. Capabilities compose instead: a Product gains booking by having a booking configuration, and gains stock by having an inventory item. What the vertical actually changes is vocabulary (menu vs products) and which route segment the catalogue is presented at.
 
-Professional-service tenants render through the Blawby template (see "Public Templates" below) rather than Saya, and don't yet have a first-class offerings/practice-areas content model in the dashboard CMS — that's tracked separately (issue #278).
+Professional-service tenants render through the Blawby template (see "Public Templates" below) rather than Saya, and their practice areas are tenant pages rather than a catalog of their own.
 
 ---
 
@@ -140,12 +140,13 @@ Default template for restaurant/experience tenants. SSR-rendered, SEO-first, edi
 /locations                     → All locations grid
 /locations/[slug]              → Location home: hours, address, map, menu preview
 /locations/[slug]/menu         → Full menu
+/locations/[slug]/menu/[slug]  → Dish detail
 /locations/[slug]/reviews      → Reviews: aggregate score + star distribution + owner replies
 /locations/[slug]/photos       → Photo gallery by category
 /locations/[slug]/qa           → Q&A: owner-answered pairs
 /locations/[slug]/contact      → Map embed, hours, address, directions CTA
-/experiences                   → All experiences grid
-/experiences/[slug]            → Experience detail: description, pricing, bookings CTA
+/products                      → All products grid (the experience vertical's catalogue route)
+/locations/[slug]/products/[slug] → Product detail: description, price, booking CTA when bookable
 /about                         → Brand story
 /contact                       → Brand contact form
 /reservations                  → Reservation form
@@ -157,15 +158,15 @@ Nav: Logo | Locations (dropdown) | Story | Contact | **RESERVE** (primary CTA). 
 
 ### Blawby (service)
 
-Template for professional-service tenants, proven first against NCLS (#194). Offerings default to site-level (not location-scoped), since many professional-service tenants serve a statewide/remote area rather than a single storefront.
+Template for professional-service tenants, proven first against NCLS (#194). Practice areas are pages, not a catalog: they are site-level, since many professional-service tenants serve a statewide/remote area rather than a single storefront.
 
 #### URL Structure
 
 ```text
 /                              → Home
 /about                         → Brand story, compliance/organization info
-/services                      → Offerings index (practice areas)
-/services/[slug]               → Offering detail
+/services                      → Practice-area index
+/services/[slug]               → Practice-area page
 /pricing                       → Pricing/eligibility, optional structured calculator component
 /donate                        → External donation CTA (no native payment processing)
 /schedule                      → Consultation entry point (external URL, e.g. Clio Grow, for now)
@@ -215,8 +216,8 @@ Both Saya and Blawby support a blog: Saya's is the shared `posts` primitive rend
 - **One org can have multiple sites** — there is no unique-per-org constraint on sites. Sites are explicit everywhere — there is no "first site in org" fallback in dashboard routing or billing.
 - One Better Auth organization subscription covers every site in the organization. A new site inherits the organization's effective plan without another checkout. `organization_billing` is the slim sessionless access/payment reconciliation projection of that organization-level authority; authenticated billing management reads Better Auth's documented subscription API.
 - Capabilities are computed only from `getPlanEntitlements(effectivePlan)`. There are no site plan, site billing, site entitlement, or organization entitlement projections.
-- **Sites** are the primary day-to-day dashboard context and selector. A location becomes the working context only inside that site's location workspace. For Saya (restaurant/experience) sites this is a physical location; Blawby's offerings are site-level by default and don't require a location to have a public street address (a professional-service tenant may serve a statewide/remote area).
-- Public tenant routes are template-specific: Saya remains location/experience-centric under `/locations/[slug]` and `/experiences/[slug]`; Blawby is offering-centric under `/services/[slug]` (see "Public Templates" above).
+- **Sites** are the primary day-to-day dashboard context and selector. A location becomes the working context only inside that site's location workspace. For Saya (restaurant/experience) sites this is a physical location; Blawby's practice areas are site-level and don't require a location to have a public street address (a professional-service tenant may serve a statewide/remote area).
+- Public tenant routes are template-specific: Saya remains location-centric under `/locations/[slug]`, with each Product's page beneath the location that offers it; Blawby is page-centric under `/services/[slug]` (see "Public Templates" above).
 - Dashboard routes follow the Vercel-style workspace shape, with an explicit site segment:
   - `/dashboard/{orgSlug}` — org root; lists sites, auto-redirects to the single site if the org has exactly one
   - `/dashboard/{orgSlug}/sites/{siteSlug}` — site workspace (`siteSlug` is the site's `subdomain`)
@@ -258,12 +259,8 @@ A reviewed template setting that controls presentation values such as typography
 _Avoid_: custom CSS, tenant stylesheet, hardcoded client styling
 
 **Practice area**:
-A legal-facing name for an offering that describes an area of expertise or client need, such as family law or immigration help. Practice areas are not restaurant menus, bookable experiences, or locations.
-_Avoid_: menu item, experience, location
-
-**Offering**:
-A reusable professional-service content item describing something a tenant can help a client with. Offerings are site-level by default and may optionally be associated with a location; legal templates may label offerings as practice areas.
-_Avoid_: experience, menu item, legal service table
+A legal-facing page describing an area of expertise or client need, such as family law or immigration help. A practice area is a page, not a catalog row: it is not a Product, a menu item, or a location.
+_Avoid_: offering, menu item, experience, legal service table
 
 **Location**:
 A tenant presence used for contact, office, service-area, hours, and routing context. For professional-service tenants, a location may omit a public street address when it represents a service-area or remote/contact presence rather than a physical storefront.
@@ -290,16 +287,28 @@ The interactive menu used by a guest to build and submit Dine-in orders. It is d
 _Avoid_: SEO menu as the cart, menu item as the whole product model, separate catalog for QR ordering
 
 **Product**:
-The stable catalog identity and content record for a sellable offering. Product content is separate from Menu placement, location/channel availability, inventory quantity, and Price records.
-_Avoid_: menu item as the combined product/price/placement model
+The organization-owned catalog identity and content record for a thing the business sells. One Product model serves every vertical. Product content is separate from where it is published (a site), where it is offered (a location), how it is grouped (a collection), what is bought (a variant), and what it costs (a price on that variant). None of those states implies another: a Product can be carried by a site and withheld, offered at a location with no price, or active with nothing published.
+_Avoid_: menu item as the combined product/price/placement model, product_type as a schema selector, a second catalog for one vertical
+
+**Variant**:
+What a customer actually buys: a Product's size, seating, or option combination. Prices belong to variants, because two sizes are two things to buy and not one thing with two amounts. A Product sold one way still has one variant, so every price has an owner.
+_Avoid_: price on the product, option strings priced by convention
+
+**Collection**:
+A named, ordered grouping a site presents — a menu section, a shelf, a curated "Featured" row. Membership is explicit, and position lives on the membership, so one Product can sit third in one collection and first in another. There is no `featured` flag on a Product: a curated grouping is a Collection whose membership someone chose.
+_Avoid_: product category, featured flag, implicit "everything else" bucket
 
 **Price**:
-The organization/site/location-scoped sellable monetary definition for a Product. A Product may have a fixed Price, or no active Price with explicit customer-facing wording (for example “Market Price”) in its `details` entry keyed `price-note`. The two forms are mutually exclusive; zero is a real free Price, and absent wording is never invented. A Price stores an integer minor-unit amount, ISO currency, structured unit (`item`, `person`, or `table`), tax behavior, optional compare-at amount, immutable provenance, and an ISO validity interval. Repricing closes the current interval and inserts a new Price; intervals for one Product may be scheduled but must not overlap. A site's default currency is only a creation default and never rewrites existing Prices. Order lines snapshot the Price and displayed values; changing an amount never rewrites historical order data.
-_Avoid_: mutable price field on an immutable order, sale as an untracked total override
+What one variant costs, in one currency, optionally narrowed to one location and one validity interval. A price stores an integer minor-unit amount, ISO currency, billing type (one-time or recurring), tax behavior, optional compare-at amount, and its validity interval. Selection has exactly one rule: a location-specific price wins over a location-neutral one for that location, and two simultaneously valid prices of the same scope are a conflict the writer refuses rather than a choice the reader makes. Zero is a real free price; a variant with no applicable price is not purchasable there, which the surface states. A site's default currency is only a creation default and never rewrites existing prices.
+_Avoid_: price on the product, mutable price field on an immutable order, a "from" amount standing in for a real price
 
-**Experience**:
-A booking-specific one-to-one extension of Product that uses the same stable ID. Product owns the Experience title, slug, description, visibility, availability, ordering, SEO, audit fields, and Price; Experience owns duration, capacity, slots, inclusions, meeting point, booking data, and other experience-only fields. An inquiry-only Experience has no active Price and may carry one concise `pricing_note`.
-_Avoid_: separate experience catalog identity, duplicated title or slug, free-text per-person pricing
+**Session**:
+One occurrence of a bookable Product: a real row with its own start instant, zone, capacity and state. Sessions are materialized from typed availability rules rather than computed at read time, so what a guest is offered and what a host sees are the same rows. A booking claims seats on a session; a bookable Product with no sessions offers nothing, which is different from not being bookable at all.
+_Avoid_: experience as a separate catalog identity, recurrence JSON read as a schedule, a slot computed per request
+
+**Reservation**:
+A table held at a location for an interval. A reservation has no materialized occurrence — a restaurant does not schedule dinners the way a studio schedules classes — so its slots are computed from the location's opening hours and date overrides, and capacity is per start-time slot. Reservations and bookings are separate because what holds the seats differs, not because the guest conversation does.
+_Avoid_: session as a reservation, reservation as a booking with a null product
 
 **Organization access projection**:
 The slim, sessionless application projection of subscription access used by cron and queue work. Better Auth is the subscription authority and authenticated billing management reads its documented subscription APIs; `organization_billing` stores only payment/reconciliation evidence, the correlated subscription ID, `access_plan`, and `access_expires_at`. Capabilities are derived from `getPlanEntitlements(effectivePlan)` rather than persisted entitlement rows.
@@ -386,7 +395,7 @@ A required verification boundary before moving a tenant's production DNS to Krab
 _Avoid_: smoke test, visual approval, soft launch
 
 **Structured data**:
-Machine-readable schema.org metadata generated from KrabiClaw's tenant, location, offering, article, compliance, and template models. Professional-service structured data may render legal-service concepts, but it is generated from platform data rather than copied as raw tenant JSON-LD. `utils/professional-service-schema.ts` is the single canonical graph builder for professional-service tenants (see ADR 0016): every route emits a linked `@graph` with stable, canonical-origin `Organization`/`WebSite` `@id`s, `nonprofit_status` is normalized to schema.org's enum (e.g. `https://schema.org/Nonprofit501c3`) at the write layer rather than stored as free text, and a `PostalAddress` is only included when `tenant_compliance.address_visibility` explicitly allows it — resolved from the offering's explicit `business_locations` owner. The shared Organization node has no postal address.
+Machine-readable schema.org metadata generated from KrabiClaw's tenant, location, Product, article, compliance, and template models. Professional-service structured data may render legal-service concepts, but it is generated from platform data rather than copied as raw tenant JSON-LD. `utils/professional-service-schema.ts` is the single canonical graph builder for professional-service tenants (see ADR 0016): every route emits a linked `@graph` with stable, canonical-origin `Organization`/`WebSite` `@id`s, `nonprofit_status` is normalized to schema.org's enum (e.g. `https://schema.org/Nonprofit501c3`) at the write layer rather than stored as free text, and a `PostalAddress` is only included when `tenant_compliance.address_visibility` explicitly allows it — resolved from the page's explicit `business_locations` owner. The shared Organization node has no postal address.
 _Avoid_: pasted JSON-LD blob, restaurant schema fallback, template-only metadata, free-text nonprofit status, a second address field on `tenant_compliance`
 
 ---
@@ -395,7 +404,7 @@ _Avoid_: pasted JSON-LD blob, restaurant schema fallback, template-only metadata
 
 ### Linked professional-service structured data graph
 
-Professional-service tenants get a schema.org graph generated from canonical data, never from pasted JSON-LD. `utils/professional-service-schema.ts` (`buildProfessionalServiceGraph`) is the single builder used by the public pages, dashboard, ChowBot, MCP and import, so every route is independently valid and checkable. `nonprofit_status` is normalized to schema.org's canonical enum. `tenant_compliance.address_visibility` gates whether a resolved street address appears at all; organizations have no postal address, and an offering linked to a location may publish that location's `PostalAddress` on its service node. Rejected: a layout-level Organization block referenced by `@id` (couples every route's validity to the layout) and duplicate address columns on `tenant_compliance` (two sources of truth).
+Professional-service tenants get a schema.org graph generated from canonical data, never from pasted JSON-LD. `utils/professional-service-schema.ts` (`buildProfessionalServiceGraph`) is the single builder used by the public pages, dashboard, ChowBot, MCP and import, so every route is independently valid and checkable. `nonprofit_status` is normalized to schema.org's canonical enum. `tenant_compliance.address_visibility` gates whether a resolved street address appears at all; organizations have no postal address, and a practice-area page linked to a location may publish that location's `PostalAddress` on its service node. Rejected: a layout-level Organization block referenced by `@id` (couples every route's validity to the layout) and duplicate address columns on `tenant_compliance` (two sources of truth).
 
 ### Restaurant ordering stops at the merchant handoff
 

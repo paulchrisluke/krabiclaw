@@ -42,7 +42,6 @@ interface ChecklistRow {
   business_info: number
   has_hero: number
   products: number
-  experiences: number
   service_pages: number
   story: number
   post: number
@@ -86,8 +85,9 @@ export async function loadOnboardingChecklist(
         JOIN media_assets ma ON ma.id = mp.asset_id AND ma.status = 'active'
         WHERE mp.site_id = s.id AND mp.owner_type = 'business_location' AND mp.slot = 'hero' AND mp.status = 'active'
       ) AS has_hero,
-      (SELECT COUNT(*) FROM products WHERE site_id = s.id AND is_visible = 1) AS products,
-      (SELECT COUNT(*) FROM products p JOIN product_publications pub ON pub.product_id = p.id JOIN product_booking_configs cfg ON cfg.product_id = p.id WHERE pub.site_id = s.id) AS experiences,
+      (SELECT COUNT(DISTINCT p.id) FROM products p
+         JOIN product_publications pub ON pub.product_id = p.id AND pub.organization_id = p.organization_id
+        WHERE pub.site_id = s.id AND pub.published = 1 AND p.active = 1) AS products,
       (SELECT COUNT(*) FROM content_documents WHERE site_id = s.id AND row_role = 'root' AND kind = 'page' AND (metadata_json ->> '$.recipe') = 'services') AS service_pages,
       (
         SELECT COUNT(*)
@@ -118,11 +118,8 @@ export async function loadOnboardingChecklist(
     items: {
       business_info: Boolean(row.business_info),
       hero_image: heroIsReal,
-      core_offering: vertical === 'experience'
-        ? row.experiences > 0
-        : vertical === 'service'
-          ? row.service_pages > 0
-          : row.products > 0,
+      // Every Saya vertical sells Products; only the word for them differs.
+      core_offering: vertical === 'service' ? row.service_pages > 0 : row.products > 0,
       story: row.story > 0,
       post: row.post > 0,
     },

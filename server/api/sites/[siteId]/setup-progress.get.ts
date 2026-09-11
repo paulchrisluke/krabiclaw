@@ -89,9 +89,10 @@ export default defineHandler(async (event) => {
     `, [orgId, siteId])
 
     const productsResult = await queryFirst<{ count: number }>(db, `
-      SELECT COUNT(id) as count
-      FROM products
-      WHERE site_id = ? AND organization_id = ? AND is_visible = 1 AND available = 1
+      SELECT COUNT(DISTINCT p.id) as count
+      FROM products p
+      JOIN product_publications pub ON pub.product_id = p.id AND pub.organization_id = p.organization_id AND pub.site_id = ? AND pub.published = 1
+      WHERE p.organization_id = ? AND p.active = 1
     `, [siteId, orgId])
     const productCount = productsResult?.count ?? 0
 
