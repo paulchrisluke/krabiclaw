@@ -9,23 +9,33 @@
 export const PRODUCT_LIMITS = {
   batchCreate: 400,
   reconcile: 200,
-  category: 120,
   name: 240,
+  slug: 240,
   description: 10_000,
   tags: 32,
   tag: 120,
-  detailGroups: 24,
-  detailKey: 80,
-  detailLabel: 120,
-  detailValues: 32,
-  detailValue: 500,
-  detailPayload: 20_000,
+  marketingFeatures: 15,
+  marketingFeature: 500,
+  metadataEntries: 50,
+  metadataKey: 40,
+  metadataValue: 500,
+  unitLabel: 40,
+  taxCode: 60,
+  sku: 120,
+  options: 3,
+  optionValues: 100,
+  optionName: 120,
+  optionValue: 240,
+  variants: 250,
+  metafields: 64,
   orderUrl: 2_048,
-  seoTitle: 240,
-  seoDescription: 1_000,
-  canonicalUrl: 2_048,
-  robots: 240,
+  collectionName: 120,
+  collectionDescription: 2_000,
+  collectionProducts: 2_000,
 } as const
 
-/** A detail key is lowercase kebab-case. The server rejects anything else. */
-export const PRODUCT_DETAIL_KEY = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
+/** A slug is lowercase kebab-case. The server rejects anything else. */
+export const PRODUCT_SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
+
+/** A metadata key is a short lowercase identifier. Values are plain strings. */
+export const PRODUCT_METADATA_KEY = /^[a-z0-9][a-z0-9_-]*$/

@@ -1,124 +1,239 @@
 import assert from 'node:assert/strict'
-import { generateSQLiteDrizzleJson, generateSQLiteMigration } from 'drizzle-kit/api'
-import * as schema from '../../server/db/schema.ts'
-import { bookingPayloadForGuest, requestInsertQueries } from '../../server/domain/requests.ts'
 import test from 'node:test'
+import { generateSQLiteDrizzleJson, generateSQLiteMigration } from 'drizzle-kit/api'
 import { Miniflare } from 'miniflare'
-import { readAvailability, executeAvailabilityClaim, readAvailabilityCalendar, setAvailability, type AvailabilitySnapshot } from '../../server/utils/availability.ts'
+import * as schema from '../../server/db/schema.ts'
+import {
+  CapacityUnavailableError,
+  claimSessionCapacity,
+  expireBookingHolds,
+  listSessions,
+  materializeSessions,
+  setBookingStatus,
+  updateSession,
+} from '../../server/utils/availability.ts'
+import { occurrenceKey } from '../../shared/bookings.ts'
+import { addLocalDays, localDateTimeToInstant, localNow } from '../../utils/timezone.ts'
 
-const date = '2099-01-05'
-test('D1 booking claims preserve schedule decisions, enforce current capacity, and keep commitments visible', async () => {
+const ORG = 'org-sessions'
+const SITE = 'site-sessions'
+const LOCATION = 'loc-sessions'
+const PRODUCT = 'prod-class'
+const ACTOR = 'user-actor'
+const NOW = '2026-09-11T00:00:00.000Z'
+
+async function boot() {
   const runtime = new Miniflare({ workers: [{ config: {
     name: 'availability-proof', type: 'worker', compatibilityDate: '2024-11-01',
     manifest: { mainModule: 'index.mjs', modules: { 'index.mjs': { type: 'esm', contents: 'export default { fetch() { return new Response("ok") } }' } } },
     env: { DB: { type: 'd1' } },
   } }] })
+  const db = await runtime.getD1Database('DB')
+  const statements = await generateSQLiteMigration(await generateSQLiteDrizzleJson({}), await generateSQLiteDrizzleJson(schema))
+  await db.batch(statements.map(statement => db.prepare(statement)))
+  await db.prepare("INSERT INTO organization (id, name, slug) VALUES (?, 'Sessions', 'sessions')").bind(ORG).run()
+  await db.prepare(`INSERT INTO sites (id, organization_id, slug, settings_json, integrations_json, theme_id, default_currency, status, onboarding_status, url_structure, vertical, created_at, updated_at)
+    VALUES (?, ?, 'sessions', '{"config":{"default_timezone":"Asia/Bangkok"}}', '{}', 'theme', 'THB', 'active', 'complete', 'flat', 'experience', ?, ?)`)
+    .bind(SITE, ORG, NOW, NOW).run()
+  await db.prepare(`INSERT INTO business_locations (id, organization_id, site_id, slug, title, status, timezone, created_at, updated_at)
+    VALUES (?, ?, ?, 'studio', 'Studio', 'active', 'Asia/Bangkok', ?, ?)`).bind(LOCATION, ORG, SITE, NOW, NOW).run()
+  await db.prepare(`INSERT INTO products (id, organization_id, name, slug, created_by, updated_by) VALUES (?, ?, 'Pottery Class', 'pottery-class', ?, ?)`)
+    .bind(PRODUCT, ORG, ACTOR, ACTOR).run()
+  for (const [id, name] of [['var-adult', 'Adult'], ['var-child', 'Child']]) {
+    await db.prepare(`INSERT INTO product_variants (id, organization_id, product_id, name, created_by, updated_by) VALUES (?, ?, ?, ?, ?, ?)`)
+      .bind(id, ORG, PRODUCT, name, ACTOR, ACTOR).run()
+  }
+  await db.prepare(`INSERT INTO product_booking_configs (product_id, organization_id, duration_minutes, default_capacity, created_by, updated_by)
+    VALUES (?, ?, 120, 10, ?, ?)`).bind(PRODUCT, ORG, ACTOR, ACTOR).run()
+  return { runtime, db }
+}
+
+function addRule(db: D1Database, id: string, over: Partial<{ weekday: number; start_time: string; interval_weeks: number; timezone: string; effective_from_date: string | null; capacity: number | null; location_id: string | null }> = {}) {
+  return db.prepare(`INSERT INTO product_availability_rules
+    (id, organization_id, product_id, location_id, timezone, weekday, start_time, interval_weeks, effective_from_date, capacity, created_by, updated_by)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+    .bind(id, ORG, PRODUCT, over.location_id ?? LOCATION, over.timezone ?? 'Asia/Bangkok', over.weekday ?? 0,
+      over.start_time ?? '14:00', over.interval_weeks ?? 1, over.effective_from_date ?? null, over.capacity ?? null, ACTOR, ACTOR).run()
+}
+
+test('session materialization is idempotent across cancel, edit and reschedule', { timeout: 120_000 }, async () => {
+  const { runtime, db } = await boot()
   try {
-    const db = await runtime.getD1Database('DB')
-    await db.batch((await generateSQLiteMigration(await generateSQLiteDrizzleJson({}), await generateSQLiteDrizzleJson(schema))).map(statement => db.prepare(statement)))
-    for (const statement of [
-      "INSERT INTO organization (id, name, slug) VALUES ('org-proof', 'Proof', 'proof')",
-      "INSERT INTO sites (id, organization_id, slug, subdomain) VALUES ('site-proof', 'org-proof', 'proof', 'proof')",
-      "INSERT INTO user (id, name, email) VALUES ('user-proof', 'Proof Owner', 'owner@proof.example')",
-      "INSERT INTO business_locations (id, organization_id, site_id, slug, title, timezone, max_capacity) VALUES ('location-proof', 'org-proof', 'site-proof', 'proof', 'Proof', 'Asia/Bangkok', 2)",
-      "INSERT INTO product_categories (id, organization_id, site_id, location_id, product_type, name, slug, sort_order, created_by, updated_by) VALUES ('category-proof', 'org-proof', 'site-proof', 'location-proof', 'experience', 'Experiences', 'experiences', 0, 'user-proof', 'user-proof')",
-      "INSERT INTO products (id, organization_id, site_id, location_id, name, slug, product_type, category_id, created_by, updated_by, sort_order, experience_json) VALUES ('experience-proof', 'org-proof', 'site-proof', 'location-proof', 'Proof', 'proof', 'experience', 'category-proof', 'user-proof', 'user-proof', 0, '{\"recurring_slots\":{\"monday\":[\"15:00\"]},\"max_capacity\":2}')",
-    ]) await db.prepare(statement).run()
-    const hours = JSON.stringify({ periods: [{ open: { day: 1, hour: 16, minute: 0 }, close: { day: 1, hour: 22, minute: 0 } }] })
-    await db.prepare('UPDATE business_locations SET opening_hours = ?').bind(hours).run()
-    const read = async (experience = false, dates = [date]) => (await readAvailability(db, { siteId: 'site-proof', owners: [experience ? { kind: 'experience', experienceId: 'experience-proof' } : { kind: 'location', locationId: 'location-proof' }], dates }))[0]!
-    const claim = async (snapshot: AvailabilitySnapshot, id: string, time = '16:00', guests = 1) => {
-      const now = new Date().toISOString()
-      const experience = snapshot.row.owner_type === 'experience'
-      const [statement, ...following] = requestInsertQueries({ id, kind: experience ? 'experience_booking' : 'reservation',
-        organization_id: 'org-proof', site_id: 'site-proof', location_id: 'location-proof', product_id: experience ? 'experience-proof' : null,
-        customer_id: null, review_id: null, booking_date: date, time_slot: time, party_size: guests, status: 'confirmed',
-        conversation_state: 'needs_attention', resolved_at: null, created_at: now, updated_at: now,
-        payload: bookingPayloadForGuest({ name: 'Guest', email: 'guest@proof.example', phone: '+66812345678' }) })
-      statement.query = statement.query.replace(/VALUES \(([^)]+)\)/, 'SELECT $1 WHERE /* availability_claim */')
-      await executeAvailabilityClaim(db, { snapshot, date, time, partySize: guests, statement, following })
-      return db.prepare('SELECT id FROM requests WHERE id=?').bind(id).first('id')
-    }
-    assert.equal((await read(true)).days[0]!.slots.find(s => s.time_slot === '15:00')?.is_closed, false)
-    const claimExperience = (snapshot: AvailabilitySnapshot, id: string) => claim(snapshot, id, '15:00')
-    const override = (experience: boolean, directive: 'set' | 'inherit') => setAvailability(db, {
-      organizationId: 'org-proof', siteId: 'site-proof', actorUserId: 'user-proof',
-      owner: experience ? { kind: 'experience', experienceId: 'experience-proof' } : { kind: 'location', locationId: 'location-proof' },
-      changes: [{ directive, override_date: date, time_slot: experience ? '15:00' : '16:00', status: 'open' }],
-    })
-    for (const column of ['is_visible', 'available']) {
-      const snapshot = await read(true)
-      await db.prepare(`UPDATE products SET ${column} = 0`).run()
-      assert.equal(await claimExperience(snapshot, `experience-${column}`), null)
-      await db.prepare(`UPDATE products SET ${column} = 1`).run()
-    }
-    const priorRecurrence = await read(true)
-    await db.prepare("UPDATE products SET experience_json = json_set(experience_json, '$.recurring_slots', json(?))").bind('{"monday":["16:00"]}').run()
-    assert.equal(await claimExperience(priorRecurrence, 'recurrence-race'), null)
-    await db.prepare("UPDATE products SET experience_json = json_set(experience_json, '$.recurring_slots', json(?))").bind('{"monday":["15:00"]}').run()
-    await db.prepare('UPDATE business_locations SET special_hours = ?').bind(JSON.stringify([{ kind: 'hours', date, periods: [{ open_time: '16:00', close_time: '20:00', close_day_offset: 0 }], note: null }])).run()
-    assert.equal((await read(true)).days[0]!.slots[0]?.is_closed, true)
-    await override(true, 'set')
-    assert.equal(await claimExperience(await read(true), 'excluded-open-override'), null)
-    await db.prepare('UPDATE business_locations SET special_hours = NULL').run()
-    await override(true, 'inherit')
-    const exCapacity = await read(true)
-    await db.prepare("UPDATE products SET experience_json = json_set(experience_json, '$.max_capacity', 1)").run()
-    assert.equal((await Promise.all([claimExperience(exCapacity, 'experience-winner-one'), claimExperience(exCapacity, 'experience-winner-two')])).filter(Boolean).length, 1)
-    await db.prepare("DELETE FROM requests WHERE kind='experience_booking'").run()
-    const beforeConfig = await read()
-    await db.prepare("UPDATE sites SET settings_json=json_set(settings_json, '$.config.default_timezone', 'America/Chicago')").run()
-    assert.equal(await claim(beforeConfig, 'config-independent'), 'config-independent')
-    await db.prepare("DELETE FROM requests WHERE id = 'config-independent'").run()
-    await db.prepare("UPDATE sites SET settings_json=json_set(settings_json, '$.config.default_timezone', 'UTC')").run()
-    const original = await read()
-    await db.prepare('UPDATE business_locations SET special_hours = ?').bind(JSON.stringify([{ kind: 'closure', starts_on: date, ends_on: null, note: null }])).run()
-    assert.equal(await claim(original, 'closed-race'), null)
-    assert.equal((await read(true)).days[0]!.slots[0]?.is_closed, true)
-    await db.prepare('UPDATE business_locations SET special_hours = NULL').run()
-    const beforeCapacity = await read()
-    await db.prepare('UPDATE business_locations SET max_capacity = 1').run()
-    const results = await Promise.all([claim(beforeCapacity, 'winner-one'), claim(beforeCapacity, 'winner-two')])
-    assert.equal(results.filter(Boolean).length, 1)
-    await db.prepare("DELETE FROM requests WHERE kind='reservation'").run()
-    const beforeOverride = await read()
-    await override(false, 'set')
-    assert.equal(await claim(beforeOverride, 'override-created-race'), null)
-    const withOverride = await read()
-    await override(false, 'inherit')
-    assert.equal(await claim(withOverride, 'override-deleted-race'), null)
-    for (const [column, value] of [['opening_hours', null], ['timezone', 'UTC'], ['status', 'inactive']]) {
-      const snapshot = await read()
-      await db.prepare(`UPDATE business_locations SET ${column} = ?`).bind(value).run()
-      assert.equal(await claim(snapshot, `changed-${column}`), null)
-      await db.prepare("UPDATE business_locations SET opening_hours = ?, timezone = 'Asia/Bangkok', status = 'active'").bind(hours).run()
-    }
-    const last = await read()
-    assert.equal(await claim(last, 'commitment'), 'commitment')
-    const moved = (await readAvailability(db, { siteId: 'site-proof', owners: [{ kind: 'location', locationId: 'location-proof' }], dates: [date], excludeBookingId: 'commitment' }))[0]!
-    const accept = async (snapshot: AvailabilitySnapshot) => executeAvailabilityClaim(db, { snapshot, date, time: '16:00', partySize: 1, statement: {
-      query: `INSERT INTO activity_entries (id, request_id, kind, scope_kind, actor_kind, event_name, dedupe_key, sequence, occurred_at)
-        SELECT 'acceptance-proof', 'commitment', 'operation', 'request', 'guest', 'booking_change.accepted', 'acceptance-proof', 2, '2099-01-01T00:00:00.000Z' WHERE /* availability_claim */`, params: [],
-    }, following: [{ query: "UPDATE requests SET payload_json=json_set(payload_json, '$.notes', 'Accepted') WHERE id = 'commitment' AND EXISTS (SELECT 1 FROM activity_entries WHERE id = 'acceptance-proof')", params: [] }] })
-    await db.prepare('UPDATE business_locations SET special_hours = ?').bind(JSON.stringify([{ kind: 'closure', starts_on: date, ends_on: null, note: null }])).run()
-    await accept(moved)
-    assert.equal(await db.prepare("SELECT id FROM activity_entries WHERE id = 'acceptance-proof'").first('id'), null)
-    assert.equal(await db.prepare("SELECT json_extract(payload_json, '$.notes') AS notes FROM requests WHERE id = 'commitment'").first('notes'), null)
-    await db.prepare('UPDATE business_locations SET special_hours = NULL').run()
-    const reopened = (await readAvailability(db, { siteId: 'site-proof', owners: [{ kind: 'location', locationId: 'location-proof' }], dates: [date], excludeBookingId: 'commitment' }))[0]!
-    await accept(reopened)
-    assert.equal(await db.prepare("SELECT json_extract(payload_json, '$.notes') AS notes FROM requests WHERE id = 'commitment'").first('notes'), 'Accepted')
-    await db.prepare('UPDATE business_locations SET opening_hours = ?').bind('{"periods":[]}').run()
-    const calendar = await readAvailabilityCalendar(db, { organizationId: 'org-proof', siteId: 'site-proof', locationId: 'location-proof', owner: { kind: 'location', locationId: 'location-proof' }, range: { from: date, to: date } })
-    assert.equal(calendar.owners[0]!.days[0]!.slots[0]?.is_closed, true)
-    assert.equal(calendar.owners[0]!.days[0]!.bookings[0]?.id, 'commitment')
-    await db.prepare("UPDATE business_locations SET timezone = 'America/New_York', opening_hours = ?").bind(JSON.stringify({ periods: [{ open: { day: 0, hour: 0, minute: 0 } }] })).run()
-    const spring = await read(false, ['2099-03-08'])
-    assert.equal(spring.days[0]!.slots.some(s => s.time_slot === '02:30'), false)
-    const autumn = await read(false, ['2099-11-01'])
-    assert.equal(autumn.days[0]!.slots.some(s => s.time_slot === '01:30'), false)
-    await db.prepare("UPDATE sites SET settings_json=json_set(settings_json, '$.config.default_timezone', 'UTC')").run()
-    await db.prepare('UPDATE business_locations SET timezone = NULL').run()
-    await assert.rejects(() => read(), /timezone/)
+    await addRule(db, 'rule-sunday')
+    const first = await materializeSessions(db, { organizationId: ORG, productId: PRODUCT, throughDate: '2026-10-31', actorId: ACTOR })
+    assert(first.created > 0, 'the weekly rule generates sessions')
+    assert.equal(first.existing, 0)
+    const count = await db.prepare('SELECT count(*) n FROM product_sessions').first<number>('n')
+
+    // Re-running changes nothing.
+    const second = await materializeSessions(db, { organizationId: ORG, productId: PRODUCT, throughDate: '2026-10-31', actorId: ACTOR })
+    assert.equal(second.created, 0, 'regeneration must not duplicate a session')
+    assert.equal(second.existing, first.created)
+    assert.equal(await db.prepare('SELECT count(*) n FROM product_sessions').first<number>('n'), count)
+
+    const target = await db.prepare('SELECT id, source_occurrence_key, starts_at FROM product_sessions ORDER BY starts_at LIMIT 1')
+      .first<{ id: string; source_occurrence_key: string; starts_at: string }>()
+    assert(target)
+
+    // A cancelled occurrence stays cancelled.
+    await updateSession(db, { organizationId: ORG, sessionId: target.id, actorId: ACTOR, status: 'cancelled' })
+    await materializeSessions(db, { organizationId: ORG, productId: PRODUCT, throughDate: '2026-10-31', actorId: ACTOR })
+    assert.equal(await db.prepare('SELECT status FROM product_sessions WHERE id = ?').bind(target.id).first<string>('status'), 'cancelled',
+      'regeneration must not resurrect a cancelled occurrence')
+    assert.equal(await db.prepare('SELECT count(*) n FROM product_sessions').first<number>('n'), count)
+
+    // A rescheduled occurrence is not recreated at its old start.
+    const moved = await db.prepare('SELECT id, starts_at, ends_at FROM product_sessions WHERE status = ? ORDER BY starts_at LIMIT 1')
+      .bind('scheduled').first<{ id: string; starts_at: string; ends_at: string }>()
+    assert(moved)
+    const newStart = new Date(Date.parse(moved.starts_at) + 3_600_000).toISOString()
+    await updateSession(db, { organizationId: ORG, sessionId: moved.id, actorId: ACTOR, startsAt: newStart, endsAt: new Date(Date.parse(moved.ends_at) + 3_600_000).toISOString(), capacity: 4 })
+    await materializeSessions(db, { organizationId: ORG, productId: PRODUCT, throughDate: '2026-10-31', actorId: ACTOR })
+    const after = await db.prepare('SELECT starts_at, capacity FROM product_sessions WHERE id = ?').bind(moved.id).first<{ starts_at: string; capacity: number }>()
+    assert.equal(after?.starts_at, newStart, 'a rescheduled session keeps its new time')
+    assert.equal(after?.capacity, 4, 'regeneration must not overwrite an edited capacity')
+    assert.equal(await db.prepare('SELECT count(*) n FROM product_sessions').first<number>('n'), count,
+      'regeneration must not recreate a rescheduled occurrence under its old start')
   } finally { await runtime.dispose() }
+})
+
+test('DST gaps and folds are reported, never silently resolved', { timeout: 120_000 }, async () => {
+  const { runtime, db } = await boot()
+  try {
+    // Generation is bounded to a year ahead, so the transition dates are found
+    // inside that window rather than hardcoded — the test stays true as time
+    // passes instead of expiring on a fixed date.
+    const zone = 'America/Los_Angeles'
+    const findSunday = (time: string): string | null => {
+      const today = localNow(zone).date
+      for (let offset = 1; offset <= 360; offset += 1) {
+        const date = addLocalDays(today, offset)
+        if (new Date(`${date}T00:00:00Z`).getUTCDay() !== 0) continue
+        try { localDateTimeToInstant(date, time, zone, 'reject') }
+        catch (error) { if (error instanceof RangeError) return date; throw error }
+      }
+      return null
+    }
+    const gapDate = findSunday('02:30')
+    const foldDate = findSunday('01:30')
+    assert(gapDate, 'a spring-forward Sunday exists within the generation window')
+    assert(foldDate, 'a fall-back Sunday exists within the generation window')
+
+    await addRule(db, 'rule-gap', { timezone: zone, weekday: 0, start_time: '02:30', location_id: null })
+    await addRule(db, 'rule-fold', { timezone: zone, weekday: 0, start_time: '01:30', location_id: null })
+    const result = await materializeSessions(db, {
+      organizationId: ORG, productId: PRODUCT, throughDate: addLocalDays(localNow(zone).date, 359), actorId: ACTOR,
+    })
+
+    const gap = result.skipped.find(entry => entry.local_date === gapDate && entry.local_start_time === '02:30')
+    assert(gap, `the spring-forward occurrence on ${gapDate} is reported`)
+    assert.equal(gap.reason, 'nonexistent_local_time')
+    const fold = result.skipped.find(entry => entry.local_date === foldDate && entry.local_start_time === '01:30')
+    assert(fold, `the fall-back occurrence on ${foldDate} is reported`)
+    assert.equal(fold.reason, 'ambiguous_local_time')
+
+    const rows = await db.prepare('SELECT starts_at FROM product_sessions ORDER BY starts_at').all<{ starts_at: string }>()
+    assert(rows.results.length > 0, 'the surrounding Sundays still generate')
+    const localDay = (instant: string) => new Intl.DateTimeFormat('en-CA', { timeZone: zone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(instant))
+    const localTime = (instant: string) => new Intl.DateTimeFormat('en-US', { timeZone: zone, hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(instant))
+    // The other rule still runs on each transition date — 01:30 exists on the
+    // spring-forward day and 02:30 exists on the fall-back day. Only the
+    // impossible and the doubled occurrence are absent, and neither was
+    // quietly shifted to a neighbouring hour.
+    assert.equal(rows.results.some(row => localDay(row.starts_at) === gapDate && localTime(row.starts_at) === '02:30'), false, 'the impossible 02:30 occurrence does not exist')
+    assert.equal(rows.results.some(row => localDay(row.starts_at) === foldDate && localTime(row.starts_at) === '01:30'), false, 'the doubled 01:30 occurrence does not exist')
+    assert.equal(rows.results.filter(row => localDay(row.starts_at) === gapDate).length, 1, 'the gap date keeps only its 01:30 session')
+    assert.equal(rows.results.filter(row => localDay(row.starts_at) === foldDate).length, 1, 'the fold date keeps only its 02:30 session')
+
+    // Local wall time is stable across the offset change: this is the whole
+    // reason recurrence is stored as wall time plus a zone, not as an offset.
+    const locals = new Set(rows.results.map(row => new Intl.DateTimeFormat('en-US', { timeZone: zone, hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(row.starts_at))))
+    assert.deepEqual([...locals].sort(), ['01:30', '02:30'])
+  } finally { await runtime.dispose() }
+})
+
+test('concurrent claims cannot exceed capacity, and variants share one pool', { timeout: 120_000 }, async () => {
+  const { runtime, db } = await boot()
+  try {
+    await db.prepare(`INSERT INTO product_sessions (id, organization_id, product_id, location_id, timezone, starts_at, ends_at, capacity, status, created_by, updated_by)
+      VALUES ('sess-1', ?, ?, ?, 'Asia/Bangkok', '2099-01-05T07:00:00.000Z', '2099-01-05T09:00:00.000Z', 5, 'scheduled', ?, ?)`)
+      .bind(ORG, PRODUCT, LOCATION, ACTOR, ACTOR).run()
+
+    // Two ticket tiers, one seat pool: 3 adults + 2 children fills the class.
+    await claimSessionCapacity(db, { organizationId: ORG, siteId: SITE, productId: PRODUCT, sessionId: 'sess-1', productVariantId: 'var-adult', partySize: 3 })
+    await claimSessionCapacity(db, { organizationId: ORG, siteId: SITE, productId: PRODUCT, sessionId: 'sess-1', productVariantId: 'var-child', partySize: 2 })
+    await assert.rejects(
+      claimSessionCapacity(db, { organizationId: ORG, siteId: SITE, productId: PRODUCT, sessionId: 'sess-1', productVariantId: 'var-adult', partySize: 1 }),
+      CapacityUnavailableError,
+      'a ticket tier does not get its own seat pool',
+    )
+
+    // Concurrency: eight parties of one race for three seats.
+    await db.prepare("UPDATE product_sessions SET capacity = 8 WHERE id = 'sess-1'").run()
+    const outcomes = await Promise.allSettled(Array.from({ length: 8 }, () =>
+      claimSessionCapacity(db, { organizationId: ORG, siteId: SITE, productId: PRODUCT, sessionId: 'sess-1', productVariantId: 'var-adult', partySize: 1 })))
+    const granted = outcomes.filter(outcome => outcome.status === 'fulfilled').length
+    assert.equal(granted, 3, `exactly the three remaining seats were granted, got ${granted}`)
+    const claimed = await db.prepare("SELECT SUM(party_size) n FROM bookings WHERE product_session_id = 'sess-1' AND status IN ('pending','confirmed','completed')").first<number>('n')
+    assert.equal(claimed, 8, 'claims never exceed capacity')
+
+    // Cancelling releases exactly that booking's seats.
+    const one = await db.prepare("SELECT id FROM bookings WHERE party_size = 3 LIMIT 1").first<string>('id')
+    assert(one)
+    await setBookingStatus(db, { organizationId: ORG, bookingId: one, status: 'cancelled', reason: 'guest cancelled' })
+    const afterCancel = await db.prepare("SELECT SUM(party_size) n FROM bookings WHERE product_session_id = 'sess-1' AND status IN ('pending','confirmed','completed')").first<number>('n')
+    assert.equal(afterCancel, 5, 'cancellation released exactly three seats')
+    const [session] = await listSessions(db, { organizationId: ORG, productId: PRODUCT, fromInstant: '2099-01-01T00:00:00.000Z', toInstant: '2099-02-01T00:00:00.000Z' })
+    assert.equal(session?.remaining, 3)
+    assert.equal(session?.is_full, false)
+  } finally { await runtime.dispose() }
+})
+
+test('an expired hold releases its seats; an unexpired one does not', { timeout: 120_000 }, async () => {
+  const { runtime, db } = await boot()
+  try {
+    await db.prepare(`INSERT INTO product_sessions (id, organization_id, product_id, timezone, starts_at, ends_at, capacity, status, created_by, updated_by)
+      VALUES ('sess-hold', ?, ?, 'Asia/Bangkok', '2099-01-05T07:00:00.000Z', '2099-01-05T09:00:00.000Z', 2, 'scheduled', ?, ?)`)
+      .bind(ORG, PRODUCT, ACTOR, ACTOR).run()
+    const future = new Date(Date.now() + 600_000).toISOString()
+    await claimSessionCapacity(db, { organizationId: ORG, siteId: SITE, productId: PRODUCT, sessionId: 'sess-hold', productVariantId: 'var-adult', partySize: 2, holdExpiresAt: future })
+    await assert.rejects(
+      claimSessionCapacity(db, { organizationId: ORG, siteId: SITE, productId: PRODUCT, sessionId: 'sess-hold', productVariantId: 'var-adult', partySize: 1 }),
+      CapacityUnavailableError, 'an unexpired hold keeps its seats')
+
+    await db.prepare("UPDATE bookings SET hold_expires_at = '2020-01-01T00:00:00.000Z' WHERE product_session_id = 'sess-hold'").run()
+    const claim = await claimSessionCapacity(db, { organizationId: ORG, siteId: SITE, productId: PRODUCT, sessionId: 'sess-hold', productVariantId: 'var-adult', partySize: 2 })
+    assert(claim.bookingId, 'an expired hold releases its seats')
+    assert.equal(await expireBookingHolds(db, ORG), 1, 'the sweep marks the abandoned claim cancelled')
+  } finally { await runtime.dispose() }
+})
+
+test('capacity cannot be reduced below seats already claimed, and a past session cannot be booked', { timeout: 120_000 }, async () => {
+  const { runtime, db } = await boot()
+  try {
+    await db.prepare(`INSERT INTO product_sessions (id, organization_id, product_id, timezone, starts_at, ends_at, capacity, status, created_by, updated_by)
+      VALUES ('sess-cap', ?, ?, 'Asia/Bangkok', '2099-01-05T07:00:00.000Z', '2099-01-05T09:00:00.000Z', 10, 'scheduled', ?, ?)`)
+      .bind(ORG, PRODUCT, ACTOR, ACTOR).run()
+    await claimSessionCapacity(db, { organizationId: ORG, siteId: SITE, productId: PRODUCT, sessionId: 'sess-cap', productVariantId: 'var-adult', partySize: 6 })
+    await assert.rejects(
+      updateSession(db, { organizationId: ORG, sessionId: 'sess-cap', actorId: ACTOR, capacity: 4 }),
+      /already has 6 seats claimed/, 'reducing capacity below claimed seats is refused, not silently oversold')
+    await updateSession(db, { organizationId: ORG, sessionId: 'sess-cap', actorId: ACTOR, capacity: 6 })
+
+    await db.prepare(`INSERT INTO product_sessions (id, organization_id, product_id, timezone, starts_at, ends_at, capacity, status, created_by, updated_by)
+      VALUES ('sess-past', ?, ?, 'Asia/Bangkok', '2020-01-05T07:00:00.000Z', '2020-01-05T09:00:00.000Z', 10, 'scheduled', ?, ?)`)
+      .bind(ORG, PRODUCT, ACTOR, ACTOR).run()
+    await assert.rejects(
+      claimSessionCapacity(db, { organizationId: ORG, siteId: SITE, productId: PRODUCT, sessionId: 'sess-past', productVariantId: 'var-adult', partySize: 1 }),
+      CapacityUnavailableError, 'a session in the past takes no bookings')
+
+    await db.prepare("UPDATE product_sessions SET status = 'cancelled' WHERE id = 'sess-cap'").run()
+    await assert.rejects(
+      claimSessionCapacity(db, { organizationId: ORG, siteId: SITE, productId: PRODUCT, sessionId: 'sess-cap', productVariantId: 'var-adult', partySize: 1 }),
+      CapacityUnavailableError, 'a cancelled session takes no bookings')
+  } finally { await runtime.dispose() }
+})
+
+test('the occurrence key is the intended local start, not the actual instant', () => {
+  assert.equal(occurrenceKey('rule-1', '2026-10-04', '14:00'), 'rule-1:2026-10-04T14:00')
 })
