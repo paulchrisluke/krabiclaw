@@ -81,7 +81,7 @@
 
           <div v-else-if="editorKey === 'hours'" class="space-y-6">
             <p class="text-base text-muted">Set the regular hours shown to guests. A Google Places sync replaces these hours with Google's current record.</p>
-            <HoursTimezoneCard v-model:form="hoursForm" />
+            <LocationHoursCard v-model:form="hoursForm" exceptions />
           </div>
 
           <div v-else-if="editorKey === 'content'" class="space-y-6">
@@ -118,9 +118,6 @@
             <UFormField label="WhatsApp notification phone" help="Use international format, for example +66812345678.">
               <UInput v-model="detailsForm.notification_phone" type="tel" placeholder="+66..." size="xl" class="w-full" />
             </UFormField>
-            <UFormField label="Timezone">
-              <USelectMenu v-model="detailsForm.timezone" :items="timezoneOptions" placeholder="Select timezone" size="xl" class="w-full" />
-            </UFormField>
           </div>
 
           <div v-else-if="editorKey === 'features'" class="space-y-6">
@@ -140,14 +137,13 @@
   </UDashboardPanel>
 </template>
 <script setup lang="ts">
-import HoursTimezoneCard, { type HoursTimezoneForm } from '~/lib/components/workspace/onboarding/HoursTimezoneCard.vue'
+import LocationHoursCard, { type LocationHoursForm } from '~/lib/components/workspace/location/LocationHoursCard.vue'
 import { parseOpeningHours, parseSpecialHours, type OpeningHours, type SpecialHours } from '~/shared/reservation-hours'
 import DashboardResourceLocalization from '~/components/dashboard/DashboardResourceLocalization.vue'
 
 import EditorPaneShell from '~/components/dashboard/EditorPaneShell.vue'
 import EditorNavigationList from '~/components/dashboard/EditorNavigationList.vue'
 const dashboardApi = useDashboardApi()
-import { TIMEZONE_OPTIONS } from '~/utils/timezone'
 import { getErrorMessage } from '~/utils/errors'
 import { defaultModuleFeaturesForVertical, resolveCmsCapabilities, toggleableModulesForScope, type ProductFeature } from '~/config/cms-registry'
 import { resolvePublicTemplate } from '~/utils/template-registry'
@@ -339,7 +335,6 @@ const detailsForm = reactive({
   description: '',
   status: 'active',
   notification_phone: '',
-  timezone: '',
 })
 const siteLocalizationSettingsPath = computed(() => `/dashboard/${route.params.orgSlug}/sites/${route.params.siteSlug}/settings/localization`)
 const locationLocalizationFields = computed(() => [
@@ -356,9 +351,8 @@ function localizedLocationPath(locale: string): string {
   return `/${locale}/locations/${slug}`
 }
 
-const timezoneOptions = TIMEZONE_OPTIONS
 
-const hoursForm = ref<HoursTimezoneForm>({ timezone: '', hours: null, specialHours: null })
+const hoursForm = ref<LocationHoursForm>({ timezone: '', hours: null, specialHours: null })
 
 function fillDetailsForm(loc: BusinessLocation) {
   detailsForm.title = loc.title
@@ -378,8 +372,7 @@ function fillDetailsForm(loc: BusinessLocation) {
   hoursForm.value = { timezone: loc.timezone ?? '', hours: parseOpeningHours(loc.opening_hours), specialHours: parseSpecialHours(loc.special_hours) }
   detailsForm.status = loc.status
   detailsForm.notification_phone = loc.notification_phone ?? ''
-  detailsForm.timezone = loc.timezone ?? ''
-}
+  }
 
 const setDetailsActive = (v: boolean | 'indeterminate') => {
   if (v === 'indeterminate') return
@@ -394,7 +387,7 @@ const statusSummary = computed(() => location.value?.status === 'active' ? 'Acti
 const hoursSummary = computed(() => location.value?.opening_hours === null ? 'Not set' : `${location.value?.opening_hours?.periods.length ?? 0} opening periods`)
 const contentSummary = computed(() => location.value?.short_description?.trim() || location.value?.description?.trim() || 'Not set')
 const discoverySummary = computed(() => location.value?.google_place_id ? 'Google Places connected' : 'Not connected')
-const notificationSummary = computed(() => location.value?.notification_phone || location.value?.timezone || 'Not configured')
+const notificationSummary = computed(() => location.value?.notification_phone || 'Not configured')
 const featureSummary = computed(() => {
   const count = locationToggleableFeatures.value.filter(feature => locationEnabledFeatureSet[feature]).length
   return count ? `${count} ${count === 1 ? 'module' : 'modules'} available` : 'No location modules'
@@ -444,7 +437,7 @@ function editorSignature(key: string | null): string {
     case 'hours': return JSON.stringify(hoursForm.value)
     case 'content': return JSON.stringify([detailsForm.short_description, detailsForm.description, detailsForm.price_level])
     case 'discovery': return JSON.stringify([detailsForm.google_place_id, detailsForm.maps_url, detailsForm.google_review_url])
-    case 'notifications': return JSON.stringify([detailsForm.notification_phone, detailsForm.timezone])
+    case 'notifications': return JSON.stringify([detailsForm.notification_phone])
     case 'features': return JSON.stringify(locationToggleableFeatures.value.map(feature => [feature, Boolean(locationEnabledFeatureSet[feature])]))
     default: return ''
   }
@@ -585,9 +578,11 @@ async function saveCurrentEditor() {
     }, 'Discovery settings saved')
     return
   }
+  // The timezone belongs to Hours, which requires it. Editing it here as well
+  // let a Notifications save write null over the value Hours validates, and
+  // the location's opening times are read in that zone.
   await patchLocation({
     notification_phone: detailsForm.notification_phone.trim() || null,
-    timezone: detailsForm.timezone || null,
   }, 'Notifications saved')
 }
 

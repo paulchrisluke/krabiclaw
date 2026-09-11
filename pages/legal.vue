@@ -306,7 +306,7 @@ const legalFeatures = [
     title: 'Private Intake Inbox',
     desc: 'Manage prospective client inquiries securely from your dashboard without sharing lead data with third-party aggregators.'
   }
-]
+] as const
 
 const faqs = [
   {

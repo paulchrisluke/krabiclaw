@@ -65,7 +65,6 @@ useHead(() => ({
     ...buildTenantHeadLinks({
       isPlatform,
       siteMedia: site?.media,
-      isSitePreview: route.path.startsWith('/preview/site/'),
     }),
   ],
 }))

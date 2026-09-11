@@ -965,24 +965,24 @@ export async function deleteCustomDomain(
   await promoteCanonicalIfReady(db, domain.site_id)
 }
 
-export async function deleteOrganizationCustomDomains(
+// Releases the Cloudflare custom hostnames behind a set of site_domains rows.
+// Best-effort per domain: one domain's Cloudflare failure (queued for
+// reconciliation retry by deleteCustomDomain) must not stop the rest.
+async function deleteCustomDomainsWhere(
   env: DomainEnv,
   db: D1Database,
-  organizationId: string
+  scope: { column: 'organization_id' | 'site_id'; value: string },
 ): Promise<void> {
   const domains = await queryAll<{ id: string }>(db, `
     SELECT id FROM site_domains
-    WHERE organization_id = ? AND type = 'custom' AND status != 'deleted'
-  `, [organizationId])
+    WHERE ${scope.column} = ? AND type = 'custom' AND status != 'deleted'
+  `, [scope.value])
   for (const domain of domains || []) {
     try {
       await deleteCustomDomain(env, db, domain.id, 'system')
     } catch (error) {
-      // Best-effort bulk cleanup — one domain's Cloudflare failure (now
-      // queued for reconciliation retry by deleteCustomDomain) must not stop
-      // the rest of the org's domains from being deleted.
-      console.error('deleteOrganizationCustomDomains: failed to delete domain', {
-        organizationId,
+      console.error('deleteCustomDomains: failed to delete domain', {
+        [scope.column]: scope.value,
         domainId: domain.id,
         error: error instanceof Error ? error.message : String(error),
       })
@@ -990,6 +990,21 @@ export async function deleteOrganizationCustomDomains(
   }
 }
 
+export async function deleteOrganizationCustomDomains(
+  env: DomainEnv,
+  db: D1Database,
+  organizationId: string
+): Promise<void> {
+  await deleteCustomDomainsWhere(env, db, { column: 'organization_id', value: organizationId })
+}
+
+export async function deleteSiteCustomDomains(
+  env: DomainEnv,
+  db: D1Database,
+  siteId: string
+): Promise<void> {
+  await deleteCustomDomainsWhere(env, db, { column: 'site_id', value: siteId })
+}
 
 export async function setCanonicalDomain(
   db: D1Database,

@@ -117,7 +117,6 @@ export function findProductModelViolations(relativePath, source) {
   const normalizedPath = relativePath.replaceAll('\\', '/')
   if (normalizedPath === 'server/db/schema.ts') return []
   const checksPublicationModel = !normalizedPath.includes('onboarding')
-    && !normalizedPath.includes('public-draft-bootstrap')
     && PUBLICATION_MODEL_PATH.test(normalizedPath)
   const patterns = checksPublicationModel
     ? [...FORBIDDEN_ACTIVE_PATTERNS, ...FORBIDDEN_PUBLICATION_PATTERNS]

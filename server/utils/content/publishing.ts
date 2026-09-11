@@ -38,7 +38,7 @@ import { findAuthUsersByIds, type CloudflareEnv } from '~/server/utils/auth'
 import { findOrganizationById } from '~/server/utils/member-access'
 import { refreshSocialCard } from '~/server/utils/social-card'
 import { loadPublicSocialMedia } from '~/server/utils/public-social-image'
-import { createScopedPreviewToken, verifyScopedPreviewToken } from '~/server/utils/preview-token'
+import { createPreviewToken, PREVIEW_TOKEN_QUERY, PREVIEW_TOKEN_TTL_MS } from '~/server/utils/preview-token'
 import { publicResourceCacheInvalidationQuery } from '~/server/utils/public-resource-cache'
 
 const BLOG_TITLE_MAX = 200
@@ -427,6 +427,7 @@ export interface ContentReviewContext { orgSlug: string; siteSlug: string }
 async function contentReviewUrls(
   record: ApiRecord,
   publicPath: string | null,
+  siteId: string,
   context?: ContentReviewContext,
   env?: CloudflareEnv,
 ) {
@@ -435,11 +436,14 @@ async function contentReviewUrls(
   const adminEditUrl = context ? `/dashboard/${context.orgSlug}/sites/${context.siteSlug}/blog/${id}` : null
   const isPublished = typeof record.status === 'string' ? record.status === 'published' : Boolean(record.published_at)
 
+  // An unpublished article is previewed the same way everything unpublished is
+  // previewed: the site's own preview token, which the tenant host turns into a
+  // cookie so the rest of the visit stays authorized.
   let previewUrl: string | null = null
   if (!isPublished && publicPath) {
-    if (!env?.PREVIEW_SECRET) throw new HTTPError({ statusCode: 500, statusMessage: 'Article preview signing is not configured' })
-    const token = await createScopedPreviewToken(env.PREVIEW_SECRET, 'article', id, Date.now() + 60 * 60 * 1000)
-    previewUrl = `${publicPath}?token=${encodeURIComponent(token)}`
+    if (!env?.PREVIEW_SECRET) throw new HTTPError({ statusCode: 500, statusMessage: 'Preview signing is not configured' })
+    const token = await createPreviewToken(env.PREVIEW_SECRET, siteId, Date.now() + PREVIEW_TOKEN_TTL_MS)
+    previewUrl = `${publicPath}?${PREVIEW_TOKEN_QUERY}=${encodeURIComponent(token)}`
   }
 
   return {
@@ -476,7 +480,7 @@ async function resolveTenantContext(db: DbClient, siteId: string, env?: Cloudfla
  * request, which was causing the page to 404 on posts the API itself
  * served fine.
  */
-export async function getPublishedBlogPost(db: DbClient, category: string, slug: string, env: CloudflareEnv, token?: string, collection: ArticleCollection = 'blog') {
+export async function getPublishedBlogPost(db: DbClient, category: string, slug: string, env: CloudflareEnv, previewAuthorized = false, collection: ArticleCollection = 'blog') {
   const platformSite = await getPlatformSite(db)
   const platformSiteId = platformSite.id
   const post = await queryFirst<ApiRecord>(db, `
@@ -489,11 +493,10 @@ export async function getPublishedBlogPost(db: DbClient, category: string, slug:
     FROM content_documents p
     ${coverJoinSql('p')}
     WHERE p.kind = 'article' AND p.row_role = 'root' AND p.slug = ? AND (p.metadata_json ->> '$.collection') = ? AND (p.metadata_json ->> '$.category') = ? AND p.site_id = ?
-      ${token === undefined ? "AND p.status = 'published'" : "AND p.status IN ('draft', 'scheduled', 'published')"}
+      ${previewAuthorized ? "AND p.status IN ('draft', 'scheduled', 'published')" : "AND p.status = 'published'"}
   `, [slug, collection, category, platformSiteId])
 
   if (!post) return null
-  if (token !== undefined && (!env.PREVIEW_SECRET || !(await verifyScopedPreviewToken(env.PREVIEW_SECRET, 'article', String(post.id), token)))) return null
 
   const rawContentBlocks = await getContentBlocksForDocument(db, String(post.id))
   if (!rawContentBlocks) throw new HTTPError({ statusCode: 500, statusMessage: 'Blog content document is missing' })
@@ -585,7 +588,7 @@ export async function listBlogPosts(db: DbClient, siteId: string, status?: strin
     const slug = typeof record.slug === 'string' ? record.slug : ''
     const category = typeof record.category === 'string' ? record.category : null
     const publicPath = slug ? tenantBlogPostPath(site.template, slug, category, articleCollectionOf(record.collection)) : null
-    return contentReviewUrls(attachCover(attachPublished(record, Boolean(record.published_at))), publicPath, context, env)
+    return contentReviewUrls(attachCover(attachPublished(record, Boolean(record.published_at))), publicPath, siteId, context, env)
   }))
 }
 
@@ -619,7 +622,7 @@ export async function getBlogPost(db: DbClient, postIdOrSlug: string, siteId: st
   `, ['$.theme_by_template.' + site.template.slug, siteId, '$.theme_by_template.' + site.template.slug])
   const editorThemeTokens = parseBlogEditorThemeTokens(editorThemeTokenRow?.tokens_json)
   return {
-    ...await contentReviewUrls(attachCover(attachPublished(post, Boolean(post.published_at))), publicPath, context, env),
+    ...await contentReviewUrls(attachCover(attachPublished(post, Boolean(post.published_at))), publicPath, siteId, context, env),
     tags: parseStringArray(post.tags_json),
     body: renderContentBlocksToMarkdown(rawBlocks),
     content_document: contentDocument,
@@ -630,7 +633,7 @@ export async function getBlogPost(db: DbClient, postIdOrSlug: string, siteId: st
   }
 }
 
-export async function getPublicSiteBlogPost(db: DbClient, siteId: string, slug: string, env: CloudflareEnv, token?: string) {
+export async function getPublicSiteBlogPost(db: DbClient, siteId: string, slug: string, env: CloudflareEnv, previewAuthorized = false) {
   const post = await queryFirst<ApiRecord>(db, `
     SELECT
       p.id, p.title, p.slug, p.summary AS excerpt, (p.metadata_json ->> '$.category') AS category, json_extract(p.metadata_json, '$.tags') AS tags_json, p.seo_title, p.seo_description, p.seo_keywords,
@@ -641,12 +644,11 @@ export async function getPublicSiteBlogPost(db: DbClient, siteId: string, slug: 
     FROM content_documents p
     ${coverJoinSql('p')}
     WHERE p.kind = 'article' AND p.row_role = 'root' AND p.slug = ? AND p.site_id = ?
-      ${token === undefined ? "AND p.status = 'published' AND (p.scheduled_for IS NULL OR p.scheduled_for <= strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))" : "AND p.status IN ('draft', 'scheduled', 'published')"}
+      ${previewAuthorized ? "AND p.status IN ('draft', 'scheduled', 'published')" : "AND p.status = 'published' AND (p.scheduled_for IS NULL OR p.scheduled_for <= strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"}
     LIMIT 1
   `, [slug, siteId])
 
   if (!post) return null
-  if (token !== undefined && (!env.PREVIEW_SECRET || !(await verifyScopedPreviewToken(env.PREVIEW_SECRET, 'article', String(post.id), token)))) return null
 
   const contentDocument = await getContentDocumentById(db, String(post.id))
   if (!contentDocument) throw new HTTPError({ statusCode: 500, statusMessage: 'Blog content document is missing' })
@@ -675,7 +677,7 @@ export async function getPublishedLocalizedSiteBlogPost(
   slug: string,
   locale: string,
   env: CloudflareEnv,
-  token?: string,
+  previewAuthorized = false,
 ) {
   const site = await queryFirst<{ organization_id: string; vertical: string }>(db, `
     SELECT organization_id, vertical FROM sites WHERE id = ? AND status = 'active' LIMIT 1
@@ -683,7 +685,7 @@ export async function getPublishedLocalizedSiteBlogPost(
   if (!site) return null
   const prefix = normalizeVertical(site.vertical) === 'service' ? 'article' : 'blog'
   if (locale === 'en') {
-    const post = await getPublicSiteBlogPost(db, siteId, slug, env, token)
+    const post = await getPublicSiteBlogPost(db, siteId, slug, env, previewAuthorized)
     if (!post || typeof post.id !== 'string') return post
     return {
       ...post,
@@ -705,10 +707,10 @@ export async function getPublishedLocalizedSiteBlogPost(
       FROM content_documents d JOIN content_documents root ON root.id = d.root_id
      WHERE d.site_id = ? AND d.locale = ? AND d.path = ? AND d.row_role = 'representation'
        AND root.kind = 'article' AND root.row_role = 'root'
-       ${token === undefined ? "AND root.status = 'published'" : ''} LIMIT 1
+       ${previewAuthorized ? '' : "AND root.status = 'published'"} LIMIT 1
   `, [siteId, locale, '/' + prefix + '/' + slug])
   if (!row) return null
-  const canonical = await getPublicSiteBlogPost(db, siteId, row.source_slug, env, token)
+  const canonical = await getPublicSiteBlogPost(db, siteId, row.source_slug, env, previewAuthorized)
   if (!canonical) return null
   const metadata = JSON.parse(row.metadata_json) as Record<string, unknown>
   const [outlineBlocks, rawBlocks, social] = await Promise.all([

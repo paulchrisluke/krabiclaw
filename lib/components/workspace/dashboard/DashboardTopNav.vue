@@ -35,6 +35,22 @@
     </nav>
 
     <div class="flex items-center justify-end gap-3">
+      <!-- Page-level controls sit to the left of the account menu. A page
+           registers one with useDashboardTopNavAction(); see that composable
+           for why a slot cannot reach here. -->
+      <ClientOnly>
+        <UButton
+          v-for="action in topNavActions"
+          :key="action.key"
+          :icon="action.icon"
+          :aria-label="action.ariaLabel"
+          :class="action.class"
+          color="neutral"
+          variant="soft"
+          square
+          @click="action.onSelect()"
+        />
+      </ClientOnly>
       <DashboardAccountMenu />
       <UButton
         v-if="items.length"
@@ -56,6 +72,9 @@
 // the bar shows at every width as identity only — wordmark and account. That is
 // the sole way out of onboarding on a phone.
 import DashboardAccountMenu from './DashboardAccountMenu.vue'
+import { useDashboardTopNavActions } from '~/composables/useDashboardTopNavActions'
+
+const topNavActions = useDashboardTopNavActions()
 
 export interface DashboardTopNavItem {
   key: string

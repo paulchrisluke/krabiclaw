@@ -66,11 +66,25 @@ type OfferingRow = ApiRecord & {
   location_city: string | null
 }
 
-export async function getActiveBlawbySite(db: DbClient, siteId: string): Promise<{ organization_id: string; vertical: string; theme_id: string } | null> {
+/**
+ * The site behind a Blawby route.
+ *
+ * `previewAuthorized` is the same contract every other public surface honours:
+ * a site that is not yet active still renders for someone holding its preview
+ * token. Without it a professional-services site could not be previewed at all
+ * during onboarding — the pending site 404'd as "Blawby is not enabled" no
+ * matter what token the frame carried. Legal-access callers pass nothing and so
+ * keep requiring an active site, which is what an eligibility check wants.
+ */
+export async function getActiveBlawbySite(
+  db: DbClient,
+  siteId: string,
+  options: { previewAuthorized?: boolean } = {},
+): Promise<{ organization_id: string; vertical: string; theme_id: string } | null> {
   const site = await queryFirst<{ organization_id: string; vertical: string; theme_id: string }>(db, `
     SELECT organization_id, vertical, theme_id
       FROM sites
-     WHERE id = ? AND status = 'active' AND onboarding_status = 'active'
+     WHERE id = ? AND status = 'active'${options.previewAuthorized ? '' : " AND onboarding_status = 'active'"}
      LIMIT 1
   `, [siteId])
 
@@ -486,10 +500,10 @@ export async function getPublicBlawbyDocumentData(
   db: DbClient,
   siteId: string,
   recipe: PublicBlawbyRouteData['recipe'],
-  options: { token?: string; slug?: string | null; locale?: string | null } = {},
+  options: { previewAuthorized?: boolean; slug?: string | null; locale?: string | null } = {},
   env: CloudflareEnv,
 ): Promise<{ shell: PublicBlawbyShellData; route: PublicBlawbyRouteData } | null> {
-  const site = await getActiveBlawbySite(db, siteId)
+  const site = await getActiveBlawbySite(db, siteId, { previewAuthorized: options.previewAuthorized })
   if (!site) return null
   const locale = options.locale?.trim() || 'en'
   const localizations = locale === 'en'
@@ -521,7 +535,7 @@ export async function resolvePublicBlawbyDocumentOrThrow(
   db: DbClient,
   siteId: string,
   recipe: PublicBlawbyRouteData['recipe'],
-  options: { token?: string; slug?: string | null; locale?: string | null } = {},
+  options: { previewAuthorized?: boolean; slug?: string | null; locale?: string | null } = {},
   env: CloudflareEnv,
 ): Promise<{ success: true; shell: PublicBlawbyShellData; route: PublicBlawbyRouteData }> {
   const document = await getPublicBlawbyDocumentData(db, siteId, recipe, options, env)
@@ -633,7 +647,7 @@ export async function getPublicBlawbyRouteData(
   db: DbClient,
   siteId: string,
   recipe: PublicBlawbyRouteData['recipe'],
-  options: { token?: string; slug?: string | null; locale?: string | null; localizations?: readonly ExactPublicLocalization[] } = {},
+  options: { previewAuthorized?: boolean; slug?: string | null; locale?: string | null; localizations?: readonly ExactPublicLocalization[] } = {},
   env: CloudflareEnv,
 ): Promise<PublicBlawbyRouteData> {
   const needsOfferings = ['home', 'services', 'offering', 'about', 'pricing'].includes(recipe)
@@ -669,7 +683,7 @@ export async function getPublicBlawbyRouteData(
     needsReviews ? listSiteReviews(db, siteId, { publishedOnly: true }) : Promise.resolve([]),
     postLimit ? listPublicBlogSummaries(db, siteId, postLimit, options.locale ?? 'en') : Promise.resolve([]),
     recipe === 'article' && options.slug
-      ? getPublishedLocalizedSiteBlogPost(db, siteId, options.slug, options.locale ?? 'en', env, options.token)
+      ? getPublishedLocalizedSiteBlogPost(db, siteId, options.slug, options.locale ?? 'en', env, options.previewAuthorized)
       : Promise.resolve(null),
   ])
   const localizations = options.localizations ?? []

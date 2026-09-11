@@ -400,7 +400,7 @@ const sanitizedBody = computed(() => {
 const thingsToKnow = computed(() => {
   const exp = experience.value
   if (!exp) return []
-  const groups: Array<{ id: string; title: string; icon: string; lines: string[] }> = []
+  const groups: Array<{ id: string; title: string; icon: SayaIconName; lines: string[] }> = []
 
   if (exp.included_items?.length) {
     groups.push({
@@ -414,7 +414,7 @@ const thingsToKnow = computed(() => {
     groups.push({
       id: 'bring',
       title: t('saya.experience_detail.what_to_bring'),
-      icon: 'briefcase',
+      icon: 'shopping-bag',
       lines: [...exp.what_to_bring],
     })
   }
@@ -425,7 +425,7 @@ const thingsToKnow = computed(() => {
     groups.push({
       id: 'policies',
       title: experiencePolicySummary.value?.heading ?? '',
-      icon: 'clock',
+      icon: 'question-mark-circle',
       lines: policyLines,
     })
   }
@@ -465,6 +465,7 @@ import BookingTimeStep, { type RawDateAvailability, type TimeSlotSelection } fro
 import { formatTime } from '~/utils/timezone'
 import BookingContactForm, { type ContactFormState } from '@/components/booking/BookingContactForm.vue'
 import { normalizeRobotsIntent } from '~/shared/robots-directive'
+import type { SayaIconName } from '~/components/saya/SayaIcon.vue'
 
 const isBookingModalOpen = ref(false)
 const isHydrated = ref(false)

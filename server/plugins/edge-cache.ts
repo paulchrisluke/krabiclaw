@@ -3,7 +3,8 @@
 
 import type { HTTPEvent } from 'nitro/h3'
 import { buildHtmlCacheKey } from '~/server/utils/edge-cache'
-import { isPreviewContext } from '~/server/utils/tenant-hosts'
+import { isNonProductionHost } from '~/server/utils/tenant-hosts'
+import { PREVIEW_COOKIE_NAME } from '~/server/utils/preview-token'
 import { definePlugin } from 'nitro';
 
 const SKIP_PREFIXES = [
@@ -39,9 +40,12 @@ export default definePlugin((nitroApp) => {
     // 00.edge-cache.ts: stale HTML survives redeploys and references wrong asset hashes.
     const writeHost = cfRequest?.headers.get('host') ?? request.headers.get('host') ?? ''
     const writeHostname = writeHost.split(':')[0] ?? writeHost
-    if (isPreviewContext(writeHostname)) return
+    if (isNonProductionHost(writeHostname)) return
     const cookieHeader = cfRequest?.headers.get('cookie') ?? request.headers.get('cookie') ?? ''
     if (cookieHeader.includes(SESSION_COOKIE)) return
+    // A preview render shows unpublished content and a site that may not be
+    // public at all. It is never written to a cache everyone shares.
+    if (cookieHeader.includes(`${PREVIEW_COOKIE_NAME}=`)) return
 
     // Only skip caching when a Set-Cookie carries the real auth session — the
     // anonymous pageview-tracking cookies (kc_visitor_id/kc_session_id) are set on
@@ -49,7 +53,7 @@ export default definePlugin((nitroApp) => {
     // personalize the HTML, so they must not block caching or the KV write path
     // never fires for any real tenant page.
     const setCookieValues = response.headers.get('set-cookie')?.split(/,\s*(?=[^;]+=)/) ?? []
-    if (setCookieValues.some((c) => c.includes(SESSION_COOKIE))) return
+    if (setCookieValues.some((c) => c.includes(SESSION_COOKIE) || c.includes(`${PREVIEW_COOKIE_NAME}=`))) return
 
     const ct = response.headers.get('content-type') ?? ''
     if (!ct.includes('text/html')) return

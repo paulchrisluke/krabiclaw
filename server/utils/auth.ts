@@ -55,12 +55,24 @@ export function oauthSigningConfig(authBaseUrl: string) {
   }
 }
 
-const organizationOptions = {
+export const organizationOptions = {
   ac: organizationAccessControl,
   roles: organizationRoles,
   teams: {
     enabled: true,
     defaultTeam: { enabled: false },
+  },
+  // Deleting a tenant is a scheduled operation with a grace period and with
+  // Cloudflare hostnames and Images to release, so server/utils/tenant-deletion.ts
+  // owns it and calls this plugin's adapter. The plugin's own route would delete
+  // immediately and leak both, so it stays closed.
+  disableOrganizationDeletion: true,
+  schema: {
+    organization: {
+      additionalFields: {
+        deletionScheduledAt: { type: 'date', required: false, input: false },
+      },
+    },
   },
 } as const
 
@@ -248,7 +260,14 @@ export function createAuth(env: CloudflareEnv) {
     secret: env.BETTER_AUTH_SECRET,
     trustedOrigins: trustedOriginsForAuth(env),
     user: {
-      deleteUser: { enabled: true },
+      // Account deletion is scheduled through /api/user/delete-account and
+      // performed by the deletion-sweep task (server/utils/tenant-deletion.ts),
+      // which also removes the organizations the account owns alone. Better
+      // Auth's own /delete-user route stays disabled: it would delete the user
+      // immediately and leave those organizations with no owner, still serving.
+      additionalFields: {
+        deletionScheduledAt: { type: 'date', required: false, input: false },
+      },
     },
     rateLimit: {
       customRules: {

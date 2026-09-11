@@ -1,30 +1,28 @@
 <template>
   <div>
-      <h1 class="text-2xl font-semibold tracking-tight text-highlighted">Choose a new password</h1>
-      <p class="mt-2 text-sm text-muted">Use a strong password you haven't used elsewhere.</p>
+    <h1 class="text-2xl font-semibold tracking-tight text-highlighted">Choose a new password</h1>
+    <p class="mt-2 text-sm text-muted">Use a strong password you haven't used elsewhere.</p>
 
-      <UAlert v-if="notice" color="success" variant="soft" :description="notice" class="mt-4" />
-      <UAlert v-if="error" color="error" variant="soft" :description="error" class="mt-4" />
+    <UAlert v-if="notice" color="success" variant="soft" :description="notice" class="mt-4" />
+    <UAlert v-if="error" color="error" variant="soft" :description="error" class="mt-4" />
 
-      <UAlert v-if="!token" color="neutral" variant="soft" class="mt-6" description="This reset link is missing a token or has already been used. Request a fresh email to continue.">
-        <template #actions>
-          <UButton to="/forgot-password" size="sm">Request new reset link</UButton>
-        </template>
-      </UAlert>
+    <UAlert v-if="!token" color="neutral" variant="soft" class="mt-6" description="This reset link is missing a token or has already been used. Request a fresh email to continue.">
+      <template #actions>
+        <UButton to="/forgot-password" size="sm">Request new reset link</UButton>
+      </template>
+    </UAlert>
 
-      <form v-else method="post" class="mt-6 space-y-4" @submit.prevent="handleSubmit">
-        <UFormField label="New password" name="password" :error="passwordError" size="lg">
-          <UInput v-model="password" type="password" placeholder="••••••••" :disabled="loading" autocomplete="new-password" size="lg" class="w-full" />
-        </UFormField>
-        <div class="flex items-center justify-between gap-3">
-          <NuxtLink to="/login" class="text-sm text-primary font-medium hover:underline no-underline">
-            Back to sign in
-          </NuxtLink>
-          <UButton type="submit" size="lg" :loading="loading">
-            Save new password
-          </UButton>
-        </div>
-      </form>
+    <form v-else method="post" class="mt-6 space-y-4" @submit.prevent="handleSubmit">
+      <UFormField label="New password" name="password" :error="passwordError" size="lg">
+        <UInput v-model="password" type="password" placeholder="••••••••" :disabled="loading" autocomplete="new-password" size="lg" class="w-full" />
+      </UFormField>
+      <UButton type="submit" size="lg" block :loading="loading">
+        Save new password
+      </UButton>
+      <p class="text-sm">
+        <NuxtLink to="/login" class="text-primary font-medium hover:underline no-underline">Back to sign in</NuxtLink>
+      </p>
+    </form>
   </div>
 </template>
 

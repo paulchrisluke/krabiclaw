@@ -1,24 +1,22 @@
 <template>
   <div>
-      <h1 class="text-2xl font-semibold tracking-tight text-highlighted">Reset your password</h1>
-      <p class="mt-2 text-sm text-muted">Enter the email you use for KrabiClaw and we'll send you a secure reset link.</p>
+    <h1 class="text-2xl font-semibold tracking-tight text-highlighted">Reset your password</h1>
+    <p class="mt-2 text-sm text-muted">Enter the email you use for KrabiClaw and we'll send you a secure reset link.</p>
 
-      <UAlert v-if="notice" color="success" variant="soft" :description="notice" class="mt-4" />
-      <UAlert v-if="error" color="error" variant="soft" :description="error" class="mt-4" />
+    <UAlert v-if="notice" color="success" variant="soft" :description="notice" class="mt-4" />
+    <UAlert v-if="error" color="error" variant="soft" :description="error" class="mt-4" />
 
-      <form class="mt-6 space-y-4" @submit.prevent="handleSubmit">
-        <UFormField label="Email" name="email" size="lg">
-          <UInput v-model="email" type="email" placeholder="you@example.com" :disabled="loading" autocomplete="email" size="lg" class="w-full" />
-        </UFormField>
-        <div class="flex items-center justify-between gap-3">
-          <NuxtLink to="/login" class="text-sm text-primary font-medium hover:underline no-underline">
-            Back to sign in
-          </NuxtLink>
-          <UButton type="submit" size="lg" :loading="loading">
-            Send reset link
-          </UButton>
-        </div>
-      </form>
+    <form class="mt-6 space-y-4" @submit.prevent="handleSubmit">
+      <UFormField label="Email" name="email" size="lg">
+        <UInput v-model="email" type="email" placeholder="you@example.com" :disabled="loading" autocomplete="email" size="lg" class="w-full" />
+      </UFormField>
+      <UButton type="submit" size="lg" block :loading="loading">
+        Send reset link
+      </UButton>
+      <p class="text-sm">
+        <NuxtLink to="/login" class="text-primary font-medium hover:underline no-underline">Back to sign in</NuxtLink>
+      </p>
+    </form>
   </div>
 </template>
 

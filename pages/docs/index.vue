@@ -180,6 +180,7 @@
 </template>
 
 <script setup lang="ts">
+import type { PlatformIconName } from '~/components/platform/PlatformIcon.vue'
 definePageMeta({ layout: 'docs' })
 
 const { articles, pending, error: docsError } = await useDocsArticles()
@@ -217,7 +218,7 @@ const quickLinks = computed(() => [
   { label: 'Edit and publish', to: findFirstDocPathForCategories(['menu-management', 'theme-customization']), icon: 'pencil' },
   { label: 'Manage operations', to: findFirstDocPathForCategories(['integrations', 'advanced']), icon: 'settings' },
   { label: 'Explore guides', to: '/docs', icon: 'book' },
-].filter((item): item is { label: string; to: string; icon: string } => Boolean(item.to)))
+].filter((item): item is { label: string; to: string; icon: PlatformIconName } => Boolean(item.to)))
 
 const relatedResources = computed(() => [
   {

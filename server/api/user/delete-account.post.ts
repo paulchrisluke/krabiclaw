@@ -1,80 +1,40 @@
+// POST /api/user/delete-account — schedule this account for deletion.
+//
+// Nothing is removed here. The account and the organizations it owns alone are
+// stamped with a due instant DELETION_GRACE_DAYS out; the deletion-sweep task
+// performs the deletion when that instant passes, and DELETE on this route
+// cancels it in the meantime. Sites keep serving through the grace period.
+
 import { cloudflareEnv, jsonResponse } from '../../utils/api-response'
-import { createAuth, getAuthSession } from '~/server/utils/auth'
-import { queryFirst } from '~/server/db'
-import { d1JsonStringSet } from '~/server/db/d1-limits'
-import { deleteOrganization, listOrganizationMembers, listUserOrganizations, resolveOrganizationMembership } from '~/server/utils/member-access'
+import { getAuthSession } from '~/server/utils/auth'
+import { DELETION_GRACE_DAYS, findPaidOrganization, listSoleOwnedOrganizationIds, scheduleAccountDeletion } from '~/server/utils/tenant-deletion'
 
 export default defineHandler(async (event) => {
   const env = cloudflareEnv(event)
   const db = env.DB
-
-  if (!db) {
-    return jsonResponse({ error: 'Database not available' }, { status: 500 })
-  }
+  if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
 
   const session = await getAuthSession(event, env)
-  if (!session?.user?.id) {
-    return jsonResponse({ error: 'Authentication required' }, { status: 401 })
-  }
+  if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
   const userId = session.user.id
+  const soleOwnedOrganizationIds = await listSoleOwnedOrganizationIds(env, userId)
 
-  const organizations = await listUserOrganizations(env, userId)
-  const organizationDetails = await Promise.all(organizations.map(async (organization) => ({
-    organization,
-    membership: await resolveOrganizationMembership(env, { organizationId: organization.id, userId }),
-    members: await listOrganizationMembers(env, organization.id),
-  })))
-  const allOrgIds = organizations.map(organization => organization.id)
-  const soleOwnedOrgIds = organizationDetails.flatMap(({ organization, membership, members }) =>
-    membership?.role === 'owner' && members.filter(member => member.role === 'owner').length === 1
-      ? [organization.id]
-      : [])
-
-  // Single query: block deletion if any org has an active subscription
-  if (allOrgIds.length > 0) {
-    const activeSubscription = await queryFirst(db, `
-      SELECT organization_id FROM organization_billing
-      WHERE organization_id IN (SELECT value FROM json_each(?))
-      AND access_plan <> 'free'
-      AND (access_expires_at IS NULL OR access_expires_at > ?)
-      LIMIT 1
-    `, [d1JsonStringSet(allOrgIds), new Date().toISOString()])
-
-    if (activeSubscription) {
-      return jsonResponse(
-        { error: 'active_subscription', message: 'Please cancel your subscription before deleting your account.' }, { status: 409 }
-      )
-    }
+  const paidOrganizationId = await findPaidOrganization(db, soleOwnedOrganizationIds, new Date())
+  if (paidOrganizationId) {
+    return jsonResponse({
+      error: 'active_subscription',
+      message: 'Please cancel your subscription before deleting your account.',
+    }, { status: 409 })
   }
 
-  // For each sole-owned org, block if other members exist (would lose access)
-  for (const orgId of soleOwnedOrgIds) {
-    const details = organizationDetails.find(({ organization }) => organization.id === orgId)
-    if (details?.members.some(member => member.userId !== userId)) {
-      return jsonResponse(
-        { error: 'org_has_members', message: 'Transfer ownership or remove all members before deleting your account.' }, { status: 409 }
-      )
-    }
-  }
+  const { scheduledAt, organizationIds } = await scheduleAccountDeletion(env, userId, soleOwnedOrganizationIds)
 
-  const auth = createAuth(env)
-  const response = await (auth.api as unknown as {
-    deleteUser(_input: { body: Record<string, never>; headers: HeadersInit; asResponse: true }): Promise<Response>
-  }).deleteUser({
-    body: {},
-    headers: Object.fromEntries(event.req.headers.entries()) as HeadersInit,
-    asResponse: true,
+  return jsonResponse({
+    success: true,
+    scheduled_at: scheduledAt.toISOString(),
+    grace_days: DELETION_GRACE_DAYS,
+    organization_ids: organizationIds,
   })
-  if (!response.ok) {
-    const message = await response.text().catch(() => '')
-    return jsonResponse({ error: 'account_deletion_failed', message: message || 'Failed to delete account.' }, { status: response.status })
-  }
-
-  for (const organizationId of soleOwnedOrgIds) {
-    await deleteOrganization(env, organizationId)
-  }
-
-  return jsonResponse({ success: true })
 })
 import { defineHandler } from 'nitro';

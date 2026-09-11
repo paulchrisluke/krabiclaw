@@ -27,7 +27,11 @@ export default defineHandler(async (event) => {
   }
 
   try {
-    const destination = await resolvePostLoginDestination(env, session.user)
+    const sessionRecord = session.session as typeof session.session & { activeOrganizationId?: string | null }
+    const destination = await resolvePostLoginDestination(env, {
+      userId: session.user.id,
+      activeOrganizationId: typeof sessionRecord.activeOrganizationId === 'string' ? sessionRecord.activeOrganizationId : null,
+    })
     if (plan) {
       if (destination === '/dashboard/onboarding') {
         throw new HTTPError({ statusCode: 409, message: 'An organization is required before choosing a billing plan' })

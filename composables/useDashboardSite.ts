@@ -7,6 +7,7 @@ interface DashboardOrganization {
   logo: string | null
   role: string
   memberId: string
+  deletionScheduledAt: string | null
 }
 
 interface DashboardSite {
@@ -67,6 +68,7 @@ const isDashboardOrganization = (value: unknown): value is DashboardOrganization
   && (value.logo === null || typeof value.logo === 'string')
   && typeof value.role === 'string'
   && typeof value.memberId === 'string'
+  && (value.deletionScheduledAt === null || typeof value.deletionScheduledAt === 'string')
 
 const isSocialImage = (value: unknown): value is { url: string } | null =>
   value === null || (isRecord(value) && typeof value.url === 'string')

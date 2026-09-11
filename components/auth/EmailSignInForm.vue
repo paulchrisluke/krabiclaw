@@ -6,13 +6,13 @@
     <UFormField label="Password" name="login-password" size="lg">
       <UInput v-model="password" type="password" placeholder="••••••••" :disabled="loading" autocomplete="current-password" size="lg" class="w-full" />
     </UFormField>
-    <div class="flex items-center justify-between gap-3 text-sm">
+    <UButton type="submit" size="lg" block :ui="{ base: 'justify-start' }" :loading="loading">
+      Sign in with email
+      <UBadge v-if="lastUsed" color="neutral" variant="subtle" size="sm" class="ml-auto shrink-0">Last used</UBadge>
+    </UButton>
+    <p class="text-sm">
       <NuxtLink to="/forgot-password" class="text-primary font-medium hover:underline no-underline">Forgot password?</NuxtLink>
-      <div class="flex items-center gap-2">
-        <UBadge v-if="lastUsed" color="primary" variant="soft" size="sm">Last used</UBadge>
-        <UButton type="submit" size="lg" :loading="loading">Sign in with email</UButton>
-      </div>
-    </div>
+    </p>
     <UAlert v-if="error" color="error" variant="soft" :description="error" />
   </form>
 </template>

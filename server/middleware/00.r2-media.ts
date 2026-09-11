@@ -6,7 +6,7 @@ import { defineHandler, HTTPError  } from 'nitro';
 import type { getHeader} from 'nitro/h3';
 import {  sendStream, setHeader, setResponseStatus } from 'nitro/h3';
 import { cloudflareEnv } from '~/server/utils/api-response'
-import { isPreviewContext } from '~/server/utils/tenant-hosts'
+import { isNonProductionHost } from '~/server/utils/tenant-hosts'
 
 const MEDIA_HOST = 'media.krabiclaw.com'
 const WORKER_MEDIA_PREFIX = '/__media/'
@@ -19,7 +19,7 @@ const WORKER_MEDIA_PREFIX = '/__media/'
 function isWorkerMediaPathAllowed(event: Parameters<typeof getHeader>[0]): boolean {
   if (import.meta.dev) return true
   const hostname = ((event.req.headers.get('host')) || '').split(':')[0] ?? ''
-  return isPreviewContext(hostname)
+  return isNonProductionHost(hostname)
 }
 
 function isolateWorkerMediaResponse(event: Parameters<typeof getHeader>[0]): void {

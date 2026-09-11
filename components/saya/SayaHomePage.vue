@@ -8,7 +8,7 @@
           hero: hero,
           eyebrow: getField('hero.eyebrow'),
           locations: pageLocations,
-          businessTitle: businessTitle,
+          businessTitle: restaurantName,
           businessSubtitle: businessSubtitle,
           hasOrderLinks: hasOrderLinks,
           ctaRoute: homePrimaryCtaRoute,
@@ -275,7 +275,7 @@ import { getActiveSpecialClosure } from '~/utils/formatters'
 import { resolveSiteExperienceHref } from '~/utils/experience-navigation'
 import { normalizeRobotsIntent } from '~/shared/robots-directive'
 
-const { siteId, draftId, site } = useTenantSite()
+const { siteId, site } = useTenantSite()
 const { locale, localePath, t } = useI18n()
 
 const homeCopy = computed(() => getVerticalCopy(site?.vertical, locale.value))
@@ -283,7 +283,7 @@ const { resolveMedia } = useMedia()
 
 
 // Validate tenant context ONLY for tenant sites
-if (!siteId && !draftId) {
+if (!siteId) {
   throw createError({
     statusCode: 404,
     statusMessage: 'Site not found'
@@ -375,7 +375,9 @@ const restaurantName = computed(() => site?.brand_name?.trim() || businessTitle.
 // Hero metadata from CMS and imported location data — used for OG image metadata below,
 // SayaHomeHero.vue resolves its own copy via getHero() from its :data prop.
 const hero = computed(() => getHero({
-  title: businessTitle.value || '',
+  // The site's own name, not the Google Business title: a site created by hand
+  // has no Google record, and an empty <h1> was the result.
+  title: restaurantName.value,
   subtitle: businessSubtitle.value || '',
   image: '',
   video: ''

@@ -1,3 +1,4 @@
+import type { PlatformIconName } from '~/components/platform/PlatformIcon.vue'
 export type PublicTemplateSlug = 'saya' | 'blawby' | 'platform'
 
 export interface PublicTemplateDefinition {
@@ -147,7 +148,7 @@ export function siteSupportsBlawbyTemplate(input: {
 // template identity to keep in sync.
 
 export interface TemplateMarketingFeature {
-  icon: string
+  icon: PlatformIconName
   label: string
   description: string
 }

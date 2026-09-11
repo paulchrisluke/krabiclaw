@@ -11,13 +11,13 @@
   </svg>
 </template>
 
-<script setup lang="ts">
+<script lang="ts">
 interface IconDef {
   paths: string[]
   fill?: boolean
 }
 
-const ICONS: Record<string, IconDef> = {
+const ICONS = {
   'arrow-right': { paths: ['M5 12h14M13 6l6 6-6 6'] },
   'arrow-left': { paths: ['M19 12H5M12 19l-7-7 7-7'] },
   'arrow-up-right': { paths: ['M7 17L17 7M7 7h10v10'] },
@@ -63,8 +63,18 @@ const ICONS: Record<string, IconDef> = {
   puzzle: { paths: ['M4 7a2 2 0 0 1 2-2h2.17a2 2 0 0 0 3.66 0H14a2 2 0 0 1 2 2v2.17a2 2 0 0 0 0 3.66V15a2 2 0 0 1-2 2h-2.17a2 2 0 0 0-3.66 0H4a2 2 0 0 1-2-2v-2.17a2 2 0 0 0 0-3.66V7Z'] },
   briefcase: { paths: ['M9 6V4.5A1.5 1.5 0 0 1 10.5 3h3A1.5 1.5 0 0 1 15 4.5V6', 'M3.75 8.25h16.5A1.5 1.5 0 0 1 21.75 9.75v9A1.5 1.5 0 0 1 20.25 20.25H3.75A1.5 1.5 0 0 1 2.25 18.75v-9A1.5 1.5 0 0 1 3.75 8.25Z', 'M2.25 13.5h19.5', 'M10.5 13.5h3v1.5h-3z'] },
   utensils: { paths: ['M18 2v6a3 3 0 0 1-3 3 3 3 0 0 1-3-3V2', 'M15 2v10', 'M15 15v7', 'M8 2v19', 'M5 2v7a3 3 0 0 0 6 0V2'] },
-}
+} satisfies Record<string, IconDef>
 
-const props = defineProps<{ name: string }>()
-const def = computed(() => ICONS[props.name] ?? { paths: [] })
+export type PlatformIconName = keyof typeof ICONS
+</script>
+
+<script setup lang="ts">
+const props = defineProps<{ name: PlatformIconName }>()
+// No fallback: an unknown name is a missing icon, and rendering an empty
+// <svg> for it hides that on the page instead of on the build.
+const def = computed<IconDef>(() => {
+  const icon = ICONS[props.name] as IconDef | undefined
+  if (!icon) throw new Error(`PlatformIcon: no icon named "${props.name}"`)
+  return icon
+})
 </script>

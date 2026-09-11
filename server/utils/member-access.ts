@@ -3,7 +3,7 @@ import { HTTPError } from 'nitro';
 import { execute, queryAll, queryFirst, type DbClient } from '~/server/db'
 import { getOrgAdapter } from 'better-auth/plugins'
 import { parsePhoneOrThrow } from '~/utils/phone'
-import type { CloudflareEnv } from '~/server/utils/auth'
+import type { CloudflareEnv, organizationOptions } from '~/server/utils/auth'
 
 // Tenant-scoped authorization is Better Auth organization role plus Better
 // Auth Teams membership. Owner/admin are organization-wide. Editors are scoped
@@ -90,13 +90,17 @@ export function locationTeamId(locationId: string): string {
   return `location:${locationId}`
 }
 
-type OrganizationAdapter = ReturnType<typeof getOrgAdapter>
+// The adapter has to be built with the same organization options the plugin
+// runs with: getOrgAdapter filters organization output through the options'
+// additionalFields, so an adapter built with {} silently drops
+// deletionScheduledAt and every role/team limit the plugin was configured with.
+export type OrganizationAdapter = ReturnType<typeof getOrgAdapter<typeof organizationOptions>>
 
 export async function organizationAdapter(env: CloudflareEnv): Promise<OrganizationAdapter> {
-  const { createAuth } = await import('~/server/utils/auth')
+  const { createAuth, organizationOptions: options } = await import('~/server/utils/auth')
   const auth = createAuth(env)
   const context = await auth.$context
-  return getOrgAdapter(context as Parameters<typeof getOrgAdapter>[0], {})
+  return getOrgAdapter(context as Parameters<typeof getOrgAdapter>[0], options)
 }
 
 export async function resolveOrganizationMembership(
@@ -128,6 +132,7 @@ export async function resolveUserOrganization(
   logo: string | null
   role: string
   memberId: string
+  deletionScheduledAt: string | null
 } | null> {
   const adapter = await organizationAdapter(env)
   const organization = input.organizationId
@@ -148,6 +153,7 @@ export async function resolveUserOrganization(
     logo: organization.logo ?? null,
     role: String(member.role),
     memberId: member.id,
+    deletionScheduledAt: organization.deletionScheduledAt ? new Date(organization.deletionScheduledAt).toISOString() : null,
   }
 }
 
@@ -401,8 +407,6 @@ const SCOPED_ROLE_DASHBOARD_ROUTES = [
   /^\/api\/dashboard\/settings$/,
   /^\/api\/dashboard\/locations(?:\/add|\/[^/]+)?$/,
   /^\/api\/dashboard\/sites\/[^/]+\/guest-threads(?:\/[^/]+(?:\/reply)?)?$/,
-  /^\/api\/dashboard\/onboarding-context$/,
-  /^\/api\/dashboard\/onboarding\/checklist$/,
   /^\/api\/dashboard\/notifications(?:\/unread-count|\/read-all|\/[^/]+\/read)?$/,
   /^\/api\/dashboard\/guest-inbox\/socket$/,
 ]

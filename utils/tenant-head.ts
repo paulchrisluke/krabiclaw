@@ -5,12 +5,9 @@ type HeadLink =
 export interface TenantHeadLinkOptions {
   isPlatform: boolean
   siteMedia?: Array<{ slot: string; public_url: string | null }> | null
-  isSitePreview?: boolean
 }
 
 export function buildTenantHeadLinks(options: TenantHeadLinkOptions): HeadLink[] {
-  if (options.isSitePreview) return []
-
   const tenantFaviconUrl = !options.isPlatform
     ? options.siteMedia?.find(item => item.slot === 'favicon')?.public_url
     : null
