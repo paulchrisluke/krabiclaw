@@ -11,7 +11,7 @@
       <template v-if="block.type === 'hero'">
         <div :class="template === 'blawby' ? 'py-20 text-center sm:py-28' : 'py-12 sm:py-20'">
           <p v-if="text(block.data.eyebrow)" class="mb-4 text-xs font-semibold uppercase tracking-[0.2em] text-primary">{{ text(block.data.eyebrow) }}</p>
-          <h1 class="text-4xl font-bold tracking-tight sm:text-6xl">{{ text(block.data.title) || page.title }}</h1>
+          <h1 v-if="text(block.data.title)" class="text-4xl font-bold tracking-tight sm:text-6xl">{{ text(block.data.title) }}</h1>
           <p v-if="text(block.data.subtitle)" class="mx-auto mt-6 max-w-3xl text-lg leading-8 text-muted">
             {{ text(block.data.subtitle) }}
           </p>

@@ -56,22 +56,26 @@ export async function seedNewSite(
     rows.push(row);
     pageRows.set(row[0], rows);
   }
-  const templatePages = new Map<string, { path: string; pageType: 'system' | 'recipe' | 'legal'; recipe: string }>([
-    ['home', { path: '/', pageType: 'system', recipe: 'home' }],
-    ['about', { path: '/about', pageType: 'system', recipe: 'about' }],
-    ['contact', { path: '/contact', pageType: 'system', recipe: 'contact' }],
-    ['location', { path: '/locations/main', pageType: 'system', recipe: 'locations' }],
+  // `title` is the page's name as a person reads it — its document title and,
+  // for every page but the home page, its heading. The key beside it is an
+  // identifier, and using it as the title is what wrote 'about' and 'contact'
+  // into the title column and rendered them as h1s.
+  const templatePages = new Map<string, { path: string; title: string; pageType: 'system' | 'recipe' | 'legal'; recipe: string }>([
+    ['home', { path: '/', title: 'Home', pageType: 'system', recipe: 'home' }],
+    ['about', { path: '/about', title: 'About', pageType: 'system', recipe: 'about' }],
+    ['contact', { path: '/contact', title: 'Contact', pageType: 'system', recipe: 'contact' }],
+    ['location', { path: '/locations/main', title: 'Location', pageType: 'system', recipe: 'locations' }],
   ]);
   if (vertical === 'service') {
-    for (const [page, path, pageType] of [
-      ['services', '/services', 'system'],
-      ['pricing', '/pricing', 'system'],
-      ['donate', '/donate', 'system'],
-      ['schedule', '/schedule', 'system'],
-      ['privacy', '/policies/privacy', 'legal'],
-      ['terms', '/policies/terms', 'legal'],
-      ['third-party-notices', '/third-party-notices', 'legal'],
-    ] as const) templatePages.set(page, { path, pageType, recipe: page });
+    for (const [page, path, title, pageType] of [
+      ['services', '/services', 'Services', 'system'],
+      ['pricing', '/pricing', 'Pricing', 'system'],
+      ['donate', '/donate', 'Donate', 'system'],
+      ['schedule', '/schedule', 'Schedule', 'system'],
+      ['privacy', '/policies/privacy', 'Privacy Policy', 'legal'],
+      ['terms', '/policies/terms', 'Terms of Service', 'legal'],
+      ['third-party-notices', '/third-party-notices', 'Third-Party Notices', 'legal'],
+    ] as const) templatePages.set(page, { path, title, pageType, recipe: page });
   }
   const pagesToCreate: Array<{
     data: {
@@ -91,10 +95,17 @@ export async function seedNewSite(
         id: uid('block'),
         type: 'hero',
         position: 0,
-        // No words yet — the owner has not written a headline. `section` is not
-        // copy: it says which hero slot on the page this block fills, and the
-        // Blawby template resolves its home hero by it.
-        data: { section: heroBlockSection(definition.path), title: null, subtitle: null },
+        // The home page's heading is the owner's headline, which onboarding
+        // collects, so it starts empty. Every other page's heading is the page's
+        // own name and is known here — leaving it null made those pages depend
+        // on a reader falling through to the document title.
+        // `section` is not copy: it says which hero slot on the page this block
+        // fills, and the Blawby template resolves its home hero by it.
+        data: {
+          section: heroBlockSection(definition.path),
+          title: definition.path === '/' ? null : definition.title,
+          subtitle: null,
+        },
       },
     ];
     for (const [field, content, type] of rows.map(row => [row[1], row[2], row[3]] as const)) {
@@ -107,7 +118,7 @@ export async function seedNewSite(
     pagesToCreate.push({
       trustedSystemPage: definition.pageType === 'system',
       data: {
-        locale: 'en', path: definition.path, title: page,
+        locale: 'en', path: definition.path, title: definition.title,
         pageType: definition.pageType, recipe: definition.recipe, blocks,
       },
     })

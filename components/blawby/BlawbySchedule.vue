@@ -4,7 +4,7 @@
       <div class="blawby-container relative z-20 py-24 text-center sm:py-32 lg:py-40 min-[1920px]:py-48 min-[2560px]:py-64">
         <div class="mx-auto max-w-4xl min-[1920px]:max-w-6xl min-[2560px]:max-w-7xl">
           <p class="font-bold uppercase text-[var(--blawby-accent)]">{{ identity.brand_name }}</p>
-          <h1 class="blawby-display text-5xl font-medium text-white sm:text-7xl min-[1920px]:text-8xl min-[2560px]:text-9xl">
+          <h1 v-if="scheduleTitle.before || scheduleTitle.accent" class="blawby-display text-5xl font-medium text-white sm:text-7xl min-[1920px]:text-8xl min-[2560px]:text-9xl">
             {{ scheduleTitle.before }}<span v-if="scheduleTitle.accent" class="text-[var(--blawby-accent)]">{{ scheduleTitle.accent }}</span>{{ scheduleTitle.after }}
           </h1>
           <p v-if="scheduleHero?.subtitle" class="mt-6 text-lg leading-8 text-gray-300 sm:text-xl min-[1920px]:text-2xl">{{ scheduleHero.subtitle }}</p>
@@ -69,7 +69,7 @@ function mediaUrl(value: ApiRecord | null | undefined, slot: string) {
 const scheduleHero = computed(() => findTenantPageBlock(page.value.blocks, 'hero'))
 const scheduleHeroDestination = computed(() => consultation.value.external_url || String(scheduleHero.value?.buttonUrl || consultation.value.schedule_path))
 const scheduleTitle = computed(() => {
-  const title = String(scheduleHero.value?.title || page.value.title)
+  const title = String(scheduleHero.value?.title ?? '')
   const accent = 'Legal Consultation'
   const index = title.indexOf(accent)
   return index >= 0 ? { before: title.slice(0, index), accent, after: title.slice(index + accent.length) } : { before: title, accent: '', after: '' }

@@ -90,7 +90,7 @@ const contactBlocks = computed(() => {
 })
 const ctaBlock = computed(() => page.value ? findTenantPageBlock(page.value.blocks.filter(block => block.data.section === 'consultation'), 'contact_cta') : null)
 const qaBlock = computed(() => page.value ? findTenantPageBlock(page.value.blocks, 'faq') : null)
-const heroTitle = computed(() => String(heroBlock.value?.title || page.value?.title || ''))
+const heroTitle = computed(() => String(heroBlock.value?.title ?? ''))
 const heroDescription = computed(() => Array.isArray(heroBlock.value?.subtitle) ? heroBlock.value.subtitle.join('\n\n') : String(heroBlock.value?.subtitle ?? ''))
 const submitting = ref(false)
 const submitMessage = ref('')

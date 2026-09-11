@@ -20,7 +20,7 @@
       <div data-blawby-critical-hero-content class="blawby-container relative pb-36 pt-16 text-left min-[1920px]:pb-48 min-[1920px]:pt-24 min-[2560px]:pb-64 min-[2560px]:pt-32">
         <div data-blawby-critical-hero-columns class="flex flex-wrap gap-x-6 min-[1920px]:gap-x-12 min-[2560px]:gap-x-16">
           <div data-blawby-critical-hero-copy class="w-full lg:w-3/5">
-            <h1 class="max-w-4xl whitespace-pre-line blawby-display text-5xl font-medium text-white sm:text-7xl min-[1920px]:max-w-6xl min-[1920px]:text-8xl min-[2560px]:max-w-7xl min-[2560px]:text-9xl">
+            <h1 v-if="heroTitle.before || heroTitle.accent" class="max-w-4xl whitespace-pre-line blawby-display text-5xl font-medium text-white sm:text-7xl min-[1920px]:max-w-6xl min-[1920px]:text-8xl min-[2560px]:max-w-7xl min-[2560px]:text-9xl">
               {{ heroTitle.before }}<span v-if="heroTitle.accent" class="relative whitespace-nowrap text-[var(--blawby-accent)]">{{ heroTitle.accent }}</span>{{ heroTitle.after }}
             </h1>
             <p v-if="hero.subtitle" class="mt-6 max-w-2xl text-lg text-white min-[1920px]:max-w-3xl min-[1920px]:text-xl min-[2560px]:max-w-4xl min-[2560px]:text-2xl">{{ hero.subtitle }}</p>
