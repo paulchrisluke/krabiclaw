@@ -4,7 +4,7 @@ import { HTTPError } from 'nitro'
 import { queryAll, queryFirst, type DbClient } from '~/server/db'
 import { getDashboardContext } from '~/server/utils/dashboard-context'
 import { assertResourceAccess, listAccessibleLocationIds } from '~/server/utils/member-access'
-import { resolveBookingPolicy, renderBookingPolicySummary, type RenderedBookingPolicySummary } from '~/server/utils/reservations'
+import { getLocationReservationConfig, reservationPolicySummarySource, renderBookingPolicySummary, type RenderedBookingPolicySummary } from '~/server/utils/reservations'
 import { loadPublicSocialMedia, type PublicSocialMedia } from '~/server/utils/public-social-image'
 import { appendEntry, getEntryById, GuestThreadEntryDedupeConflictError } from '~/server/domain/guest-threads/entries'
 import { requestBookingChange } from '~/server/domain/guest-threads/booking-changes'
@@ -171,12 +171,12 @@ export async function loadDashboardBookingDetails(
 
   const [resourceImageUrl, resolvedPolicy, notes, timeZone] = await Promise.all([
     loadResourceImage(context.db, row, input.type),
-    resolveBookingPolicy(context.db, {
-      siteId: row.site_id,
-      policyType: input.type === 'reservation' ? 'reservation' : 'experience',
-      locationId: row.location_id,
-      experienceId: row.experience_id,
-    }),
+    // A reservation's terms are its location's typed policy. A booking's are
+    // the product's own attributes, which travel with the product — there is
+    // no site-level policy to merge underneath either.
+    input.type === 'reservation' && row.location_id
+      ? getLocationReservationConfig(context.db, { organizationId: row.organization_id, locationId: row.location_id })
+      : Promise.resolve(null),
     listInternalNotes(context.db, row.request_id),
     resolveLocationTimezone(context.db, row.organization_id, row.site_id, row.location_id),
   ])
@@ -208,7 +208,9 @@ export async function loadDashboardBookingDetails(
     threadId: row.request_id,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
-    policy: renderBookingPolicySummary(resolvedPolicy),
+    // Null means this location states no reservation policy, which the
+    // screen shows as such rather than inventing default terms.
+    policy: resolvedPolicy ? renderBookingPolicySummary(reservationPolicySummarySource(resolvedPolicy)) : null,
     notes,
     locations: visibleLocations.map(location => ({ ...location, imageUrl: mediaImage(locationMedia.get(location.id)) })),
   }

@@ -27,8 +27,8 @@ export function resolveProductPresentation(vertical: string | null | undefined):
       collectionLabel: 'Products',
       itemLabel: 'Product',
       itemLabelPlural: 'Products',
-      collectionGroupLabel: 'Category',
-      collectionGroupLabelPlural: 'Categories',
+      collectionGroupLabel: 'Collection',
+      collectionGroupLabelPlural: 'Collections',
       structuredDataType: 'Product',
     }
   }

@@ -26,15 +26,14 @@
 </template>
 
 <script setup lang="ts">
-import { resolveLocationExperienceHref } from '~/utils/experience-navigation'
 import { resolveProductPresentation, productLocationCollectionPath } from '~/utils/product-presentation'
 
 const props = defineProps<{
   locationSlug: string
-  active: 'overview' | 'menu' | 'products' | 'experiences' | 'posts' | 'reviews' | 'photos' | 'qa' | 'contact'
+  active: 'overview' | 'menu' | 'products' | 'posts' | 'reviews' | 'photos' | 'qa' | 'contact'
 }>()
 
-const { products, experiencesList, location } = await usePublicPageData({ lazy: false })
+const { products, location } = await usePublicPageData({ lazy: false })
 const { site } = useTenantSite()
 const { localePath, t } = useI18n()
 
@@ -44,7 +43,7 @@ const items = computed(() => {
   const list = [
     { key: 'overview', label: t('saya.subnav.overview'), href: `/locations/${props.locationSlug}` }
   ]
-  if (location.value && products.value.some(product => product.location_id === location.value?.id) && productPresentation.value) {
+  if (location.value && products.value.some(product => product.locations.some(entry => entry.location_id === location.value?.id && entry.published)) && productPresentation.value) {
     list.push({
       key: productPresentation.value.locationCollectionSegment,
       label: productPresentation.value.locationCollectionSegment === 'menu'
@@ -52,10 +51,6 @@ const items = computed(() => {
         : t('saya.footer.products'),
       href: productLocationCollectionPath((site as ApiRecord | null)?.vertical as string | null | undefined, props.locationSlug),
     })
-  }
-  const experiencesHref = resolveLocationExperienceHref(props.locationSlug, experiencesList.value)
-  if (experiencesHref) {
-    list.push({ key: 'experiences', label: t('saya.subnav.experiences'), href: experiencesHref })
   }
   list.push(
     { key: 'posts',    label: t('saya.subnav.posts'),   href: `/locations/${props.locationSlug}/posts` },

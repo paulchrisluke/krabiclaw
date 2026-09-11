@@ -52,7 +52,6 @@ const { locale } = useI18n()
 const { formatDate } = useLocaleDate()
 const justCopied = ref(false)
 const { siteId } = useTenantSite()
-const { experiencePolicyById, experiencePolicySiteDefault } = await usePublicPageData()
 
 const confirmation = ref<BookingConfirmationData | null>(null)
 
@@ -79,15 +78,16 @@ const receiptRows = computed(() => {
   return rows
 })
 
-// Policy source precedence: use the booking snapshot first, then an
-// experience-specific policy, then the server-rendered site default. This
-// route has no slug parameter, so experiencePolicyById is typically empty.
-const resolvedPolicySummary = computed(() => {
-  if (confirmation.value?.policySummary) return confirmation.value.policySummary as ApiRecord
-  const experienceId = confirmation.value?.experienceId
-  if (experienceId && experiencePolicyById.value[experienceId]) return experiencePolicyById.value[experienceId]
-  return experiencePolicySiteDefault.value as ApiRecord | null
-})
+/**
+ * The policy the guest agreed to, from the booking that carries it.
+ *
+ * One source. This used to try the snapshot, then a per-experience policy,
+ * then a site default — so a guest could be shown terms that were never the
+ * ones their booking was made under. If the snapshot is absent, no terms are
+ * shown rather than someone else's.
+ */
+const resolvedPolicySummary = computed(() =>
+  (confirmation.value?.policySummary as ApiRecord | undefined) ?? null)
 
 const policyLines = computed(() => (resolvedPolicySummary.value?.items ?? []).map((item: RenderedBookingPolicySummaryItem) => String(item.text ?? '')))
 

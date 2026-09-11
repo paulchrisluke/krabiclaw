@@ -122,7 +122,6 @@ export function buildPublicDraftBlawbyDocument(
       },
       compliance: null,
       themeTokens: brandColor ? { primary: brandColor } : {},
-      offeringLinks: [],
       pageLinks: [],
     },
     route: {
@@ -168,7 +167,6 @@ export function buildPublicDraftBlawbyDocument(
         }],
         updated_at: heroContent?.updated_at || '',
       },
-      offering: null,
       qa: [],
       reviews: [],
       posts: [],

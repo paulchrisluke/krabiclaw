@@ -400,7 +400,6 @@ const ROUTE_PAGE_PATHS: Record<PublicBlawbyRouteData['recipe'], string | null> =
   home: '/',
   links: null,
   services: '/services',
-  offering: '/services',
   about: '/about',
   pricing: '/pricing',
   contact: '/contact',

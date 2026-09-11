@@ -179,7 +179,6 @@ export function buildPublicShellPayload(
       label: locale.label ?? locale.locale,
       is_source: Boolean(locale.is_source),
     })),
-    hasExperiences: Number(configRows.find(({ key }) => key === '__experience_count')?.value ?? 0) > 0,
     hasProducts: (() => {
       const productLocationIds = new Set(((results[indexes.productLocations]?.results ?? []) as Array<{ location_id: string }>).map(row => row.location_id))
       return rawLocations.some((location) => {
