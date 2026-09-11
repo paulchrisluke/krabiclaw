@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "b350c795-f358-462e-b328-0097ce6b929d",
-  "prevId": "73bc12e7-4acf-4693-a74c-9b8a33c1c0a8",
+  "id": "4cdea346-4525-4be0-ae7f-179180412109",
+  "prevId": "b350c795-f358-462e-b328-0097ce6b929d",
   "tables": {
     "account": {
       "name": "account",
@@ -5013,6 +5013,13 @@
           "notNull": false,
           "autoincrement": false
         },
+        "deletionScheduledAt": {
+          "name": "deletionScheduledAt",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "createdAt": {
           "name": "createdAt",
           "type": "integer",
@@ -9922,6 +9929,13 @@
         "stripeCustomerId": {
           "name": "stripeCustomerId",
           "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "deletionScheduledAt": {
+          "name": "deletionScheduledAt",
+          "type": "integer",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false

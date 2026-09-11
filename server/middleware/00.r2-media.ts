@@ -45,7 +45,7 @@ export default defineHandler(async (event) => {
     ? url.pathname.slice(WORKER_MEDIA_PREFIX.length)
     : url.pathname.replace(/^\/+/, '')
   if (!key) {
-    throw new HTTPError({ statusCode: 400 })
+    throw new HTTPError({ statusCode: 404 })
   }
 
   const rangeHeader = (event.req.headers.get('range'))
@@ -83,6 +83,10 @@ export default defineHandler(async (event) => {
       setHeader(event, 'cache-control', 'public, max-age=31536000, immutable')
       return sendStream(event, obj.body)
     } catch (err: unknown) {
+      // A missing object and an unsatisfiable range are answers, not R2 faults:
+      // rethrow the status this block already chose instead of relabelling
+      // every one of them 502.
+      if (err instanceof HTTPError) throw err
       const msg = err instanceof Error ? err.message : 'R2 error'
       throw new HTTPError({ statusCode: 502, statusMessage: msg })
     }
@@ -99,6 +103,7 @@ export default defineHandler(async (event) => {
     setHeader(event, 'cache-control', 'public, max-age=31536000, immutable')
     return sendStream(event, obj.body)
   } catch (err: unknown) {
+    if (err instanceof HTTPError) throw err
     const msg = err instanceof Error ? err.message : 'R2 error'
     throw new HTTPError({ statusCode: 502, statusMessage: msg })
   }

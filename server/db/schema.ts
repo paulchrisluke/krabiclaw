@@ -485,6 +485,9 @@ export const oauthClient = sqliteTable("oauthClient", {
 	name: text().notNull(),
 	redirectUris: text().notNull(),
 	scopes: text().default("[]").notNull(),
+	clientCredentialsScopes: text().default("[]").notNull(),
+	clientDiscoveryId: text(),
+	applicationType: text(),
 	public: integer().default(0).notNull(),
 	requirePKCE: integer().default(1).notNull(),
 	skipConsent: integer().default(0).notNull(),
@@ -1467,3 +1470,4 @@ export const analytics_summaries = sqliteTable("analytics_summaries", {
   index("analytics_summaries_session_seen_idx").on(table.site_id, sql`(payload_json ->> '$.last_seen_at')`).where(sql`kind = 'session'`),
   index("analytics_summaries_session_visitor_idx").on(table.site_id, sql`(payload_json ->> '$.visitor_id')`, sql`(payload_json ->> '$.started_at')`).where(sql`kind = 'session'`),
 ]);
+

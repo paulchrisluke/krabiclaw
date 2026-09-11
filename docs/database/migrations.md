@@ -43,8 +43,18 @@ build-beside rebuild of a leaf family stays possible.
    `DROP TABLE` of a parent that surviving tables still reference.
 6. Rebuild local D1 from the chain (`yarn schema:local` on a fresh state, then
    `yarn db:pull:local`), run `yarn test:d1` and `yarn lint:schema-drift`.
-7. Deploy only through the PR/branch workflow. CI applies migrations after each
-   deploy.
+7. Deploy only through the PR/branch workflow. CI applies migrations **before**
+   each deploy, so every migration must be backward compatible with the Worker
+   already running: the old Worker serves against the new schema for the length
+   of the deploy. A contraction — dropping a column or constraint something still
+   reads — ships a release after the code that stopped reading it. Never both in
+   one release.
+
+   Deploying first would leave a window of new code against old schema, which is
+   the direction that breaks: a Worker reading a column its migration has not
+   created yet fails every request until the migration lands. It also leaves that
+   code live if the migration fails, where migrating first aborts before anything
+   deploys.
 
 ## Rebaseline
 

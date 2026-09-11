@@ -265,16 +265,22 @@ jobs:
       - run: corepack yarn playwright install --with-deps chromium
       - name: Build staging Worker
         run: yarn build
-      - name: Deploy staging Worker
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: corepack yarn wrangler deploy --env staging --strict
+      # Migrations run before the deploy. A migration is backward compatible with the
+      # Worker already running -- contractions ship a release after the code that
+      # stopped reading the column -- so the old Worker keeps serving against the new
+      # schema, and the new Worker never meets a schema it predates. Deploying first
+      # leaves a window of new code against old schema, and a failed migration would
+      # leave that code live.
       - name: Apply staging migrations
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: corepack yarn wrangler d1 migrations apply DB --env staging --remote
+      - name: Deploy staging Worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: corepack yarn wrangler deploy --env staging --strict
       - name: Refresh staging AI Search index
         env:
           PLATFORM_SEARCH_REINDEX_SECRET: ${{ secrets.PLATFORM_SEARCH_REINDEX_SECRET }}
@@ -344,16 +350,17 @@ jobs:
         run: |
           build_id="$(node -p 'JSON.parse(require("node:fs").readFileSync(".output/public/_nuxt/builds/latest.json", "utf8")).id')"
           printf 'id=%s\n' "$build_id" >> "$GITHUB_OUTPUT"
-      - name: Deploy production Worker
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: corepack yarn wrangler deploy --strict
+      # Migrations before the deploy, for the reason given in the staging job.
       - name: Apply production migrations
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: corepack yarn wrangler d1 migrations apply DB --remote
+      - name: Deploy production Worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: corepack yarn wrangler deploy --strict
       - name: Refresh production search index
         env:
           PLATFORM_SEARCH_REINDEX_SECRET: ${{ secrets.PLATFORM_SEARCH_REINDEX_SECRET }}

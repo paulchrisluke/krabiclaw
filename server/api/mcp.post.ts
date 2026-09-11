@@ -412,7 +412,13 @@ Common workflows: manage location-scoped Products, create and publish site posts
     const mcpError = asMcpError(error);
     const toolCallPermissionError = requestMethod === "tools/call" && mcpError.kind === "forbidden";
     const mappedStatus = toolCallPermissionError ? 200 : mcpHttpStatusForError(mcpError);
-    console.error("[MCP_ERROR]", JSON.stringify({
+    // A malformed or stale client request is the client's fault, not ours.
+    // ChatGPT still asks for widget resources it cached from an older catalog
+    // (`ui://media-upload`), and logging those at error severity buries real
+    // faults — the same reason the auth handler already splits 4xx to warn.
+    const clientFault = mappedStatus < 500
+    const logMcpError = clientFault ? console.warn : console.error
+    logMcpError("[MCP_ERROR]", JSON.stringify({
       status: mappedStatus, code: mcpError.code, message: mcpError.message, method: requestMethod ?? null, tool: requestToolName ?? null, request_id: requestId ?? null, ...(mcpError.code === MCP_ERROR.invalidRequest || mcpError.code === MCP_ERROR.invalidParams ? { envelope: requestEnvelope ?? safeMcpEnvelopeDetails(event, undefined) } : {}), }));
     if (mappedStatus >= 500 && error instanceof Error) console.error(error.stack ?? error.message);
     return respondToMcpError(event, error, {

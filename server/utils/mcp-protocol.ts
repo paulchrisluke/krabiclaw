@@ -44,6 +44,15 @@ function metaString(request: McpRpcRequest, key: string) {
   return typeof value === 'string' ? value : null
 }
 
+/**
+ * The single rule for resolving a client's requested MCP protocol version:
+ * use it when we speak it, otherwise negotiate to the revision we serve.
+ * Never reject — see readMcpRequest.
+ */
+function supportedProtocolVersionOrDefault(requested: string | null) {
+  return requested && SUPPORTED_PROTOCOL_VERSION_SET.has(requested) ? requested : MCP_PROTOCOL_VERSION
+}
+
 export function readMcpRequest(event: H3Event, body: unknown): McpRpcRequest {
   if (!body || typeof body !== 'object' || Array.isArray(body)) {
     throw mcpProtocolError(MCP_ERROR.invalidRequest, 'Invalid JSON-RPC request body.')
@@ -64,10 +73,14 @@ export function readMcpRequest(event: H3Event, body: unknown): McpRpcRequest {
     ?.params?.protocolVersion === 'string'
     ? (body as { params: { protocolVersion: string } }).params.protocolVersion
     : null
-  const version = headerVersion ?? metaString(request, 'io.modelcontextprotocol/version') ?? bodyVersion
-  if (version && !SUPPORTED_PROTOCOL_VERSION_SET.has(version)) {
-    throw mcpProtocolError(MCP_ERROR.invalidRequest, `Unsupported MCP protocol version: ${version}`)
-  }
+  // An unrecognized version is negotiated down, never rejected. MCP version
+  // negotiation is the client asking what we speak; `server/discover` exists to
+  // answer it with SUPPORTED_PROTOCOL_VERSIONS. Throwing here made that endpoint
+  // unreachable by exactly the clients that needed it — ChatGPT sends a
+  // future-dated MCP-Protocol-Version and wedged its connector setup on the -32600.
+  const version = supportedProtocolVersionOrDefault(
+    headerVersion ?? metaString(request, 'io.modelcontextprotocol/version') ?? bodyVersion,
+  )
 
   if (request.jsonrpc && request.jsonrpc !== '2.0') {
     throw mcpProtocolError(MCP_ERROR.invalidRequest, 'Only JSON-RPC 2.0 is supported.')
@@ -89,14 +102,13 @@ export function readMcpRequest(event: H3Event, body: unknown): McpRpcRequest {
   request.method = method
   request._meta = {
     ...(request._meta ?? {}),
-    'io.modelcontextprotocol/version': version ?? MCP_PROTOCOL_VERSION,
+    'io.modelcontextprotocol/version': version,
   }
   return request
 }
 
 export function negotiatedMcpProtocolVersion(request: McpRpcRequest) {
-  const version = metaString(request, 'io.modelcontextprotocol/version')
-  return version && SUPPORTED_PROTOCOL_VERSION_SET.has(version) ? version : MCP_PROTOCOL_VERSION
+  return supportedProtocolVersionOrDefault(metaString(request, 'io.modelcontextprotocol/version'))
 }
 
 export function mcpSuccess(id: JsonRpcId | undefined, result: unknown) {
