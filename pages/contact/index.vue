@@ -275,7 +275,7 @@ const { locations, config: siteConfig, tenantPage } = await usePublicPageData()
 const contactHero = computed(() => tenantPage.value?.blocks.find(block => block.type === 'hero') ?? null)
 const contactHeroEyebrow = computed(() => String(contactHero.value?.data.eyebrow || ''))
 const contactHeroTitle = computed(() => String(contactHero.value?.data.title || tenantPage.value?.title || ''))
-const contactHeroSummary = computed(() => String(contactHero.value?.data.subtitle || contactHero.value?.data.description || tenantPage.value?.summary || ''))
+const contactHeroSummary = computed(() => String(contactHero.value?.data.subtitle ?? ''))
 const contactAdditionalPage = computed(() => tenantPage.value
   ? { ...tenantPage.value, blocks: tenantPage.value.blocks.filter(block => block.type !== 'hero') }
   : null)

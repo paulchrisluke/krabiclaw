@@ -91,7 +91,7 @@ const contactBlocks = computed(() => {
 const ctaBlock = computed(() => page.value ? findTenantPageBlock(page.value.blocks.filter(block => block.data.section === 'consultation'), 'contact_cta') : null)
 const qaBlock = computed(() => page.value ? findTenantPageBlock(page.value.blocks, 'faq') : null)
 const heroTitle = computed(() => String(heroBlock.value?.title || page.value?.title || ''))
-const heroDescription = computed(() => Array.isArray(heroBlock.value?.description) ? heroBlock.value.description.join('\n\n') : String(heroBlock.value?.description || page.value?.summary || ''))
+const heroDescription = computed(() => Array.isArray(heroBlock.value?.subtitle) ? heroBlock.value.subtitle.join('\n\n') : String(heroBlock.value?.subtitle ?? ''))
 const submitting = ref(false)
 const submitMessage = ref('')
 const form = reactive({ name: '', email: '', subject: 'general', message: '', consent: false })

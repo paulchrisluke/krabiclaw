@@ -93,7 +93,7 @@ function mediaUrl(block: PublicTenantPage['blocks'][number] | null | undefined, 
 const heroBlock = computed(() => block('hero'))
 const legalBodyBlocks = computed(() => props.page.blocks.filter(candidate => candidate.type === 'heading' || candidate.type === 'markdown'))
 const heroTitle = computed(() => stringValue(heroBlock.value?.data.title) || props.page.title)
-const heroDescription = computed(() => stringValue(heroBlock.value?.data.description) || props.page.summary || '')
+const heroDescription = computed(() => stringValue(heroBlock.value?.data.subtitle))
 
 const teamBlock = computed(() => block('feature_grid', data => data.type === 'team' || Array.isArray(data.people)))
 const teamFeatures = computed(() => arrayRecords(teamBlock.value?.data.features).map((feature, index) => ({

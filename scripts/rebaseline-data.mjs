@@ -116,6 +116,14 @@ export const TRANSFORMS = [
          WHERE d.kind = 'page' AND d.row_role = 'root' AND d.path IS NOT NULL
            AND NOT EXISTS (SELECT 1 FROM content_documents q WHERE q.kind = 'qa' AND q.row_role = 'root' AND q.site_id = d.site_id AND q.location_id IS NULL AND q.scope_path = d.path AND q.status = 'published')
            AND EXISTS (SELECT 1 FROM content_documents q WHERE q.kind = 'qa' AND q.row_role = 'root' AND q.site_id = d.site_id AND q.location_id IS NULL AND q.scope_path IS NULL AND q.status = 'published'))` },
+  // --- a hero paragraph is `subtitle`: the name onboarding, the site template and the
+  // CMS hero editor all write, and the only name Saya and Blawby now read. Blawby's
+  // private second name for the same field silently dropped whatever the owner typed,
+  // so the text moves onto the canonical key and the retired key is dropped.
+  { name: 'hero_blocks_carry_subtitle', sql: `UPDATE content_blocks SET data_json = json_remove(
+      CASE WHEN json_type(data_json, '$.subtitle') IS NULL THEN json_set(data_json, '$.subtitle', json_extract(data_json, '$.description')) ELSE data_json END,
+      '$.description')
+    WHERE type = 'hero' AND json_type(data_json, '$.description') IS NOT NULL` },
 ]
 
 const LOCALIZED_OWNER_TABLES = {
@@ -144,6 +152,7 @@ export const TARGET_INVARIANT_QUERIES = {
   no_platform_mcp_surface: "SELECT id FROM mcp_tool_call_events WHERE mcp_surface = 'platform'",
   no_document_featured_placements: "SELECT id FROM media_placements WHERE owner_type = 'content_document' AND slot = 'featured'",
   no_faq_items: "SELECT id FROM content_blocks WHERE type = 'faq' AND json_type(data_json, '$.items') IS NOT NULL",
+  no_hero_description: "SELECT id FROM content_blocks WHERE type = 'hero' AND json_type(data_json, '$.description') IS NOT NULL",
   no_docs_pages: "SELECT id FROM content_documents WHERE kind = 'page' AND path LIKE '/docs/%'",
   articles_carry_collection: "SELECT id FROM content_documents WHERE kind = 'article' AND row_role = 'root' AND (metadata_json ->> '$.collection') NOT IN ('blog', 'docs')",
   one_platform_site: "SELECT count(*) AS n FROM sites WHERE theme_id = 'krabiclaw-theme-v1' HAVING n <> 1",

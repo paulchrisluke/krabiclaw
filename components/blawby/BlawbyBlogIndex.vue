@@ -34,7 +34,7 @@ const org = useBlawbyOrgIdentity(identity, compliance)
 const heroBlock = computed(() => page.value ? findTenantPageBlock(page.value.blocks, 'hero') : null)
 const disclaimerBlock = computed(() => page.value ? findTenantPageBlock(page.value.blocks, 'callout') : null)
 const heroTitle = computed(() => String(heroBlock.value?.title || page.value?.title || ''))
-const heroDescription = computed(() => Array.isArray(heroBlock.value?.description) ? heroBlock.value.description.join('\n\n') : String(heroBlock.value?.description || page.value?.summary || ''))
+const heroDescription = computed(() => Array.isArray(heroBlock.value?.subtitle) ? heroBlock.value.subtitle.join('\n\n') : String(heroBlock.value?.subtitle ?? ''))
 
 const { canonicalUrl } = useSocialMetadata(() => ({
   path: '/blog',
