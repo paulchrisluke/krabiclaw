@@ -17,6 +17,7 @@ import { localizationError } from '~/server/utils/localization-errors'
 import {
   RESOURCE_LOCALIZATION_REGISTRY,
   parseLocalizedResourceType,
+  loadMetafieldDefinitionIndex,
   validateLocalizedRoutePath,
   validateLocalizedValues,
   type LocalizedResourceType,
@@ -379,10 +380,13 @@ export async function putResourceLocalization(
   const { locale, source } = await assertSiteLanguageEntitlement(db, input.organizationId, input.siteId, input.locale)
   if (source) localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', 'English source content must be edited through its canonical resource')
   const ownerGuard = await assertCanonicalResourceExists(db, input.organizationId, input.siteId, resourceType, input.resourceId)
-  const values = validateLocalizedValues(resourceType, input.values)
+  // Which product attributes may be translated is declared by the tenant's
+  // metafield definitions, so they are loaded and handed to the validator
+  // rather than restated as a list here.
+  const definitions = resourceType === 'product' ? await loadMetafieldDefinitionIndex(db, input.organizationId) : undefined
+  const values = validateLocalizedValues(resourceType, input.values, definitions)
   const vertical = await getSiteVertical(db, input.organizationId, input.siteId)
-  const product = resourceType === 'product' ? await queryFirst<{ product_type: string }>(db, 'SELECT product_type FROM products WHERE id = ? AND organization_id = ? AND site_id = ?', [input.resourceId, input.organizationId, input.siteId]) : null
-  const routePath = validateLocalizedRoutePath(resourceType, locale, input.routePath, vertical, product?.product_type ?? null)
+  const routePath = validateLocalizedRoutePath(resourceType, locale, input.routePath, vertical)
   const existing = await queryFirst<{ id: string; route_path: string | null; created_at: string; created_by_user_id: string }>(db, `
     SELECT id, route_path, created_at, created_by_user_id
       FROM resource_localizations
@@ -640,6 +644,7 @@ export async function replaceProductLocalizations(
   if (!Array.isArray(input.items) || input.items.length < 1 || input.items.length > 250) {
     localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', 'items must contain 1 to 250 Product localizations')
   }
+  const definitions = await loadMetafieldDefinitionIndex(db, input.organizationId)
   const parsed = input.items.map((value, index) => {
     if (!value || typeof value !== 'object' || Array.isArray(value)) {
       localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', `items[${index}] must be an object`, { index })
@@ -651,7 +656,7 @@ export async function replaceProductLocalizations(
     }
     return {
       productId: item.product_id.trim(),
-      values: validateLocalizedValues('product', item.values),
+      values: validateLocalizedValues('product', item.values, definitions),
       routePathInput: item.route_path,
       index,
     }
@@ -659,12 +664,18 @@ export async function replaceProductLocalizations(
   const ids = parsed.map(item => item.productId)
   if (new Set(ids).size !== ids.length) localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', 'Product IDs must be unique')
   const placeholders = ids.map(() => '?').join(', ')
-  const products = await queryAll<{ id: string; product_type: string }>(db, `SELECT id, product_type FROM products WHERE organization_id = ? AND site_id = ? AND id IN (${placeholders})`, [input.organizationId, input.siteId, ...ids])
+  // The catalog is organization-owned; a site reaches a product through its
+  // publication row, so that is what scopes this lookup.
+  const products = await queryAll<{ id: string }>(db, `
+    SELECT p.id FROM products p
+    JOIN product_publications pub ON pub.product_id = p.id AND pub.organization_id = p.organization_id
+    WHERE p.organization_id = ? AND pub.site_id = ? AND p.id IN (${placeholders})
+  `, [input.organizationId, input.siteId, ...ids])
   const found = new Set(products.map(product => product.id))
   const missing = ids.filter(id => !found.has(id))
   if (missing.length) localizationError(404, 'LOCALIZATION_NOT_FOUND', 'One or more Products were not found', { product_ids: missing })
   const vertical = await getSiteVertical(db, input.organizationId, input.siteId)
-  const planned = parsed.map(item => ({ ...item, routePath: validateLocalizedRoutePath('product', locale, item.routePathInput, vertical, products.find(product => product.id === item.productId)!.product_type) }))
+  const planned = parsed.map(item => ({ ...item, routePath: validateLocalizedRoutePath('product', locale, item.routePathInput, vertical) }))
   const routePaths = planned.map(item => item.routePath)
   if (new Set(routePaths).size !== routePaths.length) localizationError(409, 'LOCALIZED_ROUTE_CONFLICT', 'Submitted Product routes must be unique')
   const existing = await queryAll<{

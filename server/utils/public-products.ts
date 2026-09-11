@@ -1,7 +1,7 @@
 import { queryAll, queryFirst, type DbClient } from '~/server/db'
 import { resolveSiteCmsCapabilities } from '~/server/utils/cms-capabilities'
-import { getPublicProductBySlug, listPublicSiteProducts } from '~/server/utils/product-management'
-import type { Product, ProductPresentation } from '~/server/types/products'
+import { getProductBySlug, hydrateProductMedia, listCollections, listLocationProducts } from '~/server/utils/product-management'
+import type { Collection, Product, ProductPresentation } from '~/server/types/products'
 import { resolveProductPresentation } from '~/utils/product-presentation'
 import { isCurrencyCode, type CurrencyCode } from '~/shared/currencies'
 import {
@@ -37,6 +37,12 @@ export interface PublicProductCollection {
   presentation: ProductPresentation
   locations: PublicProductLocation[]
   products: Product[]
+  /**
+   * Site and location collections, in merchandising order. These replace the
+   * old per-location category, so a template groups by explicit membership
+   * rather than by a column copied onto every product.
+   */
+  collections: Collection[]
 }
 
 export interface PublicProductDetail extends PublicProductCollection {
@@ -95,8 +101,21 @@ export async function loadPublicProductCollection(
   if (locationSlug && locationRows.length !== 1) return null
   const locations = locationRows.filter(location => locationHasProducts(resolved.site, location))
   if (locationSlug && locations.length !== 1) return null
-  const products = await listPublicSiteProducts(db, siteId, locations.map(location => location.id))
-  return { ...resolved, locations, products }
+  // Location publication is the public gate here: a product carried by the
+  // site but withheld at this branch is absent, not shown greyed out.
+  const perLocation = await Promise.all(locations.map(location =>
+    listLocationProducts(db, { organizationId: resolved.site.organization_id, locationId: location.id, publishedOnly: true })))
+  const seen = new Set<string>()
+  const products = await hydrateProductMedia(db, siteId, perLocation.flat().filter((product) => {
+    if (seen.has(product.id)) return false
+    seen.add(product.id)
+    return true
+  }))
+  const collections = (await Promise.all([
+    listCollections(db, { organizationId: resolved.site.organization_id, siteId, locationId: null }),
+    ...locations.map(location => listCollections(db, { organizationId: resolved.site.organization_id, siteId, locationId: location.id })),
+  ])).flat()
+  return { ...resolved, locations, products, collections }
 }
 
 export async function loadPublicProductDetail(
@@ -111,7 +130,12 @@ export async function loadPublicProductDetail(
     const collection = await loadPublicProductCollection(db, siteId, routeKind, locationSlug)
     const location = collection?.locations[0]
     if (!collection || !location) return null
-    const product = await getPublicProductBySlug(db, siteId, location.id, productSlug)
+    const found = await getProductBySlug(db, collection.site.organization_id, productSlug)
+    // The product must actually be offered at this location and published
+    // there: reaching it by slug alone would render a branch's page for
+    // something that branch does not sell.
+    if (!found || !found.locations.some(entry => entry.location_id === location.id && entry.published && entry.active)) return null
+    const [product] = await hydrateProductMedia(db, siteId, [found])
     if (!product) return null
     const localeRepresentations = await listPublicLocaleRepresentations(db, {
       organizationId: collection.site.organization_id,
@@ -141,18 +165,11 @@ export async function loadPublicProductDetail(
   const sourceProduct = collection.products.find(product => product.id === productId)
   const locationLocalization = localizations.find(item => item.resourceType === 'business_location' && item.resourceId === location.id)
   const productLocalization = localizations.find(item => item.resourceType === 'product' && item.resourceId === productId)
-  const categoryLocalizations = new Map(
-    localizations
-      .filter(item => item.resourceType === 'product_category')
-      .map(item => [item.resourceId, item]),
-  )
-  const categoryLocalization = sourceProduct ? categoryLocalizations.get(sourceProduct.category.id) : undefined
   const siteLocalization = localizations.find(item => item.resourceType === 'site' && item.resourceId === siteId)
-  if (!sourceProduct || !locationLocalization || !productLocalization || !categoryLocalization) return null
+  if (!sourceProduct || !locationLocalization || !productLocalization) return null
   const localizedProduct = projectExactLocalizedResource('product', sourceProduct, productLocalization)
   const product = {
     ...localizedProduct,
-    category: projectExactLocalizedResource('product_category', localizedProduct.category, categoryLocalization),
     image: localizedProduct.image
       ? projectLocalizedMediaAlt([localizedProduct.image], localizations)[0] ?? null
       : null,
@@ -172,13 +189,8 @@ export async function loadPublicProductDetail(
     ...collection,
     site: localizedSite,
     locations: projectExactLocalizedCollection('business_location', collection.locations, localizations),
-    products: projectExactLocalizedCollection('product', collection.products, localizations)
-      .flatMap(item => {
-        const localization = categoryLocalizations.get(item.category.id)
-        return localization
-          ? [{ ...item, category: projectExactLocalizedResource('product_category', item.category, localization) }]
-          : []
-      }),
+    products: projectExactLocalizedCollection('product', collection.products, localizations),
+    collections: projectExactLocalizedCollection('collection', collection.collections, localizations),
     location: localizedLocation,
     product,
     localeRepresentations,
@@ -216,11 +228,11 @@ export async function loadPublicProductReviews(
   return queryAll<PublicProductReview>(db, `
     SELECT id, author_name AS author, rating, title, content, created_at AS createdAt
      FROM reviews
-     WHERE product_id = ? AND organization_id = ? AND site_id = ? AND location_id = ? AND status = 'approved'
+     WHERE product_id = ? AND organization_id = ? AND site_id = ? AND status = 'approved'
        AND author_name IS NOT NULL AND trim(author_name) <> ''
        AND title IS NOT NULL AND trim(title) <> ''
        AND content IS NOT NULL AND trim(content) <> ''
      ORDER BY created_at DESC, id DESC
      LIMIT 50
-  `, [detail.product.id, detail.site.organization_id, detail.site.id, detail.location.id])
+  `, [detail.product.id, detail.site.organization_id, detail.site.id])
 }

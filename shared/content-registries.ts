@@ -113,7 +113,7 @@ export const CONTENT_BLOCK_TYPES = [
 export type ContentBlockType = typeof CONTENT_BLOCK_TYPES[number]
 
 export const LOCALIZED_RESOURCE_TYPES = [
-  'site', 'business_location', 'product', 'product_category', 'offering', 'media_asset',
+  'site', 'business_location', 'product', 'collection', 'media_asset',
 ] as const
 
 export type LocalizedResourceType = typeof LOCALIZED_RESOURCE_TYPES[number]
