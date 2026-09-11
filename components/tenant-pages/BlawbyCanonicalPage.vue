@@ -5,7 +5,7 @@
       <BlawbyTeamSection :people="teamPeople" :features="teamFeatures" />
       <BlawbyShieldDivider variant="about" />
       <BlawbyImpactSection v-if="impactBlock" v-bind="impactProps" />
-      <BlawbyServicesSection v-if="servicesBlock" v-bind="servicesProps" :offerings="offerings" />
+      <BlawbyServicesSection v-if="servicesBlock" v-bind="servicesProps" :items="serviceItems" />
       <BlawbyFaqSection :items="faqs" :decoration-url="faqDecoration" />
       <BlawbyReviewsSection :reviews="reviews" :description="reviewsDescription" />
       <BlawbyConsultationCta v-if="ctaBlock && ctaProps.title && ctaProps.label && ctaProps.destination" v-bind="ctaProps" />
@@ -16,7 +16,7 @@
       <BlawbyShieldDivider variant="pricing" />
       <BlawbyPricingSection :plans="pricingPlans" :calculator="pricingCalculator" />
       <BlawbyFaqSection :items="faqs" :decoration-url="faqDecoration" />
-      <BlawbyServicesSection v-if="servicesBlock" v-bind="servicesProps" :offerings="offerings" />
+      <BlawbyServicesSection v-if="servicesBlock" v-bind="servicesProps" :items="serviceItems" />
       <BlawbyConsultationCta v-if="ctaBlock && ctaProps.title && ctaProps.label && ctaProps.destination" v-bind="ctaProps" />
     </template>
 
@@ -51,7 +51,7 @@
 
 <script setup lang="ts">
 import type { PublicTenantPage } from '~/server/utils/public-tenant-pages'
-import type { BlawbyShieldVariant, PublicOfferingSummary, PublicSiteQa, PublicSiteReview } from '~/types/blawby'
+import type { BlawbyShieldVariant,  PublicSiteQa, PublicSiteReview } from '~/types/blawby'
 
 type RecordValue = Record<string, unknown>
 
@@ -118,26 +118,24 @@ const impactProps = computed(() => ({
   statistics: arrayRecords(impactBlock.value?.data.items).map(item => ({ value: stringValue(item.value), label: stringValue(item.title) })).filter(item => item.value && item.label),
 }))
 
-const servicesBlock = computed(() => block('offering_grid', data => data.section === 'services'))
-const offerings = computed<PublicOfferingSummary[]>(() => arrayRecords(servicesBlock.value?.data.items).map((item, _index) => ({
+const servicesBlock = computed(() => block('page_grid', data => data.section === 'services'))
+/**
+ * The pages this section links to, exactly as the block resolved them.
+ *
+ * No reshaping into an "offering" shape: the block already carries the title,
+ * summary, route and media for each page it names, and re-deriving a slug from
+ * the route was how a service card pointed at a path nobody published.
+ */
+const serviceItems = computed(() => arrayRecords(servicesBlock.value?.data.items).map(item => ({
   id: stringValue(item.id),
-  name: stringValue(item.title),
-  slug: stringValue(item.url).replace(/^\/services\//, ''),
-  label: stringValue(item.label) || null,
-  summary: stringValue(item.description) || null,
-  short_description: stringValue(item.description) || null,
+  title: stringValue(item.title),
+  description: stringValue(item.description) || undefined,
+  url: stringValue(item.url),
   media: (Array.isArray(item.media) ? item.media : []).map(media => ({
-    asset_id: stringValue(media.asset_id),
     slot: stringValue(media.slot),
     public_url: stringValue(media.public_url),
-    thumbnail_url: stringValue(media.thumbnail_url) || null,
-    kind: stringValue(media.kind),
-    alt_text: stringValue(media.alt_text) || null,
-  })).filter(media => media.asset_id && media.slot && media.public_url && media.kind),
-  canonical_path: stringValue(item.url),
-  sort_order: 0,
-  featured: false,
-})).filter(item => item.id && item.name && item.slug))
+  })).filter(media => media.slot && media.public_url),
+})).filter(item => item.id && item.title && item.url))
 const servicesProps = computed(() => ({
   title: stringValue(servicesBlock.value?.data.title),
   accent: stringValue(servicesBlock.value?.data.accent),
