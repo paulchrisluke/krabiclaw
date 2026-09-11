@@ -61,7 +61,7 @@ function lintEpochBaseline(presentFiles) {
   if (names[0] === EPOCH_BASELINE) return []
   return [{
     file: `migrations/${EPOCH_BASELINE}`,
-    message: 'The chain must start with the generated baseline. Production history is immutable after cutover; see docs/database/migrations.md.',
+    message: 'The chain must start with the generated baseline. Production history is immutable after cutover.',
   }]
 }
 
@@ -131,7 +131,7 @@ async function lintReferencedParentDrops(files) {
         return [{
           file: relative(ROOT, file),
           message: blockedTable
-            ? `Cannot DROP referenced parent table "${blockedTable}". D1 may execute foreign-key actions during a rebuild; follow docs/database/migrations.md.`
+            ? `Cannot DROP referenced parent table "${blockedTable}". D1 may execute foreign-key actions during a rebuild; build the replacement family beside it and rename last.`
             : `Migration chain cannot be validated: ${error.message}`,
         }]
       }

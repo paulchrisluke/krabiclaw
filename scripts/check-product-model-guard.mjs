@@ -113,7 +113,7 @@ function walk(directory) {
 
 export function findProductModelViolations(relativePath, source) {
   // The transfer script names retired values because it is what removes them.
-  if (['scripts/check-product-model-guard.mjs', 'scripts/report-publication-cleanup.mjs', 'scripts/rebaseline-data.mjs'].includes(relativePath.replaceAll('\\', '/'))) return []
+  if (['scripts/check-product-model-guard.mjs', 'scripts/report-publication-cleanup.mjs'].includes(relativePath.replaceAll('\\', '/'))) return []
   const normalizedPath = relativePath.replaceAll('\\', '/')
   if (normalizedPath === 'server/db/schema.ts') return []
   const checksPublicationModel = !normalizedPath.includes('onboarding')

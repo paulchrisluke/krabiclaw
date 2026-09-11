@@ -120,11 +120,10 @@ unverified, but unrelated route families do not block a narrowly scoped change.
 
 ## Migration and content safety
 
-For the canonical migration workflow, see [docs/database/migrations.md](../database/migrations.md).
 
-Never rewrite migration history for a production database resource in place. Rebaselining production schema history is the documented database rebaseline in [docs/database/migrations.md](../database/migrations.md): a fresh generated baseline, an offline transfer of a frozen export, verification, then a reset of the same database resource during a write freeze.
+Never rewrite migration history for a production database resource in place. A schema replacement stands up a new database from a generated baseline and repoints the binding.
 
-A database rebaseline does not take the site down. Copy live: export, transfer, load the prepared database, verify in place, deploy the candidate on the new binding, then compare the old database for rows created after the export and copy those over. There is no write-freeze or maintenance switch in the codebase; an action that returns errors to customers is never a procedure step.
+A schema replacement does not take the site down. Prepare the new database ahead of time, load it, verify it in place, deploy the candidate on the new binding, then copy over rows created after the export. There is no write-freeze or maintenance switch in the codebase; an action that returns errors to customers is never a procedure step.
 
 Before dropping or retiring a legacy table or writer:
 

@@ -56,10 +56,10 @@ Existing production values must be corrected before those readers are released.
 
 The canonical-instant constraints could not be added through an ordinary
 generated migration (the generator rebuilt referenced parent tables), so they
-shipped as a database rebaseline: a fresh generated baseline and an offline
+shipped as a fresh generated baseline and an offline
 transfer of every retained value with one-time UTC normalization, verified for
 row identity, constraints and foreign keys before the production write freeze.
 `customers.last_booking_at` and `customers.last_review_at` were duplicate
 summaries with no UI consumers and were deleted rather than normalized; the
 request and review records remain the source. See
-[migrations.md](migrations.md) for the rebaseline procedure.
+`server/db/schema.ts` for the target shape.

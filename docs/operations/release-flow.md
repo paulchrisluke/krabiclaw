@@ -9,7 +9,7 @@ KrabiClaw uses one branch-driven GitHub Actions workflow and three Cloudflare Wo
 | `staging` to `main` pull request | None | Reuses checks attached to the exact staging SHA |
 | Push to `main` | `krabiclaw` | Read-only rendering/navigation on all three customer custom domains |
 
-Each environment receives one normal `wrangler deploy`. Preview uses one fixed, shared D1 resource; it may apply disposable fixtures and run writes. During ordinary releases, staging applies migrations but does not sweep, reset, reseed customers, provision E2E identities, or perform guest/MCP writes. A standalone staging database may be reset or reprovisioned while its database epoch remains unreleased, using the controlled epoch procedure in [database migrations](../database/migrations.md); that exception never applies after the epoch reaches production. Production is never seeded, reset, or mutated by test automation.
+Each environment receives one normal `wrangler deploy`. Preview uses one fixed, shared D1 resource; it may apply disposable fixtures and run writes. During ordinary releases, staging applies migrations but does not sweep, reset, reseed customers, provision E2E identities, or perform guest/MCP writes. A standalone staging database may be reset or reprovisioned while its schema remains unreleased; that exception never applies once the schema reaches production. Production is never seeded, reset, or mutated by test automation.
 
 Preview must keep persistent Workers Logs and traces enabled in `wrangler.toml`,
 with invocation logs and 100% sampling. This is permanent environment
@@ -31,7 +31,7 @@ records distinguish successful storage/persistence from cleanup. Attachment URLs
 are redacted from error messages and stacks; diagnostic records omit tool
 arguments, credentials, and file contents.
 
-A database rebaseline additionally uses the temporary maintenance deployment
+A database replacement additionally uses the temporary maintenance deployment
 defined in [release-and-outage-prevention.md](release-and-outage-prevention.md).
 It is not part of an ordinary schema migration or application release.
 
@@ -47,12 +47,12 @@ this override from urgency; it must be given directly for the current release.
 Record the override in the promotion pull request or merge record, including
 the customer impact, the waived or incomplete checks, and the verification
 that will run after deployment. This override does not permit bypassing a known
-reproducible first-party failure, database rebaseline safeguards, migration safety,
+reproducible first-party failure, migration safety,
 or production data and write restrictions.
 
 Production deployment and verification are separate jobs in the same workflow. The deploy job builds once, performs the single Wrangler deployment, then applies forward-compatible migrations and refreshes search only when indexed content definitions or document-generation code changed. The verification job waits until all three custom domains expose that exact Nuxt build and its referenced assets, then runs read-only browser coverage. Retrying a failed verification job never redeploys production.
 
-For migration safety, preview reset behavior, database rebaselines, incident recovery, and detailed browser/MCP verification requirements, see [release-and-outage-prevention.md](release-and-outage-prevention.md). For the canonical migration workflow, see [docs/database/migrations.md](../database/migrations.md).
+For migration safety, preview reset behavior, incident recovery, and detailed browser/MCP verification requirements, see [release-and-outage-prevention.md](release-and-outage-prevention.md).
 
 ## Dependency batches
 
