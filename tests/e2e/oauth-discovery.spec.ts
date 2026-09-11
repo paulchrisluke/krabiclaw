@@ -370,7 +370,7 @@ test.describe('OAuth discovery endpoints', () => {
         client_assertion: assertion,
       },
     })
-    expect(token.status()).toBe(200)
+    expect(token.status(), await token.text()).toBe(200)
     const tokenBody = await token.json() as { access_token?: string, id_token?: string }
     expect(tokenBody.access_token).toBeTruthy()
     expect(tokenBody.id_token).toBeTruthy()
