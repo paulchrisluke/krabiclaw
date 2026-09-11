@@ -1,46 +1,80 @@
-import { instantDate, isValidInstant } from '~/utils/timezone'
-import { resourceLocalizationDeletionQueries } from '~/server/utils/localization'
 import { HTTPError } from 'nitro'
-import type { CloudflareEnv } from '~/server/utils/auth'
 import { d1JsonArray, executeBatch, queryAll, queryFirst, type BatchQuery, type DbClient } from '~/server/db'
-import type {
-  CreateProductInput,
-  Product,
-  ProductDetail,
-  ProductSource,
-  ReconcileProductInput,
-  UpdateProductInput,
-} from '~/server/types/products'
-import { refreshSocialCard } from '~/server/utils/social-card'
+import { resourceLocalizationDeletionQueries } from '~/server/utils/localization'
 import { loadPublicSocialMedia } from '~/server/utils/public-social-image'
 import { publicResourceCacheInvalidationQuery } from '~/server/utils/public-resource-cache'
-import { fireOrganizationEventSafe, type OrganizationEventType } from '~/server/utils/organization-events'
+import { fireOrganizationEventSafe } from '~/server/utils/organization-events'
 import { isCurrencyCode, type CurrencyCode } from '~/shared/currencies'
-import { PRICE_TAX_BEHAVIORS, PRICE_UNITS, type Price, type PriceInput, type PriceTaxBehavior, type PriceUnit } from '~/shared/prices'
+import {
+  assertNoConflictingPrices,
+  assertPriceShape,
+  PRICE_RECURRING_INTERVALS,
+  PRICE_TAX_BEHAVIORS,
+  PRICE_TYPES,
+  selectPrice,
+  type Price,
+  type PriceInput,
+  type PriceSelection,
+} from '~/shared/prices'
+import {
+  assertMetafieldDefinition,
+  metafieldHandle,
+  parseMetafieldValue,
+  serializeMetafieldValue,
+  type MetafieldDefinition,
+  type MetafieldValue,
+} from '~/shared/metafields'
+import type {
+  Collection,
+  CreateCollectionInput,
+  CreateProductInput,
+  Product,
+  ProductOption,
+  ProductSource,
+  ProductVariant,
+  ReconcileProductInput,
+  UpdateCollectionInput,
+  UpdateProductInput,
+} from '~/server/types/products'
 import {
   PRODUCT_LIMITS,
-  assertNoPriceNoteContradiction,
   normalizeOptionalProductString,
   requireTrimmedProductString,
-  validateProductCanonicalUrl,
-  validateProductDetails,
+  validateProductMarketingFeatures,
+  validateProductMetadata,
+  validateProductOptions,
   validateProductOrderUrl,
-  validateProductRobots,
+  validateProductSlug,
   validateProductTags,
+  validateProductUnitLabel,
+  validateProductVariants,
+  type NormalizedProductOption,
+  type NormalizedProductVariant,
 } from '~/server/utils/product-validation'
 
+/**
+ * The canonical catalog write and read path.
+ *
+ * Products belong to the organization. Where they are published, where they
+ * are offered, what they cost, how they are grouped and what they are made of
+ * are all relationships, loaded alongside the product and never flattened into
+ * it. There is no second catalog for a vertical.
+ */
+
 const MAX_SLUG_SUFFIX_ATTEMPTS = 100
-const REORDER_OFFSET = 1_000_000
 
-type ProductRow = Record<string, unknown>
-type SqlValue = string | number | boolean | null
+type Row = Record<string, unknown>
 
-interface ProductWriteAttribution {
-  actorId: string
+function notFound(message = 'Product not found'): never {
+  throw new HTTPError({ statusCode: 404, statusMessage: message })
 }
 
-function notFound(): never {
-  throw new HTTPError({ statusCode: 404, statusMessage: 'Product not found' })
+function invalid(message: string): never {
+  throw new HTTPError({ statusCode: 400, statusMessage: message })
+}
+
+function conflict(message: string): never {
+  throw new HTTPError({ statusCode: 409, statusMessage: message })
 }
 
 function parseJsonArray<T>(value: unknown, field: string): T[] {
@@ -50,41 +84,43 @@ function parseJsonArray<T>(value: unknown, field: string): T[] {
   return parsed as T[]
 }
 
-export function mapProduct(row: ProductRow): Product {
-  const price = row.price_id === null || row.price_id === undefined ? null : mapPrice(row)
+function parseJsonObject(value: unknown, field: string): Record<string, string> {
+  if (typeof value !== 'string') throw new Error(`Product ${field} is not stored as JSON`)
+  const parsed: unknown = JSON.parse(value)
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error(`Product ${field} must be a JSON object`)
+  return parsed as Record<string, string>
+}
+
+const PRODUCT_COLUMNS = `
+  p.id, p.organization_id, p.name, p.slug, p.description, p.active, p.order_url, p.unit_label,
+  p.marketing_features, p.tags, p.metadata, p.tax_code, p.source,
+  p.created_at, p.updated_at, p.created_by, p.updated_by
+`
+
+function mapProductRow(row: Row): Product {
   return {
     id: String(row.id),
     organization_id: String(row.organization_id),
-    site_id: String(row.site_id),
-    location_id: String(row.location_id),
-    product_type: String(row.product_type) as Product['product_type'],
-    category_id: String(row.category_id),
-    category: {
-      id: String(row.category_id),
-      name: String(row.category_name),
-      slug: String(row.category_slug),
-      sort_order: Number(row.category_sort_order),
-    },
     name: String(row.name),
     slug: String(row.slug),
     description: String(row.description),
-    price,
+    active: Number(row.active) === 1,
     order_url: row.order_url === null ? null : String(row.order_url),
-    is_visible: Number(row.is_visible) === 1,
-    available: Number(row.available) === 1,
-    featured: Number(row.featured) === 1,
-    featured_sort_order: Number(row.featured_sort_order),
-    sort_order: Number(row.sort_order),
-    tags: parseJsonArray<string>(row.tags_json, 'tags_json'),
-    details: parseJsonArray<ProductDetail>(row.details_json, 'details_json'),
+    unit_label: row.unit_label === null ? null : String(row.unit_label),
+    marketing_features: parseJsonArray<string>(row.marketing_features, 'marketing_features'),
+    tags: parseJsonArray<string>(row.tags, 'tags'),
+    metadata: parseJsonObject(row.metadata, 'metadata'),
+    tax_code: row.tax_code === null ? null : String(row.tax_code),
+    options: [],
+    variants: [],
+    metafields: {},
+    publications: [],
+    locations: [],
+    collections: [],
     image: null,
     gallery: [],
     media: [],
     social_image: null,
-    seo_title: row.seo_title === null ? null : String(row.seo_title),
-    seo_description: row.seo_description === null ? null : String(row.seo_description),
-    canonical_url: row.canonical_url === null ? null : String(row.canonical_url),
-    robots: row.robots === null ? null : String(row.robots),
     source: String(row.source) as ProductSource,
     created_at: String(row.created_at),
     updated_at: String(row.updated_at),
@@ -93,1289 +129,1017 @@ export function mapProduct(row: ProductRow): Product {
   }
 }
 
-const PRODUCT_COLUMNS = `
-  p.id, p.organization_id, p.site_id, p.location_id, p.product_type, p.category_id, p.name, p.slug, p.description,
-  pc.name AS category_name, pc.slug AS category_slug, pc.sort_order AS category_sort_order,
-  p.order_url,
-  p.is_visible, p.available, p.featured, p.featured_sort_order, p.sort_order, p.tags_json,
-  p.details_json, p.seo_title, p.seo_description, p.canonical_url, p.robots, p.source,
-  p.created_at, p.updated_at, p.created_by, p.updated_by,
-  pr.id AS price_id, pr.amount_minor, pr.currency, pr.unit, pr.tax_behavior,
-  pr.compare_at_amount_minor, pr.valid_from, pr.valid_until, pr.provenance,
-  pr.created_by AS price_created_by, pr.created_at AS price_created_at
-`
-
-// Category is a required parent, so this is an inner join: a Product with no
-// resolvable category is a broken row, not a row to render without a section.
-const CATEGORY_JOIN = `
-  JOIN product_categories pc ON pc.id = p.category_id
-`
-
-const ACTIVE_PRICE_JOIN = `
-  LEFT JOIN prices pr ON pr.id = (
-    SELECT candidate.id FROM prices candidate
-    WHERE candidate.organization_id = p.organization_id
-      AND candidate.site_id = p.site_id
-      AND candidate.location_id = p.location_id
-      AND candidate.product_id = p.id
-      AND candidate.valid_from <= strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
-      AND (candidate.valid_until IS NULL OR candidate.valid_until > strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
-    ORDER BY candidate.valid_from DESC LIMIT 1
-  )
-`
-
-function mapPrice(row: ProductRow): Price {
+function mapPriceRow(row: Row): Price {
   return {
-    id: String(row.price_id), organization_id: String(row.organization_id), site_id: String(row.site_id),
-    location_id: String(row.location_id), product_id: String(row.id), amount_minor: Number(row.amount_minor),
-    currency: String(row.currency) as Price['currency'], unit: String(row.unit) as Price['unit'],
+    id: String(row.id),
+    organization_id: String(row.organization_id),
+    product_variant_id: String(row.product_variant_id),
+    location_id: row.location_id === null ? null : String(row.location_id),
+    active: Number(row.active) === 1,
+    currency: String(row.currency) as CurrencyCode,
+    unit_amount: Number(row.unit_amount),
+    type: String(row.type) as Price['type'],
+    recurring_interval: row.recurring_interval === null ? null : String(row.recurring_interval) as Price['recurring_interval'],
+    recurring_interval_count: row.recurring_interval_count === null ? null : Number(row.recurring_interval_count),
     tax_behavior: String(row.tax_behavior) as Price['tax_behavior'],
-    compare_at_amount_minor: row.compare_at_amount_minor === null ? null : Number(row.compare_at_amount_minor),
-    valid_from: String(row.valid_from), valid_until: row.valid_until === null ? null : String(row.valid_until),
-    provenance: String(row.provenance), created_by: String(row.price_created_by), created_at: String(row.price_created_at),
+    compare_at_unit_amount: row.compare_at_unit_amount === null ? null : Number(row.compare_at_unit_amount),
+    valid_from_at: row.valid_from_at === null ? null : String(row.valid_from_at),
+    valid_until_at: row.valid_until_at === null ? null : String(row.valid_until_at),
+    source: String(row.source),
+    created_by: String(row.created_by),
+    updated_by: String(row.updated_by),
+    created_at: String(row.created_at),
+    updated_at: String(row.updated_at),
   }
 }
 
-interface NormalizedPriceInput {
-  amountMinor: number
-  currency: CurrencyCode
-  unit: PriceUnit
-  taxBehavior: PriceTaxBehavior
-  compareAt: number | null
-  validFrom: string
-  validUntil: string | null
-  provenance: 'manual'
-  validFromProvided: boolean
-  validUntilProvided: boolean
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === 'object' && !Array.isArray(value)
-}
-
-function isPriceUnit(value: unknown): value is PriceUnit {
-  return typeof value === 'string' && PRICE_UNITS.some(candidate => candidate === value)
-}
-
-function isPriceTaxBehavior(value: unknown): value is PriceTaxBehavior {
-  return typeof value === 'string' && PRICE_TAX_BEHAVIORS.some(candidate => candidate === value)
-}
-
-export function normalizePriceInput(input: PriceInput | null | undefined, defaultCurrency: CurrencyCode, field = 'price'): NormalizedPriceInput | null {
-  if (input === undefined) throw new HTTPError({ statusCode: 400, statusMessage: `${field} is required` })
-  if (input === null) return null
-  if (!isRecord(input)) throw new HTTPError({ statusCode: 400, statusMessage: `${field} must be an object or null` })
-  if (Object.hasOwn(input, 'provenance')) throw new HTTPError({ statusCode: 400, statusMessage: `${field}.provenance is assigned by the server` })
-  const amountMinor = input.amount_minor
-  if (typeof amountMinor !== 'number' || !Number.isSafeInteger(amountMinor) || amountMinor < 0) throw new HTTPError({ statusCode: 400, statusMessage: `${field}.amount_minor must be a non-negative integer` })
-  const currency = input.currency === undefined ? defaultCurrency : input.currency
-  if (!isCurrencyCode(currency)) throw new HTTPError({ statusCode: 400, statusMessage: `${field}.currency must be a supported currency` })
-  const unit = input.unit === undefined ? 'item' : input.unit
-  if (!isPriceUnit(unit)) throw new HTTPError({ statusCode: 400, statusMessage: `${field}.unit must be supported` })
-  const taxBehavior = input.tax_behavior === undefined ? 'unspecified' : input.tax_behavior
-  if (!isPriceTaxBehavior(taxBehavior)) throw new HTTPError({ statusCode: 400, statusMessage: `${field}.tax_behavior must be supported` })
-  const compareAt = input.compare_at_amount_minor ?? null
-  if (compareAt !== null && (typeof compareAt !== 'number' || !Number.isSafeInteger(compareAt) || compareAt <= amountMinor)) throw new HTTPError({ statusCode: 400, statusMessage: `${field}.compare_at_amount_minor must exceed amount_minor` })
-  const validFromProvided = input.valid_from !== undefined
-  const validFrom = validFromProvided ? input.valid_from : new Date().toISOString()
-  if (typeof validFrom !== 'string') throw new HTTPError({ statusCode: 400, statusMessage: `${field}.valid_from must be an ISO UTC instant (YYYY-MM-DDTHH:mm:ss[.SSS]Z)` })
-  if (!isValidInstant(validFrom)) throw new HTTPError({ statusCode: 400, statusMessage: `${field}.valid_from must be an ISO UTC instant (YYYY-MM-DDTHH:mm:ss[.SSS]Z)` })
-  const validUntilProvided = input.valid_until !== undefined
-  const validUntil = input.valid_until ?? null
-  if (validUntil !== null && (typeof validUntil !== 'string' || !isValidInstant(validUntil) || Date.parse(validUntil) <= Date.parse(validFrom))) {
-    throw new HTTPError({ statusCode: 400, statusMessage: `${field}.valid_until must be an ISO UTC instant after valid_from` })
-  }
-  return { amountMinor, currency, unit, taxBehavior, compareAt, validFrom: instantDate(validFrom).toISOString(), validUntil: validUntil === null ? null : instantDate(validUntil).toISOString(), provenance: 'manual', validFromProvided, validUntilProvided }
-}
-
-async function siteDefaultCurrency(db: DbClient, organizationId: string, siteId: string): Promise<CurrencyCode> {
-  const site = await queryFirst<{ default_currency: string }>(db, 'SELECT default_currency FROM sites WHERE id = ? AND organization_id = ?', [siteId, organizationId])
-  if (!site) throw new HTTPError({ statusCode: 404, statusMessage: 'Site not found' })
-  if (!isCurrencyCode(site.default_currency)) throw new Error(`Site ${siteId} has an unsupported default currency`)
-  return site.default_currency
-}
-
-// Shared by updateProduct and reconcileProducts, which both batch their writes
-// through one executeBatch — this must return a query, never execute
-// anything itself, or the two writes would no longer be atomic.
-function closeActivePriceQuery(priceId: string, at: string): BatchQuery {
+export function mapMetafieldDefinitionRow(row: Row): MetafieldDefinition {
   return {
-    query: `
-      UPDATE prices
-         SET valid_until = ?
-       WHERE id = ?
-         AND valid_from < ?
-         AND (valid_until IS NULL OR valid_until > ?)
-    `,
-    params: [at, priceId, at, at],
+    id: String(row.id),
+    organization_id: String(row.organization_id),
+    namespace: String(row.namespace),
+    key: String(row.key),
+    name: String(row.name),
+    description: row.description === null ? null : String(row.description),
+    value_type: String(row.value_type) as MetafieldDefinition['value_type'],
+    validations: JSON.parse(String(row.validations)) as MetafieldDefinition['validations'],
+    localizable: Number(row.localizable) === 1,
   }
 }
 
-// True only if a Price row with this exact identity — id, valid_from, and
-// valid_until all matching what was originally read — still exists. This is
-// an identity/snapshot check, deliberately independent of either racer's own
-// clock (unlike closeActivePriceQuery's time-relative WHERE, which is fine
-// for performing the close itself but not for detecting whether the Price
-// state read earlier is still the current one). `valid_until IS ?` gives
-// null-safe comparison so an active (NULL valid_until) Price compares
-// correctly. Feeding this into the Price snapshot guard (see the guarded
-// updated_at expression in updateProduct and reconcileProducts) turns a
-// concurrent close/replace into a real batch failure instead of a lost
-// update.
-function priceSnapshotMatchesPredicate(productId: string, price: Pick<Price, 'id' | 'valid_from' | 'valid_until'>): { sql: string; params: SqlValue[] } {
-  return {
-    sql: `EXISTS (
-      SELECT 1
-        FROM prices
-       WHERE id = ?
-         AND product_id = ?
-         AND valid_from = ?
-         AND valid_until IS ?
-    )`,
-    params: [price.id, productId, price.valid_from, price.valid_until],
+/**
+ * Load every relationship a Product owns, in one pass per relation.
+ *
+ * Deliberately not a single join: variants x prices x publications x locations
+ * x collections x metafields multiplies rows, and reconstructing distinct sets
+ * from that product is where duplicate and dropped children come from.
+ */
+async function hydrate(db: DbClient, organizationId: string, products: Product[]): Promise<Product[]> {
+  if (products.length === 0) return products
+  const ids = d1JsonArray(products.map(product => product.id))
+  const byId = new Map(products.map(product => [product.id, product]))
+
+  const [optionRows, valueRows, variantRows, selectionRows, priceRows, publicationRows, locationRows, collectionRows, metafieldRows] = await Promise.all([
+    queryAll<Row>(db, `SELECT id, product_id, name, sort_order FROM product_options
+      WHERE organization_id = ? AND product_id IN (SELECT value FROM json_each(?)) ORDER BY sort_order, id`, [organizationId, ids]),
+    queryAll<Row>(db, `SELECT id, product_id, product_option_id, value, sort_order FROM product_option_values
+      WHERE organization_id = ? AND product_id IN (SELECT value FROM json_each(?)) ORDER BY sort_order, id`, [organizationId, ids]),
+    queryAll<Row>(db, `SELECT id, product_id, name, sku, active, sort_order FROM product_variants
+      WHERE organization_id = ? AND product_id IN (SELECT value FROM json_each(?)) ORDER BY sort_order, id`, [organizationId, ids]),
+    queryAll<Row>(db, `SELECT product_variant_id, product_option_id, product_option_value_id FROM product_variant_option_values
+      WHERE organization_id = ? AND product_id IN (SELECT value FROM json_each(?))`, [organizationId, ids]),
+    queryAll<Row>(db, `SELECT pr.* FROM prices pr
+      JOIN product_variants v ON v.id = pr.product_variant_id AND v.organization_id = pr.organization_id
+      WHERE pr.organization_id = ? AND v.product_id IN (SELECT value FROM json_each(?))
+      ORDER BY pr.product_variant_id, pr.valid_from_at, pr.id`, [organizationId, ids]),
+    queryAll<Row>(db, `SELECT product_id, site_id, published FROM product_publications
+      WHERE organization_id = ? AND product_id IN (SELECT value FROM json_each(?)) ORDER BY site_id`, [organizationId, ids]),
+    queryAll<Row>(db, `SELECT product_id, location_id, active, published FROM product_locations
+      WHERE organization_id = ? AND product_id IN (SELECT value FROM json_each(?)) ORDER BY location_id`, [organizationId, ids]),
+    queryAll<Row>(db, `SELECT product_id, collection_id, sort_order FROM collection_products
+      WHERE organization_id = ? AND product_id IN (SELECT value FROM json_each(?)) ORDER BY collection_id`, [organizationId, ids]),
+    queryAll<Row>(db, `SELECT pm.product_id, pm.value, d.id AS definition_id, d.organization_id AS definition_org,
+        d.namespace, d.key, d.name, d.description, d.value_type, d.validations, d.localizable
+      FROM product_metafields pm
+      JOIN metafield_definitions d ON d.id = pm.definition_id AND d.organization_id = pm.organization_id
+      WHERE pm.organization_id = ? AND pm.product_id IN (SELECT value FROM json_each(?))
+      ORDER BY d.namespace, d.key`, [organizationId, ids]),
+  ])
+
+  const valuesByOption = new Map<string, { id: string; value: string; sort_order: number }[]>()
+  for (const row of valueRows) {
+    const list = valuesByOption.get(String(row.product_option_id)) ?? []
+    list.push({ id: String(row.id), value: String(row.value), sort_order: Number(row.sort_order) })
+    valuesByOption.set(String(row.product_option_id), list)
   }
-}
-
-// True only if no Price row is currently active for this Product, evaluated
-// at D1 execution time (not an application-captured timestamp) so it isn't
-// racy against either caller's own clock.
-function noActivePricePredicate(productId: string): { sql: string; params: SqlValue[] } {
-  return {
-    sql: `NOT EXISTS (
-      SELECT 1
-        FROM prices
-       WHERE product_id = ?
-         AND valid_from <= strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
-         AND (
-           valid_until IS NULL
-           OR valid_until > strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
-         )
-    )`,
-    params: [productId],
+  for (const row of optionRows) {
+    const option: ProductOption = {
+      id: String(row.id), name: String(row.name), sort_order: Number(row.sort_order),
+      values: valuesByOption.get(String(row.id)) ?? [],
+    }
+    byId.get(String(row.product_id))?.options.push(option)
   }
-}
 
-// True only if no *other* Price row for this Product overlaps [validFrom, validUntil).
-// Same shape as the pre-read conflict queries in updateProduct/reconcileProducts —
-// reused here so it can also feed the Price snapshot guard, not just serve as
-// an early user-facing validation error.
-function priceOverlapAbsentPredicate(productId: string, excludePriceId: string | null, validFrom: string, validUntil: string | null): { sql: string; params: SqlValue[] } {
-  return {
-    sql: `NOT EXISTS (
-      SELECT 1 FROM prices
-       WHERE product_id = ? AND id <> COALESCE(?, '')
-         AND valid_from < COALESCE(?, '9999-12-31T23:59:59.999Z')
-         AND (valid_until IS NULL OR valid_until > ?)
-    )`,
-    params: [productId, excludePriceId, validUntil, validFrom],
+  const selectionsByVariant = new Map<string, Record<string, string>>()
+  for (const row of selectionRows) {
+    const current = selectionsByVariant.get(String(row.product_variant_id)) ?? {}
+    current[String(row.product_option_id)] = String(row.product_option_value_id)
+    selectionsByVariant.set(String(row.product_variant_id), current)
   }
+  const pricesByVariant = new Map<string, Price[]>()
+  for (const row of priceRows) {
+    const list = pricesByVariant.get(String(row.product_variant_id)) ?? []
+    list.push(mapPriceRow(row))
+    pricesByVariant.set(String(row.product_variant_id), list)
+  }
+  for (const row of variantRows) {
+    const variant: ProductVariant = {
+      id: String(row.id), product_id: String(row.product_id), name: String(row.name),
+      sku: row.sku === null ? null : String(row.sku), active: Number(row.active) === 1,
+      sort_order: Number(row.sort_order),
+      option_values: selectionsByVariant.get(String(row.id)) ?? {},
+      prices: pricesByVariant.get(String(row.id)) ?? [],
+    }
+    byId.get(String(row.product_id))?.variants.push(variant)
+  }
+
+  for (const row of publicationRows) {
+    byId.get(String(row.product_id))?.publications.push({ site_id: String(row.site_id), published: Number(row.published) === 1 })
+  }
+  for (const row of locationRows) {
+    byId.get(String(row.product_id))?.locations.push({
+      location_id: String(row.location_id), active: Number(row.active) === 1, published: Number(row.published) === 1,
+    })
+  }
+  for (const row of collectionRows) {
+    byId.get(String(row.product_id))?.collections.push({ collection_id: String(row.collection_id), sort_order: Number(row.sort_order) })
+  }
+  for (const row of metafieldRows) {
+    const definition = mapMetafieldDefinitionRow({ ...row, id: row.definition_id, organization_id: row.definition_org })
+    const product = byId.get(String(row.product_id))
+    if (product) product.metafields[metafieldHandle(definition)] = parseMetafieldValue(definition, String(row.value))
+  }
+  return products
 }
 
-// The Price snapshot guard is enforced by making updated_at itself compute to
-// NULL when the guard fails — products.updated_at is NOT NULL in the baseline
-// schema, so D1 rejects that statement and rolls back the whole batch. This
-// only recognizes that specific, already-existing constraint message; any
-// other error propagates unchanged.
-function isPriceSnapshotConflict(error: unknown): boolean {
-  return error instanceof Error && error.message.includes('NOT NULL constraint failed: products.updated_at')
-}
-
-async function hydrateProductMedia(db: DbClient, siteId: string, products: Product[]): Promise<Product[]> {
+/**
+ * Attach media for a specific site.
+ *
+ * Media placements are site-scoped while the catalog is organization-scoped,
+ * so the caller must say which site's imagery it wants. There is no "the
+ * product's image" independent of a site, and no default site is assumed.
+ */
+export async function hydrateProductMedia(db: DbClient, siteId: string, products: Product[]): Promise<Product[]> {
   if (!products.length) return products
-  const ownerIds = products.map(product => product.id)
-  const placements = await loadPublicSocialMedia(db, siteId, 'product', ownerIds)
+  const placements = await loadPublicSocialMedia(db, siteId, 'product', products.map(product => product.id))
   return products.map((product) => {
     const socialMedia = placements.get(product.id) ?? { media: [], social_image: null }
-    const media = socialMedia.media
     return {
       ...product,
-      image: media.find(item => item.slot === 'image') ?? null,
-      gallery: media.filter(item => item.slot === 'gallery'),
-      media,
+      image: socialMedia.media.find(item => item.slot === 'image') ?? null,
+      gallery: socialMedia.media.filter(item => item.slot === 'gallery'),
+      media: socialMedia.media,
       social_image: socialMedia.social_image,
     }
   })
 }
 
-async function assertLocationOwnership(db: DbClient, organizationId: string, siteId: string, locationId: string): Promise<void> {
-  const location = await queryFirst(db, `
-    SELECT id FROM business_locations
-     WHERE id = ? AND organization_id = ? AND site_id = ?
-     LIMIT 1
-  `, [locationId, organizationId, siteId])
-  if (!location) throw new HTTPError({ statusCode: 404, statusMessage: 'Location not found' })
+// ---------------------------------------------------------------------------
+// Reads
+// ---------------------------------------------------------------------------
+
+export async function getProduct(db: DbClient, organizationId: string, productId: string): Promise<Product> {
+  const row = await queryFirst<Row>(db, `SELECT ${PRODUCT_COLUMNS} FROM products p WHERE p.organization_id = ? AND p.id = ?`, [organizationId, productId])
+  if (!row) notFound()
+  const [product] = await hydrate(db, organizationId, [mapProductRow(row)])
+  return product!
 }
 
-export async function listLocationProducts(
-  db: DbClient,
-  organizationId: string,
-  siteId: string,
-  locationId: string,
-  options: { publicOnly?: boolean } = {},
-): Promise<Product[]> {
-  await assertLocationOwnership(db, organizationId, siteId, locationId)
-  const rows = await queryAll<ProductRow>(db, `
-    SELECT ${PRODUCT_COLUMNS}
-      FROM products p ${ACTIVE_PRICE_JOIN} ${CATEGORY_JOIN}
-     WHERE p.organization_id = ? AND p.site_id = ? AND p.location_id = ?
-       AND p.product_type = 'standard'
-       ${options.publicOnly ? 'AND p.is_visible = 1' : ''}
-     ORDER BY pc.sort_order, p.sort_order, p.id
-  `, [organizationId, siteId, locationId])
-  return hydrateProductMedia(db, siteId, rows.map(mapProduct))
-}
-
-export async function listPublicSiteProducts(
-  db: DbClient,
-  siteId: string,
-  locationIds?: string[],
-): Promise<Product[]> {
-  const scoped = locationIds !== undefined
-  if (scoped && locationIds.length === 0) return []
-  const rows = await queryAll<ProductRow>(db, `
-    SELECT ${PRODUCT_COLUMNS}
-      FROM products p ${ACTIVE_PRICE_JOIN} ${CATEGORY_JOIN}
-     WHERE p.site_id = ? AND p.is_visible = 1
-       AND p.product_type = 'standard'
-       ${scoped ? 'AND p.location_id IN (SELECT value FROM json_each(?))' : ''}
-     ORDER BY p.location_id, pc.sort_order, p.sort_order, p.id
-  `, [siteId, ...(scoped ? [JSON.stringify([...new Set(locationIds)])] : [])])
-  return hydrateProductMedia(db, siteId, rows.map(mapProduct))
-}
-
-export async function getProduct(
-  db: DbClient,
-  organizationId: string,
-  siteId: string,
-  locationId: string,
-  productId: string,
-): Promise<Product | null> {
-  const row = await queryFirst<ProductRow>(db, `
-    SELECT ${PRODUCT_COLUMNS}
-      FROM products p ${ACTIVE_PRICE_JOIN} ${CATEGORY_JOIN}
-     WHERE p.id = ? AND p.organization_id = ? AND p.site_id = ? AND p.location_id = ?
-       AND p.product_type = 'standard'
-     LIMIT 1
-  `, [productId, organizationId, siteId, locationId])
-  if (!row) return null
-  const [product] = await hydrateProductMedia(db, siteId, [mapProduct(row)])
-  if (!product) return null
-  const scheduled = await queryAll<Record<string, unknown>>(db, `
-    SELECT id, organization_id, site_id, location_id, product_id, amount_minor, currency,
-           unit, tax_behavior, compare_at_amount_minor, valid_from, valid_until,
-           provenance, created_by AS price_created_by, created_at AS price_created_at
-      FROM prices WHERE product_id = ? AND valid_from > strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
-     ORDER BY valid_from, id
-  `, [productId])
-  return { ...product, scheduled_prices: scheduled.map(row => ({
-    id: String(row.id), organization_id: String(row.organization_id), site_id: String(row.site_id),
-    location_id: String(row.location_id), product_id: String(row.product_id), amount_minor: Number(row.amount_minor),
-    currency: String(row.currency) as Price['currency'], unit: String(row.unit) as Price['unit'],
-    tax_behavior: String(row.tax_behavior) as Price['tax_behavior'],
-    compare_at_amount_minor: row.compare_at_amount_minor == null ? null : Number(row.compare_at_amount_minor),
-    valid_from: String(row.valid_from), valid_until: row.valid_until == null ? null : String(row.valid_until),
-    provenance: String(row.provenance), created_by: String(row.price_created_by), created_at: String(row.price_created_at),
-  })) }
-}
-
-export async function getPublicProductBySlug(
-  db: DbClient,
-  siteId: string,
-  locationId: string,
-  productSlug: string,
-): Promise<Product | null> {
-  const row = await queryFirst<ProductRow>(db, `
-    SELECT ${PRODUCT_COLUMNS}
-      FROM products p ${ACTIVE_PRICE_JOIN} ${CATEGORY_JOIN}
-     WHERE p.site_id = ? AND p.location_id = ? AND p.slug = ? AND p.is_visible = 1
-       AND p.product_type = 'standard'
-     LIMIT 1
-  `, [siteId, locationId, productSlug])
-  if (!row) return null
-  const [product] = await hydrateProductMedia(db, siteId, [mapProduct(row)])
-  return product ?? null
-}
-
-function slugifyProductName(name: string): string {
-  return name
-    .normalize('NFKD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 120)
-    .replace(/-+$/g, '')
-}
-
-export async function createLocationProductSlug(
-  db: DbClient,
-  siteId: string,
-  locationId: string,
-  name: string,
-): Promise<string> {
-  const base = slugifyProductName(name)
-  if (!base) throw new HTTPError({ statusCode: 400, statusMessage: 'name must produce a non-empty ASCII slug' })
-  for (let suffix = 1; suffix <= MAX_SLUG_SUFFIX_ATTEMPTS; suffix += 1) {
-    const suffixText = suffix === 1 ? '' : `-${suffix}`
-    const candidate = `${base.slice(0, 120 - suffixText.length).replace(/-+$/g, '')}${suffixText}`
-    const existing = await queryFirst(db, `
-      SELECT id FROM products WHERE site_id = ? AND location_id = ? AND slug = ? LIMIT 1
-    `, [siteId, locationId, candidate])
-    if (!existing) return candidate
-  }
-  throw new HTTPError({ statusCode: 409, statusMessage: `Unable to create a unique Product slug in this location` })
-}
-
-function validateSource(source: ProductSource | undefined): ProductSource {
-  const value = source ?? 'manual'
-  if (!['manual', 'template', 'ai', 'import', 'copy'].includes(value)) {
-    throw new HTTPError({ statusCode: 400, statusMessage: 'Invalid Product source' })
-  }
-  return value
-}
-
-function validateNonNegativeInteger(value: unknown, field: string): number {
-  if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) {
-    throw new HTTPError({ statusCode: 400, statusMessage: `${field} must be a non-negative integer` })
-  }
-  return value
-}
-
-function validateOptionalBoolean(value: unknown, field: string, fallback: boolean): boolean {
-  if (value === undefined) return fallback
-  if (typeof value !== 'boolean') throw new HTTPError({ statusCode: 400, statusMessage: `${field} must be a boolean` })
-  return value
-}
-
-function productEvent(
-  db: DbClient,
-  eventType: OrganizationEventType,
-  input: { organizationId: string; siteId: string; locationId: string; actor: string; productId?: string; metadata?: Record<string, unknown> },
-) {
-  const requestedLocationId = Object.hasOwn(input.metadata ?? {}, 'requested_location_id')
-    ? input.metadata?.requested_location_id
-    : input.locationId
-  return fireOrganizationEventSafe({
-    db,
-    organizationId: input.organizationId,
-    siteId: input.siteId,
-    locationId: input.locationId,
-    actorId: input.actor,
-    eventType,
-    entityType: 'product',
-    entityId: input.productId,
-    metadata: {
-      mutation_type: eventType,
-      requested_location_id: requestedLocationId,
-      resolved_location_id: input.locationId,
-      ...input.metadata,
-    },
-  })
-}
-
-export async function createProduct(
-  db: DbClient,
-  organizationId: string,
-  siteId: string,
-  locationId: string,
-  input: CreateProductInput,
-  attribution: ProductWriteAttribution,
-  env: CloudflareEnv,
-): Promise<Product> {
-  const { actorId: actor } = attribution
-  await assertLocationOwnership(db, organizationId, siteId, locationId)
-  const category = await requireProductCategory(db, organizationId, siteId, locationId, requireTrimmedProductString(input.category_id, 'category_id', PRODUCT_LIMITS.category))
-  const name = requireTrimmedProductString(input.name, 'name', PRODUCT_LIMITS.name)
-  if (input.description !== undefined && typeof input.description !== 'string') {
-    throw new HTTPError({ statusCode: 400, statusMessage: 'description must be a string' })
-  }
-  const description = input.description?.trim() ?? ''
-  if (description.length > PRODUCT_LIMITS.description) {
-    throw new HTTPError({ statusCode: 400, statusMessage: `description must be at most ${PRODUCT_LIMITS.description} characters` })
-  }
-  const price = normalizePriceInput(input.price, await siteDefaultCurrency(db, organizationId, siteId))
-  const orderUrl = validateProductOrderUrl(input.order_url)
-  const tags = validateProductTags(input.tags)
-  const details = validateProductDetails(input.details)
-  assertNoPriceNoteContradiction(price !== null, details)
-  const seoTitle = normalizeOptionalProductString(input.seo_title, 'seo_title', PRODUCT_LIMITS.seoTitle)
-  const seoDescription = normalizeOptionalProductString(input.seo_description, 'seo_description', PRODUCT_LIMITS.seoDescription)
-  const canonicalUrl = validateProductCanonicalUrl(input.canonical_url)
-  const robots = validateProductRobots(input.robots)
-  const source = validateSource(input.source)
-  const slug = await createLocationProductSlug(db, siteId, locationId, name)
-  // sort_order is scoped to the category, so a new Product appends to the end of
-  // its own section rather than the end of the whole location.
-  const count = await queryFirst<{ count: number }>(db, `
-    SELECT COUNT(*) AS count FROM products WHERE site_id = ? AND location_id = ? AND category_id = ? AND product_type = 'standard'
-  `, [siteId, locationId, category.id])
-  const productCount = Number(count?.count ?? 0)
-  const requestedOrder = input.sort_order === undefined ? productCount : validateNonNegativeInteger(input.sort_order, 'sort_order')
-  if (requestedOrder > productCount) throw new HTTPError({ statusCode: 400, statusMessage: 'sort_order must be within the category Product range' })
-  const featuredSortOrder = input.featured_sort_order === undefined ? 0 : validateNonNegativeInteger(input.featured_sort_order, 'featured_sort_order')
-  const id = crypto.randomUUID()
-  const now = new Date().toISOString()
-  const insert: BatchQuery = {
-    query: `INSERT INTO products (
-      id, organization_id, site_id, location_id, product_type, category_id, name, slug, description, order_url,
-      is_visible, available, featured, featured_sort_order, sort_order, tags_json,
-      details_json, seo_title, seo_description, canonical_url, robots, source,
-      created_at, updated_at, created_by, updated_by
-    ) VALUES (?, ?, ?, ?, 'standard', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    params: [
-      id, organizationId, siteId, locationId, category.id, name, slug, description,
-      orderUrl,
-      validateOptionalBoolean(input.is_visible, 'is_visible', true),
-      validateOptionalBoolean(input.available, 'available', true),
-      validateOptionalBoolean(input.featured, 'featured', false),
-      featuredSortOrder, requestedOrder, JSON.stringify(tags), JSON.stringify(details),
-      seoTitle, seoDescription, canonicalUrl, robots, source, now, now, actor, actor,
-    ],
-  }
-  const insertPrice: BatchQuery | null = price === null ? null : {
-    query: `INSERT INTO prices (id, organization_id, site_id, location_id, product_id, amount_minor, currency, unit, tax_behavior, compare_at_amount_minor, valid_from, valid_until, provenance, created_by, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    params: [crypto.randomUUID(), organizationId, siteId, locationId, id, price.amountMinor, price.currency, price.unit, price.taxBehavior, price.compareAt, price.validFrom, price.validUntil, price.provenance, actor, now],
-  }
-  const priceInserts: BatchQuery[] = insertPrice ? [insertPrice] : []
-  const queries: BatchQuery[] = requestedOrder === productCount
-    ? [insert, ...priceInserts]
-    : [
-        { query: `UPDATE products SET sort_order = sort_order + ? WHERE site_id = ? AND location_id = ? AND product_type = 'standard'`, params: [REORDER_OFFSET, siteId, locationId] },
-        insert,
-        ...priceInserts,
-        { query: `UPDATE products SET sort_order = (sort_order - ?) + CASE WHEN sort_order - ? >= ? THEN 1 ELSE 0 END WHERE site_id = ? AND location_id = ? AND product_type = 'standard' AND id <> ?`, params: [REORDER_OFFSET, REORDER_OFFSET, requestedOrder, siteId, locationId, id] },
-      ]
-  queries.push(publicResourceCacheInvalidationQuery(siteId, 'product.created'))
-  await executeBatch(db, queries, { operation: 'create Product' })
-  await productEvent(db, 'product.created', { organizationId, siteId, locationId, actor, productId: id, metadata: { category_id: category.id, name } })
-  const created = await getProduct(db, organizationId, siteId, locationId, id)
-  if (!created) throw new Error('Product not found after create')
-  await refreshSocialCard({ db, env, owner: { owner_type: 'product', owner_id: id }, actorId: actor })
-  return created
-}
-
-export async function createProductsBatch(
-  db: DbClient,
-  organizationId: string,
-  siteId: string,
-  locationId: string,
-  inputs: CreateProductInput[],
-  attribution: ProductWriteAttribution,
-): Promise<Product[]> {
-  const { actorId: actor } = attribution
-  await assertLocationOwnership(db, organizationId, siteId, locationId)
-  if (!Array.isArray(inputs) || inputs.length === 0 || inputs.length > PRODUCT_LIMITS.batchCreate) {
-    throw new HTTPError({ statusCode: 400, statusMessage: `products must contain between 1 and ${PRODUCT_LIMITS.batchCreate} rows` })
-  }
-  const existing = await queryAll<{ slug: string }>(db, `SELECT slug FROM products WHERE site_id = ? AND location_id = ?`, [siteId, locationId])
-  const usedSlugs = new Set(existing.map(row => row.slug))
-  const now = new Date().toISOString()
-  const defaultCurrency = await siteDefaultCurrency(db, organizationId, siteId)
-  const categories = await categoryLookup({ db, organizationId, siteId, locationId })
-  const ids: string[] = []
-  const inserts: BatchQuery[] = inputs.flatMap((input, index) => {
-    const category = resolveCategory(categories, input.category_id, `products[${index}].category_id`)
-    const name = requireTrimmedProductString(input.name, `products[${index}].name`, PRODUCT_LIMITS.name)
-    if (input.description !== undefined && typeof input.description !== 'string') throw new HTTPError({ statusCode: 400, statusMessage: `products[${index}].description must be a string` })
-    const description = input.description?.trim() ?? ''
-    if (description.length > PRODUCT_LIMITS.description) throw new HTTPError({ statusCode: 400, statusMessage: `products[${index}].description is too long` })
-    const price = normalizePriceInput(input.price, defaultCurrency, `products[${index}].price`)
-    const details = validateProductDetails(input.details)
-    assertNoPriceNoteContradiction(price !== null, details)
-    const base = slugifyProductName(name)
-    if (!base) throw new HTTPError({ statusCode: 400, statusMessage: `products[${index}].name must produce a non-empty ASCII slug` })
-    let slug = ''
-    for (let suffix = 1; suffix <= MAX_SLUG_SUFFIX_ATTEMPTS; suffix += 1) {
-      const suffixText = suffix === 1 ? '' : `-${suffix}`
-      const candidate = `${base.slice(0, 120 - suffixText.length).replace(/-+$/g, '')}${suffixText}`
-      if (!usedSlugs.has(candidate)) { slug = candidate; usedSlugs.add(candidate); break }
-    }
-    if (!slug) throw new HTTPError({ statusCode: 409, statusMessage: `Unable to create a unique Product slug for products[${index}]` })
-    const id = crypto.randomUUID()
-    ids.push(id)
-    const productInsert: BatchQuery = {
-      query: `INSERT INTO products (
-        id, organization_id, site_id, location_id, product_type, category_id, name, slug, description, order_url,
-        is_visible, available, featured, featured_sort_order, sort_order, tags_json,
-        details_json, seo_title, seo_description, canonical_url, robots, source,
-        created_at, updated_at, created_by, updated_by
-      ) VALUES (?, ?, ?, ?, 'standard', ?, ?, ?, ?, ?, ?, ?, ?, ?,
-        (SELECT COALESCE(MAX(sort_order) + 1, 0) FROM products WHERE category_id = ?), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      params: [
-        id, organizationId, siteId, locationId, category.id, name, slug, description,
-        validateProductOrderUrl(input.order_url),
-        validateOptionalBoolean(input.is_visible, `products[${index}].is_visible`, true),
-        validateOptionalBoolean(input.available, `products[${index}].available`, true),
-        validateOptionalBoolean(input.featured, `products[${index}].featured`, false),
-        input.featured_sort_order === undefined ? 0 : validateNonNegativeInteger(input.featured_sort_order, `products[${index}].featured_sort_order`),
-        category.id, JSON.stringify(validateProductTags(input.tags)), JSON.stringify(details),
-        normalizeOptionalProductString(input.seo_title, `products[${index}].seo_title`, PRODUCT_LIMITS.seoTitle),
-        normalizeOptionalProductString(input.seo_description, `products[${index}].seo_description`, PRODUCT_LIMITS.seoDescription),
-        validateProductCanonicalUrl(input.canonical_url), validateProductRobots(input.robots), validateSource(input.source),
-        now, now, actor, actor,
-      ],
-    }
-    if (price === null) return [productInsert]
-    return [productInsert, {
-      query: `INSERT INTO prices (id, organization_id, site_id, location_id, product_id, amount_minor, currency, unit, tax_behavior, compare_at_amount_minor, valid_from, valid_until, provenance, created_by, created_at)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      params: [crypto.randomUUID(), organizationId, siteId, locationId, id, price.amountMinor, price.currency, price.unit, price.taxBehavior, price.compareAt, price.validFrom, price.validUntil, price.provenance, actor, now],
-    }]
-  })
-  await executeBatch(db, [...inserts, publicResourceCacheInvalidationQuery(siteId, 'product.batch_created')], { operation: 'batch create Products' })
-  await productEvent(db, 'product.created', { organizationId, siteId, locationId, actor, metadata: { product_count: ids.length } })
-  const created = await queryAll<ProductRow>(db, `SELECT ${PRODUCT_COLUMNS} FROM products p ${ACTIVE_PRICE_JOIN} ${CATEGORY_JOIN} WHERE p.site_id = ? AND p.location_id = ? AND p.product_type = 'standard' AND p.id IN (SELECT value FROM json_each(?)) ORDER BY pc.sort_order, p.sort_order, p.id`, [siteId, locationId, JSON.stringify(ids)])
-  return hydrateProductMedia(db, siteId, created.map(mapProduct))
-}
-
-export async function reconcileProducts(
-  db: DbClient,
-  organizationId: string,
-  siteId: string,
-  locationId: string,
-  inputs: ReconcileProductInput[],
-  attribution: ProductWriteAttribution,
-  setMissingUnavailable = false,
-): Promise<Product[]> {
-  const { actorId: actor } = attribution
-  await assertLocationOwnership(db, organizationId, siteId, locationId)
-  if (!Array.isArray(inputs) || inputs.length > PRODUCT_LIMITS.reconcile) throw new HTTPError({ statusCode: 400, statusMessage: `products may contain at most ${PRODUCT_LIMITS.reconcile} rows` })
-  for (const [index, input] of inputs.entries()) {
-    if (Object.hasOwn(input, 'product_id') && (typeof input.product_id !== 'string' || input.product_id.trim().length === 0)) {
-      throw new HTTPError({ statusCode: 400, statusMessage: `products[${index}].product_id must be a non-empty string when provided` })
-    }
-  }
-  const existing = await listLocationProducts(db, organizationId, siteId, locationId)
-  const defaultCurrency = await siteDefaultCurrency(db, organizationId, siteId)
-  const existingById = new Map(existing.map(product => [product.id, product]))
-  const requestedIds = inputs.map(input => input.product_id).filter((id): id is string => typeof id === 'string' && id.length > 0)
-  if (new Set(requestedIds).size !== requestedIds.length) throw new HTTPError({ statusCode: 400, statusMessage: 'product_id values must be unique' })
-  const unknownIds = requestedIds.filter(id => !existingById.has(id))
-  if (unknownIds.length > 0) {
-    throw new HTTPError({ statusCode: 404, statusMessage: `Product IDs not found at this location: ${unknownIds.join(', ')}` })
-  }
-  const now = new Date().toISOString()
-  const usedSlugs = new Set(existing.map(product => product.slug))
-  // Order is per category, so reconciliation accumulates one intended order per category.
-  const orderedIds: string[] = []
-  const orderByCategory = new Map<string, string[]>()
-  const writes: BatchQuery[] = []
-  const categories = await categoryLookup({ db, organizationId, siteId, locationId })
-  for (const [index, input] of inputs.entries()) {
-    const category = resolveCategory(categories, input.category_id, `products[${index}].category_id`)
-    const name = requireTrimmedProductString(input.name, `products[${index}].name`, PRODUCT_LIMITS.name)
-    if (input.description !== undefined && typeof input.description !== 'string') throw new HTTPError({ statusCode: 400, statusMessage: `products[${index}].description must be a string` })
-    const description = input.description?.trim() ?? ''
-    if (description.length > PRODUCT_LIMITS.description) throw new HTTPError({ statusCode: 400, statusMessage: `products[${index}].description is too long` })
-    const orderUrl = validateProductOrderUrl(input.order_url)
-    const tags = validateProductTags(input.tags)
-    const details = validateProductDetails(input.details)
-    const price = normalizePriceInput(input.price, defaultCurrency, `products[${index}].price`)
-    const current = input.product_id ? existingById.get(input.product_id)! : null
-    const id = current?.id ?? crypto.randomUUID()
-    orderedIds.push(id)
-    orderByCategory.set(category.id, [...(orderByCategory.get(category.id) ?? []), id])
-    if (current) {
-      const effectiveDetails = input.details === undefined ? current.details : details
-      // A row that previously had no Price and a price-note transitioning
-      // to a fixed Price must explicitly clear the note in the same call —
-      // omitting `details` keeps it, which this correctly rejects.
-      assertNoPriceNoteContradiction(price !== null, effectiveDetails)
-
-      // Resolve this row's Price mutation (if any) first, so its guard can
-      // also gate this row's own updated_at expression below. reconcile_products
-      // asserts a complete Price state for every row it touches, so every
-      // row gets a guard — including "same fixed Price, nothing to write"
-      // and "no Price, staying that way" — not only rows with an actual
-      // close/insert.
-      let priceClose: BatchQuery | null = null
-      let priceInsert: BatchQuery | null = null
-      const guardParts: { sql: string; params: SqlValue[] }[] = []
-      if (price === null) {
-        if (current.price) {
-          if (now <= current.price.valid_from) throw new HTTPError({ statusCode: 409, statusMessage: `products[${index}].price cannot close before the active Price starts` })
-          // fixed -> null: exact snapshot.
-          guardParts.push(priceSnapshotMatchesPredicate(id, current.price))
-          priceClose = closeActivePriceQuery(current.price.id, now)
-        } else {
-          // null -> null: no-active-Price guard.
-          guardParts.push(noActivePricePredicate(id))
-        }
-      } else {
-        const samePrice = current.price
-          && !price.validFromProvided && !price.validUntilProvided
-          && current.price.amount_minor === price.amountMinor
-          && current.price.currency === price.currency
-          && current.price.unit === price.unit
-          && current.price.tax_behavior === price.taxBehavior
-          && current.price.compare_at_amount_minor === price.compareAt
-        if (samePrice) {
-          // fixed -> same fixed Price: exact snapshot (nothing to write).
-          // samePrice is only truthy when current.price is truthy (see the
-          // && chain above), so this non-null assertion is safe.
-          guardParts.push(priceSnapshotMatchesPredicate(id, current.price!))
-        } else {
-          if (current.price && price.validFrom <= current.price.valid_from) throw new HTTPError({ statusCode: 409, statusMessage: `products[${index}].price must start after the active Price` })
-          const conflict = await queryFirst<{ id: string }>(db, `SELECT id FROM prices WHERE product_id = ? AND id <> COALESCE(?, '') AND valid_from < COALESCE(?, '9999-12-31T23:59:59.999Z') AND (valid_until IS NULL OR valid_until > ?) LIMIT 1`, [id, current.price?.id ?? null, price.validUntil, price.validFrom])
-          if (conflict) throw new HTTPError({ statusCode: 409, statusMessage: `products[${index}].price overlaps an existing Price` })
-          // fixed -> replacement: exact snapshot AND overlap absent.
-          // null -> fixed: overlap absent only (nothing to snapshot).
-          if (current.price) {
-            guardParts.push(priceSnapshotMatchesPredicate(id, current.price))
-            priceClose = closeActivePriceQuery(current.price.id, price.validFrom)
-          }
-          priceInsert = {
-            query: `INSERT INTO prices (id, organization_id, site_id, location_id, product_id, amount_minor, currency, unit, tax_behavior, compare_at_amount_minor, valid_from, valid_until, provenance, created_by, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-            params: [crypto.randomUUID(), organizationId, siteId, locationId, id, price.amountMinor, price.currency, price.unit, price.taxBehavior, price.compareAt, price.validFrom, price.validUntil, price.provenance, actor, now],
-          }
-          guardParts.push(priceOverlapAbsentPredicate(id, current.price?.id ?? null, price.validFrom, price.validUntil))
-        }
-      }
-
-      // Price snapshot guard (see updateProduct for the full explanation):
-      // when this row's Price context is being mutated, updated_at only
-      // takes its real value if that context still holds; otherwise it
-      // computes to NULL, which products.updated_at's NOT NULL constraint
-      // rejects, rolling back the entire reconciliation batch.
-      const updatedAtClause = guardParts.length
-        ? `CASE WHEN ${guardParts.map(part => part.sql).join(' AND ')} THEN ? ELSE NULL END`
-        : '?'
-      const updatedAtParams = guardParts.length ? [...guardParts.flatMap(part => part.params), now] : [now]
-
-      writes.push({
-        query: `UPDATE products SET category_id=?, name=?, description=?, order_url=?, is_visible=?, available=?, featured=?, featured_sort_order=?, tags_json=?, details_json=?, seo_title=?, seo_description=?, canonical_url=?, robots=?, source='manual', updated_at=${updatedAtClause}, updated_by=? WHERE id=? AND organization_id=? AND site_id=? AND location_id=? AND product_type='standard'`,
-        params: [category.id, name, input.description === undefined ? current.description : description,
-          input.order_url === undefined ? current.order_url : orderUrl,
-          validateOptionalBoolean(input.is_visible, `products[${index}].is_visible`, current.is_visible),
-          validateOptionalBoolean(input.available, `products[${index}].available`, current.available),
-          validateOptionalBoolean(input.featured, `products[${index}].featured`, current.featured),
-          input.featured_sort_order === undefined ? current.featured_sort_order : validateNonNegativeInteger(input.featured_sort_order, `products[${index}].featured_sort_order`),
-          JSON.stringify(input.tags === undefined ? current.tags : tags),
-          JSON.stringify(input.details === undefined ? current.details : details),
-          input.seo_title === undefined ? current.seo_title : normalizeOptionalProductString(input.seo_title, `products[${index}].seo_title`, PRODUCT_LIMITS.seoTitle),
-          input.seo_description === undefined ? current.seo_description : normalizeOptionalProductString(input.seo_description, `products[${index}].seo_description`, PRODUCT_LIMITS.seoDescription),
-          input.canonical_url === undefined ? current.canonical_url : validateProductCanonicalUrl(input.canonical_url),
-          input.robots === undefined ? current.robots : validateProductRobots(input.robots), ...updatedAtParams, actor,
-          id, organizationId, siteId, locationId],
-      })
-      if (priceClose) writes.push(priceClose)
-      if (priceInsert) writes.push(priceInsert)
-      continue
-    }
-    assertNoPriceNoteContradiction(price !== null, details)
-    const base = slugifyProductName(name)
-    if (!base) throw new HTTPError({ statusCode: 400, statusMessage: `products[${index}].name must produce a non-empty ASCII slug` })
-    let slug = ''
-    for (let suffix = 1; suffix <= MAX_SLUG_SUFFIX_ATTEMPTS; suffix += 1) {
-      const suffixText = suffix === 1 ? '' : `-${suffix}`
-      const candidate = `${base.slice(0, 120 - suffixText.length).replace(/-+$/g, '')}${suffixText}`
-      if (!usedSlugs.has(candidate)) { slug = candidate; usedSlugs.add(candidate); break }
-    }
-    if (!slug) throw new HTTPError({ statusCode: 409, statusMessage: `Unable to create a unique Product slug for products[${index}]` })
-    writes.push({
-      query: `INSERT INTO products (id, organization_id, site_id, location_id, product_type, category_id, name, slug, description, order_url, is_visible, available, featured, featured_sort_order, sort_order, tags_json, details_json, seo_title, seo_description, canonical_url, robots, source, created_at, updated_at, created_by, updated_by) VALUES (?,?,?,?,'standard',?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-      params: [id, organizationId, siteId, locationId, category.id, name, slug, description, orderUrl,
-        validateOptionalBoolean(input.is_visible, `products[${index}].is_visible`, true),
-        validateOptionalBoolean(input.available, `products[${index}].available`, true),
-        validateOptionalBoolean(input.featured, `products[${index}].featured`, false),
-        input.featured_sort_order === undefined ? 0 : validateNonNegativeInteger(input.featured_sort_order, `products[${index}].featured_sort_order`),
-        index, JSON.stringify(tags), JSON.stringify(details),
-        normalizeOptionalProductString(input.seo_title, `products[${index}].seo_title`, PRODUCT_LIMITS.seoTitle),
-        normalizeOptionalProductString(input.seo_description, `products[${index}].seo_description`, PRODUCT_LIMITS.seoDescription),
-        validateProductCanonicalUrl(input.canonical_url), validateProductRobots(input.robots), validateSource(input.source), now, now, actor, actor],
-    })
-    if (price !== null) {
-      writes.push({
-        query: `INSERT INTO prices (id, organization_id, site_id, location_id, product_id, amount_minor, currency, unit, tax_behavior, compare_at_amount_minor, valid_from, valid_until, provenance, created_by, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-        params: [crypto.randomUUID(), organizationId, siteId, locationId, id, price.amountMinor, price.currency, price.unit, price.taxBehavior, price.compareAt, price.validFrom, price.validUntil, price.provenance, actor, now],
-      })
-    }
-  }
-  const omitted = existing.filter(product => !requestedIds.includes(product.id))
-  const intendedIds = [...orderedIds]
-  // Products the caller omitted keep their category and trail the intended rows
-  // inside it, so an omitted row never silently jumps section.
-  for (const product of omitted) {
-    orderedIds.push(product.id)
-    orderByCategory.set(product.category_id, [...(orderByCategory.get(product.category_id) ?? []), product.id])
-  }
-  if (setMissingUnavailable && omitted.length > 0) {
-    writes.push({
-      query: `UPDATE products SET available = 0, updated_at = ?, updated_by = ? WHERE organization_id = ? AND site_id = ? AND location_id = ? AND product_type = 'standard' AND id NOT IN (SELECT value FROM json_each(?))`,
-      params: [now, actor, organizationId, siteId, locationId, d1JsonArray(intendedIds)],
-    })
-  }
-  for (const [categoryId, ids] of orderByCategory) {
-    writes.push(denseOrderQuery('products', ids, {
-      sql: `organization_id = ? AND site_id = ? AND location_id = ? AND category_id = ? AND product_type = 'standard'`,
-      params: [organizationId, siteId, locationId, categoryId],
-    }, actor, now))
-  }
-  writes.push(publicResourceCacheInvalidationQuery(siteId, 'product.reconciled'))
-  try {
-    await executeBatch(db, writes, { operation: 'reconcile Products' })
-  } catch (error) {
-    if (isPriceSnapshotConflict(error)) throw new HTTPError({ statusCode: 409, statusMessage: 'A Product Price changed concurrently; re-read the location and retry' })
-    throw error
-  }
-  await productEvent(db, 'product.reordered', { organizationId, siteId, locationId, actor, metadata: { product_count: inputs.length, omitted_count: omitted.length, set_missing_unavailable: setMissingUnavailable, mutation_type: 'reconcile_products', requested_location_id: locationId, resolved_location_id: locationId } })
-  return listLocationProducts(db, organizationId, siteId, locationId)
-}
-
-export async function updateProduct(
-  db: DbClient,
-  organizationId: string,
-  siteId: string,
-  locationId: string,
-  productId: string,
-  input: UpdateProductInput,
-  attribution: ProductWriteAttribution,
-  env: CloudflareEnv,
-): Promise<Product> {
-  const { actorId: actor } = attribution
-  const existing = await getProduct(db, organizationId, siteId, locationId, productId)
-  if (!existing) notFound()
-  if (input.sort_order !== undefined && input.sort_order !== existing.sort_order) {
-    throw new HTTPError({ statusCode: 400, statusMessage: 'Use move_products to change Product order' })
-  }
-  const sets: string[] = []
-  const params: SqlValue[] = []
-  const add = (column: string, value: SqlValue) => { sets.push(`${column} = ?`); params.push(value) }
-  // Category membership is not a field edit. It changes only through
-  // moveProductsToCategory, which keeps both categories densely ordered.
-  if (input.name !== undefined) add('name', requireTrimmedProductString(input.name, 'name', PRODUCT_LIMITS.name))
-  if (input.description !== undefined) {
-    if (typeof input.description !== 'string') throw new HTTPError({ statusCode: 400, statusMessage: 'description must be a string' })
-    const description = input.description.trim()
-    if (description.length > PRODUCT_LIMITS.description) throw new HTTPError({ statusCode: 400, statusMessage: `description must be at most ${PRODUCT_LIMITS.description} characters` })
-    add('description', description)
-  }
-  if (input.order_url !== undefined) add('order_url', validateProductOrderUrl(input.order_url))
-  if (input.is_visible !== undefined) add('is_visible', validateOptionalBoolean(input.is_visible, 'is_visible', existing.is_visible))
-  if (input.available !== undefined) add('available', validateOptionalBoolean(input.available, 'available', existing.available))
-  if (input.featured !== undefined) add('featured', validateOptionalBoolean(input.featured, 'featured', existing.featured))
-  if (input.featured_sort_order !== undefined) add('featured_sort_order', validateNonNegativeInteger(input.featured_sort_order, 'featured_sort_order'))
-  if (input.tags !== undefined) add('tags_json', JSON.stringify(validateProductTags(input.tags)))
-  const newDetails = input.details !== undefined ? validateProductDetails(input.details) : null
-  if (newDetails !== null) add('details_json', JSON.stringify(newDetails))
-  if (input.seo_title !== undefined) add('seo_title', normalizeOptionalProductString(input.seo_title, 'seo_title', PRODUCT_LIMITS.seoTitle))
-  if (input.seo_description !== undefined) add('seo_description', normalizeOptionalProductString(input.seo_description, 'seo_description', PRODUCT_LIMITS.seoDescription))
-  if (input.canonical_url !== undefined) add('canonical_url', validateProductCanonicalUrl(input.canonical_url))
-  if (input.robots !== undefined) add('robots', validateProductRobots(input.robots))
-  if (!sets.length && input.price === undefined) return existing
-  // Validate the final intended {price, details} state together — omitting
-  // either field means "keep the existing value" per this tool's patch
-  // semantics, so both must be resolved before checking for contradiction.
-  const effectiveDetails = newDetails ?? existing.details
-  const effectiveHasFixedPrice = input.price === undefined ? existing.price !== null : input.price !== null
-  assertNoPriceNoteContradiction(effectiveHasFixedPrice, effectiveDetails)
-  const contentChanged = input.price !== undefined || ['category', 'name', 'description', 'order_url', 'tags_json', 'details_json'].some(column => sets.some(set => set.startsWith(`${column} =`)))
-  if (contentChanged) add('source', 'manual')
-  add('updated_by', actor)
-  let priceInsert: BatchQuery | null = null
-  let priceClose: BatchQuery | null = null
-  const guardParts: { sql: string; params: SqlValue[] }[] = []
-  if (input.price !== undefined) {
-    const at = input.price?.valid_from ?? new Date().toISOString()
-    if (existing.price && at <= existing.price.valid_from) throw new HTTPError({ statusCode: 409, statusMessage: 'Replacement Price must start after the active Price' })
-    if (input.price !== null) {
-      const price = normalizePriceInput({ ...input.price, valid_from: at }, await siteDefaultCurrency(db, organizationId, siteId))!
-      const conflict = await queryFirst<{ id: string }>(db, `
-        SELECT id FROM prices
-        WHERE product_id = ? AND id <> COALESCE(?, '')
-          AND valid_from < COALESCE(?, '9999-12-31T23:59:59.999Z')
-          AND (valid_until IS NULL OR valid_until > ?)
-        LIMIT 1
-      `, [productId, existing.price?.id ?? null, price.validUntil, price.validFrom])
-      if (conflict) throw new HTTPError({ statusCode: 409, statusMessage: 'Scheduled Price overlaps an existing Price' })
-      // fixed -> replacement: exact snapshot AND overlap absent.
-      // null -> fixed: overlap absent only (nothing to snapshot).
-      if (existing.price) {
-        guardParts.push(priceSnapshotMatchesPredicate(productId, existing.price))
-        if (existing.price.valid_until === null || existing.price.valid_until > at) {
-          priceClose = closeActivePriceQuery(existing.price.id, at)
-        }
-      }
-      const insertParams: SqlValue[] = [crypto.randomUUID(), organizationId, siteId, locationId, productId, price.amountMinor, price.currency, price.unit, price.taxBehavior, price.compareAt, price.validFrom, price.validUntil, price.provenance, actor, new Date().toISOString()]
-      priceInsert = {
-        query: `INSERT INTO prices (id, organization_id, site_id, location_id, product_id, amount_minor, currency, unit, tax_behavior, compare_at_amount_minor, valid_from, valid_until, provenance, created_by, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        params: insertParams,
-      }
-      guardParts.push(priceOverlapAbsentPredicate(productId, existing.price?.id ?? null, price.validFrom, price.validUntil))
-    } else if (existing.price) {
-      // fixed -> null: exact snapshot.
-      guardParts.push(priceSnapshotMatchesPredicate(productId, existing.price))
-      if (existing.price.valid_until === null || existing.price.valid_until > at) {
-        priceClose = closeActivePriceQuery(existing.price.id, at)
-      }
-    } else {
-      // null -> null: no-active-Price guard (this update still asserts "no
-      // Price", so a concurrently-introduced one must still conflict).
-      guardParts.push(noActivePricePredicate(productId))
-    }
-  }
-  // The Price snapshot guard: when this update touches the Price, updated_at
-  // only takes its real value if the Price context read above still holds —
-  // otherwise it computes to NULL, which products.updated_at's NOT NULL
-  // constraint rejects, rolling back this entire batch (see
-  // isPriceSnapshotConflict below).
-  if (guardParts.length) {
-    const guardSql = guardParts.map(part => part.sql).join(' AND ')
-    const guardParams = guardParts.flatMap(part => part.params)
-    sets.push(`updated_at = CASE WHEN ${guardSql} THEN ? ELSE NULL END`)
-    params.push(...guardParams, new Date().toISOString())
-  } else {
-    sets.push('updated_at = ?')
-    params.push(new Date().toISOString())
-  }
-  const writes: BatchQuery[] = []
-  if (sets.length) {
-    params.push(productId, organizationId, siteId, locationId)
-    writes.push({
-      query: `UPDATE products SET ${sets.join(', ')} WHERE id = ? AND organization_id = ? AND site_id = ? AND location_id = ? AND product_type = 'standard'`,
-      params,
-    })
-  }
-  if (priceClose) writes.push(priceClose)
-  if (priceInsert) writes.push(priceInsert)
-  writes.push(publicResourceCacheInvalidationQuery(siteId, 'product.updated'))
-  try {
-    await executeBatch(db, writes, { operation: 'update Product' })
-  } catch (error) {
-    if (isPriceSnapshotConflict(error)) throw new HTTPError({ statusCode: 409, statusMessage: 'The Product Price changed concurrently; re-read the Product and retry' })
-    throw error
-  }
-  await productEvent(db, 'product.updated', { organizationId, siteId, locationId, actor, productId, metadata: { mutation_type: 'update_product', requested_location_id: null, resolved_location_id: locationId } })
-  const updated = await getProduct(db, organizationId, siteId, locationId, productId)
-  if (!updated) throw new Error('Product not found after update')
-  await refreshSocialCard({ db, env, owner: { owner_type: 'product', owner_id: productId }, actorId: actor })
-  return updated
-}
-
-
-interface ProductLocationScope {
-  db: DbClient
-  organizationId: string
-  siteId: string
-  locationId: string
-}
-
-interface ProductOrderScope extends ProductLocationScope {
-  actor: string
-}
-
-const CATEGORY_COLUMNS = `id, organization_id, site_id, location_id, product_type, name, slug, sort_order, created_at, updated_at, created_by, updated_by`
-
-function mapProductCategory(row: ProductRow): ProductCategory {
-  return {
-    id: String(row.id),
-    location_id: String(row.location_id),
-    name: String(row.name),
-    slug: String(row.slug),
-    sort_order: Number(row.sort_order),
-    created_at: String(row.created_at),
-    updated_at: String(row.updated_at),
-    created_by: String(row.created_by),
-    updated_by: String(row.updated_by),
-  }
+export async function listProducts(db: DbClient, organizationId: string): Promise<Product[]> {
+  const rows = await queryAll<Row>(db, `SELECT ${PRODUCT_COLUMNS} FROM products p WHERE p.organization_id = ? ORDER BY p.name, p.id`, [organizationId])
+  return hydrate(db, organizationId, rows.map(mapProductRow))
 }
 
 /**
- * One read of the location's categories for batch writes, so a 200-row import
- * resolves every category_id in memory instead of per row.
+ * Products a site carries.
+ *
+ * `publishedOnly` narrows to published rows. There is no fallback to the
+ * organization catalog when a site has published nothing: an empty site
+ * catalog renders an empty state that says so.
  */
-async function categoryLookup(scope: ProductLocationScope): Promise<Map<string, ProductCategory>> {
-  const categories = await listProductCategories(scope)
-  return new Map(categories.map(category => [category.id, category]))
+export async function listSiteProducts(db: DbClient, input: {
+  organizationId: string; siteId: string; publishedOnly?: boolean
+}): Promise<Product[]> {
+  const rows = await queryAll<Row>(db, `
+    SELECT ${PRODUCT_COLUMNS} FROM products p
+    JOIN product_publications pub ON pub.product_id = p.id AND pub.organization_id = p.organization_id
+    WHERE p.organization_id = ? AND pub.site_id = ? AND (? = 0 OR pub.published = 1)
+    ORDER BY p.name, p.id
+  `, [input.organizationId, input.siteId, input.publishedOnly ? 1 : 0])
+  return hydrate(db, input.organizationId, rows.map(mapProductRow))
 }
 
-function resolveCategory(categories: Map<string, ProductCategory>, categoryId: unknown, field: string): ProductCategory {
-  const id = requireTrimmedProductString(categoryId, field, PRODUCT_LIMITS.category)
-  const category = categories.get(id)
-  if (!category) throw new HTTPError({ statusCode: 404, statusMessage: `${field} was not found at this location: ${id}` })
-  return category
+/** Products offered at one location. Membership is its own relationship, not a price. */
+export async function listLocationProducts(db: DbClient, input: {
+  organizationId: string; locationId: string; publishedOnly?: boolean
+}): Promise<Product[]> {
+  const rows = await queryAll<Row>(db, `
+    SELECT ${PRODUCT_COLUMNS} FROM products p
+    JOIN product_locations pl ON pl.product_id = p.id AND pl.organization_id = p.organization_id
+    WHERE p.organization_id = ? AND pl.location_id = ? AND (? = 0 OR (pl.published = 1 AND pl.active = 1))
+    ORDER BY p.name, p.id
+  `, [input.organizationId, input.locationId, input.publishedOnly ? 1 : 0])
+  return hydrate(db, input.organizationId, rows.map(mapProductRow))
 }
 
-export async function listProductCategories({ db, organizationId, siteId, locationId }: ProductLocationScope): Promise<ProductCategory[]> {
-  const rows = await queryAll<ProductRow>(db, `
-    SELECT ${CATEGORY_COLUMNS} FROM product_categories
-     WHERE organization_id = ? AND site_id = ? AND location_id = ?
-       AND product_type = 'standard'
-     ORDER BY sort_order, id
-  `, [organizationId, siteId, locationId])
-  return rows.map(mapProductCategory)
+export async function listCollectionProducts(db: DbClient, input: {
+  organizationId: string; collectionId: string
+}): Promise<Product[]> {
+  const rows = await queryAll<Row>(db, `
+    SELECT ${PRODUCT_COLUMNS} FROM products p
+    JOIN collection_products cp ON cp.product_id = p.id AND cp.organization_id = p.organization_id
+    WHERE p.organization_id = ? AND cp.collection_id = ?
+    ORDER BY cp.sort_order, p.id
+  `, [input.organizationId, input.collectionId])
+  return hydrate(db, input.organizationId, rows.map(mapProductRow))
 }
 
-export async function getProductCategory(
-  db: DbClient,
-  organizationId: string,
-  siteId: string,
-  locationId: string,
-  categoryId: string,
-): Promise<ProductCategory | null> {
-  const row = await queryFirst<ProductRow>(db, `
-    SELECT ${CATEGORY_COLUMNS} FROM product_categories
-     WHERE organization_id = ? AND site_id = ? AND location_id = ? AND id = ?
-       AND product_type = 'standard'
-  `, [organizationId, siteId, locationId, categoryId])
-  return row ? mapProductCategory(row) : null
+export async function getProductBySlug(db: DbClient, organizationId: string, slug: string): Promise<Product | null> {
+  const row = await queryFirst<Row>(db, `SELECT ${PRODUCT_COLUMNS} FROM products p WHERE p.organization_id = ? AND p.slug = ?`, [organizationId, slug])
+  if (!row) return null
+  const [product] = await hydrate(db, organizationId, [mapProductRow(row)])
+  return product!
 }
 
 /**
- * Resolves a category by id and fails loudly when it does not belong to this
- * location. Every write that accepts a caller-supplied category_id goes through
- * here so a category from another location can never be attached to a Product.
+ * Resolve the price a specific surface should show.
+ *
+ * A thin, explicit wrapper over the one selection contract, so callers state
+ * their currency and location instead of reaching into `variant.prices` and
+ * inventing a rule. It throws on ambiguity and returns null when no offer
+ * applies — the caller renders an empty state, never a substitute.
  */
-export async function requireProductCategory(
-  db: DbClient,
-  organizationId: string,
-  siteId: string,
-  locationId: string,
-  categoryId: string,
-): Promise<ProductCategory> {
-  const category = await getProductCategory(db, organizationId, siteId, locationId, categoryId)
-  if (!category) throw new HTTPError({ statusCode: 404, statusMessage: `Product category not found at this location: ${categoryId}` })
-  return category
+export function resolveVariantPrice(variant: ProductVariant, selection: PriceSelection): Price | null {
+  return selectPrice(variant.prices, selection)
 }
 
-async function assertCategoryNameAvailable(
-  db: DbClient,
-  organizationId: string,
-  siteId: string,
-  locationId: string,
-  name: string,
-  excludeCategoryId: string | null,
-): Promise<void> {
-  const existing = await queryFirst<{ id: string }>(db, `
-    SELECT id FROM product_categories
-     WHERE organization_id = ? AND site_id = ? AND location_id = ? AND product_type = 'standard' AND name = ?
-     LIMIT 1
-  `, [organizationId, siteId, locationId, name])
-  if (existing && existing.id !== excludeCategoryId) {
-    throw new HTTPError({ statusCode: 409, statusMessage: `A Product category named "${name}" already exists at this location` })
+// ---------------------------------------------------------------------------
+// Writes
+// ---------------------------------------------------------------------------
+
+interface Actor { actorId: string }
+
+function slugCandidate(base: string, attempt: number): string {
+  const normalized = base.toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, PRODUCT_LIMITS.slug)
+  const root = normalized || 'product'
+  return attempt === 0 ? root : `${root}-${attempt + 1}`
+}
+
+export async function createProductSlug(db: DbClient, organizationId: string, base: string, excludeId?: string): Promise<string> {
+  for (let attempt = 0; attempt < MAX_SLUG_SUFFIX_ATTEMPTS; attempt += 1) {
+    const candidate = slugCandidate(base, attempt)
+    const clash = await queryFirst<{ id: string }>(db, 'SELECT id FROM products WHERE organization_id = ? AND slug = ? AND id <> COALESCE(?, \'\')', [organizationId, candidate, excludeId ?? null])
+    if (!clash) return candidate
   }
+  conflict('Could not derive a unique product slug')
 }
 
-export async function createProductCategory({ db, organizationId, siteId, locationId, name, actor }: ProductOrderScope & {
+async function organizationDefaultCurrency(db: DbClient, organizationId: string, siteId?: string): Promise<CurrencyCode> {
+  // Currency comes from an explicit site when the caller has one. With no site
+  // context the caller must supply the currency on the price itself; there is
+  // no platform default standing in for a merchant's decision.
+  if (!siteId) invalid('currency is required when no site context is given')
+  const site = await queryFirst<{ default_currency: string }>(db, 'SELECT default_currency FROM sites WHERE id = ? AND organization_id = ?', [siteId, organizationId])
+  if (!site) notFound('Site not found')
+  if (!isCurrencyCode(site.default_currency)) throw new Error(`Site ${siteId} has an unsupported default currency`)
+  return site.default_currency
+}
+
+interface NormalizedPrice {
+  id: string
+  location_id: string | null
+  active: boolean
+  currency: CurrencyCode
+  unit_amount: number
+  type: Price['type']
+  recurring_interval: Price['recurring_interval']
+  recurring_interval_count: number | null
+  tax_behavior: Price['tax_behavior']
+  compare_at_unit_amount: number | null
+  valid_from_at: string | null
+  valid_until_at: string | null
+  source: string
+}
+
+export function normalizePriceInput(input: PriceInput, defaultCurrency: CurrencyCode | null, field = 'price'): NormalizedPrice {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) invalid(`${field} must be an object`)
+  const currency = input.currency ?? defaultCurrency
+  if (!currency || !isCurrencyCode(currency)) invalid(`${field}.currency must be a supported currency`)
+  const type = input.type ?? 'one_time'
+  if (!PRICE_TYPES.includes(type)) invalid(`${field}.type must be one of: ${PRICE_TYPES.join(', ')}`)
+  const interval = input.recurring_interval ?? null
+  if (interval !== null && !PRICE_RECURRING_INTERVALS.includes(interval)) {
+    invalid(`${field}.recurring_interval must be one of: ${PRICE_RECURRING_INTERVALS.join(', ')}`)
+  }
+  const taxBehavior = input.tax_behavior ?? 'unspecified'
+  if (!PRICE_TAX_BEHAVIORS.includes(taxBehavior)) invalid(`${field}.tax_behavior must be supported`)
+  const normalized: NormalizedPrice = {
+    id: crypto.randomUUID(),
+    location_id: input.location_id ?? null,
+    active: input.active ?? true,
+    currency,
+    unit_amount: input.unit_amount,
+    type,
+    recurring_interval: interval,
+    recurring_interval_count: input.recurring_interval_count ?? null,
+    tax_behavior: taxBehavior,
+    compare_at_unit_amount: input.compare_at_unit_amount ?? null,
+    valid_from_at: input.valid_from_at ?? null,
+    valid_until_at: input.valid_until_at ?? null,
+    source: input.source ?? 'manual',
+  }
+  // One shape validator, shared with the read path and the Stripe adapter.
+  try { assertPriceShape(normalized) }
+  catch (error) { invalid(`${field}: ${error instanceof Error ? error.message : String(error)}`) }
+  return normalized
+}
+
+interface PlannedOption { id: string; name: string; sort_order: number; values: { id: string; value: string; sort_order: number }[] }
+interface PlannedVariant {
+  id: string
   name: string
-}): Promise<ProductCategory> {
-  const categoryName = requireTrimmedProductString(name, 'name', PRODUCT_LIMITS.category)
-  const { resolved, inserts } = await planProductCategories({ db, organizationId, siteId, locationId, names: [categoryName], actor })
-  if (!inserts.length) throw new HTTPError({ statusCode: 409, statusMessage: `A Product category named "${categoryName}" already exists at this location` })
-  const { id } = resolved.get(categoryName)!
-  await executeBatch(db, [
-    ...inserts,
-    publicResourceCacheInvalidationQuery(siteId, 'product.category_created'),
-  ], { operation: 'create Product category' })
-  await productEvent(db, 'product.category_created', { organizationId, siteId, locationId, actor, metadata: { category_id: id, name: categoryName } })
-  return await requireProductCategory(db, organizationId, siteId, locationId, id)
+  sku: string | null
+  active: boolean
+  sort_order: number
+  /** Resolved to concrete option and value row ids. */
+  option_values: Record<string, string>
+  prices: NormalizedPrice[]
+}
+
+interface PlannedProduct {
+  id: string
+  name: string
+  slug: string
+  description: string
+  active: boolean
+  order_url: string | null
+  unit_label: string | null
+  marketing_features: string[]
+  tags: string[]
+  metadata: Record<string, string>
+  tax_code: string | null
+  options: PlannedOption[]
+  variants: PlannedVariant[]
+  metafields: Record<string, MetafieldValue>
+  source: ProductSource
 }
 
 /**
- * Experiences all sit in one category per location, so this returns that row and
- * creates it on first use. It is scoped to product_type 'experience', which is
- * why it never appears in the menu-section list the CMS manages.
+ * Give every option, value and variant a concrete id before anything is
+ * written.
+ *
+ * Ids supplied by the caller are kept. That is what makes an edit an edit: a
+ * variant that keeps its id keeps the bookings and prices pointing at it,
+ * rather than being deleted and recreated as a stranger.
  */
-export async function ensureExperienceCategory(
+function resolveIds(options: NormalizedProductOption[], variants: NormalizedProductVariant[]): { options: PlannedOption[]; variantOptionValues: Map<string, Record<string, string>> } {
+  const optionIds = new Map<string, string>()
+  const valueIds = new Map<string, string>()
+  const planned = options.map((option) => {
+    const id = option.id ?? crypto.randomUUID()
+    optionIds.set(option.id ?? option.name, id)
+    return {
+      id, name: option.name, sort_order: option.sort_order,
+      values: option.values.map((value) => {
+        const valueId = value.id ?? crypto.randomUUID()
+        valueIds.set(value.id ?? value.value, valueId)
+        return { id: valueId, value: value.value, sort_order: value.sort_order }
+      }),
+    }
+  })
+  const variantOptionValues = new Map<string, Record<string, string>>()
+  variants.forEach((variant, index) => {
+    variantOptionValues.set(variant.id ?? String(index), Object.fromEntries(
+      Object.entries(variant.option_values).map(([optionKey, valueKey]) => [optionIds.get(optionKey) ?? optionKey, valueIds.get(valueKey) ?? valueKey]),
+    ))
+  })
+  return { options: planned, variantOptionValues }
+}
+
+/**
+ * Turn an input into the exact rows a product needs.
+ *
+ * A product with no customer-selectable options still gets one real default
+ * variant. That variant is not a placeholder and not a special case in the
+ * read path — every purchase, price and booking goes through variant identity,
+ * so there is exactly one purchase path in the system.
+ */
+async function planProduct(
   db: DbClient,
   organizationId: string,
-  siteId: string,
-  locationId: string,
-  actor: string,
-): Promise<string> {
-  const existing = await queryFirst<{ id: string }>(db, `
-    SELECT id FROM product_categories
-     WHERE organization_id = ? AND site_id = ? AND location_id = ? AND product_type = 'experience'
-     ORDER BY sort_order, id LIMIT 1
-  `, [organizationId, siteId, locationId])
-  if (existing) return existing.id
+  input: CreateProductInput,
+  context: { siteId?: string; existingId?: string },
+): Promise<PlannedProduct> {
+  const name = requireTrimmedProductString(input.name, 'name', PRODUCT_LIMITS.name)
+  const options = validateProductOptions(input.options)
+  const variants = input.variants === undefined
+    ? [{ name, sku: null, active: true, sort_order: 0, option_values: {} } satisfies NormalizedProductVariant]
+    : validateProductVariants(input.variants, options)
+  if (options.length > 0 && input.variants === undefined) {
+    invalid('a product with options must declare the variants that select them')
+  }
+
+  const defaultCurrency = context.siteId ? await organizationDefaultCurrency(db, organizationId, context.siteId) : null
+  const declaredVariants = input.variants ?? []
+  const resolved = resolveIds(options, variants)
+  const plannedVariants: PlannedVariant[] = variants.map((variant, index) => ({
+    id: variant.id ?? crypto.randomUUID(),
+    name: variant.name,
+    sku: variant.sku,
+    active: variant.active,
+    sort_order: variant.sort_order,
+    option_values: resolved.variantOptionValues.get(variant.id ?? String(index)) ?? {},
+    prices: (declaredVariants[index]?.prices ?? []).map((price, priceIndex) =>
+      normalizePriceInput(price, defaultCurrency, `variants[${index}].prices[${priceIndex}]`)),
+  }))
+
+  return {
+    id: context.existingId ?? crypto.randomUUID(),
+    name,
+    slug: await createProductSlug(db, organizationId, name, context.existingId),
+    // An empty description is a real choice, not a missing field. Only its
+    // length is constrained.
+    description: normalizeOptionalProductString(input.description, 'description', PRODUCT_LIMITS.description) ?? '',
+    active: input.active ?? true,
+    order_url: validateProductOrderUrl(input.order_url),
+    unit_label: validateProductUnitLabel(input.unit_label),
+    marketing_features: validateProductMarketingFeatures(input.marketing_features),
+    tags: validateProductTags(input.tags),
+    metadata: validateProductMetadata(input.metadata),
+    tax_code: normalizeOptionalProductString(input.tax_code, 'tax_code', PRODUCT_LIMITS.taxCode),
+    options: resolved.options,
+    variants: plannedVariants,
+    metafields: input.metafields ?? {},
+    source: input.source ?? 'manual',
+  }
+}
+
+async function loadMetafieldDefinitions(db: DbClient, organizationId: string): Promise<Map<string, MetafieldDefinition>> {
+  const rows = await queryAll<Row>(db, 'SELECT * FROM metafield_definitions WHERE organization_id = ?', [organizationId])
+  return new Map(rows.map((row) => {
+    const definition = mapMetafieldDefinitionRow(row)
+    return [metafieldHandle(definition), definition]
+  }))
+}
+
+/**
+ * Build the writes for one product's rows.
+ *
+ * Returns queries rather than executing, so create, update, batch and
+ * reconcile all commit through a single `executeBatch` and cannot leave a
+ * product half-written.
+ */
+function productWrites(
+  organizationId: string,
+  planned: PlannedProduct,
+  definitions: Map<string, MetafieldDefinition>,
+  actor: Actor,
+  now: string,
+  mode: 'insert' | 'upsert',
+): BatchQuery[] {
+  const upsert = mode === 'upsert'
+  const writes: BatchQuery[] = [{
+    query: upsert
+      ? `INSERT INTO products (id, organization_id, name, slug, description, active, order_url, unit_label,
+             marketing_features, tags, metadata, tax_code, source, created_at, updated_at, created_by, updated_by)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT (id) DO UPDATE SET name = excluded.name, slug = excluded.slug, description = excluded.description,
+             active = excluded.active, order_url = excluded.order_url, unit_label = excluded.unit_label,
+             marketing_features = excluded.marketing_features, tags = excluded.tags, metadata = excluded.metadata,
+             tax_code = excluded.tax_code, updated_at = excluded.updated_at, updated_by = excluded.updated_by`
+      : `INSERT INTO products (id, organization_id, name, slug, description, active, order_url, unit_label,
+             marketing_features, tags, metadata, tax_code, source, created_at, updated_at, created_by, updated_by)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    params: [planned.id, organizationId, planned.name, planned.slug, planned.description, planned.active ? 1 : 0,
+      planned.order_url, planned.unit_label, JSON.stringify(planned.marketing_features), JSON.stringify(planned.tags),
+      JSON.stringify(planned.metadata), planned.tax_code, planned.source, now, now, actor.actorId, actor.actorId],
+  }]
+
+  for (const option of planned.options) {
+    writes.push({
+      query: upsert
+        ? `INSERT INTO product_options (id, organization_id, product_id, name, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)
+             ON CONFLICT (id) DO UPDATE SET name = excluded.name, sort_order = excluded.sort_order, updated_at = excluded.updated_at`
+        : `INSERT INTO product_options (id, organization_id, product_id, name, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      params: [option.id, organizationId, planned.id, option.name, option.sort_order, now, now],
+    })
+    for (const value of option.values) {
+      writes.push({
+        query: upsert
+          ? `INSERT INTO product_option_values (id, organization_id, product_id, product_option_id, value, sort_order, created_at, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+               ON CONFLICT (id) DO UPDATE SET value = excluded.value, sort_order = excluded.sort_order, updated_at = excluded.updated_at`
+          : `INSERT INTO product_option_values (id, organization_id, product_id, product_option_id, value, sort_order, created_at, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        params: [value.id, organizationId, planned.id, option.id, value.value, value.sort_order, now, now],
+      })
+    }
+  }
+
+  for (const variant of planned.variants) {
+    writes.push({
+      query: upsert
+        ? `INSERT INTO product_variants (id, organization_id, product_id, name, sku, active, sort_order, created_at, updated_at, created_by, updated_by)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             ON CONFLICT (id) DO UPDATE SET name = excluded.name, sku = excluded.sku, active = excluded.active,
+               sort_order = excluded.sort_order, updated_at = excluded.updated_at, updated_by = excluded.updated_by`
+        : `INSERT INTO product_variants (id, organization_id, product_id, name, sku, active, sort_order, created_at, updated_at, created_by, updated_by)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      params: [variant.id, organizationId, planned.id, variant.name, variant.sku, variant.active ? 1 : 0, variant.sort_order, now, now, actor.actorId, actor.actorId],
+    })
+    for (const [optionId, valueId] of Object.entries(variant.option_values)) {
+      writes.push({
+        query: `INSERT INTO product_variant_option_values (organization_id, product_id, product_variant_id, product_option_id, product_option_value_id)
+                VALUES (?, ?, ?, ?, ?)`,
+        params: [organizationId, planned.id, variant.id, optionId, valueId],
+      })
+    }
+    for (const price of variant.prices) {
+      writes.push({
+        query: `INSERT INTO prices (id, organization_id, product_variant_id, location_id, active, currency, unit_amount, type,
+                  recurring_interval, recurring_interval_count, tax_behavior, compare_at_unit_amount, valid_from_at, valid_until_at,
+                  source, created_at, updated_at, created_by, updated_by)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        params: [price.id, organizationId, variant.id, price.location_id, price.active ? 1 : 0, price.currency, price.unit_amount,
+          price.type, price.recurring_interval, price.recurring_interval_count, price.tax_behavior, price.compare_at_unit_amount,
+          price.valid_from_at, price.valid_until_at, price.source, now, now, actor.actorId, actor.actorId],
+      })
+    }
+  }
+
+  for (const [handle, value] of Object.entries(planned.metafields)) {
+    const definition = definitions.get(handle)
+    // An undefined attribute is rejected, not stored as an untyped blob. The
+    // caller creates the definition first; that is the whole extension model.
+    if (!definition) invalid(`metafield "${handle}" has no definition in this organization`)
+    writes.push({
+      query: `INSERT INTO product_metafields (organization_id, product_id, definition_id, value, created_at, updated_at, created_by, updated_by)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      params: [organizationId, planned.id, definition.id, serializeMetafieldValue(definition, value), now, now, actor.actorId, actor.actorId],
+    })
+  }
+  return writes
+}
+
+function assertVariantPricesConsistent(planned: PlannedProduct): void {
+  for (const variant of planned.variants) {
+    if (variant.prices.length < 2) continue
+    // Refuse two simultaneously-valid offers of the same scope at write time,
+    // so the person creating them sees the conflict instead of a customer
+    // hitting an ambiguous selection at checkout.
+    assertNoConflictingPrices(variant.prices.map(price => ({
+      ...price,
+      organization_id: 'scope',
+      product_variant_id: variant.id,
+      created_by: 'scope', updated_by: 'scope', created_at: '', updated_at: '',
+    })))
+  }
+}
+
+export async function createProduct(db: DbClient, input: {
+  organizationId: string
+  siteId?: string
+  product: CreateProductInput
+  actor: Actor
+}): Promise<Product> {
+  const definitions = await loadMetafieldDefinitions(db, input.organizationId)
+  const planned = await planProduct(db, input.organizationId, input.product, { siteId: input.siteId })
+  assertVariantPricesConsistent(planned)
+  const now = new Date().toISOString()
+  await executeBatch(db, productWrites(input.organizationId, planned, definitions, input.actor, now, 'insert'), { operation: 'Create product' })
+  await fireOrganizationEventSafe({ db, organizationId: input.organizationId, siteId: input.siteId ?? null, actorId: input.actor.actorId, eventType: 'product.created', entityType: 'product', entityId: planned.id })
+  return getProduct(db, input.organizationId, planned.id)
+}
+
+export async function createProductsBatch(db: DbClient, input: {
+  organizationId: string
+  siteId?: string
+  products: CreateProductInput[]
+  actor: Actor
+}): Promise<Product[]> {
+  if (input.products.length === 0) invalid('at least one product is required')
+  if (input.products.length > PRODUCT_LIMITS.batchCreate) invalid(`at most ${PRODUCT_LIMITS.batchCreate} products may be created at once`)
+  const definitions = await loadMetafieldDefinitions(db, input.organizationId)
+  const now = new Date().toISOString()
+  const writes: BatchQuery[] = []
+  const ids: string[] = []
+  // Slugs are derived sequentially: deriving them in parallel would let two
+  // products in one batch both take the same free slug.
+  const taken = new Set<string>()
+  for (const product of input.products) {
+    const planned = await planProduct(db, input.organizationId, product, { siteId: input.siteId })
+    while (taken.has(planned.slug)) planned.slug = await createProductSlug(db, input.organizationId, `${planned.slug}-2`)
+    taken.add(planned.slug)
+    assertVariantPricesConsistent(planned)
+    writes.push(...productWrites(input.organizationId, planned, definitions, input.actor, now, 'insert'))
+    ids.push(planned.id)
+  }
+  await executeBatch(db, writes, { operation: 'Create products' })
+  await fireOrganizationEventSafe({ db, organizationId: input.organizationId, siteId: input.siteId ?? null, actorId: input.actor.actorId, eventType: 'product.created', entityType: 'product', metadata: { product_count: ids.length } })
+  const rows = await queryAll<Row>(db, `SELECT ${PRODUCT_COLUMNS} FROM products p WHERE p.organization_id = ? AND p.id IN (SELECT value FROM json_each(?))`, [input.organizationId, d1JsonArray(ids)])
+  return hydrate(db, input.organizationId, rows.map(mapProductRow))
+}
+
+/**
+ * Replace a product's rows with the intended state.
+ *
+ * Children are deleted and rewritten rather than diffed. Diffing options,
+ * values, variants and prices in place is how a half-applied edit leaves a
+ * variant selecting a value that no longer exists; the whole replacement
+ * commits in one batch or none of it does.
+ *
+ * A variant that keeps its id keeps its bookings, because bookings reference
+ * the variant, not its ordinal position.
+ */
+export async function updateProduct(db: DbClient, input: {
+  organizationId: string
+  siteId?: string
+  productId: string
+  patch: UpdateProductInput
+  actor: Actor
+}): Promise<Product> {
+  const current = await getProduct(db, input.organizationId, input.productId)
+  const definitions = await loadMetafieldDefinitions(db, input.organizationId)
+  const merged: CreateProductInput = {
+    name: input.patch.name ?? current.name,
+    description: input.patch.description ?? current.description,
+    active: input.patch.active ?? current.active,
+    order_url: input.patch.order_url === undefined ? current.order_url : input.patch.order_url,
+    unit_label: input.patch.unit_label === undefined ? current.unit_label : input.patch.unit_label,
+    marketing_features: input.patch.marketing_features ?? current.marketing_features,
+    tags: input.patch.tags ?? current.tags,
+    metadata: input.patch.metadata ?? current.metadata,
+    tax_code: input.patch.tax_code === undefined ? current.tax_code : input.patch.tax_code,
+    options: input.patch.options ?? current.options.map(option => ({
+      id: option.id, name: option.name, sort_order: option.sort_order,
+      values: option.values.map(value => ({ id: value.id, value: value.value, sort_order: value.sort_order })),
+    })),
+    variants: input.patch.variants ?? current.variants.map(variant => ({
+      id: variant.id, name: variant.name, sku: variant.sku, active: variant.active, sort_order: variant.sort_order,
+      option_values: variant.option_values,
+      prices: variant.prices.map(price => ({
+        unit_amount: price.unit_amount, currency: price.currency, location_id: price.location_id, active: price.active,
+        type: price.type, recurring_interval: price.recurring_interval, recurring_interval_count: price.recurring_interval_count,
+        tax_behavior: price.tax_behavior, compare_at_unit_amount: price.compare_at_unit_amount,
+        valid_from_at: price.valid_from_at, valid_until_at: price.valid_until_at, source: price.source,
+      })),
+    })),
+    metafields: input.patch.metafields ?? current.metafields,
+  }
+  const planned = await planProduct(db, input.organizationId, merged, { siteId: input.siteId, existingId: input.productId })
+  planned.slug = input.patch.name === undefined ? current.slug : planned.slug
+  planned.source = current.source
+  assertVariantPricesConsistent(planned)
+
+  const now = new Date().toISOString()
+  const keptOptions = d1JsonArray(planned.options.map(option => option.id))
+  const keptValues = d1JsonArray(planned.options.flatMap(option => option.values.map(value => value.id)))
+  const keptVariants = d1JsonArray(planned.variants.map(variant => variant.id))
+
+  // A variant a booking points at cannot be removed by an edit. Deleting it
+  // would cascade the booking away, which is how an editor tidying a product
+  // would silently destroy a guest's seat.
+  const orphaned = await queryAll<{ id: string; name: string }>(db, `
+    SELECT v.id, v.name FROM product_variants v
+    WHERE v.organization_id = ? AND v.product_id = ? AND v.id NOT IN (SELECT value FROM json_each(?))
+      AND EXISTS (SELECT 1 FROM bookings b WHERE b.product_variant_id = v.id AND b.status <> 'cancelled')
+  `, [input.organizationId, input.productId, keptVariants])
+  if (orphaned.length > 0) {
+    conflict(`Cancel the bookings on ${orphaned.map(variant => variant.name).join(', ')} before removing ${orphaned.length > 1 ? 'those variants' : 'that variant'}`)
+  }
+
+  const writes: BatchQuery[] = [
+    // Selections, prices and metafield values are rebuilt wholesale: nothing
+    // references them, so replacing them is simpler and cannot drift.
+    { query: 'DELETE FROM product_metafields WHERE organization_id = ? AND product_id = ?', params: [input.organizationId, input.productId] },
+    { query: 'DELETE FROM product_variant_option_values WHERE organization_id = ? AND product_id = ?', params: [input.organizationId, input.productId] },
+    { query: 'DELETE FROM prices WHERE organization_id = ? AND product_variant_id IN (SELECT id FROM product_variants WHERE organization_id = ? AND product_id = ?)', params: [input.organizationId, input.organizationId, input.productId] },
+    // Options, values and variants are UPSERTED, never dropped and recreated:
+    // bookings reference variant identity, and recreating a variant under a
+    // fresh id is the same as deleting it as far as they are concerned. Only
+    // rows the caller actually removed are deleted.
+    { query: 'DELETE FROM product_variants WHERE organization_id = ? AND product_id = ? AND id NOT IN (SELECT value FROM json_each(?))', params: [input.organizationId, input.productId, keptVariants] },
+    { query: 'DELETE FROM product_option_values WHERE organization_id = ? AND product_id = ? AND id NOT IN (SELECT value FROM json_each(?))', params: [input.organizationId, input.productId, keptValues] },
+    { query: 'DELETE FROM product_options WHERE organization_id = ? AND product_id = ? AND id NOT IN (SELECT value FROM json_each(?))', params: [input.organizationId, input.productId, keptOptions] },
+    ...productWrites(input.organizationId, planned, definitions, input.actor, now, 'upsert'),
+    ...(await productCacheInvalidations(db, input.organizationId, input.productId, 'product_updated')),
+  ]
+  await executeBatch(db, writes, { operation: 'Update product' })
+  return getProduct(db, input.organizationId, input.productId)
+}
+
+export async function deleteProduct(db: DbClient, input: {
+  organizationId: string; productId: string
+}): Promise<void> {
+  const bound = await queryAll<{ site_id: string; id: string }>(db, `
+    SELECT site_id, id FROM content_documents WHERE organization_id = ? AND product_id = ?
+  `, [input.organizationId, input.productId])
+  // The canonical page foreign key is RESTRICT, so say why rather than letting
+  // D1 return a constraint error the merchant cannot act on.
+  if (bound.length > 0) {
+    conflict(`Unbind or delete the product page${bound.length > 1 ? 's' : ''} for this product before deleting it`)
+  }
+  const invalidations = await productCacheInvalidations(db, input.organizationId, input.productId, 'product_deleted')
+  await executeBatch(db, [
+    ...resourceLocalizationDeletionQueries('product', { query: 'SELECT ?', params: [input.productId] }),
+    ...invalidations,
+    { query: 'DELETE FROM products WHERE organization_id = ? AND id = ?', params: [input.organizationId, input.productId] },
+  ], { operation: 'Delete product' })
+}
+
+/**
+ * Invalidate every site projection this product appears in.
+ *
+ * A product published on two sites has two projections; invalidating only the
+ * site the editor happened to be looking at is how one of them goes stale
+ * while looking correct.
+ */
+async function productCacheInvalidations(db: DbClient, organizationId: string, productId: string, reason: string): Promise<BatchQuery[]> {
+  const sites = await queryAll<{ site_id: string }>(db, `
+    SELECT site_id FROM product_publications WHERE organization_id = ? AND product_id = ?
+    UNION
+    SELECT site_id FROM content_documents WHERE organization_id = ? AND product_id = ?
+  `, [organizationId, productId, organizationId, productId])
+  return sites.map(row => publicResourceCacheInvalidationQuery(row.site_id, reason))
+}
+
+// ---------------------------------------------------------------------------
+// Publication and location relationships
+// ---------------------------------------------------------------------------
+
+/**
+ * Publish or withhold a product on one site.
+ *
+ * Three controls, none implying another: `products.active` is the merchant's
+ * sale switch, this row is site visibility, and `product_locations.published`
+ * is per-location visibility. A withheld product is not sold out and a
+ * disabled product is not unpublished.
+ */
+export async function setProductPublication(db: DbClient, input: {
+  organizationId: string; productId: string; siteId: string; published: boolean; actor: Actor
+}): Promise<void> {
+  const now = new Date().toISOString()
+  await executeBatch(db, [{
+    query: `INSERT INTO product_publications (organization_id, product_id, site_id, published, created_at, updated_at, created_by, updated_by)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT (product_id, site_id) DO UPDATE SET published = excluded.published, updated_at = excluded.updated_at, updated_by = excluded.updated_by`,
+    params: [input.organizationId, input.productId, input.siteId, input.published ? 1 : 0, now, now, input.actor.actorId, input.actor.actorId],
+  }, publicResourceCacheInvalidationQuery(input.siteId, 'product_publication_changed')], { operation: 'Set product publication' })
+}
+
+export async function removeProductPublication(db: DbClient, input: {
+  organizationId: string; productId: string; siteId: string
+}): Promise<void> {
+  await executeBatch(db, [
+    { query: 'DELETE FROM product_publications WHERE organization_id = ? AND product_id = ? AND site_id = ?', params: [input.organizationId, input.productId, input.siteId] },
+    publicResourceCacheInvalidationQuery(input.siteId, 'product_publication_changed'),
+  ], { operation: 'Remove product publication' })
+}
+
+export async function setProductLocation(db: DbClient, input: {
+  organizationId: string; productId: string; locationId: string; active?: boolean; published?: boolean; actor: Actor
+}): Promise<void> {
+  const site = await queryFirst<{ site_id: string }>(db, 'SELECT site_id FROM business_locations WHERE organization_id = ? AND id = ?', [input.organizationId, input.locationId])
+  if (!site) notFound('Location not found')
+  const now = new Date().toISOString()
+  await executeBatch(db, [{
+    query: `INSERT INTO product_locations (organization_id, product_id, location_id, active, published, created_at, updated_at, created_by, updated_by)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT (product_id, location_id) DO UPDATE SET active = excluded.active, published = excluded.published,
+              updated_at = excluded.updated_at, updated_by = excluded.updated_by`,
+    params: [input.organizationId, input.productId, input.locationId, (input.active ?? true) ? 1 : 0, (input.published ?? false) ? 1 : 0,
+      now, now, input.actor.actorId, input.actor.actorId],
+  }, publicResourceCacheInvalidationQuery(site.site_id, 'product_location_changed')], { operation: 'Set product location' })
+}
+
+export async function removeProductLocation(db: DbClient, input: {
+  organizationId: string; productId: string; locationId: string
+}): Promise<void> {
+  const site = await queryFirst<{ site_id: string }>(db, 'SELECT site_id FROM business_locations WHERE organization_id = ? AND id = ?', [input.organizationId, input.locationId])
+  if (!site) notFound('Location not found')
+  await executeBatch(db, [
+    { query: 'DELETE FROM product_locations WHERE organization_id = ? AND product_id = ? AND location_id = ?', params: [input.organizationId, input.productId, input.locationId] },
+    publicResourceCacheInvalidationQuery(site.site_id, 'product_location_changed'),
+  ], { operation: 'Remove product location' })
+}
+
+// ---------------------------------------------------------------------------
+// Collections
+// ---------------------------------------------------------------------------
+
+function mapCollectionRow(row: Row): Collection {
+  return {
+    id: String(row.id), site_id: String(row.site_id),
+    location_id: row.location_id === null ? null : String(row.location_id),
+    name: String(row.name), slug: String(row.slug),
+    description: row.description === null ? null : String(row.description),
+    sort_order: Number(row.sort_order),
+    created_at: String(row.created_at), updated_at: String(row.updated_at),
+    created_by: String(row.created_by), updated_by: String(row.updated_by),
+  }
+}
+
+export async function listCollections(db: DbClient, input: {
+  organizationId: string; siteId: string; locationId?: string | null
+}): Promise<Collection[]> {
+  const rows = await queryAll<Row>(db, `
+    SELECT * FROM collections
+    WHERE organization_id = ? AND site_id = ?
+      AND (? = 0 OR location_id IS ?)
+    ORDER BY sort_order, name, id
+  `, [input.organizationId, input.siteId, input.locationId === undefined ? 0 : 1, input.locationId ?? null])
+  return rows.map(mapCollectionRow)
+}
+
+export async function createCollection(db: DbClient, input: {
+  organizationId: string; collection: CreateCollectionInput; actor: Actor
+}): Promise<Collection> {
+  const name = requireTrimmedProductString(input.collection.name, 'name', PRODUCT_LIMITS.collectionName)
+  const slug = await uniqueCollectionSlug(db, input.organizationId, input.collection.site_id, input.collection.location_id ?? null, name)
   const id = crypto.randomUUID()
   const now = new Date().toISOString()
   await executeBatch(db, [{
-    query: `INSERT INTO product_categories (id, organization_id, site_id, location_id, product_type, name, slug, sort_order, created_at, updated_at, created_by, updated_by)
-            VALUES (?,?,?,?, 'experience', 'Experiences', 'experiences', 0, ?,?,?,?)`,
-    params: [id, organizationId, siteId, locationId, now, now, actor, actor],
-  }], { operation: 'create Experience category' })
-  return id
+    query: `INSERT INTO collections (id, organization_id, site_id, location_id, name, slug, description, sort_order, created_at, updated_at, created_by, updated_by)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    params: [id, input.organizationId, input.collection.site_id, input.collection.location_id ?? null, name, slug,
+      normalizeOptionalProductString(input.collection.description, 'description', PRODUCT_LIMITS.collectionDescription),
+      input.collection.sort_order ?? 0, now, now, input.actor.actorId, input.actor.actorId],
+  }, publicResourceCacheInvalidationQuery(input.collection.site_id, 'collection_created')], { operation: 'Create collection' })
+  const row = await queryFirst<Row>(db, 'SELECT * FROM collections WHERE organization_id = ? AND id = ?', [input.organizationId, id])
+  return mapCollectionRow(row!)
+}
+
+async function uniqueCollectionSlug(db: DbClient, organizationId: string, siteId: string, locationId: string | null, base: string): Promise<string> {
+  for (let attempt = 0; attempt < MAX_SLUG_SUFFIX_ATTEMPTS; attempt += 1) {
+    const candidate = slugCandidate(base, attempt)
+    const clash = await queryFirst<{ id: string }>(db, `
+      SELECT id FROM collections WHERE organization_id = ? AND site_id = ? AND location_id IS ? AND slug = ?
+    `, [organizationId, siteId, locationId, candidate])
+    if (!clash) return candidate
+  }
+  conflict('Could not derive a unique collection slug')
+}
+
+export async function updateCollection(db: DbClient, input: {
+  organizationId: string; collectionId: string; patch: UpdateCollectionInput; actor: Actor
+}): Promise<Collection> {
+  const existing = await queryFirst<Row>(db, 'SELECT * FROM collections WHERE organization_id = ? AND id = ?', [input.organizationId, input.collectionId])
+  if (!existing) notFound('Collection not found')
+  const now = new Date().toISOString()
+  await executeBatch(db, [{
+    query: `UPDATE collections SET name = ?, description = ?, sort_order = ?, updated_at = ?, updated_by = ?
+            WHERE organization_id = ? AND id = ?`,
+    params: [
+      input.patch.name === undefined ? String(existing.name) : requireTrimmedProductString(input.patch.name, 'name', PRODUCT_LIMITS.collectionName),
+      input.patch.description === undefined ? existing.description : normalizeOptionalProductString(input.patch.description, 'description', PRODUCT_LIMITS.collectionDescription),
+      input.patch.sort_order ?? Number(existing.sort_order), now, input.actor.actorId,
+      input.organizationId, input.collectionId,
+    ],
+  }, publicResourceCacheInvalidationQuery(String(existing.site_id), 'collection_updated')], { operation: 'Update collection' })
+  const row = await queryFirst<Row>(db, 'SELECT * FROM collections WHERE organization_id = ? AND id = ?', [input.organizationId, input.collectionId])
+  return mapCollectionRow(row!)
+}
+
+export async function deleteCollection(db: DbClient, input: { organizationId: string; collectionId: string }): Promise<void> {
+  const existing = await queryFirst<{ site_id: string }>(db, 'SELECT site_id FROM collections WHERE organization_id = ? AND id = ?', [input.organizationId, input.collectionId])
+  if (!existing) notFound('Collection not found')
+  // Membership cascades; the products themselves are untouched. Deleting a
+  // grouping is not deleting what was grouped.
+  await executeBatch(db, [
+    { query: 'DELETE FROM collections WHERE organization_id = ? AND id = ?', params: [input.organizationId, input.collectionId] },
+    publicResourceCacheInvalidationQuery(existing.site_id, 'collection_deleted'),
+  ], { operation: 'Delete collection' })
 }
 
 /**
- * Plans category creation without persisting it. The caller includes these
- * inserts in its own atomic batch, so failed imports cannot leave categories
- * behind or require a compensating delete of shared data.
+ * Set a collection's complete membership and order.
+ *
+ * The caller supplies the whole intended list; a partial list is a different
+ * operation and is rejected upstream. Position lives on the membership row, so
+ * the same product can sit third here and first somewhere else without being
+ * copied.
  */
-export async function planProductCategories({ db, organizationId, siteId, locationId, names, actor }: ProductOrderScope & {
-  names: string[]
-}): Promise<{ resolved: Map<string, ProductCategory>; inserts: BatchQuery[] }> {
-  const resolved = new Map<string, ProductCategory>()
-  const inserts: BatchQuery[] = []
-  if (!names.length) return { resolved, inserts }
-  await assertLocationOwnership(db, organizationId, siteId, locationId)
-  const existing = await listProductCategories({ db, organizationId, siteId, locationId })
-  const byName = new Map(existing.map(category => [category.name, category]))
-  const usedSlugs = new Set(existing.map(category => category.slug))
+export async function setCollectionProducts(db: DbClient, input: {
+  organizationId: string; collectionId: string; productIds: string[]; actor: Actor
+}): Promise<void> {
+  if (input.productIds.length > PRODUCT_LIMITS.collectionProducts) {
+    invalid(`a collection may hold at most ${PRODUCT_LIMITS.collectionProducts} products`)
+  }
+  if (new Set(input.productIds).size !== input.productIds.length) invalid('product_ids must be unique')
+  const collection = await queryFirst<{ site_id: string }>(db, 'SELECT site_id FROM collections WHERE organization_id = ? AND id = ?', [input.organizationId, input.collectionId])
+  if (!collection) notFound('Collection not found')
   const now = new Date().toISOString()
-  for (const rawName of names) {
-    const name = requireTrimmedProductString(rawName, 'category', PRODUCT_LIMITS.category)
-    if (resolved.has(rawName)) continue
-    let category = byName.get(name)
-    if (!category) {
-      const base = slugifyProductName(name)
-      if (!base) throw new HTTPError({ statusCode: 400, statusMessage: 'name must produce a non-empty ASCII slug' })
-      let slug = ''
-      for (let suffix = 1; suffix <= MAX_SLUG_SUFFIX_ATTEMPTS; suffix += 1) {
-        const suffixText = suffix === 1 ? '' : `-${suffix}`
-        const candidate = `${base.slice(0, 120 - suffixText.length).replace(/-+$/g, '')}${suffixText}`
-        if (!usedSlugs.has(candidate)) { slug = candidate; break }
-      }
-      if (!slug) throw new HTTPError({ statusCode: 409, statusMessage: 'Unable to create a unique Product category slug in this location' })
-      usedSlugs.add(slug)
-      category = {
-        id: crypto.randomUUID(), location_id: locationId, name, slug,
-        sort_order: Math.max(-1, ...[...byName.values()].map(row => row.sort_order)) + 1,
-        created_at: now, updated_at: now, created_by: actor, updated_by: actor,
-      }
-      inserts.push({
-        query: `INSERT INTO product_categories (id, organization_id, site_id, location_id, product_type, name, slug, sort_order, created_at, updated_at, created_by, updated_by)
-                VALUES (?,?,?,?, 'standard', ?,?,?,?,?,?,?)`,
-        params: [category.id, organizationId, siteId, locationId, name, slug, category.sort_order, now, now, actor, actor],
-      })
+  await executeBatch(db, [
+    { query: 'DELETE FROM collection_products WHERE organization_id = ? AND collection_id = ?', params: [input.organizationId, input.collectionId] },
+    ...input.productIds.map((productId, index): BatchQuery => ({
+      query: `INSERT INTO collection_products (organization_id, collection_id, product_id, sort_order, created_at, updated_at, created_by, updated_by)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      params: [input.organizationId, input.collectionId, productId, index, now, now, input.actor.actorId, input.actor.actorId],
+    })),
+    publicResourceCacheInvalidationQuery(collection.site_id, 'collection_membership_changed'),
+  ], { operation: 'Set collection products' })
+}
+
+export async function reorderCollections(db: DbClient, input: {
+  organizationId: string; siteId: string; locationId?: string | null; collectionIds: string[]; actor: Actor
+}): Promise<void> {
+  const existing = await listCollections(db, { organizationId: input.organizationId, siteId: input.siteId, locationId: input.locationId })
+  const intended = new Set(input.collectionIds)
+  // A partial order would leave the unnamed collections at whatever position
+  // they had, which is not an order anyone chose.
+  if (intended.size !== existing.length || existing.some(collection => !intended.has(collection.id))) {
+    invalid('collection_ids must list every collection in this scope exactly once')
+  }
+  const now = new Date().toISOString()
+  await executeBatch(db, [
+    ...input.collectionIds.map((collectionId, index): BatchQuery => ({
+      query: 'UPDATE collections SET sort_order = ?, updated_at = ?, updated_by = ? WHERE organization_id = ? AND id = ?',
+      params: [index, now, input.actor.actorId, input.organizationId, collectionId],
+    })),
+    publicResourceCacheInvalidationQuery(input.siteId, 'collection_reordered'),
+  ], { operation: 'Reorder collections' })
+}
+
+// ---------------------------------------------------------------------------
+// Metafield definitions
+// ---------------------------------------------------------------------------
+
+export async function listMetafieldDefinitions(db: DbClient, organizationId: string): Promise<MetafieldDefinition[]> {
+  const rows = await queryAll<Row>(db, 'SELECT * FROM metafield_definitions WHERE organization_id = ? ORDER BY namespace, key', [organizationId])
+  return rows.map(mapMetafieldDefinitionRow)
+}
+
+export async function createMetafieldDefinition(db: DbClient, input: {
+  organizationId: string
+  definition: Omit<MetafieldDefinition, 'id' | 'organization_id'>
+  actor: Actor
+}): Promise<MetafieldDefinition> {
+  assertMetafieldDefinition(input.definition)
+  const id = crypto.randomUUID()
+  const now = new Date().toISOString()
+  await executeBatch(db, [{
+    query: `INSERT INTO metafield_definitions (id, organization_id, namespace, key, name, description, value_type, validations, localizable, created_at, updated_at, created_by, updated_by)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    params: [id, input.organizationId, input.definition.namespace, input.definition.key, input.definition.name,
+      input.definition.description, input.definition.value_type, JSON.stringify(input.definition.validations),
+      input.definition.localizable ? 1 : 0, now, now, input.actor.actorId, input.actor.actorId],
+  }], { operation: 'Create metafield definition' })
+  const row = await queryFirst<Row>(db, 'SELECT * FROM metafield_definitions WHERE organization_id = ? AND id = ?', [input.organizationId, id])
+  return mapMetafieldDefinitionRow(row!)
+}
+
+export async function deleteMetafieldDefinition(db: DbClient, input: { organizationId: string; definitionId: string }): Promise<void> {
+  // Values cascade. Removing an attribute from the vocabulary removes it from
+  // every product that carried it, which is the point of doing it.
+  await executeBatch(db, [{
+    query: 'DELETE FROM metafield_definitions WHERE organization_id = ? AND id = ?',
+    params: [input.organizationId, input.definitionId],
+  }], { operation: 'Delete metafield definition' })
+}
+
+/**
+ * Idempotent upsert keyed by the caller's own product id.
+ *
+ * Used by imports and MCP, where the same source runs twice and must converge
+ * rather than duplicate. A row with a `product_id` that already exists is
+ * replaced with the intended state; one without is created. Products the
+ * caller did not mention are left alone unless `deactivateMissing` is set, in
+ * which case they are DEACTIVATED — the merchant's sale switch — never
+ * deleted, and never marked sold out, which is a stock statement this
+ * operation has no basis to make.
+ */
+export async function reconcileProducts(db: DbClient, input: {
+  organizationId: string
+  siteId?: string
+  products: ReconcileProductInput[]
+  actor: Actor
+  deactivateMissing?: boolean
+}): Promise<Product[]> {
+  if (!Array.isArray(input.products)) invalid('products must be an array')
+  if (input.products.length > PRODUCT_LIMITS.reconcile) invalid(`products may contain at most ${PRODUCT_LIMITS.reconcile} rows`)
+  input.products.forEach((product, index) => {
+    if (Object.hasOwn(product, 'product_id') && (typeof product.product_id !== 'string' || product.product_id.trim() === '')) {
+      invalid(`products[${index}].product_id must be a non-empty string when provided`)
     }
-    byName.set(name, category)
-    resolved.set(rawName, category)
-  }
-  return { resolved, inserts }
-}
+  })
 
-export async function renameProductCategory(
-  db: DbClient,
-  organizationId: string,
-  siteId: string,
-  locationId: string,
-  categoryId: string,
-  nameInput: string,
-  actor: string,
-): Promise<ProductCategory> {
-  await assertLocationOwnership(db, organizationId, siteId, locationId)
-  const existing = await requireProductCategory(db, organizationId, siteId, locationId, categoryId)
-  const name = requireTrimmedProductString(nameInput, 'name', PRODUCT_LIMITS.category)
-  if (name === existing.name) return existing
-  await assertCategoryNameAvailable(db, organizationId, siteId, locationId, name, categoryId)
-  const now = new Date().toISOString()
-  await executeBatch(db, [
-    {
-      query: `UPDATE product_categories SET name = ?, updated_at = ?, updated_by = ? WHERE organization_id = ? AND site_id = ? AND location_id = ? AND id = ?`,
-      params: [name, now, actor, organizationId, siteId, locationId, categoryId],
-    },
-    publicResourceCacheInvalidationQuery(siteId, 'product.category_renamed'),
-  ], { operation: 'rename Product category' })
-  await productEvent(db, 'product.category_renamed', { organizationId, siteId, locationId, actor, metadata: { category_id: categoryId, old_name: existing.name, new_name: name } })
-  return await requireProductCategory(db, organizationId, siteId, locationId, categoryId)
-}
-
-/**
- * Rewrites sort_order across a complete ordered set. The caller sends the whole
- * order it intends, which is what the CMS reorder mode and the MCP reorder tools
- * both produce, so there is no insert-before arithmetic and no partial state.
- */
-function denseOrderQuery(table: 'products' | 'product_categories', ids: string[], scope: { sql: string; params: SqlValue[] }, actor: string, now: string): BatchQuery {
-  return {
-    query: `
-      WITH desired_order AS (
-        SELECT CAST(key AS INTEGER) AS sort_order, value AS id
-          FROM json_each(?)
-      )
-      UPDATE ${table}
-         SET sort_order = (SELECT sort_order FROM desired_order WHERE desired_order.id = ${table}.id),
-             updated_at = ?,
-             updated_by = ?
-       WHERE ${scope.sql}
-         AND EXISTS (SELECT 1 FROM desired_order WHERE desired_order.id = ${table}.id)
-    `,
-    params: [d1JsonArray(ids), now, actor, ...scope.params],
+  const touched: string[] = []
+  for (const entry of input.products) {
+    const { product_id: productId, ...rest } = entry
+    const existing = productId
+      ? await queryFirst<{ id: string }>(db, 'SELECT id FROM products WHERE organization_id = ? AND id = ?', [input.organizationId, productId])
+      : null
+    if (existing) {
+      await updateProduct(db, { organizationId: input.organizationId, siteId: input.siteId, productId: existing.id, patch: rest, actor: input.actor })
+      touched.push(existing.id)
+      continue
+    }
+    const definitions = await loadMetafieldDefinitions(db, input.organizationId)
+    const planned = await planProduct(db, input.organizationId, rest, { siteId: input.siteId, existingId: productId })
+    assertVariantPricesConsistent(planned)
+    await executeBatch(db, productWrites(input.organizationId, planned, definitions, input.actor, new Date().toISOString(), 'insert'), { operation: 'Reconcile product' })
+    touched.push(planned.id)
   }
-}
 
-function validateCompleteOrder(existingIds: string[], orderedIds: string[], label: string): void {
-  if (new Set(orderedIds).size !== orderedIds.length) {
-    throw new HTTPError({ statusCode: 400, statusMessage: `${label} must not contain duplicate IDs` })
+  if (input.deactivateMissing) {
+    const now = new Date().toISOString()
+    await executeBatch(db, [{
+      query: `UPDATE products SET active = 0, updated_at = ?, updated_by = ?
+              WHERE organization_id = ? AND id NOT IN (SELECT value FROM json_each(?))`,
+      params: [now, input.actor.actorId, input.organizationId, d1JsonArray(touched)],
+    }], { operation: 'Deactivate products missing from reconcile' })
   }
-  const existing = new Set(existingIds)
-  const unknown = orderedIds.filter(id => !existing.has(id))
-  if (unknown.length > 0) {
-    throw new HTTPError({ statusCode: 404, statusMessage: `${label} contains IDs that are not at this location: ${unknown.join(', ')}` })
-  }
-  if (orderedIds.length !== existingIds.length) {
-    const ordered = new Set(orderedIds)
-    const missing = existingIds.filter(id => !ordered.has(id))
-    throw new HTTPError({ statusCode: 400, statusMessage: `${label} must list every ID exactly once. Missing: ${missing.join(', ')}` })
-  }
-}
 
-export async function reorderProductCategories({ db, organizationId, siteId, locationId, categoryIds, actor }: ProductOrderScope & {
-  categoryIds: string[]
-}): Promise<ProductCategory[]> {
-  await assertLocationOwnership(db, organizationId, siteId, locationId)
-  const existing = await listProductCategories({ db, organizationId, siteId, locationId })
-  validateCompleteOrder(existing.map(category => category.id), categoryIds, 'category_ids')
-  await executeBatch(db, [
-    denseOrderQuery('product_categories', categoryIds, {
-      sql: `organization_id = ? AND site_id = ? AND location_id = ? AND product_type = 'standard'`,
-      params: [organizationId, siteId, locationId],
-    }, actor, new Date().toISOString()),
-    publicResourceCacheInvalidationQuery(siteId, 'product.reordered'),
-  ], { operation: 'reorder Product categories' })
-  await productEvent(db, 'product.reordered', { organizationId, siteId, locationId, actor, metadata: { category_ids: categoryIds } })
-  return await listProductCategories({ db, organizationId, siteId, locationId })
-}
-
-async function categoryProductIds({ db, organizationId, siteId, locationId }: ProductLocationScope, categoryId: string): Promise<string[]> {
-  const rows = await queryAll<{ id: string }>(db, `
-    SELECT id FROM products
-     WHERE organization_id = ? AND site_id = ? AND location_id = ? AND category_id = ?
-       AND product_type = 'standard'
-     ORDER BY sort_order, id
-  `, [organizationId, siteId, locationId, categoryId])
-  return rows.map(row => row.id)
-}
-
-export async function reorderProducts({ db, organizationId, siteId, locationId, categoryId, productIds, actor }: ProductOrderScope & {
-  categoryId: string
-  productIds: string[]
-}): Promise<void> {
-  await assertLocationOwnership(db, organizationId, siteId, locationId)
-  await requireProductCategory(db, organizationId, siteId, locationId, categoryId)
-  const existingIds = await categoryProductIds({ db, organizationId, siteId, locationId }, categoryId)
-  validateCompleteOrder(existingIds, productIds, 'product_ids')
-  await executeBatch(db, [
-    denseOrderQuery('products', productIds, {
-      sql: `organization_id = ? AND site_id = ? AND location_id = ? AND category_id = ? AND product_type = 'standard'`,
-      params: [organizationId, siteId, locationId, categoryId],
-    }, actor, new Date().toISOString()),
-    publicResourceCacheInvalidationQuery(siteId, 'product.reordered'),
-  ], { operation: 'reorder Products' })
-  await productEvent(db, 'product.reordered', { organizationId, siteId, locationId, actor, metadata: { category_id: categoryId, product_ids: productIds } })
-}
-
-/**
- * Moves Products into another category, appended in the order supplied. This is
- * the only way category membership changes, so a Product can never hold a
- * category_id from a different location.
- */
-export async function moveProductsToCategory({ db, organizationId, siteId, locationId, productIds, categoryId, actor }: ProductOrderScope & {
-  productIds: string[]
-  categoryId: string
-}): Promise<void> {
-  await assertLocationOwnership(db, organizationId, siteId, locationId)
-  await requireProductCategory(db, organizationId, siteId, locationId, categoryId)
-  if (productIds.length === 0) {
-    throw new HTTPError({ statusCode: 400, statusMessage: 'product_ids must contain at least one Product ID' })
-  }
-  if (new Set(productIds).size !== productIds.length) {
-    throw new HTTPError({ statusCode: 400, statusMessage: 'product_ids must not contain duplicate Product IDs' })
-  }
-  const rows = await queryAll<{ id: string; category_id: string }>(db, `
-    SELECT id, category_id FROM products
-     WHERE organization_id = ? AND site_id = ? AND location_id = ? AND product_type = 'standard'
-       AND id IN (SELECT value FROM json_each(?))
-  `, [organizationId, siteId, locationId, d1JsonArray(productIds)])
-  const found = new Set(rows.map(row => row.id))
-  const unknown = productIds.filter(id => !found.has(id))
-  if (unknown.length > 0) {
-    throw new HTTPError({ statusCode: 404, statusMessage: `Product IDs not found at this location: ${unknown.join(', ')}` })
-  }
-  const sourceCategoryIds = [...new Set(rows.map(row => row.category_id))].filter(id => id !== categoryId)
-  const targetIds = await categoryProductIds({ db, organizationId, siteId, locationId }, categoryId)
-  const moving = new Set(productIds)
-  const now = new Date().toISOString()
-  // Products already in the target keep their relative order; the rest are
-  // appended in the order the caller listed them.
-  const finalOrder = [...targetIds.filter(id => !moving.has(id)), ...productIds]
-  const queries: BatchQuery[] = [
-    {
-      query: `UPDATE products SET category_id = ?, updated_at = ?, updated_by = ?
-               WHERE organization_id = ? AND site_id = ? AND location_id = ? AND product_type = 'standard'
-                 AND id IN (SELECT value FROM json_each(?))`,
-      params: [categoryId, now, actor, organizationId, siteId, locationId, d1JsonArray(productIds)],
-    },
-    denseOrderQuery('products', finalOrder, {
-      sql: `organization_id = ? AND site_id = ? AND location_id = ? AND category_id = ? AND product_type = 'standard'`,
-      params: [organizationId, siteId, locationId, categoryId],
-    }, actor, now),
-  ]
-  // Close the gaps the moved Products left behind so every category stays dense.
-  for (const sourceCategoryId of sourceCategoryIds) {
-    const remaining = (await categoryProductIds({ db, organizationId, siteId, locationId }, sourceCategoryId)).filter(id => !moving.has(id))
-    queries.push(denseOrderQuery('products', remaining, {
-      sql: `organization_id = ? AND site_id = ? AND location_id = ? AND category_id = ? AND product_type = 'standard'`,
-      params: [organizationId, siteId, locationId, sourceCategoryId],
-    }, actor, now))
-  }
-  queries.push(publicResourceCacheInvalidationQuery(siteId, 'product.reordered'))
-  await executeBatch(db, queries, { operation: 'move Products between categories' })
-  await productEvent(db, 'product.reordered', { organizationId, siteId, locationId, actor, metadata: { category_id: categoryId, product_ids: productIds } })
-}
-
-export async function deleteProduct(
-  db: DbClient,
-  organizationId: string,
-  siteId: string,
-  locationId: string,
-  productId: string,
-  actor: string,
-): Promise<boolean> {
-  const existing = await getProduct(db, organizationId, siteId, locationId, productId)
-  if (!existing) return false
-  const remainingIds = (await categoryProductIds({ db, organizationId, siteId, locationId }, existing.category_id)).filter(id => id !== productId)
-  const now = new Date().toISOString()
-  await executeBatch(db, [
-    ...resourceLocalizationDeletionQueries('product', { query: 'SELECT id FROM products WHERE id = ? AND site_id = ?', params: [productId, siteId] }),
-    { query: `DELETE FROM media_placements WHERE owner_type = 'review' AND owner_id IN (SELECT id FROM reviews WHERE product_id = ?)`, params: [productId] },
-    { query: `DELETE FROM reviews WHERE product_id = ?`, params: [productId] },
-    { query: `DELETE FROM media_placements WHERE owner_type = 'product' AND owner_id = ? AND organization_id = ? AND site_id = ?`, params: [productId, organizationId, siteId] },
-    { query: `DELETE FROM products WHERE id = ? AND organization_id = ? AND site_id = ? AND location_id = ? AND product_type = 'standard'`, params: [productId, organizationId, siteId, locationId] },
-    denseOrderQuery('products', remainingIds, {
-      sql: `organization_id = ? AND site_id = ? AND location_id = ? AND category_id = ? AND product_type = 'standard'`,
-      params: [organizationId, siteId, locationId, existing.category_id],
-    }, actor, now),
-    publicResourceCacheInvalidationQuery(siteId, 'product.deleted'),
-  ], { operation: 'delete Product' })
-  await productEvent(db, 'product.deleted', { organizationId, siteId, locationId, actor, productId, metadata: { category_id: existing.category_id } })
-  return true
-}
-
-export async function deleteProductCategory(
-  db: DbClient,
-  organizationId: string,
-  siteId: string,
-  locationId: string,
-  categoryId: string,
-  actor: string,
-): Promise<number> {
-  await assertLocationOwnership(db, organizationId, siteId, locationId)
-  const category = await requireProductCategory(db, organizationId, siteId, locationId, categoryId)
-  const deletedIds = await categoryProductIds({ db, organizationId, siteId, locationId }, categoryId)
-  const idJson = d1JsonArray(deletedIds)
-  const remainingCategoryIds = (await listProductCategories({ db, organizationId, siteId, locationId }))
-    .map(row => row.id)
-    .filter(id => id !== categoryId)
-  const now = new Date().toISOString()
-  await executeBatch(db, [
-    ...resourceLocalizationDeletionQueries('product', { query: 'SELECT value FROM json_each(?)', params: [idJson] }),
-    ...resourceLocalizationDeletionQueries('product_category', { query: 'SELECT id FROM product_categories WHERE id = ? AND site_id = ?', params: [categoryId, siteId] }),
-    { query: `DELETE FROM media_placements WHERE owner_type = 'review' AND owner_id IN (SELECT id FROM reviews WHERE product_id IN (SELECT value FROM json_each(?)))`, params: [idJson] },
-    { query: `DELETE FROM reviews WHERE product_id IN (SELECT value FROM json_each(?))`, params: [idJson] },
-    { query: `DELETE FROM media_placements WHERE owner_type = 'product' AND owner_id IN (SELECT value FROM json_each(?)) AND organization_id = ? AND site_id = ?`, params: [idJson, organizationId, siteId] },
-    { query: `DELETE FROM products WHERE category_id = ? AND organization_id = ? AND site_id = ? AND location_id = ? AND product_type = 'standard'`, params: [categoryId, organizationId, siteId, locationId] },
-    { query: `DELETE FROM product_categories WHERE id = ? AND organization_id = ? AND site_id = ? AND location_id = ?`, params: [categoryId, organizationId, siteId, locationId] },
-    denseOrderQuery('product_categories', remainingCategoryIds, {
-      sql: `organization_id = ? AND site_id = ? AND location_id = ? AND product_type = 'standard'`,
-      params: [organizationId, siteId, locationId],
-    }, actor, now),
-    publicResourceCacheInvalidationQuery(siteId, 'product.category_deleted'),
-  ], { operation: 'delete Product category' })
-  await productEvent(db, 'product.category_deleted', { organizationId, siteId, locationId, actor, metadata: { category_id: categoryId, name: category.name, product_count: deletedIds.length } })
-  return deletedIds.length
+  const rows = await queryAll<Row>(db, `SELECT ${PRODUCT_COLUMNS} FROM products p WHERE p.organization_id = ? AND p.id IN (SELECT value FROM json_each(?)) ORDER BY p.name, p.id`, [input.organizationId, d1JsonArray(touched)])
+  return hydrate(db, input.organizationId, rows.map(mapProductRow))
 }
