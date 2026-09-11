@@ -79,16 +79,29 @@ export default defineHandler(async (event) => {
     return jsonResponse({ error: 'Draft is no longer active (concurrent activation)' }, { status: 409 })
   }
 
-  const site = await ensureOnboardingSite(env, db, session.user.id, {
-    id: draft.id,
-    organization_id: draft.organization_id,
-    name: draft.name,
-    vertical: draft.vertical,
-    subdomain_candidate: draft.subdomain_candidate,
-  })
+  // Reopening is the only safe answer to a failure before the site is live. A
+  // draft left at 'committing' is invisible to everything that matters: resume,
+  // discard and the next save all look for an 'active' draft, so the owner can
+  // neither continue nor start over while the pending site keeps their address.
+  const reopenDraft = () => execute(db,
+    `UPDATE onboarding_drafts SET status = 'active', updated_at = ? WHERE id = ?`,
+    [new Date().toISOString(), draftId])
+
+  let site: Awaited<ReturnType<typeof ensureOnboardingSite>>
+  try {
+    site = await ensureOnboardingSite(env, db, session.user.id, {
+      id: draft.id,
+      organization_id: draft.organization_id,
+      name: draft.name,
+      vertical: draft.vertical,
+      subdomain_candidate: draft.subdomain_candidate,
+    })
+  } catch (error) {
+    await reopenDraft()
+    throw error
+  }
   if ('error' in site) {
-    await execute(db, `UPDATE onboarding_drafts SET status = 'active', updated_at = ? WHERE id = ?`,
-      [new Date().toISOString(), draftId])
+    await reopenDraft()
     return jsonResponse({ error: site.error }, { status: site.status })
   }
 
@@ -156,8 +169,7 @@ export default defineHandler(async (event) => {
     }
     // Still pending: reopen the draft so the owner can try again from where
     // they were rather than losing their answers.
-    await execute(db, `UPDATE onboarding_drafts SET status = 'active', updated_at = ? WHERE id = ?`,
-      [new Date().toISOString(), draftId])
+    await reopenDraft()
     return jsonResponse({ error: 'Could not finish creating your site. Please try again.' }, { status: 500 })
   }
 })
