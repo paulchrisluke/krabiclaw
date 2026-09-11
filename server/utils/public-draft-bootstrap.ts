@@ -168,7 +168,6 @@ export function buildPublicDraftBlawbyDocument(
         }],
         updated_at: heroContent?.updated_at || '',
       },
-      offerings: [],
       offering: null,
       qa: [],
       reviews: [],

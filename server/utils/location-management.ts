@@ -859,21 +859,17 @@ export async function deleteLocation(
   const statements = [
     ...prepareContentDocumentDeletion({ locationId, organizationId, siteId }),
     ...resourceLocalizationDeletionQueries('business_location', { query: 'SELECT id FROM business_locations WHERE id = ? AND organization_id = ? AND site_id = ?', params: [locationId, organizationId, siteId] }),
-    ...([
-      ['product', 'products'], ['product_category', 'product_categories'],
-    ] as const).flatMap(([type, table]) => resourceLocalizationDeletionQueries(type, {
-      query: `SELECT id FROM ${table} WHERE location_id = ? AND organization_id = ? AND site_id = ?`, params: [locationId, organizationId, siteId],
-    })),
+    // Deleting a location does NOT delete the products it offered: the
+    // catalog belongs to the organization and other locations may still sell
+    // them. The membership row goes (cascaded by the foreign key) and the
+    // product stays. Only the location's own media and redirects are removed.
     { query: `DELETE FROM site_redirects WHERE organization_id = ? AND site_id = ? AND (
         (owner_type = 'business_location' AND owner_id = ?) OR
-        (owner_type = 'product' AND owner_id IN (SELECT id FROM products WHERE location_id = ?)) OR
-        (owner_type = 'product_category' AND owner_id IN (SELECT id FROM product_categories WHERE location_id = ?)) OR
-        (owner_type = 'review' AND owner_id IN (SELECT id FROM reviews WHERE location_id = ?))
-      )`, params: [organizationId, siteId, locationId, locationId, locationId, locationId] },
-    { query: `DELETE FROM media_placements WHERE organization_id = ? AND site_id = ? AND (
-        (owner_type = 'product' AND owner_id IN (SELECT id FROM products WHERE location_id = ?)) OR
         (owner_type = 'review' AND owner_id IN (SELECT id FROM reviews WHERE location_id = ?))
       )`, params: [organizationId, siteId, locationId, locationId] },
+    { query: `DELETE FROM media_placements WHERE organization_id = ? AND site_id = ? AND
+        owner_type = 'review' AND owner_id IN (SELECT id FROM reviews WHERE location_id = ?)
+      `, params: [organizationId, siteId, locationId] },
     { query: 'DELETE FROM reviews WHERE location_id = ? AND organization_id = ? AND site_id = ?', params: [locationId, organizationId, siteId] },
     {
       query: `

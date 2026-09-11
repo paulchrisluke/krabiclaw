@@ -24,7 +24,6 @@ const SOCIAL_CARD_OWNERS = {
   // Articles and docs keep their picture in the leading image block, read
   // through `loadCoverBlockId`; `cover` is the social post's own slot.
   content_document: { table: 'content_documents', site: 'o.site_id', filter: "o.kind IN ('page','article','social_post') AND EXISTS (SELECT 1 FROM content_documents root WHERE root.id = COALESCE(o.root_id, o.id) AND (root.kind = 'page' OR root.status = 'published')) AND (o.kind != 'page' OR o.path != '/')", slots: ['cover', 'gallery'] },
-  offering: { table: 'offerings', site: 'o.site_id', filter: '1 = 1', slots: ['hero', 'thumbnail', 'gallery'] },
   review: { table: 'reviews', site: 'o.site_id', filter: "o.status = 'approved' AND o.site_id IS NOT NULL", slots: ['portrait', 'gallery'] },
 } satisfies Record<string, { table: string; site: string; filter: string; slots: string[] }>
 
@@ -134,7 +133,7 @@ async function loadOwner(db: DbClient, owner: SocialCardOwner): Promise<OwnerRec
       return await queryFirst<OwnerRecord>(db, `SELECT p.organization_id, p.site_id,
         COALESCE(NULLIF(trim(p.seo_title), ''), p.name) AS title,
         COALESCE(NULLIF(trim(p.seo_description), ''), NULLIF(trim(p.description), '')) AS description,
-        CASE p.product_type WHEN 'experience' THEN 'Experience' ELSE 'Product' END AS label, bl.title AS location
+        'Product' AS label, NULL AS location
         FROM products p JOIN business_locations bl ON bl.id = p.location_id WHERE p.id = ? LIMIT 1`, [owner.owner_id]) ?? null
     case 'content_document':
       return await queryFirst<OwnerRecord>(db, `SELECT d.organization_id, d.site_id,

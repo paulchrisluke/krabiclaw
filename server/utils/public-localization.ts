@@ -47,8 +47,7 @@ const PROJECTED_FIELD_NAMES: Partial<Record<LocalizedResourceType, Readonly<Reco
     address: 'address_translated',
   },
   product: {
-    tags_json: 'tags',
-    details_json: 'details',
+    tags: 'tags',
   },
 
 }

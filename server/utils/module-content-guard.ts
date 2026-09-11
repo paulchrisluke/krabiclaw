@@ -23,7 +23,10 @@ async function productsHaveLiveData(db: DbClient, scope: ModuleContentGuardScope
 async function experiencesHasLiveData(db: DbClient, scope: ModuleContentGuardScope): Promise<boolean> {
   const row = await queryFirst<{ id: string }>(db, `
     SELECT p.id FROM products p
-    WHERE p.product_type = \'experience\' AND p.site_id = ? ${scope.locationId ? 'AND p.location_id = ?' : ''} AND p.is_visible = 1 AND p.available = 1
+    JOIN product_booking_configs cfg ON cfg.product_id = p.id
+    JOIN product_publications pub ON pub.product_id = p.id AND pub.site_id = ?
+    ${scope.locationId ? 'JOIN product_locations pl ON pl.product_id = p.id AND pl.location_id = ? AND pl.published = 1' : ''}
+    WHERE p.active = 1 AND pub.published = 1
     LIMIT 1
   `, scope.locationId ? [scope.siteId, scope.locationId] : [scope.siteId])
   return Boolean(row)

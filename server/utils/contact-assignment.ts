@@ -36,7 +36,9 @@ export async function resolveContactSubmissionAssignment(
   if (opts.experienceId) {
     experience = await queryFirst<{ id: string; title: string; location_id: string }>(
       db,
-      'SELECT p.id, p.name AS title, p.location_id FROM products p WHERE p.product_type = \'experience\' AND p.id = ? AND p.site_id = ? LIMIT 1',
+      `SELECT p.id, p.name AS title, (SELECT pl.location_id FROM product_locations pl WHERE pl.product_id = p.id AND pl.published = 1 LIMIT 1) AS location_id
+         FROM products p JOIN product_publications pub ON pub.product_id = p.id
+        WHERE p.id = ? AND pub.site_id = ? LIMIT 1`,
       [opts.experienceId, opts.siteId],
     )
     if (!experience) {

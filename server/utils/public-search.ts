@@ -97,7 +97,7 @@ interface TenantBlogDocRow {
   slug: string
   excerpt: string | null
   category: string | null
-  tags_json: string | null
+  tags_metadata: string | null
   seo_description: string | null
   seo_keywords: string | null
 }
@@ -429,14 +429,14 @@ export async function buildTenantBlogDocuments(db: DbClient, platformSiteId?: st
   const platformId = platformSiteId ?? (await getPlatformSite(db)).id
   const [posts, contentBodies] = await Promise.all([queryAll<TenantBlogDocRow>(db, `
     SELECT d.id, d.site_id, d.title, d.slug, d.summary AS excerpt, d.metadata_json ->> '$.category' AS category,
-      d.metadata_json ->> '$.tags' AS tags_json, d.seo_description, d.seo_keywords, s.theme_id, s.vertical
+      d.metadata_json ->> '$.tags' AS tags_metadata, d.seo_description, d.seo_keywords, s.theme_id, s.vertical
     FROM content_documents d JOIN sites s ON s.id = d.site_id
     WHERE d.kind = 'article' AND d.row_role = 'root' AND d.status = 'published' AND d.site_id <> ? AND d.visibility = 'public'
     ORDER BY d.site_id, d.published_at DESC, d.updated_at DESC
   `, [platformId]), loadContentBodies(db, platformId, false)])
 
   return (posts ?? []).map((post) => {
-    const tags = post.tags_json ? JSON.parse(post.tags_json) as string[] : []
+    const tags = post.tags_metadata ? JSON.parse(post.tags_metadata) as string[] : []
     const canonicalBody = contentBodies.get(post.id) ?? ''
     const snippet = truncateSnippet(post.excerpt || post.seo_description || canonicalBody || post.title)
     const body = [
