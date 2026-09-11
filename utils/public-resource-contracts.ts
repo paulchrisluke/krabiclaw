@@ -1,5 +1,5 @@
 import type { RenderedBookingPolicySummary } from '~/server/utils/reservations'
-import type { Product } from '~/server/types/products'
+import type { Collection, Product } from '~/server/types/products'
 import type { PublicTenantPage } from '~/server/utils/public-tenant-pages'
 import type { SocialImageSource } from '~/utils/social-metadata'
 
@@ -90,6 +90,7 @@ export interface PublicPagePayload {
   experiencePolicySiteDefault: RenderedBookingPolicySummary | null
   experiencePolicyById: Record<string, RenderedBookingPolicySummary>
   products: Product[]
+  collections: Collection[]
   localeRepresentations: PublicLocaleRepresentation[]
 }
 
@@ -157,8 +158,6 @@ export const isPublicPagePayload = (
   && isRecord(value.experiencePolicyById)
   && Object.values(value.experiencePolicyById).every(isRecord)
   && (value.experienceDetail === null || isRecord(value.experienceDetail))
-  && Array.isArray(value.experiencesList)
-  && value.experiencesList.every(item => isRecord(item) && typeof item.id === 'string')
   && Array.isArray(value.products)
   && value.products.every(isPublicProduct)
   && Array.isArray(value.localeRepresentations)

@@ -14,7 +14,6 @@ import {
   type PublicPageDataset,
 } from "~/composables/usePublicPageRequest";
 import { useSiteShellState } from "~/composables/useSiteShell";
-import type { Experience } from "~/server/utils/experiences";
 import type { Product } from '~/server/types/products'
 import {
   isPublicPagePayload,
@@ -124,17 +123,35 @@ export const usePublicPageData = async (options: {
 
   // Persistent chrome comes from the stable shell. Route-owned collections
   // come from the keyed page response and change with navigation.
-  const { locations, config, site, locales, hasExperiences } = shell;
+  const { locations, config, site, locales } = shell;
   const googleBusiness = computed(() => ({
     ...(shell.googleBusiness.value ?? {}),
     reviews: data.value?.globalReviews ?? [],
     posts: data.value?.globalPosts ?? [],
   }))
-  const experiencesList = computed(() => data.value?.experiencesList ?? []);
   const products = computed(() => data.value?.products ?? []);
-  const productsByCategory = computed(() => {
-    return products.value.reduce<Record<string, Product[]>>((groups, product) => {
-      (groups[product.category.name] ??= []).push(product);
+  const collections = computed(() => data.value?.collections ?? []);
+  /**
+   * Products grouped by the collections they belong to, in the merchant's
+   * order. A product in two collections appears in both — that is what
+   * membership means — and one in none appears in neither, rather than being
+   * swept into a bucket nobody created.
+   */
+  const productsByCollection = computed(() => {
+    const positions = new Map<string, Map<string, number>>();
+    for (const product of products.value) {
+      for (const membership of product.collections) {
+        const forCollection = positions.get(membership.collection_id) ?? new Map<string, number>();
+        forCollection.set(product.id, membership.sort_order);
+        positions.set(membership.collection_id, forCollection);
+      }
+    }
+    return collections.value.reduce<Record<string, Product[]>>((groups, collection) => {
+      const forCollection = positions.get(collection.id);
+      if (!forCollection) return groups;
+      groups[collection.name] = products.value
+        .filter(product => forCollection.has(product.id))
+        .sort((left, right) => (forCollection.get(left.id)! - forCollection.get(right.id)!) || left.name.localeCompare(right.name));
       return groups;
     }, {});
   });
@@ -159,9 +176,6 @@ export const usePublicPageData = async (options: {
   const tenantPage = computed(() => data.value?.tenant_page ?? null);
 
   const reservationPolicyByLocation = computed(() => data.value?.reservationPolicyByLocation ?? {});
-  const experiencePolicySiteDefault = computed(() => data.value?.experiencePolicySiteDefault ?? null);
-  const experiencePolicyById = computed(() => data.value?.experiencePolicyById ?? {});
-  const experienceDetail = computed(() => (data.value?.experienceDetail ?? null) as Experience | null);
 
   // ── Content ───────────────────────────────────────────────
   const contentMap = computed(() => {
@@ -296,17 +310,13 @@ export const usePublicPageData = async (options: {
     tenantPage,
     locales,
     reservationPolicyByLocation,
-    experiencePolicySiteDefault,
-    experiencePolicyById,
-    hasExperiences,
-    experiencesList,
-    experienceDetail,
     getField,
     getFieldStr,
     getHero,
     contentMap,
     products,
-    productsByCategory,
+    productsByCollection,
+    collections,
     error,
     localeRepresentations,
   };

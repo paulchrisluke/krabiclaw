@@ -15,14 +15,14 @@ import {
   normalizePublicReviewAggregateRows,
 } from "~/server/utils/public-review-aggregate";
 import { getPublicTenantPageForPath, type PublicTenantPage } from "~/server/utils/public-tenant-pages";
-import { listSiteProducts } from '~/server/utils/product-management'
+import { listCollections, listSiteProducts } from '~/server/utils/product-management'
 import { verifyPreviewToken } from "~/server/utils/preview-token";
 import {
   toResolvedMediaAsset,
   type MediaAsset,
 } from "~/server/utils/media-asset-manager";
 import { getMediaPlacements } from '~/server/utils/media-placement'
-import type { Product } from '~/server/types/products'
+import type { Collection, Product } from '~/server/types/products'
 import { resolveSiteCmsCapabilities } from '~/server/utils/cms-capabilities'
 import { attachCover } from "~/server/utils/content/publishing";
 import { COVER_SELECT, coverJoinSql } from "~/server/utils/content/cover";
@@ -615,6 +615,7 @@ async function loadPublicPageSource(
   const contentRows: SiteContent[] = tenantPage ? tenantPageToContentRows(tenantPage) : []
 
   let products: Product[] = []
+  let collections: Collection[] = []
   if (includeProducts) {
     const locationCapabilityRows = (batchResults[shellIndexes.locations] as { results: Record<string, unknown>[] })?.results ?? []
     const enabledLocationIds = new Set(locationCapabilityRows.filter((location) => {
@@ -651,7 +652,12 @@ async function loadPublicPageSource(
         gallery: media.filter(item => item.slot === 'gallery').map(toResolvedMediaAsset),
       }
     })
+    // Collections are the site's merchandising order, which is what the
+    // public grouping renders. A page with products and no collections shows
+    // no groups rather than inventing one.
+    collections = await listCollections(db, { organizationId: orgId, siteId })
     if (localizedLocale) {
+      collections = projectExactLocalizedCollection('collection', collections, publicLocalizations)
       products = projectExactLocalizedCollection('product', products, publicLocalizations).map(product => ({
         ...product,
         image: product.image ? projectLocalizedMediaAlt([product.image], publicLocalizations)[0] ?? null : null,
@@ -870,6 +876,7 @@ async function loadPublicPageSource(
     content_blocks: groupContentBlocks(contentRows),
     tenant_page: tenantPage,
     products,
+    collections,
     locationReviews: (locationReviewRows?.results ?? []).map(review => ({ ...review, google_review_metadata: parseGoogleReviewMetadata(review.google_review_metadata) })),
     globalReviews: needsGlobalReviews ? (reviewRows.results ?? []).map(review => ({ ...review, google_review_metadata: parseGoogleReviewMetadata(review.google_review_metadata) })) : [],
     reviewsAggregate: requestedDatasets.has("reviews") ? reviewsAggregate : null,
