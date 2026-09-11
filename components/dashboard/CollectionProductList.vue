@@ -1,7 +1,7 @@
 <template>
-  <UDashboardPanel id="location-product-category">
+  <UDashboardPanel id="location-collection">
     <template #header>
-      <UDashboardNavbar :title="category?.name ?? presentation.collectionLabel" :toggle="false">
+      <UDashboardNavbar :title="collection?.name ?? presentation.collectionLabel" :toggle="false">
         <template #leading>
           <DashboardNavbarLeading :to="productsPath" :label="presentation.collectionLabel" />
         </template>
@@ -12,7 +12,7 @@
       <DashboardListEditor
         v-model:editing="editing"
         v-model:selected="selected"
-        :title="category?.name ?? presentation.collectionLabel"
+        :title="collection?.name ?? presentation.collectionLabel"
         :description="`Customers see ${presentation.itemLabelPlural.toLowerCase()} in this order.`"
         :items="listItems"
         :pending="pending"
@@ -54,7 +54,7 @@
         save-label="Move"
         @save="moveSelected"
       >
-        <UFormField :label="`Choose a ${presentation.categoryLabel.toLowerCase()}`">
+        <UFormField :label="`Choose a ${presentation.collectionGroupLabel.toLowerCase()}`">
           <div class="space-y-2">
             <label
               v-for="option in moveTargets"
@@ -66,7 +66,7 @@
               <span class="text-sm text-highlighted">{{ option.name }}</span>
             </label>
             <p v-if="!moveTargets.length" class="text-sm text-muted">
-              There is nowhere else to move these yet. Add another {{ presentation.categoryLabel.toLowerCase() }} first.
+              There is nowhere else to move these yet. Add another {{ presentation.collectionGroupLabel.toLowerCase() }} first.
             </p>
           </div>
         </UFormField>
@@ -82,7 +82,9 @@ import DashboardMediaThumb from '~/components/dashboard/DashboardMediaThumb.vue'
 import DashboardListItemDialog from '~/components/dashboard/DashboardListItemDialog.vue'
 import type { Product } from '~/server/types/products'
 import { getErrorMessage } from '~/utils/errors'
-import { formatProductPriceLabel } from '~/utils/product-money'
+import { formatProductMoney } from '~/utils/product-money'
+import { selectPrice } from '~/shared/prices'
+import { isCurrencyCode } from '~/shared/currencies'
 import { requireProductPresentation } from '~/utils/product-presentation'
 
 
@@ -96,36 +98,59 @@ const dashboardLocation = useDashboardLocation()
 const vertical = dashboard.site.value?.vertical
 if (!vertical) throw createError({ statusCode: 500, statusMessage: 'Site vertical is not configured' })
 const presentation = requireProductPresentation(vertical)
-const categoryId = computed(() => String(route.params.categoryId ?? ''))
+const collectionId = computed(() => String(route.params.collectionId ?? route.params.categoryId ?? ''))
+const rawCurrency = dashboard.site.value?.default_currency
+if (!isCurrencyCode(rawCurrency)) throw createError({ statusCode: 500, statusMessage: 'Unsupported site currency' })
+const currency = rawCurrency
 const locationId = computed(() => dashboardLocation.currentLocation.value?.id ?? null)
 // The path comes from the route this screen is mounted on, not from the
 // location selector: an unresolved selector left it empty, and an empty path is
 // a link to nowhere and, where it roots the editor frame, a frame rooted at ''.
 const locationPath = computed(() => `/dashboard/${String(route.params.orgSlug)}/sites/${String(route.params.siteSlug)}/locations/${String(route.params.locationSlug)}`)
 const productsPath = computed(() => `${locationPath.value}/products`)
-const categoryPath = computed(() => `${productsPath.value}/${categoryId.value}`)
+const collectionPath = computed(() => `${productsPath.value}/${collectionId.value}`)
 
 const catalog = useLocationProductCatalog(siteId, locationId)
-const categories = catalog.categories
+const collections = catalog.collections
 const pending = catalog.pending
 const loadError = computed(() => (catalog.error.value ? getErrorMessage(catalog.error.value, `Failed to load ${presentation.itemLabelPlural.toLowerCase()}`) : null))
 
 // Reorder is a mode: the local order stands while the edit state is open and
 // commits once when it closes, so it is held apart from the shared catalog.
 const localOrder = ref<Product[] | null>(null)
-const products = computed(() => localOrder.value ?? catalog.products.value.filter(row => row.category_id === categoryId.value))
+/**
+ * The products in this collection, in the order the merchant set.
+ *
+ * Position is on the membership row, so the same product can sit third here
+ * and first in another collection without being copied.
+ */
+const products = computed(() => {
+  if (localOrder.value) return localOrder.value
+  const positions = new Map<string, number>()
+  for (const product of catalog.products.value) {
+    const membership = product.collections.find(entry => entry.collection_id === collectionId.value)
+    if (membership) positions.set(product.id, membership.sort_order)
+  }
+  return catalog.products.value
+    .filter(product => positions.has(product.id))
+    .sort((left, right) => (positions.get(left.id)! - positions.get(right.id)!) || left.name.localeCompare(right.name))
+})
 const editing = ref(false)
 const selected = ref<string[]>([])
 const orderDirty = ref(false)
 
-const category = computed(() => categories.value.find(row => row.id === categoryId.value) ?? null)
+const collection = computed(() => collections.value.find(row => row.id === collectionId.value) ?? null)
 const listItems = computed(() => products.value.map(row => ({ id: row.id, title: row.name, row })))
-const moveTargets = computed(() => categories.value.filter(row => row.id !== categoryId.value))
+const moveTargets = computed(() => collections.value.filter(row => row.id !== collectionId.value))
 
-useSeoMeta({ title: () => `${category.value?.name ?? presentation.collectionLabel} | KrabiClaw Dashboard`, robots: 'noindex, nofollow' })
+useSeoMeta({ title: () => `${collection.value?.name ?? presentation.collectionLabel} | KrabiClaw Dashboard`, robots: 'noindex, nofollow' })
 
+/** The offer this location shows, resolved through the one selection contract. */
 function priceLabel(product: Product) {
-  return formatProductPriceLabel(product)
+  const selection = { currency, location_id: locationId.value, at: new Date().toISOString() }
+  const offers = product.variants.flatMap(variant => selectPrice(variant.prices, selection) ?? [])
+  const lowest = offers.reduce<typeof offers[number] | null>((best, offer) => (!best || offer.unit_amount < best.unit_amount ? offer : best), null)
+  return formatProductMoney(lowest)
 }
 
 const load = catalog.refresh
@@ -133,8 +158,8 @@ const load = catalog.refresh
 // A category that is not in the catalog is not a page. Thrown from an effect it
 // would be an unhandled rejection rather than the 404 screen, so it is shown.
 watchEffect(() => {
-  if (!catalog.pending.value && catalog.categories.value.length && !category.value) {
-    showError(createError({ statusCode: 404, statusMessage: `${presentation.categoryLabel} not found` }))
+  if (!catalog.pending.value && catalog.collections.value.length && !collection.value) {
+    showError(createError({ statusCode: 404, statusMessage: `${presentation.collectionGroupLabel} not found` }))
   }
 })
 
@@ -157,9 +182,10 @@ async function commitOrder() {
   const order = products.value.map(row => row.id)
   localOrder.value = null
   try {
-    await dashboardApi(`/api/editor/sites/${siteId}/locations/${id}/products/order`, {
+    // The complete intended membership and order for this collection.
+    await dashboardApi(`/api/editor/sites/${siteId}/collections/${collectionId.value}/products`, {
       method: 'PUT',
-      body: { category_id: categoryId.value, product_ids: order },
+      body: { product_ids: order },
       validate: isRecord,
     })
   } catch (error) {
@@ -189,10 +215,22 @@ async function moveSelected() {
     // otherwise fire commitOrder with the pre-move list, sending IDs that no
     // longer belong to this category.
     await commitOrder()
-    await dashboardApi(`/api/editor/sites/${siteId}/locations/${id}/products/move`, {
-      method: 'POST',
-      body: { product_ids: selected.value, category_id: moveTargetId.value },
-      validate: isRecord,
+    // Moving is a membership change: the products leave this collection and
+    // join the target, and each collection's order is sent whole.
+    const remaining = products.value.filter(product => !selected.value.includes(product.id)).map(product => product.id)
+    const targetPositions = new Map<string, number>()
+    for (const product of catalog.products.value) {
+      const membership = product.collections.find(entry => entry.collection_id === moveTargetId.value)
+      if (membership) targetPositions.set(product.id, membership.sort_order)
+    }
+    const targetOrder = [...targetPositions.keys()]
+      .sort((left, right) => targetPositions.get(left)! - targetPositions.get(right)!)
+      .concat(selected.value.filter(id => !targetPositions.has(id)))
+    await dashboardApi(`/api/editor/sites/${siteId}/collections/${collectionId.value}/products`, {
+      method: 'PUT', body: { product_ids: remaining }, validate: isRecord,
+    })
+    await dashboardApi(`/api/editor/sites/${siteId}/collections/${moveTargetId.value}/products`, {
+      method: 'PUT', body: { product_ids: targetOrder }, validate: isRecord,
     })
     moveDialogOpen.value = false
     selected.value = []
@@ -208,16 +246,16 @@ async function moveSelected() {
 
 /** Adding opens the item's own level, the same screen editing uses. */
 function openNew() {
-  void navigateTo(`${categoryPath.value}/new`)
+  void navigateTo(`${collectionPath.value}/new`)
 }
 
 
 /** An item is its own screen now, so opening one is navigation, not a sheet. */
 function openExisting(item: { row: Product }) {
-  return navigateTo(`${categoryPath.value}/${item.row.id}`)
+  return navigateTo(`${collectionPath.value}/${item.row.id}`)
 }
 
-watch([locationId, categoryId], () => {
+watch([locationId, collectionId], () => {
   orderDirty.value = false
   localOrder.value = null
   editing.value = false
