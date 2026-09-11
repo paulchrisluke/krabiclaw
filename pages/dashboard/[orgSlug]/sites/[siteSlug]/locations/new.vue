@@ -1,5 +1,8 @@
 <template>
-  <div class="flex h-screen flex-col overflow-hidden bg-muted text-highlighted">
+  <!-- This level fills the pane its parent gives it. h-screen put the footer's
+       Back/Next below the fold, because the route renders inside the site hub
+       rather than on a screen of its own. -->
+  <div class="flex size-full min-h-0 flex-col overflow-hidden bg-muted text-highlighted">
 
     <header class="flex h-[60px] shrink-0 items-center gap-4 border-b border-default bg-default px-5">
       <div class="flex items-center gap-2.5">
@@ -21,12 +24,46 @@
       class="grid min-h-0 flex-1 overflow-hidden"
       style="grid-template-columns: minmax(24rem, 45%) 1fr; grid-template-rows: minmax(0, 1fr)"
     >
-      <OnboardingWizard
-        mode="add-location"
-        :existing-org-slug="orgSlug"
-        :existing-site-slug="siteSlug"
-        @site-created="onLocationCreated"
-      />
+      <!-- The step column, the same screens the new-site flow walks. -->
+      <div class="flex min-h-0 flex-col border-r border-default bg-default">
+        <div v-if="created" class="flex min-h-0 flex-1 flex-col justify-center gap-4 px-6">
+          <h1 class="text-2xl font-bold leading-snug text-highlighted">Location added</h1>
+          <p class="text-[15px] leading-relaxed text-toned">
+            <strong class="text-highlighted">{{ state.details.name }}</strong> is on your site now, and the preview
+            beside this is showing it.
+          </p>
+          <UButton
+            class="self-start"
+            label="Back to dashboard"
+            :to="`/dashboard/${orgSlug}/sites/${siteSlug}`"
+          />
+        </div>
+
+        <template v-else-if="currentStep">
+          <div class="min-h-0 flex-1 overflow-y-auto px-6 pb-6">
+            <OnboardingStepScreen :step="currentStep" @advance="goNext" />
+          </div>
+
+          <div class="shrink-0 border-t border-default px-6 py-4">
+            <p v-if="draft.error.value" class="mb-3 text-sm text-error">{{ draft.error.value }}</p>
+            <div class="flex items-center justify-between gap-4">
+              <UButton
+                variant="link"
+                color="neutral"
+                label="Back"
+                :disabled="!previousStep"
+                @click="goBack"
+              />
+              <UButton
+                :label="nextLabel"
+                :loading="draft.busy.value"
+                :disabled="!canAdvance"
+                @click="goNext"
+              />
+            </div>
+          </div>
+        </template>
+      </div>
       <OnboardingPreviewPane
         :iframe-src="iframeSrc"
         :site-locations="siteLocations"
@@ -69,9 +106,21 @@
 </template>
 
 <script setup lang="ts">
+import OnboardingStepScreen from '~/lib/components/workspace/onboarding/OnboardingStepScreen.vue'
+import {
+  onboardingStep,
+  startOnboardingFlow,
+  useOnboardingSteps,
+  type OnboardingStepId,
+} from '~/composables/useOnboardingFlow'
+import { useOnboardingDraft } from '~/composables/useOnboardingDraft'
 import { normalizeVertical, type SiteVertical } from '~/utils/vertical-copy'
 
-definePageMeta({ layout: 'editor', skipDashboardContext: true, ssr: false })
+// Adding a location is its own screen with its own header and preview, like the
+// location editor next to it — not a pane inside the site hub. Without
+// ownsChrome the site hub kept drawing its rail and navbar around this one, so
+// the footer's Back/Next sat below the fold.
+definePageMeta({ layout: 'editor', skipDashboardContext: true, ssr: false, ownsChrome: true })
 
 const route = useRoute()
 const router = useRouter()
@@ -161,8 +210,8 @@ const loadContext = async () => {
   }
 }
 
-// Called by OnboardingWizard after the location is created — reload locations and preview the new one
-const onLocationCreated = async ({ locationSlug }: { locationSlug: string | null }) => {
+// The location exists now: reload the site's locations and frame the new one.
+const onLocationCreated = async (locationSlug: string | null) => {
   contextError.value = null
   try {
     await dashboard.refresh()
@@ -172,8 +221,50 @@ const onLocationCreated = async ({ locationSlug }: { locationSlug: string | null
   }
   previewReloadToken.value = Date.now()
 
-  const created = locationSlug ? siteLocations.value.find(l => l.slug === locationSlug) : null
-  if (created) selectedLocationId.value = created.id
+  const addedLocation = locationSlug ? siteLocations.value.find(l => l.slug === locationSlug) : null
+  if (addedLocation) selectedLocationId.value = addedLocation.id
+}
+
+// Add-location walks the same step table as /dashboard/onboarding, minus the
+// business type, the brand and the activation: the site already has all three.
+// It is not routed — the whole walk is this one create level — so the step it is
+// on is state rather than a URL segment.
+const state = startOnboardingFlow('add-location')
+const draft = useOnboardingDraft()
+const { nextOf, previousOf } = useOnboardingSteps()
+const currentStepId = ref<OnboardingStepId>('name')
+const currentStep = computed(() => onboardingStep(currentStepId.value, 'add-location'))
+const previousStep = computed(() => currentStep.value ? previousOf(currentStep.value.id) : null)
+const created = computed(() => state.value.created !== null)
+const nextLabel = computed(() => currentStep.value?.nextLabel?.(state.value)
+  ?? (currentStep.value?.optional && !currentStep.value.complete(state.value) ? 'Skip for now' : 'Next'))
+const canAdvance = computed(() => {
+  const step = currentStep.value
+  if (!step) return false
+  return step.optional || step.complete(state.value)
+})
+
+function goBack() {
+  const target = previousStep.value
+  if (target) currentStepId.value = target.id
+}
+
+// There is no draft here: nothing is written until the last step, which adds
+// the location to the site this route is already on.
+async function goNext() {
+  const step = currentStep.value
+  if (!step || !canAdvance.value) return
+
+  if (step.action === 'lookup' && !await draft.lookup(state.value.mapsUrl)) return
+
+  if (step.action === 'commit') {
+    if (!await draft.addLocation()) return
+    await onLocationCreated(state.value.created?.locationSlug ?? null)
+    return
+  }
+
+  const target = nextOf(step.id)
+  if (target) currentStepId.value = target.id
 }
 
 onMounted(loadContext)

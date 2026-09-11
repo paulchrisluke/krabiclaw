@@ -83,7 +83,8 @@
         title="Site preview"
         sandbox="allow-same-origin allow-scripts allow-forms"
         class="size-full min-h-0 flex-1 border-0 bg-default"
-        @load="onFrameLoad"
+        @load="settleFrame"
+        @error="settleFrame"
       />
       <div v-else-if="currentTabIsLocationScoped && !selectedLocationId" class="flex flex-1 items-center justify-center p-6 text-muted">
         Select a location to preview this page.
@@ -147,17 +148,39 @@ defineEmits<{
 // finish, and only the newest one is applied.
 const loadedIframeSrc = ref(props.iframeSrc)
 const frameLoading = ref(Boolean(props.iframeSrc))
-const onFrameLoad = () => {
+// A load that never settles froze the pane for the rest of the flow: the watch
+// below defers a newer URL while one is still loading, so a document that
+// errored or hung meant every later answer stopped updating the preview. A
+// cross-origin frame does not reliably fire `error`, so the timeout is the real
+// guarantee and `error` only makes the common case immediate.
+const FRAME_SETTLE_TIMEOUT_MS = 15_000
+let frameSettleTimer: ReturnType<typeof setTimeout> | null = null
+
+function armFrameSettleTimer() {
+  if (frameSettleTimer !== null) clearTimeout(frameSettleTimer)
+  frameSettleTimer = frameLoading.value ? setTimeout(settleFrame, FRAME_SETTLE_TIMEOUT_MS) : null
+}
+
+function settleFrame() {
   frameLoading.value = false
   if (loadedIframeSrc.value !== props.iframeSrc) {
     frameLoading.value = true
     loadedIframeSrc.value = props.iframeSrc
   }
+  armFrameSettleTimer()
 }
+
 watch(() => props.iframeSrc, (next) => {
   if (frameLoading.value && next && loadedIframeSrc.value) return
   frameLoading.value = Boolean(next)
   loadedIframeSrc.value = next
+  armFrameSettleTimer()
+})
+
+onMounted(armFrameSettleTimer)
+onUnmounted(() => {
+  if (frameSettleTimer !== null) clearTimeout(frameSettleTimer)
+  frameSettleTimer = null
 })
 
 const previewFrameId = useId()

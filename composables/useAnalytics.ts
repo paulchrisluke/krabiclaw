@@ -216,10 +216,6 @@ export const useAnalytics = () => {
     trackEvent('site_created', { site_id: siteId })
   }
 
-  const trackOnboardingCompleted = (siteId: string) => {
-    trackEvent('onboarding_completed', { site_id: siteId })
-  }
-
   const trackDomainConnected = (domain: string, siteId: string) => {
     trackEvent('domain_connected', { domain, site_id: siteId })
   }
@@ -323,7 +319,6 @@ export const useAnalytics = () => {
     trackEvent,
     trackSignUp,
     trackSiteCreated,
-    trackOnboardingCompleted,
     trackDomainConnected,
     trackPlanViewed,
     trackCheckoutStarted,

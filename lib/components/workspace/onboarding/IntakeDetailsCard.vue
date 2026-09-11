@@ -3,21 +3,21 @@
       <div class="grid gap-4">
         <template v-if="section === 'location'">
           <UFormField label="Street address" :required="requireLocationBasics">
-            <UInput v-model="form.streetAddress" class="w-full" size="xl" placeholder="123 Main Street" />
+            <UInput v-model="form.streetAddress" class="w-full" placeholder="123 Main Street" />
           </UFormField>
           <UFormField label="Unit, floor, or neighborhood">
-            <UInput v-model="form.addressLine2" class="w-full" size="xl" placeholder="Suite, building, landmark" />
+            <UInput v-model="form.addressLine2" class="w-full" placeholder="Suite, building, landmark" />
           </UFormField>
           <div class="@container">
             <div class="grid gap-4 @sm:grid-cols-2">
               <UFormField label="City or town" :required="requireLocationBasics">
-                <UInput v-model="form.city" class="w-full" size="xl" placeholder="City" />
+                <UInput v-model="form.city" class="w-full" placeholder="City" />
               </UFormField>
               <UFormField label="Province or region">
-                <UInput v-model="form.region" class="w-full" size="xl" placeholder="State or province" />
+                <UInput v-model="form.region" class="w-full" placeholder="State or province" />
               </UFormField>
               <UFormField label="Postal code">
-                <UInput v-model="form.postalCode" class="w-full" size="xl" inputmode="numeric" placeholder="ZIP or postal code" />
+                <UInput v-model="form.postalCode" class="w-full" inputmode="numeric" placeholder="ZIP or postal code" />
               </UFormField>
               <UFormField label="Country">
                 <USelectMenu
@@ -26,7 +26,6 @@
                   value-key="code"
                   label-key="name"
                   class="w-full"
-                  size="xl"
                   placeholder="Select country"
                   :search-input="{ placeholder: 'Search country...', icon: 'i-lucide-search' }"
                   :filter-fields="['name', 'code', 'dialCode']"
@@ -86,7 +85,6 @@
             <UInput
               :model-value="phone"
               class="min-w-0 flex-1"
-              size="xl"
               type="tel"
               autocomplete="tel-national"
               :disabled="!countryCode"
@@ -111,12 +109,10 @@
         </UFormField>
       </div>
 
-      <div class="grid gap-3">
+      <div v-if="actionLabel" class="grid gap-3">
         <UButton
           color="primary"
-          size="xl"
           block
-          class="justify-center"
           :loading="loading"
           :disabled="disabled || !canSubmit"
           @click="$emit('submit')"
@@ -154,7 +150,8 @@ type IntakeForm = {
 const form = defineModel<IntakeForm>('form', { required: true })
 
 const props = defineProps<{
-  actionLabel: string
+  /** Omitted when the surface around the card owns the commit control. */
+  actionLabel?: string
   requireLocationBasics: boolean
   section: 'location' | 'contact' | 'currency'
   loading?: boolean

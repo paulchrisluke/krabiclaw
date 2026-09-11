@@ -104,7 +104,9 @@ export const IMPACT_GROUPS = [
   {
     id: 'onboarding',
     patterns: [
-      'pages/dashboard/onboarding.vue', 'lib/components/workspace/onboarding/**',
+      'pages/dashboard/onboarding.vue', 'pages/dashboard/onboarding/**',
+      'lib/components/workspace/onboarding/**',
+      'composables/useOnboardingFlow.ts', 'composables/useOnboardingDraft.ts',
       'pages/dashboard/**/locations/new.vue', 'server/api/dashboard/locations/add.post.ts',
       'server/api/dashboard/onboarding/**', 'server/api/sites.post.ts',
       'server/utils/onboarding-*.ts',
@@ -115,7 +117,7 @@ export const IMPACT_GROUPS = [
       'utils/phone.ts', 'utils/timezone.ts', 'utils/tenant-site-origin.ts',
     ],
     specs: [
-      'tests/e2e/onboarding-wizard.spec.ts',
+      'tests/e2e/onboarding.spec.ts',
       'tests/e2e/post-login.spec.ts',
     ],
   },

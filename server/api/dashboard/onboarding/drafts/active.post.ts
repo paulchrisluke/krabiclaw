@@ -4,7 +4,7 @@ import { getAuthSession } from '~/server/utils/auth'
 import { getPlaceDetails, PlaceDetailsError } from '~/server/utils/google-places'
 import { queryFirst } from '~/server/db'
 import {
-  buildOnboardingDraftPayload, getDraftMedia, parseOnboardingDraftPayload, upsertActiveOnboardingDraft, type DraftBrandInput, type DraftDetailsInput, type DraftUploadedImage, type OnboardingDraftPayload, type PlaceDetailsSnapshot, } from '~/server/utils/onboarding-drafts'
+  buildOnboardingDraftPayload, getDraftMedia, type DraftProductInput, parseOnboardingDraftPayload, upsertActiveOnboardingDraft, type DraftBrandInput, type DraftDetailsInput, type DraftUploadedImage, type OnboardingDraftPayload, type PlaceDetailsSnapshot, } from '~/server/utils/onboarding-drafts'
 import { createPreviewToken, PREVIEW_TOKEN_TTL_MS, previewSecretOf } from '~/server/utils/preview-token'
 import { VALID_VERTICALS } from '~/server/utils/site-creation'
 import { applyOnboardingDraftToSite, ensureOnboardingSite } from '~/server/utils/onboarding-site'
@@ -39,7 +39,7 @@ function parseCountry(value: unknown): string | null {
 function detailsFromBody(
   raw: Record<string, unknown> | null, existing: DraftDetailsInput | null, name: string, place: PlaceDetailsSnapshot | Awaited<ReturnType<typeof getPlaceDetails>> | null, ): DraftDetailsInput {
   return {
-    name, country: raw?.country === undefined ? existing?.country ?? null : parseCountry(raw.country), city: stringOrNull(raw?.city) ?? existing?.city ?? null, address: stringOrNull(raw?.address) ?? existing?.address ?? null, phone: stringOrNull(raw?.phone) ?? existing?.phone ?? null, websiteUrl: stringOrNull(raw?.websiteUrl) ?? existing?.websiteUrl ?? null, openingHours: parseOpeningHours(raw?.openingHours === undefined ? (existing ? existing.openingHours : place?.openingHours ?? null) : raw.openingHours), specialHours: parseSpecialHours(raw?.specialHours === undefined ? existing?.specialHours ?? null : raw.specialHours), notificationPhone: stringOrNull(raw?.notificationPhone) ?? existing?.notificationPhone ?? null, timezone: stringOrNull(raw?.timezone) ?? (existing ? existing.timezone : place?.timezone ?? null), currency: raw?.currency === undefined ? existing?.currency ?? null : parseCurrency(raw.currency), }
+    name, country: raw?.country === undefined ? existing?.country ?? null : parseCountry(raw.country), city: stringOrNull(raw?.city) ?? existing?.city ?? null, streetAddress: stringOrNull(raw?.streetAddress) ?? existing?.streetAddress ?? null, addressLine2: stringOrNull(raw?.addressLine2) ?? existing?.addressLine2 ?? null, region: stringOrNull(raw?.region) ?? existing?.region ?? null, postalCode: stringOrNull(raw?.postalCode) ?? existing?.postalCode ?? null, phone: stringOrNull(raw?.phone) ?? existing?.phone ?? null, websiteUrl: stringOrNull(raw?.websiteUrl) ?? existing?.websiteUrl ?? null, openingHours: parseOpeningHours(raw?.openingHours === undefined ? (existing ? existing.openingHours : place?.openingHours ?? null) : raw.openingHours), specialHours: parseSpecialHours(raw?.specialHours === undefined ? existing?.specialHours ?? null : raw.specialHours), notificationPhone: stringOrNull(raw?.notificationPhone) ?? existing?.notificationPhone ?? null, timezone: stringOrNull(raw?.timezone) ?? (existing ? existing.timezone : place?.timezone ?? null), currency: raw?.currency === undefined ? existing?.currency ?? null : parseCurrency(raw.currency), }
 }
 
 function imageFromBody(raw: unknown, existing: DraftUploadedImage | null): DraftUploadedImage | null {
@@ -53,6 +53,35 @@ function imageFromBody(raw: unknown, existing: DraftUploadedImage | null): Draft
     draftAssetId, cloudflareImageId, publicUrl, thumbnailUrl: stringOrNull(record.thumbnailUrl), mimeType: stringOrNull(record.mimeType), fileName: stringOrNull(record.fileName), fileSize: typeof record.fileSize === 'number' && Number.isFinite(record.fileSize) ? record.fileSize : null, }
 }
 
+// The products step sends the whole list every save, so an absent list means
+// "unchanged" and an empty one means the owner removed everything.
+function parseProducts(value: unknown, existing: OnboardingDraftPayload | null): DraftProductInput[] | null {
+  if (value === undefined) {
+    return existing ? existing.preview.products.map(product => ({
+      name: product.name,
+      category: product.category,
+      amountMinor: product.price === null ? null : product.price.amount_minor,
+    })) : null
+  }
+  if (!Array.isArray(value)) return []
+  return value.flatMap((entry): DraftProductInput[] => {
+    if (!entry || typeof entry !== 'object') return []
+    const record = entry as Record<string, unknown>
+    const name = stringOrNull(record.name)
+    if (!name) return []
+    // A name is the only thing a product needs: `prices` is a separate table and
+    // nothing in `products` requires a row in it. An absent or null amount means
+    // unpriced; a present amount that is not a non-negative integer is a bad
+    // entry and is dropped rather than rounded into a price nobody typed.
+    const amountMinor = record.amountMinor
+    if (amountMinor === undefined || amountMinor === null) {
+      return [{ name, category: stringOrNull(record.category) ?? '', amountMinor: null }]
+    }
+    if (typeof amountMinor !== 'number' || !Number.isInteger(amountMinor) || amountMinor < 0) return []
+    return [{ name, category: stringOrNull(record.category) ?? '', amountMinor }]
+  })
+}
+
 function brandFromBody(raw: Record<string, unknown> | null, existing: OnboardingDraftPayload | null): DraftBrandInput {
   const existingConfig = existing?.preview.config ?? {}
   const existingHomeHero = existing?.preview.content.find(item => item.page === 'home' && item.field === 'hero') ?? null
@@ -63,7 +92,7 @@ function brandFromBody(raw: Record<string, unknown> | null, existing: Onboarding
     : null
 
   return {
-    brandColor: stringOrNull(raw?.brandColor) ?? stringOrNull(existingConfig.brand_color) ?? null, logoNote: stringOrNull(raw?.logoNote) ?? stringOrNull(existingConfig.draft_logo_note) ?? null, logoPreviewUrl: stringOrNull(raw?.logoPreviewUrl) ?? existingLogo?.publicUrl ?? null, heroPhotoNote: stringOrNull(raw?.heroPhotoNote) ?? stringOrNull(existingConfig.draft_hero_photo_note) ?? null, heroPreviewUrl: stringOrNull(raw?.heroPreviewUrl) ?? existingHero?.publicUrl ?? null, heroHeadline: stringOrNull(raw?.heroHeadline) ?? stringOrNull(existingConfig.draft_hero_headline) ?? existingHeroHeadline, heroDescription: stringOrNull(raw?.heroDescription) ?? stringOrNull(existingConfig.draft_hero_description) ?? null, logoImage: imageFromBody(raw?.logoImage, existingLogo), heroImage: imageFromBody(raw?.heroImage, existingHero), }
+    brandColor: stringOrNull(raw?.brandColor) ?? stringOrNull(existingConfig.brand_color) ?? null, logoNote: stringOrNull(raw?.logoNote) ?? stringOrNull(existingConfig.draft_logo_note) ?? null, logoPreviewUrl: stringOrNull(raw?.logoPreviewUrl) ?? existingLogo?.publicUrl ?? null, heroPhotoNote: stringOrNull(raw?.heroPhotoNote) ?? stringOrNull(existingConfig.draft_hero_photo_note) ?? null, heroPreviewUrl: stringOrNull(raw?.heroPreviewUrl) ?? existingHero?.publicUrl ?? null, heroHeadline: stringOrNull(raw?.heroHeadline) ?? stringOrNull(existingConfig.draft_hero_headline) ?? existingHeroHeadline, heroSubtitle: stringOrNull(raw?.heroSubtitle) ?? stringOrNull(existingConfig.draft_hero_subtitle) ?? null, logoImage: imageFromBody(raw?.logoImage, existingLogo), heroImage: imageFromBody(raw?.heroImage, existingHero), }
 }
 
 function existingHeroHeadlineIsCustom(headline: string, brandName: string) {
@@ -88,6 +117,7 @@ export default defineHandler(async (event) => {
     name?: unknown
     details?: Record<string, unknown> | null
     brandDraft?: Record<string, unknown> | null
+    products?: unknown
   }
 
   const sourceType = body?.sourceType === 'google_places' ? 'google_places' : body?.sourceType === 'manual' ? 'manual' : null
@@ -151,8 +181,9 @@ export default defineHandler(async (event) => {
 
   const details = detailsFromBody(rawDetails, existingPayload?.source.details ?? null, name, place)
   const brandDraft = brandFromBody(body.brandDraft && typeof body.brandDraft === 'object' ? body.brandDraft : null, existingPayload)
+  const products = parseProducts(body?.products, existingPayload)
   const payload = buildOnboardingDraftPayload({
-    name, vertical, place, details, brandDraft, })
+    name, vertical, place, details, brandDraft, products, })
 
   const draft = await upsertActiveOnboardingDraft(db, {
     // /dashboard/onboarding is the "New Organization" entry point, so a draft

@@ -285,16 +285,22 @@ export async function applyOnboardingDraftToSite(
         JSON.stringify(product.details), product.source, now, now, userId, userId,
       ],
     })
-    const currency = product.price.currency ?? defaultCurrency
-    batchQueries.push({
-      query: `INSERT INTO prices (id, organization_id, site_id, location_id, product_id, amount_minor, currency, unit, tax_behavior, compare_at_amount_minor, valid_from, valid_until, provenance, created_by, created_at) VALUES (?,?,?,?,?,?,?,'item','unspecified',?,?,?,'import',?,?)`,
-      params: [crypto.randomUUID(), organizationId, siteId, locationRow.id, product.id,
-        product.price.amount_minor, currency,
-        product.price.compare_at_amount_minor ?? null,
-        product.price.valid_from ?? now,
-        product.price.valid_until ?? null,
-        userId, now],
-    })
+    // A product the owner did not price gets no `prices` row at all. The public
+    // surfaces read `Product.price` as nullable and omit the price element, so
+    // an invented zero would be a price they never set.
+    const price = product.price
+    if (price) {
+      const currency = price.currency ?? defaultCurrency
+      batchQueries.push({
+        query: `INSERT INTO prices (id, organization_id, site_id, location_id, product_id, amount_minor, currency, unit, tax_behavior, compare_at_amount_minor, valid_from, valid_until, provenance, created_by, created_at) VALUES (?,?,?,?,?,?,?,'item','unspecified',?,?,?,'import',?,?)`,
+        params: [crypto.randomUUID(), organizationId, siteId, locationRow.id, product.id,
+          price.amount_minor, currency,
+          price.compare_at_amount_minor ?? null,
+          price.valid_from ?? now,
+          price.valid_until ?? null,
+          userId, now],
+      })
+    }
   }
 
   const replaced = await queryAll<{ id: string }>(db, "SELECT id FROM content_documents WHERE organization_id = ? AND site_id = ? AND row_role = 'root' AND kind IN ('qa','social_post')", [organizationId, siteId])

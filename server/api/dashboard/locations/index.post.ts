@@ -1,5 +1,5 @@
 import { parseOpeningHours, parseSpecialHours } from '~/shared/reservation-hours'
-// POST /api/dashboard/locations/add
+// POST /api/dashboard/locations
 // Add a new physical location to the current org's site from a Google Maps URL.
 // Requires an existing site — this is the multi-location flow, not onboarding.
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
@@ -10,9 +10,29 @@ import { createLocation } from '~/server/utils/location-management'
 import { purgePublicResourceCacheSafe } from '~/server/utils/public-resource-cache'
 import { executeBatch, queryFirst, type DbClient } from '~/server/db'
 import { parsePhone } from '~/utils/phone'
+import { composePostalAddress } from '~/utils/postal-address'
 import { assertSiteWideAccess } from '~/server/utils/member-access'
 
 type SetupEnv = Parameters<typeof createLocation>[0]
+
+/**
+ * The address the collected parts compose to. The client sends one field per
+ * answer and the single line is derived here, so the parts stay the only
+ * source — the same composer the onboarding draft uses.
+ */
+function detailsAddress(details: Record<string, unknown> | null | undefined, streetIsFormatted: boolean) {
+  const text = (value: unknown) => typeof value === 'string' ? value : ''
+  return composePostalAddress({
+    streetAddress: text(details?.streetAddress),
+    addressLine2: text(details?.addressLine2),
+    city: text(details?.city),
+    region: text(details?.region),
+    postalCode: text(details?.postalCode),
+    country: text(details?.country),
+    streetIsFormatted,
+  }) || null
+}
+
 
 function slugify(name: string) {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'location'
@@ -96,7 +116,7 @@ export default defineHandler(async (event) => {
 
     const result = await createLocation(
       env as SetupEnv, db, organizationId, siteId, {
-        title: typeof details?.name === 'string' && details.name.trim() ? details.name.trim() : name, slug, city: typeof details?.city === 'string' && details.city.trim() ? details.city.trim() : null, address: typeof details?.address === 'string' && details.address.trim() ? details.address.trim() : null, phone: typeof details?.phone === 'string' && details.phone.trim() ? details.phone.trim() : null, website_url: typeof details?.websiteUrl === 'string' && details.websiteUrl.trim() ? details.websiteUrl.trim() : null, opening_hours: parseOpeningHours(details?.openingHours ?? null), special_hours: parseSpecialHours(details?.specialHours ?? null), notification_phone: notificationPhone.value, timezone: typeof details?.timezone === 'string' && details.timezone.trim() ? details.timezone.trim() : null, }, session.user.id, )
+        title: typeof details?.name === 'string' && details.name.trim() ? details.name.trim() : name, slug, city: typeof details?.city === 'string' && details.city.trim() ? details.city.trim() : null, address: detailsAddress(details, false), phone: typeof details?.phone === 'string' && details.phone.trim() ? details.phone.trim() : null, website_url: typeof details?.websiteUrl === 'string' && details.websiteUrl.trim() ? details.websiteUrl.trim() : null, opening_hours: parseOpeningHours(details?.openingHours ?? null), special_hours: parseSpecialHours(details?.specialHours ?? null), notification_phone: notificationPhone.value, timezone: typeof details?.timezone === 'string' && details.timezone.trim() ? details.timezone.trim() : null, }, session.user.id, )
 
     if (result.status !== 200 && result.status !== 201) {
       return jsonResponse({ error: (result.data as { error?: string }).error ?? 'Could not add location.' }, { status: result.status })
@@ -151,9 +171,7 @@ export default defineHandler(async (event) => {
         ? details.city.trim()
         : place.city ?? null, maps_url: place.mapsUrl ?? null, google_place_id: place.placeId, website_url: typeof details?.websiteUrl === 'string' && details.websiteUrl.trim()
         ? details.websiteUrl.trim()
-        : place.websiteUrl ?? null, address: typeof details?.address === 'string' && details.address.trim()
-        ? details.address.trim()
-        : null, opening_hours: parseOpeningHours(details && 'openingHours' in details ? details.openingHours : place.openingHours), special_hours: parseSpecialHours(details?.specialHours ?? null), rating: place.rating ?? null, review_count: place.ratingCount ?? null, notification_phone: notificationPhone.value, timezone: typeof details?.timezone === 'string' && details.timezone.trim()
+        : place.websiteUrl ?? null, address: detailsAddress(details, true), opening_hours: parseOpeningHours(details && 'openingHours' in details ? details.openingHours : place.openingHours), special_hours: parseSpecialHours(details?.specialHours ?? null), rating: place.rating ?? null, review_count: place.ratingCount ?? null, notification_phone: notificationPhone.value, timezone: typeof details?.timezone === 'string' && details.timezone.trim()
         ? details.timezone.trim()
         : place.timezone, }, session.user.id, )
 

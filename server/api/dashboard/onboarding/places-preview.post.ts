@@ -7,14 +7,14 @@
 //
 // This replaces the previewOnly branch that used to live inline in the now-removed
 // server/api/dashboard/onboarding/setup.post.ts. That file also contained a
-// direct site-creation branch, but the new-site UI (OnboardingWizard.vue) never
+// direct site-creation branch, but the new-site UI never
 // reached it — new-site creation now goes through the active draft endpoint and
 // then drafts/[draftId]/commit. Splitting the still-live preview behavior into
 // its own endpoint means there is no more direct-creation branch to accidentally
 // reach or keep in sync with the draft flow.
 //
 // The add-location flow does NOT use this endpoint — it has its own
-// previewOnly branch in POST /api/dashboard/locations/add, since that endpoint
+// previewOnly branch in POST /api/dashboard/locations, since that endpoint
 // owns both the preview and the mutation for an existing site's locations.
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'

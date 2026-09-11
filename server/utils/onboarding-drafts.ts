@@ -4,7 +4,8 @@ import { queryFirst } from '~/server/db'
 import type { PlaceDetails, PlaceReview } from '~/server/utils/google-places'
 import type { CurrencyCode } from '~/shared/currencies'
 import type { PriceInput } from '~/shared/prices'
-import type { TenantPageBlock, TenantPageType } from '~/utils/tenant-page-blocks'
+import { heroBlockSection, type TenantPageBlock, type TenantPageType } from '~/utils/tenant-page-blocks'
+import { composePostalAddress } from '~/utils/postal-address'
 
 type DraftSourceType = 'google_places' | 'manual'
 
@@ -15,7 +16,7 @@ export interface DraftBrandInput {
   heroPhotoNote: string | null
   heroPreviewUrl: string | null
   heroHeadline: string | null
-  heroDescription: string | null
+  heroSubtitle: string | null
   logoImage: DraftUploadedImage | null
   heroImage: DraftUploadedImage | null
 }
@@ -53,7 +54,8 @@ export interface DraftProductRecord {
   name: string
   slug: string
   description: string
-  price: PriceInput
+  /** Absent when the owner has not priced this yet: no `prices` row is written. */
+  price: PriceInput | null
   order_url: string | null
   is_visible: boolean
   available: boolean
@@ -131,6 +133,12 @@ export interface OnboardingDraftPayload {
   }
 }
 
+function defaultProductCategory(vertical: SiteVertical): string {
+  if (vertical === 'experience') return 'Experiences'
+  if (vertical === 'service') return 'Services'
+  return 'Menu'
+}
+
 export function onboardingPagePath(page: string): string {
   if (page === 'home') return '/'
   if (page === 'privacy') return '/policies/privacy'
@@ -151,7 +159,9 @@ export function onboardingPageBlocks(rows: DraftContentRecord[]): TenantPageBloc
   const blocks: TenantPageBlock[] = []
   for (const row of rows) {
     if (row.field === 'hero') {
-      blocks.push({ id: row.id ?? crypto.randomUUID(), type: 'hero', position: blocks.length, data: { title: row.hero_title ?? row.content, subtitle: row.hero_subtitle }, media: [] })
+      // `hero_title` is the only source of a hero's headline: buildDraftContent
+      // writes the owner's answer there and leaves `content` null on that row.
+      blocks.push({ id: row.id ?? crypto.randomUUID(), type: 'hero', position: blocks.length, data: { section: heroBlockSection(onboardingPagePath(row.page)), title: row.hero_title, subtitle: row.hero_subtitle }, media: [] })
     } else if (row.type === 'media' || row.field.endsWith('.image')) {
       if (row.asset_id) {
         const type = row.field.endsWith('.image') ? 'image' : 'gallery'
@@ -178,8 +188,18 @@ export interface OnboardingDraftUpsertResult {
 
 export interface DraftDetailsInput {
   name: string
+  /**
+   * The address one field per answer, never the composed line. The draft used
+   * to persist only the composed line, and resume read it straight back into
+   * the street field — so an owner returning to a saved draft found their
+   * street address reading "United States". The line a location stores is
+   * derived here by composePostalAddress().
+   */
+  streetAddress: string | null
+  addressLine2: string | null
   city: string | null
-  address: string | null
+  region: string | null
+  postalCode: string | null
   /**
    * ISO 3166-1 alpha-2, as the owner answered it on the location step. Stored
    * in its own right rather than read back off the phone number: the location
@@ -243,9 +263,9 @@ function buildDraftContent(
   _brandName: string,
   _vertical: SiteVertical,
   heroHeadline: string | null,
-  heroDescription: string | null,
+  heroSubtitle: string | null,
 ): DraftContentRecord[] {
-  if (!heroHeadline && !heroDescription) return []
+  if (!heroHeadline && !heroSubtitle) return []
   return [{
     page: 'home',
     field: 'hero',
@@ -253,9 +273,17 @@ function buildDraftContent(
     value: null,
     type: 'text',
     hero_title: heroHeadline,
-    hero_subtitle: heroDescription,
+    hero_subtitle: heroSubtitle,
     updated_at: nowIso(),
   }]
+}
+
+/** What the owner typed on the products step, before it becomes a draft row. */
+export interface DraftProductInput {
+  name: string
+  category: string
+  /** null when the owner left the price blank. `products` requires no price. */
+  amountMinor: number | null
 }
 
 export function buildOnboardingDraftPayload(input: {
@@ -264,6 +292,7 @@ export function buildOnboardingDraftPayload(input: {
   details: DraftDetailsInput
   place: DraftPlaceSource | null
   brandDraft?: DraftBrandInput | null
+  products?: DraftProductInput[] | null
 }): OnboardingDraftPayload {
   const brandName = input.details.name || input.name
   const subdomainCandidate = slugify(brandName).slice(0, 40)
@@ -276,7 +305,36 @@ export function buildOnboardingDraftPayload(input: {
   const locationId = 'draft-location-main'
 
   const description = null
-  const products: DraftProductRecord[] = []
+  // A product the owner named on the products step. The category is the row's
+  // own, not a default: applyOnboardingDraftToSite creates the category when it
+  // does not exist, and an unnamed one groups under the vertical's own word for
+  // "everything else". A blank price stays absent — `prices` is a separate
+  // table and nothing in `products` requires a row in it, so a zero or
+  // defaulted amount would be a price the owner never named.
+  const products: DraftProductRecord[] = (input.products ?? []).map((product, index) => {
+    const name = product.name.trim()
+    const category = product.category.trim() || defaultProductCategory(input.vertical)
+    return {
+      id: `draft-product-${slugify(name) || index}`,
+      location_id: locationId,
+      category,
+      name,
+      slug: slugify(name) || `item-${index + 1}`,
+      description: '',
+      price: product.amountMinor === null
+        ? null
+        : { amount_minor: product.amountMinor, currency: input.details.currency ?? undefined },
+      order_url: null,
+      is_visible: true,
+      available: true,
+      featured: false,
+      featured_sort_order: 0,
+      sort_order: index,
+      tags: [],
+      details: [],
+      source: 'import' as const,
+    }
+  })
 
   const reviews = (placeSnapshot?.reviews ?? []).map(review => ({
     ...review,
@@ -290,8 +348,8 @@ export function buildOnboardingDraftPayload(input: {
 
   const brandColor = input.brandDraft?.brandColor?.trim() || null
   const heroHeadline = input.brandDraft?.heroHeadline?.trim() || null
-  const heroDescription = input.brandDraft?.heroDescription?.trim() || null
-  const content = buildDraftContent(brandName, input.vertical, heroHeadline, heroDescription)
+  const heroSubtitle = input.brandDraft?.heroSubtitle?.trim() || null
+  const content = buildDraftContent(brandName, input.vertical, heroHeadline, heroSubtitle)
 
   return {
     version: 2,
@@ -309,7 +367,7 @@ export function buildOnboardingDraftPayload(input: {
         draft_logo_note: input.brandDraft?.logoNote?.trim() || null,
         draft_hero_photo_note: input.brandDraft?.heroPhotoNote?.trim() || null,
         draft_hero_headline: heroHeadline,
-        draft_hero_description: heroDescription,
+        draft_hero_subtitle: heroSubtitle,
       },
       media: [
         ...(uploadedLogo ? [{ slot: 'logo' as const, asset: uploadedLogo }] : []),
@@ -320,7 +378,15 @@ export function buildOnboardingDraftPayload(input: {
         slug: locationSlug,
         title: brandName,
         city: input.details.city ?? placeSnapshot?.city ?? null,
-        address: input.details.address ?? placeSnapshot?.formattedAddress ?? null,
+        address: composePostalAddress({
+          streetAddress: input.details.streetAddress ?? '',
+          addressLine2: input.details.addressLine2 ?? '',
+          city: input.details.city ?? '',
+          region: input.details.region ?? '',
+          postalCode: input.details.postalCode ?? '',
+          country: input.details.country ?? '',
+          streetIsFormatted: placeSnapshot !== null,
+        }) || null,
         description,
         phone: input.details.phone ?? placeSnapshot?.phone ?? null,
         website_url: input.details.websiteUrl ?? placeSnapshot?.websiteUrl ?? null,

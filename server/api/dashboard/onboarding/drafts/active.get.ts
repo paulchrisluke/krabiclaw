@@ -59,6 +59,11 @@ export default defineHandler(async (event) => {
       vertical: payload.preview.vertical,
       details: payload.source.details,
       config: payload.preview.config,
+      products: payload.preview.products.map(product => ({
+        name: product.name,
+        category: product.category,
+        amountMinor: product.price === null ? null : product.price.amount_minor,
+      })),
       siteId: site?.id ?? null,
       subdomainCandidate: site?.subdomain ?? row.subdomain_candidate,
       previewToken,
