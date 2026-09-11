@@ -2,9 +2,11 @@
 // must be supplied by the owner or an approved import.
 // All records use source='template' so ChowBot can identify and reference them.
 
-import type { SiteVertical } from "~/utils/vertical-copy";
+import { getVerticalCopy, type SiteVertical } from "~/utils/vertical-copy";
+import { heroBlockSection } from "~/utils/tenant-page-blocks";
 import { executeBatch, queryFirst, type BatchQuery, type DbClient } from "~/server/db";
 import { createTenantPagesBatch } from "~/server/utils/content/pages";
+import { upsertProfessionalServiceContent } from "~/server/utils/professional-services-editor";
 
 function uid(prefix: string) {
   return `${prefix}-${crypto.randomUUID()}`;
@@ -89,7 +91,10 @@ export async function seedNewSite(
         id: uid('block'),
         type: 'hero',
         position: 0,
-        data: { title: null, subtitle: null },
+        // No words yet — the owner has not written a headline. `section` is not
+        // copy: it says which hero slot on the page this block fills, and the
+        // Blawby template resolves its home hero by it.
+        data: { section: heroBlockSection(definition.path), title: null, subtitle: null },
       },
     ];
     for (const [field, content, type] of rows.map(row => [row[1], row[2], row[3]] as const)) {
@@ -108,5 +113,39 @@ export async function seedNewSite(
     })
   }
   await createTenantPagesBatch(db, { organizationId, siteId, pages: pagesToCreate })
+
+  // ── Consultation settings (professional services only) ────────────────────
+  // The Blawby shell reads settings_json.$.consultation on every route and
+  // refuses to render without it (getPublicConsultationSettings throws
+  // CONSULTATION_SETTINGS_MISSING), so a professional-service site is not
+  // renderable until this exists. Nothing here is customer-facing copy the
+  // owner has to write: the mode is the honest "no external scheduler has been
+  // connected", the two paths are the template's own routes (/schedule is
+  // seeded above; /contact/confirmed is the Blawby confirmation route in
+  // utils/template-registry.ts), and the label is the product's own word for
+  // this button in the professional-service copy registry. The owner changes
+  // any of it from the dashboard or ChatGPT, through the same writer used here.
+  if (vertical === "service") {
+    const configured = await queryFirst<{ present: number }>(
+      db,
+      "SELECT json_type(settings_json, '$.consultation') IS NOT NULL AS present FROM sites WHERE id = ? LIMIT 1",
+      [siteId],
+    );
+    if (!configured?.present) {
+      await upsertProfessionalServiceContent(db, {
+        organizationId,
+        siteId,
+        data: {
+          consultation: {
+            mode: "native_disabled",
+            cta_label: getVerticalCopy(vertical).reservationRequestButton,
+            schedule_path: "/schedule",
+            confirmation_path: "/contact/confirmed",
+          },
+        },
+      });
+    }
+  }
+
   return locationId
 }
