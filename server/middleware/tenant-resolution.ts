@@ -185,18 +185,23 @@ export default defineHandler(async (event) => {
   // Local and raw workers.dev hosts cannot express tenant identity in their
   // hostname, so their test harness carries it explicitly. Deployed preview and
   // staging use direct environment aliases below.
-  if (usesTenantHeader(host)) {
-    const previewSlug = (event.req.headers.get("x-preview-tenant"));
-    if (previewSlug && /^[a-z0-9-]+$/.test(previewSlug)) {
-      const db = env.db;
-      if (db) {
-        const site = await resolveRegisteredSubdomainSite(db, previewSlug)
-        if (site && await authorizeTenantSite(event, site)) {
-          setResolvedTenantContext(event, site, host, hostnameOf(host))
-          return;
-        }
-      }
+  const previewSlug = usesTenantHeader(host) ? event.req.headers.get("x-preview-tenant") : null
+  if (previewSlug !== null) {
+    // The header names a tenant, so this request is that tenant's or it is
+    // nothing. Falling through on an unresolvable slug reached the platform-host
+    // branch below and answered 200 with KrabiClaw's own homepage — a request
+    // for one site served a different site. Same refusal as an environment
+    // alias that does not resolve.
+    const site = env.db && /^[a-z0-9-]+$/.test(previewSlug)
+      ? await resolveRegisteredSubdomainSite(env.db, previewSlug)
+      : null
+    if (site && await authorizeTenantSite(event, site)) {
+      setResolvedTenantContext(event, site, host, hostnameOf(host))
+      return;
     }
+    setTenantType(event, TENANT_TYPES.TENANT_404)
+    event.context.siteId = null
+    return
   }
 
   const aliasSlug = environmentTenantAliasSlug(host, env)
