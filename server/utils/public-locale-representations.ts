@@ -26,18 +26,20 @@ export async function resolvePublicLocalizationSourcePath(
     const [row] = await queryAll<{ slug: string }>(db, 'SELECT slug FROM business_locations WHERE site_id = ? AND id = ? LIMIT 1', [siteId, resource.id])
     sourcePath = row ? `/locations/${row.slug}` : null
   } else if (resource.type === 'product') {
-    const [row] = await queryAll<{ slug: string; location_slug: string; vertical: string; product_type: string }>(db, `
-      SELECT p.slug, p.product_type, l.slug AS location_slug, s.vertical
+    // A product's public route runs through a location it is published at.
+    // With several, the caller must say which — there is no primary location
+    // to fall back on, so an ambiguous product has no single source path.
+    const rows = await queryAll<{ slug: string; location_slug: string; vertical: string }>(db, `
+      SELECT p.slug, l.slug AS location_slug, s.vertical
         FROM products p
-        LEFT JOIN business_locations l ON l.id = p.location_id AND l.site_id = p.site_id
-        JOIN sites s ON s.id = p.site_id
-       WHERE p.site_id = ? AND p.id = ? LIMIT 1
+        JOIN product_locations pl ON pl.product_id = p.id AND pl.organization_id = p.organization_id AND pl.published = 1
+        JOIN business_locations l ON l.id = pl.location_id AND l.site_id = ?
+        JOIN sites s ON s.id = l.site_id
+       WHERE p.id = ?
+       ORDER BY l.slug
     `, [siteId, resource.id])
-    sourcePath = row ? row.product_type === 'experience' ? `/experiences/${row.slug}` : `/locations/${row.location_slug}/${row.vertical === 'restaurant' ? 'menu' : 'products'}/${row.slug}` : null
-  } else if (resource.type === 'offering') {
-    const [row] = await queryAll<{ slug: string; canonical_path: string | null }>(db, 'SELECT slug, canonical_path FROM offerings WHERE site_id = ? AND id = ? LIMIT 1', [siteId, resource.id])
-    sourcePath = row ? row.canonical_path || `/services/${row.slug}` : null
-
+    const row = rows.length === 1 ? rows[0] : undefined
+    sourcePath = row ? `/locations/${row.location_slug}/${row.vertical === 'restaurant' ? 'menu' : 'products'}/${row.slug}` : null
   }
   if (sourcePath) return sourcePath
   throw new HTTPError({

@@ -99,7 +99,6 @@ export async function socialCardRefreshOwnersForPlacement(db: DbClient, placemen
     case 'business_location':
     case 'product':
     case 'content_document':
-    case 'offering':
     case 'review':
       return SOCIAL_CARD_OWNERS[placement.owner_type].slots.some(slot => slot === placement.slot)
         ? [{ owner_type: placement.owner_type, owner_id: placement.owner_id }]
@@ -146,12 +145,6 @@ async function loadOwner(db: DbClient, owner: SocialCardOwner): Promise<OwnerRec
         FROM content_documents d JOIN content_documents root ON root.id = COALESCE(d.root_id, d.id)
         LEFT JOIN business_locations bl ON bl.id = root.location_id
         WHERE d.id = ? AND d.kind IN ('page','article','social_post') LIMIT 1`, [owner.owner_id]) ?? null
-    case 'offering':
-      return await queryFirst<OwnerRecord>(db, `SELECT o.organization_id, o.site_id,
-        COALESCE(NULLIF(trim(o.seo_title), ''), o.name) AS title,
-        COALESCE(NULLIF(trim(o.seo_description), ''), NULLIF(trim(o.short_description), ''), NULLIF(trim(o.summary), '')) AS description,
-        'Service' AS label, bl.title AS location
-        FROM offerings o LEFT JOIN business_locations bl ON bl.id = o.location_id WHERE o.id = ? LIMIT 1`, [owner.owner_id]) ?? null
     case 'review':
       return await queryFirst<OwnerRecord>(db, `SELECT organization_id, site_id,
         COALESCE(NULLIF(trim(title), ''), 'Review by ' || COALESCE(NULLIF(trim(author_name), ''), 'a customer')) AS title,

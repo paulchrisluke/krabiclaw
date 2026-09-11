@@ -49,7 +49,7 @@ export async function loadPublicBlawbyDocument(
   if (!RECIPES.has(recipe)) {
     throw new HTTPError({ statusCode: 400, statusMessage: 'Valid Blawby route recipe required' })
   }
-  if ((recipe === 'offering' || recipe === 'article') && !slug) {
+  if (recipe === 'article' && !slug) {
     throw new HTTPError({ statusCode: 400, statusMessage: 'Blawby route slug required' })
   }
   if (slug && !SLUG_PATTERN.test(slug)) {
