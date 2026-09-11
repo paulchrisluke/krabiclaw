@@ -4,7 +4,6 @@ import type { McpExecutorContext } from './shared'
 import {
   getLocationReservationConfig,
   renderBookingPolicySummary,
-  requireLocationReservationConfig,
   reservationPolicySummarySource,
   upsertLocationReservationConfig,
   validateLocationReservationConfigPatch,

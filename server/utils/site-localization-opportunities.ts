@@ -85,12 +85,6 @@ function opportunity(
   return { id, label, completed: result.completed, total: result.total, path: `${path(result.first)}?${query}` }
 }
 
-function requiredRowString(row: LocalizableRow, field: 'resource_type' | 'resource_id'): string {
-  const value = row[field]
-  if (typeof value !== 'string' || !value) throw new Error(`Localization opportunity is missing ${field}.`)
-  return value
-}
-
 export async function getSiteLocalizationProgress(
   db: DbClient,
   input: { organizationId: string; siteId: string; locale: string },

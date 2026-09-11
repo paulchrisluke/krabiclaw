@@ -1,5 +1,5 @@
 import type { Product } from '~/server/types/products'
-import type { PublicProductReview } from '~/server/utils/public-products'
+import type { PublicProductBooking, PublicProductReview } from '~/server/utils/public-products'
 import { isCurrencyCode, type CurrencyCode } from '~/shared/currencies'
 import { isRecord, publicApiRequest } from '~/utils/api-clients'
 import type { ProductCollectionSibling } from '~/utils/product-seo'
@@ -13,6 +13,8 @@ export interface PublicProductDetailPayload {
   vertical: string
   brandName: string
   reviews: PublicProductReview[]
+  /** Non-null exactly when this Product takes bookings. */
+  booking: PublicProductBooking | null
   /** The collection this page was reached through, and its other members. */
   collectionName: string
   collectionSiblings: ProductCollectionSibling[]
@@ -32,6 +34,9 @@ function isPublicProductDetailPayload(value: unknown): value is PublicProductDet
     && typeof value.vertical === 'string'
     && typeof value.brandName === 'string'
     && value.brandName.trim().length > 0
+    && (value.booking === null || (isRecord(value.booking)
+      && (value.booking.duration_minutes === null || typeof value.booking.duration_minutes === 'number')
+      && (value.booking.default_capacity === null || typeof value.booking.default_capacity === 'number')))
     && Array.isArray(value.reviews)
     && value.reviews.every(review => isRecord(review)
       && typeof review.id === 'string'
@@ -97,6 +102,7 @@ export async function usePublicProductDetail(routeKind: 'menu' | 'products') {
           vertical: detail.site.vertical,
           brandName: detail.site.brand_name,
           reviews: locale === 'en' ? await loadPublicProductReviews(db, detail) : [],
+          booking: detail.booking,
           // Siblings come from the collection this product actually belongs
           // to on this site. With none, there are no siblings to show — the
           // page does not fall back to "everything at this location".

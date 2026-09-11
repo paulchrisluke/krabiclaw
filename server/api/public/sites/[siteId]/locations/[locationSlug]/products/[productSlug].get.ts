@@ -31,6 +31,7 @@ export default defineHandler(async (event) => {
       vertical: result.site.vertical,
       brandName: result.site.brand_name,
       reviews,
+      booking: result.booking,
       collectionName: siblingCollection?.name ?? '',
       collectionSiblings: siblingCollection
         ? selectProductCollectionSiblings(result.products, result.product, siblingCollection.id, priceSelection)

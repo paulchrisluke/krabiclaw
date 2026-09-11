@@ -1,4 +1,3 @@
-import { WEEKDAYS, parseRecurringSlots } from '~/shared/reservation-hours'
 import { errorChainForTelemetry } from "~/server/utils/error-telemetry";
 import { HTTPError } from 'nitro';
 import type { H3Event } from 'nitro';

@@ -325,7 +325,6 @@ const {
   postsList,
 } = await usePublicPageData()
 
-const isExperienceTenant = computed(() => (site as ApiValue)?.vertical === 'experience')
 const productPresentation = computed(() => resolveProductPresentation((site as ApiValue)?.vertical as string | null | undefined))
 const locationProducts = computed(() => products.value.filter(product =>
   product.locations.some(entry => entry.location_id === location.value?.id && entry.published && entry.active)))

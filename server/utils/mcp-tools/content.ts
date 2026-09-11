@@ -1,36 +1,6 @@
 import { CONTENT_BLOCK_TYPES, describeContentBlockTextFields } from '~/shared/content-registries'
 import type { McpToolDefinition } from './shared'
-import { locationReservationConfigObject, locationReservationConfigWriteSchema, pageInfoObject, paginationInputSchema, renderedBookingPolicySummaryObject, ROBOTS_DIRECTIVE_ENUM, siteTool } from './shared'
-
-const OFFERING_SCHEMA = {
-  type: 'object',
-  description: 'One offering. Name an existing row by id (or slug) and send only the fields to change; every field left out keeps its stored value. A row matching no id or slug is created: it needs name and schema_type, and its slug, canonical_path and sort_order are derived when left out.',
-  properties: {
-    id: { type: 'string' },
-    name: { type: 'string' },
-    slug: { type: 'string' },
-    label: { type: ['string', 'null'] },
-    summary: { type: ['string', 'null'] },
-    short_description: { type: ['string', 'null'] },
-    body: { type: ['string', 'null'], description: 'Markdown body.' },
-    features: { type: 'array', items: { type: 'object' } },
-    faqs: { type: 'array', items: { type: 'object' } },
-    cta_label: { type: ['string', 'null'] },
-    cta_url: { type: ['string', 'null'] },
-    schema_type: { type: 'string', description: 'Schema.org type name such as LegalService or AccountingService.' },
-    seo_title: { type: ['string', 'null'] },
-    seo_description: { type: ['string', 'null'] },
-    canonical_path: { type: 'string', description: 'Site-relative path, e.g. /services/family.' },
-    sort_order: { type: 'integer' },
-    featured: { type: 'boolean' },
-    location_id: { type: ['string', 'null'] },
-    media: {
-      type: 'array',
-      description: 'Replaces the thumbnail and hero placements when sent. An existing gallery is changed through the media tools, not here.',
-      items: { type: 'object', properties: { asset_id: { type: 'string' }, slot: { type: 'string', enum: ['thumbnail', 'hero', 'gallery'] } }, required: ['asset_id', 'slot'] },
-    },
-  },
-} as const
+import { locationReservationConfigObject, locationReservationConfigWriteSchema, pageInfoObject, paginationInputSchema, renderedBookingPolicySummaryObject, siteTool } from './shared'
 
 const TENANT_PAGE_METADATA_SCHEMA = {
   path: { type: 'string' },

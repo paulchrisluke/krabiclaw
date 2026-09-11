@@ -45,10 +45,36 @@ export interface PublicProductCollection {
   collections: Collection[]
 }
 
+export interface PublicProductBooking {
+  duration_minutes: number | null
+  default_capacity: number | null
+}
+
 export interface PublicProductDetail extends PublicProductCollection {
   location: PublicProductLocation
   product: Product
+  /**
+   * Present exactly when the Product takes bookings.
+   *
+   * The existence of the config row is the capability — not a non-null
+   * duration, not the vertical, not a type discriminator. `null` means this
+   * page shows no booking affordance at all, which is different from a
+   * bookable Product with nothing scheduled.
+   */
+  booking: PublicProductBooking | null
   localeRepresentations: PublicLocaleRepresentation[]
+}
+
+async function loadProductBooking(db: DbClient, organizationId: string, productId: string): Promise<PublicProductBooking | null> {
+  const row = await queryFirst<{ duration_minutes: number | null; default_capacity: number | null }>(db, `
+    SELECT duration_minutes, default_capacity FROM product_booking_configs
+     WHERE organization_id = ? AND product_id = ? LIMIT 1
+  `, [organizationId, productId])
+  if (!row) return null
+  return {
+    duration_minutes: row.duration_minutes === null ? null : Number(row.duration_minutes),
+    default_capacity: row.default_capacity === null ? null : Number(row.default_capacity),
+  }
 }
 
 export interface PublicProductReview {
@@ -143,7 +169,13 @@ export async function loadPublicProductDetail(
       sourcePath: collection.presentation.productPath(location.slug, product.slug),
       resource: { type: 'product', id: product.id },
     })
-    return { ...collection, location, product, localeRepresentations }
+    return {
+      ...collection,
+      location,
+      product,
+      booking: await loadProductBooking(db, collection.site.organization_id, product.id),
+      localeRepresentations,
+    }
   }
 
   const resolved = await loadProductSite(db, siteId, routeKind)
@@ -193,6 +225,7 @@ export async function loadPublicProductDetail(
     collections: projectExactLocalizedCollection('collection', collection.collections, localizations),
     location: localizedLocation,
     product,
+    booking: await loadProductBooking(db, collection.site.organization_id, sourceProduct.id),
     localeRepresentations,
   }
 }

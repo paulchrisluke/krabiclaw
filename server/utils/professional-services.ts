@@ -8,14 +8,10 @@ import { getPublishedLocalizedSiteBlogPost } from '~/server/utils/content/publis
 import { COVER_SELECT, attachCoverMedia, coverJoinSql } from '~/server/utils/content/cover'
 import {
   loadExactPublicLocalizations,
-  projectExactLocalizedCollection,
-  projectExactLocalizedResource,
-  projectLocalizedMediaAlt,
-  resolveLocalizedRouteResourceId,
   type ExactPublicLocalization,
 } from '~/server/utils/public-localization'
-import { loadPublicSocialMedia, type PublicSocialMedia } from '~/server/utils/public-social-image'
-import { listPublicLocaleRepresentations, listPublicResourceLocaleRepresentations } from '~/server/utils/public-locale-representations'
+import { loadPublicSocialMedia } from '~/server/utils/public-social-image'
+import { listPublicLocaleRepresentations } from '~/server/utils/public-locale-representations'
 import { siteSupportsBlawbyTemplate } from '~/utils/template-registry'
 import {
   getPublicTenantPageForPath,
@@ -51,13 +47,6 @@ function requiredText(value: unknown, field: string): string {
 export function resolvePublicArticleCanonicalUrl(value: unknown, slug: unknown): string {
   if (typeof value === 'string' && value.trim()) return value.trim()
   return `/article/${requiredText(slug, 'article.slug')}`
-}
-
-type OfferingRow = ApiRecord & {
-  features: string | null
-  faqs: string | null
-  location_address: string | null
-  location_city: string | null
 }
 
 export async function getActiveBlawbySite(db: DbClient, siteId: string): Promise<{ organization_id: string; vertical: string; theme_id: string } | null> {

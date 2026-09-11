@@ -1,6 +1,6 @@
 import { instantSchema, calendarDateSchema, timezoneSchema } from '~/utils/timezone'
 import { postMutationJsonSchema } from '~/shared/posts'
-import { openingHoursSchema, specialHoursSchema, recurringSlotsSchema, WEEKDAYS } from '~/shared/reservation-hours'
+import { openingHoursSchema, specialHoursSchema } from '~/shared/reservation-hours'
 import type { McpToolRole } from '~/server/utils/mcp-auth'
 import { SUPPORTED_CURRENCIES } from '~/shared/currencies'
 import { PUBLICATION_CONTENT_BLOCK_TYPES } from '~/shared/content-registries'

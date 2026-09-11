@@ -1,4 +1,4 @@
-import { parseOpeningHours, parseSpecialHours, parseRecurringSlots } from '~/shared/reservation-hours'
+import { parseOpeningHours, parseSpecialHours } from '~/shared/reservation-hours'
 import { parseGoogleReviewMetadata } from '~/shared/google-review'
 // Canonical route-capability-driven public page service.
 //   ?page=home|about|contact|location|reviews|photos|qa|...

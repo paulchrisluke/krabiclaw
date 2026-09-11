@@ -54,7 +54,9 @@ export default {
     },
     "experience_detail": {
       "available": "Available",
+      "book_now": "Book now",
       "booking_failed": "Something went wrong. Please try again.",
+      "nothing_scheduled": "There are no sessions scheduled right now.",
       "capacity": "Up to {count} guests",
       "capacity_label": "Capacity",
       "capacity_max": "{count} guests max",

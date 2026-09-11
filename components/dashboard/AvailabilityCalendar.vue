@@ -180,8 +180,6 @@ type MonthBlock =
   | { kind: 'error'; key: string; cause: unknown }
 
 const dashboardApi = useDashboardApi()
-const route = useRoute()
-const router = useRouter()
 const toast = useToast()
 const monthBlocks = ref<MonthBlock[]>([])
 const requestGeneration = ref(0)

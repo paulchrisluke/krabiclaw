@@ -12,7 +12,7 @@ import { notifyBookingChangeOwner } from '~/server/utils/notifications'
 import { appendEntry, findEntryByDedupeKey, getEntryById } from './entries'
 import { createDeliveryReceipt, deliverGuestThreadEmail } from './deliveries'
 import { updateThreadProjection } from './repository'
-import { getGuestRequest, getThreadOperationalRecord, requestSummary, type ThreadOperationalRecord } from '~/server/domain/requests'
+import { getGuestRequest, getThreadOperationalRecord, requestSummary } from '~/server/domain/requests'
 import type { GuestThreadRow } from './types'
 
 /**

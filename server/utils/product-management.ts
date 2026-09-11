@@ -44,7 +44,6 @@ import {
   validateProductMetadata,
   validateProductOptions,
   validateProductOrderUrl,
-  validateProductSlug,
   validateProductTags,
   validateProductUnitLabel,
   validateProductVariants,

@@ -23,6 +23,11 @@
             <p v-if="!isAvailable" class="mt-6 font-semibold text-muted">{{ t('saya.common.temporarily_unavailable') }}</p>
             <div class="mt-8 flex flex-wrap items-center gap-5">
               <SayaButton
+                v-if="booking && isAvailable"
+                control-id="product-booking-toggle"
+                @click="openBooking"
+              >{{ t('saya.experience_detail.book_now') }}</SayaButton>
+              <SayaButton
                 v-if="isAvailable && product.order_url"
                 :href="product.order_url"
                 target="_blank"
@@ -74,6 +79,54 @@
         </div>
       </section>
 
+      <!-- One booking surface, mounted outside the card so the mobile sheet and
+           the desktop button open the same thing. -->
+      <BookingModal
+        v-if="booking"
+        v-model="bookingOpen"
+        target-id="product-booking"
+        :title="product.name"
+        :can-go-back="bookingStep > 1 && !submitting"
+        @back="bookingStep = 1"
+      >
+        <div v-if="bookingStep === 1" class="flex min-h-0 flex-1 flex-col">
+          <p v-if="!sessionsPending && availabilityDates.length === 0" class="py-10 text-center text-sm text-muted">
+            {{ t('saya.experience_detail.nothing_scheduled') }}
+          </p>
+          <BookingTimeStep
+            v-else
+            v-model="timeSelection"
+            :dates="availabilityDates"
+            :loading="sessionsPending"
+            :guests="partySize"
+            :guests-max="booking.default_capacity ?? 8"
+            @update:guests="partySize = $event"
+            @next="bookingStep = 2"
+          />
+          <p v-if="bookingError" role="alert" class="mt-4 rounded-lg border border-red-500/30 bg-red-500/5 px-4 py-3 text-sm text-error">
+            {{ bookingError }}
+          </p>
+        </div>
+
+        <div v-else class="flex-1 overflow-y-auto">
+          <BookingRecap
+            v-if="timeSelection"
+            :main-line="timeSelection.label"
+            :meta-line="t('saya.experience_detail.guest_count', { count: partySize })"
+            :edit-label="t('saya.experience_detail.change')"
+            @edit="bookingStep = 1"
+          />
+          <p v-if="bookingError" role="alert" class="mb-4 rounded-lg border border-red-500/30 bg-red-500/5 px-4 py-3 text-sm text-error">
+            {{ bookingError }}
+          </p>
+          <BookingContactForm
+            :loading="submitting"
+            :submit-text="t('saya.experience_detail.confirm_booking')"
+            @submit="submitBooking"
+          />
+        </div>
+      </BookingModal>
+
       <section v-if="reviews.length" class="mt-16 border-t border-default pt-12">
         <h2 class="saya-display saya-italic text-4xl">{{ t('saya.footer.reviews') }}</h2>
         <div class="mt-6 divide-y divide-default">
@@ -101,6 +154,14 @@ import { productLocationCollectionPath } from '~/utils/product-presentation'
 import type { ProductCollectionSibling } from '~/utils/product-seo'
 import type { MetafieldDefinition } from '~/shared/metafields'
 import { metafieldHandle } from '~/shared/metafields'
+import type { PublicProductBooking } from '~/server/utils/public-products'
+import BookingModal from '~/components/booking/BookingModal.vue'
+import BookingRecap from '~/components/booking/BookingRecap.vue'
+import BookingContactForm, { type ContactFormState } from '~/components/booking/BookingContactForm.vue'
+import BookingTimeStep, { type RawDateAvailability, type TimeSlotSelection } from '~/components/booking/BookingTimeStep.vue'
+import { setBookingConfirmation } from '~/composables/useBookingHandoff'
+import { localPartsAt } from '~/utils/timezone'
+import { getErrorMessage } from '~/utils/errors'
 
 interface LocationSummary { id: string; slug: string; title: string }
 interface ProductReview { id: string; author: string; rating: number; title: string; content: string; createdAt: string }
@@ -111,6 +172,8 @@ const props = defineProps<{
   product: Product
   location: LocationSummary
   reviews: ProductReview[]
+  /** Non-null exactly when this Product takes bookings. */
+  booking: PublicProductBooking | null
   collectionName: string
   collectionSiblings: ProductCollectionSibling[]
   /** The tenant's attribute vocabulary, so this page can label its own facts. */
@@ -121,7 +184,7 @@ const props = defineProps<{
 }>()
 
 const { trackProductOrder } = useSiteConversionTracking()
-const { localePath, t } = useI18n()
+const { locale, localePath, t } = useI18n()
 const collectionLabel = computed(() => props.presentation.collectionPath === '/menu'
   ? t('saya.footer.menu')
   : t('saya.footer.products'))
@@ -169,6 +232,143 @@ const visibleDetails = computed(() => props.metafieldDefinitions.flatMap((defini
   const values = Array.isArray(value) ? value : [String(value)]
   return values.length ? [{ key: definition.id, label: definition.name, values }] : []
 }))
+
+/**
+ * The sessions a guest can claim a seat on.
+ *
+ * Materialized occurrences only. A bookable Product whose sessions have not
+ * been generated offers nothing rather than a schedule computed on the fly
+ * that no row backs.
+ */
+interface PublicSession {
+  id: string
+  starts_at: string
+  ends_at: string
+  timezone: string
+  remaining: number | null
+  is_full: boolean
+}
+
+const bookingOpen = ref(false)
+const bookingStep = ref(1)
+const partySize = ref(1)
+const timeSelection = ref<TimeSlotSelection | null>(null)
+const submitting = ref(false)
+const bookingError = ref('')
+const sessions = ref<PublicSession[]>([])
+const sessionsPending = ref(false)
+
+function localDateOf(session: PublicSession) {
+  const parts = localPartsAt(new Date(session.starts_at), session.timezone)
+  return `${String(parts.year).padStart(4, '0')}-${String(parts.month).padStart(2, '0')}-${String(parts.day).padStart(2, '0')}`
+}
+function localTimeOf(session: PublicSession) {
+  const parts = localPartsAt(new Date(session.starts_at), session.timezone)
+  return `${String(parts.hour).padStart(2, '0')}:${String(parts.minute).padStart(2, '0')}`
+}
+
+// The calendar speaks in the session's own zone, so a 10:00 class is 10:00 for
+// every guest reading the page from anywhere.
+const availabilityDates = computed<RawDateAvailability[]>(() => {
+  const byDate = new Map<string, RawDateAvailability>()
+  for (const session of sessions.value) {
+    const date = localDateOf(session)
+    const entry = byDate.get(date) ?? { date, slots: [] }
+    entry.slots.push({
+      time_slot: localTimeOf(session),
+      capacity: session.remaining === null ? null : session.remaining,
+      booked: 0,
+      remaining: session.remaining,
+      is_closed: false,
+      is_full: session.is_full,
+    })
+    byDate.set(date, entry)
+  }
+  return [...byDate.values()].sort((left, right) => left.date.localeCompare(right.date))
+})
+
+const selectedSession = computed<PublicSession | null>(() => {
+  const selection = timeSelection.value
+  if (!selection) return null
+  return sessions.value.find(session => localDateOf(session) === selection.day && localTimeOf(session) === selection.time) ?? null
+})
+
+async function openBooking() {
+  bookingOpen.value = true
+  bookingStep.value = 1
+  bookingError.value = ''
+  if (sessions.value.length || sessionsPending.value) return
+  sessionsPending.value = true
+  try {
+    const response = await publicApiRequest<{ success: true; sessions: PublicSession[] }>(
+      `/api/public/sites/${encodeURIComponent(props.siteId)}/products/${encodeURIComponent(props.product.slug)}/sessions`,
+      {
+        validate: (value): value is { success: true; sessions: PublicSession[] } =>
+          isRecord(value) && value.success === true && Array.isArray(value.sessions),
+      },
+    )
+    sessions.value = response.sessions.filter(session => !session.is_full)
+  } catch (error) {
+    bookingError.value = getErrorMessage(error, t('saya.experience_detail.nothing_scheduled'))
+  } finally {
+    sessionsPending.value = false
+  }
+}
+
+async function submitBooking(contact: ContactFormState) {
+  const session = selectedSession.value
+  if (submitting.value) return
+  if (!session) {
+    bookingError.value = t('saya.experience_detail.choose_time')
+    bookingStep.value = 1
+    return
+  }
+  submitting.value = true
+  bookingError.value = ''
+  try {
+    const response = await publicApiMutation<{ success: true; booking_id: string; cancellation_token: string; message: string; policy_summary?: ApiRecord | null }>(
+      `/api/public/sites/${encodeURIComponent(props.siteId)}/products/${encodeURIComponent(props.product.slug)}/book`,
+      {
+        method: 'POST',
+        body: {
+          session_id: session.id,
+          party_size: partySize.value,
+          guest_name: contact.name,
+          guest_email: contact.email,
+          guest_phone: contact.phone || null,
+          notes: contact.notes || null,
+          locale: locale.value,
+        },
+        validate: (value): value is { success: true; booking_id: string; cancellation_token: string; message: string } =>
+          isRecord(value) && value.success === true && typeof value.booking_id === 'string' && typeof value.cancellation_token === 'string',
+      },
+    )
+    setBookingConfirmation({
+      type: 'booking',
+      siteId: props.siteId,
+      siteName: props.location.title,
+      guestName: contact.name,
+      startsAt: session.starts_at,
+      timezone: session.timezone,
+      guests: partySize.value,
+      productId: props.product.id,
+      title: props.product.name,
+      requests: contact.notes || null,
+      message: response.message,
+      cancelUrl: `/bookings/cancel?id=${response.booking_id}#${response.cancellation_token}`,
+      policySummary: response.policy_summary ?? null,
+      locationId: props.location.id,
+      locationName: props.location.title,
+      locationSlug: props.location.slug,
+    })
+    bookingOpen.value = false
+    await navigateTo('/bookings/confirmed')
+  } catch (error) {
+    bookingError.value = getErrorMessage(error, 'That booking could not be completed. Please try again.')
+  } finally {
+    submitting.value = false
+  }
+}
 
 function recordExternalOrderClick() {
   if (!import.meta.client || props.analyticsEnabled === false) return
