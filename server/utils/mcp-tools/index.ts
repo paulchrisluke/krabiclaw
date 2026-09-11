@@ -4,7 +4,6 @@ import { ANALYTICS_TOOLS } from './analytics'
 import { BLOG_TOOLS } from './blog'
 import { CONTENT_TOOLS } from './content'
 import { CONTEXT_TOOLS } from './context'
-import { EXPERIENCES_TOOLS } from './experiences'
 import { LOCALES_TOOLS } from './locales'
 import { LOCATIONS_TOOLS } from './locations'
 import { MEDIA_TOOLS } from './media'
@@ -21,7 +20,6 @@ export const MCP_PUBLIC_TOOLS: McpToolDefinition[] = [
   ...BLOG_TOOLS,
   ...CONTENT_TOOLS,
   ...CONTEXT_TOOLS,
-  ...EXPERIENCES_TOOLS,
   ...LOCALES_TOOLS,
   ...LOCATIONS_TOOLS,
   ...MEDIA_TOOLS,

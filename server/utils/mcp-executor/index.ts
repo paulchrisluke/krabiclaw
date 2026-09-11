@@ -14,7 +14,6 @@ import { hasSiteEntitlement } from '~/server/utils/billing'
 import { handleAnalyticsTools } from './analytics'
 import { handleBlogTools } from './blog'
 import { handleContentTools } from './content'
-import { handleExperiencesTools } from './experiences'
 import { handleLocalesTools } from './locales'
 import { handleLocationsTools } from './locations'
 import { handleMediaTools } from './media'
@@ -45,7 +44,6 @@ export const DOMAIN_HANDLERS: Record<string, (_ctx: McpExecutorContext) => Promi
   analytics: handleAnalyticsTools,
   blog: handleBlogTools,
   content: handleContentTools,
-  experiences: handleExperiencesTools,
   locales: handleLocalesTools,
   locations: handleLocationsTools,
   media: handleMediaTools,
