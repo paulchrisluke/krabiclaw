@@ -258,7 +258,10 @@ export function useOnboardingSteps() {
    */
   const resumeStep = computed(() => {
     const unanswered = steps.value.find(step => !step.intro && !step.optional && !step.complete(state.value))
-    return unanswered ?? steps.value.find(step => step.id === 'hours') ?? steps.value[0]!
+    // Every required answer is in, so the draft belongs at the end of the flow.
+    // Landing on 'hours' put a finished draft back on an optional step it had
+    // already passed, and contradicted the rule above.
+    return unanswered ?? steps.value[steps.value.length - 1]!
   })
 
   return { steps, indexOf, nextOf, previousOf, resumeStep }

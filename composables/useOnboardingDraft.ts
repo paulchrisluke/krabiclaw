@@ -322,6 +322,12 @@ export function useOnboardingDraft() {
       const details = isRecord(draft.details) ? draft.details : {}
       const config = isRecord(draft.config) ? draft.config : {}
       const text = (value: unknown) => typeof value === 'string' ? value : ''
+      // Parse before touching state. These throw on stored hours that no longer
+      // parse, and assigning as we went left the flow half-restored — name and
+      // address in place, hours silently empty — which the next save would have
+      // written back over the hours the owner had already given.
+      const openingHours = parseOpeningHours(details.openingHours as OpeningHours)
+      const specialHours = parseSpecialHours(details.specialHours)
 
       state.value.draftId = draft.draftId
       state.value.vertical = draft.vertical === 'experience' || draft.vertical === 'service' ? draft.vertical : 'restaurant'
@@ -338,8 +344,8 @@ export function useOnboardingDraft() {
         state.value.details.currency = details.currency as typeof state.value.details.currency
       }
       state.value.hours.timezone = text(details.timezone)
-      state.value.hours.hours = parseOpeningHours(details.openingHours as OpeningHours)
-      state.value.hours.specialHours = parseSpecialHours(details.specialHours)
+      state.value.hours.hours = openingHours
+      state.value.hours.specialHours = specialHours
       state.value.brand.brandColor = text(config.brand_color)
       state.value.brand.logoNote = text(config.draft_logo_note)
       state.value.brand.heroPhotoNote = text(config.draft_hero_photo_note)

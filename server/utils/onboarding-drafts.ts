@@ -301,7 +301,12 @@ export function buildOnboardingDraftPayload(input: {
   // Saya hero renders a brand-color + icon treatment when no real photo is available yet.
   const uploadedHero = input.brandDraft?.heroImage ?? null
   const uploadedLogo = input.brandDraft?.logoImage ?? null
-  const locationSlug = slugify(brandName) || 'main'
+  // A site's first location is 'main' everywhere else — seedNewSite creates it
+  // under that slug and seeds its page at /locations/main. Deriving a slug from
+  // the brand name here renamed the location out from under that page, leaving
+  // every onboarded site serving 200 "Location Not Found" at /locations/main.
+  // Later locations get their own slugs through the add-location flow.
+  const locationSlug = 'main'
   const locationId = 'draft-location-main'
 
   const description = null

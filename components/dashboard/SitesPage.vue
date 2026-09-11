@@ -57,9 +57,14 @@
           />
         </div>
 
+        <!-- Every tile here is a site, and a site's tile shows its logo rather
+             than its social card, so the selector's default copy named the
+             wrong asset. -->
         <DashboardSiteLocationSelector
           v-else
           :items="selectorItems"
+          missing-image-label="No logo"
+          missing-image-hint="Add a logo in site settings."
         />
       </div>
     </template>
@@ -154,11 +159,6 @@ const selectorItems = computed<SiteLocationSelectorItem[]>(() => sites.value.map
   imageFit: 'contain' as const,
   eyebrow: verticalLabel(site.vertical),
   summary: addressSummary(site),
-  // The tile renders the site's logo, not its social card, so the default
-  // copy ("No social image / Its social card has not been generated") named
-  // the wrong asset on every site without a logo.
-  missingImageLabel: 'No logo',
-  missingImageHint: 'Add a logo in site settings.',
   status: statusPill(site.onboarding_status),
   actions: discardActions(site),
   to: siteDashboardPath(site),
@@ -231,13 +231,20 @@ function discardActions(site: Site): DropdownMenuItem[] | undefined {
 }
 
 /**
- * An unfinished site resumes the flow at the unscoped /dashboard/onboarding.
- * The shell there restores the draft and redirects to the step it stopped at,
- * so there is no resume logic here. There is no onboarding route under
- * /dashboard/{orgSlug}, which is what the previous branch pointed at.
+ * The caller's own unfinished site resumes the flow at the unscoped
+ * /dashboard/onboarding. The shell there restores the draft and redirects to
+ * the step it stopped at, so there is no resume logic here. There is no
+ * onboarding route under /dashboard/{orgSlug}, which is what the previous
+ * branch pointed at.
+ *
+ * Only the caller's own. /dashboard/onboarding resumes whichever draft belongs
+ * to whoever opens it, so sending every unfinished site there meant an admin
+ * clicking a colleague's half-built site landed in their own draft — a
+ * different site than the one they pressed. Anyone else's unfinished site
+ * opens its dashboard, the same as a live one.
  */
 function siteDashboardPath(site: Site) {
-  if (site.onboarding_status !== 'active') return '/dashboard/onboarding'
+  if (site.onboarding_status !== 'active' && site.id === discardableSiteId.value) return '/dashboard/onboarding'
   if (!site.subdomain) {
     throw createError({ statusCode: 500, statusMessage: `Site ${site.id} is active with no subdomain` })
   }
