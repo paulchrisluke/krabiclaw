@@ -211,6 +211,14 @@ export async function deleteAccountNow(env: CloudflareEnv, userId: string): Prom
 }
 
 /**
+ * What the draft claimed, and therefore what abandoning it has to give back:
+ * `nothing` when the draft never got as far as creating either.
+ */
+export type AbandonedDraftTenantOutcome =
+  | { removed: 'organization' | 'site' | 'nothing' }
+  | { refused: 'site_is_live' | 'not_owner' | 'delete_incomplete' }
+
+/**
  * Abandoning a wizard draft: delete the pending site it created, now.
  *
  * There is no grace period because nothing was ever public — the site has not
@@ -219,47 +227,79 @@ export async function deleteAccountNow(env: CloudflareEnv, userId: string): Prom
  * their address back straight away, which matters when they abandoned the
  * draft precisely because they typed the wrong business name.
  *
- * Refuses anything that is not a pending site, and only removes the
- * organization when this was the only site in it and the owner is its only
- * member — the organization may be an existing workspace the site was being
- * added to.
+ * The draft's claim is (organization, subdomain), so this resolves the site
+ * from that pair rather than from a site id the caller looked up with a
+ * narrower filter of its own: a site that is no longer pending has to come
+ * back as `site_is_live`, and the caller cannot report that if its own lookup
+ * silently found nothing.
+ *
+ * Removes the organization with the site when this was the only site in it and
+ * the owner is its only member — that is the organization onboarding created
+ * for this draft, and leaving it behind is what made the next attempt at the
+ * same address collide. An organization with another site or another member is
+ * a workspace in its own right and keeps standing. A draft that claimed an
+ * organization but never got a site created (site creation failed) still owns
+ * that empty organization, so abandoning it removes that too.
+ *
+ * Re-reads the site row after deleting it: a delete or a cascade that left it
+ * standing must not come back as success.
  */
-export async function deletePendingSiteNow(
+export async function deleteAbandonedDraftTenant(
   env: CloudflareEnv,
-  siteId: string,
-  userId: string,
-): Promise<{ deleted: boolean; reason?: string }> {
+  claim: { organizationId: string; subdomain: string; userId: string },
+): Promise<AbandonedDraftTenantOutcome> {
   const db = env.DB
-  const site = await queryFirst<{ id: string; organization_id: string; onboarding_status: string }>(db, `
-    SELECT id, organization_id, onboarding_status FROM sites WHERE id = ? LIMIT 1
-  `, [siteId])
-  if (!site) return { deleted: false, reason: 'not_found' }
-  if (site.onboarding_status !== 'pending') return { deleted: false, reason: 'site_is_live' }
+  const { organizationId, subdomain, userId } = claim
 
-  const membership = await resolveOrganizationMembership(env, { organizationId: site.organization_id, userId })
-  if (membership?.role !== 'owner') return { deleted: false, reason: 'not_owner' }
+  const membership = await resolveOrganizationMembership(env, { organizationId, userId })
+  if (membership?.role !== 'owner') return { refused: 'not_owner' }
 
-  const siblings = await queryFirst<{ n: number }>(db, `
-    SELECT count(*) AS n FROM sites WHERE organization_id = ? AND id <> ?
-  `, [site.organization_id, siteId])
-  const members = await listOrganizationMembers(env, site.organization_id)
+  const site = await queryFirst<{ id: string; onboarding_status: string }>(db, `
+    SELECT id, onboarding_status FROM sites WHERE organization_id = ? AND subdomain = ? LIMIT 1
+  `, [organizationId, subdomain])
+  // Only an activated site is live. A site whose onboarding failed is not, and
+  // refusing it as live told the owner their site was published while its tile
+  // read "Setup incomplete" — and left them no way to release the address.
+  if (site && site.onboarding_status === 'active') return { refused: 'site_is_live' }
 
-  if ((siblings?.n ?? 0) === 0 && members.length === 1) {
-    await deleteOrganizationNow(env, site.organization_id)
-    return { deleted: true }
+  const others = await queryFirst<{ n: number }>(db, `
+    SELECT count(*) AS n FROM sites WHERE organization_id = ? AND id IS NOT ?
+  `, [organizationId, site ? site.id : null])
+  const members = await listOrganizationMembers(env, organizationId)
+
+  if ((others?.n ?? 0) === 0 && members.length === 1) {
+    await deleteOrganizationNow(env, organizationId)
+    const survivor = await queryFirst<{ id: string }>(db, `
+      SELECT id FROM sites WHERE organization_id = ? LIMIT 1
+    `, [organizationId])
+    if (survivor) {
+      console.error('tenant_deletion_draft_cascade_incomplete', { organizationId, siteId: survivor.id })
+      return { refused: 'delete_incomplete' }
+    }
+    return { removed: 'organization' }
   }
 
-  // Only this site's resources: the organization keeps its other sites.
-  for (const imageId of await ownedImageIds(db, { column: 'site_id', value: siteId })) {
+  // The organization stands: it has another site or another member. Only this
+  // site's own resources go.
+  if (!site) return { removed: 'nothing' }
+  for (const imageId of await ownedImageIds(db, { column: 'site_id', value: site.id })) {
     await deleteImage(env, imageId).catch((error: unknown) => {
       console.error('tenant_deletion_image_release_failed', {
-        siteId, imageId, error: error instanceof Error ? error.message : String(error),
+        siteId: site.id, imageId, error: error instanceof Error ? error.message : String(error),
       })
     })
   }
-  await deleteSiteCustomDomains(env, db, siteId)
-  await execute(db, 'DELETE FROM sites WHERE id = ?', [siteId])
-  return { deleted: true }
+  await deleteSiteCustomDomains(env, db, site.id)
+  await execute(db, 'DELETE FROM sites WHERE id = ?', [site.id])
+  // Read the row back rather than counting changes: a cascade makes
+  // meta.changes the number of rows the whole tree lost (15 for a seeded
+  // onboarding site), so it says nothing about this one row.
+  const survivor = await queryFirst<{ id: string }>(db, 'SELECT id FROM sites WHERE id = ? LIMIT 1', [site.id])
+  if (survivor) {
+    console.error('tenant_deletion_draft_site_not_removed', { organizationId, siteId: site.id })
+    return { refused: 'delete_incomplete' }
+  }
+  return { removed: 'site' }
 }
 
 export interface DeletionSweepResult {

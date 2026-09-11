@@ -4,11 +4,18 @@
 // pending site the first save created is at an address they did not mean to
 // claim. Delete it now — nothing was ever public — and close the draft so the
 // next save starts a fresh one at the address the new name derives.
+//
+// The draft closes only once its site and organization are actually gone. A
+// success here with the site still standing is what leaves the owner unable to
+// re-enter onboarding under the same business name: site creation refuses the
+// address as already taken and there is no longer a draft that owns it.
+
+import { defineHandler } from 'nitro'
 
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { execute, queryFirst } from '~/server/db'
-import { deletePendingSiteNow } from '~/server/utils/tenant-deletion'
+import { deleteAbandonedDraftTenant } from '~/server/utils/tenant-deletion'
 
 export default defineHandler(async (event) => {
   const env = cloudflareEnv(event)
@@ -28,20 +35,23 @@ export default defineHandler(async (event) => {
 
   let deleted = false
   if (draft.organization_id) {
-    const site = await queryFirst<{ id: string }>(db, `
-      SELECT id FROM sites
-      WHERE organization_id = ? AND subdomain = ? AND onboarding_status = 'pending'
-      LIMIT 1
-    `, [draft.organization_id, draft.subdomain_candidate])
-    if (site) {
-      const result = await deletePendingSiteNow(env, site.id, session.user.id)
-      deleted = result.deleted
-      if (!result.deleted && result.reason === 'site_is_live') {
-        // The owner activated it in another tab. Leave the site alone and leave
-        // the draft for the activation flow to close.
-        return jsonResponse({ error: 'This site is already live.' }, { status: 409 })
+    const outcome = await deleteAbandonedDraftTenant(env, {
+      organizationId: draft.organization_id,
+      subdomain: draft.subdomain_candidate,
+      userId: session.user.id,
+    })
+    if ('refused' in outcome) {
+      // The draft stays open: it still owns the address, and closing it here
+      // would strand the site with nothing left to discard it from.
+      if (outcome.refused === 'site_is_live') {
+        return jsonResponse({ error: 'This site is already live. Delete it from its dashboard instead.' }, { status: 409 })
       }
+      if (outcome.refused === 'not_owner') {
+        return jsonResponse({ error: 'Only an owner of this organization can discard its draft site.' }, { status: 403 })
+      }
+      return jsonResponse({ error: 'Could not discard this draft’s site. Please try again.' }, { status: 500 })
     }
+    deleted = outcome.removed !== 'nothing'
   }
 
   await execute(db, `
@@ -50,4 +60,3 @@ export default defineHandler(async (event) => {
 
   return jsonResponse({ success: true, deleted })
 })
-import { defineHandler } from 'nitro';
