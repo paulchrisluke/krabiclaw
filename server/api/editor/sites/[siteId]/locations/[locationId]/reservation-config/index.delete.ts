@@ -1,6 +1,6 @@
 import { jsonResponse, rethrowHttpError } from '~/server/utils/api-response'
 import { requireLocationAccess } from '~/server/utils/location-access'
-import { deleteLocationReservationConfig } from '~/server/utils/booking-policies'
+import { deleteLocationReservationConfig } from '~/server/utils/reservations'
 import { defineHandler } from 'nitro'
 import { getRouterParam } from 'nitro/h3'
 

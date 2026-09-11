@@ -54,7 +54,7 @@
 </template>
 
 <script setup lang="ts">
-import type { BookingPolicyPatch, RenderedBookingPolicySummary } from '~/server/utils/booking-policies'
+import type { BookingPolicyPatch, RenderedBookingPolicySummary } from '~/server/utils/reservations'
 
 const props = defineProps<{
   modelValue: BookingPolicyPatch

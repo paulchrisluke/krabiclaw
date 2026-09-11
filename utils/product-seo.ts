@@ -1,5 +1,6 @@
 import type { Product } from '~/server/types/products'
-import { formatProductPriceLabel } from '~/utils/product-money'
+import { formatProductMoney } from '~/utils/product-money'
+import { selectPrice, type PriceSelection } from '~/shared/prices'
 import { DESCRIPTION_MAX_LENGTH, truncateForSeo } from '~/utils/social-metadata'
 
 /**
@@ -17,56 +18,58 @@ import { DESCRIPTION_MAX_LENGTH, truncateForSeo } from '~/utils/social-metadata'
  * catalogue as it is) but they canonicalise to the collection index instead of
  * competing with it as a standalone result.
  */
-export function isOfferedProduct(product: Pick<Product, 'price' | 'details'>): boolean {
-  return formatProductPriceLabel(product) !== null
+export function isOfferedProduct(product: Product, selection: PriceSelection): boolean {
+  return product.variants.some(variant => selectPrice(variant.prices, selection) !== null)
 }
 
-export interface ProductCategorySibling {
+export interface ProductCollectionSibling {
   id: string
   name: string
   slug: string
 }
 
-/** Links per product page. Bounded so a 60-item category does not turn every
+/** Links per product page. Bounded so a 60-item collection does not turn every
  *  page into a full menu dump. */
-export const CATEGORY_SIBLING_LIMIT = 8
+export const COLLECTION_SIBLING_LIMIT = 8
 
 /**
- * Other offerings in the same category at the same location.
+ * Other products in the same collection.
  *
  * The window rotates: it starts at the item after the current one and wraps, so
- * consecutive dishes in a large category link to overlapping-but-different
- * neighbours. That reaches every item in the category through internal links
- * instead of pointing all of them at the same first eight, and it makes the
- * rendered list differ between sibling pages.
+ * consecutive dishes in a large collection link to overlapping-but-different
+ * neighbours. That reaches every item through internal links instead of
+ * pointing all of them at the same first eight.
  *
- * `products` is expected in catalogue order (category sort order, then product
- * sort order) — the order the collection page renders — so the list a visitor
- * sees here matches the menu they just came from.
+ * `products` is expected in the order the collection page renders, so the list
+ * a visitor sees here matches the menu they just came from.
  */
-export function selectProductCategorySiblings(
+export function selectProductCollectionSiblings(
   products: readonly Product[],
   product: Product,
-  limit: number = CATEGORY_SIBLING_LIMIT,
-): ProductCategorySibling[] {
-  const inCategory = products.filter(candidate => candidate.location_id === product.location_id
-    && candidate.category_id === product.category_id
-    && isOfferedProduct(candidate))
-  const index = inCategory.findIndex(candidate => candidate.id === product.id)
+  collectionId: string,
+  selection: PriceSelection,
+  limit: number = COLLECTION_SIBLING_LIMIT,
+): ProductCollectionSibling[] {
+  const inCollection = products.filter(candidate =>
+    candidate.collections.some(membership => membership.collection_id === collectionId)
+    && isOfferedProduct(candidate, selection))
+  const index = inCollection.findIndex(candidate => candidate.id === product.id)
   const rotated = index === -1
-    ? inCategory
-    : [...inCategory.slice(index + 1), ...inCategory.slice(0, index)]
+    ? inCollection
+    : [...inCollection.slice(index + 1), ...inCollection.slice(0, index)]
   return rotated.slice(0, limit).map(({ id, name, slug }) => ({ id, name, slug }))
 }
 
 /** Everything the composed description reads. All of it is product data. */
-export type ProductSeoSubject = Pick<Product, 'name' | 'description' | 'seo_description' | 'category' | 'price' | 'details'>
+export type ProductSeoSubject = Pick<Product, 'name' | 'description' | 'variants'>
 
 export interface ProductSeoDescriptionInput {
   /** The product, already localized for the rendering locale. */
   product: ProductSeoSubject
   /** The location this product is sold at, already localized. */
   locationTitle: string
+  /** Which offer to quote, if the page quotes one. */
+  priceSelection: PriceSelection
 }
 
 /** Translator shape supplied by the caller's `useI18n()`. */
@@ -81,17 +84,17 @@ function withoutTrailingStop(text: string): string {
 }
 
 /**
- * The product's own subject line. `seo_description` and `description` are the
- * same concept at different specificity — the description to show a search
- * engine, and the description to show a reader — so the more specific one wins
- * when it exists. A product with neither is described by its category, which it
- * always has. None of the three is another resource's data, so no page can
- * inherit the site blurb the way it did before.
+ * The product's own subject line.
+ *
+ * One source: the product's description. SEO copy used to be a second
+ * editable field on the product AND a field on its page, and the two drifted;
+ * page-level SEO now belongs to the canonical document, and this composes from
+ * the product's own words. An empty description yields an empty subject line,
+ * and the frame below carries the tag on its own — it does not reach for the
+ * site blurb, which gave hundreds of dish pages one identical description.
  */
 function productSubjectLine(product: ProductSeoSubject): string {
-  if (product.seo_description?.trim()) return withoutTrailingStop(product.seo_description)
-  if (product.description.trim()) return withoutTrailingStop(product.description)
-  return withoutTrailingStop(product.category.name)
+  return withoutTrailingStop(product.description)
 }
 
 /**
@@ -110,7 +113,9 @@ export function composeProductSeoDescription(
 ): string {
   // Formatted exactly as the page body formats it, so the tag and the rendered
   // price never disagree.
-  const priceLabel = formatProductPriceLabel(input.product)
+  const priceLabel = formatProductMoney(
+    input.product.variants.flatMap(variant => selectPrice(variant.prices, input.priceSelection) ?? []).at(0) ?? null,
+  )
   const key = priceLabel
     ? 'saya.product_detail.meta_description_priced'
     : 'saya.product_detail.meta_description'

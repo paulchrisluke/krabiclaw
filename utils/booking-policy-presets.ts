@@ -1,4 +1,4 @@
-import type { BookingPolicyPatch } from '~/server/utils/booking-policies'
+import type { BookingPolicyPatch } from '~/server/utils/reservations'
 
 /**
  * Cancellation terms as named outcomes rather than a minutes field.

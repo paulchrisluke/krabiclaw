@@ -1,5 +1,4 @@
-import type { RenderedBookingPolicySummary } from '~/server/utils/booking-policies'
-import type { Experience } from '~/server/utils/experiences'
+import type { RenderedBookingPolicySummary } from '~/server/utils/reservations'
 import type { Product } from '~/server/types/products'
 import type { PublicTenantPage } from '~/server/utils/public-tenant-pages'
 import type { SocialImageSource } from '~/utils/social-metadata'
@@ -29,7 +28,6 @@ export interface PublicShellPayload {
   config: Record<string, string>
   googleBusiness: ApiRecord
   locales: { code: string; label: string; is_source: boolean }[]
-  hasExperiences: boolean
   hasProducts: boolean
   platformMessages: Record<string, string> | null
 }
@@ -69,7 +67,7 @@ export const isPublicShellPayload = (value: unknown): value is PublicShellPayloa
       && typeof locale.is_source === 'boolean')) return false
   if (value.platformMessages !== null && (!isRecord(value.platformMessages)
     || !Object.values(value.platformMessages).every(message => typeof message === 'string'))) return false
-  return typeof value.hasExperiences === 'boolean' && typeof value.hasProducts === 'boolean'
+  return typeof value.hasProducts === 'boolean'
 }
 
 export interface PublicPagePayload {
@@ -91,8 +89,6 @@ export interface PublicPagePayload {
   reservationPolicyByLocation: Record<string, RenderedBookingPolicySummary | null>
   experiencePolicySiteDefault: RenderedBookingPolicySummary | null
   experiencePolicyById: Record<string, RenderedBookingPolicySummary>
-  experienceDetail: Experience | null
-  experiencesList: Experience[]
   products: Product[]
   localeRepresentations: PublicLocaleRepresentation[]
 }

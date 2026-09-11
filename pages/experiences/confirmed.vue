@@ -44,7 +44,7 @@
 import { getBookingConfirmation, type BookingConfirmation as BookingConfirmationData } from '~/composables/useBookingHandoff'
 import BookingConfirmation from '~/components/booking/BookingConfirmation.vue'
 import { formatTime } from '~/utils/timezone'
-import type { RenderedBookingPolicySummaryItem } from '~/server/utils/booking-policies'
+import type { RenderedBookingPolicySummaryItem } from '~/server/utils/reservations'
 
 definePageMeta({ layout: 'saya' })
 

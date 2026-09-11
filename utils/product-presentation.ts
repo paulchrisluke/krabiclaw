@@ -13,8 +13,8 @@ export function resolveProductPresentation(vertical: string | null | undefined):
       collectionLabel: 'Menu',
       itemLabel: 'Dish',
       itemLabelPlural: 'Dishes',
-      categoryLabel: 'Section',
-      categoryLabelPlural: 'Sections',
+      collectionGroupLabel: 'Section',
+      collectionGroupLabelPlural: 'Sections',
       structuredDataType: 'MenuItem',
     }
   }
@@ -27,8 +27,8 @@ export function resolveProductPresentation(vertical: string | null | undefined):
       collectionLabel: 'Products',
       itemLabel: 'Product',
       itemLabelPlural: 'Products',
-      categoryLabel: 'Category',
-      categoryLabelPlural: 'Categories',
+      collectionGroupLabel: 'Category',
+      collectionGroupLabelPlural: 'Categories',
       structuredDataType: 'Product',
     }
   }

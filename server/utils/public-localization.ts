@@ -92,13 +92,13 @@ export function projectExactLocalizedResource<T extends { id: string }>(
     site: 'brand_name',
     business_location: 'title',
     product: 'name',
-    offering: 'name',
+    collection: 'name',
   }
   const descriptionField: Partial<Record<LocalizedResourceType, string>> = {
     site: 'brand_description',
     business_location: 'description',
     product: 'description',
-    offering: 'summary',
+    collection: 'description',
   }
   const localizedTitle = titleField[resourceType] ? localization.values[titleField[resourceType]] : undefined
   const localizedDescription = descriptionField[resourceType] ? localization.values[descriptionField[resourceType]] : undefined

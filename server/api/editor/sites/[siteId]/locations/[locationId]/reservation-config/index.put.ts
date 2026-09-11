@@ -1,6 +1,6 @@
 import { jsonResponse, readRequiredBody, rethrowHttpError } from '~/server/utils/api-response'
 import { requireLocationAccess } from '~/server/utils/location-access'
-import { renderBookingPolicySummary, reservationPolicySummarySource, upsertLocationReservationConfig, validateLocationReservationConfigPatch } from '~/server/utils/booking-policies'
+import { renderBookingPolicySummary, reservationPolicySummarySource, upsertLocationReservationConfig, validateLocationReservationConfigPatch } from '~/server/utils/reservations'
 import { getSourceLocale } from '~/server/utils/site-locales'
 import { defineHandler } from 'nitro'
 import { getRouterParam } from 'nitro/h3'

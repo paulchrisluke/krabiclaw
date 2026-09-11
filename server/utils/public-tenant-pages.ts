@@ -74,16 +74,22 @@ export async function listPublicTenantPageReferenceRows(
   db: DbClient,
   siteId: string,
   pageIds: readonly string[],
+  locale = 'en',
 ): Promise<PublicTenantPageReferenceRow[]> {
   if (pageIds.length === 0) return []
+  // The referenced root, rendered in the requested locale through its own
+  // representation row. A page with no translation keeps its English title and
+  // route rather than disappearing from the grid unexplained.
   const rows = await queryAll<Omit<PublicTenantPageReferenceRow, 'media'>>(db, `
-    SELECT d.id, d.title, d.summary, d.slug, d.path
-      FROM content_documents d
-     WHERE d.site_id = ? AND d.row_role = 'root' AND d.kind = 'page'
-       AND d.path IS NOT NULL AND d.title IS NOT NULL
-       AND d.id IN (SELECT value FROM json_each(?))
-     ORDER BY d.sort_order ASC, d.title ASC
-  `, [siteId, d1JsonStringSet(pageIds)])
+    SELECT root.id, COALESCE(rep.title, root.title) AS title, COALESCE(rep.summary, root.summary) AS summary,
+           COALESCE(rep.slug, root.slug) AS slug, COALESCE(rep.path, root.path) AS path
+      FROM content_documents root
+      LEFT JOIN content_documents rep ON rep.root_id = root.id AND rep.row_role = 'representation' AND rep.locale = ?
+     WHERE root.site_id = ? AND root.row_role = 'root' AND root.kind = 'page'
+       AND root.path IS NOT NULL AND root.title IS NOT NULL
+       AND root.id IN (SELECT value FROM json_each(?))
+     ORDER BY root.sort_order ASC, root.title ASC
+  `, [locale, siteId, d1JsonStringSet(pageIds)])
   const placements = await loadPublicSocialMedia(db, siteId, 'content_document', rows.map(row => row.id))
   return rows.map(row => ({ ...row, media: placements.get(row.id)?.media ?? [] }))
 }
@@ -147,7 +153,7 @@ async function hydrateBlocks(
   const sourcePages = pageIds.size
     ? resources.pages
       ? (await resources.pages).filter(page => pageIds.has(page.id))
-      : await listPublicTenantPageReferenceRows(db, siteId, [...pageIds])
+      : await listPublicTenantPageReferenceRows(db, siteId, [...pageIds], locale)
     : []
   const products = (await Promise.all([...collectionIds].map(collectionId =>
     listPublicTenantPageProductRows(db, siteId, { collectionId })))).flat()
@@ -185,16 +191,11 @@ async function hydrateBlocks(
   ])
   const reviewRows = sourceReviewRows
   const postRows = sourcePostRows
-  // Localized pages carry their own route and title; the source row is kept
-  // so a reference to a page that is not translated still resolves to the
-  // English page rather than vanishing from the grid without explanation.
+  // A page's translation is its representation row, loaded by locale in the
+  // reference query above — not a resource_localizations entry. Only the media
+  // alt text needs projecting here.
   const pages = localizations
-    ? sourcePages.map((page) => {
-        const representation = localizations.find(item => item.resourceType === 'content_document' && item.resourceId === page.id)
-        return representation?.routePath?.startsWith('/')
-          ? { ...page, path: representation.routePath, media: projectLocalizedMediaAlt(page.media, localizations) }
-          : page
-      })
+    ? sourcePages.map(page => ({ ...page, media: projectLocalizedMediaAlt(page.media, localizations) }))
     : sourcePages
   const pageById = new Map(pages.map(item => [item.id, item]))
   const sourceLocationById = new Map(sourceLocations.map(item => [item.id, item]))

@@ -33,10 +33,6 @@ import {
   putPublicResourceCache,
 } from "~/server/utils/public-resource-cache";
 import { recordRequestPhase } from "~/server/utils/request-metrics";
-import {
-  renderBookingPolicySummary,
-  resolveBookingPolicyIndex,
-} from "~/server/utils/booking-policies";
 import { getCloudflareWaitUntil } from "~/server/utils/mcp-route-helpers";
 import { isPreviewContext } from "~/server/utils/tenant-hosts";
 import { getPublishedPosts } from "~/server/utils/post-management";
@@ -847,10 +843,7 @@ async function loadPublicPageSource(
   let representationSourcePath = routePagePath ?? '/'
   let representationDocumentId: string | undefined
   let representationResource: { type: LocalizedResourceType; id: string; routeSuffix?: string } | undefined
-  if (sourceExperienceDetail) {
-    representationSourcePath = `/experiences/${sourceExperienceDetail.slug}`
-    representationResource = { type: 'product', id: sourceExperienceDetail.id }
-  } else if (sourceBlogPostIdentity) {
+  if (sourceBlogPostIdentity) {
     const prefix = normalizedVertical === 'service' ? 'article' : 'blog'
     representationSourcePath = `/${prefix}/${sourceBlogPostIdentity.slug}`
     representationDocumentId = sourceBlogPostIdentity.id
