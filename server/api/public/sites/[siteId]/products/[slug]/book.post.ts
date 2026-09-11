@@ -7,7 +7,8 @@ import { recordSubmissionConversionSafe } from '~/server/utils/site-conversions'
 import { resolveLocationContact } from '~/server/utils/contact-resolution'
 import { parsePhone } from '~/utils/phone'
 import { executeBatch, queryFirst } from '~/server/db'
-import { renderBookingPolicySummary, resolveBookingPolicy } from '~/server/utils/booking-policies'
+import { productPolicySummarySource, renderBookingPolicySummary } from '~/server/utils/booking-policies'
+import { getProduct } from '~/server/utils/product-management'
 import { getSourceLocale } from '~/server/utils/site-locales'
 import { buildOwnerThreadInboxUrl } from '~/server/utils/dashboard-notification-links'
 import { createReservationCancelToken, hashReservationCancelToken } from '~/server/utils/reservation-cancel-token'
@@ -160,8 +161,10 @@ export default defineHandler(async (event) => {
   }
 
   const requestedLocale = cleanString(body.locale, 10)
-  const [policy, locale] = await Promise.all([
-    resolveBookingPolicy(db, { siteId, policyType: 'experience', locationId: session.location_id, experienceId: product.id }),
+  const [full, locale] = await Promise.all([
+    // The policy the guest is shown is the product's own attribute. There is
+    // no site or location policy merged underneath it.
+    getProduct(db, site.organization_id, product.id),
     requestedLocale && /^[a-z]{2}(-[A-Z]{2})?$/.test(requestedLocale) ? requestedLocale : getSourceLocale(db, site.organization_id, siteId),
     recordSubmissionConversionSafe(db, event, {
       organizationId: site.organization_id, siteId, eventName: 'booking_submit', stage: 'submitted',
@@ -173,6 +176,6 @@ export default defineHandler(async (event) => {
   return jsonResponse({
     success: true, booking_id: threadId, cancellation_token: cancellation.token,
     message: `Your booking request for ${product.name} on ${whenLabel} has been received. We'll confirm shortly.`,
-    policy_summary: renderBookingPolicySummary(policy, locale),
+    policy_summary: renderBookingPolicySummary(productPolicySummarySource(full.metafields), locale),
   }, { status: 201 })
 })
