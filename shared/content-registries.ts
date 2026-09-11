@@ -87,7 +87,8 @@ export const CONTENT_BLOCK_TEXT_FIELDS = {
   contact_cta: [plain('title'), plain('description'), plain('label')],
   booking_cta: [plain('title'), plain('description'), plain('label')],
   donation_choices: [plain('tiers', '*', 'label')],
-  offering_grid: [plain('title'), plain('description')],
+  page_grid: [plain('title'), plain('description')],
+  product_grid: [plain('title'), plain('description')],
   location_grid: [plain('title'), plain('description')],
 } as const satisfies Record<ContentBlockType, readonly ContentBlockTextField[]>
 
@@ -106,7 +107,8 @@ export const CONTENT_BLOCK_TYPES = [
   'contact_cta',
   'booking_cta',
   'donation_choices',
-  'offering_grid',
+  'page_grid',
+  'product_grid',
   'location_grid',
 ] as const
 
