@@ -299,7 +299,7 @@ const experienceFeatures = [
     title: 'Local SEO & Schema.org',
     desc: 'Automated Event and LocalBusiness schema markup ensures your activities rank in Google Search and AI answer engines.'
   }
-]
+] as const
 
 const faqs = [
   {

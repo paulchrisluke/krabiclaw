@@ -415,6 +415,18 @@ export function blockDefinition(type: TenantPageBlockType): TenantPageBlockDefin
   return TENANT_PAGE_BLOCK_REGISTRY[type]
 }
 
+/**
+ * A hero block's `section`: which slot on its page the block fills. The home
+ * page's hero is the full-bleed one; every other page's is the compact page
+ * hero. A template that places several blocks of one type on a page resolves
+ * them by this key — components/blawby/BlawbyHome.vue picks its hero with
+ * `data.section === 'hero'` — so whoever writes the block has to set it, and
+ * it is derived here rather than in each producer.
+ */
+export function heroBlockSection(path: string): 'hero' | 'page-hero' {
+  return normalizeTenantPagePath(path) === '/' ? 'hero' : 'page-hero'
+}
+
 export function findTenantPageBlock(
   blocks: TenantPageBlock[],
   type: TenantPageBlockType,

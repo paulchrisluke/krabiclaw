@@ -185,7 +185,7 @@ const {
   trackSubscriptionDowngrade,
   trackSubscriptionCheckoutSuccess,
 } = useAnalytics()
-const { isAuthenticated } = useAuth()
+const { isAuthenticated } = await useAuthSession()
 const { startSubscriptionCheckout } = useSubscriptionCheckout()
 const loading = ref(true)
 const billing = ref<ApiRecord | null>(null)

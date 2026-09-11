@@ -47,7 +47,7 @@ useSeoMeta({ title: 'People | KrabiClaw Dashboard', robots: 'noindex, nofollow' 
 interface PlatformUser { id: string; name: string | null; email: string; role?: string | null; banned?: boolean | null }
 
 const toast = useToast()
-const { user: currentUser, waitForSession } = useAuth()
+const { user: currentUser, refresh: refreshSession } = await useAuthSession()
 const currentUserId = computed(() => currentUser.value?.id ?? null)
 
 const search = ref('')
@@ -90,7 +90,7 @@ async function impersonate(userId: string) {
   try {
     const result = await authClient.admin.impersonateUser({ userId })
     if (result.error) throw new Error(result.error.message)
-    await waitForSession(result.data.session.id)
+    await refreshSession()
     await navigateTo('/dashboard')
   } catch (error) {
     toast.add({ title: 'Failed to impersonate', description: error instanceof Error ? error.message : undefined, color: 'error' })

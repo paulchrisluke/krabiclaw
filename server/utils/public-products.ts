@@ -86,11 +86,13 @@ export interface PublicProductReview {
   createdAt: string
 }
 
-async function loadProductSite(db: DbClient, siteId: string, routeKind: 'menu' | 'products') {
+// previewAuthorized carries the site's one preview authorization down from the
+// request: a site that has not finished onboarding is readable only with it.
+async function loadProductSite(db: DbClient, siteId: string, routeKind: 'menu' | 'products', previewAuthorized: boolean) {
   const site = await queryFirst<PublicProductSiteRow>(db, `
     SELECT id, organization_id, brand_name, vertical, theme_id, feature_overrides, default_currency
       FROM sites
-     WHERE id = ? AND status = 'active' AND onboarding_status = 'active'
+     WHERE id = ? AND status = 'active'${previewAuthorized ? '' : " AND onboarding_status = 'active'"}
        AND brand_name IS NOT NULL AND trim(brand_name) <> ''
      LIMIT 1
   `, [siteId])
@@ -113,9 +115,10 @@ export async function loadPublicProductCollection(
   db: DbClient,
   siteId: string,
   routeKind: 'menu' | 'products',
+  previewAuthorized: boolean,
   locationSlug?: string | null,
 ): Promise<PublicProductCollection | null> {
-  const resolved = await loadProductSite(db, siteId, routeKind)
+  const resolved = await loadProductSite(db, siteId, routeKind, previewAuthorized)
   if (!resolved) return null
   const locationRows = await queryAll<PublicProductLocation>(db, `
     SELECT id, slug, title, feature_overrides
@@ -148,12 +151,13 @@ export async function loadPublicProductDetail(
   db: DbClient,
   siteId: string,
   routeKind: 'menu' | 'products',
+  previewAuthorized: boolean,
   locationSlug: string,
   productSlug: string,
   locale = 'en',
 ): Promise<PublicProductDetail | null> {
   if (locale === 'en') {
-    const collection = await loadPublicProductCollection(db, siteId, routeKind, locationSlug)
+    const collection = await loadPublicProductCollection(db, siteId, routeKind, previewAuthorized, locationSlug)
     const location = collection?.locations[0]
     if (!collection || !location) return null
     const found = await getProductBySlug(db, collection.site.organization_id, productSlug)
@@ -178,7 +182,7 @@ export async function loadPublicProductDetail(
     }
   }
 
-  const resolved = await loadProductSite(db, siteId, routeKind)
+  const resolved = await loadProductSite(db, siteId, routeKind, previewAuthorized)
   if (!resolved) return null
   const localizations = await loadExactPublicLocalizations(db, resolved.site.organization_id, siteId, locale)
   const localizedLocationPath = `/${locale}/locations/${locationSlug}`
@@ -191,7 +195,7 @@ export async function loadPublicProductDetail(
      WHERE organization_id = ? AND site_id = ? AND id = ? AND status = 'active' LIMIT 1
   `, [resolved.site.organization_id, siteId, locationId])
   if (!sourceLocation) return null
-  const collection = await loadPublicProductCollection(db, siteId, routeKind, sourceLocation.slug)
+  const collection = await loadPublicProductCollection(db, siteId, routeKind, previewAuthorized, sourceLocation.slug)
   const location = collection?.locations[0]
   if (!collection || !location) return null
   const sourceProduct = collection.products.find(product => product.id === productId)
@@ -233,25 +237,27 @@ export async function loadPublicProductDetail(
 export async function loadPublicProductApiCollection(
   db: DbClient,
   siteId: string,
+  previewAuthorized: boolean,
   locationSlug?: string | null,
 ): Promise<PublicProductCollection | null> {
-  const site = await queryFirst<{ vertical: string }>(db, `SELECT vertical FROM sites WHERE id = ? AND status = 'active' AND onboarding_status = 'active' LIMIT 1`, [siteId])
+  const site = await queryFirst<{ vertical: string }>(db, `SELECT vertical FROM sites WHERE id = ? AND status = 'active'${previewAuthorized ? '' : " AND onboarding_status = 'active'"} LIMIT 1`, [siteId])
   const presentation = site ? resolveProductPresentation(site.vertical) : null
   if (!presentation) return null
-  return loadPublicProductCollection(db, siteId, presentation.locationCollectionSegment, locationSlug)
+  return loadPublicProductCollection(db, siteId, presentation.locationCollectionSegment, previewAuthorized, locationSlug)
 }
 
 export async function loadPublicProductApiDetail(
   db: DbClient,
   siteId: string,
+  previewAuthorized: boolean,
   locationSlug: string,
   productSlug: string,
   locale = 'en',
 ): Promise<PublicProductDetail | null> {
-  const site = await queryFirst<{ vertical: string }>(db, `SELECT vertical FROM sites WHERE id = ? AND status = 'active' AND onboarding_status = 'active' LIMIT 1`, [siteId])
+  const site = await queryFirst<{ vertical: string }>(db, `SELECT vertical FROM sites WHERE id = ? AND status = 'active'${previewAuthorized ? '' : " AND onboarding_status = 'active'"} LIMIT 1`, [siteId])
   const presentation = site ? resolveProductPresentation(site.vertical) : null
   if (!presentation) return null
-  return loadPublicProductDetail(db, siteId, presentation.locationCollectionSegment, locationSlug, productSlug, locale)
+  return loadPublicProductDetail(db, siteId, presentation.locationCollectionSegment, previewAuthorized, locationSlug, productSlug, locale)
 }
 
 export async function loadPublicProductReviews(

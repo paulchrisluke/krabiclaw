@@ -33,9 +33,9 @@ interface TenantBlogPost {
   media?: Array<{ asset_id: string; slot: string; public_url: string | null; kind: string | null }>
 }
 
-const { siteId, draftId, site } = useTenantSite()
+const { siteId, site } = useTenantSite()
 const { locale, t } = useI18n()
-if (!siteId && !draftId) throw createError({ statusCode: 404 })
+if (!siteId) throw createError({ statusCode: 404 })
 
 const siteName = computed(() => site?.brand_name?.trim() ?? '')
 

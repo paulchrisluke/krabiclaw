@@ -3,7 +3,9 @@ import type { SiteVertical } from '~/utils/vertical-copy'
 import { queryFirst } from '~/server/db'
 import type { PlaceDetails, PlaceReview } from '~/server/utils/google-places'
 import type { CurrencyCode } from '~/shared/currencies'
-import type { Product } from '~/server/types/products'
+import type { PriceInput } from '~/shared/prices'
+import { heroBlockSection, type TenantPageBlock, type TenantPageType } from '~/utils/tenant-page-blocks'
+import { composePostalAddress } from '~/utils/postal-address'
 
 type DraftSourceType = 'google_places' | 'manual'
 
@@ -14,7 +16,7 @@ export interface DraftBrandInput {
   heroPhotoNote: string | null
   heroPreviewUrl: string | null
   heroHeadline: string | null
-  heroDescription: string | null
+  heroSubtitle: string | null
   logoImage: DraftUploadedImage | null
   heroImage: DraftUploadedImage | null
 }
@@ -43,6 +45,29 @@ export interface DraftLocationRecord {
   rating: number | null
   review_count: number | null
   status: 'active'
+}
+
+/**
+ * A Product the owner named on the onboarding products step.
+ *
+ * Expressed the way the catalog stores it: the Product belongs to the
+ * organization, `collection` is the grouping the site presents it in, and the
+ * price belongs to the variant a customer buys. A blank price stays absent —
+ * a zero would be a price the owner never named.
+ */
+export interface DraftProductRecord {
+  id: string
+  location_id: string
+  collection: string
+  name: string
+  slug: string
+  description: string
+  /** Absent when the owner has not priced it yet: the variant carries no price row. */
+  price: PriceInput | null
+  order_url: string | null
+  sort_order: number
+  tags: string[]
+  source: 'import'
 }
 
 export interface DraftReviewRecord extends PlaceReview {
@@ -101,13 +126,55 @@ export interface OnboardingDraftPayload {
     config: Record<string, string | null>
     media: Array<{ slot: 'logo' | 'hero'; asset: DraftUploadedImage }>
     locations: DraftLocationRecord[]
-    products: Product[]
+    products: DraftProductRecord[]
     reviews: DraftReviewRecord[]
     qa: DraftQaRecord[]
     posts: DraftPostRecord[]
     content: DraftContentRecord[]
     locales: Array<{ code: string; label: string; is_source: boolean }>
   }
+}
+
+function defaultProductCategory(vertical: SiteVertical): string {
+  if (vertical === 'experience') return 'Experiences'
+  if (vertical === 'service') return 'Services'
+  return 'Menu'
+}
+
+export function onboardingPagePath(page: string): string {
+  if (page === 'home') return '/'
+  if (page === 'privacy') return '/policies/privacy'
+  if (page === 'terms') return '/policies/terms'
+  return `/${page}`
+}
+
+export function onboardingPageType(page: string): TenantPageType {
+  if (page === 'privacy' || page === 'terms') return 'legal'
+  if (page === 'home' || page === 'about' || page === 'contact') return 'system'
+  return 'recipe'
+}
+
+// One mapping from draft content rows to tenant-page blocks. The draft preview
+// renders these blocks and commit persists them, so the preview is exactly the
+// page the tenant will get.
+export function onboardingPageBlocks(rows: DraftContentRecord[]): TenantPageBlock[] {
+  const blocks: TenantPageBlock[] = []
+  for (const row of rows) {
+    if (row.field === 'hero') {
+      // `hero_title` is the only source of a hero's headline: buildDraftContent
+      // writes the owner's answer there and leaves `content` null on that row.
+      blocks.push({ id: row.id ?? crypto.randomUUID(), type: 'hero', position: blocks.length, data: { section: heroBlockSection(onboardingPagePath(row.page)), title: row.hero_title, subtitle: row.hero_subtitle }, media: [] })
+    } else if (row.type === 'media' || row.field.endsWith('.image')) {
+      if (row.asset_id) {
+        const type = row.field.endsWith('.image') ? 'image' : 'gallery'
+        blocks.push({ id: row.id ?? crypto.randomUUID(), type, position: blocks.length, data: { field: row.field }, media: [] })
+      }
+    } else if (row.content?.trim()) {
+      const type = row.field.endsWith('.title') || row.field.endsWith('.headline') ? 'heading' : 'markdown'
+      blocks.push({ id: row.id ?? crypto.randomUUID(), type, position: blocks.length, data: type === 'heading' ? { field: row.field, text: row.content, level: 2 } : { field: row.field, markdown: row.content }, media: [] })
+    }
+  }
+  return blocks
 }
 
 export function getDraftMedia(payload: OnboardingDraftPayload, slot: 'logo' | 'hero') {
@@ -117,13 +184,32 @@ export function getDraftMedia(payload: OnboardingDraftPayload, slot: 'logo' | 'h
 export interface OnboardingDraftUpsertResult {
   id: string
   subdomainCandidate: string
+  organizationId: string | null
   payload: OnboardingDraftPayload
 }
 
 export interface DraftDetailsInput {
   name: string
+  /**
+   * The address one field per answer, never the composed line. The draft used
+   * to persist only the composed line, and resume read it straight back into
+   * the street field — so an owner returning to a saved draft found their
+   * street address reading "United States". The line a location stores is
+   * derived here by composePostalAddress().
+   */
+  streetAddress: string | null
+  addressLine2: string | null
   city: string | null
-  address: string | null
+  region: string | null
+  postalCode: string | null
+  /**
+   * ISO 3166-1 alpha-2, as the owner answered it on the location step. Stored
+   * in its own right rather than read back off the phone number: the location
+   * step saves before the contact step, so a resumed draft would otherwise fall
+   * back to the product default and validate a non-US number against the US
+   * numbering plan.
+   */
+  country: string | null
   phone: string | null
   websiteUrl: string | null
   openingHours: OpeningHours
@@ -148,7 +234,7 @@ export interface PlaceDetailsSnapshot {
   reviews: PlaceReview[]
 }
 
-function slugify(value: string) {
+export function slugify(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'site'
 }
 
@@ -179,9 +265,9 @@ function buildDraftContent(
   _brandName: string,
   _vertical: SiteVertical,
   heroHeadline: string | null,
-  heroDescription: string | null,
+  heroSubtitle: string | null,
 ): DraftContentRecord[] {
-  if (!heroHeadline && !heroDescription) return []
+  if (!heroHeadline && !heroSubtitle) return []
   return [{
     page: 'home',
     field: 'hero',
@@ -189,9 +275,17 @@ function buildDraftContent(
     value: null,
     type: 'text',
     hero_title: heroHeadline,
-    hero_subtitle: heroDescription,
+    hero_subtitle: heroSubtitle,
     updated_at: nowIso(),
   }]
+}
+
+/** What the owner typed on the products step, before it becomes a draft row. */
+export interface DraftProductInput {
+  name: string
+  category: string
+  /** null when the owner left the price blank. `products` requires no price. */
+  amountMinor: number | null
 }
 
 export function buildOnboardingDraftPayload(input: {
@@ -200,6 +294,7 @@ export function buildOnboardingDraftPayload(input: {
   details: DraftDetailsInput
   place: DraftPlaceSource | null
   brandDraft?: DraftBrandInput | null
+  products?: DraftProductInput[] | null
 }): OnboardingDraftPayload {
   const brandName = input.details.name || input.name
   const subdomainCandidate = slugify(brandName).slice(0, 40)
@@ -208,14 +303,34 @@ export function buildOnboardingDraftPayload(input: {
   // Saya hero renders a brand-color + icon treatment when no real photo is available yet.
   const uploadedHero = input.brandDraft?.heroImage ?? null
   const uploadedLogo = input.brandDraft?.logoImage ?? null
-  const locationSlug = slugify(brandName) || 'main'
+  // A site's first location is 'main' everywhere else — seedNewSite creates it
+  // under that slug and seeds its page at /locations/main. Deriving a slug from
+  // the brand name here renamed the location out from under that page, leaving
+  // every onboarded site serving 200 "Location Not Found" at /locations/main.
+  // Later locations get their own slugs through the add-location flow.
+  const locationSlug = 'main'
   const locationId = 'draft-location-main'
 
   const description = null
-  // Onboarding does not import a catalogue: a draft site has no products
-  // until the merchant creates them in the dashboard, where the canonical
-  // writer owns variants, prices and publication.
-  const products: Product[] = []
+  const products: DraftProductRecord[] = (input.products ?? []).map((product, index) => {
+    const name = product.name.trim()
+    const collection = product.category.trim() || defaultProductCategory(input.vertical)
+    return {
+      id: `draft-product-${slugify(name) || index}`,
+      location_id: locationId,
+      collection,
+      name,
+      slug: slugify(name) || `item-${index + 1}`,
+      description: '',
+      price: product.amountMinor === null
+        ? null
+        : { unit_amount: product.amountMinor, currency: input.details.currency ?? 'USD' },
+      order_url: null,
+      sort_order: index,
+      tags: [],
+      source: 'import' as const,
+    }
+  })
 
   const reviews = (placeSnapshot?.reviews ?? []).map(review => ({
     ...review,
@@ -229,8 +344,8 @@ export function buildOnboardingDraftPayload(input: {
 
   const brandColor = input.brandDraft?.brandColor?.trim() || null
   const heroHeadline = input.brandDraft?.heroHeadline?.trim() || null
-  const heroDescription = input.brandDraft?.heroDescription?.trim() || null
-  const content = buildDraftContent(brandName, input.vertical, heroHeadline, heroDescription)
+  const heroSubtitle = input.brandDraft?.heroSubtitle?.trim() || null
+  const content = buildDraftContent(brandName, input.vertical, heroHeadline, heroSubtitle)
 
   return {
     version: 2,
@@ -248,7 +363,7 @@ export function buildOnboardingDraftPayload(input: {
         draft_logo_note: input.brandDraft?.logoNote?.trim() || null,
         draft_hero_photo_note: input.brandDraft?.heroPhotoNote?.trim() || null,
         draft_hero_headline: heroHeadline,
-        draft_hero_description: heroDescription,
+        draft_hero_subtitle: heroSubtitle,
       },
       media: [
         ...(uploadedLogo ? [{ slot: 'logo' as const, asset: uploadedLogo }] : []),
@@ -259,7 +374,15 @@ export function buildOnboardingDraftPayload(input: {
         slug: locationSlug,
         title: brandName,
         city: input.details.city ?? placeSnapshot?.city ?? null,
-        address: input.details.address ?? placeSnapshot?.formattedAddress ?? null,
+        address: composePostalAddress({
+          streetAddress: input.details.streetAddress ?? '',
+          addressLine2: input.details.addressLine2 ?? '',
+          city: input.details.city ?? '',
+          region: input.details.region ?? '',
+          postalCode: input.details.postalCode ?? '',
+          country: input.details.country ?? '',
+          streetIsFormatted: placeSnapshot !== null,
+        }) || null,
         description,
         phone: input.details.phone ?? placeSnapshot?.phone ?? null,
         website_url: input.details.websiteUrl ?? placeSnapshot?.websiteUrl ?? null,
@@ -304,31 +427,33 @@ export async function upsertActiveOnboardingDraft(db: D1Database, input: {
   payload: OnboardingDraftPayload
 }): Promise<OnboardingDraftUpsertResult> {
   const payloadJson = JSON.stringify(input.payload)
-  const subdomainCandidate = input.payload.preview.subdomainCandidate
   const now = nowIso()
 
   const id = crypto.randomUUID()
-  const draft = await queryFirst<{ id: string }>(db, `
+  // The address is claimed at the first save, when the pending site is created,
+  // so a later change of brand name renames the brand and not the site's host —
+  // and every following save keeps writing to the same site. organization_id is
+  // set once for the same reason.
+  const draft = await queryFirst<{ id: string; subdomain_candidate: string; organization_id: string | null }>(db, `
     INSERT INTO onboarding_drafts
       (id, user_id, organization_id, name, vertical, subdomain_candidate, source_type, status, payload_json, created_at, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?)
     ON CONFLICT(user_id) WHERE status = 'active'
     DO UPDATE SET
-      organization_id = excluded.organization_id,
+      organization_id = COALESCE(onboarding_drafts.organization_id, excluded.organization_id),
       name = excluded.name,
       vertical = excluded.vertical,
-      subdomain_candidate = excluded.subdomain_candidate,
       source_type = excluded.source_type,
       payload_json = excluded.payload_json,
       updated_at = excluded.updated_at
-    RETURNING id
+    RETURNING id, subdomain_candidate, organization_id
   `, [
     id,
     input.userId,
     input.organizationId ?? null,
     input.name,
     input.vertical,
-    subdomainCandidate,
+    input.payload.preview.subdomainCandidate,
     input.sourceType,
     payloadJson,
     now,
@@ -340,7 +465,8 @@ export async function upsertActiveOnboardingDraft(db: D1Database, input: {
 
   return {
     id: draft.id,
-    subdomainCandidate,
+    subdomainCandidate: draft.subdomain_candidate,
+    organizationId: draft.organization_id,
     payload: input.payload,
   }
 }

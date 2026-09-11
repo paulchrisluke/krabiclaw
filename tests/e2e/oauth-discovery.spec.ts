@@ -303,7 +303,7 @@ test.describe('OAuth discovery endpoints', () => {
     expect(userinfoBody.email_verified).toBe(true)
   })
 
-  test('ChatGPT-shaped CIMD uses private_key_jwt and rejects assertion replay', async ({ request, baseURL }) => {
+  test('CIMD uses its declared private_key_jwt method and rejects assertion replay', async ({ request, baseURL }) => {
     test.skip(new URL(baseURL!).protocol !== 'https:', 'CIMD requires an HTTPS client metadata and JWKS URI')
     await loginAs(request, baseURL!, 'user-e2e-oauth-private-cimd')
 

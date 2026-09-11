@@ -28,6 +28,11 @@ export default defineHandler(async (event) => {
 
   // Handle tenant sites based on onboarding status
   if (tenantType === TENANT_TYPES.TENANT) {
+    // A preview-authorized request is the owner looking at their own
+    // unfinished site: render it. Tenant resolution already verified the
+    // site's preview token, and it only sets this for a site it resolved.
+    if (event.context.previewAuthorized === true) return;
+
     switch (onboardingStatus) {
       case "pending":
         return redirect("/tenant-setup-pending", 302);

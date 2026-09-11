@@ -36,7 +36,6 @@
 </template>
 
 <script setup lang="ts">
-import { getPreviewSubpath } from '~/composables/usePublicPageRequest'
 import sayaCriticalCss from '~/assets/css/saya-critical.css?raw'
 import '~/assets/css/saya-entry.css'
 import { NON_INDEXABLE_ROBOTS_INTENT, normalizeRobotsIntent, type RobotsIntent } from '~/shared/robots-directive'
@@ -46,8 +45,7 @@ const hydrated = ref(false)
 onMounted(() => { hydrated.value = true })
 const { locale: activeLocale } = useI18n()
 const isHome = computed(() => route.path === '/'
-  || (activeLocale.value !== 'en' && route.path === `/${activeLocale.value}`)
-  || getPreviewSubpath(route.path) === '/')
+  || (activeLocale.value !== 'en' && route.path === `/${activeLocale.value}`))
 const sayaStylesheetHref = '/_nuxt/surfaces/saya.css'
 const sayaStylesheetForRoute = computed(() => {
   return sayaStylesheetHref
@@ -108,7 +106,7 @@ const themeStyles = computed(() => {
 // Slug matching works in every locale because the shell's locations are fetched
 // per locale and carry the same localized slugs the route does.
 const scopedLocationSlug = computed(() => {
-  const path = getPreviewSubpath(route.path) ?? route.path
+  const path = route.path
   const localePrefix = `/${activeLocale.value}`
   const sourcePath = activeLocale.value !== 'en' && path.startsWith(localePrefix)
     ? path.slice(localePrefix.length)
@@ -186,6 +184,11 @@ useHead(() => {
 <style>
 /* Saya theme CSS variables */
 .saya-theme {
-  --brand-color: #16a34a;
+  /* A site that has not chosen a colour yet wears the platform's, so the first
+     preview in onboarding already looks like KrabiClaw rather than a green
+     nobody picked. themeStyles above replaces both values the moment the owner
+     answers the brand step. */
+  --brand-color: var(--kc-coral);
+  --brand-color-foreground: #fff;
 }
 </style>

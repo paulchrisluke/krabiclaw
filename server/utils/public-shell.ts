@@ -8,8 +8,8 @@ import { buildPublicResourceCacheKey, getPublicResourceCache, putPublicResourceC
 import { getCloudflareWaitUntil } from '~/server/utils/mcp-route-helpers'
 import { loadPublicBase } from '~/server/utils/public-base'
 import { appendPublicShellQueries, buildPublicShellPayload } from '~/server/utils/public-shell-query'
-import { verifyPreviewToken } from '~/server/utils/preview-token'
-import { isPreviewContext } from '~/server/utils/tenant-hosts'
+import { previewSecretOf, resolvePreviewAuthorization } from '~/server/utils/preview-token'
+import { isNonProductionHost } from '~/server/utils/tenant-hosts'
 import { recordRequestPhase } from '~/server/utils/request-metrics'
 import { isPublicShellPayload } from '~/utils/public-resource-contracts'
 import { assertExactCanonicalLocale, assertPublicSiteLanguageEntitlement } from '~/server/utils/localization'
@@ -30,7 +30,7 @@ const readsByRequest = new WeakMap<H3Event, Map<string, Promise<unknown>>>()
 export async function loadPublicShellSource(
   event: H3Event,
   siteId: string,
-  query: Pick<Record<string, string | undefined>, 'locale' | 'token'>,
+  query: Pick<Record<string, string | undefined>, 'locale'>,
   options: PublicShellLoadOptions = {},
 ) {
   options.signal?.throwIfAborted()
@@ -39,16 +39,11 @@ export async function loadPublicShellSource(
   const db = env.DB
   if (!db) throw new HTTPError({ statusCode: 503, statusMessage: 'Database unavailable' })
 
-  const token = typeof query.token === 'string' ? query.token : null
   const locale = typeof query.locale === 'string' ? query.locale : undefined
   if (locale !== undefined) assertExactCanonicalLocale(locale)
-  const previewAuthorized = Boolean(
-    token && env.PREVIEW_SECRET
-      ? await verifyPreviewToken(String(env.PREVIEW_SECRET), siteId, token)
-      : false,
-  )
+  const previewAuthorized = await resolvePreviewAuthorization(event, siteId, previewSecretOf(env))
   const host = (event.req.headers.get('host')) ?? ''
-  const useCache = !previewAuthorized && !isPreviewContext(host)
+  const useCache = !previewAuthorized && !isNonProductionHost(host)
   const cacheKey = buildPublicResourceCacheKey(siteId, {
     contract: 'shell',
     page: null,
@@ -158,7 +153,7 @@ export async function loadPublicShellSource(
 export function loadPublicShell(
   event: H3Event,
   siteId: string,
-  query: Pick<Record<string, string | undefined>, 'locale' | 'token'>,
+  query: Pick<Record<string, string | undefined>, 'locale'>,
   options?: PublicShellLoadOptions,
 ) {
   if (options?.signal) {
@@ -171,7 +166,7 @@ export function loadPublicShell(
     reads = new Map()
     readsByRequest.set(event, reads)
   }
-  const key = `${siteId}:${query.locale ?? ''}:${query.token ?? ''}`
+  const key = `${siteId}:${query.locale ?? ''}`
   const existing = reads.get(key)
   if (existing) return existing
   const startedAt = performance.now()

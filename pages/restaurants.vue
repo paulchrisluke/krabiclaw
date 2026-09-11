@@ -306,7 +306,7 @@ const restaurantFeatures = [
     title: 'Multi-Location Support',
     desc: 'Easily run multiple venues with dedicated location URLs, unique hours, and location-scoped menu items under one organization.'
   }
-]
+] as const
 
 const faqs = [
   {

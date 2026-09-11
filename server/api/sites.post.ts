@@ -1,23 +1,21 @@
 import { defineHandler } from 'nitro';
-import { appendResponseHeader,  readBody } from 'nitro/h3';
+import { readBody } from 'nitro/h3';
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
-import { createAuth, getAuthSession } from '~/server/utils/auth'
+import { getAuthSession } from '~/server/utils/auth'
+import { resolveRequestedOrganization } from '~/server/utils/dashboard-context'
+import { activateSessionOrganization } from '~/server/utils/session-organization'
 import { runSiteCreation, VALID_VERTICALS } from '~/server/utils/site-creation'
 import type { SiteVertical } from '~/utils/vertical-copy'
 
-interface SetActiveOrganizationApi {
-  setActiveOrganization(_input: {
-    body: { organizationId: string }
-    headers: HeadersInit
-    asResponse: true
-  }): Promise<Response>
-}
-
+// Adds a site to an organization the caller already belongs to. The organization
+// is explicit: the dashboard sends the route's `org` query param (dashboardFetch),
+// API callers send `organizationId` in the body. Nothing is inferred from memberships.
 export default defineHandler(async (event) => {
-  const body = await readBody<{ name?: string; subdomain?: string; vertical?: string }>(event)
+  const body = await readBody<{ name?: string; subdomain?: string; vertical?: string; organizationId?: string }>(event)
   const name = body?.name?.trim()
   const subdomain = body?.subdomain?.trim()
   const vertical = body?.vertical
+  const explicitOrganizationId = body?.organizationId?.trim() || null
 
   if (!name || !subdomain) {
     return jsonResponse({ error: 'name and subdomain are required' }, { status: 400 })
@@ -35,38 +33,27 @@ export default defineHandler(async (event) => {
   const session = await getAuthSession(event, env)
   if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
-  const auth = createAuth(env)
-  const activeOrganizationApi = auth.api as unknown as SetActiveOrganizationApi
-  const activateOrganization = async (organizationId: string) => {
-    const response = await activeOrganizationApi.setActiveOrganization({
-      body: { organizationId },
-      headers: Object.fromEntries(event.req.headers.entries()) as HeadersInit,
-      asResponse: true,
-    })
-    if (!response.ok) {
-      throw new Error(`Failed to activate the new organization (${response.status || 502})`)
-    }
-    const headerBag = response.headers as Headers & {
-      getSetCookie?: () => string[]
-      getAll?: (_name: string) => string[]
-      raw?: () => Record<string, string[]>
-    }
-    const setCookies = typeof headerBag.getSetCookie === 'function'
-      ? headerBag.getSetCookie()
-      : typeof headerBag.getAll === 'function'
-        ? headerBag.getAll('set-cookie')
-        : (headerBag.raw?.()['set-cookie'] || [])
-    for (const cookieValue of setCookies) {
-      appendResponseHeader(event, 'set-cookie', cookieValue)
-    }
+  const organization = await resolveRequestedOrganization(event, db, session.user.id, { explicitOrganizationId })
+  if (!organization) {
+    return jsonResponse({
+      error: 'organizationId (or the dashboard `org` query param) is required and must name an organization you belong to',
+    }, { status: 400 })
   }
 
   const result = await runSiteCreation(env, db, session.user.id, {
+    organizationId: organization.id,
     name,
     subdomain,
     vertical: vertical as SiteVertical
-  }, {
-    beforeSiteMutation: activateOrganization,
   })
+  if (result.status === 200) {
+    // The site exists at this point; a failed activation must not turn that into a
+    // 500. It is logged loudly and the caller still gets the created site.
+    try {
+      await activateSessionOrganization(event, env, organization.id)
+    } catch (error) {
+      console.error('site_creation_activate_organization_failed', { organizationId: organization.id, error: error instanceof Error ? error.message : String(error) })
+    }
+  }
   return jsonResponse(result.data, { status: result.status })
 })

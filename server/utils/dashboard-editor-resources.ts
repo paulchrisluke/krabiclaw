@@ -25,7 +25,7 @@ import { loadDashboardGuestThreads } from '~/server/utils/dashboard-guest-thread
 import { requireBlogAccess } from '~/server/utils/blog-access'
 import { getBlogPost, listBlogPosts } from '~/server/utils/content/publishing'
 import { listPosts } from '~/server/utils/post-management'
-import { createPreviewToken } from '~/server/utils/preview-token'
+import { createPreviewToken, PREVIEW_TOKEN_TTL_MS } from '~/server/utils/preview-token'
 import { resolveSiteCmsCapabilities } from '~/server/utils/cms-capabilities'
 import { getEditablePages } from '~/config/content-registry'
 import { parseCmsFeatureOverrideDelta } from '~/config/cms-registry'
@@ -67,7 +67,7 @@ export async function loadDashboardEditorContext(event: H3Event, siteId: string)
   if (typeof env.PREVIEW_SECRET !== 'string' || !env.PREVIEW_SECRET) {
     throw new HTTPError({ statusCode: 500, statusMessage: 'PREVIEW_SECRET is required for editor previews' })
   }
-  const previewToken = await createPreviewToken(env.PREVIEW_SECRET, siteId, Date.now() + 60 * 60 * 1000)
+  const previewToken = await createPreviewToken(env.PREVIEW_SECRET, siteId, Date.now() + PREVIEW_TOKEN_TTL_MS)
   const { vertical, template } = resolveSiteCmsCapabilities(site.vertical, site.theme_id, {
     siteEnabledFeatures: site.feature_overrides,
   })

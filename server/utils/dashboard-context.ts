@@ -36,6 +36,9 @@ export interface DashboardOrganizationRow {
   logo: string | null
   role: string
   memberId: string
+  // Set while a deletion is pending: the sites keep serving until the
+  // deletion-sweep task runs, and an owner can cancel until then.
+  deletionScheduledAt: string | null
 }
 
 // One loader for site-level social media, used by both the sites list and the

@@ -9,10 +9,10 @@
 <script setup lang="ts">
 definePageMeta({ layout: false })
 
-const { isPlatform, siteId, draftId } = useTenantSite()
+const { isPlatform, siteId } = useTenantSite()
 const { isBlawby: isBlawbyPage } = usePublicTemplate()
 
-if (!isPlatform && !siteId && !draftId) {
+if (!isPlatform && !siteId) {
   throw createError({
     statusCode: 404,
     statusMessage: 'Site not found'

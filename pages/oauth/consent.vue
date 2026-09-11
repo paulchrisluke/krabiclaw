@@ -1,6 +1,5 @@
 <template>
-  <main class="min-h-screen flex items-center justify-center bg-(--ui-bg) px-6 py-12">
-    <div class="w-full max-w-xs">
+  <div>
 
       <!-- Header -->
       <div class="mb-6">
@@ -13,8 +12,9 @@
       <!-- Signed-in account -->
       <div v-if="currentUser" class="mb-6">
         <p class="text-sm text-muted">
-          Logged in as <span class="text-default font-medium">{{ currentUser.name || currentUser.email }}</span>
-          <span v-if="currentUser.name" class="text-dimmed"> · {{ currentUser.email }}</span>.
+          Logged in as
+          <span v-if="currentUser.name" class="text-default font-medium">{{ currentUser.name }} · </span>
+          <span class="text-default font-medium">{{ currentUser.email }}</span>.
           <button
             type="button"
             class="text-primary hover:underline ml-1"
@@ -38,12 +38,7 @@
             :key="group.title"
             class="flex items-start gap-3"
           >
-            <!-- Dynamic SVG Icons based on group.icon -->
-            <svg v-if="group.icon === 'i-lucide-fingerprint'" class="w-5 h-5 text-default shrink-0 mt-0.5" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 10a2 2 0 0 0-2 2c0 1.02-.1 2.51-.26 4"/><path d="M14 13.12c0 2.38 0 6.38-1 8.88"/><path d="M17.29 21.02c.12-.6.43-2.3.5-3.02"/><path d="M2 12a10 10 0 0 1 18-6"/><path d="M2 16h.01"/><path d="M21.8 16c.2-2 .131-5.354 0-6"/><path d="M5 19.5C5.5 18 6 15 6 12a6 6 0 0 1 .34-2"/><path d="M8.65 22c.21-.66.45-1.32.57-2"/><path d="M9 6.8a6 6 0 0 1 9 5.2v2"/></svg>
-            <svg v-else-if="group.icon === 'i-lucide-layout-dashboard'" class="w-5 h-5 text-default shrink-0 mt-0.5" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg>
-            <svg v-else-if="group.icon === 'i-lucide-shield-check'" class="w-5 h-5 text-default shrink-0 mt-0.5" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2-1 4-3 5.33-4.33a2 2 0 0 1 2.82 0C14.49 2 16.28 3 18.28 4a1 1 0 0 1 1 1v6z"/><path d="m9 12 2 2 4-4"/></svg>
-            <svg v-else class="w-5 h-5 text-default shrink-0 mt-0.5" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L22 7l-3-3"/></svg>
-            
+            <PlatformIcon :name="group.icon" class="size-5 text-default shrink-0 mt-0.5" />
             <div>
               <p class="text-sm font-bold text-default">{{ group.title }}</p>
               <ul class="mt-1 space-y-0.5">
@@ -61,32 +56,15 @@
       </div>
 
       <!-- Actions -->
-      <div v-if="error" role="alert" class="mb-4 rounded-lg border border-red-500/30 bg-red-500/5 px-4 py-3 text-sm text-red-500">
-        {{ error }}
-      </div>
+      <div v-if="error" role="alert" class="mb-4 rounded-lg border border-red-500/30 bg-red-500/5 px-4 py-3 text-sm text-red-500">{{ error }}</div>
 
-      <button
-        id="oauth-consent-agree"
-        class="w-full flex justify-center items-center py-3 px-4 rounded-full text-[15px] font-semibold shadow-sm transition-all text-white bg-black dark:bg-white dark:text-black hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
-        :disabled="accepting || denying || switchingAccount"
-        @click="accept"
-      >
-        <svg v-if="accepting" class="animate-spin -ml-1 mr-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-        </svg>
+      <PlatformButton id="oauth-consent-agree" size="lg" block :loading="accepting" :disabled="denying || switchingAccount" @click="accept">
         Agree
-      </button>
+      </PlatformButton>
 
-      <button
-        id="oauth-consent-cancel"
-        class="w-full text-sm text-muted hover:text-default transition-colors text-center mt-3 py-1"
-        :disabled="accepting || switchingAccount"
-        @click="deny"
-      >
-        <span v-if="denying" class="opacity-60">Cancelling…</span>
-        <span v-else>Cancel</span>
-      </button>
+      <PlatformButton id="oauth-consent-cancel" variant="ghost" size="sm" block class="mt-3" :loading="denying" :disabled="accepting || switchingAccount" @click="deny">
+        Cancel
+      </PlatformButton>
 
       <!-- Legal footnotes -->
       <div class="mt-6 space-y-2">
@@ -100,40 +78,28 @@
         </p>
       </div>
 
-    </div>
-  </main>
+  </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { $fetch } from 'ofetch'
+import type { PlatformIconName } from '~/components/platform/PlatformIcon.vue'
 import { authClient } from '~/lib/auth-client'
-definePageMeta({ layout: 'standalone', auth: false })
+import { fetchOAuthClientPrelogin, oauthContinuationDestination } from '~/shared/auth/oauth-login'
+
+definePageMeta({ layout: 'access', auth: false })
 
 useSeoMeta({ robots: 'noindex, nofollow' })
 
 const route = useRoute()
 
 // ── Client metadata ───────────────────────────────────────────────────────────
-const clientName = ref('')
-const currentUser = ref(null)
+const clientName = ref<string | null>(null)
+const { user: currentUser } = await useAuthSession()
 
 onMounted(async () => {
-  const clientId = route.query.client_id
-
-  // Check session and pre-fetch client name in parallel
-  const [sessionResult] = await Promise.allSettled([
-    authClient.getSession(),
-    clientId && typeof clientId === 'string'
-      ? $fetch('/api/auth/oauth2/public-client-prelogin', {
-          method: 'POST',
-          body: { client_id: clientId, oauth_query: window.location.search.slice(1) },
-        }).then((data) => { if (data?.client_name) clientName.value = data.client_name }).catch(() => {})
-      : Promise.resolve(),
-  ])
-
-  if (sessionResult.status === 'fulfilled' && sessionResult.value?.data?.user) {
-    currentUser.value = sessionResult.value.data.user
-  }
+  const client = await fetchOAuthClientPrelogin(route.query.client_id, window.location.search.slice(1))
+  clientName.value = client?.clientName ?? null
 })
 
 // ── Permission groups ─────────────────────────────────────────────────────────
@@ -145,11 +111,11 @@ const requestedScopes = computed(() => {
 
 const permissionGroups = computed(() => {
   const scopes = new Set(requestedScopes.value)
-  const groups = []
+  const groups: Array<{ icon: PlatformIconName, title: string, items: string[] }> = []
 
   if (scopes.has('openid')) {
     groups.push({
-      icon: 'i-lucide-fingerprint',
+      icon: 'fingerprint',
       title: 'Verify your identity',
       items: ['Confirm you are who you say you are'],
     })
@@ -157,7 +123,7 @@ const permissionGroups = computed(() => {
 
   if (scopes.has('tenant')) {
     groups.push({
-      icon: 'i-lucide-layout-dashboard',
+      icon: 'layout-dashboard',
       title: 'Access your KrabiClaw workspace',
       items: [
         'Read and update your site content, menus, and media',
@@ -173,7 +139,7 @@ const permissionGroups = computed(() => {
   const unknown = [...scopes].filter(s => !known.has(s))
   if (unknown.length) {
     groups.push({
-      icon: 'i-lucide-key',
+      icon: 'key',
       title: 'Additional permissions',
       items: unknown,
     })
@@ -185,7 +151,7 @@ const permissionGroups = computed(() => {
 // ── Actions ───────────────────────────────────────────────────────────────────
 const accepting = ref(false)
 const denying = ref(false)
-const error = ref(null)
+const error = ref<string | null>(null)
 const switchingAccount = ref(false)
 
 /**
@@ -197,43 +163,47 @@ async function switchAccount() {
   switchingAccount.value = true
   try {
     await authClient.signOut()
-  } catch (err) {
-    error.value = err?.message ?? 'Could not sign out. Please try again.'
+  } catch (cause) {
+    error.value = getErrorMessage(cause, 'Could not sign out. Please try again.')
     switchingAccount.value = false
     return
   }
   window.location.href = `/oauth/login${route.fullPath.slice(route.path.length)}`
 }
 
-async function accept() {
-  if (switchingAccount.value || denying.value) return
-  accepting.value = true
+async function submitConsent(accept: boolean) {
   error.value = null
   try {
     const result = await $fetch('/api/auth/oauth2/consent', {
       method: 'POST',
-      body: { accept: true, oauth_query: window.location.search.slice(1) },
+      body: { accept, oauth_query: window.location.search.slice(1) },
     })
-    if (result?.url) window.location.href = result.url
-  } catch (err) {
-    error.value = err?.data?.message ?? err?.message ?? 'Something went wrong. Please try again.'
+    const destination = oauthContinuationDestination(result)
+    if (!destination) {
+      error.value = 'The authorization server did not send us anywhere to continue. Start the connection again from the app.'
+      return
+    }
+    window.location.href = destination
+  } catch (cause) {
+    error.value = getErrorMessage(cause, 'Something went wrong. Please try again.')
+  }
+}
+
+async function accept() {
+  if (switchingAccount.value || denying.value || accepting.value) return
+  accepting.value = true
+  try {
+    await submitConsent(true)
   } finally {
     accepting.value = false
   }
 }
 
 async function deny() {
-  if (switchingAccount.value || accepting.value) return
+  if (switchingAccount.value || accepting.value || denying.value) return
   denying.value = true
-  error.value = null
   try {
-    const result = await $fetch('/api/auth/oauth2/consent', {
-      method: 'POST',
-      body: { accept: false, oauth_query: window.location.search.slice(1) },
-    })
-    if (result?.url) window.location.href = result.url
-  } catch (err) {
-    error.value = err?.data?.message ?? err?.message ?? 'Something went wrong. Please try again.'
+    await submitConsent(false)
   } finally {
     denying.value = false
   }

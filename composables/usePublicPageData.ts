@@ -54,16 +54,15 @@ export const usePublicPageData = async (options: {
   lazy?: boolean
   routeOwned?: boolean
 } = {}) => {
-  const { isPlatform, siteId, draftId } = useTenantSite();
+  const { isPlatform, siteId } = useTenantSite();
   const route = useRoute();
   const params = usePublicPageRequest();
-  const entityId = siteId || draftId || null;
   const requestedParams = computed(() => options.datasets
     ? { ...params.value, datasets: [...options.datasets] }
     : { ...params.value, datasets: [...params.value.datasets] })
-  const key = computed(() => usePublicPageKey(entityId, requestedParams.value));
+  const key = computed(() => usePublicPageKey(siteId, requestedParams.value));
 
-  const url = computed(() => buildPublicPageUrl(siteId, requestedParams.value, route));
+  const url = computed(() => buildPublicPageUrl(siteId, requestedParams.value));
 
   const shell = useSiteShellState();
   const requestEvent = import.meta.server ? useRequestEvent() : undefined
@@ -72,14 +71,13 @@ export const usePublicPageData = async (options: {
     && options.lazy === true;
 
   const asyncData =
-    isPlatform || (!siteId && !draftId)
+    isPlatform || !siteId
       ? { data: ref<PublicPagePayload>(), error: ref<Error | null>(null), pending: ref(false), refresh: async () => {} }
       : useAsyncData<PublicPagePayload>(
           key,
           (_nuxtApp, { signal }) => {
             const currentParams = requestedParams.value
             return loadPublicResourcePayload<PublicPagePayload>({
-              draftId,
               siteId,
               resourceKind: 'page',
               url: url.value,
@@ -90,7 +88,6 @@ export const usePublicPageData = async (options: {
                 datasets: [...currentParams.datasets].sort().join(',') || undefined,
                 blogSlug: currentParams.blogSlug ?? undefined,
                 locale: currentParams.locale ?? undefined,
-                token: currentParams.token ?? undefined,
               },
               validate: (value): value is PublicPagePayload =>
                 isPublicPagePayload(value, currentParams.page ?? 'home'),

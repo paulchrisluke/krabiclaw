@@ -1,7 +1,7 @@
 // The pinned @better-auth/stripe build mutates subscription state inside its
 // webhook handlers before invoking the application callback and can create a
 // second checkout for a past_due subscription, which breaks event-ID
-// deduplication. patches/@better-auth+stripe+1.7.0-beta.10.patch (applied via
+// deduplication. patches/@better-auth+stripe+1.7.4.patch (applied via
 // postinstall's patch-package --error-on-fail) delegates lifecycle events to
 // this reconciler instead. This module owns current-state repair, monotonic
 // event protection, and retry processing; the hourly sweep task is a recovery

@@ -79,8 +79,10 @@ interface BlogPost {
 
 const route = useRoute()
 const requestEvent = useRequestEvent()
-const previewToken = computed(() => typeof route.query.token === 'string' ? route.query.token : undefined)
-const postEndpoint = computed(() => `/api/public/blog/${String(route.params.category)}/${String(route.params.slug)}${previewToken.value === undefined ? '' : '?token=' + encodeURIComponent(previewToken.value)}`)
+// Preview authorization is the site's, resolved once by tenant resolution
+// from the preview cookie; the client's API call carries the same cookie.
+const previewAuthorized = computed(() => Boolean(requestEvent?.context.previewAuthorized))
+const postEndpoint = computed(() => `/api/public/blog/${String(route.params.category)}/${String(route.params.slug)}`)
 
 const { data, pending, error } = await useAsyncData(
   () => `blog-post-${postEndpoint.value}`,
@@ -106,7 +108,7 @@ const { data, pending, error } = await useAsyncData(
       const db = env.db
       if (!db) throw createError({ statusCode: 500, statusMessage: 'Database not available' })
 
-      post = await getPublishedBlogPost(db, category, String(route.params.slug), env, previewToken.value) as BlogPost | null
+      post = await getPublishedBlogPost(db, category, String(route.params.slug), env, previewAuthorized.value) as BlogPost | null
     } else {
       let payload: { post?: BlogPost }
       try {

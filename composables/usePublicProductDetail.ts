@@ -88,7 +88,7 @@ export async function usePublicProductDetail(routeKind: 'menu' | 'products') {
         ])
         const db = cloudflareEnv(requestEvent).DB
         if (!db) throw createError({ statusCode: 500, statusMessage: 'Database not available' })
-        const detail = await loadPublicProductDetail(db, siteId, routeKind, locationSlug, productSlug, locale)
+        const detail = await loadPublicProductDetail(db, siteId, routeKind, Boolean(requestEvent.context.previewAuthorized), locationSlug, productSlug, locale)
         if (!detail) return null
         // The collection this product belongs to on this site, in the site's
         // own order. Several means the first by that order — one documented

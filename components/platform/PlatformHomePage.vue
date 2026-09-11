@@ -212,7 +212,7 @@ const features = [
   { icon: 'calendar', title: 'Bookings & Reservations', body: 'Accept table reservations and ticketed experience bookings with automated confirmations and zero per-cover fees.' },
   { icon: 'sparkles', title: 'Social & Blog Publishing', body: 'Publish thought leadership, news, and seasonal specials to your website and social channels simultaneously.' },
   { icon: 'inbox', title: 'Unified Inbox', body: 'Manage all your reservations, bookings, and contact inquiries from a single, unified inbox.' },
-]
+] as const
 
 const { plans } = usePlans()
 

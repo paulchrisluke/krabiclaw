@@ -27,7 +27,6 @@ export interface PublicPageRequest {
   datasets: readonly PublicPageDataset[];
   blogSlug: string | null; // set when the blogPost dataset is requested
   locale: string | null;
-  token: string | null; // signed preview token — non-null only on /preview/site/... routes
 }
 
 export function getPublicCriticalHomeRequest(params: PublicPageRequest): PublicPageRequest {
@@ -40,15 +39,7 @@ export function getPublicCriticalHomeRequest(params: PublicPageRequest): PublicP
   }
 }
 
-// Extracts the page sub-path from a platform preview route path.
-// Returns null if the path is not a preview route.
-export function getPreviewSubpath(path: string): string | null {
-  const match = path.match(/^\/preview\/(?:site|draft)\/[^/]+(\/.*)?$/)
-  if (!match) return null
-  return match[1] || '/'
-}
-
-export function getPublicPageRequest(path: string): Omit<PublicPageRequest, "locale" | "token"> {
+export function getPublicPageRequest(path: string): Omit<PublicPageRequest, "locale"> {
 
   // Location sub-pages: /locations/[slug]/*
   const locationMatch = path.match(/^\/locations\/([^/]+)/);
@@ -204,8 +195,7 @@ export const usePublicPageRequest = () => {
   const locale = useState<string>('public-locale', () => 'en')
 
   return computed<PublicPageRequest>(() => {
-    const previewSubpath = getPreviewSubpath(route.path)
-    const effectivePath = previewSubpath ?? route.path
+    const effectivePath = route.path
     const explicitLocale = typeof route.params.locale === 'string'
       ? route.params.locale
       : locale.value !== 'en' && effectivePath.startsWith(`/${locale.value}`)
@@ -218,15 +208,11 @@ export const usePublicPageRequest = () => {
           publicPath: effectivePath,
         }
       : { localeSegment: null, sourcePath: effectivePath, publicPath: effectivePath }
-    const token = previewSubpath !== null && typeof route.query.token === 'string'
-      ? route.query.token
-      : null
     const request = getPublicPageRequest(localePath.sourcePath)
     return {
       ...request,
       datasets: request.datasets,
       locale: localePath.localeSegment ?? locale.value,
-      token,
     }
   });
 };
@@ -252,7 +238,6 @@ export const usePublicResourceKey = (
     encodeKeyField([...params.datasets].sort().join(',')),
     encodeKeyField(params.blogSlug),
     encodeKeyField(params.locale),
-    encodeKeyField(params.token),
   ].join("~");
 
 export const usePublicPageKey = (
@@ -263,7 +248,6 @@ export const usePublicPageKey = (
 export const buildPublicPageUrl = (
   siteId: string | null | undefined,
   params: PublicPageRequest,
-  route: { path: string; params: Record<string, unknown> },
   resourceKind: 'shell' | 'page' = 'page',
 ) => {
   const qs = new URLSearchParams();
@@ -271,18 +255,7 @@ export const buildPublicPageUrl = (
   if (params.location) qs.set("location", params.location);
   if (params.datasets.length) qs.set("datasets", [...params.datasets].sort().join(','));
   if (params.blogSlug) qs.set("blogSlug", params.blogSlug);
-  if (params.token) {
-    qs.set("preview", "true");
-    qs.set("token", params.token);
-  }
-  const draftId = typeof route.params.draftId === 'string' && route.path.startsWith('/preview/draft/')
-    ? route.params.draftId
-    : null
-  if (!draftId && params.locale && params.locale !== 'en') qs.set('locale', params.locale)
+  if (params.locale && params.locale !== 'en') qs.set('locale', params.locale)
   const q = qs.toString();
-  if (draftId) {
-    const draftQuery = qs.toString()
-    return `/api/public/drafts/${draftId}/${resourceKind}${draftQuery ? `?${draftQuery}` : ""}`
-  }
   return `/api/public/sites/${siteId}/${resourceKind}${q ? `?${q}` : ""}`;
 };

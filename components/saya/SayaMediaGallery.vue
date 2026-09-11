@@ -117,6 +117,7 @@
 </template>
 
 <script setup lang="ts">
+import type { SayaIconName } from '~/components/saya/SayaIcon.vue'
 interface GalleryItem {
   url: string
   kind?: 'image' | 'video' | 'file'
@@ -129,7 +130,7 @@ interface GalleryItem {
 const props = withDefaults(defineProps<{
   items: GalleryItem[]
   title: string
-  emptyIcon?: string
+  emptyIcon?: SayaIconName
 }>(), {
   emptyIcon: 'sparkles',
 })

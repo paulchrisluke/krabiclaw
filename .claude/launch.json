@@ -4,21 +4,51 @@
     {
       "name": "dev",
       "runtimeExecutable": "corepack",
-      "runtimeArgs": ["yarn", "dev"],
+      "runtimeArgs": [
+        "yarn",
+        "dev"
+      ],
       "port": 3000
     },
     {
       "name": "worker",
       "runtimeExecutable": "corepack",
-      "runtimeArgs": ["yarn", "dev:worker"],
+      "runtimeArgs": [
+        "yarn",
+        "dev:worker"
+      ],
       "port": 3000
     },
     {
       "name": "worker-verify",
       "runtimeExecutable": "corepack",
-      "runtimeArgs": ["yarn", "wrangler", "dev", ".output/server/index.mjs", "--assets", ".output/public", "--local", "--port", "3100", "--live-reload"],
+      "runtimeArgs": [
+        "yarn",
+        "wrangler",
+        "dev",
+        ".output/server/index.mjs",
+        "--assets",
+        ".output/public",
+        "--local",
+        "--port",
+        "3100",
+        "--live-reload"
+      ],
       "port": 3100
+    },
+    {
+      "name": "onboarding-wt",
+      "runtimeExecutable": "corepack",
+      "runtimeArgs": [
+        "yarn",
+        "dev",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "3001"
+      ],
+      "port": 3001,
+      "url": "http://127.0.0.1:3001"
     }
   ]
 }
-

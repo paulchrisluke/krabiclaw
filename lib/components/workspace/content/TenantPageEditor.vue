@@ -144,7 +144,10 @@ const resolvedSiteId = siteId
 const route = useRoute()
 const dashboardApi = useDashboardApi()
 const toast = useToast()
-const platformOrigin = useRequestURL().origin
+// The preview is the site itself on its own host — never a platform-hosted
+// copy of it — so links, navigation and templates are exactly the public ones.
+const runtimeConfig = useRuntimeConfig()
+const siteSubdomain = ref('')
 const pagesPath = computed(() => `/dashboard/${route.params.orgSlug}/sites/${route.params.siteSlug}/pages`)
 const isNew = computed(() => !props.pageId)
 const selected = ref<PageDetail | null>(null)
@@ -171,9 +174,18 @@ const blockTypeOptions = computed(() => Object.values(TENANT_PAGE_BLOCK_REGISTRY
   .map(definition => ({ label: definition.label, value: definition.type })))
 const blockErrors = computed(() => selected.value?.blocks.map(block => validateTenantPageBlock(block)) ?? [])
 const previewUrl = computed(() => {
-  if (!selected.value?.id || !previewToken.value) return ''
+  if (!selected.value?.id || !previewToken.value || !siteSubdomain.value) return ''
   const path = selected.value.path === '/' ? '' : selected.value.path
-  return `${platformOrigin}/preview/site/${siteId}${path}?preview=true&token=${encodeURIComponent(previewToken.value)}&locale=${encodeURIComponent(selected.value.locale)}`
+  const localizedPath = selected.value.locale === 'en' ? path : `/${selected.value.locale}${path}`
+  const origin = tenantSiteOrigin({
+    platformDomain: String(runtimeConfig.public.platformDomain),
+    freeSiteDomain: String(runtimeConfig.public.freeSiteDomain),
+    subdomain: siteSubdomain.value,
+  })
+  if (!origin) return ''
+  const url = new URL(`${origin}${localizedPath || '/'}`)
+  url.searchParams.set('preview_token', previewToken.value)
+  return url.toString()
 })
 const navigablePreviewUrl = computed(() => previewHrefForTenantPage(dirty.value, previewUrl.value))
 
@@ -189,8 +201,9 @@ function validatePage(value: unknown): value is { page: PageDetailResponse } {
   return isRecord(value) && isRecord(value.page) && typeof value.page.id === 'string' && isRecord(value.page.document) && Array.isArray(value.page.blocks)
 }
 
-function validateContext(value: unknown): value is { context: { previewToken: string } } {
+function validateContext(value: unknown): value is { context: { previewToken: string; site: { subdomain: string | null } } } {
   return isRecord(value) && isRecord(value.context) && typeof value.context.previewToken === 'string'
+    && isRecord(value.context.site)
 }
 
 function toEditorPage(page: PageDetailResponse): PageDetail {
@@ -216,12 +229,13 @@ async function loadEditor() {
   pageLoadError.value = null
   try {
     const [contextResponse, pageResponse, pagesResponse] = await Promise.all([
-      dashboardApi<{ context: { previewToken: string } }>(`/api/editor/sites/${siteId}/context`, { validate: validateContext }),
+      dashboardApi<{ context: { previewToken: string; site: { subdomain: string | null } } }>(`/api/editor/sites/${siteId}/context`, { validate: validateContext }),
       props.pageId ? dashboardApi<{ page: PageDetailResponse }>(`/api/editor/sites/${siteId}/pages/${props.pageId}`, { validate: validatePage }) : Promise.resolve(null),
       props.pageId ? Promise.resolve(null) : dashboardApi<{ pages: PageSummary[] }>(`/api/editor/sites/${siteId}/pages`, { validate: validateList }),
     ])
     if (!requestGate.isCurrent(requestToken)) return
     previewToken.value = contextResponse.context.previewToken
+    siteSubdomain.value = contextResponse.context.site.subdomain ?? ''
     if (pageResponse) {
       selected.value = toEditorPage(pageResponse.page)
       savedBlockIds.value = new Set(pageResponse.page.blocks.map(block => block.id))

@@ -1299,6 +1299,9 @@ export const oauthClient = sqliteTable("oauthClient", {
 	name: text().notNull(),
 	redirectUris: text().notNull(),
 	scopes: text().default("[]").notNull(),
+	clientCredentialsScopes: text().default("[]").notNull(),
+	clientDiscoveryId: text(),
+	applicationType: text(),
 	public: integer().default(0).notNull(),
 	requirePKCE: integer().default(1).notNull(),
 	skipConsent: integer().default(0).notNull(),
@@ -1404,6 +1407,11 @@ export const organization = sqliteTable("organization", {
 	metadata: text(),
 	// Better Auth Stripe plugin organization customer field.
 	stripeCustomerId: text().unique(),
+	// Set when an owner asks for the organization to be deleted. Its sites keep
+	// serving through the grace period so the request can be cancelled; the
+	// deletion-sweep task deletes the organization once this instant has passed,
+	// and the foreign-key cascade takes its sites, domains and content with it.
+	deletionScheduledAt: integer({ mode: "timestamp" }),
 	createdAt: integer({ mode: "timestamp" }).default(sql`(unixepoch())`).notNull(),
 }, () => [
 	check("organization_slug_required_check", sql`trim(slug) <> ''`),
@@ -1988,6 +1996,10 @@ export const user = sqliteTable("user", {
 	// Better Auth Stripe plugin user customer field. Organization subscriptions
 	// use organization.stripeCustomerId instead.
 	stripeCustomerId: text(),
+	// Set when the account holder asks for deletion. The account stays usable
+	// through the grace period so the request can be cancelled; the
+	// deletion-sweep task removes the row once this instant has passed.
+	deletionScheduledAt: integer({ mode: "timestamp" }),
 	createdAt: integer({ mode: "timestamp" }).default(sql`(unixepoch())`).notNull(),
 	updatedAt: integer({ mode: "timestamp" }).default(sql`(unixepoch())`).notNull(),
 });
@@ -2260,3 +2272,4 @@ export const analytics_summaries = sqliteTable("analytics_summaries", {
   index("analytics_summaries_session_seen_idx").on(table.site_id, sql`(payload_json ->> '$.last_seen_at')`).where(sql`kind = 'session'`),
   index("analytics_summaries_session_visitor_idx").on(table.site_id, sql`(payload_json ->> '$.visitor_id')`, sql`(payload_json ->> '$.started_at')`).where(sql`kind = 'session'`),
 ]);
+

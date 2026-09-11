@@ -123,7 +123,7 @@ const canManageSite = computed(() => dashboard.siteAccess.value !== 'location')
 const siteDomain = computed(() => dashboard.site.value?.custom_domain ?? null)
 const publicSiteUrl = computed(() => dashboard.site.value?.public_url || '')
 
-const { user: currentUser } = useAuth()
+const { user: currentUser } = await useAuthSession()
 const template = computed(() => resolvePublicTemplate({ themeId: dashboard.site.value?.theme_id, vertical: dashboard.site.value?.vertical }).slug)
 const vertical = computed(() => {
   const raw = dashboard.site.value?.vertical

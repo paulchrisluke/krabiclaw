@@ -15,7 +15,19 @@ export default defineAppConfig({
         color: 'neutral'
       }
     },
+    // One control size across the app. Nuxt UI's own default is `md`, which is
+    // why fields drifted: a surface that wanted a bigger field set `size="xl"`
+    // by hand and its neighbour did not. Set the default once here and pass the
+    // prop only where a control genuinely differs.
+    checkbox: { defaultVariants: { size: 'xl' } },
+    inputMenu: { defaultVariants: { size: 'xl' } },
+    inputNumber: { defaultVariants: { size: 'xl' } },
+    inputDate: { defaultVariants: { size: 'xl' } },
+    inputTime: { defaultVariants: { size: 'xl' } },
+    inputTags: { defaultVariants: { size: 'xl' } },
+    selectMenu: { defaultVariants: { size: 'xl' } },
     button: {
+      defaultVariants: { size: 'xl' },
       compoundVariants: [
         {
           color: 'primary',
@@ -52,19 +64,19 @@ export default defineAppConfig({
     },
     input: {
       defaultVariants: {
-        size: 'md',
+        size: 'xl',
         variant: 'outline'
       }
     },
     textarea: {
       defaultVariants: {
-        size: 'md',
+        size: 'xl',
         variant: 'outline'
       }
     },
     select: {
       defaultVariants: {
-        size: 'md',
+        size: 'xl',
         variant: 'outline'
       }
     },

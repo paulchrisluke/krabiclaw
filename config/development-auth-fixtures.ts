@@ -82,6 +82,9 @@ export const E2E_AUTH_FIXTURES: readonly E2eAuthFixture[] = [
   ...[
     'oauth-cimd',
     'oauth-private-cimd',
+    // Drives the new-site wizard end to end; every run leaves it owning one more
+    // organization, which reset-e2e-artifacts sweeps as a non-fixture org.
+    'onboarding-wizard',
     ...[
       'media',
       'inaccessible',

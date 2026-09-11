@@ -80,7 +80,7 @@ export const CONTENT_BLOCK_TEXT_FIELDS = {
   // `data.markdown || data.text`, and no stored callout has either key, so every
   // callout rendered empty there.
   callout: [plain('title'), plain('body')],
-  hero: [plain('eyebrow'), plain('title'), plain('subtitle'), plain('description'), plain('cta_label')],
+  hero: [plain('eyebrow'), plain('title'), plain('subtitle'), plain('cta_label')],
   button_group: [plain('buttons', '*', 'label')],
   feature_grid: [plain('title'), plain('description'), plain('items', '*', 'title'), plain('items', '*', 'description')],
   testimonial_grid: [plain('title'), plain('description'), plain('items', '*', 'title'), plain('items', '*', 'description')],

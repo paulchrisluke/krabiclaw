@@ -244,14 +244,21 @@ test('Today uses the CMS patterns and sends one reservation change request', asy
     [guestName, guestEmail, now],
     [`Priya${now} Patel`, `priya-${now}@example.test`, now + 86_400_000],
   ] as const) {
-    // The time comes from the location's own availability for that day, not a
-    // clock time that is only open while the test happens to run before it.
-    const date = localDateAt(new Date(instant), timezone)
-    const day = await page.request.get('/api/public/sites/site-demo/reservations/availability', { params: { date, location_id: 'loc-demo' } })
-    await expectStatus(day, 200)
-    const { dates } = await day.json() as { dates: Array<{ slots: Array<{ time_slot: string; is_closed: boolean }> }> }
-    const slot = dates[0]?.slots.filter(candidate => !candidate.is_closed).at(-1)
-    expect(slot, `loc-demo offers no open slot on ${date}`).toBeTruthy()
+    // The time comes from the location's own availability, not a clock time that
+    // is only open while the test happens to run before it. The *day* has to be
+    // resolved the same way: every slot on the location's current day is already
+    // in the past once CI runs late in its timezone (Asia/Bangkok here), so this
+    // walks forward to the first day that still has an open slot.
+    let date = localDateAt(new Date(instant), timezone)
+    let slot: { time_slot: string; is_closed: boolean } | undefined
+    for (let dayOffset = 0; dayOffset < 4 && !slot; dayOffset += 1) {
+      date = localDateAt(new Date(instant + dayOffset * 86_400_000), timezone)
+      const day = await page.request.get('/api/public/sites/site-demo/reservations/availability', { params: { date, location_id: 'loc-demo' } })
+      await expectStatus(day, 200)
+      const { dates } = await day.json() as { dates: Array<{ slots: Array<{ time_slot: string; is_closed: boolean }> }> }
+      slot = dates[0]?.slots.filter(candidate => !candidate.is_closed).at(-1)
+    }
+    expect(slot, `loc-demo offers no open slot within four days of ${localDateAt(new Date(instant), timezone)}`).toBeTruthy()
     const response = await page.request.post('/api/public/sites/site-demo/reservations', {
       data: { name, email, phone: '+12025550123', date, time: slot!.time_slot, guests: '2', location_id: 'loc-demo' },
     })

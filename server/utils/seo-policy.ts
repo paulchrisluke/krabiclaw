@@ -27,7 +27,6 @@ export const PRIVATE_ROUTE_PREFIXES = [
   '/dashboard',
   '/dev',
   '/oauth',
-  '/preview',
   '/transfer',
 ] as const
 
