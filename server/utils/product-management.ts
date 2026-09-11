@@ -714,17 +714,26 @@ export async function createProduct(db: DbClient, input: {
   return getProduct(db, input.organizationId, planned.id)
 }
 
-export async function createProductsBatch(db: DbClient, input: {
+/**
+ * Plan the writes that create these products, without running them.
+ *
+ * The only reason this is separate from `createProductsBatch` is callers that
+ * must commit product creation together with other statements in one D1 batch
+ * — onboarding commit replaces a site's whole catalogue and its content in a
+ * single atomic batch. They get the same planning, validation and SQL as every
+ * other create; there is no second product writer.
+ */
+export async function planProductCreateWrites(db: DbClient, input: {
   organizationId: string
   siteId?: string
   products: CreateProductInput[]
   actor: Actor
-}): Promise<Product[]> {
+  now: string
+}): Promise<{ ids: string[]; queries: BatchQuery[] }> {
   if (input.products.length === 0) invalid('at least one product is required')
   if (input.products.length > PRODUCT_LIMITS.batchCreate) invalid(`at most ${PRODUCT_LIMITS.batchCreate} products may be created at once`)
   const definitions = await loadMetafieldDefinitions(db, input.organizationId)
-  const now = new Date().toISOString()
-  const writes: BatchQuery[] = []
+  const queries: BatchQuery[] = []
   const ids: string[] = []
   // Slugs are derived sequentially: deriving them in parallel would let two
   // products in one batch both take the same free slug.
@@ -734,10 +743,20 @@ export async function createProductsBatch(db: DbClient, input: {
     while (taken.has(planned.slug)) planned.slug = await createProductSlug(db, input.organizationId, `${planned.slug}-2`)
     taken.add(planned.slug)
     assertVariantPricesConsistent(planned)
-    writes.push(...productWrites(input.organizationId, planned, definitions, input.actor, now, 'insert'))
+    queries.push(...productWrites(input.organizationId, planned, definitions, input.actor, input.now, 'insert'))
     ids.push(planned.id)
   }
-  await executeBatch(db, writes, { operation: 'Create products' })
+  return { ids, queries }
+}
+
+export async function createProductsBatch(db: DbClient, input: {
+  organizationId: string
+  siteId?: string
+  products: CreateProductInput[]
+  actor: Actor
+}): Promise<Product[]> {
+  const { ids, queries } = await planProductCreateWrites(db, { ...input, now: new Date().toISOString() })
+  await executeBatch(db, queries, { operation: 'Create products' })
   await fireOrganizationEventSafe({ db, organizationId: input.organizationId, siteId: input.siteId ?? null, actorId: input.actor.actorId, eventType: 'product.created', entityType: 'product', metadata: { product_count: ids.length } })
   const rows = await queryAll<Row>(db, `SELECT ${PRODUCT_COLUMNS} FROM products p WHERE p.organization_id = ? AND p.id IN (SELECT value FROM json_each(?))`, [input.organizationId, d1JsonArray(ids)])
   return hydrate(db, input.organizationId, rows.map(mapProductRow))

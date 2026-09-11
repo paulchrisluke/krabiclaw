@@ -18,10 +18,11 @@
       ref="trackRef"
       class="flex snap-x snap-mandatory gap-5 overflow-x-auto pb-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
     >
-      <NuxtLink
+      <component
+        :is="item.href ? 'NuxtLink' : 'div'"
         v-for="(item, i) in items"
         :key="i"
-        :to="localePath(item.href || '')"
+        :to="item.href ? localePath(item.href) : undefined"
         data-carousel-item
         class="group relative flex w-[85vw] shrink-0 snap-start flex-col justify-between overflow-hidden rounded-2xl bg-elevated no-underline text-default transition hover:opacity-90 sm:w-[45vw] lg:w-[30vw]"
       >
@@ -54,12 +55,12 @@
               <span v-if="item.compareAtPrice" class="font-normal text-sm text-muted line-through">{{ item.compareAtPrice }}</span>
               <span>{{ item.price }}</span>
             </p>
-            <span class="border-b border-current pb-0.5 text-xs uppercase tracking-widest text-default">
+            <span v-if="item.href" class="border-b border-current pb-0.5 text-xs uppercase tracking-widest text-default">
               {{ t('saya.common.view_dish') }} →
             </span>
           </div>
         </div>
-      </NuxtLink>
+      </component>
     </div>
 
     <!-- Controls: ← [dashes] → centered below carousel -->
@@ -109,7 +110,8 @@ interface Props {
       alt?: string
       price?: string | null
       compareAtPrice?: string | null
-      href?: string
+      /** Null when this item has no single page to link to; the card renders unlinked. */
+      href?: string | null
       unavailable?: boolean
       category?: string | null
       description?: string | null
@@ -129,7 +131,10 @@ const props = withDefaults(defineProps<Props>(), {
 })
 const { localePath, t } = useI18n()
 
-const items = computed(() => (props.data?.items || []).filter(item => Boolean(item.href)))
+// Every item given is shown. An item with no href renders as a card without a
+// link rather than vanishing, so a product the merchant published is never
+// silently missing from its own site.
+const items = computed(() => props.data?.items || [])
 // A location-wide closure marks every item unavailable at once — showing a
 // row of all-badged cards reads as broken, so hide the whole section instead.
 const allUnavailable = computed(() => {

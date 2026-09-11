@@ -26,7 +26,7 @@ import {
  * the absence of another.
  *
  * Location table reservations are a different capability and live in
- * `booking-policies.ts`. They are not this code under another name: a
+ * `reservations.ts`. They are not this code under another name: a
  * reservation has no materialized occurrence, because a restaurant does not
  * schedule a dinner the way a studio schedules a class.
  */

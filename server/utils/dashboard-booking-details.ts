@@ -72,7 +72,7 @@ export interface DashboardBookingDetails {
   threadId: string | null
   createdAt: string
   updatedAt: string
-  policy: RenderedBookingPolicySummary
+  policy: RenderedBookingPolicySummary | null
   notes: DashboardBookingNote[]
   locations: Array<{ id: string; title: string; imageUrl: string | null }>
 }

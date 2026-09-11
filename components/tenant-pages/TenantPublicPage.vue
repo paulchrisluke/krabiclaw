@@ -93,7 +93,7 @@ const schemaRecipe = computed<'home' | 'about' | 'contact' | 'pricing' | 'donate
 useProfessionalServiceSchema(() => {
   if (!isBlawby.value || !schemaContext) return null
   const faqBlock = page.value.blocks.find(block => block.type === 'faq')
-  const offeringBlock = page.value.blocks.find(block => block.type === 'offering_grid')
+  const productBlock = page.value.blocks.find(block => block.type === 'product_grid')
   const donationBlock = page.value.blocks.find(block => block.type === 'donation_choices')
   const faqItems = Array.isArray(faqBlock?.data.items)
     ? faqBlock.data.items.filter(item => item && typeof item === 'object' && !Array.isArray(item)).map(item => {
@@ -101,8 +101,8 @@ useProfessionalServiceSchema(() => {
         return { question: typeof record.title === 'string' ? record.title : null, answer: typeof record.description === 'string' ? record.description : null }
       })
     : []
-  const offeringItems = Array.isArray(offeringBlock?.data.items)
-    ? offeringBlock.data.items.filter(item => item && typeof item === 'object' && !Array.isArray(item)).map(item => {
+  const productItems = Array.isArray(productBlock?.data.items)
+    ? productBlock.data.items.filter(item => item && typeof item === 'object' && !Array.isArray(item)).map(item => {
         const record = item as Record<string, unknown>
         return {
           name: typeof record.title === 'string' ? record.title : '',
@@ -119,7 +119,7 @@ useProfessionalServiceSchema(() => {
     pageTitle: page.value.title,
     pageDescription: page.value.seo_description || page.value.summary,
     faqs: faqItems,
-    items: offeringItems,
+    items: productItems,
     donationUrl,
   }
 })

@@ -6,8 +6,6 @@ import { HTTPError, defineHandler  } from 'nitro';
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { execute, executeBatch, queryFirst, queryAll, type BatchQuery } from '~/server/db'
-import { resourceLocalizationDeletionQueries } from '~/server/utils/localization'
-import { planProductCategories } from '~/server/utils/product-management'
 import { updateLocation } from '~/server/utils/location-management'
 import { getDraftMedia, parseOnboardingDraftPayload } from '~/server/utils/onboarding-drafts'
 import { runSiteCreation } from '~/server/utils/site-creation'
@@ -218,53 +216,11 @@ export default defineHandler(async (event) => {
     // never leaves the site with half-cleared content — see incident notes for why
     // sequential execute() calls here are unsafe.
     const now = new Date().toISOString()
-    const orderedProducts = [...payload.preview.products].sort((a, b) => a.sort_order - b.sort_order)
-    const categoryPlan = await planProductCategories({
-      db, organizationId, siteId, locationId: locationRow.id, actor: session.user.id,
-      names: [...orderedProducts.filter(product => product.is_visible), ...orderedProducts.filter(product => !product.is_visible)].map(product => product.category),
-    })
-    const standardProducts = { query: "SELECT id FROM products WHERE organization_id = ? AND site_id = ? AND product_type = 'standard'", params: [organizationId, siteId] }
-    const batchQueries: BatchQuery[] = [
-      ...categoryPlan.inserts,
-      ...resourceLocalizationDeletionQueries('product', standardProducts),
-      { query: `DELETE FROM media_placements WHERE owner_type = 'review' AND owner_id IN (SELECT id FROM reviews WHERE product_id IN (${standardProducts.query}))`, params: standardProducts.params },
-    ]
-
-    batchQueries.push({
-      query: `DELETE FROM media_placements WHERE owner_type = 'product' AND owner_id IN (${standardProducts.query})`,
-      params: standardProducts.params,
-    })
-    batchQueries.push({ query: `DELETE FROM reviews WHERE product_id IN (SELECT id FROM products WHERE site_id = ? AND product_type = 'standard')`, params: [siteId] })
-    batchQueries.push({ query: `DELETE FROM products WHERE organization_id = ? AND site_id = ? AND product_type = 'standard'`, params: [organizationId, siteId] })
-    for (const product of orderedProducts) {
-      const category = categoryPlan.resolved.get(product.category)!
-      batchQueries.push({
-        query: `
-          INSERT INTO products
-            (id, organization_id, site_id, location_id, product_type, category_id, name, slug, description, order_url,
-             is_visible, available, featured, featured_sort_order, sort_order, tags_json,
-             details_json, source, created_at, updated_at, created_by, updated_by)
-          VALUES (?, ?, ?, ?, 'standard', ?, ?, ?, ?, ?, ?, ?, ?, ?,
-            (SELECT COALESCE(MAX(sort_order) + 1, 0) FROM products WHERE category_id = ?), ?, ?, ?, ?, ?, ?, ?)
-        `, params: [
-          product.id, organizationId, siteId, locationRow.id, category.id, product.name,
-          product.slug, product.description, product.order_url,
-          product.is_visible ? 1 : 0, product.available ? 1 : 0, product.featured ? 1 : 0,
-          product.featured_sort_order, category.id, JSON.stringify(product.tags),
-          JSON.stringify(product.details), product.source, now, now, session.user.id, session.user.id,
-        ],
-      })
-      const currency = product.price.currency ?? defaultCurrency
-      batchQueries.push({
-        query: `INSERT INTO prices (id, organization_id, site_id, location_id, product_id, amount_minor, currency, unit, tax_behavior, compare_at_amount_minor, valid_from, valid_until, provenance, created_by, created_at) VALUES (?,?,?,?,?,?,?,'item','unspecified',?,?,?,'import',?,?)`,
-        params: [crypto.randomUUID(), organizationId, siteId, locationRow.id, product.id,
-          product.price.amount_minor, currency,
-          product.price.compare_at_amount_minor ?? null,
-          product.price.valid_from ?? now,
-          product.price.valid_until ?? null,
-          session.user.id, now],
-      })
-    }
+    // A committed draft carries no catalogue: products, their variants and
+    // their prices are created in the dashboard through the canonical writer,
+    // so there is nothing here to replace and nothing to plan. The reviews
+    // this draft does carry belong to the location, not to a product.
+    const batchQueries: BatchQuery[] = []
 
     const replaced = await queryAll<{ id: string }>(db, "SELECT id FROM content_documents WHERE organization_id = ? AND site_id = ? AND row_role = 'root' AND kind IN ('qa','social_post')", [organizationId, siteId])
     for (const document of replaced) batchQueries.push(...prepareContentDocumentDeletion({ documentId: document.id, organizationId, siteId }))

@@ -87,7 +87,6 @@ export const usePublicPageData = async (options: {
               query: {
                 page: currentParams.page ?? undefined,
                 location: currentParams.location ?? undefined,
-                experience: currentParams.experience ?? undefined,
                 datasets: [...currentParams.datasets].sort().join(',') || undefined,
                 blogSlug: currentParams.blogSlug ?? undefined,
                 locale: currentParams.locale ?? undefined,

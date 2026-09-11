@@ -30,14 +30,6 @@
             {{ t('saya.header.reservations') }}
           </NuxtLink>
           <NuxtLink
-            v-if="hasExperiences"
-            :to="localePath('/experiences')"
-            class="rounded-full px-3 py-2 text-sm text-muted transition hover:bg-muted hover:text-default"
-          >
-            {{ t('saya.header.experiences') }}
-          </NuxtLink>
-
-          <NuxtLink
             v-if="locations.length > 1"
             :to="localePath('/locations')"
             class="rounded-full px-3 py-2 text-sm text-muted transition hover:bg-muted hover:text-default"
@@ -81,9 +73,6 @@
                 <NuxtLink v-if="!isExperienceSite" :to="localePath('/reservations')" class="rounded-full px-4 py-3 text-sm text-default hover:bg-muted" @click="closeMobileNav">
                   {{ t('saya.header.reservations') }}
                 </NuxtLink>
-                <NuxtLink v-if="hasExperiences" :to="localePath('/experiences')" class="rounded-full px-4 py-3 text-sm text-default hover:bg-muted" @click="closeMobileNav">
-                  {{ t('saya.header.experiences') }}
-                </NuxtLink>
                 <NuxtLink :to="localePath('/contact')" class="rounded-full px-4 py-3 text-sm text-default hover:bg-muted" @click="closeMobileNav">
                   {{ t('saya.header.contact') }}
                 </NuxtLink>
@@ -124,7 +113,6 @@ const props = defineProps<{
   site: Site | null
   locations: ApiRecord[]
   hasProducts: boolean
-  hasExperiences: boolean
 }>()
 
 const i18n = useI18n() as ApiValue as I18nComposable

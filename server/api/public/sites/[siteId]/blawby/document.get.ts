@@ -15,7 +15,7 @@ export default defineHandler(async (event) => {
   if (!siteId || !recipe || !RECIPES.has(recipe) || typeof locale !== 'string') {
     return apiErrorResponse(event, 400, 'BLAWBY_DOCUMENT_REQUIRED', 'Valid site ID and Blawby route recipe required')
   }
-  if ((recipe === 'offering' || recipe === 'article') && !slug) {
+  if (recipe === 'article' && !slug) {
     return apiErrorResponse(event, 400, 'BLAWBY_DOCUMENT_SLUG_REQUIRED', 'Route slug required')
   }
 

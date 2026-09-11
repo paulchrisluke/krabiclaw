@@ -19,7 +19,6 @@
       :site="resolvedSite"
       :locations="locations"
       :has-products="shell.hasProducts.value"
-      :has-experiences="hasExperiences"
     />
     <main class="grow" :data-route-shell="route.path">
       <slot />
@@ -32,7 +31,6 @@
       :error="bootstrapError"
       :config="config"
       :has-products="shell.hasProducts.value"
-      :has-experiences="hasExperiences"
     />
   </div>
 </template>
@@ -83,7 +81,7 @@ if (import.meta.dev) useDebugLCP()
 // experience data comes from the keyed page loader and changes independently.
 const shell = useSiteShellState()
 if (import.meta.server && isHome.value) await shell.ready
-const { config, locations, hasExperiences, locales, error: bootstrapError, site: shellSite } = shell
+const { config, locations, locales, error: bootstrapError, site: shellSite } = shell
 const { isPlatform, site } = useTenantSite()
 const resolvedSite = computed(() => shellSite.value || site)
 const brandColor = computed(

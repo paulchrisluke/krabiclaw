@@ -21,16 +21,6 @@
         </div>
 
         <div class="mt-16 grid grid-cols-2 gap-8 md:grid-cols-4 xl:col-span-2 xl:mt-0">
-          <div v-if="offeringLinks.length">
-            <h3 class="text-sm font-semibold leading-6 text-white">{{ t('blawby.footer.services') }}</h3>
-            <ul class="mt-6 space-y-4" role="list">
-              <li v-for="offering in offeringLinks" :key="offering.id">
-                <NuxtLink :to="localePath(offering.canonical_path)" class="blawby-footer-link text-sm leading-6 no-underline">
-                  {{ offering.name }}
-                </NuxtLink>
-              </li>
-            </ul>
-          </div>
           <div v-for="group in footerGroups" :key="group.label" v-show="group.items.length">
             <h3 class="text-sm font-semibold leading-6 text-white">{{ group.label }}</h3>
             <ul class="mt-6 space-y-4" role="list">
@@ -53,12 +43,11 @@
 </template>
 
 <script setup lang="ts">
-import type { PublicBlawbyIdentity, PublicBlawbyPageLink, PublicCompliance, PublicOfferingLink } from '~/types/blawby'
+import type { PublicBlawbyIdentity, PublicBlawbyPageLink, PublicCompliance } from '~/types/blawby'
 
 const props = defineProps<{
   site: PublicBlawbyIdentity
   compliance: PublicCompliance | null
-  offeringLinks: PublicOfferingLink[]
   pageLinks: PublicBlawbyPageLink[]
 }>()
 

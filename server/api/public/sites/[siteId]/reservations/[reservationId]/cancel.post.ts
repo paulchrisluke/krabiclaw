@@ -5,6 +5,7 @@ import { notifyReservationCancelled } from '~/server/utils/notifications'
 import { hashReservationCancelToken, readBearerToken } from '~/server/utils/reservation-cancel-token'
 import { getClientIp, hashClientIp, incrementHourlyRateLimit } from '~/server/utils/hourly-rate-limit'
 import { publishGuestInboxThreadEvent } from '~/server/cloudflare/guest-inbox-events'
+import { localPartsAt } from '~/utils/timezone'
 
 const IP_HOURLY_LIMIT = 20
 const RESERVATION_HOURLY_LIMIT = 5
@@ -42,6 +43,11 @@ export default defineHandler(async (event) => {
   const reservation = cancelled.request
   if (reservation.kind !== 'reservation') throw new Error('Cancellation returned another booking kind')
   const summary = await requestSummary(db, reservation)
+  // When and for how many comes from the reservation row, in the reservation's
+  // own zone — the thread carries the conversation, never the seating facts.
+  const parts = localPartsAt(new Date(cancelled.record.starts_at), cancelled.record.timezone)
+  const localDate = `${String(parts.year).padStart(4, '0')}-${String(parts.month).padStart(2, '0')}-${String(parts.day).padStart(2, '0')}`
+  const localTime = `${String(parts.hour).padStart(2, '0')}:${String(parts.minute).padStart(2, '0')}`
 
   const thread = await getGuestRequest(db, reservationId, undefined, 'reservation')
   if (thread) {
@@ -53,7 +59,7 @@ export default defineHandler(async (event) => {
 
   try {
     await notifyReservationCancelled(env, db, {
-      organizationId: reservation.organization_id, siteId: reservation.site_id, siteName: site?.brand_name, locationId: reservation.location_id, locationName: summary.locationTitle, reservationId, guestName: reservation.payload.guest.name, email: reservation.payload.guest.email, phone: reservation.payload.guest.phone, date: reservation.booking_date, time: reservation.time_slot, guests: `${reservation.party_size}${reservation.payload.party_size_is_minimum ? '+' : ''}`, requests: reservation.payload.notes, wasConfirmed: cancelled.wasConfirmed
+      organizationId: reservation.organization_id, siteId: reservation.site_id, siteName: site?.brand_name, locationId: reservation.location_id, locationName: summary.locationTitle, reservationId, guestName: reservation.payload.guest.name, email: reservation.payload.guest.email, phone: reservation.payload.guest.phone, date: localDate, time: localTime, guests: `${cancelled.record.party_size}${reservation.payload.party_size_is_minimum ? '+' : ''}`, requests: reservation.payload.notes, wasConfirmed: cancelled.wasConfirmed
     })
   } catch (error) {
     console.error('reservation_cancellation_notification_failed', {

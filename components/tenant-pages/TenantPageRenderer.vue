@@ -116,7 +116,7 @@
         <TenantPagePricingCalculator :rows="calculatorRows(block)" :note="calculatorNote(block)" />
       </template>
 
-      <template v-else-if="block.type === 'feature_grid' || block.type === 'testimonial_grid' || block.type === 'offering_grid' || block.type === 'location_grid'">
+      <template v-else-if="block.type === 'feature_grid' || block.type === 'testimonial_grid' || block.type === 'product_grid' || block.type === 'location_grid'">
         <section class="my-12">
           <h2 v-if="text(block.data.title)" class="mb-6 text-2xl font-semibold">{{ text(block.data.title) }}</h2>
           <div class="grid gap-5 md:grid-cols-2 lg:grid-cols-3">

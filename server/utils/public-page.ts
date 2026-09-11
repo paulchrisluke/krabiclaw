@@ -208,8 +208,6 @@ async function loadPublicPageSource(
   const page = typeof query.page === "string" ? query.page : null;
   const locationSlug =
     typeof query.location === "string" ? query.location : null;
-  const experienceSlug =
-    typeof query.experience === "string" ? query.experience : null;
   const requestedDatasets = new Set(
     typeof query.datasets === "string" && query.datasets
       ? query.datasets.split(",")
@@ -223,8 +221,7 @@ async function loadPublicPageSource(
   // to prevent unbounded cache entries from arbitrary variants.
   const VALID_DATASETS = new Set([
     'content', 'location', 'products', 'reviews', 'photos', 'qa', 'posts',
-    'blog', 'blogPost',
-    'reservationPolicies', 'experiencePolicies',
+    'blog', 'blogPost', 'reservationPolicies',
   ]);
   // Mirrors composables/usePublicPageRequest.ts's getPublicPageRequest() — the only
   // page values the frontend ever requests. A regex alone (e.g. /^[a-z0-9_-]+$/)
@@ -232,22 +229,21 @@ async function loadPublicPageSource(
   // the page value; allowlisting against the real route set bounds that space.
   const VALID_PAGES = new Set([
     'home', 'locations', 'location', 'about', 'contact', 'reservations',
-    'order', 'qa', 'reviews', 'posts', 'experiences', 'photos', 'menu', 'products', 'blog',
+    'order', 'qa', 'reviews', 'posts', 'photos', 'menu', 'products', 'blog',
   ]);
   const areDatasetsValid = [...requestedDatasets].every(dataset => VALID_DATASETS.has(dataset));
   const isValidLocale = locale === undefined || /^[a-z]{2}(-[A-Z]{2})?$/.test(locale);
   const isValidPage = page === null || VALID_PAGES.has(page);
-  // locationSlug/experienceSlug/blogSlug can't be allowlisted up front — they're
+  // locationSlug/blogSlug can't be allowlisted up front — they're
   // arbitrary per-tenant slugs resolved against D1. The regex here only bounds
   // the character set for a cheap pre-DB shape check; the actual cache *write*
   // below is additionally gated on the slug having resolved to a real row, so
   // slugs that don't correspond to an existing entity never populate the cache.
   const isValidLocation = locationSlug === null || /^[a-z0-9_-]+$/.test(locationSlug);
-  const isValidExperience = experienceSlug === null || /^[a-z0-9_-]+$/.test(experienceSlug);
   const isValidBlogSlug = blogSlug === null || /^[a-z0-9_-]+$/.test(blogSlug);
 
   const allInputsValid = areDatasetsValid && isValidLocale && isValidPage &&
-    isValidLocation && isValidExperience && isValidBlogSlug;
+    isValidLocation && isValidBlogSlug;
   if (!allInputsValid) {
     throw new HTTPError({ statusCode: 400, statusMessage: "Invalid public page query" });
   }
@@ -265,7 +261,6 @@ async function loadPublicPageSource(
     contract: 'page',
     page,
     location: locationSlug,
-    experience: experienceSlug,
     datasets: [...requestedDatasets],
     blogSlug,
     locale,
@@ -335,12 +330,6 @@ async function loadPublicPageSource(
     : null
   const locationId = locationRow?.id;
 
-  const localizedExperienceId = localizedLocale && experienceSlug
-    ? resolveLocalizedRouteResourceId(publicLocalizations, 'product', `/${localizedLocale}/experiences/${experienceSlug}`)
-    : null
-  if (localizedLocale && experienceSlug && !localizedExperienceId) {
-    throw new HTTPError({ statusCode: 404, statusMessage: 'Localized Experience was not found' })
-  }
   const normalizedVertical = normalizeVertical(site.vertical)
   const localizedBlogPost = localizedLocale && blogSlug ? await queryFirst<{ id: string }>(db,
     `SELECT id FROM content_documents WHERE site_id = ? AND kind = 'article' AND row_role = 'representation'
@@ -360,9 +349,7 @@ async function loadPublicPageSource(
     requestedDatasets.has("reviews") ||
     requestedDatasets.has("location") ||
     requestedDatasets.has('products') ||
-    requestedDatasets.has("experiences") ||
-    requestedDatasets.has("reservationPolicies") ||
-    requestedDatasets.has("experiencePolicies");
+    requestedDatasets.has("reservationPolicies");
 
   // Build batch — one subrequest to D1 for all inline queries
   const batchStmts: BatchQuery[] = [];
@@ -607,7 +594,6 @@ async function loadPublicPageSource(
   // The route remains valid when that optional overlay has no translated page.
   const allowsMissingLocalizedTenantPage = page === 'contact'
     || page === 'reservations'
-    || page === 'experiences'
     || page === 'order'
   if (contentPagePath && !tenantPage && locale && locale !== sourceLocale && !isPreviewAuthorized && !allowsMissingLocalizedTenantPage) {
     throw new HTTPError({ statusCode: 404, statusMessage: 'Localized page was not found' })
@@ -666,7 +652,6 @@ async function loadPublicPageSource(
     }
   }
 
-  // Build experiences
   options.signal?.throwIfAborted();
   const [globalPublishedPosts, locationPublishedPosts] = await Promise.all([
     needsGlobalPosts ? getPublishedPosts(db, siteId, page === "posts" ? 50 : 6, undefined, localizedLocale ?? "en") : Promise.resolve([]),
@@ -894,8 +879,8 @@ async function loadPublicPageSource(
 
   // Slug-shaped inputs are only worth caching once they've resolved to a real
   // row — otherwise a stream of made-up slugs (still regex-valid) would each
-  // mint their own permanent KV entry. locationRow/experienceDetail/blogPost
-  // are the actual D1-resolved lookups for locationSlug/experienceSlug/blogSlug.
+  // mint their own permanent KV entry. locationRow/blogPost are the actual
+  // D1-resolved lookups for locationSlug/blogSlug.
   const resolvedSlugsValid =
     (!locationSlug || !!locationRow) &&
     (!blogSlug || !!blogPost);

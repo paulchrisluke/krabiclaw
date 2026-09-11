@@ -75,7 +75,6 @@ export function buildDraftShellPayload(payload: Awaited<ReturnType<typeof loadDr
       syncedAt: null,
     },
     locales: payload.preview.locales,
-    hasExperiences: payload.preview.hasExperiences,
     hasProducts: payload.preview.products.length > 0,
   }
 }
@@ -211,8 +210,7 @@ export async function loadPublicDraftPage(
   const includeProducts = requestedDatasets.has('products')
   const supportedDatasets = new Set([
     'content', 'location', 'products', 'reviews', 'photos', 'qa', 'posts',
-    'blog', 'blogPost', 'experiences', 'experienceDetail',
-    'reservationPolicies', 'experiencePolicies',
+    'blog', 'blogPost', 'reservationPolicies',
   ])
   if ([...requestedDatasets].some(dataset => !supportedDatasets.has(dataset))) {
     throw new HTTPError({ statusCode: 400, statusMessage: 'Unsupported draft preview dataset' })
@@ -260,9 +258,10 @@ export async function loadPublicDraftPage(
     },
     locations: payload.preview.locations,
     content,
-    products: includeProducts
-      ? payload.preview.products.filter(product => !resolvedLocation || product.location_id === resolvedLocation.id)
-      : [],
+    // A draft has no catalogue (see onboarding-drafts.ts); the collection
+    // routes render their empty state rather than a preview of nothing.
+    products: includeProducts ? payload.preview.products : [],
+    collections: [],
     locationReviews: payload.preview.reviews.slice(0, 3),
     globalReviews: page === 'home' || page === 'reviews' ? payload.preview.reviews : [],
     reviewsAggregate,
@@ -276,10 +275,6 @@ export async function loadPublicDraftPage(
     reservationPolicyByLocation: Object.fromEntries(
       payload.preview.locations.map(location => [String(location.id), null]),
     ),
-    experiencePolicySiteDefault: null,
-    experiencePolicyById: {},
-    experiencesList: [],
-    experienceDetail: null,
     location: resolvedLocation,
   }
 }

@@ -3,7 +3,7 @@ import type { SiteVertical } from '~/utils/vertical-copy'
 import { queryFirst } from '~/server/db'
 import type { PlaceDetails, PlaceReview } from '~/server/utils/google-places'
 import type { CurrencyCode } from '~/shared/currencies'
-import type { PriceInput } from '~/shared/prices'
+import type { Product } from '~/server/types/products'
 
 type DraftSourceType = 'google_places' | 'manual'
 
@@ -43,25 +43,6 @@ export interface DraftLocationRecord {
   rating: number | null
   review_count: number | null
   status: 'active'
-}
-
-export interface DraftProductRecord {
-  id: string
-  location_id: string
-  category: string
-  name: string
-  slug: string
-  description: string
-  price: PriceInput
-  order_url: string | null
-  is_visible: boolean
-  available: boolean
-  featured: boolean
-  featured_sort_order: number
-  sort_order: number
-  tags: string[]
-  details: Array<{ key: string; label: string; values: string[] }>
-  source: 'import'
 }
 
 export interface DraftReviewRecord extends PlaceReview {
@@ -120,13 +101,12 @@ export interface OnboardingDraftPayload {
     config: Record<string, string | null>
     media: Array<{ slot: 'logo' | 'hero'; asset: DraftUploadedImage }>
     locations: DraftLocationRecord[]
-    products: DraftProductRecord[]
+    products: Product[]
     reviews: DraftReviewRecord[]
     qa: DraftQaRecord[]
     posts: DraftPostRecord[]
     content: DraftContentRecord[]
     locales: Array<{ code: string; label: string; is_source: boolean }>
-    hasExperiences: boolean
   }
 }
 
@@ -232,7 +212,10 @@ export function buildOnboardingDraftPayload(input: {
   const locationId = 'draft-location-main'
 
   const description = null
-  const products: DraftProductRecord[] = []
+  // Onboarding does not import a catalogue: a draft site has no products
+  // until the merchant creates them in the dashboard, where the canonical
+  // writer owns variants, prices and publication.
+  const products: Product[] = []
 
   const reviews = (placeSnapshot?.reviews ?? []).map(review => ({
     ...review,
@@ -293,7 +276,6 @@ export function buildOnboardingDraftPayload(input: {
       posts,
       content,
       locales: [{ code: 'en', label: 'English', is_source: true }],
-      hasExperiences: input.vertical === 'experience',
     },
   }
 }

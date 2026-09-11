@@ -59,9 +59,6 @@
       <p v-if="currentLocation && isMenu" class="mt-4 text-sm text-muted">
         {{ t('saya.menu_page.coming_soon_desc', { location: currentLocation.title }) }}
       </p>
-      <SayaButton v-if="isMenu && emptyExperienceHref" class="mt-6" :to="localePath(emptyExperienceHref)">
-        {{ t('saya.nav.experiences') }}
-      </SayaButton>
     </div>
 
     <div v-else-if="isMenu">
@@ -191,7 +188,7 @@ import { useSchemaOrg } from '~/composables/useSchemaOrg'
 import type { CurrencyCode } from '~/shared/currencies'
 import { formatProductMoney } from '~/utils/product-money'
 import { minorAmountToMajor, selectPrice, type Price } from '~/shared/prices'
-import { productLocationCollectionPath } from '~/utils/product-presentation'
+import { groupProductsByCollection, productLocationCollectionPath } from '~/utils/product-presentation'
 
 interface LocationSummary { id: string; slug: string; title: string }
 
@@ -205,7 +202,6 @@ const props = defineProps<{
   vertical: string
   title: string
   brandName: string
-  emptyExperienceHref?: string | null
 }>()
 
 const { localePath, t } = useI18n()
@@ -278,38 +274,10 @@ const priceFor = (product: Product): Price | null => {
   return offers.reduce<Price | null>((lowest, offer) => (!lowest || offer.unit_amount < lowest.unit_amount ? offer : lowest), null)
 }
 const priceLabel = (product: Product): string | null => formatProductMoney(priceFor(product))
-// Categories carry their own stable slug and order now, so anchors no longer
-// need a de-duplicating counter over slugified display names.
-/**
- * One section per collection, in the merchant's order, with the product order
- * they chose inside it.
- *
- * A product in two collections appears in both, once each — that is what
- * membership means. Products in no collection are not silently dropped into an
- * "other" bucket they were never put in; they are simply not on this page,
- * which is a page built from collections.
- */
-const groups = computed(() => {
-  const positionFor = new Map<string, Map<string, number>>()
-  for (const product of props.products) {
-    for (const membership of product.collections) {
-      const positions = positionFor.get(membership.collection_id) ?? new Map<string, number>()
-      positions.set(product.id, membership.sort_order)
-      positionFor.set(membership.collection_id, positions)
-    }
-  }
-  return props.collections
-    .map((collection) => {
-      const positions = positionFor.get(collection.id)
-      const products = positions
-        ? props.products
-            .filter(product => positions.has(product.id))
-            .sort((left, right) => (positions.get(left.id)! - positions.get(right.id)!) || left.name.localeCompare(right.name))
-        : []
-      return { id: collection.id, category: collection.name, sort_order: collection.sort_order, products }
-    })
-    .filter(group => group.products.length > 0)
-})
+// One section per collection, in the merchant's order — see
+// groupProductsByCollection for what membership does and does not imply.
+const groups = computed(() => groupProductsByCollection(props.products, props.collections)
+  .map(group => ({ id: group.id, category: group.name, sort_order: group.sort_order, products: group.products })))
 const categoryTabs = computed(() => groups.value.map(group => ({
   key: group.id,
   label: group.category,

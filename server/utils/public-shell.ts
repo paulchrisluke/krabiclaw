@@ -53,7 +53,6 @@ export async function loadPublicShellSource(
     contract: 'shell',
     page: null,
     location: null,
-    experience: null,
     datasets: [],
     blogSlug: null,
     locale,

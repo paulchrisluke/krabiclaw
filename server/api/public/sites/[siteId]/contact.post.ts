@@ -84,7 +84,7 @@ export default defineHandler(async (event) => {
   const consentAt = consentAcknowledged ? new Date().toISOString() : null
   const now = new Date().toISOString()
   await executeBatch(db, requestInsertQueries({ id, kind: 'contact', organization_id: site.organization_id, site_id: siteId, location_id: assignedLocationId,
-    product_id: experience?.id ?? null, customer_id: null, review_id: null, status: null, conversation_state: 'needs_attention', resolved_at: null,
+    customer_id: null, review_id: null, conversation_state: 'needs_attention', resolved_at: null,
     payload: { guest: { name, email, phone: null }, subject: subject || topic || null, message, consent_at: consentAt, ip_hash: ipHash,
       source: source || null, route_context: routeContext || null, suggested_summary: suggestedSummary || null, agent_metadata: agentMetadata }, created_at: now, updated_at: now }))
   await publishGuestInboxThreadEvent(env, db, { threadId: id, type: 'thread.created' })

@@ -29,6 +29,7 @@ import { createPreviewToken } from '~/server/utils/preview-token'
 import { resolveSiteCmsCapabilities } from '~/server/utils/cms-capabilities'
 import { getEditablePages } from '~/config/content-registry'
 import { parseCmsFeatureOverrideDelta } from '~/config/cms-registry'
+import { getLocationReservationConfig } from '~/server/utils/reservations'
 
 interface EditorLocationRow {
   id: string
@@ -339,12 +340,17 @@ export async function loadDashboardLocationSettings(
     siteId,
     location.feature_overrides as string | null ?? null,
   )
+  // The reservation policy is a row of its own, and the settings editor opens
+  // its leaf from the same render — so it travels with the location rather than
+  // costing a second round trip from the client.
+  const reservationConfig = await getLocationReservationConfig(db, { organizationId: organization.id, locationId })
   return {
     location: {
       success: true as const,
       location: parseLocationPayload(location)!,
       ...capabilities,
     },
+    reservationConfig: { success: true as const, config: reservationConfig },
   }
 }
 

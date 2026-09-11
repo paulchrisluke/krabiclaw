@@ -235,19 +235,19 @@
     </template>
   </UDashboardPanel>
 
-  <DashboardListItemDialog v-model:open="policyOpen" :title="booking?.policy.heading || 'Cancellation policy'" :show-actions="false">
+  <DashboardListItemDialog v-model:open="policyOpen" :title="booking?.policy?.heading || 'Cancellation policy'" :show-actions="false">
     <div v-if="booking" class="space-y-4">
-      <div v-if="booking.policy.items.length" class="space-y-3">
-        <div v-for="item in booking.policy.items" :key="item.id" class="flex gap-3">
+      <div v-if="booking.policy?.items.length" class="space-y-3">
+        <div v-for="item in booking.policy!.items" :key="item.id" class="flex gap-3">
           <UIcon name="i-lucide-check" class="mt-0.5 size-4 shrink-0 text-success" />
           <p class="text-sm leading-relaxed text-muted">{{ item.text }}</p>
         </div>
       </div>
       <p v-else class="text-sm text-muted">No cancellation terms have been configured for this booking.</p>
-      <div v-if="booking.policy.additional_notes_html" class="border-t border-default pt-4 text-sm text-muted">
+      <div v-if="booking.policy?.additional_notes_html" class="border-t border-default pt-4 text-sm text-muted">
         <!-- Canonical booking-policy writes sanitize this CMS-authored HTML before persistence. -->
         <!-- eslint-disable-next-line vue/no-v-html -->
-        <div v-html="booking.policy.additional_notes_html" />
+        <div v-html="booking.policy!.additional_notes_html" />
       </div>
     </div>
   </DashboardListItemDialog>
@@ -412,8 +412,8 @@ const statusLabel = computed(() => {
   const status = booking.value?.status || ''
   return status ? status.charAt(0).toUpperCase() + status.slice(1) : ''
 })
-const cancellationSummary = computed(() => booking.value?.policy.items.find(item => item.id === 'cancellation')?.text
-  || 'No cancellation terms have been configured.')
+const cancellationSummary = computed(() => booking.value?.policy?.items.find(item => item.id === 'cancellation')?.text
+  ?? 'No cancellation terms have been configured.')
 const messageTo = computed(() => {
   if (!booking.value?.threadId) return null
   return `/dashboard/${orgSlug.value}/sites/${booking.value.siteSlug}/locations/${booking.value.locationSlug}/inbox/${booking.value.threadId}`

@@ -1066,12 +1066,12 @@ export const bookings = sqliteTable("bookings", {
 //   operational JSON reader.
 // Capacity contract: capacity is per START-TIME SLOT, not per overlapping
 //   interval. That choice is preserved consistently by
-//   server/utils/booking-policies.ts and is not re-decided per caller.
+//   server/utils/reservations.ts and is not re-decided per caller.
 // Null semantics: every policy field NULL means the policy does not constrain
 //   that dimension — not that a platform default applies.
 // Deletion: cascades from location; cascades to overrides. Reservations keep
 //   their own records.
-// Read/write: server/utils/booking-policies.ts.
+// Read/write: server/utils/reservations.ts.
 export const location_reservation_configs = sqliteTable("location_reservation_configs", {
 	location_id: text().primaryKey(),
 	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" }),
@@ -1111,7 +1111,7 @@ export const location_reservation_configs = sqliteTable("location_reservation_co
 //   NOT exist on the product side: an experience override is a change to the
 //   actual product_sessions row.
 // Deletion: cascades from the config.
-// Read/write: server/utils/booking-policies.ts.
+// Read/write: server/utils/reservations.ts.
 export const location_reservation_overrides = sqliteTable("location_reservation_overrides", {
 	id: text().primaryKey(),
 	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" }),
@@ -1145,7 +1145,7 @@ export const location_reservation_overrides = sqliteTable("location_reservation_
 //   inbox thread.
 // Deletion: cascades from location. An inbox thread cannot be deleted while a
 //   reservation links to it; the domain operation unlinks first.
-// Read/write: server/utils/booking-policies.ts for policy,
+// Read/write: server/utils/reservations.ts for policy,
 //   server/domain/requests.ts for the inbox thread linkage.
 export const reservations = sqliteTable("reservations", {
 	id: text().primaryKey(),

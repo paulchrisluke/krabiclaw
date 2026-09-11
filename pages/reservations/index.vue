@@ -162,6 +162,7 @@ import { useBreadcrumbSchema } from '~/composables/useSchemaOrg'
 import { getTodayHoursLabel, isOpenNow } from '~/shared/reservation-hours'
 import { formatTime } from '~/utils/timezone'
 import { setBookingConfirmation } from '~/composables/useBookingHandoff'
+import { requireProductPresentation } from '~/utils/product-presentation'
 
 function formatTitleItalics(text: string | null | undefined): string {
   if (!text) return ''
@@ -177,14 +178,14 @@ const resCopy = computed(() => getVerticalCopy((site as ApiValue)?.vertical, loc
 const { locations, config, getField, reservationPolicyByLocation } = await usePublicPageData()
 const isExperienceSite = computed(() => (site as { vertical?: string | null } | null)?.vertical === 'experience')
 
-// Pure experience-vertical sites book per-experience on /experiences/[slug].
-// The /reservations page has no meaning for them. Redirect as soon as the
-// site vertical is known — do NOT gate on hasExperiences, because a freshly
-// seeded site with vertical='experience' and no experiences yet should still
-// not show this page.
+// Experience-vertical sites book each Product on its own page. The
+// /reservations page has no meaning for them. Redirect as soon as the site
+// vertical is known — do NOT gate on having products, because a freshly seeded
+// site with vertical='experience' and no products yet should still not show
+// this page.
 watch(isExperienceSite, (isExp) => {
   if (isExp) {
-    navigateTo({ path: '/experiences', query: route.query }, { replace: true, redirectCode: 302 })
+    navigateTo({ path: requireProductPresentation(String((site as { vertical?: string | null } | null)?.vertical)).collectionPath, query: route.query }, { replace: true, redirectCode: 302 })
   }
 }, { immediate: true })
 
