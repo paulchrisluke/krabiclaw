@@ -60,3 +60,6 @@ export const RESERVATION_CAPACITY_CONSUMING_SQL = `r.status IN ('pending', 'conf
 export function occurrenceKey(ruleId: string, localDate: string, localStartTime: string): string {
   return `${ruleId}:${localDate}T${localStartTime}`
 }
+
+/** How far ahead a guest can book, in days. The public page and the session generator read the same number. */
+export const PUBLIC_BOOKING_WINDOW_DAYS = 31

@@ -1,3 +1,4 @@
+import { PUBLIC_BOOKING_WINDOW_DAYS } from '~/shared/bookings'
 import { HTTPError } from 'nitro'
 import { executeBatch, queryAll, queryFirst, type BatchQuery, type DbClient } from '~/server/db'
 import {
@@ -296,7 +297,7 @@ export async function listSessions(db: DbClient, input: {
 }
 
 /** The public booking window, expressed as instants in the product's timezone. */
-export const PUBLIC_BOOKING_WINDOW_DAYS = 31
+export { PUBLIC_BOOKING_WINDOW_DAYS }
 
 export function bookingWindow(timezone: string, days = PUBLIC_BOOKING_WINDOW_DAYS): { fromInstant: string; toInstant: string } {
   if (!isValidTimezone(timezone)) throw new HTTPError({ statusCode: 409, statusMessage: 'Set the timezone before offering bookings' })

@@ -196,8 +196,10 @@
               </label>
             </div>
           </fieldset>
+          <!-- A guest is choosing a time, so the empty state says what they
+               asked: nothing in the window they can book. -->
           <p v-if="!sessionsPending && availabilityDates.length === 0" class="py-10 text-center text-sm text-muted">
-            {{ t('saya.experience_detail.nothing_scheduled') }}
+            {{ t('saya.experience_detail.no_availability', { count: PUBLIC_BOOKING_WINDOW_DAYS }) }}
           </p>
           <BookingTimeStep
             v-else
@@ -267,6 +269,7 @@ import BookingContactForm, { type ContactFormState } from '~/components/booking/
 import BookingTimeStep, { type RawDateAvailability, type TimeSlotSelection } from '~/components/booking/BookingTimeStep.vue'
 import { setBookingConfirmation } from '~/composables/useBookingHandoff'
 import { localPartsAt } from '~/utils/timezone'
+import { PUBLIC_BOOKING_WINDOW_DAYS } from '~/shared/bookings'
 import { getErrorMessage } from '~/utils/errors'
 
 interface LocationSummary { id: string; slug: string; title: string }
@@ -529,7 +532,7 @@ async function openBooking() {
     )
     sessions.value = response.sessions.filter(session => !session.is_full)
   } catch (error) {
-    bookingError.value = getErrorMessage(error, t('saya.experience_detail.nothing_scheduled'))
+    bookingError.value = getErrorMessage(error, t('saya.experience_detail.no_availability', { count: PUBLIC_BOOKING_WINDOW_DAYS }))
   } finally {
     sessionsPending.value = false
   }

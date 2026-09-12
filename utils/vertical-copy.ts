@@ -243,7 +243,7 @@ const registry: Record<LocaleCode, Partial<Record<SiteVertical, VerticalCopy>>> 
       poweredByTagline: "experience booking sites that run themselves",
       aboutImageAlt: "About our studio",
       ctaTitle: "Book a class.",
-      ctaRoute: "/products",
+      ctaRoute: "/experiences",
       contactSubtitle:
         "For booking a class or checking availability, head to your nearest studio, for press, partnerships, workshops or anything else, use the form below.",
       contactSubjectCatering: "Workshops & events",
@@ -253,7 +253,7 @@ const registry: Record<LocaleCode, Partial<Record<SiteVertical, VerticalCopy>>> 
       reservationRequestButton: "Request Booking",
       reservationWord: "booking",
       reservationExploreLabel: "View Experiences",
-      reservationExploreRoute: "/products",
+      reservationExploreRoute: "/experiences",
       experiencesPageTitle: "Experiences",
       experiencesPageSubtitle:
         "Classes, workshops, and special sessions you can book right now.",
@@ -274,7 +274,7 @@ const registry: Record<LocaleCode, Partial<Record<SiteVertical, VerticalCopy>>> 
         `Browse classes and bookable experiences at ${_name}.`,
       orderNowCta: "Book Now",
       viewMenuCta: "View Experiences",
-      viewMenuRoute: "/products",
+      viewMenuRoute: "/experiences",
       findUsKicker: "Find us",
       visitLocationCta: "Visit this studio →",
       mainLocationLabel: "Main studio",
@@ -477,7 +477,7 @@ const registry: Record<LocaleCode, Partial<Record<SiteVertical, VerticalCopy>>> 
       poweredByTagline: "เว็บไซต์จองประสบการณ์ที่ดูแลตัวเองได้",
       aboutImageAlt: "เกี่ยวกับสตูดิโอของเรา",
       ctaTitle: "จองคลาส",
-      ctaRoute: "/products",
+      ctaRoute: "/experiences",
       contactSubtitle:
         "สำหรับการจองคลาสหรือตรวจสอบคิว ให้ไปที่สตูดิโอใกล้คุณ หากเป็นเรื่องสื่อ พาร์ตเนอร์ เวิร์กช็อป หรือเรื่องอื่น ๆ ใช้แบบฟอร์มด้านล่างได้เลย",
       contactSubjectCatering: "เวิร์กช็อปและอีเวนต์",
@@ -487,7 +487,7 @@ const registry: Record<LocaleCode, Partial<Record<SiteVertical, VerticalCopy>>> 
       reservationRequestButton: "ขอจอง",
       reservationWord: "การจอง",
       reservationExploreLabel: "ดูประสบการณ์",
-      reservationExploreRoute: "/products",
+      reservationExploreRoute: "/experiences",
       experiencesPageTitle: "ประสบการณ์",
       experiencesPageSubtitle:
         "คลาส เวิร์กช็อป และเซสชันพิเศษที่จองได้ตอนนี้",
@@ -508,7 +508,7 @@ const registry: Record<LocaleCode, Partial<Record<SiteVertical, VerticalCopy>>> 
         `เลือกดูคลาสและประสบการณ์ที่จองได้ที่ ${_name}`,
       orderNowCta: "จองเลย",
       viewMenuCta: "ดูประสบการณ์",
-      viewMenuRoute: "/products",
+      viewMenuRoute: "/experiences",
       findUsKicker: "หาเรา",
       visitLocationCta: "เยี่ยมชมสตูดิโอนี้ →",
       mainLocationLabel: "สตูดิโอหลัก",
