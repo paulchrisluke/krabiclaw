@@ -25,10 +25,10 @@ async function clientJourney(page: Page, options: {
   expect(errors).toEqual([])
 }
 
-test('Pottery home → products → product detail', async ({ page }) => {
+test('Pottery home → experiences → experience detail', async ({ page }) => {
   await clientJourney(page, {
     baseURL: potteryHouseBaseURL, headers: potteryHouseExtraHeaders,
-    listPath: '/products', detailPath: '/locations/krabi/products/pottery-wheel-class', detailText: /Pottery Wheel Class/i,
+    listPath: '/experiences', detailPath: '/experiences/pottery-wheel-class', detailText: /Pottery Wheel Class/i,
   })
 })
 
