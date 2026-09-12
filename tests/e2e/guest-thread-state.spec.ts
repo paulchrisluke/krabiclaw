@@ -61,8 +61,8 @@ interface LocationSlot { date: string; time: string }
  * says which minutes are taken, and minutes that are a multiple of five are skipped so
  * the time cannot sit on any ordinary 15/30/60-minute grid either.
  */
-function openableMinuteToday(timeZone: string, taken: ReadonlySet<string>): LocationSlot | null {
-  const { date, time } = localNow(timeZone)
+function openableMinuteToday(local: { date: string; time: string }, taken: ReadonlySet<string>): LocationSlot | null {
+  const { date, time } = local
   const [hours, minutes] = time.split(':').map(Number)
   for (let minuteOfDay = hours! * 60 + minutes! + TODAY_SLOT_LEAD_MINUTES; minuteOfDay < 24 * 60; minuteOfDay += 1) {
     const slot = `${String(Math.floor(minuteOfDay / 60)).padStart(2, '0')}:${String(minuteOfDay % 60).padStart(2, '0')}`
@@ -308,7 +308,11 @@ test('Today uses the CMS patterns and sends one reservation change request', asy
   // slot left and a guest who "arrives today" cannot be created at all. Opening a slot
   // for the rest of today is what the availability override exists for, so the test
   // opens one instead of depending on the hour CI happens to start.
-  const todaySlot = openableMinuteToday(timezone, await loadLocationDay(page.request, localDateAt(new Date(now), timezone)))
+  // One reading of the location's clock feeds both the calendar lookup and the chosen
+  // minute; reading it twice could straddle local midnight and write the override to a
+  // different day than the one checked for collisions.
+  const localToday = localNow(timezone)
+  const todaySlot = openableMinuteToday(localToday, await loadLocationDay(page.request, localToday.date))
   test.skip(
     !todaySlot,
     `${timezone} is within ${TODAY_SLOT_LEAD_MINUTES} minutes of midnight, so no reservation can still arrive today`,
