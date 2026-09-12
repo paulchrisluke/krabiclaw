@@ -9,7 +9,7 @@ import {
   putPublicResourceCache,
 } from '~/server/utils/public-resource-cache'
 import { recordRequestPhase } from '~/server/utils/request-metrics'
-import { isPreviewContext } from '~/server/utils/tenant-hosts'
+import { isNonProductionHost } from '~/server/utils/tenant-hosts'
 import { assertExactCanonicalLocale } from '~/server/utils/localization'
 import { BLAWBY_ROUTE_RECIPES, type BlawbyRouteRecipe } from '~/types/blawby'
 import {
@@ -19,9 +19,10 @@ import {
 
 const RECIPES = new Set<BlawbyRouteRecipe>(BLAWBY_ROUTE_RECIPES)
 const SLUG_PATTERN = /^[a-z0-9_-]+$/
+const PAGE_PATH_PATTERN = /^\/[a-z0-9/_-]*$/
 
 export interface PublicBlawbyDocumentLoadOptions {
-  token?: string
+  previewAuthorized?: boolean
   slug?: string | null
   locale?: string
   mutateResponseHeaders?: boolean
@@ -49,10 +50,11 @@ export async function loadPublicBlawbyDocument(
   if (!RECIPES.has(recipe)) {
     throw new HTTPError({ statusCode: 400, statusMessage: 'Valid Blawby route recipe required' })
   }
-  if ((recipe === 'offering' || recipe === 'article') && !slug) {
+  if ((recipe === 'article' || recipe === 'page') && !slug) {
     throw new HTTPError({ statusCode: 400, statusMessage: 'Blawby route slug required' })
   }
-  if (slug && !SLUG_PATTERN.test(slug)) {
+  // A generic page is addressed by its path; every other recipe by a slug.
+  if (slug && !(recipe === 'page' ? PAGE_PATH_PATTERN : SLUG_PATTERN).test(slug)) {
     throw new HTTPError({ statusCode: 400, statusMessage: 'Invalid Blawby route slug' })
   }
 
@@ -62,7 +64,7 @@ export async function loadPublicBlawbyDocument(
 
   const host = event.req.headers.get('host') ?? ''
   const cache = env.SITE_CACHE
-  const useCache = options.token === undefined && !isPreviewContext(host) && Boolean(cache)
+  const useCache = !options.previewAuthorized && !isNonProductionHost(host) && Boolean(cache)
   const cacheKey = buildPublicBlawbyDocumentCacheKey(siteId, recipe, slug, locale)
   const mutateResponseHeaders = options.mutateResponseHeaders ?? true
 
@@ -100,7 +102,7 @@ export async function loadPublicBlawbyDocument(
   }
 
   const loadStartedAt = performance.now()
-  const payload = await resolvePublicBlawbyDocumentOrThrow(db, siteId, recipe, { slug, locale, token: options.token }, env)
+  const payload = await resolvePublicBlawbyDocumentOrThrow(db, siteId, recipe, { slug, locale, previewAuthorized: options.previewAuthorized }, env)
   recordRequestPhase(event, 'document', loadStartedAt)
   options.signal?.throwIfAborted()
 

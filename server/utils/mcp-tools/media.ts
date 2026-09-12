@@ -109,7 +109,7 @@ export const MEDIA_TOOLS: McpToolDefinition[] = [
     }),
   siteTool({
       name: 'upload_user_media',
-      description: 'The only upload path for user-provided images, videos, and Markdown documents (.md/.markdown). Call it only with the resolved native ChatGPT file argument; never pass a bare file_id or invent a download URL. One call performs one download attempt. If attachment delivery fails, stop and ask the user to attach the file again instead of trying another transport. The returned asset_id is active. Every video requires poster_file so the asset always has thumbnail_url metadata.',
+      description: 'The only upload path for user-provided images, videos, and Markdown documents (.md/.markdown). Call it only with the resolved native ChatGPT file argument; never pass a bare file_id or invent a download URL. One call performs one download attempt. If attachment delivery fails, stop and ask the user to attach the file again instead of trying another transport. Stores the attachment in Cloudflare media storage with a public URL, even before assignment to a page. The returned asset_id is active. Every video requires poster_file so the asset always has thumbnail_url metadata.',
       domain: 'media',
       minimumRole: 'editor',
       confirmRequired: false,

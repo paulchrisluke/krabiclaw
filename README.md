@@ -213,7 +213,7 @@ The mandatory deployed-browser release gate and outage recovery rules are docume
 
 ## Schema
 
-Database schema changes must follow the canonical migration workflow in [docs/database/migrations.md](docs/database/migrations.md). `server/db/schema.ts` is the only schema source of truth.
+`server/db/schema.ts` is the only schema source of truth; `migrations/` holds generated output. Hand-written migrations are prohibited.
 
 ---
 

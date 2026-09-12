@@ -1,6 +1,8 @@
 import { sha256 } from '@noble/hashes/sha2.js'
 import { bytesToHex } from '@noble/hashes/utils.js'
 
+import { composeRobotsDirective, type RobotsIntent } from '~/shared/robots-directive'
+
 /**
  * Shared global OG/social SEO contract (#259).
  *
@@ -156,17 +158,19 @@ export interface SocialPageMetadataInput {
   author?: string | null
   /** ISO 8601 date string. Only meaningful when pageType is 'article'. */
   publishedAt?: string | null
-  /** Defaults to true. Set false for pages that should not be indexed. */
-  indexable?: boolean
-  /** Explicit robots override string; takes precedence over `indexable` when set. */
-  robots?: string | null
+  /**
+   * Indexing intent, not a rendered directive. Unset means the default
+   * `index,follow`. See shared/robots-directive.ts.
+   */
+  robots?: RobotsIntent | null
 }
 
 export interface ComposedSocialTags {
   title: string
   description: string | undefined
   canonicalUrl: string
-  robots: string | null
+  /** The derived `<meta name="robots">` content. Always set. */
+  robots: string
   ogTitle: string
   ogDescription: string | undefined
   ogType: SocialPageType
@@ -191,7 +195,7 @@ export const OG_IMAGE_WIDTH = 1200
 export const OG_IMAGE_HEIGHT = 630
 
 const TITLE_MAX_LENGTH = 70
-const DESCRIPTION_MAX_LENGTH = 160
+export const DESCRIPTION_MAX_LENGTH = 160
 
 /** Truncate text to fit social/SERP preview limits, breaking on a word boundary. */
 export function truncateForSeo(text: string | null | undefined, maxLength: number): string | undefined {
@@ -200,12 +204,6 @@ export function truncateForSeo(text: string | null | undefined, maxLength: numbe
   if (!trimmed) return undefined
   if (trimmed.length <= maxLength) return trimmed
   return `${trimmed.slice(0, maxLength - 1).replace(/\s+\S*$/, '')}…`
-}
-
-export function resolveRobots(input: Pick<SocialPageMetadataInput, 'robots' | 'indexable'>): string | null {
-  if (input.robots) return input.robots
-  if (input.indexable === false) return 'noindex, nofollow'
-  return null
 }
 
 /**
@@ -226,7 +224,7 @@ export function composeSocialMetadata(
     title,
     description,
     canonicalUrl: input.canonicalUrl,
-    robots: resolveRobots(input),
+    robots: composeRobotsDirective(input.robots),
     ogTitle: title,
     ogDescription: description,
     ogType: pageType,

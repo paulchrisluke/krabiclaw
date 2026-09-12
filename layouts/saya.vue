@@ -19,7 +19,6 @@
       :site="resolvedSite"
       :locations="locations"
       :has-products="shell.hasProducts.value"
-      :has-experiences="hasExperiences"
     />
     <main class="grow" :data-route-shell="route.path">
       <slot />
@@ -27,28 +26,26 @@
     <LazySayaFooter
       :site="resolvedSite"
       :is-platform="isPlatform"
-      :locations="locations"
+      :locations="footerLocations"
       :locales="locales"
       :error="bootstrapError"
       :config="config"
       :has-products="shell.hasProducts.value"
-      :has-experiences="hasExperiences"
     />
   </div>
 </template>
 
 <script setup lang="ts">
-import { getPreviewSubpath } from '~/composables/usePublicPageRequest'
 import sayaCriticalCss from '~/assets/css/saya-critical.css?raw'
 import '~/assets/css/saya-entry.css'
+import { NON_INDEXABLE_ROBOTS_INTENT, normalizeRobotsIntent, type RobotsIntent } from '~/shared/robots-directive'
 
 const route = useRoute()
 const hydrated = ref(false)
 onMounted(() => { hydrated.value = true })
 const { locale: activeLocale } = useI18n()
 const isHome = computed(() => route.path === '/'
-  || (activeLocale.value !== 'en' && route.path === `/${activeLocale.value}`)
-  || getPreviewSubpath(route.path) === '/')
+  || (activeLocale.value !== 'en' && route.path === `/${activeLocale.value}`))
 const sayaStylesheetHref = '/_nuxt/surfaces/saya.css'
 const sayaStylesheetForRoute = computed(() => {
   return sayaStylesheetHref
@@ -82,7 +79,7 @@ if (import.meta.dev) useDebugLCP()
 // experience data comes from the keyed page loader and changes independently.
 const shell = useSiteShellState()
 if (import.meta.server && isHome.value) await shell.ready
-const { config, locations, hasExperiences, locales, error: bootstrapError, site: shellSite } = shell
+const { config, locations, locales, error: bootstrapError, site: shellSite } = shell
 const { isPlatform, site } = useTenantSite()
 const resolvedSite = computed(() => shellSite.value || site)
 const brandColor = computed(
@@ -97,6 +94,41 @@ const themeStyles = computed(() => {
     '--brand-color-foreground': brandTextColor.value,
   }
 })
+
+// A page under /locations/<slug> is about exactly one location: the location
+// itself, its menu, or a single dish. Printing every location's address, phone
+// and today's hours in the footer of those pages was the single largest source
+// of duplicate text on Kikuzuki's 896 dish pages — that block was roughly half
+// of each page's ~124 visible words and byte-identical across all of them. The
+// footer now carries the location the page is actually about, which also makes
+// the 84 dishes sold at two locations genuinely distinct pages.
+//
+// Slug matching works in every locale because the shell's locations are fetched
+// per locale and carry the same localized slugs the route does.
+const scopedLocationSlug = computed(() => {
+  const path = route.path
+  const localePrefix = `/${activeLocale.value}`
+  const sourcePath = activeLocale.value !== 'en' && path.startsWith(localePrefix)
+    ? path.slice(localePrefix.length)
+    : path
+  const matched = sourcePath.match(/^\/locations\/([^/]+)/)?.[1]
+  if (matched === undefined) return null
+  try {
+    return decodeURIComponent(matched)
+  }
+  catch {
+    // A segment that is not a valid escape sequence. The request layer decodes
+    // the pathname first and answers 400 for the ones I could construct
+    // (`/locations/%`, `/locations/%252`), so nothing reaches here today —
+    // this layout does not decide its own behaviour on that staying true. A
+    // segment naming no location scopes the footer to nothing, and the page
+    // below answers with its own 404.
+    return null
+  }
+})
+const footerLocations = computed(() => (scopedLocationSlug.value === null
+  ? locations.value
+  : locations.value.filter(location => location.slug === scopedLocationSlug.value)))
 
 const googleSiteVerification = computed(() => config.value?.google_site_verification || null)
 
@@ -137,11 +169,9 @@ const isDemoHost = DEMO_HOSTS.has(requestHostname)
 
 // Site-wide default only — individual pages set their own robots directive
 // when they have one; this covers pages without a page-specific directive.
-const siteRobots = computed(() => {
-  if (isDemoHost) {
-    return 'noindex, nofollow'
-  }
-  return config.value?.robots || null
+const siteRobots = computed<RobotsIntent | null>(() => {
+  if (isDemoHost) return NON_INDEXABLE_ROBOTS_INTENT
+  return normalizeRobotsIntent(config.value?.robots)
 })
 
 useSocialMetadata(() => ({
@@ -166,6 +196,11 @@ useHead(() => {
 <style>
 /* Saya theme CSS variables */
 .saya-theme {
-  --brand-color: #16a34a;
+  /* A site that has not chosen a colour yet wears the platform's, so the first
+     preview in onboarding already looks like KrabiClaw rather than a green
+     nobody picked. themeStyles above replaces both values the moment the owner
+     answers the brand step. */
+  --brand-color: var(--kc-coral);
+  --brand-color-foreground: #fff;
 }
 </style>

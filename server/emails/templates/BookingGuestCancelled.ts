@@ -7,7 +7,7 @@ export default defineComponent({
   props: {
     guestName: { type: String, required: true },
     siteName: { type: String, required: true },
-    experienceTitle: { type: String, required: true },
+    productTitle: { type: String, required: true },
     date: { type: String, required: true },
     time: { type: String, required: true },
     partySize: { type: Number, required: true },
@@ -23,7 +23,7 @@ export default defineComponent({
         h(EText, { style: 'margin:0 0 16px;font-size:15px;color:#52525b;line-height:1.6' }, () => `Hi ${props.guestName}, ${intro}`),
         h(EmailDetails, {
           rows: [
-            ['Experience', props.experienceTitle],
+            ['Booking', props.productTitle],
             ['Date', props.date],
             ['Time', props.time],
             ['Party size', String(props.partySize)],

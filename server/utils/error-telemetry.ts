@@ -9,21 +9,15 @@ const MAX_ERROR_DEPTH = 4
 const MAX_ERROR_MESSAGE_LENGTH = 1000
 const MAX_ERROR_STACK_LENGTH = 4000
 
-function redactErrorMessage(value: string): string {
-  const redacted = value.replace(/https?:\/\/[^\s<>"']+/gi, '[url redacted]').replace(/\nparams:[\s\S]*$/i, '\nparams: [redacted]')
-  return redacted.length <= MAX_ERROR_MESSAGE_LENGTH
+function redactErrorText(value: string, maxLength: number): string {
+  const redacted = value
+    .replace(/\b[rs]k_(?:test|live)_[A-Za-z0-9_*]+/g, '[key redacted]')
+    .replace(/\bBearer\s+[^\s,"']+/gi, 'Bearer [redacted]')
+    .replace(/https?:\/\/[^\s<>"']+/gi, '[url redacted]')
+    .replace(/\nparams:[\s\S]*$/i, '\nparams: [redacted]')
+  return redacted.length <= maxLength
     ? redacted
-    : `${redacted.slice(0, MAX_ERROR_MESSAGE_LENGTH)}…[truncated]`
-}
-
-function redactErrorStack(value: string): string {
-  const redacted = value.replace(/https?:\/\/[^\s<>"']+/gi, '[url redacted]').replace(
-    /\nparams:[\s\S]*?(?=\n\s*at\s|$)/gi,
-    '\nparams: [redacted]',
-  )
-  return redacted.length <= MAX_ERROR_STACK_LENGTH
-    ? redacted
-    : `${redacted.slice(0, MAX_ERROR_STACK_LENGTH)}…[truncated]`
+    : `${redacted.slice(0, maxLength)}…[truncated]`
 }
 
 export function errorChainForTelemetry(error: unknown): ErrorTelemetryEntry[] {
@@ -48,13 +42,13 @@ export function errorChainForTelemetry(error: unknown): ErrorTelemetryEntry[] {
           : String(current)
     const entry: ErrorTelemetryEntry = {
       name: typeof name === 'string' ? name : typeof current,
-      message: redactErrorMessage(message),
+      message: redactErrorText(message, MAX_ERROR_MESSAGE_LENGTH),
     }
     if (typeof code === 'string' || typeof code === 'number') {
       entry.code = String(code)
     }
     if (typeof stack === 'string') {
-      entry.stack = redactErrorStack(stack)
+      entry.stack = redactErrorText(stack, MAX_ERROR_STACK_LENGTH)
     }
     chain.push(entry)
     current = record ? Reflect.get(record, 'cause') : undefined

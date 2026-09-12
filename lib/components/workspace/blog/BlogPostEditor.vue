@@ -92,7 +92,6 @@
 
       <EditorPaneShell
         has-detail
-        show-desktop-detail
         :show-actions="section !== 'share'"
         :saving="savingExplicitly || publishing"
         :detail-title="sectionLabel"

@@ -1,5 +1,6 @@
 import { instantDate, isValidInstant, localDateTimeToInstant } from './timezone'
 import { PUBLICATION_CONTENT_BLOCK_LOCALIZED_FIELDS, expandContentFieldPath, readContentFieldValue, type PublicationContentBlockType } from '~/shared/content-registries'
+import { normalizeRobotsIntent } from '~/shared/robots-directive'
 
 export type BlogVisibility = 'public' | 'unlisted'
 
@@ -220,7 +221,7 @@ export function resolveBlogSeo(input: {
     title: input.seoTitle?.trim() || input.title.trim(),
     description,
     canonicalUrl: input.canonicalUrl?.trim() || new URL(path, input.baseUrl).toString(),
-    robots: input.robots?.trim() || 'index, follow',
+    robots: normalizeRobotsIntent(input.robots),
   }
 }
 

@@ -65,3 +65,4 @@ seeds/*.sql
 .scratch/
 .tmp/
 .valo/
+tsconfig.spot.json

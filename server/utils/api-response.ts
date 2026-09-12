@@ -4,7 +4,7 @@ import {  getRequestHost, readBody  } from 'nitro/h3';
 import { useRuntimeConfig } from 'nitro/runtime-config';
 import { createDb, type AppDb } from '~/server/db'
 import type { CloudflareEnv } from './auth'
-import { isPreviewContext } from '~/server/utils/tenant-hosts'
+import { isNonProductionHost } from '~/server/utils/tenant-hosts'
 import { getRequestDataMetrics, instrumentD1 } from '~/server/utils/request-metrics'
 
 export const jsonResponse = (body: ApiValue, init: ResponseInit = {}) => {
@@ -189,7 +189,7 @@ export const cloudflareEnv = (event: H3Event): CloudflareEnv => {
     const secretValid = expectedSecret && providedSecret && expectedSecret === providedSecret
     const hostname = (getRequestHost(event, { xForwardedHost: true }) || '').split(':')[0] || ''
     const isLocalHost = hostname === 'localhost' || hostname === '127.0.0.1'
-    const isPreview = isPreviewContext(hostname)
+    const isPreview = isNonProductionHost(hostname)
     const hostAllowed = isLocalHost || isPreview
 
     if (secretValid && hostAllowed) {

@@ -1,4 +1,4 @@
-import { parseOpeningHours, parseSpecialHours, parseRecurringSlots } from '~/shared/reservation-hours'
+import { parseOpeningHours, parseSpecialHours } from '~/shared/reservation-hours'
 import { parseGoogleReviewMetadata } from '~/shared/google-review'
 // Canonical route-capability-driven public page service.
 //   ?page=home|about|contact|location|reviews|photos|qa|...
@@ -15,15 +15,14 @@ import {
   normalizePublicReviewAggregateRows,
 } from "~/server/utils/public-review-aggregate";
 import { getPublicTenantPageForPath, type PublicTenantPage } from "~/server/utils/public-tenant-pages";
-import { mapProduct } from '~/server/utils/product-management'
-import { verifyPreviewToken } from "~/server/utils/preview-token";
-import { attachAvailabilitySummaries, attachExperienceMedia, type Experience } from "~/server/utils/experiences";
+import { listCollections, listSiteProducts } from '~/server/utils/product-management'
+import { previewSecretOf, resolvePreviewAuthorization } from "~/server/utils/preview-token";
 import {
   toResolvedMediaAsset,
   type MediaAsset,
 } from "~/server/utils/media-asset-manager";
 import { getMediaPlacements } from '~/server/utils/media-placement'
-import type { Product } from '~/server/types/products'
+import type { Collection, Product } from '~/server/types/products'
 import { resolveSiteCmsCapabilities } from '~/server/utils/cms-capabilities'
 import { attachCover } from "~/server/utils/content/publishing";
 import { COVER_SELECT, coverJoinSql } from "~/server/utils/content/cover";
@@ -34,18 +33,13 @@ import {
   putPublicResourceCache,
 } from "~/server/utils/public-resource-cache";
 import { recordRequestPhase } from "~/server/utils/request-metrics";
-import {
-  renderBookingPolicySummary,
-  resolveBookingPolicyIndex,
-} from "~/server/utils/booking-policies";
 import { getCloudflareWaitUntil } from "~/server/utils/mcp-route-helpers";
-import { isPreviewContext } from "~/server/utils/tenant-hosts";
+import { isNonProductionHost } from "~/server/utils/tenant-hosts";
 import { getPublishedPosts } from "~/server/utils/post-management";
 import { loadPublicBase } from "~/server/utils/public-base";
 import { appendPublicShellQueries, buildPublicShellPayload } from "~/server/utils/public-shell-query";
 import { isPublicPagePayload } from '~/utils/public-resource-contracts'
 import type { LocalizedResourceType } from '~/server/utils/localization-registry'
-import { validateProductDetails, validateProductTags } from '~/server/utils/product-validation'
 import { listPublicLocaleRepresentations } from '~/server/utils/public-locale-representations'
 import { normalizeVertical } from '~/utils/vertical-copy'
 import { isPublicSourceRouteRoot } from '~/shared/public-locale-routes'
@@ -72,7 +66,6 @@ interface SiteContent {
   hero_title?: string | null
   hero_subtitle?: string | null
   media?: Array<{ asset_id: string; slot: string; public_url?: string | null; thumbnail_url?: string | null; kind?: string | null }>
-  component?: string | null
   updated_at: string
 }
 
@@ -83,7 +76,6 @@ function groupContentBlocks(rows: SiteContent[]): Array<SiteContent & { _section
     if (!groups[section]) {
       groups[section] = { ...row, field: section, _section: section }
     } else {
-      if (row.component) groups[section].component = row.component
       for (const key of Object.keys(row) as Array<keyof SiteContent>) {
         if (groups[section][key] == null) (groups[section] as unknown as Record<string, unknown>)[key] = row[key]
       }
@@ -157,7 +149,6 @@ function tenantPageToContentRows(page: PublicTenantPage): SiteContent[] {
       type: block.type === 'image' || block.type === 'gallery' ? 'media' : 'text',
       source: 'tenant-pages',
       updated_at: page.updated_at,
-      component: null,
       media: block.media,
     } satisfies SiteContent
     if (block.type === 'hero') {
@@ -186,67 +177,6 @@ function tenantPageToContentRows(page: PublicTenantPage): SiteContent[] {
 
 
 
-function projectLocalizedExperience(source: Experience, localization: Parameters<typeof projectExactLocalizedResource>[2]): Experience {
-  const product = projectExactLocalizedResource('product', { ...source, name: source.title, description: source.body }, localization)
-  const extra = localization.values.experience as Record<string, unknown> | undefined
-  return { ...product, title: typeof product.name === 'string' ? product.name : '', body: product.description ?? null,
-    tagline: typeof extra?.tagline === 'string' ? extra.tagline : null,
-    pricing_note: typeof extra?.pricing_note === 'string' ? extra.pricing_note : null,
-    included_items: Array.isArray(extra?.included_items) ? extra.included_items as string[] : [],
-    what_to_bring: Array.isArray(extra?.what_to_bring) ? extra.what_to_bring as string[] : [],
-    meeting_point: typeof extra?.meeting_point === 'string' ? extra.meeting_point : null,
-    cancellation_policy: typeof extra?.cancellation_policy === 'string' ? extra.cancellation_policy : null,
-  }
-}
-
-function parseExperienceRow(row: Record<string, unknown>): Experience {
-  const parseStringArr = (value: unknown): string[] => {
-    if (typeof value === "string" && value) {
-      const parsed = JSON.parse(value)
-      if (!Array.isArray(parsed) || !parsed.every((item): item is string => typeof item === "string")) {
-        throw new HTTPError({ statusCode: 500, statusMessage: 'Stored experience string array is invalid', data: { code: 'INVALID_STORED_CONTENT' } })
-      }
-      return parsed.filter(item => item.trim().length > 0)
-    }
-    if (Array.isArray(value)) {
-      if (!value.every((item): item is string => typeof item === "string")) {
-        throw new HTTPError({ statusCode: 500, statusMessage: 'Stored experience string array is invalid', data: { code: 'INVALID_STORED_CONTENT' } })
-      }
-      return value
-    }
-    if (value == null || value === '') return []
-    throw new HTTPError({ statusCode: 500, statusMessage: 'Stored experience string array is invalid', data: { code: 'INVALID_STORED_CONTENT' } })
-  };
-
-  const recurring_slots = parseRecurringSlots(row.recurring_slots ? JSON.parse(String(row.recurring_slots)) : null)
-
-  const {
-    price_id, amount_minor, currency, price_unit, tax_behavior, compare_at_amount_minor,
-    valid_from, valid_until, provenance, price_created_by, price_created_at,
-    ...experienceRow
-  } = row
-
-  return {
-    ...(experienceRow as unknown as Experience),
-    price: price_id == null ? null : {
-      id: String(price_id), organization_id: String(row.organization_id), site_id: String(row.site_id),
-      location_id: row.location_id == null ? null : String(row.location_id), product_id: String(row.id), amount_minor: Number(amount_minor),
-      currency: String(currency), unit: String(price_unit), tax_behavior: String(tax_behavior),
-      compare_at_amount_minor: compare_at_amount_minor == null ? null : Number(compare_at_amount_minor),
-      valid_from: String(valid_from), valid_until: valid_until == null ? null : String(valid_until),
-      provenance: String(provenance), created_by: String(price_created_by), created_at: String(price_created_at),
-    } as Experience['price'],
-    status: row.status as Experience["status"],
-    tags: validateProductTags(JSON.parse(String(row.tags_json))),
-    details: validateProductDetails(JSON.parse(String(row.details_json))),
-    included_items: parseStringArr(row.included_items),
-    what_to_bring: parseStringArr(row.what_to_bring),
-    meeting_point: row.meeting_point ?? null,
-    recurring_slots,
-    featured: Boolean(row.featured),
-  } as Experience
-}
-
 async function loadPublicPageSource(
   event: H3Event,
   siteId: string,
@@ -259,11 +189,7 @@ async function loadPublicPageSource(
   const db = env.DB;
   if (!db) throw new HTTPError({ statusCode: 503, statusMessage: "Database unavailable" });
 
-  const rawToken = typeof query.token === "string" ? query.token : null;
-  let isPreviewAuthorized = false;
-  if (rawToken && env.PREVIEW_SECRET) {
-    isPreviewAuthorized = await verifyPreviewToken(String(env.PREVIEW_SECRET), siteId, rawToken);
-  }
+  const isPreviewAuthorized = await resolvePreviewAuthorization(event, siteId, previewSecretOf(env));
   options.signal?.throwIfAborted();
 
   if (mutateResponseHeaders) {
@@ -278,8 +204,6 @@ async function loadPublicPageSource(
   const page = typeof query.page === "string" ? query.page : null;
   const locationSlug =
     typeof query.location === "string" ? query.location : null;
-  const experienceSlug =
-    typeof query.experience === "string" ? query.experience : null;
   const requestedDatasets = new Set(
     typeof query.datasets === "string" && query.datasets
       ? query.datasets.split(",")
@@ -293,8 +217,7 @@ async function loadPublicPageSource(
   // to prevent unbounded cache entries from arbitrary variants.
   const VALID_DATASETS = new Set([
     'content', 'location', 'products', 'reviews', 'photos', 'qa', 'posts',
-    'blog', 'blogPost', 'experiences', 'experienceDetail',
-    'reservationPolicies', 'experiencePolicies',
+    'blog', 'blogPost', 'reservationPolicies',
   ]);
   // Mirrors composables/usePublicPageRequest.ts's getPublicPageRequest() — the only
   // page values the frontend ever requests. A regex alone (e.g. /^[a-z0-9_-]+$/)
@@ -302,22 +225,21 @@ async function loadPublicPageSource(
   // the page value; allowlisting against the real route set bounds that space.
   const VALID_PAGES = new Set([
     'home', 'locations', 'location', 'about', 'contact', 'reservations',
-    'order', 'qa', 'reviews', 'posts', 'experiences', 'photos', 'menu', 'products', 'blog',
+    'order', 'qa', 'reviews', 'posts', 'photos', 'menu', 'products', 'blog',
   ]);
   const areDatasetsValid = [...requestedDatasets].every(dataset => VALID_DATASETS.has(dataset));
   const isValidLocale = locale === undefined || /^[a-z]{2}(-[A-Z]{2})?$/.test(locale);
   const isValidPage = page === null || VALID_PAGES.has(page);
-  // locationSlug/experienceSlug/blogSlug can't be allowlisted up front — they're
+  // locationSlug/blogSlug can't be allowlisted up front — they're
   // arbitrary per-tenant slugs resolved against D1. The regex here only bounds
   // the character set for a cheap pre-DB shape check; the actual cache *write*
   // below is additionally gated on the slug having resolved to a real row, so
   // slugs that don't correspond to an existing entity never populate the cache.
   const isValidLocation = locationSlug === null || /^[a-z0-9_-]+$/.test(locationSlug);
-  const isValidExperience = experienceSlug === null || /^[a-z0-9_-]+$/.test(experienceSlug);
   const isValidBlogSlug = blogSlug === null || /^[a-z0-9_-]+$/.test(blogSlug);
 
   const allInputsValid = areDatasetsValid && isValidLocale && isValidPage &&
-    isValidLocation && isValidExperience && isValidBlogSlug;
+    isValidLocation && isValidBlogSlug;
   if (!allInputsValid) {
     throw new HTTPError({ statusCode: 400, statusMessage: "Invalid public page query" });
   }
@@ -330,12 +252,11 @@ async function loadPublicPageSource(
   // a 60s-old cached response could serve pre-reseed content into a fresh E2E run.
   // Also skipped if any query input is invalid to prevent unbounded cache entries.
   const host = (event.req.headers.get("host")) ?? "";
-  const usePageCache = !isPreviewAuthorized && !isPreviewContext(host) && allInputsValid;
+  const usePageCache = !isPreviewAuthorized && !isNonProductionHost(host) && allInputsValid;
   const cacheKey = buildPublicResourceCacheKey(siteId, {
     contract: 'page',
     page,
     location: locationSlug,
-    experience: experienceSlug,
     datasets: [...requestedDatasets],
     blogSlug,
     locale,
@@ -405,12 +326,6 @@ async function loadPublicPageSource(
     : null
   const locationId = locationRow?.id;
 
-  const localizedExperienceId = localizedLocale && experienceSlug
-    ? resolveLocalizedRouteResourceId(publicLocalizations, 'product', `/${localizedLocale}/experiences/${experienceSlug}`)
-    : null
-  if (localizedLocale && experienceSlug && !localizedExperienceId) {
-    throw new HTTPError({ statusCode: 404, statusMessage: 'Localized Experience was not found' })
-  }
   const normalizedVertical = normalizeVertical(site.vertical)
   const localizedBlogPost = localizedLocale && blogSlug ? await queryFirst<{ id: string }>(db,
     `SELECT id FROM content_documents WHERE site_id = ? AND kind = 'article' AND row_role = 'representation'
@@ -430,9 +345,7 @@ async function loadPublicPageSource(
     requestedDatasets.has("reviews") ||
     requestedDatasets.has("location") ||
     requestedDatasets.has('products') ||
-    requestedDatasets.has("experiences") ||
-    requestedDatasets.has("reservationPolicies") ||
-    requestedDatasets.has("experiencePolicies");
+    requestedDatasets.has("reservationPolicies");
 
   // Build batch — one subrequest to D1 for all inline queries
   const batchStmts: BatchQuery[] = [];
@@ -445,8 +358,6 @@ async function loadPublicPageSource(
     idxQa = -1;
   let idxProducts = -1, idxProductMedia = -1;
 
-  let idxExperiencesList = -1,
-    idxExperienceDetail = -1;
   let idxBlogList = -1,
     idxBlogPost = -1;
 
@@ -460,94 +371,38 @@ async function loadPublicPageSource(
   if (needsLocations) idxLoc = shellIndexes.locations;
 
   if (includeProducts) {
-    const locationClause = locationSlug ? 'AND location_id = ?' : ''
-    const productParams = locationSlug
-      ? [orgId, siteId, locationId ?? '__missing-location__']
-      : [orgId, siteId]
+    // Root rows only, and only what this site publishes at a location that is
+    // still offering them. The relationships hanging off each product are
+    // hydrated by the canonical reader below — this query does not try to
+    // flatten variants, prices and collections into one row set.
+    const productParams: unknown[] = locationSlug
+      ? [siteId, locationId ?? '__missing-location__', orgId]
+      : [siteId, orgId]
     idxProducts = push(
-      `SELECT p.id, p.organization_id, p.site_id, p.location_id, p.product_type, p.category_id, p.name, p.slug, p.description,
-              pc.name AS category_name, pc.slug AS category_slug, pc.sort_order AS category_sort_order,
-              p.order_url, p.is_visible, p.available, p.featured, p.featured_sort_order, p.sort_order, p.tags_json,
-              p.details_json, p.seo_title, p.seo_description, p.canonical_url, p.robots, p.source,
-              p.created_at, p.updated_at, p.created_by, p.updated_by,
-              pr.id AS price_id, pr.amount_minor, pr.currency, pr.unit AS price_unit, pr.tax_behavior,
-              pr.compare_at_amount_minor, pr.valid_from, pr.valid_until, pr.provenance,
-              pr.created_by AS price_created_by, pr.created_at AS price_created_at
+      `SELECT DISTINCT p.id, pl.location_id
          FROM products p
-         JOIN product_categories pc ON pc.id = p.category_id
-         LEFT JOIN prices pr ON pr.product_id = p.id AND pr.valid_from <= strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
-           AND (pr.valid_until IS NULL OR pr.valid_until > strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
-        WHERE p.organization_id = ? AND p.site_id = ? AND p.product_type = 'standard' AND p.is_visible = 1 ${locationClause.replace('location_id', 'p.location_id')}
-        ORDER BY p.location_id, pc.sort_order, p.sort_order, p.id`,
+         JOIN product_publications pub ON pub.product_id = p.id AND pub.organization_id = p.organization_id AND pub.published = 1
+         JOIN product_locations pl ON pl.product_id = p.id AND pl.organization_id = p.organization_id AND pl.published = 1 AND pl.active = 1
+         JOIN business_locations bl ON bl.id = pl.location_id AND bl.site_id = pub.site_id AND bl.status = 'active'
+        WHERE pub.site_id = ? ${locationSlug ? 'AND pl.location_id = ?' : ''} AND p.organization_id = ? AND p.active = 1
+        ORDER BY pl.location_id, p.name, p.id`,
       productParams,
     )
 
     idxProductMedia = push(
       `SELECT ma.*, mp.owner_id AS product_id, mp.slot, mp.sort_order
          FROM media_placements mp
-         JOIN products p ON p.id = mp.owner_id
          JOIN media_assets ma ON ma.id = mp.asset_id
           AND ma.organization_id = mp.organization_id
           AND ma.site_id = mp.site_id
           AND ma.status = 'active'
-        WHERE p.product_type = 'standard' AND p.organization_id = ? AND p.site_id = ? AND p.is_visible = 1
-          ${locationSlug ? 'AND p.location_id = ?' : ''}
+        WHERE mp.organization_id = ? AND mp.site_id = ?
           AND mp.owner_type = 'product' AND mp.slot IN ('image', 'gallery') AND mp.status = 'active'
         ORDER BY mp.owner_id, mp.slot, mp.sort_order, mp.id`,
-      productParams,
+      [orgId, siteId],
     )
   }
 
-  // Experiences remain route data. The page response also carries the shared
-  // shell so the layout and route components consume one canonical resource.
-  const needsExperiencesList =
-    requestedDatasets.has("experiences") && !experienceSlug;
-
-  if (needsExperiencesList) {
-    const expParams: unknown[] = [orgId, siteId];
-    let expSql = `SELECT p.id, p.organization_id, p.site_id, p.location_id,
-                         p.name AS title, p.slug, json_extract(p.experience_json, '$.tagline') AS tagline, p.description AS body, json_extract(p.experience_json, '$.pricing_note') AS pricing_note,
-                         pr.id AS price_id, pr.amount_minor, pr.currency, pr.unit AS price_unit, pr.tax_behavior,
-                         pr.compare_at_amount_minor, pr.valid_from, pr.valid_until, pr.provenance,
-                         pr.created_by AS price_created_by, pr.created_at AS price_created_at,
-                         json_extract(p.experience_json, '$.duration_minutes') AS duration_minutes, json_extract(p.experience_json, '$.max_capacity') AS max_capacity, json_extract(p.experience_json, '$.recurring_slots') AS recurring_slots,
-                         p.tags_json, p.details_json, json_extract(p.experience_json, '$.included_items') AS included_items, json_extract(p.experience_json, '$.what_to_bring') AS what_to_bring, json_extract(p.experience_json, '$.meeting_point') AS meeting_point,
-              json_extract(p.experience_json, '$.cancellation_policy') AS cancellation_policy,
-                         CASE WHEN p.available = 0 THEN 'sold_out' ELSE 'active' END AS status,
-                         p.sort_order, p.featured, p.featured_sort_order,
-                         p.seo_title, p.seo_description, p.canonical_url, p.robots, p.created_at, p.updated_at
-                  FROM products p
-                  LEFT JOIN prices pr ON pr.product_id = p.id AND pr.valid_from <= strftime('%Y-%m-%dT%H:%M:%fZ', 'now') AND (pr.valid_until IS NULL OR pr.valid_until > strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
-                  WHERE p.product_type = 'experience' AND p.organization_id = ? AND p.site_id = ? AND p.is_visible = 1`;
-    if (locationId) {
-      expSql += ` AND p.location_id = ?`;
-      expParams.push(locationId);
-    }
-    expSql += ` ORDER BY p.sort_order ASC, p.created_at ASC`;
-    idxExperiencesList = push(expSql, expParams);
-  }
-
-  if (requestedDatasets.has("experienceDetail") && experienceSlug) {
-    const experienceWhere = localizedExperienceId ? 'p.id = ?' : 'p.slug = ?'
-    idxExperienceDetail = push(
-      `SELECT p.id, p.organization_id, p.site_id, p.location_id,
-              p.name AS title, p.slug, json_extract(p.experience_json, '$.tagline') AS tagline, p.description AS body, json_extract(p.experience_json, '$.pricing_note') AS pricing_note,
-              pr.id AS price_id, pr.amount_minor, pr.currency, pr.unit AS price_unit, pr.tax_behavior,
-              pr.compare_at_amount_minor, pr.valid_from, pr.valid_until, pr.provenance,
-              pr.created_by AS price_created_by, pr.created_at AS price_created_at,
-              json_extract(p.experience_json, '$.duration_minutes') AS duration_minutes, json_extract(p.experience_json, '$.max_capacity') AS max_capacity, json_extract(p.experience_json, '$.recurring_slots') AS recurring_slots,
-              p.tags_json, p.details_json, json_extract(p.experience_json, '$.included_items') AS included_items, json_extract(p.experience_json, '$.what_to_bring') AS what_to_bring, json_extract(p.experience_json, '$.meeting_point') AS meeting_point,
-              json_extract(p.experience_json, '$.cancellation_policy') AS cancellation_policy,
-              CASE WHEN p.is_visible = 0 THEN 'inactive' WHEN p.available = 0 THEN 'sold_out' ELSE 'active' END AS status,
-              p.sort_order, p.featured, p.featured_sort_order,
-              p.seo_title, p.seo_description, p.canonical_url, p.robots, p.created_at, p.updated_at
-       FROM products p
-       LEFT JOIN prices pr ON pr.product_id = p.id AND pr.valid_from <= strftime('%Y-%m-%dT%H:%M:%fZ', 'now') AND (pr.valid_until IS NULL OR pr.valid_until > strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
-       WHERE p.organization_id = ? AND p.site_id = ? AND p.product_type = 'experience' AND ${experienceWhere}
-       LIMIT 1`,
-      [orgId, siteId, localizedExperienceId ?? experienceSlug],
-    );
-  }
 
   if (needsGlobalReviews)
     idxReviews = push(
@@ -735,7 +590,6 @@ async function loadPublicPageSource(
   // The route remains valid when that optional overlay has no translated page.
   const allowsMissingLocalizedTenantPage = page === 'contact'
     || page === 'reservations'
-    || page === 'experiences'
     || page === 'order'
   if (contentPagePath && !tenantPage && locale && locale !== sourceLocale && !isPreviewAuthorized && !allowsMissingLocalizedTenantPage) {
     throw new HTTPError({ statusCode: 404, statusMessage: 'Localized page was not found' })
@@ -743,6 +597,7 @@ async function loadPublicPageSource(
   const contentRows: SiteContent[] = tenantPage ? tenantPageToContentRows(tenantPage) : []
 
   let products: Product[] = []
+  let collections: Collection[] = []
   if (includeProducts) {
     const locationCapabilityRows = (batchResults[shellIndexes.locations] as { results: Record<string, unknown>[] })?.results ?? []
     const enabledLocationIds = new Set(locationCapabilityRows.filter((location) => {
@@ -752,8 +607,9 @@ async function loadPublicPageSource(
       })
       return capabilities.managers.some(manager => manager.key === 'location.products')
     }).map(location => String(location.id)))
-    const productRows = ((batchResults[idxProducts] as { results: Record<string, unknown>[] })?.results ?? [])
+    const productIdRows = ((batchResults[idxProducts] as { results: Record<string, unknown>[] })?.results ?? [])
       .filter(row => enabledLocationIds.has(String(row.location_id)))
+    const productIds = [...new Set(productIdRows.map(row => String(row.id)))]
     const productMediaRows = (batchResults[idxProductMedia] as { results: ProductMediaRow[] })?.results ?? []
     const mediaByProduct = new Map<string, ProductMediaRow[]>()
     for (const row of productMediaRows) {
@@ -761,88 +617,43 @@ async function loadPublicPageSource(
       rows.push(row)
       mediaByProduct.set(row.product_id, rows)
     }
-    products = productRows.map((row) => {
-      const product = mapProduct(row)
+    // One canonical read, hydrated in a single batch. This page does not
+    // reassemble variants, prices and collections from its own SQL — the
+    // catalog has one reader and a projection that disagreed with it is
+    // exactly the drift this replaces.
+    const canonical = productIds.length
+      ? await listSiteProducts(db, { organizationId: orgId, siteId, publishedOnly: true })
+      : []
+    const wanted = new Set(productIds)
+    products = canonical.filter(product => wanted.has(product.id)).map((product) => {
       const media = mediaByProduct.get(product.id) ?? []
+      const image = media.find(item => item.slot === 'image')
       return {
         ...product,
-        image: media.find(item => item.slot === 'image') ? toResolvedMediaAsset(media.find(item => item.slot === 'image')!) : null,
+        image: image ? toResolvedMediaAsset(image) : null,
         gallery: media.filter(item => item.slot === 'gallery').map(toResolvedMediaAsset),
       }
     })
+    // Collections are the site's merchandising order, which is what the
+    // public grouping renders. A page with products and no collections shows
+    // no groups rather than inventing one. A location page shows the site's
+    // own collections and that location's — never another branch's, which a
+    // Product offered at both would otherwise drag onto the page.
+    collections = locationId
+      ? [
+          ...await listCollections(db, { organizationId: orgId, siteId, locationId: null }),
+          ...await listCollections(db, { organizationId: orgId, siteId, locationId }),
+        ]
+      : await listCollections(db, { organizationId: orgId, siteId })
     if (localizedLocale) {
-      const categoryLocalizations = new Map(
-        publicLocalizations
-          .filter(item => item.resourceType === 'product_category')
-          .map(item => [item.resourceId, item]),
-      )
-      products = projectExactLocalizedCollection('product', products, publicLocalizations)
-        .flatMap(product => {
-          const categoryLocalization = categoryLocalizations.get(product.category.id)
-          if (!categoryLocalization) return []
-          return [{
-            ...product,
-            category: projectExactLocalizedResource('product_category', product.category, categoryLocalization),
-            image: product.image
-              ? projectLocalizedMediaAlt([product.image], publicLocalizations)[0] ?? null
-              : null,
-            gallery: projectLocalizedMediaAlt(product.gallery, publicLocalizations),
-          }]
-        })
+      collections = projectExactLocalizedCollection('collection', collections, publicLocalizations)
+      products = projectExactLocalizedCollection('product', products, publicLocalizations).map(product => ({
+        ...product,
+        image: product.image ? projectLocalizedMediaAlt([product.image], publicLocalizations)[0] ?? null : null,
+        gallery: projectLocalizedMediaAlt(product.gallery, publicLocalizations),
+      }))
     }
   }
-
-  // Build experiences
-  const sourceExperiencesList: Experience[] =
-    idxExperiencesList >= 0
-      ? (
-          (batchResults[idxExperiencesList] as { results: Record<string, unknown>[] })?.results ?? []
-        ).map(parseExperienceRow)
-      : [];
-  const experiencesListRaw = localizedLocale
-    ? sourceExperiencesList.flatMap(experience => {
-        const localization = publicLocalizations.find(item => item.resourceType === 'product' && item.resourceId === experience.id)
-        return localization ? [projectLocalizedExperience(experience, localization)] : []
-      })
-    : sourceExperiencesList
-  options.signal?.throwIfAborted();
-  const experiencesWithMedia = await attachExperienceMedia(db, siteId, experiencesListRaw);
-  options.signal?.throwIfAborted();
-  const experiencesList = requestedDatasets.has("experiences")
-    ? await attachAvailabilitySummaries(db, siteId, experiencesWithMedia)
-    : experiencesWithMedia;
-
-  const sourceExperienceDetail: Experience | null =
-    idxExperienceDetail >= 0
-      ? (
-          (batchResults[idxExperienceDetail] as { results: Record<string, unknown>[] })?.results[0] ?? null
-        )
-        ? parseExperienceRow(
-            (batchResults[idxExperienceDetail] as { results: Record<string, unknown>[] }).results[0]!,
-          )
-        : null
-      : null;
-  const experienceDetailRaw = sourceExperienceDetail && localizedLocale
-    ? (() => {
-        const localization = publicLocalizations.find(item =>
-          item.resourceType === 'product' && item.resourceId === sourceExperienceDetail.id,
-        )
-        return localization
-          ? projectLocalizedExperience(sourceExperienceDetail, localization)
-          : null
-      })()
-    : sourceExperienceDetail
-  // inactive experiences are never public, at any route — sold_out stays visible
-  // with its own messaging (see server/utils/experiences.ts listExperiences).
-  options.signal?.throwIfAborted();
-  const experienceDetail =
-    experienceDetailRaw && experienceDetailRaw.status !== "inactive"
-      ? (await attachAvailabilitySummaries(
-          db,
-          siteId,
-          await attachExperienceMedia(db, siteId, [experienceDetailRaw]),
-        ))[0]
-      : null;
 
   options.signal?.throwIfAborted();
   const [globalPublishedPosts, locationPublishedPosts] = await Promise.all([
@@ -906,64 +717,38 @@ async function loadPublicPageSource(
     };
   });
 
-  const experiencePolicyTargets = new Map<string, { locationId: string | null }>();
-  for (const experience of experiencesList) {
-    experiencePolicyTargets.set(experience.id, {
-      locationId: typeof experience.location_id === "string" ? experience.location_id : null,
-    });
-  }
-  if (experienceDetail?.id) {
-    experiencePolicyTargets.set(experienceDetail.id, {
-      locationId: typeof experienceDetail.location_id === "string" ? experienceDetail.location_id : null,
-    });
-  }
-
   const needsReservationPolicies = requestedDatasets.has('reservationPolicies');
-  const needsExperiencePolicies = requestedDatasets.has('experiencePolicies');
-  if ((needsReservationPolicies || needsExperiencePolicies) && !locale && !sourceLocale) {
+  if (needsReservationPolicies && !locale && !sourceLocale) {
     throw new HTTPError({
       statusCode: 500,
       statusMessage: 'Site source locale is not configured',
     });
   }
   options.signal?.throwIfAborted();
-  const [reservationPolicies, experiencePolicies] = await Promise.all([
-    needsReservationPolicies ? resolveBookingPolicyIndex(db, {
-      siteId,
-      policyType: "reservation",
-      locations: locations.map(location => String(location.id)),
-    }) : Promise.resolve(null),
-    needsExperiencePolicies ? resolveBookingPolicyIndex(db, {
-      siteId,
-      policyType: "experience",
-      locations: locations.map(location => String(location.id)),
-      experiences: experiencePolicyTargets,
-    }) : Promise.resolve(null),
-  ]);
+  // Reservation policy is a location's own typed row. A product's booking
+  // terms are its metafields and are read with the product, so there is no
+  // second policy index to resolve here.
+  const reservationPolicies = needsReservationPolicies
+    ? new Map(await Promise.all(locations.map(async location => [
+        String(location.id),
+        await getLocationReservationConfig(db, { organizationId: orgId, locationId: String(location.id) }),
+      ] as const)))
+    : null
   options.signal?.throwIfAborted();
   const policyLocale = locale ?? sourceLocale!;
-  const localizePolicy = <T extends { id: string | null; policy_type: 'reservation' | 'experience'; scope_type: string; additional_notes_html: string | null }>(policy: T): T => {
-    if (!localizedLocale || !policy.id) return policy
-    const resourceType = policy.scope_type === 'site' ? 'site' : policy.scope_type === 'location' ? 'business_location' : 'product'
-    const localized = publicLocalizations.find(item => item.resourceType === resourceType && item.resourceId === policy.id)
-    const values = localized?.values as { booking?: { experience?: { additional_notes_html?: string; policy?: { additional_notes_html?: string } }; reservation?: { policy?: { additional_notes_html?: string } } }; experience?: { policy?: { additional_notes_html?: string } } } | undefined
-    const notes = resourceType === 'site' ? values?.booking?.experience?.additional_notes_html
-      : resourceType === 'product' ? values?.experience?.policy?.additional_notes_html : values?.booking?.[policy.policy_type]?.policy?.additional_notes_html
-    return { ...policy, additional_notes_html: notes ?? null }
+  // One localized field, from one place: the location's own translation. The
+  // old resolver had to guess which of three scopes a rendered rule came from
+  // before it could find the right translation for it.
+  const localizeReservationNotes = (locationId: string, config: LocationReservationConfig): LocationReservationConfig => {
+    if (!localizedLocale) return config
+    const localized = publicLocalizations.find(item => item.resourceType === 'business_location' && item.resourceId === locationId)
+    const values = localized?.values as { reservation?: { policy?: { additional_notes_html?: string } } } | undefined
+    return { ...config, additional_notes_html: values?.reservation?.policy?.additional_notes_html ?? null }
   }
   const reservationPolicyByLocation = Object.fromEntries(
-    Array.from(reservationPolicies?.byLocation ?? [], ([locationId, policy]) => [
+    Array.from(reservationPolicies ?? [], ([locationId, config]) => [
       locationId,
-      policy.id ? renderBookingPolicySummary(localizePolicy(policy), policyLocale) : null,
-    ]),
-  );
-  const experiencePolicySiteDefault = experiencePolicies?.site
-    ? renderBookingPolicySummary(localizePolicy(experiencePolicies.site), policyLocale)
-    : null;
-  const experiencePolicyById = Object.fromEntries(
-    Array.from(experiencePolicies?.byExperience ?? [], ([experienceId, policy]) => [
-      experienceId,
-      renderBookingPolicySummary(localizePolicy(policy), policyLocale),
+      config ? renderBookingPolicySummary(reservationPolicySummarySource(localizeReservationNotes(locationId, config)), policyLocale) : null,
     ]),
   );
 
@@ -1052,10 +837,7 @@ async function loadPublicPageSource(
   let representationSourcePath = routePagePath ?? '/'
   let representationDocumentId: string | undefined
   let representationResource: { type: LocalizedResourceType; id: string; routeSuffix?: string } | undefined
-  if (sourceExperienceDetail) {
-    representationSourcePath = `/experiences/${sourceExperienceDetail.slug}`
-    representationResource = { type: 'product', id: sourceExperienceDetail.id }
-  } else if (sourceBlogPostIdentity) {
+  if (sourceBlogPostIdentity) {
     const prefix = normalizedVertical === 'service' ? 'article' : 'blog'
     representationSourcePath = `/${prefix}/${sourceBlogPostIdentity.slug}`
     representationDocumentId = sourceBlogPostIdentity.id
@@ -1082,6 +864,7 @@ async function loadPublicPageSource(
     content_blocks: groupContentBlocks(contentRows),
     tenant_page: tenantPage,
     products,
+    collections,
     locationReviews: (locationReviewRows?.results ?? []).map(review => ({ ...review, google_review_metadata: parseGoogleReviewMetadata(review.google_review_metadata) })),
     globalReviews: needsGlobalReviews ? (reviewRows.results ?? []).map(review => ({ ...review, google_review_metadata: parseGoogleReviewMetadata(review.google_review_metadata) })) : [],
     reviewsAggregate: requestedDatasets.has("reviews") ? reviewsAggregate : null,
@@ -1093,21 +876,16 @@ async function loadPublicPageSource(
     postsList: requestedDatasets.has("posts") ? locationPublishedPosts : [],
     globalPosts: needsGlobalPosts ? globalPublishedPosts : [],
     reservationPolicyByLocation,
-    experiencePolicySiteDefault,
-    experiencePolicyById,
-    experiencesList,
-    experienceDetail,
     localeRepresentations,
   };
   const payload = pagePayload;
 
   // Slug-shaped inputs are only worth caching once they've resolved to a real
   // row — otherwise a stream of made-up slugs (still regex-valid) would each
-  // mint their own permanent KV entry. locationRow/experienceDetail/blogPost
-  // are the actual D1-resolved lookups for locationSlug/experienceSlug/blogSlug.
+  // mint their own permanent KV entry. locationRow/blogPost are the actual
+  // D1-resolved lookups for locationSlug/blogSlug.
   const resolvedSlugsValid =
     (!locationSlug || !!locationRow) &&
-    (!experienceSlug || !!experienceDetail) &&
     (!blogSlug || !!blogPost);
 
   if (usePageCache && resolvedSlugsValid) {

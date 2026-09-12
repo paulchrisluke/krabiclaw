@@ -16,7 +16,7 @@ import { purgeSiteKvCache } from "~/server/utils/edge-cache";
 import { purgePublicResourceCacheSafe } from "~/server/utils/public-resource-cache";
 import { schedulePlatformKnowledgeIndexRebuild } from "~/server/utils/platform-search-rebuild";
 import {
-  assertConversationalToolEnabled, visibleConversationalMcpTools, } from "~/server/utils/conversational-tool-surface";
+  visibleConversationalMcpTools, } from "~/server/utils/conversational-tool-surface";
 import {
   dispatchStandardMcpMethod, respondToMcpError, resolveMissingMcpCredential, unsupportedMcpMethodError, type McpToolMeta, } from "~/server/utils/mcp-runtime";
 import { getCloudflareWaitUntil, isMcpMutatingTool } from "~/server/utils/mcp-route-helpers";
@@ -95,6 +95,10 @@ export default defineHandler(async (event) => {
 
     const body = await readBody(event);
     requestEnvelope = safeMcpEnvelopeDetails(event, body);
+    if (isRecord(body)) {
+      const rawId = body.id;
+      if (typeof rawId === 'string' || typeof rawId === 'number' || rawId === null) requestId = rawId;
+    }
 
     const request = readMcpRequest(event, body);
     requestId = request.id;
@@ -157,7 +161,7 @@ This entire flow runs within the current conversation — do not tell the user t
 KrabiClaw has three distinct content-creation tools — do not default to whichever one comes to mind first. Ask yourself whether the request is time-boxed, narrative, or a permanent offering:
 - **create_post** — a time-boxed announcement, offer, or event that can be published to the website and connected Facebook/Instagram channels. Use for "we're running a sale this week" or "come to our event Saturday."
 - **create_blog_post** — long-form narrative/story content on the site's own blog. Use for "write about our history" or "announce our new location" as a story, not an action.
-- **create_experience** — a permanent, bookable offering with its own page: a class, package, tour, or group/custom-booking option that needs pricing/availability and a Reserve Now (or Contact Us, if inquiry-only) CTA. Use for "we want a dedicated page for X" when X is something people book or inquire about. For inquiry-only pricing, send price: null and a concise pricing_note rather than writing a post or blog entry about it.
+- **create_product** — a permanent thing the business sells, with its own page: a dish, a class, a package, a tour. What a customer buys is a variant, so give it at least one variant with a price. Booking is a capability a Product gains rather than a different kind of row, so a class and a dish are created the same way. Use it for "we want a dedicated page for X" when X is something people buy or book.
 If a request is ambiguous, ask a brief clarifying question rather than guessing.
 
 ## Session start
@@ -171,7 +175,7 @@ Start every conversation by calling get_workspace_context. If no active site is 
 - Use get_workspace_context whenever you need to confirm the active organization/site/location before mutating content.
 - If a location-scoped action is requested and the active location is missing, call list_locations and then set_workspace_context with the chosen location_id.
 - site_id means the internal KrabiClaw site ID returned by get_workspace_context or list_sites, such as site-pottery-house. A public URL, hostname, custom domain, subdomain, slug, or site name is never a valid site_id.
-- If the user gives a public URL such as https://www.potteryhousekrabi.com/experiences/ceramics-painting-class, first call get_workspace_context or list_sites and match the URL to the returned site's public_url/domain context before calling site-scoped tools.
+- If the user gives a public URL such as https://www.potteryhousekrabi.com/products/ceramics-painting-class, first call get_workspace_context or list_sites and match the URL to the returned site's public_url/domain context before calling site-scoped tools.
 
 ## Site confirmation policy — enforced before every mutation
 
@@ -195,9 +199,9 @@ When a public-facing tool result includes \`view_url\` or \`public_url\`, includ
 
 All other tools require a site_id obtained from get_workspace_context or list_sites. Never guess, invent, derive, or pass through site IDs from URLs/domains.
 
-For every paginated read, keep calling the same tool with page_info.next_cursor (or the resource-specific next_cursor field) until has_more is false before claiming the collection is complete. Product batch and sync tools are atomic: read every list_location_products page, then send one complete intended create or reconciliation call with an explicit location_id. Never split one logical Product replacement across multiple mutation calls. Read list_product_categories and create any missing sections with create_product_category; Product writes require category_id, and Product reads return category as an object. Use move_products to change category membership. For ordering, use reorder_products with every Product ID in one category, or reorder_product_categories with every category ID at the location, each exactly once in the intended order. Category names are localized separately through put_resource_localization with resource_type product_category and values { name }.
+For every paginated read, keep calling the same tool with page_info.next_cursor (or the resource-specific next_cursor field) until has_more is false before claiming the collection is complete. batch_create_products and reconcile_products are atomic: read every list_location_products page, then send one complete intended create or reconciliation call with an explicit location_id. Never split one logical Product replacement across multiple mutation calls. A Product belongs to the organization: set_product_publication says which sites carry it, set_product_location says where it is offered, and what a customer buys is a variant, so prices belong to variants. Grouping is a collection — read list_collections, create missing ones with create_collection, and send the complete intended membership and order with set_collection_products; reorder_collections takes every collection ID at the site exactly once. Collection names are localized separately through put_resource_localization with resource_type collection and values { name }.
 
-Common workflows: manage location-scoped Products, create and publish site posts, triage contact and reservation submissions, update page content directly, upload media, reply to reviews, manage experiences and bookings, and generate or replace images for any content section. Manual locale management is available through the locale tools. Social publishing, domains, and priority-support requests are shown only when connector eligibility enables them; otherwise direct the user to the dashboard.`, });
+Common workflows: manage a site's Products and the collections that group them, create and publish site posts, triage contact, reservation and booking submissions, update page content directly, upload media, reply to reviews, and generate or replace images for any content section. Manual locale management is available through the locale tools. Domain setup and Google Places lookup are CMS-only. Social publishing is available only when explicitly enabled; otherwise direct the user to the dashboard.`, });
     }
 
     const standardResponse = await dispatchStandardMcpMethod(event, request, runtimeDeps, {
@@ -284,7 +288,6 @@ Common workflows: manage location-scoped Products, create and publish site posts
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       let result: any;
       try {
-        assertConversationalToolEnabled(toolName, cfEnv as ApiRecord);
         result = await executeMcpToolCall(event, toolName, rawArgs, mcpUser);
       } catch (toolError) {
         recordRequestPhase(event, 'mcp_execute', executionStartedAt);
@@ -413,7 +416,13 @@ Common workflows: manage location-scoped Products, create and publish site posts
     const mcpError = asMcpError(error);
     const toolCallPermissionError = requestMethod === "tools/call" && mcpError.kind === "forbidden";
     const mappedStatus = toolCallPermissionError ? 200 : mcpHttpStatusForError(mcpError);
-    console.error("[MCP_ERROR]", JSON.stringify({
+    // A malformed or stale client request is the client's fault, not ours.
+    // ChatGPT still asks for widget resources it cached from an older catalog
+    // (`ui://media-upload`), and logging those at error severity buries real
+    // faults — the same reason the auth handler already splits 4xx to warn.
+    const clientFault = mappedStatus < 500
+    const logMcpError = clientFault ? console.warn : console.error
+    logMcpError("[MCP_ERROR]", JSON.stringify({
       status: mappedStatus, code: mcpError.code, message: mcpError.message, method: requestMethod ?? null, tool: requestToolName ?? null, request_id: requestId ?? null, ...(mcpError.code === MCP_ERROR.invalidRequest || mcpError.code === MCP_ERROR.invalidParams ? { envelope: requestEnvelope ?? safeMcpEnvelopeDetails(event, undefined) } : {}), }));
     if (mappedStatus >= 500 && error instanceof Error) console.error(error.stack ?? error.message);
     return respondToMcpError(event, error, {

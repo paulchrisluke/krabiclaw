@@ -4,8 +4,7 @@ import { loadPublicSocialMedia } from './public-social-image.ts'
 import type { CloudflareEnv } from '~/server/utils/auth'
 import { refreshSocialCard } from '~/server/utils/social-card'
 
-export const OWNER_REVIEW_COLLECTION_METHODS = ['in_person', 'email', 'phone', 'migration', 'other'] as const
-export type OwnerReviewCollectionMethod = typeof OWNER_REVIEW_COLLECTION_METHODS[number]
+import { OWNER_REVIEW_COLLECTION_METHODS, OWNER_REVIEW_STATUSES, type OwnerReviewCollectionMethod, type OwnerReviewStatus } from '~/shared/site-reviews'
 
 export interface OwnerEnteredReviewInput {
   author_name: unknown
@@ -48,8 +47,8 @@ function parseCollectionMethod(value: unknown): OwnerReviewCollectionMethod {
 
 function parseStatus(value: unknown) {
   if (value != null && typeof value !== 'string') throw new Error('status is invalid')
-  const status = value ?? 'pending'
-  if (!['pending', 'approved', 'rejected'].includes(status)) throw new Error('status is invalid')
+  const status = (value ?? 'pending') as OwnerReviewStatus
+  if (!OWNER_REVIEW_STATUSES.includes(status)) throw new Error('status is invalid')
   return status
 }
 

@@ -7,7 +7,7 @@ export default defineHandler(async (event) => {
   const slug = getRouterParam(event, 'slug')
   if (!categorySlug || !slug) return jsonResponse({ error: 'Category and slug required' }, { status: 400 })
 
-  const { token, collection: requestedCollection } = getQuery(event)
+  const { collection: requestedCollection } = getQuery(event)
   const collection = requestedCollection === undefined ? 'blog' : requestedCollection
   if (!isArticleCollection(collection)) return jsonResponse({ error: 'Unknown collection' }, { status: 400 })
   const category = articleCategoryFromSlug(collection, categorySlug)
@@ -17,8 +17,8 @@ export default defineHandler(async (event) => {
   const db = env.db
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
 
-  if (token !== undefined && typeof token !== 'string') return jsonResponse({ error: 'Invalid preview token' }, { status: 400 })
-  const post = await getPublishedBlogPost(db, category, slug, env, token, collection)
+  // Tenant resolution already verified the site's preview cookie for this host.
+  const post = await getPublishedBlogPost(db, category, slug, env, Boolean(event.context.previewAuthorized), collection)
   if (!post) return jsonResponse({ error: 'Post not found' }, { status: 404 })
 
   return jsonResponse({ post })

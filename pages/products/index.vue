@@ -1,5 +1,5 @@
 <template>
-  <ProductCollectionPage :products="products" :locations="productLocations" :currency="currency" :presentation="presentation" :vertical="vertical" :title="collectionTitle" :brand-name="brandName" />
+  <ProductCollectionPage :products="products" :collections="collections" :locations="productLocations" :currency="currency" :presentation="presentation" :vertical="vertical" :title="collectionTitle" :brand-name="brandName" />
 </template>
 
 <script setup lang="ts">
@@ -11,7 +11,7 @@ definePageMeta({ layout: 'saya' })
 const { isBlawby } = usePublicTemplate()
 if (isBlawby.value) throw createError({ statusCode: 404 })
 const { t } = useI18n()
-const { products, locations, config, site } = await usePublicPageData({ lazy: false })
+const { products, collections, locations, config, site } = await usePublicPageData({ lazy: false })
 const vertical = String(site.value?.vertical ?? '')
 const presentation = requireProductPresentation(vertical)
 if (presentation.locationCollectionSegment !== 'products') throw createError({ statusCode: 404 })

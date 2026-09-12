@@ -73,7 +73,16 @@ export default defineHandler(async (event) => {
     locationId = cleanString(body.location_id, 120) || null
     entityId = cleanString(body.product_id, 120) || null
     if (!locationId || !entityId) return jsonResponse({ error: 'location_id and product_id are required' }, { status: 400 })
-    const product = await queryFirst<{ id: string; order_url: string }>(db, `SELECT id, order_url FROM products WHERE id = ? AND site_id = ? AND location_id = ? AND is_visible = 1 AND available = 1 AND order_url IS NOT NULL LIMIT 1`, [entityId, siteId, locationId])
+    // Published to this site, offered at a location OF THIS SITE, on sale, and
+    // carrying the link the guest just followed. Five separate facts, all
+    // required: the location arrives in the request body, and without the site
+    // check one tenant's page could report a click at another tenant's branch.
+    const product = await queryFirst<{ id: string; order_url: string }>(db, `
+      SELECT p.id, p.order_url FROM products p
+      JOIN product_publications pub ON pub.product_id = p.id AND pub.organization_id = p.organization_id AND pub.site_id = ? AND pub.published = 1
+      JOIN product_locations pl ON pl.product_id = p.id AND pl.organization_id = p.organization_id AND pl.location_id = ? AND pl.published = 1 AND pl.active = 1
+      JOIN business_locations bl ON bl.organization_id = p.organization_id AND bl.id = pl.location_id AND bl.site_id = ?
+      WHERE p.id = ? AND p.active = 1 AND p.order_url IS NOT NULL LIMIT 1`, [siteId, locationId, siteId, entityId])
     if (!product || !destinationHost(product.order_url)) return jsonResponse({ error: 'Product not found' }, { status: 404 })
     const destinationHostname = new URL(product.order_url).hostname.toLowerCase()
     entityType = 'product'; ctaDestination = destinationHostname; pageType = 'product'; metadata = { product_id: product.id, destination_hostname: destinationHostname }

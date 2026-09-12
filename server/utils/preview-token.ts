@@ -1,6 +1,26 @@
+// Preview authorization: one signed token, one cookie, one meaning.
+//
+// A preview token says "the holder may see this site before it is public".
+// It is minted for a site id, handed to the browser once in a URL, and then
+// lives in an HttpOnly cookie on the tenant host, so every subsequent request
+// the preview makes — page navigations and the public shell/page APIs the site
+// calls for itself — is authorized without the token being threaded through
+// props, routes or query strings.
+//
+// The cookie is Partitioned (CHIPS) because the dashboard frames the tenant
+// host in an iframe: a third-party cookie without it is dropped by the browser.
+
 import { timingSafeEqual } from 'node:crypto'
+import type { H3Event } from 'nitro/h3'
+import { getCookie, getQuery, setCookie } from 'nitro/h3'
 
 const textEncoder = new TextEncoder()
+
+/** Set on the tenant host, so the host itself names the site. */
+export const PREVIEW_COOKIE_NAME = 'kc_preview'
+/** The query parameter that mints the cookie. */
+export const PREVIEW_TOKEN_QUERY = 'preview_token'
+export const PREVIEW_TOKEN_TTL_MS = 12 * 60 * 60 * 1000
 
 const base64UrlEncode = (bytes: ArrayBuffer) =>
   btoa(String.fromCharCode(...new Uint8Array(bytes)))
@@ -14,36 +34,25 @@ async function signPreviewPayload(secret: string, payload: string) {
     textEncoder.encode(secret),
     { name: 'HMAC', hash: 'SHA-256' },
     false,
-    ['sign']
+    ['sign'],
   )
   const signature = await crypto.subtle.sign('HMAC', key, textEncoder.encode(payload))
   return base64UrlEncode(signature)
 }
 
 export async function createPreviewToken(secret: string, siteId: string, expiresAt: number) {
-  const payload = `site:${siteId}.${expiresAt}`
-  const signature = await signPreviewPayload(secret, payload)
-  return `${expiresAt}.${signature}`
-}
-
-export async function createScopedPreviewToken(secret: string, scope: string, entityId: string, expiresAt: number) {
-  const payload = `${scope}:${entityId}.${expiresAt}`
-  const signature = await signPreviewPayload(secret, payload)
+  const signature = await signPreviewPayload(secret, `site:${siteId}.${expiresAt}`)
   return `${expiresAt}.${signature}`
 }
 
 export async function verifyPreviewToken(secret: string, siteId: string, token: string) {
-  return verifyScopedPreviewToken(secret, 'site', siteId, token)
-}
-
-export async function verifyScopedPreviewToken(secret: string, scope: string, entityId: string, token: string) {
   const [expiresAtRaw, signature] = token.split('.')
   const expiresAt = Number(expiresAtRaw)
 
   if (!Number.isFinite(expiresAt) || !signature) return false
   if (Date.now() > expiresAt) return false
 
-  const expected = await createScopedPreviewToken(secret, scope, entityId, expiresAt)
+  const expected = await createPreviewToken(secret, siteId, expiresAt)
 
   const tokenBuf = textEncoder.encode(token)
   const expectedBuf = textEncoder.encode(expected)
@@ -56,4 +65,49 @@ export async function verifyScopedPreviewToken(secret: string, scope: string, en
   }
 
   return timingSafeEqual(tokenBuf, expectedBuf)
+}
+
+/**
+ * Is this request authorized to preview `siteId`?
+ *
+ * Accepts the token from `?preview_token=` and, when it is valid, promotes it
+ * to the cookie so the rest of the visit — every link the site renders, every
+ * API call it makes — stays authorized without the token in the URL. Reads the
+ * cookie on every later request.
+ */
+export async function resolvePreviewAuthorization(
+  event: H3Event,
+  siteId: string,
+  previewSecret: string | null,
+): Promise<boolean> {
+  if (!previewSecret) return false
+
+  const queryToken = getQuery(event)[PREVIEW_TOKEN_QUERY]
+  const token = typeof queryToken === 'string' && queryToken ? queryToken : null
+  if (token) {
+    if (!await verifyPreviewToken(previewSecret, siteId, token)) return false
+    setCookie(event, PREVIEW_COOKIE_NAME, token, {
+      httpOnly: true,
+      secure: true,
+      sameSite: 'none',
+      partitioned: true,
+      path: '/',
+      maxAge: Math.floor(PREVIEW_TOKEN_TTL_MS / 1000),
+    })
+    return true
+  }
+
+  const cookieToken = getCookie(event, PREVIEW_COOKIE_NAME)
+  if (!cookieToken) return false
+  return await verifyPreviewToken(previewSecret, siteId, cookieToken)
+}
+
+/**
+ * The signing key, exactly as configured. Never trimmed: createPreviewToken is
+ * also called with env.PREVIEW_SECRET directly, and a trimmed copy here would
+ * verify against a different HMAC key than the one that signed.
+ */
+export function previewSecretOf(env: object): string | null {
+  const secret = (env as { PREVIEW_SECRET?: unknown }).PREVIEW_SECRET
+  return typeof secret === 'string' && secret.trim() ? secret : null
 }

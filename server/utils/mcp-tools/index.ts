@@ -4,7 +4,6 @@ import { ANALYTICS_TOOLS } from './analytics'
 import { BLOG_TOOLS } from './blog'
 import { CONTENT_TOOLS } from './content'
 import { CONTEXT_TOOLS } from './context'
-import { EXPERIENCES_TOOLS } from './experiences'
 import { LOCALES_TOOLS } from './locales'
 import { LOCATIONS_TOOLS } from './locations'
 import { MEDIA_TOOLS } from './media'
@@ -13,7 +12,6 @@ import { ONBOARDING_TOOLS } from './onboarding'
 import { POSTS_TOOLS } from './posts'
 import { QA_TOOLS } from './qa'
 import { REVIEWS_TOOLS } from './reviews'
-import { SETTINGS_TOOLS } from './settings'
 import { SITES_TOOLS } from './sites'
 import { SUBMISSIONS_TOOLS } from './submissions'
 
@@ -22,7 +20,6 @@ export const MCP_PUBLIC_TOOLS: McpToolDefinition[] = [
   ...BLOG_TOOLS,
   ...CONTENT_TOOLS,
   ...CONTEXT_TOOLS,
-  ...EXPERIENCES_TOOLS,
   ...LOCALES_TOOLS,
   ...LOCATIONS_TOOLS,
   ...MEDIA_TOOLS,
@@ -31,7 +28,6 @@ export const MCP_PUBLIC_TOOLS: McpToolDefinition[] = [
   ...POSTS_TOOLS,
   ...QA_TOOLS,
   ...REVIEWS_TOOLS,
-  ...SETTINGS_TOOLS,
   ...SITES_TOOLS,
   ...SUBMISSIONS_TOOLS,
 ].sort((a, b) => a.name.localeCompare(b.name))

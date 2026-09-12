@@ -1,183 +1,180 @@
 <template>
-  <OrganizationSettingsShell detail-title="Billing" wide-detail>
-    <div v-if="loading" class="space-y-6">
-        <USkeleton class="h-28 w-full" />
-        <div class="grid gap-4 lg:grid-cols-3">
-          <USkeleton class="h-64" />
-          <USkeleton class="h-64" />
-          <USkeleton class="h-64" />
-        </div>
+  <div v-if="loading" class="space-y-6">
+      <USkeleton class="h-28 w-full" />
+      <div class="grid gap-4 lg:grid-cols-3">
+        <USkeleton class="h-64" />
+        <USkeleton class="h-64" />
+        <USkeleton class="h-64" />
       </div>
-
-      <div v-else class="space-y-6">
-        <UAlert
-          v-if="errorMessage"
-          color="error"
-          variant="soft"
-          icon="i-lucide-triangle-alert"
-          :description="errorMessage"
-        />
-
-        <UCard v-if="sites.length">
-          <template #header>
-            <div class="flex items-center justify-between">
-              <h2 class="font-semibold">Sites</h2>
-              <UButton
-                v-if="sites.some(s => s.plan !== 'free')"
-                size="xs"
-                color="neutral"
-                variant="ghost"
-                :loading="portalLoading"
-                @click="openBillingPortal"
-              >
-                Manage subscriptions
-              </UButton>
-            </div>
-          </template>
-
-          <ul class="-mx-4 -mb-4 sm:-mx-6 sm:-mb-6 divide-y divide-default">
-            <li
-              v-for="s in sites"
-              :key="s.siteId"
-              class="flex flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-6"
-            >
-              <div class="min-w-0">
-                <p class="text-sm font-medium text-highlighted truncate">{{ s.brandName ?? s.subdomain }}</p>
-                <p class="text-xs text-muted">
-                  {{ s.subdomain }}
-                  <span v-if="s.currentPeriodEnd"> · Renews {{ formatDate(s.currentPeriodEnd) }}</span>
-                </p>
-              </div>
-              <div class="flex items-center gap-2">
-                <UBadge :color="s.plan === 'free' ? 'neutral' : 'primary'" variant="soft" class="capitalize">
-                  {{ s.plan }}
-                </UBadge>
-                <UButton
-                  size="xs"
-                  color="neutral"
-                  variant="outline"
-                  :class="selectedSiteId === s.siteId ? 'ring-2 ring-primary' : ''"
-                  @click="selectedSiteId = s.siteId"
-                >
-                  Change plan
-                </UButton>
-              </div>
-            </li>
-          </ul>
-        </UCard>
-
-        <!-- Payment method -->
-        <UCard v-if="sites.some(s => s.plan !== 'free') || savedCard">
-          <template #header>
-            <div class="flex items-center justify-between">
-              <div class="flex items-center gap-2">
-                <UIcon name="i-lucide-credit-card" class="size-4 text-primary" />
-                <h2 class="font-semibold">Payment method</h2>
-              </div>
-              <UButton
-                v-if="sites.some(s => s.plan !== 'free')"
-                size="xs"
-                color="neutral"
-                variant="ghost"
-                :loading="portalLoading"
-                @click="openBillingPortal"
-              >
-                Manage
-              </UButton>
-            </div>
-          </template>
-
-          <div v-if="savedCard" class="flex items-center gap-4">
-            <div class="flex size-10 shrink-0 items-center justify-center rounded-lg border border-default bg-elevated text-xs font-bold uppercase tracking-wide text-muted">
-              {{ savedCard.brand.slice(0, 4) }}
-            </div>
-            <div class="flex-1 min-w-0">
-              <p class="text-sm font-medium text-highlighted">•••• •••• •••• {{ savedCard.last4 }}</p>
-              <p class="text-xs text-muted">Expires {{ savedCard.exp_month }}/{{ savedCard.exp_year }}</p>
-            </div>
-            <UBadge label="Default" color="success" variant="soft" size="xs" />
-          </div>
-          <p v-else class="text-sm text-muted">No payment method saved. Add one when you subscribe or upgrade your plan.</p>
-        </UCard>
-
-        <UAlert
-          v-if="selectedSite"
-          color="primary"
-          variant="soft"
-          icon="i-lucide-info"
-          title="Changing your organization plan"
-          description="One subscription covers every site in this organization. The selected site is included as billing context, and site entitlements are derived from the organization plan."
-        />
-
-        <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <UCard
-            v-for="plan in plans"
-            :key="plan.id"
-            :class="selectedSite?.plan === plan.id ? 'ring-2 ring-primary' : ''"
-          >
-            <div class="flex h-full flex-col">
-              <div>
-                <div class="flex items-center justify-between gap-3">
-                  <h2 class="text-lg font-semibold text-highlighted">{{ plan.name }}</h2>
-                  <div class="flex gap-2">
-                    <UBadge v-if="plan.badge && selectedSite?.plan !== plan.id" color="primary" variant="soft">{{ plan.badge }}</UBadge>
-                    <UBadge v-if="selectedSite?.plan === plan.id" color="primary" variant="soft">Current</UBadge>
-                  </div>
-                </div>
-                <p class="mt-2 text-3xl font-semibold text-highlighted">
-                  {{ displayPrice(plan, annual) }}
-                  <span v-if="plan.prices?.length" class="text-sm font-normal text-muted">
-                    /mo
-                  </span>
-                </p>
-              </div>
-
-              <ul class="mt-5 flex-1 space-y-2 text-sm text-default">
-                <li v-for="feature in plan.features" :key="feature" class="flex gap-2">
-                  <UIcon name="i-lucide-circle-check" class="mt-0.5 size-4 shrink-0 text-primary" />
-                  <span>{{ feature }}</span>
-                </li>
-              </ul>
-
-              <template v-if="selectedSite && selectedSite.plan !== plan.id">
-                <UButton
-                  v-if="plan.id === 'free'"
-                  color="neutral"
-                  variant="soft"
-                  block
-                  class="mt-6"
-                  @click="upgradeToPlan(plan.id)"
-                >
-                  Switch to Free
-                </UButton>
-                <UButton
-                  v-else
-                  :loading="upgrading === plan.id"
-                  color="primary"
-                  block
-                  class="mt-6"
-                  @click="upgradeToPlan(plan.id)"
-                >
-                  Upgrade to {{ plan.name }}
-                </UButton>
-              </template>
-            </div>
-          </UCard>
-        </div>
     </div>
-  </OrganizationSettingsShell>
+
+    <div v-else class="space-y-6">
+      <UAlert
+        v-if="errorMessage"
+        color="error"
+        variant="soft"
+        icon="i-lucide-triangle-alert"
+        :description="errorMessage"
+      />
+
+      <UCard v-if="sites.length">
+        <template #header>
+          <div class="flex items-center justify-between">
+            <h2 class="font-semibold">Sites</h2>
+            <UButton
+              v-if="sites.some(s => s.plan !== 'free')"
+              size="xs"
+              color="neutral"
+              variant="ghost"
+              :loading="portalLoading"
+              @click="openBillingPortal"
+            >
+              Manage subscriptions
+            </UButton>
+          </div>
+        </template>
+
+        <ul class="-mx-4 -mb-4 sm:-mx-6 sm:-mb-6 divide-y divide-default">
+          <li
+            v-for="s in sites"
+            :key="s.siteId"
+            class="flex flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-6"
+          >
+            <div class="min-w-0">
+              <p class="text-sm font-medium text-highlighted truncate">{{ s.brandName ?? s.subdomain }}</p>
+              <p class="text-xs text-muted">
+                {{ s.subdomain }}
+                <span v-if="s.currentPeriodEnd"> · Renews {{ formatDate(s.currentPeriodEnd) }}</span>
+              </p>
+            </div>
+            <div class="flex items-center gap-2">
+              <UBadge :color="s.plan === 'free' ? 'neutral' : 'primary'" variant="soft" class="capitalize">
+                {{ s.plan }}
+              </UBadge>
+              <UButton
+                size="xs"
+                color="neutral"
+                variant="outline"
+                :class="selectedSiteId === s.siteId ? 'ring-2 ring-primary' : ''"
+                @click="selectedSiteId = s.siteId"
+              >
+                Change plan
+              </UButton>
+            </div>
+          </li>
+        </ul>
+      </UCard>
+
+      <!-- Payment method -->
+      <UCard v-if="sites.some(s => s.plan !== 'free') || savedCard">
+        <template #header>
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <UIcon name="i-lucide-credit-card" class="size-4 text-primary" />
+              <h2 class="font-semibold">Payment method</h2>
+            </div>
+            <UButton
+              v-if="sites.some(s => s.plan !== 'free')"
+              size="xs"
+              color="neutral"
+              variant="ghost"
+              :loading="portalLoading"
+              @click="openBillingPortal"
+            >
+              Manage
+            </UButton>
+          </div>
+        </template>
+
+        <div v-if="savedCard" class="flex items-center gap-4">
+          <div class="flex size-10 shrink-0 items-center justify-center rounded-lg border border-default bg-elevated text-xs font-bold uppercase tracking-wide text-muted">
+            {{ savedCard.brand.slice(0, 4) }}
+          </div>
+          <div class="flex-1 min-w-0">
+            <p class="text-sm font-medium text-highlighted">•••• •••• •••• {{ savedCard.last4 }}</p>
+            <p class="text-xs text-muted">Expires {{ savedCard.exp_month }}/{{ savedCard.exp_year }}</p>
+          </div>
+          <UBadge label="Default" color="success" variant="soft" size="xs" />
+        </div>
+        <p v-else class="text-sm text-muted">No payment method saved. Add one when you subscribe or upgrade your plan.</p>
+      </UCard>
+
+      <UAlert
+        v-if="selectedSite"
+        color="primary"
+        variant="soft"
+        icon="i-lucide-info"
+        title="Changing your organization plan"
+        description="One subscription covers every site in this organization. The selected site is included as billing context, and site entitlements are derived from the organization plan."
+      />
+
+      <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <UCard
+          v-for="plan in plans"
+          :key="plan.id"
+          :class="selectedSite?.plan === plan.id ? 'ring-2 ring-primary' : ''"
+        >
+          <div class="flex h-full flex-col">
+            <div>
+              <div class="flex items-center justify-between gap-3">
+                <h2 class="text-lg font-semibold text-highlighted">{{ plan.name }}</h2>
+                <div class="flex gap-2">
+                  <UBadge v-if="plan.badge && selectedSite?.plan !== plan.id" color="primary" variant="soft">{{ plan.badge }}</UBadge>
+                  <UBadge v-if="selectedSite?.plan === plan.id" color="primary" variant="soft">Current</UBadge>
+                </div>
+              </div>
+              <p class="mt-2 text-3xl font-semibold text-highlighted">
+                {{ displayPrice(plan, annual) }}
+                <span v-if="plan.prices?.length" class="text-sm font-normal text-muted">
+                  /mo
+                </span>
+              </p>
+            </div>
+
+            <ul class="mt-5 flex-1 space-y-2 text-sm text-default">
+              <li v-for="feature in plan.features" :key="feature" class="flex gap-2">
+                <UIcon name="i-lucide-circle-check" class="mt-0.5 size-4 shrink-0 text-primary" />
+                <span>{{ feature }}</span>
+              </li>
+            </ul>
+
+            <template v-if="selectedSite && selectedSite.plan !== plan.id">
+              <UButton
+                v-if="plan.id === 'free'"
+                color="neutral"
+                variant="soft"
+                block
+                class="mt-6"
+                @click="upgradeToPlan(plan.id)"
+              >
+                Switch to Free
+              </UButton>
+              <UButton
+                v-else
+                :loading="upgrading === plan.id"
+                color="primary"
+                block
+                class="mt-6"
+                @click="upgradeToPlan(plan.id)"
+              >
+                Upgrade to {{ plan.name }}
+              </UButton>
+            </template>
+          </div>
+        </UCard>
+      </div>
+  </div>
 
 </template>
 
 <script setup lang="ts">
-import OrganizationSettingsShell from '~/components/dashboard/OrganizationSettingsShell.vue'
 
 const dashboardApi = useDashboardApi()
 
 import { authClient } from '~/lib/auth-client'
 const toast = useToast()
 
-definePageMeta({ layout: 'dashboard' })
+definePageMeta({ layout: 'dashboard', wideDetail: true })
 
 const route = useRoute()
 const router = useRouter()
@@ -188,7 +185,7 @@ const {
   trackSubscriptionDowngrade,
   trackSubscriptionCheckoutSuccess,
 } = useAnalytics()
-const { isAuthenticated } = useAuth()
+const { isAuthenticated } = await useAuthSession()
 const { startSubscriptionCheckout } = useSubscriptionCheckout()
 const loading = ref(true)
 const billing = ref<ApiRecord | null>(null)

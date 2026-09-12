@@ -158,7 +158,7 @@ const FILTER_ALL = '__all__'
 const PAGE_SIZE = 12
 const UPCOMING_WINDOW_DAYS = 30
 const UPCOMING_HORIZON_DAYS = 365
-const BOOKING_KINDS: AgendaKind[] = ['reservation', 'experience_booking']
+const BOOKING_KINDS: AgendaKind[] = ['reservation', 'booking']
 
 const ranges: Array<{ label: string; value: TodayRange }> = [
   { label: 'Today', value: 'today' },
@@ -321,7 +321,7 @@ const locationOptions = computed(() => [
 ])
 const kindOptions = computed(() => [
   { label: 'All booking types', value: FILTER_ALL },
-  ...(todayData.value?.availableKinds ?? []).map(kind => ({ label: kind === 'reservation' ? 'Reservations' : 'Experience bookings', value: kind })),
+  ...(todayData.value?.availableKinds ?? []).map(kind => ({ label: kind === 'reservation' ? 'Reservations' : 'Bookings', value: kind })),
 ])
 
 async function selectRange(range: TodayRange) {
@@ -361,7 +361,7 @@ async function loadUpcoming() {
           to,
           siteId: filters.siteId !== FILTER_ALL ? filters.siteId : undefined,
           locationId: filters.locationId !== FILTER_ALL ? filters.locationId : undefined,
-          kinds: filters.kind !== FILTER_ALL ? filters.kind : 'reservation, experience_booking',
+          kinds: filters.kind !== FILTER_ALL ? filters.kind : 'reservation, booking',
         },
         validate: isAgendaPayload,
       })
@@ -397,7 +397,7 @@ function retryRealtime() {
 // (`isAgendaItem` rejects the rest), so this narrows the type rather than
 // standing in for missing data.
 function isBookingKind(kind: AgendaKind): kind is BookingKind {
-  return kind === 'reservation' || kind === 'experience_booking'
+  return kind === 'reservation' || kind === 'booking'
 }
 
 function needsResponse(item: AgendaItem): boolean {

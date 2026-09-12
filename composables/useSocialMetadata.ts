@@ -31,6 +31,17 @@ export type SchemaPageType =
 
 export type PageSocialMetadataInput = Omit<SocialPageMetadataInput, 'template' | 'canonicalUrl' | 'brand'> & {
   path: string
+  /**
+   * Canonical target when this page is deliberately not its own canonical
+   * resource — e.g. a catalogue row with no price at all, which canonicalises
+   * to its collection index rather than competing with it.
+   *
+   * Wins over both `path` and the active locale's route representation: the
+   * representation resolves *this* resource in another locale, which is the
+   * wrong axis when the canonical target is a different resource entirely.
+   * Supply it already localized.
+   */
+  canonicalPath?: string
   template?: SocialTemplate
   brand?: SocialBrand
   breadcrumbs?: PageBreadcrumb[]
@@ -68,7 +79,7 @@ export function useSocialMetadata(input: MaybeRefOrGetter<PageSocialMetadataInpu
     if (publicLocale.value !== 'en' && !exactRepresentation) {
       throw createError({ statusCode: 404, statusMessage: 'Localized route representation was not found' })
     }
-    const canonicalUrl = resolveSeoUrl(exactRepresentation?.route_path ?? value.path, origin)
+    const canonicalUrl = resolveSeoUrl(value.canonicalPath ?? exactRepresentation?.route_path ?? value.path, origin)
     const brand = value.brand ?? (template === 'platform'
       ? {
           siteName: PLATFORM_NAME,
@@ -121,7 +132,7 @@ export function useSocialMetadata(input: MaybeRefOrGetter<PageSocialMetadataInpu
       { name: 'twitter:image:alt', content: normalized.value.tags.twitterImageAlt },
       { property: 'article:author', content: normalized.value.tags.articleAuthor },
       { property: 'article:published_time', content: normalized.value.tags.articlePublishedTime },
-      ...(normalized.value.tags.robots ? [{ name: 'robots', content: normalized.value.tags.robots }] : []),
+      { name: 'robots', content: normalized.value.tags.robots },
       ].filter(item => item.content !== undefined),
       link: [
         canonicalLink,

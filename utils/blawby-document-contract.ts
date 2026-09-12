@@ -49,7 +49,6 @@ function hasValidThemeTokens(value: unknown) {
 
 function hasRequiredRouteContent(route: Record<string, unknown>) {
   if (route.recipe === 'links' || route.recipe === 'confirmation') return true
-  if (route.recipe === 'offering') return isRecord(route.offering)
   if (route.recipe === 'article') return isRecord(route.post)
   return isRecord(route.page)
 }
@@ -65,13 +64,11 @@ export const isBlawbyDocumentPayload = (
   && hasValidIdentity(value.shell.identity)
   && hasValidConsultation(value.shell.consultation)
   && hasValidThemeTokens(value.shell.themeTokens)
-  && Array.isArray(value.shell.offeringLinks)
   && Array.isArray(value.shell.pageLinks)
   && typeof value.route.recipe === 'string'
   && RECIPES.has(value.route.recipe)
   && value.route.recipe === expectedRecipe
   && Array.isArray(value.route.localeRepresentations)
-  && Array.isArray(value.route.offerings)
   && Array.isArray(value.route.qa)
   && Array.isArray(value.route.reviews)
   && Array.isArray(value.route.posts)

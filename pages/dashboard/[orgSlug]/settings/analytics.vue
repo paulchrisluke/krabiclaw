@@ -1,94 +1,92 @@
 <template>
-  <OrganizationSettingsShell detail-title="Analytics">
-    <div class="grid gap-4">
-        <UCard>
-          <UFormField label="Site" description="Choose which site's analytics integrations to manage.">
-            <USelectMenu
-              v-model="selectedSiteSlug"
-              :items="siteOptions"
-              value-key="value"
-              placeholder="Select a site"
-              class="w-full sm:max-w-sm"
-            />
-          </UFormField>
-        </UCard>
+  <div class="grid gap-4">
+      <UCard>
+        <UFormField label="Site" description="Choose which site's analytics integrations to manage.">
+          <USelectMenu
+            v-model="selectedSiteSlug"
+            :items="siteOptions"
+            value-key="value"
+            placeholder="Select a site"
+            class="w-full sm:max-w-sm"
+          />
+        </UFormField>
+      </UCard>
 
-        <UCard v-if="!siteId">
-          <div class="py-6 text-center">
-            <UIcon name="i-lucide-chart-bar" class="mx-auto size-8 text-muted" />
-            <p class="mt-3 font-medium text-highlighted">Select a site</p>
-            <p class="mt-1 text-sm text-muted">Analytics connections are configured separately for each site.</p>
-          </div>
-        </UCard>
+      <UCard v-if="!siteId">
+        <div class="py-6 text-center">
+          <UIcon name="i-lucide-chart-bar" class="mx-auto size-8 text-muted" />
+          <p class="mt-3 font-medium text-highlighted">Select a site</p>
+          <p class="mt-1 text-sm text-muted">Analytics connections are configured separately for each site.</p>
+        </div>
+      </UCard>
 
-        <UCard v-else>
-          <template #header>
-            <h2 class="font-semibold text-highlighted">Google Analytics & Search Console</h2>
-          </template>
+      <UCard v-else>
+        <template #header>
+          <h2 class="font-semibold text-highlighted">Google Analytics & Search Console</h2>
+        </template>
 
-          <div v-if="loading" class="space-y-3">
-            <USkeleton class="h-10 rounded-lg" />
-            <USkeleton class="h-10 rounded-lg" />
-          </div>
+        <div v-if="loading" class="space-y-3">
+          <USkeleton class="h-10 rounded-lg" />
+          <USkeleton class="h-10 rounded-lg" />
+        </div>
 
-          <div v-else-if="!connection" class="space-y-3">
-            <p class="text-sm text-muted">Connect a Google account to pick your Analytics property and Search Console site from a list — no copy-pasting tracking IDs.</p>
-            <UButton :loading="connecting" icon="i-simple-icons-google" @click="connectGoogle">
-              Connect Google
+        <div v-else-if="!connection" class="space-y-3">
+          <p class="text-sm text-muted">Connect a Google account to pick your Analytics property and Search Console site from a list — no copy-pasting tracking IDs.</p>
+          <UButton :loading="connecting" icon="i-simple-icons-google" @click="connectGoogle">
+            Connect Google
+          </UButton>
+        </div>
+
+        <div v-else class="space-y-5">
+          <div class="flex items-center justify-between gap-3 rounded-lg border border-default bg-muted/40 p-3">
+            <div class="min-w-0">
+              <p class="text-sm font-medium text-highlighted truncate">{{ connection.provider_account_email }}</p>
+              <p class="text-xs text-muted">Connected Google account</p>
+            </div>
+            <UButton
+              icon="i-lucide-link-2-off"
+              color="error"
+              variant="ghost"
+              size="xs"
+              :loading="disconnecting"
+              @click="disconnectGoogle"
+            >
+              Disconnect
             </UButton>
           </div>
 
-          <div v-else class="space-y-5">
-            <div class="flex items-center justify-between gap-3 rounded-lg border border-default bg-muted/40 p-3">
-              <div class="min-w-0">
-                <p class="text-sm font-medium text-highlighted truncate">{{ connection.provider_account_email }}</p>
-                <p class="text-xs text-muted">Connected Google account</p>
-              </div>
-              <UButton
-                icon="i-lucide-link-2-off"
-                color="error"
-                variant="ghost"
-                size="xs"
-                :loading="disconnecting"
-                @click="disconnectGoogle"
-              >
-                Disconnect
-              </UButton>
-            </div>
+          <UFormField label="Analytics property" description="Pulls the GA4 measurement ID automatically — no copy-paste needed.">
+            <USelectMenu
+              v-model="selectedGa4Property"
+              :items="ga4PropertyOptions"
+              value-key="value"
+              placeholder="Select a GA4 property"
+            />
+            <p v-if="ga4Error" class="mt-2 text-xs text-red-500">{{ ga4Error }}</p>
+            <p v-else-if="!ga4PropertyOptions.length" class="mt-2 text-xs text-muted">No GA4 properties found on this Google account.</p>
+          </UFormField>
 
-            <UFormField label="Analytics property" description="Pulls the GA4 measurement ID automatically — no copy-paste needed.">
-              <USelectMenu
-                v-model="selectedGa4Property"
-                :items="ga4PropertyOptions"
-                value-key="value"
-                placeholder="Select a GA4 property"
-              />
-              <p v-if="ga4Error" class="mt-2 text-xs text-red-500">{{ ga4Error }}</p>
-              <p v-else-if="!ga4PropertyOptions.length" class="mt-2 text-xs text-muted">No GA4 properties found on this Google account.</p>
-            </UFormField>
+          <UFormField label="Search Console property">
+            <USelectMenu
+              v-model="selectedSearchConsoleSite"
+              :items="searchConsoleOptions"
+              value-key="value"
+              placeholder="Select a Search Console property"
+            />
+            <p v-if="searchConsoleError" class="mt-2 text-xs text-red-500">{{ searchConsoleError }}</p>
+            <p v-else-if="!searchConsoleOptions.length" class="mt-2 text-xs text-muted">
+              No verified properties found. <a href="https://search.google.com/search-console" target="_blank" rel="noopener" class="underline">Verify your domain in Search Console</a> first, then reconnect.
+            </p>
+          </UFormField>
 
-            <UFormField label="Search Console property">
-              <USelectMenu
-                v-model="selectedSearchConsoleSite"
-                :items="searchConsoleOptions"
-                value-key="value"
-                placeholder="Select a Search Console property"
-              />
-              <p v-if="searchConsoleError" class="mt-2 text-xs text-red-500">{{ searchConsoleError }}</p>
-              <p v-else-if="!searchConsoleOptions.length" class="mt-2 text-xs text-muted">
-                No verified properties found. <a href="https://search.google.com/search-console" target="_blank" rel="noopener" class="underline">Verify your domain in Search Console</a> first, then reconnect.
-              </p>
-            </UFormField>
+          <UButton :loading="saving" :disabled="!siteId || connectionSiteId !== siteId" @click="saveSelection">Save</UButton>
+        </div>
+      </UCard>
+  </div>
 
-            <UButton :loading="saving" :disabled="!siteId || connectionSiteId !== siteId" @click="saveSelection">Save</UButton>
-          </div>
-        </UCard>
-    </div>
-  </OrganizationSettingsShell>
 </template>
 
 <script setup lang="ts">
-import OrganizationSettingsShell from '~/components/dashboard/OrganizationSettingsShell.vue'
 
 const dashboardApi = useDashboardApi()
 definePageMeta({ layout: 'dashboard' })

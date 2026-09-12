@@ -3,7 +3,7 @@ import {
   blawbyBaseURL, blawbyExtraHeaders, collectPageErrors,
   openTenantPage, potteryHouseBaseURL, potteryHouseExtraHeaders,
 } from './helpers'
-import { kikuzukiTestBaseUrl, kikuzukiTestExtraHeaders } from './test-env'
+import { kikuzukiTestBaseUrl, kikuzukiTestExtraHeaders, testBaseUrl } from './test-env'
 
 type Tenant = {
   name: string
@@ -22,7 +22,7 @@ const tenants: Tenant[] = [
   {
     name: 'Pottery House', baseURL: potteryHouseBaseURL, headers: potteryHouseExtraHeaders,
     shell: '.tenant-layout', identity: /Pottery House/i, definingContent: /pottery|wheel|clay/i,
-    primaryLabel: /experience|class|book/i, detailPath: '/experiences/pottery-wheel-class',
+    primaryLabel: /product|class|book/i, detailPath: '/locations/krabi/products/pottery-wheel-class',
     detailContent: /Pottery Wheel Class/i,
     forbidden: [/Come dine with us/i, /Reserve a table/i, /From the kitchen/i, /Also part of Saya/i],
   },
@@ -83,6 +83,23 @@ async function expectTenantDocument(page: Page, tenant: Tenant) {
   ))
 }
 
+test('KrabiClaw home retains its billing plans after hydration', async ({ page }) => {
+  const baseURL = testBaseUrl()
+  const failures = collectFirstPartyFailures(page, baseURL)
+  const response = await openTenantPage(page, `${baseURL}/`, {})
+  expect(response?.status()).toBe(200)
+  await page.waitForFunction(() => {
+    const root = document.querySelector('#__nuxt') as (Element & {
+      __vue_app__?: { $nuxt?: { isHydrating: boolean } }
+    }) | null
+    return root?.__vue_app__?.$nuxt?.isHydrating === false
+  })
+  await expect(page.getByRole('heading', { name: 'Starter', exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Growth', exact: true })).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Get Growth', exact: true })).toHaveAttribute('href', '/signup?plan=growth')
+  expect(failures).toEqual([])
+})
+
 for (const tenant of tenants) {
   test(`${tenant.name} renders home and detail routes on desktop`, async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 })
@@ -133,16 +150,16 @@ test('Kikuzuki menu retains its authored Tuna Sushi media', async ({ page }) => 
 })
 
 test('Pottery House preserves dark-theme hydration and booking context', async ({ page }) => {
-  await openTenantPage(page, `${potteryHouseBaseURL}/experiences/pottery-wheel-class`, potteryHouseExtraHeaders)
+  await openTenantPage(page, `${potteryHouseBaseURL}/locations/krabi/products/pottery-wheel-class`, potteryHouseExtraHeaders)
   await expect(page.locator('.tenant-layout')).not.toHaveCSS('--saya-bg', '')
   await expect(page.locator('main')).toContainText(/Pottery Wheel Class/i)
-  await expect(page.locator('#experience-booking-toggle').first()).toBeVisible()
+  await expect(page.locator('#product-booking-toggle').first()).toBeVisible()
   await page.waitForTimeout(250)
   await expect(page.locator('.tenant-layout')).not.toHaveCSS('--saya-bg', '')
 })
 
 test('an English-only tenant does not classify one-segment CMS paths as locales', async ({ page }) => {
-  for (const path of ['/th', '/th/about', '/th/experiences', '/th/links']) {
+  for (const path of ['/th', '/th/about', '/th/products', '/th/links']) {
     const response = await openTenantPage(page, `${potteryHouseBaseURL}${path}`, potteryHouseExtraHeaders)
     expect(response?.status()).toBe(404)
     await expect(page.locator('html')).toHaveAttribute('lang', 'en')

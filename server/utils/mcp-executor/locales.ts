@@ -4,7 +4,7 @@ import {
   getProductCatalogLocalization,
   getLocalizationForAuthoring,
   putLocalizationForAuthoring,
-  syncProductCatalogLocalization,
+  replaceProductLocalizations,
 } from '~/server/utils/localization'
 import { listSiteLocales } from '~/server/utils/site-locales'
 import { NOT_HANDLED, mutationContextPayload, requiredString } from './shared'
@@ -47,8 +47,8 @@ export async function handleLocalesTools(ctx: McpExecutorContext): Promise<unkno
     const catalog = await getProductCatalogLocalization(site.db, site.organizationId, site.siteId, requiredString(args, 'locale'))
     return { locale: catalog.locale, products: catalog.products }
   }
-  if (toolName === 'sync_product_catalog_localization') {
-    const result = await syncProductCatalogLocalization(site.db, {
+  if (toolName === 'replace_product_localizations') {
+    const result = await replaceProductLocalizations(site.db, {
       organizationId: site.organizationId,
       siteId: site.siteId,
       locale: requiredString(args, 'locale'),

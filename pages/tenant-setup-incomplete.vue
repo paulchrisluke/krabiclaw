@@ -46,12 +46,13 @@
 </template>
 
 <script setup>
+import { NON_INDEXABLE_ROBOTS_INTENT } from '~/shared/robots-directive'
 definePageMeta({ layout: 'saya' })
-// SEO: Add noindex for setup pages
-useHead({
-  meta: [
-    { name: 'robots', content: 'noindex, nofollow' }
-  ],
-  title: 'Setup Incomplete - KrabiClaw'
+useSocialMetadata({
+  schema: false,
+  path: '/tenant-setup-incomplete',
+  title: 'Setup incomplete',
+  description: 'This site has not finished its setup yet.',
+  robots: NON_INDEXABLE_ROBOTS_INTENT,
 })
 </script>

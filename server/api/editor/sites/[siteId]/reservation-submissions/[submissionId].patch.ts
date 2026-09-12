@@ -29,7 +29,12 @@ export default defineHandler(async (event) => {
   const site = await loadMemberSiteRow(db, env, siteId, session.user.id)
   if (!site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
 
-  const submission = await queryFirst<{ location_id: string; status: string; updated_at: string }>(db, `SELECT location_id, status, updated_at FROM requests WHERE kind = \'reservation\' AND id = ? AND site_id = ? LIMIT 1`, [submissionId, siteId])
+  // The table held is its own row: it carries the location and the status this
+  // endpoint is about, and the thread carries the conversation.
+  const submission = await queryFirst<{ location_id: string; status: string; updated_at: string }>(db, `
+    SELECT res.location_id, res.status, r.updated_at
+      FROM requests r JOIN reservations res ON res.request_id = r.id
+     WHERE r.kind = 'reservation' AND r.id = ? AND r.site_id = ? LIMIT 1`, [submissionId, siteId])
   if (!submission) return jsonResponse({ error: 'Reservation not found' }, { status: 404 })
 
   await assertResourceAccess(db, {

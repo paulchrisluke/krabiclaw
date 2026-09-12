@@ -3,6 +3,7 @@ import { deleteConfig, getConfig, setConfig } from '~/server/utils/site-config'
 import { createSystemSubdomain, isSystemSubdomainSpent } from '~/server/utils/domains'
 import { reconcileZarazAnalytics } from '~/server/utils/zaraz-analytics'
 import { isCurrencyCode } from '~/shared/currencies'
+import { parseRobotsIntent, ROBOTS_INTENTS } from '~/shared/robots-directive'
 import type { UpdateSiteSettingsRequest } from '~/server/types/site'
 import { execute, executeBatch, queryAll, queryFirst, type DbClient } from '~/server/db'
 import { defaultModuleFeaturesForVertical, parseCmsFeatureOverrideDelta, toggleableModulesForScope, type CmsCapabilityOverrideDelta, type ProductFeature } from '~/config/cms-registry'
@@ -319,8 +320,10 @@ async function attemptSiteUpdate(
     params.push(updates.canonical_url ?? null)
   }
   if (updates.robots !== undefined) {
+    const parsed = parseRobotsIntent(updates.robots)
+    if (!parsed.ok) return { status: 400, data: { error: `robots must be one of: ${ROBOTS_INTENTS.join(', ')}` } }
     setParts.push('robots = ?')
-    params.push(updates.robots ?? null)
+    params.push(parsed.intent)
   }
   for (const key of ['social_facebook_url', 'social_instagram_url', 'social_tiktok_url'] as const) {
     if (updates[key] === undefined) continue

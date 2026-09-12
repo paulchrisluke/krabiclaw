@@ -4,7 +4,7 @@ import { parsePhone, PHONE_METADATA_VERSION } from '~/utils/phone'
 
 export type CustomerSource =
   | 'reservation'
-  | 'experience_booking'
+  | 'booking'
   | 'review_request'
   | 'manual'
   | 'stripe'

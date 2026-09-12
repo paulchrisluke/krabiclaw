@@ -38,7 +38,6 @@ export default defineHandler(async (event) => {
     ? (() => { try { return JSON.parse(JSON.stringify(body.agent_metadata_json)) as ApiValue } catch { return null } })()
     : null
   if (agentMetadata !== null && JSON.stringify(agentMetadata).length > 10_000) return jsonResponse({ error: 'agent_metadata_json is too large.' }, { status: 400 })
-  const experienceIdInput = cleanString(body.experienceId, 100)
   const locationIdInput = cleanString(body.location_id, 100) || cleanString(body.locationId, 100)
 
   if (!name) return jsonResponse({ error: 'Please enter your name.' }, { status: 400 })
@@ -59,9 +58,9 @@ export default defineHandler(async (event) => {
   }
 
   const assignment = await resolveContactSubmissionAssignment(db, {
-    siteId, locationId: locationIdInput || null, experienceId: experienceIdInput || null, })
+    siteId, locationId: locationIdInput || null, })
   if (assignment.error) return jsonResponse({ error: assignment.error }, { status: 400 })
-  const { assignedLocationId, experience } = assignment
+  const { assignedLocationId } = assignment
 
   const id = crypto.randomUUID()
   const clientIp = getClientIp(event)
@@ -84,14 +83,14 @@ export default defineHandler(async (event) => {
   const consentAt = consentAcknowledged ? new Date().toISOString() : null
   const now = new Date().toISOString()
   await executeBatch(db, requestInsertQueries({ id, kind: 'contact', organization_id: site.organization_id, site_id: siteId, location_id: assignedLocationId,
-    product_id: experience?.id ?? null, customer_id: null, review_id: null, status: null, conversation_state: 'needs_attention', resolved_at: null,
+    customer_id: null, review_id: null, conversation_state: 'needs_attention', resolved_at: null,
     payload: { guest: { name, email, phone: null }, subject: subject || topic || null, message, consent_at: consentAt, ip_hash: ipHash,
       source: source || null, route_context: routeContext || null, suggested_summary: suggestedSummary || null, agent_metadata: agentMetadata }, created_at: now, updated_at: now }))
   await publishGuestInboxThreadEvent(env, db, { threadId: id, type: 'thread.created' })
 
   try {
     await notifyContactSubmitted(env, db, {
-      organizationId: site.organization_id, siteId, locationId: assignedLocationId, siteName: site.brand_name, contactId: id, guestName: name, email, subject: subject || topic || null, message, consentAcknowledged, experienceId: experience?.id ?? null, experienceTitle: experience?.title ?? null, })
+      organizationId: site.organization_id, siteId, locationId: assignedLocationId, siteName: site.brand_name, contactId: id, guestName: name, email, subject: subject || topic || null, message, consentAcknowledged, })
   } catch (error) {
     console.error('contact_notification_failed', {
       organizationId: site.organization_id, siteId, contactId: id, error: error instanceof Error ? error.message : String(error)

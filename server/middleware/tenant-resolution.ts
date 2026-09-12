@@ -14,9 +14,7 @@ import {
   isPlatformHost,
   usesTenantHeader,
 } from "../utils/tenant-hosts";
-import { verifyScopedPreviewToken } from "../utils/preview-token";
-import { isPlatformPath } from "~/utils/platform-routes";
-import { getDraftMedia, parseOnboardingDraftPayload } from "~/server/utils/onboarding-drafts";
+import { previewSecretOf, resolvePreviewAuthorization } from "../utils/preview-token";
 import { PLATFORM_TEMPLATE, resolvePublicTemplate } from "~/utils/template-registry";
 import { publicSocialMediaFromJson } from '~/server/utils/public-social-image'
 
@@ -118,11 +116,29 @@ async function resolveRegisteredSubdomainSite(
         ON canonical.site_id = s.id
        AND canonical.role = 'canonical'
        AND canonical.status = 'active'
-      WHERE s.subdomain = ? AND s.status = 'active' AND s.onboarding_status = 'active'
+      WHERE s.subdomain = ? AND s.status = 'active'
       LIMIT 1
     `,
     [tenantSlug],
   )
+}
+
+/**
+ * A site that has not finished onboarding is not public. It is served only to a
+ * holder of a valid preview token for that site — which is what "preview" means
+ * everywhere in this product: the real site, on its real host, rendered by the
+ * real templates, with unpublished content and no caching.
+ *
+ * Returns false when the request may not see this site at all.
+ */
+async function authorizeTenantSite(event: H3Event, site: TenantSiteRow): Promise<boolean> {
+  const previewSecret = previewSecretOf(cloudflareEnv(event))
+  const authorized = await resolvePreviewAuthorization(event, site.id, previewSecret)
+  event.context.previewAuthorized = authorized
+  // A live site is public either way; the flag still travels, because preview
+  // also means "show me the drafts" — an unpublished article on a site that is
+  // already live is previewed the same way.
+  return site.onboarding_status === 'active' || authorized
 }
 
 function setResolvedTenantContext(
@@ -169,18 +185,23 @@ export default defineHandler(async (event) => {
   // Local and raw workers.dev hosts cannot express tenant identity in their
   // hostname, so their test harness carries it explicitly. Deployed preview and
   // staging use direct environment aliases below.
-  if (usesTenantHeader(host)) {
-    const previewSlug = (event.req.headers.get("x-preview-tenant"));
-    if (previewSlug && /^[a-z0-9-]+$/.test(previewSlug)) {
-      const db = env.db;
-      if (db) {
-        const site = await resolveRegisteredSubdomainSite(db, previewSlug)
-        if (site) {
-          setResolvedTenantContext(event, site, host, hostnameOf(host))
-          return;
-        }
-      }
+  const previewSlug = usesTenantHeader(host) ? event.req.headers.get("x-preview-tenant") : null
+  if (previewSlug !== null) {
+    // The header names a tenant, so this request is that tenant's or it is
+    // nothing. Falling through on an unresolvable slug reached the platform-host
+    // branch below and answered 200 with KrabiClaw's own homepage — a request
+    // for one site served a different site. Same refusal as an environment
+    // alias that does not resolve.
+    const site = env.db && /^[a-z0-9-]+$/.test(previewSlug)
+      ? await resolveRegisteredSubdomainSite(env.db, previewSlug)
+      : null
+    if (site && await authorizeTenantSite(event, site)) {
+      setResolvedTenantContext(event, site, host, hostnameOf(host))
+      return;
     }
+    setTenantType(event, TENANT_TYPES.TENANT_404)
+    event.context.siteId = null
+    return
   }
 
   const aliasSlug = environmentTenantAliasSlug(host, env)
@@ -188,7 +209,7 @@ export default defineHandler(async (event) => {
     const site = env.db
       ? await resolveRegisteredSubdomainSite(env.db, aliasSlug)
       : null
-    if (site) {
+    if (site && await authorizeTenantSite(event, site)) {
       setResolvedTenantContext(event, site, host, hostnameOf(host))
       return
     }
@@ -197,120 +218,8 @@ export default defineHandler(async (event) => {
     return
   }
 
-  // Platform-hosted preview routes: /preview/site/[siteId]/...
-  // Token verification is deferred to the bootstrap endpoint — the middleware
-  // only resolves the site identity so composables see the correct tenant context.
-  // Only allow preview routes on platform hosts (localhost/krabiclaw.com) to prevent
-  // tenant/custom hosts from bypassing normal tenant resolution.
-  const previewRouteMatch = url.pathname.match(/^\/preview\/site\/([^/?]+)/);
-  if (previewRouteMatch && isPlatformHost(host, env) && isPlatformPath(url.pathname)) {
-    const previewSiteId = previewRouteMatch[1]!;
-    const db = env.db;
-    if (db) {
-      const previewSite = await queryFirst<
-        Pick<
-          TenantSiteRow,
-          | "id"
-          | "organization_id"
-          | "theme_id"
-          | "onboarding_status"
-          | "brand_name"
-          | "media_json"
-          | "vertical"
-        >
-      >(
-        db,
-        `
-        SELECT s.id, s.organization_id, s.theme_id, s.onboarding_status, s.brand_name,
-               ${SITE_MEDIA_SELECT_SQL} AS media_json, s.vertical
-        FROM sites s
-        WHERE s.id = ? AND s.status = 'active'
-        LIMIT 1
-      `,
-        [previewSiteId],
-      );
-      if (previewSite) {
-        const metadata = requireTenantMetadata(previewSite, previewSite.id)
-        const socialMedia = publicTenantSiteMedia(previewSite)
-        event.context.siteId = previewSite.id;
-        event.context.organizationId = previewSite.organization_id;
-        event.context.themeId = metadata.themeId;
-        event.context.onboardingStatus = previewSite.onboarding_status;
-        setTenantType(event, TENANT_TYPES.TENANT);
-        event.context.site = {
-          brand_name: metadata.brandName,
-          ...socialMedia,
-          vertical: metadata.vertical,
-        };
-        return;
-      }
-    }
-  }
-
-  const previewDraftMatch = url.pathname.match(/^\/preview\/draft\/([^/?]+)/);
-  if (previewDraftMatch && isPlatformHost(host, env) && isPlatformPath(url.pathname)) {
-    const draftId = previewDraftMatch[1]!;
-    const previewToken = url.searchParams.get("token");
-    const db = env.db;
-    if (db) {
-      const previewDraft = await queryFirst<{
-        id: string;
-        name: string;
-        vertical: string | null;
-        payload_json: string;
-      }>(
-        db,
-        `
-        SELECT id, name, vertical, payload_json
-        FROM onboarding_drafts
-        WHERE id = ? AND status = 'active'
-        LIMIT 1
-      `,
-        [draftId],
-      );
-
-      // Verify token as a signed stateless scoped token with scope and expiry validation
-      const previewSecret =
-        typeof env.PREVIEW_SECRET === "string" && env.PREVIEW_SECRET.trim()
-          ? env.PREVIEW_SECRET.trim()
-          : null;
-      if (previewDraft && previewToken && previewSecret) {
-        const isAuthorized = await verifyScopedPreviewToken(
-          previewSecret,
-          "draft",
-          draftId,
-          previewToken,
-        );
-        if (isAuthorized) {
-          const payload = parseOnboardingDraftPayload(previewDraft.payload_json);
-          const template = resolvePublicTemplate({ vertical: previewDraft.vertical });
-          if (!template) {
-            throw new HTTPError({ statusCode: 500, statusMessage: 'Draft preview has no supported template', data: { code: 'DRAFT_TEMPLATE_MISSING' } })
-          }
-          event.context.draftId = previewDraft.id;
-          setTenantType(event, TENANT_TYPES.TENANT);
-          event.context.themeId = template.themeId;
-          event.context.onboardingStatus = "active";
-          event.context.site = {
-            brand_name: previewDraft.name || null,
-            media: getDraftMedia(payload, 'logo') ? [{
-              asset_id: getDraftMedia(payload, 'logo')!.draftAssetId,
-              slot: 'logo',
-              public_url: getDraftMedia(payload, 'logo')!.publicUrl,
-              thumbnail_url: null,
-              kind: 'image',
-              mime_type: null,
-            }] : [],
-            vertical: previewDraft.vertical,
-          };
-          return;
-        }
-      }
-    }
-  }
-
   // A platform host serves KrabiClaw's own site. Tenant hosts own their public
-  // route families; isPlatformPath() is only a preview-route guard above.
+  // route families.
   if (isPlatformHost(host, env)) {
     const site = env.db ? await resolvePlatformSite(env.db) : null
     if (!site) {
@@ -330,8 +239,7 @@ export default defineHandler(async (event) => {
     throw new HTTPError({ statusCode: 410, statusMessage: 'Gone' })
   }
 
-  // If site found, handle based on onboarding status
-  if (site) {
+  if (site && await authorizeTenantSite(event, site)) {
     setResolvedTenantContext(event, site, host, site.canonical_domain || null)
     return;
   }
@@ -379,7 +287,7 @@ export async function resolveTenantSite(
     LEFT JOIN site_domains canonical
       ON canonical.site_id = s.id AND canonical.role = 'canonical' AND canonical.status = 'active'
     WHERE sd.domain = ? AND sd.type IN ('custom', 'subdomain') AND sd.status = 'active'
-      AND s.status = 'active' AND s.onboarding_status = 'active'
+      AND s.status = 'active'
     LIMIT 1
   `,
     [hostname],

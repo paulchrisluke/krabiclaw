@@ -49,59 +49,13 @@
         </button>
       </template>
     </DashboardListEditor>
-
-    <!--
-      Adding asks only for what the contract will not accept a post without: its
-      type, its words, and — for an event or an offer — the window it runs in.
-      Everything else is a section of the post once it exists.
-    -->
-    <DashboardListItemDialog
-      v-model:open="newDialogOpen"
-      title="New post"
-      :removable="false"
-      :saving="editor.saving.value"
-      :save-disabled="!canCreate"
-      save-label="Create"
-      @save="createPost"
-    >
-      <UFormField label="What are you posting?">
-        <URadioGroup v-model="newType" :items="typeOptions" :ui="{ fieldset: 'flex flex-wrap gap-4' }" />
-      </UFormField>
-
-      <UFormField label="Post" required>
-        <UTextarea
-          v-model="editor.form.body"
-          :rows="5"
-          autofocus
-          placeholder="What's new? Write it the way you'd say it to a guest."
-          class="w-full"
-        />
-      </UFormField>
-
-      <UFormField
-        v-if="editor.form.topic.event"
-        :label="newType === 'offer' ? 'When the offer runs' : 'When it happens'"
-      >
-        <PostScheduleFields v-model="editor.form.topic.event" :is-offer="newType === 'offer'" />
-      </UFormField>
-
-      <p class="text-sm text-muted">
-        You'll land on this post's own page, where its photo, headline, call to action and
-        publishing time are each a section you can fill in.
-      </p>
-    </DashboardListItemDialog>
-
   </div>
 </template>
 
 <script setup lang="ts">
 import { formatTimestamp, formatCalendarDate } from '~/utils/timezone'
 import DashboardListEditor from '~/components/dashboard/DashboardListEditor.vue'
-import DashboardListItemDialog from '~/components/dashboard/DashboardListItemDialog.vue'
-import PostScheduleFields from '~/components/dashboard/PostScheduleFields.vue'
 import { normalizePostMediaForForm, useLocationPostEditor } from '~/composables/useLocationPostEditor'
-import type { PostMutation } from '~/shared/posts'
-import { postScheduleComplete } from '~/utils/post-fields'
 import { getErrorMessage } from '~/utils/errors'
 
 // The posts index. Rendered by `posts.vue`, which owns the frame.
@@ -111,8 +65,12 @@ const dashboardLocation = useDashboardLocation()
 
 const currentLocationId = computed(() => dashboardLocation.currentLocationId.value)
 const editor = useLocationPostEditor(siteId, currentLocationId)
-const { locationPaths } = useDashboardSiteLinks()
-const postsPath = computed(() => locationPaths.value?.posts ?? '')
+const route = useRoute()
+// The path comes from the route this screen is mounted on, not from the
+// location selector: an unresolved selector left it empty, and an empty path is
+// a link to nowhere and, where it roots the editor frame, a frame rooted at ''.
+const locationPath = computed(() => `/dashboard/${String(route.params.orgSlug)}/sites/${String(route.params.siteSlug)}/locations/${String(route.params.locationSlug)}`)
+const postsPath = computed(() => `${locationPath.value}/posts`)
 
 const TYPE_LABELS: Record<string, string> = {
   standard: 'Update',
@@ -120,16 +78,6 @@ const TYPE_LABELS: Record<string, string> = {
   offer: 'Offer',
   alert: 'Alert',
 }
-/**
- * `alert` is deliberately absent. The contract accepts exactly one alert —
- * `covid_19` — so offering it would be a dead choice; an existing alert post
- * still opens and edits here.
- */
-const typeOptions = [
-  { value: 'standard', label: 'Update', description: 'News from the location.' },
-  { value: 'event', label: 'Event', description: 'Something at a set date and time.' },
-  { value: 'offer', label: 'Offer', description: 'A deal that runs between two dates.' },
-]
 
 const postTabs = [
   { value: 'all', label: 'All' },
@@ -165,7 +113,7 @@ const { data, pending, error, refresh } = await useAsyncData(
     })
     return { posts: response.posts }
   },
-  { lazy: import.meta.client, watch: [currentLocationId] },
+  { lazy: import.meta.client },
 )
 
 const loadError = computed(() => (error.value ? getErrorMessage(error.value, 'Failed to load posts') : null))
@@ -235,44 +183,11 @@ function formatDay(day: string) {
 }
 
 // ── Creating ────────────────────────────────────────────
-const newDialogOpen = ref(false)
-const newType = ref<'standard' | 'event' | 'offer'>('standard')
-
-/** The chosen type seeds the shape the contract expects for it. An offer carries
- *  its validity window in the same event shape an event uses. */
-function seedTopic(type: 'standard' | 'event' | 'offer'): PostMutation {
-  return {
-    post_type: type,
-    event: type === 'standard'
-      ? null
-      : { title: '', schedule: { start_date: '', start_time: '', end_date: '', end_time: '' } },
-    offer: type === 'offer' ? {} : null,
-    call_to_action: null,
-    alert_type: null,
-    scheduled_for: null,
-  }
-}
-
-const canCreate = computed(() => {
-  if (!editor.form.body.trim()) return false
-  if (!editor.form.topic.event) return true
-  return postScheduleComplete(editor.form.topic.event)
-})
-
+/** A post is created on its own level, where its type, its words and — for an
+ *  event or an offer — the window it runs in are each a section of the record
+ *  being made, rather than a dialog stacked over the list. */
 function openNew() {
-  editor.reset()
-  newType.value = 'standard'
-  editor.form.topic = seedTopic('standard')
-  newDialogOpen.value = true
-}
-
-watch(newType, (type) => { editor.form.topic = seedTopic(type) })
-
-async function createPost() {
-  const post = await editor.save(null)
-  if (!post?.id) return
-  newDialogOpen.value = false
-  await navigateTo(`${postsPath.value}/${String(post.id)}`)
+  return navigateTo(`${postsPath.value}/new`)
 }
 
 /** A post is its own screen, so opening one is navigation, not a sheet. */

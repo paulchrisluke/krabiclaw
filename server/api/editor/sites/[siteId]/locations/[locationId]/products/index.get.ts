@@ -8,14 +8,13 @@ export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   const locationId = getRouterParam(event, 'locationId')
   if (!siteId || !locationId) return jsonResponse({ error: 'Site ID and location ID are required' }, { status: 400 })
-
   try {
     const { db, site } = await requireLocationAccess(event, siteId, locationId)
-    const products = await listLocationProducts(db, site.organization_id, siteId, locationId)
+    const products = await listLocationProducts(db, { organizationId: site.organization_id, locationId })
     return jsonResponse({ success: true, products, site_id: siteId, location_id: locationId })
   } catch (error) {
     rethrowHttpError(error)
-    console.error('product_list_failed', { siteId, locationId, error: error instanceof Error ? error.message : String(error) })
-    return jsonResponse({ error: 'Failed to list Products' }, { status: 500 })
+    console.error('location_products_list_failed', { siteId, locationId, error: error instanceof Error ? error.message : String(error) })
+    return jsonResponse({ error: 'Failed to list products for this location' }, { status: 500 })
   }
 })

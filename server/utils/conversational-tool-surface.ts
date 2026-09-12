@@ -1,8 +1,3 @@
-// Relative (not '~/...') import — this file is loaded directly by the plain
-// node:test runner in tests/unit/conversational-tool-surface.test.ts, outside
-// Nuxt's build context, where the '~' alias doesn't resolve.
-import { mcpProtocolError, MCP_ERROR } from './mcp-protocol.ts'
-
 type ToolLike = {
   name: string
   description?: string
@@ -14,38 +9,16 @@ type McpToolLike = ToolLike & {
 
 export type ConversationalToolSurfaceGroup =
   | 'social_publishing'
-  | 'domains'
 
 const TRUE_VALUES = new Set(['1', 'true', 'yes', 'on', 'enabled'])
 
 const GROUP_FLAG_ENV: Record<ConversationalToolSurfaceGroup, string> = {
   social_publishing: 'CONVERSATIONAL_TOOLS_SOCIAL_PUBLISHING_ENABLED',
-  domains: 'CONVERSATIONAL_TOOLS_DOMAINS_ENABLED',
 }
-
-const GROUP_TOOL_NAMES: Record<ConversationalToolSurfaceGroup, readonly string[]> = {
-  // No standalone tool belongs to this group anymore — social_publishing now
-  // only gates publish_post's facebook/instagram channels (see
-  // normalizeMcpToolForConversationalSurface below).
-  social_publishing: [],
-  domains: [
-    'get_site_domains',
-  ],
-}
-
-const TOOL_GROUP_BY_NAME = new Map<string, ConversationalToolSurfaceGroup>(
-  Object.entries(GROUP_TOOL_NAMES).flatMap(([group, names]) =>
-    names.map((name) => [name, group as ConversationalToolSurfaceGroup]),
-  ),
-)
 
 function flagEnabled(env: ApiRecord | undefined, key: string) {
   const raw = env?.[key]
   return typeof raw === 'string' && TRUE_VALUES.has(raw.trim().toLowerCase())
-}
-
-export function conversationalToolGroupForName(name: string) {
-  return TOOL_GROUP_BY_NAME.get(name) ?? null
 }
 
 export function isConversationalToolGroupEnabled(
@@ -53,29 +26,6 @@ export function isConversationalToolGroupEnabled(
   group: ConversationalToolSurfaceGroup,
 ) {
   return flagEnabled(env, GROUP_FLAG_ENV[group])
-}
-
-export function isConversationalToolEnabled(name: string, env?: ApiRecord) {
-  const group = conversationalToolGroupForName(name)
-  return !group || isConversationalToolGroupEnabled(env, group)
-}
-
-export function assertConversationalToolEnabled(name: string, env?: ApiRecord) {
-  const group = conversationalToolGroupForName(name)
-  if (!group || isConversationalToolGroupEnabled(env, group)) return
-
-  const flag = GROUP_FLAG_ENV[group]
-  // MCP-shaped (not a plain Error) so mcp.post.ts's asMcpError() preserves
-  // methodNotFound instead of falling back to a generic internal (-32603)
-  // error for a tools/call against a surface-disabled tool. chowbot-agent.ts's
-  // `error instanceof Error` catch still works — mcpProtocolError() returns a
-  // real Error with an extra `.mcp` property attached.
-  throw mcpProtocolError(
-    MCP_ERROR.methodNotFound,
-    `Tool ${name} is not exposed on the conversational surface. Enable ${flag}=true to opt into ${group.replaceAll('_', ' ')} tools.`,
-    undefined,
-    'protocol',
-  )
 }
 
 function stripExternalChannelsFromProperties(properties: Record<string, unknown>) {
@@ -112,14 +62,9 @@ export function normalizeMcpToolForConversationalSurface<T extends McpToolLike>(
   }
 }
 
-export function filterConversationalTools<T extends ToolLike>(tools: readonly T[], env?: ApiRecord): T[] {
-  return tools.filter((tool) => isConversationalToolEnabled(tool.name, env))
-}
-
 export function visibleConversationalMcpTools<T extends McpToolLike>(
   tools: readonly T[],
   env?: ApiRecord,
 ): T[] {
-  return filterConversationalTools(tools, env)
-    .map((tool) => normalizeMcpToolForConversationalSurface(tool, env))
+  return tools.map((tool) => normalizeMcpToolForConversationalSurface(tool, env))
 }

@@ -1,6 +1,7 @@
 import { execute } from '~/server/db'
 import { cleanString, cloudflareEnv, jsonResponse, rethrowHttpError } from '~/server/utils/api-response'
 import { getClientIp, hashClientIp, HOUR_MS, incrementHourlyRateLimit } from '~/server/utils/hourly-rate-limit'
+import { previewSecretOf, resolvePreviewAuthorization } from '~/server/utils/preview-token'
 import { loadPublicProductApiDetail } from '~/server/utils/public-products'
 import { defineHandler } from 'nitro'
 import { getRouterParam, readBody } from 'nitro/h3'
@@ -15,7 +16,8 @@ export default defineHandler(async (event) => {
   try {
     const db = cloudflareEnv(event).DB
     if (!db) return jsonResponse({ error: 'Database unavailable' }, { status: 503 })
-    const resolved = await loadPublicProductApiDetail(db, siteId, locationSlug, productSlug)
+    const previewAuthorized = await resolvePreviewAuthorization(event, siteId, previewSecretOf(cloudflareEnv(event)))
+    const resolved = await loadPublicProductApiDetail(db, siteId, previewAuthorized, locationSlug, productSlug)
     if (!resolved) return jsonResponse({ error: 'Product not found' }, { status: 404 })
     const body = await readBody(event) as ApiRecord
     const author = cleanString(body.author, 80)

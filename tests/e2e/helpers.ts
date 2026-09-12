@@ -18,6 +18,7 @@ const THIRD_PARTY_REQUEST_DOMAINS = [
   'google.internal.maps',
   'doubleclick.net',
   'media.krabiclaw.com',
+  'googleusercontent.com', // author avatars; headless Chromium blocks them with ERR_BLOCKED_BY_ORB
   'gen_204',
   'cdn-cgi',      // Cloudflare injected endpoints (Zaraz, Web Analytics beacon)
   'zaraz',

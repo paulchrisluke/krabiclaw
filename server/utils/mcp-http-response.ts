@@ -13,6 +13,7 @@ export function mcpHttpStatusForError(error: McpErrorShape): number {
   if (error.kind === 'auth') return 401
   if (error.kind === 'forbidden') return 403
   if (error.kind === 'transport') return 500
+  if (error.kind === 'protocol' && error.code === MCP_ERROR.invalidRequest) return 400
   if (
     error.code === MCP_ERROR.methodNotFound
     || error.code === MCP_ERROR.invalidRequest

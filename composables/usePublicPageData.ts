@@ -14,7 +14,6 @@ import {
   type PublicPageDataset,
 } from "~/composables/usePublicPageRequest";
 import { useSiteShellState } from "~/composables/useSiteShell";
-import type { Experience } from "~/server/utils/experiences";
 import type { Product } from '~/server/types/products'
 import {
   isPublicPagePayload,
@@ -28,7 +27,6 @@ interface ContentRow {
   hero_title: string | null;
   hero_subtitle: string | null;
   media?: Array<{ asset_id: string; slot: string; public_url: string | null; thumbnail_url?: string | null; kind?: string | null }>;
-  component: string | null;
   [key: string]: unknown;
 }
 
@@ -56,16 +54,15 @@ export const usePublicPageData = async (options: {
   lazy?: boolean
   routeOwned?: boolean
 } = {}) => {
-  const { isPlatform, siteId, draftId } = useTenantSite();
+  const { isPlatform, siteId } = useTenantSite();
   const route = useRoute();
   const params = usePublicPageRequest();
-  const entityId = siteId || draftId || null;
   const requestedParams = computed(() => options.datasets
     ? { ...params.value, datasets: [...options.datasets] }
     : { ...params.value, datasets: [...params.value.datasets] })
-  const key = computed(() => usePublicPageKey(entityId, requestedParams.value));
+  const key = computed(() => usePublicPageKey(siteId, requestedParams.value));
 
-  const url = computed(() => buildPublicPageUrl(siteId, requestedParams.value, route));
+  const url = computed(() => buildPublicPageUrl(siteId, requestedParams.value));
 
   const shell = useSiteShellState();
   const requestEvent = import.meta.server ? useRequestEvent() : undefined
@@ -74,14 +71,13 @@ export const usePublicPageData = async (options: {
     && options.lazy === true;
 
   const asyncData =
-    isPlatform || (!siteId && !draftId)
+    isPlatform || !siteId
       ? { data: ref<PublicPagePayload>(), error: ref<Error | null>(null), pending: ref(false), refresh: async () => {} }
       : useAsyncData<PublicPagePayload>(
           key,
           (_nuxtApp, { signal }) => {
             const currentParams = requestedParams.value
             return loadPublicResourcePayload<PublicPagePayload>({
-              draftId,
               siteId,
               resourceKind: 'page',
               url: url.value,
@@ -89,11 +85,9 @@ export const usePublicPageData = async (options: {
               query: {
                 page: currentParams.page ?? undefined,
                 location: currentParams.location ?? undefined,
-                experience: currentParams.experience ?? undefined,
                 datasets: [...currentParams.datasets].sort().join(',') || undefined,
                 blogSlug: currentParams.blogSlug ?? undefined,
                 locale: currentParams.locale ?? undefined,
-                token: currentParams.token ?? undefined,
               },
               validate: (value): value is PublicPagePayload =>
                 isPublicPagePayload(value, currentParams.page ?? 'home'),
@@ -125,17 +119,35 @@ export const usePublicPageData = async (options: {
 
   // Persistent chrome comes from the stable shell. Route-owned collections
   // come from the keyed page response and change with navigation.
-  const { locations, config, site, locales, hasExperiences } = shell;
+  const { locations, config, site, locales } = shell;
   const googleBusiness = computed(() => ({
     ...(shell.googleBusiness.value ?? {}),
     reviews: data.value?.globalReviews ?? [],
     posts: data.value?.globalPosts ?? [],
   }))
-  const experiencesList = computed(() => data.value?.experiencesList ?? []);
   const products = computed(() => data.value?.products ?? []);
-  const productsByCategory = computed(() => {
-    return products.value.reduce<Record<string, Product[]>>((groups, product) => {
-      (groups[product.category.name] ??= []).push(product);
+  const collections = computed(() => data.value?.collections ?? []);
+  /**
+   * Products grouped by the collections they belong to, in the merchant's
+   * order. A product in two collections appears in both — that is what
+   * membership means — and one in none appears in neither, rather than being
+   * swept into a bucket nobody created.
+   */
+  const productsByCollection = computed(() => {
+    const positions = new Map<string, Map<string, number>>();
+    for (const product of products.value) {
+      for (const membership of product.collections) {
+        const forCollection = positions.get(membership.collection_id) ?? new Map<string, number>();
+        forCollection.set(product.id, membership.sort_order);
+        positions.set(membership.collection_id, forCollection);
+      }
+    }
+    return collections.value.reduce<Record<string, Product[]>>((groups, collection) => {
+      const forCollection = positions.get(collection.id);
+      if (!forCollection) return groups;
+      groups[collection.name] = products.value
+        .filter(product => forCollection.has(product.id))
+        .sort((left, right) => (forCollection.get(left.id)! - forCollection.get(right.id)!) || left.name.localeCompare(right.name));
       return groups;
     }, {});
   });
@@ -160,9 +172,6 @@ export const usePublicPageData = async (options: {
   const tenantPage = computed(() => data.value?.tenant_page ?? null);
 
   const reservationPolicyByLocation = computed(() => data.value?.reservationPolicyByLocation ?? {});
-  const experiencePolicySiteDefault = computed(() => data.value?.experiencePolicySiteDefault ?? null);
-  const experiencePolicyById = computed(() => data.value?.experiencePolicyById ?? {});
-  const experienceDetail = computed(() => (data.value?.experienceDetail ?? null) as Experience | null);
 
   // ── Content ───────────────────────────────────────────────
   const contentMap = computed(() => {
@@ -263,15 +272,6 @@ export const usePublicPageData = async (options: {
     };
   };
 
-  // ── Content Blocks for Dynamic Rendering ───────────────────
-  const contentBlocks = computed(() => {
-    const rows = (data.value?.content ?? []) as ContentRow[];
-    return rows.map((row) => ({
-      ...row,
-      _uid: row.field, // Use field as unique identifier for now
-      component: row.component || null,
-    }));
-  });
 
   // Register every lifecycle hook above before suspending setup. Route-owned
   // data is authoritative: navigation completes only after this single request
@@ -306,18 +306,13 @@ export const usePublicPageData = async (options: {
     tenantPage,
     locales,
     reservationPolicyByLocation,
-    experiencePolicySiteDefault,
-    experiencePolicyById,
-    hasExperiences,
-    experiencesList,
-    experienceDetail,
     getField,
     getFieldStr,
     getHero,
     contentMap,
-    contentBlocks,
     products,
-    productsByCategory,
+    productsByCollection,
+    collections,
     error,
     localeRepresentations,
   };

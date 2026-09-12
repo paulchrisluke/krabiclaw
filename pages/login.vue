@@ -26,11 +26,19 @@
 </template>
 
 <script setup lang="ts">
+import { NON_INDEXABLE_ROBOTS_INTENT } from '~/shared/robots-directive'
 import { authClient } from '~/lib/auth-client'
 import { buildPostLoginUrl, validatedInternalPath } from '~/shared/auth/return-target'
 
 definePageMeta({ layout: 'access', auth: false })
-useSeoMeta({ robots: 'noindex, nofollow' })
+useSocialMetadata({
+  template: 'platform',
+  schema: false,
+  path: '/login',
+  title: 'Sign in',
+  description: 'Sign in to your KrabiClaw account to manage your site, bookings and content.',
+  robots: NON_INDEXABLE_ROBOTS_INTENT,
+})
 
 const route = useRoute()
 const queryEmail = typeof route.query.email === 'string' ? route.query.email : ''

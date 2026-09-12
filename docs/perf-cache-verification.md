@@ -24,7 +24,7 @@ cold_status="$(curl --fail-with-body -sS -D /tmp/public-cold.headers -o /tmp/pub
   -H 'Host: staging.foo.localhost' \
   -H 'x-preview-tenant: site-demo' \
   -H 'cache-control: no-store' \
-  "http://localhost:8787/preview/site/site-demo/about?probe=${probe_id}")" || {
+  "http://localhost:8787/about?probe=${probe_id}")" || {
   echo "Cold request failed" >&2
   sed -n '1,80p' /tmp/public-cold.body >&2
   exit 1

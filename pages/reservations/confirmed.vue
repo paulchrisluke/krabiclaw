@@ -25,7 +25,7 @@
           confirmation.guests,
           Number(confirmation.guests) === 1 ? resCopy.guestLabel : resCopy.guestsLabelPlural,
           readableDate,
-          formatTime(confirmation.time, locale)
+          readableTime
         ) }}
       </template>
       <template #actions>
@@ -55,8 +55,9 @@
 import { $fetch } from 'ofetch'
 import { getBookingConfirmation, type BookingConfirmation as BookingConfirmationData } from '~/composables/useBookingHandoff'
 import BookingConfirmation from '~/components/booking/BookingConfirmation.vue'
-import { formatTime } from '~/utils/timezone'
-import type { RenderedBookingPolicySummaryItem } from '~/server/utils/booking-policies'
+import { formatTimestamp } from '~/utils/timezone'
+import { resolveProductPresentation } from '~/utils/product-presentation'
+import type { RenderedBookingPolicySummaryItem } from '~/server/utils/reservations'
 
 definePageMeta({ layout: 'saya' })
 
@@ -64,24 +65,27 @@ const { site, siteId } = useTenantSite()
 const { reservationPolicyByLocation } = await usePublicPageData()
 const { locale } = useI18n()
 const resCopy = computed(() => getVerticalCopy((site as ApiValue)?.vertical, locale.value))
-const { formatDate } = useLocaleDate()
 const route = useRoute()
 const justCopied = ref(false)
 
 const confirmation = ref<BookingConfirmationData | null>(null)
 const pending = ref(true)
 
-const readableDate = computed(() => {
-  if (!confirmation.value?.date) return ''
-  return formatDate(confirmation.value.date)
-})
+// One instant plus one zone, read in the location's own zone — the guest sees
+// the hour the table is held, wherever they open the page.
+const readableDate = computed(() => confirmation.value
+  ? formatTimestamp(confirmation.value.startsAt, locale.value, confirmation.value.timezone, { dateStyle: 'full' })
+  : '')
+const readableTime = computed(() => confirmation.value
+  ? formatTimestamp(confirmation.value.startsAt, locale.value, confirmation.value.timezone, { timeStyle: 'short' })
+  : '')
 
 const receiptRows = computed(() => {
   if (!confirmation.value) return []
   const rows: Array<{ label: string; value: string }> = []
   if (confirmation.value.locationName) rows.push({ label: 'Location', value: confirmation.value.locationName })
   rows.push({ label: 'Date', value: readableDate.value })
-  rows.push({ label: 'Time', value: formatTime(confirmation.value.time, locale.value) })
+  rows.push({ label: 'Time', value: readableTime.value })
   rows.push({
     label: 'Party',
     value: `${confirmation.value.guests} ${Number(confirmation.value.guests) === 1 ? resCopy.value.guestLabel : resCopy.value.guestsLabelPlural}`,
@@ -103,9 +107,12 @@ const resolvedPolicySummary = computed(() => {
 
 const policyLines = computed(() => (resolvedPolicySummary.value?.items ?? []).map((item: RenderedBookingPolicySummaryItem) => String(item.text ?? '')))
 
+// Back to the catalogue the guest reserved against: this location's own when
+// the reservation names one, otherwise the site's.
+const presentation = computed(() => resolveProductPresentation((site as { vertical?: string | null } | null)?.vertical))
 const menuCtaTo = computed(() => {
   const slug = confirmation.value?.locationSlug
-  if (slug) return `/locations/${slug}/menu`
+  if (slug && presentation.value) return `/locations/${slug}/${presentation.value.locationCollectionSegment}`
   return resCopy.value.reservationExploreRoute
 })
 
@@ -128,19 +135,19 @@ onMounted(async () => {
   const token = route.hash ? route.hash.substring(1) : ''
   if (resId && token) {
     try {
-      const res = await $fetch<{ reservation: { name: string; date: string; time: string; guests: string; location_id?: string | null } }>(
-        `/api/public/sites/${siteId}/reservations/${resId}`,
+      const res = await $fetch<{ booking: { name: string; starts_at: string; timezone: string; guests: string; location_id?: string | null } }>(
+        `/api/public/sites/${siteId}/booking-requests/${resId}`,
         { headers: { Authorization: `Bearer ${token}` } },
       )
       confirmation.value = {
         type: 'reservation',
         siteId,
         siteName: String((site as ApiValue)?.brand_name ?? ''),
-        guestName: res.reservation.name,
-        date: res.reservation.date,
-        time: res.reservation.time,
-        guests: res.reservation.guests,
-        locationId: typeof res.reservation.location_id === 'string' ? res.reservation.location_id : null,
+        guestName: res.booking.name,
+        startsAt: res.booking.starts_at,
+        timezone: res.booking.timezone,
+        guests: res.booking.guests,
+        locationId: typeof res.booking.location_id === 'string' ? res.booking.location_id : null,
         cancelUrl: `/reservations/cancel?id=${resId}#${token}`,
       }
     } catch {
@@ -152,7 +159,7 @@ onMounted(async () => {
 
 async function share() {
   if (!confirmation.value) return
-  const text = `My reservation at ${confirmation.value.siteName} is confirmed for ${readableDate.value} at ${formatTime(confirmation.value.time, locale.value)}.`
+  const text = `My reservation at ${confirmation.value.siteName} is confirmed for ${readableDate.value} at ${readableTime.value}.`
   if (import.meta.client && navigator.share) {
     try {
       await navigator.share({ title: 'Reservation confirmed', text, url: window.location.origin })

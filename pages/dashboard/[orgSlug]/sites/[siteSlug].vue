@@ -29,7 +29,6 @@
     <template #body>
       <EditorPaneShell
         :has-detail="hasDetail"
-        :show-desktop-detail="hasDetail"
         :detail-title="detailTitle"
         :dismiss-to="sitePath"
         wide-detail
@@ -94,29 +93,27 @@ const dashboard = useDashboardSite()
 const requestEvent = useRequestEvent()
 const { orgPaths } = useDashboardSiteLinks()
 
+// The frame comes first, and before any `await`. `useEditorFrame` provides and
+// injects, which Vue only binds to this instance while setup is still
+// synchronous; called after an await it binds to nothing and every level below
+// this one loses its place in the chain.
+const sitePath = computed(() => `/dashboard/${String(route.params.orgSlug)}/sites/${String(route.params.siteSlug)}`)
+const frame = useEditorFrame(sitePath)
+
 if (!dashboard.state.value) await dashboard.refresh()
 const siteId = dashboard.siteId.value
 if (!siteId) throw createError({ statusCode: 404, statusMessage: 'Site not found' })
 
-const sitePath = computed(() => `/dashboard/${String(route.params.orgSlug)}/sites/${String(route.params.siteSlug)}`)
-
-const routeSegments = computed(() => route.path.slice(sitePath.value.length).replace(/^\//, '').split('/').filter(Boolean))
-const sectionSegment = computed(() => routeSegments.value[0] ?? '')
-
 /**
- * The site yields when the screen below it draws its own panel and navbar —
- * the outermost level on screen owns that chrome, and two levels drawing it
- * puts three columns on screen.
- *
- * The child declares this with `ownsChrome` in its own `definePageMeta`, rather
- * than the site keeping a list of which sections are special. A list is an
- * exception mechanism: `blog` was missing from it, so the site kept its rail
- * while `blog.vue` drew its own pair and the article was left 297px of a
- * 1280px window. Nothing here needs editing when a section gains a chain.
+ * The site yields when the screen below it draws its own panel and navbar. The
+ * child declares that with `ownsChrome` in its own `definePageMeta`, rather
+ * than the site keeping a list of which sections are special — a list is an
+ * exception mechanism, and nothing here needs editing when a section gains a
+ * chain of its own.
  */
 const rendersStandalone = computed(() => route.matched.some(record => record.meta?.ownsChrome === true))
-const hasDetail = computed(() => Boolean(sectionSegment.value))
-const activeSection = computed(() => sectionSegment.value || null)
+const hasDetail = computed(() => frame.mode.value !== 'index')
+const activeSection = frame.childSegment
 
 const siteName = computed(() => dashboard.site.value?.brand_name ?? '')
 const canManageSite = computed(() => dashboard.siteAccess.value !== 'location')
@@ -126,7 +123,7 @@ const canManageSite = computed(() => dashboard.siteAccess.value !== 'location')
 const siteDomain = computed(() => dashboard.site.value?.custom_domain ?? null)
 const publicSiteUrl = computed(() => dashboard.site.value?.public_url || '')
 
-const { user: currentUser } = useAuth()
+const { user: currentUser } = await useAuthSession()
 const template = computed(() => resolvePublicTemplate({ themeId: dashboard.site.value?.theme_id, vertical: dashboard.site.value?.vertical }).slug)
 const vertical = computed(() => {
   const raw = dashboard.site.value?.vertical

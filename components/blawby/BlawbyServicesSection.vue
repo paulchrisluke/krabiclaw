@@ -7,17 +7,18 @@
         :description="description"
         centered
       />
-      <BlawbyServiceGrid :offerings="offerings" class="mt-20" />
+      <BlawbyPageGrid :items="items" class="mt-20" />
     </div>
     <img v-if="decorationUrl" :src="decorationUrl" alt="" width="1920" height="400" loading="lazy" class="absolute bottom-0 w-full object-contain object-center">
   </section>
 </template>
 
 <script setup lang="ts">
-import type { PublicOfferingSummary } from '~/types/blawby'
+/** The pages this section shows, resolved by the page's own page_grid block. */
+interface PageGridItem { id: string; title: string; description?: string; url: string; media?: Array<{ slot: string; public_url: string }> }
 
 withDefaults(defineProps<{
-  offerings: PublicOfferingSummary[]
+  items: PageGridItem[]
   title: string
   accent: string
   description?: string

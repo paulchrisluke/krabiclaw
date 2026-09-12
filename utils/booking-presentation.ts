@@ -21,7 +21,7 @@ export interface BookingPresentation {
 	labelPlural: string
 }
 
-export type BookingKind = 'reservation' | 'experience_booking'
+export type BookingKind = 'reservation' | 'booking'
 
 const RESERVATION: BookingPresentation = {
 	noun: 'reservation',
@@ -51,7 +51,7 @@ const BOOKING: BookingPresentation = {
  * site's vertical alone would call both of them reservations.
  */
 export function resolveBookingPresentation(kind: BookingKind, vertical: string | null | undefined): BookingPresentation {
-	if (kind === 'experience_booking') return BOOKING
+	if (kind === 'booking') return BOOKING
 	if (!vertical?.trim()) throw new Error('Cannot resolve booking vocabulary: missing vertical')
 	return normalizeVertical(vertical) === 'service' ? CONSULTATION : RESERVATION
 }

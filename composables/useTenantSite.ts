@@ -5,7 +5,7 @@ import type { SocialImageSource } from '~/utils/social-metadata'
 interface TenantSiteState {
   tenantType: TenantType
   siteId: string | null
-  draftId: string | null
+  previewAuthorized: boolean
   organizationId: string | null
   themeId: string | null
   site: TenantSiteInfo | null
@@ -33,7 +33,7 @@ export const useTenantSite = () => {
       return {
         tenantType: (event.context.tenantType as TenantType | undefined) || TENANT_TYPES.PLATFORM,
         siteId: typeof event.context.siteId === 'string' ? event.context.siteId : null,
-        draftId: typeof event.context.draftId === 'string' ? event.context.draftId : null,
+        previewAuthorized: event.context.previewAuthorized === true,
         organizationId: typeof event.context.organizationId === 'string' ? event.context.organizationId : null,
         themeId: typeof event.context.themeId === 'string' ? event.context.themeId : null,
         site: (event.context.site as TenantSiteInfo | null | undefined) ?? null
@@ -42,7 +42,7 @@ export const useTenantSite = () => {
     return {
       tenantType: TENANT_TYPES.PLATFORM,
       siteId: null,
-      draftId: null,
+      previewAuthorized: false,
       organizationId: null,
       themeId: null,
       site: null
@@ -54,7 +54,7 @@ export const useTenantSite = () => {
     isPlatform: tenantContext.value.tenantType === TENANT_TYPES.PLATFORM,
     isTenant: tenantContext.value.tenantType === TENANT_TYPES.TENANT,
     siteId: tenantContext.value.siteId,
-    draftId: tenantContext.value.draftId,
+    previewAuthorized: tenantContext.value.previewAuthorized,
     organizationId: tenantContext.value.organizationId,
     themeId: tenantContext.value.themeId,
     site: tenantContext.value.site

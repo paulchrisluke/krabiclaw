@@ -17,6 +17,7 @@ import { localizationError } from '~/server/utils/localization-errors'
 import {
   RESOURCE_LOCALIZATION_REGISTRY,
   parseLocalizedResourceType,
+  loadMetafieldDefinitionIndex,
   validateLocalizedRoutePath,
   validateLocalizedValues,
   type LocalizedResourceType,
@@ -212,10 +213,40 @@ function mapLocalization(row: ResourceLocalizationRow): ResourceLocalizationReco
   return { ...rest, values: parsed as LocalizedValues }
 }
 
+/**
+ * The location-scoped Product route this path names, or null when the path is
+ * not one. The family segment follows the vertical, exactly as the English
+ * route does.
+ */
+function parseProductRouteSegments(path: string, vertical: string): { locationSlug: string; productSlug: string; sourcePath: string } | null {
+  const segments = path.split('/').filter(Boolean)
+  const family = vertical === 'restaurant' ? 'menu' : 'products'
+  if (segments.length !== 4 || segments[0] !== 'locations' || segments[2] !== family) return null
+  const locationSlug = segments[1]
+  const productSlug = segments[3]
+  if (!locationSlug || !productSlug) return null
+  return { locationSlug, productSlug, sourcePath: `/locations/${locationSlug}/${family}/${productSlug}` }
+}
+
 async function getSiteVertical(db: DbClient, organizationId: string, siteId: string): Promise<string> {
   const site = await queryFirst<{ vertical: string }>(db, 'SELECT vertical FROM sites WHERE organization_id = ? AND id = ? LIMIT 1', [organizationId, siteId])
   if (!site) localizationError(404, 'LOCALIZATION_NOT_FOUND', 'Site was not found', { site_id: siteId })
   return site.vertical
+}
+
+/**
+ * Does this site carry this resource? Every variant takes the same three
+ * parameters — organization, site, resource — so the same SQL serves both the
+ * existence check and the NOT EXISTS clause that clears a localization whose
+ * canonical row has since gone.
+ */
+function canonicalResourceQuery(resourceType: LocalizedResourceType): string {
+  const { table, siteScope } = RESOURCE_LOCALIZATION_REGISTRY[resourceType]
+  if (siteScope === 'self') return `SELECT id FROM ${table} WHERE organization_id = ? AND id = ? AND id = ?`
+  if (siteScope === 'site_column') return `SELECT id FROM ${table} WHERE organization_id = ? AND site_id = ? AND id = ?`
+  return `SELECT p.id FROM ${table} p
+    JOIN product_publications pub ON pub.organization_id = p.organization_id AND pub.product_id = p.id
+    WHERE p.organization_id = ? AND pub.site_id = ? AND p.id = ?`
 }
 
 async function assertCanonicalResourceExists(
@@ -225,13 +256,10 @@ async function assertCanonicalResourceExists(
   resourceType: LocalizedResourceType,
   resourceId: string,
 ): Promise<BatchQuery> {
-  const table = RESOURCE_LOCALIZATION_REGISTRY[resourceType].table
-  const query = resourceType === 'site'
-    ? `SELECT id FROM ${table} WHERE organization_id = ? AND id = ?`
-    : `SELECT id FROM ${table} WHERE organization_id = ? AND site_id = ? AND id = ?`
-  const params = resourceType === 'site' ? [organizationId, resourceId] : [organizationId, siteId, resourceId]
+  const query = canonicalResourceQuery(resourceType)
+  const params = [organizationId, siteId, resourceId]
   const row = await queryFirst<{ id: string }>(db, query, params)
-  if (!row || (resourceType === 'site' && resourceId !== siteId)) {
+  if (!row) {
     localizationError(404, 'LOCALIZATION_NOT_FOUND', 'Canonical resource was not found', { resource_type: resourceType, resource_id: resourceId })
   }
   return {
@@ -300,6 +328,47 @@ export async function resolveLocalizedPublicRoute(
     localizationError(500, 'PLATFORM_LOCALE_UNAVAILABLE', 'Published platform locale messages are unavailable', { locale })
   }
   const { listPublicLocaleRepresentations, listPublicResourceLocaleRepresentations } = await import('~/server/utils/public-locale-representations')
+
+  // A Product is addressed through a location that offers it, so its localized
+  // route is read the way its English route is: by its segments. Nothing is
+  // stored to match against, which is what lets one Product answer at every
+  // location it is offered at.
+  const productRoute = parseProductRouteSegments(routePath.slice(locale.length + 1),
+    await getSiteVertical(db, organizationId, siteId))
+  if (productRoute) {
+    const product = await queryFirst<{ id: string }>(db, `
+      SELECT p.id FROM products p
+        JOIN product_publications pub ON pub.product_id = p.id AND pub.organization_id = p.organization_id
+         AND pub.site_id = ? AND pub.published = 1
+        JOIN product_locations pl ON pl.product_id = p.id AND pl.organization_id = p.organization_id
+         AND pl.published = 1 AND pl.active = 1
+        JOIN business_locations l ON l.id = pl.location_id AND l.site_id = ? AND l.slug = ?
+       WHERE p.organization_id = ? AND p.slug = ? AND p.active = 1 LIMIT 1
+    `, [siteId, siteId, productRoute.locationSlug, organizationId, productRoute.productSlug])
+    if (!product) localizationError(404, 'LOCALIZATION_NOT_FOUND', 'Localized route was not found', { locale, route_path: routePath })
+    const localized = await queryFirst<ResourceLocalizationRow>(db, `
+      SELECT id, organization_id, site_id, resource_type, resource_id, locale, values_json, route_path,
+             created_at, created_by_user_id, updated_at, updated_by_user_id
+        FROM resource_localizations
+       WHERE organization_id = ? AND site_id = ? AND locale = ? AND resource_type = 'product' AND resource_id = ?
+       LIMIT 1
+    `, [organizationId, siteId, locale, product.id])
+    if (!localized) localizationError(404, 'LOCALIZATION_NOT_FOUND', 'Localized route was not found', { locale, route_path: routePath })
+    const localization = mapLocalization(localized)
+    return {
+      locale,
+      route_path: routePath,
+      platform_messages: entitlement.platform_messages,
+      locale_representations: await listPublicLocaleRepresentations(db, {
+        organizationId,
+        siteId,
+        sourcePath: productRoute.sourcePath,
+        resource: { type: 'product', id: product.id },
+      }),
+      representation: { kind: 'resource', resource_type: 'product', resource_id: product.id, localization },
+    }
+  }
+
   const resource = await queryFirst<ResourceLocalizationRow>(db, `
     SELECT id, organization_id, site_id, resource_type, resource_id, locale, values_json, route_path,
            created_at, created_by_user_id, updated_at, updated_by_user_id
@@ -379,10 +448,12 @@ export async function putResourceLocalization(
   const { locale, source } = await assertSiteLanguageEntitlement(db, input.organizationId, input.siteId, input.locale)
   if (source) localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', 'English source content must be edited through its canonical resource')
   const ownerGuard = await assertCanonicalResourceExists(db, input.organizationId, input.siteId, resourceType, input.resourceId)
-  const values = validateLocalizedValues(resourceType, input.values)
-  const vertical = await getSiteVertical(db, input.organizationId, input.siteId)
-  const product = resourceType === 'product' ? await queryFirst<{ product_type: string }>(db, 'SELECT product_type FROM products WHERE id = ? AND organization_id = ? AND site_id = ?', [input.resourceId, input.organizationId, input.siteId]) : null
-  const routePath = validateLocalizedRoutePath(resourceType, locale, input.routePath, vertical, product?.product_type ?? null)
+  // Which product attributes may be translated is declared by the tenant's
+  // metafield definitions, so they are loaded and handed to the validator
+  // rather than restated as a list here.
+  const definitions = resourceType === 'product' ? await loadMetafieldDefinitionIndex(db, input.organizationId) : undefined
+  const values = validateLocalizedValues(resourceType, input.values, definitions)
+  const routePath = validateLocalizedRoutePath(resourceType, locale, input.routePath)
   const existing = await queryFirst<{ id: string; route_path: string | null; created_at: string; created_by_user_id: string }>(db, `
     SELECT id, route_path, created_at, created_by_user_id
       FROM resource_localizations
@@ -566,47 +637,45 @@ export async function getProductCatalogLocalization(
 ) {
   const { locale, source } = await assertSiteLanguageEntitlement(db, organizationId, siteId, localeInput)
   if (source) localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', 'Product catalog localization requires a secondary locale')
-  const [rows, categoryRows] = await Promise.all([queryAll<{
+  // Products belong to the organization and reach this site through a
+  // publication; collections are the site's own merchandising. Both are listed
+  // in the order the public pages render them, so a translator works down the
+  // page rather than down a join.
+  const [rows, collectionRows] = await Promise.all([queryAll<{
     id: string
-    location_id: string
-    category_id: string
-    category_name: string
-    category_slug: string
-    category_sort_order: number
     name: string
     description: string
     localization_id: string | null
     values_json: string | null
     route_path: string | null
   }>(db, `
-    SELECT p.id, p.location_id, p.category_id, pc.name AS category_name,
-           pc.slug AS category_slug, pc.sort_order AS category_sort_order, p.name, p.description,
+    SELECT p.id, p.name, p.description,
            rl.id AS localization_id, rl.values_json, rl.route_path
       FROM products p
-      JOIN product_categories pc ON pc.id = p.category_id
+      JOIN product_publications pub ON pub.product_id = p.id AND pub.organization_id = p.organization_id AND pub.site_id = ?
       LEFT JOIN resource_localizations rl
-        ON rl.organization_id = p.organization_id AND rl.site_id = p.site_id
+        ON rl.organization_id = p.organization_id AND rl.site_id = pub.site_id
        AND rl.resource_type = 'product' AND rl.resource_id = p.id AND rl.locale = ?
-     WHERE p.organization_id = ? AND p.site_id = ?
-     ORDER BY p.location_id, pc.sort_order, p.sort_order, p.id
-  `, [locale, organizationId, siteId]), queryAll<{
+     WHERE p.organization_id = ?
+     ORDER BY p.name, p.id
+  `, [siteId, locale, organizationId]), queryAll<{
     id: string
-    location_id: string
+    location_id: string | null
     name: string
     localization_id: string | null
     values_json: string | null
   }>(db, `
     SELECT c.id, c.location_id, c.name, rl.id AS localization_id, rl.values_json
-      FROM product_categories c
+      FROM collections c
       LEFT JOIN resource_localizations rl
         ON rl.organization_id = c.organization_id AND rl.site_id = c.site_id
-       AND rl.resource_type = 'product_category' AND rl.resource_id = c.id AND rl.locale = ?
-     WHERE c.organization_id = ? AND c.site_id = ? AND c.product_type = 'standard'
-     ORDER BY c.location_id, c.sort_order, c.id
+       AND rl.resource_type = 'collection' AND rl.resource_id = c.id AND rl.locale = ?
+     WHERE c.organization_id = ? AND c.site_id = ?
+     ORDER BY c.sort_order, c.id
   `, [locale, organizationId, siteId])])
   return {
     locale,
-    categories: categoryRows.map(row => ({
+    collections: collectionRows.map(row => ({
       id: row.id,
       location_id: row.location_id,
       source: { name: row.name },
@@ -614,9 +683,6 @@ export async function getProductCatalogLocalization(
     })),
     products: rows.map(row => ({
       id: row.id,
-      location_id: row.location_id,
-      category_id: row.category_id,
-      category: { id: row.category_id, name: row.category_name, slug: row.category_slug, sort_order: row.category_sort_order },
       source: { name: row.name, description: row.description },
       localization: row.localization_id
         ? { values: JSON.parse(row.values_json!), route_path: row.route_path }
@@ -625,7 +691,7 @@ export async function getProductCatalogLocalization(
   }
 }
 
-export async function syncProductCatalogLocalization(
+export async function replaceProductLocalizations(
   db: DbClient,
   input: {
     organizationId: string
@@ -640,89 +706,62 @@ export async function syncProductCatalogLocalization(
   if (!Array.isArray(input.items) || input.items.length < 1 || input.items.length > 250) {
     localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', 'items must contain 1 to 250 Product localizations')
   }
+  const definitions = await loadMetafieldDefinitionIndex(db, input.organizationId)
   const parsed = input.items.map((value, index) => {
     if (!value || typeof value !== 'object' || Array.isArray(value)) {
       localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', `items[${index}] must be an object`, { index })
     }
     const item = value as Record<string, unknown>
-    const unknown = Object.keys(item).filter(key => !['product_id', 'values', 'route_path'].includes(key))
+    const unknown = Object.keys(item).filter(key => !['product_id', 'values'].includes(key))
     if (unknown.length || typeof item.product_id !== 'string' || !item.product_id.trim()) {
       localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', `items[${index}] is invalid`, { index, fields: unknown })
     }
     return {
       productId: item.product_id.trim(),
-      values: validateLocalizedValues('product', item.values),
-      routePathInput: item.route_path,
+      values: validateLocalizedValues('product', item.values, definitions),
       index,
     }
   })
   const ids = parsed.map(item => item.productId)
   if (new Set(ids).size !== ids.length) localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', 'Product IDs must be unique')
   const placeholders = ids.map(() => '?').join(', ')
-  const products = await queryAll<{ id: string; product_type: string }>(db, `SELECT id, product_type FROM products WHERE organization_id = ? AND site_id = ? AND id IN (${placeholders})`, [input.organizationId, input.siteId, ...ids])
+  // The catalog is organization-owned; a site reaches a product through its
+  // publication row, so that is what scopes this lookup.
+  const products = await queryAll<{ id: string }>(db, `
+    SELECT p.id FROM products p
+    JOIN product_publications pub ON pub.product_id = p.id AND pub.organization_id = p.organization_id
+    WHERE p.organization_id = ? AND pub.site_id = ? AND p.id IN (${placeholders})
+  `, [input.organizationId, input.siteId, ...ids])
   const found = new Set(products.map(product => product.id))
   const missing = ids.filter(id => !found.has(id))
   if (missing.length) localizationError(404, 'LOCALIZATION_NOT_FOUND', 'One or more Products were not found', { product_ids: missing })
-  const vertical = await getSiteVertical(db, input.organizationId, input.siteId)
-  const planned = parsed.map(item => ({ ...item, routePath: validateLocalizedRoutePath('product', locale, item.routePathInput, vertical, products.find(product => product.id === item.productId)!.product_type) }))
-  const routePaths = planned.map(item => item.routePath)
-  if (new Set(routePaths).size !== routePaths.length) localizationError(409, 'LOCALIZED_ROUTE_CONFLICT', 'Submitted Product routes must be unique')
   const existing = await queryAll<{
     id: string
     resource_id: string
-    route_path: string | null
     created_at: string
     created_by_user_id: string
   }>(db, `
-    SELECT id, resource_id, route_path, created_at, created_by_user_id
+    SELECT id, resource_id, created_at, created_by_user_id
       FROM resource_localizations
      WHERE organization_id = ? AND site_id = ? AND resource_type = 'product' AND locale = ?
   `, [input.organizationId, input.siteId, locale])
   const byProduct = new Map(existing.map(row => [row.resource_id, row]))
-  const submittedIds = new Set(ids)
-  const conflicts = existing.filter(row => !submittedIds.has(row.resource_id) && row.route_path && routePaths.includes(row.route_path))
-  if (conflicts.length) localizationError(409, 'LOCALIZED_ROUTE_CONFLICT', 'A submitted Product route is already owned', { route_paths: conflicts.map(row => row.route_path) })
   const now = new Date().toISOString()
   const statements: BatchQuery[] = []
-  for (const item of planned) {
+  for (const item of parsed) {
     const prior = byProduct.get(item.productId)
-    const id = prior?.id ?? crypto.randomUUID()
-    if (prior?.route_path && prior.route_path !== item.routePath) {
-      statements.push({
-        query: `INSERT INTO site_redirects
-          (id, organization_id, site_id, locale, owner_type, owner_id, from_path, to_path, status_code, behavior, reason, source, created_at, updated_at)
-          VALUES (?, ?, ?, ?, 'resource_localization', ?, ?, ?, 301, 'redirect', 'localized_route_change', 'localization', ?, ?)
-          ON CONFLICT(site_id, locale, from_path) DO UPDATE SET owner_type = excluded.owner_type, owner_id = excluded.owner_id,
-            to_path = excluded.to_path, behavior = 'redirect', reason = excluded.reason, source = excluded.source, updated_at = excluded.updated_at`,
-        params: [crypto.randomUUID(), input.organizationId, input.siteId, locale, id, prior.route_path, item.routePath, now, now],
-      })
-    }
     statements.push({
       query: `INSERT INTO resource_localizations
         (id, organization_id, site_id, resource_type, resource_id, locale, values_json, route_path,
          created_at, created_by_user_id, updated_at, updated_by_user_id)
-        VALUES (?, ?, ?, 'product', ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, 'product', ?, ?, ?, NULL, ?, ?, ?, ?)
         ON CONFLICT(organization_id, site_id, resource_type, resource_id, locale) DO UPDATE SET
-          values_json = excluded.values_json, route_path = excluded.route_path,
+          values_json = excluded.values_json,
           updated_at = excluded.updated_at, updated_by_user_id = excluded.updated_by_user_id`,
-      params: [id, input.organizationId, input.siteId, item.productId, locale, JSON.stringify(item.values), item.routePath,
+      params: [prior?.id ?? crypto.randomUUID(), input.organizationId, input.siteId, item.productId, locale, JSON.stringify(item.values),
         prior?.created_at ?? now, prior?.created_by_user_id ?? input.userId, now, input.userId],
     })
   }
-  statements.push({
-    query: `UPDATE resource_localizations SET resource_id = NULL
-      WHERE organization_id = ? AND site_id = ? AND resource_type = 'product' AND locale = ?
-        AND resource_id IN (SELECT value FROM json_each(?))
-        AND NOT EXISTS (SELECT 1 FROM products p WHERE p.id = resource_localizations.resource_id AND p.organization_id = resource_localizations.organization_id AND p.site_id = resource_localizations.site_id)`,
-    params: [input.organizationId, input.siteId, locale, JSON.stringify(ids)],
-  })
-  try {
-    await executeBatch(db, statements, { operation: 'sync product catalog localization' })
-  } catch (error) {
-    if (error instanceof Error && error.message.includes('UNIQUE constraint failed')) {
-      localizationError(409, 'LOCALIZED_ROUTE_CONFLICT', 'A submitted Product route conflicts with existing localized content')
-    }
-    throw error
-  }
+  await executeBatch(db, statements, { operation: 'replace product localizations' })
   return { locale, updated_product_ids: ids }
 }

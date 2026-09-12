@@ -18,7 +18,7 @@ export default defineHandler(async (event) => {
   }
 
   try {
-    const site = await queryFirst<{ id: string; organization_id: string; default_currency: string | null }>(db, `
+    const site = await queryFirst<{ id: string; organization_id: string; default_currency: string }>(db, `
       SELECT id, organization_id, default_currency
       FROM sites
       WHERE id = ? AND status = 'active'
@@ -30,7 +30,7 @@ export default defineHandler(async (event) => {
     }
 
     const config = {
-      ...await getConfig(db, site.organization_id, site.id), default_currency: site.default_currency || 'USD', }
+      ...await getConfig(db, site.organization_id, site.id), default_currency: site.default_currency, }
     return jsonResponse({
       success: true, config
     })

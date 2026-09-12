@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { describeErrorForTelemetry } from "../../server/utils/error-telemetry.ts";
+import { describeErrorForTelemetry, errorChainForTelemetry } from "../../server/utils/error-telemetry.ts";
 import { summarizeForTelemetry } from "../../server/utils/mcp-telemetry.ts";
 
 test("oversized MCP summaries remain parseable JSON with redaction", () => {
@@ -34,4 +34,14 @@ test("describeErrorForTelemetry handles circular cause chains", () => {
   error.cause = error;
 
   assert.equal(describeErrorForTelemetry(error), "outer");
+});
+
+test("provider error chains retain the cause without logging credentials", () => {
+  const cause = new Error("Invalid API Key provided: sk_test_example123; Authorization: Bearer private-token");
+  cause.name = "StripeAuthenticationError";
+  const chain = errorChainForTelemetry(new Error("Billing plans are temporarily unavailable", { cause }));
+
+  assert.equal(chain[1]?.name, "StripeAuthenticationError");
+  assert.match(chain[1]!.message, /Invalid API Key provided/);
+  assert.doesNotMatch(JSON.stringify(chain), /sk_test_example123|private-token/);
 });

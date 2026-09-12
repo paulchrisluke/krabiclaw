@@ -7,6 +7,7 @@ import { stripe as betterAuthStripe } from '@better-auth/stripe'
 import { oauthProvider } from '@better-auth/oauth-provider'
 import type { SchemaClient, Scope } from '@better-auth/oauth-provider'
 import { cimd } from '@better-auth/cimd'
+import { fetchCimdMetadataResource } from '~/server/utils/cimd-metadata-fetch'
 import type { GenericEndpointContext } from '@better-auth/core'
 import { HTTPError, type H3Event } from 'nitro';
 import { createDb, execute, schema } from '~/server/db'
@@ -29,6 +30,7 @@ import { createStripeClient } from '~/server/utils/stripe-client'
 import { unwrapInstrumentedD1 } from '~/server/utils/request-metrics'
 import { timingSafeEqualText } from '~/server/utils/dev-route-auth'
 import { notifyOrganizationInvited } from '~/server/utils/notifications'
+import { linkLegalIntakeAuthorizedUser } from '~/server/utils/legal-intake-references'
 
 type MemberRow = InferSelectModel<typeof schema.member>
 type InvitationRow = InferSelectModel<typeof schema.invitation>
@@ -53,44 +55,34 @@ export function oauthSigningConfig(authBaseUrl: string) {
   }
 }
 
-const organizationOptions = {
+export const organizationOptions = {
   ac: organizationAccessControl,
   roles: organizationRoles,
   teams: {
     enabled: true,
     defaultTeam: { enabled: false },
   },
+  // Deleting a tenant is a scheduled operation with a grace period and with
+  // Cloudflare hostnames and Images to release, so server/utils/tenant-deletion.ts
+  // owns it and calls this plugin's adapter. The plugin's own route would delete
+  // immediately and leak both, so it stays closed.
+  disableOrganizationDeletion: true,
+  schema: {
+    organization: {
+      additionalFields: {
+        deletionScheduledAt: { type: 'date', required: false, input: false },
+      },
+    },
+  },
 } as const
 
-async function normalizeCimdClientAuthentication(data: {
+async function configureCimdTenantScopes(event: {
   client: SchemaClient<Scope[]>
-  metadata: Record<string, unknown>
-  ctx: GenericEndpointContext
+  clientMetadataDocument: Record<string, unknown>
+  context: GenericEndpointContext
 }) {
-  const { client, metadata, ctx } = data
-  const advertisedMethods = metadata.token_endpoint_auth_methods_supported
-  const jwksUri = metadata.jwks_uri
-  const supportsPrivateKeyJwt = Array.isArray(advertisedMethods)
-    && advertisedMethods.includes('private_key_jwt')
-    && typeof jwksUri === 'string'
-    && jwksUri.length > 0
-
+  const { client, context: ctx } = event
   const update: Record<string, unknown> = { scopes: [...CIMD_TENANT_SCOPES] }
-  if (supportsPrivateKeyJwt) {
-    // @better-auth/cimd@1.7.0-beta.10's convertDocToClient only reads the
-    // singular doc.token_endpoint_auth_method (node_modules/@better-auth/cimd/
-    // dist/index.mjs lines ~106-115, ~298) — it never checks the plural
-    // capability field, token_endpoint_auth_methods_supported, that
-    // ChatGPT-shaped CIMD documents advertise private_key_jwt through.
-    // Confirmed against the installed package source; remove this once a
-    // newer @better-auth/cimd release maps that field itself. Covered by
-    // tests/e2e/oauth-discovery.spec.ts's "ChatGPT-shaped CIMD uses
-    // private_key_jwt" test — removing this hook without an upstream fix
-    // breaks that flow.
-    update.tokenEndpointAuthMethod = 'private_key_jwt'
-    update.public = false
-    update.jwksUri = jwksUri
-  }
 
   Object.assign(client, update)
   await ctx.context.adapter.update({
@@ -139,6 +131,23 @@ export interface CloudflareEnv {
   MEDIA_BUCKET?: R2Bucket
   SITE_CACHE?: KVNamespace
   GUEST_INBOX_HUBS?: DurableObjectNamespace
+  LEGAL_BLAWBY_ORIGIN?: string
+  LEGAL_BLAWBY_CLIENT_ID?: string
+  LEGAL_BLAWBY_CLIENT_SECRET?: string
+  LEGAL_BLAWBY_AUDIENCE?: string
+  LEGAL_BLAWBY_CALLBACK_URL_RETURN?: string
+  LEGAL_BLAWBY_CALLBACK_URL_REFRESH?: string
+  LEGAL_BLAWBY_TIMEOUT_MS?: string
+  LEGAL_PUBLIC_BUDGET_IP_SITE_OP_LIMIT?: string
+  LEGAL_PUBLIC_BUDGET_IP_SITE_OP_WINDOW_MS?: string
+  LEGAL_PUBLIC_BUDGET_ACTOR_SITE_OP_LIMIT?: string
+  LEGAL_PUBLIC_BUDGET_ACTOR_SITE_OP_WINDOW_MS?: string
+  LEGAL_PUBLIC_BUDGET_SITE_OP_LIMIT?: string
+  LEGAL_PUBLIC_BUDGET_SITE_OP_WINDOW_MS?: string
+  LEGAL_PUBLIC_BUDGET_REQUEST_REF_LIMIT?: string
+  LEGAL_PUBLIC_BUDGET_REQUEST_REF_WINDOW_MS?: string
+  LEGAL_DIGEST_KEY_ACTIVE?: string
+  LEGAL_DIGEST_KEYS_PREVIOUS?: string
   db?: ReturnType<typeof createDb>
   [key: string]: ApiValue
 }
@@ -158,7 +167,10 @@ export function shouldBypassE2eAuthRateLimit(
 // WeakMap keyed on the D1 binding instance — safe for the Worker lifecycle
 const authCache = new WeakMap<D1Database, unknown>()
 
-function normalizeOrigin(value: string | undefined): string | null {
+// Exported for U5's legal-access dashboard-origin resolution (see
+// server/utils/legal-access.ts) — the same normalization every other
+// trusted-origin comparison in this file already relies on.
+export function normalizeOrigin(value: string | undefined): string | null {
   const trimmed = value?.trim().replace(/\/$/, '')
   if (!trimmed) return null
   const withProtocol = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`
@@ -238,7 +250,8 @@ export function createAuth(env: CloudflareEnv) {
   } as const
   const authBaseUrl = env.BETTER_AUTH_URL?.replace(/\/$/, '')
   if (!authBaseUrl) throw new Error('BETTER_AUTH_URL is required')
-  const stripeClient = createStripeClient(env.STRIPE_SECRET_KEY ?? 'sk_test_placeholder')
+  if (!env.STRIPE_SECRET_KEY) throw new Error('STRIPE_SECRET_KEY is required')
+  const stripeClient = createStripeClient(env.STRIPE_SECRET_KEY)
   const loadStripePlans = createStripePlanLoader(stripeClient, env)
 
   const instance = betterAuth({
@@ -247,7 +260,14 @@ export function createAuth(env: CloudflareEnv) {
     secret: env.BETTER_AUTH_SECRET,
     trustedOrigins: trustedOriginsForAuth(env),
     user: {
-      deleteUser: { enabled: true },
+      // Account deletion is scheduled through /api/user/delete-account and
+      // performed by the deletion-sweep task (server/utils/tenant-deletion.ts),
+      // which also removes the organizations the account owns alone. Better
+      // Auth's own /delete-user route stays disabled: it would delete the user
+      // immediately and leave those organizations with no owner, still serving.
+      additionalFields: {
+        deletionScheduledAt: { type: 'date', required: false, input: false },
+      },
     },
     rateLimit: {
       customRules: {
@@ -411,6 +431,10 @@ export function createAuth(env: CloudflareEnv) {
                  WHERE anonymous_user_id = ?
                )
           `, [newUser.user.id, now, anonymousUser.user.id, anonymousUser.user.id])
+          // U4/U9 (R27, KTD9): sets legal_intake_references.current_authorized_user_id
+          // once, from NULL only — replay-safe and collision-safe, never touches
+          // original_actor_id/kind (original anonymous attribution is preserved).
+          await linkLegalIntakeAuthorizedUser(db, anonymousUser.user.id, newUser.user.id)
         },
       }),
       oauthProvider({
@@ -440,9 +464,22 @@ export function createAuth(env: CloudflareEnv) {
         },
       }),
       cimd({
-        allowLoopback: import.meta.dev || env.E2E_ALLOW_DEV_ROUTES === 'true',
-        onClientCreated: normalizeCimdClientAuthentication,
-        onClientRefreshed: normalizeCimdClientAuthentication,
+        // Required: @better-auth/cimd hands the network boundary to the
+        // application. See server/utils/cimd-metadata-fetch.ts.
+        fetchClientMetadataResource: fetchCimdMetadataResource,
+        onClientCreated: configureCimdTenantScopes,
+        onClientRefreshed: configureCimdTenantScopes,
+        // cimd's default 1s-per-client_id metadata fetch cooldown exists to
+        // stop a caller hammering a third party's jwks_uri. The E2E OAuth/CIMD
+        // suite reuses one fixed (non-nonced) client_id across an initial
+        // exchange and a same-test replay check, and Cloudflare doesn't
+        // guarantee isolate affinity between those requests, so the in-memory
+        // cache can miss twice inside that 1s window and trip the cooldown as
+        // "temporarily_unavailable" — not a real abuse case, just this test's
+        // shape. Lift it only under the E2E dev-route flag (never production).
+        metadataFetchPolicy: env.E2E_ALLOW_DEV_ROUTES === 'true'
+          ? { minimumFetchInterval: 0 }
+          : undefined,
       }),
       organization(configuredOrganizationOptions),
       betterAuthStripe({

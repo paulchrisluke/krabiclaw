@@ -140,21 +140,19 @@ async function assertSavedImage(headers, siteId, imageData, label) {
 
 
 async function createProduct(headers, siteId, locationId) {
-  const category = await mcp(headers, 'create_product_category', { site_id: siteId, location_id: locationId, name: 'Main' })
-  expectStatus('create_product_category succeeds', category)
-  const categoryId = data(category.body)?.category?.id
-  expectValue('create_product_category returns category id', Boolean(categoryId), category.body)
   const product = await mcp(headers, 'create_product', {
     site_id: siteId,
-    location_id: locationId,
     name: 'MCP Image Dish',
     description: 'Used for image tool coverage',
-    category_id: categoryId,
-    price: { amount_minor: 1200, currency: 'USD', unit: 'item', tax_behavior: 'unspecified' },
+    variants: [{ name: 'Standard', prices: [{ unit_amount: 1200, currency: 'USD' }] }],
   })
   expectStatus('create_product succeeds', product)
   const productId = data(product.body)?.product?.id
   expectValue('create_product returns Product id', Boolean(productId), product.body)
+  // Publication and location membership are separate rows; a Product nobody
+  // published is not on the site, which is what the image checks read back.
+  expectStatus('set_product_publication succeeds', await mcp(headers, 'set_product_publication', { site_id: siteId, product_id: productId, published: true }))
+  expectStatus('set_product_location succeeds', await mcp(headers, 'set_product_location', { site_id: siteId, product_id: productId, location_id: locationId, active: true, published: true }))
   return productId
 }
 
@@ -170,17 +168,21 @@ async function createPost(headers, siteId) {
   return postId
 }
 
-async function createExperience(headers, siteId) {
-  const response = await mcp(headers, 'create_experience', {
+async function createSecondProduct(headers, siteId) {
+  const response = await mcp(headers, 'create_product', {
     site_id: siteId,
-    title: 'MCP Image Experience',
-    body: 'Experience used for image tool coverage',
-    status: 'active',
+    name: 'MCP Image Class',
+    description: 'Second Product used for image tool coverage',
+    variants: [{ name: 'Standard', prices: [{ unit_amount: 4500, currency: 'USD' }] }],
   })
-  expectStatus('create_experience succeeds', response)
-  const experienceId = data(response.body)?.id
-  expectValue('create_experience returns experience id', Boolean(experienceId), response.body)
-  return experienceId
+  expectStatus('create_product (second) succeeds', response)
+  const id = data(response.body)?.product?.id
+  expectValue('create_product (second) returns Product id', Boolean(id), response.body)
+  // Carrying is not publishing, and the media steps below read this Product
+  // through the site. The first Product publishes itself; this one did not, so
+  // the later site-scoped reads were exercising an unpublished row.
+  expectStatus('set_product_publication (second) succeeds', await mcp(headers, 'set_product_publication', { site_id: siteId, product_id: id, published: true }))
+  return id
 }
 
 async function assertImageAssignmentTool(headers, name, args, expectation) {
@@ -216,7 +218,7 @@ async function main() {
   expectValue('workspace context stores active location', workspacePayload?.context?.location_id === locationId, workspacePayload)
   const productId = await createProduct(headers, siteId, locationId)
   const postId = await createPost(headers, siteId)
-  const experienceId = await createExperience(headers, siteId)
+  const secondProductId = await createSecondProduct(headers, siteId)
 
   await assertImageAssignmentTool(headers, 'set_media', {
     site_id: siteId,
@@ -272,11 +274,11 @@ async function main() {
 
   await assertImageAssignmentTool(headers, 'attach_media', {
     site_id: siteId,
-    placement: { owner_type: 'product', owner_id: experienceId, slot: 'gallery' },
+    placement: { owner_type: 'product', owner_id: secondProductId, slot: 'gallery' },
     asset_id: assetId,
   }, (payload) => {
-    expectValue('attach_media experience gallery returns experience id', payload?.id === experienceId, payload)
-    expectValue('attach_media experience gallery returns site context', payload?.context?.site_id === siteId, payload)
+    expectValue('attach_media second Product gallery returns its id', payload?.id === secondProductId, payload)
+    expectValue('attach_media second Product gallery returns site context', payload?.context?.site_id === siteId, payload)
   })
 
   const locationRead = await mcp(headers, 'get_location', {
@@ -306,12 +308,12 @@ async function main() {
   expectStatus('get_post succeeds', postRead)
   expectValue('set_media updates post cover', data(postRead.body)?.post?.media?.some(media => media.slot === 'cover' && media.asset_id === assetId), data(postRead.body))
 
-  const experienceRead = await mcp(headers, 'get_experience', {
+  const secondProductRead = await mcp(headers, 'get_product', {
     site_id: siteId,
-    experience_id: experienceId,
+    product_id: secondProductId,
   })
-  expectStatus('get_experience succeeds', experienceRead)
-  expectValue('attach_media updates experience media', data(experienceRead.body)?.experience?.media?.[0]?.asset_id === assetId, data(experienceRead.body))
+  expectStatus('get_product (second) succeeds', secondProductRead)
+  expectValue('attach_media updates the second Product media', data(secondProductRead.body)?.product?.gallery?.[0]?.asset_id === assetId, data(secondProductRead.body))
 
   process.exit(failed ? 1 : 0)
 }

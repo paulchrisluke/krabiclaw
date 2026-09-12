@@ -10,9 +10,10 @@
         </template>
         <template #right>
           <DashboardResourceLocalization
+            v-if="location"
             :site-id="siteId"
             resource-type="business_location"
-            :resource-id="locationId"
+            :resource-id="location.id"
             resource-label="location"
             :fields="locationLocalizationFields"
             :route-path="localizedLocationPath"
@@ -46,27 +47,41 @@
         </template>
 
         <template #detail>
-          <div v-if="editorKey === 'profile'" class="space-y-6">
-            <p class="text-base text-muted">The public identity and contact details for this location.</p>
-            <div class="flex flex-wrap gap-6">
-              <UCheckbox :model-value="detailsForm.status === 'active'" label="Active" @update:model-value="setDetailsActive" />
-            </div>
-            <UFormField label="Name"><UInput v-model="detailsForm.title" size="xl" autofocus class="w-full" /></UFormField>
-            <UFormField label="Slug"><UInput v-model="detailsForm.slug" size="xl" class="w-full" /></UFormField>
-            <div class="grid gap-5 sm:grid-cols-2">
-              <UFormField label="City"><UInput v-model="detailsForm.city" size="xl" class="w-full" /></UFormField>
-              <UFormField label="Neighbourhood"><UInput v-model="detailsForm.neighborhood" size="xl" class="w-full" /></UFormField>
-              <UFormField label="Phone"><UInput v-model="detailsForm.phone" type="tel" size="xl" class="w-full" /></UFormField>
-              <UFormField label="Email"><UInput v-model="detailsForm.email" type="email" size="xl" class="w-full" /></UFormField>
-            </div>
+          <UFormField v-if="editorKey === 'name'" label="Name" required>
+            <UInput v-model="detailsForm.title" size="xl" autofocus class="w-full" />
+          </UFormField>
+
+          <UFormField
+            v-else-if="editorKey === 'slug'"
+            label="Slug"
+            description="The location's segment in its public URL."
+          >
+            <UInput v-model="detailsForm.slug" size="xl" autofocus class="w-full" />
+          </UFormField>
+
+          <div v-else-if="editorKey === 'address'" class="space-y-6">
+            <p class="text-base text-muted">Where guests find this location.</p>
+            <UFormField label="Address"><UTextarea v-model="detailsForm.address" :rows="4" autofocus class="w-full" /></UFormField>
+            <UFormField label="City"><UInput v-model="detailsForm.city" size="xl" class="w-full" /></UFormField>
+            <UFormField label="Neighbourhood"><UInput v-model="detailsForm.neighborhood" size="xl" class="w-full" /></UFormField>
+          </div>
+
+          <div v-else-if="editorKey === 'contact'" class="space-y-6">
+            <p class="text-base text-muted">How guests reach this location.</p>
+            <UFormField label="Phone"><UInput v-model="detailsForm.phone" type="tel" size="xl" autofocus class="w-full" /></UFormField>
+            <UFormField label="Email"><UInput v-model="detailsForm.email" type="email" size="xl" class="w-full" /></UFormField>
             <UFormField label="Website URL"><UInput v-model="detailsForm.website_url" type="url" size="xl" class="w-full" /></UFormField>
-            <UFormField label="Address"><UTextarea v-model="detailsForm.address" :rows="4" class="w-full" /></UFormField>
+          </div>
+
+          <div v-else-if="editorKey === 'status'" class="space-y-6">
+            <p class="text-base text-muted">An inactive location is hidden from the public site.</p>
+            <UCheckbox :model-value="detailsForm.status === 'active'" label="Active" @update:model-value="setDetailsActive" />
           </div>
 
 
           <div v-else-if="editorKey === 'hours'" class="space-y-6">
             <p class="text-base text-muted">Set the regular hours shown to guests. A Google Places sync replaces these hours with Google's current record.</p>
-            <HoursTimezoneCard v-model:form="hoursForm" />
+            <LocationHoursCard v-model:form="hoursForm" exceptions />
           </div>
 
           <div v-else-if="editorKey === 'content'" class="space-y-6">
@@ -103,9 +118,33 @@
             <UFormField label="WhatsApp notification phone" help="Use international format, for example +66812345678.">
               <UInput v-model="detailsForm.notification_phone" type="tel" placeholder="+66..." size="xl" class="w-full" />
             </UFormField>
-            <UFormField label="Timezone">
-              <USelectMenu v-model="detailsForm.timezone" :items="timezoneOptions" placeholder="Select timezone" size="xl" class="w-full" />
-            </UFormField>
+          </div>
+
+          <div v-else-if="editorKey === 'reservations'" class="space-y-6">
+            <p class="text-base text-muted">
+              Reservations are open at this location while a policy exists here. Every rule you
+              state below is a sentence guests read before they book; a rule left unchecked is not
+              stated at all.
+            </p>
+            <UAlert
+              v-if="!reservationConfigExists"
+              color="neutral"
+              variant="soft"
+              icon="i-lucide-calendar-off"
+              description="This location does not take reservations yet. Saving a policy opens them."
+            />
+            <ReservationPolicyForm v-model="reservationForm" />
+            <UButton
+              v-if="reservationConfigExists"
+              color="error"
+              variant="soft"
+              icon="i-lucide-trash-2"
+              :loading="closingReservations"
+              :disabled="saving"
+              @click="closeReservations"
+            >
+              Stop taking reservations here
+            </UButton>
           </div>
 
           <div v-else-if="editorKey === 'features'" class="space-y-6">
@@ -125,14 +164,15 @@
   </UDashboardPanel>
 </template>
 <script setup lang="ts">
-import HoursTimezoneCard, { type HoursTimezoneForm } from '~/lib/components/workspace/onboarding/HoursTimezoneCard.vue'
+import LocationHoursCard, { type LocationHoursForm } from '~/lib/components/workspace/location/LocationHoursCard.vue'
 import { parseOpeningHours, parseSpecialHours, type OpeningHours, type SpecialHours } from '~/shared/reservation-hours'
 import DashboardResourceLocalization from '~/components/dashboard/DashboardResourceLocalization.vue'
 
 import EditorPaneShell from '~/components/dashboard/EditorPaneShell.vue'
 import EditorNavigationList from '~/components/dashboard/EditorNavigationList.vue'
+import ReservationPolicyForm from '~/components/dashboard/ReservationPolicyForm.vue'
+import type { LocationReservationConfig, LocationReservationConfigPatch } from '~/server/utils/reservations'
 const dashboardApi = useDashboardApi()
-import { TIMEZONE_OPTIONS } from '~/utils/timezone'
 import { getErrorMessage } from '~/utils/errors'
 import { defaultModuleFeaturesForVertical, resolveCmsCapabilities, toggleableModulesForScope, type ProductFeature } from '~/config/cms-registry'
 import { resolvePublicTemplate } from '~/utils/template-registry'
@@ -170,11 +210,16 @@ const router = useRouter()
 const toast = useToast()
 const dashboard = useDashboardSite()
 const dashboardLocation = useDashboardLocation()
-const siteId = await useDashboardSiteId()
-const locationId = computed(() => dashboardLocation.currentLocationId.value ?? '')
 const sitePath = computed(() => `/dashboard/${String(route.params.orgSlug)}/sites/${String(route.params.siteSlug)}`)
 const locationPath = computed(() => `${sitePath.value}/locations/${String(route.params.locationSlug)}`)
 const settingsPath = computed(() => `${locationPath.value}/settings`)
+// `useEditorFrame` provides and injects, so it runs before any `await`, and it
+// owns the split of the route below this level. The `route.params.segments`
+// derivation this replaces was a second copy of the composable's `rest`.
+const frame = useEditorFrame(settingsPath)
+
+const siteId = await useDashboardSiteId()
+const locationId = computed(() => dashboardLocation.currentLocationId.value)
 
 // Up one level: out of a section back to the settings index, out of the index
 // back to the location overview.
@@ -182,14 +227,10 @@ const settingsPath = computed(() => `${locationPath.value}/settings`)
 // way out is the sheet's close control, which lands on the settings index — the
 // index that is already beside it at `lg`.
 const levelBackTo = computed(() => locationPath.value)
-const routeSegments = computed(() => {
-  const raw = route.params.segments
-  if (Array.isArray(raw)) return raw.map(String)
-  return raw ? [String(raw)] : []
-})
+const routeSegments = frame.rest
 const detailKey = computed(() => routeSegments.value[0] ?? null)
-const editorKey = computed(() => detailKey.value ?? 'profile')
-const validDetailKeys = new Set(['profile', 'hours', 'content', 'discovery', 'notifications', 'features'])
+const editorKey = computed(() => detailKey.value ?? 'name')
+const validDetailKeys = new Set(['name', 'slug', 'address', 'contact', 'status', 'hours', 'content', 'discovery', 'notifications', 'reservations', 'features'])
 if (routeSegments.value.length > 1 || (detailKey.value && !validDetailKeys.has(detailKey.value))) {
   throw createError({ statusCode: 404, statusMessage: 'Location setting not found' })
 }
@@ -306,6 +347,24 @@ async function saveLocationFeatures() {
 const placeSyncResult = ref('')
 const detailsSaving = ref(false)
 
+// The reservation policy is its own row (location_reservation_configs), not a
+// column on the location, so it loads and saves through its own endpoint. A
+// null row means this location does not take reservations — the absence of the
+// capability, not an empty policy.
+const reservationConfig = ref<LocationReservationConfig | null>(null)
+const reservationForm = ref<LocationReservationConfigPatch>({})
+const reservationSaving = ref(false)
+const closingReservations = ref(false)
+const reservationConfigExists = computed(() => reservationConfig.value !== null)
+const isReservationConfigResponse = (value: unknown): value is { success: true; config: LocationReservationConfig | null } =>
+  isRecord(value) && value.success === true && (value.config === null || isRecord(value.config))
+
+function reservationPatchFrom(config: LocationReservationConfig | null): LocationReservationConfigPatch {
+  if (!config) return {}
+  const { location_id: _locationId, organization_id: _organizationId, created_at: _createdAt, updated_at: _updatedAt, ...patch } = config
+  return patch
+}
+
 const detailsForm = reactive({
   title: '',
   slug: '',
@@ -323,7 +382,6 @@ const detailsForm = reactive({
   description: '',
   status: 'active',
   notification_phone: '',
-  timezone: '',
 })
 const siteLocalizationSettingsPath = computed(() => `/dashboard/${route.params.orgSlug}/sites/${route.params.siteSlug}/settings/localization`)
 const locationLocalizationFields = computed(() => [
@@ -340,9 +398,8 @@ function localizedLocationPath(locale: string): string {
   return `/${locale}/locations/${slug}`
 }
 
-const timezoneOptions = TIMEZONE_OPTIONS
 
-const hoursForm = ref<HoursTimezoneForm>({ timezone: '', hours: null, specialHours: null })
+const hoursForm = ref<LocationHoursForm>({ timezone: '', hours: null, specialHours: null })
 
 function fillDetailsForm(loc: BusinessLocation) {
   detailsForm.title = loc.title
@@ -362,8 +419,7 @@ function fillDetailsForm(loc: BusinessLocation) {
   hoursForm.value = { timezone: loc.timezone ?? '', hours: parseOpeningHours(loc.opening_hours), specialHours: parseSpecialHours(loc.special_hours) }
   detailsForm.status = loc.status
   detailsForm.notification_phone = loc.notification_phone ?? ''
-  detailsForm.timezone = loc.timezone ?? ''
-}
+  }
 
 const setDetailsActive = (v: boolean | 'indeterminate') => {
   if (v === 'indeterminate') return
@@ -371,52 +427,75 @@ const setDetailsActive = (v: boolean | 'indeterminate') => {
 }
 
 const addressSummary = computed(() => location.value?.address?.addressLines?.join(', ') || location.value?.city || 'Not set')
+const nameSummary = computed(() => location.value?.title?.trim() || 'Not named yet')
+const slugSummary = computed(() => location.value?.slug?.trim() || 'Not set')
+const contactSummary = computed(() => location.value?.phone?.trim() || location.value?.email?.trim() || location.value?.website_url?.trim() || 'Not set')
+const statusSummary = computed(() => location.value?.status === 'active' ? 'Active' : 'Hidden from the public site')
 const hoursSummary = computed(() => location.value?.opening_hours === null ? 'Not set' : `${location.value?.opening_hours?.periods.length ?? 0} opening periods`)
 const contentSummary = computed(() => location.value?.short_description?.trim() || location.value?.description?.trim() || 'Not set')
 const discoverySummary = computed(() => location.value?.google_place_id ? 'Google Places connected' : 'Not connected')
-const notificationSummary = computed(() => location.value?.notification_phone || location.value?.timezone || 'Not configured')
+const notificationSummary = computed(() => location.value?.notification_phone || 'Not configured')
+const reservationSummary = computed(() => {
+  const config = reservationConfig.value
+  if (!config) return 'Not taking reservations'
+  return config.slot_capacity === null ? 'Open, no seat limit' : `Open, ${config.slot_capacity} guests per slot`
+})
 const featureSummary = computed(() => {
   const count = locationToggleableFeatures.value.filter(feature => locationEnabledFeatureSet[feature]).length
   return count ? `${count} ${count === 1 ? 'module' : 'modules'} available` : 'No location modules'
 })
 const navigationItems = computed(() => [
-  { id: 'profile', label: 'Profile', summary: addressSummary.value, icon: 'i-lucide-map-pin', to: `${settingsPath.value}/profile` },
+  { id: 'name', label: 'Name', summary: nameSummary.value, icon: 'i-lucide-type', to: `${settingsPath.value}/name` },
+  { id: 'slug', label: 'Slug', summary: slugSummary.value, icon: 'i-lucide-link', to: `${settingsPath.value}/slug` },
+  { id: 'address', label: 'Address', summary: addressSummary.value, icon: 'i-lucide-map-pin', to: `${settingsPath.value}/address` },
+  { id: 'contact', label: 'Contact', summary: contactSummary.value, icon: 'i-lucide-phone', to: `${settingsPath.value}/contact` },
+  { id: 'status', label: 'Status', summary: statusSummary.value, icon: 'i-lucide-eye', to: `${settingsPath.value}/status` },
   { id: 'hours', label: 'Hours', summary: hoursSummary.value, icon: 'i-lucide-clock-3', to: `${settingsPath.value}/hours` },
   { id: 'content', label: 'Public content', summary: contentSummary.value, icon: 'i-lucide-align-left', to: `${settingsPath.value}/content` },
   { id: 'discovery', label: 'Discovery', summary: discoverySummary.value, icon: 'i-simple-icons-googlemaps', to: `${settingsPath.value}/discovery` },
   { id: 'notifications', label: 'Notifications', summary: notificationSummary.value, icon: 'i-lucide-bell', to: `${settingsPath.value}/notifications` },
+  { id: 'reservations', label: 'Reservations', summary: reservationSummary.value, icon: 'i-lucide-calendar-check', to: `${settingsPath.value}/reservations` },
   { id: 'features', label: 'Available features', summary: featureSummary.value, icon: 'i-lucide-layout-grid', to: `${settingsPath.value}/features` },
 ])
 const navigationGroups = computed(() => [
-  { id: 'location', label: 'Location', items: navigationItems.value.slice(0, 2) },
-  { id: 'guest-facing', label: 'Guest-facing details', items: navigationItems.value.slice(2, 4) },
-  { id: 'operations', label: 'Operations', items: navigationItems.value.slice(4) },
+  { id: 'location', label: 'Location', items: navigationItems.value.slice(0, 6) },
+  { id: 'guest-facing', label: 'Guest-facing details', items: navigationItems.value.slice(6, 8) },
+  { id: 'operations', label: 'Operations', items: navigationItems.value.slice(8) },
 ])
 const detailTitles: Record<string, string> = {
-  profile: 'Profile',
+  name: 'Name',
+  slug: 'Slug',
+  address: 'Address',
+  contact: 'Contact',
+  status: 'Status',
   hours: 'Hours',
   content: 'Public content',
   discovery: 'Discovery',
   notifications: 'Notifications',
+  reservations: 'Reservations',
   features: 'Available features',
 }
-const hasDetail = computed(() => detailKey.value !== null)
+const hasDetail = computed(() => routeSegments.value.length > 0)
 // Names the level, not the open section: at `lg` the section's title is a
 // heading on its own pane with the index still beside it.
 const navbarTitle = computed(() => location.value?.title || 'Location')
-const saving = computed(() => detailsSaving.value || savingLocationFeatures.value)
+// Every write this screen can be in the middle of, including the one that
+// stops reservations: Save stayed live during that delete, and a save landing
+// on top of it recreated the policy it had just removed.
+const saving = computed(() => detailsSaving.value || savingLocationFeatures.value || reservationSaving.value || closingReservations.value)
 
 function editorSignature(key: string | null): string {
   switch (key) {
-    case 'profile': return JSON.stringify([
-      detailsForm.title, detailsForm.slug, detailsForm.city, detailsForm.neighborhood,
-      detailsForm.phone, detailsForm.email, detailsForm.website_url, detailsForm.address,
-      detailsForm.status,
-    ])
+    case 'name': return JSON.stringify(detailsForm.title)
+    case 'slug': return JSON.stringify(detailsForm.slug)
+    case 'address': return JSON.stringify([detailsForm.address, detailsForm.city, detailsForm.neighborhood])
+    case 'contact': return JSON.stringify([detailsForm.phone, detailsForm.email, detailsForm.website_url])
+    case 'status': return JSON.stringify(detailsForm.status)
     case 'hours': return JSON.stringify(hoursForm.value)
     case 'content': return JSON.stringify([detailsForm.short_description, detailsForm.description, detailsForm.price_level])
     case 'discovery': return JSON.stringify([detailsForm.google_place_id, detailsForm.maps_url, detailsForm.google_review_url])
-    case 'notifications': return JSON.stringify([detailsForm.notification_phone, detailsForm.timezone])
+    case 'notifications': return JSON.stringify([detailsForm.notification_phone])
+    case 'reservations': return JSON.stringify(reservationForm.value)
     case 'features': return JSON.stringify(locationToggleableFeatures.value.map(feature => [feature, Boolean(locationEnabledFeatureSet[feature])]))
     default: return ''
   }
@@ -431,9 +510,9 @@ function isValidUrl(value: string): boolean {
   }
 }
 const validationMessage = computed(() => {
-  if (editorKey.value === 'profile') {
-    if (!detailsForm.title.trim()) return 'Enter a location name.'
-    if (!detailsForm.slug.trim()) return 'Enter a location slug.'
+  if (editorKey.value === 'name' && !detailsForm.title.trim()) return 'Enter a location name.'
+  if (editorKey.value === 'slug' && !detailsForm.slug.trim()) return 'Enter a location slug.'
+  if (editorKey.value === 'contact') {
     if (detailsForm.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(detailsForm.email)) return 'Enter a valid email address.'
     if (!isValidUrl(detailsForm.website_url)) return 'Enter a complete website URL.'
   }
@@ -458,6 +537,7 @@ const saveDisabled = computed(() => {
 function resetDraft() {
   if (!location.value) return
   fillDetailsForm(location.value)
+  reservationForm.value = reservationPatchFrom(reservationConfig.value)
   fillLocationFeatures({
     site_effective_features: siteEffectiveFeatures.value,
     location_effective_features: locationEffectiveFeatures.value,
@@ -501,26 +581,84 @@ async function patchLocation(body: Record<string, unknown>, successMessage: stri
   }
 }
 
+async function saveReservationPolicy() {
+  const requestedLocationId = locationId.value
+  reservationSaving.value = true
+  try {
+    const response = await dashboardApi<{ success: true; config: LocationReservationConfig | null }>(
+      `/api/editor/sites/${siteId}/locations/${requestedLocationId}/reservation-config`,
+      { method: 'PUT', body: reservationForm.value, validate: isReservationConfigResponse },
+    )
+    if (locationId.value !== requestedLocationId) return
+    reservationConfig.value = response.config
+    reservationForm.value = reservationPatchFrom(response.config)
+    originalSignature.value = editorSignature(editorKey.value)
+    toast.add({ description: 'Reservation policy saved', color: 'success' })
+  } catch (error) {
+    toast.add({ description: getErrorMessage(error, 'Failed to save the reservation policy'), color: 'error' })
+  } finally {
+    reservationSaving.value = false
+  }
+}
+
+async function closeReservations() {
+  const requestedLocationId = locationId.value
+  closingReservations.value = true
+  try {
+    await dashboardApi<{ success: true }>(
+      `/api/editor/sites/${siteId}/locations/${requestedLocationId}/reservation-config`,
+      { method: 'DELETE', validate: (value: unknown): value is { success: true } => isRecord(value) && value.success === true },
+    )
+    if (locationId.value !== requestedLocationId) return
+    reservationConfig.value = null
+    reservationForm.value = {}
+    originalSignature.value = editorSignature(editorKey.value)
+    toast.add({ description: 'This location no longer takes reservations', color: 'success' })
+  } catch (error) {
+    toast.add({ description: getErrorMessage(error, 'Failed to close reservations'), color: 'error' })
+  } finally {
+    closingReservations.value = false
+  }
+}
+
 async function saveCurrentEditor() {
   if (saveDisabled.value) return
+  if (editorKey.value === 'reservations') {
+    await saveReservationPolicy()
+    return
+  }
   if (editorKey.value === 'features') {
     await saveLocationFeatures()
     return
   }
-  if (editorKey.value === 'profile') {
+  if (editorKey.value === 'name') {
+    await patchLocation({ title: detailsForm.title.trim() }, 'Name saved')
+    return
+  }
+  if (editorKey.value === 'slug') {
+    await patchLocation({ slug: detailsForm.slug.trim() }, 'Slug saved')
+    return
+  }
+  if (editorKey.value === 'address') {
     await patchLocation({
-      title: detailsForm.title.trim(),
-      slug: detailsForm.slug.trim(),
-      city: detailsForm.city.trim() || null,
-      neighborhood: detailsForm.neighborhood.trim() || null,
-      phone: detailsForm.phone.trim() || null,
-      email: detailsForm.email.trim() || null,
-      website_url: detailsForm.website_url.trim() || null,
       address: detailsForm.address.trim()
         ? { addressLines: detailsForm.address.split('\n').map(line => line.trim()).filter(Boolean) }
         : null,
-      status: detailsForm.status,
-    }, 'Profile saved')
+      city: detailsForm.city.trim() || null,
+      neighborhood: detailsForm.neighborhood.trim() || null,
+    }, 'Address saved')
+    return
+  }
+  if (editorKey.value === 'contact') {
+    await patchLocation({
+      phone: detailsForm.phone.trim() || null,
+      email: detailsForm.email.trim() || null,
+      website_url: detailsForm.website_url.trim() || null,
+    }, 'Contact saved')
+    return
+  }
+  if (editorKey.value === 'status') {
+    await patchLocation({ status: detailsForm.status }, 'Status saved')
     return
   }
   if (editorKey.value === 'hours') {
@@ -543,9 +681,11 @@ async function saveCurrentEditor() {
     }, 'Discovery settings saved')
     return
   }
+  // The timezone belongs to Hours, which requires it. Editing it here as well
+  // let a Notifications save write null over the value Hours validates, and
+  // the location's opening times are read in that zone.
   await patchLocation({
     notification_phone: detailsForm.notification_phone.trim() || null,
-    timezone: detailsForm.timezone || null,
   }, 'Notifications saved')
 }
 
@@ -584,6 +724,7 @@ async function syncGooglePlace() {
 
 interface LocationSettingsResource {
   location: { success: true; location: BusinessLocation } & LocationCapabilitySummary
+  reservationConfig: { success: true; config: LocationReservationConfig | null }
 }
 
 const requestEvent = useRequestEvent()
@@ -601,11 +742,17 @@ const {
     const { loadDashboardLocationSettings } = await import('~/server/utils/dashboard-editor-resources')
     return await loadDashboardLocationSettings(requestEvent, siteId, requestedLocationId)
   }
-  const locationResponse = await dashboardApi<{ success: true; location: BusinessLocation } & LocationCapabilitySummary>(
-    `/api/dashboard/locations/${requestedLocationId}`,
-    { validate: isLocationResponse },
-  )
-  return { location: locationResponse }
+  const [locationResponse, reservationResponse] = await Promise.all([
+    dashboardApi<{ success: true; location: BusinessLocation } & LocationCapabilitySummary>(
+      `/api/dashboard/locations/${requestedLocationId}`,
+      { validate: isLocationResponse },
+    ),
+    dashboardApi<{ success: true; config: LocationReservationConfig | null }>(
+      `/api/editor/sites/${siteId}/locations/${requestedLocationId}/reservation-config`,
+      { validate: isReservationConfigResponse },
+    ),
+  ])
+  return { location: locationResponse, reservationConfig: reservationResponse }
 }, {
   watch: [locationId],
 })
@@ -619,6 +766,8 @@ watch(
       : null
     if (!resource) return
     location.value = resource.location.location
+    reservationConfig.value = resource.reservationConfig.config
+    reservationForm.value = reservationPatchFrom(resource.reservationConfig.config)
     fillLocationFeatures(resource.location)
     fillDetailsForm(resource.location.location)
     originalSignature.value = editorSignature(editorKey.value)

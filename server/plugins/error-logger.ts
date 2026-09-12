@@ -1,4 +1,5 @@
 import { definePlugin } from 'nitro';
+import { errorChainForTelemetry } from '~/server/utils/error-telemetry'
 
 export default definePlugin((nitroApp) => {
   nitroApp.hooks.hook('error', async (error, { event: _event }) => {
@@ -9,9 +10,6 @@ export default definePlugin((nitroApp) => {
     // Mirrors the same >=500 threshold already used in server/api/auth/[...].ts.
     const statusCode = (error as { statusCode?: number }).statusCode
     const log = statusCode && statusCode < 500 ? console.warn : console.error
-    log('[NITRO_SERVER_ERROR]', error.message)
-    if (error.stack) {
-      log('[NITRO_SERVER_STACK]', error.stack)
-    }
+    log('[NITRO_SERVER_ERROR]', errorChainForTelemetry(error))
   })
 })

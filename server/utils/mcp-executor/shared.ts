@@ -1,11 +1,9 @@
-import { WEEKDAYS, parseRecurringSlots } from '~/shared/reservation-hours'
 import { errorChainForTelemetry } from "~/server/utils/error-telemetry";
 import { HTTPError } from 'nitro';
 import type { H3Event } from 'nitro';
 import { queryFirst } from "~/server/db";
 import { isIP } from "node:net";
 import { getMediaAsset } from "~/server/utils/media-asset-manager";
-import { generateSlots } from "~/server/utils/experiences";
 import type { getMcpTool } from "~/server/utils/mcp-tools";
 import { requireMcpUser, type McpSiteContext, type McpUserContext } from "~/server/utils/mcp-auth";
 import { mcpProtocolError, MCP_ERROR } from "~/server/utils/mcp-protocol";
@@ -32,23 +30,6 @@ export function resolveImageUploadProvider(contentType: string, env: ApiRecord):
     throw new Error("Cloudflare Images not configured");
   }
   return provider as "cloudflare_r2" | "cloudflare_images" | undefined;
-}
-
-export function haversineKm(
-  lat1: number,
-  lng1: number,
-  lat2: number,
-  lng2: number,
-): number {
-  const R = 6371;
-  const dLat = (lat2 - lat1) * (Math.PI / 180);
-  const dLng = (lng2 - lng1) * (Math.PI / 180);
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(lat1 * (Math.PI / 180)) *
-      Math.cos(lat2 * (Math.PI / 180)) *
-      Math.sin(dLng / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
 export async function resolveGeneratedImageUpload(
@@ -145,32 +126,6 @@ export async function requireActiveImageAsset(
     );
   }
   return asset;
-}
-
-export function expandSlotGeneratorArgs(args: Record<string, unknown>): Record<string, unknown> {
-  const { slot_start, slot_end, slot_interval_minutes, slot_weekday, ...rest } = args;
-  if (slot_start === undefined && slot_end === undefined && slot_interval_minutes === undefined) {
-    if (slot_weekday !== undefined) {
-      throw mcpProtocolError(
-        MCP_ERROR.invalidParams,
-        "slot_weekday requires slot_start, slot_end, and slot_interval_minutes to also be provided.",
-      );
-    }
-    return rest;
-  }
-  if (typeof slot_start !== "string" || typeof slot_end !== "string" || typeof slot_interval_minutes !== "number") {
-    throw mcpProtocolError(
-      MCP_ERROR.invalidParams,
-      "slot_start, slot_end, and slot_interval_minutes must all be provided together.",
-    );
-  }
-  const generated = generateSlots(slot_start, slot_end, slot_interval_minutes);
-  const existing = parseRecurringSlots(rest.recurring_slots ?? null) ?? {};
-  if (slot_weekday === undefined) return { ...rest, recurring_slots: Object.fromEntries(WEEKDAYS.map(day => [day, generated])) };
-  const day = WEEKDAYS.find(day => day === slot_weekday);
-  if (!day) throw mcpProtocolError(MCP_ERROR.invalidParams, 'slot_weekday must be a lowercase weekday name.');
-  return { ...rest, recurring_slots: { ...existing, [day]: generated } };
-
 }
 
 export interface GeneratedImagePickerConfig {
@@ -533,211 +488,6 @@ export async function resolveUserUploadedMediaFile(
   }
 }
 
-export interface GoogleMapsSignals {
-  nameHint: string | null;
-  lat: number | null;
-  lng: number | null;
-  rawId: string | null;
-  isChijId: boolean;
-}
-
-export interface GoogleMapsPlaceCandidate {
-  placeId?: string | null;
-  lat?: number | null;
-  lng?: number | null;
-}
-
-export interface GoogleMapsPlaceResolution {
-  placeId: string;
-  resolvedUrl: string;
-  usedTextSearch: boolean;
-}
-
-interface GoogleMapsPlaceResolverDependencies {
-  resolveShortLink: (_url: string) => Promise<{ ok: boolean; url: string }>;
-  searchPlaces: (
-    _query: string,
-    _locationBias: { latitude: number; longitude: number },
-  ) => Promise<GoogleMapsPlaceCandidate[]>;
-}
-
-function validCoordinates(
-  lat: number | null | undefined,
-  lng: number | null | undefined,
-): { lat: number; lng: number } | null {
-  if (
-    typeof lat === "number" &&
-    Number.isFinite(lat) &&
-    lat >= -90 &&
-    lat <= 90 &&
-    typeof lng === "number" &&
-    Number.isFinite(lng) &&
-    lng >= -180 &&
-    lng <= 180
-  ) {
-    return { lat, lng };
-  }
-  return null;
-}
-
-export async function resolveGoogleMapsPlace(
-  rawUrl: string,
-  dependencies: GoogleMapsPlaceResolverDependencies,
-): Promise<GoogleMapsPlaceResolution> {
-  let parsedUrl: URL;
-  try {
-    parsedUrl = new URL(rawUrl);
-  } catch {
-    throw mcpProtocolError(MCP_ERROR.invalidParams, "Invalid Maps URL.");
-  }
-
-  if (!isAllowedGoogleMapsHost(parsedUrl.hostname)) {
-    throw mcpProtocolError(
-      MCP_ERROR.invalidParams,
-      "URL does not appear to be a Google Maps link. Please paste a google.com/maps or maps.app.goo.gl link.",
-    );
-  }
-
-  let resolvedUrl = parsedUrl.toString();
-  if (parsedUrl.hostname === "maps.app.goo.gl") {
-    let probe: { ok: boolean; url: string };
-    try {
-      probe = await dependencies.resolveShortLink(parsedUrl.toString());
-    } catch {
-      throw new HTTPError({
-        statusCode: 502,
-        statusMessage: "Google Maps link resolution failed.",
-      });
-    }
-
-    let resolvedHost: string;
-    try {
-      resolvedHost = new URL(probe.url).hostname;
-    } catch {
-      throw mcpProtocolError(
-        MCP_ERROR.invalidParams,
-        "The Google Maps share link did not resolve to a valid Google Maps place URL.",
-      );
-    }
-    if (!probe.ok || !isAllowedGoogleMapsHost(resolvedHost)) {
-      throw mcpProtocolError(
-        MCP_ERROR.invalidParams,
-        "The Google Maps share link did not resolve to a valid Google Maps place URL.",
-      );
-    }
-    resolvedUrl = probe.url;
-  }
-
-  const signals = extractGoogleMapsSignals(resolvedUrl);
-  if (signals.isChijId && signals.rawId) {
-    return {
-      placeId: signals.rawId,
-      resolvedUrl,
-      usedTextSearch: false,
-    };
-  }
-
-  if (!signals.nameHint) {
-    throw mcpProtocolError(
-      MCP_ERROR.invalidParams,
-      "Could not extract place details from that Maps URL. Try copying the full Google Maps URL from the address bar.",
-    );
-  }
-  const urlCoordinates = validCoordinates(signals.lat, signals.lng);
-  if (!urlCoordinates) {
-    throw mcpProtocolError(
-      MCP_ERROR.invalidParams,
-      "This URL does not contain valid location coordinates. Paste the full Google Maps URL from the address bar so the place can be identified precisely.",
-    );
-  }
-
-  const locationBias = {
-    latitude: urlCoordinates.lat,
-    longitude: urlCoordinates.lng,
-  };
-  let results: GoogleMapsPlaceCandidate[];
-  try {
-    results = await dependencies.searchPlaces(signals.nameHint, locationBias);
-  } catch (error) {
-    throw new HTTPError({
-      statusCode: 502,
-      statusMessage:
-        error instanceof Error ? error.message : "Google Places search failed.",
-    });
-  }
-
-  const candidate = results[0];
-  if (!candidate?.placeId) {
-    throw mcpProtocolError(
-      MCP_ERROR.invalidParams,
-      `Could not find "${signals.nameHint}" in Google Places. Try the full Maps URL from the address bar.`,
-    );
-  }
-  const candidateCoordinates = validCoordinates(candidate.lat, candidate.lng);
-  if (!candidateCoordinates) {
-    throw mcpProtocolError(
-      MCP_ERROR.invalidParams,
-      `The top search result for "${signals.nameHint}" did not include valid coordinates and could not be verified against the Maps URL.`,
-    );
-  }
-
-  const distanceKm = haversineKm(
-    locationBias.latitude,
-    locationBias.longitude,
-    candidateCoordinates.lat,
-    candidateCoordinates.lng,
-  );
-  if (distanceKm > 5) {
-    throw mcpProtocolError(
-      MCP_ERROR.invalidParams,
-      `The top search result for "${signals.nameHint}" is ${Math.round(distanceKm)} km from the location in that URL. Paste the full Google Maps URL from the address bar so the exact place can be identified.`,
-    );
-  }
-
-  return {
-    placeId: candidate.placeId,
-    resolvedUrl,
-    usedTextSearch: true,
-  };
-}
-
-export function extractGoogleMapsSignals(resolvedUrl: string): GoogleMapsSignals {
-  const rawIdMatch = resolvedUrl.match(/!1s([^!&]+)/);
-  let rawId: string | null = null;
-  if (rawIdMatch?.[1]) {
-    try {
-      rawId = decodeURIComponent(rawIdMatch[1]);
-    } catch {
-      rawId = null;
-    }
-  }
-  const isChijId = rawId ? /^ChIJ/.test(rawId) : false;
-
-  const nameFromPath = resolvedUrl.match(/\/maps\/place\/([^/@?]+)/)?.[1];
-  let nameHint: string | null = null;
-  if (nameFromPath) {
-    try {
-      nameHint = decodeURIComponent(nameFromPath.replace(/\+/g, " "));
-    } catch {
-      nameHint = null;
-    }
-  }
-
-  // !3d/!4d are the exact business coords; @ is the map viewport (less precise)
-  const coordinatePattern = "-?\\d+(?:\\.\\d+)?";
-  const lat3d = resolvedUrl.match(new RegExp(`!3d(${coordinatePattern})`))?.[1];
-  const lng4d = resolvedUrl.match(new RegExp(`!4d(${coordinatePattern})`))?.[1];
-  const viewportMatch = resolvedUrl.match(
-    new RegExp(`@(${coordinatePattern}),(${coordinatePattern})`),
-  );
-  const latRaw = lat3d ?? viewportMatch?.[1] ?? null;
-  const lngRaw = lng4d ?? viewportMatch?.[2] ?? null;
-  const lat = latRaw != null ? Number(latRaw) : null;
-  const lng = lngRaw != null ? Number(lngRaw) : null;
-
-  return { nameHint, lat, lng, rawId, isChijId };
-}
-
 export function workspaceContextPayload(
   organization: Awaited<ReturnType<typeof resolveMcpWorkspace>>["organization"],
   site: McpSiteSummary | null,
@@ -929,7 +679,7 @@ export async function normalizeWorkspaceArguments(
 ) {
   const args = { ...rawArguments };
 
-  if (["get_workspace_context", "set_workspace_context", "import_from_maps", "list_sites"].includes(toolName)) {
+  if (["get_workspace_context", "set_workspace_context", "list_sites"].includes(toolName)) {
     return args;
   }
 
@@ -1024,16 +774,6 @@ export function propertyAllowsNull(schema: Record<string, unknown> | null) {
   if (type === "null") return true;
   if (Array.isArray(type)) return type.includes("null");
   return false;
-}
-
-export function isAllowedGoogleMapsHost(hostname: string): boolean {
-  const h = hostname.toLowerCase();
-  return (
-    h === "maps.app.goo.gl" ||
-    h === "maps.google.com" ||
-    h === "google.com" ||
-    h.endsWith(".google.com")
-  );
 }
 
 export function requiredString(source: Record<string, unknown>, key: string) {

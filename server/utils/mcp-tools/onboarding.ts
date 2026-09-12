@@ -3,42 +3,6 @@ import { fileReferenceObject, generatedImagePickerOutputSchema, globalTool, site
 
 export const ONBOARDING_TOOLS: McpToolDefinition[] = [
   globalTool(withToolAnnotations({
-      name: 'import_from_maps',
-      description: 'Look up business details through Google Places using a Google Maps URL or share link without saving a site or location. The caller decides what to save in the CMS. Media is added after the site exists through the media asset tools.',
-      domain: 'onboarding',
-      minimumRole: 'editor',
-      confirmRequired: false,
-      inputSchema: {
-        type: 'object',
-        properties: {
-          maps_url: { type: 'string', description: 'Google Maps URL or short share link (maps.app.goo.gl or google.com/maps/place/...).' },
-        },
-        required: ['maps_url'],
-        additionalProperties: false,
-      },
-      outputSchema: {
-        type: 'object',
-        properties: {
-          business: {
-            type: 'object',
-            description: 'Parsed business details from Google Places.',
-            properties: {
-              name: { type: 'string' },
-              address: { type: 'string' },
-              phone: { type: ['string', 'null'] },
-              hours: { type: 'array', items: { type: 'string' } },
-              rating: { type: ['number', 'null'] },
-              reviewCount: { type: ['number', 'null'] },
-              placeId: { type: 'string' },
-              mapsUrl: { type: 'string' },
-            },
-            required: ['name', 'address', 'placeId'],
-          },
-        },
-        required: ['business'],
-      },
-    })),
-  globalTool(withToolAnnotations({
       name: 'show_generated_images',
       description: 'Use this after generating AI photos for the user to pick from. First persist each image, then pass the returned asset_id and public_url. To assign the selection, build placement from the target entity type and id.',
       domain: 'onboarding',
@@ -72,12 +36,12 @@ export const ONBOARDING_TOOLS: McpToolDefinition[] = [
     })),
   siteTool({
       name: 'save_generated_image',
-      description: 'Upload a base64-encoded image to Cloudflare Images and persist a media_asset record. Use ONLY when you already have a raw base64 string (e.g. from an external API). For ChatGPT native image_generation output, use save_generated_image_file instead — passing image_generation_call.result base64 here will be blocked by safety checks.',
+      description: 'Upload a base64-encoded image to Cloudflare Images and persist a media_asset record with a public URL. Use ONLY when you already have a raw base64 string (e.g. from an external API). For ChatGPT native image_generation output, use save_generated_image_file instead — passing image_generation_call.result base64 here will be blocked by safety checks.',
       domain: 'onboarding',
       minimumRole: 'editor',
       confirmRequired: false,
       inputSchema: {
-        image_data_base64: { type: 'string', description: 'Base64-encoded image data from image_generation_call.result, or a base64 data URL.' },
+        image_data_base64: { type: 'string', description: 'Raw base64 image bytes or a base64 data URL already available from an external source; use save_generated_image_file for a native ChatGPT generated attachment.' },
         prompt: { type: 'string', description: 'The prompt used to generate the image (stored as alt text).' },
       },
       required: ['image_data_base64'],
@@ -93,7 +57,7 @@ export const ONBOARDING_TOOLS: McpToolDefinition[] = [
     }),
   siteTool({
       name: 'save_generated_image_file',
-      description: 'Use this right after generating an AI photo for the user — "make me a photo", "create an image". Primary path for saving a ChatGPT natively-generated image. After calling image_generation, pass the resulting image as attachment_id (a file reference). This avoids safety blocks that occur when raw base64 is passed to save_generated_image.',
+      description: 'Use this right after generating an AI photo for the user — "make me a photo", "create an image". Primary path for saving a ChatGPT natively-generated image to media storage with a public URL. After calling image_generation, pass the resulting image as attachment_id (a file reference). This avoids safety blocks that occur when raw base64 is passed to save_generated_image.',
       domain: 'onboarding',
       minimumRole: 'editor',
       confirmRequired: false,

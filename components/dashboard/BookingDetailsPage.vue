@@ -57,7 +57,7 @@
               <div class="flex items-center gap-4">
                 <img v-if="changeLocation?.imageUrl" :src="changeLocation.imageUrl" alt="" class="size-16 rounded-xl object-cover">
                 <p class="min-w-0 flex-1 font-semibold text-highlighted">{{ changeLocation?.title }}</p>
-                <UButton :to="`${bookingPath}/change/location`" icon="i-lucide-pencil" aria-label="Change location" color="neutral" variant="soft" square />
+                <UButton v-if="props.bookingType === 'reservation'" :to="`${bookingPath}/change/location`" icon="i-lucide-pencil" aria-label="Change location" color="neutral" variant="soft" square />
               </div>
             </UCard>
             <section>
@@ -235,19 +235,19 @@
     </template>
   </UDashboardPanel>
 
-  <DashboardListItemDialog v-model:open="policyOpen" :title="booking?.policy.heading || 'Cancellation policy'" :show-actions="false">
+  <DashboardListItemDialog v-model:open="policyOpen" :title="booking?.policy?.heading || 'Cancellation policy'" :show-actions="false">
     <div v-if="booking" class="space-y-4">
-      <div v-if="booking.policy.items.length" class="space-y-3">
-        <div v-for="item in booking.policy.items" :key="item.id" class="flex gap-3">
+      <div v-if="booking.policy?.items.length" class="space-y-3">
+        <div v-for="item in booking.policy!.items" :key="item.id" class="flex gap-3">
           <UIcon name="i-lucide-check" class="mt-0.5 size-4 shrink-0 text-success" />
           <p class="text-sm leading-relaxed text-muted">{{ item.text }}</p>
         </div>
       </div>
       <p v-else class="text-sm text-muted">No cancellation terms have been configured for this booking.</p>
-      <div v-if="booking.policy.additional_notes_html" class="border-t border-default pt-4 text-sm text-muted">
+      <div v-if="booking.policy?.additional_notes_html" class="border-t border-default pt-4 text-sm text-muted">
         <!-- Canonical booking-policy writes sanitize this CMS-authored HTML before persistence. -->
         <!-- eslint-disable-next-line vue/no-v-html -->
-        <div v-html="booking.policy.additional_notes_html" />
+        <div v-html="booking.policy!.additional_notes_html" />
       </div>
     </div>
   </DashboardListItemDialog>
@@ -342,7 +342,11 @@ const toast = useToast()
 const orgSlug = computed(() => String(route.params.orgSlug || ''))
 const todayPath = computed(() => `/dashboard/${orgSlug.value}`)
 const bookingPath = computed(() => `${todayPath.value}/bookings/${props.bookingType}/${encodeURIComponent(props.bookingId)}`)
-const editorSegments = computed(() => Array.isArray(route.params.editor) ? route.params.editor : route.params.editor ? [route.params.editor] : [])
+// `useEditorFrame` provides and injects, so it runs before any `await`, and it
+// owns the split of the route below this booking. The `route.params.editor`
+// derivation this replaces was a second copy of the composable's `rest`.
+const frame = useEditorFrame(bookingPath)
+const editorSegments = frame.rest
 const editorKey = computed(() => editorSegments.value[0] || '')
 const editorField = computed(() => editorSegments.value[1] || '')
 const isChangeMode = computed(() => editorKey.value === 'change')
@@ -408,8 +412,8 @@ const statusLabel = computed(() => {
   const status = booking.value?.status || ''
   return status ? status.charAt(0).toUpperCase() + status.slice(1) : ''
 })
-const cancellationSummary = computed(() => booking.value?.policy.items.find(item => item.id === 'cancellation')?.text
-  || 'No cancellation terms have been configured.')
+const cancellationSummary = computed(() => booking.value?.policy?.items.find(item => item.id === 'cancellation')?.text
+  ?? 'No cancellation terms have been configured.')
 const messageTo = computed(() => {
   if (!booking.value?.threadId) return null
   return `/dashboard/${orgSlug.value}/sites/${booking.value.siteSlug}/locations/${booking.value.locationSlug}/inbox/${booking.value.threadId}`
@@ -429,13 +433,35 @@ const changeAttemptKey = ref<string | null>(null)
 const changeAttemptDraft = ref('')
 const changeFieldOriginal = ref<string | number | null>(null)
 const changeLocation = computed(() => booking.value?.locations.find(location => location.id === changeDraft.value.locationId))
-const changeDirty = computed(() => Boolean(booking.value) && (changeDraft.value.bookingDate !== booking.value?.bookingDate || changeDraft.value.bookingTime !== booking.value?.bookingTime.slice(0, 5) || changeDraft.value.partySize !== booking.value?.partySize || changeDraft.value.locationId !== booking.value?.locationId))
-const changeFields = computed(() => [
-  { key: 'date', label: 'Date', summary: changeDraft.value.bookingDate ? formatCalendarDate(changeDraft.value.bookingDate, 'en') : 'Choose a date' },
-  { key: 'time', label: 'Time', summary: changeDraft.value.bookingTime ? formatTime(changeDraft.value.bookingTime, 'en') : 'Choose a time' },
-  { key: 'guests', label: 'Guests', summary: `${changeDraft.value.partySize} ${changeDraft.value.partySize === 1 ? 'guest' : 'guests'}` },
-])
-const changeValid = computed(() => Boolean(changeDraft.value.bookingDate && changeDraft.value.bookingTime && Number.isInteger(changeDraft.value.partySize) && changeDraft.value.partySize > 0))
+const changeDirty = computed(() => {
+  if (!booking.value) return false
+  if (changeDraft.value.partySize !== booking.value.partySize) return true
+  // Only the fields this kind can actually change count as a change.
+  return props.bookingType === 'reservation' && (
+    changeDraft.value.bookingDate !== booking.value.bookingDate
+    || changeDraft.value.bookingTime !== booking.value.bookingTime.slice(0, 5)
+    || changeDraft.value.locationId !== booking.value.locationId)
+})
+/**
+ * What this record can be changed to.
+ *
+ * A reservation moves to a location, date and time. A booking moves to another
+ * SESSION of its product — an occurrence that exists as a row — so a date and
+ * time picker cannot express one, and the screen offers party size only until
+ * it can name a session.
+ */
+const changeFields = computed(() => props.bookingType === 'reservation'
+  ? [
+      { key: 'date', label: 'Date', summary: changeDraft.value.bookingDate ? formatCalendarDate(changeDraft.value.bookingDate, 'en') : 'Choose a date' },
+      { key: 'time', label: 'Time', summary: changeDraft.value.bookingTime ? formatTime(changeDraft.value.bookingTime, 'en') : 'Choose a time' },
+      { key: 'guests', label: 'Guests', summary: `${changeDraft.value.partySize} ${changeDraft.value.partySize === 1 ? 'guest' : 'guests'}` },
+    ]
+  : [
+      { key: 'guests', label: 'Guests', summary: `${changeDraft.value.partySize} ${changeDraft.value.partySize === 1 ? 'guest' : 'guests'}` },
+    ])
+const changeValid = computed(() => props.bookingType === 'reservation'
+  ? Boolean(changeDraft.value.bookingDate && changeDraft.value.bookingTime && changeDraft.value.locationId && Number.isInteger(changeDraft.value.partySize) && changeDraft.value.partySize > 0)
+  : Boolean(booking.value?.sessionId && Number.isInteger(changeDraft.value.partySize) && changeDraft.value.partySize > 0))
 const pendingAction = ref<string | null>(null)
 const actionAttempt = ref<{ draft: string; key: string } | null>(null)
 const noteDraft = ref('')
@@ -587,12 +613,18 @@ async function sendChangeRequest() {
   }
   changeSaving.value = true
   try {
-    const proposal = {
-      bookingDate: changeDraft.value.bookingDate,
-      bookingTime: changeDraft.value.bookingTime,
-      partySize: changeDraft.value.partySize,
-      locationId: changeDraft.value.locationId,
-    }
+    // The writer takes one shape per kind and refuses anything else, so the
+    // screen says which it is sending rather than posting a reservation-shaped
+    // body for both — which is how every change request came back a 400.
+    const proposal = props.bookingType === 'reservation'
+      ? {
+          kind: 'reservation' as const,
+          bookingDate: changeDraft.value.bookingDate,
+          bookingTime: changeDraft.value.bookingTime,
+          partySize: changeDraft.value.partySize,
+          locationId: changeDraft.value.locationId,
+        }
+      : { kind: 'booking' as const, sessionId: booking.value?.sessionId ?? '', partySize: changeDraft.value.partySize }
     const response = await dashboardApi<{ booking: DashboardBookingDetails }>(
       `/api/dashboard/bookings/${props.bookingType}/${encodeURIComponent(props.bookingId)}/changes`,
       {

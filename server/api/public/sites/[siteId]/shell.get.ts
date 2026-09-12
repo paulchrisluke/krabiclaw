@@ -9,7 +9,7 @@ export default defineHandler(async (event) => {
   if (!siteId) throw new HTTPError({ statusCode: 400, statusMessage: 'siteId required' })
   const query = getQuery(event)
   const payload = await loadPublicShell(event, siteId, {
-    locale: typeof query.locale === 'string' ? query.locale : undefined, token: typeof query.token === 'string' ? query.token : undefined, })
+    locale: typeof query.locale === 'string' ? query.locale : undefined, })
   return jsonResponse(finalizeRequestMetrics(event, 'public-shell', payload))
 })
 import { defineHandler } from 'nitro';

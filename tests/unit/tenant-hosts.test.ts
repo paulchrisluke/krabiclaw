@@ -8,7 +8,7 @@ import {
   getPlatformHosts,
   hostnameOf,
   isPlatformHost,
-  isPreviewContext,
+  isNonProductionHost,
   normalizeHost,
   usesTenantHeader,
   type TenantHostEnv,
@@ -76,46 +76,51 @@ test('getPlatformHtmlCacheHosts covers all platform host cache prefixes', () => 
 ])
 })
 
-test('isPlatformHost recognizes localhost and loopback with and without a port', () => {
-  for (const env of [prodEnv, localEnv]) {
-    assert.equal(isPlatformHost('localhost', env), true)
-    assert.equal(isPlatformHost('localhost:3000', env), true)
-    assert.equal(isPlatformHost('127.0.0.1', env), true)
-    assert.equal(isPlatformHost('127.0.0.1:3000', env), true)
-  }
-})
+// isPlatformHost scenarios stay under one top-level test() with TestContext
+// subtests, since check-unit-test-quality.mjs only counts direct test()/it()
+// calls (see tests/unit/blawby-client.test.ts for the same pattern).
+test('isPlatformHost', async (t) => {
+  await t.test('recognizes localhost and loopback with and without a port', () => {
+    for (const env of [prodEnv, localEnv]) {
+      assert.equal(isPlatformHost('localhost', env), true)
+      assert.equal(isPlatformHost('localhost:3000', env), true)
+      assert.equal(isPlatformHost('127.0.0.1', env), true)
+      assert.equal(isPlatformHost('127.0.0.1:3000', env), true)
+    }
+  })
 
-test('isPlatformHost recognizes the configured platform domain with and without a port', () => {
-  assert.equal(isPlatformHost('krabiclaw.com', prodEnv), true)
-  assert.equal(isPlatformHost('krabiclaw.com:443', prodEnv), true)
-  assert.equal(isPlatformHost('www.krabiclaw.com', prodEnv), false)
-  assert.equal(isPlatformHost('www.krabiclaw.com:443', prodEnv), false)
-})
+  await t.test('recognizes the configured platform domain with and without a port', () => {
+    assert.equal(isPlatformHost('krabiclaw.com', prodEnv), true)
+    assert.equal(isPlatformHost('krabiclaw.com:443', prodEnv), true)
+    assert.equal(isPlatformHost('www.krabiclaw.com', prodEnv), false)
+    assert.equal(isPlatformHost('www.krabiclaw.com:443', prodEnv), false)
+  })
 
-test('isPlatformHost does not recognize an unconfigured production host', () => {
-  const env = { ...localEnv, NUXT_PUBLIC_PLATFORM_DOMAIN: 'http://localhost:3000' }
-  assert.equal(isPlatformHost('krabiclaw.com', env), false)
-  assert.equal(isPlatformHost('www.krabiclaw.com', env), false)
-})
+  await t.test('does not recognize an unconfigured production host', () => {
+    const env = { ...localEnv, NUXT_PUBLIC_PLATFORM_DOMAIN: 'http://localhost:3000' }
+    assert.equal(isPlatformHost('krabiclaw.com', env), false)
+    assert.equal(isPlatformHost('www.krabiclaw.com', env), false)
+  })
 
-test('isPlatformHost rejects unrelated external hosts and tenant custom domains', () => {
-  for (const env of [prodEnv, localEnv]) {
-    assert.equal(isPlatformHost('example.com', env), false)
-    assert.equal(isPlatformHost('pottery-house-krabi.com', env), false)
-    assert.equal(isPlatformHost('pottery-house-krabi.com:8080', env), false)
-    assert.equal(isPlatformHost('demo.krabiclaw.com', env), false)
-  }
-})
+  await t.test('rejects unrelated external hosts and tenant custom domains', () => {
+    for (const env of [prodEnv, localEnv]) {
+      assert.equal(isPlatformHost('example.com', env), false)
+      assert.equal(isPlatformHost('pottery-house-krabi.com', env), false)
+      assert.equal(isPlatformHost('pottery-house-krabi.com:8080', env), false)
+      assert.equal(isPlatformHost('demo.krabiclaw.com', env), false)
+    }
+  })
 
-test('isPlatformHost recognizes the deployed *.pages.dev preview host', () => {
-  assert.equal(isPlatformHost('krabiclaw.pages.dev', prodEnv), true)
-  assert.equal(isPlatformHost('preview-123.krabiclaw.pages.dev', prodEnv), true)
-})
+  await t.test('recognizes the deployed *.pages.dev preview host', () => {
+    assert.equal(isPlatformHost('krabiclaw.pages.dev', prodEnv), true)
+    assert.equal(isPlatformHost('preview-123.krabiclaw.pages.dev', prodEnv), true)
+  })
 
-test('isPlatformHost recognizes deployed CI preview Worker hosts on workers.dev', () => {
-  assert.equal(isPlatformHost('krabiclaw-preview.paulchrisluke.workers.dev', prodEnv), true)
-  assert.equal(isPlatformHost('ci-pr-1234567890-krabiclaw-preview.paulchrisluke.workers.dev', prodEnv), false)
-  assert.equal(isPlatformHost('some-other-worker.paulchrisluke.workers.dev', prodEnv), false)
+  await t.test('recognizes deployed CI preview Worker hosts on workers.dev', () => {
+    assert.equal(isPlatformHost('krabiclaw-preview.paulchrisluke.workers.dev', prodEnv), true)
+    assert.equal(isPlatformHost('ci-pr-1234567890-krabiclaw-preview.paulchrisluke.workers.dev', prodEnv), false)
+    assert.equal(isPlatformHost('some-other-worker.paulchrisluke.workers.dev', prodEnv), false)
+  })
 })
 
 test('getFreeSiteDomain normalizes the configured domain and strips its port', () => {
@@ -129,16 +134,16 @@ test('getFreeSiteDomain rejects an unconfigured domain', () => {
 })
 
 test('preview contexts include platform hosts, direct tenant aliases, and raw shared hosts', () => {
-  assert.equal(isPreviewContext('localhost'), true)
-  assert.equal(isPreviewContext('localhost:3000'), true)
-  assert.equal(isPreviewContext('127.0.0.1:3000'), true)
-  assert.equal(isPreviewContext('preview.krabiclaw.com'), true)
-  assert.equal(isPreviewContext('staging.krabiclaw.com'), true)
-  assert.equal(isPreviewContext('pottery-house-preview.krabiclaw.com'), true)
-  assert.equal(isPreviewContext('pottery-house-staging.krabiclaw.com'), true)
-  assert.equal(isPreviewContext('preview.customer.com'), false)
-  assert.equal(isPreviewContext('ci-pr-1234567890-krabiclaw-preview.paulchrisluke.workers.dev'), false)
-  assert.equal(isPreviewContext('some-other-worker.paulchrisluke.workers.dev'), false)
+  assert.equal(isNonProductionHost('localhost'), true)
+  assert.equal(isNonProductionHost('localhost:3000'), true)
+  assert.equal(isNonProductionHost('127.0.0.1:3000'), true)
+  assert.equal(isNonProductionHost('preview.krabiclaw.com'), true)
+  assert.equal(isNonProductionHost('staging.krabiclaw.com'), true)
+  assert.equal(isNonProductionHost('pottery-house-preview.krabiclaw.com'), true)
+  assert.equal(isNonProductionHost('pottery-house-staging.krabiclaw.com'), true)
+  assert.equal(isNonProductionHost('preview.customer.com'), false)
+  assert.equal(isNonProductionHost('ci-pr-1234567890-krabiclaw-preview.paulchrisluke.workers.dev'), false)
+  assert.equal(isNonProductionHost('some-other-worker.paulchrisluke.workers.dev'), false)
 })
 
 test('tenant headers are confined to local and raw workers.dev shared hosts', () => {

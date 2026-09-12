@@ -19,7 +19,6 @@ const ROOT = process.cwd()
 const ALWAYS_ALLOWED_PREFIXES = [
   'migrations/',
   'migrations/meta/',
-  'migrations-archive/',
   '.audit/',
 ]
 

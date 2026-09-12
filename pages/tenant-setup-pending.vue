@@ -58,13 +58,14 @@
 </template>
 
 <script setup lang="ts">
+import { NON_INDEXABLE_ROBOTS_INTENT } from '~/shared/robots-directive'
 definePageMeta({ layout: 'saya' })
-// SEO: Add noindex for setup pages
-useHead({
-  meta: [
-    { name: 'robots', content: 'noindex, nofollow' }
-  ],
-  title: 'Setting Up Your Site - KrabiClaw'
+useSocialMetadata({
+  schema: false,
+  path: '/tenant-setup-pending',
+  title: 'Setting up your site',
+  description: 'This site is still being set up and will be available shortly.',
+  robots: NON_INDEXABLE_ROBOTS_INTENT,
 })
 
 const setupFailed = ref(false)

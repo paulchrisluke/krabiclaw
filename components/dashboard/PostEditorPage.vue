@@ -4,7 +4,7 @@
     its rows and nothing else. It becomes the index column only once a section
     is open.
   -->
-  <div v-if="frame.mode.value === 'index'">
+  <div v-if="frame.mode.value === 'index'" class="space-y-6">
     <UAlert
       v-if="loadError"
       color="error"
@@ -13,12 +13,17 @@
       title="Post could not be loaded"
       :description="loadError"
     />
-    <EditorNavigationList v-else :groups="navigationGroups" />
+    <template v-else>
+      <div v-if="isNew" class="flex justify-end">
+        <UButton :label="createActionLabel" :loading="editor.saving.value" @click="startOrCreate" />
+      </div>
+      <EditorNavigationList :groups="navigationGroups" />
+    </template>
   </div>
 
   <UDashboardPanel v-else id="location-post-detail">
     <template #header>
-      <UDashboardNavbar :title="editor.form.title || 'Post'" :toggle="false">
+      <UDashboardNavbar :title="isNew ? 'New post' : editor.form.title || 'Post'" :toggle="false">
         <template #leading>
           <DashboardNavbarLeading :to="postsPath" label="Posts" />
         </template>
@@ -49,10 +54,10 @@
       <EditorPaneShell
         v-else
         has-detail
-        show-desktop-detail
         :show-actions="editorKey !== 'photo'"
         :saving="editor.saving.value"
-        :save-disabled="!sectionValid"
+        :save-disabled="saveDisabled"
+        :save-label="saveLabel"
         :detail-title="sectionLabels[editorKey]"
         :dismiss-to="postPath"
         @cancel="cancelEditor"
@@ -63,8 +68,21 @@
         </template>
 
         <template #detail>
+          <!--
+            Post type. Only a post being created has it: the contract's shape
+            is chosen by the type, so an existing post cannot change it.
+          -->
+          <UFormField v-if="editorKey === 'type'" label="What are you posting?">
+            <URadioGroup
+              :model-value="postType"
+              :items="typeOptions"
+              :ui="{ fieldset: 'flex flex-wrap gap-4' }"
+              @update:model-value="setType(String($event))"
+            />
+          </UFormField>
+
           <!-- Photo -->
-          <div v-if="editorKey === 'photo'" class="space-y-4">
+          <div v-else-if="editorKey === 'photo'" class="space-y-4">
             <p class="text-base text-muted">The picture this post is recognised by, in the list and on your site.</p>
             <PostMediaFields
               v-model:media="editor.form.media"
@@ -222,7 +240,7 @@ import PostScheduleFields from '~/components/dashboard/PostScheduleFields.vue'
 import { useLocationPostEditor } from '~/composables/useLocationPostEditor'
 import { instantDate, formatTimestamp } from '~/utils/timezone'
 import { scheduledLifecycleValue } from '~/utils/blog-editor'
-import { POST_ACTIONS, postEventDescription } from '~/shared/posts'
+import { CREATABLE_POST_TYPES, POST_ACTIONS, postEventDescription, type PostMutation } from '~/shared/posts'
 import {
   postActionComplete,
   postNeedsSchedule,
@@ -233,16 +251,21 @@ import { getErrorMessage, isNotFoundError } from '~/utils/errors'
 
 const route = useRoute()
 const dashboardApi = useDashboardApi()
-const { locationPaths } = useDashboardSiteLinks()
+const postId = computed(() => String(route.params.postId ?? ''))
+// The path comes from the route this screen is mounted on, not from the
+// location selector: an unresolved selector left it empty, and an empty path is
+// a link to nowhere and, where it roots the editor frame, a frame rooted at ''.
+const locationPath = computed(() => `/dashboard/${String(route.params.orgSlug)}/sites/${String(route.params.siteSlug)}/locations/${String(route.params.locationSlug)}`)
+const postsPath = computed(() => `${locationPath.value}/posts`)
+const postPath = computed(() => `${postsPath.value}/${postId.value}`)
+const frame = useEditorFrame(postPath)
+
 const siteId = await useDashboardSiteId()
 const dashboardLocation = useDashboardLocation()
+const isNew = computed(() => postId.value === 'new')
 
-const postId = computed(() => String(route.params.postId ?? ''))
 const currentLocationId = computed(() => dashboardLocation.currentLocationId.value)
-const postsPath = computed(() => locationPaths.value?.posts ?? '')
-const postPath = computed(() => `${postsPath.value}/${postId.value}`)
 const editor = useLocationPostEditor(siteId, currentLocationId)
-const frame = useEditorFrame(postPath)
 
 const TYPE_LABELS: Record<string, string> = {
   standard: 'Update',
@@ -264,10 +287,15 @@ const TIMING_OPTIONS = [
 ]
 
 // ── Which leaf is open ──────────────────────────────────
-const SECTION_KEYS = ['photo', 'headline', 'body', 'schedule', 'offer', 'action', 'publishing'] as const
+const SECTION_KEYS = ['type', 'photo', 'headline', 'body', 'schedule', 'offer', 'action', 'publishing'] as const
 type SectionKey = typeof SECTION_KEYS[number]
 
+/** Creating asks only for what the contract will not accept a post without. */
+const NEW_SECTION_KEYS: readonly SectionKey[] = ['type', 'body', 'schedule']
+const EXISTING_SECTION_KEYS: readonly SectionKey[] = SECTION_KEYS.filter(key => key !== 'type')
+
 const sectionLabels = computed<Record<SectionKey, string>>(() => ({
+  type: 'Post type',
   photo: 'Photo',
   headline: 'Headline',
   body: 'Post',
@@ -277,17 +305,12 @@ const sectionLabels = computed<Record<SectionKey, string>>(() => ({
   publishing: 'Publishing',
 }))
 
-const routeSegments = computed(() => {
-  const segments = route.params.segments
-  if (Array.isArray(segments)) return segments.filter(Boolean).map(String)
-  return segments ? [String(segments)] : []
-})
-const detailKey = computed(() => routeSegments.value[0] ?? null)
-const editorKey = computed<SectionKey>(() => (detailKey.value ?? 'photo') as SectionKey)
+const detailKey = computed(() => frame.childSegment.value)
+const editorKey = computed<SectionKey>(() => (detailKey.value ?? (isNew.value ? 'type' : 'photo')) as SectionKey)
 
-const isSectionKey = (value: string): value is SectionKey => SECTION_KEYS.some(key => key === value)
+const openSections = computed(() => (isNew.value ? NEW_SECTION_KEYS : EXISTING_SECTION_KEYS))
 // An unsupported route 404s rather than silently showing the first section.
-if (routeSegments.value.length > 1 || (detailKey.value && !isSectionKey(detailKey.value))) {
+if (frame.rest.value.length > 1 || (detailKey.value && !openSections.value.some(key => key === detailKey.value))) {
   throw createError({ statusCode: 404, statusMessage: 'Page not found' })
 }
 
@@ -299,9 +322,11 @@ const isFacebookResponse = (value: unknown): value is { connected: boolean } =>
 
 const { data, error } = await useAsyncData(
   computed(() => `dashboard-location-post:${siteId}:${postId.value}`),
-  () => dashboardApi<{ post: ApiRecord }>(`/api/editor/sites/${siteId}/posts/${postId.value}`, {
-    validate: isSinglePostResponse,
-  }),
+  async () => isNew.value
+    ? null
+    : await dashboardApi<{ post: ApiRecord }>(`/api/editor/sites/${siteId}/posts/${postId.value}`, {
+      validate: isSinglePostResponse,
+    }),
   { watch: [postId] },
 )
 
@@ -326,6 +351,72 @@ const post = computed(() => data.value?.post ?? null)
 const facebookConnected = computed(() => facebookData.value?.connected ?? false)
 
 watch(post, value => { if (value) editor.loadFrom(value) }, { immediate: true })
+
+// ── The new post's draft ────────────────────────────────
+type NewPostType = typeof CREATABLE_POST_TYPES[number]
+const TYPE_DESCRIPTIONS: Record<NewPostType, string> = {
+  standard: 'News from the location.',
+  event: 'Something at a set date and time.',
+  offer: 'A deal that runs between two dates.',
+}
+const typeOptions: Array<{ value: string, label: string, description: string }> = CREATABLE_POST_TYPES.map(value => ({
+  value,
+  label: TYPE_LABELS[value] ?? value,
+  description: TYPE_DESCRIPTIONS[value],
+}))
+
+/** The chosen type seeds the shape the contract expects for it. An offer carries
+ *  its validity window in the same event shape an event uses. */
+function seedTopic(type: NewPostType): PostMutation {
+  return {
+    post_type: type,
+    event: type === 'standard'
+      ? null
+      : { title: '', schedule: { start_date: '', start_time: '', end_date: '', end_time: '' } },
+    offer: type === 'offer' ? {} : null,
+    call_to_action: null,
+    alert_type: null,
+    scheduled_for: null,
+  }
+}
+
+/**
+ * The draft outlives any one leaf. Moving between sections remounts this
+ * component, so the editor's own `reactive` lost the body the moment you
+ * navigated from Post to the event schedule. `useState` is keyed to the
+ * record, so a half-written new post survives the walk between its own
+ * sections and is discarded once the post exists.
+ *
+ * The draft carries the location it was written for rather than naming it in
+ * the key, which is only read once during setup: keyed by location, a change in
+ * the selector left the draft filed under the location it started in while the
+ * commit went to the new one. It is the same entry either way, and it is reset
+ * whenever it does not belong to the location now selected.
+ */
+const blankDraft = () => ({ location_id: currentLocationId.value, topic: seedTopic('standard'), body: '' })
+const draft = useState(`location-post-draft-${siteId}-${postId.value}`, blankDraft)
+
+if (isNew.value) {
+  if (draft.value.location_id !== currentLocationId.value) draft.value = blankDraft()
+  watch(currentLocationId, () => {
+    if (draft.value.location_id === currentLocationId.value) return
+    draft.value = blankDraft()
+    editor.form.topic = draft.value.topic
+    editor.form.body = draft.value.body
+  })
+  editor.form.topic = draft.value.topic
+  editor.form.body = draft.value.body
+  // Synchronous so the draft is already written when a commit navigates away
+  // in the same tick as the last keystroke.
+  watch(() => editor.form.topic, value => { draft.value.topic = value }, { deep: true, flush: 'sync' })
+  watch(() => editor.form.body, value => { draft.value.body = value }, { flush: 'sync' })
+}
+
+function setType(value: string) {
+  const type = CREATABLE_POST_TYPES.find(option => option === value)
+  if (!type) return
+  editor.form.topic = seedTopic(type)
+}
 
 const topic = computed(() => editor.form.topic)
 const postType = computed(() => topic.value.post_type ?? 'standard')
@@ -380,6 +471,30 @@ function publishingSummary(): string {
 }
 
 const navigationGroups = computed<EditorNavigationGroup[]>(() => {
+  // A post that does not exist yet shows only what creating it asks for.
+  if (isNew.value) {
+    const creating: EditorNavigationGroup['items'] = [
+      { id: 'type', label: 'Post type', summary: typeLabel.value, to: `${postPath.value}/type` },
+      {
+        id: 'body',
+        label: 'Post',
+        summary: editor.form.body || 'Nothing written yet',
+        placeholder: !editor.form.body,
+        to: `${postPath.value}/body`,
+      },
+    ]
+    if (postNeedsSchedule(topic.value)) {
+      creating.push({
+        id: 'schedule',
+        label: sectionLabels.value.schedule,
+        summary: scheduleSummary(),
+        placeholder: !postScheduleComplete(topic.value.event),
+        to: `${postPath.value}/schedule`,
+      })
+    }
+    return [{ id: 'new-post', label: 'New post', items: creating }]
+  }
+
   const content: EditorNavigationGroup['items'] = [
     {
       id: 'photo',
@@ -440,7 +555,35 @@ const sectionValid = computed(() => {
   return true
 })
 
-async function saveCurrentEditor() {
+const { createActionLabel, saveLabel, saveDisabled, save: saveCurrentEditor, startOrCreate } = useCreateWalk<SectionKey>({
+  recordPath: postPath,
+  isNew,
+  openKey: editorKey,
+  labels: sectionLabels,
+  // The type is chosen for you — a post is an update unless you say otherwise —
+  // so it is walked past, and only visited when the owner opens it.
+  order: ['type', 'body', 'schedule'],
+  missing: (key) => {
+    if (key === 'body') return !editor.form.body.trim()
+    if (key === 'schedule') return postNeedsSchedule(topic.value) && !postScheduleComplete(topic.value.event)
+    return false
+  },
+  noun: 'post',
+  saving: editor.saving,
+  existingBlocked: () => !sectionValid.value,
+  commit,
+})
+
+async function commit() {
+  if (isNew.value) {
+    const created = await editor.save(null)
+    if (!created?.id) return
+    await navigateTo(`${postsPath.value}/${String(created.id)}`)
+    // Once the post exists the draft is spent. Cleared after the navigation so
+    // the watchers above, which stop with this component, cannot write it back.
+    draft.value = blankDraft()
+    return
+  }
   if (await editor.save(postId.value)) await navigateTo(postPath.value)
 }
 
@@ -546,5 +689,8 @@ function localizedPostPath(locale: string): string {
   return `/${locale}/posts/${slug}`
 }
 
-useSeoMeta({ title: () => `${editor.form.title || 'Post'} | KrabiClaw Dashboard`, robots: 'noindex, nofollow' })
+useSeoMeta({
+  title: () => `${isNew.value ? 'New post' : editor.form.title || 'Post'} | KrabiClaw Dashboard`,
+  robots: 'noindex, nofollow',
+})
 </script>

@@ -31,13 +31,14 @@ import { buildSingleMediaPlacementQueries, hydrateMediaPlacementRefs, insertInit
 import { COVER_SELECT, attachCoverMedia, coverJoinSql } from '~/server/utils/content/cover'
 import { attachPageQa } from '~/server/utils/location-qa'
 import { isSingleMediaPlacement } from '~/shared/media-placement-contract'
+import { parseRobotsIntent, ROBOTS_INTENTS } from '~/shared/robots-directive'
 import { getMediaPlacements } from '~/server/utils/media-placement'
 import { d1JsonStringSet } from '~/server/db/d1-limits'
 import { findAuthUsersByIds, type CloudflareEnv } from '~/server/utils/auth'
 import { findOrganizationById } from '~/server/utils/member-access'
 import { refreshSocialCard } from '~/server/utils/social-card'
 import { loadPublicSocialMedia } from '~/server/utils/public-social-image'
-import { createScopedPreviewToken, verifyScopedPreviewToken } from '~/server/utils/preview-token'
+import { createPreviewToken, PREVIEW_TOKEN_QUERY, PREVIEW_TOKEN_TTL_MS } from '~/server/utils/preview-token'
 import { publicResourceCacheInvalidationQuery } from '~/server/utils/public-resource-cache'
 
 const BLOG_TITLE_MAX = 200
@@ -103,9 +104,6 @@ export function parseBlogEditorThemeTokens(value: string | null | undefined): Ap
 }
 
 
-export type PlatformRobotsDirective = 'index,follow' | 'noindex,follow' | 'index,nofollow' | 'noindex,nofollow'
-
-export const PLATFORM_ROBOTS_DIRECTIVES: readonly PlatformRobotsDirective[] = ['index,follow', 'noindex,follow', 'index,nofollow', 'noindex,nofollow']
 
 
 export interface BlogScope {
@@ -229,11 +227,12 @@ function assertStringLength(value: string | null | undefined, max: number, field
   }
 }
 
-function assertValidRobotsDirective(value: string | null | undefined) {
-  if (value == null) return
-  if (!PLATFORM_ROBOTS_DIRECTIVES.includes(value as PlatformRobotsDirective)) {
-    badRequest(`robots must be one of: ${PLATFORM_ROBOTS_DIRECTIVES.join(', ')}`)
-  }
+/** Canonicalizes the submitted intent in place; an unsupported value is a bad request. */
+function normalizeRobotsField(input: { robots?: string | null }) {
+  if (input.robots === undefined) return
+  const parsed = parseRobotsIntent(input.robots)
+  if (!parsed.ok) badRequest(`robots must be one of: ${ROBOTS_INTENTS.join(', ')}`)
+  input.robots = parsed.intent
 }
 
 /** KrabiClaw's own collections file every article under a fixed category that shapes its URL. */
@@ -410,10 +409,10 @@ async function normalizeCanonicalBlogBlocks(
 }
 
 function parseTags<T extends Record<string, unknown>>(record: T) {
-  const normalized = { ...record } as T & { tags?: string[]; tags_json?: unknown }
-  if ('tags_json' in record) {
-    normalized.tags = parseStringArray(record.tags_json)
-    delete normalized.tags_json
+  const normalized = { ...record } as T & { tags?: string[]; tags_metadata?: unknown }
+  if ('tags_metadata' in record) {
+    normalized.tags = parseStringArray(record.tags_metadata)
+    delete normalized.tags_metadata
   }
   return normalized
 }
@@ -428,6 +427,7 @@ export interface ContentReviewContext { orgSlug: string; siteSlug: string }
 async function contentReviewUrls(
   record: ApiRecord,
   publicPath: string | null,
+  siteId: string,
   context?: ContentReviewContext,
   env?: CloudflareEnv,
 ) {
@@ -436,11 +436,14 @@ async function contentReviewUrls(
   const adminEditUrl = context ? `/dashboard/${context.orgSlug}/sites/${context.siteSlug}/blog/${id}` : null
   const isPublished = typeof record.status === 'string' ? record.status === 'published' : Boolean(record.published_at)
 
+  // An unpublished article is previewed the same way everything unpublished is
+  // previewed: the site's own preview token, which the tenant host turns into a
+  // cookie so the rest of the visit stays authorized.
   let previewUrl: string | null = null
   if (!isPublished && publicPath) {
-    if (!env?.PREVIEW_SECRET) throw new HTTPError({ statusCode: 500, statusMessage: 'Article preview signing is not configured' })
-    const token = await createScopedPreviewToken(env.PREVIEW_SECRET, 'article', id, Date.now() + 60 * 60 * 1000)
-    previewUrl = `${publicPath}?token=${encodeURIComponent(token)}`
+    if (!env?.PREVIEW_SECRET) throw new HTTPError({ statusCode: 500, statusMessage: 'Preview signing is not configured' })
+    const token = await createPreviewToken(env.PREVIEW_SECRET, siteId, Date.now() + PREVIEW_TOKEN_TTL_MS)
+    previewUrl = `${publicPath}?${PREVIEW_TOKEN_QUERY}=${encodeURIComponent(token)}`
   }
 
   return {
@@ -477,12 +480,12 @@ async function resolveTenantContext(db: DbClient, siteId: string, env?: Cloudfla
  * request, which was causing the page to 404 on posts the API itself
  * served fine.
  */
-export async function getPublishedBlogPost(db: DbClient, category: string, slug: string, env: CloudflareEnv, token?: string, collection: ArticleCollection = 'blog') {
+export async function getPublishedBlogPost(db: DbClient, category: string, slug: string, env: CloudflareEnv, previewAuthorized = false, collection: ArticleCollection = 'blog') {
   const platformSite = await getPlatformSite(db)
   const platformSiteId = platformSite.id
   const post = await queryFirst<ApiRecord>(db, `
     SELECT
-      p.id, p.title, p.slug, p.summary AS excerpt, (p.metadata_json ->> '$.collection') AS collection, (p.metadata_json ->> '$.category') AS category, json_extract(p.metadata_json, '$.tags') AS tags_json, p.seo_title, p.seo_description, p.seo_keywords,
+      p.id, p.title, p.slug, p.summary AS excerpt, (p.metadata_json ->> '$.collection') AS collection, (p.metadata_json ->> '$.category') AS category, json_extract(p.metadata_json, '$.tags') AS tags_metadata, p.seo_title, p.seo_description, p.seo_keywords,
       p.canonical_url, p.robots, p.visibility, p.sort_order,
       p.published_at, p.created_at, p.updated_at,
       p.author_id,
@@ -490,11 +493,10 @@ export async function getPublishedBlogPost(db: DbClient, category: string, slug:
     FROM content_documents p
     ${coverJoinSql('p')}
     WHERE p.kind = 'article' AND p.row_role = 'root' AND p.slug = ? AND (p.metadata_json ->> '$.collection') = ? AND (p.metadata_json ->> '$.category') = ? AND p.site_id = ?
-      ${token === undefined ? "AND p.status = 'published'" : "AND p.status IN ('draft', 'scheduled', 'published')"}
+      ${previewAuthorized ? "AND p.status IN ('draft', 'scheduled', 'published')" : "AND p.status = 'published'"}
   `, [slug, collection, category, platformSiteId])
 
   if (!post) return null
-  if (token !== undefined && (!env.PREVIEW_SECRET || !(await verifyScopedPreviewToken(env.PREVIEW_SECRET, 'article', String(post.id), token)))) return null
 
   const rawContentBlocks = await getContentBlocksForDocument(db, String(post.id))
   if (!rawContentBlocks) throw new HTTPError({ statusCode: 500, statusMessage: 'Blog content document is missing' })
@@ -516,9 +518,8 @@ export async function getPublishedBlogPost(db: DbClient, category: string, slug:
  * See getPublishedBlogPost above for why the page must call this
  * directly rather than doing a nested self-fetch back to the API route.
  */
-function normalizeBlankToNull(input: { canonical_url?: string | null; robots?: string | null }) {
+function normalizeBlankToNull(input: { canonical_url?: string | null }) {
   if (input.canonical_url !== undefined && input.canonical_url?.trim() === '') input.canonical_url = null
-  if (input.robots !== undefined && input.robots?.trim() === '') input.robots = null
 }
 
 // KrabiClaw's own collections have fixed category taxonomies because the category
@@ -542,7 +543,7 @@ function validateBlogCommon(input: Partial<PlatformBlogCreateInput>, isTenant: b
   if (input.seo_description !== undefined) assertStringLength(input.seo_description ?? null, BLOG_SEO_DESCRIPTION_MAX, 'seo_description')
   if (input.seo_keywords !== undefined) assertStringLength(input.seo_keywords ?? null, BLOG_SEO_KEYWORDS_MAX, 'seo_keywords')
   if (input.canonical_url !== undefined) assertValidCanonicalUrl(input.canonical_url)
-  if (input.robots !== undefined) assertValidRobotsDirective(input.robots)
+  normalizeRobotsField(input)
 }
 
 /**
@@ -569,7 +570,7 @@ export async function listPublicPlatformBlogPosts(db: DbClient, collection: Arti
 
 export async function listBlogPosts(db: DbClient, siteId: string, status?: string | null, env?: CloudflareEnv) {
   let sql = `SELECT
-      p.id, p.title, p.slug, p.summary AS excerpt, (p.metadata_json ->> '$.collection') AS collection, (p.metadata_json ->> '$.category') AS category, json_extract(p.metadata_json, '$.tags') AS tags_json, p.status, p.visibility, p.scheduled_for,
+      p.id, p.title, p.slug, p.summary AS excerpt, (p.metadata_json ->> '$.collection') AS collection, (p.metadata_json ->> '$.category') AS category, json_extract(p.metadata_json, '$.tags') AS tags_metadata, p.status, p.visibility, p.scheduled_for,
       p.seo_title, p.seo_description, p.seo_keywords, p.canonical_url, p.robots,
       ${COVER_SELECT},
       p.published_at, p.created_at, p.updated_at
@@ -587,7 +588,7 @@ export async function listBlogPosts(db: DbClient, siteId: string, status?: strin
     const slug = typeof record.slug === 'string' ? record.slug : ''
     const category = typeof record.category === 'string' ? record.category : null
     const publicPath = slug ? tenantBlogPostPath(site.template, slug, category, articleCollectionOf(record.collection)) : null
-    return contentReviewUrls(attachCover(attachPublished(record, Boolean(record.published_at))), publicPath, context, env)
+    return contentReviewUrls(attachCover(attachPublished(record, Boolean(record.published_at))), publicPath, siteId, context, env)
   }))
 }
 
@@ -596,7 +597,7 @@ export async function getBlogPost(db: DbClient, postIdOrSlug: string, siteId: st
   const post = await queryFirst<ApiRecord | null>(
     db,
     `SELECT
-       p.id, p.title, p.slug, p.summary AS excerpt, (p.metadata_json ->> '$.collection') AS collection, (p.metadata_json ->> '$.category') AS category, json_extract(p.metadata_json, '$.tags') AS tags_json, p.status, p.visibility, p.scheduled_for,
+       p.id, p.title, p.slug, p.summary AS excerpt, (p.metadata_json ->> '$.collection') AS collection, (p.metadata_json ->> '$.category') AS category, json_extract(p.metadata_json, '$.tags') AS tags_metadata, p.status, p.visibility, p.scheduled_for,
        p.first_published_at, (p.metadata_json ->> '$.slug_manually_overridden') AS slug_manually_overridden,
        p.seo_title, p.seo_description, p.seo_keywords, p.canonical_url, p.robots,
        ${COVER_SELECT},
@@ -621,8 +622,8 @@ export async function getBlogPost(db: DbClient, postIdOrSlug: string, siteId: st
   `, ['$.theme_by_template.' + site.template.slug, siteId, '$.theme_by_template.' + site.template.slug])
   const editorThemeTokens = parseBlogEditorThemeTokens(editorThemeTokenRow?.tokens_json)
   return {
-    ...await contentReviewUrls(attachCover(attachPublished(post, Boolean(post.published_at))), publicPath, context, env),
-    tags: parseStringArray(post.tags_json),
+    ...await contentReviewUrls(attachCover(attachPublished(post, Boolean(post.published_at))), publicPath, siteId, context, env),
+    tags: parseStringArray(post.tags_metadata),
     body: renderContentBlocksToMarkdown(rawBlocks),
     content_document: contentDocument,
     editor_template: site.template.slug,
@@ -632,10 +633,10 @@ export async function getBlogPost(db: DbClient, postIdOrSlug: string, siteId: st
   }
 }
 
-export async function getPublicSiteBlogPost(db: DbClient, siteId: string, slug: string, env: CloudflareEnv, token?: string) {
+export async function getPublicSiteBlogPost(db: DbClient, siteId: string, slug: string, env: CloudflareEnv, previewAuthorized = false) {
   const post = await queryFirst<ApiRecord>(db, `
     SELECT
-      p.id, p.title, p.slug, p.summary AS excerpt, (p.metadata_json ->> '$.category') AS category, json_extract(p.metadata_json, '$.tags') AS tags_json, p.seo_title, p.seo_description, p.seo_keywords,
+      p.id, p.title, p.slug, p.summary AS excerpt, (p.metadata_json ->> '$.category') AS category, json_extract(p.metadata_json, '$.tags') AS tags_metadata, p.seo_title, p.seo_description, p.seo_keywords,
       p.canonical_url, p.robots, p.visibility,
       p.published_at, p.created_at, p.updated_at,
       p.author_id,
@@ -643,12 +644,11 @@ export async function getPublicSiteBlogPost(db: DbClient, siteId: string, slug: 
     FROM content_documents p
     ${coverJoinSql('p')}
     WHERE p.kind = 'article' AND p.row_role = 'root' AND p.slug = ? AND p.site_id = ?
-      ${token === undefined ? "AND p.status = 'published' AND (p.scheduled_for IS NULL OR p.scheduled_for <= strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))" : "AND p.status IN ('draft', 'scheduled', 'published')"}
+      ${previewAuthorized ? "AND p.status IN ('draft', 'scheduled', 'published')" : "AND p.status = 'published' AND (p.scheduled_for IS NULL OR p.scheduled_for <= strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"}
     LIMIT 1
   `, [slug, siteId])
 
   if (!post) return null
-  if (token !== undefined && (!env.PREVIEW_SECRET || !(await verifyScopedPreviewToken(env.PREVIEW_SECRET, 'article', String(post.id), token)))) return null
 
   const contentDocument = await getContentDocumentById(db, String(post.id))
   if (!contentDocument) throw new HTTPError({ statusCode: 500, statusMessage: 'Blog content document is missing' })
@@ -677,7 +677,7 @@ export async function getPublishedLocalizedSiteBlogPost(
   slug: string,
   locale: string,
   env: CloudflareEnv,
-  token?: string,
+  previewAuthorized = false,
 ) {
   const site = await queryFirst<{ organization_id: string; vertical: string }>(db, `
     SELECT organization_id, vertical FROM sites WHERE id = ? AND status = 'active' LIMIT 1
@@ -685,7 +685,7 @@ export async function getPublishedLocalizedSiteBlogPost(
   if (!site) return null
   const prefix = normalizeVertical(site.vertical) === 'service' ? 'article' : 'blog'
   if (locale === 'en') {
-    const post = await getPublicSiteBlogPost(db, siteId, slug, env, token)
+    const post = await getPublicSiteBlogPost(db, siteId, slug, env, previewAuthorized)
     if (!post || typeof post.id !== 'string') return post
     return {
       ...post,
@@ -707,10 +707,10 @@ export async function getPublishedLocalizedSiteBlogPost(
       FROM content_documents d JOIN content_documents root ON root.id = d.root_id
      WHERE d.site_id = ? AND d.locale = ? AND d.path = ? AND d.row_role = 'representation'
        AND root.kind = 'article' AND root.row_role = 'root'
-       ${token === undefined ? "AND root.status = 'published'" : ''} LIMIT 1
+       ${previewAuthorized ? '' : "AND root.status = 'published'"} LIMIT 1
   `, [siteId, locale, '/' + prefix + '/' + slug])
   if (!row) return null
-  const canonical = await getPublicSiteBlogPost(db, siteId, row.source_slug, env, token)
+  const canonical = await getPublicSiteBlogPost(db, siteId, row.source_slug, env, previewAuthorized)
   if (!canonical) return null
   const metadata = JSON.parse(row.metadata_json) as Record<string, unknown>
   const [outlineBlocks, rawBlocks, social] = await Promise.all([

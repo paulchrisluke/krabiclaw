@@ -10,7 +10,7 @@ export default defineComponent({
     date: { type: String, required: true },
     time: { type: String, required: true },
     guests: { type: String, required: true },
-    phone: { type: String, required: true },
+    phone: { type: String as PropType<string | null>, default: null },
     email: { type: String, required: true },
     locationName: { type: String as PropType<string | null>, default: null },
     specialRequests: { type: String as PropType<string | null>, default: null },

@@ -1,24 +1,23 @@
-import { instantDate } from '~/utils/timezone'
-// Core site creation logic shared by site creation entry points. Handles org creation/lookup,
-// idempotency, subdomain uniqueness, and seeding.
+// Core site creation logic shared by site creation entry points. The target
+// organization is always an explicit input from the caller — this module never
+// picks one from the user's memberships. Handles the same-org retry, subdomain
+// uniqueness, and seeding.
 import { seedNewSite } from '~/server/utils/site-template'
 import { createSystemSubdomain, isSystemSubdomainSpent } from '~/server/utils/domains'
-import { execute, executeBatch, queryAll, queryFirst } from '~/server/db'
+import { execute, executeBatch, queryFirst } from '~/server/db'
 import { ALL_VERTICALS, type SiteVertical } from '~/utils/vertical-copy'
 import { resolvePublicTemplate } from '~/utils/template-registry'
-import { ensureSiteTeam, organizationAdapter } from '~/server/utils/member-access'
+import { ensureSiteTeam, isOrganizationWideRole, organizationAdapter, type OrganizationAdapter } from '~/server/utils/member-access'
 import { createAuth, type CloudflareEnv } from '~/server/utils/auth'
-import type { getOrgAdapter } from 'better-auth/plugins'
 
 type SetupEnv = CloudflareEnv
 
-interface SubdomainRow { subdomain: string }
-interface UserOrganizationSiteRow {
-  site_id: string | null
+interface ExistingSubdomainSiteRow {
+  id: string
+  organization_id: string
   onboarding_status: string | null
 }
 
-type OrganizationAdapter = ReturnType<typeof getOrgAdapter>
 const SITE_CREATION_MARKER_KEY = '__krabiclaw_site_creation_marker'
 
 interface CreateOrganizationApi {
@@ -74,37 +73,42 @@ export async function runSiteCreation(
   env: SetupEnv,
   db: D1Database,
   userId: string,
-  params: { name: string; subdomain: string; vertical: SiteVertical },
-  options?: { beforeSiteMutation?: (_organizationId: string) => Promise<void> },
+  params: { organizationId: string; name: string; subdomain: string; vertical: SiteVertical; activate?: boolean },
 ): Promise<SiteCreationResult> {
-  const { name, vertical } = params
+  const { organizationId, name, vertical } = params
   const normalizedSubdomain = params.subdomain.toLowerCase()
   let siteId = ''
 
   try {
-    const existingSubdomain = await queryFirst<{ id: string }>(db, `
-      SELECT id FROM sites WHERE subdomain = ? LIMIT 1
-    `, [normalizedSubdomain])
-    if (existingSubdomain) {
-      return { status: 409, data: { error: 'This subdomain is already taken' } }
-    }
-    if (await isSystemSubdomainSpent(env, db, normalizedSubdomain)) {
-      return { status: 409, data: { error: 'This subdomain is permanently unavailable' } }
+    const adapter = await organizationAdapter(env)
+    const member = await adapter.findMemberByOrgId({ userId, organizationId })
+    if (!member || !isOrganizationWideRole(String(member.role))) {
+      return { status: 403, data: { error: 'Organization-level access required to create a site in this organization' } }
     }
 
     const themeId = resolveThemeId(vertical)
 
-    const { organizationId, existingRetrySiteId } = await resolveCreationOrganization(env, db, userId, name)
-    await options?.beforeSiteMutation?.(organizationId)
-    if (existingRetrySiteId) {
-      // A retry (pending/failed site from a previous attempt) may have been created
+    const existingSubdomain = await queryFirst<ExistingSubdomainSiteRow>(db, `
+      SELECT id, organization_id, onboarding_status FROM sites WHERE subdomain = ? LIMIT 1
+    `, [normalizedSubdomain])
+    if (existingSubdomain) {
+      const isRetryable = existingSubdomain.organization_id === organizationId
+        && (existingSubdomain.onboarding_status === 'pending' || existingSubdomain.onboarding_status === 'failed')
+      if (!isRetryable) {
+        return { status: 409, data: { error: 'This subdomain is already taken' } }
+      }
+      // Retry: the same subdomain in the same explicit organization still has a
+      // pending/failed site from a previous attempt. It may have been created
       // under a stale default (theme_id='saya-theme-v1', vertical='restaurant') —
       // correct both here so a professional-service retry can never be left on Saya.
-      siteId = existingRetrySiteId
+      siteId = existingSubdomain.id
       await execute(db, `UPDATE sites SET theme_id = ?, vertical = ?, updated_at = ? WHERE id = ?`,
-        [themeId, vertical, new Date().toISOString(), existingRetrySiteId])
-      await ensureSiteTeam(db, { env, organizationId, siteId: existingRetrySiteId, name })
-      return await performSeeding(env, db, existingRetrySiteId, organizationId, name, vertical, '')
+        [themeId, vertical, new Date().toISOString(), siteId])
+      await ensureSiteTeam(db, { env, organizationId, siteId, name })
+      return await performSeeding(env, db, siteId, organizationId, name, vertical, normalizedSubdomain, params.activate !== false)
+    }
+    if (await isSystemSubdomainSpent(env, db, normalizedSubdomain)) {
+      return { status: 409, data: { error: 'This subdomain is permanently unavailable' } }
     }
 
     siteId = crypto.randomUUID()
@@ -137,7 +141,7 @@ export async function runSiteCreation(
     }
     await ensureSiteTeam(db, { env, organizationId, siteId, name })
 
-    return await performSeeding(env, db, siteId, organizationId, name, vertical, normalizedSubdomain)
+    return await performSeeding(env, db, siteId, organizationId, name, vertical, normalizedSubdomain, params.activate !== false)
 
   } catch (error) {
     console.error('Site creation failed:', asError(error))
@@ -146,72 +150,14 @@ export async function runSiteCreation(
   }
 }
 
-export async function resolveCreationOrganization(
-  env: CloudflareEnv,
-  db: D1Database,
-  userId: string,
-  name: string
-): Promise<{ organizationId: string; existingRetrySiteId?: string }> {
-  const adapter = await organizationAdapter(env)
-  const organizations = (await adapter.listOrganizations(userId))
-    .slice()
-    .sort((left, right) => instantDate(left.createdAt).getTime() - instantDate(right.createdAt).getTime())
-
-  const snapshots: Array<{
-    organizationId: string
-    role: string
-    sites: UserOrganizationSiteRow[]
-  }> = []
-
-  for (const organization of organizations) {
-    const member = await adapter.findMemberByOrgId({ userId, organizationId: organization.id })
-    if (!member) continue
-
-    const sites = await queryAll<UserOrganizationSiteRow>(db, `
-      SELECT id AS site_id, onboarding_status
-      FROM sites
-      WHERE organization_id = ?
-      ORDER BY created_at ASC
-    `, [organization.id])
-    snapshots.push({
-      organizationId: organization.id,
-      role: String(member.role),
-      sites: sites ?? [],
-    })
-  }
-
-  // Keep the original global priority: any owned pending/failed site is the
-  // retry target before an empty-org rename or active-org multi-site reuse.
-  const retrySnapshot = snapshots.find(snapshot => snapshot.role === 'owner'
-    && snapshot.sites.some(site => site.site_id
-      && (site.onboarding_status === 'pending' || site.onboarding_status === 'failed')))
-  const retrySite = retrySnapshot?.sites.find(site =>
-    site.site_id && (site.onboarding_status === 'pending' || site.onboarding_status === 'failed')
-  )
-  if (retrySnapshot && retrySite?.site_id) {
-    return { organizationId: retrySnapshot.organizationId, existingRetrySiteId: retrySite.site_id }
-  }
-
-  const emptyOwnerOrg = snapshots.find(snapshot => snapshot.role === 'owner' && snapshot.sites.length === 0)
-  if (emptyOwnerOrg) {
-    await adapter.updateOrganization(emptyOwnerOrg.organizationId, {
-      name,
-      slug: await uniqueOrganizationSlug(adapter, name),
-    })
-    return { organizationId: emptyOwnerOrg.organizationId }
-  }
-
-  // Multi-site: if the user already owns an org with active sites, add the new site there.
-  // The unique-per-org constraint was removed pre-squash (was migration 0017); now part of the 0001_initial.sql baseline.
-  const existingOwnerOrg = snapshots.find(snapshot => snapshot.role === 'owner'
-    && snapshot.sites.some(site => site.onboarding_status === 'active'))
-  if (existingOwnerOrg) {
-    return { organizationId: existingOwnerOrg.organizationId }
-  }
-
-  return await createOrganizationForSite(env, userId, name)
+/** Makes a pending site public. */
+export async function activateSite(db: D1Database, siteId: string): Promise<void> {
+  await execute(db, `UPDATE sites SET onboarding_status = 'active', updated_at = ? WHERE id = ?`, [new Date().toISOString(), siteId])
 }
 
+// Creates a brand-new organization owned by `userId`. Callers decide when a new
+// organization is wanted (the "New Organization" onboarding entry point); this
+// never reuses or renames an existing one.
 export async function createOrganizationForSite(env: CloudflareEnv, userId: string, name: string) {
   const adapter = await organizationAdapter(env)
   const slug = await uniqueOrganizationSlug(adapter, name)
@@ -306,21 +252,6 @@ async function uniqueOrganizationSlug(adapter: OrganizationAdapter, name: string
 }
 
 
-export async function findOldestOwnedOrganization(
-  env: CloudflareEnv,
-  userId: string,
-): Promise<string | null> {
-  const adapter = await organizationAdapter(env)
-  const organizations = (await adapter.listOrganizations(userId))
-    .slice()
-    .sort((left, right) => instantDate(left.createdAt).getTime() - instantDate(right.createdAt).getTime())
-  for (const organization of organizations) {
-    const member = await adapter.findMemberByOrgId({ userId, organizationId: organization.id })
-    if (member && String(member.role) === 'owner') return organization.id
-  }
-  return null
-}
-
 function slugifyName(name: string) {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'site'
 }
@@ -332,27 +263,24 @@ async function performSeeding(
   organizationId: string,
   name: string,
   vertical: SiteVertical,
-  subdomain: string
+  subdomain: string,
+  // Onboarding creates the site before the owner has finished answering, so it
+  // stays pending: the address is reserved and the site is previewable with its
+  // preview token, but it is not public until activateSite() is called.
+  activate: boolean,
 ): Promise<SiteCreationResult> {
-  const now = new Date().toISOString()
   const locationId = await seedNewSite(db, { organizationId, siteId, name, vertical })
 
-  const resolvedSubdomain = subdomain || await queryFirst<SubdomainRow>(
-    db, 'SELECT subdomain FROM sites WHERE id = ?', [siteId]
-  ).then(r => r?.subdomain)
+  await createSystemSubdomain(env, db, siteId, organizationId, subdomain)
 
-  if (!resolvedSubdomain?.trim()) throw new Error(`Missing subdomain for site ${siteId}`)
-
-  await createSystemSubdomain(env, db, siteId, organizationId, resolvedSubdomain)
-
-  await execute(db, `UPDATE sites SET onboarding_status = 'active', updated_at = ? WHERE id = ?`, [now, siteId])
+  if (activate) await activateSite(db, siteId)
 
   return {
     status: 200,
     data: {
       siteId,
       organizationId,
-      subdomain: resolvedSubdomain,
+      subdomain,
       locationId,
       message: 'Site created successfully',
     }

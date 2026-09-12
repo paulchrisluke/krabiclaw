@@ -14,7 +14,7 @@ through it with the same tools.
   submissions, notifications, Q&A, analytics
 - Site creation and location creation, copying, and deletion are CMS-only. MCP
   retains daily content operations, including media asset and experience deletion.
-- Feature-flagged conversational groups: social/OAuth publishing and domains.
+- Google Places lookup and domain setup are CMS-only. Social/OAuth publishing is feature-flagged.
   Manual locale management remains available as ordinary content editing.
 
 KrabiClaw's marketing site is an ordinary site row running the platform
@@ -45,6 +45,15 @@ are edited with the same tools as any tenant's articles, using its `site_id`.
 KrabiClaw exposes one canonical tool contract. Every tool name, input schema,
 output schema, and executor must agree. Unknown tool names return JSON-RPC
 `-32601` over HTTP 200.
+
+### Operation names
+
+- `list_*` discovers a collection; `get_*` reads a selected record or aggregate.
+- `preview_*` computes a proposal without saving; `update_*` saves supplied changes.
+- `reconcile_products` is one atomic create/update operation for an explicitly selected location, not an ongoing sync. Each row supplies its intended Price or null. `set_missing_unavailable: true` explicitly makes omitted products unavailable.
+- `replace_product_localizations` replaces only the submitted products’ translations for one locale; omitted products are untouched.
+
+MCP names map to shared domain functions. REST uses HTTP methods on the same resources; it does not need duplicate verb-named endpoints. `get_site`, `list_sites`, and workspace context expose the canonical public site URL; publishing a post returns its full public URL. DNS setup remains in the CMS.
 
 ### Release sequence
 

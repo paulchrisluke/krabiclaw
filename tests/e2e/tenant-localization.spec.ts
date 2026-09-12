@@ -117,6 +117,15 @@ test.describe.serial('published Thai content saves through the CMS and renders w
     }
     expect(links.items).toHaveLength(2)
 
+    // A practice area is a page, so it localizes like every other page, and the
+    // services grid names the pages it lists. Its id belongs to the tenant, so
+    // it is read from the site rather than written here as a constant.
+    const pagesResponse = await owner.get(`/api/editor/sites/${siteId}/pages`)
+    await expectStatus(pagesResponse, 200)
+    const { pages } = await pagesResponse.json() as { pages: Array<{ page_id: string; path: string }> }
+    const familyPage = pages.find(page => page.path === '/services/family')
+    expect(familyPage, 'NCLS publishes a family practice area page').toBeTruthy()
+
     await createPageVariant(owner, {
       pageId: 'page_ncls_home',
       path: '/',
@@ -136,9 +145,9 @@ test.describe.serial('published Thai content saves through the CMS and renders w
           media: [],
         },
         {
-          type: 'offering_grid',
+          type: 'page_grid',
           position: 1,
-          data: { section: 'services', source: 'site_offerings' },
+          data: { section: 'services', page_ids: [familyPage!.page_id] },
           media: [],
         },
       ],
@@ -151,13 +160,18 @@ test.describe.serial('published Thai content saves through the CMS and renders w
     })
 
     await expectStatus(await owner.get(`/api/editor/sites/${siteId}/localization/site/${siteId}/${locale}`), 404)
-    await putLocalization(owner, 'offering', 'offering_ncls_family', {
+    // A page representation carries its own translated body: a Thai page with
+    // no blocks is an empty page, which is why the writer rejects one.
+    await putLocalization(owner, 'content_document', familyPage!.page_id, {
       route_path: '/th/services/family-th',
       values: {
-        name: 'กฎหมายครอบครัวภาษาไทย',
+        title: 'กฎหมายครอบครัวภาษาไทย',
         summary: 'คำแนะนำเรื่องครอบครัวที่ชัดเจน',
-        body: 'ทีมกฎหมายของเราช่วยอธิบายทางเลือกและขั้นตอนเป็นภาษาไทย',
       },
+      content_blocks: [
+        { type: 'heading', position: 0, level: 2, data: { text: 'กฎหมายครอบครัวภาษาไทย' }, media: [] },
+        { type: 'markdown', position: 1, data: { markdown: 'ทีมงานของเราช่วยเรื่องครอบครัวเป็นภาษาไทย', editor_mode: 'source' }, media: [] },
+      ],
     })
     await putLocalization(owner, 'content_document', 'blog_ncls_writing-your-own-will-how-it-works', {
       route_path: '/th/article/will-th',
@@ -225,7 +239,10 @@ test.describe.serial('published Thai content saves through the CMS and renders w
         console.error('[e2e-localization-cms]', JSON.stringify({ event: 'transport_failed', method: request.method(),
           path: new URL(request.url()).pathname, durationMs: Date.now() - startedAt }))
       })
-      await openTenantPage(cms, `${baseURL}/dashboard/north-carolina-legal-services/sites/ncls/links`, {})
+      // The links leaf, where the list of links lives. The page's own Localize
+      // control is in the level's navbar beside it; a link's own Localize is in
+      // the navbar of the record the row opens.
+      await openTenantPage(cms, `${baseURL}/dashboard/north-carolina-legal-services/sites/ncls/links/items`, {})
     })
 
     test('loads and saves one representative Thai link translation through Localize', async () => {
@@ -237,9 +254,12 @@ test.describe.serial('published Thai content saves through the CMS and renders w
       await expect(cms.getByTestId('localize-field-title')).toHaveValue('ลิงก์กฎหมายภาษาไทย')
       await cms.getByRole('button', { name: 'Cancel' }).click()
 
+      // A row opens the link's own level rather than a sheet, so the Localize
+      // that follows is the record's, in that level's navbar.
       await cms.getByTestId('list-editor-toggle').click()
       await cms.getByRole('button', { name: 'Edit Family law services' }).click()
-      await cms.getByRole('button', { name: 'Localize' }).last().click()
+      await expect(cms).toHaveURL(new RegExp(`/links/items/${links.items[0]!.id}$`))
+      await cms.getByTestId('localize-resource').click()
       await cms.getByTestId('localize-language').click()
       await cms.getByRole('option', { name: /ไทย \(th\)/ }).click()
       await expect(cms.getByTestId('localize-field-label')).toHaveValue('บริการกฎหมายครอบครัวเก่า')
@@ -253,8 +273,17 @@ test.describe.serial('published Thai content saves through the CMS and renders w
   })
 
   test('keeps dirty Thai Localize state after a rejected save', async () => {
-    await cms.getByRole('button', { name: 'Close Edit link' }).click()
+    // This test opens a Localize dialog of its own, and preview spends upwards
+    // of 11s on each one, which is why its sibling above also buys headroom.
+    test.setTimeout(60_000)
+    // Back out of the link's level to the links leaf, whose navbar carries the
+    // page's own Localize. The record's navbar carries one too, so the URL has
+    // to settle first: mid-transition both are mounted, and the click landed on
+    // the record's as it detached.
+    await cms.getByTestId('dashboard-navbar-back').click()
+    await expect(cms).toHaveURL(/\/links\/items$/)
     await cms.getByTestId('localize-resource').first().click()
+    await expect(cms.getByTestId('localize-language')).toBeEnabled()
     await cms.getByTestId('localize-language').click()
     await cms.getByRole('option', { name: /ไทย \(th\)/ }).click()
     await expect(cms.getByTestId('localize-field-title')).toHaveValue('ลิงก์กฎหมายภาษาไทย')

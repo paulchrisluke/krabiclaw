@@ -1,4 +1,5 @@
 import { cloudflareEnv, jsonResponse, rethrowHttpError } from '~/server/utils/api-response'
+import { previewSecretOf, resolvePreviewAuthorization } from '~/server/utils/preview-token'
 import { loadPublicProductApiDetail, loadPublicProductReviews } from '~/server/utils/public-products'
 import { defineHandler } from 'nitro'
 import { getRouterParam } from 'nitro/h3'
@@ -11,7 +12,8 @@ export default defineHandler(async (event) => {
   try {
     const db = cloudflareEnv(event).DB
     if (!db) return jsonResponse({ error: 'Database unavailable' }, { status: 503 })
-    const resolved = await loadPublicProductApiDetail(db, siteId, locationSlug, productSlug)
+    const previewAuthorized = await resolvePreviewAuthorization(event, siteId, previewSecretOf(cloudflareEnv(event)))
+    const resolved = await loadPublicProductApiDetail(db, siteId, previewAuthorized, locationSlug, productSlug)
     if (!resolved) return jsonResponse({ error: 'Product not found' }, { status: 404 })
     const reviews = await loadPublicProductReviews(db, resolved)
     return jsonResponse({ reviews })

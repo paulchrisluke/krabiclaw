@@ -1,28 +1,22 @@
 <template>
-  <OrganizationSettingsShell
-    detail-title="Appearance"
-    show-actions
-    :save-disabled="!dirty"
-    @cancel="cancel"
-    @save="save"
-  >
-    <div class="space-y-8">
-      <p class="text-base text-muted">Choose how the dashboard appears for you.</p>
-      <URadioGroup
-        v-model="selectedPreference"
-        legend="Theme"
-        :items="themeOptions"
-        value-key="value"
-        size="xl"
-        variant="card"
-      />
+  <div class="space-y-8">
+    <p class="text-base text-muted">Choose how the dashboard appears for you.</p>
+    <URadioGroup
+      v-model="selectedPreference"
+      legend="Theme"
+      :items="themeOptions"
+      value-key="value"
+      size="xl"
+      variant="card"
+    />
+    <div class="flex items-center justify-between gap-4 border-t border-default pt-4">
+      <UButton color="neutral" variant="ghost" label="Cancel" @click="cancel" />
+      <UButton label="Save" :disabled="!dirty" @click="save" />
     </div>
-  </OrganizationSettingsShell>
+  </div>
 </template>
 
 <script setup lang="ts">
-import OrganizationSettingsShell from '~/components/dashboard/OrganizationSettingsShell.vue'
-
 const { preference, setPreference } = usePlatformTheme()
 type ThemePreference = 'system' | 'light' | 'dark'
 const selectedPreference = ref<ThemePreference>(preference.value)

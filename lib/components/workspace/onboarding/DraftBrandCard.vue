@@ -1,6 +1,6 @@
 <template>
   <div class="onboarding-intake-card">
-      <UFormField v-if="section === 'brand'" label="Brand color">
+      <UFormField v-if="showBrand" label="Brand color">
         <div class="flex flex-wrap items-center gap-2">
           <button
             v-for="swatch in colorPresets"
@@ -35,7 +35,7 @@
         </div>
       </UFormField>
 
-      <div v-if="section === 'brand'" class="rounded-xl border border-default bg-elevated p-3">
+      <div v-if="showBrand" class="rounded-xl border border-default bg-elevated p-3">
         <p class="mb-2 text-[12px] font-bold text-highlighted">Logo</p>
         <div class="flex items-center gap-3">
           <button
@@ -62,7 +62,7 @@
         </div>
       </div>
 
-      <div v-if="section === 'hero'" class="rounded-xl border border-default bg-elevated p-3">
+      <div v-if="showHero" class="rounded-xl border border-default bg-elevated p-3">
         <p class="mb-2 text-[12px] font-bold text-highlighted">Hero photo</p>
         <button
           type="button"
@@ -88,13 +88,12 @@
         <UInput ref="heroInput" type="file" accept="image/*" class="hidden" @change="event => uploadDraftImage(event, 'hero')" />
       </div>
 
-      <UFormField v-if="section === 'hero'" label="Hero headline">
-        <UInput v-model="form.heroHeadline" size="xl" placeholder="A clear promise guests remember" />
+      <UFormField v-if="showHero" label="Hero headline" required>
+        <UInput v-model="form.heroHeadline" class="w-full" placeholder="A clear promise guests remember" />
       </UFormField>
-      <UFormField v-if="section === 'hero'" label="Hero description">
+      <UFormField v-if="showHero" label="Hero description">
         <UTextarea
-          v-model="form.heroDescription"
-          size="xl"
+          v-model="form.heroSubtitle"
           class="w-full"
           autoresize
           :rows="3"
@@ -110,12 +109,10 @@
         :description="uploadError"
       />
 
-      <div class="grid gap-3">
+      <div v-if="actionLabel" class="grid gap-3">
         <UButton
           color="primary"
-          size="xl"
           block
-          class="justify-center"
           :loading="loading"
           :disabled="disabled || activeUploadInProgress"
           @click="$emit('submit')"
@@ -146,14 +143,15 @@ export type DraftBrandForm = {
   heroPreviewUrl: string
   heroImage: DraftUploadedImage | null
   heroHeadline: string
-  heroDescription: string
+  heroSubtitle: string
 }
 
 const form = defineModel<DraftBrandForm>('form', { required: true })
 
 const props = defineProps<{
-  actionLabel: string
-  section: 'brand' | 'hero'
+  /** Omitted when the surface around the card owns the commit control. */
+  actionLabel?: string
+  section: 'brand' | 'hero' | 'look'
   draftId?: string | null
   loading?: boolean
   disabled?: boolean
@@ -171,7 +169,11 @@ const logoUploading = ref(false)
 const heroUploading = ref(false)
 const uploadError = ref<string | null>(null)
 const section = computed(() => props.section)
-const activeUploadInProgress = computed(() => section.value === 'brand' ? logoUploading.value : heroUploading.value)
+// 'look' is both halves on one screen: colour and logo above, photo and words
+// below. The two are one decision an owner makes in one sitting.
+const showBrand = computed(() => section.value === 'brand' || section.value === 'look')
+const showHero = computed(() => section.value === 'hero' || section.value === 'look')
+const activeUploadInProgress = computed(() => showBrand.value && logoUploading.value ? true : showHero.value && heroUploading.value)
 // An unset brand color is unset — not "custom". Nothing is persisted until the
 // owner picks a swatch or a custom color themselves.
 const customColorSelected = computed(() => Boolean(form.value.brandColor) && !colorPresets.includes(form.value.brandColor))

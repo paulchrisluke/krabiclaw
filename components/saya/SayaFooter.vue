@@ -73,7 +73,6 @@
           <h4 class="saya-eyebrow mb-5 text-inverted/50">{{ t('saya.footer.heading_experience') }}</h4>
           <ul class="space-y-3 text-sm">
             <li v-if="showProducts"><NuxtLink :to="localePath(productPresentation!.collectionPath)" class="text-inverted/60 no-underline transition hover:text-inverted">{{ productCollectionLabel }}</NuxtLink></li>
-            <li v-if="hasExperiences"><NuxtLink :to="localePath('/experiences')" class="text-inverted/60 no-underline transition hover:text-inverted">{{ t('saya.footer.experiences') }}</NuxtLink></li>
             <li v-if="!isExperienceSite"><NuxtLink :to="localePath('/reservations')" class="text-inverted/60 no-underline transition hover:text-inverted">{{ copy.reservationPageKicker }}</NuxtLink></li>
             <li v-if="!isExperienceSite"><NuxtLink :to="localePath('/photos')" class="text-inverted/60 no-underline transition hover:text-inverted">{{ t('saya.footer.gallery') }}</NuxtLink></li>
             <li><NuxtLink :to="localePath('/about')" class="text-inverted/60 no-underline transition hover:text-inverted">{{ t('saya.footer.our_story') }}</NuxtLink></li>
@@ -213,7 +212,6 @@ const props = defineProps<{
   error: unknown
   config: Record<string, string>
   hasProducts: boolean
-  hasExperiences: boolean
 }>()
 
 const isDark = ref(false)

@@ -1,0 +1,20 @@
+{
+  "id": "/dashboard",
+  "name": "KrabiClaw",
+  "short_name": "KrabiClaw",
+  "description": "KrabiClaw dashboard",
+  "start_url": "/dashboard",
+  "scope": "/dashboard",
+  "display": "standalone",
+  "display_override": ["fullscreen", "standalone"],
+  "background_color": "#0B0D20",
+  "theme_color": "#1F2547",
+  "icons": [
+    {
+      "src": "/krabi-claw-logo.png",
+      "sizes": "any",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

@@ -46,7 +46,7 @@
     <div v-else>
     <DashboardTopNav
       v-if="showDashboardChrome"
-      :items="primaryNavItems"
+      :items="showNavChrome ? primaryNavItems : []"
       :home-to="topNavHomeTo"
       @menu="menuOpen = true"
     />
@@ -60,10 +60,6 @@
       case; only an element that deliberately spans the viewport reaches them.
     -->
     <UDashboardGroup
-      unit="rem"
-      :min-size="14"
-      :default-size="18"
-      :max-size="24"
       :ui="{ base: [showDashboardChrome ? 'z-40' : '', showNavChrome ? 'md:top-(--kc-dashboard-top-nav) max-md:bottom-(--kc-dashboard-bottom-nav)' : showDashboardChrome ? 'top-(--kc-dashboard-top-nav)' : ''].filter(Boolean).join(' ') }"
     >
       <UDashboardSearch v-model:search-term="dashboardSearchTerm" :groups="dashboardSearchGroups" :loading="dashboardSearchLoading" :color-mode="false" />
@@ -114,7 +110,6 @@ import DashboardMenuSlideover from '~/lib/components/workspace/dashboard/Dashboa
 import type { DashboardScopeHeaderModel } from '~/lib/components/workspace/dashboard/DashboardScopeHeader.vue'
 import { dashboardOrganizationParentKey, dashboardScopeHeaderModelKey } from '~/lib/components/workspace/dashboard/dashboardScopeHeaderContext'
 import { authClient } from '~/lib/auth-client'
-import { useAuth } from '~/composables/useAuth'
 import { useAnalytics } from '~/composables/useAnalytics'
 import { parseCmsFeatureOverrideDelta, resolveCmsCapabilities } from '~/config/cms-registry'
 import { resolvePublicTemplate } from '~/utils/template-registry'
@@ -152,7 +147,7 @@ interface AuthOrganization {
 
 const route = useRoute()
 const router = useRouter()
-const { data: sessionData, waitForSession } = useAuth()
+const { sessionData, refresh: refreshSession } = await useAuthSession()
 const { trackDashboardVisited, setUserId } = useAnalytics()
 const toast = useToast()
 const stoppingImpersonation = ref(false)
@@ -469,7 +464,11 @@ const primaryNavItems = computed(() => mobileNavItems.value)
 // exist until there is one. Gating both together is what left an owner who
 // abandoned onboarding with no way to reach account settings or log out.
 const showNavChrome = computed(() => primaryNavItems.value.length > 0 && !isAccountRoute.value)
-const showDashboardChrome = computed(() => showNavChrome.value || skipDashboardContext.value)
+// The bar itself is user-scoped, so it stays on an account route; only its
+// links go, because they are organization-scoped and the account pages are not.
+// Dropping the whole bar there left the profile page with no wordmark, no way
+// back, and no place for a page's own header control to land.
+const showDashboardChrome = computed(() => primaryNavItems.value.length > 0 || skipDashboardContext.value || isAccountRoute.value)
 const topNavHomeTo = computed(() => {
   const routeOrgSlug = typeof route.params.orgSlug === 'string' ? route.params.orgSlug : null
   return routeOrgSlug ? `/dashboard/${encodeURIComponent(routeOrgSlug)}` : '/dashboard'
@@ -549,7 +548,7 @@ async function stopImpersonating() {
   try {
     const result = await authClient.admin.stopImpersonating()
     if (result.error) throw new Error(result.error.message)
-    await waitForSession(result.data.session.id)
+    await refreshSession()
     await navigateTo('/dashboard')
   } catch (error) {
     console.error('Failed to stop impersonation:', error)

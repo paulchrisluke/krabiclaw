@@ -4,14 +4,15 @@ import { HTTPError } from 'nitro'
 import { queryAll, queryFirst, type DbClient } from '~/server/db'
 import { getDashboardContext } from '~/server/utils/dashboard-context'
 import { assertResourceAccess, listAccessibleLocationIds } from '~/server/utils/member-access'
-import { resolveBookingPolicy, renderBookingPolicySummary, type RenderedBookingPolicySummary } from '~/server/utils/booking-policies'
+import { getLocationReservationConfig, reservationPolicySummarySource, renderBookingPolicySummary, type RenderedBookingPolicySummary } from '~/server/utils/reservations'
 import { loadPublicSocialMedia, type PublicSocialMedia } from '~/server/utils/public-social-image'
+import { localPartsAt } from '~/utils/timezone'
 import { appendEntry, getEntryById, GuestThreadEntryDedupeConflictError } from '~/server/domain/guest-threads/entries'
 import { requestBookingChange } from '~/server/domain/guest-threads/booking-changes'
 import { publishGuestInboxThreadEvent } from '~/server/cloudflare/guest-inbox-events'
 import { resolveLocationTimezone } from '~/server/utils/site-config'
 
-export type DashboardBookingType = 'reservation' | 'experience_booking'
+export type DashboardBookingType = 'reservation' | 'booking'
 
 interface BookingRow {
   id: string
@@ -28,12 +29,14 @@ interface BookingRow {
   guest_phone: string | null
   guest_image_url: string | null
   party_size: number
-  booking_date: string
-  booking_time: string
+  /** The occurrence itself, in its own zone: one instant, not a date and a time. */
+  starts_at: string
+  timezone: string
   status: string
   requests: string | null
   experience_id: string | null
   experience_title: string | null
+  session_id: string | null
   request_id: string | null
   created_at: string
   updated_at: string
@@ -69,10 +72,16 @@ export interface DashboardBookingDetails {
   status: string
   requests: string | null
   experienceId: string | null
+  /**
+   * The session a booking holds seats in. Null for a reservation, which has no
+   * occurrence row. A change to a booking names the session it moves to, so the
+   * screen has to know which one it is on now.
+   */
+  sessionId: string | null
   threadId: string | null
   createdAt: string
   updatedAt: string
-  policy: RenderedBookingPolicySummary
+  policy: RenderedBookingPolicySummary | null
   notes: DashboardBookingNote[]
   locations: Array<{ id: string; title: string; imageUrl: string | null }>
 }
@@ -107,12 +116,24 @@ async function loadBookingRow(
   type: DashboardBookingType,
   bookingId: string,
 ): Promise<BookingRow | null> {
+  // When, for how many and against what all live on the record the thread
+  // refers to — a reservation or a booking — not on the thread. The thread
+  // carries the conversation and the guest.
   return queryFirst<BookingRow>(db, `SELECT r.id, r.organization_id, r.site_id, s.subdomain AS site_slug, s.brand_name AS site_name, s.vertical,
-    r.location_id, l.slug AS location_slug, l.title AS location_title,
+    record.location_id, l.slug AS location_slug, l.title AS location_title,
     json_extract(r.payload_json, '$.guest.name') AS guest_name, json_extract(r.payload_json, '$.guest.email') AS guest_email, json_extract(r.payload_json, '$.guest.phone') AS guest_phone,
-    NULL AS guest_image_url, r.party_size, r.booking_date, r.time_slot AS booking_time, r.status, json_extract(r.payload_json, '$.notes') AS requests,
-    r.product_id AS experience_id, p.name AS experience_title, r.id AS request_id, r.created_at, r.updated_at
-    FROM requests r JOIN sites s ON s.id = r.site_id JOIN business_locations l ON l.id = r.location_id LEFT JOIN products p ON p.id = r.product_id
+    NULL AS guest_image_url, record.party_size, record.starts_at, record.timezone, record.status, json_extract(r.payload_json, '$.notes') AS requests,
+    record.product_id AS experience_id, record.product_name AS experience_title, record.product_session_id AS session_id,
+    r.id AS request_id, r.created_at, r.updated_at
+    FROM requests r
+    JOIN sites s ON s.id = r.site_id
+    JOIN (
+      SELECT b.request_id, b.status, b.party_size, ps.starts_at, ps.timezone, ps.location_id, b.product_id, p.name AS product_name, ps.id AS product_session_id
+        FROM bookings b JOIN product_sessions ps ON ps.id = b.product_session_id JOIN products p ON p.id = b.product_id
+      UNION ALL
+      SELECT res.request_id, res.status, res.party_size, res.starts_at, res.timezone, res.location_id, NULL, NULL, NULL FROM reservations res
+    ) record ON record.request_id = r.id
+    JOIN business_locations l ON l.id = record.location_id
     WHERE r.id = ? AND r.organization_id = ? AND r.kind = ?`, [bookingId, organizationId, type])
 }
 
@@ -127,13 +148,23 @@ async function assertBookingAccess(context: BookingAccessContext, row: BookingRo
   })
 }
 
+function localDateOf(row: Pick<BookingRow, 'starts_at' | 'timezone'>): string {
+  const parts = localPartsAt(new Date(row.starts_at), row.timezone)
+  return `${String(parts.year).padStart(4, '0')}-${String(parts.month).padStart(2, '0')}-${String(parts.day).padStart(2, '0')}`
+}
+
+function localTimeOf(row: Pick<BookingRow, 'starts_at' | 'timezone'>): string {
+  const parts = localPartsAt(new Date(row.starts_at), row.timezone)
+  return `${String(parts.hour).padStart(2, '0')}:${String(parts.minute).padStart(2, '0')}`
+}
+
 function mediaImage(media: PublicSocialMedia | undefined): string | null {
   const placed = media?.media.find(item => item.kind !== 'video' && ['hero', 'gallery'].includes(item.slot))
   return placed?.thumbnail_url || placed?.public_url || media?.social_image?.url || null
 }
 
 async function loadResourceImage(db: DbClient, row: BookingRow, type: DashboardBookingType) {
-  if (type === 'experience_booking' && row.experience_id) {
+  if (type === 'booking' && row.experience_id) {
     const experience = await loadPublicSocialMedia(db, row.site_id, 'product', [row.experience_id])
     const image = mediaImage(experience.get(row.experience_id))
     if (image) return image
@@ -171,12 +202,12 @@ export async function loadDashboardBookingDetails(
 
   const [resourceImageUrl, resolvedPolicy, notes, timeZone] = await Promise.all([
     loadResourceImage(context.db, row, input.type),
-    resolveBookingPolicy(context.db, {
-      siteId: row.site_id,
-      policyType: input.type === 'reservation' ? 'reservation' : 'experience',
-      locationId: row.location_id,
-      experienceId: row.experience_id,
-    }),
+    // A reservation's terms are its location's typed policy. A booking's are
+    // the product's own attributes, which travel with the product — there is
+    // no site-level policy to merge underneath either.
+    input.type === 'reservation' && row.location_id
+      ? getLocationReservationConfig(context.db, { organizationId: row.organization_id, locationId: row.location_id })
+      : Promise.resolve(null),
     listInternalNotes(context.db, row.request_id),
     resolveLocationTimezone(context.db, row.organization_id, row.site_id, row.location_id),
   ])
@@ -199,16 +230,22 @@ export async function loadDashboardBookingDetails(
     // Customer records do not expose an avatar. Never bypass Better Auth to read one.
     guestImageUrl: row.guest_image_url,
     partySize: row.party_size,
-    bookingDate: row.booking_date,
-    bookingTime: row.booking_time,
+    // The screen shows a local date and time; the record holds one instant and
+    // the zone it belongs to, so these are read off it rather than stored
+    // alongside it and kept in step.
+    bookingDate: localDateOf(row),
+    bookingTime: localTimeOf(row),
     timeZone,
     status: row.status,
     requests: row.requests,
     experienceId: row.experience_id,
+    sessionId: row.session_id,
     threadId: row.request_id,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
-    policy: renderBookingPolicySummary(resolvedPolicy),
+    // Null means this location states no reservation policy, which the
+    // screen shows as such rather than inventing default terms.
+    policy: resolvedPolicy ? renderBookingPolicySummary(reservationPolicySummarySource(resolvedPolicy)) : null,
     notes,
     locations: visibleLocations.map(location => ({ ...location, imageUrl: mediaImage(locationMedia.get(location.id)) })),
   }
@@ -277,5 +314,5 @@ export async function addDashboardBookingNote(
 }
 
 export function isDashboardBookingType(value: string | undefined): value is DashboardBookingType {
-  return value === 'reservation' || value === 'experience_booking'
+  return value === 'reservation' || value === 'booking'
 }

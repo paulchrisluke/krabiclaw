@@ -8,12 +8,12 @@ import { getMediaPlacements } from '~/server/utils/media-placement'
 import { loadExactPublicLocalizations, projectExactLocalizedResource } from '~/server/utils/public-localization'
 import { listPublicLocaleRepresentations } from '~/server/utils/public-locale-representations'
 import type { PublicLocaleRepresentation } from '~/utils/public-resource-contracts'
+import { parseRobotsIntent, type RobotsIntent } from '~/shared/robots-directive'
 
-const ROBOTS_DIRECTIVES = ['index,follow', 'noindex,follow', 'index,nofollow', 'noindex,nofollow'] as const
 const LINK_ITEM_STATUSES = ['active', 'hidden'] as const
 
 export type LinkItemStatus = typeof LINK_ITEM_STATUSES[number]
-export type LinkPageRobots = typeof ROBOTS_DIRECTIVES[number]
+export type LinkPageRobots = RobotsIntent
 
 export interface SiteLinksPage {
   id: string
@@ -107,11 +107,9 @@ function normalizeItemStatus(value: unknown): LinkItemStatus {
 }
 
 function normalizeRobots(value: unknown): LinkPageRobots {
-  const robots = cleanString(value as ApiValue, 40) || 'noindex,follow'
-  if (!ROBOTS_DIRECTIVES.includes(robots as LinkPageRobots)) {
-    throw new SiteLinksValidationError('Robots must be one of the approved directives.')
-  }
-  return robots as LinkPageRobots
+  const parsed = parseRobotsIntent(cleanString(value as ApiValue, 40))
+  if (!parsed.ok) throw new SiteLinksValidationError('Robots must be one of the approved directives.')
+  return parsed.intent ?? 'noindex,follow'
 }
 
 export function validateLinkDestination(value: unknown): string {
@@ -144,15 +142,16 @@ function mapPage(row: ApiRecord): SiteLinksPage {
     if (typeof value !== 'string' || !value.trim()) throw new SiteLinksValidationError(`Stored links page ${field} is invalid.`)
     return value
   }
-  const robots = required(row.robots, 'robots')
-  if (!ROBOTS_DIRECTIVES.includes(robots as LinkPageRobots)) throw new SiteLinksValidationError('Stored links page robots directive is invalid.')
+  const parsedRobots = parseRobotsIntent(required(row.robots, 'robots'))
+  if (!parsedRobots.ok || !parsedRobots.intent) throw new SiteLinksValidationError('Stored links page robots directive is invalid.')
+  const robots = parsedRobots.intent
   return {
     id: required(row.id, 'id'),
     organization_id: required(row.organization_id, 'organization_id'),
     site_id: required(row.site_id, 'site_id'),
     path: required(row.path, 'path'),
     title: required(row.title, 'title'),
-    robots: robots as LinkPageRobots,
+    robots,
     seo_title: typeof row.seo_title === 'string' ? row.seo_title : null,
     seo_description: typeof row.seo_description === 'string' ? row.seo_description : null,
     created_at: required(row.created_at, 'created_at'),
@@ -295,9 +294,12 @@ export async function upsertLinksPage(db: DbClient, input: {
   const title = requiredString(input.page.title, 160, 'Title')
   const robots = normalizeRobots(input.page.robots)
 
+  const knownItemIds = new Set(current.items.map(item => item.id))
+  const createdItemIds: string[] = []
   const normalizedItems = input.items.map((item, index) => {
     const existingId = cleanString(item.id as ApiValue, 120)
-    const id = existingId && !existingId.startsWith('tmp_') ? existingId : idWith('linkitem')
+    const id = existingId && knownItemIds.has(existingId) ? existingId : idWith('linkitem')
+    if (id !== existingId) createdItemIds.push(id)
     const status = normalizeItemStatus(item.status)
     const sortOrder = Number(item.sort_order ?? index)
     if (!Number.isInteger(sortOrder)) throw new SiteLinksValidationError('Link sort order must be an integer.')
@@ -337,7 +339,7 @@ export async function upsertLinksPage(db: DbClient, input: {
       seoTitle: copy.seo_title, seoDescription: copy.seo_description, updatedBy: input.updatedBy,
       metadata: { recipe: 'links', page_type: 'custom' } }, blocks)
   }
-  return await getLinksPage(db, input.siteId)
+  return { ...await getLinksPage(db, input.siteId), created_item_ids: createdItemIds }
 }
 
 export async function createLinkItem(db: DbClient, input: {

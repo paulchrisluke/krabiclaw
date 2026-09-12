@@ -1,11 +1,11 @@
 import { instantSchema, calendarDateSchema, timezoneSchema } from '~/utils/timezone'
 import { postMutationJsonSchema } from '~/shared/posts'
-import { openingHoursSchema, specialHoursSchema, recurringSlotsSchema, WEEKDAYS } from '~/shared/reservation-hours'
+import { openingHoursSchema, specialHoursSchema } from '~/shared/reservation-hours'
 import type { McpToolRole } from '~/server/utils/mcp-auth'
-import { EXPERIENCE_STATUSES } from '~/server/utils/experiences'
 import { SUPPORTED_CURRENCIES } from '~/shared/currencies'
 import { PUBLICATION_CONTENT_BLOCK_TYPES } from '~/shared/content-registries'
-import { PRODUCT_DETAILS_INPUT_SCHEMA } from '~/server/utils/product-validation'
+import { ROBOTS_INTENTS } from '~/shared/robots-directive'
+import { RESERVATION_STATUSES } from '~/shared/bookings'
 
 export interface McpToolDefinition {
   name: string
@@ -54,7 +54,7 @@ export const pageInfoObject = {
 
 // --- reusable schema fragments ---
 
-export const ROBOTS_DIRECTIVE_ENUM = ['index,follow', 'noindex,follow', 'index,nofollow', 'noindex,nofollow']
+export const ROBOTS_DIRECTIVE_ENUM = [...ROBOTS_INTENTS]
 
 /** SEO override fields shared across location/Product/experience/site tools. */
 export function seoOverrideFieldsSchema() {
@@ -180,8 +180,8 @@ export const blogComponentInputSchema = {
         properties: {
           data: {
             type: 'object',
-            // The block lists the article's published Q&A records; it stores no questions.
-            properties: { title: { type: ['string', 'null'] }, source: { type: 'string', const: 'page_qa' } },
+            // The block stores no questions: `page_qa` lists the published Q&A records filed under this page, `site_qa` the site-wide set.
+            properties: { title: { type: ['string', 'null'] }, source: { type: 'string', enum: ['page_qa', 'site_qa'] } },
             required: ['source'],
           },
         },
@@ -500,128 +500,6 @@ export const resolvedMediaAssetObject = {
   required: ['asset_id', 'kind', 'public_url', 'status'],
 }
 
-export const priceObject = {
-  type: ['object', 'null'],
-  properties: {
-    id: { type: 'string' }, amount_minor: { type: 'integer' }, currency: { type: 'string' },
-    unit: { type: 'string', enum: ['item', 'person', 'table'] },
-    tax_behavior: { type: 'string', enum: ['unspecified', 'inclusive', 'exclusive'] },
-    compare_at_amount_minor: { type: ['integer', 'null'] }, valid_from: instantSchema,
-    valid_until: { ...instantSchema, type: ['string', 'null'] }, provenance: { type: 'string' },
-  },
-  required: ['id', 'amount_minor', 'currency', 'unit', 'tax_behavior', 'compare_at_amount_minor', 'valid_from', 'valid_until', 'provenance'],
-}
-
-export const priceWriteObject = {
-  type: ['object', 'null'],
-  properties: {
-    amount_minor: { type: 'integer', minimum: 0 }, currency: { type: 'string' },
-    unit: { type: 'string', enum: ['item', 'person', 'table'] },
-    tax_behavior: { type: 'string', enum: ['unspecified', 'inclusive', 'exclusive'] },
-    compare_at_amount_minor: { type: ['integer', 'null'] }, valid_from: instantSchema,
-    valid_until: { ...instantSchema, type: ['string', 'null'] }, provenance: { type: 'string' },
-  },
-  required: ['amount_minor'],
-  additionalProperties: false,
-}
-
-export const experienceObject = {
-  type: 'object',
-  properties: {
-    id: { type: 'string' },
-    title: { type: 'string' },
-    slug: { type: 'string' },
-    tagline: { type: ['string', 'null'] },
-    body: { type: ['string', 'null'] },
-    duration_minutes: { type: ['number', 'null'] },
-    price: priceObject,
-    scheduled_prices: { type: 'array', items: priceObject },
-    pricing_note: { type: ['string', 'null'] },
-    max_capacity: { type: ['number', 'null'] },
-    status: { type: 'string', enum: [...EXPERIENCE_STATUSES] },
-    location_id: { type: ['string', 'null'] },
-    media: {
-      type: 'array',
-      items: resolvedMediaAssetObject,
-    },
-    recurring_slots: recurringSlotsSchema,
-    tags: { type: 'array', items: { type: 'string' } },
-    details: PRODUCT_DETAILS_INPUT_SCHEMA,
-    included_items: { type: 'array', items: { type: 'string' } },
-    what_to_bring: { type: 'array', items: { type: 'string' } },
-    meeting_point: { type: ['string', 'null'] },
-    sort_order: { type: 'number' },
-    featured: { type: 'boolean' },
-    featured_sort_order: { type: 'number' },
-    seo_title: { type: ['string', 'null'] },
-    seo_description: { type: ['string', 'null'] },
-    canonical_url: { type: ['string', 'null'] },
-    robots: { type: ['string', 'null'] },
-    public_path: { type: ['string', 'null'] },
-    public_url: { type: ['string', 'null'] },
-    view_url: { type: ['string', 'null'] },
-    created_at: { type: 'string' },
-    updated_at: { type: 'string' },
-  },
-}
-
-export const experienceMutationResultObject = {
-  type: 'object',
-  properties: {
-    ok: { type: 'boolean' },
-    entity: { type: 'string', enum: ['experience'] },
-    id: { type: 'string' },
-    slug: { type: 'string' },
-    public_url: { type: ['string', 'null'] },
-    changed_fields: { type: 'array', items: { type: 'string' } },
-    updated_at: { type: 'string' },
-    context: { type: 'object' },
-  },
-  required: ['ok', 'entity', 'id'],
-}
-
-export const experienceStatusSchema = { type: 'string', enum: [...EXPERIENCE_STATUSES] }
-
-export const experienceWriteSchema = {
-  title: { type: 'string', description: 'Public name of the experience.' },
-  tagline: { type: ['string', 'null'], description: 'Short one-line hook shown in cards and summaries. Keep this concise; do not dump the full description here.' },
-  body: { type: ['string', 'null'], description: 'Main long-form description for the experience. Use this for the full narrative, inclusions, what guests can expect, and important details that do not have a dedicated field.' },
-  media: {
-    type: 'array',
-    description: 'Ordered image/video media asset references. Position 0 is the cover everywhere. Videos in cover position must already have thumbnail_url/poster metadata.',
-    items: {
-      type: 'object',
-      properties: {
-        asset_id: { type: 'string', description: 'Active image or video asset id from get_site_media_assets.' },
-      },
-      required: ['asset_id'],
-    },
-  },
-  price: { ...priceWriteObject, description: 'Canonical immutable Price. Use null for inquiry-only experiences.' },
-  pricing_note: { type: ['string', 'null'], description: 'Concise pricing context for an inquiry-only experience.' },
-  duration_minutes: { type: ['number', 'null'], description: 'Expected duration in minutes.' },
-  max_capacity: { type: ['number', 'null'], description: 'Maximum guest count for a single booking or session.' },
-  recurring_slots: { ...recurringSlotsSchema, description: 'Weekly start times keyed by lowercase weekday. Missing days have no starts; null is unknown.' },
-  slot_start: { type: 'string', description: 'Convenience: auto-generate slots from this "HH:MM" start time. Used with slot_end and slot_interval_minutes instead of typing recurring_slots by hand.' },
-  slot_end: { type: 'string', description: 'Convenience: auto-generate slots up to and including this "HH:MM" end time.' },
-  slot_interval_minutes: { type: 'number', description: 'Convenience: interval in minutes between generated slots, e.g. 30.' },
-  slot_weekday: { type: 'string', enum: [...WEEKDAYS], description: 'Assign generated starts to this lowercase weekday. Omit to apply to every weekday.' },
-  tags: { type: ['array', 'null'], items: { type: 'string' }, description: 'Searchable labels shared with the canonical Product model.' },
-  details: { ...PRODUCT_DETAILS_INPUT_SCHEMA, type: ['array', 'null'], description: 'Structured detail groups shared with the canonical Product model.' },
-  included_items: { type: ['array', 'null'], items: { type: 'string' }, description: 'Explicit list of what is included. Use one concise string per included item.' },
-  what_to_bring: { type: ['array', 'null'], items: { type: 'string' }, description: 'Explicit list of what guests should bring or prepare. Use one concise string per item.' },
-  meeting_point: { type: ['string', 'null'], description: 'Specific arrival or check-in instruction for guests.' },
-  status: experienceStatusSchema,
-  sort_order: { type: 'number', description: 'Lower numbers sort earlier in lists.' },
-  featured: { type: 'boolean', description: 'Whether this experience should be highlighted in featured placements.' },
-  featured_sort_order: { type: 'number', description: 'Lower numbers sort earlier among featured experiences.' },
-  location_id: { type: 'string', description: 'Location id. Required when creating an experience; updates may omit it to keep the stored owning location.' },
-  seo_title: { type: ['string', 'null'], description: 'Optional SEO title override.' },
-  seo_description: { type: ['string', 'null'], description: 'Optional SEO description override.' },
-  canonical_url: { type: ['string', 'null'], description: 'Optional canonical URL override. Leave unset for the default self-referencing canonical.' },
-  robots: { type: ['string', 'null'], enum: [...ROBOTS_DIRECTIVE_ENUM, null], description: 'Search engine indexing directive. Leave unset for the default index,follow.' },
-} as const
-
 export const renderedBookingPolicySummaryObject = {
   type: 'object',
   properties: {
@@ -642,46 +520,44 @@ export const renderedBookingPolicySummaryObject = {
   required: ['heading', 'items', 'additional_notes_html'],
 }
 
-export const bookingPolicyObject = {
+/**
+ * One location's reservation policy.
+ *
+ * No scope_type and no policy_type: a reservation policy belongs to a
+ * location and nothing else, so there is no scope to choose and no cascade to
+ * explain. Product booking terms are typed metafields on the product.
+ */
+export const locationReservationConfigObject = {
   type: 'object',
   properties: {
-    id: { type: ['string', 'null'] },
-    organization_id: { type: ['string', 'null'] },
-    site_id: { type: 'string' },
-    policy_type: { type: 'string', enum: ['reservation', 'experience'] },
-    scope_type: { type: 'string', enum: ['site', 'location', 'experience'] },
-    location_id: { type: ['string', 'null'] },
-    experience_id: { type: ['string', 'null'] },
+    location_id: { type: 'string' },
+    slot_capacity: { type: ['number', 'null'], description: 'Guests seatable at one start time. Null means unlimited.' },
     advance_notice_minutes: { type: ['number', 'null'] },
     free_cancellation_until_minutes: { type: ['number', 'null'] },
-    reschedule_allowed: { type: ['boolean', 'null'] },
+    reschedule_allowed: { type: 'boolean' },
     reschedule_cutoff_minutes: { type: ['number', 'null'] },
-    deposit_required: { type: ['boolean', 'null'] },
+    deposit_required: { type: 'boolean' },
     deposit_trigger_party_size: { type: ['number', 'null'] },
     minimum_guest_age: { type: ['number', 'null'] },
-    accessibility_contact_required: { type: ['boolean', 'null'] },
+    accessibility_contact_required: { type: 'boolean' },
     additional_notes_html: { type: ['string', 'null'] },
-    source_scope: { type: ['string', 'null'] },
-    created_at: { type: ['string', 'null'] },
-    updated_at: { type: ['string', 'null'] },
+    created_at: { type: 'string' },
+    updated_at: { type: 'string' },
   },
-}
+  required: ['location_id', 'reschedule_allowed', 'deposit_required', 'accessibility_contact_required', 'created_at', 'updated_at'],
+} as const
 
-export const bookingPolicyWriteSchema = {
-  policy_type: { type: 'string', enum: ['reservation', 'experience'] },
-  scope_type: { type: 'string', enum: ['site', 'location', 'experience'], description: 'Reservation policies must use location scope. Experience policies may use site, location, or experience scope.' },
-  location_id: { type: 'string', description: 'Required for reservation policies and location-scoped experience policies.' },
-  experience_id: { type: 'string', description: 'Optional experience id when editing an experience-specific policy override.' },
-  advance_notice_minutes: { type: ['number', 'null'] },
-  free_cancellation_until_minutes: { type: ['number', 'null'] },
+export const locationReservationConfigWriteSchema = {
+  slot_capacity: { type: ['number', 'null'], minimum: 0 },
+  advance_notice_minutes: { type: ['number', 'null'], minimum: 0 },
+  free_cancellation_until_minutes: { type: ['number', 'null'], minimum: 0 },
   reschedule_allowed: { type: 'boolean' },
-  reschedule_cutoff_minutes: { type: ['number', 'null'] },
+  reschedule_cutoff_minutes: { type: ['number', 'null'], minimum: 0 },
   deposit_required: { type: 'boolean' },
-  deposit_trigger_party_size: { type: ['number', 'null'] },
-  minimum_guest_age: { type: ['number', 'null'] },
+  deposit_trigger_party_size: { type: ['number', 'null'], minimum: 1 },
+  minimum_guest_age: { type: ['number', 'null'], minimum: 0 },
   accessibility_contact_required: { type: 'boolean' },
-  additional_notes_html: { type: ['string', 'null'] },
-  locale: { type: 'string', description: 'Optional locale code for the rendered preview copy. Defaults to en.' },
+  additional_notes_html: { type: ['string', 'null'], description: 'Guest-facing notes. Sanitized on the way in; only basic formatting and links survive.' },
 } as const
 
 export const bookingObject = {
@@ -779,7 +655,7 @@ export const reservationSubmissionObject = {
     date: { type: ['string', 'null'] },
     time: { type: ['string', 'null'] },
     requests: { type: ['string', 'null'] },
-    status: { type: 'string', enum: ['new', 'confirmed', 'cancelled', 'completed'] },
+    status: { type: 'string', enum: [...RESERVATION_STATUSES] },
     created_at: { type: 'string' },
     location_id: { type: ['string', 'null'] },
     location_title: { type: ['string', 'null'] },
@@ -960,51 +836,35 @@ export const EXPECTED_TOOL_ANNOTATIONS = {
   batch_create_products: W,
   change_tenant_page_path: D,
   create_blog_post: W,
-  create_experience: W,
   create_location_qa: W,
   create_owner_entered_site_review: W,
   create_post: W,
   create_product: W,
-  create_product_category: W,
   create_site_qa: W,
   create_tenant_page: W,
   delete_blog_post: D,
-  delete_experience: D,
   delete_location_qa: D,
   delete_media_asset: D,
   delete_owner_entered_site_review: D,
   delete_post: D,
   delete_product: D,
-  delete_product_category: D,
-  reorder_product_categories: D,
-  reorder_products: D,
   delete_resource_localization: D,
   delete_site_qa: D,
   get_blog_post: R,
-  get_booking_policy: R,
   get_contact_inquiries: R,
-  get_experience: R,
   get_location: R,
   get_post: R,
   get_product: R,
-  get_product_catalog_localization: R,
-  get_professional_service_content: R,
   get_reservation_inquiries: R,
   get_resource_localization: R,
   get_site: R,
   get_site_analytics: R,
-  get_site_domains: R,
   get_site_media_assets: R,
   get_site_settings: R,
   get_tenant_page: R,
   get_workspace_context: R,
-  import_from_maps: { readOnlyHint: true, openWorldHint: true, destructiveHint: false },
-  list_all_experience_bookings: R,
   list_blog_posts: R,
-  list_experience_bookings: R,
-  list_experiences: R,
   list_location_products: R,
-  list_product_categories: R,
   list_location_qa: R,
   list_location_reviews: R,
   list_locations: R,
@@ -1014,13 +874,10 @@ export const EXPECTED_TOOL_ANNOTATIONS = {
   list_site_reviews: R,
   list_sites: R,
   list_tenant_pages: R,
-  move_products: D,
-  preview_booking_policy: R,
   publish_blog_post: D,
   publish_post: D,
   put_resource_localization: D,
   remove_media: D,
-  rename_product_category: D,
   reorder_location_qa: D,
   reorder_media: D,
   reorder_site_qa: D,
@@ -1033,24 +890,38 @@ export const EXPECTED_TOOL_ANNOTATIONS = {
   set_media: D,
   set_workspace_context: BD,
   show_generated_images: R,
-  sync_product_catalog_localization: D,
-  sync_products: D,
+  reconcile_products: D,
   update_blog_metadata: D,
   update_blog_post: D,
-  update_booking_policy: D,
-  update_experience: D,
-  update_experience_booking: D,
   update_location: D,
   update_location_qa: D,
   update_media_asset: D,
   update_owner_entered_site_review: D,
   update_post: D,
   update_product: D,
-  update_professional_service_content: D,
   update_site_qa: D,
   update_site_settings: D,
   update_tenant_page: D,
   upload_user_media: W,
+  list_products: R,
+  set_product_publication: W,
+  set_product_location: W,
+  remove_product_location: D,
+  list_collections: R,
+  create_collection: W,
+  update_collection: W,
+  delete_collection: D,
+  // Replaces the whole membership list: products left out lose their place in
+  // the collection, which is a removal the caller must mean.
+  set_collection_products: D,
+  reorder_collections: W,
+  list_metafield_definitions: R,
+  create_metafield_definition: W,
+  delete_metafield_definition: D,
+  get_product_catalog_localization: R,
+  replace_product_localizations: W,
+  get_reservation_policy: R,
+  update_reservation_policy: W,
 } as const satisfies Record<string, McpToolAnnotations>
 
 export function buildToolAnnotationsByName() {

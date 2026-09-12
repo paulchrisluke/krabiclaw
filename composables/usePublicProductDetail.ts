@@ -1,7 +1,9 @@
 import type { Product } from '~/server/types/products'
-import type { PublicProductReview } from '~/server/utils/public-products'
+import type { PublicProductBooking, PublicProductReview } from '~/server/utils/public-products'
 import { isCurrencyCode, type CurrencyCode } from '~/shared/currencies'
 import { isRecord, publicApiRequest } from '~/utils/api-clients'
+import type { ProductCollectionSibling } from '~/utils/product-seo'
+import type { MetafieldDefinition } from '~/shared/metafields'
 import { isPublicProduct, type PublicLocaleRepresentation } from '~/utils/public-resource-contracts'
 
 export interface PublicProductDetailPayload {
@@ -11,6 +13,13 @@ export interface PublicProductDetailPayload {
   vertical: string
   brandName: string
   reviews: PublicProductReview[]
+  /** Non-null exactly when this Product takes bookings. */
+  booking: PublicProductBooking | null
+  /** The collection this page was reached through, and its other members. */
+  collectionName: string
+  collectionSiblings: ProductCollectionSibling[]
+  /** The tenant's attribute vocabulary, so the page can label its own facts. */
+  metafieldDefinitions: MetafieldDefinition[]
   localeRepresentations: PublicLocaleRepresentation[]
 }
 
@@ -25,6 +34,9 @@ function isPublicProductDetailPayload(value: unknown): value is PublicProductDet
     && typeof value.vertical === 'string'
     && typeof value.brandName === 'string'
     && value.brandName.trim().length > 0
+    && (value.booking === null || (isRecord(value.booking)
+      && (value.booking.duration_minutes === null || typeof value.booking.duration_minutes === 'number')
+      && (value.booking.default_capacity === null || typeof value.booking.default_capacity === 'number')))
     && Array.isArray(value.reviews)
     && value.reviews.every(review => isRecord(review)
       && typeof review.id === 'string'
@@ -33,6 +45,18 @@ function isPublicProductDetailPayload(value: unknown): value is PublicProductDet
       && typeof review.title === 'string'
       && typeof review.content === 'string'
       && typeof review.createdAt === 'string')
+    && typeof value.collectionName === 'string'
+    && Array.isArray(value.collectionSiblings)
+    && value.collectionSiblings.every(sibling => isRecord(sibling)
+      && typeof sibling.id === 'string'
+      && typeof sibling.name === 'string'
+      && typeof sibling.slug === 'string')
+    && Array.isArray(value.metafieldDefinitions)
+    && value.metafieldDefinitions.every(definition => isRecord(definition)
+      && typeof definition.id === 'string'
+      && typeof definition.namespace === 'string'
+      && typeof definition.key === 'string'
+      && typeof definition.name === 'string')
     && Array.isArray(value.localeRepresentations)
     && value.localeRepresentations.every(item => isRecord(item)
       && typeof item.locale === 'string'
@@ -56,14 +80,21 @@ export async function usePublicProductDetail(routeKind: 'menu' | 'products') {
     async (_nuxtApp, { signal }) => {
       if (import.meta.server) {
         if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Request context unavailable' })
-        const [{ cloudflareEnv }, { loadPublicProductDetail, loadPublicProductReviews }] = await Promise.all([
+        const [{ cloudflareEnv }, { loadPublicProductDetail, loadPublicProductReviews }, { selectProductCollectionSiblings }, { listMetafieldDefinitions }] = await Promise.all([
           import('~/server/utils/api-response'),
           import('~/server/utils/public-products'),
+          import('~/utils/product-seo'),
+          import('~/server/utils/product-management'),
         ])
         const db = cloudflareEnv(requestEvent).DB
         if (!db) throw createError({ statusCode: 500, statusMessage: 'Database not available' })
-        const detail = await loadPublicProductDetail(db, siteId, routeKind, locationSlug, productSlug, locale)
+        const detail = await loadPublicProductDetail(db, siteId, routeKind, Boolean(requestEvent.context.previewAuthorized), locationSlug, productSlug, locale)
         if (!detail) return null
+        // The collection this product belongs to on this site, in the site's
+        // own order. Several means the first by that order — one documented
+        // rule, not a per-caller guess.
+        const membership = new Set(detail.product.collections.map(entry => entry.collection_id))
+        const siblingCollection = detail.collections.find(collection => membership.has(collection.id)) ?? null
         return {
           product: detail.product,
           location: { id: detail.location.id, slug: detail.location.slug, title: detail.location.title },
@@ -71,6 +102,17 @@ export async function usePublicProductDetail(routeKind: 'menu' | 'products') {
           vertical: detail.site.vertical,
           brandName: detail.site.brand_name,
           reviews: locale === 'en' ? await loadPublicProductReviews(db, detail) : [],
+          booking: detail.booking,
+          // Siblings come from the collection this product actually belongs
+          // to on this site. With none, there are no siblings to show — the
+          // page does not fall back to "everything at this location".
+          collectionName: siblingCollection?.name ?? '',
+          collectionSiblings: siblingCollection
+            ? selectProductCollectionSiblings(detail.products, detail.product, siblingCollection.id, {
+                currency: detail.currency, location_id: detail.location.id, at: new Date().toISOString(),
+              })
+            : [],
+          metafieldDefinitions: await listMetafieldDefinitions(db, detail.site.organization_id),
           localeRepresentations: detail.localeRepresentations,
         }
       }

@@ -18,7 +18,7 @@ export default defineComponent({
     subject: { type: String as PropType<string | null>, default: null },
     message: { type: String, required: true },
     platformDomain: { type: String, required: true },
-    experienceTitle: { type: String as PropType<string | null | undefined>, default: null },
+    productTitle: { type: String as PropType<string | null | undefined>, default: null },
     consentAcknowledged: { type: Boolean, default: false },
   },
   setup(props) {
@@ -32,7 +32,7 @@ export default defineComponent({
       h(EmailDetails, {
         rows: [
           props.subject && ['Subject', SUBJECT_LABELS[props.subject] ?? props.subject],
-          props.experienceTitle && ['Regarding', props.experienceTitle],
+          props.productTitle && ['Regarding', props.productTitle],
           props.consentAcknowledged && ['Contact/privacy notice', 'Acknowledged'],
           ['Message', props.message],
         ].filter(Boolean) as [string, string][]

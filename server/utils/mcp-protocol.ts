@@ -44,6 +44,14 @@ function metaString(request: McpRpcRequest, key: string) {
   return typeof value === 'string' ? value : null
 }
 
+/**
+ * Legacy initialize negotiates a version; ordinary requests must already use
+ * a supported revision (validated by readMcpRequest).
+ */
+function supportedProtocolVersionOrDefault(requested: string | null) {
+  return requested && SUPPORTED_PROTOCOL_VERSION_SET.has(requested) ? requested : MCP_PROTOCOL_VERSION
+}
+
 export function readMcpRequest(event: H3Event, body: unknown): McpRpcRequest {
   if (!body || typeof body !== 'object' || Array.isArray(body)) {
     throw mcpProtocolError(MCP_ERROR.invalidRequest, 'Invalid JSON-RPC request body.')
@@ -64,10 +72,19 @@ export function readMcpRequest(event: H3Event, body: unknown): McpRpcRequest {
     ?.params?.protocolVersion === 'string'
     ? (body as { params: { protocolVersion: string } }).params.protocolVersion
     : null
-  const version = headerVersion ?? metaString(request, 'io.modelcontextprotocol/version') ?? bodyVersion
-  if (version && !SUPPORTED_PROTOCOL_VERSION_SET.has(version)) {
-    throw mcpProtocolError(MCP_ERROR.invalidRequest, `Unsupported MCP protocol version: ${version}`)
+  const requestedVersion = method === 'initialize'
+    ? bodyVersion
+    : headerVersion
+  // This is a legacy server. HTTP 400 with a legacy error lets dual-era HTTP
+  // clients detect it and initialize; a successful modern discovery would
+  // incorrectly identify us as supporting stateless 2026 semantics.
+  if (method !== 'initialize' && requestedVersion !== null && !SUPPORTED_PROTOCOL_VERSION_SET.has(requestedVersion)) {
+    throw mcpProtocolError(MCP_ERROR.invalidRequest, `Unsupported MCP protocol version: ${requestedVersion}.`, {
+      supported: SUPPORTED_PROTOCOL_VERSIONS,
+      requested: requestedVersion,
+    }, 'protocol')
   }
+  const version = supportedProtocolVersionOrDefault(requestedVersion)
 
   if (request.jsonrpc && request.jsonrpc !== '2.0') {
     throw mcpProtocolError(MCP_ERROR.invalidRequest, 'Only JSON-RPC 2.0 is supported.')
@@ -89,14 +106,13 @@ export function readMcpRequest(event: H3Event, body: unknown): McpRpcRequest {
   request.method = method
   request._meta = {
     ...(request._meta ?? {}),
-    'io.modelcontextprotocol/version': version ?? MCP_PROTOCOL_VERSION,
+    'io.modelcontextprotocol/version': version,
   }
   return request
 }
 
 export function negotiatedMcpProtocolVersion(request: McpRpcRequest) {
-  const version = metaString(request, 'io.modelcontextprotocol/version')
-  return version && SUPPORTED_PROTOCOL_VERSION_SET.has(version) ? version : MCP_PROTOCOL_VERSION
+  return supportedProtocolVersionOrDefault(metaString(request, 'io.modelcontextprotocol/version'))
 }
 
 export function mcpSuccess(id: JsonRpcId | undefined, result: unknown) {

@@ -238,7 +238,7 @@ test.describe('stateless MCP server', () => {
       expect(readPost.status).toBe('draft')
       expect(readPost.published_at).toBeNull()
       expect(readPost.public_url).toBeNull()
-      expect(readPost.preview_url).toContain('?token=')
+      expect(readPost.preview_url).toContain('?preview_token=')
       expect(readPost.updated_at).toEqual(created.updated_at)
       expect(readPost.content_blocks.map(block => block.type)).toEqual(['heading', 'markdown'])
       expect(readPost).not.toHaveProperty('body')
@@ -310,7 +310,7 @@ test.describe('stateless MCP server', () => {
       const scheduled = mcpData<{ post: { status: string; updated_at: string; published_at: string | null; preview_url: string | null } }>(await schedule.json()).post
       expect(scheduled.status).toBe('scheduled')
       expect(scheduled.published_at).toBeNull()
-      expect(scheduled.preview_url).toContain('?token=')
+      expect(scheduled.preview_url).toContain('?preview_token=')
       const publish = await mcpRequest(request, baseURL!, {
         method: 'tools/call', toolName: 'publish_blog_post',
         args: { site_id: siteId, post_id: postId, expected_updated_at: scheduled.updated_at },
@@ -371,7 +371,7 @@ test.describe('stateless MCP server', () => {
     expect(allToolNames).toEqual(expect.arrayContaining([
       'list_sites',
       'get_site', 'list_locations', 'list_location_products', 'list_posts', 'get_site_media_assets',
-      'list_tenant_pages', 'list_experiences', 'get_contact_inquiries',
+      'list_tenant_pages', 'list_products', 'list_collections', 'get_contact_inquiries',
     ]))
     expect(allToolNames).not.toEqual(expect.arrayContaining([
       'get_translation_inventory', 'start_translation_job', 'list_translation_jobs',

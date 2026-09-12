@@ -1,12 +1,42 @@
-import { queryFirst } from '~/server/db'
-import type { CreateProductInput, Product, SyncProductInput, UpdateProductInput } from '~/server/types/products'
-import { createProduct, createProductCategory, createProductsBatch, deleteProduct, deleteProductCategory, getProduct, listLocationProducts, listProductCategories, moveProductsToCategory, renameProductCategory, reorderProductCategories, reorderProducts, syncProducts, updateProduct } from '~/server/utils/product-management'
+import type { CreateProductInput, Product, ReconcileProductInput, UpdateProductInput } from '~/server/types/products'
+import {
+  createCollection,
+  createMetafieldDefinition,
+  createProduct,
+  createProductsBatch,
+  deleteCollection,
+  deleteMetafieldDefinition,
+  deleteProduct,
+  getProduct,
+  requireSiteProduct,
+  listCollectionProducts,
+  listCollections,
+  listLocationProducts,
+  listMetafieldDefinitions,
+  listSiteProducts,
+  reconcileProducts,
+  removeProductLocation,
+  reorderCollections,
+  setCollectionProducts,
+  setProductLocation,
+  setProductPublication,
+  updateCollection,
+  updateProduct,
+} from '~/server/utils/product-management'
 import { assertResourceAccess } from '~/server/utils/member-access'
-import { paginateMcpCollection } from '~/server/utils/mcp-pagination'
+import { mcpPageInfo, mcpPageWindow } from '~/server/utils/mcp-pagination'
 import { MCP_ERROR, mcpProtocolError } from '~/server/utils/mcp-protocol'
+import { listSitesForUser } from '~/server/utils/mcp-workflows'
+import type { MetafieldDefinition } from '~/shared/metafields'
 import type { McpExecutorContext } from './shared'
 import { NOT_HANDLED, objectArray, omit, requiredString, requiredStringArray } from './shared'
 
+/**
+ * Writing to a product is an organization-wide act, and a location-scoped
+ * editor must not get there by naming a location. This authorizes the
+ * location for the rows that ARE location-scoped — offering, withdrawing, and
+ * per-location pricing.
+ */
 async function authorizeLocation(ctx: McpExecutorContext, locationId: string) {
   await assertResourceAccess(ctx.site.db, {
     env: ctx.site.env,
@@ -18,125 +48,238 @@ async function authorizeLocation(ctx: McpExecutorContext, locationId: string) {
   })
 }
 
-async function resolveStoredProduct(ctx: McpExecutorContext, productId: string) {
-  const scope = await queryFirst<{ location_id: string }>(ctx.site.db, `SELECT location_id FROM products WHERE id = ? AND organization_id = ? AND site_id = ? LIMIT 1`, [productId, ctx.site.organizationId, ctx.site.siteId])
-  if (!scope) throw mcpProtocolError(MCP_ERROR.invalidParams, 'Product not found')
-  await authorizeLocation(ctx, scope.location_id)
-  const product = await getProduct(ctx.site.db, ctx.site.organizationId, ctx.site.siteId, scope.location_id, productId)
-  if (!product) throw mcpProtocolError(MCP_ERROR.invalidParams, 'Product not found')
-  return product
+/**
+ * The Product this site carries, as an MCP error.
+ *
+ * One lookup: `requireSiteProduct` is the rule — the catalog is
+ * organization-owned and a site reaches a product through its publication row
+ * — and this only restates its refusal in the transport's own shape.
+ */
+async function resolveCarriedProduct(ctx: McpExecutorContext, productId: string): Promise<Product> {
+  return await requireSiteProduct(ctx.site.db, {
+    organizationId: ctx.site.organizationId, siteId: ctx.site.siteId, productId,
+  }).catch((error: unknown) => {
+    const message = (error as { statusMessage?: string }).statusMessage
+    throw mcpProtocolError(MCP_ERROR.invalidParams, message && message !== 'Not Found' ? message : 'Product not found')
+  })
+}
+
+/** One page of products, with the extra row the query asked for removed. */
+function productPage(products: Product[], window: { limit: number; offset: number }) {
+  const page = products.slice(0, window.limit)
+  return {
+    products: page.map(productListItem),
+    page_info: mcpPageInfo(window, page.length, products.length > window.limit, { resource: 'products' }),
+  }
 }
 
 function productListItem(product: Product) {
   return {
     id: product.id,
-    location_id: product.location_id,
-    category_id: product.category_id,
-    category: product.category,
     name: product.name,
+    slug: product.slug,
     description: product.description,
-    price: product.price
-      ? {
-          amount_minor: product.price.amount_minor,
-          currency: product.price.currency,
-          unit: product.price.unit,
-          tax_behavior: product.price.tax_behavior,
-          compare_at_amount_minor: product.price.compare_at_amount_minor,
-        }
-      : null,
-    is_visible: product.is_visible,
-    available: product.available,
-    sort_order: product.sort_order,
+    active: product.active,
+    variant_count: product.variants.length,
+    publications: product.publications,
+    locations: product.locations,
   }
 }
 
-export async function handleProductsTools(ctx: McpExecutorContext): Promise<unknown> {
-  const { args, site, toolName } = ctx
+function definitionResult(definition: MetafieldDefinition) {
+  return {
+    id: definition.id, namespace: definition.namespace, key: definition.key, name: definition.name,
+    description: definition.description, value_type: definition.value_type,
+    validations: definition.validations, localizable: definition.localizable,
+  }
+}
+
+export async function handleProductsTools(ctx: McpExecutorContext) {
+  const { toolName, args, site } = ctx
+  const actor = { actorId: site.userId }
+  const scope = { organizationId: site.organizationId, siteId: site.siteId }
+
   switch (toolName) {
+    // Both list tools read the window first and ask the database for exactly
+    // one page, so a catalog of four hundred is not loaded and hydrated to
+    // answer a request for fifty.
+    case 'list_products': {
+      const window = mcpPageWindow(args, { resource: 'products' })
+      const products = await listSiteProducts(site.db, { ...scope, publishedOnly: args.published_only === true, window })
+      return productPage(products, window)
+    }
     case 'list_location_products': {
       const locationId = requiredString(args, 'location_id')
       await authorizeLocation(ctx, locationId)
-      const products = await listLocationProducts(site.db, site.organizationId, site.siteId, locationId)
-      const page = paginateMcpCollection(products, args, { resource: `products:${site.siteId}:${locationId}` })
-      return { products: page.items.map(productListItem), page_info: page.page_info }
+      const window = mcpPageWindow(args, { resource: 'products' })
+      const products = await listLocationProducts(site.db, {
+        organizationId: site.organizationId, locationId, window,
+        ...(args.published_only === true ? { publishedOnSiteId: site.siteId } : {}),
+      })
+      return productPage(products, window)
     }
-    case 'get_product': return { product: await resolveStoredProduct(ctx, requiredString(args, 'product_id')) }
+    case 'get_product':
+      return { product: await resolveCarriedProduct(ctx, requiredString(args, 'product_id')) }
+
     case 'create_product': {
-      const locationId = requiredString(args, 'location_id')
-      await authorizeLocation(ctx, locationId)
-      return { product: await createProduct(site.db, site.organizationId, site.siteId, locationId, omit(args, ['location_id']) as unknown as CreateProductInput, { actorId: site.userId }, site.env) }
+      // The site carries what it created, withheld until someone publishes it
+      // — written with the product, so the product is loaded once.
+      const product = await createProduct(site.db, {
+        organizationId: site.organizationId, siteId: site.siteId,
+        product: args as unknown as CreateProductInput, actor,
+        publication: { published: false },
+      })
+      return { product }
     }
     case 'update_product': {
-      const product = await resolveStoredProduct(ctx, requiredString(args, 'product_id'))
-      return { product: await updateProduct(site.db, site.organizationId, site.siteId, product.location_id, product.id, omit(args, ['product_id']) as UpdateProductInput, { actorId: site.userId }, site.env) }
+      const productId = requiredString(args, 'product_id')
+      await resolveCarriedProduct(ctx, productId)
+      return {
+        product: await updateProduct(site.db, {
+          ...scope, productId, patch: omit(args, ['product_id']) as unknown as UpdateProductInput, actor,
+        }),
+      }
     }
     case 'delete_product': {
-      const product = await resolveStoredProduct(ctx, requiredString(args, 'product_id'))
-      return { deleted: await deleteProduct(site.db, site.organizationId, site.siteId, product.location_id, product.id, site.userId) }
+      const productId = requiredString(args, 'product_id')
+      await resolveCarriedProduct(ctx, productId)
+      await deleteProduct(site.db, { organizationId: site.organizationId, productId })
+      return { deleted: true }
     }
-    case 'move_products': {
+    case 'set_product_publication': {
+      const productId = requiredString(args, 'product_id')
+      const target = await getProduct(site.db, site.organizationId, productId)
+      // Attaching a product to this site is not a way in to a product the
+      // caller could not already reach. One carried by a site outside their
+      // access stays outside it — otherwise publishing it here would be the
+      // permission to edit it everywhere.
+      if (target.publications.length > 0) {
+        const visible = new Set((await listSitesForUser(site.db, site.env, site.userId)).map(row => String(row.id)))
+        if (target.publications.some(entry => !visible.has(entry.site_id))) {
+          throw mcpProtocolError(MCP_ERROR.invalidParams, 'That product is carried by a site you do not have access to')
+        }
+      }
+      if (typeof args.published !== 'boolean') throw mcpProtocolError(MCP_ERROR.invalidParams, 'published must be a boolean')
+      await setProductPublication(site.db, { ...scope, productId, published: args.published, actor })
+      return { product: await getProduct(site.db, site.organizationId, productId) }
+    }
+    case 'set_product_location': {
+      const productId = requiredString(args, 'product_id')
       const locationId = requiredString(args, 'location_id')
+      // Both halves are checked: the location the caller may reach, and the
+      // product this site actually carries. Authorizing one says nothing
+      // about the other.
+      await resolveCarriedProduct(ctx, productId)
       await authorizeLocation(ctx, locationId)
-      await moveProductsToCategory({
-        db: site.db,
-        organizationId: site.organizationId,
-        siteId: site.siteId,
-        locationId,
-        productIds: requiredStringArray(args.product_ids, 'product_ids'),
-        categoryId: requiredString(args, 'category_id'),
-        actor: site.userId,
+      await setProductLocation(site.db, {
+        organizationId: site.organizationId, productId, locationId,
+        active: typeof args.active === 'boolean' ? args.active : undefined,
+        published: typeof args.published === 'boolean' ? args.published : undefined,
+        actor,
       })
-      return { moved: true }
+      return { product: await getProduct(site.db, site.organizationId, productId) }
     }
-    case 'list_product_categories': {
+    case 'remove_product_location': {
+      const productId = requiredString(args, 'product_id')
       const locationId = requiredString(args, 'location_id')
+      await resolveCarriedProduct(ctx, productId)
       await authorizeLocation(ctx, locationId)
-      return { categories: await listProductCategories({ db: site.db, organizationId: site.organizationId, siteId: site.siteId, locationId }) }
-    }
-    case 'create_product_category': {
-      const locationId = requiredString(args, 'location_id')
-      await authorizeLocation(ctx, locationId)
-      return { category: await createProductCategory({ db: site.db, organizationId: site.organizationId, siteId: site.siteId, locationId, name: requiredString(args, 'name'), actor: site.userId }) }
-    }
-    case 'reorder_products': {
-      const locationId = requiredString(args, 'location_id')
-      await authorizeLocation(ctx, locationId)
-      await reorderProducts({
-        db: site.db,
-        organizationId: site.organizationId,
-        siteId: site.siteId,
-        locationId,
-        categoryId: requiredString(args, 'category_id'),
-        productIds: requiredStringArray(args.product_ids, 'product_ids'),
-        actor: site.userId,
-      })
-      return { reordered: true }
-    }
-    case 'reorder_product_categories': {
-      const locationId = requiredString(args, 'location_id')
-      await authorizeLocation(ctx, locationId)
-      return { categories: await reorderProductCategories({ db: site.db, organizationId: site.organizationId, siteId: site.siteId, locationId, categoryIds: requiredStringArray(args.category_ids, 'category_ids'), actor: site.userId }) }
-    }
-    case 'rename_product_category': {
-      const locationId = requiredString(args, 'location_id')
-      await authorizeLocation(ctx, locationId)
-      return { category: await renameProductCategory(site.db, site.organizationId, site.siteId, locationId, requiredString(args, 'category_id'), requiredString(args, 'name'), site.userId) }
-    }
-    case 'delete_product_category': {
-      const locationId = requiredString(args, 'location_id')
-      await authorizeLocation(ctx, locationId)
-      return { deleted: await deleteProductCategory(site.db, site.organizationId, site.siteId, locationId, requiredString(args, 'category_id'), site.userId) }
+      await removeProductLocation(site.db, { organizationId: site.organizationId, productId, locationId })
+      return { product: await getProduct(site.db, site.organizationId, productId) }
     }
     case 'batch_create_products': {
-      const locationId = requiredString(args, 'location_id')
-      await authorizeLocation(ctx, locationId)
-      return { products: await createProductsBatch(site.db, site.organizationId, site.siteId, locationId, objectArray(args.products, 'products') as unknown as CreateProductInput[], { actorId: site.userId }) }
+      // The site carries what it created, withheld until someone publishes it
+      // — written in the same batch as the products themselves.
+      const products = await createProductsBatch(site.db, {
+        ...scope, products: objectArray(args.products, 'products') as unknown as CreateProductInput[], actor,
+        publication: { published: false },
+      })
+      return { products }
     }
-    case 'sync_products': {
-      const locationId = requiredString(args, 'location_id')
-      await authorizeLocation(ctx, locationId)
-      return { products: await syncProducts(site.db, site.organizationId, site.siteId, locationId, objectArray(args.products, 'products') as unknown as SyncProductInput[], { actorId: site.userId }, args.set_missing_unavailable === true) }
+    case 'reconcile_products':
+      return {
+        products: await reconcileProducts(site.db, {
+          ...scope,
+          products: objectArray(args.products, 'products') as unknown as ReconcileProductInput[],
+          actor,
+          deactivateMissing: args.deactivate_missing === true,
+        }),
+      }
+
+    case 'list_collections': {
+      const locationId = args.location_id === undefined ? undefined : (args.location_id === null ? null : requiredString(args, 'location_id'))
+      return { collections: await listCollections(site.db, { ...scope, locationId }) }
     }
-    default: return NOT_HANDLED
+    case 'create_collection': {
+      const locationId = typeof args.location_id === 'string' ? args.location_id : null
+      if (locationId) await authorizeLocation(ctx, locationId)
+      return {
+        collection: await createCollection(site.db, {
+          organizationId: site.organizationId,
+          collection: {
+            site_id: site.siteId, location_id: locationId,
+            name: requiredString(args, 'name'),
+            description: typeof args.description === 'string' ? args.description : null,
+            sort_order: typeof args.sort_order === 'number' ? args.sort_order : undefined,
+          },
+          actor,
+        }),
+      }
+    }
+    case 'update_collection':
+      return {
+        collection: await updateCollection(site.db, {
+          organizationId: site.organizationId,
+          collectionId: requiredString(args, 'collection_id'),
+          patch: omit(args, ['collection_id']),
+          actor,
+        }),
+      }
+    case 'delete_collection':
+      await deleteCollection(site.db, {
+        organizationId: site.organizationId, collectionId: requiredString(args, 'collection_id'),
+      })
+      return { deleted: true }
+    case 'set_collection_products': {
+      const collectionId = requiredString(args, 'collection_id')
+      await setCollectionProducts(site.db, {
+        organizationId: site.organizationId, collectionId,
+        productIds: requiredStringArray(args.product_ids, 'product_ids'), actor,
+      })
+      const products = await listCollectionProducts(site.db, { organizationId: site.organizationId, collectionId })
+      return { products: products.map(productListItem) }
+    }
+    case 'reorder_collections': {
+      const locationId = args.location_id === undefined || args.location_id === null ? null : requiredString(args, 'location_id')
+      await reorderCollections(site.db, {
+        ...scope, locationId, collectionIds: requiredStringArray(args.collection_ids, 'collection_ids'), actor,
+      })
+      return { collections: await listCollections(site.db, { ...scope, locationId }) }
+    }
+
+    case 'list_metafield_definitions':
+      return { definitions: (await listMetafieldDefinitions(site.db, site.organizationId)).map(definitionResult) }
+    case 'create_metafield_definition':
+      return {
+        definition: definitionResult(await createMetafieldDefinition(site.db, {
+          organizationId: site.organizationId,
+          definition: {
+            namespace: requiredString(args, 'namespace'),
+            key: requiredString(args, 'key'),
+            name: requiredString(args, 'name'),
+            description: typeof args.description === 'string' ? args.description : null,
+            value_type: requiredString(args, 'value_type') as MetafieldDefinition['value_type'],
+            validations: (args.validations ?? {}) as MetafieldDefinition['validations'],
+            localizable: args.localizable === true,
+          },
+          actor,
+        })),
+      }
+    case 'delete_metafield_definition':
+      await deleteMetafieldDefinition(site.db, {
+        organizationId: site.organizationId, definitionId: requiredString(args, 'definition_id'),
+      })
+      return { deleted: true }
   }
+  return NOT_HANDLED
 }

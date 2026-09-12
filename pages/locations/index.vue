@@ -108,7 +108,7 @@ type AddressInput = string | { addressLines?: string[]; locality?: string; admin
 
 const { siteId, site } = useTenantSite()
 if (!siteId) throw createError({ statusCode: 404 })
-const { isAuthenticated } = useAuth()
+const { isAuthenticated } = await useAuthSession()
 const { locale, localePath, t } = useI18n()
 const locationsCopy = computed(() => getVerticalCopy(unref(site)?.vertical, locale.value))
 

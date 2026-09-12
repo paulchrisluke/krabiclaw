@@ -4,6 +4,23 @@
       <p class="text-muted">Loading...</p>
     </div>
 
+    <div v-else-if="isCategoryIndexOnly">
+      <h1 class="mb-6 text-4xl font-bold text-default">{{ categoryName }}</h1>
+      <p class="text-muted">{{ seoDescription }}</p>
+
+      <div class="mt-14 grid gap-6 sm:grid-cols-2">
+        <NuxtLink
+          v-for="item in siblings"
+          :key="item.path"
+          :to="item.path"
+          class="rounded-2xl border border-default p-6 no-underline transition hover:border-muted hover:bg-elevated"
+        >
+          <p class="text-lg font-semibold text-default">{{ item.title }}</p>
+          <p v-if="item.excerpt" class="mt-2 text-sm text-muted">{{ item.excerpt }}</p>
+        </NuxtLink>
+      </div>
+    </div>
+
     <div v-else-if="error || !article" class="rounded-lg border border-red-200 bg-red-50 p-6">
       <p class="text-red-600">{{ error?.message || 'Documentation not found' }}</p>
     </div>
@@ -73,6 +90,7 @@ import { articleCategoryFromSlug } from '~/utils/article-collections'
 import { structuredComponentsFromBlocks } from '~/utils/blog-editor'
 import { isRecord, publicApiRequest } from '~/utils/api-clients'
 import { loadDomPurify } from '~/utils/dom-purify-loader'
+import { normalizeRobotsIntent } from '~/shared/robots-directive'
 
 interface DocsArticleDetail {
   id: string
@@ -114,14 +132,17 @@ const { articles, error: articlesError } = await useDocsArticles()
 if (articlesError.value) throw createError({ statusCode: 500, statusMessage: 'Failed to load documentation index' })
 
 const current = computed(() => articles.value.find(item => item.path === path.value) ?? null)
+const categoryArticles = computed(() => articles.value.filter(item => item.categorySlug === categorySlug.value))
 
-// A category with no landing article opens on its first article; nothing is
-// fetched for the path being left.
-const redirectTo = !current.value && segments.value.length === 1
-  ? articles.value.find(item => item.categorySlug === categorySlug.value)?.path ?? null
-  : null
-if (!current.value && segments.value.length === 1 && !redirectTo) throw createError({ statusCode: 404, statusMessage: 'Documentation category not found' })
-if (redirectTo) await navigateTo(redirectTo, { replace: true, redirectCode: 302 })
+// Every category with published articles answers at /docs/{category}. When one
+// of them is the category's landing article that article is the page; otherwise
+// the page is the category's index, listing what the category contains. It is
+// the same URL either way, so the sitemap can name it without knowing which
+// shape a category happens to have today.
+const isCategoryIndexOnly = computed(() => segments.value.length === 1 && !current.value)
+if (isCategoryIndexOnly.value && !categoryArticles.value.length) {
+  throw createError({ statusCode: 404, statusMessage: 'Documentation category not found' })
+}
 
 // The landing article's slug is its category segment.
 const slug = computed(() => segments.value[1] ?? categorySlug.value)
@@ -150,7 +171,7 @@ const { data: article, pending, error } = await useAsyncData(`docs-article-${pat
   }
   if (!loaded) throw createError({ statusCode: 404, statusMessage: 'Documentation not found' })
   return loaded
-}, { immediate: !redirectTo })
+}, { immediate: !isCategoryIndexOnly.value })
 
 if (error.value) throw error.value
 
@@ -171,20 +192,24 @@ const articleBodyRef = shallowRef<Element | null>(null)
 useCopyableCodeBlocks(articleBodyRef, blocks)
 const renderedComponents = computed(() => structuredComponentsFromBlocks(blocks.value))
 
-const siblings = computed(() => articles.value.filter(item =>
-  item.categorySlug === current.value?.categorySlug && item.path !== current.value?.path))
+const siblings = computed(() => categoryArticles.value.filter(item => item.path !== current.value?.path))
 
 // Previous/Next walks the sidebar's order across every category.
 const currentIndex = computed(() => articles.value.findIndex(item => item.path === path.value))
 const previousArticle = computed(() => currentIndex.value > 0 ? articles.value[currentIndex.value - 1] : null)
 const nextArticle = computed(() => currentIndex.value >= 0 && currentIndex.value < articles.value.length - 1 ? articles.value[currentIndex.value + 1] : null)
 
-const seoTitle = computed(() => article.value?.seo_title || article.value?.title || 'Documentation')
-const seoDescription = computed(() => article.value?.seo_description || article.value?.excerpt || `Learn about ${article.value?.title || 'this topic'} in KrabiClaw documentation.`)
+const categoryName = computed(() => current.value?.category ?? category.value!)
+const seoTitle = computed(() => isCategoryIndexOnly.value
+  ? `${categoryName.value} documentation`
+  : article.value?.seo_title || article.value?.title || 'Documentation')
+const seoDescription = computed(() => isCategoryIndexOnly.value
+  ? `${categoryName.value} guides in the KrabiClaw documentation.`
+  : article.value?.seo_description || article.value?.excerpt || `Learn about ${article.value?.title || 'this topic'} in KrabiClaw documentation.`)
 
 const breadcrumbs = computed(() => [
   { name: 'Docs', url: '/docs' },
-  ...(current.value ? [{ name: current.value.category, url: `/docs/${current.value.categorySlug}` }] : []),
+  { name: categoryName.value, url: `/docs/${categorySlug.value}` },
   ...(current.value && !current.value.isCategoryIndex ? [{ name: current.value.title, url: current.value.path }] : []),
 ])
 
@@ -194,14 +219,21 @@ const platformOrigin = computed(() => runtimeConfig.public.siteUrl || requestURL
 const { canonicalUrl } = useSocialMetadata(() => ({
   template: 'platform' as const,
   schema: false,
-  pageType: 'article' as const,
   title: seoTitle.value,
   description: seoDescription.value,
-  path: resolveSeoUrl(article.value?.canonical_url || path.value, platformOrigin.value),
   brand: { siteName: 'KrabiClaw' },
-  socialImage: article.value?.social_image ?? null,
-  robots: article.value?.robots?.trim() || null,
-  indexable: !article.value?.robots || !/noindex/i.test(article.value.robots),
+  // A category index is one of the site's own index pages, so it carries the
+  // site's social card the way /features and /pricing do. An article carries
+  // its own generated card and nothing else — omitting the key would reach for
+  // the site's card and hide a missing article card.
+  ...(isCategoryIndexOnly.value
+    ? { pageType: 'website' as const, path: path.value }
+    : {
+        pageType: 'article' as const,
+        path: resolveSeoUrl(article.value?.canonical_url || path.value, platformOrigin.value),
+        socialImage: article.value?.social_image ?? null,
+        robots: normalizeRobotsIntent(article.value?.robots),
+      }),
 }))
 
 useContentPageSchema(computed(() => {

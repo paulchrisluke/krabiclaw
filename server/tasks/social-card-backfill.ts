@@ -3,6 +3,9 @@ import { defineScheduledTask } from '~/server/utils/scheduled-task'
 import { listSocialCardOwners, refreshSocialCard } from '~/server/utils/social-card'
 import { summarizeSocialCardRefreshResults } from '~/utils/social-card-refresh'
 
+// This task reconciles; it is not the backfill tool. Bulk work goes through
+// POST /api/editor/sites/{siteId}/social-cards/regenerate, which reports every
+// outcome. Keeping this at one render per run is what bounds memory (#876).
 const OWNERS_PER_RUN = 1
 const CURSOR_KEY = 'social-card-backfill:cursor'
 

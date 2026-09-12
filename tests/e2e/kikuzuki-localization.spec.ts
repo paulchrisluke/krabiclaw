@@ -74,16 +74,22 @@ test.beforeAll(async ({ playwright }, testInfo) => {
         short_description: 'โรบาตายากิและซูชิในอ่าวนาง',
       },
     })
-    await putLocalization(owner, 'product_category', 'pc_loc-kikuzuki_standard_sushi', {
+    // Menu sections are collections now; their names localize on the
+    // collection. The id is read from the site rather than written here — a
+    // tenant's own ids are its business, not a constant in a test.
+    const collectionsResponse = await owner.get(`/api/editor/sites/${siteId}/collections?location_id=loc-kikuzuki`)
+    await expectStatus(collectionsResponse, 200)
+    const { collections } = await collectionsResponse.json() as { collections: Array<{ id: string; slug: string }> }
+    const sushi = collections.find(collection => collection.slug === 'sushi')
+    expect(sushi, 'Kikuzuki has a sushi collection to translate').toBeTruthy()
+    await putLocalization(owner, 'collection', sushi!.id, {
       values: { name: 'ซูชิ' },
     })
     await putLocalization(owner, 'product', 'item-kiku-tuna-sushi', {
-      route_path: '/th/locations/kikuzuki-japanese-robatayaki-izakaya/menu/tuna-sushi',
       values: {
         name: 'ซูชิทูน่า',
         description: 'ทูน่า',
-        tags_json: [],
-        details_json: [],
+        tags: [],
       },
     })
   } finally {
@@ -91,7 +97,7 @@ test.beforeAll(async ({ playwright }, testInfo) => {
   }
 })
 
-test('Kikuzuki keeps its Thai shell and category translations on a hard load', async ({ page }, testInfo) => {
+test('Kikuzuki keeps its Thai shell and collection translations on a hard load', async ({ page }, testInfo) => {
   testInfo.setTimeout(120_000)
   const errors: string[] = []
   page.on('console', message => {
@@ -135,7 +141,7 @@ test('Kikuzuki keeps its Thai shell and category translations on a hard load', a
     await expect(hoursRow).toContainText('23:00')
   }
 
-  for (const path of ['/th/reservations', '/th/experiences']) {
+  for (const path of ['/th/reservations', '/th/menu']) {
     const builtInResponse = await openTenantPage(page, `${kikuzukiTestBaseUrl()}${path}`, kikuzukiTestExtraHeaders())
     expect(builtInResponse?.status()).toBeLessThan(400)
     await expect(page.locator('html')).toHaveAttribute('lang', locale)
@@ -151,9 +157,12 @@ test('Kikuzuki Localize preserves its translated address', async ({ browser, pla
   try {
     await loginAs(owner, baseURL, 'user-e2e-kikuzuki-owner')
     const dashboardContext = await browser.newContext({ baseURL, storageState: await owner.storageState() })
+    const cms = await dashboardContext.newPage()
     try {
-      const cms = await dashboardContext.newPage()
-      await openTenantPage(cms, `${baseURL}/dashboard/org-bVY8SxxUuG6Ctk2CQnfCk8T2cPsj4jJX/sites/kikuzuki-krabi-thailand/locations/kikuzuki-japanese-robatayaki-izakaya/settings/profile`, {})
+      // The settings level, not a `profile` section: that one leaf became
+      // name, slug, address, contact and status, and the level's own navbar is
+      // what carries Localize either way.
+      await openTenantPage(cms, `${baseURL}/dashboard/org-bVY8SxxUuG6Ctk2CQnfCk8T2cPsj4jJX/sites/kikuzuki-krabi-thailand/locations/kikuzuki-japanese-robatayaki-izakaya/settings`, {})
       await cms.getByTestId('localize-resource').click()
       await cms.getByTestId('localize-language').click()
       await cms.getByRole('option', { name: /ไทย \(th\)/ }).click()
@@ -167,6 +176,7 @@ test('Kikuzuki Localize preserves its translated address', async ({ browser, pla
       const payload = saveResponse.request().postDataJSON() as { values: { address: unknown } }
       expect(payload.values.address).toBe('325 ตำบลอ่าวนาง กระบี่ 81180 ประเทศไทย')
     } finally {
+      await cms.close()
       await dashboardContext.close()
     }
   } finally {

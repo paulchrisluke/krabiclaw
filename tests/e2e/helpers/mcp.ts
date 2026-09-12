@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { expect, type APIRequestContext } from '@playwright/test'
-import { loginAs } from './auth'
+import { authRequestHeaders, loginAs } from './auth'
 
 export const MCP_VERSION = '2025-06-18'
 // Fixed fixture sites retained in the production snapshot with the matching plan already
@@ -97,8 +97,25 @@ export function mcpData<T>(body: { error?: unknown; result?: { isError?: boolean
 
 export async function ensureSite(request: APIRequestContext, baseURL: string) {
   const suffix = `${Date.now()}-${Math.random().toString(36).substring(2, 8)}`
+  // POST /api/sites requires the target organization explicitly. loginAs() made the
+  // fixture's membership the active organization; a fixture with no organization
+  // (user-e2e-growth-service-owner) gets one through Better Auth's organization
+  // API, which also makes it the session's active organization.
+  const sessionRes = await request.get(`${baseURL}/api/auth/get-session`)
+  expect(sessionRes.ok(), await sessionRes.text()).toBe(true)
+  const body = await sessionRes.json() as { session?: { activeOrganizationId?: string | null } } | null
+  expect(body?.session, 'ensureSite requires an authenticated session').toBeTruthy()
+  let organizationId = body!.session!.activeOrganizationId ?? null
+  if (!organizationId) {
+    const created = await request.post(`${baseURL}/api/auth/organization/create`, {
+      headers: authRequestHeaders(baseURL),
+      data: { name: `MCP E2E Org ${suffix}`, slug: `e2e-mcp-org-${suffix}` },
+    })
+    expect(created.ok(), await created.text()).toBe(true)
+    organizationId = (await created.json() as { id: string }).id
+  }
   const res = await request.post(`${baseURL}/api/sites`, {
-    data: { name: `MCP E2E ${suffix}`, subdomain: `e2e-mcp-${suffix}`, vertical: 'restaurant' },
+    data: { name: `MCP E2E ${suffix}`, subdomain: `e2e-mcp-${suffix}`, vertical: 'restaurant', organizationId },
   })
   expect(res.ok(), await res.text()).toBe(true)
   const { siteId } = await res.json() as { siteId: string }
@@ -119,15 +136,42 @@ export async function ensureLocation(request: APIRequestContext, baseURL: string
   return data.locations[0]!.id
 }
 
-// Create disposable locations through the same API used by the CMS.
+// Create disposable locations through the same API the CMS uses. That endpoint
+// is route-scoped: it reads the organization and site from the `org` and `site`
+// query the dashboard transport sends and refuses the request without them, so
+// the helper resolves the same pair the dashboard URL would carry. `site` is the
+// subdomain, which is what a /dashboard/{orgSlug}/sites/{siteSlug} route holds.
+async function dashboardScope(request: APIRequestContext, baseURL: string, siteId: string) {
+  const orgRes = await request.get(`${baseURL}/api/auth/organization/get-full-organization`)
+  expect(orgRes.ok(), await orgRes.text()).toBe(true)
+  const { slug: org } = await orgRes.json() as { slug: string }
+  expect(org, 'The session has no active organization to scope the request to').toEqual(expect.any(String))
+
+  const contextRes = await request.get(`${baseURL}/api/dashboard/context?org=${encodeURIComponent(org)}`)
+  expect(contextRes.ok(), await contextRes.text()).toBe(true)
+  const { sites } = await contextRes.json() as { sites: Array<{ id: string; subdomain: string | null }> }
+  const site = sites.find(candidate => candidate.id === siteId)
+  expect(site?.subdomain, `Site ${siteId} is not in organization ${org}`).toEqual(expect.any(String))
+  return `org=${encodeURIComponent(org)}&site=${encodeURIComponent(site!.subdomain!)}`
+}
+
+// The endpoint answers with the new location's slug; the id comes from the same
+// list the dashboard reads.
 export async function createScratchLocation(request: APIRequestContext, baseURL: string, siteId: string) {
-  const response = await request.post(`${baseURL}/api/sites/${siteId}/locations`, {
-    data: { title: `MCP Scratch Location ${Date.now()}`, city: 'Krabi' },
+  const scope = await dashboardScope(request, baseURL, siteId)
+  const response = await request.post(`${baseURL}/api/dashboard/locations?${scope}`, {
+    data: { name: `MCP Scratch Location ${Date.now()}`, details: { city: 'Krabi' } },
   })
-  expect(response.status(), await response.text()).toBe(201)
-  const { location } = await response.json() as { location: { id: string } }
-  expect(location.id).toEqual(expect.any(String))
-  return location.id
+  expect(response.status(), await response.text()).toBe(200)
+  const { locationSlug } = await response.json() as { locationSlug: string }
+  expect(locationSlug).toEqual(expect.any(String))
+
+  const listed = await request.get(`${baseURL}/api/dashboard/locations?${scope}`)
+  expect(listed.ok(), await listed.text()).toBe(true)
+  const { locations } = await listed.json() as { locations: Array<{ id: string; slug: string }> }
+  const created = locations.find(location => location.slug === locationSlug)
+  expect(created, `The location created as ${locationSlug} is missing from the dashboard list`).toBeTruthy()
+  return created!.id
 }
 
 export async function loginAsFreshMcpUser(request: APIRequestContext, baseURL: string, label: string) {

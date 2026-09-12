@@ -1,7 +1,7 @@
 import { execute, queryFirst, type DbClient } from '~/server/db'
 import { hasSiteEntitlement } from '~/server/utils/billing'
 
-export type ReviewBookingType = 'reservation' | 'experience_booking'
+export type ReviewBookingType = 'reservation' | 'booking'
 export type CompletionSource = 'manual' | 'auto'
 
 export interface ReviewRequestRow {

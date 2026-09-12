@@ -34,11 +34,17 @@ function decodeMcpCursor(cursor: string): McpCursorPayload {
   }
 }
 
-export function paginateMcpCollection<T>(
-  items: readonly T[],
+/**
+ * The window a request is asking for, before anything is read.
+ *
+ * A caller that can push the window into its query reads this first and
+ * fetches only the page; one that already holds the whole collection hands it
+ * to paginateMcpCollection, which asks the same question again.
+ */
+export function mcpPageWindow(
   args: Record<string, unknown>,
   options: { resource: string; revision?: string },
-): { items: T[]; page_info: McpPageInfo } {
+): { limit: number; offset: number } {
   const rawLimit = args.limit
   const limit = rawLimit === undefined ? 50 : rawLimit
   if (!Number.isInteger(limit) || Number(limit) < 1 || Number(limit) > 100) {
@@ -59,6 +65,35 @@ export function paginateMcpCollection<T>(
     }
     offset = cursor.offset
   }
+  return { limit: Number(limit), offset }
+}
+
+/**
+ * Page info for a window that was already applied by the query.
+ *
+ * `hasMore` is the caller's answer — it asked for one more row than the page
+ * and saw whether it came back — so nothing has to hold the whole collection
+ * to know there is another page.
+ */
+export function mcpPageInfo(
+  window: { limit: number; offset: number },
+  pageLength: number,
+  hasMore: boolean,
+  options: { resource: string; revision?: string },
+): McpPageInfo {
+  const nextOffset = window.offset + pageLength
+  return {
+    has_more: hasMore,
+    next_cursor: hasMore ? encodeMcpCursor({ v: 1, resource: options.resource, offset: nextOffset, revision: options.revision }) : null,
+  }
+}
+
+export function paginateMcpCollection<T>(
+  items: readonly T[],
+  args: Record<string, unknown>,
+  options: { resource: string; revision?: string },
+): { items: T[]; page_info: McpPageInfo } {
+  const { limit, offset } = mcpPageWindow(args, options)
 
   const page = items.slice(offset, offset + Number(limit))
   const nextOffset = offset + page.length

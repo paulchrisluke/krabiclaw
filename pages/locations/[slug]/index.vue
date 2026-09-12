@@ -159,18 +159,9 @@
       </section>
 
       <LazySayaFeaturedContent
-        v-if="isExperienceTenant && featuredExperienceItems.length"
+        v-if="productPresentation && collectionProductItems.length"
         :data="{
-          items: featuredExperienceItems,
-          kicker: t('saya.footer.experiences'),
-          heading: `${t('saya.footer.experiences')} · ${location.title}`,
-          linkTarget: locationExperienceHref ? localePath(locationExperienceHref) : null
-        }"
-      />
-      <LazySayaFeaturedContent
-        v-if="productPresentation && featuredProductItems.length"
-        :data="{
-          items: featuredProductItems,
+          items: collectionProductItems,
           kicker: productPresentation.locationCollectionSegment === 'menu' ? t('saya.footer.menu') : productPresentation.collectionLabel,
           heading: `${productPresentation.locationCollectionSegment === 'menu' ? t('saya.footer.menu') : productPresentation.collectionLabel} · ${location.title}`,
           linkTarget: productCollectionPath ? localePath(productCollectionPath) : null
@@ -286,16 +277,6 @@
         </div>
       </section>
 
-      <!-- ── Dynamic content blocks ───────────────────────────── -->
-      <template v-if="contentBlocks.length > 0">
-        <component
-          v-for="block in contentBlocks.filter(b => b.component)"
-          :key="block._uid || block.field"
-          :is="resolveComponent(block.component)"
-          :data="block"
-          class="content-block"
-        />
-      </template>
     </template>
 
     <!-- Not found -->
@@ -310,16 +291,16 @@
 <script setup lang="ts">
 import { formatOpeningHours, getIsOpenNow, getActiveSpecialClosure, formatClosureMessage } from '~/utils/formatters'
 import { getTodayHoursLabel } from '~/shared/reservation-hours'
-import { formatProductMoney, formatProductPriceLabel } from '~/utils/product-money'
+import { formatProductMoney } from '~/utils/product-money'
 import { productLocationCollectionPath, resolveProductPresentation } from '~/utils/product-presentation'
-import { useDynamicComponent } from '~/composables/useDynamicComponent'
-import { resolveLocationExperienceHref } from '~/utils/experience-navigation'
-import type { Experience } from '~/server/utils/experiences'
+import { selectPrice, type Price } from '~/shared/prices'
+import { isCurrencyCode } from '~/shared/currencies'
+import type { Product } from '~/server/types/products'
+import { normalizeRobotsIntent } from '~/shared/robots-directive'
 
 const DOMPurify = useHtmlSanitizer()
 
 const { resolveMedia } = useMedia()
-const { resolveComponent } = useDynamicComponent()
 definePageMeta({ layout: 'saya' })
 
 const route = useRoute()
@@ -337,17 +318,21 @@ const {
   getField: getContentField,
   getHero: getContentHero,
   products,
+  collections,
   locationReviews,
   pending,
   config: pageConfig,
-  experiencesList,
-  contentBlocks,
   postsList,
 } = await usePublicPageData()
+// A slug naming no location is a URL that does not exist. Rendering the page
+// around a null location answered 200 with an empty shell — a soft 404 a
+// crawler indexes. The sibling menu and product indexes already refuse it.
+if (!location.value) throw createError({ statusCode: 404, statusMessage: 'Location not found' })
 
-const isExperienceTenant = computed(() => (site as ApiValue)?.vertical === 'experience')
+
 const productPresentation = computed(() => resolveProductPresentation((site as ApiValue)?.vertical as string | null | undefined))
-const locationProducts = computed(() => products.value.filter(product => product.location_id === location.value?.id))
+const locationProducts = computed(() => products.value.filter(product =>
+  product.locations.some(entry => entry.location_id === location.value?.id && entry.published && entry.active)))
 const productCollectionPath = computed(() => {
   if (!productPresentation.value || !location.value) return null
   return productLocationCollectionPath((site as ApiValue)?.vertical as string, location.value.slug)
@@ -355,27 +340,12 @@ const productCollectionPath = computed(() => {
 const locationMedia = (location: ApiRecord) => Array.isArray(location.media)
   ? (location.media as ApiRecord[]).find(item => item.slot === 'hero') ?? null
   : null
-const locationExperienceHref = computed(() =>
-  resolveLocationExperienceHref(slug.value, experiencesList.value)
-)
-
-const primaryCtaPath = computed(() => {
-  if (isExperienceTenant.value) return locationExperienceHref.value
-  return locationIndexCopy.value.ctaRoute
-})
+const primaryCtaPath = computed(() => locationIndexCopy.value.ctaRoute)
 const primaryCtaLabel = computed(() => locationIndexCopy.value.reserveCta)
 
-const secondaryCtaPath = computed(() => {
-  if (locationProducts.value.length > 0) return productCollectionPath.value
-  if (locationExperienceHref.value) return locationExperienceHref.value
-  return null
-})
+const secondaryCtaPath = computed(() => (locationProducts.value.length > 0 ? productCollectionPath.value : null))
 
-const secondaryCtaLabel = computed(() => {
-  if (locationProducts.value.length > 0) return locationIndexCopy.value.viewMenuCta
-  if (!isExperienceTenant.value && locationExperienceHref.value) return t('saya.menu_page.view_experiences')
-  return null
-})
+const secondaryCtaLabel = computed(() => (locationProducts.value.length > 0 ? locationIndexCopy.value.viewMenuCta : null))
 
 
 // Contact details are location-owned; missing or placeholder values stay absent.
@@ -425,53 +395,67 @@ const heroBackgroundStyle = computed(() => {
   return { backgroundImage: `url("${safeHref}")` }
 })
 
-const featuredProductItems = computed(() => {
-  const presentation = productPresentation.value
-  if (!presentation) return []
-  return locationProducts.value
-    .filter(product => product.featured)
-    .sort((a, b) => a.featured_sort_order - b.featured_sort_order || a.sort_order - b.sort_order || a.id.localeCompare(b.id))
-    .slice(0, 4)
-    .map(product => ({
-      name: product.name,
-      category: product.category.name,
-      description: product.description,
-      price: formatProductPriceLabel(product),
-      compareAtPrice: product.price?.compare_at_amount_minor
-        ? formatProductMoney({ ...product.price, amount_minor: product.price.compare_at_amount_minor, compare_at_amount_minor: null })
-        : null,
-      image: product.image?.public_url || null,
-      alt: product.image?.alt_text || product.name,
-      href: localePath(presentation.productPath(slug.value, product.slug)),
-      unavailable: !product.available,
-    }))
-})
+const rawCurrency = (site as ApiValue)?.default_currency
+const currency = isCurrencyCode(rawCurrency) ? rawCurrency : null
 
-const featuredExperienceItems = computed(() => {
-  const featured = experiencesList.value
-    .filter(experience => experience.status === 'active' && experience.featured && experience.location_id === location.value?.id)
-    .sort((a, b) => Number(a.featured_sort_order) - Number(b.featured_sort_order) || Number(a.sort_order) - Number(b.sort_order) || String(a.id).localeCompare(String(b.id)))
-  return featured.slice(0, 4).map(experience => ({
-    name: experience.title,
-    price: formatProductMoney(experience.price),
-    compareAtPrice: experience.price?.compare_at_amount_minor
-      ? formatProductMoney({ ...experience.price, amount_minor: experience.price.compare_at_amount_minor, compare_at_amount_minor: null })
-      : null,
-    image: experienceCoverImage(experience),
-    alt: experience.title || '',
-    href: experience.slug ? localePath(`/experiences/${experience.slug}`) : locationExperienceHref.value ? localePath(locationExperienceHref.value) : undefined,
-    unavailable: Boolean(activeClosureMessage.value),
-  }))
-})
-
-function experienceCoverImage(exp: Experience): string | null {
-  const cover = exp.media?.[0]
-  if (cover?.kind === 'image') return cover.public_url || null
-  if (cover?.kind === 'video') return cover.thumbnail_url || null
-  return null
+/** The offer this location shows for a product, through the one contract. */
+function offerFor(product: Product): Price | null {
+  if (!currency || !location.value) return null
+  const selection = { currency, location_id: String(location.value.id), at: new Date().toISOString() }
+  const offers = product.variants.flatMap(variant => selectPrice(variant.prices, selection) ?? [])
+  return offers.reduce<Price | null>((lowest, offer) => (!lowest || offer.unit_amount < lowest.unit_amount ? offer : lowest), null)
 }
 
-// Content hero fields take precedence; fall back to the imported primary photo
+/**
+ * The teaser strip: the top of what the merchant put in this location's
+ * collections, in the order they put it.
+ *
+ * There is no `featured` flag and no separate featured ranking. Those were a
+ * second ordering to keep in step with the real one, and they disagreed. The
+ * merchant orders their collections and the products inside them; this shows
+ * the front of that order.
+ */
+const collectionProductItems = computed(() => {
+  const presentation = productPresentation.value
+  if (!presentation || !location.value) return []
+  const here = new Set(locationProducts.value.map(product => product.id))
+  const ordered = collections.value
+    .filter(collection => collection.location_id === null || collection.location_id === location.value!.id)
+    .sort((left, right) => left.sort_order - right.sort_order)
+    .flatMap((collection) => {
+      const positions = new Map<string, number>()
+      for (const product of locationProducts.value) {
+        const membership = product.collections.find(entry => entry.collection_id === collection.id)
+        if (membership) positions.set(product.id, membership.sort_order)
+      }
+      return [...positions.keys()]
+        .sort((left, right) => positions.get(left)! - positions.get(right)!)
+        .map(id => ({ id, collectionName: collection.name }))
+    })
+  const seen = new Set<string>()
+  return ordered
+    .filter(entry => here.has(entry.id) && !seen.has(entry.id) && seen.add(entry.id))
+    .slice(0, 4)
+    .flatMap((entry) => {
+      const product = locationProducts.value.find(row => row.id === entry.id)
+      if (!product) return []
+      const offer = offerFor(product)
+      return [{
+        name: product.name,
+        category: entry.collectionName,
+        description: product.description,
+        price: formatProductMoney(offer),
+        compareAtPrice: offer?.compare_at_unit_amount
+          ? formatProductMoney({ ...offer, unit_amount: offer.compare_at_unit_amount, compare_at_unit_amount: null })
+          : null,
+        image: product.image?.public_url || null,
+        alt: product.image?.alt_text || product.name,
+        href: localePath(presentation.productPath(slug.value, product.slug)),
+        unavailable: !product.active || offer === null,
+      }]
+    })
+})
+
 const contentHero = computed(() => getContentHero({ title: '', subtitle: '', image: '', video: '' }))
 const heroMedia = computed(() => {
   if (contentHero.value.video) return resolveMedia({ public_url: contentHero.value.video, thumbnail_url: contentHero.value.thumbnail_url, kind: contentHero.value.videoKind || 'video' })
@@ -517,7 +501,7 @@ useSocialMetadata(() => ({
   path: location.value?.canonical_url || `/locations/${slug.value}`,
   title: location.value?.seo_title || location.value?.title || '',
   description: location.value?.seo_description || '',
-  robots: location.value?.robots || null,
+  robots: normalizeRobotsIntent(location.value?.robots),
   socialImage: locationSocialCard.value,
   brand: {
     siteName: siteName.value,

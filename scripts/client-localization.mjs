@@ -149,7 +149,7 @@ async function publish() {
     }
     for (let offset = 0; offset < bundle.products.length; offset += 200) {
       const items = bundle.products.slice(offset, offset + 200).map(({ source, ...item }) => item)
-      await call('sync_product_catalog_localization', { locale: bundle.locale, items })
+      await call('replace_product_localizations', { locale: bundle.locale, items })
       console.log(`Saved products ${offset + 1}–${offset + items.length}`)
     }
     for (const page of bundle.pages) {

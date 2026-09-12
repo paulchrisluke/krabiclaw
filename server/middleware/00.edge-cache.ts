@@ -9,6 +9,9 @@
 // NEVER cached:
 //   - /api/**, /dashboard/**, /auth/** — auth-gated
 //   - Requests with session cookie — personalised
+//   - Requests with the preview cookie — one owner's view of their own
+//     unpublished site, which must never be read from or written to a cache
+//     everyone shares
 //   - Paths with query strings
 //   - Non-GET requests
 //   - No Host header
@@ -16,7 +19,8 @@
 import { defineHandler } from 'nitro';
 import { setResponseHeaders } from 'nitro/h3';
 import { buildHtmlCacheKey } from '~/server/utils/edge-cache'
-import { isPreviewContext } from '~/server/utils/tenant-hosts'
+import { isNonProductionHost } from '~/server/utils/tenant-hosts'
+import { PREVIEW_COOKIE_NAME } from '~/server/utils/preview-token'
 
 const CACHE_TTL_SECONDS = 60
 
@@ -30,7 +34,9 @@ const SESSION_COOKIE = 'better-auth.session_token'
 export default defineHandler(async (event) => {
   if (event.method !== 'GET') return
   if (SKIP_PREFIXES.some(p => event.path.startsWith(p))) return
-  if (((event.req.headers.get('cookie')) ?? '').includes(SESSION_COOKIE)) return
+  const requestCookies = (event.req.headers.get('cookie')) ?? ''
+  if (requestCookies.includes(SESSION_COOKIE)) return
+  if (requestCookies.includes(`${PREVIEW_COOKIE_NAME}=`)) return
   if (event.path.includes('?')) return
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -42,7 +48,7 @@ export default defineHandler(async (event) => {
   // from the previous deploy references stale asset hashes (/_nuxt/*.css|js) that
   // no longer exist in the new deploy's Assets binding → ERR_ABORTED in tests.
   // Skip the KV layer entirely; SSR always returns fresh HTML with correct hashes.
-  if (isPreviewContext(hostname)) return
+  if (isNonProductionHost(hostname)) return
 
   const key = buildHtmlCacheKey(event)
   if (!key) return

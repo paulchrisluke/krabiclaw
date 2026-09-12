@@ -1,28 +1,22 @@
 <template>
-  <OrganizationSettingsShell
-    :detail-title="isGeneralRoute ? 'General' : undefined"
-    :show-actions="isGeneralRoute"
-    :saving="saving"
-    :save-disabled="!dirty"
-    @cancel="cancel"
-    @save="save"
-  >
-    <div v-if="isGeneralRoute" class="space-y-8">
-      <p class="text-base text-muted">The ownership boundary for sites, members, billing, and connected services.</p>
-      <UFormField label="Organization name">
-        <UInput v-model="name" :disabled="!canManage" size="xl" autofocus class="w-full" />
-      </UFormField>
-      <div>
-        <p class="text-sm font-medium text-highlighted">Your role</p>
-        <p class="mt-2 capitalize text-muted">{{ organization?.role || 'Not available' }}</p>
-      </div>
+  <div class="space-y-8">
+    <p class="text-base text-muted">The ownership boundary for sites, members, billing, and connected services.</p>
+    <UFormField label="Organization name">
+      <UInput v-model="name" :disabled="!canManage" size="xl" autofocus class="w-full" />
+    </UFormField>
+    <div>
+      <p class="text-sm font-medium text-highlighted">Your role</p>
+      <p class="mt-2 capitalize text-muted">{{ organization?.role || 'Not available' }}</p>
     </div>
-  </OrganizationSettingsShell>
+    <div class="flex items-center justify-between gap-4 border-t border-default pt-4">
+      <UButton color="neutral" variant="ghost" label="Cancel" @click="cancel" />
+      <UButton label="Save" :loading="saving" :disabled="!dirty" @click="save" />
+    </div>
+  </div>
 </template>
 
 <script setup lang="ts">
 import { authClient } from '~/lib/auth-client'
-import OrganizationSettingsShell from '~/components/dashboard/OrganizationSettingsShell.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -37,9 +31,6 @@ const name = ref(organization.value?.name ?? '')
 const saving = ref(false)
 const canManage = computed(() => organization.value?.role === 'owner' || organization.value?.role === 'admin')
 const dirty = computed(() => Boolean(name.value.trim()) && name.value.trim() !== organization.value?.name)
-const orgBase = computed(() => `/dashboard/${String(route.params.orgSlug)}`)
-const settingsPath = computed(() => `${orgBase.value}/settings`)
-const isGeneralRoute = computed(() => route.path === `${settingsPath.value}/general`)
 
 let organizationLoadToken = 0
 watch(() => route.params.orgSlug, async (nextOrgSlug, previousOrgSlug) => {

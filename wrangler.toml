@@ -77,11 +77,31 @@ WHATSAPP_DELIVERY_MODE = "provider"
 # secret and rebuilds the production index. Preview and staging deploys do not rebuild search
 # automatically (see .github/workflows/ci.yml and docs/ai-search.md). To set it by hand:
 #   yarn wrangler secret put PLATFORM_SEARCH_REINDEX_SECRET
+# Legal BFF (Blawby integration) configuration — all fields optional for dormant deployments.
+# When enabling any LEGAL_*_ENABLED flag in production, provide these via deployment secrets:
+#   yarn wrangler secret put LEGAL_BLAWBY_CLIENT_SECRET
+#   yarn wrangler secret put LEGAL_DIGEST_KEY_ACTIVE
+#   yarn wrangler secret put LEGAL_DIGEST_KEYS_PREVIOUS
+# Non-secret Blawby configuration can be set as [vars] entries when enabling:
+#   LEGAL_BLAWBY_ORIGIN: HTTPS origin of the Blawby API service
+#   LEGAL_BLAWBY_CLIENT_ID: OAuth client ID for Blawby
+#   LEGAL_BLAWBY_AUDIENCE: OAuth audience identifier for Blawby
+#   LEGAL_BLAWBY_CALLBACK_URL_RETURN: HTTPS return callback base URL (path appended by KrabiClaw)
+#   LEGAL_BLAWBY_CALLBACK_URL_REFRESH: HTTPS refresh callback base URL (path appended by KrabiClaw)
+#   LEGAL_BLAWBY_TIMEOUT_MS: HTTP client timeout in milliseconds
+#   LEGAL_PUBLIC_BUDGET_IP_SITE_OP_LIMIT: IP/site/operation rate limit (requests per window)
+#   LEGAL_PUBLIC_BUDGET_IP_SITE_OP_WINDOW_MS: IP/site/operation window in milliseconds
+#   LEGAL_PUBLIC_BUDGET_ACTOR_SITE_OP_LIMIT: Actor/site/operation rate limit
+#   LEGAL_PUBLIC_BUDGET_ACTOR_SITE_OP_WINDOW_MS: Actor/site/operation window in milliseconds
+#   LEGAL_PUBLIC_BUDGET_SITE_OP_LIMIT: Site/operation aggregate rate limit
+#   LEGAL_PUBLIC_BUDGET_SITE_OP_WINDOW_MS: Site/operation aggregate window in milliseconds
+#   LEGAL_PUBLIC_BUDGET_REQUEST_REF_LIMIT: Request-reference follow-up rate limit
+#   LEGAL_PUBLIC_BUDGET_REQUEST_REF_WINDOW_MS: Request-reference follow-up window in milliseconds
 
 [[d1_databases]]
 binding = "DB"
-database_name = "krabiclaw-production"
-database_id = "a3d20d54-8e98-425d-9b3a-fd03b1824fd9"
+database_name = "krabiclaw-production-v1"
+database_id = "d8a838ce-cd79-47b8-8ed3-4ed04c710d6f"
 migrations_dir = "migrations"
 remote = false
 
@@ -168,8 +188,8 @@ E2E_ALLOW_DEV_ROUTES = "true"
 
 [[env.preview.d1_databases]]
 binding = "DB"
-database_name = "krabiclaw-preview"
-database_id = "fe738267-6d05-48a3-8a80-f0e81f80833c"
+database_name = "krabiclaw-preview-v1"
+database_id = "da0e9fc4-be07-424d-83a1-611a49583d23"
 migrations_dir = "migrations"
 remote = false
 
@@ -256,8 +276,8 @@ E2E_ALLOW_DEV_ROUTES = "true"
 
 [[env.staging.d1_databases]]
 binding = "DB"
-database_name = "krabiclaw-staging"
-database_id = "84ea830f-1b88-4c96-9e3d-89928acf81fb"
+database_name = "krabiclaw-staging-v1"
+database_id = "3425595e-0d65-4e02-b629-e26e69a07fe7"
 migrations_dir = "migrations"
 remote = false
 

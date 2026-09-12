@@ -20,7 +20,7 @@
     </template>
 
     <template #body>
-      <div class="w-full max-w-[var(--ws-page-narrow,45rem)]">
+      <div class="mx-auto w-full max-w-[var(--ws-page-narrow,45rem)]">
         <UAlert
           v-if="loadError || realtimeFailed"
           color="warning"

@@ -1,57 +1,8 @@
 import { describe, test } from 'node:test'
 import assert from 'node:assert/strict'
-import {
-  assertConversationalToolEnabled,
-  filterConversationalTools,
-  isConversationalToolEnabled,
-  normalizeMcpToolForConversationalSurface,
-} from '../../server/utils/conversational-tool-surface.ts'
-import { asMcpError, MCP_ERROR } from '../../server/utils/mcp-protocol.ts'
+import { normalizeMcpToolForConversationalSurface } from '../../server/utils/conversational-tool-surface.ts'
 
 describe('conversational tool surface policy', () => {
-  test('keeps manual locale tools visible while hiding gated groups', () => {
-    assert.equal(isConversationalToolEnabled('list_site_locales'), true)
-    assert.equal(isConversationalToolEnabled('get_site_domains'), false)
-    assert.equal(isConversationalToolEnabled('update_product'), true)
-  })
-
-  test('enables a group only through its explicit env flag', () => {
-    const env = { CONVERSATIONAL_TOOLS_DOMAINS_ENABLED: 'true' }
-
-    assert.equal(isConversationalToolEnabled('get_site_domains', env), true)
-    assert.equal(isConversationalToolEnabled('get_site_domains'), false)
-  })
-
-  test('filters mixed tool lists consistently', () => {
-    const tools = [
-      { name: 'update_product' },
-      { name: 'list_site_locales' },
-      { name: 'get_site_domains' },
-    ]
-
-    assert.deepEqual(filterConversationalTools(tools).map((tool) => tool.name), ['update_product', 'list_site_locales'])
-  })
-
-  test('blocks stale calls to hidden tools', () => {
-    assert.throws(
-      () => assertConversationalToolEnabled('get_site_domains'),
-      /CONVERSATIONAL_TOOLS_DOMAINS_ENABLED/,
-    )
-  })
-
-  test('blocked-tool error is MCP-shaped with methodNotFound, not a generic internal error', () => {
-    try {
-      assertConversationalToolEnabled('get_site_domains')
-      assert.fail('expected assertConversationalToolEnabled to throw')
-    } catch (error) {
-      // This is what mcp.post.ts's catch block does with a thrown auth/gating
-      // error to build the JSON-RPC response — asserting through asMcpError
-      // (not just error.mcp directly) proves a plain `new Error(...)` here
-      // would regress to the generic internal (-32603) fallback.
-      assert.equal(asMcpError(error).code, MCP_ERROR.methodNotFound)
-    }
-  })
-
   test('narrows publish_post social channels while social publishing is disabled', () => {
     const tool = normalizeMcpToolForConversationalSurface({
       name: 'publish_post',

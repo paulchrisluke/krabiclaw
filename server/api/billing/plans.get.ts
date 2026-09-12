@@ -15,8 +15,6 @@ export default defineHandler(async (event) => {
     return apiErrorResponse(event, 503, 'BILLING_NOT_CONFIGURED', 'Billing provider is not configured')
   }
 
-  setHeader(event, 'Cache-Control', 'public, max-age=3600')
-
   try {
     const plans = await getCachedPlans(env as EnvWithSiteCache)
     return jsonResponse(plans)

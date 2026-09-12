@@ -4,7 +4,7 @@
  *
  * This module is intentionally framework-free (no Nuxt composables, no DOM):
  * - `composables/useProfessionalServiceSchema.ts` wraps it for Vue rendering.
- * - `server/utils/professional-services-editor.ts` uses `normalizeNonprofitStatus`
+ * - site settings carry `compliance.nonprofit_status` (see `server/utils/professional-services.ts`)
  *   to reject/normalize invalid values at the canonical write layer.
  * - `tests/unit/professional-service-schema.test.ts` exercises it directly.
  *

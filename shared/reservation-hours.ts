@@ -7,7 +7,6 @@ export type OpeningHours = { periods: WeeklyPeriod[] } | null
 export type DatePeriod = { open_time: string; close_time: string; close_day_offset: 0 | 1 }
 export type Closure = { kind: 'closure'; starts_on: string; ends_on: string | null; note: string | null }
 export type SpecialHours = Array<Closure | { kind: 'hours'; date: string; periods: DatePeriod[]; note: string | null }> | null
-export type RecurringSlots = Partial<Record<Weekday, string[]>> | null
 export type HoursInterval = { start: number; end: number }
 const DAY = 1440
 const WEEK = DAY * 7
@@ -27,7 +26,6 @@ export const specialHoursSchema = { anyOf: [{ type: 'null' }, { type: 'array', i
   { type: 'object', additionalProperties: false, required: ['kind', 'starts_on', 'ends_on', 'note'], properties: { kind: { const: 'closure' }, starts_on: dateSchema, ends_on: { anyOf: [dateSchema, { type: 'null' }] }, note: noteSchema } },
   { type: 'object', additionalProperties: false, required: ['kind', 'date', 'periods', 'note'], properties: { kind: { const: 'hours' }, date: dateSchema, note: noteSchema, periods: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['open_time', 'close_time', 'close_day_offset'], properties: { open_time: timeSchema, close_time: timeSchema, close_day_offset: { enum: [0, 1] } } } } } },
 ] } }] }
-export const recurringSlotsSchema = { anyOf: [{ type: 'null' }, { type: 'object', additionalProperties: false, properties: Object.fromEntries(WEEKDAYS.map(day => [day, { type: 'array', uniqueItems: true, items: timeSchema }])) }] }
 
 function record(value: unknown, keys: string[]): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value) || Object.keys(value).some(key => !keys.includes(key))) throw new Error('Invalid hours object or unsupported field')
@@ -102,18 +100,6 @@ export function parseSpecialHours(value: unknown): SpecialHours {
     return { kind: 'hours', date: item.date, periods, note: item.note }
   })
 }
-export function parseRecurringSlots(value: unknown): RecurringSlots {
-  if (value === null) return null
-  const input = record(value, [...WEEKDAYS])
-  const result: NonNullable<RecurringSlots> = {}
-  for (const day of WEEKDAYS) {
-    if (!(day in input)) continue
-    const slots = input[day]
-    if (!Array.isArray(slots) || !slots.every((slot): slot is string => typeof slot === 'string' && TIME_PATTERN.test(slot)) || new Set(slots).size !== slots.length) throw new Error('Recurring slots must contain unique HH:MM times')
-    result[day] = slots.toSorted()
-  }
-  return result
-}
 export function closureOnDate(special: SpecialHours, date: string): Closure | undefined {
   return special?.find((p): p is Closure => p.kind === 'closure' && p.starts_on <= date && (p.ends_on === null || p.ends_on >= date))
 }
@@ -162,9 +148,6 @@ export function generateReservationTimes(hours: OpeningHours, date: string, { in
     for (let minute = start < 0 ? start + Math.ceil(-start / intervalMinutes) * intervalMinutes : start; minute < DAY && minute <= end - lastSeatingBufferMinutes; minute += intervalMinutes) slots.add(toTimeString(minute))
   }
   return [...slots].sort()
-}
-export function resolveExperienceScheduleSlots(experience: { recurring_slots: RecurringSlots }, date: string): string[] {
-  return experience.recurring_slots?.[WEEKDAYS[new Date(`${date}T00:00:00Z`).getUTCDay()]!] ?? []
 }
 export function getTodayHoursLabel(hours: OpeningHours, closedLabel: string, timezone?: string | null, now = new Date(), special: SpecialHours = null, locale = 'en'): string | null {
   if (!timezone) return null

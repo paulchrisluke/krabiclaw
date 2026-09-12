@@ -21,12 +21,18 @@
 </template>
 
 <script setup>
+import { NON_INDEXABLE_ROBOTS_INTENT } from '~/shared/robots-directive'
 definePageMeta({ layout: 'access', auth: false })
 
 import { authClient } from '~/lib/auth-client'
 
-useSeoMeta({
-  robots: 'noindex, nofollow'
+useSocialMetadata({
+  template: 'platform',
+  schema: false,
+  path: '/forgot-password',
+  title: 'Reset your password',
+  description: 'Request a password reset link for your KrabiClaw account.',
+  robots: NON_INDEXABLE_ROBOTS_INTENT,
 })
 
 const loading = ref(false)

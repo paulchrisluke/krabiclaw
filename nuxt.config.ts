@@ -2,10 +2,8 @@
 import { createRequire } from 'node:module'
 import { getIcons } from '@iconify/utils'
 import { visualizer } from 'rollup-plugin-visualizer'
-import { DEFAULT_CURRENCY, isCurrencyCode } from './shared/currencies'
+import { ROBOTS_DISABLED_DIRECTIVE, ROBOTS_ENABLED_DIRECTIVE } from './shared/robots-directive'
 import { localizedPublicRouteAliases } from './build/localized-public-routes'
-
-const configuredDefaultCurrency = process.env.DEFAULT_CURRENCY?.toUpperCase()
 
 // nuxt/icon's serverBundle bundles a named collection in full — no usage-based
 // tree-shaking. lucide is the app's sole icon pack (it's also what Nuxt UI's
@@ -154,11 +152,11 @@ export default defineNuxtConfig({
       ],
     },
     customCollections: [
-      pickIcons('simple-icons', ['facebook', 'google', 'googlemaps']),
+      pickIcons('simple-icons', ['facebook', 'google', 'googlemaps', 'openai', 'whatsapp']),
+      pickIcons('logos', ['google-icon', 'whatsapp-icon']),
     ],
   },
   runtimeConfig: {
-    defaultCurrency: isCurrencyCode(configuredDefaultCurrency) ? configuredDefaultCurrency : DEFAULT_CURRENCY,
     public: {
       platformDomain: process.env.NUXT_PUBLIC_PLATFORM_DOMAIN || '',
       freeSiteDomain: process.env.NUXT_PUBLIC_FREE_SITE_DOMAIN || '',
@@ -231,9 +229,18 @@ export default defineNuxtConfig({
     defaults: false,
   },
 
-  // Crawler guidance. Runtime X-Robots-Tag middleware remains the authoritative
-  // indexing control for private routes and non-production hosts.
+  // Crawler guidance. @nuxtjs/robots owns /robots.txt and the X-Robots-Tag
+  // response header, which stays the authoritative indexing control for private
+  // routes and non-production hosts. It does not own the `<meta name="robots">`
+  // tag: `metaTag: false` leaves that to useSocialMetadata, so one derivation
+  // (shared/robots-directive.ts) produces the served directive for every page —
+  // CMS-driven and hardcoded alike — instead of two emitters racing through
+  // useHead's dedupe. The enabled/disabled values come from the same derivation
+  // so the header and the meta tag agree byte for byte.
   robots: {
+    metaTag: false,
+    robotsEnabledValue: ROBOTS_ENABLED_DIRECTIVE,
+    robotsDisabledValue: ROBOTS_DISABLED_DIRECTIVE,
     groups: [
       {
         userAgent: ['*'],
@@ -244,7 +251,6 @@ export default defineNuxtConfig({
           '/dashboard',
           '/dev',
           '/oauth',
-          '/preview',
           '/transfer',
           '/accept-invitation',
           '/contact/confirmed',
@@ -341,6 +347,10 @@ export default defineNuxtConfig({
     },
     {
       path: '~/lib/components/workspace/media',
+      pathPrefix: false,
+    },
+    {
+      path: '~/lib/components/workspace/location',
       pathPrefix: false,
     },
     {

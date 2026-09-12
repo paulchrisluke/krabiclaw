@@ -1,6 +1,6 @@
 import { queryFirst } from '~/server/db'
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
-import { listPageQa, listQa } from '~/server/utils/location-qa'
+import { listQa } from '~/server/utils/location-qa'
 
 export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
@@ -10,7 +10,7 @@ export default defineHandler(async (event) => {
   const site = await queryFirst<{ id: string }>(db, "SELECT id FROM sites WHERE id = ? AND status = 'active'", [siteId])
   if (!site) return jsonResponse({ error: 'Site not found' }, { status: 404 })
   const pagePath = typeof getQuery(event).page_path === 'string' ? String(getQuery(event).page_path) : null
-  return jsonResponse({ qa: pagePath ? await listPageQa(db, siteId, pagePath, true) : await listQa(db, siteId, null, true) })
+  return jsonResponse({ qa: await listQa(db, siteId, null, true, pagePath) })
 })
 import { defineHandler } from 'nitro';
 import { getQuery } from 'nitro/h3';

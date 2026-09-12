@@ -80,14 +80,23 @@ export const CONTENT_BLOCK_TEXT_FIELDS = {
   // `data.markdown || data.text`, and no stored callout has either key, so every
   // callout rendered empty there.
   callout: [plain('title'), plain('body')],
-  hero: [plain('eyebrow'), plain('title'), plain('subtitle'), plain('description'), plain('cta_label')],
+  hero: [plain('eyebrow'), plain('title'), plain('subtitle'), plain('cta_label')],
   button_group: [plain('buttons', '*', 'label')],
   feature_grid: [plain('title'), plain('description'), plain('items', '*', 'title'), plain('items', '*', 'description')],
+  // A person's own words: the role they hold and how they describe themselves.
+  // Their name is translatable too — a Japanese or Thai site writes it in its
+  // own script rather than transliterating at read time.
+  team_grid: [
+    plain('title'), plain('description'),
+    plain('items', '*', 'first_name'), plain('items', '*', 'last_name'),
+    plain('items', '*', 'title'), plain('items', '*', 'bio'),
+  ],
   testimonial_grid: [plain('title'), plain('description'), plain('items', '*', 'title'), plain('items', '*', 'description')],
   contact_cta: [plain('title'), plain('description'), plain('label')],
   booking_cta: [plain('title'), plain('description'), plain('label')],
   donation_choices: [plain('tiers', '*', 'label')],
-  offering_grid: [plain('title'), plain('description')],
+  page_grid: [plain('title'), plain('description')],
+  product_grid: [plain('title'), plain('description')],
   location_grid: [plain('title'), plain('description')],
 } as const satisfies Record<ContentBlockType, readonly ContentBlockTextField[]>
 
@@ -102,18 +111,20 @@ export const CONTENT_BLOCK_TYPES = [
   'hero',
   'button_group',
   'feature_grid',
+  'team_grid',
   'testimonial_grid',
   'contact_cta',
   'booking_cta',
   'donation_choices',
-  'offering_grid',
+  'page_grid',
+  'product_grid',
   'location_grid',
 ] as const
 
 export type ContentBlockType = typeof CONTENT_BLOCK_TYPES[number]
 
 export const LOCALIZED_RESOURCE_TYPES = [
-  'site', 'business_location', 'product', 'product_category', 'offering', 'media_asset',
+  'site', 'business_location', 'product', 'collection', 'media_asset',
 ] as const
 
 export type LocalizedResourceType = typeof LOCALIZED_RESOURCE_TYPES[number]
