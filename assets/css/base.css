@@ -104,6 +104,12 @@
   /* Global type scaling belongs at the root so rem-based sizing stays predictable. */
   font-size: 106%;
 
+  /* Form field boundary. WCAG 2.1 SC 1.4.11 wants 3:1 for the edge of a
+     control, and the decorative --ui-border this shared input class used to
+     borrow lands at 1.27:1 on white — the field read as floating text with no
+     visible box. Measured 3.25:1 on #FFFFFF. */
+  --kc-field-border: #8E8E97;
+
   --kc-navy:        #1F2547;
   --kc-navy-700:    #2C3360;
   --kc-navy-500:    #4A5380;
@@ -224,6 +230,12 @@
   --ui-border-muted:      rgba(255,255,255,5%);
   --ui-border-accented:   rgba(255,255,255,12%);
   --ui-border-inverted:   var(--kc-cream-elev);
+}
+
+/* Field boundary on any dark surface. Measured 3.44:1 on the Saya dark field
+   background #09090B, where --ui-border landed at 1.34:1. */
+.dark {
+  --kc-field-border: #64646E;
 }
 
 /* Dark mode wordmark: swap navy text to cream */
