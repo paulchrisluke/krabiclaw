@@ -1,4 +1,5 @@
 @import "tailwindcss" source(none);
+@source "../../utils/form-constants.ts";
 
 @plugin "@tailwindcss/typography";
 
