@@ -134,9 +134,17 @@ export function mediaPlacementOwnerQuery(input: {
       JOIN content_documents root ON root.id = COALESCE(owner.root_id, owner.id)
       WHERE owner.id = ? AND owner.organization_id = ? AND owner.site_id = ?`, params,
   }
+  // A product is organization-owned and reaches a site through its publication.
+  // Its locations are a many relationship (product_locations), so there is no
+  // single location to narrow authorization by.
+  if (input.ownerType === 'product') return {
+    query: `SELECT NULL AS location_id FROM products p
+      JOIN product_publications pub ON pub.product_id = p.id AND pub.organization_id = p.organization_id
+      WHERE p.id = ? AND p.organization_id = ? AND pub.site_id = ?`, params,
+  }
   const table = OWNER_TABLES[input.ownerType]
   const location = input.ownerType === 'business_location' ? 'id'
-    : ['product', 'offering', 'review', 'review_request'].includes(input.ownerType) ? 'location_id' : 'NULL'
+    : ['review', 'review_request'].includes(input.ownerType) ? 'location_id' : 'NULL'
   return {
     query: `SELECT ${location} AS location_id FROM ${table} WHERE id = ? AND organization_id = ? AND ${input.ownerType === 'site' ? 'id' : 'site_id'} = ?`, params,
   }

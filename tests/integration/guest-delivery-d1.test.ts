@@ -12,6 +12,11 @@ import { executeGuestThreadOperation } from '../../server/domain/guest-threads/o
 import { listGuestThreads, updateThreadProjectionIfLatestEntry } from '../../server/domain/guest-threads/repository.ts'
 import { requestBookingChange, respondToBookingChange } from '../../server/domain/guest-threads/booking-changes.ts'
 import { notifyContactSubmitted } from '../../server/utils/notifications.ts'
+import { getReviewBookingContext } from '../../server/utils/review-requests.ts'
+import { sendReviewRequestForBooking } from '../../server/utils/review-request-delivery.ts'
+import { renderEmail } from '../../server/emails/vue-email.ts'
+import BookingThankYouReviewRequest from '../../server/emails/templates/BookingThankYouReviewRequest.ts'
+import { formatTimestamp } from '../../utils/timezone.ts'
 import type { CloudflareEnv } from '../../server/utils/auth.ts'
 
 test('D1 claims fence concurrent sends and bound ambiguous provider retries', async () => {
@@ -433,5 +438,60 @@ test('a booking move into a full session leaves the original booking exactly as 
       'no replacement seat was taken in the full session')
     assert.equal(await db.prepare("SELECT count(*) AS count FROM activity_entries WHERE request_id='move-proof' AND event_name='booking_change.accepted'").first('count'), 0,
       'the decision was not recorded for a move that did not happen')
+  } finally { await runtime.dispose() }
+})
+
+test('a review request reads the visit from the record that holds it', async () => {
+  const runtime = new Miniflare({ workers: [{ config: {
+    name: 'review-request-proof', type: 'worker', compatibilityDate: '2024-11-01',
+    manifest: { mainModule: 'index.mjs', modules: { 'index.mjs': { type: 'esm', contents: 'export class Hub { fetch() { return new Response(null, { status: 204 }) } } export default { fetch() { return new Response("ok") } }' } } },
+    exports: { Hub: { type: 'durable-object', storage: 'sqlite' } },
+    env: { DB: { type: 'd1' }, GUEST_INBOX_HUBS: { type: 'durable-object', workerName: 'review-request-proof', exportName: 'Hub' } },
+  } }] })
+
+  try {
+    const db = await runtime.getD1Database('DB')
+    const env = { ...await runtime.getBindings<CloudflareEnv>(), BETTER_AUTH_SECRET: 'local-proof-secret-long-enough-for-auth', BETTER_AUTH_URL: 'https://proof.example',
+      STRIPE_SECRET_KEY: 'sk_test_local_d1_no_stripe_requests',
+      NUXT_PUBLIC_PLATFORM_DOMAIN: 'https://proof.example', EMAIL_REPLY_SECRET: 'local-reply-proof', EMAIL_DELIVERY_MODE: 'log_only', WHATSAPP_DELIVERY_MODE: 'log_only' }
+    await db.batch((await generateSQLiteMigration(await generateSQLiteDrizzleJson({}), await generateSQLiteDrizzleJson(schema))).map(statement => db.prepare(statement)))
+    const now = new Date().toISOString()
+    for (const statement of [
+      "INSERT INTO organization (id, name, slug) VALUES ('org-review', 'Review', 'review')",
+      "INSERT INTO sites (id, organization_id, slug, subdomain, brand_name) VALUES ('site-review', 'org-review', 'review', 'review', 'Kikuzuki')",
+      "INSERT INTO site_domains (id, organization_id, site_id, domain, role, status, type) VALUES ('domain-review','org-review','site-review','review.example','canonical','active','custom')",
+      "INSERT INTO business_locations (id,organization_id,site_id,slug,title,timezone,max_capacity) VALUES ('loc-review','org-review','site-review','main','Main Room','Asia/Bangkok',40)",
+      "INSERT INTO customers (id, organization_id, site_id, name, email, source) VALUES ('cust-review','org-review','site-review','Sivan','sivan@proof.example','reservation')",
+      "INSERT INTO organization_billing (organization_id, payment_status, access_plan, paid_through, access_expires_at) VALUES ('org-review','paid','growth','2099-01-01T00:00:00.000Z','2099-01-01T00:00:00.000Z')",
+    ]) await db.prepare(statement).run()
+    const thread = requestInsertQueries({ id: 'reservation-review', kind: 'reservation', organization_id: 'org-review', site_id: 'site-review', location_id: 'loc-review',
+      customer_id: 'cust-review', review_id: null, conversation_state: 'resolved', resolved_at: now,
+      payload: { ...threadPayloadForGuest({ name: 'Sivan', email: 'sivan@proof.example', phone: null }), completion: { at: now, source: 'auto' } }, created_at: now, updated_at: now })
+    await db.batch(thread.map(write => db.prepare(write.query).bind(...write.params)))
+    // The visit is the reservation's, in the reservation's zone. 13:00Z in
+    // Asia/Bangkok is 8:00 PM, and nothing else in the system knows that.
+    await db.prepare(`INSERT INTO reservations (id,organization_id,site_id,location_id,customer_id,request_id,timezone,starts_at,ends_at,party_size,status,completed_at)
+      VALUES ('res-review','org-review','site-review','loc-review','cust-review','reservation-review','Asia/Bangkok','2026-09-11T13:00:00.000Z','2026-09-11T15:00:00.000Z',6,'completed',?)`).bind(now).run()
+
+    const context = await getReviewBookingContext(db, 'reservation', 'reservation-review')
+    assert(context, 'the thread and its reservation resolve to one context')
+    assert.deepEqual(
+      { status: context.status, visit_starts_at: context.visit_starts_at, visit_timezone: context.visit_timezone, party_size: context.party_size },
+      { status: 'completed', visit_starts_at: '2026-09-11T13:00:00.000Z', visit_timezone: 'Asia/Bangkok', party_size: 6 },
+      'status and the visit come from the reservation, not from the thread payload',
+    )
+
+    const result = await sendReviewRequestForBooking(env, db, 'reservation', 'reservation-review', 'first')
+    assert.deepEqual({ sent: result.sent, error: result.error }, { sent: true, error: undefined })
+    // The email states the visit. A row that reads "your reservation" is the
+    // headline fragment leaking into a value, which is what this guards.
+    const { html } = await renderEmail(BookingThankYouReviewRequest, {
+      guestName: 'Sivan', siteName: 'Kikuzuki', locationName: 'Main Room', bookingPhrase: 'your reservation',
+      visitAt: formatTimestamp(context.visit_starts_at, 'en', context.visit_timezone), partySize: '6 guests',
+      reviewUrl: 'https://review.example/r', optOutUrl: 'https://review.example/r?optOut=1', platformDomain: 'proof.example',
+    })
+    assert.match(html, /Sep 11, 2026, 8:00\s?PM/, 'the visit renders in the reservation timezone')
+    assert.match(html, /6 guests/)
+    assert.doesNotMatch(html, />\s*your reservation\s*</, 'the headline phrase is never rendered as a detail value')
   } finally { await runtime.dispose() }
 })

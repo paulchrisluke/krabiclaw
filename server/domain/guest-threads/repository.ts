@@ -53,7 +53,8 @@ function sourcePreviewText(row: {
   if (row.source_preview) return row.source_preview
   if (!row.record_starts_at || !row.record_timezone || row.record_party_size === null) return null
   const when = formatThreadWhenLabel(row.record_starts_at, row.record_timezone)
-  return `${when} - ${row.record_party_size}${row.party_size_is_minimum ? '+' : ''} guests`.slice(0, 160)
+  const size = `${row.record_party_size}${row.party_size_is_minimum ? '+' : ''}`
+  return `${when} - ${size} ${size === '1' ? 'guest' : 'guests'}`.slice(0, 160)
 }
 
 export interface OperationSummary {

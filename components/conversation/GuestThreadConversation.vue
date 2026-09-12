@@ -134,8 +134,8 @@
 </template>
 
 <script setup lang="ts">
-import { formatTimestamp } from '~/utils/timezone'
 import ConversationShell from '~/components/conversation/ConversationShell.vue'
+import type { ThreadDetailSourceFields } from '~/server/domain/guest-threads/types'
 
 type EntryKind = 'submission' | 'message' | 'operation' | 'assignment' | 'resolution'
 type ActorKind = 'guest' | 'member' | 'system'
@@ -190,7 +190,7 @@ const props = withDefaults(defineProps<{
   guestPhone?: string | null
   locationLabel?: string | null
   contextLabel?: string | null
-  sourceFields?: Record<string, unknown>
+  sourceFields?: ThreadDetailSourceFields
   actionItems?: Array<{ value: string; label: string; icon: string; color: 'primary' | 'secondary' | 'success' | 'info' | 'warning' | 'error' | 'neutral'; variant: 'soft' | 'outline' | 'ghost' }>
   pendingAction?: string | null
 }>(), {
@@ -233,43 +233,29 @@ function openingRows(): Array<{ label: string; value: string; wide?: boolean }> 
     { label: 'Location', value: props.locationLabel },
   ]
 
-  if (props.submissionType === 'reservation') {
-    rows.push(
-      { label: 'Date', value: stringField(fields.date) },
-      { label: 'Time', value: stringField(fields.time) },
-      { label: 'Guests', value: stringField(fields.guests) },
-      { label: 'Requests', value: stringField(fields.requests), wide: true },
-    )
-  } else if (props.submissionType === 'booking') {
-    rows.push(
-      { label: 'Experience', value: stringField(fields.experienceTitle), wide: true },
-      { label: 'Date', value: stringField(fields.bookingDate) },
-      { label: 'Time', value: stringField(fields.timeSlot) },
-      { label: 'Party size', value: stringField(fields.partySize) },
-      { label: 'Notes', value: stringField(fields.notes), wide: true },
-    )
-  } else {
+  if (props.submissionType === 'contact') {
     rows.push(
       { label: 'Subject', value: stringField(fields.subject), wide: true },
       { label: 'Message', value: stringField(fields.message), wide: true },
     )
+  } else {
+    // A reservation and an experience booking are the same shape here: an
+    // occurrence the operational record owns. The server already formatted
+    // `whenLabel` in that record's timezone, so nothing is re-derived here.
+    rows.push(
+      { label: 'Experience', value: stringField(fields.productTitle), wide: true },
+      { label: 'When', value: stringField(fields.whenLabel) },
+      { label: 'Guests', value: stringField(fields.guests) },
+      { label: 'Requests', value: stringField(fields.notes), wide: true },
+    )
   }
 
-  return rows
-    .filter((row): row is { label: string; value: string; wide?: boolean } => Boolean(row.value))
-    .map(row => ({ ...row, value: row.label === 'Date' ? formatOpeningDate(row.value) : row.value }))
+  return rows.filter((row): row is { label: string; value: string; wide?: boolean } => Boolean(row.value))
 }
 
 function stringField(value: unknown): string | null {
   if (value === null || value === undefined || value === '') return null
   return String(value)
-}
-
-function formatOpeningDate(value: string | undefined) {
-  if (!value) return ''
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return value
-  return formatTimestamp(date, 'en', 'UTC', { dateStyle: 'medium' })
 }
 
 function actorLabel(message: GuestThreadEntryMessage) {
