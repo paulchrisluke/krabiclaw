@@ -86,7 +86,7 @@ export const useSiteShellState = () => {
   const googleBusiness = computed(() => data.value?.googleBusiness ?? null);
   const locales = computed(() => data.value?.locales ?? []);
   const hasProducts = computed(() => data.value?.hasProducts ?? false);
-  const hasExperiences = computed(() => data.value?.hasExperiences ?? false);
+  const hasBookableProducts = computed(() => data.value?.hasBookableProducts ?? false);
   const platformMessages = useState<Record<string, string> | null>('platform-locale-messages', () => null)
   watch(
     () => data.value?.platformMessages,
@@ -100,7 +100,7 @@ export const useSiteShellState = () => {
     googleBusiness,
     locales,
     hasProducts,
-    hasExperiences,
+    hasBookableProducts,
     data,
     pending,
     error,

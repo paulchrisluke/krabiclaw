@@ -203,7 +203,7 @@ export function buildPublicShellPayload(
         })
         return capabilities.managers.some(manager => manager.key === 'location.products')
       })
-      return { hasProducts: carries(row => row.unbookable), hasExperiences: carries(row => row.bookable) }
+      return { hasProducts: carries(row => row.unbookable), hasBookableProducts: carries(row => row.bookable) }
     })(),
   }
 }

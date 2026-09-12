@@ -124,7 +124,7 @@ const props = defineProps<{
   site: Site | null
   locations: ApiRecord[]
   hasProducts: boolean
-  hasExperiences: boolean
+  hasBookableProducts: boolean
 }>()
 
 const i18n = useI18n() as ApiValue as I18nComposable
@@ -172,7 +172,7 @@ const productPresentation = computed(() => resolveProductPresentation(props.site
 const showProducts = computed(() => props.hasProducts && productPresentation.value !== null)
 // Two surfaces, each offered only when the site has something on it: what the
 // merchant sells, and what a guest books a seat on.
-const showExperiences = computed(() => props.hasExperiences)
+const showExperiences = computed(() => props.hasBookableProducts)
 const productCollectionLabel = computed(() => productPresentation.value?.locationCollectionSegment === 'menu'
   ? t('saya.header.menu')
   : t('saya.footer.products'))

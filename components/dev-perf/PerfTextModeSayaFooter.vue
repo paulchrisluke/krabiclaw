@@ -18,7 +18,7 @@
           :error="null"
           :config="{}"
           :has-products="false"
-          :has-experiences="false"
+          :has-bookable-products="false"
         />
       </UTheme>
     </div>

@@ -9,9 +9,9 @@ import { normalizeVertical } from '~/utils/vertical-copy'
  * so, and it is what the merchant switches on. A restaurant with a teppanyaki
  * counter keeps its Menu and gains an Experiences page; a studio's clay and
  * its t-shirts are not the same page. This reads the same fact the old
- * `product_categories.product_type` recorded: on production every product that
- * came across from an 'experience' category takes bookings, and none of the
- * 380 'standard' ones do.
+ * category type column recorded: on production every product that came across
+ * from an 'experience' category takes bookings, and none of the 380 'standard'
+ * ones do.
  */
 export function isExperience(product: Pick<Product, 'booking'>): boolean {
   return product.booking !== null

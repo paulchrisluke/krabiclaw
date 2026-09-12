@@ -213,7 +213,7 @@ const props = defineProps<{
   error: unknown
   config: Record<string, string>
   hasProducts: boolean
-  hasExperiences: boolean
+  hasBookableProducts: boolean
 }>()
 
 const isDark = ref(false)
@@ -255,7 +255,7 @@ const locationsError = computed(() => props.error)
 const productPresentation = computed(() => resolveProductPresentation(props.site?.vertical))
 const showProducts = computed(() => props.hasProducts && productPresentation.value !== null)
 // Offered only when the site has something a guest can book.
-const showExperiences = computed(() => props.hasExperiences)
+const showExperiences = computed(() => props.hasBookableProducts)
 const productCollectionLabel = computed(() => productPresentation.value?.locationCollectionSegment === 'menu'
   ? t('saya.footer.menu')
   : t('saya.footer.products'))
