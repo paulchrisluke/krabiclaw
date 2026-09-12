@@ -101,6 +101,17 @@ disappearance. Mutating form, booking, and MCP interactions belong only on local
 or preview disposable data. Staging and production checks stay read-only unless
 a dedicated canary is explicitly authorized.
 
+Verification means completing what the customer came to do, up to the last
+read-only step. Opening a class means opening its booking form and seeing a
+time to choose; opening a dish means its price and photograph; opening a
+service means its page in the site's own design. A page that renders with an
+empty state is a failed check unless that emptiness is the tenant's own data.
+Row counts, foreign-key checks, and `typecheck` describe the database and the
+build; none of them is a customer journey, and a cutover is not verified until
+one has been walked on each representative surface. On 2026-09-12 a catalog
+cutover passed every count — 406 products, 627 prices, 0 FK violations — while
+no class on any site had a bookable time, because nobody opened a booking form.
+
 The representative client order is:
 
 1. Pottery House: home, experiences and details, locations, contact, and
@@ -120,11 +131,10 @@ unverified, but unrelated route families do not block a narrowly scoped change.
 
 ## Migration and content safety
 
-For the canonical migration workflow, see [docs/database/migrations.md](../database/migrations.md).
 
-Never rewrite migration history for a production database resource in place. Rebaselining production schema history is the documented database rebaseline in [docs/database/migrations.md](../database/migrations.md): a fresh generated baseline, an offline transfer of a frozen export, verification, then a reset of the same database resource during a write freeze.
+Never rewrite migration history for a production database resource in place. A schema replacement stands up a new database from a generated baseline and repoints the binding.
 
-A database rebaseline does not take the site down. Copy live: export, transfer, load the prepared database, verify in place, deploy the candidate on the new binding, then compare the old database for rows created after the export and copy those over. There is no write-freeze or maintenance switch in the codebase; an action that returns errors to customers is never a procedure step.
+A schema replacement does not take the site down. Prepare the new database ahead of time, load it, verify it in place, deploy the candidate on the new binding, then copy over rows created after the export. There is no write-freeze or maintenance switch in the codebase; an action that returns errors to customers is never a procedure step.
 
 Before dropping or retiring a legacy table or writer:
 
@@ -134,6 +144,21 @@ Before dropping or retiring a legacy table or writer:
 - apply the migration locally from a clean database and from the prior schema;
 - compare the resulting schema and run `PRAGMA foreign_key_check`;
 - repeat a read-only schema and foreign-key check after deployment.
+
+When a change turns a value the runtime computed into rows the runtime reads
+— a schedule into sessions, a flag into a placement — the same change ships
+whatever creates those rows, unattended, and the migration derives them for the
+data already there. A CMS button is not a generator. The check for such a
+change is the surface that reads the rows, not the count of rules that would
+have produced them.
+
+A change that deletes or moves a public route lists every retired path and what
+answers it now, in the pull request: a restored route, a 301 to a named
+successor, or a deliberate 404 with the reason. The same change updates the
+production verification spec, the template sitemap allowlist, and any robots
+rule that named the path — those three are where a retired route keeps
+answering after the page is gone. Customer-facing names are decided with the
+owner before a route is renamed: a schema word is not a navigation label.
 
 Never rebuild a referenced parent table with `DROP TABLE`; D1 may execute foreign-key actions during a generated rebuild. An obsolete unreferenced table may be dropped in the same release once these checks pass. Do not retain inert tables or compatibility code for an extra release as a substitute for proving the migration.
 

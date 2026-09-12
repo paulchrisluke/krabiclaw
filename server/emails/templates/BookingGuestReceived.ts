@@ -7,7 +7,7 @@ export default defineComponent({
   props: {
     guestName: { type: String, required: true },
     siteName: { type: String, required: true },
-    experienceTitle: { type: String, required: true },
+    productTitle: { type: String, required: true },
     date: { type: String, required: true },
     time: { type: String, required: true },
     partySize: { type: Number, required: true },
@@ -20,14 +20,14 @@ export default defineComponent({
   setup(props) {
     return () => h(EmailShell, {
       preheader: 'We received your booking request',
-      title: `Your booking request was sent — ${props.experienceTitle}`,
+      title: `Your booking request was sent — ${props.productTitle}`,
       siteName: props.siteName,
       platformDomain: props.platformDomain,
     }, () => [
       h(EText, { class: 'email-text', style: 'margin:0 0 16px;font-size:15px;color:#52525b;line-height:1.6' }, () => `Thanks, ${props.guestName}. Your booking request has been sent to ${props.siteName}.`),
       h(EmailDetails, {
         rows: [
-          ['Experience', props.experienceTitle],
+          ['Booking', props.productTitle],
           ['Date', props.date],
           ['Time', props.time],
           ['Party size', String(props.partySize)],

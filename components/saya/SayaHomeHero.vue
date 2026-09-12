@@ -141,7 +141,7 @@ const props = withDefaults(defineProps<Props>(), { data: () => ({}) })
 const hero = computed(() => props.data?.hero || {})
 const eyebrow = computed(() => typeof props.data?.eyebrow === 'string' ? props.data.eyebrow : '')
 const locations = computed(() => props.data?.locations || [])
-const hasLocations = computed(() => locations.value.length > 0)
+const hasLocations = computed(() => locations.value.length > 1)
 const businessTitle = computed(() => props.data?.businessTitle || '')
 const businessSubtitle = computed(() => props.data?.businessSubtitle || '')
 const hasOrderLinks = computed(() => props.data?.hasOrderLinks || false)
@@ -153,8 +153,11 @@ const viewMenuRoute = computed(() => props.data?.viewMenuRoute || '')
 const showSecondaryCta = computed(() =>
   !hasOrderLinks.value && !!viewMenuRoute.value && !!viewMenuCta.value && viewMenuRoute.value !== ctaRoute.value
 )
-// Neutral default until the owner picks a brand color in onboarding.
-const brandColor = computed(() => props.data?.brandColor || '#3F3F46')
+// The theme's --brand-color is the one source for this; the layout defaults it
+// to the platform colour until the owner picks one in the brand step. Reading
+// it here rather than keeping a second default means the hero treatment and the
+// site's buttons can never disagree about what the brand colour is.
+const brandColor = computed(() => props.data?.brandColor || 'var(--brand-color)')
 const isExperienceVertical = computed(() => props.data?.vertical === 'experience')
 
 const heroImageSource = computed(() => {

@@ -23,20 +23,23 @@ test('catch-all locale classification uses the tenant published-locale set', () 
 test('localized projection clears untranslated localizable fields', () => {
   const projected = projectExactLocalizedResource(
     'product',
-    { id: 'product-1', name: 'English name', description: 'English description', experience: { tagline: 'English tagline' }, price: { amount_minor: 2500 } },
+    { id: 'product-1', name: 'English name', description: 'English description', tags: ['english-tag'], variants: [{ id: 'var-1', prices: [{ unit_amount: 2500 }] }] },
     {
       resourceType: 'product',
       resourceId: 'product-1',
       locale: 'th',
-      routePath: '/th/experiences/lesson',
+      routePath: '/th/locations/studio/products/lesson',
       values: { name: 'บทเรียน' },
     },
   )
 
   assert.equal(projected.name, 'บทเรียน')
   assert.equal(projected.description, undefined)
-  assert.equal(projected.experience, undefined)
-  assert.deepEqual(projected.price, { amount_minor: 2500 })
+  // Tags are localizable, so an untranslated one is cleared rather than shown
+  // in the source language.
+  assert.equal(projected.tags, undefined)
+  // Prices are not language, so they survive verbatim.
+  assert.deepEqual(projected.variants, [{ id: 'var-1', prices: [{ unit_amount: 2500 }] }])
 })
 
 test('professional-service blog paths use the Blawby article route', () => {

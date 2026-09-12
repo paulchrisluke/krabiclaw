@@ -1,6 +1,5 @@
-import type { RenderedBookingPolicySummary } from '~/server/utils/booking-policies'
-import type { Experience } from '~/server/utils/experiences'
-import type { Product } from '~/server/types/products'
+import type { RenderedBookingPolicySummary } from '~/server/utils/reservations'
+import type { Collection, Product } from '~/server/types/products'
 import type { PublicTenantPage } from '~/server/utils/public-tenant-pages'
 import type { SocialImageSource } from '~/utils/social-metadata'
 
@@ -29,8 +28,10 @@ export interface PublicShellPayload {
   config: Record<string, string>
   googleBusiness: ApiRecord
   locales: { code: string; label: string; is_source: boolean }[]
-  hasExperiences: boolean
+  /** The site sells something that is not booked: a dish, a t-shirt. */
   hasProducts: boolean
+  /** The site has something a guest books a seat on. */
+  hasBookableProducts: boolean
   platformMessages: Record<string, string> | null
 }
 
@@ -69,7 +70,7 @@ export const isPublicShellPayload = (value: unknown): value is PublicShellPayloa
       && typeof locale.is_source === 'boolean')) return false
   if (value.platformMessages !== null && (!isRecord(value.platformMessages)
     || !Object.values(value.platformMessages).every(message => typeof message === 'string'))) return false
-  return typeof value.hasExperiences === 'boolean' && typeof value.hasProducts === 'boolean'
+  return typeof value.hasProducts === 'boolean' && typeof value.hasBookableProducts === 'boolean'
 }
 
 export interface PublicPagePayload {
@@ -89,11 +90,8 @@ export interface PublicPagePayload {
   blogList: ApiRecord[]
   blogPost: ApiRecord | null
   reservationPolicyByLocation: Record<string, RenderedBookingPolicySummary | null>
-  experiencePolicySiteDefault: RenderedBookingPolicySummary | null
-  experiencePolicyById: Record<string, RenderedBookingPolicySummary>
-  experienceDetail: Experience | null
-  experiencesList: Experience[]
   products: Product[]
+  collections: Collection[]
   localeRepresentations: PublicLocaleRepresentation[]
 }
 
@@ -104,27 +102,50 @@ export interface PublicLocaleRepresentation {
   source: 'source' | 'localized'
 }
 
+/**
+ * The shape a public surface is allowed to render.
+ *
+ * Checks the relationships the pages actually read — variants carry the
+ * prices, memberships say where the product is offered and grouped — rather
+ * than every field, so a payload missing one of them fails here instead of
+ * rendering a product with no offer.
+ */
 export function isPublicProduct(value: unknown): value is Product {
   return isRecord(value)
     && typeof value.id === 'string'
-    && typeof value.site_id === 'string'
-    && typeof value.location_id === 'string'
-    && typeof value.category_id === 'string'
-    && isRecord(value.category)
-    && value.category.id === value.category_id
-    && typeof value.category.name === 'string'
-    && typeof value.category.slug === 'string'
-    && Number.isInteger(value.category.sort_order)
-    && Number(value.category.sort_order) >= 0
+    && typeof value.organization_id === 'string'
     && typeof value.name === 'string'
     && typeof value.slug === 'string'
-    && (value.price === null || isRecord(value.price))
-    && typeof value.is_visible === 'boolean'
-    && typeof value.available === 'boolean'
+    && typeof value.description === 'string'
+    && typeof value.active === 'boolean'
     && Array.isArray(value.tags)
-    && Array.isArray(value.details)
+    && Array.isArray(value.options)
+    && Array.isArray(value.variants)
+    && value.variants.every(variant => isRecord(variant)
+      && typeof variant.id === 'string'
+      && typeof variant.name === 'string'
+      && Array.isArray(variant.prices))
+    && isRecord(value.metafields)
+    && Array.isArray(value.locations)
+    && value.locations.every(entry => isRecord(entry)
+      && typeof entry.location_id === 'string'
+      && typeof entry.active === 'boolean'
+      && typeof entry.published === 'boolean')
+    && Array.isArray(value.collections)
+    && value.collections.every(entry => isRecord(entry)
+      && typeof entry.collection_id === 'string'
+      && Number.isInteger(entry.sort_order))
     && (value.image === null || isRecord(value.image))
     && Array.isArray(value.gallery)
+}
+
+export function isPublicCollection(value: unknown): value is Collection {
+  return isRecord(value)
+    && typeof value.id === 'string'
+    && typeof value.site_id === 'string'
+    && typeof value.name === 'string'
+    && typeof value.slug === 'string'
+    && Number.isInteger(value.sort_order)
 }
 
 export const isPublicPagePayload = (
@@ -157,14 +178,10 @@ export const isPublicPagePayload = (
   && (value.blogPost === null || isRecord(value.blogPost))
   && isRecord(value.reservationPolicyByLocation)
   && Object.values(value.reservationPolicyByLocation).every(item => item === null || isRecord(item))
-  && (value.experiencePolicySiteDefault === null || isRecord(value.experiencePolicySiteDefault))
-  && isRecord(value.experiencePolicyById)
-  && Object.values(value.experiencePolicyById).every(isRecord)
-  && (value.experienceDetail === null || isRecord(value.experienceDetail))
-  && Array.isArray(value.experiencesList)
-  && value.experiencesList.every(item => isRecord(item) && typeof item.id === 'string')
   && Array.isArray(value.products)
   && value.products.every(isPublicProduct)
+  && Array.isArray(value.collections)
+  && value.collections.every(isPublicCollection)
   && Array.isArray(value.localeRepresentations)
   && value.localeRepresentations.every(item => isRecord(item)
     && typeof item.locale === 'string'

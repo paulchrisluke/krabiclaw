@@ -114,7 +114,7 @@ export interface MediaPlacementInsertInput {
 
 const OWNER_TABLES = {
   site: 'sites', business_location: 'business_locations', product: 'products',
-  content_document: 'content_documents', offering: 'offerings', review: 'reviews',
+  content_document: 'content_documents', review: 'reviews',
   review_request: 'review_requests',
   content_block: 'content_blocks',
 } as const satisfies Record<MediaPlacementOwnerType, string>

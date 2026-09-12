@@ -1,5 +1,7 @@
 import { calendarDateSchema, preciseTimeSchema, instantSchema, isValidCalendarDate, isValidInstant, instantDate, formatCalendarDate, formatTime, formatTimestamp } from '../utils/timezone.ts'
 export const POST_TYPES = ['standard', 'event', 'offer', 'alert'] as const
+/** `alert` is not offered when creating: its only alert_type is `covid_19`. An existing alert still opens. */
+export const CREATABLE_POST_TYPES = ['standard', 'event', 'offer'] as const
 export const POST_ACTIONS = ['book', 'order', 'shop', 'learn_more', 'sign_up', 'call'] as const
 export const POST_WEEKDAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'] as const
 export class PostValidationError extends Error { statusCode = 400 }

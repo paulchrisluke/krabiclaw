@@ -8,9 +8,7 @@ export interface BlawbyRouteTarget {
 }
 
 export function resolveBlawbyPath(path: string): string {
-  const match = path.match(/^\/preview\/(?:site|draft)\/[^/]+(\/.*)?$/)
-  const resolvedPath = match?.[1] || (match ? '/' : path)
-  return resolvedPath.length > 1 ? resolvedPath.replace(/\/+$/, '') : resolvedPath
+  return path.length > 1 ? path.replace(/\/+$/, '') : path
 }
 
 export function resolveBlawbyRouteTarget(path: string, params: Record<string, unknown> = {}): BlawbyRouteTarget {
@@ -18,7 +16,6 @@ export function resolveBlawbyRouteTarget(path: string, params: Record<string, un
   if (routePath === '/') return { recipe: 'home', slug: null }
   if (routePath === '/links') return { recipe: 'links', slug: null }
   if (routePath === '/services') return { recipe: 'services', slug: null }
-  if (/^\/services\/[^/]+$/.test(routePath)) return { recipe: 'offering', slug: String(params.slug || '') }
   if (routePath === '/about') return { recipe: 'about', slug: null }
   if (routePath === '/pricing') return { recipe: 'pricing', slug: null }
   if (routePath === '/contact') return { recipe: 'contact', slug: null }
@@ -30,7 +27,9 @@ export function resolveBlawbyRouteTarget(path: string, params: Record<string, un
   if (routePath === '/policies/privacy') return { recipe: 'privacy', slug: null }
   if (routePath === '/policies/terms') return { recipe: 'terms', slug: null }
   if (routePath === '/third-party-notices') return { recipe: 'third-party-notices', slug: null }
-  throw createError({ statusCode: 404, statusMessage: 'Unsupported Blawby route' })
+  // Every other path is a page this site publishes; whether it exists is the
+  // page loader's answer, not a list kept here.
+  return { recipe: 'page', slug: routePath }
 }
 
 export async function useBlawbyDocument(
@@ -39,45 +38,32 @@ export async function useBlawbyDocument(
   options: { server?: boolean; lazy?: boolean } = {},
 ) {
   const nuxtApp = useNuxtApp()
-  const { siteId, draftId, isTenant } = useTenantSite()
+  const { siteId, isTenant } = useTenantSite()
   const locale = useState<string>('public-locale', () => 'en')
-  const entityId = siteId || draftId
-  if (!isTenant || !entityId) {
+  if (!isTenant || !siteId) {
     throw createError({ statusCode: 404, statusMessage: 'Blawby site context is unavailable' })
   }
 
   const normalizedSlug = slug?.trim() || ''
-  const route = useRoute()
-  const previewToken = computed(() => (draftId || recipe === 'article') && typeof route.query.token === 'string' ? route.query.token : undefined)
-  const key = () => `blawby-document-${entityId}-${recipe}-${normalizedSlug || 'index'}-${locale.value}-${previewToken.value ?? ''}`
+  const key = () => `blawby-document-${siteId}-${recipe}-${normalizedSlug || 'index'}-${locale.value}`
   const asyncData = await useAsyncData<BlawbyDocumentPayload>(
     key,
     async () => {
       if (import.meta.server) {
         const requestEvent = useRequestEvent()
         if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Request context unavailable' })
-        if (draftId) {
-          const { loadPublicDraftBlawbyDocument } = await import('~/server/utils/public-draft-bootstrap')
-          return await loadPublicDraftBlawbyDocument(requestEvent, draftId, previewToken.value, recipe)
-        }
-        if (!siteId) throw createError({ statusCode: 404, statusMessage: 'Blawby site context is unavailable' })
         const { loadPublicBlawbyDocument } = await import('~/server/utils/public-blawby-document')
         return await loadPublicBlawbyDocument(requestEvent, siteId, recipe, {
           slug: normalizedSlug,
-          token: previewToken.value,
+          previewAuthorized: Boolean(requestEvent.context.previewAuthorized),
           locale: locale.value,
           mutateResponseHeaders: false,
         })
       }
-      if (draftId) {
-        return await publicApiRequest<BlawbyDocumentPayload>('/api/public/drafts/' + encodeURIComponent(draftId) + '/blawby/document', {
-          query: { recipe, ...(previewToken.value === undefined ? {} : { token: previewToken.value }) },
-          validate: value => isBlawbyDocumentPayload(value, recipe),
-        })
-      }
-      if (!siteId) throw createError({ statusCode: 404, statusMessage: 'Blawby site context is unavailable' })
+      // The preview cookie travels with this request, so the API resolves the
+      // same authorization the server render used.
       return await publicApiRequest<BlawbyDocumentPayload>('/api/public/sites/' + encodeURIComponent(siteId) + '/blawby/document', {
-        query: { recipe, locale: locale.value, token: previewToken.value, ...(normalizedSlug ? { slug: normalizedSlug } : {}) },
+        query: { recipe, locale: locale.value, ...(normalizedSlug ? { slug: normalizedSlug } : {}) },
         validate: value => isBlawbyDocumentPayload(value, recipe),
       })
     },

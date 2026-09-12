@@ -38,9 +38,9 @@
 // validation is deliberately not performed until the caller is known to
 // be an authorized staff actor.
 // Plan step 6 / R14: the browser must create-and-retain an
-// organization-and-operation-scoped Connect UUID v4 in sessionStorage
-// BEFORE calling this route (see composables/useLegalConnect.ts) and send
-// it as `requestKey`; this route validates its shape and forwards it
+// organization-scoped Connect UUID v4 in sessionStorage BEFORE calling this
+// route and send it as `requestKey`; this route validates its shape and
+// forwards it
 // verbatim as callBlawbyRoute's requestReference so U8's organization-bound
 // recovery record can resume the same operation after a response-loss
 // retry — KrabiClaw itself keeps no separate Connect-recovery row (KTD10).

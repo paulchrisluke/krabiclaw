@@ -1,3 +1,4 @@
+import { OWNER_REVIEW_COLLECTION_METHODS, OWNER_REVIEW_STATUSES } from '~/shared/site-reviews'
 import type { McpToolDefinition } from './shared'
 import { pageInfoObject, paginationInputSchema, reviewObject, siteTool } from './shared'
 
@@ -19,9 +20,9 @@ export const REVIEWS_TOOLS: McpToolDefinition[] = [
     confirmRequired: false,
     inputSchema: {
       author_name: { type: 'string' }, rating: { type: 'number' }, title: { type: ['string', 'null'] }, content: { type: 'string' },
-      collection_method: { type: 'string', enum: ['in_person', 'email', 'phone', 'migration', 'other'] },
+      collection_method: { type: 'string', enum: [...OWNER_REVIEW_COLLECTION_METHODS] },
       original_review_date: { type: ['string', 'null'] }, original_reference: { type: ['string', 'null'] },
-      publication_authorized: { type: 'boolean' }, status: { type: 'string', enum: ['pending', 'approved', 'rejected'] },
+      publication_authorized: { type: 'boolean' }, status: { type: 'string', enum: [...OWNER_REVIEW_STATUSES] },
     },
     required: ['author_name', 'rating', 'content', 'collection_method', 'publication_authorized'],
     outputSchema: { type: 'object', properties: { id: { type: 'string' }, created: { type: 'boolean' }, verified: { type: 'boolean' } }, required: ['id', 'created', 'verified'] },
@@ -34,9 +35,9 @@ export const REVIEWS_TOOLS: McpToolDefinition[] = [
     confirmRequired: false,
     inputSchema: {
       review_id: { type: 'string' }, author_name: { type: 'string' }, rating: { type: 'number' }, title: { type: ['string', 'null'] }, content: { type: 'string' },
-      collection_method: { type: 'string', enum: ['in_person', 'email', 'phone', 'migration', 'other'] },
+      collection_method: { type: 'string', enum: [...OWNER_REVIEW_COLLECTION_METHODS] },
       original_review_date: { type: ['string', 'null'] }, original_reference: { type: ['string', 'null'] },
-      publication_authorized: { type: 'boolean' }, status: { type: 'string', enum: ['pending', 'approved', 'rejected'] },
+      publication_authorized: { type: 'boolean' }, status: { type: 'string', enum: [...OWNER_REVIEW_STATUSES] },
     },
     required: ['review_id'],
     outputSchema: { type: 'object', properties: { review_id: { type: 'string' }, updated: { type: 'boolean' }, verified: { type: 'boolean' } }, required: ['review_id', 'updated', 'verified'] },

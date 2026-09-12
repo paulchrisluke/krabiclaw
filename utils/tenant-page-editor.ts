@@ -1,3 +1,4 @@
+import { FAQ_BLOCK_SOURCES, FAQ_BLOCK_SOURCE_LABELS } from '~/shared/faq-block'
 import {
   TENANT_PAGE_BLOCK_REGISTRY,
   normalizeTenantPageBlocks,
@@ -6,6 +7,8 @@ import {
 } from './tenant-page-blocks'
 
 type EditorData = Record<string, unknown>
+
+export const FAQ_SOURCE_OPTIONS = FAQ_BLOCK_SOURCES.map(value => ({ label: FAQ_BLOCK_SOURCE_LABELS[value], value }))
 
 export function createTenantPageEditorData(type: TenantPageBlockType): EditorData {
   switch (type) {
@@ -35,7 +38,13 @@ export function createTenantPageEditorData(type: TenantPageBlockType): EditorDat
       return { buttons: [{ label: '', url: '' }] }
     case 'feature_grid':
     case 'testimonial_grid':
-    case 'offering_grid':
+      return { title: '', source: 'manual', items: [] }
+    case 'team_grid':
+      return { title: '', description: '', items: [{ first_name: '', last_name: '', title: '', bio: '' }] }
+    case 'page_grid':
+      return { title: '', page_ids: [] }
+    case 'product_grid':
+      return { title: '', collection_id: '', product_ids: [] }
     case 'location_grid':
       return { title: '', source: 'manual', items: [] }
     case 'donation_choices':
@@ -115,7 +124,7 @@ export function validateTenantPageBlock(block: TenantPageBlock): string[] {
       if (!block.media.some(item => item.slot === 'gallery')) addError(errors, 'Add at least one gallery image.')
       break
     case 'faq':
-      if (text(data.source) === 'page_qa') break
+      if (FAQ_BLOCK_SOURCES.some(source => source === text(data.source))) break
       objectArray(data, 'items').forEach((item, index) => {
         if (!itemText(item, 'title', ['question'])) addError(errors, `FAQ item ${index + 1} needs a question.`)
         if (!itemText(item, 'description', ['answer'])) addError(errors, `FAQ item ${index + 1} needs an answer.`)
@@ -137,13 +146,34 @@ export function validateTenantPageBlock(block: TenantPageBlock): string[] {
       break
     case 'feature_grid':
     case 'testimonial_grid':
-    case 'offering_grid':
+    case 'page_grid':
+    case 'product_grid':
     case 'location_grid':
-      if (text(data.source) !== 'site_posts' && text(data.source) !== 'site_reviews' && text(data.source) !== 'site_offerings' && text(data.source) !== 'calculator') {
+      if (text(data.source) !== 'site_posts' && text(data.source) !== 'site_reviews' && text(data.source) !== 'calculator') {
         validateGridItems(errors, data, 'Grid item')
       }
-      if (block.type === 'offering_grid' && text(data.source) === 'site_offerings') break
+      // A reference grid names what it shows. There is no "everything on the
+      // site" source: a grid that silently grew when a page or product was
+      // added is a grid nobody chose the contents of.
+      if (block.type === 'page_grid') {
+        if (!stringArray(data, 'page_ids').length) addError(errors, 'Choose at least one page.')
+        break
+      }
+      if (block.type === 'product_grid') {
+        const hasCollection = Boolean(text(data.collection_id))
+        const hasProducts = stringArray(data, 'product_ids').length > 0
+        if (hasCollection && hasProducts) addError(errors, 'Choose either a collection or specific products, not both.')
+        if (!hasCollection && !hasProducts) addError(errors, 'Choose a collection or at least one product.')
+        break
+      }
       if (block.type === 'location_grid' && !stringArray(data, 'location_ids').length && !objectArray(data, 'items').length) addError(errors, 'Add at least one location reference or manual item.')
+      break
+    case 'team_grid':
+      objectArray(data, 'items').forEach((item, index) => {
+        if (!itemText(item, 'first_name') && !itemText(item, 'last_name')) {
+          addError(errors, `Team member ${index + 1} needs a name.`)
+        }
+      })
       break
     case 'donation_choices':
       if (!text(data.destination)) addError(errors, 'Donation destination is required.')

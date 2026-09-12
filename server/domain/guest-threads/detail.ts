@@ -1,5 +1,5 @@
 import type { DbClient } from '~/server/db'
-import { getGuestRequest, requestSummary, requestActions } from '~/server/domain/requests'
+import { getGuestRequest, getThreadOperationalRecord, requestSummary, requestActions } from '~/server/domain/requests'
 import { formatOperationalStatusLabel } from './status-labels'
 import { listThreadEntries, parseEntryPayload } from './entries'
 import { getDeliveryRetryEligibility, listDeliveryFailures } from './deliveries'
@@ -36,6 +36,7 @@ export async function getGuestThreadDetail(
   }))
 
   const summary = await requestSummary(db, thread)
+  const record = await getThreadOperationalRecord(db, thread.id)
 
   return {
     id: thread.id,
@@ -48,9 +49,29 @@ export async function getGuestThreadDetail(
     locationLabel: summary.locationTitle,
     conversationState: thread.conversation_state,
     conversationStateLabel: CONVERSATION_STATE_LABELS[thread.conversation_state],
-    source: { submissionType: thread.kind, submissionId: thread.id, operationalStatus: thread.status, operationalStatusLabel: thread.status ? formatOperationalStatusLabel(thread.kind, thread.status) : null, fields: thread.kind === 'contact' ? { subject: thread.payload.subject, message: thread.payload.message, locationTitle: summary.locationTitle, experienceTitle: summary.productTitle } : { date: thread.booking_date, time: thread.time_slot, guests: `${thread.party_size}${thread.payload.party_size_is_minimum ? '+' : ''}`, requests: thread.payload.notes, bookingDate: thread.booking_date, timeSlot: thread.time_slot, partySize: thread.party_size, notes: thread.payload.notes, locationTitle: summary.locationTitle, experienceTitle: summary.productTitle } },
+    // The occurrence comes from the booking or reservation, rendered in that
+    // record's own timezone. A thread with no record reports no occurrence
+    // rather than a fabricated one.
+    source: {
+      submissionType: thread.kind,
+      submissionId: thread.id,
+      operationalStatus: record?.status ?? null,
+      operationalStatusLabel: record ? formatOperationalStatusLabel(thread.kind, record.status) : null,
+      fields: thread.kind === 'contact'
+        ? { subject: thread.payload.subject, message: thread.payload.message, locationTitle: summary.locationTitle, productTitle: summary.productTitle }
+        : {
+            whenLabel: record ? new Intl.DateTimeFormat('en-US', { timeZone: record.timezone, dateStyle: 'medium', timeStyle: 'short' }).format(new Date(record.starts_at)) : null,
+            startsAt: record?.starts_at ?? null,
+            timezone: record?.timezone ?? null,
+            guests: record ? `${record.party_size}${thread.payload.party_size_is_minimum ? '+' : ''}` : null,
+            partySize: record?.party_size ?? null,
+            notes: thread.payload.notes,
+            locationTitle: summary.locationTitle,
+            productTitle: summary.productTitle,
+          },
+    },
     entries,
-    availableActions: requestActions(thread),
+    availableActions: requestActions(record),
     deliveryFailures: deliveryFailureRows.map(d => ({
       id: d.id,
       channel: d.channel,

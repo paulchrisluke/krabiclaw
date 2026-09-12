@@ -21,14 +21,12 @@ if (tenantType === TENANT_TYPES.TENANT_404) {
 const { isBlawby } = usePublicTemplate()
 const siteShell = isBlawby.value ? null : useSiteShellState()
 const config = siteShell?.config
-const route = useRoute()
 const siteMedia = computed(() => siteShell?.site.value?.media ?? site?.media ?? [])
 useHead(() => {
   return {
     link: buildTenantHeadLinks({
       isPlatform,
       siteMedia: siteMedia.value,
-      isSitePreview: route.path.startsWith('/preview/site/'),
     })
   }
 })

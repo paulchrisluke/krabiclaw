@@ -7,7 +7,7 @@ import { isNonIndexableHost, PLATFORM_SITEMAP_ROUTES } from '~/server/utils/seo-
 import { ARTICLE_COLLECTIONS, articleCategoryToSlug, collectionArticlePath, isArticleCollection } from '~/utils/article-collections'
 import { TENANT_TYPES } from '~/utils/tenant-routing'
 import { resolvePublicTemplate } from '~/utils/template-registry'
-import { resolveProductPresentation } from '~/utils/product-presentation'
+import { presentationForSurface, resolveProductPresentation } from '~/utils/product-presentation'
 import { assertSiteLanguageEntitlement } from '~/server/utils/localization'
 
 interface SitemapEntry {
@@ -126,6 +126,7 @@ export default definePlugin((nitroApp) => {
     }
 
     const template = resolvePublicTemplate({ themeId: site.theme_id, vertical: site.vertical })
+    const productPresentation = resolveProductPresentation(site.vertical)
 
     const localizedLocales = await queryAll<{ locale: string; organization_id: string }>(db, `
       SELECT l.locale, l.organization_id
@@ -157,6 +158,38 @@ export default definePlugin((nitroApp) => {
         `, [siteId, candidate.locale]),
       ])
       for (const resource of resources) entries.push({ loc: resource.route_path, lastmod: resource.updated_at })
+      // A Product's localized route is derived from the location it is offered
+      // at, so a Product offered at two locations lists both.
+      if (productPresentation) {
+        const localizedProducts = await queryAll<{ location_slug: string; slug: string; updated_at: string; bookable: number }>(db, `
+          SELECT bl.slug AS location_slug, p.slug, rl.updated_at,
+                 (SELECT COUNT(*) FROM product_booking_configs bc
+                   WHERE bc.product_id = p.id AND bc.organization_id = p.organization_id) AS bookable
+            FROM resource_localizations rl
+            JOIN products p ON p.id = rl.resource_id AND p.organization_id = rl.organization_id AND p.active = 1
+            JOIN product_publications pub ON pub.product_id = p.id AND pub.organization_id = p.organization_id
+             AND pub.site_id = rl.site_id AND pub.published = 1
+            JOIN product_locations pl ON pl.product_id = p.id AND pl.organization_id = p.organization_id
+             AND pl.published = 1 AND pl.active = 1
+            JOIN business_locations bl ON bl.id = pl.location_id AND bl.site_id = rl.site_id AND bl.status = 'active'
+           WHERE rl.site_id = ? AND rl.locale = ? AND rl.resource_type = 'product'
+           ORDER BY bl.slug, p.slug
+        `, [siteId, candidate.locale])
+        // An Experience's page is site-wide, so it contributes one URL however
+        // many branches offer it — and none when two do, because that URL is
+        // ambiguous and 404s.
+        const localizedLocationCount = new Map<string, Set<string>>()
+        for (const product of localizedProducts) {
+          const slugs = localizedLocationCount.get(product.slug) ?? new Set<string>()
+          slugs.add(product.location_slug)
+          localizedLocationCount.set(product.slug, slugs)
+        }
+        for (const product of localizedProducts) {
+          if (product.bookable > 0 && (localizedLocationCount.get(product.slug)?.size ?? 0) !== 1) continue
+          const presentation = product.bookable > 0 ? presentationForSurface(site.vertical, 'experiences') : productPresentation
+          entries.push({ loc: `/${candidate.locale}${presentation.productPath(product.location_slug, product.slug)}`, lastmod: product.updated_at })
+        }
+      }
       for (const page of pages) {
         if (/noindex/i.test(page.robots || '')) continue
         const localizedPath = page.path === '/' ? `/${candidate.locale}` : `/${candidate.locale}${page.path}`
@@ -170,13 +203,10 @@ export default definePlugin((nitroApp) => {
     // rather than threading template-specific conditionals through the
     // Saya-oriented queries.
     if (template.slug === 'blawby') {
-      const [offerings, tenantPages, posts] = await Promise.all([
-        queryAll<{ slug: string; canonical_path: string | null; updated_at: string | null }>(db, `
-          SELECT slug, canonical_path, updated_at
-            FROM offerings
-           WHERE site_id = ?
-           ORDER BY sort_order ASC, name ASC
-        `, [siteId]),
+      // Practice areas are pages, so they are already in the page list. There
+      // is no separate offering query, and no canonical_path to prefer over
+      // the route the document actually publishes at.
+      const [tenantPages, posts] = await Promise.all([
         listPublishedTenantSitemapPages(db, siteId),
         queryAll<ApiRecord>(
           db,
@@ -190,12 +220,6 @@ export default definePlugin((nitroApp) => {
       ])
 
       for (const loc of template.sitemap.exactPaths) entries.push({ loc })
-      for (const offering of offerings ?? []) {
-        entries.push({
-          loc: offering.canonical_path || `${template.serviceRoutes.offeringDetailPrefix}/${offering.slug}`,
-          lastmod: offering.updated_at ?? undefined,
-        })
-      }
       for (const page of tenantPages ?? []) {
         if (!page.path || /noindex/i.test(page.robots || '')) continue
         entries.push({ loc: page.path, lastmod: page.lastmod ?? undefined })
@@ -213,8 +237,7 @@ export default definePlugin((nitroApp) => {
       return
     }
 
-    const productPresentation = resolveProductPresentation(site.vertical)
-    const [locations, products, posts, experiences, tenantPages] = await Promise.all([
+    const [locations, products, posts, tenantPages] = await Promise.all([
       queryAll<ApiRecord>(
         db,
         `SELECT id, slug, updated_at, grab_url, uber_eats_url, foodpanda_url
@@ -226,17 +249,19 @@ export default definePlugin((nitroApp) => {
       ),
       queryAll<ApiRecord>(
         db,
-        `SELECT p.slug, p.location_id, bl.slug AS location_slug, p.updated_at
+        `SELECT p.id, p.slug, pl.location_id, bl.slug AS location_slug, p.updated_at,
+                (SELECT COUNT(*) FROM product_booking_configs bc
+                  WHERE bc.product_id = p.id AND bc.organization_id = p.organization_id) AS bookable
          FROM products p
+         JOIN product_publications pub ON pub.product_id = p.id AND pub.organization_id = p.organization_id AND pub.published = 1
+         JOIN product_locations pl ON pl.product_id = p.id AND pl.organization_id = p.organization_id AND pl.published = 1 AND pl.active = 1
          JOIN business_locations bl
-           ON bl.id = p.location_id
-          AND bl.organization_id = p.organization_id
-          AND bl.site_id = p.site_id
+           ON bl.id = pl.location_id
+          AND bl.site_id = pub.site_id
           AND bl.status = 'active'
-         WHERE p.site_id = ? AND p.product_type = 'standard'
-           AND p.is_visible = 1
-           AND (p.robots IS NULL OR p.robots NOT LIKE '%noindex%')
-         ORDER BY p.location_id, p.sort_order, p.id`,
+          AND pub.site_id = ?
+         WHERE p.active = 1
+         ORDER BY pl.location_id, p.name, p.id`,
         [siteId],
       ),
       queryAll<ApiRecord>(
@@ -249,16 +274,6 @@ export default definePlugin((nitroApp) => {
            AND (robots IS NULL OR robots NOT LIKE '%noindex%')`,
         [siteId],
       ),
-      queryAll<ApiRecord>(
-        db,
-        `SELECT p.slug, p.location_id, p.updated_at
-         FROM products p
-         JOIN business_locations bl ON bl.id = p.location_id AND bl.site_id = p.site_id AND bl.organization_id = p.organization_id
-         WHERE p.site_id = ? AND p.product_type = 'experience' AND bl.status = 'active'
-           AND p.is_visible = 1
-           AND (p.robots IS NULL OR p.robots NOT LIKE '%noindex%')`,
-        [siteId],
-      ),
       listPublishedTenantSitemapPages(db, siteId),
     ])
 
@@ -268,44 +283,47 @@ export default definePlugin((nitroApp) => {
       entries.push({ loc: '/locations' })
       if (site.vertical !== 'experience') entries.push({ loc: '/reservations' })
     }
-    if (productPresentation && products.length > 0) entries.push({ loc: productPresentation.collectionPath })
+    // A Product takes bookings, so it is an Experience, or it belongs to the
+    // vertical's own surface. Both surfaces exist side by side: a restaurant
+    // keeps /menu and gains /experiences.
+    const isBookable = (product: ApiRecord) => Number(product.bookable ?? 0) > 0
+    const bookableProducts = products.filter(isBookable)
+    const surfaceProducts = products.filter(product => !isBookable(product))
+    if (productPresentation && surfaceProducts.length > 0) entries.push({ loc: productPresentation.collectionPath })
+    if (productPresentation && bookableProducts.length > 0) entries.push({ loc: presentationForSurface(site.vertical, 'experiences').collectionPath })
     if (posts.length > 0) entries.push({ loc: '/blog' })
-    if (experiences.length > 0) entries.push({ loc: '/experiences' })
     if (locations.some(location => location.grab_url || location.uber_eats_url || location.foodpanda_url)) {
       entries.push({ loc: '/order' })
     }
 
-    const visibleExperienceCountsByLocation = new Map<string, number>()
-    for (const experience of experiences ?? []) {
-      const locationId = typeof experience.location_id === 'string' ? experience.location_id : ''
-      if (!locationId) continue
-      visibleExperienceCountsByLocation.set(
-        locationId,
-        (visibleExperienceCountsByLocation.get(locationId) ?? 0) + 1,
-      )
+    const countByLocation = (rows: ApiRecord[]) => {
+      const counts = new Map<string, number>()
+      for (const product of rows ?? []) {
+        const locationId = typeof product.location_id === 'string' ? product.location_id : ''
+        if (!locationId) continue
+        counts.set(locationId, (counts.get(locationId) ?? 0) + 1)
+      }
+      return counts
     }
-
-    const visibleProductCountsByLocation = new Map<string, number>()
-    for (const product of products ?? []) {
-      const locationId = typeof product.location_id === 'string' ? product.location_id : ''
-      if (!locationId) continue
-      visibleProductCountsByLocation.set(locationId, (visibleProductCountsByLocation.get(locationId) ?? 0) + 1)
+    const visibleProductCountsByLocation = countByLocation(surfaceProducts)
+    const bookableCountsByLocation = countByLocation(bookableProducts)
+    // An Experience's own page is site-wide: it is listed once, and only when a
+    // single branch offers it — two make /experiences/<slug> ambiguous, and it
+    // 404s rather than choosing one.
+    const branchesOfferingProduct = new Map<string, Set<string>>()
+    for (const product of bookableProducts) {
+      const slug = typeof product.slug === 'string' ? product.slug : ''
+      const locationSlug = typeof product.location_slug === 'string' ? product.location_slug : ''
+      if (!slug || !locationSlug) continue
+      const branches = branchesOfferingProduct.get(slug) ?? new Set<string>()
+      branches.add(locationSlug)
+      branchesOfferingProduct.set(slug, branches)
     }
 
     entries.push(
       ...locations
         .filter(location => location.slug)
         .map(location => ({ loc: `/locations/${location.slug}`, lastmod: location.updated_at as string | undefined })),
-      ...locations
-        .filter(location =>
-          location.slug &&
-          typeof location.id === 'string' &&
-          (visibleExperienceCountsByLocation.get(location.id) ?? 0) >= 2
-        )
-        .map(location => ({
-          loc: `/locations/${location.slug}/experiences`,
-          lastmod: location.updated_at as string | undefined,
-        })),
       ...(productPresentation
         ? locations
             .filter(location => location.slug && typeof location.id === 'string' && (visibleProductCountsByLocation.get(location.id) ?? 0) > 0)
@@ -315,19 +333,26 @@ export default definePlugin((nitroApp) => {
             }))
         : []),
       ...(productPresentation
+        ? locations
+            .filter(location => location.slug && typeof location.id === 'string' && (bookableCountsByLocation.get(location.id) ?? 0) > 0)
+            .map(location => ({
+              loc: `/locations/${location.slug}/${presentationForSurface(site.vertical, 'experiences').locationCollectionSegment}`,
+              lastmod: location.updated_at as string | undefined,
+            }))
+        : []),
+      ...(productPresentation
         ? products
             .filter(product => product.slug && product.location_slug)
+            .filter(product => !isBookable(product) || (branchesOfferingProduct.get(String(product.slug))?.size ?? 0) === 1)
             .map(product => ({
-              loc: productPresentation.productPath(String(product.location_slug), String(product.slug)),
+              loc: (isBookable(product) ? presentationForSurface(site.vertical, 'experiences') : productPresentation)
+                .productPath(String(product.location_slug), String(product.slug)),
               lastmod: product.updated_at as string | undefined,
             }))
         : []),
       ...posts
         .filter(post => post.slug)
         .map(post => ({ loc: `/blog/${post.slug}`, lastmod: post.updated_at as string | undefined })),
-      ...experiences
-        .filter(experience => experience.slug)
-        .map(experience => ({ loc: `/experiences/${experience.slug}`, lastmod: experience.updated_at as string | undefined })),
       ...tenantPages
         .filter(page => page.path && !/noindex/i.test(page.robots || ''))
         .map(page => ({ loc: page.path as string, lastmod: page.lastmod ?? undefined })),

@@ -17,14 +17,17 @@ interface IntakeSummary {
 function parseIntakeList(body: unknown): { intakes: IntakeSummary[] } | undefined {
   if (!body || typeof body !== 'object') return undefined
   const record = body as Record<string, unknown>
-  const raw = record.intakes
+  // R15 reconciliation: U8's real list response (listIntakesResponseSchema)
+  // envelopes rows under `data`, each with a `uuid` field -- not `intakes`
+  // with `id`. `status` is unchanged (both sides use that name already).
+  const raw = record.data
   if (!Array.isArray(raw)) return undefined
   const intakes: IntakeSummary[] = []
   for (const entry of raw) {
     if (!entry || typeof entry !== 'object') return undefined
     const row = entry as Record<string, unknown>
-    if (typeof row.id !== 'string' || typeof row.status !== 'string') return undefined
-    intakes.push({ id: row.id, status: row.status })
+    if (typeof row.uuid !== 'string' || typeof row.status !== 'string') return undefined
+    intakes.push({ id: row.uuid, status: row.status })
   }
   return { intakes }
 }

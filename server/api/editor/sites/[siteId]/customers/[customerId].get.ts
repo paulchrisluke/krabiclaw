@@ -17,19 +17,24 @@ export default defineHandler(async (event) => {
   `, [customerId, siteId])
   if (!customer) return jsonResponse({ error: 'Customer not found' }, { status: 404 })
 
+  // When and for how many live on the reservation, not on the thread: the
+  // thread is the conversation, and the table held is its own row.
   const reservations = await queryAll<ApiRecord>(db, `
-    SELECT id, location_id, json_extract(payload_json, '$.guest.name') AS name, json_extract(payload_json, '$.guest.email') AS email, json_extract(payload_json, '$.guest.phone') AS phone, booking_date AS date, time_slot AS time, party_size || CASE WHEN json_extract(payload_json, '$.party_size_is_minimum') THEN '+' ELSE '' END AS guests, status, json_extract(payload_json, '$.completion.at') AS completed_at, json_extract(payload_json, '$.completion.source') AS completion_source, json_extract(payload_json, '$.review.request_sent_at') AS review_request_sent_at, json_extract(payload_json, '$.review.reminder_sent_at') AS review_reminder_sent_at, json_extract(payload_json, '$.review.submitted_at') AS review_submitted_at, review_id, created_at
-    FROM requests WHERE kind = 'reservation' AND site_id = ? AND customer_id = ?
-    ORDER BY date DESC, time DESC, created_at DESC
+    SELECT r.id, res.location_id, json_extract(r.payload_json, '$.guest.name') AS name, json_extract(r.payload_json, '$.guest.email') AS email, json_extract(r.payload_json, '$.guest.phone') AS phone, res.starts_at, res.timezone, res.party_size || CASE WHEN json_extract(r.payload_json, '$.party_size_is_minimum') THEN '+' ELSE '' END AS guests, res.status, json_extract(r.payload_json, '$.completion.at') AS completed_at, json_extract(r.payload_json, '$.completion.source') AS completion_source, json_extract(r.payload_json, '$.review.request_sent_at') AS review_request_sent_at, json_extract(r.payload_json, '$.review.reminder_sent_at') AS review_reminder_sent_at, json_extract(r.payload_json, '$.review.submitted_at') AS review_submitted_at, r.review_id, r.created_at
+    FROM requests r JOIN reservations res ON res.request_id = r.id
+    WHERE r.kind = 'reservation' AND r.site_id = ? AND r.customer_id = ?
+    ORDER BY res.starts_at DESC, r.created_at DESC
     LIMIT 25
   `, [siteId, customerId])
 
-  const experienceBookings = await queryAll<ApiRecord>(db, `
-    SELECT eb.id, eb.location_id, eb.product_id AS experience_id, p.name AS experience_title, json_extract(eb.payload_json, '$.guest.name') AS guest_name, json_extract(eb.payload_json, '$.guest.email') AS guest_email, json_extract(eb.payload_json, '$.guest.phone') AS guest_phone, eb.booking_date, eb.time_slot, eb.party_size, eb.status, json_extract(eb.payload_json, '$.completion.at') AS completed_at, json_extract(eb.payload_json, '$.completion.source') AS completion_source, json_extract(eb.payload_json, '$.review.request_sent_at') AS review_request_sent_at, json_extract(eb.payload_json, '$.review.reminder_sent_at') AS review_reminder_sent_at, json_extract(eb.payload_json, '$.review.submitted_at') AS review_submitted_at, eb.review_id, eb.created_at
-    FROM requests eb
-    LEFT JOIN products p ON p.id = eb.product_id
-    WHERE eb.kind = 'experience_booking' AND eb.site_id = ? AND eb.customer_id = ?
-    ORDER BY eb.booking_date DESC, eb.time_slot DESC, eb.created_at DESC
+  const bookings = await queryAll<ApiRecord>(db, `
+    SELECT r.id, ps.location_id, b.product_id, p.name AS product_title, json_extract(r.payload_json, '$.guest.name') AS guest_name, json_extract(r.payload_json, '$.guest.email') AS guest_email, json_extract(r.payload_json, '$.guest.phone') AS guest_phone, ps.starts_at, ps.timezone, b.party_size, b.status, json_extract(r.payload_json, '$.completion.at') AS completed_at, json_extract(r.payload_json, '$.completion.source') AS completion_source, json_extract(r.payload_json, '$.review.request_sent_at') AS review_request_sent_at, json_extract(r.payload_json, '$.review.reminder_sent_at') AS review_reminder_sent_at, json_extract(r.payload_json, '$.review.submitted_at') AS review_submitted_at, r.review_id, r.created_at
+    FROM requests r
+    JOIN bookings b ON b.request_id = r.id
+    JOIN product_sessions ps ON ps.id = b.product_session_id
+    LEFT JOIN products p ON p.id = b.product_id
+    WHERE r.kind = 'booking' AND r.site_id = ? AND r.customer_id = ?
+    ORDER BY ps.starts_at DESC, r.created_at DESC
     LIMIT 25
   `, [siteId, customerId])
 
@@ -50,7 +55,7 @@ export default defineHandler(async (event) => {
   `, [siteId, customerId])
 
   return jsonResponse({
-    customer, reservations, experienceBookings, reviews, reviewRequests, })
+    customer, reservations, bookings, reviews, reviewRequests, })
 })
 import { defineHandler } from 'nitro';
 import { getRouterParam } from 'nitro/h3';

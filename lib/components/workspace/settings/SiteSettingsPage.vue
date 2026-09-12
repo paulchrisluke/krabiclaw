@@ -113,6 +113,30 @@
             <USelect v-model="form.default_currency" :items="CURRENCY_OPTIONS" value-key="value" label-key="label" size="xl" class="w-full" />
           </div>
 
+          <div v-else-if="detailKey === 'delete'" class="space-y-6">
+            <template v-if="deletionScheduledAt">
+              <UAlert
+                color="warning"
+                variant="soft"
+                icon="i-lucide-clock"
+                title="Deletion scheduled"
+                :description="`This workspace — the site, its locations, content and media — is deleted on ${deletionDateLabel}. Everything stays online until then, and the address stays reserved.`"
+              />
+              <UAlert v-if="deletionError" color="error" variant="soft" icon="i-lucide-triangle-alert" :description="deletionError" />
+              <UButton color="neutral" variant="solid" size="lg" :loading="deletionSaving" @click="keepWorkspace">Keep this workspace</UButton>
+            </template>
+            <template v-else>
+              <p class="text-base text-muted">
+                This schedules the whole workspace for deletion in {{ deletionGraceDays }} days: this site, its locations, content, media and the organization itself. Nothing is removed today, the site stays online, and you can cancel here until then.
+              </p>
+              <UAlert v-if="deletionError" color="error" variant="soft" icon="i-lucide-triangle-alert" :description="deletionError" />
+              <UFormField label="Type DELETE to confirm">
+                <UInput v-model="deletionConfirmText" placeholder="DELETE" :disabled="deletionSaving" class="w-full" />
+              </UFormField>
+              <UButton color="error" variant="solid" size="lg" :disabled="deletionConfirmText !== 'DELETE'" :loading="deletionSaving" @click="scheduleWorkspaceDeletion">Schedule deletion</UButton>
+            </template>
+          </div>
+
           <div v-else-if="detailKey === 'localization'" class="space-y-6">
             <p class="text-base text-muted">
               English is the permanent source language. Growth includes two secondary languages at no extra cost.
@@ -247,6 +271,78 @@ const frame = useEditorFrame(computed(() => surface.value === 'brand' ? brandPat
 if (!dashboard.state.value) await dashboard.refresh()
 const siteId = await useDashboardSiteId()
 
+// Workspace deletion is scheduled, never immediate: the organization carries a
+// due instant and the deletion-sweep task performs the deletion once it passes.
+// server/utils/tenant-deletion.ts owns both ends.
+const isOwner = computed(() => dashboard.organization.value?.role === 'owner')
+const deletionGraceDays = ref(30)
+const deletionConfirmText = ref('')
+const deletionSaving = ref(false)
+const deletionError = ref('')
+const deletionScheduledAt = computed(() => {
+  const scheduled = dashboard.organization.value?.deletionScheduledAt
+  if (!scheduled) return null
+  const at = new Date(scheduled)
+  return Number.isNaN(at.getTime()) ? null : at
+})
+const deletionDateLabel = computed(() => deletionScheduledAt.value
+  ? deletionScheduledAt.value.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })
+  : '')
+
+async function scheduleWorkspaceDeletion() {
+  if (deletionConfirmText.value !== 'DELETE') return
+  deletionSaving.value = true
+  deletionError.value = ''
+  try {
+    const response = await dashboardApi<{ success?: boolean; scheduled_at?: string; grace_days?: number }>('/api/dashboard/organizations/deletion', {
+      method: 'POST',
+      validate: (value): value is { success?: boolean; scheduled_at?: string; grace_days?: number } => isRecord(value),
+    })
+    if (response?.success !== true) throw new Error('Scheduling the deletion failed. Please try again.')
+    if (typeof response?.grace_days === 'number') deletionGraceDays.value = response.grace_days
+    deletionConfirmText.value = ''
+  } catch (error) {
+    deletionError.value = error instanceof Error ? error.message : 'Scheduling the deletion failed. Please try again.'
+    deletionSaving.value = false
+    return
+  }
+  // The deletion is scheduled. Reloading the workspace is what the date in the
+  // message is read from, and a failure there is a failure to REFRESH: saying
+  // "Scheduling the deletion failed" for a deletion that happened is how an
+  // owner schedules it twice, or believes their workspace is safe.
+  try {
+    await dashboard.refresh()
+    toast.add({ title: 'Deletion scheduled', description: `Everything is deleted on ${deletionDateLabel.value}. Cancel here any time before then.`, icon: 'i-lucide-clock', color: 'warning' })
+  } catch {
+    toast.add({ title: 'Deletion scheduled', description: 'Reload this page to see the date it happens on.', icon: 'i-lucide-clock', color: 'warning' })
+  } finally {
+    deletionSaving.value = false
+  }
+}
+
+async function keepWorkspace() {
+  deletionSaving.value = true
+  deletionError.value = ''
+  try {
+    const response = await dashboardApi<{ success?: boolean }>('/api/dashboard/organizations/deletion', {
+      method: 'DELETE',
+      validate: (value): value is { success?: boolean } => isRecord(value),
+    })
+    if (response?.success !== true) throw new Error('Cancelling the deletion failed. Please try again.')
+  } catch (error) {
+    deletionError.value = error instanceof Error ? error.message : 'Cancelling the deletion failed. Please try again.'
+    deletionSaving.value = false
+    return
+  }
+  // Cancelled. As above, the refresh that follows is a separate thing to fail.
+  try {
+    await dashboard.refresh()
+  } finally {
+    toast.add({ title: 'Deletion cancelled', icon: 'i-lucide-circle-check', color: 'success' })
+    deletionSaving.value = false
+  }
+}
+
 interface SiteSettingsResponse {
   theme?: string
   brand_name?: string | null
@@ -312,7 +408,7 @@ const firstSegment = computed(() => routeSegments.value[0] ?? null)
 const secondSegment = computed(() => routeSegments.value[1] ?? null)
 const detailKey = computed(() => surface.value === 'brand' ? firstSegment.value : firstSegment.value === 'search' ? secondSegment.value ?? 'search-index' : firstSegment.value)
 const validBrandKeys = new Set(['name', 'logo', 'sharing-image', 'description', 'color', 'font', 'contact', 'social'])
-const validSettingsKeys = new Set(['currency', 'notifications', 'search', 'publishing', 'localization'])
+const validSettingsKeys = new Set(['currency', 'notifications', 'search', 'publishing', 'localization', 'delete'])
 const validSearchKeys = new Set(['analytics', 'verification', 'visibility'])
 const routeIsCanonical = computed(() => {
   const segments = routeSegments.value
@@ -410,6 +506,11 @@ const settingsItems = computed<EditorNavigationItem[]>(() => [
   { id: 'notifications', label: 'Notifications', summary: notificationSummary.value, icon: 'i-lucide-bell', to: `${settingsPath.value}/notifications` },
   { id: 'search', label: 'Search and analytics', summary: searchSummary.value, icon: 'i-lucide-chart-no-axes-combined', to: `${settingsPath.value}/search` },
   { id: 'publishing', label: 'Facebook publishing', summary: facebookConnection.value?.connected ? explicitSummary(facebookConnection.value.facebook_page_name, 'Connected') : 'Not connected', icon: 'i-simple-icons-facebook', to: `${settingsPath.value}/publishing` },
+  // Deleting the workspace deletes the organization, so only an owner is
+  // offered it — the same permission Better Auth enforces on the delete itself.
+  ...(isOwner.value
+    ? [{ id: 'delete', label: 'Delete workspace', summary: deletionScheduledAt.value ? `Scheduled for ${deletionDateLabel.value}` : 'Removes this site, its locations and its content', icon: 'i-lucide-trash-2', to: `${settingsPath.value}/delete` }]
+    : []),
 ])
 const searchItems = computed<EditorNavigationItem[]>(() => [
   { id: 'analytics', label: 'Google Analytics', summary: explicitSummary(loadedSettings.value?.google_analytics_measurement_id, 'Not connected'), icon: 'i-lucide-chart-no-axes-combined', to: `${settingsPath.value}/search/analytics` },
@@ -443,7 +544,7 @@ const levelTitle = computed(() => {
   return isSearchLevel.value ? 'Search and analytics' : 'Site Settings'
 })
 const navbarTitle = computed(() => levelTitle.value)
-const showActions = computed(() => Boolean(detailKey.value && !['search-index', 'publishing'].includes(detailKey.value)
+const showActions = computed(() => Boolean(detailKey.value && !['search-index', 'publishing', 'delete'].includes(detailKey.value)
   && (detailKey.value !== 'font' || supportsSiteFonts.value)))
 
 // Leaving a section resets its editor. This used to hang off the back button's

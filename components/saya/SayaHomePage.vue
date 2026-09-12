@@ -8,7 +8,7 @@
           hero: hero,
           eyebrow: getField('hero.eyebrow'),
           locations: pageLocations,
-          businessTitle: businessTitle,
+          businessTitle: restaurantName,
           businessSubtitle: businessSubtitle,
           hasOrderLinks: hasOrderLinks,
           ctaRoute: homePrimaryCtaRoute,
@@ -23,24 +23,11 @@
 
       <template v-if="pageData">
       <LazySayaFeaturedContent
-        v-if="isExperienceTenant"
-        :data="{
-          items: featuredExperienceCards,
-          kicker: t('saya.header.experiences'),
-          heading: t('saya.header.experiences'),
-          linkTarget: homeExperienceHref
-        }"
-      />
-      <LazySayaFeaturedContent
         :data="{
           items: featuredProductCards,
-          kicker: productPresentation?.locationCollectionSegment === 'menu'
-            ? t('saya.footer.menu')
-            : t('saya.footer.products'),
-          heading: productPresentation?.locationCollectionSegment === 'menu'
-            ? t('saya.footer.menu')
-            : t('saya.products.collection_title', { site: brandName }),
-          linkTarget: productPresentation ? productPresentation.collectionPath : null
+          kicker: previewKicker,
+          heading: previewHeading,
+          linkTarget: previewPresentation ? previewPresentation.collectionPath : null
         }"
       />
 
@@ -269,13 +256,13 @@
 </template>
 
 <script setup>
-import { formatProductMoney, formatProductPriceLabel } from '~/utils/product-money'
-import { resolveProductPresentation } from '~/utils/product-presentation'
+import { formatProductMoney } from '~/utils/product-money'
+import { EXPERIENCE_PRESENTATION, groupProductsByCollection, isExperience, presentationForProduct, resolveProductPresentation } from '~/utils/product-presentation'
 import { getActiveSpecialClosure } from '~/utils/formatters'
-import { resolveSiteExperienceHref } from '~/utils/experience-navigation'
+import { selectPrice } from '~/shared/prices'
 import { normalizeRobotsIntent } from '~/shared/robots-directive'
 
-const { siteId, draftId, site } = useTenantSite()
+const { siteId, site } = useTenantSite()
 const { locale, localePath, t } = useI18n()
 
 const homeCopy = computed(() => getVerticalCopy(site?.vertical, locale.value))
@@ -283,7 +270,7 @@ const { resolveMedia } = useMedia()
 
 
 // Validate tenant context ONLY for tenant sites
-if (!siteId && !draftId) {
+if (!siteId) {
   throw createError({
     statusCode: 404,
     statusMessage: 'Site not found'
@@ -302,7 +289,7 @@ const {
   config: pageConfig,
   site: publicSite,
   products,
-  experiencesList,
+  collections,
 } = await usePublicPageData({ server: true, lazy: false })
 
 const {
@@ -324,8 +311,8 @@ const hasOrderLinks = computed(() =>
 )
 
 // Location ids currently under an active special_hours closure (e.g. "closed
-// for renovations") — used to mark their experiences unavailable without
-// touching the experience's own status.
+// for renovations") — used to mark the products offered there unavailable
+// without touching the product's own state.
 const closedLocationIds = computed(() => new Set(
   locations.value
     .filter(loc => getActiveSpecialClosure(loc.special_hours, loc.timezone))
@@ -375,7 +362,9 @@ const restaurantName = computed(() => site?.brand_name?.trim() || businessTitle.
 // Hero metadata from CMS and imported location data — used for OG image metadata below,
 // SayaHomeHero.vue resolves its own copy via getHero() from its :data prop.
 const hero = computed(() => getHero({
-  title: businessTitle.value || '',
+  // The site's own name, not the Google Business title: a site created by hand
+  // has no Google record, and an empty <h1> was the result.
+  title: restaurantName.value,
   subtitle: businessSubtitle.value || '',
   image: '',
   video: ''
@@ -411,38 +400,53 @@ if (siteId) {
   }))
 }
 
-const featuredProducts = computed(() => {
-  const featured = products.value
-    .filter(item => item.featured)
-    .sort((a, b) => {
-      if ((a.featured_sort_order ?? 0) !== (b.featured_sort_order ?? 0)) {
-        return (a.featured_sort_order ?? 0) - (b.featured_sort_order ?? 0)
-      }
-      if ((a.sort_order ?? 0) !== (b.sort_order ?? 0)) return (a.sort_order ?? 0) - (b.sort_order ?? 0)
-      return String(a.name ?? '').localeCompare(String(b.name ?? ''))
-    })
-  return featured.slice(0, 6)
-})
+/**
+ * The preview this page shows of the catalogue.
+ *
+ * There is no "featured" flag to read: the merchant's curation is the order of
+ * their collections and the order of products inside them, so this shows the
+ * front of that arrangement and links to the whole thing. A site with no
+ * collections shows no preview here rather than an arbitrary handful.
+ */
+const previewProducts = computed(() => groupProductsByCollection(products.value, collections.value)
+  .flatMap(group => group.products.map(product => ({ product, collectionName: group.name })))
+  .slice(0, 4))
 
-const featuredExperiences = computed(() => {
-  const allExperiences = experiencesList.value || []
-  const featured = allExperiences
-    .filter(exp => exp.status === 'active' && exp.featured)
-    .sort((a, b) => {
-      const fa = Number(a.featured_sort_order ?? Infinity)
-      const fb = Number(b.featured_sort_order ?? Infinity)
-      if (fa !== fb) return fa - fb
-      const sa = Number(a.sort_order ?? Infinity)
-      const sb = Number(b.sort_order ?? Infinity)
-      if (sa !== sb) return sa - sb
-      return String(a.title ?? '').localeCompare(String(b.title ?? ''))
-    })
-  return (featured.length > 0 ? featured : allExperiences.filter(exp => exp.status === 'active')).slice(0, 6)
+/**
+ * Which surface this preview's "view all" link belongs to.
+ *
+ * A bookable product is read on /experiences and everything else on the
+ * vertical's own collection, so the section header has to name the surface the
+ * cards under it actually go to. When the front of the arrangement is entirely
+ * bookable that surface is Experiences; otherwise it is the vertical's
+ * collection, which is where the non-bookable cards land.
+ */
+const previewPresentation = computed(() => {
+  if (!previewProducts.value.length) return null
+  return previewProducts.value.every(({ product }) => isExperience(product))
+    ? EXPERIENCE_PRESENTATION
+    : productPresentation.value
+})
+const isExperiencePreview = computed(() => previewPresentation.value === EXPERIENCE_PRESENTATION)
+const previewKicker = computed(() => {
+  if (!previewPresentation.value) return ''
+  if (isExperiencePreview.value) return homeCopy.value.experiencesPageTitle
+  return previewPresentation.value.locationCollectionSegment === 'menu'
+    ? t('saya.footer.menu')
+    : t('saya.footer.products')
+})
+const previewHeading = computed(() => {
+  if (!previewPresentation.value) return ''
+  if (isExperiencePreview.value) return t('saya.experiences.collection_title', { site: brandName.value })
+  return previewPresentation.value.locationCollectionSegment === 'menu'
+    ? t('saya.footer.menu')
+    : t('saya.products.collection_title', { site: brandName.value })
 })
 const isExperienceTenant = computed(() => site?.vertical === 'experience')
-const homeExperienceHref = computed(() => resolveSiteExperienceHref(experiencesList.value))
 const homePrimaryCtaRoute = computed(() => {
-  if (isExperienceTenant.value) return homeExperienceHref.value
+  // An experience tenant's primary action is to browse what is on offer; the
+  // collection route is the one place that lists it.
+  if (isExperienceTenant.value) return productPresentation.value?.collectionPath ?? null
   return homeCopy.value.ctaRoute
 })
 
@@ -534,45 +538,52 @@ const supplementalErrorMessage = computed(() => {
 })
 
 const locationSlugById = computed(() => new Map(locations.value.map(location => [location.id, location.slug])))
+const currency = computed(() => {
+  const code = pageConfig.value?.default_currency
+  if (!code) throw new Error('The site currency is unavailable')
+  return code
+})
 const featuredProductCards = computed(() => {
-  const presentation = productPresentation.value
-  if (!presentation) return []
-  return featuredProducts.value.slice(0, 4).map(item => {
-    const locationSlug = locationSlugById.value.get(item.location_id)
-    if (!locationSlug) throw new Error(`Product location is missing: ${item.location_id}`)
+  // A vertical that presents no catalogue previews none of it.
+  if (!productPresentation.value) return []
+  return previewProducts.value.map(({ product, collectionName }) => {
+    // A product offered at several of this site's locations has no single
+    // route, so it is previewed without a link rather than linked to a
+    // location the merchant did not name.
+    const published = product.locations.filter(entry => entry.published && locationSlugById.value.has(entry.location_id))
+    const locationId = published.length === 1 ? published[0].location_id : null
+    const locationSlug = locationId ? locationSlugById.value.get(locationId) : null
+    // The product's own surface, not the site's: a bookable one is read at
+    // /experiences/<slug> whatever the site sells otherwise.
+    const productSurface = presentationForProduct(publicSite.value?.vertical, product)
+    // Each variant resolves its own offer through the one selection contract;
+    // the card shows the lowest of them, the same "from" price the collection
+    // page shows.
+    const selection = { currency: currency.value, location_id: locationId, at: new Date().toISOString() }
+    const price = product.variants
+      .flatMap(variant => selectPrice(variant.prices, selection) ?? [])
+      .reduce((lowest, offer) => (!lowest || offer.unit_amount < lowest.unit_amount ? offer : lowest), null)
     return {
-      name: item.name,
-      category: item.category.name,
-      description: item.description,
-      price: formatProductPriceLabel(item),
-      compareAtPrice: item.price?.compare_at_amount_minor
-        ? formatProductMoney({ ...item.price, amount_minor: item.price.compare_at_amount_minor, compare_at_amount_minor: null })
+      name: product.name,
+      category: collectionName,
+      description: product.description,
+      price: formatProductMoney(price),
+      compareAtPrice: price && price.compare_at_unit_amount !== null
+        ? formatProductMoney({ ...price, unit_amount: price.compare_at_unit_amount, compare_at_unit_amount: null })
         : null,
-      image: item.image?.public_url || null,
-      alt: item.image?.alt_text || item.name,
-      href: presentation.productPath(locationSlug, item.slug),
-      unavailable: !item.available,
+      image: product.image?.public_url || null,
+      alt: product.image?.alt_text || product.name,
+      // An experience is named by its own slug on the site-wide surface, so it
+      // links whether or not one location owns it; the vertical's own product
+      // page is location-scoped and needs that single location.
+      href: isExperience(product) || locationSlug
+        ? productSurface.productPath(locationSlug, product.slug)
+        : null,
+      unavailable: !product.active
+        || (locationId !== null && closedLocationIds.value.has(locationId))
+        || price === null,
     }
   })
 })
-
-const featuredExperienceCards = computed(() => featuredExperiences.value.slice(0, 4).map(item => ({
-  name: item.title,
-  price: formatProductMoney(item.price),
-  compareAtPrice: item.price?.compare_at_amount_minor
-    ? formatProductMoney({ ...item.price, amount_minor: item.price.compare_at_amount_minor, compare_at_amount_minor: null })
-    : '',
-  image: experienceCoverImage(item),
-  alt: item.title ? `${item.title} experience` : 'Featured experience image',
-  href: item.slug ? `/experiences/${item.slug}` : '',
-  unavailable: item.location_id ? closedLocationIds.value.has(item.location_id) : false,
-})))
-
-function experienceCoverImage(item) {
-  const cover = item.media?.[0]
-  if (cover?.kind === 'image') return cover.public_url || null
-  if (cover?.kind === 'video') return cover.thumbnail_url || null
-  return null
-}
 
 </script>

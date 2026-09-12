@@ -38,7 +38,7 @@ import {
   resolveLegalPublicSiteAccess,
 } from '~/server/utils/legal-access'
 import { attachLegalIntakeUuid, claimLegalIntakeReference } from '~/server/utils/legal-intake-references'
-import { validateLegalIntakePayload } from '~/server/utils/legal-intake-payload'
+import { buildBlawbyIntakeCreateBody, validateLegalIntakePayload } from '~/server/utils/legal-intake-payload'
 import { getClientIp } from '~/server/utils/hourly-rate-limit'
 
 const UUID_V4_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
@@ -51,13 +51,20 @@ interface IntakeCreateResult {
 function parseIntakeCreateResult(body: unknown): IntakeCreateResult | undefined {
   if (!body || typeof body !== 'object') return undefined
   const record = body as Record<string, unknown>
-  // A non-empty intakeId is required: an empty string is a valid unique-index
+  // R15 reconciliation: U8's real create-intake response is
+  // createPracticeClientIntakeResponseSchema, which returns `uuid`, not
+  // `intakeId` (see blawby-ts's practice-client-intakes.validation.ts). Read
+  // the real field name here and keep mapping it onto this route's own
+  // `intakeId` field below/at the call site -- KrabiClaw's own response
+  // contract to its callers is unaffected by this fix.
+  //
+  // A non-empty uuid is required: an empty string is a valid unique-index
   // value in D1, so treating "" as success here would durably attach an
   // empty blawby_intake_id, permanently blocking a real intake id from ever
   // being attached to this request reference. Treat it as malformed, same as
   // a missing/wrong-typed field.
-  return typeof record.intakeId === 'string' && record.intakeId.length > 0 && typeof record.status === 'string'
-    ? { intakeId: record.intakeId, status: record.status }
+  return typeof record.uuid === 'string' && record.uuid.length > 0 && typeof record.status === 'string'
+    ? { intakeId: record.uuid, status: record.status }
     : undefined
 }
 
@@ -136,7 +143,7 @@ export default defineHandler(async (event) => {
       correlationId,
       requestReference,
       clientIp: getClientIp(event),
-      body: payload,
+      body: buildBlawbyIntakeCreateBody(payload),
       parseResponse: parseIntakeCreateResult,
     })
 

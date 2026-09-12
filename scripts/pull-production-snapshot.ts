@@ -3,10 +3,11 @@
  * seed definitions, so what they test against is what customers actually have.
  *
  * The export is transferred through scripts/rebaseline-data.mjs: every row is
- * copied into the current generated baseline, the pending data transforms run,
- * and the result is audited before anything is written. Until production itself
- * carries the baseline this is what makes a production export loadable; after
- * that the transforms are no-ops.
+ * copied into the current generated baseline, the catalog derivation and the
+ * pending data transforms run, and the result is audited before anything is
+ * written. Until production itself carries the baseline this is what makes a
+ * production export loadable; after that the derivation reads nothing and the
+ * transforms are no-ops.
  *
  * `jwks` is left alone — production's signing keys are encrypted under
  * production's BETTER_AUTH_SECRET, so the target keeps and mints its own. E2E

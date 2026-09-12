@@ -4,17 +4,16 @@ import { resolveProductPresentation } from '~/utils/product-presentation'
 
 export type CmsSectionId = 'pages' | 'collections' | 'locations' | 'media' | 'site'
 
-// Explicit module identifiers a vertical/template/site/location can turn on. 'experience_bookings',
+// Explicit module identifiers a vertical/template/site/location can turn on.
 // 'consultations' and 'appointments' are declared (not yet wired to any catalog entry below) because
-// no distinct manager/route exists for them yet — today's single 'reservations' feature covers both
-// table-reservation and experience-booking policy management, and blawby's practice management lives
+// no distinct manager/route exists for them yet, and blawby's practice management lives
 // entirely on the single 'services' page. Reservation policies belong to locations because every
-// reservation is location-owned. Experience policies may vary at site, location, or experience
-// scope. Wire distinct manager entries only when their routes provide distinct customer-facing UX.
+// reservation is location-owned. Booking is a capability of a Product, configured where the
+// Product is, so it needs no module of its own. Wire distinct manager entries only when their
+// routes provide distinct customer-facing UX.
 export type ProductFeature =
   | 'contact' | 'locations' | 'settings'
   | 'products' | 'reservations' | 'ordering'
-  | 'experiences' | 'experience_bookings'
   | 'services' | 'consultations' | 'appointments'
   | 'blog' | 'qa' | 'testimonials' | 'reviews' | 'media' | 'posts' | 'photos' | 'links'
 
@@ -49,7 +48,7 @@ export interface CmsCapabilityDefinition {
 /** Explicit site/location module override, as an ADDITIVE/SUBTRACTIVE DELTA on top of the
  *  underlying default set (never a full-replacement snapshot) — this is what lets a future
  *  default addition still reach a site that already has an override, and lets an owner add a
- *  module the vertical doesn't default to (hybrid restaurant+experiences) independently of
+ *  module the vertical doesn't default to (a restaurant adding ordering) independently of
  *  removing one it does (turn off ordering), without either action clobbering the other. */
 export interface CmsCapabilityOverrideDelta {
   enabled?: readonly ProductFeature[]
@@ -105,14 +104,12 @@ const sayaTemplateCatalog: CmsTemplateCatalog = {
     ...sayaCorePages,
     { id: 'products', feature: 'products', label: 'Products', route: '/products', scope: 'site', editor: 'tenant_pages' },
     { id: 'order', feature: 'ordering', label: 'Order online', route: '/order', scope: 'site', editor: 'tenant_pages' },
-    { id: 'experiences', feature: 'experiences', label: 'Experiences', route: '/experiences', scope: 'site', editor: 'tenant_pages' },
     { id: 'reservations', feature: 'reservations', label: 'Reservations', route: '/reservations', scope: 'site', editor: 'tenant_pages' },
   ],
   managers: [
     ...sayaCoreManagers,
     { key: 'location.products', id: 'products', label: 'Products', section: 'collections', route: ':location/products', scope: 'location' },
     { key: 'site.ordering', id: 'ordering', label: 'Orders', section: 'collections', route: 'orders', scope: 'site' },
-    { key: 'location.experiences', id: 'experiences', label: 'Experiences', section: 'collections', route: ':location/experiences', scope: 'location' },
     { key: 'location.reservations', id: 'reservations', label: 'Reservations', section: 'collections', route: ':location/reservations', scope: 'location' },
   ],
   locationVocabularyDefault: 'location',
@@ -188,7 +185,6 @@ const sayaModules: readonly ProductModuleDefinition[] = [
   { feature: 'products', configurableAt: ['site', 'location'] },
   { feature: 'ordering', configurableAt: ['site', 'location'] },
   { feature: 'reservations', configurableAt: ['site', 'location'] },
-  { feature: 'experiences', configurableAt: ['site', 'location'] },
 ]
 const blawbyModules: readonly ProductModuleDefinition[] = [
   { feature: 'services', configurableAt: ['site'] },
@@ -230,14 +226,12 @@ export const ALWAYS_ON_FEATURES: readonly ProductFeature[] = [
 // Real business-module defaults only — content managers are handled uniformly via
 // ALWAYS_ON_FEATURES above, not per-vertical here.
 const verticalDefaultFeatures: Record<SiteVertical, readonly ProductFeature[]> = {
-  // A restaurant that also runs experiences — a tasting menu, a chef's table, a
-  // cooking class — is an ordinary restaurant, not a hybrid needing configuration.
-  // Both verticals share the same Saya template and the same products table; the
-  // real difference between them is vocabulary (menu vs products), not which
-  // modules exist. Leaving experiences out here left live restaurants with
-  // experience rows and no CMS route to reach them.
-  restaurant: ['products', 'reservations', 'ordering', 'experiences'],
-  experience: ['experiences', 'reservations'],
+  // A restaurant that also runs classes and a studio that only runs them have
+  // the same modules: a Product is a Product, and booking is a capability it
+  // may have. The difference between these verticals is vocabulary (menu vs
+  // products), not which modules exist.
+  restaurant: ['products', 'reservations', 'ordering'],
+  experience: ['products', 'reservations'],
   service: ['services'],
 }
 

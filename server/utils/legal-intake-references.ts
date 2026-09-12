@@ -238,6 +238,10 @@ export async function claimLegalIntakeReference(
       payload_digest, digest_key_id, digest_version, created_at, updated_at
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET updated_at = excluded.updated_at
+      WHERE legal_intake_references.organization_id = excluded.organization_id
+        AND legal_intake_references.site_id = excluded.site_id
+        AND (legal_intake_references.original_actor_id = excluded.original_actor_id
+          OR legal_intake_references.current_authorized_user_id = excluded.original_actor_id)
     RETURNING *
   `, [
     params.requestReference, params.organizationId, params.siteId,
@@ -245,7 +249,20 @@ export async function claimLegalIntakeReference(
     built.digest, built.digestKeyId, built.digestVersion,
     now, now,
   ])
-  if (!row) throw new Error('legal intake reference claim returned no row')
+  // The ownership rule is carried by the write itself, so a guessed reference
+  // touches nothing at all: the upsert used to bump another tenant's row and
+  // only then check who owned it. No row back means the conflict target exists
+  // and belongs to somebody else.
+  if (!row) {
+    emitLegalSecurityEvent({
+      reason: 'legal_intake_ownership_conflict',
+      organizationId: params.organizationId,
+      siteId: params.siteId,
+      actorKind: params.actorKind,
+      requestCorrelationId: legalRequestCorrelationId(event),
+    })
+    return { status: 'ownership_conflict' }
+  }
 
   // R16: "The only cross-actor continuation allowed is the current
   // authorized user established by the trusted Better Auth link hook."

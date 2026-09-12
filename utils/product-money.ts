@@ -1,22 +1,25 @@
-import type { Price } from '~/shared/prices'
-import { formatMinorAmount } from '~/shared/prices'
-import type { Product, ProductDetail } from '~/server/types/products'
+import type { Price, PriceSelection } from '~/shared/prices'
+import { formatMinorAmount, selectPrice } from '~/shared/prices'
+import type { ProductVariant } from '~/server/types/products'
 
-// No generic "Price on request" fallback — null means the caller must omit
-// the price element entirely rather than render text nobody supplied.
+/**
+ * Render one resolved offer.
+ *
+ * Null means the caller omits the price element entirely. There is no
+ * "Price on request" stand-in: text nobody supplied is not a price.
+ */
 export function formatProductMoney(price: Price | null, locale?: string): string | null {
-  return price ? formatMinorAmount(price.amount_minor, price.currency, locale) : null
+  return price ? formatMinorAmount(price.unit_amount, price.currency, locale) : null
 }
 
-export function productPriceNote(details: readonly ProductDetail[]): string | null {
-  return details.find(detail => detail.key === 'price-note')?.values[0] ?? null
-}
-
-// Precedence is always numeric Price > explicit price-note > nothing — a
-// stale note never overrides an active Price, and the absence of both is
-// not synthesized into customer-facing text. Callers must render no price
-// element at all when this returns null.
-export function formatProductPriceLabel(product: Pick<Product, 'price' | 'details'>, locale?: string): string | null {
-  if (product.price) return formatMinorAmount(product.price.amount_minor, product.price.currency, locale)
-  return productPriceNote(product.details)
+/**
+ * The price a surface shows for one variant, in one currency and location.
+ *
+ * A thin pass-through to the one selection contract, so a component never
+ * reaches into `variant.prices` and invents a rule of its own. It throws on an
+ * ambiguous set and returns null when nothing applies — both are the surface's
+ * problem to state, not to paper over.
+ */
+export function formatVariantPrice(variant: ProductVariant, selection: PriceSelection, locale?: string): string | null {
+  return formatProductMoney(selectPrice(variant.prices, selection), locale)
 }

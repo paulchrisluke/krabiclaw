@@ -17,9 +17,9 @@
       <UAlert v-if="resendError" color="error" variant="soft" :description="resendError" class="mt-5 text-left" />
 
       <div class="mt-7 space-y-3">
-        <PlatformButton variant="outline" size="lg" block :loading="resending" @click="resendVerification">
+        <UButton color="neutral" variant="outline" size="lg" block :loading="resending" @click="resendVerification">
           Resend the email
-        </PlatformButton>
+        </UButton>
         <UButton block color="neutral" variant="ghost" size="sm" @click="useDifferentEmail">
           Use a different email address
         </UButton>
@@ -33,8 +33,8 @@
     <UAlert v-if="error" color="error" variant="soft" :description="error" class="mt-4" />
 
     <div class="mt-6 space-y-3">
-      <AuthGoogleAuthButton label="Sign up with Google" :loading="loading" @activate="googleSignup" />
-      <WhatsAppAuthButton label="Sign up with WhatsApp" :disabled="loading" @activate="showPhone = !showPhone" />
+      <AuthGoogleButton label="Sign up with Google" :loading="loading" @activate="googleSignup" />
+      <AuthWhatsAppButton label="Sign up with WhatsApp" :disabled="loading" @activate="showPhone = !showPhone" />
       <AuthPhoneOtpForm v-if="showPhone" default-country="TH" verify-label="Continue with WhatsApp" @verified="whatsAppSignupComplete" />
       <USeparator label="or use email" />
       <AuthEmailSignUpForm :callback-url="verificationCallback" @success="emailSignupComplete" />
@@ -46,7 +46,6 @@
 
 <script setup lang="ts">
 import { NON_INDEXABLE_ROBOTS_INTENT } from '~/shared/robots-directive'
-import WhatsAppAuthButton from '~/components/auth/WhatsAppAuthButton.vue'
 import { authClient } from '~/lib/auth-client'
 import { buildPostLoginUrl, validatedInternalPath } from '~/shared/auth/return-target'
 

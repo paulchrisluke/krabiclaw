@@ -1,3 +1,4 @@
+import type { PlatformIconName } from '~/components/platform/PlatformIcon.vue'
 export type PublicTemplateSlug = 'saya' | 'blawby' | 'platform'
 
 export interface PublicTemplateDefinition {
@@ -34,10 +35,10 @@ export const publicTemplateRegistry: Record<PublicTemplateSlug, PublicTemplateDe
       articlePathHasCategory: false,
     },
     sitemap: {
-      exactPaths: ['/', '/menu', '/contact', '/blog', '/experiences', '/locations', '/reservations', '/posts', '/photos', '/qa', '/reviews'],
+      exactPaths: ['/', '/menu', '/products', '/experiences', '/contact', '/blog', '/locations', '/reservations', '/posts', '/photos', '/qa', '/reviews'],
       dynamicPrefixes: ['/blog/', '/experiences/', '/locations/', '/posts/'],
     },
-    nonIndexableExactPaths: ['/contact/confirmed', '/experiences/cancel', '/experiences/confirmed', '/reservations/cancel', '/reservations/confirmed'],
+    nonIndexableExactPaths: ['/contact/confirmed', '/bookings/cancel', '/bookings/confirmed', '/reservations/cancel', '/reservations/confirmed'],
   },
   blawby: {
     slug: 'blawby',
@@ -147,7 +148,7 @@ export function siteSupportsBlawbyTemplate(input: {
 // template identity to keep in sync.
 
 export interface TemplateMarketingFeature {
-  icon: string
+  icon: PlatformIconName
   label: string
   description: string
 }

@@ -30,7 +30,6 @@
     <template #body>
       <EditorPaneShell
         :has-detail="frame.mode.value === 'pair'"
-        show-desktop-detail
         :detail-title="SECTION_LABELS[openKey]"
         :dismiss-to="recordPath"
         show-actions
@@ -108,6 +107,7 @@ import EditorNavigationList, { type EditorNavigationGroup } from '~/components/d
 import { getErrorMessage } from '~/utils/errors'
 import {
   COLLECTION_METHODS,
+  COLLECTION_METHOD_LABELS,
   TESTIMONIAL_STATUSES,
   testimonialCreateBlockers,
   isTestimonialsResponse,
@@ -122,8 +122,6 @@ const route = useRoute()
 const toast = useToast()
 const dashboardApi = useDashboardApi()
 
-// The frame comes first, and before any `await`: `useEditorFrame` provides and
-// injects, which Vue binds only while setup is still synchronous.
 const testimonialId = computed(() => String(route.params.testimonialId ?? ''))
 const testimonialsPath = computed(() => `/dashboard/${String(route.params.orgSlug)}/sites/${String(route.params.siteSlug)}/testimonials`)
 const recordPath = computed(() => `${testimonialsPath.value}/${testimonialId.value}`)
@@ -154,19 +152,16 @@ watchEffect(() => {
 })
 
 /**
- * The draft outlives any one leaf. Moving between sections remounts this
- * component, so a plain `reactive` here lost the reviewer's name the moment you
- * navigated from Reviewer to Testimonial. `useState` is keyed to the record, so
- * a half-filled new testimonial survives the walk between its own sections and
- * is discarded when a different record is opened.
+ * Rating and collection method have no server default: the endpoint refuses a
+ * review without them, so the walk asks for both rather than pre-answering.
  */
 function emptyDraft() {
   return {
     author_name: '',
-    rating: 5,
+    rating: null as number | null,
     title: '',
     content: '',
-    collection_method: 'in_person' as CollectionMethod,
+    collection_method: undefined as CollectionMethod | undefined,
     original_review_date: '',
     original_reference: '',
     publication_authorized: false,
@@ -174,6 +169,7 @@ function emptyDraft() {
   }
 }
 
+// Keyed to the record so the draft survives the remount between sections.
 const form = useState(`testimonial-draft-${siteId}-${testimonialId.value}`, emptyDraft).value
 
 const saving = ref(false)
@@ -191,8 +187,7 @@ const { data, refresh } = await useAsyncData(
 
 const record = computed(() => data.value?.reviews.find(row => row.id === testimonialId.value) ?? null)
 
-watch(record, (row) => {
-  if (!row) return
+function loadForm(row: SiteTestimonial) {
   Object.assign(form, {
     author_name: row.author_name,
     rating: row.rating,
@@ -204,7 +199,8 @@ watch(record, (row) => {
     publication_authorized: row.publication_authorized,
     status: row.status,
   })
-}, { immediate: true })
+}
+watch(record, (row) => { if (row) loadForm(row) }, { immediate: true })
 
 const blockers = computed(() => testimonialCreateBlockers(form))
 
@@ -218,7 +214,7 @@ const navigationGroups = computed<EditorNavigationGroup[]>(() => [
     label: 'Testimonial',
     items: [
       { id: 'reviewer', label: 'Reviewer', summary: summary(form.author_name, 'Not named yet'), icon: 'i-lucide-user', to: `${recordPath.value}/reviewer` },
-      { id: 'rating', label: 'Rating', summary: `${form.rating} of 5`, icon: 'i-lucide-star', to: `${recordPath.value}/rating` },
+      { id: 'rating', label: 'Rating', summary: form.rating === null ? 'Not rated yet' : `${form.rating} of 5`, placeholder: form.rating === null, icon: 'i-lucide-star', to: `${recordPath.value}/rating` },
       { id: 'title', label: 'Title', summary: summary(form.title, 'Not set'), icon: 'i-lucide-type', to: `${recordPath.value}/title` },
       { id: 'content', label: 'Testimonial', summary: summary(form.content, 'Nothing written yet'), icon: 'i-lucide-quote', to: `${recordPath.value}/content` },
     ],
@@ -227,7 +223,7 @@ const navigationGroups = computed<EditorNavigationGroup[]>(() => [
     id: 'record',
     label: 'Record',
     items: [
-      { id: 'provenance', label: 'Provenance', summary: COLLECTION_METHODS.find(m => m.value === form.collection_method)?.label ?? form.collection_method, icon: 'i-lucide-file-clock', to: `${recordPath.value}/provenance` },
+      { id: 'provenance', label: 'Provenance', summary: form.collection_method ? COLLECTION_METHOD_LABELS[form.collection_method] : 'Not recorded yet', placeholder: !form.collection_method, icon: 'i-lucide-file-clock', to: `${recordPath.value}/provenance` },
       { id: 'status', label: 'Status', summary: form.status, icon: 'i-lucide-eye', to: `${recordPath.value}/status` },
       { id: 'authorization', label: 'Publication authorization', summary: form.publication_authorized ? 'Confirmed' : 'Not confirmed', placeholder: !form.publication_authorized, icon: 'i-lucide-shield-check', to: `${recordPath.value}/authorization` },
     ],
@@ -239,48 +235,24 @@ const body = computed(() => ({
   rating: form.rating,
   title: form.title.trim() || null,
   content: form.content.trim(),
-  collection_method: form.collection_method,
+  collection_method: form.collection_method ?? null,
   original_review_date: form.original_review_date || null,
   original_reference: form.original_reference.trim() || null,
   publication_authorized: form.publication_authorized,
   status: form.status,
 }))
 
-/**
- * Creating walks the required sections in order rather than describing what is
- * missing. The commit names where it is going — "Next: Testimonial" — and only
- * reads "Create testimonial" on the last one outstanding, so the owner is
- * carried through the record instead of being told to go back for a field.
- *
- * Only this level does that, because only this level creates. Every other
- * chain edits a record that already exists, where each leaf saves on its own
- * and there is no order to walk. If a second create-chain appears, this belongs
- * somewhere shared rather than copied.
- */
-const REQUIRED_ORDER: SectionKey[] = ['reviewer', 'content', 'rating', 'authorization']
-
-const outstanding = computed(() => {
-  const names = new Set(blockers.value)
-  return REQUIRED_ORDER.filter(key => names.has(SECTION_LABELS[key]))
+const { createActionLabel, saveLabel, saveDisabled, save: saveOpenSection, startOrCreate } = useCreateWalk({
+  recordPath,
+  isNew,
+  openKey,
+  labels: SECTION_LABELS,
+  order: ['reviewer', 'content', 'rating', 'provenance', 'authorization'],
+  missing: key => blockers.value.includes(key),
+  noun: 'testimonial',
+  saving,
+  commit,
 })
-
-/** The next section still outstanding, ignoring the one already open. */
-const nextOutstanding = computed(() => outstanding.value.find(key => key !== openKey.value) ?? null)
-
-const createActionLabel = computed(() => {
-  const next = outstanding.value[0]
-  return next ? `Start with ${SECTION_LABELS[next]}` : 'Create testimonial'
-})
-
-function startOrCreate() {
-  const next = outstanding.value[0]
-  if (next) return void navigateTo(`${recordPath.value}/${next}`)
-  void saveOpenSection()
-}
-
-// The open section's own value is the only thing that can block its commit.
-const openSectionIncomplete = computed(() => outstanding.value.includes(openKey.value))
-const saveDisabled = computed(() => saving.value || (isNew.value && openSectionIncomplete.value))
 
 /**
  * A new record posts once, when nothing is outstanding. An existing one patches
@@ -297,19 +269,7 @@ const SECTION_FIELDS: Record<SectionKey, Array<keyof typeof body.value>> = {
   authorization: ['publication_authorized'],
 }
 
-const saveLabel = computed(() => {
-  if (!isNew.value) return undefined
-  return nextOutstanding.value ? `Next: ${SECTION_LABELS[nextOutstanding.value]}` : 'Create testimonial'
-})
-
-async function saveOpenSection() {
-  if (saveDisabled.value) return
-  // Creating advances to the next outstanding section; the POST happens once
-  // nothing is left to answer.
-  if (isNew.value && nextOutstanding.value) {
-    await navigateTo(`${recordPath.value}/${nextOutstanding.value}`)
-    return
-  }
+async function commit() {
   // The PATCH sends the open section's fields from the form, and the form holds
   // the row it was loaded from. With no row — a load that has not arrived or
   // that failed — it holds its own blank defaults, and saving would write those
@@ -327,10 +287,6 @@ async function saveOpenSection() {
         body: body.value,
         validate: isReviewCreatedResponse,
       })
-      // `new` is one key for every testimonial ever added here, so a successful
-      // create has to empty it. Left behind, the next Add opens pre-filled with
-      // the testimonial just created and reports nothing outstanding, which is
-      // one click from a duplicate.
       Object.assign(form, emptyDraft())
       toast.add({ description: 'Testimonial created', color: 'success' })
       await navigateTo(`${testimonialsPath.value}/${created.id}`)
@@ -354,20 +310,7 @@ async function saveOpenSection() {
 }
 
 function closeDetail() {
-  if (record.value) {
-    const row = record.value
-    Object.assign(form, {
-      author_name: row.author_name,
-      rating: row.rating,
-      title: row.title ?? '',
-      content: row.content,
-      collection_method: row.collection_method,
-      original_review_date: row.original_review_date ?? '',
-      original_reference: row.original_reference ?? '',
-      publication_authorized: row.publication_authorized,
-      status: row.status,
-    })
-  }
+  if (record.value) loadForm(record.value)
   void navigateTo(recordPath.value)
 }
 

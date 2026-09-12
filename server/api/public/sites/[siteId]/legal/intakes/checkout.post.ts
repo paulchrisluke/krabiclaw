@@ -51,8 +51,13 @@ interface IntakeCheckoutResult {
 function parseIntakeCheckoutResult(body: unknown): IntakeCheckoutResult | undefined {
   if (!body || typeof body !== 'object') return undefined
   const record = body as Record<string, unknown>
-  return typeof record.checkoutSessionId === 'string' && typeof record.paymentUrl === 'string'
-    ? { checkoutSessionId: record.checkoutSessionId, paymentUrl: record.paymentUrl }
+  // R15 reconciliation: U8's real checkout-session response
+  // (createPracticeClientIntakeCheckoutSessionResponseSchema) returns
+  // {url, session_id} -- not {paymentUrl, checkoutSessionId}. Read the real
+  // field names here; this route's own internal/response shape is
+  // unaffected.
+  return typeof record.session_id === 'string' && typeof record.url === 'string'
+    ? { checkoutSessionId: record.session_id, paymentUrl: record.url }
     : undefined
 }
 

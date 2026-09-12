@@ -1,6 +1,6 @@
 import type { McpExecutorContext } from './shared'
 import { MCP_ERROR, mcpProtocolError } from '~/server/utils/mcp-protocol'
-import { createLocationQa, createQa, deleteLocationQa, deleteQa, listLocationQa, listPageQa, listQa, reorderQa, updateQa } from '~/server/utils/location-qa'
+import { createLocationQa, createQa, deleteLocationQa, deleteQa, listLocationQa, listQa, reorderQa, updateQa } from '~/server/utils/location-qa'
 import { reorderLocationQa, updateLocationQa } from '~/server/utils/mcp-workflows'
 import { paginateMcpCollection } from '~/server/utils/mcp-pagination'
 import { NOT_HANDLED, assertDomainSuccess, mutationContextPayload, objectArray, omit, requiredString } from './shared'
@@ -10,7 +10,7 @@ export async function handleQaTools(ctx: McpExecutorContext): Promise<unknown> {
   switch (toolName) {
     case "list_site_qa":
       {
-        const items = typeof args.page_path === "string" ? await listPageQa(site.db, site.siteId, args.page_path) : await listQa(site.db, site.siteId, null);
+        const items = await listQa(site.db, site.siteId, null, false, typeof args.page_path === "string" ? args.page_path : null);
         const page = paginateMcpCollection(items, args, { resource: `site-qa:${site.siteId}:${typeof args.page_path === 'string' ? args.page_path : ''}` });
         return { items: page.items, page_info: page.page_info };
       }

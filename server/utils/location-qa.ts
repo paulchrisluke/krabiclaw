@@ -1,3 +1,4 @@
+import { FAQ_BLOCK_SOURCES, type FaqBlockSource } from '~/shared/faq-block'
 import { getPersistedSourceLocale } from '~/server/utils/localization'
 import { createContentDocumentWithBlocks, prepareContentDocumentDeletion } from '~/server/utils/content/documents'
 import { execute, executeBatch, queryAll, queryFirst, type DbClient } from '../db/index.ts'
@@ -94,24 +95,36 @@ export async function listQa(db: DbClient, siteId: string, locationId: string | 
   `, [locale, siteId, ...scope.params])
 }
 
-export async function listPageQa(db: DbClient, siteId: string, pagePath: string, publishedOnly = false, locale = 'en') {
-  const scoped = await listQa(db, siteId, null, publishedOnly, pagePath, locale)
-  return scoped.length ? scoped : listQa(db, siteId, null, publishedOnly, undefined, locale)
+export function faqBlockSource(block: { type: string; data: Record<string, unknown> }): FaqBlockSource | null {
+  if (block.type !== 'faq') return null
+  return FAQ_BLOCK_SOURCES.find(source => source === block.data.source) ?? null
+}
+
+/** The published records a FAQ block with `source` lists on `pagePath`. */
+export function listFaqBlockQa(db: DbClient, siteId: string, pagePath: string, source: FaqBlockSource, locale = 'en') {
+  return listQa(db, siteId, null, true, source === 'page_qa' ? pagePath : null, locale)
+}
+
+export function faqItems(rows: QaDocument[]) {
+  return rows.map(row => ({ id: String(row.id), title: String(row.question), description: typeof row.answer === 'string' ? row.answer : undefined }))
 }
 
 /**
- * FAQ blocks hold no questions of their own: they list the published Q&A records
- * scoped to the page (or article) they sit on. Public readers attach those
- * records here so every surface renders the same items.
+ * FAQ blocks hold no questions of their own: each lists the published Q&A
+ * records its `source` names. Public readers attach those records here so every
+ * surface renders the same items.
  */
 export async function attachPageQa<T extends { type: string; data: Record<string, unknown> }>(
   db: DbClient, siteId: string, pagePath: string, blocks: T[], locale = 'en',
 ): Promise<T[]> {
-  const sourced = (block: T) => block.type === 'faq' && block.data.source === 'page_qa'
-  if (!blocks.some(sourced)) return blocks
-  const items = (await listPageQa(db, siteId, pagePath, true, locale))
-    .map(row => ({ id: String(row.id), title: String(row.question), description: typeof row.answer === 'string' ? row.answer : undefined }))
-  return blocks.map(block => sourced(block) ? { ...block, data: { ...block.data, items } } : block)
+  const sources = new Set(blocks.map(faqBlockSource).filter((source): source is FaqBlockSource => source !== null))
+  if (!sources.size) return blocks
+  const itemsBySource = new Map(await Promise.all([...sources].map(async source =>
+    [source, faqItems(await listFaqBlockQa(db, siteId, pagePath, source, locale))] as const)))
+  return blocks.map((block) => {
+    const source = faqBlockSource(block)
+    return source ? { ...block, data: { ...block.data, items: itemsBySource.get(source) } } : block
+  })
 }
 
 export async function createQa(db: DbClient, scope: QaScope, input: CreateQaInput) {
@@ -160,6 +173,10 @@ export async function createQa(db: DbClient, scope: QaScope, input: CreateQaInpu
       page_path: pagePath,
       status,
       sort_order: sortOrder,
+      // A newly created question has no votes yet. It is stated rather than
+      // omitted: this is the same row shape the list returns, and the CMS
+      // validates it as one.
+      upvote_count: 0,
       created: true,
     },
   }

@@ -1,5 +1,6 @@
 import { queryAll, type DbClient } from '~/server/db'
 import { listQa } from '~/server/utils/location-qa'
+import type { QaRow } from '~/utils/site-qa'
 
 export async function getTenantPages(db: DbClient, siteId: string): Promise<Array<{ path: string; title: string }>> {
   const rows = await queryAll<{ path: string; title: string }>(db,
@@ -28,14 +29,7 @@ export async function getSiteQa(
   siteId: string,
   pagePath: string | null,
   qaId: string | null = null,
-): Promise<Array<{
-  id: string
-  question: string
-  answer: string | null
-  status: 'published' | 'hidden'
-  sort_order: number
-  page_path: string | null
-}>> {
+): Promise<QaRow[]> {
   const rows = await listQa(db, siteId, null, false, pagePath, 'en', qaId)
-  return rows.map(({ id, question, answer, status, sort_order, page_path }) => ({ id, question, answer, status, sort_order, page_path }))
+  return rows.map(({ id, question, answer, status, sort_order, page_path, upvote_count }) => ({ id, question, answer, status, sort_order, page_path, upvote_count }))
 }

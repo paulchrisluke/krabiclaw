@@ -12,8 +12,17 @@
       icon="i-lucide-triangle-alert"
       :description="errorMessage"
     />
-    <div v-if="isNew" class="flex justify-end">
-      <UButton :label="createActionLabel" :loading="saving" @click="startOrCreate" />
+    <div class="flex justify-end gap-2">
+      <UButton v-if="isNew" :label="createActionLabel" :loading="saving" @click="startOrCreate" />
+      <DashboardResourceLocalization
+        v-else
+        :site-id="siteId"
+        resource-type="content_document"
+        :resource-id="qaId"
+        resource-label="question"
+        :fields="qaLocalizationFields"
+        :language-settings-path="siteLocalizationSettingsPath"
+      />
     </div>
     <EditorNavigationList :groups="navigationGroups" />
   </div>
@@ -24,13 +33,22 @@
         <template #leading>
           <DashboardNavbarLeading :to="qaPath" label="Q&A" />
         </template>
+        <template v-if="!isNew" #right>
+          <DashboardResourceLocalization
+            :site-id="siteId"
+            resource-type="content_document"
+            :resource-id="qaId"
+            resource-label="question"
+            :fields="qaLocalizationFields"
+            :language-settings-path="siteLocalizationSettingsPath"
+          />
+        </template>
       </UDashboardNavbar>
     </template>
 
     <template #body>
       <EditorPaneShell
         :has-detail="frame.mode.value === 'pair'"
-        show-desktop-detail
         :detail-title="SECTION_LABELS[openKey]"
         :dismiss-to="recordPath"
         show-actions
@@ -74,22 +92,29 @@
 <script setup lang="ts">
 import EditorPaneShell from '~/components/dashboard/EditorPaneShell.vue'
 import EditorNavigationList, { type EditorNavigationGroup } from '~/components/dashboard/EditorNavigationList.vue'
+import DashboardResourceLocalization from '~/components/dashboard/DashboardResourceLocalization.vue'
 import { getErrorMessage } from '~/utils/errors'
 import { isQaResponse, isQaCreated, isQaUpdated, qaCreateBlockers, type QaRow } from '~/utils/site-qa'
+
+/** Set when this is a location's question rather than the site's. */
+const props = defineProps<{ locationId?: string }>()
 
 const route = useRoute()
 const toast = useToast()
 const dashboardApi = useDashboardApi()
 
-// The frame comes first, and before any `await`: `useEditorFrame` provides and
-// injects, which Vue binds only while setup is still synchronous.
 const qaId = computed(() => String(route.params.qaId ?? ''))
-const qaPath = computed(() => `/dashboard/${String(route.params.orgSlug)}/sites/${String(route.params.siteSlug)}/qa`)
+const qaPath = computed(() => props.locationId
+  ? `/dashboard/${String(route.params.orgSlug)}/sites/${String(route.params.siteSlug)}/locations/${String(route.params.locationSlug)}/qa`
+  : `/dashboard/${String(route.params.orgSlug)}/sites/${String(route.params.siteSlug)}/qa`)
 const recordPath = computed(() => `${qaPath.value}/${qaId.value}`)
 const frame = useEditorFrame(recordPath)
 
 const siteId = await useDashboardSiteId()
 const isNew = computed(() => qaId.value === 'new')
+const qaEndpoint = computed(() => props.locationId
+  ? `/api/editor/sites/${siteId}/locations/${props.locationId}/qa`
+  : `/api/editor/sites/${siteId}/qa`)
 
 const SECTION_LABELS = { question: 'Question', answer: 'Answer', visibility: 'Visibility' } as const
 type SectionKey = keyof typeof SECTION_LABELS
@@ -104,32 +129,27 @@ watchEffect(() => {
   }
 })
 
-/**
- * The draft outlives any one leaf: moving between sections remounts this
- * component, so a plain `reactive` would lose the question on the way to the
- * answer.
- */
 function emptyDraft() {
   return { question: '', answer: '', published: true }
 }
 
-const form = useState(`qa-draft-${siteId}-${qaId.value}`, emptyDraft).value
+// Keyed to the record so the draft survives the remount between sections.
+const form = useState(`qa-draft-${siteId}-${props.locationId ?? 'site'}-${qaId.value}`, emptyDraft).value
 
 const saving = ref(false)
 const errorMessage = ref('')
 
 /**
- * A record is read by id, not by scope. The page a question is filed under is
- * an attribute of the record rather than part of its address, so the row is
- * fetched without knowing it and reports its own `page_path` back — which is
- * what the scoped PATCH and DELETE need.
+ * A site record is read by id, not by scope: the page it is filed under is an
+ * attribute it reports back, which the scoped PATCH needs. A location's list
+ * is not scoped, so its record is found in the list.
  */
 const { data, refresh } = await useAsyncData(
-  () => `dashboard-qa-record-${siteId}-${qaId.value}`,
+  () => `dashboard-qa-record-${siteId}-${props.locationId ?? 'site'}-${qaId.value}`,
   async () => isNew.value
     ? null
-    : await dashboardApi<{ qa: QaRow[] }>(`/api/editor/sites/${siteId}/qa`, {
-      query: { id: qaId.value },
+    : await dashboardApi<{ qa: QaRow[] }>(qaEndpoint.value, {
+      query: props.locationId ? undefined : { id: qaId.value },
       validate: isQaResponse,
     }),
   { server: false },
@@ -137,14 +157,20 @@ const { data, refresh } = await useAsyncData(
 
 const record = computed(() => data.value?.qa.find(row => row.id === qaId.value) ?? null)
 
-watch(record, (row) => {
-  if (!row) return
+function loadForm(row: QaRow) {
   form.question = row.question
   form.answer = row.answer ?? ''
   form.published = row.status === 'published'
-}, { immediate: true })
+}
+watch(record, (row) => { if (row) loadForm(row) }, { immediate: true })
 
 const blockers = computed(() => qaCreateBlockers(form))
+
+const qaLocalizationFields = computed(() => [
+  { key: 'title', label: 'Question', source: record.value?.question },
+  { key: 'summary', label: 'Answer', source: record.value?.answer, multiline: true, rows: 4 },
+])
+const siteLocalizationSettingsPath = computed(() => `/dashboard/${route.params.orgSlug}/sites/${route.params.siteSlug}/settings/localization`)
 
 const navigationGroups = computed<EditorNavigationGroup[]>(() => [
   {
@@ -157,43 +183,19 @@ const navigationGroups = computed<EditorNavigationGroup[]>(() => [
   },
 ])
 
-/**
- * Creating walks the sections the endpoint will not accept empty, naming where
- * it is going, and posts once nothing is outstanding. Only this level walks an
- * order, because only this level creates.
- */
-const REQUIRED_ORDER: SectionKey[] = ['question']
-const outstanding = computed(() => {
-  const names = new Set(blockers.value)
-  return REQUIRED_ORDER.filter(key => names.has(SECTION_LABELS[key]))
-})
-const nextOutstanding = computed(() => outstanding.value.find(key => key !== openKey.value) ?? null)
-
-const createActionLabel = computed(() => {
-  const next = outstanding.value[0]
-  return next ? `Start with ${SECTION_LABELS[next]}` : 'Create question'
+const { createActionLabel, saveLabel, saveDisabled, save: saveOpenSection, startOrCreate } = useCreateWalk({
+  recordPath,
+  isNew,
+  openKey,
+  labels: SECTION_LABELS,
+  order: ['question'],
+  missing: key => blockers.value.some(section => section === key),
+  noun: 'question',
+  saving,
+  commit,
 })
 
-function startOrCreate() {
-  const next = outstanding.value[0]
-  if (next) return void navigateTo(`${recordPath.value}/${next}`)
-  void saveOpenSection()
-}
-
-const openSectionIncomplete = computed(() => outstanding.value.includes(openKey.value))
-const saveDisabled = computed(() => saving.value || (isNew.value && openSectionIncomplete.value))
-
-const saveLabel = computed(() => {
-  if (!isNew.value) return undefined
-  return nextOutstanding.value ? `Next: ${SECTION_LABELS[nextOutstanding.value]}` : 'Create question'
-})
-
-async function saveOpenSection() {
-  if (saveDisabled.value) return
-  if (isNew.value && nextOutstanding.value) {
-    await navigateTo(`${recordPath.value}/${nextOutstanding.value}`)
-    return
-  }
+async function commit() {
   // The PATCH sends the whole record, and the form holds the row it was loaded
   // from. With no row — a load that failed — it holds its own blank defaults,
   // and saving would write those over the stored question.
@@ -205,25 +207,23 @@ async function saveOpenSection() {
   errorMessage.value = ''
   try {
     const body = {
-      // A new question is filed under the page the list was showing; an
+      // A site question is filed under the page the list was showing, and an
       // existing one keeps the page it already carries.
-      page_path: isNew.value ? (typeof route.query.page_path === 'string' ? route.query.page_path : null) : record.value?.page_path ?? null,
+      ...(props.locationId
+        ? {}
+        : { page_path: isNew.value ? (typeof route.query.page_path === 'string' ? route.query.page_path : null) : record.value?.page_path ?? null }),
       question: form.question.trim(),
       answer: form.answer.trim() || null,
       status: form.published ? 'published' : 'hidden',
     }
     if (isNew.value) {
-      const created = await dashboardApi(`/api/editor/sites/${siteId}/qa`, { method: 'POST', body, validate: isQaCreated })
-      // `new` is one key for every question ever added here, so a successful
-      // create has to empty it. Left behind, the next Add opens pre-filled with
-      // the question just created and reports nothing outstanding, which is one
-      // click from a duplicate.
+      const created = await dashboardApi(qaEndpoint.value, { method: 'POST', body, validate: isQaCreated })
       Object.assign(form, emptyDraft())
       toast.add({ description: 'Question created', color: 'success' })
       await navigateTo(`${qaPath.value}/${created.id}`)
       return
     }
-    await dashboardApi(`/api/editor/sites/${siteId}/qa/${qaId.value}`, { method: 'PATCH', body, validate: isQaUpdated })
+    await dashboardApi(`${qaEndpoint.value}/${qaId.value}`, { method: 'PATCH', body, validate: isQaUpdated })
     await refresh()
     toast.add({ description: `${SECTION_LABELS[openKey.value]} saved`, color: 'success' })
     await navigateTo(recordPath.value)
@@ -235,12 +235,7 @@ async function saveOpenSection() {
 }
 
 function closeDetail() {
-  const row = record.value
-  if (row) {
-    form.question = row.question
-    form.answer = row.answer ?? ''
-    form.published = row.status === 'published'
-  }
+  if (record.value) loadForm(record.value)
   void navigateTo(recordPath.value)
 }
 

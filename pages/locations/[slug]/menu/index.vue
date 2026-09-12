@@ -1,17 +1,19 @@
 <template>
-  <ProductCollectionPage :products="products" :locations="productLocations" :location-id="locationId" :currency="currency" :presentation="presentation" :vertical="vertical" :title="`${locationTitle} Menu`" :brand-name="brandName" :empty-experience-href="emptyExperienceHref" />
+  <ProductCollectionPage :products="goods" :collections="collections" :locations="productLocations" :location-id="locationId" :currency="currency" :presentation="presentation" :vertical="vertical" :title="`${locationTitle} Menu`" :brand-name="brandName" />
 </template>
 
 <script setup lang="ts">
 import ProductCollectionPage from '~/components/products/ProductCollectionPage.vue'
 import { isCurrencyCode } from '~/shared/currencies'
-import { resolveLocationExperienceHref } from '~/utils/experience-navigation'
-import { requireProductPresentation } from '~/utils/product-presentation'
+import { isExperience, requireProductPresentation } from '~/utils/product-presentation'
 
 definePageMeta({ layout: 'saya' })
 const { isBlawby } = usePublicTemplate()
 if (isBlawby.value) throw createError({ statusCode: 404 })
-const { products, locations, location, config, site, experiencesList } = await usePublicPageData({ lazy: false })
+const { products, collections, locations, location, config, site } = await usePublicPageData({ lazy: false })
+// What the merchant sells over the counter. Anything a guest books a seat on
+// is an Experience and has its own surface, so it is not listed twice.
+const goods = computed(() => products.value.filter(product => !isExperience(product)))
 const currentLocation = location.value
 if (!currentLocation) throw createError({ statusCode: 404 })
 const brandName = site.value?.brand_name
@@ -25,6 +27,5 @@ const currency = rawCurrency
 const locationId = currentLocation.id
 const locationTitle = currentLocation.title
 const productLocations = computed(() => locations.value.map(item => ({ id: item.id, slug: item.slug, title: item.title })))
-const emptyExperienceHref = computed(() => resolveLocationExperienceHref(currentLocation.slug, experiencesList.value))
 useSocialMetadata(() => ({ path: `/locations/${encodeURIComponent(currentLocation.slug)}/menu`, title: `${locationTitle} Menu`, description: `Full menu for ${locationTitle}.`, socialImage: location.value?.social_image ?? null, brand: { siteName: brandName } }))
 </script>

@@ -24,7 +24,7 @@
         hide-detail-heading
       >
         <template #index>
-          <ProductCategoryList />
+          <CollectionList />
         </template>
         <template #detail>
           <NuxtPage />
@@ -34,12 +34,12 @@
   </UDashboardPanel>
 
   <!-- Nothing below me is open, so I am my parent's detail column. -->
-  <ProductCategoryList v-else />
+  <CollectionList v-else />
 </template>
 
 <script setup lang="ts">
 import EditorPaneShell from '~/components/dashboard/EditorPaneShell.vue'
-import ProductCategoryList from '~/components/dashboard/ProductCategoryList.vue'
+import CollectionList from '~/components/dashboard/CollectionList.vue'
 import { requireProductPresentation } from '~/utils/product-presentation'
 
 definePageMeta({ layout: 'dashboard', cmsCapabilityKey: 'location.products' })

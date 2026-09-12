@@ -96,16 +96,26 @@ export function environmentTenantAliasSlug(host: string, env: TenantHostEnv): st
 // first-level tenant aliases instead.
 export function usesTenantHeader(host: string): boolean {
   const hostname = hostnameOf(host).toLowerCase().replace(/\.$/, '')
-  if (hostname === 'localhost' || hostname === '127.0.0.1') return true
+  // A tenant is framed locally as <subdomain>.localhost, which is as
+  // non-production as localhost itself. Missing that served every local page
+  // from the public resource cache, so an edit appeared to change nothing.
+  if (hostname === 'localhost' || hostname.endsWith('.localhost') || hostname === '127.0.0.1') return true
   return WORKERS_DEV_PREVIEW_HOST_PATTERN.test(hostname)
 }
 
-// Returns true for non-production hosts. Call usesTenantHeader() when deciding
-// how tenant identity is transported; deployed aliases are preview contexts but
-// resolve identity from their hostname.
-export function isPreviewContext(host: string): boolean {
+// Returns true for non-production hosts: local development, the preview and
+// staging environments, and their tenant aliases. This is about *which
+// environment* a request is in — not about the preview of an unpublished site,
+// which is server/utils/preview-token.ts and means one owner looking at their
+// own site. Call usesTenantHeader() when deciding how tenant identity is
+// transported; deployed aliases are non-production but resolve identity from
+// their hostname.
+export function isNonProductionHost(host: string): boolean {
   const hostname = hostnameOf(host).toLowerCase().replace(/\.$/, '')
-  if (hostname === 'localhost' || hostname === '127.0.0.1') return true
+  // A tenant is framed locally as <subdomain>.localhost, which is as
+  // non-production as localhost itself. Missing that served every local page
+  // from the public resource cache, so an edit appeared to change nothing.
+  if (hostname === 'localhost' || hostname.endsWith('.localhost') || hostname === '127.0.0.1') return true
   if (hostname === 'preview.krabiclaw.com' || hostname === 'staging.krabiclaw.com') return true
   if (isEnvironmentTenantAliasHost(hostname)) return true
   return WORKERS_DEV_PREVIEW_HOST_PATTERN.test(hostname)

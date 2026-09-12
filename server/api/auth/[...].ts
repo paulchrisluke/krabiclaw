@@ -54,9 +54,14 @@ async function normalizedAuthRequest(event: H3Event): Promise<Request> {
   }
   const url = requestUrl.toString()
   if (request.method !== 'POST') {
-    if (url === request.url) return request as unknown as Request
+    // Better Auth's router registers GET handlers only, so a HEAD reaches it as
+    // an unrouted method and 404s on paths whose GET works — /oauth2/authorize
+    // included. HEAD is defined as GET without a body, so run it as GET here and
+    // drop the body on the way out (see the caller).
+    const method = request.method === 'HEAD' ? 'GET' : request.method
+    if (url === request.url && method === request.method) return request as unknown as Request
     const init: RequestInit & { duplex?: 'half' } = {
-      method: request.method,
+      method,
       headers: request.headers,
       signal: request.signal,
     }
@@ -111,10 +116,21 @@ export default defineHandler(async (event) => {
   const env = cloudflareEnv(event) as CloudflareEnv
   const auth = createAuth(env)
   
+  const isHeadRequest = event.req.method === 'HEAD'
+
   try {
     const request = await normalizedAuthRequest(event)
     const response = await auth.handler(request)
-    
+
+    // HEAD must carry the GET status and headers with no body.
+    if (isHeadRequest) {
+      return new Response(null, {
+        status: response.status,
+        statusText: response.statusText,
+        headers: response.headers,
+      })
+    }
+
     // Check for error responses
     if (response.status >= 400) {
       const responseText = await response.text()

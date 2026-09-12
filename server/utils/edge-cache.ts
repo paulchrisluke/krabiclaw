@@ -1,7 +1,7 @@
 
 import type { H3Event } from 'nitro'
 import type { HTTPEvent } from 'nitro/h3'
-import { isPreviewContext } from '~/server/utils/tenant-hosts'
+import { isNonProductionHost } from '~/server/utils/tenant-hosts'
 
 export function buildHtmlCacheKey(event: H3Event | HTTPEvent): string | null {
 
@@ -15,7 +15,7 @@ export function buildHtmlCacheKey(event: H3Event | HTTPEvent): string | null {
   const hostname = host.split(':')[0] ?? host
   // On hosts where multiple tenants share one hostname (workers.dev, preview.*, staging.*),
   // include x-preview-tenant in the key so their cached HTML doesn't collide.
-  const previewTenant = isPreviewContext(hostname)
+  const previewTenant = isNonProductionHost(hostname)
     ? (cfRequest?.headers.get('x-preview-tenant')
       ?? request.headers.get('x-preview-tenant'))
     : null

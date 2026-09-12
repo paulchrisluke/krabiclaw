@@ -26,6 +26,13 @@ export const ROBOTS_INTENTS: readonly RobotsIntent[] = [
   'noindex,nofollow',
 ] as const
 
+export const ROBOTS_INTENT_LABELS: Record<RobotsIntent, string> = {
+  'index,follow': 'Index, follow',
+  'noindex,follow': 'No index, follow',
+  'index,nofollow': 'Index, no follow',
+  'noindex,nofollow': 'No index, no follow',
+}
+
 /** A row with no stored intent is indexable and followable. */
 export const DEFAULT_ROBOTS_INTENT: RobotsIntent = 'index,follow'
 

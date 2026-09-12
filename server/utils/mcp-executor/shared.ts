@@ -1,11 +1,9 @@
-import { WEEKDAYS, parseRecurringSlots } from '~/shared/reservation-hours'
 import { errorChainForTelemetry } from "~/server/utils/error-telemetry";
 import { HTTPError } from 'nitro';
 import type { H3Event } from 'nitro';
 import { queryFirst } from "~/server/db";
 import { isIP } from "node:net";
 import { getMediaAsset } from "~/server/utils/media-asset-manager";
-import { generateSlots } from "~/server/utils/experiences";
 import type { getMcpTool } from "~/server/utils/mcp-tools";
 import { requireMcpUser, type McpSiteContext, type McpUserContext } from "~/server/utils/mcp-auth";
 import { mcpProtocolError, MCP_ERROR } from "~/server/utils/mcp-protocol";
@@ -128,32 +126,6 @@ export async function requireActiveImageAsset(
     );
   }
   return asset;
-}
-
-export function expandSlotGeneratorArgs(args: Record<string, unknown>): Record<string, unknown> {
-  const { slot_start, slot_end, slot_interval_minutes, slot_weekday, ...rest } = args;
-  if (slot_start === undefined && slot_end === undefined && slot_interval_minutes === undefined) {
-    if (slot_weekday !== undefined) {
-      throw mcpProtocolError(
-        MCP_ERROR.invalidParams,
-        "slot_weekday requires slot_start, slot_end, and slot_interval_minutes to also be provided.",
-      );
-    }
-    return rest;
-  }
-  if (typeof slot_start !== "string" || typeof slot_end !== "string" || typeof slot_interval_minutes !== "number") {
-    throw mcpProtocolError(
-      MCP_ERROR.invalidParams,
-      "slot_start, slot_end, and slot_interval_minutes must all be provided together.",
-    );
-  }
-  const generated = generateSlots(slot_start, slot_end, slot_interval_minutes);
-  const existing = parseRecurringSlots(rest.recurring_slots ?? null) ?? {};
-  if (slot_weekday === undefined) return { ...rest, recurring_slots: Object.fromEntries(WEEKDAYS.map(day => [day, generated])) };
-  const day = WEEKDAYS.find(day => day === slot_weekday);
-  if (!day) throw mcpProtocolError(MCP_ERROR.invalidParams, 'slot_weekday must be a lowercase weekday name.');
-  return { ...rest, recurring_slots: { ...existing, [day]: generated } };
-
 }
 
 export interface GeneratedImagePickerConfig {

@@ -60,7 +60,7 @@
         :saving="saving"
         :save-disabled="!editorReady || !sectionValid"
         :detail-title="SECTION_LABELS[editorKey]"
-        :hide-detail-heading="editorKey === 'links'"
+        :hide-detail-heading="editorKey === 'items'"
         :dismiss-to="linksPath"
         @cancel="cancelEditor"
         @save="save"
@@ -110,7 +110,7 @@
 
           <!-- Links -->
           <DashboardListEditor
-            v-else-if="editorKey === 'links'"
+            v-else-if="editorKey === 'items'"
             v-model:editing="editing"
             title="Links"
             description="Add, hide, and reorder the buttons shown on /links."
@@ -138,8 +138,8 @@
   </UDashboardPanel>
 
   <!--
-    A link is a record of its own, at `links/links/<id>`, with one leaf per
-    field. Adding is the same screen at `links/links/new`, so there is nothing
+    A link is a record of its own, at `links/items/<id>`, with one leaf per
+    field. Adding is the same screen at `links/items/new`, so there is nothing
     a sheet did that a URL does not.
   -->
   <UDashboardPanel v-else id="site-links-item">
@@ -237,16 +237,16 @@ import EditorPaneShell from '~/components/dashboard/EditorPaneShell.vue'
 import EditorNavigationList, { type EditorNavigationGroup } from '~/components/dashboard/EditorNavigationList.vue'
 import DashboardListEditor from '~/components/dashboard/DashboardListEditor.vue'
 import DashboardResourceLocalization from '~/components/dashboard/DashboardResourceLocalization.vue'
+import { ROBOTS_INTENTS, ROBOTS_INTENT_LABELS, type RobotsIntent } from '~/shared/robots-directive'
+import type { LinkItemStatus } from '~/server/utils/site-links'
 
 const dashboardApi = useDashboardApi()
 const route = useRoute()
 
-type ItemStatus = 'active' | 'hidden'
-
 interface LinksPage {
   id: string
   title: string
-  robots: string
+  robots: RobotsIntent
   seo_title: string
   seo_description: string
 }
@@ -256,7 +256,7 @@ interface LinkItem {
   label: string
   destination: string
   sort_order: number
-  status: ItemStatus
+  status: LinkItemStatus
 }
 
 interface ApiLinksPage extends Omit<LinksPage, 'seo_title' | 'seo_description'> {
@@ -264,11 +264,9 @@ interface ApiLinksPage extends Omit<LinksPage, 'seo_title' | 'seo_description'> 
   seo_description: string | null
 }
 
-type ApiLinkItem = LinkItem
-
 const isLinksResponse = (
   value: unknown,
-): value is { page: ApiLinksPage; items: ApiLinkItem[] } =>
+): value is { page: ApiLinksPage; items: LinkItem[] } =>
   isRecord(value)
   && isRecord(value.page)
   && typeof value.page.title === 'string'
@@ -281,6 +279,13 @@ const isLinksResponse = (
     && typeof item.sort_order === 'number'
     && typeof item.status === 'string',
   )
+
+const isLinksWriteResponse = (
+  value: unknown,
+): value is { page: ApiLinksPage; items: LinkItem[]; created_item_ids: string[] } =>
+  isLinksResponse(value)
+  && Array.isArray((value as Record<string, unknown>).created_item_ids)
+  && ((value as Record<string, unknown>).created_item_ids as unknown[]).every(id => typeof id === 'string')
 
 // The frame comes first, and before any `await`. `useEditorFrame` provides and
 // injects, which Vue only binds to this instance while setup is still
@@ -303,7 +308,7 @@ const sitePath = computed(() => `/dashboard/${String(route.params.orgSlug)}/site
 // ── Which leaf is open ──────────────────────────────────
 // One leaf per field: a leaf edits one concern, and the hub is read by scanning
 // what each row currently holds.
-const SECTION_KEYS = ['title', 'robots', 'seo-title', 'seo-description', 'links'] as const
+const SECTION_KEYS = ['title', 'robots', 'seo-title', 'seo-description', 'items'] as const
 type SectionKey = typeof SECTION_KEYS[number]
 
 const SECTION_LABELS: Record<SectionKey, string> = {
@@ -311,7 +316,7 @@ const SECTION_LABELS: Record<SectionKey, string> = {
   'robots': 'Robots',
   'seo-title': 'SEO title',
   'seo-description': 'SEO description',
-  'links': 'Links',
+  'items': 'Links',
 }
 
 const ITEM_SECTION_LABELS = { label: 'Label', destination: 'Destination', status: 'Status' } as const
@@ -324,11 +329,11 @@ const detailKey = computed(() => frame.childSegment.value)
 const editorKey = computed<SectionKey>(() => (detailKey.value ?? 'title') as SectionKey)
 
 // ── The link record below the links leaf ────────────────
-// `links/links/<id>` and `links/links/<id>/<field>` are two more levels of the
+// `links/items/<id>` and `links/items/<id>/<field>` are two more levels of the
 // same chain. This level owns the chrome for both: the leaf above it has
 // yielded, so nothing else is drawing a panel around them.
-const itemsPath = computed(() => `${linksPath.value}/links`)
-const itemId = computed(() => (frame.rest.value[0] === 'links' && frame.rest.value.length > 1 ? String(frame.rest.value[1]) : ''))
+const itemsPath = computed(() => `${linksPath.value}/items`)
+const itemId = computed(() => (frame.rest.value[0] === 'items' && frame.rest.value.length > 1 ? String(frame.rest.value[1]) : ''))
 const itemLeaf = computed(() => (frame.rest.value.length > 2 ? String(frame.rest.value[2]) : null))
 const itemPath = computed(() => `${itemsPath.value}/${itemId.value}`)
 const isNewItem = computed(() => itemId.value === 'new')
@@ -345,7 +350,7 @@ watchEffect(() => {
     if (!isSectionKey(rest[0]!)) throw createError({ statusCode: 404, statusMessage: 'Page not found' })
     return
   }
-  if (rest[0] !== 'links' || rest.length > 3 || (rest.length === 3 && !isItemSectionKey(rest[2]!))) {
+  if (rest[0] !== 'items' || rest.length > 3 || (rest.length === 3 && !isItemSectionKey(rest[2]!))) {
     throw createError({ statusCode: 404, statusMessage: 'Page not found' })
   }
 })
@@ -354,12 +359,7 @@ const ITEM_STATUS_OPTIONS = [
   { label: 'Active', value: 'active' },
   { label: 'Hidden', value: 'hidden' },
 ]
-const ROBOTS_OPTIONS = [
-  { label: 'No index, follow', value: 'noindex,follow' },
-  { label: 'Index, follow', value: 'index,follow' },
-  { label: 'Index, no follow', value: 'index,nofollow' },
-  { label: 'No index, no follow', value: 'noindex,nofollow' },
-]
+const ROBOTS_OPTIONS = ROBOTS_INTENTS.map(value => ({ label: ROBOTS_INTENT_LABELS[value], value }))
 const form = reactive<LinksPage>({
   id: '',
   title: '',
@@ -398,7 +398,7 @@ const editing = ref(false)
 const emptyItemDraft = () => ({
   label: '',
   destination: '',
-  status: 'active' as ItemStatus,
+  status: 'active' as LinkItemStatus,
 })
 /** One draft per record, because the key is re-read on every mount: this
  * component is replaced on each path change, measured by its instance uid
@@ -462,7 +462,7 @@ function move(item: { id: string }, direction: -1 | 1) {
 
 const { data, pending } = await useAsyncData(
   `links-page-editor-${siteId}`,
-  () => dashboardApi<{ page: ApiLinksPage; items: ApiLinkItem[] }>(
+  () => dashboardApi<{ page: ApiLinksPage; items: LinkItem[] }>(
     `/api/editor/sites/${siteId}/links-page`,
     { validate: isLinksResponse },
   ),
@@ -520,7 +520,7 @@ async function saveLinksLocalization(locale: string, submitted: Record<string, u
   linkLocalizationStates.set(key, { locale, translation: response.localization })
 }
 
-function loadForm(value: { page: ApiLinksPage; items: ApiLinkItem[] }) {
+function loadForm(value: { page: ApiLinksPage; items: LinkItem[] }) {
   Object.assign(form, {
     ...value.page,
     seo_title: value.page.seo_title ?? '',
@@ -570,7 +570,7 @@ const publicLinksUrl = computed(() => {
 })
 
 // ── The hub ─────────────────────────────────────────────
-const robotsLabel = computed(() => ROBOTS_OPTIONS.find(option => option.value === form.robots)?.label ?? form.robots)
+const robotsLabel = computed(() => ROBOTS_INTENT_LABELS[form.robots])
 
 function linksSummary(): string {
   if (!items.value.length) return 'No links yet'
@@ -586,7 +586,7 @@ const navigationGroups = computed<EditorNavigationGroup[]>(() => [
     id: 'page',
     items: [
       { id: 'title', label: 'Title', summary: form.title || 'Not named yet', placeholder: !form.title, to: `${linksPath.value}/title` },
-      { id: 'links', label: 'Links', summary: linksSummary(), placeholder: !items.value.length, to: `${linksPath.value}/links` },
+      { id: 'items', label: 'Links', summary: linksSummary(), placeholder: !items.value.length, to: `${linksPath.value}/items` },
     ],
   },
   {
@@ -617,36 +617,24 @@ const itemNavigationGroups = computed<EditorNavigationGroup[]>(() => [
   },
 ])
 
-/**
- * Creating walks the fields the endpoint will not accept empty, naming where it
- * is going, and saves once nothing is outstanding. Status has a default, so the
- * walk never stops on it.
- */
-const REQUIRED_ORDER: ItemSectionKey[] = ['label', 'destination']
-const outstanding = computed(() => REQUIRED_ORDER.filter(key => !itemForm[key].trim()))
-const nextOutstanding = computed(() => outstanding.value.find(key => key !== openItemKey.value) ?? null)
-
-const createItemActionLabel = computed(() => {
-  const next = outstanding.value[0]
-  return next ? `Start with ${ITEM_SECTION_LABELS[next]}` : 'Create link'
-})
-
-function startOrCreateItem() {
-  const next = outstanding.value[0]
-  if (next) return void navigateTo(`${itemPath.value}/${next}`)
-  void saveItemSection()
-}
-
-const openItemSectionIncomplete = computed(() => outstanding.value.includes(openItemKey.value))
-// A new record's Save advances the walk, so only the open field has to be
-// filled in. An existing one is being saved outright: a required field cleared
-// on another leaf would otherwise go back empty and read as "Untitled link".
-const itemSaveDisabled = computed(() => saving.value || !editorReady.value
-  || (isNewItem.value ? openItemSectionIncomplete.value : outstanding.value.length > 0))
-
-const itemSaveLabel = computed(() => {
-  if (!isNewItem.value) return undefined
-  return nextOutstanding.value ? `Next: ${ITEM_SECTION_LABELS[nextOutstanding.value]}` : 'Create link'
+const {
+  createActionLabel: createItemActionLabel,
+  saveLabel: itemSaveLabel,
+  saveDisabled: itemSaveDisabled,
+  save: saveItemSection,
+  startOrCreate: startOrCreateItem,
+} = useCreateWalk({
+  recordPath: itemPath,
+  isNew: isNewItem,
+  openKey: openItemKey,
+  labels: ITEM_SECTION_LABELS,
+  order: ['label', 'destination'],
+  missing: key => !itemForm[key].trim(),
+  noun: 'link',
+  saving: computed(() => saving.value || !editorReady.value),
+  // A required field cleared on another leaf would otherwise go back empty.
+  existingBlocked: outstanding => outstanding.length > 0,
+  commit: commitItem,
 })
 
 // ── Save / cancel ───────────────────────────────────────
@@ -665,8 +653,8 @@ async function copyPublicUrl() {
  * Save sends the page beside it. The response is the document as stored, which
  * is where a newly created link picks up its id.
  */
-async function persist(nextItems: LinkItem[]) {
-  const response = await dashboardApi<{ page: ApiLinksPage; items: ApiLinkItem[] }>(`/api/editor/sites/${siteId}/links-page`, {
+async function persist(nextItems: Array<Omit<LinkItem, 'id'> & { id?: string }>) {
+  const response = await dashboardApi(`/api/editor/sites/${siteId}/links-page`, {
     method: 'PATCH',
     body: {
       page: {
@@ -676,16 +664,16 @@ async function persist(nextItems: LinkItem[]) {
         seo_description: form.seo_description,
       },
       items: nextItems.map((item, index) => ({
-        id: item.id,
+        ...(item.id ? { id: item.id } : {}),
         label: item.label,
         destination: item.destination,
         sort_order: index,
         status: item.status,
       })),
     },
-    validate: isLinksResponse,
+    validate: isLinksWriteResponse,
   })
-  data.value = response
+  data.value = { page: response.page, items: response.items }
   return response
 }
 
@@ -706,19 +694,12 @@ async function save() {
   }
 }
 
-async function saveItemSection() {
-  if (itemSaveDisabled.value) return
-  if (isNewItem.value && nextOutstanding.value) {
-    await navigateTo(`${itemPath.value}/${nextOutstanding.value}`)
-    return
-  }
+async function commitItem() {
   saving.value = true
   errorMessage.value = ''
   try {
-    const known = new Set(items.value.map(item => item.id))
-    const nextItems: LinkItem[] = isNewItem.value
+    const nextItems = isNewItem.value
       ? [...items.value, {
-          id: `tmp_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
           label: itemForm.label,
           destination: itemForm.destination,
           sort_order: items.value.length,
@@ -729,10 +710,11 @@ async function saveItemSection() {
         : item)
     const response = await persist(nextItems)
     if (isNewItem.value) {
-      const created = response.items.find(item => !known.has(item.id))
+      const [createdId] = response.created_item_ids
+      if (!createdId) throw new Error('The link was not created.')
       clearItemDraft()
       toast.add({ description: 'Link created', color: 'success' })
-      await navigateTo(created ? `${itemsPath.value}/${created.id}` : itemsPath.value)
+      await navigateTo(`${itemsPath.value}/${createdId}`)
       return
     }
     toast.add({ description: `${ITEM_SECTION_LABELS[openItemKey.value]} saved`, color: 'success' })

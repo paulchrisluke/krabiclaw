@@ -5,14 +5,6 @@
         <h3 class="font-semibold text-highlighted">Availability</h3>
         <p class="text-sm text-muted">Drag across dates to update availability, capacity, or a private note.</p>
       </div>
-      <UButton
-        v-if="ownerType && ownerId"
-        color="neutral"
-        variant="soft"
-        icon="i-lucide-layout-grid"
-        label="All availability"
-        @click="showAllOwners"
-      />
     </div>
 
     <USkeleton v-if="monthBlocks.length === 0" class="h-80 w-full" />
@@ -41,7 +33,7 @@
           <UButton color="neutral" variant="soft" label="Retry month" @click="retryMonth(month.key)" />
         </div>
 
-        <UCard v-else-if="month.calendar.owners.length === 0" :ui="{ body: 'py-12 text-center' }">
+        <UCard v-else-if="month.calendar.days.length === 0" :ui="{ body: 'py-12 text-center' }">
           <p class="font-medium text-highlighted">No availability schedules at this location</p>
           <p class="mt-1 text-sm text-muted">Add an experience or configure reservation hours first.</p>
         </UCard>
@@ -57,45 +49,25 @@
                 <p class="text-sm font-semibold text-highlighted">{{ dayNumber(date) }}</p>
               </div>
             </div>
-            <div
-              v-for="owner in month.calendar.owners"
-              :key="ownerKey(owner)"
-              class="grid border-b border-default last:border-b-0"
-              :style="gridStyle(month.calendar)"
-            >
+            <div class="grid border-b border-default last:border-b-0" :style="gridStyle(month.calendar)">
               <div class="sticky left-0 z-10 border-r border-default bg-default px-3 py-3">
-                <button
-                  v-if="!ownerType || !ownerId"
-                  type="button"
-                  class="block max-w-48 truncate text-left text-sm font-medium text-highlighted hover:text-primary"
-                  :title="owner.label"
-                  :aria-label="`Open ${owner.label} availability`"
-                  @click="showOwner(owner)"
-                >
-                  {{ owner.label }}
-                </button>
-                <p v-else class="max-w-48 truncate text-sm font-medium text-highlighted" :title="owner.label">{{ owner.label }}</p>
-                <p class="mt-0.5 text-xs text-muted">{{ owner.owner.kind === 'location' ? 'Reservations' : 'Experience' }}</p>
+                <p class="max-w-48 truncate text-sm font-medium text-highlighted">Reservations</p>
               </div>
               <button
-                v-for="day in owner.days"
+                v-for="day in month.calendar.days"
                 :key="day.date"
                 type="button"
                 class="min-h-20 select-none border-r border-default px-2 py-2 text-left last:border-r-0"
-                :class="cellClass(owner, day)"
-                :aria-label="`${owner.label}, ${day.date}, ${dayState(day)}`"
-                @pointerdown.prevent="beginSelection(owner, day.date)"
-                @pointerenter="extendSelection(owner, day.date)"
-                @keydown.enter.prevent="beginSelection(owner, day.date); finishSelection()"
-                @keydown.space.prevent="beginSelection(owner, day.date); finishSelection()"
+                :class="cellClass(day)"
+                :aria-label="`${day.date}, ${dayState(day)}`"
+                @pointerdown.prevent="beginSelection(day.date)"
+                @pointerenter="extendSelection(day.date)"
+                @keydown.enter.prevent="beginSelection(day.date); finishSelection()"
+                @keydown.space.prevent="beginSelection(day.date); finishSelection()"
               >
                 <p class="text-xs font-medium">{{ dayState(day) }}</p>
-                <p
-                  v-for="booking in day.bookings"
-                  :key="booking.id"
-                  class="mt-1 rounded bg-violet-500/15 px-1 py-0.5 text-[11px] text-violet-700 dark:text-violet-300"
-                >
-                  {{ booking.time_slot }} · {{ booking.label }} · {{ booking.party_size }} {{ booking.party_size === 1 ? 'guest' : 'guests' }}
+                <p v-if="day.slots.some(slot => slot.claimed > 0)" class="mt-1 rounded bg-violet-500/15 px-1 py-0.5 text-[11px] text-violet-700 dark:text-violet-300">
+                  {{ day.slots.reduce((total, slot) => total + slot.claimed, 0) }} booked
                 </p>
                 <p v-if="dayNote(day)" class="mt-1 max-w-24 truncate text-[10px] text-muted" :title="dayNote(day) ?? undefined">
                   {{ dayNote(day) }}
@@ -125,7 +97,7 @@
       <template #body>
         <div class="space-y-5 p-6">
           <div>
-            <p class="font-medium text-highlighted">{{ selectedOwner?.label }}</p>
+            <p class="font-medium text-highlighted">Reservations</p>
             <p class="text-sm text-muted">{{ selectionLabel }}</p>
           </div>
           <UAlert
@@ -162,12 +134,37 @@
 
 <script setup lang="ts">
 import { formatCalendarDate } from '~/utils/timezone'
-import type {
-  AvailabilityCalendar,
-  AvailabilityCalendarDay,
-  AvailabilityCalendarOwner,
-  AvailabilityChange,
-} from '~/server/utils/availability'
+/**
+ * The reservation calendar, for one location.
+ *
+ * There is no owner switch any more. A product's sessions are real rows with
+ * their own screen; folding them into this calendar made a session look like a
+ * slot that could be "reopened", which is not a thing a session does.
+ */
+interface CalendarSlot {
+  time_slot: string
+  starts_at: string
+  capacity: number | null
+  claimed: number
+  remaining: number | null
+  is_closed: boolean
+  is_full: boolean
+  note: string | null
+}
+interface AvailabilityCalendarDay {
+  date: string
+  timezone: string
+  slots: CalendarSlot[]
+}
+interface AvailabilityCalendar {
+  from: string
+  to: string
+  days: AvailabilityCalendarDay[]
+}
+type AvailabilityChange = {
+  override_date: string
+  time_slot: string | null
+} & ({ directive: 'inherit' } | { directive: 'set'; status: 'open' | 'closed'; capacity?: number | null; note?: string | null })
 import { getErrorMessage } from '~/utils/errors'
 
 const props = defineProps<{
@@ -175,8 +172,6 @@ const props = defineProps<{
   locationId: string
   from: string
   to: string
-  ownerType?: 'location' | 'experience'
-  ownerId?: string
 }>()
 
 type MonthBlock =
@@ -185,8 +180,6 @@ type MonthBlock =
   | { kind: 'error'; key: string; cause: unknown }
 
 const dashboardApi = useDashboardApi()
-const route = useRoute()
-const router = useRouter()
 const toast = useToast()
 const monthBlocks = ref<MonthBlock[]>([])
 const requestGeneration = ref(0)
@@ -198,8 +191,6 @@ const scopeKey = computed(() => [
   props.locationId,
   props.from,
   props.to,
-  props.ownerType ?? 'all',
-  props.ownerId ?? 'all',
 ].join(':'))
 const startMonthKey = computed(() => props.from.slice(0, 7))
 const displayedDateKeys = computed(() => [...new Set(monthBlocks.value.flatMap(month =>
@@ -209,53 +200,29 @@ const nextMonthKey = computed(() => nextMonthRequest.value?.key
   ?? shiftMonth(monthBlocks.value.at(-1)?.key ?? startMonthKey.value, 1))
 const loadingNextMonth = computed(() => nextMonthRequest.value !== null)
 
-function isNullableNumber(value: unknown): value is number | null {
-  return value === null || typeof value === 'number'
-}
-
 function isNullableString(value: unknown): value is string | null {
   return value === null || typeof value === 'string'
 }
 
-function isAvailabilityOwner(value: unknown): value is AvailabilityCalendarOwner {
-  if (!isRecord(value) || !isRecord(value.owner)) return false
-  const ownerIsValid = value.owner.kind === 'location'
-    ? typeof value.owner.locationId === 'string'
-    : value.owner.kind === 'experience' && typeof value.owner.experienceId === 'string'
-  if (!ownerIsValid || typeof value.label !== 'string' || typeof value.location_id !== 'string'
-    || typeof value.timezone !== 'string' || !Array.isArray(value.days)) return false
+function isNullableNumber(value: unknown): value is number | null {
+  return value === null || typeof value === 'number'
+}
+
+function isCalendarResponse(value: unknown): value is AvailabilityCalendar {
+  if (!isRecord(value) || typeof value.from !== 'string' || typeof value.to !== 'string' || !Array.isArray(value.days)) return false
   return value.days.every(day => isRecord(day)
     && typeof day.date === 'string'
+    && typeof day.timezone === 'string'
     && Array.isArray(day.slots)
     && day.slots.every(slot => isRecord(slot)
       && typeof slot.time_slot === 'string'
+      && typeof slot.starts_at === 'string'
       && isNullableNumber(slot.capacity)
-      && typeof slot.booked === 'number'
+      && typeof slot.claimed === 'number'
       && isNullableNumber(slot.remaining)
       && typeof slot.is_closed === 'boolean'
       && typeof slot.is_full === 'boolean'
-      && (slot.override === null || (isRecord(slot.override)
-        && typeof slot.override.id === 'string'
-        && (slot.override.status === 'open' || slot.override.status === 'closed')
-        && isNullableNumber(slot.override.capacity_override)
-        && isNullableString(slot.override.note)
-        && typeof slot.override.updated_at === 'string')))
-    && Array.isArray(day.bookings)
-    && day.bookings.every(booking => isRecord(booking)
-      && typeof booking.id === 'string'
-      && typeof booking.time_slot === 'string'
-      && typeof booking.party_size === 'number'
-      && typeof booking.label === 'string'
-      && typeof booking.status === 'string'))
-}
-
-function isCalendarResponse(value: unknown): value is { calendar: AvailabilityCalendar } {
-  return isRecord(value)
-    && isRecord(value.calendar)
-    && typeof value.calendar.from === 'string'
-    && typeof value.calendar.to === 'string'
-    && Array.isArray(value.calendar.owners)
-    && value.calendar.owners.every(isAvailabilityOwner)
+      && isNullableString(slot.note)))
 }
 
 function monthBounds(key: string): { from: string; to: string } {
@@ -283,21 +250,12 @@ async function loadMonth(key: string, generation = requestGeneration.value): Pro
   replaceMonth({ kind: 'loading', key })
   const range = monthBounds(key)
   try {
-    const response = await dashboardApi<{ calendar: AvailabilityCalendar }>(
-      `/api/editor/sites/${props.siteId}/availability`,
-      {
-        query: {
-          location_id: props.locationId,
-          from: range.from,
-          to: range.to,
-          owner_type: props.ownerType,
-          owner_id: props.ownerId,
-        },
-        validate: isCalendarResponse,
-      },
+    const response = await dashboardApi<AvailabilityCalendar>(
+      `/api/editor/sites/${props.siteId}/locations/${props.locationId}/reservation-availability`,
+      { query: { from: range.from, to: range.to }, validate: isCalendarResponse },
     )
     if (generation !== requestGeneration.value) return
-    replaceMonth({ kind: 'ready', key, calendar: response.calendar })
+    replaceMonth({ kind: 'ready', key, calendar: response })
   } catch (cause) {
     if (generation !== requestGeneration.value) return
     replaceMonth({ kind: 'error', key, cause })
@@ -310,7 +268,6 @@ async function resetMonths(): Promise<void> {
   monthBlocks.value = []
   nextMonthRequest.value = null
   dragging.value = false
-  selection.ownerKey = ''
   selection.anchor = ''
   selection.focus = ''
   panelOpen.value = false
@@ -332,7 +289,7 @@ async function loadNextMonth(): Promise<void> {
 }
 
 function dateKeys(calendar: AvailabilityCalendar): string[] {
-  return calendar.owners[0]?.days.map(day => day.date) ?? []
+  return calendar.days.map(day => day.date)
 }
 
 function gridStyle(calendar: AvailabilityCalendar): { gridTemplateColumns: string } {
@@ -344,7 +301,7 @@ function monthLabel(key: string): string {
 }
 
 const dragging = ref(false)
-const selection = reactive({ ownerKey: '', anchor: '', focus: '' })
+const selection = reactive({ anchor: '', focus: '' })
 const panelOpen = ref(false)
 const saving = ref(false)
 const saveError = ref<string | null>(null)
@@ -361,20 +318,6 @@ const directiveOptions = [
   { label: 'Use recurring schedule', value: 'inherit' },
 ]
 
-function ownerKey(owner: AvailabilityCalendarOwner): string {
-  return owner.owner.kind === 'location'
-    ? `location:${owner.owner.locationId}`
-    : `experience:${owner.owner.experienceId}`
-}
-
-const selectedOwner = computed(() => {
-  for (const month of monthBlocks.value) {
-    if (month.kind !== 'ready') continue
-    const owner = month.calendar.owners.find(item => ownerKey(item) === selection.ownerKey)
-    if (owner) return owner
-  }
-  return null
-})
 const selectedDates = computed(() => {
   if (!selection.anchor || !selection.focus) return []
   const start = selection.anchor < selection.focus ? selection.anchor : selection.focus
@@ -383,8 +326,7 @@ const selectedDates = computed(() => {
 })
 const selectedDays = computed(() => monthBlocks.value.flatMap(month => {
   if (month.kind !== 'ready') return []
-  const owner = month.calendar.owners.find(item => ownerKey(item) === selection.ownerKey)
-  return owner?.days.filter(day => selectedDates.value.includes(day.date)) ?? []
+  return month.calendar.days.filter(day => selectedDates.value.includes(day.date))
 }))
 const selectedSlots = computed(() => selectedDays.value.flatMap(day => day.slots))
 const selectionLabel = computed(() => {
@@ -407,16 +349,15 @@ const fullSummary = computed(() => {
   return full ? `${full} ${full === 1 ? 'slot is' : 'slots are'} full from bookings.` : 'No selected slots are full from bookings.'
 })
 
-function beginSelection(owner: AvailabilityCalendarOwner, date: string): void {
+function beginSelection(date: string): void {
   dragging.value = true
-  selection.ownerKey = ownerKey(owner)
   selection.anchor = date
   selection.focus = date
   saveError.value = null
 }
 
-function extendSelection(owner: AvailabilityCalendarOwner, date: string): void {
-  if (dragging.value && ownerKey(owner) === selection.ownerKey) selection.focus = date
+function extendSelection(date: string): void {
+  if (dragging.value) selection.focus = date
 }
 
 function finishSelection(): void {
@@ -425,10 +366,10 @@ function finishSelection(): void {
   edit.timeSlots = ''
   const first = selectedSlots.value[0]
   edit.directive = first?.is_closed ? 'closed' : 'open'
-  edit.capacity = selectedSlots.value.every(slot => slot.override?.capacity_override === first?.override?.capacity_override)
-    ? first?.override?.capacity_override ?? null : null
-  edit.note = selectedSlots.value.every(slot => slot.override?.note === first?.override?.note)
-    ? first?.override?.note ?? '' : ''
+  // A mixed selection offers no shared value to prefill, so it prefills
+  // nothing rather than the first cell's, which would silently apply to all.
+  edit.capacity = selectedSlots.value.every(slot => slot.capacity === first?.capacity) ? first?.capacity ?? null : null
+  edit.note = selectedSlots.value.every(slot => slot.note === first?.note) ? first?.note ?? '' : ''
   panelOpen.value = true
 }
 
@@ -443,7 +384,7 @@ watch(scopeKey, () => {
 })
 
 function dayState(day: AvailabilityCalendarDay): string {
-  if (day.slots.length === 0) return day.bookings.length ? 'Booked' : 'No slots'
+  if (day.slots.length === 0) return 'No slots'
   const blocked = day.slots.filter(slot => slot.is_closed).length
   if (blocked === day.slots.length) return 'Blocked'
   if (blocked > 0) return 'Mixed'
@@ -452,13 +393,13 @@ function dayState(day: AvailabilityCalendarDay): string {
 }
 
 function dayNote(day: AvailabilityCalendarDay): string | null {
-  return day.slots.find(slot => slot.override?.note)?.override?.note ?? null
+  return day.slots.find(slot => slot.note)?.note ?? null
 }
 
-function cellClass(owner: AvailabilityCalendarOwner, day: AvailabilityCalendarDay): string[] {
+function cellClass(day: AvailabilityCalendarDay): string[] {
   const state = dayState(day)
   return [
-    selectedDates.value.includes(day.date) && ownerKey(owner) === selection.ownerKey ? 'ring-2 ring-inset ring-primary' : '',
+    selectedDates.value.includes(day.date) ? 'ring-2 ring-inset ring-primary' : '',
     state === 'Blocked' ? 'bg-red-500/10 text-red-700 dark:text-red-300' : '',
     state === 'Full' ? 'bg-amber-500/10 text-amber-700 dark:text-amber-300' : '',
     state === 'Mixed' ? 'bg-orange-500/10 text-orange-700 dark:text-orange-300' : '',
@@ -474,25 +415,13 @@ function dayNumber(date: string): string {
   return String(Number(date.slice(-2)))
 }
 
-async function showAllOwners(): Promise<void> {
-  await router.replace({
-    query: { ...route.query, ownerType: undefined, ownerId: undefined },
-  })
-}
-
-async function showOwner(owner: AvailabilityCalendarOwner): Promise<void> {
-  const ownerType = owner.owner.kind
-  const ownerId = owner.owner.kind === 'location' ? owner.owner.locationId : owner.owner.experienceId
-  await router.replace({ query: { ...route.query, ownerType, ownerId } })
-}
-
 function requestedTimes(day: AvailabilityCalendarDay): string[] {
   const explicit = edit.timeSlots.split(',').map(value => value.trim()).filter(Boolean)
   return [...new Set(explicit.length ? explicit : day.slots.map(slot => slot.time_slot))]
 }
 
 async function saveSelection(): Promise<void> {
-  if (!selectedOwner.value || selectedDays.value.length === 0) return
+  if (selectedDays.value.length === 0) return
   const changes: AvailabilityChange[] = selectedDays.value.flatMap(day => requestedTimes(day).map((time_slot) => {
     const base = { override_date: day.date, time_slot }
     return edit.directive === 'inherit'
@@ -512,10 +441,10 @@ async function saveSelection(): Promise<void> {
   saving.value = true
   saveError.value = null
   try {
-    await dashboardApi(`/api/editor/sites/${props.siteId}/availability`, {
+    await dashboardApi(`/api/editor/sites/${props.siteId}/locations/${props.locationId}/reservation-availability`, {
       method: 'PUT',
-      body: { owner: selectedOwner.value.owner, changes },
-      validate: (value): value is { overrides: unknown[] } => isRecord(value) && Array.isArray(value.overrides),
+      body: { changes },
+      validate: (value): value is { success: true } => isRecord(value) && value.success === true,
     })
     const changedMonths = [...new Set(changes.map(change => change.override_date.slice(0, 7)))]
     await Promise.all(changedMonths.map(key => loadMonth(key)))

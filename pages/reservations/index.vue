@@ -160,8 +160,9 @@ import BookingRecap from '@/components/booking/BookingRecap.vue'
 import BookingTimeStep, { type RawDateAvailability, type TimeSlotSelection } from '@/components/booking/BookingTimeStep.vue'
 import { useBreadcrumbSchema } from '~/composables/useSchemaOrg'
 import { getTodayHoursLabel, isOpenNow } from '~/shared/reservation-hours'
-import { formatTime } from '~/utils/timezone'
+import { formatTime, localDateTimeToInstant } from '~/utils/timezone'
 import { setBookingConfirmation } from '~/composables/useBookingHandoff'
+import { requireProductPresentation } from '~/utils/product-presentation'
 
 function formatTitleItalics(text: string | null | undefined): string {
   if (!text) return ''
@@ -184,14 +185,14 @@ useHeroLcpPreload(computed(() => {
 
 const isExperienceSite = computed(() => (site as { vertical?: string | null } | null)?.vertical === 'experience')
 
-// Pure experience-vertical sites book per-experience on /experiences/[slug].
-// The /reservations page has no meaning for them. Redirect as soon as the
-// site vertical is known — do NOT gate on hasExperiences, because a freshly
-// seeded site with vertical='experience' and no experiences yet should still
-// not show this page.
+// Experience-vertical sites book each Product on its own page. The
+// /reservations page has no meaning for them. Redirect as soon as the site
+// vertical is known — do NOT gate on having products, because a freshly seeded
+// site with vertical='experience' and no products yet should still not show
+// this page.
 watch(isExperienceSite, (isExp) => {
   if (isExp) {
-    navigateTo({ path: '/experiences', query: route.query }, { replace: true, redirectCode: 302 })
+    navigateTo({ path: requireProductPresentation(String((site as { vertical?: string | null } | null)?.vertical)).collectionPath, query: route.query }, { replace: true, redirectCode: 302 })
   }
 }, { immediate: true })
 
@@ -214,6 +215,21 @@ const selectedLocation = computed(() =>
 )
 
 
+
+/**
+ * The zone the chosen slot is stated in.
+ *
+ * A reservation is a wall-clock time at a place, so the place's zone is the
+ * only one that can turn it into an instant. A location without one cannot
+ * take reservations, and saying so loudly beats booking the wrong hour.
+ */
+const reservationTimezone = computed(() => {
+  const timezone = selectedLocation.value?.timezone
+  if (typeof timezone !== 'string' || !timezone) {
+    throw createError({ statusCode: 500, statusMessage: 'This location has no timezone set, so a reservation time cannot be read.' })
+  }
+  return timezone
+})
 
 function bookingLocationAddress(location: ApiRecord): unknown {
   if (locale.value === 'en') return location.address
@@ -377,6 +393,12 @@ async function handleReservation() {
   submitting.value = true
   submitError.value = null
   try {
+    // The instant is resolved BEFORE the request. Reading the location's zone
+    // and converting the wall-clock slot both throw on a misconfigured
+    // location, and doing it after the POST turned a reservation that exists
+    // into "Failed to submit" — which the guest answers by booking a second one.
+    const startsAt = localDateTimeToInstant(reservationForm.value.date, reservationForm.value.time, reservationTimezone.value).toISOString()
+    const timezone = reservationTimezone.value
     const res = await $fetch<{ id: string; cancellationToken: string; policy_summary?: ApiRecord | null }>(`/api/public/sites/${siteId}/reservations`, {
       method: 'POST',
       body: reservationForm.value,
@@ -386,8 +408,10 @@ async function handleReservation() {
       siteId,
       siteName: brandName.value,
       guestName: reservationForm.value.name,
-      date: reservationForm.value.date,
-      time: reservationForm.value.time,
+      // The guest picked a wall-clock slot at this location; the instant it
+      // means was resolved once, above, in that location's zone.
+      startsAt,
+      timezone,
       guests: reservationForm.value.guests,
       requests: reservationForm.value.requests || null,
       cancelUrl: res?.id && res?.cancellationToken ? `/reservations/cancel?id=${res.id}#${res.cancellationToken}` : null,

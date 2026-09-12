@@ -1,5 +1,6 @@
-import { apiErrorResponse, jsonResponse } from '~/server/utils/api-response'
+import { apiErrorResponse, cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { loadPublicBlawbyDocument } from '~/server/utils/public-blawby-document'
+import { previewSecretOf, resolvePreviewAuthorization } from '~/server/utils/preview-token'
 import { finalizeRequestMetrics } from '~/server/utils/request-metrics'
 import { BLAWBY_ROUTE_RECIPES, type BlawbyRouteRecipe } from '~/types/blawby'
 
@@ -11,16 +12,16 @@ export default defineHandler(async (event) => {
   const recipe = typeof query.recipe === 'string' ? query.recipe as BlawbyRouteRecipe : null
   const slug = typeof query.slug === 'string' ? query.slug : null
   const locale = query.locale === undefined ? 'en' : query.locale
-  if (query.token !== undefined && typeof query.token !== 'string') return apiErrorResponse(event, 400, 'INVALID_PREVIEW_TOKEN', 'Invalid preview token')
   if (!siteId || !recipe || !RECIPES.has(recipe) || typeof locale !== 'string') {
     return apiErrorResponse(event, 400, 'BLAWBY_DOCUMENT_REQUIRED', 'Valid site ID and Blawby route recipe required')
   }
-  if ((recipe === 'offering' || recipe === 'article') && !slug) {
+  if (recipe === 'article' && !slug) {
     return apiErrorResponse(event, 400, 'BLAWBY_DOCUMENT_SLUG_REQUIRED', 'Route slug required')
   }
 
   try {
-    const document = await loadPublicBlawbyDocument(event, siteId, recipe, { slug, locale, token: query.token })
+    const previewAuthorized = await resolvePreviewAuthorization(event, siteId, previewSecretOf(cloudflareEnv(event)))
+    const document = await loadPublicBlawbyDocument(event, siteId, recipe, { slug, locale, previewAuthorized })
     return jsonResponse(finalizeRequestMetrics(event, 'public-blawby-document', document))
   } catch (error) {
     const typedError = error as {

@@ -251,13 +251,12 @@ import { setContactConfirmation } from '~/composables/useContactHandoff'
 
 definePageMeta({ layout: false })
 
-const { isPlatform, siteId, draftId, site } = useTenantSite()
+const { isPlatform, siteId, previewAuthorized, site } = useTenantSite()
 const { isBlawby } = usePublicTemplate()
-if (isPlatform || (!siteId && !draftId)) throw createError({ statusCode: 404 })
+if (isPlatform || !siteId) throw createError({ statusCode: 404 })
 
 const { locale, localePath, t } = useI18n()
 const vertCopy = computed(() => getVerticalCopy(site?.vertical, locale.value))
-const route = useRoute()
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 // Plain-Tailwind form styling — replaces UInput/UTextarea's default look
@@ -266,14 +265,16 @@ import { FORM_INPUT_CLASS } from '~/utils/form-constants'
 const inputClass = FORM_INPUT_CLASS
 
 const businessName = computed(() => site?.brand_name?.trim() ?? '')
-const isDraftPreview = computed(() => Boolean(draftId && !siteId))
+// A preview is the real site, so the form is real too — but an owner looking
+// at an unlaunched site should not be able to file a guest thread against it.
+const isDraftPreview = computed(() => previewAuthorized)
 
 // ── Bootstrap: locations + config in one call ─────────────
 const { locations, config: siteConfig, tenantPage } = await usePublicPageData()
 const contactHero = computed(() => tenantPage.value?.blocks.find(block => block.type === 'hero') ?? null)
 const contactHeroEyebrow = computed(() => String(contactHero.value?.data.eyebrow || ''))
-const contactHeroTitle = computed(() => String(contactHero.value?.data.title || tenantPage.value?.title || ''))
-const contactHeroSummary = computed(() => String(contactHero.value?.data.subtitle || contactHero.value?.data.description || tenantPage.value?.summary || ''))
+const contactHeroTitle = computed(() => String(contactHero.value?.data.title ?? ''))
+const contactHeroSummary = computed(() => String(contactHero.value?.data.subtitle ?? ''))
 const contactAdditionalPage = computed(() => tenantPage.value
   ? { ...tenantPage.value, blocks: tenantPage.value.blocks.filter(block => block.type !== 'hero') }
   : null)
@@ -336,7 +337,6 @@ const subjectOptions = computed(() => [
   { key: 'careers', label: t('saya.contact_page.careers') }
 ])
 
-const inquiryExperienceId = typeof route.query.experienceId === 'string' ? route.query.experienceId : null
 const tenantForm = ref<TenantContactForm>({
   name: '',
   email: '',
@@ -373,7 +373,7 @@ const handleTenantContact = async () => {
   try {
     await publicApiMutation<{ success: true }>(`/api/public/sites/${siteId}/contact`, {
       method: 'POST',
-      body: { ...tenantForm.value, experienceId: inquiryExperienceId },
+      body: { ...tenantForm.value },
       validate: (value): value is { success: true } => isRecord(value) && value.success === true,
     })
   } catch {

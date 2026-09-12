@@ -1,6 +1,6 @@
 import { queryFirst } from '~/server/db'
 import { apiErrorResponse, cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
-import { verifyPreviewToken } from '~/server/utils/preview-token'
+import { previewSecretOf, resolvePreviewAuthorization } from '~/server/utils/preview-token'
 import { getPublicTenantPageForPath, listCanonicalTenantPages } from '~/server/utils/public-tenant-pages'
 
 export default defineHandler(async (event) => {
@@ -9,21 +9,17 @@ export default defineHandler(async (event) => {
   const env = cloudflareEnv(event)
   const db = env.db
   if (!db) return apiErrorResponse(event, 503, 'DATABASE_UNAVAILABLE', 'Database unavailable')
+  // A site that has not finished onboarding is served only to a holder of its
+  // preview token, exactly as tenant resolution serves the pages themselves.
+  const preview = await resolvePreviewAuthorization(event, siteId, previewSecretOf(env))
   const site = await queryFirst<{ id: string }>(db, `
-    SELECT id FROM sites WHERE id = ? AND status = 'active' AND onboarding_status = 'active' LIMIT 1
+    SELECT id FROM sites WHERE id = ? AND status = 'active'${preview ? '' : " AND onboarding_status = 'active'"} LIMIT 1
   `, [siteId])
   if (!site) return apiErrorResponse(event, 404, 'SITE_NOT_FOUND', 'Site not found')
 
   const query = getQuery(event)
   const path = typeof query.path === 'string' ? query.path : null
   const locale = typeof query.locale === 'string' ? query.locale : null
-  const preview = query.preview === 'true'
-  if (preview) {
-    const token = typeof query.token === 'string' ? query.token : null
-    if (!token || !env.PREVIEW_SECRET || !(await verifyPreviewToken(String(env.PREVIEW_SECRET), siteId, token))) {
-      return apiErrorResponse(event, 401, 'PREVIEW_UNAUTHORIZED', 'Preview authorization is required')
-    }
-  }
 
   try {
     const pages = path

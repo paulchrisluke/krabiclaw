@@ -25,8 +25,11 @@ interface IntakeAcceptResult {
 function parseIntakeAcceptResult(body: unknown): IntakeAcceptResult | undefined {
   if (!body || typeof body !== 'object') return undefined
   const record = body as Record<string, unknown>
-  return typeof record.id === 'string' && typeof record.status === 'string'
-    ? { id: record.id, status: record.status }
+  // R15 reconciliation: U8's real triage response
+  // (updateIntakeTriageStatusResponseSchema) returns {uuid, triage_status},
+  // not {id, status} -- see blawby-ts's practice-client-intakes.validation.ts.
+  return typeof record.uuid === 'string' && typeof record.triage_status === 'string'
+    ? { id: record.uuid, status: record.triage_status }
     : undefined
 }
 

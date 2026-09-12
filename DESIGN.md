@@ -10,7 +10,7 @@ Airbnb's host tools are the reference. The goal is **parity of behaviour**, not
 pixel copying, and where Airbnb has no equivalent this document says so rather
 than forcing an analogy.
 
-**There are no exceptions to this document.** Products, experiences, posts, Q&A,
+**There are no exceptions to this document.** Products, bookings, posts, Q&A,
 photos and every surface added later obey the same rules. A screen that cannot
 be built from the patterns here is a gap in this document to be argued and
 written down — not a one-off. Every previous "this one is different" is what
@@ -22,7 +22,7 @@ Navigation questions are almost always one of these two, and confusing them is
 what produced the CMS's earlier inconsistency.
 
 **Chain** — how deep the content nests. Unbounded, driven by the domain: a hub
-may open another hub. `site > location > products > category > dish` is five
+may open another hub. `site > location > products > collection > dish` is five
 levels and that is fine.
 
 **Presentation** — how one node renders. Exactly two renderings, chosen by
@@ -156,10 +156,18 @@ Adding a record asks only for what names it, or what the contract will not
 accept it without — nothing more. Everything else is a section of the record
 once it exists and has an id to hang media, prices and translations on.
 
-It is a sheet on the list, not a route: `Add` opens `DashboardListItemDialog`,
-the commit creates the record, and the surface then navigates to the record's
-own hub. A dedicated `/new` screen with its own panel and navbar is not a level
-of the chain, and rendering one inside a detail column draws two headers.
+It is a level, not a sheet: `Add` navigates to `new` in the record's own slot,
+which renders the record's hub with only the sections the contract needs. Its
+commit names where it is going — `Start with Title`, then `Next: <section>`
+while any remain, and `Create <record>` on the last one — so the tenant reads
+what is left rather than a banner listing it. The commit creates the record and
+navigates to its real id. `useCreateWalk` is the one implementation of that
+walk; an editor supplies its sections, their order and what blocks each.
+
+A create level is the record's own level, so it draws no second panel or
+navbar of its own. The draft belongs to the record, not to the leaf: moving
+between sections remounts the level, so it lives in `useState` keyed to the
+record, never in a plain `reactive`.
 
 ## Committing
 
@@ -209,14 +217,17 @@ parent. Overloading one control with both is what forced single-item moves.
 Airbnb has Move and no Reorder at all — room order is fixed by room type. Menu
 sections must be orderable, so Reorder is a deliberate addition, not parity.
 
-**Membership is a navigable row, not a field.** A record's parent renders as
-`Category ›` and opens the same Move flow used for bulk selection. The free-text
-box it replaced silently forked a new category on a typo.
+**Membership is a navigable row, not a field.** A Product's collections render
+as rows and open the same Move flow used for bulk selection. The free-text box
+they replaced silently forked a new grouping on a typo. Membership is plural:
+one Product can sit in several collections, so the row states which ones rather
+than implying a single parent.
 
 **A control must not be able to build an invalid state.** If the server rejects
 a combination, the form should make it unrepresentable rather than allow it and
-then refuse to save. Price is one three-way choice — amount, wording, or
-nothing — because those are the only three states the server accepts.
+then refuse to save. A price belongs to a variant, so the editor asks for a
+price per variant and never offers a product-level amount the server has
+nowhere to put.
 
 **The picture leads.** Rows lead with a thumbnail; a leaf leads with the image
 large. When there is no image, show a muted icon in the *same footprint* so a
@@ -234,13 +245,13 @@ like a broken editor, sitting in a frame with a rail, a navbar and a commit bar
 for something that does not exist. `isNotFoundError` in `utils/errors.ts` is the
 one place that tells them apart.
 
-**Empty is a state, not a bug.** A category with no items, or a location with no
-categories, renders its own empty state. Containers that cannot be empty (the
-old model could not express an empty category) are a modelling error.
+**Empty is a state, not a bug.** A collection with no Products, or a location
+with no collections, renders its own empty state. Containers that cannot be
+empty are a modelling error.
 
 ## Naming
 
 Use the tenant's vocabulary, not the schema's. `ProductPresentation` maps the
 vertical onto what the owner calls things — a restaurant reads Menu, Section,
-Dish where the database says products and categories. Plurals live there too;
+Dish where the database says products and collections. Plurals live there too;
 appending `s` produces "dishs".

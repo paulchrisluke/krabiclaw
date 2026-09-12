@@ -1,125 +1,39 @@
 <template>
-  <div class="min-h-screen bg-default text-default">
-    <template v-if="pending">
-      <div class="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
-        <div class="mb-16 max-w-2xl">
-          <div class="h-3 w-32 animate-pulse rounded bg-muted" />
-          <div class="mt-5 h-12 w-2/3 animate-pulse rounded bg-muted" />
-          <div class="mt-5 h-4 w-full animate-pulse rounded bg-muted" />
-        </div>
-        <SayaExperienceGrid
-          :experiences="[]"
-          pending
-          :empty-label="expCopy.noExperiencesLabel"
-          :view-experience-cta="expCopy.viewExperienceCta"
-          :guests-max-label="expCopy.guestsMaxLabel"
-          :sold-out-label="expCopy.soldOutLabel"
-          :temporarily-unavailable-label="expCopy.temporarilyUnavailableLabel"
-          :fully-booked-label="expCopy.fullyBookedLabel"
-          :not-scheduled-label="expCopy.notScheduledLabel"
-          :duration-hour-label="expCopy.durationHourLabel"
-          :duration-minute-label="expCopy.durationMinuteLabel"
-        />
-      </div>
-    </template>
-
-    <template v-else-if="location">
-      <SayaSubNav :location-slug="slug" active="experiences" />
-
-      <div class="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
-        <div class="mb-16 max-w-2xl">
-          <p class="saya-kicker mb-4">{{ location.title }}</p>
-          <h1 class="saya-display-md text-default">{{ expCopy.experiencesPageTitle }}</h1>
-          <p v-if="heroSubtitle" class="mt-5 text-base leading-relaxed text-muted">
-            {{ heroSubtitle }}
-          </p>
-        </div>
-
-        <SayaExperienceGrid
-          :experiences="experiences"
-          :empty-label="expCopy.noExperiencesLabel"
-          :view-experience-cta="expCopy.viewExperienceCta"
-          :guests-max-label="expCopy.guestsMaxLabel"
-          :sold-out-label="expCopy.soldOutLabel"
-          :temporarily-unavailable-label="expCopy.temporarilyUnavailableLabel"
-          :fully-booked-label="expCopy.fullyBookedLabel"
-          :not-scheduled-label="expCopy.notScheduledLabel"
-          :duration-hour-label="expCopy.durationHourLabel"
-          :duration-minute-label="expCopy.durationMinuteLabel"
-        />
-      </div>
-    </template>
-
-    <div v-else class="mx-auto max-w-xl px-4 py-24 text-center">
-      <SayaIcon name="map-pin" class="mx-auto mb-4 size-12 text-muted" />
-      <h1 class="saya-display-sm text-default">{{ t('saya.location.not_found') }}</h1>
-      <SayaButton to="/locations" class="mt-8">{{ t('saya.location.view_all_locations') }}</SayaButton>
-    </div>
-  </div>
+  <ProductCollectionPage :products="experiences" :collections="collections" :locations="productLocations" :location-id="locationId" :currency="currency" :presentation="presentation" :vertical="vertical" :title="collectionTitle" :brand-name="brandName" />
 </template>
 
 <script setup lang="ts">
-import type { Experience } from '~/server/utils/experiences'
+import ProductCollectionPage from '~/components/products/ProductCollectionPage.vue'
+import { isCurrencyCode } from '~/shared/currencies'
+import { EXPERIENCE_PRESENTATION, isExperience, resolveProductPresentation } from '~/utils/product-presentation'
 
 definePageMeta({ layout: 'saya' })
-
-const route = useRoute()
-const { isPlatform, site } = useTenantSite()
-if (isPlatform) throw createError({ statusCode: 404, statusMessage: 'Page not found' })
-
-const { locale, t } = useI18n()
-const slug = computed(() => String(route.params.slug))
-const siteName = computed(() => String((site as ApiValue)?.brand_name ?? '').trim())
-const expCopy = computed(() => getVerticalCopy((site as ApiValue)?.vertical, locale.value))
-
-const {
-  location,
-  experiencesList,
-  pending: pagePending,
-} = await usePublicPageData()
-
-const pending = computed(() => pagePending.value)
-const experiences = computed<Experience[]>(() => experiencesList.value)
-const heroSubtitle = computed(() =>
-  location.value
-    ? expCopy.value.seoExperiencesDescription(location.value.title || siteName.value)
-    : expCopy.value.experiencesPageSubtitle,
-)
-
-const requestURL = useRequestURL()
-useSchemaOrg(computed(() => ({
-  '@context': 'https://schema.org',
-  '@type': 'BreadcrumbList',
-  itemListElement: [
-    { '@type': 'ListItem', position: 1, name: 'Home', item: new URL('/', requestURL.origin).toString() },
-    { '@type': 'ListItem', position: 2, name: 'Locations', item: new URL('/locations', requestURL.origin).toString() },
-    {
-      '@type': 'ListItem',
-      position: 3,
-      name: location.value?.title || slug.value,
-      item: new URL(`/locations/${slug.value}`, requestURL.origin).toString(),
-    },
-    {
-      '@type': 'ListItem',
-      position: 4,
-      name: 'Experiences',
-      item: new URL(`/locations/${slug.value}/experiences`, requestURL.origin).toString(),
-    },
-  ],
-})))
-
+const { isBlawby } = usePublicTemplate()
+if (isBlawby.value) throw createError({ statusCode: 404 })
+const { products, collections, locations, location, config, site } = await usePublicPageData({ lazy: false })
+const currentLocation = location.value
+if (!currentLocation) throw createError({ statusCode: 404, statusMessage: 'Location not found' })
+const vertical = String(site.value?.vertical ?? '')
+if (!resolveProductPresentation(vertical)) throw createError({ statusCode: 404 })
+const presentation = EXPERIENCE_PRESENTATION
+const rawCurrency = config.value.default_currency
+if (!isCurrencyCode(rawCurrency)) throw createError({ statusCode: 500, statusMessage: 'Unsupported site currency' })
+const currency = rawCurrency
+const brandName = String(site.value?.brand_name ?? '').trim()
+if (!brandName) throw createError({ statusCode: 500, statusMessage: 'Site brand is unavailable' })
+const { t } = useI18n()
+const experiences = computed(() => products.value.filter(isExperience))
+// A site with nothing to book has no experiences page, rather than an
+// indexable empty one.
+if (experiences.value.length === 0) throw createError({ statusCode: 404 })
+const locationId = currentLocation.id
+const collectionTitle = computed(() => t('saya.experiences.collection_title', { site: currentLocation.title }))
+const productLocations = computed(() => locations.value.map(item => ({ id: String(item.id), slug: String(item.slug), title: String(item.title) })))
 useSocialMetadata(() => ({
-  path: `/locations/${slug.value}/experiences`,
-  title: location.value
-    ? `${expCopy.value.experiencesPageTitle} at ${location.value.title} | ${siteName.value}`
-    : `${expCopy.value.experiencesPageTitle} | ${siteName.value}`,
-  description: location.value
-    ? expCopy.value.seoExperiencesDescription(location.value.title || siteName.value)
-    : expCopy.value.seoExperiencesDescription(siteName.value),
-  socialImage: location.value?.social_image ?? null,
-  brand: {
-    siteName: siteName.value,
-  },
+  path: `/locations/${encodeURIComponent(currentLocation.slug)}/experiences`,
+  title: collectionTitle.value,
+  description: t('saya.experiences.meta_description', { site: currentLocation.title }),
+  socialImage: currentLocation.social_image ?? null,
+  brand: { siteName: brandName },
 }))
-
 </script>

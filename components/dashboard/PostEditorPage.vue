@@ -240,7 +240,7 @@ import PostScheduleFields from '~/components/dashboard/PostScheduleFields.vue'
 import { useLocationPostEditor } from '~/composables/useLocationPostEditor'
 import { instantDate, formatTimestamp } from '~/utils/timezone'
 import { scheduledLifecycleValue } from '~/utils/blog-editor'
-import { POST_ACTIONS, postEventDescription, type PostMutation } from '~/shared/posts'
+import { CREATABLE_POST_TYPES, POST_ACTIONS, postEventDescription, type PostMutation } from '~/shared/posts'
 import {
   postActionComplete,
   postNeedsSchedule,
@@ -258,9 +258,6 @@ const postId = computed(() => String(route.params.postId ?? ''))
 const locationPath = computed(() => `/dashboard/${String(route.params.orgSlug)}/sites/${String(route.params.siteSlug)}/locations/${String(route.params.locationSlug)}`)
 const postsPath = computed(() => `${locationPath.value}/posts`)
 const postPath = computed(() => `${postsPath.value}/${postId.value}`)
-// `useEditorFrame` provides and injects, so it must run while setup is still
-// synchronous. Awaiting before it binds the frame to nothing: the mode never
-// resolves and this level silently drops out of the chain.
 const frame = useEditorFrame(postPath)
 
 const siteId = await useDashboardSiteId()
@@ -308,17 +305,12 @@ const sectionLabels = computed<Record<SectionKey, string>>(() => ({
   publishing: 'Publishing',
 }))
 
-const routeSegments = computed(() => {
-  const segments = route.params.segments
-  if (Array.isArray(segments)) return segments.filter(Boolean).map(String)
-  return segments ? [String(segments)] : []
-})
-const detailKey = computed(() => routeSegments.value[0] ?? null)
+const detailKey = computed(() => frame.childSegment.value)
 const editorKey = computed<SectionKey>(() => (detailKey.value ?? (isNew.value ? 'type' : 'photo')) as SectionKey)
 
 const openSections = computed(() => (isNew.value ? NEW_SECTION_KEYS : EXISTING_SECTION_KEYS))
 // An unsupported route 404s rather than silently showing the first section.
-if (routeSegments.value.length > 1 || (detailKey.value && !openSections.value.some(key => key === detailKey.value))) {
+if (frame.rest.value.length > 1 || (detailKey.value && !openSections.value.some(key => key === detailKey.value))) {
   throw createError({ statusCode: 404, statusMessage: 'Page not found' })
 }
 
@@ -361,19 +353,13 @@ const facebookConnected = computed(() => facebookData.value?.connected ?? false)
 watch(post, value => { if (value) editor.loadFrom(value) }, { immediate: true })
 
 // ── The new post's draft ────────────────────────────────
-/**
- * `alert` is deliberately absent. The contract accepts exactly one alert —
- * `covid_19` — so offering it would be a dead choice; an existing alert post
- * still opens and edits here.
- */
-const NEW_POST_TYPES = ['standard', 'event', 'offer'] as const
-type NewPostType = typeof NEW_POST_TYPES[number]
+type NewPostType = typeof CREATABLE_POST_TYPES[number]
 const TYPE_DESCRIPTIONS: Record<NewPostType, string> = {
   standard: 'News from the location.',
   event: 'Something at a set date and time.',
   offer: 'A deal that runs between two dates.',
 }
-const typeOptions: Array<{ value: string, label: string, description: string }> = NEW_POST_TYPES.map(value => ({
+const typeOptions: Array<{ value: string, label: string, description: string }> = CREATABLE_POST_TYPES.map(value => ({
   value,
   label: TYPE_LABELS[value] ?? value,
   description: TYPE_DESCRIPTIONS[value],
@@ -427,7 +413,7 @@ if (isNew.value) {
 }
 
 function setType(value: string) {
-  const type = NEW_POST_TYPES.find(option => option === value)
+  const type = CREATABLE_POST_TYPES.find(option => option === value)
   if (!type) return
   editor.form.topic = seedTopic(type)
 }
@@ -569,54 +555,27 @@ const sectionValid = computed(() => {
   return true
 })
 
-/**
- * Creating walks the required sections in order rather than describing what is
- * missing. The commit names where it is going — "Next: Post" — and only reads
- * "Create post" on the last one outstanding, so the owner is carried through
- * the post instead of being told to go back for a field.
- */
-const REQUIRED_ORDER: SectionKey[] = ['type', 'body', 'schedule']
-
-const outstanding = computed(() => REQUIRED_ORDER.filter((key) => {
+const { createActionLabel, saveLabel, saveDisabled, save: saveCurrentEditor, startOrCreate } = useCreateWalk<SectionKey>({
+  recordPath: postPath,
+  isNew,
+  openKey: editorKey,
+  labels: sectionLabels,
   // The type is chosen for you — a post is an update unless you say otherwise —
   // so it is walked past, and only visited when the owner opens it.
-  if (key === 'body') return !editor.form.body.trim()
-  if (key === 'schedule') return postNeedsSchedule(topic.value) && !postScheduleComplete(topic.value.event)
-  return false
-}))
-
-/** The next section still outstanding, ignoring the one already open. */
-const nextOutstanding = computed(() => outstanding.value.find(key => key !== editorKey.value) ?? null)
-
-const createActionLabel = computed(() => {
-  const next = outstanding.value[0]
-  return next ? `Start with ${sectionLabels.value[next]}` : 'Create post'
+  order: ['type', 'body', 'schedule'],
+  missing: (key) => {
+    if (key === 'body') return !editor.form.body.trim()
+    if (key === 'schedule') return postNeedsSchedule(topic.value) && !postScheduleComplete(topic.value.event)
+    return false
+  },
+  noun: 'post',
+  saving: editor.saving,
+  existingBlocked: () => !sectionValid.value,
+  commit,
 })
 
-const saveLabel = computed(() => {
-  if (!isNew.value) return undefined
-  return nextOutstanding.value ? `Next: ${sectionLabels.value[nextOutstanding.value]}` : 'Create post'
-})
-
-// The open section's own value is the only thing that can block its commit.
-const saveDisabled = computed(() => editor.saving.value
-  || (isNew.value ? outstanding.value.includes(editorKey.value) : !sectionValid.value))
-
-function startOrCreate() {
-  const next = outstanding.value[0]
-  if (next) return void navigateTo(`${postPath.value}/${next}`)
-  void saveCurrentEditor()
-}
-
-async function saveCurrentEditor() {
-  if (saveDisabled.value) return
+async function commit() {
   if (isNew.value) {
-    // Creating advances to the next outstanding section; the POST happens once
-    // nothing is left to answer.
-    if (nextOutstanding.value) {
-      await navigateTo(`${postPath.value}/${nextOutstanding.value}`)
-      return
-    }
     const created = await editor.save(null)
     if (!created?.id) return
     await navigateTo(`${postsPath.value}/${String(created.id)}`)

@@ -181,7 +181,7 @@ const ENVIRONMENTS = {
  * Drops every application object in one D1 database and replays the migration
  * chain from the generated baseline. Preview does this on every CI run before
  * reseeding from production. A prepared cutover target (--config) does it right
- * before its verified payload is loaded (docs/database/migrations.md).
+ * before its verified payload is loaded.
  */
 function main() {
   if (process.argv.includes('--help')) {

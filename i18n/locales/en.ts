@@ -54,7 +54,9 @@ export default {
     },
     "experience_detail": {
       "available": "Available",
+      "book_now": "Book now",
       "booking_failed": "Something went wrong. Please try again.",
+      "nothing_scheduled": "There are no sessions scheduled right now.",
       "capacity": "Up to {count} guests",
       "capacity_label": "Capacity",
       "capacity_max": "{count} guests max",
@@ -169,10 +171,18 @@ export default {
       "empty": "No products published.",
       "meta_description": "Products from {site}."
     },
+    "experiences": {
+      "collection_title": "{site} Experiences",
+      "empty": "No experiences available right now. Check back soon.",
+      "meta_description": "Experiences you can book at {site}."
+    },
     "product_detail": {
+      "choose_option": "Choose an option",
       "more_in_category": "More in {category}",
       "meta_description": "{name} — {detail}. Available at {location}.",
-      "meta_description_priced": "{name} — {detail}. {price} at {location}."
+      "meta_description_priced": "{name} — {detail}. {price} at {location}.",
+      "meta_description_undescribed": "{name}. Available at {location}.",
+      "meta_description_undescribed_priced": "{name}. {price} at {location}."
     },
     "photos": {
       "title": "Photos from every room.",

@@ -42,7 +42,7 @@
 
 <script setup lang="ts">
 import { buildPostLoginUrl } from '~/shared/auth/return-target'
-import { signOutUser } from '~/composables/useAuth'
+import { authClient } from '~/lib/auth-client'
 
 defineOptions({ inheritAttrs: false })
 const props = withDefaults(defineProps<{ account?: boolean, to?: string, label?: string }>(), {
@@ -61,7 +61,8 @@ function closeMenu() {
 }
 async function signOut() {
   closeMenu()
-  await signOutUser()
+  await authClient.signOut()
+  await navigateTo('/login')
 }
 
 function onDocumentPointerDown(event: MouseEvent) {

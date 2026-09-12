@@ -19,19 +19,14 @@ export type PublicPageDataset =
   | 'posts'
   | 'blog'
   | 'blogPost'
-  | 'experiences'
-  | 'experienceDetail'
   | 'reservationPolicies'
-  | 'experiencePolicies'
 
 export interface PublicPageRequest {
   page: string | null;
   location: string | null;
-  experience: string | null;
   datasets: readonly PublicPageDataset[];
   blogSlug: string | null; // set when the blogPost dataset is requested
   locale: string | null;
-  token: string | null; // signed preview token — non-null only on /preview/site/... routes
 }
 
 export function getPublicCriticalHomeRequest(params: PublicPageRequest): PublicPageRequest {
@@ -39,21 +34,12 @@ export function getPublicCriticalHomeRequest(params: PublicPageRequest): PublicP
     ...params,
     page: 'home',
     location: null,
-    experience: null,
     datasets: ['content'],
     blogSlug: null,
   }
 }
 
-// Extracts the page sub-path from a platform preview route path.
-// Returns null if the path is not a preview route.
-export function getPreviewSubpath(path: string): string | null {
-  const match = path.match(/^\/preview\/(?:site|draft)\/[^/]+(\/.*)?$/)
-  if (!match) return null
-  return match[1] || '/'
-}
-
-export function getPublicPageRequest(path: string): Omit<PublicPageRequest, "locale" | "token"> {
+export function getPublicPageRequest(path: string): Omit<PublicPageRequest, "locale"> {
 
   // Location sub-pages: /locations/[slug]/*
   const locationMatch = path.match(/^\/locations\/([^/]+)/);
@@ -69,29 +55,13 @@ export function getPublicPageRequest(path: string): Omit<PublicPageRequest, "loc
     return {
       page,
       location: slug ?? null,
-      experience: null,
       datasets: [
         ...(page === 'location' || page === 'contact' ? ['content'] as const : []),
         'location',
-        ...(page === 'location' || page === 'menu' || page === 'products' ? ['products'] as const : []),
-        ...(page === "location" || page === "menu" || page === 'products' || page === "experiences"
-          ? ['experiences', 'experiencePolicies'] as const
-          : []),
+        ...(page === 'location' || page === 'menu' || page === 'products' || page === 'experiences' ? ['products'] as const : []),
         ...(page === "location" ? ['reviews', 'posts'] as const : []),
         ...(fullData ? [fullData] as PublicPageDataset[] : []),
       ],
-      blogSlug: null,
-    };
-  }
-
-  // Experience detail: /experiences/[slug]
-  const experienceMatch = path.match(/^\/experiences\/([^/]+)/);
-  if (experienceMatch) {
-    return {
-      page: "experiences",
-      location: null,
-      experience: experienceMatch[1] ?? null,
-      datasets: ['experiences', 'experienceDetail', 'experiencePolicies'],
       blogSlug: null,
     };
   }
@@ -104,7 +74,6 @@ export function getPublicPageRequest(path: string): Omit<PublicPageRequest, "loc
     return {
       page: "blog",
       location: null,
-      experience: null,
       datasets: ['blog', 'blogPost'],
       blogSlug: blogMatch[1] ?? null,
     };
@@ -115,7 +84,6 @@ export function getPublicPageRequest(path: string): Omit<PublicPageRequest, "loc
     return {
       page: "blog",
       location: null,
-      experience: null,
       datasets: ['blog', 'blogPost'],
       blogSlug: articleMatch[1] ?? null,
     };
@@ -126,15 +94,13 @@ export function getPublicPageRequest(path: string): Omit<PublicPageRequest, "loc
     return {
       page: "home",
       location: null,
-      experience: null,
-      datasets: ['content', 'location', 'products', 'experiences'],
+      datasets: ['content', 'location', 'products'],
       blogSlug: null,
     };
   if (path.startsWith("/locations"))
     return {
       page: "locations",
       location: null,
-      experience: null,
       datasets: ['location'],
       blogSlug: null,
     };
@@ -142,7 +108,6 @@ export function getPublicPageRequest(path: string): Omit<PublicPageRequest, "loc
     return {
       page: "about",
       location: null,
-      experience: null,
       datasets: ['content'],
       blogSlug: null,
     };
@@ -150,7 +115,6 @@ export function getPublicPageRequest(path: string): Omit<PublicPageRequest, "loc
     return {
       page: "contact",
       location: null,
-      experience: null,
       datasets: ['content'],
       blogSlug: null,
     };
@@ -158,7 +122,6 @@ export function getPublicPageRequest(path: string): Omit<PublicPageRequest, "loc
     return {
       page: "reservations",
       location: null,
-      experience: null,
       datasets: ['content', 'reservationPolicies'],
       blogSlug: null,
     };
@@ -166,7 +129,6 @@ export function getPublicPageRequest(path: string): Omit<PublicPageRequest, "loc
     return {
       page: "order",
       location: null,
-      experience: null,
       datasets: ['content'],
       blogSlug: null,
     };
@@ -174,7 +136,6 @@ export function getPublicPageRequest(path: string): Omit<PublicPageRequest, "loc
     return {
       page: "qa",
       location: null,
-      experience: null,
       datasets: ['qa'],
       blogSlug: null,
     };
@@ -182,7 +143,6 @@ export function getPublicPageRequest(path: string): Omit<PublicPageRequest, "loc
     return {
       page: "reviews",
       location: null,
-      experience: null,
       datasets: ['reviews'],
       blogSlug: null,
     };
@@ -190,23 +150,13 @@ export function getPublicPageRequest(path: string): Omit<PublicPageRequest, "loc
     return {
       page: "posts",
       location: null,
-      experience: null,
       datasets: ['posts'],
-      blogSlug: null,
-    };
-  if (path.startsWith("/experiences"))
-    return {
-      page: "experiences",
-      location: null,
-      experience: null,
-      datasets: ['content', 'experiences', 'experiencePolicies'],
       blogSlug: null,
     };
   if (path.startsWith("/photos"))
     return {
       page: "photos",
       location: null,
-      experience: null,
       datasets: ['photos'],
       blogSlug: null,
     };
@@ -214,7 +164,6 @@ export function getPublicPageRequest(path: string): Omit<PublicPageRequest, "loc
     return {
       page: "menu",
       location: null,
-      experience: null,
       datasets: ['products'],
       blogSlug: null,
     };
@@ -222,7 +171,17 @@ export function getPublicPageRequest(path: string): Omit<PublicPageRequest, "loc
     return {
       page: 'products',
       location: null,
-      experience: null,
+      datasets: ['products'],
+      blogSlug: null,
+    };
+  // Experiences are their own surface on every vertical that sells products: a
+  // restaurant reaches /menu and /experiences, a studio /products and
+  // /experiences. An Experience's own page is site-wide, so /experiences/<slug>
+  // reads the same dataset as its collection.
+  if (path === '/experiences' || path.startsWith('/experiences/'))
+    return {
+      page: 'experiences',
+      location: null,
       datasets: ['products'],
       blogSlug: null,
     };
@@ -230,7 +189,6 @@ export function getPublicPageRequest(path: string): Omit<PublicPageRequest, "loc
     return {
       page: "blog",
       location: null,
-      experience: null,
       datasets: ['blog'],
       blogSlug: null,
     };
@@ -238,7 +196,6 @@ export function getPublicPageRequest(path: string): Omit<PublicPageRequest, "loc
     return {
       page: null,
       location: null,
-      experience: null,
       datasets: [],
       blogSlug: null,
     };
@@ -249,8 +206,7 @@ export const usePublicPageRequest = () => {
   const locale = useState<string>('public-locale', () => 'en')
 
   return computed<PublicPageRequest>(() => {
-    const previewSubpath = getPreviewSubpath(route.path)
-    const effectivePath = previewSubpath ?? route.path
+    const effectivePath = route.path
     const explicitLocale = typeof route.params.locale === 'string'
       ? route.params.locale
       : locale.value !== 'en' && effectivePath.startsWith(`/${locale.value}`)
@@ -263,15 +219,11 @@ export const usePublicPageRequest = () => {
           publicPath: effectivePath,
         }
       : { localeSegment: null, sourcePath: effectivePath, publicPath: effectivePath }
-    const token = previewSubpath !== null && typeof route.query.token === 'string'
-      ? route.query.token
-      : null
     const request = getPublicPageRequest(localePath.sourcePath)
     return {
       ...request,
       datasets: request.datasets,
       locale: localePath.localeSegment ?? locale.value,
-      token,
     }
   });
 };
@@ -294,11 +246,9 @@ export const usePublicResourceKey = (
     encodeKeyField(siteId ?? "none"),
     encodeKeyField(params.page),
     encodeKeyField(params.location),
-    encodeKeyField(params.experience),
     encodeKeyField([...params.datasets].sort().join(',')),
     encodeKeyField(params.blogSlug),
     encodeKeyField(params.locale),
-    encodeKeyField(params.token),
   ].join("~");
 
 export const usePublicPageKey = (
@@ -309,27 +259,14 @@ export const usePublicPageKey = (
 export const buildPublicPageUrl = (
   siteId: string | null | undefined,
   params: PublicPageRequest,
-  route: { path: string; params: Record<string, unknown> },
   resourceKind: 'shell' | 'page' = 'page',
 ) => {
   const qs = new URLSearchParams();
   if (params.page) qs.set("page", params.page);
   if (params.location) qs.set("location", params.location);
-  if (params.experience) qs.set("experience", params.experience);
   if (params.datasets.length) qs.set("datasets", [...params.datasets].sort().join(','));
   if (params.blogSlug) qs.set("blogSlug", params.blogSlug);
-  if (params.token) {
-    qs.set("preview", "true");
-    qs.set("token", params.token);
-  }
-  const draftId = typeof route.params.draftId === 'string' && route.path.startsWith('/preview/draft/')
-    ? route.params.draftId
-    : null
-  if (!draftId && params.locale && params.locale !== 'en') qs.set('locale', params.locale)
+  if (params.locale && params.locale !== 'en') qs.set('locale', params.locale)
   const q = qs.toString();
-  if (draftId) {
-    const draftQuery = qs.toString()
-    return `/api/public/drafts/${draftId}/${resourceKind}${draftQuery ? `?${draftQuery}` : ""}`
-  }
   return `/api/public/sites/${siteId}/${resourceKind}${q ? `?${q}` : ""}`;
 };

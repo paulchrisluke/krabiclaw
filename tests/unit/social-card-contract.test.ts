@@ -57,7 +57,6 @@ test('every page gets a card: an owner with no media of its own falls back to th
     { owner_type: 'review' as const, owner_id: 'review-1' },
     { owner_type: 'business_location' as const, owner_id: 'location-1' },
     { owner_type: 'product' as const, owner_id: 'product-1' },
-    { owner_type: 'offering' as const, owner_id: 'offering-1' },
   ]) {
     assert.equal(
       selectSocialCardPlacements([placedAsset('site', 'site-1', 'logo', 'site-logo'), share], owner, 'site-1').source?.asset_id,

@@ -1,7 +1,6 @@
 import type { H3Event } from 'h3'
 
 interface PublicResourceLoadOptions<T> {
-  draftId: string | null
   siteId: string | null
   resourceKind: 'shell' | 'page'
   url: string
@@ -17,7 +16,6 @@ export async function loadPublicResourcePayload<T>(
   options: PublicResourceLoadOptions<T>,
 ): Promise<T> {
   const providerOptions = {
-    draftId: options.draftId,
     siteId: options.siteId,
     resourceKind: options.resourceKind,
     url: options.url,

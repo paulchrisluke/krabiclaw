@@ -139,7 +139,7 @@ function restoreFocus() {
 }
 
 // Lock body scroll when modal is open
-watch(() => props.modelValue, async (isOpen) => {
+async function applyOpenState(isOpen: boolean) {
   if (typeof document === 'undefined') return
   if (toggleRef.value) toggleRef.value.checked = isOpen
   if (isOpen) {
@@ -157,16 +157,26 @@ watch(() => props.modelValue, async (isOpen) => {
     }
     restoreFocus()
   }
-}, { immediate: true })
+}
 
+watch(() => props.modelValue, applyOpenState)
+
+/**
+ * Reconcile with whatever the checkbox already says, THEN take over.
+ *
+ * The modal opens without JavaScript: the label checks the box and CSS reveals
+ * the dialog. Someone who presses it while the page is still hydrating has
+ * already opened it, and this component used to run its state watcher
+ * immediately — unchecking the box before it ever looked — so the dialog
+ * snapped shut the moment hydration finished.
+ */
 onMounted(() => {
   const toggle = toggleRef.value
-  if (!toggle) return
-  if (props.modelValue) {
-    toggle.checked = true
-  } else if (toggle.checked) {
+  if (toggle && !props.modelValue && toggle.checked) {
     emit('update:modelValue', true)
+    return
   }
+  void applyOpenState(props.modelValue)
 })
 
 onUnmounted(() => {

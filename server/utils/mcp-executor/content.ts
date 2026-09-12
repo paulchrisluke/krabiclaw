@@ -1,7 +1,13 @@
 import { HTTPError } from 'nitro';
 
 import type { McpExecutorContext } from './shared'
-import { applyBookingPolicyPatch, getDirectBookingPolicy, renderBookingPolicySummary, resolveBookingPolicy, upsertBookingPolicy, validateBookingPolicyPatch, validateBookingPolicyScope, type BookingPolicyScopeType, type BookingPolicyType } from '~/server/utils/booking-policies'
+import {
+  getLocationReservationConfig,
+  renderBookingPolicySummary,
+  reservationPolicySummarySource,
+  upsertLocationReservationConfig,
+  validateLocationReservationConfigPatch,
+} from '~/server/utils/reservations'
 import { buildTenantPageReplacementConfirmationToken } from '~/server/utils/mcp-workflows'
 import {
   createTenantPage,
@@ -9,10 +15,9 @@ import {
   listTenantPages,
   updateTenantPage,
 } from '~/server/utils/content/pages'
-import { getProfessionalServiceContent, upsertProfessionalServiceContent } from '~/server/utils/professional-services-editor'
 import { renderStructuredResponse } from '~/server/utils/mcp-render'
 import { paginateMcpCollection } from '~/server/utils/mcp-pagination'
-import { NOT_HANDLED, mutationContextPayload, optionalString, requiredString, rethrowAsInvalidParams } from './shared'
+import { NOT_HANDLED, omit, mutationContextPayload, optionalString, requiredString, rethrowAsInvalidParams } from './shared'
 
 function nullableStringArg(args: Record<string, unknown>, key: string, fallback: string | null): string | null {
   if (!Object.prototype.hasOwnProperty.call(args, key)) return fallback
@@ -42,14 +47,6 @@ function tenantPageDocumentData(args: Record<string, unknown>, page: Awaited<Ret
 
 function tenantPageLifecycleResponse(action: string, result: unknown) {
   return renderStructuredResponse(result, `${action} tenant page.`, { tenant_page: result })
-}
-
-function bookingPolicyTarget(args: Record<string, unknown>, policyType: BookingPolicyType) {
-  const locationId = optionalString(args, 'location_id')
-  const experienceId = optionalString(args, 'experience_id')
-  const scopeType = (optionalString(args, 'scope_type') ?? (policyType === 'reservation' ? 'location' : 'site')) as BookingPolicyScopeType
-  validateBookingPolicyScope({ policyType, scopeType, locationId, experienceId })
-  return { locationId, experienceId, scopeType }
 }
 
 function tenantPageReplacementConfirmation(page: Awaited<ReturnType<typeof getTenantPageById>>) {
@@ -177,115 +174,45 @@ export async function handleContentTools(ctx: McpExecutorContext): Promise<unkno
       } catch (error) {
         return rethrowAsInvalidParams(error);
       }
-    case "get_professional_service_content":
-      console.info(
-        "[MCP] get_professional_service_content invoked site=%s",
-        site.siteId,
-      );
-      return await getProfessionalServiceContent(site.db, site.siteId);
-    case "update_professional_service_content":
-      try {
-        const updated = await upsertProfessionalServiceContent(site.db, {
-          organizationId: site.organizationId,
-          siteId: site.siteId,
-          data: {
-            ...(Object.hasOwn(args, 'offerings') ? { offerings: args.offerings } : {}),
-            ...(Object.hasOwn(args, 'compliance') ? { compliance: args.compliance } : {}),
-            ...(Object.hasOwn(args, 'consultation') ? { consultation: args.consultation } : {}),
-            ...(Object.hasOwn(args, 'themeTokens') ? { themeTokens: args.themeTokens } : {}),
-          },
-          updatedBy: site.userId,
-          env: site.env,
-        });
-        const context = await mutationContextPayload(site);
-        return renderStructuredResponse(
-          {
-            ...updated,
-            context,
-          },
-          "Updated professional-service content.",
-          { professional_service_content: updated, context },
-        );
-      } catch (error) {
-        return rethrowAsInvalidParams(error);
-      }
-    case "get_booking_policy": {
-      const policyType = requiredString(args, "policy_type") as BookingPolicyType;
-      const { locationId, experienceId, scopeType } = bookingPolicyTarget(args, policyType);
+    case "get_reservation_policy": {
+      const locationId = requiredString(args, "location_id");
       const locale = optionalString(args, "locale") ?? "en";
-      const policy = await getDirectBookingPolicy(site.db, {
-        siteId: site.siteId,
-        policyType,
-        scopeType,
-        locationId,
-        experienceId,
-      });
-      const resolvedPolicy = await resolveBookingPolicy(site.db, {
-        siteId: site.siteId,
-        policyType,
-        locationId,
-        experienceId,
-      });
-      return {
-        policy,
-        resolved_policy: resolvedPolicy,
-        summary: resolvedPolicy.id ? renderBookingPolicySummary(resolvedPolicy, locale) : null,
-      };
-    }
-    case "preview_booking_policy": {
-      const policyType = requiredString(args, "policy_type") as BookingPolicyType;
-      const { locationId, experienceId } = bookingPolicyTarget(args, policyType);
-      const locale = optionalString(args, "locale") ?? "en";
-      const resolvedPolicy = await resolveBookingPolicy(site.db, {
-        siteId: site.siteId,
-        policyType,
-        locationId,
-        experienceId,
-      });
-      const preview = applyBookingPolicyPatch(
-        resolvedPolicy,
-        await validateBookingPolicyPatch(args as Record<string, unknown>, policyType),
-      );
-      return {
-        resolved_policy: preview,
-        summary: renderBookingPolicySummary(preview, locale),
-      };
-    }
-    case "update_booking_policy": {
-      const policyType = requiredString(args, "policy_type") as BookingPolicyType;
-      const { locationId, experienceId, scopeType } = bookingPolicyTarget(args, policyType);
-      const locale = optionalString(args, "locale") ?? "en";
-      const patch = await validateBookingPolicyPatch(args as Record<string, unknown>, policyType);
-      const policy = await upsertBookingPolicy(site.db, {
+      const config = await getLocationReservationConfig(site.db, {
         organizationId: site.organizationId,
-        siteId: site.siteId,
-        policyType,
-        scopeType,
         locationId,
-        experienceId,
-        patch,
       });
-      const resolvedPolicy = await resolveBookingPolicy(site.db, {
-        siteId: site.siteId,
-        policyType,
+      // No row means this location does not take reservations. That is the
+      // answer; there is no site-level policy underneath it to merge in.
+      return {
+        policy: config,
+        summary: config ? renderBookingPolicySummary(reservationPolicySummarySource(config), locale) : null,
+      };
+    }
+    case "update_reservation_policy": {
+      const locationId = requiredString(args, "location_id");
+      const locale = optionalString(args, "locale") ?? "en";
+      const patch = await validateLocationReservationConfigPatch(
+        omit(args as Record<string, unknown>, ["location_id", "locale"]),
+      );
+      const config = await upsertLocationReservationConfig(site.db, {
+        organizationId: site.organizationId,
         locationId,
-        experienceId,
+        patch,
+        actorId: site.userId,
       });
       const policyContext = await mutationContextPayload(site, { locationId });
       return renderStructuredResponse(
         {
           ok: true,
-          entity: "booking_policy",
-          id: policy.id,
-          policy_type: policyType,
-          scope_type: scopeType,
+          entity: "reservation_policy",
+          location_id: locationId,
           changed_fields: Object.keys(patch),
-          updated_at: policy.updated_at,
+          updated_at: config.updated_at,
           context: policyContext,
-          summary: renderBookingPolicySummary(resolvedPolicy, locale),
+          summary: renderBookingPolicySummary(reservationPolicySummarySource(config), locale),
         },
-        `Updated ${policyType} booking policy.`,
-        { policy, resolved_policy: resolvedPolicy },
+        "Updated the reservation policy.",
+        { policy: config },
       );
     }
     default:

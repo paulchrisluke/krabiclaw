@@ -114,7 +114,6 @@ interface LocationOverview {
 interface InboxSummary { openThreads: number; unreadThreads: number }
 interface LocationContentCounts {
   photos: number
-  experiences: number
   posts: number
   qa: number
   upcomingReservations: number
@@ -140,7 +139,7 @@ const frame = useEditorFrame(locationPath)
 
 const siteId = await useDashboardSiteId()
 
-const locationId = computed(() => dashboardLocation.currentLocationId.value ?? '')
+const locationId = computed(() => dashboardLocation.currentLocationId.value)
 const settingsPath = computed(() => `${locationPath.value}/settings`)
 
 // Settings and Inbox are their own screens rather than sections of this one, so
@@ -154,7 +153,7 @@ const activeSection = computed(() => sectionSegment.value || null)
 const location = ref<LocationOverview | null>(null)
 const products = ref<ApiRecord[]>([])
 const inboxSummary = ref<InboxSummary>({ openThreads: 0, unreadThreads: 0 })
-const counts = ref<LocationContentCounts>({ photos: 0, experiences: 0, posts: 0, qa: 0, upcomingReservations: 0 })
+const counts = ref<LocationContentCounts>({ photos: 0, posts: 0, qa: 0, upcomingReservations: 0 })
 const loading = ref(true)
 const error = ref<string | null>(null)
 
@@ -195,7 +194,6 @@ function countSummary(total: number, noun: string, empty: string): string {
 const contentGroups = computed(() => {
   const items = [
     { id: 'products', label: dashboard.site.value?.vertical === 'restaurant' ? 'Menu' : 'Products', summary: countSummary(products.value.length, 'item', 'Add your first item'), to: `${locationPath.value}/products`, visible: hasFeature('products') },
-    { id: 'experiences', label: 'Experiences', summary: countSummary(counts.value.experiences, 'experience', 'Add your first experience'), to: `${locationPath.value}/experiences`, visible: hasFeature('experiences') },
     { id: 'photos', label: 'Photos', summary: countSummary(counts.value.photos, 'photo', 'Add photos'), to: `${locationPath.value}/photos`, visible: hasFeature('photos') },
     { id: 'posts', label: 'Posts', summary: countSummary(counts.value.posts, 'published post', 'Write your first post'), to: `${locationPath.value}/posts`, visible: hasFeature('posts') },
     { id: 'qa', label: 'Q&A', summary: countSummary(counts.value.qa, 'question', 'Answer your first question'), to: `${locationPath.value}/qa`, visible: hasFeature('qa') },
@@ -228,15 +226,16 @@ const isOverviewResponse = (value: unknown): value is LocationOverviewResource =
 const requestEvent = useRequestEvent()
 const overviewKey = computed(() => `dashboard-location-overview:${siteId}:${locationId.value}:${includeProducts.value ? 'products' : 'no-products'}`)
 const { data: overview, pending: overviewPending, error: overviewError } = await useAsyncData<LocationOverviewResource>(overviewKey, async () => {
-  if (!locationId.value) throw createError({ statusCode: 404, statusMessage: 'Location not found' })
+  const requestedLocationId = locationId.value
+  if (!requestedLocationId) throw createError({ statusCode: 404, statusMessage: 'Location not found' })
   const shouldIncludeProducts = includeProducts.value
   if (import.meta.server) {
     if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Request context unavailable' })
     const { loadDashboardLocationOverview } = await import('~/server/utils/dashboard-editor-resources')
-    return await loadDashboardLocationOverview(requestEvent, siteId, locationId.value, { includeProducts: shouldIncludeProducts }) as LocationOverviewResource
+    return await loadDashboardLocationOverview(requestEvent, siteId, requestedLocationId, { includeProducts: shouldIncludeProducts }) as LocationOverviewResource
   }
   return await dashboardApi<LocationOverviewResource>(
-    `/api/dashboard/sites/${siteId}/locations/${locationId.value}/overview`,
+    `/api/dashboard/sites/${siteId}/locations/${requestedLocationId}/overview`,
     { query: { includeProducts: String(shouldIncludeProducts) }, validate: isOverviewResponse },
   )
 }, { lazy: import.meta.client })

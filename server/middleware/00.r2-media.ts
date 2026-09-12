@@ -6,7 +6,7 @@ import { defineHandler, HTTPError  } from 'nitro';
 import type { getHeader} from 'nitro/h3';
 import {  sendStream, setHeader, setResponseStatus } from 'nitro/h3';
 import { cloudflareEnv } from '~/server/utils/api-response'
-import { isPreviewContext } from '~/server/utils/tenant-hosts'
+import { isNonProductionHost } from '~/server/utils/tenant-hosts'
 
 const MEDIA_HOST = 'media.krabiclaw.com'
 const WORKER_MEDIA_PREFIX = '/__media/'
@@ -19,7 +19,7 @@ const WORKER_MEDIA_PREFIX = '/__media/'
 function isWorkerMediaPathAllowed(event: Parameters<typeof getHeader>[0]): boolean {
   if (import.meta.dev) return true
   const hostname = ((event.req.headers.get('host')) || '').split(':')[0] ?? ''
-  return isPreviewContext(hostname)
+  return isNonProductionHost(hostname)
 }
 
 function isolateWorkerMediaResponse(event: Parameters<typeof getHeader>[0]): void {
@@ -45,7 +45,7 @@ export default defineHandler(async (event) => {
     ? url.pathname.slice(WORKER_MEDIA_PREFIX.length)
     : url.pathname.replace(/^\/+/, '')
   if (!key) {
-    throw new HTTPError({ statusCode: 400 })
+    throw new HTTPError({ statusCode: 404 })
   }
 
   const rangeHeader = (event.req.headers.get('range'))
@@ -83,6 +83,10 @@ export default defineHandler(async (event) => {
       setHeader(event, 'cache-control', 'public, max-age=31536000, immutable')
       return sendStream(event, obj.body)
     } catch (err: unknown) {
+      // A missing object and an unsatisfiable range are answers, not R2 faults:
+      // rethrow the status this block already chose instead of relabelling
+      // every one of them 502.
+      if (err instanceof HTTPError) throw err
       const msg = err instanceof Error ? err.message : 'R2 error'
       throw new HTTPError({ statusCode: 502, statusMessage: msg })
     }
@@ -99,6 +103,7 @@ export default defineHandler(async (event) => {
     setHeader(event, 'cache-control', 'public, max-age=31536000, immutable')
     return sendStream(event, obj.body)
   } catch (err: unknown) {
+    if (err instanceof HTTPError) throw err
     const msg = err instanceof Error ? err.message : 'R2 error'
     throw new HTTPError({ statusCode: 502, statusMessage: msg })
   }

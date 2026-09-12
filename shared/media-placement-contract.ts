@@ -3,7 +3,6 @@ export const MEDIA_PLACEMENT_SLOTS = {
   business_location: ['hero', 'gallery', 'social_card'],
   product: ['image', 'gallery', 'social_card'],
   content_document: ['cover', 'gallery', 'social_card'],
-  offering: ['thumbnail', 'hero', 'gallery', 'social_card'],
   content_block: ['media', 'gallery', 'background', 'featured', 'decoration'],
   review: ['portrait', 'gallery', 'social_card'],
   review_request: ['gallery'],
@@ -13,7 +12,7 @@ export type MediaPlacementOwnerType = keyof typeof MEDIA_PLACEMENT_SLOTS
 
 export const EDITABLE_MEDIA_PLACEMENT_OWNERS = [
   'site', 'business_location', 'product', 'content_document',
-  'offering', 'content_block', 'review', 'review_request',
+  'content_block', 'review', 'review_request',
 ] as const satisfies readonly MediaPlacementOwnerType[]
 
 export type EditableMediaPlacementOwnerType = typeof EDITABLE_MEDIA_PLACEMENT_OWNERS[number]
@@ -27,7 +26,6 @@ export function isEditableMediaPlacementOwnerType(value: string): value is Edita
 }
 
 const INDEXED_SLOTS = [
-  { ownerType: 'offering', runtime: /^features\.\d+\.image$/, sqlGlob: 'features.[0-9]*.image' },
   { ownerType: 'content_block', runtime: /^items\.\d+\.image$/, sqlGlob: 'items.[0-9]*.image' },
   { ownerType: 'content_block', runtime: /^images\.\d+$/, sqlGlob: 'images.[0-9]*' },
   { ownerType: 'content_block', runtime: /^features\.\d+\.icon$/, sqlGlob: 'features.[0-9]*.icon' },
@@ -36,7 +34,7 @@ const INDEXED_SLOTS = [
 
 const ORDERED_PLACEMENTS = new Set([
   'business_location:gallery', 'product:gallery', 'content_document:gallery',
-  'offering:gallery', 'content_block:gallery', 'review:gallery', 'review_request:gallery',
+  'content_block:gallery', 'review:gallery', 'review_request:gallery',
   'site:compliance_document',
 ])
 

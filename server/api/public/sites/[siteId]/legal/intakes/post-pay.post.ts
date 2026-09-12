@@ -59,16 +59,26 @@ import { getClientIp } from '~/server/utils/hourly-rate-limit'
 const UUID_V4_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
 interface PostPayVerification {
-  verified: boolean
-  checkoutSessionId: string
+  paid: boolean
+  intakeUuid: string | undefined
 }
 
+// R15 reconciliation: U8's real post-pay response
+// (practiceClientIntakePostPayStatusResponseSchema) is {paid, intake_uuid?,
+// organization_id?} -- there is no `verified`/`checkoutSessionId` field, and
+// Blawby never echoes a checkout session id back from this endpoint at all.
+// The original design ("attach only the session returned in a validated
+// Blawby response") assumed a field that does not exist; the verification
+// this route can actually perform is: Blawby confirms `paid` for the exact
+// intake uuid this request reference is bound to, given the client-supplied
+// `session_id` query param. If that holds, the caller-supplied
+// checkoutSessionId (already used to ask Blawby) is what gets attached below
+// -- there is no other session id available to attach.
 function parsePostPayVerification(body: unknown): PostPayVerification | undefined {
   if (!body || typeof body !== 'object') return undefined
   const record = body as Record<string, unknown>
-  return typeof record.verified === 'boolean' && typeof record.checkoutSessionId === 'string'
-    ? { verified: record.verified, checkoutSessionId: record.checkoutSessionId }
-    : undefined
+  if (typeof record.paid !== 'boolean') return undefined
+  return { paid: record.paid, intakeUuid: typeof record.intake_uuid === 'string' ? record.intake_uuid : undefined }
 }
 
 export default defineHandler(async (event) => {
@@ -134,32 +144,34 @@ export default defineHandler(async (event) => {
       parseResponse: parsePostPayVerification,
     })
 
-    if (!verification.verified || verification.checkoutSessionId !== checkoutSessionId) {
+    if (!verification.paid || verification.intakeUuid !== blawbyIntakeId) {
       return legalApiErrorResponse(event, 409, 'LEGAL_INTAKE_POST_PAY_UNVERIFIED', 'Blawby could not verify this checkout session')
     }
 
     // Only NOW, after Blawby's own verified response, may this session be
-    // attached (plan step 4/5's "attach only the session returned in a
-    // validated Blawby response").
+    // attached. Blawby's post-pay response never echoes a session id (see
+    // parsePostPayVerification above), so the caller-supplied
+    // checkoutSessionId -- already verified against Blawby above -- is what
+    // gets attached.
     const attach = record.checkoutSessionId
       ? await replaceLegalCheckoutSession(context.db, event, {
           requestReference,
           organizationId: context.organizationId,
           siteId: context.siteId,
           expectedPriorSessionId: record.checkoutSessionId,
-          newSessionId: verification.checkoutSessionId,
+          newSessionId: checkoutSessionId,
         })
       : await attachLegalCheckoutSessionInitial(context.db, event, {
           requestReference,
           organizationId: context.organizationId,
           siteId: context.siteId,
-          checkoutSessionId: verification.checkoutSessionId,
+          checkoutSessionId,
         })
     if (attach === 'conflict') {
       return legalApiErrorResponse(event, 409, 'LEGAL_INTAKE_CHECKOUT_SESSION_CONFLICT', 'This request reference already has a different checkout session bound')
     }
 
-    return legalJsonResponse({ checkoutSessionId: verification.checkoutSessionId, status: 'attached' })
+    return legalJsonResponse({ checkoutSessionId, status: 'attached' })
   } catch (error) {
     rethrowHttpError(error)
     return legalApiErrorResponse(event, 500, 'LEGAL_INTAKE_POST_PAY_FAILED', 'Failed to verify and attach the checkout session')

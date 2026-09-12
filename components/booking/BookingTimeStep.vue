@@ -82,6 +82,7 @@
             :key="slot.time_slot"
             type="button"
             :disabled="slot.disabled"
+            :aria-label="`${formatTime(slot.time_slot, locale)} ${slot.availabilityLabel}`"
             class="flex w-full items-center justify-between gap-4 rounded-lg border border-default px-4 py-3.5 text-left transition-colors"
             :class="[
               slot.disabled ? 'cursor-default bg-muted' : 'cursor-pointer hover:border-inverted',

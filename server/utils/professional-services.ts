@@ -3,27 +3,20 @@ import { queryAll, queryFirst, type DbClient } from '~/server/db'
 import { HTTPError } from 'nitro';
 import type { CloudflareEnv } from '~/server/utils/auth'
 import { parseSocialImageSource } from '~/utils/social-metadata'
-import { listPageQa } from '~/server/utils/location-qa'
 import { listSiteReviews } from '~/server/utils/site-reviews'
 import { getPublishedLocalizedSiteBlogPost } from '~/server/utils/content/publishing'
 import { COVER_SELECT, attachCoverMedia, coverJoinSql } from '~/server/utils/content/cover'
 import {
   loadExactPublicLocalizations,
-  projectExactLocalizedCollection,
-  projectExactLocalizedResource,
-  projectLocalizedMediaAlt,
-  resolveLocalizedRouteResourceId,
   type ExactPublicLocalization,
 } from '~/server/utils/public-localization'
-import { loadPublicSocialMedia, type PublicSocialMedia } from '~/server/utils/public-social-image'
-import { listPublicLocaleRepresentations, listPublicResourceLocaleRepresentations } from '~/server/utils/public-locale-representations'
+import { loadPublicSocialMedia } from '~/server/utils/public-social-image'
+import { listPublicLocaleRepresentations } from '~/server/utils/public-locale-representations'
 import { siteSupportsBlawbyTemplate } from '~/utils/template-registry'
 import {
   getPublicTenantPageForPath,
   listCanonicalTenantPages,
-  listPublicTenantPageOfferingRows,
   type PublicTenantPageHydrationResources,
-  type PublicTenantPageOfferingRow,
 } from '~/server/utils/public-tenant-pages'
 import { listPublishedTenantPagePaths } from '~/server/utils/content/pages'
 import { isBlawbyShellOnlyRouteRecipe } from '~/types/blawby'
@@ -37,10 +30,6 @@ import type {
   PublicCompliance,
   PublicComplianceContactPoint,
   PublicConsultationSettings,
-  PublicOffering,
-  PublicOfferingFeature,
-  PublicOfferingLink,
-  PublicOfferingSummary,
   PublicSiteQa,
   PublicSiteReview,
   PublicTenantPage,
@@ -60,133 +49,31 @@ export function resolvePublicArticleCanonicalUrl(value: unknown, slug: unknown):
   return `/article/${requiredText(slug, 'article.slug')}`
 }
 
-type OfferingRow = ApiRecord & {
-  features: string | null
-  faqs: string | null
-  location_address: string | null
-  location_city: string | null
-}
-
-export async function getActiveBlawbySite(db: DbClient, siteId: string): Promise<{ organization_id: string; vertical: string; theme_id: string } | null> {
+/**
+ * The site behind a Blawby route.
+ *
+ * `previewAuthorized` is the same contract every other public surface honours:
+ * a site that is not yet active still renders for someone holding its preview
+ * token. Without it a professional-services site could not be previewed at all
+ * during onboarding — the pending site 404'd as "Blawby is not enabled" no
+ * matter what token the frame carried. Legal-access callers pass nothing and so
+ * keep requiring an active site, which is what an eligibility check wants.
+ */
+export async function getActiveBlawbySite(
+  db: DbClient,
+  siteId: string,
+  options: { previewAuthorized?: boolean } = {},
+): Promise<{ organization_id: string; vertical: string; theme_id: string } | null> {
   const site = await queryFirst<{ organization_id: string; vertical: string; theme_id: string }>(db, `
     SELECT organization_id, vertical, theme_id
       FROM sites
-     WHERE id = ? AND status = 'active' AND onboarding_status = 'active'
+     WHERE id = ? AND status = 'active'${options.previewAuthorized ? '' : " AND onboarding_status = 'active'"}
      LIMIT 1
   `, [siteId])
 
   return siteSupportsBlawbyTemplate({ vertical: site?.vertical, themeId: site?.theme_id })
     ? site
     : null
-}
-
-async function getOfferingMedia(db: DbClient, siteId: string, offeringIds: string[]) {
-  return await loadPublicSocialMedia(db, siteId, 'offering', offeringIds)
-}
-
-function mapOfferingRow(row: OfferingRow, socialMedia: PublicSocialMedia): PublicOffering {
-  const media = socialMedia.media
-  const rawFeatures = row.features ? JSON.parse(row.features) as ApiRecord[] : []
-  const features: PublicOfferingFeature[] = rawFeatures.map((feature, index) => {
-    if (!feature || typeof feature !== 'object' || Array.isArray(feature)) {
-      throw new HTTPError({ statusCode: 500, statusMessage: `Stored offering ${row.id}.features[${index}] is invalid`, data: { code: 'INVALID_STORED_CONTENT' } })
-    }
-    const record = feature as ApiRecord
-    return {
-      title: requiredText(record.title ?? record.name, `offering ${row.id}.features[${index}].title`),
-      description: requiredText(record.description ?? record.desc, `offering ${row.id}.features[${index}].description`),
-      icon: typeof record.icon === 'string' ? record.icon : null,
-      sort_order: Number(record.sort_order ?? index),
-    }
-  }).sort((left, right) => left.sort_order - right.sort_order)
-  return {
-    id: String(row.id),
-    name: String(row.name),
-    slug: String(row.slug),
-    label: typeof row.label === 'string' ? row.label : null,
-    summary: typeof row.summary === 'string' ? row.summary : null,
-    short_description: typeof row.short_description === 'string' ? row.short_description : null,
-    body: typeof row.body === 'string' ? row.body : null,
-    features,
-    faqs: row.faqs ? JSON.parse(row.faqs) as { question: string; answer: string }[] : [],
-    cta_label: typeof row.cta_label === 'string' ? row.cta_label : null,
-    cta_url: typeof row.cta_url === 'string' ? row.cta_url : null,
-    media: media.filter(asset => typeof asset.public_url === 'string' && asset.public_url).map(asset => ({
-      asset_id: String(asset.asset_id),
-      slot: String(asset.slot),
-      public_url: String(asset.public_url),
-      thumbnail_url: typeof asset.thumbnail_url === 'string' ? asset.thumbnail_url : null,
-      kind: requiredText(asset.kind, `media asset ${asset.asset_id}.kind`),
-      alt_text: typeof asset.alt_text === 'string' ? String(asset.alt_text) : null,
-      width: Number.isFinite(Number(asset.width)) ? Number(asset.width) : null,
-      height: Number.isFinite(Number(asset.height)) ? Number(asset.height) : null,
-    })),
-    social_image: socialMedia.social_image,
-    schema_type: typeof row.schema_type === 'string' ? row.schema_type : null,
-    seo_title: typeof row.seo_title === 'string' ? row.seo_title : null,
-    seo_description: typeof row.seo_description === 'string' ? row.seo_description : null,
-    canonical_path: typeof row.canonical_path === 'string' ? row.canonical_path : null,
-    sort_order: Number(row.sort_order ?? 0),
-    featured: asBoolean(row.featured),
-    location_address_street: typeof row.location_address === 'string' ? row.location_address : null,
-    location_address_locality: typeof row.location_city === 'string' ? row.location_city : null,
-  }
-}
-
-export async function listPublicOfferings(db: DbClient, siteId: string): Promise<PublicOffering[]> {
-  const rows = await queryAll<OfferingRow>(db, `
-    SELECT o.*, loc.address AS location_address,
-           loc.city AS location_city
-      FROM offerings o
-      LEFT JOIN business_locations loc ON o.location_id = loc.id AND loc.status = 'active'
-     WHERE o.site_id = ?
-     ORDER BY o.sort_order ASC, o.name ASC
-  `, [siteId])
-
-  const media = await getOfferingMedia(db, siteId, rows.map(row => String(row.id)))
-  return rows.map(row => mapOfferingRow(row, media.get(String(row.id)) ?? { media: [], social_image: null }))
-}
-
-export async function listPublicOfferingLinks(db: DbClient, siteId: string): Promise<PublicOfferingLink[]> {
-  const rows = await queryAll<ApiRecord>(db, `
-    SELECT id, name, slug, canonical_path
-      FROM offerings
-     WHERE site_id = ?
-     ORDER BY sort_order ASC, name ASC
-  `, [siteId])
-
-  return rows.map(row => ({
-    id: String(row.id),
-    name: String(row.name),
-    slug: String(row.slug),
-    canonical_path: requiredText(row.canonical_path, `offering ${row.id}.canonical_path`),
-  }))
-}
-
-export async function listPublicOfferingSummaries(db: DbClient, siteId: string): Promise<PublicOfferingSummary[]> {
-  return mapPublicOfferingSummaries(await listPublicTenantPageOfferingRows(db, siteId))
-}
-
-function mapPublicOfferingSummaries(rows: PublicTenantPageOfferingRow[]): PublicOfferingSummary[] {
-  return rows.map(row => ({
-    id: String(row.id),
-    name: String(row.name),
-    slug: String(row.slug),
-    label: typeof row.label === 'string' ? row.label : null,
-    summary: typeof row.summary === 'string' ? row.summary : null,
-    short_description: typeof row.short_description === 'string' ? row.short_description : null,
-    media: row.media.map(item => ({
-      asset_id: item.asset_id,
-      slot: item.slot,
-      public_url: item.public_url,
-      thumbnail_url: item.thumbnail_url,
-      kind: item.kind,
-      alt_text: item.alt_text,
-    })),
-    canonical_path: requiredText(row.canonical_path, `offering ${row.id}.canonical_path`),
-    sort_order: Number(row.sort_order ?? 0),
-    featured: asBoolean(row.featured),
-  }))
 }
 
 export async function listPublicBlogSummaries(db: DbClient, siteId: string, limit = 50, locale = 'en'): Promise<PublicBlogSummary[]> {
@@ -213,20 +100,6 @@ export async function listPublicBlogSummaries(db: DbClient, siteId: string, limi
     cover: attachCoverMedia(row).cover,
     social_image: socialMedia.get(String(row.representation_id))?.social_image ?? null,
   }))
-}
-
-export async function getPublicOfferingBySlug(db: DbClient, siteId: string, slug: string): Promise<PublicOffering | null> {
-  const row = await queryFirst<OfferingRow>(db, `
-    SELECT o.*, loc.address AS location_address,
-           loc.city AS location_city
-      FROM offerings o
-      LEFT JOIN business_locations loc ON o.location_id = loc.id AND loc.status = 'active'
-     WHERE o.site_id = ? AND o.slug = ?
-     LIMIT 1
-  `, [siteId, slug])
-  if (!row) return null
-  const media = await getOfferingMedia(db, siteId, [String(row.id)])
-  return mapOfferingRow(row, media.get(String(row.id)) ?? { media: [], social_image: null })
 }
 
 export async function listPublicTenantPages(db: DbClient, siteId: string): Promise<PublicTenantPage[]> {
@@ -418,12 +291,13 @@ export async function getPublicBlawbyShellData(
   const locale = options.locale?.trim() || 'en'
   const localizations = options.localizations ?? []
   const siteLocalization = localizations.find(item => item.resourceType === 'site' && item.resourceId === siteId) ?? null
-  const [sourceIdentity, sourceConsultation, sourceCompliance, themeTokens, sourceOfferingLinks, pageLinks] = await Promise.all([
+  // Navigation is the site's published pages. A practice area is one of them,
+  // so there is no separate link list to keep in step with the page list.
+  const [sourceIdentity, sourceConsultation, sourceCompliance, themeTokens, pageLinks] = await Promise.all([
     getPublicBlawbyIdentity(db, siteId),
     getPublicConsultationSettings(db, siteId),
     getPublicCompliance(db, siteId),
     getPublicThemeTokens(db, siteId),
-    listPublicOfferingLinks(db, siteId),
     listPublishedTenantPagePaths(db, siteId, locale),
   ])
   const localizedRepresentation = locale !== 'en'
@@ -436,7 +310,6 @@ export async function getPublicBlawbyShellData(
     : sourceIdentity
   let consultation = sourceConsultation
   let compliance = sourceCompliance
-  let offeringLinks = sourceOfferingLinks
   if (localizedRepresentation) {
     const consultationValues = siteLocalization?.values.consultation as { cta_label?: unknown } | undefined
     consultation = {
@@ -455,18 +328,6 @@ export async function getPublicBlawbyShellData(
           media: sourceCompliance.media.map(item => ({ ...item, alt_text: null, file_name: null })),
         }
       : null
-    const offeringLocalizations = new Map(
-      localizations
-        .filter(row => row.resourceType === 'offering')
-        .map(row => [row.resourceId, row]),
-    )
-    offeringLinks = projectExactLocalizedCollection('offering', sourceOfferingLinks, localizations).map((offering) => {
-      const routePath = offeringLocalizations.get(offering.id)?.routePath
-      if (!routePath?.startsWith('/')) {
-        throw new HTTPError({ statusCode: 500, statusMessage: 'Stored localized offering route is invalid', data: { code: 'INVALID_STORED_CONTENT' } })
-      }
-      return { ...offering, canonical_path: routePath }
-    })
   }
   const header = compliance?.metadata?.header
   if (header && typeof header === 'object') {
@@ -478,7 +339,6 @@ export async function getPublicBlawbyShellData(
     consultation,
     compliance,
     themeTokens,
-    offeringLinks,
     pageLinks: pageLinks.map(page => ({ id: page.id, path: page.path, title: page.title })),
   }
 }
@@ -487,10 +347,10 @@ export async function getPublicBlawbyDocumentData(
   db: DbClient,
   siteId: string,
   recipe: PublicBlawbyRouteData['recipe'],
-  options: { token?: string; slug?: string | null; locale?: string | null } = {},
+  options: { previewAuthorized?: boolean; slug?: string | null; locale?: string | null } = {},
   env: CloudflareEnv,
 ): Promise<{ shell: PublicBlawbyShellData; route: PublicBlawbyRouteData } | null> {
-  const site = await getActiveBlawbySite(db, siteId)
+  const site = await getActiveBlawbySite(db, siteId, { previewAuthorized: options.previewAuthorized })
   if (!site) return null
   const locale = options.locale?.trim() || 'en'
   const localizations = locale === 'en'
@@ -501,20 +361,16 @@ export async function getPublicBlawbyDocumentData(
     getPublicBlawbyShellData(db, siteId, { locale, localizations }),
     getPublicBlawbyRouteData(db, siteId, recipe, { ...options, locale, localizations }, env),
   ])
-  const pagePath = ROUTE_PAGE_PATHS[recipe]
+  const pagePath = recipe === 'page' ? options.slug ?? null : ROUTE_PAGE_PATHS[recipe]
   if (recipe === 'article') return { shell, route }
-  route.localeRepresentations = recipe === 'offering' && route.offering
-    ? await listPublicResourceLocaleRepresentations(db, {
-        organizationId: site.organization_id,
-        siteId,
-        resource: { type: 'offering', id: route.offering.id },
-      })
-    : await listPublicLocaleRepresentations(db, {
-        organizationId: site.organization_id,
-        siteId,
-        sourcePath: pagePath ?? '/',
-        documentId: route.page?.page_id,
-      })
+  // Every route on this template is a page now, so locale representations
+  // come from the document — there is no second resource kind to branch on.
+  route.localeRepresentations = await listPublicLocaleRepresentations(db, {
+    organizationId: site.organization_id,
+    siteId,
+    sourcePath: pagePath ?? '/',
+    documentId: route.page?.page_id,
+  })
   return { shell, route }
 }
 
@@ -522,7 +378,7 @@ export async function resolvePublicBlawbyDocumentOrThrow(
   db: DbClient,
   siteId: string,
   recipe: PublicBlawbyRouteData['recipe'],
-  options: { token?: string; slug?: string | null; locale?: string | null } = {},
+  options: { previewAuthorized?: boolean; slug?: string | null; locale?: string | null } = {},
   env: CloudflareEnv,
 ): Promise<{ success: true; shell: PublicBlawbyShellData; route: PublicBlawbyRouteData }> {
   const document = await getPublicBlawbyDocumentData(db, siteId, recipe, options, env)
@@ -547,7 +403,6 @@ const ROUTE_PAGE_PATHS: Record<PublicBlawbyRouteData['recipe'], string | null> =
   home: '/',
   links: null,
   services: '/services',
-  offering: '/services',
   about: '/about',
   pricing: '/pricing',
   contact: '/contact',
@@ -559,19 +414,18 @@ const ROUTE_PAGE_PATHS: Record<PublicBlawbyRouteData['recipe'], string | null> =
   privacy: '/policies/privacy',
   terms: '/policies/terms',
   'third-party-notices': '/third-party-notices',
+  // A generic page names its own path, so it has no fixed entry here.
+  page: null,
 }
-function mapPublicQa(rows: Array<{
-  id: unknown
-  question: unknown
-  answer?: unknown
-  sort_order?: unknown
-}>): PublicSiteQa[] {
-  return rows.map(row => ({
-    id: String(row.id),
-    question: String(row.question),
-    answer: typeof row.answer === 'string' ? row.answer : null,
-    sort_order: Number(row.sort_order ?? 0),
-  }))
+function faqBlockQa(page: { blocks: Array<{ type: string; data: Record<string, unknown> }> } | null): PublicSiteQa[] {
+  const block = page?.blocks.find(candidate => candidate.type === 'faq')
+  if (!block || !Array.isArray(block.data.items)) return []
+  return block.data.items.flatMap((item, index) => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) return []
+    const record = item as Record<string, unknown>
+    if (typeof record.id !== 'string' || typeof record.title !== 'string') return []
+    return [{ id: record.id, question: record.title, answer: typeof record.description === 'string' ? record.description : null, sort_order: index }]
+  })
 }
 
 type SiteReviewRow = Awaited<ReturnType<typeof listSiteReviews>>[number]
@@ -637,84 +491,27 @@ export async function getPublicBlawbyRouteData(
   db: DbClient,
   siteId: string,
   recipe: PublicBlawbyRouteData['recipe'],
-  options: { token?: string; slug?: string | null; locale?: string | null; localizations?: readonly ExactPublicLocalization[] } = {},
+  options: { previewAuthorized?: boolean; slug?: string | null; locale?: string | null; localizations?: readonly ExactPublicLocalization[] } = {},
   env: CloudflareEnv,
 ): Promise<PublicBlawbyRouteData> {
-  const needsOfferings = ['home', 'services', 'offering', 'about', 'pricing'].includes(recipe)
-  const needsQa = ['home', 'services', 'about', 'pricing', 'contact', 'schedule', 'blog', 'donate'].includes(recipe)
-  const needsReviews = ['home', 'offering', 'about', 'contact', 'schedule'].includes(recipe)
+  const needsReviews = ['home', 'about', 'contact', 'schedule'].includes(recipe)
   const postLimit = recipe === 'home' ? 3 : recipe === 'blog' ? 50 : 0
-  const pagePath = ROUTE_PAGE_PATHS[recipe]
-  const offeringRowsPromise = needsOfferings
-    ? listPublicTenantPageOfferingRows(db, siteId)
-    : Promise.resolve([])
-  const qaRowsPromise = needsQa && pagePath
-    ? listPageQa(db, siteId, pagePath, true, options.locale ?? 'en')
-    : Promise.resolve([])
+  const pagePath = recipe === 'page' ? options.slug ?? null : ROUTE_PAGE_PATHS[recipe]
   const localized = options.locale !== undefined && options.locale !== 'en'
-  const localizedOfferingId = localized && recipe === 'offering' && options.slug
-    ? resolveLocalizedRouteResourceId(options.localizations ?? [], 'offering', `/${options.locale}/services/${options.slug}`)
-    : null
-  const localizedOfferingSource = localizedOfferingId
-    ? await queryFirst<{ slug: string; location_id: string | null }>(db, 'SELECT slug, location_id FROM offerings WHERE id = ? AND site_id = ? LIMIT 1', [localizedOfferingId, siteId])
-    : null
-  const offeringSlug = localized ? localizedOfferingSource?.slug ?? null : options.slug
 
-  const [page, offeringRows, offering, qaRows, reviewRows, initialPosts, postRow] = await Promise.all([
+  const [page, reviewRows, initialPosts, postRow] = await Promise.all([
     pagePath
       ? getPublicTenantPageByPath(db, siteId, pagePath, {
           locale: options.locale,
           localizations: localized ? options.localizations ?? [] : null,
-          hydrationResources: {
-            offerings: needsOfferings ? offeringRowsPromise : undefined,
-            qaRows: needsQa ? qaRowsPromise : undefined,
-          },
         })
       : Promise.resolve(null),
-    offeringRowsPromise,
-    recipe === 'offering' && offeringSlug
-      ? getPublicOfferingBySlug(db, siteId, offeringSlug)
-      : Promise.resolve(null),
-    qaRowsPromise,
     needsReviews ? listSiteReviews(db, siteId, { publishedOnly: true }) : Promise.resolve([]),
     postLimit ? listPublicBlogSummaries(db, siteId, postLimit, options.locale ?? 'en') : Promise.resolve([]),
     recipe === 'article' && options.slug
-      ? getPublishedLocalizedSiteBlogPost(db, siteId, options.slug, options.locale ?? 'en', env, options.token)
+      ? getPublishedLocalizedSiteBlogPost(db, siteId, options.slug, options.locale ?? 'en', env, options.previewAuthorized)
       : Promise.resolve(null),
   ])
-  const localizations = options.localizations ?? []
-  const sourceOfferings = mapPublicOfferingSummaries(offeringRows)
-  const offerings = localized
-    ? projectExactLocalizedCollection('offering', sourceOfferings, localizations).map(item => {
-        const representation = localizations.find(value => value.resourceType === 'offering' && value.resourceId === item.id)
-        if (!representation?.routePath?.startsWith('/')) {
-          throw new HTTPError({ statusCode: 500, statusMessage: 'Stored localized offering route is invalid', data: { code: 'INVALID_STORED_CONTENT' } })
-        }
-        return {
-          ...item,
-          canonical_path: representation.routePath,
-          media: projectLocalizedMediaAlt(item.media, localizations),
-        }
-      })
-    : sourceOfferings
-  const sourceOffering = offering
-  const offeringLocalization = sourceOffering
-    ? localizations.find(item => item.resourceType === 'offering' && item.resourceId === sourceOffering.id)
-    : null
-  const offeringLocationLocalization = localizedOfferingSource?.location_id
-    ? localizations.find(item => item.resourceType === 'business_location' && item.resourceId === localizedOfferingSource.location_id)
-    : null
-  const resolvedOffering = localized
-    ? sourceOffering && offeringLocalization?.routePath
-      ? {
-          ...projectExactLocalizedResource('offering', sourceOffering, offeringLocalization),
-          canonical_path: offeringLocalization.routePath,
-          media: projectLocalizedMediaAlt(sourceOffering.media, localizations),
-          location_address_street: typeof offeringLocationLocalization?.values.address === 'string' ? offeringLocationLocalization.values.address : null,
-          location_address_locality: typeof offeringLocationLocalization?.values.city === 'string' ? offeringLocationLocalization.values.city : null,
-        }
-      : null
-    : sourceOffering
   let posts = initialPosts
   if (recipe === 'article' && postRow) {
     if (localized) posts = []
@@ -727,14 +524,14 @@ export async function getPublicBlawbyRouteData(
     }
   }
 
-  const qa = mapPublicQa(qaRows)
+  // The Blawby layouts render one FAQ section, from the page's FAQ block; the
+  // route data carries that block's items, as its declared source resolved them.
+  const qa = faqBlockQa(page)
   const resolvedPost = mapPublicBlogPost(postRow)
   return {
     recipe,
     localeRepresentations: postRow?.localeRepresentations ?? [],
     page,
-    offerings,
-    offering: resolvedOffering,
     qa,
     reviews: mapPublicReviews(reviewRows),
     posts,
@@ -744,18 +541,16 @@ export async function getPublicBlawbyRouteData(
 
 export function hasPublicBlawbyRouteContent(route: PublicBlawbyRouteData): boolean {
   if (route.recipe === 'confirmation' || isBlawbyShellOnlyRouteRecipe(route.recipe)) return true
-  if (route.recipe === 'offering') return Boolean(route.offering)
   if (route.recipe === 'article') return Boolean(route.post)
   return Boolean(route.page)
 }
 
 export async function getPublicBlawbyData(db: DbClient, siteId: string): Promise<PublicBlawbyData> {
-  const [offerings, tenantPages, compliance, consultation, themeTokens] = await Promise.all([
-    listPublicOfferings(db, siteId),
+  const [tenantPages, compliance, consultation, themeTokens] = await Promise.all([
     listPublicTenantPages(db, siteId),
     getPublicCompliance(db, siteId),
     getPublicConsultationSettings(db, siteId),
     getPublicThemeTokens(db, siteId),
   ])
-  return { offerings, tenantPages, compliance, consultation, themeTokens }
+  return { tenantPages, compliance, consultation, themeTokens }
 }

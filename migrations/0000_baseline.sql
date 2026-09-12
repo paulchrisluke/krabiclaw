@@ -91,7 +91,7 @@ CREATE INDEX `analytics_events_site_session_idx` ON `analytics_events` (`site_id
 CREATE INDEX `analytics_events_site_visitor_idx` ON `analytics_events` (`site_id`,`kind`,`visitor_id`);--> statement-breakpoint
 CREATE INDEX `analytics_events_conversion_name_idx` ON `analytics_events` (`kind`,(payload_json ->> '$.event_name'),`created_at`);--> statement-breakpoint
 CREATE INDEX `analytics_events_conversion_entity_idx` ON `analytics_events` (`site_id`,(payload_json ->> '$.entity_type'),(payload_json ->> '$.entity_id')) WHERE kind = 'conversion';--> statement-breakpoint
-CREATE UNIQUE INDEX `analytics_events_conversion_entity_unique` ON `analytics_events` (`site_id`,(payload_json ->> '$.event_name'),(payload_json ->> '$.entity_type'),(payload_json ->> '$.entity_id')) WHERE kind = 'conversion' AND (payload_json ->> '$.entity_type') IS NOT NULL AND (payload_json ->> '$.entity_id') IS NOT NULL AND (payload_json ->> '$.event_name') IN ('contact_submit', 'reservation_submit', 'experience_booking_submit');--> statement-breakpoint
+CREATE UNIQUE INDEX `analytics_events_conversion_entity_unique` ON `analytics_events` (`site_id`,(payload_json ->> '$.event_name'),(payload_json ->> '$.entity_type'),(payload_json ->> '$.entity_id')) WHERE kind = 'conversion' AND (payload_json ->> '$.entity_type') IS NOT NULL AND (payload_json ->> '$.entity_id') IS NOT NULL AND (payload_json ->> '$.event_name') IN ('contact_submit', 'reservation_submit', 'booking_submit');--> statement-breakpoint
 CREATE TABLE `analytics_summaries` (
 	`id` text PRIMARY KEY NOT NULL,
 	`kind` text NOT NULL,
@@ -130,8 +130,39 @@ CREATE UNIQUE INDEX `analytics_summaries_grain_unique` ON `analytics_summaries` 
 CREATE INDEX `analytics_summaries_session_started_idx` ON `analytics_summaries` (`site_id`,(payload_json ->> '$.started_at')) WHERE kind = 'session';--> statement-breakpoint
 CREATE INDEX `analytics_summaries_session_seen_idx` ON `analytics_summaries` (`site_id`,(payload_json ->> '$.last_seen_at')) WHERE kind = 'session';--> statement-breakpoint
 CREATE INDEX `analytics_summaries_session_visitor_idx` ON `analytics_summaries` (`site_id`,(payload_json ->> '$.visitor_id'),(payload_json ->> '$.started_at')) WHERE kind = 'session';--> statement-breakpoint
+CREATE TABLE `bookings` (
+	`id` text PRIMARY KEY NOT NULL,
+	`organization_id` text NOT NULL,
+	`site_id` text NOT NULL,
+	`product_id` text NOT NULL,
+	`product_session_id` text NOT NULL,
+	`product_variant_id` text NOT NULL,
+	`customer_id` text,
+	`request_id` text,
+	`party_size` integer NOT NULL,
+	`status` text DEFAULT 'pending' NOT NULL,
+	`hold_expires_at` text,
+	`cancelled_at` text,
+	`completed_at` text,
+	`cancellation_reason` text,
+	`created_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
+	`updated_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
+	FOREIGN KEY (`organization_id`) REFERENCES `organization`(`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`customer_id`) REFERENCES `customers`(`id`) ON UPDATE no action ON DELETE set null,
+	FOREIGN KEY (`organization_id`,`site_id`) REFERENCES `sites`(`organization_id`,`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`organization_id`,`product_id`,`product_session_id`) REFERENCES `product_sessions`(`organization_id`,`product_id`,`id`) ON UPDATE no action ON DELETE restrict,
+	FOREIGN KEY (`organization_id`,`product_id`,`product_variant_id`) REFERENCES `product_variants`(`organization_id`,`product_id`,`id`) ON UPDATE no action ON DELETE restrict,
+	FOREIGN KEY (`organization_id`,`site_id`,`request_id`) REFERENCES `requests`(`organization_id`,`site_id`,`id`) ON UPDATE no action ON DELETE restrict,
+	CONSTRAINT "bookings_instants_check" CHECK((hold_expires_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', hold_expires_at, '+0 days') IS hold_expires_at) AND (cancelled_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', cancelled_at, '+0 days') IS cancelled_at) AND (completed_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', completed_at, '+0 days') IS completed_at) AND (created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)),
+	CONSTRAINT "bookings_party_size_check" CHECK(party_size > 0)
+);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `bookings_request_unique` ON `bookings` (`request_id`) WHERE request_id IS NOT NULL;--> statement-breakpoint
+CREATE INDEX `bookings_session_status_idx` ON `bookings` (`product_session_id`,`status`);--> statement-breakpoint
+CREATE INDEX `bookings_site_created_idx` ON `bookings` (`site_id`,`created_at`);--> statement-breakpoint
+CREATE INDEX `bookings_customer_idx` ON `bookings` (`customer_id`);--> statement-breakpoint
+CREATE INDEX `bookings_hold_expiry_idx` ON `bookings` (`hold_expires_at`) WHERE hold_expires_at IS NOT NULL;--> statement-breakpoint
 CREATE TABLE `business_locations` (
-	`booking_json` text DEFAULT '{}' NOT NULL,
 	`id` text PRIMARY KEY NOT NULL,
 	`organization_id` text NOT NULL,
 	`site_id` text NOT NULL,
@@ -181,7 +212,6 @@ CREATE TABLE `business_locations` (
 	FOREIGN KEY (`team_id`) REFERENCES `team`(`id`) ON UPDATE no action ON DELETE set null,
 	FOREIGN KEY (`organization_id`,`site_id`) REFERENCES `sites`(`organization_id`,`id`) ON UPDATE no action ON DELETE cascade,
 	CONSTRAINT "business_locations_instants_check" CHECK((last_synced_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', last_synced_at, '+0 days') IS last_synced_at) AND (created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)),
-	CONSTRAINT "business_locations_booking_check" CHECK(json_valid(booking_json) AND json_type(booking_json) = 'object'),
 	CONSTRAINT "business_locations_address_check" CHECK(address IS NULL OR (json_valid(address) AND json_type(address) IS 'object')),
 	CONSTRAINT "business_locations_categories_check" CHECK(categories IS NULL OR (json_valid(categories) AND json_type(categories) IS 'array')),
 	CONSTRAINT "business_locations_feature_overrides_check" CHECK(feature_overrides IS NULL OR (json_valid(feature_overrides) AND json_type(feature_overrides) IS 'object')),
@@ -191,6 +221,52 @@ CREATE TABLE `business_locations` (
 --> statement-breakpoint
 CREATE UNIQUE INDEX `business_locations_organization_id_site_id_slug_unique` ON `business_locations` (`organization_id`,`site_id`,`slug`);--> statement-breakpoint
 CREATE UNIQUE INDEX `business_locations_organization_id_site_id_id_unique` ON `business_locations` (`organization_id`,`site_id`,`id`);--> statement-breakpoint
+CREATE UNIQUE INDEX `business_locations_organization_id_id_unique` ON `business_locations` (`organization_id`,`id`);--> statement-breakpoint
+CREATE TABLE `collection_products` (
+	`organization_id` text NOT NULL,
+	`collection_id` text NOT NULL,
+	`product_id` text NOT NULL,
+	`sort_order` integer DEFAULT 0 NOT NULL,
+	`created_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
+	`updated_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
+	`created_by` text NOT NULL,
+	`updated_by` text NOT NULL,
+	PRIMARY KEY(`collection_id`, `product_id`),
+	FOREIGN KEY (`organization_id`) REFERENCES `organization`(`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`organization_id`,`collection_id`) REFERENCES `collections`(`organization_id`,`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`organization_id`,`product_id`) REFERENCES `products`(`organization_id`,`id`) ON UPDATE no action ON DELETE cascade,
+	CONSTRAINT "collection_products_instants_check" CHECK((created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)),
+	CONSTRAINT "collection_products_sort_order_check" CHECK(sort_order >= 0)
+);
+--> statement-breakpoint
+CREATE INDEX `collection_products_order_idx` ON `collection_products` (`collection_id`,`sort_order`,`product_id`);--> statement-breakpoint
+CREATE INDEX `collection_products_product_idx` ON `collection_products` (`product_id`);--> statement-breakpoint
+CREATE TABLE `collections` (
+	`id` text PRIMARY KEY NOT NULL,
+	`organization_id` text NOT NULL,
+	`site_id` text NOT NULL,
+	`location_id` text,
+	`name` text NOT NULL,
+	`slug` text NOT NULL,
+	`description` text,
+	`sort_order` integer DEFAULT 0 NOT NULL,
+	`created_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
+	`updated_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
+	`created_by` text NOT NULL,
+	`updated_by` text NOT NULL,
+	FOREIGN KEY (`organization_id`) REFERENCES `organization`(`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`organization_id`,`site_id`) REFERENCES `sites`(`organization_id`,`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`organization_id`,`site_id`,`location_id`) REFERENCES `business_locations`(`organization_id`,`site_id`,`id`) ON UPDATE no action ON DELETE cascade,
+	CONSTRAINT "collections_instants_check" CHECK((created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)),
+	CONSTRAINT "collections_name_not_blank_check" CHECK(trim(name) <> ''),
+	CONSTRAINT "collections_slug_check" CHECK(slug <> '' AND slug = lower(slug) AND slug NOT GLOB '*[^a-z0-9-]*' AND slug NOT LIKE '-%' AND slug NOT LIKE '%-' AND slug NOT LIKE '%--%'),
+	CONSTRAINT "collections_sort_order_check" CHECK(sort_order >= 0)
+);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `collections_site_slug_unique` ON `collections` (`site_id`,`slug`) WHERE location_id IS NULL;--> statement-breakpoint
+CREATE UNIQUE INDEX `collections_location_slug_unique` ON `collections` (`site_id`,`location_id`,`slug`) WHERE location_id IS NOT NULL;--> statement-breakpoint
+CREATE INDEX `collections_site_sort_idx` ON `collections` (`site_id`,`location_id`,`sort_order`);--> statement-breakpoint
+CREATE UNIQUE INDEX `collections_org_id_unique` ON `collections` (`organization_id`,`id`);--> statement-breakpoint
 CREATE TABLE `content_blocks` (
 	`id` text PRIMARY KEY NOT NULL,
 	`source_block_id` text,
@@ -227,6 +303,7 @@ CREATE TABLE `content_documents` (
 	`root_role` text,
 	`locale` text,
 	`location_id` text,
+	`product_id` text,
 	`scope_path` text,
 	`title` text,
 	`slug` text,
@@ -255,12 +332,13 @@ CREATE TABLE `content_documents` (
 	FOREIGN KEY (`location_id`) REFERENCES `business_locations`(`id`) ON UPDATE no action ON DELETE cascade,
 	FOREIGN KEY (`author_id`) REFERENCES `user`(`id`) ON UPDATE no action ON DELETE set null,
 	FOREIGN KEY (`organization_id`,`site_id`,`location_id`) REFERENCES `business_locations`(`organization_id`,`site_id`,`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`organization_id`,`product_id`) REFERENCES `products`(`organization_id`,`id`) ON UPDATE no action ON DELETE restrict,
 	FOREIGN KEY (`organization_id`,`site_id`) REFERENCES `sites`(`organization_id`,`id`) ON UPDATE no action ON DELETE cascade,
 	FOREIGN KEY (`organization_id`,`site_id`,`root_id`,`root_role`,`kind`) REFERENCES `content_documents`(`organization_id`,`site_id`,`id`,`row_role`,`kind`) ON UPDATE no action ON DELETE cascade,
 	FOREIGN KEY (`organization_id`,`site_id`,`locale`) REFERENCES `site_locales`(`organization_id`,`site_id`,`locale`) ON UPDATE no action ON DELETE cascade,
 	CONSTRAINT "content_documents_instants_check" CHECK((published_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', published_at, '+0 days') IS published_at) AND (first_published_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', first_published_at, '+0 days') IS first_published_at) AND (scheduled_for IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', scheduled_for, '+0 days') IS scheduled_for) AND (created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)),
 	CONSTRAINT "content_documents_metadata_check" CHECK(json_valid(metadata_json) AND json_type(metadata_json) IS 'object'),
-	CONSTRAINT "content_documents_role_check" CHECK((row_role = 'root' AND root_id IS NULL AND root_role IS NULL AND locale = 'en') OR (row_role = 'representation' AND root_id IS NOT NULL AND root_id <> id AND root_role = 'root' AND locale IS NOT NULL AND locale <> 'en' AND location_id IS NULL AND scope_path IS NULL AND status IS NULL AND visibility IS NULL AND source IS NULL AND author_id IS NULL AND published_at IS NULL AND first_published_at IS NULL AND scheduled_for IS NULL)),
+	CONSTRAINT "content_documents_role_check" CHECK((row_role = 'root' AND root_id IS NULL AND root_role IS NULL AND locale = 'en') OR (row_role = 'representation' AND root_id IS NOT NULL AND root_id <> id AND root_role = 'root' AND locale IS NOT NULL AND locale <> 'en' AND product_id IS NULL AND location_id IS NULL AND scope_path IS NULL AND status IS NULL AND visibility IS NULL AND source IS NULL AND author_id IS NULL AND published_at IS NULL AND first_published_at IS NULL AND scheduled_for IS NULL)),
 	CONSTRAINT "content_documents_path_check" CHECK(path IS NULL OR (path LIKE '/%' AND path NOT LIKE '//%')),
 	CONSTRAINT "content_documents_page_copy_check" CHECK(kind <> 'page' OR (path IS NOT NULL AND title IS NOT NULL)),
 	CONSTRAINT "content_documents_page_type_check" CHECK(kind <> 'page' OR row_role <> 'root' OR ((metadata_json ->> '$.page_type') IN ('custom','recipe','legal','system')) IS 1),
@@ -283,6 +361,7 @@ CREATE TABLE `content_documents` (
 	CONSTRAINT "content_documents_channel_instagram_check" CHECK(kind <> 'social_post' OR row_role <> 'root' OR (json_type(metadata_json, '$.channels.instagram') IS NULL OR (json_type(metadata_json, '$.channels.instagram') IS 'object' AND json_type(metadata_json, '$.channels.instagram.created_at') IS 'text' AND (((metadata_json ->> '$.channels.instagram.status') = 'pending' AND (metadata_json ->> '$.channels.instagram.provider_post_id') IS NULL AND (metadata_json ->> '$.channels.instagram.published_at') IS NULL AND (metadata_json ->> '$.channels.instagram.error_message') IS NULL) OR ((metadata_json ->> '$.channels.instagram.status') = 'published' AND (metadata_json ->> '$.channels.instagram.provider_post_id') IS NOT NULL AND (metadata_json ->> '$.channels.instagram.published_at') IS NOT NULL AND (metadata_json ->> '$.channels.instagram.error_message') IS NULL) OR ((metadata_json ->> '$.channels.instagram.status') IN ('failed','skipped') AND (metadata_json ->> '$.channels.instagram.provider_post_id') IS NULL AND (metadata_json ->> '$.channels.instagram.published_at') IS NULL AND (metadata_json ->> '$.channels.instagram.error_message') IS NOT NULL))) IS 1))
 );
 --> statement-breakpoint
+CREATE UNIQUE INDEX `content_documents_product_root_unique` ON `content_documents` (`site_id`,`product_id`) WHERE row_role = 'root' AND product_id IS NOT NULL;--> statement-breakpoint
 CREATE UNIQUE INDEX `content_documents_root_locale_unique` ON `content_documents` (`root_id`,`locale`) WHERE row_role = 'representation';--> statement-breakpoint
 CREATE UNIQUE INDEX `content_documents_route_unique` ON `content_documents` (`site_id`,`locale`,`path`) WHERE row_role IN ('root','representation') AND path IS NOT NULL;--> statement-breakpoint
 CREATE UNIQUE INDEX `content_documents_slug_unique` ON `content_documents` (`site_id`,`kind`,`locale`,`slug`) WHERE row_role IN ('root','representation') AND slug IS NOT NULL;--> statement-breakpoint
@@ -341,6 +420,36 @@ CREATE TABLE `guest_thread_deliveries` (
 --> statement-breakpoint
 CREATE UNIQUE INDEX `guest_thread_deliveries_provider_message_unique` ON `guest_thread_deliveries` (`provider`,`provider_message_id`) WHERE provider_message_id IS NOT NULL;--> statement-breakpoint
 CREATE INDEX `guest_thread_deliveries_entry_status_idx` ON `guest_thread_deliveries` (`entry_id`,`status`);--> statement-breakpoint
+CREATE TABLE `inventory_items` (
+	`id` text PRIMARY KEY NOT NULL,
+	`organization_id` text NOT NULL,
+	`product_variant_id` text NOT NULL,
+	`created_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
+	`updated_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
+	FOREIGN KEY (`organization_id`) REFERENCES `organization`(`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`organization_id`,`product_variant_id`) REFERENCES `product_variants`(`organization_id`,`id`) ON UPDATE no action ON DELETE cascade,
+	CONSTRAINT "inventory_items_instants_check" CHECK((created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at))
+);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `inventory_items_org_id_unique` ON `inventory_items` (`organization_id`,`id`);--> statement-breakpoint
+CREATE UNIQUE INDEX `inventory_items_variant_unique` ON `inventory_items` (`product_variant_id`);--> statement-breakpoint
+CREATE TABLE `inventory_levels` (
+	`organization_id` text NOT NULL,
+	`inventory_item_id` text NOT NULL,
+	`location_id` text NOT NULL,
+	`on_hand` integer DEFAULT 0 NOT NULL,
+	`reserved` integer DEFAULT 0 NOT NULL,
+	`created_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
+	`updated_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
+	PRIMARY KEY(`inventory_item_id`, `location_id`),
+	FOREIGN KEY (`organization_id`) REFERENCES `organization`(`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`organization_id`,`inventory_item_id`) REFERENCES `inventory_items`(`organization_id`,`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`organization_id`,`location_id`) REFERENCES `business_locations`(`organization_id`,`id`) ON UPDATE no action ON DELETE cascade,
+	CONSTRAINT "inventory_levels_instants_check" CHECK((created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)),
+	CONSTRAINT "inventory_levels_quantities_check" CHECK(on_hand >= 0 AND reserved >= 0 AND reserved <= on_hand)
+);
+--> statement-breakpoint
+CREATE INDEX `inventory_levels_location_idx` ON `inventory_levels` (`location_id`);--> statement-breakpoint
 CREATE TABLE `invitation` (
 	`id` text PRIMARY KEY NOT NULL,
 	`organizationId` text NOT NULL,
@@ -369,6 +478,85 @@ CREATE TABLE `jwks` (
 	`expiresAt` integer
 );
 --> statement-breakpoint
+CREATE TABLE `legal_intake_references` (
+	`id` text PRIMARY KEY NOT NULL,
+	`organization_id` text NOT NULL,
+	`site_id` text NOT NULL,
+	`original_actor_id` text NOT NULL,
+	`original_actor_kind` text NOT NULL,
+	`current_authorized_user_id` text,
+	`payload_digest` text NOT NULL,
+	`digest_key_id` text NOT NULL,
+	`digest_version` integer NOT NULL,
+	`blawby_intake_id` text,
+	`checkout_session_id` text,
+	`created_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
+	`updated_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
+	FOREIGN KEY (`organization_id`) REFERENCES `organization`(`id`) ON UPDATE no action ON DELETE restrict,
+	FOREIGN KEY (`site_id`) REFERENCES `sites`(`id`) ON UPDATE no action ON DELETE restrict,
+	FOREIGN KEY (`original_actor_id`) REFERENCES `user`(`id`) ON UPDATE no action ON DELETE restrict,
+	FOREIGN KEY (`current_authorized_user_id`) REFERENCES `user`(`id`) ON UPDATE no action ON DELETE set null,
+	FOREIGN KEY (`organization_id`,`site_id`) REFERENCES `sites`(`organization_id`,`id`) ON UPDATE no action ON DELETE restrict,
+	CONSTRAINT "legal_intake_references_actor_kind_check" CHECK(original_actor_kind IN ('human', 'anonymous'))
+);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `legal_intake_references_blawby_intake_id_unique` ON `legal_intake_references` (`blawby_intake_id`);--> statement-breakpoint
+CREATE UNIQUE INDEX `legal_intake_references_checkout_session_id_unique` ON `legal_intake_references` (`checkout_session_id`);--> statement-breakpoint
+CREATE INDEX `idx_legal_intake_references_site_actor` ON `legal_intake_references` (`site_id`,`original_actor_id`);--> statement-breakpoint
+CREATE INDEX `legal_intake_references_organization_id_idx` ON `legal_intake_references` (`organization_id`);--> statement-breakpoint
+CREATE INDEX `idx_legal_intake_references_actor` ON `legal_intake_references` (`original_actor_id`);--> statement-breakpoint
+CREATE TABLE `location_reservation_configs` (
+	`location_id` text PRIMARY KEY NOT NULL,
+	`organization_id` text NOT NULL,
+	`slot_capacity` integer,
+	`advance_notice_minutes` integer,
+	`minimum_guest_age` integer,
+	`deposit_required` integer DEFAULT 0 NOT NULL,
+	`deposit_trigger_party_size` integer,
+	`free_cancellation_until_minutes` integer,
+	`reschedule_allowed` integer DEFAULT 1 NOT NULL,
+	`reschedule_cutoff_minutes` integer,
+	`accessibility_contact_required` integer DEFAULT 0 NOT NULL,
+	`additional_notes_html` text,
+	`created_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
+	`updated_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
+	`created_by` text NOT NULL,
+	`updated_by` text NOT NULL,
+	FOREIGN KEY (`organization_id`) REFERENCES `organization`(`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`organization_id`,`location_id`) REFERENCES `business_locations`(`organization_id`,`id`) ON UPDATE no action ON DELETE cascade,
+	CONSTRAINT "location_reservation_configs_instants_check" CHECK((created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)),
+	CONSTRAINT "location_reservation_configs_booleans_check" CHECK(deposit_required IN (0, 1) AND reschedule_allowed IN (0, 1) AND accessibility_contact_required IN (0, 1)),
+	CONSTRAINT "location_reservation_configs_slot_capacity_check" CHECK(slot_capacity IS NULL OR slot_capacity >= 0),
+	CONSTRAINT "location_reservation_configs_minutes_check" CHECK((advance_notice_minutes IS NULL OR advance_notice_minutes >= 0) AND (free_cancellation_until_minutes IS NULL OR free_cancellation_until_minutes >= 0) AND (reschedule_cutoff_minutes IS NULL OR reschedule_cutoff_minutes >= 0)),
+	CONSTRAINT "location_reservation_configs_party_check" CHECK(deposit_trigger_party_size IS NULL OR deposit_trigger_party_size > 0),
+	CONSTRAINT "location_reservation_configs_age_check" CHECK(minimum_guest_age IS NULL OR minimum_guest_age >= 0)
+);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `location_reservation_configs_org_location_unique` ON `location_reservation_configs` (`organization_id`,`location_id`);--> statement-breakpoint
+CREATE TABLE `location_reservation_overrides` (
+	`id` text PRIMARY KEY NOT NULL,
+	`organization_id` text NOT NULL,
+	`location_id` text NOT NULL,
+	`override_date` text NOT NULL,
+	`time_slot` text,
+	`status` text NOT NULL,
+	`capacity` integer,
+	`note` text,
+	`created_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
+	`updated_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
+	`created_by` text NOT NULL,
+	`updated_by` text NOT NULL,
+	FOREIGN KEY (`organization_id`) REFERENCES `organization`(`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`organization_id`,`location_id`) REFERENCES `location_reservation_configs`(`organization_id`,`location_id`) ON UPDATE no action ON DELETE cascade,
+	CONSTRAINT "location_reservation_overrides_instants_check" CHECK((created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)),
+	CONSTRAINT "location_reservation_overrides_date_check" CHECK(date(override_date, '+0 days') IS override_date),
+	CONSTRAINT "location_reservation_overrides_time_slot_check" CHECK(time_slot IS NULL OR (time_slot GLOB '[0-2][0-9]:[0-5][0-9]' AND time_slot < '24:00')),
+	CONSTRAINT "location_reservation_overrides_capacity_check" CHECK(capacity IS NULL OR capacity >= 0)
+);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `location_reservation_overrides_slot_unique` ON `location_reservation_overrides` (`location_id`,`override_date`,`time_slot`) WHERE time_slot IS NOT NULL;--> statement-breakpoint
+CREATE UNIQUE INDEX `location_reservation_overrides_date_unique` ON `location_reservation_overrides` (`location_id`,`override_date`) WHERE time_slot IS NULL;--> statement-breakpoint
+CREATE INDEX `location_reservation_overrides_date_idx` ON `location_reservation_overrides` (`location_id`,`override_date`);--> statement-breakpoint
 CREATE TABLE `mcp_tool_call_events` (
 	`id` text PRIMARY KEY NOT NULL,
 	`organization_id` text,
@@ -482,6 +670,31 @@ CREATE TABLE `member` (
 --> statement-breakpoint
 CREATE INDEX `member_userId_organizationId_idx` ON `member` (`userId`,`organizationId`);--> statement-breakpoint
 CREATE INDEX `member_organizationId_idx` ON `member` (`organizationId`);--> statement-breakpoint
+CREATE TABLE `metafield_definitions` (
+	`id` text PRIMARY KEY NOT NULL,
+	`organization_id` text NOT NULL,
+	`namespace` text NOT NULL,
+	`key` text NOT NULL,
+	`name` text NOT NULL,
+	`description` text,
+	`value_type` text NOT NULL,
+	`validations` text DEFAULT '{}' NOT NULL,
+	`localizable` integer DEFAULT 0 NOT NULL,
+	`created_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
+	`updated_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
+	`created_by` text NOT NULL,
+	`updated_by` text NOT NULL,
+	FOREIGN KEY (`organization_id`) REFERENCES `organization`(`id`) ON UPDATE no action ON DELETE cascade,
+	CONSTRAINT "metafield_definitions_instants_check" CHECK((created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)),
+	CONSTRAINT "metafield_definitions_namespace_check" CHECK(namespace <> '' AND namespace = lower(namespace) AND namespace NOT GLOB '*[^a-z0-9_-]*'),
+	CONSTRAINT "metafield_definitions_key_check" CHECK(key <> '' AND key = lower(key) AND key NOT GLOB '*[^a-z0-9_-]*'),
+	CONSTRAINT "metafield_definitions_name_not_blank_check" CHECK(trim(name) <> ''),
+	CONSTRAINT "metafield_definitions_validations_check" CHECK(json_valid(validations) AND json_type(validations) = 'object'),
+	CONSTRAINT "metafield_definitions_localizable_check" CHECK(localizable IN (0, 1))
+);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `metafield_definitions_org_id_unique` ON `metafield_definitions` (`organization_id`,`id`);--> statement-breakpoint
+CREATE UNIQUE INDEX `metafield_definitions_namespace_key_unique` ON `metafield_definitions` (`organization_id`,`namespace`,`key`);--> statement-breakpoint
 CREATE TABLE `oauthAccessToken` (
 	`id` text PRIMARY KEY NOT NULL,
 	`clientId` text NOT NULL,
@@ -508,6 +721,9 @@ CREATE TABLE `oauthClient` (
 	`name` text NOT NULL,
 	`redirectUris` text NOT NULL,
 	`scopes` text DEFAULT '[]' NOT NULL,
+	`clientCredentialsScopes` text DEFAULT '[]' NOT NULL,
+	`clientDiscoveryId` text,
+	`applicationType` text,
 	`public` integer DEFAULT 0 NOT NULL,
 	`requirePKCE` integer DEFAULT 1 NOT NULL,
 	`skipConsent` integer DEFAULT 0 NOT NULL,
@@ -609,43 +825,6 @@ CREATE TABLE `oauthResource` (
 );
 --> statement-breakpoint
 CREATE UNIQUE INDEX `oauthResource_identifier_unique` ON `oauthResource` (`identifier`);--> statement-breakpoint
-CREATE TABLE `offerings` (
-	`id` text PRIMARY KEY NOT NULL,
-	`organization_id` text NOT NULL,
-	`site_id` text NOT NULL,
-	`location_id` text,
-	`name` text NOT NULL,
-	`slug` text NOT NULL,
-	`label` text,
-	`summary` text,
-	`short_description` text,
-	`body` text,
-	`features` text,
-	`faqs` text,
-	`cta_label` text,
-	`cta_url` text,
-	`schema_type` text,
-	`seo_title` text,
-	`seo_description` text,
-	`canonical_path` text,
-	`sort_order` integer DEFAULT 0 NOT NULL,
-	`featured` integer DEFAULT 0 NOT NULL,
-	`source` text DEFAULT 'manual' NOT NULL,
-	`source_ref` text,
-	`created_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
-	`updated_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
-	`updated_by` text,
-	FOREIGN KEY (`organization_id`) REFERENCES `organization`(`id`) ON UPDATE no action ON DELETE cascade,
-	FOREIGN KEY (`site_id`) REFERENCES `sites`(`id`) ON UPDATE no action ON DELETE cascade,
-	FOREIGN KEY (`location_id`) REFERENCES `business_locations`(`id`) ON UPDATE no action ON DELETE set null,
-	FOREIGN KEY (`organization_id`,`site_id`) REFERENCES `sites`(`organization_id`,`id`) ON UPDATE no action ON DELETE cascade,
-	CONSTRAINT "offerings_instants_check" CHECK((created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)),
-	CONSTRAINT "offerings_features_check" CHECK(features IS NULL OR (json_valid(features) AND json_type(features) IS 'array')),
-	CONSTRAINT "offerings_faqs_check" CHECK(faqs IS NULL OR (json_valid(faqs) AND json_type(faqs) IS 'array'))
-);
---> statement-breakpoint
-CREATE INDEX `offerings_site_sort_idx` ON `offerings` (`site_id`,`sort_order`);--> statement-breakpoint
-CREATE UNIQUE INDEX `offerings_organization_id_site_id_slug_unique` ON `offerings` (`organization_id`,`site_id`,`slug`);--> statement-breakpoint
 CREATE TABLE `onboarding_drafts` (
 	`id` text PRIMARY KEY NOT NULL,
 	`user_id` text NOT NULL,
@@ -676,6 +855,7 @@ CREATE TABLE `organization` (
 	`logo` text,
 	`metadata` text,
 	`stripeCustomerId` text,
+	`deletionScheduledAt` integer,
 	`createdAt` integer DEFAULT (unixepoch()) NOT NULL,
 	CONSTRAINT "organization_slug_required_check" CHECK(trim(slug) <> '')
 );
@@ -700,112 +880,283 @@ CREATE TABLE `organization_billing` (
 CREATE TABLE `prices` (
 	`id` text PRIMARY KEY NOT NULL,
 	`organization_id` text NOT NULL,
-	`site_id` text NOT NULL,
-	`location_id` text NOT NULL,
-	`product_id` text NOT NULL,
-	`amount_minor` integer NOT NULL,
+	`product_variant_id` text NOT NULL,
+	`location_id` text,
+	`active` integer DEFAULT 1 NOT NULL,
 	`currency` text NOT NULL,
-	`unit` text DEFAULT 'item' NOT NULL,
+	`unit_amount` integer NOT NULL,
+	`type` text DEFAULT 'one_time' NOT NULL,
+	`recurring_interval` text,
+	`recurring_interval_count` integer,
 	`tax_behavior` text DEFAULT 'unspecified' NOT NULL,
-	`compare_at_amount_minor` integer,
-	`valid_from` text NOT NULL,
-	`valid_until` text,
-	`provenance` text NOT NULL,
-	`created_by` text NOT NULL,
-	`created_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
-	FOREIGN KEY (`organization_id`) REFERENCES `organization`(`id`) ON UPDATE no action ON DELETE cascade,
-	FOREIGN KEY (`site_id`) REFERENCES `sites`(`id`) ON UPDATE no action ON DELETE cascade,
-	FOREIGN KEY (`location_id`) REFERENCES `business_locations`(`id`) ON UPDATE no action ON DELETE cascade,
-	FOREIGN KEY (`product_id`) REFERENCES `products`(`id`) ON UPDATE no action ON DELETE cascade,
-	FOREIGN KEY (`organization_id`,`site_id`,`location_id`,`product_id`) REFERENCES `products`(`organization_id`,`site_id`,`location_id`,`id`) ON UPDATE no action ON DELETE cascade,
-	CONSTRAINT "prices_instants_check" CHECK((strftime('%Y-%m-%dT%H:%M:%fZ', valid_from, '+0 days') IS valid_from) AND (valid_until IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', valid_until, '+0 days') IS valid_until) AND (created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at)),
-	CONSTRAINT "prices_amount_check" CHECK(amount_minor >= 0),
-	CONSTRAINT "prices_compare_at_check" CHECK(compare_at_amount_minor IS NULL OR compare_at_amount_minor > amount_minor),
-	CONSTRAINT "prices_validity_check" CHECK(valid_until IS NULL OR valid_until > valid_from)
-);
---> statement-breakpoint
-CREATE INDEX `prices_product_validity_idx` ON `prices` (`organization_id`,`site_id`,`product_id`,`valid_from`,`valid_until`);--> statement-breakpoint
-CREATE INDEX `prices_site_location_validity_idx` ON `prices` (`site_id`,`location_id`,`valid_from`,`valid_until`);--> statement-breakpoint
-CREATE TABLE `product_categories` (
-	`id` text PRIMARY KEY NOT NULL,
-	`organization_id` text NOT NULL,
-	`site_id` text NOT NULL,
-	`location_id` text NOT NULL,
-	`product_type` text DEFAULT 'standard' NOT NULL,
-	`name` text NOT NULL,
-	`slug` text NOT NULL,
-	`sort_order` integer NOT NULL,
-	`created_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
-	`updated_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
-	`created_by` text NOT NULL,
-	`updated_by` text NOT NULL,
-	FOREIGN KEY (`organization_id`) REFERENCES `organization`(`id`) ON UPDATE no action ON DELETE cascade,
-	FOREIGN KEY (`site_id`) REFERENCES `sites`(`id`) ON UPDATE no action ON DELETE cascade,
-	FOREIGN KEY (`location_id`) REFERENCES `business_locations`(`id`) ON UPDATE no action ON DELETE cascade,
-	FOREIGN KEY (`organization_id`,`site_id`,`location_id`) REFERENCES `business_locations`(`organization_id`,`site_id`,`id`) ON UPDATE no action ON DELETE cascade,
-	CONSTRAINT "product_categories_instants_check" CHECK((created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)),
-	CONSTRAINT "product_categories_name_not_blank_check" CHECK(trim(name) <> ''),
-	CONSTRAINT "product_categories_slug_check" CHECK(slug <> '' AND slug = lower(slug) AND slug NOT GLOB '*[^a-z0-9-]*' AND slug NOT LIKE '-%' AND slug NOT LIKE '%-' AND slug NOT LIKE '%--%'),
-	CONSTRAINT "product_categories_sort_order_check" CHECK(sort_order >= 0)
-);
---> statement-breakpoint
-CREATE INDEX `product_categories_location_type_sort_idx` ON `product_categories` (`site_id`,`location_id`,`product_type`,`sort_order`);--> statement-breakpoint
-CREATE UNIQUE INDEX `product_categories_scope_id_unique` ON `product_categories` (`organization_id`,`site_id`,`location_id`,`product_type`,`id`);--> statement-breakpoint
-CREATE UNIQUE INDEX `product_categories_location_type_slug_unique` ON `product_categories` (`site_id`,`location_id`,`product_type`,`slug`);--> statement-breakpoint
-CREATE UNIQUE INDEX `product_categories_location_type_name_unique` ON `product_categories` (`site_id`,`location_id`,`product_type`,`name`);--> statement-breakpoint
-CREATE TABLE `products` (
-	`experience_json` text,
-	`id` text PRIMARY KEY NOT NULL,
-	`organization_id` text NOT NULL,
-	`site_id` text NOT NULL,
-	`location_id` text NOT NULL,
-	`product_type` text DEFAULT 'standard' NOT NULL,
-	`category_id` text NOT NULL,
-	`name` text NOT NULL,
-	`slug` text NOT NULL,
-	`description` text DEFAULT '' NOT NULL,
-	`order_url` text,
-	`is_visible` integer DEFAULT 1 NOT NULL,
-	`available` integer DEFAULT 1 NOT NULL,
-	`featured` integer DEFAULT 0 NOT NULL,
-	`featured_sort_order` integer DEFAULT 0 NOT NULL,
-	`sort_order` integer NOT NULL,
-	`tags_json` text DEFAULT '[]' NOT NULL,
-	`details_json` text DEFAULT '[]' NOT NULL,
-	`seo_title` text,
-	`seo_description` text,
-	`canonical_url` text,
-	`robots` text,
+	`compare_at_unit_amount` integer,
+	`valid_from_at` text,
+	`valid_until_at` text,
 	`source` text DEFAULT 'manual' NOT NULL,
 	`created_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
 	`updated_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
 	`created_by` text NOT NULL,
 	`updated_by` text NOT NULL,
 	FOREIGN KEY (`organization_id`) REFERENCES `organization`(`id`) ON UPDATE no action ON DELETE cascade,
-	FOREIGN KEY (`site_id`) REFERENCES `sites`(`id`) ON UPDATE no action ON DELETE cascade,
-	FOREIGN KEY (`location_id`) REFERENCES `business_locations`(`id`) ON UPDATE no action ON DELETE cascade,
-	FOREIGN KEY (`organization_id`,`site_id`,`location_id`) REFERENCES `business_locations`(`organization_id`,`site_id`,`id`) ON UPDATE no action ON DELETE cascade,
-	FOREIGN KEY (`organization_id`,`site_id`,`location_id`,`product_type`,`category_id`) REFERENCES `product_categories`(`organization_id`,`site_id`,`location_id`,`product_type`,`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`organization_id`,`product_variant_id`) REFERENCES `product_variants`(`organization_id`,`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`organization_id`,`location_id`) REFERENCES `business_locations`(`organization_id`,`id`) ON UPDATE no action ON DELETE cascade,
+	CONSTRAINT "prices_instants_check" CHECK((valid_from_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', valid_from_at, '+0 days') IS valid_from_at) AND (valid_until_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', valid_until_at, '+0 days') IS valid_until_at) AND (created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)),
+	CONSTRAINT "prices_active_check" CHECK(active IN (0, 1)),
+	CONSTRAINT "prices_currency_check" CHECK(length(currency) = 3 AND currency = upper(currency) AND currency NOT GLOB '*[^A-Z]*'),
+	CONSTRAINT "prices_unit_amount_check" CHECK(unit_amount >= 0),
+	CONSTRAINT "prices_compare_at_check" CHECK(compare_at_unit_amount IS NULL OR compare_at_unit_amount > unit_amount),
+	CONSTRAINT "prices_validity_check" CHECK(valid_until_at IS NULL OR valid_from_at IS NULL OR valid_until_at > valid_from_at),
+	CONSTRAINT "prices_recurring_check" CHECK((type = 'recurring' AND recurring_interval IS NOT NULL AND recurring_interval_count IS NOT NULL AND recurring_interval_count > 0) OR (type <> 'recurring' AND recurring_interval IS NULL AND recurring_interval_count IS NULL))
+);
+--> statement-breakpoint
+CREATE INDEX `prices_variant_validity_idx` ON `prices` (`organization_id`,`product_variant_id`,`active`,`valid_from_at`,`valid_until_at`);--> statement-breakpoint
+CREATE INDEX `prices_location_idx` ON `prices` (`organization_id`,`location_id`);--> statement-breakpoint
+CREATE TABLE `product_availability_rules` (
+	`id` text PRIMARY KEY NOT NULL,
+	`organization_id` text NOT NULL,
+	`product_id` text NOT NULL,
+	`location_id` text,
+	`timezone` text NOT NULL,
+	`weekday` integer NOT NULL,
+	`start_time` text NOT NULL,
+	`interval_weeks` integer DEFAULT 1 NOT NULL,
+	`effective_from_date` text,
+	`effective_until_date` text,
+	`duration_minutes` integer,
+	`capacity` integer,
+	`created_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
+	`updated_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
+	`created_by` text NOT NULL,
+	`updated_by` text NOT NULL,
+	FOREIGN KEY (`organization_id`) REFERENCES `organization`(`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`organization_id`,`product_id`) REFERENCES `product_booking_configs`(`organization_id`,`product_id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`organization_id`,`location_id`) REFERENCES `business_locations`(`organization_id`,`id`) ON UPDATE no action ON DELETE cascade,
+	CONSTRAINT "product_availability_rules_instants_check" CHECK((created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)),
+	CONSTRAINT "product_availability_rules_weekday_check" CHECK(weekday BETWEEN 0 AND 6),
+	CONSTRAINT "product_availability_rules_start_time_check" CHECK(start_time GLOB '[0-2][0-9]:[0-5][0-9]' AND start_time < '24:00'),
+	CONSTRAINT "product_availability_rules_interval_check" CHECK(interval_weeks >= 1),
+	CONSTRAINT "product_availability_rules_anchor_check" CHECK(interval_weeks = 1 OR effective_from_date IS NOT NULL),
+	CONSTRAINT "product_availability_rules_dates_check" CHECK((effective_from_date IS NULL OR date(effective_from_date, '+0 days') IS effective_from_date) AND (effective_until_date IS NULL OR date(effective_until_date, '+0 days') IS effective_until_date) AND (effective_from_date IS NULL OR effective_until_date IS NULL OR effective_until_date >= effective_from_date)),
+	CONSTRAINT "product_availability_rules_duration_check" CHECK(duration_minutes IS NULL OR duration_minutes > 0),
+	CONSTRAINT "product_availability_rules_capacity_check" CHECK(capacity IS NULL OR capacity >= 0),
+	CONSTRAINT "product_availability_rules_timezone_check" CHECK(timezone <> '' AND timezone NOT GLOB '*[^A-Za-z0-9/_+-]*')
+);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `product_availability_rules_slot_unique` ON `product_availability_rules` (`product_id`,`location_id`,`weekday`,`start_time`,`interval_weeks`) WHERE location_id IS NOT NULL;--> statement-breakpoint
+CREATE UNIQUE INDEX `product_availability_rules_neutral_slot_unique` ON `product_availability_rules` (`product_id`,`weekday`,`start_time`,`interval_weeks`) WHERE location_id IS NULL;--> statement-breakpoint
+CREATE INDEX `product_availability_rules_product_idx` ON `product_availability_rules` (`product_id`,`weekday`,`start_time`);--> statement-breakpoint
+CREATE UNIQUE INDEX `product_availability_rules_org_id_unique` ON `product_availability_rules` (`organization_id`,`id`);--> statement-breakpoint
+CREATE TABLE `product_booking_configs` (
+	`product_id` text PRIMARY KEY NOT NULL,
+	`organization_id` text NOT NULL,
+	`duration_minutes` integer,
+	`default_capacity` integer,
+	`created_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
+	`updated_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
+	`created_by` text NOT NULL,
+	`updated_by` text NOT NULL,
+	FOREIGN KEY (`organization_id`) REFERENCES `organization`(`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`organization_id`,`product_id`) REFERENCES `products`(`organization_id`,`id`) ON UPDATE no action ON DELETE cascade,
+	CONSTRAINT "product_booking_configs_instants_check" CHECK((created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)),
+	CONSTRAINT "product_booking_configs_duration_check" CHECK(duration_minutes IS NULL OR duration_minutes > 0),
+	CONSTRAINT "product_booking_configs_capacity_check" CHECK(default_capacity IS NULL OR default_capacity >= 0)
+);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `product_booking_configs_org_product_unique` ON `product_booking_configs` (`organization_id`,`product_id`);--> statement-breakpoint
+CREATE TABLE `product_locations` (
+	`organization_id` text NOT NULL,
+	`product_id` text NOT NULL,
+	`location_id` text NOT NULL,
+	`active` integer DEFAULT 1 NOT NULL,
+	`published` integer DEFAULT 0 NOT NULL,
+	`created_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
+	`updated_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
+	`created_by` text NOT NULL,
+	`updated_by` text NOT NULL,
+	PRIMARY KEY(`product_id`, `location_id`),
+	FOREIGN KEY (`organization_id`) REFERENCES `organization`(`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`organization_id`,`product_id`) REFERENCES `products`(`organization_id`,`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`organization_id`,`location_id`) REFERENCES `business_locations`(`organization_id`,`id`) ON UPDATE no action ON DELETE cascade,
+	CONSTRAINT "product_locations_instants_check" CHECK((created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)),
+	CONSTRAINT "product_locations_active_check" CHECK(active IN (0, 1) AND published IN (0, 1))
+);
+--> statement-breakpoint
+CREATE INDEX `product_locations_location_idx` ON `product_locations` (`location_id`,`published`,`active`);--> statement-breakpoint
+CREATE TABLE `product_metafields` (
+	`organization_id` text NOT NULL,
+	`product_id` text NOT NULL,
+	`definition_id` text NOT NULL,
+	`value` text NOT NULL,
+	`created_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
+	`updated_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
+	`created_by` text NOT NULL,
+	`updated_by` text NOT NULL,
+	PRIMARY KEY(`product_id`, `definition_id`),
+	FOREIGN KEY (`organization_id`) REFERENCES `organization`(`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`organization_id`,`product_id`) REFERENCES `products`(`organization_id`,`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`organization_id`,`definition_id`) REFERENCES `metafield_definitions`(`organization_id`,`id`) ON UPDATE no action ON DELETE cascade,
+	CONSTRAINT "product_metafields_instants_check" CHECK((created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)),
+	CONSTRAINT "product_metafields_value_check" CHECK(json_valid(value))
+);
+--> statement-breakpoint
+CREATE INDEX `product_metafields_definition_idx` ON `product_metafields` (`definition_id`);--> statement-breakpoint
+CREATE TABLE `product_option_values` (
+	`id` text PRIMARY KEY NOT NULL,
+	`organization_id` text NOT NULL,
+	`product_id` text NOT NULL,
+	`product_option_id` text NOT NULL,
+	`value` text NOT NULL,
+	`sort_order` integer DEFAULT 0 NOT NULL,
+	`created_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
+	`updated_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
+	FOREIGN KEY (`organization_id`) REFERENCES `organization`(`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`organization_id`,`product_id`,`product_option_id`) REFERENCES `product_options`(`organization_id`,`product_id`,`id`) ON UPDATE no action ON DELETE cascade,
+	CONSTRAINT "product_option_values_instants_check" CHECK((created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)),
+	CONSTRAINT "product_option_values_value_not_blank_check" CHECK(trim(value) <> ''),
+	CONSTRAINT "product_option_values_sort_order_check" CHECK(sort_order >= 0)
+);
+--> statement-breakpoint
+CREATE INDEX `product_option_values_option_sort_idx` ON `product_option_values` (`product_option_id`,`sort_order`);--> statement-breakpoint
+CREATE UNIQUE INDEX `product_option_values_option_id_unique` ON `product_option_values` (`organization_id`,`product_id`,`product_option_id`,`id`);--> statement-breakpoint
+CREATE UNIQUE INDEX `product_option_values_option_value_unique` ON `product_option_values` (`organization_id`,`product_option_id`,`value`);--> statement-breakpoint
+CREATE TABLE `product_options` (
+	`id` text PRIMARY KEY NOT NULL,
+	`organization_id` text NOT NULL,
+	`product_id` text NOT NULL,
+	`name` text NOT NULL,
+	`sort_order` integer DEFAULT 0 NOT NULL,
+	`created_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
+	`updated_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
+	FOREIGN KEY (`organization_id`) REFERENCES `organization`(`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`organization_id`,`product_id`) REFERENCES `products`(`organization_id`,`id`) ON UPDATE no action ON DELETE cascade,
+	CONSTRAINT "product_options_instants_check" CHECK((created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)),
+	CONSTRAINT "product_options_name_not_blank_check" CHECK(trim(name) <> ''),
+	CONSTRAINT "product_options_sort_order_check" CHECK(sort_order >= 0)
+);
+--> statement-breakpoint
+CREATE INDEX `product_options_product_sort_idx` ON `product_options` (`product_id`,`sort_order`);--> statement-breakpoint
+CREATE UNIQUE INDEX `product_options_product_id_unique` ON `product_options` (`organization_id`,`product_id`,`id`);--> statement-breakpoint
+CREATE UNIQUE INDEX `product_options_product_name_unique` ON `product_options` (`organization_id`,`product_id`,`name`);--> statement-breakpoint
+CREATE TABLE `product_publications` (
+	`organization_id` text NOT NULL,
+	`product_id` text NOT NULL,
+	`site_id` text NOT NULL,
+	`published` integer DEFAULT 0 NOT NULL,
+	`created_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
+	`updated_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
+	`created_by` text NOT NULL,
+	`updated_by` text NOT NULL,
+	PRIMARY KEY(`product_id`, `site_id`),
+	FOREIGN KEY (`organization_id`) REFERENCES `organization`(`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`organization_id`,`product_id`) REFERENCES `products`(`organization_id`,`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`organization_id`,`site_id`) REFERENCES `sites`(`organization_id`,`id`) ON UPDATE no action ON DELETE cascade,
+	CONSTRAINT "product_publications_instants_check" CHECK((created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)),
+	CONSTRAINT "product_publications_published_check" CHECK(published IN (0, 1))
+);
+--> statement-breakpoint
+CREATE INDEX `product_publications_site_idx` ON `product_publications` (`site_id`,`published`);--> statement-breakpoint
+CREATE TABLE `product_sessions` (
+	`id` text PRIMARY KEY NOT NULL,
+	`organization_id` text NOT NULL,
+	`product_id` text NOT NULL,
+	`location_id` text,
+	`availability_rule_id` text,
+	`source_occurrence_key` text,
+	`timezone` text NOT NULL,
+	`starts_at` text NOT NULL,
+	`ends_at` text NOT NULL,
+	`capacity` integer,
+	`status` text DEFAULT 'scheduled' NOT NULL,
+	`created_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
+	`updated_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
+	`created_by` text NOT NULL,
+	`updated_by` text NOT NULL,
+	FOREIGN KEY (`organization_id`) REFERENCES `organization`(`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`organization_id`,`product_id`) REFERENCES `product_booking_configs`(`organization_id`,`product_id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`organization_id`,`location_id`) REFERENCES `business_locations`(`organization_id`,`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`organization_id`,`availability_rule_id`) REFERENCES `product_availability_rules`(`organization_id`,`id`) ON UPDATE no action ON DELETE restrict,
+	CONSTRAINT "product_sessions_instants_check" CHECK((strftime('%Y-%m-%dT%H:%M:%fZ', starts_at, '+0 days') IS starts_at) AND (strftime('%Y-%m-%dT%H:%M:%fZ', ends_at, '+0 days') IS ends_at) AND (created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)),
+	CONSTRAINT "product_sessions_interval_check" CHECK(ends_at > starts_at),
+	CONSTRAINT "product_sessions_capacity_check" CHECK(capacity IS NULL OR capacity >= 0),
+	CONSTRAINT "product_sessions_timezone_check" CHECK(timezone <> '' AND timezone NOT GLOB '*[^A-Za-z0-9/_+-]*')
+);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `product_sessions_occurrence_unique` ON `product_sessions` (`product_id`,`source_occurrence_key`) WHERE source_occurrence_key IS NOT NULL;--> statement-breakpoint
+CREATE UNIQUE INDEX `product_sessions_location_instant_unique` ON `product_sessions` (`product_id`,`location_id`,`starts_at`) WHERE location_id IS NOT NULL;--> statement-breakpoint
+CREATE UNIQUE INDEX `product_sessions_neutral_instant_unique` ON `product_sessions` (`product_id`,`starts_at`) WHERE location_id IS NULL;--> statement-breakpoint
+CREATE INDEX `product_sessions_product_start_idx` ON `product_sessions` (`product_id`,`starts_at`,`status`);--> statement-breakpoint
+CREATE INDEX `product_sessions_location_start_idx` ON `product_sessions` (`location_id`,`starts_at`,`status`);--> statement-breakpoint
+CREATE UNIQUE INDEX `product_sessions_org_id_unique` ON `product_sessions` (`organization_id`,`id`);--> statement-breakpoint
+CREATE UNIQUE INDEX `product_sessions_org_product_id_unique` ON `product_sessions` (`organization_id`,`product_id`,`id`);--> statement-breakpoint
+CREATE TABLE `product_variant_option_values` (
+	`organization_id` text NOT NULL,
+	`product_id` text NOT NULL,
+	`product_variant_id` text NOT NULL,
+	`product_option_id` text NOT NULL,
+	`product_option_value_id` text NOT NULL,
+	PRIMARY KEY(`product_variant_id`, `product_option_id`),
+	FOREIGN KEY (`organization_id`) REFERENCES `organization`(`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`organization_id`,`product_id`,`product_variant_id`) REFERENCES `product_variants`(`organization_id`,`product_id`,`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`organization_id`,`product_id`,`product_option_id`) REFERENCES `product_options`(`organization_id`,`product_id`,`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`organization_id`,`product_id`,`product_option_id`,`product_option_value_id`) REFERENCES `product_option_values`(`organization_id`,`product_id`,`product_option_id`,`id`) ON UPDATE no action ON DELETE cascade
+);
+--> statement-breakpoint
+CREATE INDEX `product_variant_option_values_variant_idx` ON `product_variant_option_values` (`product_variant_id`);--> statement-breakpoint
+CREATE TABLE `product_variants` (
+	`id` text PRIMARY KEY NOT NULL,
+	`organization_id` text NOT NULL,
+	`product_id` text NOT NULL,
+	`name` text NOT NULL,
+	`sku` text,
+	`active` integer DEFAULT 1 NOT NULL,
+	`sort_order` integer DEFAULT 0 NOT NULL,
+	`created_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
+	`updated_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
+	`created_by` text NOT NULL,
+	`updated_by` text NOT NULL,
+	FOREIGN KEY (`organization_id`) REFERENCES `organization`(`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`organization_id`,`product_id`) REFERENCES `products`(`organization_id`,`id`) ON UPDATE no action ON DELETE cascade,
+	CONSTRAINT "product_variants_instants_check" CHECK((created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)),
+	CONSTRAINT "product_variants_name_not_blank_check" CHECK(trim(name) <> ''),
+	CONSTRAINT "product_variants_active_check" CHECK(active IN (0, 1)),
+	CONSTRAINT "product_variants_sort_order_check" CHECK(sort_order >= 0)
+);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `product_variants_org_sku_unique` ON `product_variants` (`organization_id`,`sku`) WHERE sku IS NOT NULL;--> statement-breakpoint
+CREATE INDEX `product_variants_product_sort_idx` ON `product_variants` (`product_id`,`sort_order`);--> statement-breakpoint
+CREATE UNIQUE INDEX `product_variants_org_id_unique` ON `product_variants` (`organization_id`,`id`);--> statement-breakpoint
+CREATE UNIQUE INDEX `product_variants_product_id_unique` ON `product_variants` (`organization_id`,`product_id`,`id`);--> statement-breakpoint
+CREATE TABLE `products` (
+	`id` text PRIMARY KEY NOT NULL,
+	`organization_id` text NOT NULL,
+	`name` text NOT NULL,
+	`slug` text NOT NULL,
+	`description` text DEFAULT '' NOT NULL,
+	`active` integer DEFAULT 1 NOT NULL,
+	`order_url` text,
+	`unit_label` text,
+	`marketing_features` text DEFAULT '[]' NOT NULL,
+	`tags` text DEFAULT '[]' NOT NULL,
+	`metadata` text DEFAULT '{}' NOT NULL,
+	`tax_code` text,
+	`source` text DEFAULT 'manual' NOT NULL,
+	`created_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
+	`updated_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
+	`created_by` text NOT NULL,
+	`updated_by` text NOT NULL,
+	FOREIGN KEY (`organization_id`) REFERENCES `organization`(`id`) ON UPDATE no action ON DELETE cascade,
 	CONSTRAINT "products_instants_check" CHECK((created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)),
 	CONSTRAINT "products_name_not_blank_check" CHECK(trim(name) <> ''),
 	CONSTRAINT "products_slug_check" CHECK(slug <> '' AND slug = lower(slug) AND slug NOT GLOB '*[^a-z0-9-]*' AND slug NOT LIKE '-%' AND slug NOT LIKE '%-' AND slug NOT LIKE '%--%'),
-	CONSTRAINT "products_sort_order_check" CHECK(sort_order >= 0),
-	CONSTRAINT "products_featured_sort_order_check" CHECK(featured_sort_order >= 0),
-	CONSTRAINT "products_boolean_check" CHECK(is_visible IN (0, 1) AND available IN (0, 1) AND featured IN (0, 1)),
-	CONSTRAINT "products_experience_check" CHECK((product_type = 'experience' AND experience_json IS NOT NULL AND json_valid(experience_json) AND json_type(experience_json) = 'object') OR (product_type = 'standard' AND experience_json IS NULL)),
-	CONSTRAINT "products_experience_fields_check" CHECK(experience_json IS NULL OR ((json_type(experience_json, '$.recurring_slots') IS NULL OR json_type(experience_json, '$.recurring_slots') IN ('null', 'object')) AND (json_type(experience_json, '$.included_items') IS NULL OR json_type(experience_json, '$.included_items') IN ('null', 'array')) AND (json_type(experience_json, '$.what_to_bring') IS NULL OR json_type(experience_json, '$.what_to_bring') IN ('null', 'array')))),
-	CONSTRAINT "products_tags_json_check" CHECK(json_valid(tags_json) AND json_type(tags_json) = 'array'),
-	CONSTRAINT "products_details_json_check" CHECK(json_valid(details_json) AND json_type(details_json) = 'array'),
+	CONSTRAINT "products_active_check" CHECK(active IN (0, 1)),
+	CONSTRAINT "products_marketing_features_check" CHECK(json_valid(marketing_features) AND json_type(marketing_features) = 'array'),
+	CONSTRAINT "products_tags_check" CHECK(json_valid(tags) AND json_type(tags) = 'array'),
+	CONSTRAINT "products_metadata_check" CHECK(json_valid(metadata) AND json_type(metadata) = 'object'),
 	CONSTRAINT "products_order_url_check" CHECK(order_url IS NULL OR (order_url LIKE 'https://_%' AND instr(order_url, '@') = 0 AND instr(order_url, char(10)) = 0 AND instr(order_url, char(13)) = 0))
 );
 --> statement-breakpoint
-CREATE INDEX `products_category_sort_order_idx` ON `products` (`category_id`,`sort_order`);--> statement-breakpoint
-CREATE INDEX `products_site_location_type_sort_order_idx` ON `products` (`site_id`,`location_id`,`product_type`,`sort_order`);--> statement-breakpoint
-CREATE INDEX `products_site_location_visible_sort_idx` ON `products` (`site_id`,`location_id`,`is_visible`,`sort_order`);--> statement-breakpoint
-CREATE INDEX `products_site_location_featured_sort_idx` ON `products` (`site_id`,`location_id`,`featured`,`featured_sort_order`);--> statement-breakpoint
-CREATE UNIQUE INDEX `products_scope_id_unique` ON `products` (`organization_id`,`site_id`,`location_id`,`id`);--> statement-breakpoint
-CREATE UNIQUE INDEX `products_org_site_id_unique` ON `products` (`organization_id`,`site_id`,`id`);--> statement-breakpoint
-CREATE UNIQUE INDEX `products_site_location_slug_unique` ON `products` (`site_id`,`location_id`,`slug`);--> statement-breakpoint
+CREATE UNIQUE INDEX `products_org_id_unique` ON `products` (`organization_id`,`id`);--> statement-breakpoint
+CREATE UNIQUE INDEX `products_org_slug_unique` ON `products` (`organization_id`,`slug`);--> statement-breakpoint
 CREATE TABLE `public_resource_cache_invalidations` (
 	`id` text PRIMARY KEY NOT NULL,
 	`site_id` text NOT NULL,
@@ -838,13 +1189,8 @@ CREATE TABLE `requests` (
 	`organization_id` text,
 	`site_id` text,
 	`location_id` text,
-	`product_id` text,
 	`customer_id` text,
 	`review_id` text,
-	`status` text,
-	`booking_date` text,
-	`time_slot` text,
-	`party_size` integer,
 	`conversation_state` text,
 	`resolved_at` text,
 	`payload_json` text NOT NULL,
@@ -853,29 +1199,55 @@ CREATE TABLE `requests` (
 	FOREIGN KEY (`organization_id`) REFERENCES `organization`(`id`) ON UPDATE no action ON DELETE cascade,
 	FOREIGN KEY (`site_id`) REFERENCES `sites`(`id`) ON UPDATE no action ON DELETE cascade,
 	FOREIGN KEY (`location_id`) REFERENCES `business_locations`(`id`) ON UPDATE no action ON DELETE set null,
-	FOREIGN KEY (`product_id`) REFERENCES `products`(`id`) ON UPDATE no action ON DELETE set null,
 	FOREIGN KEY (`customer_id`) REFERENCES `customers`(`id`) ON UPDATE no action ON DELETE set null,
 	FOREIGN KEY (`review_id`) REFERENCES `reviews`(`id`) ON UPDATE no action ON DELETE set null,
 	FOREIGN KEY (`organization_id`,`site_id`) REFERENCES `sites`(`organization_id`,`id`) ON UPDATE no action ON DELETE cascade,
 	FOREIGN KEY (`organization_id`,`site_id`,`location_id`) REFERENCES `business_locations`(`organization_id`,`site_id`,`id`) ON UPDATE no action ON DELETE no action,
-	FOREIGN KEY (`organization_id`,`site_id`,`product_id`) REFERENCES `products`(`organization_id`,`site_id`,`id`) ON UPDATE no action ON DELETE no action,
-	FOREIGN KEY (`organization_id`,`site_id`,`location_id`,`product_id`) REFERENCES `products`(`organization_id`,`site_id`,`location_id`,`id`) ON UPDATE no action ON DELETE no action,
 	CONSTRAINT "requests_instants_check" CHECK((resolved_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', resolved_at, '+0 days') IS resolved_at) AND (created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)),
 	CONSTRAINT "requests_payload_check" CHECK(json_valid(payload_json) AND json_type(payload_json) = 'object'),
 	CONSTRAINT "requests_guest_payload_check" CHECK((json_type(payload_json, '$.guest.name') IS 'text' AND json_type(payload_json, '$.guest.email') IS 'text' AND (json_type(payload_json, '$.guest.phone') IS 'text' OR json_type(payload_json, '$.guest.phone') IS 'null'))),
-	CONSTRAINT "requests_booking_payload_check" CHECK(kind NOT IN ('reservation', 'experience_booking') OR (json_type(payload_json, '$.party_size_is_minimum') IN ('true', 'false') AND json_type(payload_json, '$.cancellation') IS 'object' AND json_type(payload_json, '$.completion') IS 'object' AND json_type(payload_json, '$.review') IS 'object' AND (kind != 'reservation' OR json_type(payload_json, '$.guest.phone') IS 'text')) IS TRUE),
 	CONSTRAINT "requests_message_payload_check" CHECK(kind <> 'contact' OR json_type(payload_json, '$.message') IS 'text'),
-	CONSTRAINT "requests_scope_check" CHECK(kind IN ('contact', 'reservation', 'experience_booking') AND organization_id IS NOT NULL AND site_id IS NOT NULL),
-	CONSTRAINT "requests_booking_check" CHECK((kind IN ('reservation', 'experience_booking') AND location_id IS NOT NULL AND booking_date IS NOT NULL AND date(booking_date, '+0 days') IS booking_date AND time_slot IS NOT NULL AND time_slot GLOB '[0-2][0-9]:[0-5][0-9]' AND time_slot < '24:00' AND party_size IS NOT NULL AND party_size > 0 AND status IS NOT NULL AND status IN ('pending', 'confirmed', 'cancelled', 'completed') AND (kind != 'experience_booking' OR product_id IS NOT NULL) AND (kind != 'reservation' OR product_id IS NULL)) OR (kind NOT IN ('reservation', 'experience_booking') AND booking_date IS NULL AND time_slot IS NULL AND party_size IS NULL)),
-	CONSTRAINT "requests_state_check" CHECK(conversation_state IS NOT NULL AND conversation_state IN ('needs_attention', 'waiting_on_guest', 'resolved') AND (kind != 'contact' OR status IS NULL))
+	CONSTRAINT "requests_scope_check" CHECK(organization_id IS NOT NULL AND site_id IS NOT NULL),
+	CONSTRAINT "requests_state_check" CHECK(conversation_state IS NOT NULL)
 );
 --> statement-breakpoint
 CREATE UNIQUE INDEX `requests_review_owner_unique` ON `requests` (`organization_id`,`site_id`,`id`,`kind`);--> statement-breakpoint
 CREATE UNIQUE INDEX `requests_scope_id_unique` ON `requests` (`organization_id`,`site_id`,`id`);--> statement-breakpoint
 CREATE INDEX `requests_site_activity_idx` ON `requests` (`site_id`,`conversation_state`,`updated_at`);--> statement-breakpoint
-CREATE INDEX `requests_booking_slot_idx` ON `requests` (`site_id`,`kind`,`location_id`,`product_id`,`booking_date`,`time_slot`,`status`);--> statement-breakpoint
+CREATE INDEX `requests_site_kind_idx` ON `requests` (`site_id`,`kind`,`location_id`,`updated_at`);--> statement-breakpoint
 CREATE INDEX `requests_customer_idx` ON `requests` (`customer_id`);--> statement-breakpoint
 CREATE INDEX `requests_org_created_idx` ON `requests` (`organization_id`,`created_at`);--> statement-breakpoint
+CREATE TABLE `reservations` (
+	`id` text PRIMARY KEY NOT NULL,
+	`organization_id` text NOT NULL,
+	`site_id` text NOT NULL,
+	`location_id` text NOT NULL,
+	`customer_id` text,
+	`request_id` text,
+	`timezone` text NOT NULL,
+	`starts_at` text NOT NULL,
+	`ends_at` text NOT NULL,
+	`party_size` integer NOT NULL,
+	`status` text DEFAULT 'pending' NOT NULL,
+	`cancelled_at` text,
+	`completed_at` text,
+	`cancellation_reason` text,
+	`created_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
+	`updated_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
+	FOREIGN KEY (`organization_id`) REFERENCES `organization`(`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`customer_id`) REFERENCES `customers`(`id`) ON UPDATE no action ON DELETE set null,
+	FOREIGN KEY (`organization_id`,`site_id`,`location_id`) REFERENCES `business_locations`(`organization_id`,`site_id`,`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`organization_id`,`site_id`,`request_id`) REFERENCES `requests`(`organization_id`,`site_id`,`id`) ON UPDATE no action ON DELETE restrict,
+	CONSTRAINT "reservations_instants_check" CHECK((strftime('%Y-%m-%dT%H:%M:%fZ', starts_at, '+0 days') IS starts_at) AND (strftime('%Y-%m-%dT%H:%M:%fZ', ends_at, '+0 days') IS ends_at) AND (cancelled_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', cancelled_at, '+0 days') IS cancelled_at) AND (completed_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', completed_at, '+0 days') IS completed_at) AND (created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)),
+	CONSTRAINT "reservations_interval_check" CHECK(ends_at > starts_at),
+	CONSTRAINT "reservations_party_size_check" CHECK(party_size > 0),
+	CONSTRAINT "reservations_timezone_check" CHECK(timezone <> '' AND timezone NOT GLOB '*[^A-Za-z0-9/_+-]*')
+);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `reservations_request_unique` ON `reservations` (`request_id`) WHERE request_id IS NOT NULL;--> statement-breakpoint
+CREATE INDEX `reservations_location_start_idx` ON `reservations` (`location_id`,`starts_at`,`status`);--> statement-breakpoint
+CREATE INDEX `reservations_site_created_idx` ON `reservations` (`site_id`,`created_at`);--> statement-breakpoint
+CREATE INDEX `reservations_customer_idx` ON `reservations` (`customer_id`);--> statement-breakpoint
 CREATE TABLE `resource_localizations` (
 	`id` text PRIMARY KEY NOT NULL,
 	`organization_id` text NOT NULL,
@@ -975,11 +1347,11 @@ CREATE TABLE `reviews` (
 	FOREIGN KEY (`user_id`) REFERENCES `user`(`id`) ON UPDATE no action ON DELETE set null,
 	FOREIGN KEY (`entered_by_user_id`) REFERENCES `user`(`id`) ON UPDATE no action ON DELETE set null,
 	FOREIGN KEY (`organization_id`,`site_id`) REFERENCES `sites`(`organization_id`,`id`) ON UPDATE no action ON DELETE cascade,
-	FOREIGN KEY (`organization_id`,`site_id`,`location_id`,`product_id`) REFERENCES `products`(`organization_id`,`site_id`,`location_id`,`id`) ON UPDATE no action ON DELETE restrict,
+	FOREIGN KEY (`organization_id`,`product_id`) REFERENCES `products`(`organization_id`,`id`) ON UPDATE no action ON DELETE restrict,
 	CONSTRAINT "reviews_instants_check" CHECK((owner_reply_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', owner_reply_at, '+0 days') IS owner_reply_at) AND (created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)),
 	CONSTRAINT "reviews_google_review_metadata_check" CHECK(google_review_metadata IS NULL OR (json_valid(google_review_metadata) AND json_type(google_review_metadata) IS 'object')),
 	CONSTRAINT "reviews_rating_check" CHECK(rating BETWEEN 1 AND 5),
-	CONSTRAINT "reviews_product_scope_check" CHECK(product_id IS NULL OR (organization_id IS NOT NULL AND site_id IS NOT NULL AND location_id IS NOT NULL)),
+	CONSTRAINT "reviews_product_scope_check" CHECK(product_id IS NULL OR (organization_id IS NOT NULL AND site_id IS NOT NULL)),
 	CONSTRAINT "reviews_owner_entered_provenance_check" CHECK(source != 'owner_entered' OR (organization_id IS NOT NULL AND site_id IS NOT NULL AND location_id IS NULL AND entered_by_user_id IS NOT NULL AND collection_method IS NOT NULL AND publication_authorized = 1))
 );
 --> statement-breakpoint
@@ -1186,6 +1558,25 @@ CREATE UNIQUE INDEX `sites_slug_unique` ON `sites` (`slug`);--> statement-breakp
 CREATE UNIQUE INDEX `sites_subdomain_unique` ON `sites` (`subdomain`);--> statement-breakpoint
 CREATE INDEX `sites_created_at_idx` ON `sites` (`created_at`);--> statement-breakpoint
 CREATE UNIQUE INDEX `sites_organization_id_id_unique` ON `sites` (`organization_id`,`id`);--> statement-breakpoint
+CREATE TABLE `stripe_catalog_mappings` (
+	`id` text PRIMARY KEY NOT NULL,
+	`organization_id` text NOT NULL,
+	`local_entity` text NOT NULL,
+	`local_id` text NOT NULL,
+	`stripe_account_id` text NOT NULL,
+	`livemode` integer NOT NULL,
+	`stripe_id` text NOT NULL,
+	`created_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
+	`updated_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
+	FOREIGN KEY (`organization_id`) REFERENCES `organization`(`id`) ON UPDATE no action ON DELETE cascade,
+	CONSTRAINT "stripe_catalog_mappings_instants_check" CHECK((created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)),
+	CONSTRAINT "stripe_catalog_mappings_livemode_check" CHECK(livemode IN (0, 1)),
+	CONSTRAINT "stripe_catalog_mappings_ids_check" CHECK(trim(local_id) <> '' AND trim(stripe_id) <> '' AND trim(stripe_account_id) <> '')
+);
+--> statement-breakpoint
+CREATE INDEX `stripe_catalog_mappings_org_idx` ON `stripe_catalog_mappings` (`organization_id`,`local_entity`);--> statement-breakpoint
+CREATE UNIQUE INDEX `stripe_catalog_mappings_local_unique` ON `stripe_catalog_mappings` (`local_entity`,`local_id`,`stripe_account_id`,`livemode`);--> statement-breakpoint
+CREATE UNIQUE INDEX `stripe_catalog_mappings_stripe_unique` ON `stripe_catalog_mappings` (`stripe_account_id`,`livemode`,`stripe_id`);--> statement-breakpoint
 CREATE TABLE `stripe_ga4_subscription_intents` (
 	`id` text PRIMARY KEY NOT NULL,
 	`organization_id` text NOT NULL,
@@ -1352,6 +1743,7 @@ CREATE TABLE `user` (
 	`banExpires` integer,
 	`isAnonymous` integer DEFAULT 0 NOT NULL,
 	`stripeCustomerId` text,
+	`deletionScheduledAt` integer,
 	`createdAt` integer DEFAULT (unixepoch()) NOT NULL,
 	`updatedAt` integer DEFAULT (unixepoch()) NOT NULL
 );

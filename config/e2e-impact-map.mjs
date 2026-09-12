@@ -94,11 +94,31 @@ export const IMPACT_GROUPS = [
     specs: [
       'tests/e2e/mcp-authorization.spec.ts',
       'tests/e2e/mcp-product-large-batch.spec.ts',
-      'tests/e2e/mcp-product-nullable-price.spec.ts',
+      'tests/e2e/mcp-product-pricing.spec.ts',
       'tests/e2e/mcp-content.spec.ts',
       'tests/e2e/mcp-media.spec.ts',
       'tests/e2e/mcp-owner-tools.spec.ts',
       'tests/e2e/oauth-discovery.spec.ts',
+    ],
+  },
+  {
+    id: 'onboarding',
+    patterns: [
+      'pages/dashboard/onboarding.vue', 'pages/dashboard/onboarding/**',
+      'lib/components/workspace/onboarding/**',
+      'composables/useOnboardingFlow.ts', 'composables/useOnboardingDraft.ts',
+      'pages/dashboard/**/locations/new.vue', 'server/api/dashboard/locations/add.post.ts',
+      'server/api/dashboard/onboarding/**', 'server/api/sites.post.ts',
+      'server/utils/onboarding-*.ts',
+      'server/utils/site-creation.ts', 'server/utils/session-organization.ts',
+      'server/utils/google-places.ts', 'server/utils/post-login-routing.ts',
+      'server/utils/preview-token.ts', 'server/utils/tenant-deletion.ts',
+      'server/api/user/delete-account.*.ts', 'server/api/dashboard/organizations/deletion.*.ts',
+      'utils/phone.ts', 'utils/timezone.ts', 'utils/tenant-site-origin.ts',
+    ],
+    specs: [
+      'tests/e2e/onboarding.spec.ts',
+      'tests/e2e/post-login.spec.ts',
     ],
   },
   {

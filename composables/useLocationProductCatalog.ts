@@ -1,19 +1,20 @@
 import type { Ref } from 'vue'
-import type { Product, ProductCategory } from '~/server/types/products'
+import type { Collection, Product } from '~/server/types/products'
 
 /**
- * One location's categories and items, fetched once.
+ * One location's collections and the products offered there, fetched once.
  *
- * Three levels of the menu chain need this data at the same time — the category
- * list, one category's item list, and the level that titles the column — and
- * each used to fetch it for itself. Keyed `useAsyncData` means they share one
- * request and one cache entry, and a write in any of them refreshes all three.
+ * Three levels of the catalog chain need this at the same time — the
+ * collection list, one collection's product list, and the level that titles
+ * the column — and each used to fetch it for itself. Keyed `useAsyncData`
+ * means they share one request and one cache entry, and a write in any of them
+ * refreshes all three.
  */
 export function useLocationProductCatalog(siteId: string, locationId: Ref<string | null>) {
   const dashboardApi = useDashboardApi()
 
-  const isCategoryList = (value: unknown): value is { categories: ProductCategory[] } =>
-    isRecord(value) && Array.isArray(value.categories)
+  const isCollectionList = (value: unknown): value is { collections: Collection[] } =>
+    isRecord(value) && Array.isArray(value.collections)
   const isProductList = (value: unknown): value is { success: true, products: Product[] } =>
     isRecord(value) && Array.isArray(value.products)
 
@@ -23,17 +24,20 @@ export function useLocationProductCatalog(siteId: string, locationId: Ref<string
       const id = locationId.value
       // No location resolved yet is not an error — it is a request that has
       // nothing to ask for. The surfaces render their own empty state.
-      if (!id) return { categories: [] as ProductCategory[], products: [] as Product[] }
-      const [categoryResponse, productResponse] = await Promise.all([
-        dashboardApi(`/api/editor/sites/${siteId}/locations/${id}/products/categories`, { validate: isCategoryList }),
+      if (!id) return { collections: [] as Collection[], products: [] as Product[] }
+      const [collectionResponse, productResponse] = await Promise.all([
+        // Collections scoped to this location, and the site-wide ones, are
+        // different questions. This screen edits the location's own catalog,
+        // so it asks for that scope explicitly.
+        dashboardApi(`/api/editor/sites/${siteId}/collections?location_id=${encodeURIComponent(id)}`, { validate: isCollectionList }),
         dashboardApi(`/api/editor/sites/${siteId}/locations/${id}/products`, { validate: isProductList }),
       ])
-      return { categories: categoryResponse.categories, products: productResponse.products }
+      return { collections: collectionResponse.collections, products: productResponse.products }
     },
   )
 
-  const categories = computed(() => data.value?.categories ?? [])
+  const collections = computed(() => data.value?.collections ?? [])
   const products = computed(() => data.value?.products ?? [])
 
-  return { categories, products, pending, error, refresh }
+  return { collections, products, pending, error, refresh }
 }

@@ -41,7 +41,10 @@ if (!local && !environment) {
   console.error('Pass --local or --env <preview|staging|production>')
   process.exit(1)
 }
-const target = local ? ['--local'] : ['--env', environment, '--remote']
+// The production binding is the top-level [[d1_databases]]; every other
+// environment is addressed through wrangler's --env flag (scripts/reset-d1.mjs
+// says the same thing, for the same reason).
+const target = local ? ['--local'] : [...(environment === 'production' ? [] : ['--env', environment]), '--remote']
 
 function d1(sql) {
   const result = spawnSync(WRANGLER_BIN, ['d1', 'execute', 'DB', ...target, '--json', '--command', sql], {
@@ -75,6 +78,10 @@ const unnameable = []
 for (const table of TABLES) {
   const rows = d1(`SELECT robots AS value, count(*) AS rows FROM ${table} WHERE robots IS NOT NULL GROUP BY robots`)
   for (const row of rows) {
+    // A blank is not an unnameable intent, it is an unset one, and the sweep
+    // below clears it. Listing it here made the script fix the rows and then
+    // exit 1 saying it could not.
+    if (!String(row.value).trim()) continue
     const intent = canonical(row.value)
     if (!intent) {
       unnameable.push(`${table}: ${JSON.stringify(row.value)} (${row.rows} row(s))`)

@@ -1,7 +1,7 @@
 import { executeBatch, queryFirst, type BatchQuery, type DbClient } from '~/server/db'
 import { isReservedTestDomain, shouldSendRealEmail } from '~/server/utils/email-delivery'
 import type { ReplyEmailEnv } from '~/server/utils/submission-messages'
-import { getGuestRequest, requestActions, requestSummary, type GuestRequest } from '~/server/domain/requests'
+import { getGuestRequest, getThreadOperationalRecord, requestActions, requestSummary, type GuestRequest, type ThreadOperationalRecord } from '~/server/domain/requests'
 import { deliverGuestThreadEmail, getDeliveryById, getDeliveryClaimEligibility, getDeliveryRetryEligibility, isDeliveryClaimInFlight } from './deliveries'
 import { findEntryByDedupeKey, getEntryById } from './entries'
 import { updateThreadProjectionIfLatestEntry } from './repository'
@@ -38,10 +38,17 @@ export type ExecuteOperationInput = {
 
 interface ThreadContext {
   thread: GuestThreadRow
+  /**
+   * The booking or reservation this thread refers to, loaded once.
+   *
+   * Operational status lives there, not on the thread, so every transition
+   * below reads and writes that record. A contact thread has none.
+   */
+  record: ThreadOperationalRecord | null
 }
 
 interface SourceMutationPlan {
-  kind: 'reservation' | 'experience_booking'
+  kind: 'reservation' | 'booking'
   action: 'confirm' | 'cancel' | 'complete'
   beforeStatus: string
   afterStatus: 'confirmed' | 'cancelled' | 'completed'
@@ -55,7 +62,7 @@ async function loadThreadContext(
 ): Promise<ThreadContext | OperationOutcome> {
   const thread = await getGuestRequest(db, threadId, siteId)
   if (!thread) return { ok: false, status: 404, reason: 'thread_not_found' }
-  return { thread }
+  return { thread, record: await getThreadOperationalRecord(db, thread.id) }
 }
 
 function operationDedupeKey(input: ExecuteOperationInput): string {
@@ -84,17 +91,18 @@ async function successfulOutcome(
   status: SuccessfulOperationOutcome['status'] = 200,
 ): Promise<SuccessfulOperationOutcome> {
   const thread = await getGuestRequest(db, context.thread.id, context.thread.site_id)
+  const record = await getThreadOperationalRecord(db, context.thread.id)
   return {
     ok: true,
     status,
     thread: thread ?? context.thread,
-    availableActions: requestActions(thread ?? context.thread),
+    availableActions: requestActions(record),
   }
 }
 
 function sourceMutationPlan(context: ThreadContext, action: string): SourceMutationPlan | null {
-  const { kind, status: beforeStatus } = context.thread
-  if (kind === 'contact') return null
+  if (context.thread.kind === 'contact' || !context.record) return null
+  const { kind, status: beforeStatus } = context.record
   if (beforeStatus === 'pending' && action === 'confirm') {
     return { kind, action, beforeStatus, afterStatus: 'confirmed', requiresNotification: true }
   }
@@ -124,14 +132,19 @@ function operationEntryQuery(
              COALESCE((SELECT MAX(sequence) FROM activity_entries WHERE request_id = gt.id), 0) + 1,
              ?, ?
       FROM requests gt
-      WHERE gt.id = ? AND gt.site_id = ? AND gt.kind = ? AND gt.status = ?
+      WHERE gt.id = ? AND gt.site_id = ? AND gt.kind = ?
+        -- Guarded on the state of the record that holds the seats, because the
+        -- thread has no status of its own: two dashboards acting at once must
+        -- not both write an entry for the same transition.
+        AND EXISTS (SELECT 1 FROM ${plan.kind === 'reservation' ? 'reservations' : 'bookings'} src
+                     WHERE src.request_id = gt.id AND src.status = ?)
       ON CONFLICT(dedupe_key) DO NOTHING
     `,
     params: [
       entryId,
       input.actorUserId === null ? 'system' : 'member',
       input.actorUserId,
-      plan.requiresNotification ? operationBody(plan.action, context.thread) : null,
+      plan.requiresNotification ? operationBody(plan.action, context.thread, context.record) : null,
       `${plan.kind}.${plan.action}`,
       JSON.stringify({ action: plan.action, beforeStatus: plan.beforeStatus, afterStatus: plan.afterStatus, subject }),
       dedupeKey,
@@ -145,21 +158,30 @@ function operationEntryQuery(
   }
 }
 
+/**
+ * Move the operational record, not the thread.
+ *
+ * Cancelling here is what releases the seats, because availability is always
+ * the sum over live bookings — there is no counter to keep in step. The
+ * transition is guarded on the status the caller read, so two dashboards
+ * confirming at once cannot both win.
+ */
 function sourceUpdateQuery(context: ThreadContext, plan: SourceMutationPlan, input: ExecuteOperationInput, entryId: string, now: string): BatchQuery {
-  const completion = plan.action === 'complete'
-    ? ", payload_json = json_set(payload_json, '$.completion.at', COALESCE(json_extract(payload_json, '$.completion.at'), ?), '$.completion.source', COALESCE(json_extract(payload_json, '$.completion.source'), ?))"
-    : ''
-  const params = completion
-    ? [plan.afterStatus, now, now, input.completionSource ?? 'manual', context.thread.id, context.thread.site_id, plan.beforeStatus, entryId]
-    : [plan.afterStatus, now, context.thread.id, context.thread.site_id, plan.beforeStatus, entryId]
+  const table = plan.kind === 'reservation' ? 'reservations' : 'bookings'
+  const stamps = plan.action === 'complete'
+    ? ', completed_at = COALESCE(completed_at, ?)'
+    : plan.action === 'cancel' ? ', cancelled_at = COALESCE(cancelled_at, ?), cancellation_reason = ?' : ''
+  const stampParams = plan.action === 'complete'
+    ? [now]
+    : plan.action === 'cancel' ? [now, input.completionSource === 'auto' ? 'auto_cancelled' : 'host_cancelled'] : []
   return {
     query: `
-      UPDATE requests
-      SET status = ?, updated_at = ?${completion}
-      WHERE id = ? AND site_id = ? AND status = ?
+      UPDATE ${table}
+      SET status = ?, updated_at = ?${stamps}${table === 'bookings' && plan.action !== 'complete' ? ', hold_expires_at = NULL' : ''}
+      WHERE id = ? AND status = ?
         AND EXISTS (SELECT 1 FROM activity_entries WHERE id = ?)
     `,
-    params,
+    params: [plan.afterStatus, now, ...stampParams, context.record!.id, plan.beforeStatus, entryId],
   }
 }
 
@@ -228,13 +250,18 @@ function operationSubject(action: string, fromName: string): string {
   return `Update on your booking at ${fromName}`
 }
 
-function operationBody(action: string, request: GuestRequest): string {
-  if (request.kind === 'contact') throw new Error('Contact requests have no booking operations')
-  const context = `${request.booking_date} at ${request.time_slot} for ${request.party_size}${request.payload.party_size_is_minimum ? '+' : ''} guests`
+function operationBody(action: string, request: GuestRequest, record: ThreadOperationalRecord | null): string {
+  if (request.kind === 'contact') throw new Error('Contact threads have no booking operations')
+  if (!record) throw new Error('This thread has no booking or reservation')
+  // Rendered in the record's own timezone, which is the only zone the guest
+  // agreed to. Formatting from a server-local clock is how a 7pm table became
+  // a noon one in the confirmation email.
+  const when = new Intl.DateTimeFormat('en-US', { timeZone: record.timezone, dateStyle: 'medium', timeStyle: 'short' }).format(new Date(record.starts_at))
+  const context = `${when} for ${record.party_size}${request.payload.party_size_is_minimum ? '+' : ''} guests`
   const noun = request.kind === 'reservation' ? 'reservation' : 'booking'
   if (action === 'confirm') return `Your ${noun} is confirmed: ${context}.`
   if (action === 'cancel') return `Your ${noun} for ${context} has been cancelled.`
-  return `Thanks for visiting us on ${request.booking_date}.`
+  return `Thanks for visiting us on ${when}.`
 }
 
 function replySubject(submissionType: GuestThreadSubmissionType, fromName: string): string {
@@ -263,8 +290,8 @@ async function sendStatusUpdate(
   if (!entry.body || !subject) return conflict('Status update has no recorded email content')
   const payload = JSON.parse(entry.payload_json!) as { action?: string; afterStatus?: string }
   if (payload.action && (
-    payload.afterStatus !== context.thread.status
-    || entry.body !== operationBody(payload.action, context.thread)
+    payload.afterStatus !== context.record?.status
+    || entry.body !== operationBody(payload.action, context.thread, context.record)
   )) return conflict('Status update was superseded by a booking change')
   const summary = await requestSummary(db, context.thread)
   if (!summary.guestEmail) return { ok: false, status: 400, reason: 'no_guest_email' }

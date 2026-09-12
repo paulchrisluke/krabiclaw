@@ -283,7 +283,7 @@ const detailedFeatures = [
       'Ask ChatGPT "how many visitors this month?"'
     ]
   }
-]
+] as const
 
 
 </script>

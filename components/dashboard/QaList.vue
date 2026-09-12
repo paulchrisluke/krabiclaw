@@ -1,19 +1,18 @@
 <template>
   <div class="space-y-6">
-    <!-- Which page these questions belong to. It was in the navbar, which the
-         shell now owns, so it sits with the section it filters. -->
-    <div class="flex justify-end">
+    <!-- Which page these questions belong to. A location's questions are its own; only the site's are filed by page. -->
+    <div v-if="!locationId" class="flex justify-end">
       <USelect v-model="selectedPagePath" :items="pageScopes" class="w-48" aria-label="Q&A page scope" />
     </div>
 
   <DashboardListEditor
     v-model:editing="editing"
     title="Q&A"
-    description="Manage general questions or questions tailored to a public page."
+    :description="locationId ? 'Add common guest questions, then answer them once.' : 'Manage general questions or questions tailored to a public page.'"
     :items="listItems"
     :pending="pending"
     :error="qaError ? getErrorMessage(qaError, 'Q&A request failed') : null"
-    empty-title="No site Q&A yet"
+    :empty-title="locationId ? 'No Q&A yet' : 'No site Q&A yet'"
     empty-icon="i-lucide-circle-help"
     add-label="Add a question"
     reorderable
@@ -24,8 +23,12 @@
     @move="move"
   >
     <template #item="{ item }">
-      <p class="text-sm font-medium text-highlighted">{{ item.title }}</p>
-      <p class="mt-1 line-clamp-2 text-sm text-muted">{{ item.summary }}</p>
+      <div class="flex flex-wrap items-center gap-2">
+        <UBadge :color="item.row.status === 'published' ? 'success' : 'neutral'" variant="soft">{{ item.row.status }}</UBadge>
+        <span v-if="item.row.upvote_count" class="text-xs text-muted">{{ item.row.upvote_count }} upvotes</span>
+      </div>
+      <p class="mt-2 text-sm font-medium text-highlighted">{{ item.title }}</p>
+      <p class="mt-1 line-clamp-2 text-sm text-muted" :class="item.row.answer ? '' : 'italic'">{{ item.row.answer || 'No answer yet.' }}</p>
     </template>
   </DashboardListEditor>
   </div>
@@ -34,26 +37,26 @@
 <script setup lang="ts">
 import DashboardListEditor from '~/components/dashboard/DashboardListEditor.vue'
 import { getErrorMessage } from '~/utils/errors'
-import { isQaDeleted, type QaRow } from '~/utils/site-qa'
+import { isQaDeleted, isQaResponse, type QaRow } from '~/utils/site-qa'
+/** Set when this list is a location's Q&A rather than the site's. */
+const props = defineProps<{ locationId?: string }>()
+
 const dashboardApi = useDashboardApi()
-
-
-
 const route = useRoute()
 const siteId = await useDashboardSiteId()
 const toast = useToast()
 const selectedPagePath = ref('general')
 
-const STANDARD_ROUTES = ['/', '/about', '/services', '/pricing', '/contact', '/schedule', '/blog', '/donate'] as const
-
 const requestEvent = useRequestEvent()
-// tenantPages, existingQaScopes, and the main qa query below are independent of
-// each other (none reads another's result) — issue them together instead of
-// sequentially awaiting each one, which otherwise turns three independent
-// requests into a waterfall during SSR.
+const qaEndpoint = computed(() => props.locationId
+  ? `/api/editor/sites/${siteId}/locations/${props.locationId}/qa`
+  : `/api/editor/sites/${siteId}/qa`)
+
+// The three reads are independent, so they are issued together.
 const tenantPagesAsyncData = useAsyncData(
   () => `dashboard-tenant-pages-${siteId}`,
   async () => {
+    if (props.locationId) return []
     if (import.meta.server) {
       if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Request context unavailable' })
       const [{ cloudflareEnv }, { getTenantPages }] = await Promise.all([
@@ -82,6 +85,7 @@ const tenantPagesAsyncData = useAsyncData(
 const existingQaScopesAsyncData = useAsyncData(
   () => `dashboard-qa-scopes-${siteId}`,
   async () => {
+    if (props.locationId) return []
     if (import.meta.server) {
       if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Request context unavailable' })
       const [{ cloudflareEnv }, { getQaScopes }] = await Promise.all([
@@ -108,10 +112,14 @@ const existingQaScopesAsyncData = useAsyncData(
 
 const pagePath = computed(() => selectedPagePath.value === 'general' ? null : selectedPagePath.value)
 const qaAsyncData = useAsyncData(
-  () => `dashboard-site-qa-${siteId}-${selectedPagePath.value}`,
+  () => props.locationId ? `dashboard-location-qa-${siteId}-${props.locationId}` : `dashboard-site-qa-${siteId}-${selectedPagePath.value}`,
   async () => {
     if (import.meta.server) {
       if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Request context unavailable' })
+      if (props.locationId) {
+        const { loadDashboardLocationQa } = await import('~/server/utils/dashboard-editor-resources')
+        return await loadDashboardLocationQa(requestEvent, siteId, props.locationId)
+      }
       const [{ cloudflareEnv }, { getSiteQa }] = await Promise.all([
         import('~/server/utils/api-response'),
         import('~/server/utils/qa-dashboard'),
@@ -121,24 +129,10 @@ const qaAsyncData = useAsyncData(
       const qa = await getSiteQa(db, siteId, pagePath.value)
       return { qa }
     }
-    return await dashboardApi<{ qa: QaRow[] }>(
-      `/api/editor/sites/${siteId}/qa`,
-      {
-        query: pagePath.value ? { page_path: pagePath.value } : undefined,
-        validate: (value): value is { qa: QaRow[] } =>
-          isRecord(value)
-          && Array.isArray(value.qa)
-          && value.qa.every(item =>
-            isRecord(item)
-            && typeof item.id === 'string'
-            && typeof item.question === 'string'
-            && (item.answer === null || typeof item.answer === 'string')
-            && (item.status === 'published' || item.status === 'hidden')
-            && typeof item.sort_order === 'number'
-            && (item.page_path === null || typeof item.page_path === 'string'),
-          ),
-      },
-    )
+    return await dashboardApi<{ qa: QaRow[] }>(qaEndpoint.value, {
+      query: pagePath.value ? { page_path: pagePath.value } : undefined,
+      validate: isQaResponse,
+    })
   },
 )
 
@@ -150,11 +144,7 @@ const [
 
 const pageScopes = computed(() => {
   const scopes = new Map<string, string>()
-  scopes.set('general', 'General fallback')
-
-  for (const path of STANDARD_ROUTES) {
-    scopes.set(path, path === '/' ? 'Home' : path)
-  }
+  scopes.set('general', 'Whole site')
 
   for (const page of tenantPages.value ?? []) {
     if (page.path && !scopes.has(page.path)) {
@@ -171,16 +161,14 @@ const pageScopes = computed(() => {
   return Array.from(scopes.entries()).map(([value, label]) => ({ label, value }))
 })
 const qaRows = computed(() => data.value?.qa ?? [])
-const listItems = computed(() => qaRows.value.map(row => ({
-  id: row.id,
-  title: row.question,
-  summary: row.answer || 'No answer yet.',
-})))
+const listItems = computed(() => qaRows.value.map(row => ({ id: row.id, title: row.question, row })))
 
 const editing = ref(false)
 const removingId = ref<string | null>(null)
 
-const qaPath = computed(() => `/dashboard/${String(route.params.orgSlug)}/sites/${String(route.params.siteSlug)}/qa`)
+const qaPath = computed(() => props.locationId
+  ? `/dashboard/${String(route.params.orgSlug)}/sites/${String(route.params.siteSlug)}/locations/${String(route.params.locationSlug)}/qa`
+  : `/dashboard/${String(route.params.orgSlug)}/sites/${String(route.params.siteSlug)}/qa`)
 
 // A question opens its own level rather than a sheet over the list, so the
 // record has a URL and adding and editing are the same screen. The page the
@@ -196,7 +184,7 @@ function openExisting(item: { id: string }) {
 async function removeItem(item: { id: string }) {
   removingId.value = item.id
   try {
-    await dashboardApi(`/api/editor/sites/${siteId}/qa/${item.id}`, {
+    await dashboardApi(`${qaEndpoint.value}/${item.id}`, {
       method: 'DELETE',
       query: pagePath.value ? { page_path: pagePath.value } : undefined,
       validate: isQaDeleted,
@@ -214,9 +202,9 @@ async function move(item: { id: string }, direction: -1 | 1) {
   const current = qaRows.value[index]
   const target = qaRows.value[index + direction]
   if (!current || !target) return
-  await dashboardApi(`/api/editor/sites/${siteId}/qa/reorder`, {
+  await dashboardApi(`${qaEndpoint.value}/reorder`, {
     method: 'POST',
-    body: { page_path: pagePath.value, updates: [{ id: current.id, sort_order: target.sort_order }, { id: target.id, sort_order: current.sort_order }] },
+    body: { ...(props.locationId ? {} : { page_path: pagePath.value }), updates: [{ id: current.id, sort_order: target.sort_order }, { id: target.id, sort_order: current.sort_order }] },
     validate: (value): value is { updated: number } =>
       isRecord(value) && typeof value.updated === 'number',
   })

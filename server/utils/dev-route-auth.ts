@@ -1,7 +1,7 @@
 import { HTTPError } from 'nitro';
 import {  getRequestHost } from 'nitro/h3';
 import type { H3Event } from 'nitro'
-import { isPreviewContext } from '~/server/utils/tenant-hosts'
+import { isNonProductionHost } from '~/server/utils/tenant-hosts'
 
 const textEncoder = new TextEncoder()
 
@@ -76,7 +76,7 @@ export function assertDevRouteAllowed(event: H3Event) {
       throw new HTTPError({ statusCode: 403, statusMessage: 'Forbidden' })
     }
 
-    if (!isLocalHost(hostname) && !isPreviewContext(hostname)) {
+    if (!isLocalHost(hostname) && !isNonProductionHost(hostname)) {
       throw new HTTPError({ statusCode: 404, statusMessage: 'Not found' })
     }
   }
@@ -89,7 +89,7 @@ export function assertE2eFixtureEnabled(event: H3Event) {
   }
 
   const hostname = normalizeHostname(getRequestHost(event) || '')
-  if (!isLocalHost(hostname) && !isPreviewContext(hostname)) {
+  if (!isLocalHost(hostname) && !isNonProductionHost(hostname)) {
     throw new HTTPError({ statusCode: 404, statusMessage: 'Not found' })
   }
 }

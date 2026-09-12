@@ -10,7 +10,7 @@ useSeoMeta({ title: 'Booking details | KrabiClaw', robots: 'noindex, nofollow' }
 
 const route = useRoute()
 const rawType = typeof route.params.bookingType === 'string' ? route.params.bookingType : undefined
-if (rawType !== 'reservation' && rawType !== 'experience_booking') {
+if (rawType !== 'reservation' && rawType !== 'booking') {
   throw createError({ statusCode: 404, statusMessage: 'Booking not found' })
 }
 const bookingType = rawType

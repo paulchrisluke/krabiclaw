@@ -8,9 +8,8 @@ import {
 } from '~/utils/public-resource-contracts'
 
 export const useSiteShellState = () => {
-  const { isPlatform, siteId, draftId } = useTenantSite();
+  const { isPlatform, siteId } = useTenantSite();
   const requestEvent = useRequestEvent();
-  const route = useRoute();
   const { locale } = useI18n();
   const isSyntheticServerAssetFetch = import.meta.server
     && !requestEvent?.req.runtime?.cloudflare?.env
@@ -21,7 +20,6 @@ export const useSiteShellState = () => {
       || requestEvent?.path?.startsWith('/__nuxt_error')
     );
 
-  const entityId = computed(() => siteId || draftId || null);
 
   const params = computed<PublicPageRequest>(() => ({
     page: null,
@@ -30,20 +28,17 @@ export const useSiteShellState = () => {
     datasets: [],
     blogSlug: null,
     locale: locale.value,
-    token: typeof route.query.token === 'string' && route.path.startsWith('/preview/')
-      ? route.query.token
-      : null,
   }));
 
-  const key = computed(() => usePublicResourceKey('shell', entityId.value, params.value));
-  const url = computed(() => buildPublicPageUrl(siteId, params.value, route, 'shell'));
+  const key = computed(() => usePublicResourceKey('shell', siteId, params.value));
+  const url = computed(() => buildPublicPageUrl(siteId, params.value, 'shell'));
 
   let data: Ref<SiteShellPayload | undefined>
   let error: Ref<Error | null>
   let pending: Ref<boolean>
   let refresh: () => Promise<unknown>
   let ready: Promise<unknown>
-  if (isSyntheticServerAssetFetch || isPlatform || (!siteId && !draftId)) {
+  if (isSyntheticServerAssetFetch || isPlatform || !siteId) {
     data = ref<SiteShellPayload>()
     error = ref<Error | null>(null)
     pending = ref(false)
@@ -53,20 +48,30 @@ export const useSiteShellState = () => {
     const asyncData = useAsyncData<SiteShellPayload>(
           key,
           (_nuxtApp, { signal }) => loadPublicResourcePayload<SiteShellPayload>({
-              draftId,
               siteId,
               resourceKind: 'shell',
               url: url.value,
               key: key.value,
               query: {
                 locale: params.value.locale ?? undefined,
-                token: params.value.token ?? undefined,
               },
               validate: isPublicShellPayload,
               failureMessage: 'Public shell failed',
               signal,
             }),
-          { server: true, dedupe: 'cancel' },
+          {
+            server: true,
+            dedupe: 'cancel',
+            // Reuse what SSR already resolved. Without this the shell can be
+            // fetched a second time during hydration, and that fetch carries
+            // different authorization than the server render did (the preview
+            // cookie is a third-party cookie inside the onboarding preview
+            // frame), which renders a different shell than the one being
+            // hydrated. The page loader does the same for the same reason.
+            getCachedData(cacheKey) {
+              return useNuxtApp().payload.data[cacheKey] as SiteShellPayload | undefined
+            },
+          },
         );
     data = asyncData.data
     error = asyncData.error as Ref<Error | null>
@@ -80,8 +85,8 @@ export const useSiteShellState = () => {
   const shellSite = computed(() => data.value?.site ?? null);
   const googleBusiness = computed(() => data.value?.googleBusiness ?? null);
   const locales = computed(() => data.value?.locales ?? []);
-  const hasExperiences = computed(() => data.value?.hasExperiences ?? false);
   const hasProducts = computed(() => data.value?.hasProducts ?? false);
+  const hasBookableProducts = computed(() => data.value?.hasBookableProducts ?? false);
   const platformMessages = useState<Record<string, string> | null>('platform-locale-messages', () => null)
   watch(
     () => data.value?.platformMessages,
@@ -94,8 +99,8 @@ export const useSiteShellState = () => {
     site: shellSite,
     googleBusiness,
     locales,
-    hasExperiences,
     hasProducts,
+    hasBookableProducts,
     data,
     pending,
     error,

@@ -20,11 +20,17 @@ import { resolvePublicTemplate } from '~/utils/template-registry'
 const SOCIAL_CARD_OWNERS = {
   site: { table: 'sites', site: 'o.id', filter: "o.status = 'active'", slots: ['social_share'] },
   business_location: { table: 'business_locations', site: 'o.site_id', filter: "o.status = 'active'", slots: ['hero', 'gallery'] },
-  product: { table: 'products', site: 'o.site_id', filter: 'o.is_visible = 1', slots: ['image', 'gallery'] },
+  // A Product belongs to the organization and reaches a site through a
+  // publication, so its site match is that row rather than a column.
+  product: {
+    table: 'products',
+    site: "(SELECT pub.site_id FROM product_publications pub WHERE pub.product_id = o.id AND pub.organization_id = o.organization_id AND pub.published = 1)",
+    filter: 'o.active = 1',
+    slots: ['image', 'gallery'],
+  },
   // Articles and docs keep their picture in the leading image block, read
   // through `loadCoverBlockId`; `cover` is the social post's own slot.
   content_document: { table: 'content_documents', site: 'o.site_id', filter: "o.kind IN ('page','article','social_post') AND EXISTS (SELECT 1 FROM content_documents root WHERE root.id = COALESCE(o.root_id, o.id) AND (root.kind = 'page' OR root.status = 'published')) AND (o.kind != 'page' OR o.path != '/')", slots: ['cover', 'gallery'] },
-  offering: { table: 'offerings', site: 'o.site_id', filter: '1 = 1', slots: ['hero', 'thumbnail', 'gallery'] },
   review: { table: 'reviews', site: 'o.site_id', filter: "o.status = 'approved' AND o.site_id IS NOT NULL", slots: ['portrait', 'gallery'] },
 } satisfies Record<string, { table: string; site: string; filter: string; slots: string[] }>
 
@@ -99,7 +105,6 @@ export async function socialCardRefreshOwnersForPlacement(db: DbClient, placemen
     case 'business_location':
     case 'product':
     case 'content_document':
-    case 'offering':
     case 'review':
       return SOCIAL_CARD_OWNERS[placement.owner_type].slots.some(slot => slot === placement.slot)
         ? [{ owner_type: placement.owner_type, owner_id: placement.owner_id }]
@@ -135,7 +140,7 @@ async function loadOwner(db: DbClient, owner: SocialCardOwner): Promise<OwnerRec
       return await queryFirst<OwnerRecord>(db, `SELECT p.organization_id, p.site_id,
         COALESCE(NULLIF(trim(p.seo_title), ''), p.name) AS title,
         COALESCE(NULLIF(trim(p.seo_description), ''), NULLIF(trim(p.description), '')) AS description,
-        CASE p.product_type WHEN 'experience' THEN 'Experience' ELSE 'Product' END AS label, bl.title AS location
+        'Product' AS label, NULL AS location
         FROM products p JOIN business_locations bl ON bl.id = p.location_id WHERE p.id = ? LIMIT 1`, [owner.owner_id]) ?? null
     case 'content_document':
       return await queryFirst<OwnerRecord>(db, `SELECT d.organization_id, d.site_id,
@@ -146,12 +151,6 @@ async function loadOwner(db: DbClient, owner: SocialCardOwner): Promise<OwnerRec
         FROM content_documents d JOIN content_documents root ON root.id = COALESCE(d.root_id, d.id)
         LEFT JOIN business_locations bl ON bl.id = root.location_id
         WHERE d.id = ? AND d.kind IN ('page','article','social_post') LIMIT 1`, [owner.owner_id]) ?? null
-    case 'offering':
-      return await queryFirst<OwnerRecord>(db, `SELECT o.organization_id, o.site_id,
-        COALESCE(NULLIF(trim(o.seo_title), ''), o.name) AS title,
-        COALESCE(NULLIF(trim(o.seo_description), ''), NULLIF(trim(o.short_description), ''), NULLIF(trim(o.summary), '')) AS description,
-        'Service' AS label, bl.title AS location
-        FROM offerings o LEFT JOIN business_locations bl ON bl.id = o.location_id WHERE o.id = ? LIMIT 1`, [owner.owner_id]) ?? null
     case 'review':
       return await queryFirst<OwnerRecord>(db, `SELECT organization_id, site_id,
         COALESCE(NULLIF(trim(title), ''), 'Review by ' || COALESCE(NULLIF(trim(author_name), ''), 'a customer')) AS title,

@@ -36,21 +36,30 @@
       </header>
     </template>
 
-    <header v-else class="mx-auto max-w-7xl px-4 pb-10 pt-12 text-center sm:px-6 lg:px-8">
-      <p v-if="collectionLabel" class="saya-kicker mb-4">{{ collectionLabel }}</p>
-      <h1 class="saya-display-md text-default">{{ title }}</h1>
-      <div v-if="locations.length > 1 && !locationId" class="mt-8 flex flex-wrap justify-center gap-3">
-        <NuxtLink
-          v-for="location in locations"
-          :key="location.id"
-          :to="localePath(productLocationCollectionPath(vertical, location.slug))"
-          class="inline-flex items-center gap-2 rounded-full border border-default px-5 py-2.5 text-sm text-muted no-underline transition hover:bg-muted hover:text-default"
-        >
-          <SayaIcon name="map-pin" class="size-3.5 opacity-70" />
-          {{ location.title }}
-        </NuxtLink>
-      </div>
-    </header>
+    <template v-else>
+      <SayaSubNav
+        v-if="currentLocation"
+        :location-slug="currentLocation.slug"
+        :active="presentation.locationCollectionSegment"
+      />
+      <header class="mx-auto max-w-7xl px-4 pb-10 pt-16 sm:px-6 lg:px-8">
+        <div class="max-w-2xl">
+          <p v-if="collectionLabel" class="saya-kicker mb-4">{{ collectionLabel }}</p>
+          <h1 class="saya-display-md text-default">{{ title }}</h1>
+        </div>
+        <div v-if="locations.length > 1 && !locationId" class="mt-8 flex flex-wrap gap-3">
+          <NuxtLink
+            v-for="location in locations"
+            :key="location.id"
+            :to="localePath(`/locations/${encodeURIComponent(location.slug)}/${presentation.locationCollectionSegment}`)"
+            class="inline-flex items-center gap-2 rounded-full border border-default px-5 py-2.5 text-sm text-muted no-underline transition hover:bg-muted hover:text-default"
+          >
+            <SayaIcon name="map-pin" class="size-3.5 opacity-70" />
+            {{ location.title }}
+          </NuxtLink>
+        </div>
+      </header>
+    </template>
 
     <div v-if="products.length === 0 && (isMenu || emptyCollectionMessage)" class="mx-auto max-w-xl px-4 py-24 text-center sm:px-6">
       <p v-if="currentLocation && isMenu || emptyCollectionMessage" class="saya-display saya-italic text-3xl">
@@ -59,9 +68,6 @@
       <p v-if="currentLocation && isMenu" class="mt-4 text-sm text-muted">
         {{ t('saya.menu_page.coming_soon_desc', { location: currentLocation.title }) }}
       </p>
-      <SayaButton v-if="isMenu && emptyExperienceHref" class="mt-6" :to="localePath(emptyExperienceHref)">
-        {{ t('saya.nav.experiences') }}
-      </SayaButton>
     </div>
 
     <div v-else-if="isMenu">
@@ -91,8 +97,8 @@
               class="flex items-start gap-5"
             >
               <NuxtLink
-                v-if="product.image && product.available"
-                :to="localePath(presentation.productPath(locationSlug(product.location_id), product.slug))"
+                v-if="product.image && isAvailable(product, group.location_id) && productHref(product, group.location_id)"
+                :to="productHref(product, group.location_id)!"
                 class="shrink-0"
               >
                 <SayaMenuItemPreview :item="previewItem(product)" />
@@ -107,15 +113,15 @@
                 <div class="flex items-baseline gap-2">
                   <div class="flex items-baseline gap-2 text-base font-medium text-default">
                     <NuxtLink
-                      v-if="product.available"
-                      :to="localePath(presentation.productPath(locationSlug(product.location_id), product.slug))"
+                      v-if="isAvailable(product, group.location_id) && productHref(product, group.location_id)"
+                      :to="productHref(product, group.location_id)!"
                       class="text-default no-underline underline-offset-2 hover:underline"
                     >
                       {{ product.name }}
                     </NuxtLink>
                     <span v-else class="text-default opacity-50">{{ product.name }}</span>
                     <SayaBadgeUnavailable
-                      v-if="!product.available"
+                      v-if="!isAvailable(product, group.location_id)"
                       :text="t('saya.menu_page.unavailable')"
                     />
                     <span
@@ -126,11 +132,11 @@
                       {{ tag }}
                     </span>
                   </div>
-                  <template v-if="formatProductPriceLabel(product)">
+                  <template v-if="priceLabel(product, group.location_id)">
                     <div class="saya-dotted-leader" />
                     <div class="flex shrink-0 items-baseline gap-1.5 tabular-nums text-base text-default">
-                      <span v-if="compareAtPrice(product)" class="text-sm text-muted line-through">{{ compareAtPrice(product) }}</span>
-                      <span>{{ formatProductPriceLabel(product) }}</span>
+                      <span v-if="compareAtPrice(product, group.location_id)" class="text-sm text-muted line-through">{{ compareAtPrice(product, group.location_id) }}</span>
+                      <span>{{ priceLabel(product, group.location_id) }}</span>
                     </div>
                   </template>
                 </div>
@@ -152,32 +158,66 @@
     </div>
 
     <div v-else class="mx-auto max-w-7xl px-4 pb-24 sm:px-6 lg:px-8">
-      <section v-for="group in groups" :key="group.category" class="mb-20">
-        <h2 class="saya-display saya-italic mb-8 border-b border-default pb-6 text-5xl">{{ group.category }}</h2>
+      <section v-for="group in groups" :key="group.id" class="mb-20">
+        <div class="mb-8 border-b border-default pb-6">
+          <p v-if="showLocations && group.location_id" class="saya-kicker mb-2">{{ locationTitle(group.location_id) }}</p>
+          <h2 class="saya-display saya-italic text-5xl">{{ group.category }}</h2>
+        </div>
         <div class="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
           <article v-for="product in group.products" :key="product.id">
-            <NuxtLink :to="localePath(presentation.productPath(locationSlug(product.location_id), product.slug))" class="group block text-default no-underline">
-              <div v-if="product.image?.public_url" class="relative aspect-[4/3] overflow-hidden rounded-lg bg-muted">
-                <img
-                  :src="product.image.public_url"
-                  :alt="product.image.alt_text || product.name"
-                  class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-                >
+            <component :is="productHref(product, group.location_id) ? NuxtLinkComponent : 'div'" :to="productHref(product, group.location_id) ?? undefined" class="group block text-default no-underline">
+              <div class="relative aspect-[4/3] overflow-hidden rounded-lg bg-muted">
+                <template v-if="coverUrl(product)">
+                  <img
+                    :src="coverUrl(product)!"
+                    :alt="product.image!.alt_text || product.name"
+                    class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                  >
+                  <span
+                    v-if="product.image!.kind === 'video'"
+                    class="absolute inset-0 flex items-center justify-center bg-black/10"
+                    aria-hidden="true"
+                  >
+                    <span class="flex size-12 items-center justify-center rounded-full bg-black/55 text-white">
+                      <SayaIcon name="play" class="ml-0.5 size-5" />
+                    </span>
+                  </span>
+                </template>
+                <div v-else class="flex h-full items-center justify-center">
+                  <SayaIcon name="sparkles" class="size-12 text-dimmed" />
+                </div>
                 <SayaBadgeUnavailable
-                  v-if="!product.available"
+                  v-if="!isAvailable(product, group.location_id)"
                   overlay
                   :text="t('saya.menu_page.unavailable')"
                 />
               </div>
               <div class="mt-5">
-                <div class="flex items-start justify-between gap-4">
-                  <h3 class="text-lg font-semibold transition-colors group-hover:text-primary">{{ product.name }}</h3>
-                  <span v-if="formatProductPriceLabel(product)" class="shrink-0 tabular-nums">{{ formatProductPriceLabel(product) }}</span>
-                </div>
-                <p v-if="showLocations" class="mt-1 text-xs font-medium uppercase tracking-wide text-muted">{{ locationTitle(product.location_id) }}</p>
+                <h3 class="text-lg font-semibold transition-colors group-hover:text-primary">{{ product.name }}</h3>
+                <p v-if="showLocations && productLocationId(product, group.location_id)" class="mt-1 text-xs font-medium uppercase tracking-wide text-muted">{{ locationTitle(productLocationId(product, group.location_id)!) }}</p>
                 <p v-if="product.description" class="mt-1 line-clamp-2 text-sm leading-6 text-muted">{{ product.description }}</p>
+
+                <div class="mt-4 flex flex-wrap gap-x-5 gap-y-1.5 text-xs text-muted">
+                  <span v-if="priceLabel(product, group.location_id)" class="flex items-center gap-1">
+                    <SayaIcon name="banknotes" class="size-3.5" />
+                    {{ priceLabel(product, group.location_id) }}
+                  </span>
+                  <span v-if="product.booking?.duration_minutes" class="flex items-center gap-1">
+                    <SayaIcon name="clock" class="size-3.5" />
+                    {{ durationLabel(product.booking.duration_minutes) }}
+                  </span>
+                  <span v-if="product.booking?.default_capacity" class="flex items-center gap-1">
+                    <SayaIcon name="user-group" class="size-3.5" />
+                    {{ product.booking.default_capacity }} {{ verticalCopy.guestsMaxLabel }}
+                  </span>
+                </div>
+
+                <div v-if="productHref(product, group.location_id)" class="mt-4 flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-primary">
+                  {{ verticalCopy.viewExperienceCta }}
+                  <SayaIcon name="arrow-right" class="size-3.5 transition-transform group-hover:translate-x-1" />
+                </div>
               </div>
-            </NuxtLink>
+            </component>
           </article>
         </div>
       </section>
@@ -186,17 +226,25 @@
 </template>
 
 <script setup lang="ts">
-import type { Product, ProductPresentation } from '~/server/types/products'
+import type { Collection, Product, ProductPresentation } from '~/server/types/products'
 import { useSchemaOrg } from '~/composables/useSchemaOrg'
 import type { CurrencyCode } from '~/shared/currencies'
-import { formatProductMoney, formatProductPriceLabel } from '~/utils/product-money'
-import { minorAmountToMajor } from '~/shared/prices'
-import { productLocationCollectionPath } from '~/utils/product-presentation'
+import { formatProductMoney } from '~/utils/product-money'
+import { minorAmountToMajor, selectPrice, type Price } from '~/shared/prices'
+import { PRICING_NOTE_HANDLE } from '~/shared/metafields'
+import { groupProductsByCollection, productLocationCollectionPath } from '~/utils/product-presentation'
+import { getVerticalCopy } from '~/utils/vertical-copy'
 
 interface LocationSummary { id: string; slug: string; title: string }
 
+// Resolved once: a dynamic `:is` given the string 'NuxtLink' renders a literal
+// <NuxtLink> element that no browser follows, so the card looked linked in the
+// markup and was not.
+const NuxtLinkComponent = resolveComponent('NuxtLink')
+
 const props = defineProps<{
   products: Product[]
+  collections: Collection[]
   locations: LocationSummary[]
   locationId?: string | null
   currency: CurrencyCode
@@ -204,16 +252,20 @@ const props = defineProps<{
   vertical: string
   title: string
   brandName: string
-  emptyExperienceHref?: string | null
 }>()
 
-const { localePath, t } = useI18n()
+const { localePath, t, locale } = useI18n()
+const verticalCopy = computed(() => getVerticalCopy(props.vertical, locale.value))
 const { formatDate } = useLocaleDate()
 const isMenu = computed(() => props.presentation.structuredDataType === 'MenuItem')
-const collectionLabel = computed(() => isMenu.value
-  ? t('saya.footer.menu')
-  : t('saya.footer.products'))
-const emptyCollectionMessage = computed(() => t('saya.products.empty'))
+const isExperiences = computed(() => props.presentation.locationCollectionSegment === 'experiences')
+const collectionLabel = computed(() => {
+  if (isMenu.value) return t('saya.footer.menu')
+  return isExperiences.value ? t('saya.footer.experiences') : t('saya.footer.products')
+})
+const emptyCollectionMessage = computed(() => (isExperiences.value
+  ? t('saya.experiences.empty')
+  : t('saya.products.empty')))
 const locationMap = computed(() => new Map(props.locations.map(location => [location.id, location])))
 const showLocations = computed(() => !props.locationId && props.locations.length > 1)
 const currentLocation = computed(() => {
@@ -222,6 +274,25 @@ const currentLocation = computed(() => {
   if (!location) throw new Error(`Product location is missing: ${props.locationId}`)
   return location
 })
+/**
+ * Where a product's page lives.
+ *
+ * The page is scoped to one location when the route says so; otherwise the
+ * product must be offered at exactly one of this site's locations for its
+ * route to be unambiguous. Several, and there is no single path — the product
+ * is linked from each location's own collection instead.
+ */
+const productLocationId = (product: Product, collectionLocationId: string | null = null): string | null => {
+  if (props.locationId) return props.locationId
+  // A location's collection is that branch's menu, so a dish offered at two
+  // branches is linked, priced and labelled as the branch whose section it is
+  // being read in. Only under a site-wide collection is there nothing to say
+  // which branch it belongs to, and then it has no single route.
+  if (collectionLocationId && locationMap.value.has(collectionLocationId)
+    && product.locations.some(entry => entry.location_id === collectionLocationId && entry.published)) return collectionLocationId
+  const here = product.locations.filter(entry => entry.published && locationMap.value.has(entry.location_id))
+  return here.length === 1 ? here[0]!.location_id : null
+}
 const locationSlug = (id: string) => {
   const location = locationMap.value.get(id)
   if (!location) throw new Error(`Product location is missing: ${id}`)
@@ -232,21 +303,67 @@ const locationTitle = (id: string) => {
   if (!location) throw new Error(`Product location is missing: ${id}`)
   return location.title
 }
-// Categories carry their own stable slug and order now, so anchors no longer
-// need a de-duplicating counter over slugified display names.
-const groups = computed(() => {
-  const grouped = new Map<string, { id: string; category: string; sort_order: number; products: Product[] }>()
-  for (const product of props.products) {
-    // Category slugs are unique per location, not per site, so an all-location
-    // collection would emit the same anchor twice. The category ID is the only
-    // identity that stays unique across the whole page.
-    const group = grouped.get(product.category_id)
-      ?? { id: product.category_id, category: product.category.name, sort_order: product.category.sort_order, products: [] }
-    group.products.push(product)
-    grouped.set(product.category_id, group)
-  }
-  return [...grouped.values()].sort((a, b) => a.sort_order - b.sort_order)
-})
+/**
+ * Whether a customer can buy this here.
+ *
+ * Three separate facts, all of which must hold: the merchant is selling it,
+ * this location offers it, and it has an applicable price. None of them
+ * substitutes for another, and none of them is a stock statement.
+ */
+const isAvailable = (product: Product, collectionLocationId: string | null = null): boolean => {
+  if (!product.active) return false
+  const id = productLocationId(product, collectionLocationId)
+  // Under a site-wide collection a product offered at several branches has no
+  // single one to name, and the question becomes whether any branch this page
+  // covers offers it. Skipping the check entirely there made a product offered
+  // nowhere read as available.
+  const offeredHere = id
+    ? product.locations.some(entry => entry.location_id === id && entry.active)
+    : product.locations.some(entry => entry.active && entry.published && locationMap.value.has(entry.location_id))
+  if (!offeredHere) return false
+  // On sale means the merchant is selling it here. A product priced in words —
+  // "Market price" — is on sale; an amount is what online checkout needs, and
+  // that is a different question.
+  return priceFor(product, collectionLocationId) !== null
+    || typeof product.metafields[PRICING_NOTE_HANDLE] === 'string'
+}
+
+const productHref = (product: Product, collectionLocationId: string | null = null): string | null => {
+  const id = productLocationId(product, collectionLocationId)
+  return id ? localePath(props.presentation.productPath(locationSlug(id), product.slug)) : null
+}
+
+/**
+ * The offer this page shows, resolved once through the one selection contract.
+ *
+ * A product with several variants shows its lowest applicable offer as a
+ * "from" price — an explicit choice made here, not a fallback: every variant's
+ * own price is on the product's own page.
+ */
+const priceFor = (product: Product, collectionLocationId: string | null = null): Price | null => {
+  const selection = { currency: props.currency, location_id: productLocationId(product, collectionLocationId), at: new Date().toISOString() }
+  // Only variants a customer can choose: a disabled variant's price would
+  // otherwise undercut the one actually on offer.
+  const offers = product.variants.filter(variant => variant.active !== false).flatMap(variant => selectPrice(variant.prices, selection) ?? [])
+  return offers.reduce<Price | null>((lowest, offer) => (!lowest || offer.unit_amount < lowest.unit_amount ? offer : lowest), null)
+}
+/**
+ * What this card says about price.
+ *
+ * An amount when the product has one, the merchant's own words when it is
+ * priced in words instead, and nothing at all when it states neither. A
+ * missing amount never becomes zero, "Free" or "Market price" here.
+ */
+const priceLabel = (product: Product, collectionLocationId: string | null = null): string | null => {
+  const amount = formatProductMoney(priceFor(product, collectionLocationId))
+  if (amount) return amount
+  const note = product.metafields[PRICING_NOTE_HANDLE]
+  return typeof note === 'string' && note.trim() ? note : null
+}
+// One section per collection, in the merchant's order — see
+// groupProductsByCollection for what membership does and does not imply.
+const groups = computed(() => groupProductsByCollection(props.products, props.collections)
+  .map(group => ({ id: group.id, category: group.name, sort_order: group.sort_order, location_id: group.location_id, products: group.products })))
 const categoryTabs = computed(() => groups.value.map(group => ({
   key: group.id,
   label: group.category,
@@ -272,6 +389,26 @@ watch(groups, () => {
   userSelectedCategory.value = ''
 })
 
+/**
+ * What the card shows for a cover. A video's poster frame stands in for the
+ * video itself — the same asset, not a second one — and a card with no cover
+ * shows the empty state rather than borrowing a gallery photograph.
+ */
+function coverUrl(product: Product): string | null {
+  const cover = product.image
+  if (!cover) return null
+  return cover.kind === 'video' ? cover.thumbnail_url : cover.public_url
+}
+
+function durationLabel(minutes: number): string {
+  if (minutes < 60) return t('saya.experience_detail.minutes', { count: minutes })
+  const hours = Math.floor(minutes / 60)
+  const rest = minutes % 60
+  return rest
+    ? t('saya.experience_detail.hours_minutes', { hours, minutes: rest })
+    : t('saya.experience_detail.hours', { count: hours })
+}
+
 function previewItem(product: Product) {
   return {
     name: product.name,
@@ -279,19 +416,25 @@ function previewItem(product: Product) {
   }
 }
 
+/**
+ * Dietary marks come from the tenant's own 'menu.dietary-notes' attribute.
+ * A site that has not defined it shows none, rather than a guess.
+ */
 function dietaryTags(product: Product): string[] {
-  const notes = product.details.find(detail => detail.key === 'dietary-notes')?.values ?? []
+  const notes = product.metafields['menu.dietary-notes']
+  if (!Array.isArray(notes)) return []
   return notes.filter(note => note === 'V' || note === 'VG' || note === 'GF')
 }
 
-function compareAtPrice(product: Product): string | null {
-  const price = product.price
-  if (!price || price.compare_at_amount_minor === null) return null
-  return formatProductMoney({
-    ...price,
-    amount_minor: price.compare_at_amount_minor,
-    compare_at_amount_minor: null,
-  })
+function compareAtPrice(product: Product, collectionLocationId: string | null = null): string | null {
+  const price = priceFor(product, collectionLocationId)
+  if (!price || price.compare_at_unit_amount === null) return null
+  return formatProductMoney({ ...price, unit_amount: price.compare_at_unit_amount, compare_at_unit_amount: null })
+}
+
+function offerFor(product: Product, collectionLocationId: string | null = null) {
+  const price = priceFor(product, collectionLocationId)
+  return price ? { '@type': 'Offer', price: minorAmountToMajor(price.unit_amount, price.currency), priceCurrency: price.currency } : undefined
 }
 
 useSchemaOrg(computed(() => props.presentation.structuredDataType === 'MenuItem'
@@ -305,7 +448,10 @@ useSchemaOrg(computed(() => props.presentation.structuredDataType === 'MenuItem'
           '@type': 'MenuItem',
           name: product.name,
           description: product.description,
-          offers: product.price ? { '@type': 'Offer', price: minorAmountToMajor(product.price.amount_minor, product.price.currency), priceCurrency: product.price.currency } : undefined,
+          // The same branch the card is priced for: a menu section belongs to
+          // one location, and structured data that disagreed with the visible
+          // price would be the page contradicting itself.
+          offers: offerFor(product, group.location_id),
         })),
       })),
     }
@@ -319,7 +465,7 @@ useSchemaOrg(computed(() => props.presentation.structuredDataType === 'MenuItem'
           '@type': 'Product',
           name: product.name,
           description: product.description,
-          offers: product.price ? { '@type': 'Offer', price: minorAmountToMajor(product.price.amount_minor, product.price.currency), priceCurrency: product.price.currency } : undefined,
+          offers: offerFor(product),
         },
       })),
     }))

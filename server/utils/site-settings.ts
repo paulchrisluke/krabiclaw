@@ -185,7 +185,7 @@ export async function loadSettingsPayload(
     default_features: defaultFeatures,
     brand_color: siteConfig.brand_color || '',
     font_preset: resolveSiteFontPreset(siteConfig.font_preset),
-    default_currency: updatedSite.default_currency || 'USD',
+    default_currency: updatedSite.default_currency,
     press_email: siteConfig.press_email || '',
     partnerships_email: siteConfig.partnerships_email || '',
     catering_email: siteConfig.catering_email || '',

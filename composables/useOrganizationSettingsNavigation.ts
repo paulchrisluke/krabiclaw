@@ -8,12 +8,13 @@ export function useOrganizationSettingsNavigation() {
   const route = useRoute()
   const dashboard = useDashboardSite()
   const { preference } = usePlatformTheme()
+  const { orgPaths } = useDashboardSiteLinks()
 
   const organization = dashboard.organization
-  const settingsPath = computed(() => `/dashboard/${String(route.params.orgSlug)}/settings`)
+  const settingsPath = computed(() => orgPaths.value.settings)
 
   const items = computed(() => [
-    { id: 'general', label: 'General', summary: organization.value?.name || 'Organization details', to: `${settingsPath.value}/general` },
+    { id: 'general', label: 'General', summary: organization.value?.name ?? '', to: `${settingsPath.value}/general` },
     { id: 'appearance', label: 'Appearance', summary: `${preference.value.charAt(0).toUpperCase()}${preference.value.slice(1)} theme`, to: `${settingsPath.value}/appearance` },
     { id: 'members', label: 'Members', summary: 'People and organization access', to: `${settingsPath.value}/members` },
     { id: 'billing', label: 'Billing', summary: 'Plans and payments', to: `${settingsPath.value}/billing` },

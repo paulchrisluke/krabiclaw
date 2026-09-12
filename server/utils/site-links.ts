@@ -294,9 +294,12 @@ export async function upsertLinksPage(db: DbClient, input: {
   const title = requiredString(input.page.title, 160, 'Title')
   const robots = normalizeRobots(input.page.robots)
 
+  const knownItemIds = new Set(current.items.map(item => item.id))
+  const createdItemIds: string[] = []
   const normalizedItems = input.items.map((item, index) => {
     const existingId = cleanString(item.id as ApiValue, 120)
-    const id = existingId && !existingId.startsWith('tmp_') ? existingId : idWith('linkitem')
+    const id = existingId && knownItemIds.has(existingId) ? existingId : idWith('linkitem')
+    if (id !== existingId) createdItemIds.push(id)
     const status = normalizeItemStatus(item.status)
     const sortOrder = Number(item.sort_order ?? index)
     if (!Number.isInteger(sortOrder)) throw new SiteLinksValidationError('Link sort order must be an integer.')
@@ -336,7 +339,7 @@ export async function upsertLinksPage(db: DbClient, input: {
       seoTitle: copy.seo_title, seoDescription: copy.seo_description, updatedBy: input.updatedBy,
       metadata: { recipe: 'links', page_type: 'custom' } }, blocks)
   }
-  return await getLinksPage(db, input.siteId)
+  return { ...await getLinksPage(db, input.siteId), created_item_ids: createdItemIds }
 }
 
 export async function createLinkItem(db: DbClient, input: {

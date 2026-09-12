@@ -7,7 +7,6 @@ export const PLATFORM_SITEMAP_ROUTES = [
   '/about',
   '/blog',
   '/docs',
-  '/experiences',
   '/features',
   '/help',
   '/legal',
@@ -27,7 +26,6 @@ export const PRIVATE_ROUTE_PREFIXES = [
   '/dashboard',
   '/dev',
   '/oauth',
-  '/preview',
   '/transfer',
 ] as const
 
@@ -46,22 +44,26 @@ export const PRIVATE_EXACT_ROUTES = new Set([
 export const TENANT_ONLY_EXACT_ROUTES = new Set([
   '/contact',
   '/locations',
+  '/experiences',
   '/menu',
   '/order',
   '/photos',
   '/posts',
+  '/products',
   '/qa',
   '/reservations',
   '/reviews',
 ])
 
 export const TENANT_ONLY_ROUTE_PREFIXES = [
+  '/bookings/',
   '/contact/',
   '/experiences/',
   '/locations/',
   '/menu/',
   '/order/',
   '/photos/',
+  '/products/',
   '/posts/',
   '/qa/',
   '/reservations/',

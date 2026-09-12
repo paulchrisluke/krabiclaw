@@ -27,7 +27,6 @@ function checkoutReturnUrls(): { successUrl: string; cancelUrl: string; returnUr
 
 export function useSubscriptionCheckout() {
   const dashboardApi = useDashboardApi()
-  const { data: sessionData } = useAuth()
   const { getBillingAnalyticsContext } = useAnalytics()
 
   async function startSubscriptionCheckout(input: SubscriptionCheckoutInput): Promise<StripeGa4IntentAction> {
@@ -59,12 +58,16 @@ export function useSubscriptionCheckout() {
       console.warn('Billing analytics intent was not recorded; continuing checkout', error)
     }
 
+    // Checkout runs from a click, not a render, so the session is read the
+    // imperative way Better Auth provides for exactly that. useAuthSession is
+    // for rendering; calling it here would want a setup context it does not have.
+    const currentUser = (await authClient.getSession()).data?.user
     const metadata = {
       site_id: input.siteId,
       ...buildStripeSubscriptionMetadata(
         action,
         analyticsContext,
-        sessionData.value?.user?.id,
+        currentUser?.id,
         input.previousPriceId,
         input.newPriceId,
       ),

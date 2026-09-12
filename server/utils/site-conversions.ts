@@ -12,7 +12,7 @@ const TAXONOMY: Record<SiteConversionEventName, { stages: ConversionStage[]; ent
   consultation_cta_click: { stages: ['schedule_navigation', 'external_booking_handoff'], entityType: null },
   contact_submit: { stages: ['submitted'], entityType: 'request' },
   reservation_submit: { stages: ['submitted'], entityType: 'request' },
-  experience_booking_submit: { stages: ['submitted'], entityType: 'request' },
+  booking_submit: { stages: ['submitted'], entityType: 'request' },
   product_order_external_click: { stages: ['external_handoff'], entityType: 'product' },
   link_click: { stages: ['external_handoff'], entityType: 'content_block' },
   donation_click: { stages: ['external_handoff'], entityType: 'content_document' },

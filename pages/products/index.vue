@@ -1,17 +1,24 @@
 <template>
-  <ProductCollectionPage :products="products" :locations="productLocations" :currency="currency" :presentation="presentation" :vertical="vertical" :title="collectionTitle" :brand-name="brandName" />
+  <ProductCollectionPage :products="goods" :collections="collections" :locations="productLocations" :currency="currency" :presentation="presentation" :vertical="vertical" :title="collectionTitle" :brand-name="brandName" />
 </template>
 
 <script setup lang="ts">
 import ProductCollectionPage from '~/components/products/ProductCollectionPage.vue'
 import { isCurrencyCode } from '~/shared/currencies'
-import { requireProductPresentation } from '~/utils/product-presentation'
+import { isExperience, requireProductPresentation } from '~/utils/product-presentation'
 
 definePageMeta({ layout: 'saya' })
 const { isBlawby } = usePublicTemplate()
 if (isBlawby.value) throw createError({ statusCode: 404 })
 const { t } = useI18n()
-const { products, locations, config, site } = await usePublicPageData({ lazy: false })
+const { products, collections, locations, config, site } = await usePublicPageData({ lazy: false })
+// What the merchant sells over the counter. Anything a guest books a seat on
+// is an Experience and has its own surface, so it is not listed twice.
+const goods = computed(() => products.value.filter(product => !isExperience(product)))
+// A surface with nothing on it is not a page: a studio that sells no
+// merchandise has no /products, rather than an indexable empty one. The
+// navigation hides it for the same reason.
+if (goods.value.length === 0) throw createError({ statusCode: 404 })
 const vertical = String(site.value?.vertical ?? '')
 const presentation = requireProductPresentation(vertical)
 if (presentation.locationCollectionSegment !== 'products') throw createError({ statusCode: 404 })

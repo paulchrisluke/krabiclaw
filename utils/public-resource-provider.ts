@@ -1,5 +1,4 @@
 export interface PublicResourceProviderOptions {
-  draftId: string | null
   siteId: string | null
   resourceKind: 'shell' | 'page'
   url: string

@@ -8,7 +8,7 @@ import {
   getPlatformHosts,
   hostnameOf,
   isPlatformHost,
-  isPreviewContext,
+  isNonProductionHost,
   normalizeHost,
   usesTenantHeader,
   type TenantHostEnv,
@@ -134,16 +134,16 @@ test('getFreeSiteDomain rejects an unconfigured domain', () => {
 })
 
 test('preview contexts include platform hosts, direct tenant aliases, and raw shared hosts', () => {
-  assert.equal(isPreviewContext('localhost'), true)
-  assert.equal(isPreviewContext('localhost:3000'), true)
-  assert.equal(isPreviewContext('127.0.0.1:3000'), true)
-  assert.equal(isPreviewContext('preview.krabiclaw.com'), true)
-  assert.equal(isPreviewContext('staging.krabiclaw.com'), true)
-  assert.equal(isPreviewContext('pottery-house-preview.krabiclaw.com'), true)
-  assert.equal(isPreviewContext('pottery-house-staging.krabiclaw.com'), true)
-  assert.equal(isPreviewContext('preview.customer.com'), false)
-  assert.equal(isPreviewContext('ci-pr-1234567890-krabiclaw-preview.paulchrisluke.workers.dev'), false)
-  assert.equal(isPreviewContext('some-other-worker.paulchrisluke.workers.dev'), false)
+  assert.equal(isNonProductionHost('localhost'), true)
+  assert.equal(isNonProductionHost('localhost:3000'), true)
+  assert.equal(isNonProductionHost('127.0.0.1:3000'), true)
+  assert.equal(isNonProductionHost('preview.krabiclaw.com'), true)
+  assert.equal(isNonProductionHost('staging.krabiclaw.com'), true)
+  assert.equal(isNonProductionHost('pottery-house-preview.krabiclaw.com'), true)
+  assert.equal(isNonProductionHost('pottery-house-staging.krabiclaw.com'), true)
+  assert.equal(isNonProductionHost('preview.customer.com'), false)
+  assert.equal(isNonProductionHost('ci-pr-1234567890-krabiclaw-preview.paulchrisluke.workers.dev'), false)
+  assert.equal(isNonProductionHost('some-other-worker.paulchrisluke.workers.dev'), false)
 })
 
 test('tenant headers are confined to local and raw workers.dev shared hosts', () => {

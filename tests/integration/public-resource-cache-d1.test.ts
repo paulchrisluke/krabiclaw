@@ -158,13 +158,16 @@ test('a site write purges that site despite an older invalidation for another si
   assert.equal(await kv.get('html:changed.krabiclaw.com:/'), null)
   assert.equal(await kv.get('public~site~v3~page'), 'cached public resource')
   assert.equal(await kv.get('html:site.krabiclaw.com:/'), 'cached HTML')
+  // The write clears its own site's caches and queues the row that makes every
+  // other worker converge; the queue's own bookkeeping belongs to the drainer,
+  // not to a mutation's response time.
   const rows = await db.prepare('SELECT site_id, status, attempt_count FROM public_resource_cache_invalidations ORDER BY site_id')
     .all<{ site_id: string; status: string; attempt_count: number }>()
   assert.deepEqual(rows.results, [
-    { site_id: 'changed', status: 'processed', attempt_count: 1 },
+    { site_id: 'changed', status: 'pending', attempt_count: 0 },
     { site_id: 'site', status: 'pending', attempt_count: 0 },
   ])
-  assert.equal(await drainPublicResourceCacheInvalidations(db, kv, { freeSiteDomain: 'https://krabiclaw.com' }), 1)
+  assert.equal(await drainPublicResourceCacheInvalidations(db, kv, { freeSiteDomain: 'https://krabiclaw.com' }), 2)
   assert.equal(await kv.get('public~site~v3~page'), null)
   assert.equal(await kv.get('html:site.krabiclaw.com:/'), null)
 })

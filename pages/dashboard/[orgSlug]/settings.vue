@@ -41,10 +41,8 @@ definePageMeta({ layout: 'dashboard' })
 
 const route = useRoute()
 
-// The frame comes first, and before any `await`: `useEditorFrame` provides and
-// injects, which Vue binds only while setup is still synchronous.
 const { orgPaths } = useDashboardSiteLinks()
-const settingsPath = computed(() => `${orgPaths.value.org}/settings`)
+const settingsPath = computed(() => orgPaths.value.settings)
 const frame = useEditorFrame(settingsPath)
 
 const dashboard = useDashboardSite()

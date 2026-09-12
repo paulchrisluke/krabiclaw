@@ -109,7 +109,7 @@ const solutionItems = [
   { label: 'Restaurants', to: '/restaurants', desc: 'Direct bookings & crawlable menus', icon: 'utensils' },
   { label: 'Experiences', to: '/experiences', desc: 'Tours, workshops & ticketing', icon: 'calendar' },
   { label: 'Legal & Professional', to: '/legal', desc: 'Practice areas & consultation intake', icon: 'briefcase' },
-]
+] as const
 
 const navItems = [
   { label: 'Plugin', to: '/plugin' },

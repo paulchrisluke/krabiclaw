@@ -1,5 +1,11 @@
 <template>
-  <TenantPageRenderer :page="page" :template="template" />
+  <!--
+    One renderer per template, chosen here. Every Blawby page is a Blawby page:
+    the practice areas were the only ones an allowlist of seven paths left out,
+    so they rendered in the Saya markup on a Blawby site.
+  -->
+  <BlawbyCanonicalPage v-if="isBlawby" :page="page" />
+  <TenantPageRenderer v-else :page="page" template="saya" />
 </template>
 
 <script setup lang="ts">
@@ -9,19 +15,21 @@ import type { PublicLocaleRepresentation } from '~/utils/public-resource-contrac
 import type { PublicBlawbyIdentity, PublicCompliance } from '~/types/blawby'
 import { normalizeRobotsIntent } from '~/shared/robots-directive'
 
-const props = defineProps<{ path: string; previewToken?: string | null; locale?: string | null }>()
-const { siteId, isTenant, site } = useTenantSite()
+const props = defineProps<{ path: string; locale?: string | null }>()
+const { siteId, isTenant, previewAuthorized, site } = useTenantSite()
 const { isBlawby } = usePublicTemplate()
 const { locale: i18nLocale } = useI18n()
 if (!isTenant || !siteId) throw createError({ statusCode: 404, statusMessage: 'Tenant site context is unavailable' })
 
-const preview = Boolean(props.previewToken)
+// Preview authorization belongs to the site, resolved once from the preview
+// cookie by tenant resolution; the client's API call carries the same cookie.
+const preview = previewAuthorized
 const activeLocale = computed(() => {
   if (props.locale?.trim()) return props.locale.trim()
   return i18nLocale.value
 })
 const pagePath = props.path === '/' ? '/' : props.path.replace(/\/+$/, '')
-const key = computed(() => `tenant-page-${siteId}-${activeLocale.value}-${pagePath}-${preview ? 'preview' : 'published'}-${props.previewToken || ''}`)
+const key = computed(() => `tenant-page-${siteId}-${activeLocale.value}-${pagePath}-${preview ? 'preview' : 'published'}`)
 const isPageResponse = (value: unknown): value is { success: true; page: PublicTenantPage } =>
   isRecord(value) && value.success === true && isRecord(value.page) && typeof value.page.path === 'string' && Array.isArray(value.page.blocks)
 
@@ -29,15 +37,11 @@ const requestEvent = useRequestEvent()
 const { data, error } = await useAsyncData(key, async () => {
   if (import.meta.server) {
     if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Request context unavailable' })
-    const [{ cloudflareEnv }, { verifyPreviewToken }, { getPublicTenantPageForPath }] = await Promise.all([
+    const [{ cloudflareEnv }, { getPublicTenantPageForPath }] = await Promise.all([
       import('~/server/utils/api-response'),
-      import('~/server/utils/preview-token'),
       import('~/server/utils/public-tenant-pages'),
     ])
     const env = cloudflareEnv(requestEvent)
-    if (preview && (!props.previewToken || !env.PREVIEW_SECRET || !(await verifyPreviewToken(String(env.PREVIEW_SECRET), siteId, props.previewToken)))) {
-      throw createError({ statusCode: 401, statusMessage: 'Preview authorization is required' })
-    }
     const db = env.db
     if (!db) throw createError({ statusCode: 503, statusMessage: 'Database not available' })
     const page = await getPublicTenantPageForPath(db, siteId, pagePath, { locale: activeLocale.value, preview })
@@ -45,10 +49,6 @@ const { data, error } = await useAsyncData(key, async () => {
     return { success: true as const, page }
   }
   const query: Record<string, string> = { path: pagePath }
-  if (preview && props.previewToken) {
-    query.preview = 'true'
-    query.token = props.previewToken
-  }
   const endpoint = activeLocale.value === 'en'
     ? `/api/public/sites/${encodeURIComponent(siteId)}/pages`
     : `/api/public/sites/${encodeURIComponent(siteId)}/localized-pages/${encodeURIComponent(activeLocale.value)}`
@@ -73,7 +73,6 @@ if (!page.value.localeRepresentations) {
   throw createError({ statusCode: 500, statusMessage: 'Tenant page locale representations were not returned' })
 }
 useState<PublicLocaleRepresentation[]>('public-locale-representations', () => []).value = page.value.localeRepresentations
-const template = computed<'saya' | 'blawby'>(() => isBlawby.value ? 'blawby' : 'saya')
 const schemaContext = inject<{ identity: ComputedRef<PublicBlawbyIdentity>; compliance: ComputedRef<PublicCompliance | null> } | null>('blawby-schema-context', null)
 const schemaOrg = useBlawbyOrgIdentity(() => schemaContext?.identity.value, () => schemaContext?.compliance.value)
 const supportedSchemaRecipes = new Set(['home', 'about', 'contact', 'pricing', 'donate', 'schedule'])
@@ -93,7 +92,10 @@ const schemaRecipe = computed<'home' | 'about' | 'contact' | 'pricing' | 'donate
 useProfessionalServiceSchema(() => {
   if (!isBlawby.value || !schemaContext) return null
   const faqBlock = page.value.blocks.find(block => block.type === 'faq')
-  const offeringBlock = page.value.blocks.find(block => block.type === 'offering_grid')
+  // The services this page lists are pages, and the page renders them from its
+  // page_grid. Reading a product_grid here described a block these pages do not
+  // carry, so the schema listed no services at all.
+  const servicesBlock = page.value.blocks.find(block => block.type === 'page_grid' && block.data.section === 'services')
   const donationBlock = page.value.blocks.find(block => block.type === 'donation_choices')
   const faqItems = Array.isArray(faqBlock?.data.items)
     ? faqBlock.data.items.filter(item => item && typeof item === 'object' && !Array.isArray(item)).map(item => {
@@ -101,8 +103,8 @@ useProfessionalServiceSchema(() => {
         return { question: typeof record.title === 'string' ? record.title : null, answer: typeof record.description === 'string' ? record.description : null }
       })
     : []
-  const offeringItems = Array.isArray(offeringBlock?.data.items)
-    ? offeringBlock.data.items.filter(item => item && typeof item === 'object' && !Array.isArray(item)).map(item => {
+  const serviceItems = Array.isArray(servicesBlock?.data.items)
+    ? servicesBlock.data.items.filter(item => item && typeof item === 'object' && !Array.isArray(item)).map(item => {
         const record = item as Record<string, unknown>
         return {
           name: typeof record.title === 'string' ? record.title : '',
@@ -119,7 +121,7 @@ useProfessionalServiceSchema(() => {
     pageTitle: page.value.title,
     pageDescription: page.value.seo_description || page.value.summary,
     faqs: faqItems,
-    items: offeringItems,
+    items: serviceItems,
     donationUrl,
   }
 })

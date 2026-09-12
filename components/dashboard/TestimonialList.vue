@@ -18,7 +18,7 @@
         <strong class="text-sm text-highlighted">{{ item.row.author_name }}</strong>
         <UBadge color="warning" variant="soft">{{ item.row.rating }} stars</UBadge>
         <UBadge :color="item.row.status === 'approved' ? 'success' : 'neutral'" variant="soft">{{ item.row.status }}</UBadge>
-        <UBadge color="neutral" variant="subtle">{{ methodLabel(item.row.collection_method) }}</UBadge>
+        <UBadge color="neutral" variant="subtle">{{ COLLECTION_METHOD_LABELS[item.row.collection_method] }}</UBadge>
       </div>
       <p v-if="item.row.title" class="mt-2 text-sm font-semibold text-highlighted">{{ item.row.title }}</p>
       <p class="mt-1 line-clamp-2 text-sm text-muted">{{ item.row.content }}</p>
@@ -29,11 +29,10 @@
 <script setup lang="ts">
 import DashboardListEditor from '~/components/dashboard/DashboardListEditor.vue'
 import {
-  COLLECTION_METHODS,
+  COLLECTION_METHOD_LABELS,
   isTestimonialsResponse,
   isReviewDeletedResponse,
   type SiteTestimonial,
-  type CollectionMethod,
 } from '~/utils/testimonials'
 
 const dashboardApi = useDashboardApi()
@@ -75,10 +74,6 @@ const listItems = computed(() => testimonials.value.map(row => ({ id: row.id, ti
 
 const editing = ref(false)
 const removingId = ref<string | null>(null)
-
-function methodLabel(method: CollectionMethod) {
-  return COLLECTION_METHODS.find(item => item.value === method)?.label ?? method
-}
 
 // A row opens its own level rather than a sheet over the list, so adding and
 // editing are the same screen and the record has a URL of its own.

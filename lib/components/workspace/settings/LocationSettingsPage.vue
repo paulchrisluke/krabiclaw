@@ -10,9 +10,10 @@
         </template>
         <template #right>
           <DashboardResourceLocalization
+            v-if="location"
             :site-id="siteId"
             resource-type="business_location"
-            :resource-id="locationId"
+            :resource-id="location.id"
             resource-label="location"
             :fields="locationLocalizationFields"
             :route-path="localizedLocationPath"
@@ -80,7 +81,7 @@
 
           <div v-else-if="editorKey === 'hours'" class="space-y-6">
             <p class="text-base text-muted">Set the regular hours shown to guests. A Google Places sync replaces these hours with Google's current record.</p>
-            <HoursTimezoneCard v-model:form="hoursForm" />
+            <LocationHoursCard v-model:form="hoursForm" exceptions />
           </div>
 
           <div v-else-if="editorKey === 'content'" class="space-y-6">
@@ -117,9 +118,33 @@
             <UFormField label="WhatsApp notification phone" help="Use international format, for example +66812345678.">
               <UInput v-model="detailsForm.notification_phone" type="tel" placeholder="+66..." size="xl" class="w-full" />
             </UFormField>
-            <UFormField label="Timezone">
-              <USelectMenu v-model="detailsForm.timezone" :items="timezoneOptions" placeholder="Select timezone" size="xl" class="w-full" />
-            </UFormField>
+          </div>
+
+          <div v-else-if="editorKey === 'reservations'" class="space-y-6">
+            <p class="text-base text-muted">
+              Reservations are open at this location while a policy exists here. Every rule you
+              state below is a sentence guests read before they book; a rule left unchecked is not
+              stated at all.
+            </p>
+            <UAlert
+              v-if="!reservationConfigExists"
+              color="neutral"
+              variant="soft"
+              icon="i-lucide-calendar-off"
+              description="This location does not take reservations yet. Saving a policy opens them."
+            />
+            <ReservationPolicyForm v-model="reservationForm" />
+            <UButton
+              v-if="reservationConfigExists"
+              color="error"
+              variant="soft"
+              icon="i-lucide-trash-2"
+              :loading="closingReservations"
+              :disabled="saving"
+              @click="closeReservations"
+            >
+              Stop taking reservations here
+            </UButton>
           </div>
 
           <div v-else-if="editorKey === 'features'" class="space-y-6">
@@ -139,14 +164,15 @@
   </UDashboardPanel>
 </template>
 <script setup lang="ts">
-import HoursTimezoneCard, { type HoursTimezoneForm } from '~/lib/components/workspace/onboarding/HoursTimezoneCard.vue'
+import LocationHoursCard, { type LocationHoursForm } from '~/lib/components/workspace/location/LocationHoursCard.vue'
 import { parseOpeningHours, parseSpecialHours, type OpeningHours, type SpecialHours } from '~/shared/reservation-hours'
 import DashboardResourceLocalization from '~/components/dashboard/DashboardResourceLocalization.vue'
 
 import EditorPaneShell from '~/components/dashboard/EditorPaneShell.vue'
 import EditorNavigationList from '~/components/dashboard/EditorNavigationList.vue'
+import ReservationPolicyForm from '~/components/dashboard/ReservationPolicyForm.vue'
+import type { LocationReservationConfig, LocationReservationConfigPatch } from '~/server/utils/reservations'
 const dashboardApi = useDashboardApi()
-import { TIMEZONE_OPTIONS } from '~/utils/timezone'
 import { getErrorMessage } from '~/utils/errors'
 import { defaultModuleFeaturesForVertical, resolveCmsCapabilities, toggleableModulesForScope, type ProductFeature } from '~/config/cms-registry'
 import { resolvePublicTemplate } from '~/utils/template-registry'
@@ -193,7 +219,7 @@ const settingsPath = computed(() => `${locationPath.value}/settings`)
 const frame = useEditorFrame(settingsPath)
 
 const siteId = await useDashboardSiteId()
-const locationId = computed(() => dashboardLocation.currentLocationId.value ?? '')
+const locationId = computed(() => dashboardLocation.currentLocationId.value)
 
 // Up one level: out of a section back to the settings index, out of the index
 // back to the location overview.
@@ -204,7 +230,7 @@ const levelBackTo = computed(() => locationPath.value)
 const routeSegments = frame.rest
 const detailKey = computed(() => routeSegments.value[0] ?? null)
 const editorKey = computed(() => detailKey.value ?? 'name')
-const validDetailKeys = new Set(['name', 'slug', 'address', 'contact', 'status', 'hours', 'content', 'discovery', 'notifications', 'features'])
+const validDetailKeys = new Set(['name', 'slug', 'address', 'contact', 'status', 'hours', 'content', 'discovery', 'notifications', 'reservations', 'features'])
 if (routeSegments.value.length > 1 || (detailKey.value && !validDetailKeys.has(detailKey.value))) {
   throw createError({ statusCode: 404, statusMessage: 'Location setting not found' })
 }
@@ -321,6 +347,24 @@ async function saveLocationFeatures() {
 const placeSyncResult = ref('')
 const detailsSaving = ref(false)
 
+// The reservation policy is its own row (location_reservation_configs), not a
+// column on the location, so it loads and saves through its own endpoint. A
+// null row means this location does not take reservations — the absence of the
+// capability, not an empty policy.
+const reservationConfig = ref<LocationReservationConfig | null>(null)
+const reservationForm = ref<LocationReservationConfigPatch>({})
+const reservationSaving = ref(false)
+const closingReservations = ref(false)
+const reservationConfigExists = computed(() => reservationConfig.value !== null)
+const isReservationConfigResponse = (value: unknown): value is { success: true; config: LocationReservationConfig | null } =>
+  isRecord(value) && value.success === true && (value.config === null || isRecord(value.config))
+
+function reservationPatchFrom(config: LocationReservationConfig | null): LocationReservationConfigPatch {
+  if (!config) return {}
+  const { location_id: _locationId, organization_id: _organizationId, created_at: _createdAt, updated_at: _updatedAt, ...patch } = config
+  return patch
+}
+
 const detailsForm = reactive({
   title: '',
   slug: '',
@@ -338,7 +382,6 @@ const detailsForm = reactive({
   description: '',
   status: 'active',
   notification_phone: '',
-  timezone: '',
 })
 const siteLocalizationSettingsPath = computed(() => `/dashboard/${route.params.orgSlug}/sites/${route.params.siteSlug}/settings/localization`)
 const locationLocalizationFields = computed(() => [
@@ -355,9 +398,8 @@ function localizedLocationPath(locale: string): string {
   return `/${locale}/locations/${slug}`
 }
 
-const timezoneOptions = TIMEZONE_OPTIONS
 
-const hoursForm = ref<HoursTimezoneForm>({ timezone: '', hours: null, specialHours: null })
+const hoursForm = ref<LocationHoursForm>({ timezone: '', hours: null, specialHours: null })
 
 function fillDetailsForm(loc: BusinessLocation) {
   detailsForm.title = loc.title
@@ -377,8 +419,7 @@ function fillDetailsForm(loc: BusinessLocation) {
   hoursForm.value = { timezone: loc.timezone ?? '', hours: parseOpeningHours(loc.opening_hours), specialHours: parseSpecialHours(loc.special_hours) }
   detailsForm.status = loc.status
   detailsForm.notification_phone = loc.notification_phone ?? ''
-  detailsForm.timezone = loc.timezone ?? ''
-}
+  }
 
 const setDetailsActive = (v: boolean | 'indeterminate') => {
   if (v === 'indeterminate') return
@@ -393,7 +434,12 @@ const statusSummary = computed(() => location.value?.status === 'active' ? 'Acti
 const hoursSummary = computed(() => location.value?.opening_hours === null ? 'Not set' : `${location.value?.opening_hours?.periods.length ?? 0} opening periods`)
 const contentSummary = computed(() => location.value?.short_description?.trim() || location.value?.description?.trim() || 'Not set')
 const discoverySummary = computed(() => location.value?.google_place_id ? 'Google Places connected' : 'Not connected')
-const notificationSummary = computed(() => location.value?.notification_phone || location.value?.timezone || 'Not configured')
+const notificationSummary = computed(() => location.value?.notification_phone || 'Not configured')
+const reservationSummary = computed(() => {
+  const config = reservationConfig.value
+  if (!config) return 'Not taking reservations'
+  return config.slot_capacity === null ? 'Open, no seat limit' : `Open, ${config.slot_capacity} guests per slot`
+})
 const featureSummary = computed(() => {
   const count = locationToggleableFeatures.value.filter(feature => locationEnabledFeatureSet[feature]).length
   return count ? `${count} ${count === 1 ? 'module' : 'modules'} available` : 'No location modules'
@@ -408,6 +454,7 @@ const navigationItems = computed(() => [
   { id: 'content', label: 'Public content', summary: contentSummary.value, icon: 'i-lucide-align-left', to: `${settingsPath.value}/content` },
   { id: 'discovery', label: 'Discovery', summary: discoverySummary.value, icon: 'i-simple-icons-googlemaps', to: `${settingsPath.value}/discovery` },
   { id: 'notifications', label: 'Notifications', summary: notificationSummary.value, icon: 'i-lucide-bell', to: `${settingsPath.value}/notifications` },
+  { id: 'reservations', label: 'Reservations', summary: reservationSummary.value, icon: 'i-lucide-calendar-check', to: `${settingsPath.value}/reservations` },
   { id: 'features', label: 'Available features', summary: featureSummary.value, icon: 'i-lucide-layout-grid', to: `${settingsPath.value}/features` },
 ])
 const navigationGroups = computed(() => [
@@ -425,13 +472,17 @@ const detailTitles: Record<string, string> = {
   content: 'Public content',
   discovery: 'Discovery',
   notifications: 'Notifications',
+  reservations: 'Reservations',
   features: 'Available features',
 }
 const hasDetail = computed(() => routeSegments.value.length > 0)
 // Names the level, not the open section: at `lg` the section's title is a
 // heading on its own pane with the index still beside it.
 const navbarTitle = computed(() => location.value?.title || 'Location')
-const saving = computed(() => detailsSaving.value || savingLocationFeatures.value)
+// Every write this screen can be in the middle of, including the one that
+// stops reservations: Save stayed live during that delete, and a save landing
+// on top of it recreated the policy it had just removed.
+const saving = computed(() => detailsSaving.value || savingLocationFeatures.value || reservationSaving.value || closingReservations.value)
 
 function editorSignature(key: string | null): string {
   switch (key) {
@@ -443,7 +494,8 @@ function editorSignature(key: string | null): string {
     case 'hours': return JSON.stringify(hoursForm.value)
     case 'content': return JSON.stringify([detailsForm.short_description, detailsForm.description, detailsForm.price_level])
     case 'discovery': return JSON.stringify([detailsForm.google_place_id, detailsForm.maps_url, detailsForm.google_review_url])
-    case 'notifications': return JSON.stringify([detailsForm.notification_phone, detailsForm.timezone])
+    case 'notifications': return JSON.stringify([detailsForm.notification_phone])
+    case 'reservations': return JSON.stringify(reservationForm.value)
     case 'features': return JSON.stringify(locationToggleableFeatures.value.map(feature => [feature, Boolean(locationEnabledFeatureSet[feature])]))
     default: return ''
   }
@@ -485,6 +537,7 @@ const saveDisabled = computed(() => {
 function resetDraft() {
   if (!location.value) return
   fillDetailsForm(location.value)
+  reservationForm.value = reservationPatchFrom(reservationConfig.value)
   fillLocationFeatures({
     site_effective_features: siteEffectiveFeatures.value,
     location_effective_features: locationEffectiveFeatures.value,
@@ -528,8 +581,52 @@ async function patchLocation(body: Record<string, unknown>, successMessage: stri
   }
 }
 
+async function saveReservationPolicy() {
+  const requestedLocationId = locationId.value
+  reservationSaving.value = true
+  try {
+    const response = await dashboardApi<{ success: true; config: LocationReservationConfig | null }>(
+      `/api/editor/sites/${siteId}/locations/${requestedLocationId}/reservation-config`,
+      { method: 'PUT', body: reservationForm.value, validate: isReservationConfigResponse },
+    )
+    if (locationId.value !== requestedLocationId) return
+    reservationConfig.value = response.config
+    reservationForm.value = reservationPatchFrom(response.config)
+    originalSignature.value = editorSignature(editorKey.value)
+    toast.add({ description: 'Reservation policy saved', color: 'success' })
+  } catch (error) {
+    toast.add({ description: getErrorMessage(error, 'Failed to save the reservation policy'), color: 'error' })
+  } finally {
+    reservationSaving.value = false
+  }
+}
+
+async function closeReservations() {
+  const requestedLocationId = locationId.value
+  closingReservations.value = true
+  try {
+    await dashboardApi<{ success: true }>(
+      `/api/editor/sites/${siteId}/locations/${requestedLocationId}/reservation-config`,
+      { method: 'DELETE', validate: (value: unknown): value is { success: true } => isRecord(value) && value.success === true },
+    )
+    if (locationId.value !== requestedLocationId) return
+    reservationConfig.value = null
+    reservationForm.value = {}
+    originalSignature.value = editorSignature(editorKey.value)
+    toast.add({ description: 'This location no longer takes reservations', color: 'success' })
+  } catch (error) {
+    toast.add({ description: getErrorMessage(error, 'Failed to close reservations'), color: 'error' })
+  } finally {
+    closingReservations.value = false
+  }
+}
+
 async function saveCurrentEditor() {
   if (saveDisabled.value) return
+  if (editorKey.value === 'reservations') {
+    await saveReservationPolicy()
+    return
+  }
   if (editorKey.value === 'features') {
     await saveLocationFeatures()
     return
@@ -584,9 +681,11 @@ async function saveCurrentEditor() {
     }, 'Discovery settings saved')
     return
   }
+  // The timezone belongs to Hours, which requires it. Editing it here as well
+  // let a Notifications save write null over the value Hours validates, and
+  // the location's opening times are read in that zone.
   await patchLocation({
     notification_phone: detailsForm.notification_phone.trim() || null,
-    timezone: detailsForm.timezone || null,
   }, 'Notifications saved')
 }
 
@@ -625,6 +724,7 @@ async function syncGooglePlace() {
 
 interface LocationSettingsResource {
   location: { success: true; location: BusinessLocation } & LocationCapabilitySummary
+  reservationConfig: { success: true; config: LocationReservationConfig | null }
 }
 
 const requestEvent = useRequestEvent()
@@ -642,11 +742,17 @@ const {
     const { loadDashboardLocationSettings } = await import('~/server/utils/dashboard-editor-resources')
     return await loadDashboardLocationSettings(requestEvent, siteId, requestedLocationId)
   }
-  const locationResponse = await dashboardApi<{ success: true; location: BusinessLocation } & LocationCapabilitySummary>(
-    `/api/dashboard/locations/${requestedLocationId}`,
-    { validate: isLocationResponse },
-  )
-  return { location: locationResponse }
+  const [locationResponse, reservationResponse] = await Promise.all([
+    dashboardApi<{ success: true; location: BusinessLocation } & LocationCapabilitySummary>(
+      `/api/dashboard/locations/${requestedLocationId}`,
+      { validate: isLocationResponse },
+    ),
+    dashboardApi<{ success: true; config: LocationReservationConfig | null }>(
+      `/api/editor/sites/${siteId}/locations/${requestedLocationId}/reservation-config`,
+      { validate: isReservationConfigResponse },
+    ),
+  ])
+  return { location: locationResponse, reservationConfig: reservationResponse }
 }, {
   watch: [locationId],
 })
@@ -660,6 +766,8 @@ watch(
       : null
     if (!resource) return
     location.value = resource.location.location
+    reservationConfig.value = resource.reservationConfig.config
+    reservationForm.value = reservationPatchFrom(resource.reservationConfig.config)
     fillLocationFeatures(resource.location)
     fillDetailsForm(resource.location.location)
     originalSignature.value = editorSignature(editorKey.value)
