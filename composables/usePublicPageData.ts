@@ -170,6 +170,8 @@ export const usePublicPageData = async (options: {
   const blogList = computed(() => (data.value?.blogList ?? []) as ApiRecord[]);
   const blogPost = computed(() => (data.value?.blogPost ?? null) as ApiRecord | null);
   const tenantPage = computed(() => data.value?.tenant_page ?? null);
+  // The site's story, read from its About page by the public page loader.
+  const story = computed(() => data.value?.story ?? null);
 
   const reservationPolicyByLocation = computed(() => data.value?.reservationPolicyByLocation ?? {});
 
@@ -304,6 +306,7 @@ export const usePublicPageData = async (options: {
     blogList,
     blogPost,
     tenantPage,
+    story,
     locales,
     reservationPolicyByLocation,
     getField,

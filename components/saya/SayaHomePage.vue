@@ -108,11 +108,11 @@
 
       <!-- ── Brand story ─────────────────────────────────────── -->
       <LazySayaBrandStory
-        v-if="getField('story.headline') || getField('story.body') || getField('story.image')"
+        v-if="story && (story.title || story.body)"
         :data="{
-          headline: getField('story.headline'),
-          body: getField('story.body'),
-          image: getField('story.image'),
+          title: story?.title,
+          body: story?.body,
+          image: story?.image,
           ourStoryKicker: homeCopy.ourStoryKicker,
           readMoreCta: homeCopy.readMoreCta
         }"
@@ -286,6 +286,7 @@ const {
   googleBusiness: pageGoogleBusiness,
   getField,
   getHero,
+  story,
   config: pageConfig,
   site: publicSite,
   products,

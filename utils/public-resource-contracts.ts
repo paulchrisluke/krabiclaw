@@ -73,12 +73,23 @@ export const isPublicShellPayload = (value: unknown): value is PublicShellPayloa
   return typeof value.hasProducts === 'boolean' && typeof value.hasBookableProducts === 'boolean'
 }
 
+/**
+ * The site's story, read from its About page. The home teaser renders it and
+ * links to the page it came from; null when that page carries no story.
+ */
+export interface PublicPageStory {
+  title: string | null
+  body: string | null
+  image: string | null
+}
+
 export interface PublicPagePayload {
   kind: string
   shell: PublicShellPayload
   content: ApiRecord[]
   content_blocks: ApiRecord[]
   tenant_page: PublicTenantPage | null
+  story: PublicPageStory | null
   locationReviews: ApiRecord[]
   globalReviews: ApiRecord[]
   reviewsAggregate: ApiRecord | null
@@ -164,6 +175,10 @@ export const isPublicPagePayload = (
     && typeof value.tenant_page.path === 'string'
     && typeof value.tenant_page.title === 'string'
     && Array.isArray(value.tenant_page.blocks)))
+  && (value.story === null || (isRecord(value.story)
+    && (value.story.title === null || typeof value.story.title === 'string')
+    && (value.story.body === null || typeof value.story.body === 'string')
+    && (value.story.image === null || typeof value.story.image === 'string')))
   && Array.isArray(value.locationReviews)
   && Array.isArray(value.globalReviews)
   && value.globalReviews.every(item => isRecord(item) && typeof item.rating === 'number')

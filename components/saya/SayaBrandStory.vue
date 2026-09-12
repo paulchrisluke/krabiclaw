@@ -1,18 +1,18 @@
 <template>
-  <AppSection v-if="headline || body || image" bg="black" padding="xl">
-    <div :class="image && (headline || body) ? 'grid gap-16 lg:grid-cols-2 lg:items-center' : ''">
+  <AppSection v-if="title || body" bg="black" padding="xl">
+    <div :class="image ? 'grid gap-16 lg:grid-cols-2 lg:items-center' : ''">
       <div v-if="image" class="overflow-hidden">
         <UImage
           :src="image"
           alt=""
           aria-hidden="true"
-          class="h-full w-full object-cover aspect-4/3"
+          class="aspect-4/3 w-full object-cover"
         />
       </div>
-      <div :class="image && !headline && !body ? 'mt-8 flex items-center justify-between' : ''">
+      <div>
         <p class="saya-eyebrow mb-8 text-inverted/60">{{ ourStoryKicker }}</p>
-        <h2 v-if="headline" class="saya-display-md text-inverted" :class="image ? '' : 'max-w-3xl'">
-          {{ headline }}
+        <h2 v-if="title" class="saya-display-md text-inverted" :class="image ? '' : 'max-w-3xl'">
+          {{ title }}
         </h2>
         <p v-if="body" class="mt-8 text-base leading-relaxed text-inverted/60" :class="image ? '' : 'max-w-2xl'">
           {{ body }}
@@ -35,9 +35,9 @@ const { localePath } = useI18n()
 
 interface Props {
   data?: {
-    headline?: string
-    body?: string
-    image?: string
+    title?: string | null
+    body?: string | null
+    image?: string | null
     ourStoryKicker?: string
     readMoreCta?: string
   }
@@ -47,7 +47,7 @@ const props = withDefaults(defineProps<Props>(), {
   data: () => ({}),
 })
 
-const headline = computed(() => props.data?.headline || '')
+const title = computed(() => props.data?.title || '')
 const body = computed(() => props.data?.body || '')
 const image = computed(() => props.data?.image || '')
 const ourStoryKicker = computed(() => props.data?.ourStoryKicker || 'Our story')

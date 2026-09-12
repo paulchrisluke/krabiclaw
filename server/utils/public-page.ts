@@ -133,6 +133,27 @@ function canonicalTenantPagePath(page: string | null): string | null {
   return null
 }
 
+// A site has one story, and it lives on the About page: that is the document
+// the onboarding checklist counts as the story, and the one the home teaser
+// links to. The home teaser reads it from there. It does not carry a second
+// copy of its own.
+const STORY_SOURCE_PATH = '/about'
+
+function tenantPageToStory(page: PublicTenantPage | null): PublicPageStory | null {
+  if (!page) return null
+  const rows = tenantPageToContentRows(page)
+  const rowFor = (field: string) => rows.find(row => row.field === field) ?? null
+  const title = rowFor('story.title')?.content?.trim() ?? ''
+  const body = rowFor('story.body')?.content?.trim() ?? ''
+  const image = rowFor('story.image')?.media?.[0]?.public_url?.trim() ?? ''
+  if (!title && !body && !image) return null
+  return {
+    title: title || null,
+    body: body || null,
+    image: image || null,
+  }
+}
+
 function tenantPageToContentRows(page: PublicTenantPage): SiteContent[] {
   const rows: SiteContent[] = []
   for (const block of page.blocks) {
@@ -580,13 +601,20 @@ async function loadPublicPageSource(
   const sourceLocale = 'en';
   const routePagePath = canonicalTenantPagePath(page)
   const contentPagePath = requestedDatasets.has('content') ? routePagePath : null
-  const tenantPage = contentPagePath
-    ? await getPublicTenantPageForPath(db, siteId, contentPagePath, {
-        locale,
-        preview: isPreviewAuthorized,
-        localizations: localizedLocale ? publicLocalizations : null,
-      })
-    : null
+  const tenantPageOptions = {
+    locale,
+    preview: isPreviewAuthorized,
+    localizations: localizedLocale ? publicLocalizations : null,
+  }
+  const [tenantPage, storyPage] = await Promise.all([
+    contentPagePath
+      ? getPublicTenantPageForPath(db, siteId, contentPagePath, tenantPageOptions)
+      : null,
+    // The home teaser renders the story; every other route reads its own page.
+    contentPagePath === '/'
+      ? getPublicTenantPageForPath(db, siteId, STORY_SOURCE_PATH, tenantPageOptions)
+      : null,
+  ])
   // These complete built-in routes may display an optional CMS content overlay.
   // The route remains valid when that optional overlay has no translated page.
   const allowsMissingLocalizedTenantPage = page === 'contact'
@@ -864,6 +892,7 @@ async function loadPublicPageSource(
     content: contentRows,
     content_blocks: groupContentBlocks(contentRows),
     tenant_page: tenantPage,
+    story: tenantPageToStory(storyPage),
     products,
     collections,
     locationReviews: (locationReviewRows?.results ?? []).map(review => ({ ...review, google_review_metadata: parseGoogleReviewMetadata(review.google_review_metadata) })),
