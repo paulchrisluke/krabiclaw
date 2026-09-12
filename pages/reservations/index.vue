@@ -386,6 +386,12 @@ async function handleReservation() {
   submitting.value = true
   submitError.value = null
   try {
+    // The instant is resolved BEFORE the request. Reading the location's zone
+    // and converting the wall-clock slot both throw on a misconfigured
+    // location, and doing it after the POST turned a reservation that exists
+    // into "Failed to submit" — which the guest answers by booking a second one.
+    const startsAt = localDateTimeToInstant(reservationForm.value.date, reservationForm.value.time, reservationTimezone.value).toISOString()
+    const timezone = reservationTimezone.value
     const res = await $fetch<{ id: string; cancellationToken: string; policy_summary?: ApiRecord | null }>(`/api/public/sites/${siteId}/reservations`, {
       method: 'POST',
       body: reservationForm.value,
@@ -396,9 +402,9 @@ async function handleReservation() {
       siteName: brandName.value,
       guestName: reservationForm.value.name,
       // The guest picked a wall-clock slot at this location; the instant it
-      // means is resolved once, here, in that location's zone.
-      startsAt: localDateTimeToInstant(reservationForm.value.date, reservationForm.value.time, reservationTimezone.value).toISOString(),
-      timezone: reservationTimezone.value,
+      // means was resolved once, above, in that location's zone.
+      startsAt,
+      timezone,
       guests: reservationForm.value.guests,
       requests: reservationForm.value.requests || null,
       cancelUrl: res?.id && res?.cancellationToken ? `/reservations/cancel?id=${res.id}#${res.cancellationToken}` : null,

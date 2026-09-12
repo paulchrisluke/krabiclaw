@@ -132,9 +132,9 @@ export default defineHandler(async (event) => {
   const payload = threadPayloadForGuest({ name, email, phone, notes: requests, ipHash, partySizeIsMinimum: guests.endsWith('+') })
   payload.cancellation = { token_hash: cancellationTokenHash, expires_at: cancellation.expiresAt, used_at: null }
 
-  // The reservation and its inbox thread commit in one batch. The claim's own
-  // capacity predicate decides whether the table is there; nothing is left
-  // behind if it is not.
+  // The reservation and its inbox thread commit in one batch, the thread
+  // conditional on the claim: the claim's capacity predicate decides whether
+  // the table is there, and nothing is left behind if it is not.
   const durationMinutes = 120
   try {
     await claimReservation(db, {
@@ -147,7 +147,7 @@ export default defineHandler(async (event) => {
         id, kind: 'reservation', organization_id: site.organization_id, site_id: siteId,
         location_id: resolvedLocationId, customer_id: customer.id, review_id: null,
         conversation_state: 'needs_attention', resolved_at: null, payload, created_at: now, updated_at: now,
-      }),
+      }, { query: 'SELECT 1 FROM reservations WHERE id = ?', params: [reservationId] }),
     })
   } catch (error) {
     if (!(error instanceof ReservationUnavailableError)) throw error

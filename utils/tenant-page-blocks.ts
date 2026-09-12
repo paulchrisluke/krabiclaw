@@ -13,6 +13,7 @@ export type TenantPageBlockType =
   | 'hero'
   | 'button_group'
   | 'feature_grid'
+  | 'team_grid'
   | 'testimonial_grid'
   | 'contact_cta'
   | 'booking_cta'
@@ -97,6 +98,11 @@ export const TENANT_PAGE_BLOCK_REGISTRY: Record<TenantPageBlockType, TenantPageB
   hero: blockDefinitionWithMetadata('hero', 'Hero', 'A page hero section.', ALL_RECIPES, ['eyebrow', 'title', 'subtitle', 'cta_label', 'cta_url'], { accessibility: 'required', seo: 'structured' }),
   button_group: blockDefinitionWithMetadata('button_group', 'Button group', 'A group of typed links.', ALL_RECIPES, ['buttons']),
   feature_grid: blockDefinitionWithMetadata('feature_grid', 'Feature grid', 'A grid of structured features or a configured source.', ALL_RECIPES, ['title', 'items', 'source', 'calculator']),
+  // The people a business puts its name to. Separate from feature_grid because
+  // a person is not a feature: the two used to share one block, one holding
+  // `features` and `people` side by side under keys no writer declared, and
+  // nothing could edit either of them.
+  team_grid: blockDefinitionWithMetadata('team_grid', 'Team', 'The people behind the business.', ALL_RECIPES, ['title', 'description', 'items']),
   testimonial_grid: blockDefinitionWithMetadata('testimonial_grid', 'Testimonials', 'A grid of customer testimonials.', ALL_RECIPES, ['title', 'items']),
   contact_cta: blockDefinitionWithMetadata('contact_cta', 'Contact CTA', 'A contact-focused call to action.', ALL_RECIPES, ['title', 'description', 'label', 'url']),
   booking_cta: blockDefinitionWithMetadata('booking_cta', 'Booking CTA', 'A booking-focused call to action.', ALL_RECIPES, ['title', 'description', 'label', 'url']),

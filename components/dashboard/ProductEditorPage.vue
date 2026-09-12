@@ -251,6 +251,13 @@
           -->
           <div v-else-if="editorKey === 'booking'" class="space-y-4">
             <UCheckbox v-model="form.bookable" label="Takes bookings" description="Guests choose a session and reserve a place." />
+            <UAlert
+              v-if="!form.bookable && product?.booking"
+              color="warning"
+              variant="soft"
+              icon="i-lucide-triangle-alert"
+              description="Saving removes this product's schedule. It is refused while anything is booked."
+            />
             <template v-if="form.bookable">
               <UFormField label="Session length (minutes)">
                 <UInput v-model="form.booking_duration" inputmode="numeric" placeholder="120" class="w-full" />
@@ -461,6 +468,12 @@ function loadForm(row: Product) {
   form.location_active = here?.active ?? true
   form.location_published = here?.published ?? false
   form.image_asset_id = row.image?.asset_id ?? null
+  // The configuration row is the capability, so the checkbox is its existence
+  // and the fields are its values. The form used to open every product as "Not
+  // bookable" with empty defaults, whatever was stored.
+  form.bookable = row.booking !== null
+  form.booking_duration = row.booking?.duration_minutes === null || row.booking === null ? '' : String(row.booking.duration_minutes)
+  form.booking_capacity = row.booking?.default_capacity === null || row.booking === null ? '' : String(row.booking.default_capacity)
   loadedCatalogShape.value = catalogShapeOf()
 }
 
@@ -765,10 +778,14 @@ async function commit() {
         method: 'POST', body: payload(), validate: isOne,
       })
       // A newly created product is offered here and added to the collection the
-      // editor was opened from — both explicit writes, neither implied.
+      // editor was opened from — both explicit writes, neither implied. The
+      // location relationship is not collection membership: without the second
+      // write the product was absent from the very collection it was created
+      // in.
       await dashboardApi(`/api/editor/sites/${siteId}/products/${created.product.id}/locations/${id}`, {
         method: 'PUT', body: { active: true, published: false }, validate: isRecord,
       })
+      await addToCollection(created.product.id, id)
       await navigateTo(`${collectionPath.value}/${created.product.id}`)
       return
     }
@@ -786,6 +803,29 @@ async function commit() {
   }
 }
 
+/**
+ * Put the new product at the end of the collection it was created in.
+ *
+ * Membership is stated whole — the writer replaces the collection with exactly
+ * the ids it is sent — so the current members are read first and the new one
+ * appended in their existing order.
+ */
+async function addToCollection(newProductId: string, locationId: string) {
+  if (!collectionId.value) return
+  const { products } = await dashboardApi(`/api/editor/sites/${siteId}/locations/${locationId}/products`, { validate: isProductList })
+  const members = products
+    .flatMap(row => row.collections
+      .filter(entry => entry.collection_id === collectionId.value)
+      .map(entry => ({ id: row.id, sort_order: entry.sort_order })))
+    .sort((left, right) => left.sort_order - right.sort_order)
+    .map(entry => entry.id)
+  await dashboardApi(`/api/editor/sites/${siteId}/collections/${collectionId.value}/products`, {
+    method: 'PUT',
+    body: { product_ids: [...members.filter(memberId => memberId !== newProductId), newProductId] },
+    validate: isRecord,
+  })
+}
+
 /** Three switches, three writes. None of them implies another. */
 async function savePublication(id: string) {
   await dashboardApi(`/api/editor/sites/${siteId}/products/${productId.value}/publication`, {
@@ -796,8 +836,21 @@ async function savePublication(id: string) {
   })
 }
 
+/**
+ * Write the capability the merchant is looking at.
+ *
+ * Unticking the box used to return here and let the save report success while
+ * the product stayed bookable. Removing the capability takes the schedule with
+ * it, so the writer refuses while anything is booked and says so.
+ */
 async function saveBooking() {
-  if (!form.bookable) return
+  if (!form.bookable) {
+    if (!product.value?.booking) return
+    await dashboardApi(`/api/editor/sites/${siteId}/products/${productId.value}/booking`, {
+      method: 'DELETE', validate: isRecord,
+    })
+    return
+  }
   await dashboardApi(`/api/editor/sites/${siteId}/products/${productId.value}/booking`, {
     method: 'PUT',
     body: {

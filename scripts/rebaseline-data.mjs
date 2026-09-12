@@ -289,9 +289,95 @@ function deriveCatalog(stage, now, record) {
   deriveBookingCapability(stage, now, record)
   deriveProductMedia(stage, record)
   deriveOfferingPages(stage, now, record)
+  // After the placements exist: this renames the slots they are addressed by.
+  deriveCanonicalContentBlocks(stage, record)
   deriveGuestRecords(stage, record)
   deriveLocalizations(stage, record)
   deriveSlugRedirects(stage, now, record)
+}
+
+/**
+ * One shape for a content block.
+ *
+ * The old model let a feature grid hold its items under `features`, a team
+ * under `people` beside them, and its images inside `data` as asset objects.
+ * The block contract names exactly one list — `items` — and says media lives
+ * in placements, so every reader had to know the private spellings and the
+ * CMS could not save any of these blocks at all: its writer refuses an
+ * `asset_id` anywhere in `data`.
+ *
+ * Here they become what they are: a feature grid with `items`, a `team_grid`
+ * with the people, and placements at `items.<index>.image`. Nothing is
+ * invented — every embedded asset already has the placement it names.
+ */
+function deriveCanonicalContentBlocks(stage, record) {
+  const rows = stage.prepare(`SELECT b.id, b.document_id, b.type, b.position, b.data_json, b.created_at, b.updated_at, d.locale
+    FROM content_blocks b JOIN content_documents d ON d.id = b.document_id ORDER BY b.document_id, b.position`).all()
+  const updateData = stage.prepare('UPDATE content_blocks SET data_json = ? WHERE id = ?')
+  const insertBlock = stage.prepare(`INSERT INTO content_blocks (id, document_id, parent_block_id, type, position, level, data_json, created_at, updated_at)
+    VALUES (?, ?, NULL, 'team_grid', ?, NULL, ?, ?, ?)`)
+  const shiftPositions = stage.prepare('UPDATE content_blocks SET position = position + 1 WHERE document_id = ? AND position > ?')
+  const movePlacement = stage.prepare(`UPDATE media_placements SET owner_id = ?, slot = ?
+    WHERE owner_type = 'content_block' AND owner_id = ? AND slot = ?`)
+  let renamedLists = 0
+  let teamBlocks = 0
+  let liftedAssets = 0
+
+  // An asset object anywhere in `data` is a copy of a placement that already
+  // exists. It is removed, not moved: nothing here creates a placement.
+  const stripAssets = (value) => {
+    if (Array.isArray(value)) return value.map(stripAssets)
+    if (!value || typeof value !== 'object') return value
+    const out = {}
+    for (const [key, item] of Object.entries(value)) {
+      if (key === 'asset_id' || key === 'url' || key === 'public_url' || key === 'thumbnail_url' || key === 'image_url') { liftedAssets += 1; continue }
+      if (item && typeof item === 'object' && !Array.isArray(item) && 'asset_id' in item) { liftedAssets += 1; continue }
+      out[key] = stripAssets(item)
+    }
+    return out
+  }
+
+  for (const row of rows) {
+    const data = JSON.parse(row.data_json)
+    let changed = false
+
+    if (Array.isArray(data.features)) {
+      assert(row.locale === 'en', `Block ${row.id} carries a translated legacy feature list`)
+      assert(!Array.isArray(data.items), `Block ${row.id} carries both items and features`)
+      data.items = data.features
+      delete data.features
+      // The grid a Blawby page renders as its feature cards says which section
+      // it is, the way every other block on those pages does.
+      if (!data.section) data.section = 'features'
+      for (let index = 0; index < data.items.length; index += 1) {
+        movePlacement.run(row.id, `items.${index}.image`, row.id, `features.${index}.icon`)
+      }
+      renamedLists += 1
+      changed = true
+    }
+
+    if (Array.isArray(data.people)) {
+      assert(row.locale === 'en', `Block ${row.id} carries a translated legacy team list`)
+      const people = data.people
+      delete data.people
+      const teamId = `${row.id}-team`
+      shiftPositions.run(row.document_id, row.position)
+      insertBlock.run(teamId, row.document_id, row.position + 1,
+        JSON.stringify({ items: people.map(person => stripAssets(person)) }), row.created_at, row.updated_at)
+      for (let index = 0; index < people.length; index += 1) {
+        movePlacement.run(teamId, `items.${index}.image`, row.id, `people.${index}.image`)
+      }
+      teamBlocks += 1
+      changed = true
+    }
+
+    const cleaned = stripAssets(data)
+    if (changed || JSON.stringify(cleaned) !== row.data_json) updateData.run(JSON.stringify(cleaned), row.id)
+  }
+
+  record('content_block_lists_renamed', renamedLists)
+  record('content_block_team_blocks', teamBlocks)
+  record('content_block_embedded_assets_removed', liftedAssets)
 }
 
 /**
@@ -505,12 +591,15 @@ function deriveOfferingPages(stage, now, record) {
     // index, so re-sorting here would point each icon at another feature.
     const features = JSON.parse(offering.features ?? '[]')
     if (features.length > 0) {
+      // One list, one slot: `items` with its image at `items.<index>.image`,
+      // the same shape the block contract declares and the editor writes.
       const blockId = add('feature_grid', {
-        features: features.map(feature => ({ title: String(feature.title ?? ''), description: String(feature.description ?? ''), icon: feature.icon ?? null })),
+        section: 'features',
+        items: features.map(feature => ({ title: String(feature.title ?? ''), description: String(feature.description ?? '') })),
       })
       features.forEach((_feature, index) => {
         const icon = placementsFor(offering.id, `features.${index}.image`)[0]
-        if (icon) movePlacement(icon, 'content_block', blockId, `features.${index}.icon`, 0)
+        if (icon) movePlacement(icon, 'content_block', blockId, `items.${index}.image`, 0)
       })
     }
     const faqs = JSON.parse(offering.faqs ?? '[]').filter(entry => !blank(entry?.question))

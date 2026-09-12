@@ -277,7 +277,7 @@ function dayLabel(dayKey: string) {
   return formatCalendarDate(dayKey, 'en', { weekday: 'long', month: 'long', day: 'numeric' })
 }
 function kindLabel(kind: AgendaKind) {
-  return ({ reservation: 'Reservation', booking: 'Experience booking', post: 'Post' })[kind]
+  return ({ reservation: 'Reservation', booking: 'Booking', post: 'Post' })[kind]
 }
 function kindIcon(kind: AgendaKind) {
   return ({ reservation: 'i-lucide-utensils', booking: 'i-lucide-ticket', post: 'i-lucide-send' })[kind]

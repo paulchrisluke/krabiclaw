@@ -417,12 +417,14 @@ export async function claimSessionCapacity(db: DbClient, input: {
   requestId?: string | null
   holdExpiresAt?: string | null
   /**
-   * Writes that must land before the claim — the request row it references —
-   * and after it. All of them commit in the one batch the claim commits in, so
-   * a thread without its booking is not a state anything has to reconcile.
+   * The writes that belong to this claim, given the id it minted.
+   *
+   * They run AFTER the claim, in the same batch, and each one has to carry the
+   * claim's existence in its own predicate: a claim that finds no room inserts
+   * zero rows and raises nothing, so anything written ahead of it — or written
+   * after it unconditionally — commits into a booking that does not exist.
    */
-  preceding?: BatchQuery[]
-  following?: BatchQuery[]
+  following?: (_bookingId: string) => BatchQuery[]
 }): Promise<{ bookingId: string }> {
   if (!Number.isSafeInteger(input.partySize) || input.partySize < 1) badRequest('party_size must be a positive integer')
 
@@ -435,9 +437,8 @@ export async function claimSessionCapacity(db: DbClient, input: {
 
   const bookingId = crypto.randomUUID()
   const claim = sessionClaimQuery({ ...input, bookingId, now: new Date().toISOString() })
-  const preceding = input.preceding ?? []
-  const results = await executeBatch(db, [...preceding, claim, ...(input.following ?? [])], { operation: 'Claim session capacity' })
-  if ((results[preceding.length]?.meta?.changes ?? 0) === 0) throw new CapacityUnavailableError()
+  const results = await executeBatch(db, [claim, ...(input.following?.(bookingId) ?? [])], { operation: 'Claim session capacity' })
+  if ((results[0]?.meta?.changes ?? 0) === 0) throw new CapacityUnavailableError()
   return { bookingId }
 }
 

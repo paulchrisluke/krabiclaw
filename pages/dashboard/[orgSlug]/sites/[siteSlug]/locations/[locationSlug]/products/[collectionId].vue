@@ -168,15 +168,17 @@ const isCollectionCreated = (value: unknown): value is { collection: { id: strin
   isRecord(value) && isRecord(value.collection) && typeof value.collection.id === 'string'
 
 async function commit() {
-  const location = locationId.value
-  if (!location) return
   saving.value = true
   errorMessage.value = ''
   try {
     // A collection created from a location's screen is scoped to that
     // location; a site-wide one is created from the site's own catalog screen.
+    // Renaming one needs no location at all, so only the create asks for it —
+    // and says so rather than returning quietly and leaving Save looking done.
     const endpoint = `/api/editor/sites/${siteId}/collections`
     if (isNew.value) {
+      const location = locationId.value
+      if (!location) throw createError({ statusCode: 404, statusMessage: 'Location not found' })
       const created = await dashboardApi(endpoint, { method: 'POST', body: { name: form.name.trim(), location_id: location }, validate: isCollectionCreated })
       form.name = ''
       await catalog.refresh()

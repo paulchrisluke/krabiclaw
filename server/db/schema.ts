@@ -382,8 +382,10 @@ export const teamMember = sqliteTable("teamMember", {
 //   unit. tax_code NULL means no declared code, not a default one.
 // Deletion: cascades to variants, options, publication/location rows,
 //   collection membership, metafield values, booking config, rules and
-//   sessions. Sets content_documents.product_id to NULL so the page survives
-//   as a page and renders an explicit empty state.
+//   sessions. A canonical page pointing at the product REFUSES the delete
+//   (content_documents_product_scope_fk is RESTRICT), and so does a booking:
+//   the domain checks both and says which, because the cascade would otherwise
+//   take seat allocations with it.
 // Read/write: server/utils/product-management.ts (writes),
 //   server/utils/product-validation.ts (validators),
 //   server/utils/public-products.ts (public reads).

@@ -58,6 +58,12 @@ export interface Collection {
   updated_by: string
 }
 
+/** What generating this product's occurrences starts from. Sessions keep their own. */
+export interface ProductBookingConfig {
+  duration_minutes: number | null
+  default_capacity: number | null
+}
+
 /** Membership of one product in one collection, carrying its position there. */
 export interface CollectionMembership {
   collection_id: string
@@ -92,6 +98,15 @@ export interface Product {
   publications: ProductPublication[]
   locations: ProductLocation[]
   collections: CollectionMembership[]
+  /**
+   * Non-null exactly when this product takes bookings.
+   *
+   * The existence of the configuration row is the capability — not a vertical,
+   * not a type, not a non-null duration. Every surface reads it from here, so
+   * the CMS and the public page cannot disagree about whether a product is
+   * bookable or about the defaults its sessions are generated from.
+   */
+  booking: ProductBookingConfig | null
   image: ResolvedMediaAsset | null
   gallery: ResolvedMediaAsset[]
   media: ResolvedMediaAsset[]

@@ -2,10 +2,11 @@
 // server/api/dashboard/legal/connect/index.post.ts forwards to Blawby as
 // requestReference (plan step 6, R14). sessionStorage-backed, same-tab
 // only, following composables/useBookingHandoff.ts's existing pattern for
-// this repo's sessionStorage-recovery convention — but keyed per
-// organization+operation (not per confirmation payload) so a key can never
-// be reused across organizations and a completed operation clears only its
-// own scoped entry, never another organization's in-flight one.
+// this repo's sessionStorage-recovery convention — keyed per organization
+// (not per confirmation payload), so a key can never be reused across
+// organizations and clearing one organization's entry never touches another's.
+// There is one Connect operation per organization at a time, which is why the
+// organization alone identifies it.
 
 const STORAGE_PREFIX = 'kc:legal-connect:'
 

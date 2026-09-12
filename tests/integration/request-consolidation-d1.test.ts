@@ -51,28 +51,35 @@ test('a thread and the record it refers to commit and cancel as one', { timeout:
         VALUES ('session-proof','${ORG}','product-proof','${LOCATION}','Asia/Bangkok','2099-01-05T07:00:00.000Z','2099-01-05T09:00:00.000Z',1,'scheduled','${ACTOR}','${ACTOR}')`,
     ].map(statement => db.prepare(statement)))
 
-    // One seat, two guests: the claim carries its own capacity predicate, so
-    // exactly one insert lands and the loser is told, not overbooked.
+    // One seat, two guests: the claim carries its own capacity predicate, and
+    // the thread is written only where that claim landed. Exactly as the public
+    // booking route writes it — claim first, thread conditional on it, then the
+    // booking takes the thread's id.
     async function bookSession(id: string) {
-      await db.batch(requestInsertQueries({
-        id, kind: 'booking', organization_id: ORG, site_id: SITE, location_id: LOCATION,
-        customer_id: null, review_id: null, conversation_state: 'needs_attention', resolved_at: null,
-        payload: threadPayloadForGuest({ name: 'Guest', email: 'guest@proof.example', phone: '+66812345678' }),
-        created_at: NOW, updated_at: NOW,
-      }).map(write => db.prepare(write.query).bind(...write.params)))
       return claimSessionCapacity(db, {
         organizationId: ORG, siteId: SITE, productId: 'product-proof', sessionId: 'session-proof',
-        productVariantId: 'variant-proof', partySize: 1, customerId: null, requestId: id,
-      }).then(() => true, async () => {
-        // A thread with no booking is a conversation about nothing; the caller
-        // that lost the seat takes its thread back out, as the public route does.
-        await db.prepare('DELETE FROM requests WHERE id=?').bind(id).run()
-        return false
-      })
+        productVariantId: 'variant-proof', partySize: 1, customerId: null, requestId: null,
+        following: bookingId => [
+          ...requestInsertQueries({
+            id, kind: 'booking', organization_id: ORG, site_id: SITE, location_id: LOCATION,
+            customer_id: null, review_id: null, conversation_state: 'needs_attention', resolved_at: null,
+            payload: threadPayloadForGuest({ name: 'Guest', email: 'guest@proof.example', phone: '+66812345678' }),
+            created_at: NOW, updated_at: NOW,
+          }, { query: 'SELECT 1 FROM bookings WHERE id = ?', params: [bookingId] }),
+          {
+            query: 'UPDATE bookings SET request_id = ?, updated_at = ? WHERE id = ? AND EXISTS (SELECT 1 FROM requests WHERE id = ?)',
+            params: [id, NOW, bookingId, id],
+          },
+        ],
+      }).then(() => true, () => false)
     }
     const claims = await Promise.all([bookSession('booking-first'), bookSession('booking-second')])
     assert.equal(claims.filter(Boolean).length, 1)
     assert.equal(await db.prepare('SELECT count(*) FROM bookings').first('count(*)'), 1)
+    // Nothing to clean up after the guest who lost the seat: the thread and its
+    // opening entry are conditional on the claim, so neither was written.
+    assert.equal(await db.prepare('SELECT count(*) FROM requests').first('count(*)'), 1)
+    assert.equal(await db.prepare("SELECT count(*) FROM activity_entries WHERE kind='submission'").first('count(*)'), 1)
 
     const winner = await db.prepare('SELECT request_id FROM bookings').first<string>('request_id')
     assert.ok(winner)

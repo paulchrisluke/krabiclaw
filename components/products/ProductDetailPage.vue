@@ -118,7 +118,7 @@
             :dates="availabilityDates"
             :loading="sessionsPending"
             :guests="partySize"
-            :guests-max="booking.default_capacity ?? 8"
+            :guests-max="guestsMax"
             @update:guests="partySize = $event"
             @next="bookingStep = 2"
           />
@@ -335,6 +335,27 @@ const availabilityDates = computed<RawDateAvailability[]>(() => {
     byDate.set(date, entry)
   }
   return [...byDate.values()].sort((left, right) => left.date.localeCompare(right.date))
+})
+
+/**
+ * The largest party the calendar can take.
+ *
+ * Seats live on the session, not on the product: `default_capacity` is what
+ * generating an occurrence starts from, and the sessions already on the
+ * calendar keep whatever capacity they were given. Reading the product default
+ * here capped a twelve-seat session at four, and a product with no default at
+ * an unrelated eight.
+ *
+ * Once a time is chosen it is that session's remaining seats; before then it is
+ * the most any session on the calendar has left. A session with no capacity at
+ * all takes any party the endpoint accepts.
+ */
+const MAX_PARTY_SIZE = 99
+const guestsMax = computed(() => {
+  const pool = selectedSession.value ? [selectedSession.value] : sessions.value
+  if (!pool.length) return 1
+  if (pool.some(session => session.remaining === null)) return MAX_PARTY_SIZE
+  return Math.max(1, ...pool.map(session => session.remaining ?? 0))
 })
 
 const selectedSession = computed<PublicSession | null>(() => {

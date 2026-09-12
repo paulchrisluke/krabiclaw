@@ -221,7 +221,7 @@ interface ThreadDetail {
 const threadTypeMeta: Record<SubmissionType, { label: string; color: UiColor }> = {
   contact: { label: 'Contact', color: 'info' },
   reservation: { label: 'Reservation', color: 'success' },
-  booking: { label: 'Experience booking', color: 'warning' },
+  booking: { label: 'Booking', color: 'warning' },
 }
 
 const ACTION_META: Record<string, { label: string; icon: string; color: UiColor; variant: 'soft' | 'outline' | 'ghost'; destructive?: boolean }> = {
@@ -341,7 +341,7 @@ const effectiveFeatureSet = computed(() => new Set<ProductFeature>([
 const typeOptions = computed(() => {
   const options: Array<{ value: SubmissionType; label: string }> = [{ value: 'contact', label: 'Contact' }]
   if (effectiveFeatureSet.value.has('reservations')) options.push({ value: 'reservation', label: 'Reservations' })
-  if (effectiveFeatureSet.value.has('products')) options.push({ value: 'booking', label: 'Product bookings' })
+  if (effectiveFeatureSet.value.has('products')) options.push({ value: 'booking', label: 'Bookings' })
   return options
 })
 const supportedThreadLabels = computed(() => typeOptions.value.map(option => option.label.toLowerCase()))

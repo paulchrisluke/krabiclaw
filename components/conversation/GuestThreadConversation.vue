@@ -221,7 +221,7 @@ const { formatRelativeTime } = useHumanTime()
 
 const openingTitle = computed(() => {
   if (props.submissionType === 'reservation') return 'Reservation request'
-  if (props.submissionType === 'booking') return 'Experience booking request'
+  if (props.submissionType === 'booking') return 'Booking request'
   return 'Website message'
 })
 

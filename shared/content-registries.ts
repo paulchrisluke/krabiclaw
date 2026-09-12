@@ -83,6 +83,14 @@ export const CONTENT_BLOCK_TEXT_FIELDS = {
   hero: [plain('eyebrow'), plain('title'), plain('subtitle'), plain('cta_label')],
   button_group: [plain('buttons', '*', 'label')],
   feature_grid: [plain('title'), plain('description'), plain('items', '*', 'title'), plain('items', '*', 'description')],
+  // A person's own words: the role they hold and how they describe themselves.
+  // Their name is translatable too — a Japanese or Thai site writes it in its
+  // own script rather than transliterating at read time.
+  team_grid: [
+    plain('title'), plain('description'),
+    plain('items', '*', 'first_name'), plain('items', '*', 'last_name'),
+    plain('items', '*', 'title'), plain('items', '*', 'bio'),
+  ],
   testimonial_grid: [plain('title'), plain('description'), plain('items', '*', 'title'), plain('items', '*', 'description')],
   contact_cta: [plain('title'), plain('description'), plain('label')],
   booking_cta: [plain('title'), plain('description'), plain('label')],
@@ -103,6 +111,7 @@ export const CONTENT_BLOCK_TYPES = [
   'hero',
   'button_group',
   'feature_grid',
+  'team_grid',
   'testimonial_grid',
   'contact_cta',
   'booking_cta',

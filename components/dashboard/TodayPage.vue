@@ -321,7 +321,7 @@ const locationOptions = computed(() => [
 ])
 const kindOptions = computed(() => [
   { label: 'All booking types', value: FILTER_ALL },
-  ...(todayData.value?.availableKinds ?? []).map(kind => ({ label: kind === 'reservation' ? 'Reservations' : 'Experience bookings', value: kind })),
+  ...(todayData.value?.availableKinds ?? []).map(kind => ({ label: kind === 'reservation' ? 'Reservations' : 'Bookings', value: kind })),
 ])
 
 async function selectRange(range: TodayRange) {

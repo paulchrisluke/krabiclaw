@@ -139,19 +139,26 @@ export default defineHandler(async (event) => {
   payload.cancellation = { token_hash: cancellationTokenHash, expires_at: cancellation.expiresAt, used_at: null }
 
   try {
-    // The inbox thread and the seat claim commit together, in one batch: a
-    // thread with no booking, or a booking with no thread, would each be a
-    // broken state somebody has to reconcile by hand. The thread is written
-    // first because the booking references it.
+    // The seat is claimed first, and the thread is written only where that
+    // claim landed: a claim that finds the session full inserts nothing and
+    // raises nothing, so a thread written ahead of it would commit on its own.
+    // The booking takes its request id once the thread exists.
     await claimSessionCapacity(db, {
       organizationId: site.organization_id, siteId, productId: product.id, sessionId: session.id,
-      productVariantId, partySize, customerId: customer.id, requestId: threadId,
-      preceding: requestInsertQueries({
-        kind: 'booking', id: threadId, organization_id: site.organization_id, site_id: siteId,
-        location_id: session.location_id, customer_id: customer.id, review_id: null,
-        conversation_state: 'needs_attention', resolved_at: null, payload,
-        created_at: now, updated_at: now,
-      }),
+      productVariantId, partySize, customerId: customer.id, requestId: null,
+      following: bookingId => [
+        ...requestInsertQueries({
+          kind: 'booking', id: threadId, organization_id: site.organization_id, site_id: siteId,
+          location_id: session.location_id, customer_id: customer.id, review_id: null,
+          conversation_state: 'needs_attention', resolved_at: null, payload,
+          created_at: now, updated_at: now,
+        }, { query: 'SELECT 1 FROM bookings WHERE id = ?', params: [bookingId] }),
+        {
+          query: `UPDATE bookings SET request_id = ?, updated_at = ?
+                   WHERE id = ? AND EXISTS (SELECT 1 FROM requests WHERE id = ?)`,
+          params: [threadId, now, bookingId, threadId],
+        },
+      ],
     })
   } catch (error) {
     // Nothing to roll back: the batch either applied whole or not at all. The

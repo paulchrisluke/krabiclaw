@@ -140,6 +140,7 @@
               variant="soft"
               icon="i-lucide-trash-2"
               :loading="closingReservations"
+              :disabled="saving"
               @click="closeReservations"
             >
               Stop taking reservations here
@@ -478,7 +479,10 @@ const hasDetail = computed(() => routeSegments.value.length > 0)
 // Names the level, not the open section: at `lg` the section's title is a
 // heading on its own pane with the index still beside it.
 const navbarTitle = computed(() => location.value?.title || 'Location')
-const saving = computed(() => detailsSaving.value || savingLocationFeatures.value || reservationSaving.value)
+// Every write this screen can be in the middle of, including the one that
+// stops reservations: Save stayed live during that delete, and a save landing
+// on top of it recreated the policy it had just removed.
+const saving = computed(() => detailsSaving.value || savingLocationFeatures.value || reservationSaving.value || closingReservations.value)
 
 function editorSignature(key: string | null): string {
   switch (key) {

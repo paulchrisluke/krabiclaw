@@ -279,6 +279,32 @@ test('editing a product keeps variant identity, so bookings survive', { timeout:
       'editing the product did not drop the booking')
     assert.equal((await getProduct(db, ORG, product.id)).description, 'Now with clay')
     assert.equal(await db.prepare("SELECT count(*) n FROM product_sessions WHERE id = 's1'").first<number>('n'), 1)
+
+    // Removing that option is refused, and refused before anything is written:
+    // the booking's foreign key cascades, so a delete that went through would
+    // take the guest's seat with it.
+    await assert.rejects(
+      updateProduct(db, { organizationId: ORG, siteId: 'site-a', productId: product.id, actor: ACTOR, patch: {
+        variants: [{ name: 'Child', prices: [{ unit_amount: 25000, currency: 'THB' }] }],
+      } }),
+      (error: unknown) => String((error as { statusMessage?: string }).statusMessage).includes('bookings'),
+    )
+    assert.equal(await db.prepare("SELECT count(*) n FROM bookings WHERE id = 'b1'").first<number>('n'), 1,
+      'the refused edit left the booking alone')
+    assert.equal(await db.prepare("SELECT count(*) n FROM product_variants WHERE id = 'var-adult'").first<number>('n'), 1,
+      'the refused edit left the variant alone')
+
+    // A cancelled booking is the record that it happened, and it is held by
+    // the same key. The option stops being sold by being turned off.
+    await db.prepare("UPDATE bookings SET status = 'cancelled', cancelled_at = '2099-01-01T00:00:00.000Z' WHERE id = 'b1'").run()
+    await assert.rejects(
+      updateProduct(db, { organizationId: ORG, siteId: 'site-a', productId: product.id, actor: ACTOR, patch: {
+        variants: [{ name: 'Child', prices: [{ unit_amount: 25000, currency: 'THB' }] }],
+      } }),
+      (error: unknown) => String((error as { statusMessage?: string }).statusMessage).includes('bookings'),
+    )
+    assert.equal(await db.prepare("SELECT count(*) n FROM bookings WHERE id = 'b1'").first<number>('n'), 1,
+      'a cancelled booking is history, not something an edit deletes')
   } finally { await runtime.dispose() }
 })
 

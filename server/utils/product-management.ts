@@ -118,6 +118,7 @@ function mapProductRow(row: Row): Product {
     publications: [],
     locations: [],
     collections: [],
+    booking: null,
     image: null,
     gallery: [],
     media: [],
@@ -202,6 +203,8 @@ async function hydrate(db: DbClient, organizationId: string, products: Product[]
       WHERE organization_id = ? AND product_id IN (SELECT value FROM json_each(?)) ORDER BY location_id`, params: [organizationId, ids] },
     { query: `SELECT product_id, collection_id, sort_order FROM collection_products
       WHERE organization_id = ? AND product_id IN (SELECT value FROM json_each(?)) ORDER BY collection_id`, params: [organizationId, ids] },
+    { query: `SELECT product_id, duration_minutes, default_capacity FROM product_booking_configs
+      WHERE organization_id = ? AND product_id IN (SELECT value FROM json_each(?))`, params: [organizationId, ids] },
     { query: `SELECT pm.product_id, pm.value, d.id AS definition_id, d.organization_id AS definition_org,
         d.namespace, d.key, d.name, d.description, d.value_type, d.validations, d.localizable
       FROM product_metafields pm
@@ -218,7 +221,19 @@ async function hydrate(db: DbClient, organizationId: string, products: Product[]
   const publicationRows = rowsAt(5)
   const locationRows = rowsAt(6)
   const collectionRows = rowsAt(7)
-  const metafieldRows = rowsAt(8)
+  const bookingRows = rowsAt(8)
+  const metafieldRows = rowsAt(9)
+
+  // The row's existence is the capability, so a product with no row keeps the
+  // null it was mapped with.
+  for (const row of bookingRows) {
+    const product = byId.get(String(row.product_id))
+    if (!product) continue
+    product.booking = {
+      duration_minutes: row.duration_minutes === null ? null : Number(row.duration_minutes),
+      default_capacity: row.default_capacity === null ? null : Number(row.default_capacity),
+    }
+  }
 
   const valuesByOption = new Map<string, { id: string; value: string; sort_order: number }[]>()
   for (const row of valueRows) {
@@ -439,17 +454,39 @@ function slugCandidate(base: string, attempt: number): string {
  * so a hundred products in one request do not all take the same free slug —
  * and do not each ask the database whether they may.
  */
-export async function createProductSlug(db: DbClient, organizationId: string, base: string, excludeId?: string, taken?: Set<string>): Promise<string> {
+/**
+ * A slug nothing else in this organization holds.
+ *
+ * `known` is the organization's slugs, already loaded — a bulk caller reads
+ * them once instead of asking the database for every candidate of every
+ * product. Without it each candidate is a round trip.
+ */
+export async function createProductSlug(
+  db: DbClient,
+  organizationId: string,
+  base: string,
+  excludeId?: string,
+  taken?: Set<string>,
+  known?: ReadonlyMap<string, string>,
+): Promise<string> {
   for (let attempt = 0; attempt < MAX_SLUG_SUFFIX_ATTEMPTS; attempt += 1) {
     const candidate = slugCandidate(base, attempt)
     if (taken?.has(candidate)) continue
-    const clash = await queryFirst<{ id: string }>(db, 'SELECT id FROM products WHERE organization_id = ? AND slug = ? AND id <> COALESCE(?, \'\')', [organizationId, candidate, excludeId ?? null])
-    if (!clash) {
+    const holder = known
+      ? known.get(candidate) ?? null
+      : (await queryFirst<{ id: string }>(db, 'SELECT id FROM products WHERE organization_id = ? AND slug = ? AND id <> COALESCE(?, \'\')', [organizationId, candidate, excludeId ?? null]))?.id ?? null
+    if (!holder || holder === excludeId) {
       taken?.add(candidate)
       return candidate
     }
   }
   conflict('Could not derive a unique product slug')
+}
+
+/** Every slug this organization holds, so a batch derives its own without asking again. */
+async function loadProductSlugs(db: DbClient, organizationId: string): Promise<Map<string, string>> {
+  const rows = await queryAll<{ id: string; slug: string }>(db, 'SELECT id, slug FROM products WHERE organization_id = ?', [organizationId])
+  return new Map(rows.map(row => [row.slug, row.id]))
 }
 
 async function organizationDefaultCurrency(db: DbClient, organizationId: string, siteId?: string): Promise<CurrencyCode> {
@@ -600,27 +637,65 @@ function resolveIds(options: NormalizedProductOption[], variants: NormalizedProd
  * caller is editing says nothing about an id in the body, so each one is
  * checked against the product being written.
  */
+const SUPPLIED_ID_TABLES = ['product_options', 'product_option_values', 'product_variants'] as const
+type SuppliedIdTable = typeof SUPPLIED_ID_TABLES[number]
+/** Who owns each supplied id today: table → id → `<organization>:<product>`. */
+export type SuppliedIdOwners = ReadonlyMap<SuppliedIdTable, ReadonlyMap<string, string>>
+
+function suppliedIds(options: NormalizedProductOption[], variants: NormalizedProductVariant[]): Record<SuppliedIdTable, string[]> {
+  return {
+    product_options: options.map(option => option.id).filter((id): id is string => Boolean(id)),
+    product_option_values: options.flatMap(option => option.values.map(value => value.id)).filter((id): id is string => Boolean(id)),
+    product_variants: variants.map(variant => variant.id).filter((id): id is string => Boolean(id)),
+  }
+}
+
+/**
+ * Load the owner of every id a batch supplies, in one query per table.
+ *
+ * The check below is the same either way; this only decides whether it costs
+ * three round trips for the whole batch or three for every product in it.
+ */
+async function loadSuppliedIdOwners(db: DbClient, ids: Record<SuppliedIdTable, string[]>): Promise<SuppliedIdOwners> {
+  const owners = new Map<SuppliedIdTable, Map<string, string>>()
+  for (const table of SUPPLIED_ID_TABLES) {
+    const table_ids = ids[table]
+    const index = new Map<string, string>()
+    owners.set(table, index)
+    if (table_ids.length === 0) continue
+    const rows = await queryAll<{ id: string; organization_id: string; product_id: string | null }>(db, `
+      SELECT id, organization_id, product_id FROM ${table} WHERE id IN (SELECT value FROM json_each(?))
+    `, [d1JsonArray(table_ids)])
+    for (const row of rows) index.set(String(row.id), `${row.organization_id}:${row.product_id ?? ''}`)
+  }
+  return owners
+}
+
 async function assertSuppliedIdsBelongHere(
   db: DbClient,
   organizationId: string,
   productId: string | null,
   options: NormalizedProductOption[],
   variants: NormalizedProductVariant[],
+  owners?: SuppliedIdOwners,
 ): Promise<void> {
-  const supplied = {
-    product_options: options.map(option => option.id).filter((id): id is string => Boolean(id)),
-    product_option_values: options.flatMap(option => option.values.map(value => value.id)).filter((id): id is string => Boolean(id)),
-    product_variants: variants.map(variant => variant.id).filter((id): id is string => Boolean(id)),
-  }
-  for (const [table, ids] of Object.entries(supplied)) {
+  const supplied = suppliedIds(options, variants)
+  const here = `${organizationId}:${productId ?? ''}`
+  for (const table of SUPPLIED_ID_TABLES) {
+    const ids = supplied[table]
     if (ids.length === 0) continue
-    const foreign = await queryAll<{ id: string }>(db, `
-      SELECT id FROM ${table}
-       WHERE id IN (SELECT value FROM json_each(?))
-         AND NOT (organization_id = ? AND product_id IS ?)
-    `, [d1JsonArray(ids), organizationId, productId])
+    const foreign = owners
+      ? ids.filter((id) => {
+          const owner = owners.get(table)?.get(id)
+          return owner !== undefined && owner !== here
+        })
+      : (await queryAll<{ id: string }>(db, `
+          SELECT id FROM ${table}
+           WHERE id IN (SELECT value FROM json_each(?))
+             AND NOT (organization_id = ? AND product_id IS ?)
+        `, [d1JsonArray(ids), organizationId, productId])).map(row => String(row.id))
     if (foreign.length > 0) {
-      notFound(`${table.replace('product_', '').replaceAll('_', ' ')} ${foreign.map(row => row.id).join(', ')} does not belong to this product`)
+      notFound(`${table.replace('product_', '').replaceAll('_', ' ')} ${foreign.join(', ')} does not belong to this product`)
     }
   }
 }
@@ -637,7 +712,15 @@ async function planProduct(
   db: DbClient,
   organizationId: string,
   input: CreateProductInput,
-  context: { siteId?: string; existingId?: string; defaultCurrency?: CurrencyCode | null; takenSlugs?: Set<string> },
+  context: {
+    siteId?: string
+    existingId?: string
+    defaultCurrency?: CurrencyCode | null
+    takenSlugs?: Set<string>
+    /** Preloaded answers for a batch: same rules, one round trip instead of per product. */
+    idOwners?: SuppliedIdOwners
+    knownSlugs?: ReadonlyMap<string, string>
+  },
 ): Promise<PlannedProduct> {
   const name = requireTrimmedProductString(input.name, 'name', PRODUCT_LIMITS.name)
   const options = validateProductOptions(input.options)
@@ -648,7 +731,7 @@ async function planProduct(
     invalid('a product with options must declare the variants that select them')
   }
 
-  await assertSuppliedIdsBelongHere(db, organizationId, context.existingId ?? null, options, variants)
+  await assertSuppliedIdsBelongHere(db, organizationId, context.existingId ?? null, options, variants, context.idOwners)
 
   // One site has one default currency: a batch resolves it once and hands it
   // down, rather than asking the same question for every product in it.
@@ -671,7 +754,7 @@ async function planProduct(
   return {
     id: context.existingId ?? crypto.randomUUID(),
     name,
-    slug: await createProductSlug(db, organizationId, name, context.existingId, context.takenSlugs),
+    slug: await createProductSlug(db, organizationId, name, context.existingId, context.takenSlugs, context.knownSlugs),
     // An empty description is a real choice, not a missing field. Only its
     // length is constrained.
     description: normalizeOptionalProductString(input.description, 'description', PRODUCT_LIMITS.description) ?? '',
@@ -879,7 +962,19 @@ export async function planProductCreateWrites(db: DbClient, input: {
 }): Promise<{ ids: string[]; queries: BatchQuery[] }> {
   if (input.products.length === 0) invalid('at least one product is required')
   if (input.products.length > PRODUCT_LIMITS.batchCreate) invalid(`at most ${PRODUCT_LIMITS.batchCreate} products may be created at once`)
-  const definitions = await loadMetafieldDefinitions(db, input.organizationId)
+  // What is the same for every product in the batch is asked once: the
+  // vocabulary, the currency, the organization's slugs, and who owns any id
+  // the caller supplied. Asking per product turned a hundred-row create into a
+  // hundred round trips before a single row was written.
+  const [definitions, knownSlugs, idOwners] = await Promise.all([
+    loadMetafieldDefinitions(db, input.organizationId),
+    loadProductSlugs(db, input.organizationId),
+    loadSuppliedIdOwners(db, {
+      product_options: input.products.flatMap(product => (product.options ?? []).map(option => option.id).filter((id): id is string => Boolean(id))),
+      product_option_values: input.products.flatMap(product => (product.options ?? []).flatMap(option => (option.values ?? []).map(value => typeof value === 'string' ? null : value.id)).filter((id): id is string => Boolean(id))),
+      product_variants: input.products.flatMap(product => (product.variants ?? []).map(variant => variant.id).filter((id): id is string => Boolean(id))),
+    }),
+  ])
   const defaultCurrency = input.siteId ? await organizationDefaultCurrency(db, input.organizationId, input.siteId) : null
   const queries: BatchQuery[] = []
   const ids: string[] = []
@@ -888,7 +983,7 @@ export async function planProductCreateWrites(db: DbClient, input: {
   // batch both take the same free slug.
   const taken = new Set<string>()
   for (const product of input.products) {
-    const planned = await planProduct(db, input.organizationId, product, { siteId: input.siteId, defaultCurrency, takenSlugs: taken })
+    const planned = await planProduct(db, input.organizationId, product, { siteId: input.siteId, defaultCurrency, takenSlugs: taken, knownSlugs, idOwners })
     assertVariantPricesConsistent(planned)
     queries.push(...productWrites(input.organizationId, planned, definitions, input.actor, input.now, 'insert'))
     if (input.publication && input.siteId) {
@@ -932,30 +1027,47 @@ export async function createProductsBatch(db: DbClient, input: {
  * A variant that keeps its id keeps its bookings, because bookings reference
  * the variant, not its ordinal position.
  */
-export async function updateProduct(db: DbClient, input: {
+/**
+ * The writes one patch makes, given the product it is patching.
+ *
+ * Planning is separated from loading so a batch can load every product it is
+ * about in one hydration and still go through exactly this validation. The
+ * caller supplies what is the same for every row — the attribute vocabulary,
+ * the site's currency, the organization's slugs — and gets back the statements
+ * plus the variants this patch would remove, which a caller checks against
+ * bookings before running anything.
+ */
+async function planProductUpdate(db: DbClient, input: {
   organizationId: string
   siteId?: string
-  productId: string
+  current: Product
   patch: UpdateProductInput
   actor: Actor
-}): Promise<Product> {
-  const current = await getProduct(db, input.organizationId, input.productId)
-  const definitions = await loadMetafieldDefinitions(db, input.organizationId)
+  now: string
+  definitions: Awaited<ReturnType<typeof loadMetafieldDefinitions>>
+  defaultCurrency?: CurrencyCode | null
+  takenSlugs?: Set<string>
+  idOwners?: SuppliedIdOwners
+  knownSlugs?: ReadonlyMap<string, string>
+  cacheInvalidations: BatchQuery[]
+}): Promise<{ writes: BatchQuery[]; keptVariants: string }> {
+  const { current, patch, organizationId } = input
+  const productId = current.id
   const merged: CreateProductInput = {
-    name: input.patch.name ?? current.name,
-    description: input.patch.description ?? current.description,
-    active: input.patch.active ?? current.active,
-    order_url: input.patch.order_url === undefined ? current.order_url : input.patch.order_url,
-    unit_label: input.patch.unit_label === undefined ? current.unit_label : input.patch.unit_label,
-    marketing_features: input.patch.marketing_features ?? current.marketing_features,
-    tags: input.patch.tags ?? current.tags,
-    metadata: input.patch.metadata ?? current.metadata,
-    tax_code: input.patch.tax_code === undefined ? current.tax_code : input.patch.tax_code,
-    options: input.patch.options ?? current.options.map(option => ({
+    name: patch.name ?? current.name,
+    description: patch.description ?? current.description,
+    active: patch.active ?? current.active,
+    order_url: patch.order_url === undefined ? current.order_url : patch.order_url,
+    unit_label: patch.unit_label === undefined ? current.unit_label : patch.unit_label,
+    marketing_features: patch.marketing_features ?? current.marketing_features,
+    tags: patch.tags ?? current.tags,
+    metadata: patch.metadata ?? current.metadata,
+    tax_code: patch.tax_code === undefined ? current.tax_code : patch.tax_code,
+    options: patch.options ?? current.options.map(option => ({
       id: option.id, name: option.name, sort_order: option.sort_order,
       values: option.values.map(value => ({ id: value.id, value: value.value, sort_order: value.sort_order })),
     })),
-    variants: input.patch.variants ?? current.variants.map(variant => ({
+    variants: patch.variants ?? current.variants.map(variant => ({
       id: variant.id, name: variant.name, sku: variant.sku, active: variant.active, sort_order: variant.sort_order,
       option_values: variant.option_values,
       prices: variant.prices.map(price => ({
@@ -966,53 +1078,107 @@ export async function updateProduct(db: DbClient, input: {
         valid_from_at: price.valid_from_at, valid_until_at: price.valid_until_at, source: price.source,
       })),
     })),
-    metafields: input.patch.metafields ?? current.metafields,
+    metafields: patch.metafields ?? current.metafields,
   }
-  const planned = await planProduct(db, input.organizationId, merged, { siteId: input.siteId, existingId: input.productId })
-  planned.slug = input.patch.name === undefined ? current.slug : planned.slug
+  const planned = await planProduct(db, organizationId, merged, {
+    siteId: input.siteId, existingId: productId, defaultCurrency: input.defaultCurrency,
+    takenSlugs: input.takenSlugs, idOwners: input.idOwners, knownSlugs: input.knownSlugs,
+  })
+  // A patch that does not rename keeps the slug it has: a public path is not
+  // re-derived because something else about the product changed.
+  planned.slug = patch.name === undefined ? current.slug : planned.slug
   planned.source = current.source
   assertVariantPricesConsistent(planned)
 
-  const now = new Date().toISOString()
   const keptOptions = d1JsonArray(planned.options.map(option => option.id))
   const keptValues = d1JsonArray(planned.options.flatMap(option => option.values.map(value => value.id)))
   const keptVariants = d1JsonArray(planned.variants.map(variant => variant.id))
 
-  // A variant a booking points at cannot be removed by an edit. Deleting it
-  // would cascade the booking away, which is how an editor tidying a product
-  // would silently destroy a guest's seat.
-  const orphaned = await queryAll<{ id: string; name: string }>(db, `
-    SELECT v.id, v.name FROM product_variants v
-    WHERE v.organization_id = ? AND v.product_id = ? AND v.id NOT IN (SELECT value FROM json_each(?))
-      AND EXISTS (SELECT 1 FROM bookings b WHERE b.product_variant_id = v.id AND b.status <> 'cancelled')
-  `, [input.organizationId, input.productId, keptVariants])
-  if (orphaned.length > 0) {
-    conflict(`Cancel the bookings on ${orphaned.map(variant => variant.name).join(', ')} before removing ${orphaned.length > 1 ? 'those variants' : 'that variant'}`)
-  }
-
   // A patch that says nothing about variants says nothing about money. Its
   // prices keep their rows, their identity and their scopes; only a caller
   // that restated the variants is describing the offers.
-  const writesPrices = input.patch.variants !== undefined
+  const writesPrices = patch.variants !== undefined
   const writes: BatchQuery[] = [
     // Selections and metafield values are rebuilt wholesale: nothing
     // references them, so replacing them is simpler and cannot drift.
-    { query: 'DELETE FROM product_metafields WHERE organization_id = ? AND product_id = ?', params: [input.organizationId, input.productId] },
-    { query: 'DELETE FROM product_variant_option_values WHERE organization_id = ? AND product_id = ?', params: [input.organizationId, input.productId] },
+    { query: 'DELETE FROM product_metafields WHERE organization_id = ? AND product_id = ?', params: [organizationId, productId] },
+    { query: 'DELETE FROM product_variant_option_values WHERE organization_id = ? AND product_id = ?', params: [organizationId, productId] },
     ...(writesPrices
-      ? [{ query: 'DELETE FROM prices WHERE organization_id = ? AND product_variant_id IN (SELECT id FROM product_variants WHERE organization_id = ? AND product_id = ?)', params: [input.organizationId, input.organizationId, input.productId] }]
+      ? [{ query: 'DELETE FROM prices WHERE organization_id = ? AND product_variant_id IN (SELECT id FROM product_variants WHERE organization_id = ? AND product_id = ?)', params: [organizationId, organizationId, productId] }]
       : []),
     // Options, values and variants are UPSERTED, never dropped and recreated:
     // bookings reference variant identity, and recreating a variant under a
     // fresh id is the same as deleting it as far as they are concerned. Only
-    // rows the caller actually removed are deleted.
-    { query: 'DELETE FROM product_variants WHERE organization_id = ? AND product_id = ? AND id NOT IN (SELECT value FROM json_each(?))', params: [input.organizationId, input.productId, keptVariants] },
-    { query: 'DELETE FROM product_option_values WHERE organization_id = ? AND product_id = ? AND id NOT IN (SELECT value FROM json_each(?))', params: [input.organizationId, input.productId, keptValues] },
-    { query: 'DELETE FROM product_options WHERE organization_id = ? AND product_id = ? AND id NOT IN (SELECT value FROM json_each(?))', params: [input.organizationId, input.productId, keptOptions] },
-    ...productWrites(input.organizationId, planned, definitions, input.actor, now, 'upsert', { writePrices: writesPrices }),
-    ...(await productCacheInvalidations(db, input.organizationId, input.productId, 'product_updated')),
+    // rows the caller actually removed are deleted, and never one a booking
+    // points at — the foreign key would cascade the seat allocation away.
+    {
+      query: `DELETE FROM product_variants WHERE organization_id = ? AND product_id = ? AND id NOT IN (SELECT value FROM json_each(?))
+                AND NOT EXISTS (SELECT 1 FROM bookings b WHERE b.product_variant_id = product_variants.id)`,
+      params: [organizationId, productId, keptVariants],
+    },
+    { query: 'DELETE FROM product_option_values WHERE organization_id = ? AND product_id = ? AND id NOT IN (SELECT value FROM json_each(?))', params: [organizationId, productId, keptValues] },
+    { query: 'DELETE FROM product_options WHERE organization_id = ? AND product_id = ? AND id NOT IN (SELECT value FROM json_each(?))', params: [organizationId, productId, keptOptions] },
+    ...productWrites(organizationId, planned, input.definitions, input.actor, input.now, 'upsert', { writePrices: writesPrices }),
+    ...input.cacheInvalidations,
   ]
+  return { writes, keptVariants }
+}
+
+/**
+ * The variants a patch would remove that anything has ever been booked on.
+ *
+ * One question for however many products are being edited: the message the
+ * merchant reads. The delete statements carry the same rule themselves, so a
+ * booking taken between this read and the write is kept either way.
+ */
+async function bookedRemovals(db: DbClient, organizationId: string, products: Array<{ productId: string; keptVariants: string }>): Promise<string[]> {
+  if (products.length === 0) return []
+  // One statement for however many products: each entry carries its own kept
+  // list, so a hundred-product reconcile asks once rather than a hundred times.
+  const payload = JSON.stringify(products.map(entry => ({ product_id: entry.productId, kept: entry.keptVariants })))
+  const booked = await queryAll<{ name: string }>(db, `
+    SELECT v.name FROM json_each(?) entry
+    JOIN product_variants v ON v.product_id = entry.value ->> '$.product_id' AND v.organization_id = ?
+    WHERE v.id NOT IN (SELECT value FROM json_each(entry.value ->> '$.kept'))
+      AND EXISTS (SELECT 1 FROM bookings b WHERE b.product_variant_id = v.id)
+  `, [payload, organizationId])
+  return booked.map(row => row.name)
+}
+
+export async function updateProduct(db: DbClient, input: {
+  organizationId: string
+  siteId?: string
+  productId: string
+  patch: UpdateProductInput
+  actor: Actor
+}): Promise<Product> {
+  const current = await getProduct(db, input.organizationId, input.productId)
+  const definitions = await loadMetafieldDefinitions(db, input.organizationId)
+  const now = new Date().toISOString()
+  const { writes, keptVariants } = await planProductUpdate(db, {
+    organizationId: input.organizationId, siteId: input.siteId, current, patch: input.patch, actor: input.actor, now, definitions,
+    cacheInvalidations: await productCacheInvalidations(db, input.organizationId, input.productId, 'product_updated'),
+  })
+
+  // A variant anything was ever booked on is not removed by an edit. Stopping
+  // the sale of an option is `active`, not deletion.
+  const booked = await bookedRemovals(db, input.organizationId, [{ productId: input.productId, keptVariants }])
+  if (booked.length > 0) {
+    conflict(`${booked.join(', ')} ${booked.length > 1 ? 'have' : 'has'} bookings, so ${booked.length > 1 ? 'they cannot be removed' : 'it cannot be removed'}. Turn ${booked.length > 1 ? 'them' : 'it'} off instead.`)
+  }
+
   await executeBatch(db, writes, { operation: 'Update product' })
+
+  // Someone booked one of the removed options while this edit was in flight.
+  // The predicate above kept both the variant and the booking; the edit itself
+  // stands, and the merchant is told which option is still there and why.
+  const kept = await queryAll<{ name: string }>(db, `
+    SELECT v.name FROM product_variants v
+    WHERE v.organization_id = ? AND v.product_id = ? AND v.id NOT IN (SELECT value FROM json_each(?))
+  `, [input.organizationId, input.productId, keptVariants])
+  if (kept.length > 0) {
+    conflict(`${kept.map(variant => variant.name).join(', ')} was booked while you were editing, so it was kept. Turn it off instead of removing it.`)
+  }
   return getProduct(db, input.organizationId, input.productId)
 }
 
@@ -1026,6 +1192,16 @@ export async function deleteProduct(db: DbClient, input: {
   // D1 return a constraint error the merchant cannot act on.
   if (bound.length > 0) {
     conflict(`Unbind or delete the product page${bound.length > 1 ? 's' : ''} for this product before deleting it`)
+  }
+  // The same rule an edit follows: a product anything was ever booked on is
+  // not deleted. Its variants and sessions cascade, and the bookings hanging
+  // off both would go with them — silently for a booking with no thread, and
+  // as a raw foreign-key error for one that has a thread holding it.
+  const booked = await queryFirst<{ n: number }>(db, `
+    SELECT count(*) AS n FROM bookings WHERE organization_id = ? AND product_id = ?
+  `, [input.organizationId, input.productId])
+  if ((booked?.n ?? 0) > 0) {
+    conflict('This product has bookings. Cancel them, or turn the product off instead of deleting it.')
   }
   const invalidations = await productCacheInvalidations(db, input.organizationId, input.productId, 'product_deleted')
   await executeBatch(db, [
@@ -1296,6 +1472,38 @@ export async function deleteMetafieldDefinition(db: DbClient, input: { organizat
  * deleted, and never marked sold out, which is a stock statement this
  * operation has no basis to make.
  */
+/** The products a reconcile names, loaded and hydrated in one pass. */
+async function listProductsByIds(db: DbClient, organizationId: string, ids: string[]): Promise<Product[]> {
+  if (ids.length === 0) return []
+  const rows = await queryAll<Row>(db, `
+    SELECT ${PRODUCT_COLUMNS} FROM products p
+     WHERE p.organization_id = ? AND p.id IN (SELECT value FROM json_each(?))
+  `, [organizationId, d1JsonArray(ids)])
+  return hydrate(db, organizationId, rows.map(mapProductRow))
+}
+
+/**
+ * The sites whose public projection this reconcile changes.
+ *
+ * One question for the whole batch: every site already carrying one of the
+ * named products, plus the site the reconcile itself speaks for, which is
+ * where anything it creates lands.
+ */
+async function reconcileCacheSites(db: DbClient, organizationId: string, productIds: string[], siteId?: string): Promise<string[]> {
+  const sites = new Set<string>(siteId ? [siteId] : [])
+  if (productIds.length > 0) {
+    const rows = await queryAll<{ site_id: string }>(db, `
+      SELECT site_id FROM product_publications
+       WHERE organization_id = ? AND product_id IN (SELECT value FROM json_each(?))
+      UNION
+      SELECT site_id FROM content_documents
+       WHERE organization_id = ? AND product_id IN (SELECT value FROM json_each(?))
+    `, [organizationId, d1JsonArray(productIds), organizationId, d1JsonArray(productIds)])
+    for (const row of rows) sites.add(String(row.site_id))
+  }
+  return [...sites]
+}
+
 export async function reconcileProducts(db: DbClient, input: {
   organizationId: string
   siteId?: string
@@ -1311,35 +1519,57 @@ export async function reconcileProducts(db: DbClient, input: {
     }
   })
 
-  // The tenant's attribute vocabulary and the site's currency are the same for
-  // every row in one reconcile: asked once, not once per product.
-  const definitions = await loadMetafieldDefinitions(db, input.organizationId)
+  // What is the same for every row in one reconcile is asked once: the
+  // tenant's attribute vocabulary, the site's currency, the organization's
+  // slugs, who owns every id the request supplied, and the products the
+  // request names. A hundred rows used to mean a hundred of each — the
+  // reconcile spent its time on round trips, not on work.
+  const requestedIds = input.products.map(entry => entry.product_id).filter((id): id is string => Boolean(id))
+  const [definitions, knownSlugs, existingProducts] = await Promise.all([
+    loadMetafieldDefinitions(db, input.organizationId),
+    loadProductSlugs(db, input.organizationId),
+    listProductsByIds(db, input.organizationId, requestedIds),
+  ])
   const defaultCurrency = input.siteId ? await organizationDefaultCurrency(db, input.organizationId, input.siteId) : null
+  const idOwners = await loadSuppliedIdOwners(db, {
+    product_options: input.products.flatMap(entry => (entry.options ?? []).map(option => option.id).filter((id): id is string => Boolean(id))),
+    product_option_values: input.products.flatMap(entry => (entry.options ?? []).flatMap(option => (option.values ?? []).map(value => typeof value === 'string' ? null : value.id)).filter((id): id is string => Boolean(id))),
+    product_variants: input.products.flatMap(entry => (entry.variants ?? []).map(variant => variant.id).filter((id): id is string => Boolean(id))),
+  })
+  const byId = new Map(existingProducts.map(product => [product.id, product]))
+  const cacheSites = await reconcileCacheSites(db, input.organizationId, requestedIds, input.siteId)
+
   const taken = new Set<string>()
   const now = new Date().toISOString()
   const touched: string[] = []
-  const creates: BatchQuery[] = []
+  const writes: BatchQuery[] = []
+  const removals: Array<{ productId: string; keptVariants: string }> = []
 
   for (const entry of input.products) {
     const { product_id: productId, ...rest } = entry
-    const existing = productId
-      ? await queryFirst<{ id: string }>(db, 'SELECT id FROM products WHERE organization_id = ? AND id = ?', [input.organizationId, productId])
-      : null
-    if (existing) {
-      await updateProduct(db, { organizationId: input.organizationId, siteId: input.siteId, productId: existing.id, patch: rest, actor: input.actor })
-      touched.push(existing.id)
+    const current = productId ? byId.get(productId) : undefined
+    if (current) {
+      const planned = await planProductUpdate(db, {
+        organizationId: input.organizationId, siteId: input.siteId, current, patch: rest, actor: input.actor, now,
+        definitions, defaultCurrency, takenSlugs: taken, idOwners, knownSlugs,
+        // One invalidation per site at the end of the batch, not one per product.
+        cacheInvalidations: [],
+      })
+      writes.push(...planned.writes)
+      removals.push({ productId: current.id, keptVariants: planned.keptVariants })
+      touched.push(current.id)
       continue
     }
     const planned = await planProduct(db, input.organizationId, rest, {
-      siteId: input.siteId, existingId: productId, defaultCurrency, takenSlugs: taken,
+      siteId: input.siteId, existingId: productId, defaultCurrency, takenSlugs: taken, idOwners, knownSlugs,
     })
     assertVariantPricesConsistent(planned)
-    creates.push(...productWrites(input.organizationId, planned, definitions, input.actor, now, 'insert'))
+    writes.push(...productWrites(input.organizationId, planned, definitions, input.actor, now, 'insert'))
     // The site that reconciles its catalog carries what the reconcile creates,
     // withheld until someone publishes it — the same rule batch creation
     // follows, and what makes "missing from this site's import" answerable.
     if (input.siteId) {
-      creates.push({
+      writes.push({
         query: `INSERT INTO product_publications (organization_id, product_id, site_id, published, created_at, updated_at, created_by, updated_by)
                 VALUES (?, ?, ?, 0, ?, ?, ?, ?)
                 ON CONFLICT (product_id, site_id) DO NOTHING`,
@@ -1348,9 +1578,18 @@ export async function reconcileProducts(db: DbClient, input: {
     }
     touched.push(planned.id)
   }
-  // Everything new lands together, in batches the size D1 accepts.
-  for (let index = 0; index < creates.length; index += MAX_D1_BATCH_STATEMENTS) {
-    await executeBatch(db, creates.slice(index, index + MAX_D1_BATCH_STATEMENTS), { operation: 'Reconcile products' })
+
+  // Nothing is written while a booking points at a variant the reconcile would
+  // remove: the caller is told, and its whole reconcile is refused.
+  const booked = await bookedRemovals(db, input.organizationId, removals)
+  if (booked.length > 0) {
+    conflict(`${booked.join(', ')} ${booked.length > 1 ? 'have' : 'has'} bookings, so ${booked.length > 1 ? 'they cannot be removed' : 'it cannot be removed'}. Turn ${booked.length > 1 ? 'them' : 'it'} off instead.`)
+  }
+
+  for (const siteId of cacheSites) writes.push(publicResourceCacheInvalidationQuery(siteId, 'products_reconciled'))
+  // Everything lands together, in batches the size D1 accepts.
+  for (let index = 0; index < writes.length; index += MAX_D1_BATCH_STATEMENTS) {
+    await executeBatch(db, writes.slice(index, index + MAX_D1_BATCH_STATEMENTS), { operation: 'Reconcile products' })
   }
 
   // Products the reconcile did not mention. A reconcile for one site speaks

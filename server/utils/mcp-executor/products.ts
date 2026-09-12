@@ -8,6 +8,7 @@ import {
   deleteMetafieldDefinition,
   deleteProduct,
   getProduct,
+  requireSiteProduct,
   listCollectionProducts,
   listCollections,
   listLocationProducts,
@@ -48,19 +49,19 @@ async function authorizeLocation(ctx: McpExecutorContext, locationId: string) {
 }
 
 /**
- * Resolve a product this site actually carries.
+ * The Product this site carries, as an MCP error.
  *
- * The catalog is organization-owned, so a site reaches a product through its
- * publication row. Without one, the product exists but is none of this
- * site's business.
+ * One lookup: `requireSiteProduct` is the rule — the catalog is
+ * organization-owned and a site reaches a product through its publication row
+ * — and this only restates its refusal in the transport's own shape.
  */
 async function resolveCarriedProduct(ctx: McpExecutorContext, productId: string): Promise<Product> {
-  const product = await getProduct(ctx.site.db, ctx.site.organizationId, productId).catch(() => null)
-  if (!product) throw mcpProtocolError(MCP_ERROR.invalidParams, 'Product not found')
-  if (!product.publications.some(entry => entry.site_id === ctx.site.siteId)) {
-    throw mcpProtocolError(MCP_ERROR.invalidParams, 'This site does not carry that product')
-  }
-  return product
+  return await requireSiteProduct(ctx.site.db, {
+    organizationId: ctx.site.organizationId, siteId: ctx.site.siteId, productId,
+  }).catch((error: unknown) => {
+    const message = (error as { statusMessage?: string }).statusMessage
+    throw mcpProtocolError(MCP_ERROR.invalidParams, message && message !== 'Not Found' ? message : 'Product not found')
+  })
 }
 
 /** One page of products, with the extra row the query asked for removed. */
@@ -165,6 +166,10 @@ export async function handleProductsTools(ctx: McpExecutorContext) {
     case 'set_product_location': {
       const productId = requiredString(args, 'product_id')
       const locationId = requiredString(args, 'location_id')
+      // Both halves are checked: the location the caller may reach, and the
+      // product this site actually carries. Authorizing one says nothing
+      // about the other.
+      await resolveCarriedProduct(ctx, productId)
       await authorizeLocation(ctx, locationId)
       await setProductLocation(site.db, {
         organizationId: site.organizationId, productId, locationId,
@@ -177,6 +182,7 @@ export async function handleProductsTools(ctx: McpExecutorContext) {
     case 'remove_product_location': {
       const productId = requiredString(args, 'product_id')
       const locationId = requiredString(args, 'location_id')
+      await resolveCarriedProduct(ctx, productId)
       await authorizeLocation(ctx, locationId)
       await removeProductLocation(site.db, { organizationId: site.organizationId, productId, locationId })
       return { product: await getProduct(site.db, site.organizationId, productId) }

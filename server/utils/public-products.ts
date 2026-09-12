@@ -1,7 +1,7 @@
 import { queryAll, queryFirst, type DbClient } from '~/server/db'
 import { resolveSiteCmsCapabilities } from '~/server/utils/cms-capabilities'
 import { getProductBySlug, hydrateProductMedia, listCollections, listLocationProducts } from '~/server/utils/product-management'
-import type { Collection, Product, ProductPresentation } from '~/server/types/products'
+import type { Collection, Product, ProductBookingConfig, ProductPresentation } from '~/server/types/products'
 import { resolveProductPresentation } from '~/utils/product-presentation'
 import { isCurrencyCode, type CurrencyCode } from '~/shared/currencies'
 import {
@@ -45,10 +45,8 @@ export interface PublicProductCollection {
   collections: Collection[]
 }
 
-export interface PublicProductBooking {
-  duration_minutes: number | null
-  default_capacity: number | null
-}
+/** What the page needs to know about this product's booking capability. */
+export type PublicProductBooking = ProductBookingConfig
 
 export interface PublicProductDetail extends PublicProductCollection {
   location: PublicProductLocation
@@ -63,18 +61,6 @@ export interface PublicProductDetail extends PublicProductCollection {
    */
   booking: PublicProductBooking | null
   localeRepresentations: PublicLocaleRepresentation[]
-}
-
-async function loadProductBooking(db: DbClient, organizationId: string, productId: string): Promise<PublicProductBooking | null> {
-  const row = await queryFirst<{ duration_minutes: number | null; default_capacity: number | null }>(db, `
-    SELECT duration_minutes, default_capacity FROM product_booking_configs
-     WHERE organization_id = ? AND product_id = ? LIMIT 1
-  `, [organizationId, productId])
-  if (!row) return null
-  return {
-    duration_minutes: row.duration_minutes === null ? null : Number(row.duration_minutes),
-    default_capacity: row.default_capacity === null ? null : Number(row.default_capacity),
-  }
 }
 
 export interface PublicProductReview {
@@ -179,7 +165,7 @@ export async function loadPublicProductDetail(
       ...collection,
       location,
       product,
-      booking: await loadProductBooking(db, collection.site.organization_id, product.id),
+      booking: product.booking,
       localeRepresentations,
     }
   }
@@ -233,7 +219,7 @@ export async function loadPublicProductDetail(
     collections: projectExactLocalizedCollection('collection', collection.collections, localizations),
     location: localizedLocation,
     product,
-    booking: await loadProductBooking(db, collection.site.organization_id, sourceProduct.id),
+    booking: sourceProduct.booking,
     localeRepresentations,
   }
 }

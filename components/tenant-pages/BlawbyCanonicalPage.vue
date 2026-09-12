@@ -2,7 +2,8 @@
   <div data-parity-root>
     <template v-if="page.path === '/about'">
       <BlawbyPageHero :title="heroTitle" :description="heroDescription" variant="about" />
-      <BlawbyTeamSection :people="teamPeople" :features="teamFeatures" />
+      <BlawbyFeatureCards :features="pageFeatures" />
+      <BlawbyTeamSection :people="teamPeople" />
       <BlawbyShieldDivider variant="about" />
       <BlawbyImpactSection v-if="impactBlock" v-bind="impactProps" />
       <BlawbyServicesSection v-if="servicesBlock" v-bind="servicesProps" :items="serviceItems" />
@@ -44,12 +45,21 @@
       <BlawbyFaqSection :items="faqs" :decoration-url="faqDecoration" />
     </template>
 
+    <!--
+      Every other page: the legal documents and the practice areas. Each
+      section renders when the page carries that block, so a practice area
+      shows its feature cards and its questions — which went unrendered when
+      the offering detail component was deleted — and a policy page, carrying
+      neither, still shows only its prose.
+    -->
     <template v-else>
-      <BlawbyPageHero :title="heroTitle" :description="heroDescription" :variant="legalVariant" />
-      <BlawbyShieldDivider :variant="legalVariant" />
-      <section v-if="legalBodyBlocks.length" class="blawby-container mx-auto max-w-4xl bg-white py-8 text-gray-900" data-parity-section="legal-body">
-        <TenantPageRichTextBlock v-for="bodyBlock in legalBodyBlocks" :key="bodyBlock.id" :block="bodyBlock" :page-title="page.title" />
+      <BlawbyPageHero :title="heroTitle" :description="heroDescription" :variant="heroVariant" />
+      <BlawbyShieldDivider v-if="dividerVariant" :variant="dividerVariant" />
+      <section v-if="bodyBlocks.length" class="blawby-container mx-auto max-w-4xl bg-white py-8 text-gray-900" data-parity-section="legal-body">
+        <TenantPageRichTextBlock v-for="bodyBlock in bodyBlocks" :key="bodyBlock.id" :block="bodyBlock" :page-title="page.title" />
       </section>
+      <BlawbyFeatureCards :features="pageFeatures" />
+      <BlawbyFaqSection v-if="faqs.length" :items="faqs" :decoration-url="faqDecoration" />
       <BlawbyConsultationCta v-if="ctaBlock && ctaProps.title && ctaProps.label && ctaProps.destination" v-bind="ctaProps" />
     </template>
   </div>
@@ -96,24 +106,44 @@ function mediaUrl(block: PublicTenantPage['blocks'][number] | null | undefined, 
   return (item.kind === 'video' ? item.thumbnail_url : item.public_url) || null
 }
 
+/**
+ * A block's items with the media each one carries.
+ *
+ * One slot spelling for every grid: `items.<index>.image`. Position in the
+ * array is the item's identity, so the slot names the index rather than any
+ * value inside the item.
+ */
+function itemsWithMedia(source: PublicTenantPage['blocks'][number] | null | undefined) {
+  return arrayRecords(source?.data.items).map((item, index) => ({
+    item,
+    media: source?.media.filter(asset => asset.slot === `items.${index}.image`) ?? [],
+  }))
+}
+
 const heroBlock = computed(() => block('hero'))
-const legalBodyBlocks = computed(() => props.page.blocks.filter(candidate => candidate.type === 'heading' || candidate.type === 'markdown'))
+const bodyBlocks = computed(() => props.page.blocks.filter(candidate => candidate.type === 'heading' || candidate.type === 'markdown'))
 const heroTitle = computed(() => stringValue(heroBlock.value?.data.title) ?? '')
 const heroDescription = computed(() => stringValue(heroBlock.value?.data.subtitle))
 
-const teamBlock = computed(() => block('feature_grid', data => data.type === 'team' || Array.isArray(data.people)))
-const teamFeatures = computed(() => arrayRecords(teamBlock.value?.data.features).map((feature, index) => ({
-  title: stringValue(feature.title),
-  description: stringValue(feature.description),
-  media: teamBlock.value?.media.filter(item => item.slot === `features.${index}.icon`) ?? [],
+// Two blocks, because they are two things: what the firm does, and who does
+// it. They used to be one feature_grid holding `features` beside `people` —
+// keys no writer declares, so neither could be edited and every reader had to
+// know the private spelling.
+const featuresBlock = computed(() => block('feature_grid', data => data.section === 'features'))
+const pageFeatures = computed(() => itemsWithMedia(featuresBlock.value).map(({ item, media }) => ({
+  title: stringValue(item.title),
+  description: stringValue(item.description),
+  media,
 })).filter(feature => feature.title))
-const teamPeople = computed(() => arrayRecords(teamBlock.value?.data.people).map((person, index) => ({
-  first_name: stringValue(person.first_name),
-  last_name: stringValue(person.last_name),
-  title: stringValue(person.title) || null,
-  bio: stringValue(person.bio) || null,
-  url: stringValue(person.url) || null,
-  media: teamBlock.value?.media.filter(item => item.slot === `people.${index}.image`) ?? [],
+
+const teamBlock = computed(() => block('team_grid'))
+const teamPeople = computed(() => itemsWithMedia(teamBlock.value).map(({ item, media }) => ({
+  first_name: stringValue(item.first_name),
+  last_name: stringValue(item.last_name),
+  title: stringValue(item.title) || null,
+  bio: stringValue(item.bio) || null,
+  url: stringValue(item.url) || null,
+  media,
 })).filter(person => person.first_name || person.last_name))
 
 const impactBlock = computed(() => block('feature_grid', data => data.section === 'donation' && Array.isArray(data.items)))
@@ -219,9 +249,17 @@ const ctaProps = computed(() => {
   }
 })
 
-const legalVariant = computed<BlawbyShieldVariant>(() => {
-  if (props.page.path === '/policies/privacy') return 'privacy'
-  if (props.page.path === '/policies/terms') return 'terms'
-  return 'third-party-notices'
-})
+// A divider belongs to a page that has one. The legal documents each have
+// their own; a practice area has none, and returning the third-party-notices
+// shield for "anything else" was a default standing in for an answer.
+const LEGAL_VARIANTS: Readonly<Record<string, BlawbyShieldVariant>> = {
+  '/policies/privacy': 'privacy',
+  '/policies/terms': 'terms',
+  '/third-party-notices': 'third-party-notices',
+}
+const dividerVariant = computed<BlawbyShieldVariant | null>(() => LEGAL_VARIANTS[props.page.path] ?? null)
+// The hero's variant is a background tint, and every page in this branch has
+// to pick one. A practice area reads as part of the firm's own story, so it
+// takes the same tint the About page does.
+const heroVariant = computed<BlawbyShieldVariant>(() => LEGAL_VARIANTS[props.page.path] ?? 'about')
 </script>

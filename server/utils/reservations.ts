@@ -391,10 +391,10 @@ export async function claimReservation(db: DbClient, input: {
   /**
    * The guest thread this reservation answers, written in the same batch.
    *
-   * It leads: the reservation's scope key points at the request row, so the
-   * request has to exist before the seat is taken. The claim's own capacity
-   * predicate still decides whether the table is there, and a batch that
-   * cannot take it writes neither.
+   * It FOLLOWS the claim, and each of its statements carries the claim's
+   * existence in its own predicate. A claim that finds the slot full inserts
+   * zero rows and raises nothing, so a thread written ahead of it committed on
+   * its own and left a conversation about a table nobody holds.
    */
   thread?: BatchQuery[]
 }): Promise<void> {
@@ -420,12 +420,19 @@ export async function claimReservation(db: DbClient, input: {
       ON CONFLICT (id) DO NOTHING
     `,
     params: [
-      input.reservationId, input.organizationId, input.siteId, input.locationId, input.customerId, input.requestId,
+      input.reservationId, input.organizationId, input.siteId, input.locationId, input.customerId, null,
       input.timezone, input.startsAt, input.endsAt, input.partySize, input.status ?? 'confirmed', now, now,
       input.locationId, input.organizationId, input.partySize, input.startsAt,
     ],
   }
-  const thread = input.thread ?? []
-  const results = await executeBatch(db, [...thread, claim], { operation: 'Claim reservation' })
-  if ((results[thread.length]?.meta?.changes ?? 0) === 0) throw new ReservationUnavailableError()
+  // The reservation takes its request id once the thread it answers exists.
+  const attach: BatchQuery[] = input.requestId
+    ? [{
+        query: `UPDATE reservations SET request_id = ?, updated_at = ?
+                 WHERE id = ? AND EXISTS (SELECT 1 FROM requests WHERE id = ?)`,
+        params: [input.requestId, now, input.reservationId, input.requestId],
+      }]
+    : []
+  const results = await executeBatch(db, [claim, ...(input.thread ?? []), ...attach], { operation: 'Claim reservation' })
+  if ((results[0]?.meta?.changes ?? 0) === 0) throw new ReservationUnavailableError()
 }

@@ -39,6 +39,8 @@ export function createTenantPageEditorData(type: TenantPageBlockType): EditorDat
     case 'feature_grid':
     case 'testimonial_grid':
       return { title: '', source: 'manual', items: [] }
+    case 'team_grid':
+      return { title: '', description: '', items: [{ first_name: '', last_name: '', title: '', bio: '' }] }
     case 'page_grid':
       return { title: '', page_ids: [] }
     case 'product_grid':
@@ -165,6 +167,13 @@ export function validateTenantPageBlock(block: TenantPageBlock): string[] {
         break
       }
       if (block.type === 'location_grid' && !stringArray(data, 'location_ids').length && !objectArray(data, 'items').length) addError(errors, 'Add at least one location reference or manual item.')
+      break
+    case 'team_grid':
+      objectArray(data, 'items').forEach((item, index) => {
+        if (!itemText(item, 'first_name') && !itemText(item, 'last_name')) {
+          addError(errors, `Team member ${index + 1} needs a name.`)
+        }
+      })
       break
     case 'donation_choices':
       if (!text(data.destination)) addError(errors, 'Donation destination is required.')
