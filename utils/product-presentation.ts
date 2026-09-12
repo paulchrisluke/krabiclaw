@@ -50,6 +50,8 @@ export interface ProductCollectionGroup {
   id: string
   name: string
   sort_order: number
+  /** The location whose collection this is, or null for a site-wide one. */
+  location_id: string | null
   products: Product[]
 }
 
@@ -84,6 +86,7 @@ export function groupProductsByCollection(
         id: collection.id,
         name: collection.name,
         sort_order: collection.sort_order,
+        location_id: collection.location_id,
         products: positions
           ? products
               .filter(product => positions.has(product.id))

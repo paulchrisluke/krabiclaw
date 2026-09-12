@@ -4,7 +4,7 @@
   "app_info": {
     "display_name": "KrabiClaw",
     "subtitle": "Manage your business website",
-    "description": "Manage your KrabiClaw business website from ChatGPT. Choose a site and location, edit products and experiences, publish announcements and blog articles, update page content and translations, and upload or assign media. Review customer inquiries and experience bookings from your connected workspace. Publishing and content changes can appear on your public website. A KrabiClaw account with access to the selected business is required. Site and location setup and deletion are managed in the KrabiClaw CMS.",
+    "description": "Manage your KrabiClaw business website from ChatGPT. Choose a site and location, edit products, variants and prices, publish announcements and blog articles, update page content and translations, and upload or assign media. Review contact and reservation inquiries from your connected workspace. Publishing and content changes can appear on your public website. A KrabiClaw account with access to the selected business is required. Site and location setup and deletion are managed in the KrabiClaw CMS.",
     "category": "BUSINESS"
   },
   "tools": {
@@ -1118,7 +1118,7 @@
     },
     {
       "description": "Location creation and copying belong in the CMS.",
-      "user_prompt": "Duplicate my location into a new branch, including all its products and experiences.",
+      "user_prompt": "Duplicate my location into a new branch, including all its products.",
       "file_attachment_urls": null,
       "tools_triggered": null,
       "expected_output": "Direct the user to location setup in the CMS; do not invoke a content tool to create or duplicate a location.",

@@ -125,6 +125,15 @@ test.describe('stateless MCP server', () => {
     })
     expect(mcpData<{ ok: boolean }>(await locationSetup.json()).ok).toBe(true)
 
+    // Creating the policy is what lets a location take reservations: there is
+    // no site-level default underneath it, so a guest cannot book until the
+    // owner has said the branch takes tables.
+    const policySetup = await mcpRequest(request, baseURL!, {
+      method: 'tools/call', toolName: 'update_reservation_policy',
+      args: { site_id: siteId, location_id: locationId, slot_capacity: 20 },
+    })
+    expect(policySetup.status(), await policySetup.text()).toBe(200)
+
     const publicContact = await request.post(`${baseURL}/api/public/sites/${siteId}/contact`, {
       data: { name: 'MCP Contact', email: `mcp-contact-${Date.now()}@example.test`, message: 'hello from MCP e2e' },
     })

@@ -1,6 +1,6 @@
 import { jsonResponse, rethrowHttpError } from '~/server/utils/api-response'
 import { requireLocationAccess } from '~/server/utils/location-access'
-import { getProduct, removeProductLocation } from '~/server/utils/product-management'
+import { getProduct, removeProductLocation, requireSiteProduct } from '~/server/utils/product-management'
 import { defineHandler } from 'nitro'
 import { getRouterParam } from 'nitro/h3'
 
@@ -11,6 +11,8 @@ export default defineHandler(async (event) => {
   if (!siteId || !productId || !locationId) return jsonResponse({ error: 'Site, product and location IDs are required' }, { status: 400 })
   try {
     const { db, site } = await requireLocationAccess(event, siteId, locationId)
+    // A product id in the path is not authorized by the site in the path.
+    await requireSiteProduct(db, { organizationId: site.organization_id, siteId, productId })
     await removeProductLocation(db, { organizationId: site.organization_id, productId, locationId })
     return jsonResponse({ success: true, product: await getProduct(db, site.organization_id, productId) })
   } catch (error) {

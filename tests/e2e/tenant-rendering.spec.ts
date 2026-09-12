@@ -22,7 +22,7 @@ const tenants: Tenant[] = [
   {
     name: 'Pottery House', baseURL: potteryHouseBaseURL, headers: potteryHouseExtraHeaders,
     shell: '.tenant-layout', identity: /Pottery House/i, definingContent: /pottery|wheel|clay/i,
-    primaryLabel: /product|class|book/i, detailPath: '/locations/pottery-house-krabi/products/pottery-wheel-class',
+    primaryLabel: /product|class|book/i, detailPath: '/locations/krabi/products/pottery-wheel-class',
     detailContent: /Pottery Wheel Class/i,
     forbidden: [/Come dine with us/i, /Reserve a table/i, /From the kitchen/i, /Also part of Saya/i],
   },
@@ -150,7 +150,7 @@ test('Kikuzuki menu retains its authored Tuna Sushi media', async ({ page }) => 
 })
 
 test('Pottery House preserves dark-theme hydration and booking context', async ({ page }) => {
-  await openTenantPage(page, `${potteryHouseBaseURL}/locations/pottery-house-krabi/products/pottery-wheel-class`, potteryHouseExtraHeaders)
+  await openTenantPage(page, `${potteryHouseBaseURL}/locations/krabi/products/pottery-wheel-class`, potteryHouseExtraHeaders)
   await expect(page.locator('.tenant-layout')).not.toHaveCSS('--saya-bg', '')
   await expect(page.locator('main')).toContainText(/Pottery Wheel Class/i)
   await expect(page.locator('#product-booking-toggle').first()).toBeVisible()

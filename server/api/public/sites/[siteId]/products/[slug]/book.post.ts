@@ -79,7 +79,15 @@ export default defineHandler(async (event) => {
     SELECT s.id, s.location_id, s.starts_at, s.timezone
       FROM product_sessions s
      WHERE s.id = ? AND s.product_id = ? AND s.organization_id = ? AND s.status = 'scheduled'
-  `, [sessionId, product.id, site.organization_id])
+       -- A branch that has stopped selling this product does not take seats
+       -- for it, whatever the site and the product itself still say.
+       AND (s.location_id IS NULL OR EXISTS (
+         SELECT 1 FROM product_locations pl
+           JOIN business_locations l ON l.id = pl.location_id AND l.site_id = ? AND l.status = 'active'
+          WHERE pl.product_id = s.product_id AND pl.location_id = s.location_id
+            AND pl.active = 1 AND pl.published = 1
+       ))
+  `, [sessionId, product.id, site.organization_id, siteId])
   if (!session) return jsonResponse({ error: 'That session is not open for booking' }, { status: 404 })
 
   // What is being bought is a variant. Adult and child seats, or a class and

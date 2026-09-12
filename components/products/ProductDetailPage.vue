@@ -172,7 +172,7 @@ import { formatProductMoney } from '~/utils/product-money'
 import { productLocationCollectionPath } from '~/utils/product-presentation'
 import type { ProductCollectionSibling } from '~/utils/product-seo'
 import type { MetafieldDefinition } from '~/shared/metafields'
-import { metafieldHandle } from '~/shared/metafields'
+import { metafieldHandle, PRICING_NOTE_HANDLE } from '~/shared/metafields'
 import type { PublicProductBooking } from '~/server/utils/public-products'
 import BookingModal from '~/components/booking/BookingModal.vue'
 import BookingRecap from '~/components/booking/BookingRecap.vue'
@@ -224,7 +224,17 @@ const offer = computed<Price | null>(() => {
   const offers = props.product.variants.flatMap(variant => selectPrice(variant.prices, selection) ?? [])
   return offers.reduce<Price | null>((lowest, candidate) => (!lowest || candidate.unit_amount < lowest.unit_amount ? candidate : lowest), null)
 })
-const priceLabel = computed(() => formatProductMoney(offer.value))
+/**
+ * The amount, or the merchant's own words when the product is priced in words
+ * instead. Neither one means this page shows no price — never a zero, a
+ * "Free", or a "Market price" nobody wrote.
+ */
+const priceLabel = computed(() => {
+  const amount = formatProductMoney(offer.value)
+  if (amount) return amount
+  const note = props.product.metafields[PRICING_NOTE_HANDLE]
+  return typeof note === 'string' && note.trim() ? note : null
+})
 const compareAtLabel = computed(() => {
   const price = offer.value
   if (!price || price.compare_at_unit_amount === null) return null
@@ -246,7 +256,11 @@ const isAvailable = computed(() =>
  * An attribute with no definition is not rendered under a raw key.
  */
 const visibleDetails = computed(() => props.metafieldDefinitions.flatMap((definition) => {
-  const value = props.product.metafields[metafieldHandle(definition)]
+  const handle = metafieldHandle(definition)
+  // The pricing note is shown where the price goes, so it is not repeated in
+  // the attribute list underneath it.
+  if (handle === PRICING_NOTE_HANDLE) return []
+  const value = props.product.metafields[handle]
   if (value === undefined || value === null) return []
   const values = Array.isArray(value) ? value : [String(value)]
   return values.length ? [{ key: definition.id, label: definition.name, values }] : []

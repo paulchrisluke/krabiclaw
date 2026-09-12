@@ -198,9 +198,15 @@ export function validateProductVariants(
       if (!allowed.has(selections[key]!)) invalid(`variants[${index}] selects a value that does not belong to option ${key}`)
     }
 
-    const combination = optionKeys.map(key => `${key}=${selections[key]}`).join('|')
-    if (combinations.has(combination)) invalid('two variants cannot select the same combination of option values')
-    combinations.add(combination)
+    // Two variants may not select the same combination — of options the
+    // product actually declares. A product with no options has no combination
+    // to collide on: "Six pieces" and "Twelve pieces" are two things to buy,
+    // told apart by their own names and prices.
+    if (optionKeys.length > 0) {
+      const combination = optionKeys.map(key => `${key}=${selections[key]}`).join('|')
+      if (combinations.has(combination)) invalid('two variants cannot select the same combination of option values')
+      combinations.add(combination)
+    }
 
     return {
       id: variant.id,

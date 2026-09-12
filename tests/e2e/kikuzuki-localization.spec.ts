@@ -74,12 +74,18 @@ test.beforeAll(async ({ playwright }, testInfo) => {
         short_description: 'โรบาตายากิและซูชิในอ่าวนาง',
       },
     })
-    // Menu sections are collections now; their names localize on the collection.
-    await putLocalization(owner, 'collection', 'collection-kikuzuki-sushi', {
+    // Menu sections are collections now; their names localize on the
+    // collection. The id is read from the site rather than written here — a
+    // tenant's own ids are its business, not a constant in a test.
+    const collectionsResponse = await owner.get(`/api/editor/sites/${siteId}/collections?location_id=loc-kikuzuki`)
+    await expectStatus(collectionsResponse, 200)
+    const { collections } = await collectionsResponse.json() as { collections: Array<{ id: string; slug: string }> }
+    const sushi = collections.find(collection => collection.slug === 'sushi')
+    expect(sushi, 'Kikuzuki has a sushi collection to translate').toBeTruthy()
+    await putLocalization(owner, 'collection', sushi!.id, {
       values: { name: 'ซูชิ' },
     })
     await putLocalization(owner, 'product', 'item-kiku-tuna-sushi', {
-      route_path: '/th/locations/kikuzuki-japanese-robatayaki-izakaya/menu/tuna-sushi',
       values: {
         name: 'ซูชิทูน่า',
         description: 'ทูน่า',

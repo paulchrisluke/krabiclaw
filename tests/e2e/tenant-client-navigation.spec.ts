@@ -28,7 +28,7 @@ async function clientJourney(page: Page, options: {
 test('Pottery home → products → product detail', async ({ page }) => {
   await clientJourney(page, {
     baseURL: potteryHouseBaseURL, headers: potteryHouseExtraHeaders,
-    listPath: '/products', detailPath: '/locations/pottery-house-krabi/products/pottery-wheel-class', detailText: /Pottery Wheel Class/i,
+    listPath: '/products', detailPath: '/locations/krabi/products/pottery-wheel-class', detailText: /Pottery Wheel Class/i,
   })
 })
 

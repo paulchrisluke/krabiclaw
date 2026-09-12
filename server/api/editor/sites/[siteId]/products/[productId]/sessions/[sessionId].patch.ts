@@ -1,5 +1,6 @@
 import { jsonResponse, readStrictBody, rethrowHttpError } from '~/server/utils/api-response'
 import { requireSiteAccess } from '~/server/utils/location-access'
+import { requireSiteProduct } from '~/server/utils/product-management'
 import { updateSession } from '~/server/utils/availability'
 import { PRODUCT_SESSION_STATUSES, type ProductSessionStatus } from '~/shared/bookings'
 import { defineHandler } from 'nitro'
@@ -14,10 +15,13 @@ import { getRouterParam } from 'nitro/h3'
  */
 export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
+  const productId = getRouterParam(event, 'productId')
   const sessionId = getRouterParam(event, 'sessionId')
-  if (!siteId || !sessionId) return jsonResponse({ error: 'Site ID and session ID are required' }, { status: 400 })
+  if (!siteId || !productId || !sessionId) return jsonResponse({ error: 'Site, product and session IDs are required' }, { status: 400 })
   try {
     const { db, session: auth, site } = await requireSiteAccess(event, siteId)
+    // A product id in the path is not authorized by the site in the path.
+    await requireSiteProduct(db, { organizationId: site.organization_id, siteId, productId })
     const body = await readStrictBody<{ starts_at?: unknown; ends_at?: unknown; capacity?: unknown; status?: unknown }>(event, {
       starts_at: 'unknown', ends_at: 'unknown', capacity: 'unknown', status: 'unknown',
     })

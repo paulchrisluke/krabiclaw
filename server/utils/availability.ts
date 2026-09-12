@@ -353,6 +353,13 @@ export function sessionClaimQuery(input: {
    * that is full without them still is.
    */
   replacingBookingId?: string | null
+  /**
+   * The request this claim is part of answering, and the version it was read
+   * at. The claim lands only if that request is still exactly what the caller
+   * saw — otherwise a decision that is about to be refused would still have
+   * taken a seat.
+   */
+  requireRequestVersion?: { requestId: string; siteId: string; updatedAt: string } | null
   now: string
 }): BatchQuery {
   return {
@@ -362,10 +369,17 @@ export function sessionClaimQuery(input: {
         customer_id, request_id, party_size, status, hold_expires_at, created_at, updated_at
       )
       SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?
-      WHERE EXISTS (
+      WHERE ${input.requireRequestVersion ? 'EXISTS (SELECT 1 FROM requests WHERE id = ? AND site_id = ? AND updated_at = ?) AND ' : ''}EXISTS (
         SELECT 1 FROM product_sessions s
         WHERE s.id = ? AND s.organization_id = ? AND s.product_id = ?
           AND s.status = 'scheduled'
+          -- The location's own sale switch is part of being bookable: a branch
+          -- that has stopped selling this does not take seats for it.
+          AND (s.location_id IS NULL OR EXISTS (
+            SELECT 1 FROM product_locations pl
+             WHERE pl.product_id = s.product_id AND pl.location_id = s.location_id
+               AND pl.active = 1 AND pl.published = 1
+          ))
           AND s.starts_at > ?
           AND (s.capacity IS NULL OR s.capacity >= ? + COALESCE((
             SELECT SUM(b.party_size) FROM bookings b
@@ -377,6 +391,9 @@ export function sessionClaimQuery(input: {
     params: [
       input.bookingId, input.organizationId, input.siteId, input.productId, input.sessionId, input.productVariantId,
       input.customerId ?? null, input.requestId ?? null, input.partySize, input.holdExpiresAt ?? null, input.now, input.now,
+      ...(input.requireRequestVersion
+        ? [input.requireRequestVersion.requestId, input.requireRequestVersion.siteId, input.requireRequestVersion.updatedAt]
+        : []),
       input.sessionId, input.organizationId, input.productId, input.now, input.partySize, input.replacingBookingId ?? null, input.now,
     ],
   }
@@ -524,19 +541,32 @@ export async function updateSession(db: DbClient, input: {
   }
 
   const now = new Date().toISOString()
-  await executeBatch(db, [{
+  // The read above is a courtesy: it gives the merchant a message naming the
+  // seats in the way. The write carries the same predicate, so a booking that
+  // lands between the two cannot leave the session oversold.
+  const capacity = input.capacity === undefined ? session.capacity : input.capacity
+  const guard = capacity === null
+    ? ''
+    : `AND ? >= COALESCE((SELECT SUM(b.party_size) FROM bookings b WHERE b.product_session_id = product_sessions.id AND ${CAPACITY_CONSUMING_SQL}), 0)`
+  const written = await executeBatch(db, [{
     query: `
       UPDATE product_sessions
       SET starts_at = ?, ends_at = ?, capacity = ?, status = ?, updated_at = ?, updated_by = ?
-      WHERE organization_id = ? AND id = ?
+      WHERE organization_id = ? AND id = ? ${guard}
     `,
     params: [
-      startsAt, endsAt,
-      input.capacity === undefined ? session.capacity : input.capacity,
+      startsAt, endsAt, capacity,
       input.status ?? session.status, now, input.actorId,
       input.organizationId, input.sessionId,
+      ...(capacity === null ? [] : [capacity, now]),
     ],
   }], { operation: 'Update product session' })
+  if (capacity !== null && written[0]?.meta?.changes === 0) {
+    throw new HTTPError({
+      statusCode: 409,
+      statusMessage: `This session took more seats while you were editing it; cancel bookings before reducing capacity to ${capacity}`,
+    })
+  }
 }
 
 /** The local calendar date a session falls on, for grouping in a UI. */

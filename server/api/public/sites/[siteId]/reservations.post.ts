@@ -143,7 +143,7 @@ export default defineHandler(async (event) => {
       timezone: availability.timezone, startsAt: slot.starts_at,
       endsAt: new Date(Date.parse(slot.starts_at) + durationMinutes * 60_000).toISOString(),
       partySize, status: 'confirmed',
-      following: requestInsertQueries({
+      thread: requestInsertQueries({
         id, kind: 'reservation', organization_id: site.organization_id, site_id: siteId,
         location_id: resolvedLocationId, customer_id: customer.id, review_id: null,
         conversation_state: 'needs_attention', resolved_at: null, payload, created_at: now, updated_at: now,

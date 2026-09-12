@@ -151,8 +151,15 @@ test.describe.serial('published Thai content saves through the CMS and renders w
     })
 
     await expectStatus(await owner.get(`/api/editor/sites/${siteId}/localization/site/${siteId}/${locale}`), 404)
-    // A practice area is a page, so it localizes like every other page.
-    await putLocalization(owner, 'content_document', 'page_ncls_services_family', {
+    // A practice area is a page, so it localizes like every other page. Its id
+    // belongs to the tenant, so it is read from the site rather than written
+    // here as a constant.
+    const pagesResponse = await owner.get(`/api/editor/sites/${siteId}/pages`)
+    await expectStatus(pagesResponse, 200)
+    const { pages } = await pagesResponse.json() as { pages: Array<{ page_id: string; path: string }> }
+    const familyPage = pages.find(page => page.path === '/services/family')
+    expect(familyPage, 'NCLS publishes a family practice area page').toBeTruthy()
+    await putLocalization(owner, 'content_document', familyPage!.page_id, {
       route_path: '/th/services/family-th',
       values: {
         title: 'กฎหมายครอบครัวภาษาไทย',

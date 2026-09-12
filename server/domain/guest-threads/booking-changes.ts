@@ -135,7 +135,8 @@ async function validateDestination(db: DbClient, thread: GuestThreadRow, before:
       claim: (bookingId, now) => sessionClaimQuery({
         bookingId, organizationId: thread.organization_id, siteId: thread.site_id, productId: before.productId!,
         sessionId: target.id, productVariantId: booking.product_variant_id, partySize: after.partySize,
-        customerId: booking.customer_id, requestId: null, replacingBookingId: before.recordId, now,
+        customerId: booking.customer_id, requestId: null, replacingBookingId: before.recordId,
+        requireRequestVersion: { requestId: thread.id, siteId: thread.site_id, updatedAt: before.updatedAt }, now,
       }),
     }
   }

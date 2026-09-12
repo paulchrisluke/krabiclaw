@@ -1,5 +1,6 @@
 import { jsonResponse, rethrowHttpError } from '~/server/utils/api-response'
 import { requireSiteAccess } from '~/server/utils/location-access'
+import { requireSiteProduct } from '~/server/utils/product-management'
 import { listSessions } from '~/server/utils/availability'
 import { PRODUCT_SESSION_STATUSES, type ProductSessionStatus } from '~/shared/bookings'
 import { defineHandler } from 'nitro'
@@ -11,6 +12,8 @@ export default defineHandler(async (event) => {
   if (!siteId || !productId) return jsonResponse({ error: 'Site ID and product ID are required' }, { status: 400 })
   try {
     const { db, site } = await requireSiteAccess(event, siteId)
+    // A product id in the path is not authorized by the site in the path.
+    await requireSiteProduct(db, { organizationId: site.organization_id, siteId, productId })
     const query = getQuery(event)
     const from = typeof query.from === 'string' ? query.from : new Date().toISOString()
     const to = typeof query.to === 'string' ? query.to : new Date(Date.now() + 90 * 86_400_000).toISOString()

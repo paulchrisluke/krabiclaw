@@ -19,6 +19,7 @@ import {
 import {
   assertMetafieldDefinition,
   metafieldHandle,
+  PRICING_NOTE_HANDLE,
   parseMetafieldValue,
   serializeMetafieldValue,
   type MetafieldDefinition,
@@ -319,15 +320,25 @@ export async function listProducts(db: DbClient, organizationId: string): Promis
  * organization catalog when a site has published nothing: an empty site
  * catalog renders an empty state that says so.
  */
+/**
+ * `window` reads one page instead of the whole catalog.
+ *
+ * Hydration loads every relationship of everything it is given, so a request
+ * for fifty products should not carry four hundred through it. One extra row
+ * is asked for, and never returned: its presence is how the caller knows there
+ * is another page.
+ */
 export async function listSiteProducts(db: DbClient, input: {
-  organizationId: string; siteId: string; publishedOnly?: boolean
+  organizationId: string; siteId: string; publishedOnly?: boolean; window?: { limit: number; offset: number }
 }): Promise<Product[]> {
   const rows = await queryAll<Row>(db, `
     SELECT ${PRODUCT_COLUMNS} FROM products p
     JOIN product_publications pub ON pub.product_id = p.id AND pub.organization_id = p.organization_id
     WHERE p.organization_id = ? AND pub.site_id = ? AND (? = 0 OR pub.published = 1)
     ORDER BY p.name, p.id
-  `, [input.organizationId, input.siteId, input.publishedOnly ? 1 : 0])
+    ${input.window ? 'LIMIT ? OFFSET ?' : ''}
+  `, [input.organizationId, input.siteId, input.publishedOnly ? 1 : 0,
+    ...(input.window ? [input.window.limit + 1, input.window.offset] : [])])
   return hydrate(db, input.organizationId, rows.map(mapProductRow))
 }
 
@@ -342,7 +353,7 @@ export async function listSiteProducts(db: DbClient, input: {
  * names the site rather than passing a bare flag that could only check two.
  */
 export async function listLocationProducts(db: DbClient, input: {
-  organizationId: string; locationId: string; publishedOnSiteId?: string
+  organizationId: string; locationId: string; publishedOnSiteId?: string; window?: { limit: number; offset: number }
 }): Promise<Product[]> {
   const published = input.publishedOnSiteId !== undefined
   const rows = await queryAll<Row>(db, `
@@ -352,7 +363,9 @@ export async function listLocationProducts(db: DbClient, input: {
       AND pub.site_id = ? AND pub.published = 1` : ''}
     WHERE p.organization_id = ? AND pl.location_id = ?${published ? ' AND pl.published = 1 AND pl.active = 1' : ''}
     ORDER BY p.name, p.id
-  `, [...(published ? [input.publishedOnSiteId] : []), input.organizationId, input.locationId])
+    ${input.window ? 'LIMIT ? OFFSET ?' : ''}
+  `, [...(published ? [input.publishedOnSiteId] : []), input.organizationId, input.locationId,
+    ...(input.window ? [input.window.limit + 1, input.window.offset] : [])])
   return hydrate(db, input.organizationId, rows.map(mapProductRow))
 }
 
@@ -418,11 +431,22 @@ function slugCandidate(base: string, attempt: number): string {
   return attempt === 0 ? root : `${root}-${attempt + 1}`
 }
 
-export async function createProductSlug(db: DbClient, organizationId: string, base: string, excludeId?: string): Promise<string> {
+/**
+ * A slug no other product in this organization holds.
+ *
+ * `taken` carries the slugs a batch has already claimed but not yet written,
+ * so a hundred products in one request do not all take the same free slug —
+ * and do not each ask the database whether they may.
+ */
+export async function createProductSlug(db: DbClient, organizationId: string, base: string, excludeId?: string, taken?: Set<string>): Promise<string> {
   for (let attempt = 0; attempt < MAX_SLUG_SUFFIX_ATTEMPTS; attempt += 1) {
     const candidate = slugCandidate(base, attempt)
+    if (taken?.has(candidate)) continue
     const clash = await queryFirst<{ id: string }>(db, 'SELECT id FROM products WHERE organization_id = ? AND slug = ? AND id <> COALESCE(?, \'\')', [organizationId, candidate, excludeId ?? null])
-    if (!clash) return candidate
+    if (!clash) {
+      taken?.add(candidate)
+      return candidate
+    }
   }
   conflict('Could not derive a unique product slug')
 }
@@ -612,7 +636,7 @@ async function planProduct(
   db: DbClient,
   organizationId: string,
   input: CreateProductInput,
-  context: { siteId?: string; existingId?: string },
+  context: { siteId?: string; existingId?: string; defaultCurrency?: CurrencyCode | null; takenSlugs?: Set<string> },
 ): Promise<PlannedProduct> {
   const name = requireTrimmedProductString(input.name, 'name', PRODUCT_LIMITS.name)
   const options = validateProductOptions(input.options)
@@ -625,7 +649,11 @@ async function planProduct(
 
   await assertSuppliedIdsBelongHere(db, organizationId, context.existingId ?? null, options, variants)
 
-  const defaultCurrency = context.siteId ? await organizationDefaultCurrency(db, organizationId, context.siteId) : null
+  // One site has one default currency: a batch resolves it once and hands it
+  // down, rather than asking the same question for every product in it.
+  const defaultCurrency = context.defaultCurrency !== undefined
+    ? context.defaultCurrency
+    : context.siteId ? await organizationDefaultCurrency(db, organizationId, context.siteId) : null
   const declaredVariants = input.variants ?? []
   const resolved = resolveIds(options, variants)
   const plannedVariants: PlannedVariant[] = variants.map((variant, index) => ({
@@ -642,7 +670,7 @@ async function planProduct(
   return {
     id: context.existingId ?? crypto.randomUUID(),
     name,
-    slug: await createProductSlug(db, organizationId, name, context.existingId),
+    slug: await createProductSlug(db, organizationId, name, context.existingId, context.takenSlugs),
     // An empty description is a real choice, not a missing field. Only its
     // length is constrained.
     description: normalizeOptionalProductString(input.description, 'description', PRODUCT_LIMITS.description) ?? '',
@@ -776,6 +804,14 @@ function productWrites(
 }
 
 function assertVariantPricesConsistent(planned: PlannedProduct): void {
+  // A product is priced in numbers or in words, never both. Whichever the
+  // merchant chose is the one source the page reads; two would need a
+  // precedence rule, and a precedence rule is a fallback.
+  const note = planned.metafields[PRICING_NOTE_HANDLE]
+  const priced = planned.variants.some(variant => variant.prices.length > 0)
+  if (typeof note === 'string' && note.trim() !== '' && priced) {
+    invalid(`a product states ${PRICING_NOTE_HANDLE} or a numeric price, not both`)
+  }
   for (const variant of planned.variants) {
     if (variant.prices.length < 2) continue
     // Refuse two simultaneously-valid offers of the same scope at write time,
@@ -795,12 +831,23 @@ export async function createProduct(db: DbClient, input: {
   siteId?: string
   product: CreateProductInput
   actor: Actor
+  /** Publish it on `siteId` in the same batch — see planProductCreateWrites. */
+  publication?: { published: boolean }
 }): Promise<Product> {
   const definitions = await loadMetafieldDefinitions(db, input.organizationId)
   const planned = await planProduct(db, input.organizationId, input.product, { siteId: input.siteId })
   assertVariantPricesConsistent(planned)
   const now = new Date().toISOString()
-  await executeBatch(db, productWrites(input.organizationId, planned, definitions, input.actor, now, 'insert'), { operation: 'Create product' })
+  const writes = productWrites(input.organizationId, planned, definitions, input.actor, now, 'insert')
+  if (input.publication && input.siteId) {
+    writes.push({
+      query: `INSERT INTO product_publications (organization_id, product_id, site_id, published, created_at, updated_at, created_by, updated_by)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      params: [input.organizationId, planned.id, input.siteId, input.publication.published ? 1 : 0, now, now, input.actor.actorId, input.actor.actorId],
+    })
+    writes.push(publicResourceCacheInvalidationQuery(input.siteId, 'product_created'))
+  }
+  await executeBatch(db, writes, { operation: 'Create product' })
   await fireOrganizationEventSafe({ db, organizationId: input.organizationId, siteId: input.siteId ?? null, actorId: input.actor.actorId, eventType: 'product.created', entityType: 'product', entityId: planned.id })
   return getProduct(db, input.organizationId, planned.id)
 }
@@ -820,23 +867,42 @@ export async function planProductCreateWrites(db: DbClient, input: {
   products: CreateProductInput[]
   actor: Actor
   now: string
+  /**
+   * Publish the new products on `siteId` as part of the same batch.
+   *
+   * A caller that writes its own publication rows leaves this out. One that
+   * wants the site to carry what it just created says so here, rather than
+   * following the batch with one round trip per product.
+   */
+  publication?: { published: boolean }
 }): Promise<{ ids: string[]; queries: BatchQuery[] }> {
   if (input.products.length === 0) invalid('at least one product is required')
   if (input.products.length > PRODUCT_LIMITS.batchCreate) invalid(`at most ${PRODUCT_LIMITS.batchCreate} products may be created at once`)
   const definitions = await loadMetafieldDefinitions(db, input.organizationId)
+  const defaultCurrency = input.siteId ? await organizationDefaultCurrency(db, input.organizationId, input.siteId) : null
   const queries: BatchQuery[] = []
   const ids: string[] = []
-  // Slugs are derived sequentially: deriving them in parallel would let two
-  // products in one batch both take the same free slug.
+  // Slugs are derived sequentially and the set carries what this batch has
+  // already claimed: deriving them in parallel would let two products in one
+  // batch both take the same free slug.
   const taken = new Set<string>()
   for (const product of input.products) {
-    const planned = await planProduct(db, input.organizationId, product, { siteId: input.siteId })
-    while (taken.has(planned.slug)) planned.slug = await createProductSlug(db, input.organizationId, `${planned.slug}-2`)
-    taken.add(planned.slug)
+    const planned = await planProduct(db, input.organizationId, product, { siteId: input.siteId, defaultCurrency, takenSlugs: taken })
     assertVariantPricesConsistent(planned)
     queries.push(...productWrites(input.organizationId, planned, definitions, input.actor, input.now, 'insert'))
+    if (input.publication && input.siteId) {
+      queries.push({
+        query: `INSERT INTO product_publications (organization_id, product_id, site_id, published, created_at, updated_at, created_by, updated_by)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        params: [input.organizationId, planned.id, input.siteId, input.publication.published ? 1 : 0,
+          input.now, input.now, input.actor.actorId, input.actor.actorId],
+      })
+    }
     ids.push(planned.id)
   }
+  // One site, one invalidation: a hundred products landing together change
+  // that site's public projection once.
+  if (input.publication && input.siteId) queries.push(publicResourceCacheInvalidationQuery(input.siteId, 'products_created'))
   return { ids, queries }
 }
 
@@ -845,6 +911,7 @@ export async function createProductsBatch(db: DbClient, input: {
   siteId?: string
   products: CreateProductInput[]
   actor: Actor
+  publication?: { published: boolean }
 }): Promise<Product[]> {
   const { ids, queries } = await planProductCreateWrites(db, { ...input, now: new Date().toISOString() })
   await executeBatch(db, queries, { operation: 'Create products' })

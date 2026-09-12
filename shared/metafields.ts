@@ -184,6 +184,16 @@ export function validateMetafieldValue(definition: MetafieldDefinition, value: u
   }
 }
 
+/**
+ * The one attribute the price surfaces read: a product priced in words.
+ *
+ * A market-price product carries no numeric price and states this note
+ * instead; the page renders the note where an amount would be. The two are
+ * mutually exclusive, and a product with neither shows no price at all — a
+ * missing amount never becomes zero, "Free", or "Market price" by inference.
+ */
+export const PRICING_NOTE_HANDLE = 'pricing.note'
+
 /** Values are stored as JSON so a typed list stays a list, not a joined string. */
 export function serializeMetafieldValue(definition: MetafieldDefinition, value: unknown): string {
   return JSON.stringify(validateMetafieldValue(definition, value))

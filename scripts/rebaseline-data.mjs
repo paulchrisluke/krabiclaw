@@ -254,13 +254,19 @@ function deriveCatalog(stage, now, record) {
     SELECT p.id || '-default', p.organization_id, p.id, p.name, NULL, 1, 0, p.created_at, p.updated_at, p.created_by, p.updated_by FROM products p`).run().changes)
 
   // --- money. A location-scoped price stays location-scoped; a "was" price
-  // that is not above the current price says nothing and is dropped.
+  // that is not above the current price says nothing and is dropped. A zero
+  // amount on a product priced in words was a placeholder for "no amount",
+  // which is what the pricing note now says: zero here would read as free.
   record('prices_compare_at_dropped', stage.prepare(`SELECT count(*) AS n FROM old.prices WHERE compare_at_amount_minor IS NOT NULL AND compare_at_amount_minor <= amount_minor`).get().n)
   record('prices', stage.prepare(`INSERT INTO prices (id, organization_id, product_variant_id, location_id, active, currency, unit_amount, type, recurring_interval, recurring_interval_count, tax_behavior, compare_at_unit_amount, valid_from_at, valid_until_at, source, created_at, updated_at, created_by, updated_by)
     SELECT op.id, op.organization_id, m.new_id || '-default', op.location_id, 1, op.currency, op.amount_minor, 'one_time', NULL, NULL, op.tax_behavior,
       CASE WHEN op.compare_at_amount_minor > op.amount_minor THEN op.compare_at_amount_minor END,
       op.valid_from, op.valid_until, op.provenance, op.created_at, op.created_at, op.created_by, op.created_by
-    FROM old.prices op JOIN temp.product_map m ON m.old_id = op.product_id`).run().changes)
+    FROM old.prices op JOIN temp.product_map m ON m.old_id = op.product_id
+    WHERE NOT (op.amount_minor = 0 AND EXISTS (
+      SELECT 1 FROM old.products p, json_each(p.details_json) j
+       WHERE p.id = op.product_id AND j.value ->> '$.key' = 'price-note'
+    ))`).run().changes)
 
   // --- the three independent states the old `is_visible` flag stood for
   record('product_publications', stage.prepare(`INSERT INTO product_publications (organization_id, product_id, site_id, published, created_at, updated_at, created_by, updated_by)
@@ -277,6 +283,7 @@ function deriveCatalog(stage, now, record) {
     SELECT max(p.organization_id), p.category_id, m.new_id, min(p.sort_order), min(p.created_at), max(p.updated_at), max(p.created_by), max(p.updated_by)
     FROM old.products p JOIN temp.product_map m ON m.old_id = p.id GROUP BY p.category_id, m.new_id`).run().changes)
 
+  deriveDraftPayloads(stage, record)
   deriveMetafields(stage, now, record)
   deriveBookingCapability(stage, now, record)
   deriveProductMedia(stage, record)
@@ -284,6 +291,45 @@ function deriveCatalog(stage, now, record) {
   deriveGuestRecords(stage, record)
   deriveLocalizations(stage, record)
   deriveSlugRedirects(stage, now, record)
+}
+
+/**
+ * An onboarding draft holds the catalog its owner has typed so far, in the
+ * shape the model had when they typed it. It is read back by the wizard, so it
+ * moves to the new shape with everything else: a product names the collection
+ * it sits in and carries the price its variant will, and the retired per-site
+ * flags — visibility, featured, availability — have nothing to say here.
+ */
+function deriveDraftPayloads(stage, record) {
+  // Experiences were a second catalog; a draft has no question to answer about
+  // whether the site has one.
+  record('onboarding_draft_experience_flag', stage.prepare(
+    "UPDATE onboarding_drafts SET payload_json = json_remove(payload_json, '$.preview.hasExperiences') WHERE json_type(payload_json, '$.preview.hasExperiences') IS NOT NULL",
+  ).run().changes)
+  record('onboarding_draft_products', stage.prepare(`
+    UPDATE onboarding_drafts SET payload_json = json_set(
+      payload_json,
+      '$.preview.products',
+      (SELECT json_group_array(json_object(
+        'id', p.value ->> '$.id',
+        'location_id', p.value ->> '$.location_id',
+        'collection', p.value ->> '$.category',
+        'name', p.value ->> '$.name',
+        'slug', p.value ->> '$.slug',
+        'description', coalesce(p.value ->> '$.description', ''),
+        'price', CASE WHEN json_type(p.value, '$.price') = 'object'
+          THEN json_object('unit_amount', p.value -> '$.price' ->> '$.amount_minor', 'currency', p.value -> '$.price' ->> '$.currency')
+          END,
+        'order_url', p.value ->> '$.order_url',
+        'sort_order', p.value ->> '$.sort_order',
+        'tags', coalesce(p.value -> '$.tags', json('[]')),
+        'source', coalesce(p.value ->> '$.source', 'import')
+      ))
+      FROM json_each(onboarding_drafts.payload_json, '$.preview.products') p))
+    WHERE json_type(payload_json, '$.preview.products') = 'array'
+      AND EXISTS (SELECT 1 FROM json_each(onboarding_drafts.payload_json, '$.preview.products') q
+                   WHERE json_type(q.value, '$.category') IS NOT NULL)
+  `).run().changes)
 }
 
 /**
@@ -305,6 +351,13 @@ function deriveMetafields(stage, now, record) {
      WHERE p.details_json <> '[]' OR p.experience_json IS NOT NULL`).all()) {
     for (const detail of JSON.parse(row.details_json ?? '[]')) {
       if (!detail?.key || !Array.isArray(detail.values) || detail.values.length === 0) continue
+      // A price stated in words is the canonical pricing note, not a detail
+      // row: the page shows it where the amount would be.
+      if (String(detail.key) === 'price-note') {
+        const definition = defineFor(row.organization_id, 'pricing', 'note', 'Pricing note', 'single_line_text')
+        values.push({ ...row, definition, value: String(detail.values[0]) })
+        continue
+      }
       const definition = defineFor(row.organization_id, 'details', String(detail.key), String(detail.label ?? detail.key), 'list.single_line_text')
       values.push({ ...row, definition, value: detail.values.map(String) })
     }

@@ -693,13 +693,17 @@ function payload() {
   // that renames a product says nothing about what it costs, and a patch that
   // omits variants leaves every offer exactly as it is.
   const catalog = buildCatalog()
+  // A product being created with only a name says nothing about variants, and
+  // the canonical writer gives it its one default variant. An empty list is a
+  // claim that it has none, which is not a product.
+  const describesCatalog = catalog.variants.length > 0
   const changed = JSON.stringify(catalog) !== loadedCatalogShape.value
   return {
     name: form.name.trim(),
     description: form.description,
     order_url: form.order_url || null,
     tags: form.tags.map(tag => tag.trim()).filter(Boolean),
-    ...(changed ? catalog : {}),
+    ...(changed && describesCatalog ? catalog : {}),
     metafields: form.metafields,
     active: form.active,
   }

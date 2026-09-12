@@ -38,10 +38,20 @@ export default defineHandler(async (event) => {
   try {
     const dates: string[] = []
     for (let offset = 0; offset < days; offset += 1) dates.push(addLocalDays(date, offset))
-    const calendar = await Promise.all(dates.map(async day => ({
-      date: day,
-      ...await listReservationSlots(db, { organizationId: site.organization_id, locationId: location.id, date: day }),
-    })))
+    // The slot reader carries the owner's own note for a closure, which is why
+    // they closed it and is nobody else's business. The guest is told the slot
+    // is closed; the reason stays in the dashboard.
+    const calendar = await Promise.all(dates.map(async (day) => {
+      const { timezone, slots } = await listReservationSlots(db, { organizationId: site.organization_id, locationId: location.id, date: day })
+      return {
+        date: day,
+        timezone,
+        slots: slots.map(slot => ({
+          time_slot: slot.time_slot, starts_at: slot.starts_at, capacity: slot.capacity,
+          claimed: slot.claimed, remaining: slot.remaining, is_closed: slot.is_closed, is_full: slot.is_full,
+        })),
+      }
+    }))
     return jsonResponse({ timezone: calendar[0]?.timezone ?? null, dates: calendar })
   } catch (error) {
     rethrowHttpError(error)

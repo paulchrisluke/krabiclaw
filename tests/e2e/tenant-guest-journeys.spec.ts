@@ -53,7 +53,15 @@ test.describe('tenant guest journeys (disposable local/preview data only)', () =
     test.setTimeout(90_000)
     const since = new Date().toISOString()
     const email = `pottery-booking-${Date.now()}@playwright.example`
-    await openTenantPage(page, `${potteryHouseBaseURL}/locations/pottery-house-krabi/products/pottery-wheel-class`, potteryHouseExtraHeaders)
+    // A guest books an occurrence, and occurrences are materialized from the
+    // product's rules. Generation is idempotent, so the journey makes sure
+    // there is something on the calendar to book before it tries.
+    const generated = await request.post(`${testBaseUrl()}/api/editor/sites/site-pottery-house/products/exp-ph-wheel/sessions/generate`, {
+      headers: { ...devLoginHeaders(), 'x-preview-tenant': 'pottery-house' },
+      data: { through: new Date(Date.now() + 30 * 86_400_000).toISOString().slice(0, 10) },
+    })
+    expect(generated.status(), await generated.text()).toBe(200)
+    await openTenantPage(page, `${potteryHouseBaseURL}/locations/krabi/products/pottery-wheel-class`, potteryHouseExtraHeaders)
     await page.locator('#product-booking-toggle').first().click()
     await chooseFirstAvailableTime(page)
     await page.getByLabel('Full name').fill('Pottery Journey Test')

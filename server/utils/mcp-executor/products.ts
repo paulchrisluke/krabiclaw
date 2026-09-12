@@ -23,7 +23,7 @@ import {
   updateProduct,
 } from '~/server/utils/product-management'
 import { assertResourceAccess } from '~/server/utils/member-access'
-import { paginateMcpCollection } from '~/server/utils/mcp-pagination'
+import { mcpPageInfo, mcpPageWindow } from '~/server/utils/mcp-pagination'
 import { MCP_ERROR, mcpProtocolError } from '~/server/utils/mcp-protocol'
 import type { MetafieldDefinition } from '~/shared/metafields'
 import type { McpExecutorContext } from './shared'
@@ -62,6 +62,15 @@ async function resolveCarriedProduct(ctx: McpExecutorContext, productId: string)
   return product
 }
 
+/** One page of products, with the extra row the query asked for removed. */
+function productPage(products: Product[], window: { limit: number; offset: number }) {
+  const page = products.slice(0, window.limit)
+  return {
+    products: page.map(productListItem),
+    page_info: mcpPageInfo(window, page.length, products.length > window.limit, { resource: 'products' }),
+  }
+}
+
 function productListItem(product: Product) {
   return {
     id: product.id,
@@ -89,30 +98,36 @@ export async function handleProductsTools(ctx: McpExecutorContext) {
   const scope = { organizationId: site.organizationId, siteId: site.siteId }
 
   switch (toolName) {
+    // Both list tools read the window first and ask the database for exactly
+    // one page, so a catalog of four hundred is not loaded and hydrated to
+    // answer a request for fifty.
     case 'list_products': {
-      const products = await listSiteProducts(site.db, { ...scope, publishedOnly: args.published_only === true })
-      return paginateMcpCollection(products.map(productListItem), args, { resource: 'products' })
+      const window = mcpPageWindow(args, { resource: 'products' })
+      const products = await listSiteProducts(site.db, { ...scope, publishedOnly: args.published_only === true, window })
+      return productPage(products, window)
     }
     case 'list_location_products': {
       const locationId = requiredString(args, 'location_id')
       await authorizeLocation(ctx, locationId)
+      const window = mcpPageWindow(args, { resource: 'products' })
       const products = await listLocationProducts(site.db, {
-        organizationId: site.organizationId, locationId,
+        organizationId: site.organizationId, locationId, window,
         ...(args.published_only === true ? { publishedOnSiteId: site.siteId } : {}),
       })
-      return paginateMcpCollection(products.map(productListItem), args, { resource: 'products' })
+      return productPage(products, window)
     }
     case 'get_product':
       return { product: await resolveCarriedProduct(ctx, requiredString(args, 'product_id')) }
 
     case 'create_product': {
+      // The site carries what it created, withheld until someone publishes it
+      // — written with the product, so the product is loaded once.
       const product = await createProduct(site.db, {
         organizationId: site.organizationId, siteId: site.siteId,
         product: args as unknown as CreateProductInput, actor,
+        publication: { published: false },
       })
-      // The site carries what it created, withheld until someone publishes it.
-      await setProductPublication(site.db, { ...scope, productId: product.id, published: false, actor })
-      return { product: await getProduct(site.db, site.organizationId, product.id) }
+      return { product }
     }
     case 'update_product': {
       const productId = requiredString(args, 'product_id')
@@ -156,12 +171,12 @@ export async function handleProductsTools(ctx: McpExecutorContext) {
       return { product: await getProduct(site.db, site.organizationId, productId) }
     }
     case 'batch_create_products': {
+      // The site carries what it created, withheld until someone publishes it
+      // — written in the same batch as the products themselves.
       const products = await createProductsBatch(site.db, {
         ...scope, products: objectArray(args.products, 'products') as unknown as CreateProductInput[], actor,
+        publication: { published: false },
       })
-      for (const product of products) {
-        await setProductPublication(site.db, { ...scope, productId: product.id, published: false, actor })
-      }
       return { products }
     }
     case 'reconcile_products':

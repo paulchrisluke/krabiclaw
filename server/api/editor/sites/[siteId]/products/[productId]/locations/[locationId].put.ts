@@ -1,6 +1,6 @@
 import { jsonResponse, readStrictBody, rethrowHttpError } from '~/server/utils/api-response'
 import { requireLocationAccess } from '~/server/utils/location-access'
-import { getProduct, setProductLocation } from '~/server/utils/product-management'
+import { getProduct, requireSiteProduct, setProductLocation } from '~/server/utils/product-management'
 import { defineHandler } from 'nitro'
 import { getRouterParam } from 'nitro/h3'
 
@@ -13,6 +13,8 @@ export default defineHandler(async (event) => {
     // Location access, not site access: a location editor may say whether this
     // branch offers the product without gaining rights over the product itself.
     const { db, session, site } = await requireLocationAccess(event, siteId, locationId)
+    // A product id in the path is not authorized by the site in the path.
+    await requireSiteProduct(db, { organizationId: site.organization_id, siteId, productId })
     const body = await readStrictBody<{ active?: unknown; published?: unknown }>(event, { active: 'unknown', published: 'unknown' })
     for (const field of ['active', 'published'] as const) {
       if (body[field] !== undefined && typeof body[field] !== 'boolean') {

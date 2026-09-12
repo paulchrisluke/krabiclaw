@@ -388,7 +388,15 @@ export async function claimReservation(db: DbClient, input: {
   endsAt: string
   partySize: number
   status?: 'pending' | 'confirmed'
-  following?: BatchQuery[]
+  /**
+   * The guest thread this reservation answers, written in the same batch.
+   *
+   * It leads: the reservation's scope key points at the request row, so the
+   * request has to exist before the seat is taken. The claim's own capacity
+   * predicate still decides whether the table is there, and a batch that
+   * cannot take it writes neither.
+   */
+  thread?: BatchQuery[]
 }): Promise<void> {
   if (!Number.isSafeInteger(input.partySize) || input.partySize < 1) {
     throw new HTTPError({ statusCode: 400, statusMessage: 'party_size must be a positive integer' })
@@ -417,6 +425,7 @@ export async function claimReservation(db: DbClient, input: {
       input.locationId, input.organizationId, input.partySize, input.startsAt,
     ],
   }
-  const results = await executeBatch(db, [claim, ...(input.following ?? [])], { operation: 'Claim reservation' })
-  if ((results[0]?.meta?.changes ?? 0) === 0) throw new ReservationUnavailableError()
+  const thread = input.thread ?? []
+  const results = await executeBatch(db, [...thread, claim], { operation: 'Claim reservation' })
+  if ((results[thread.length]?.meta?.changes ?? 0) === 0) throw new ReservationUnavailableError()
 }

@@ -129,12 +129,12 @@ export function renderMcpPrompt(name: string, args: Record<string, string>): { d
     }
     case "triage_inbox": {
       return {
-        description: "Summarize what's new across contact, reservations, bookings, and unreplied reviews",
+        description: "Summarize what's new across contact messages, reservations, and unreplied reviews",
         text: [
-          "Call get_contact_inquiries for site-level contact messages, get_reservation_inquiries with location_id when the site has multiple locations, and list_all_bookings for experience bookings across the whole site; summarize only pending experience bookings from that last result.",
+          "Call get_contact_inquiries for site-level contact messages, and get_reservation_inquiries with location_id when the site has multiple locations.",
           "Call list_locations, then list_location_reviews for each location, and pull out any review that has no owner reply yet.",
-          "Summarize what's new, grouped by type (messages, reservations, bookings, reviews needing a reply), oldest first.",
-          "For pending experience bookings only, update_booking exists to confirm or decline — offer to do that with the user's explicit approval for each one, don't act unilaterally.",
+          "Summarize what's new, grouped by type (messages, reservations, reviews needing a reply), oldest first.",
+          "Seats booked on a bookable Product are not on this connection: read and answer those in the dashboard inbox, and say so rather than reaching for a tool that does not exist.",
           "For unreplied reviews, offer to compose a reply for any the user wants to answer now, and call reply_to_review only after they approve the exact wording.",
           "There is no tool on this connection to reply to or change the status of contact or reservation submissions — for those, tell the user what's waiting and point them to the dashboard inbox and reservations pages to respond. Do not attempt to call a tool that doesn't exist for this.",
         ].join(" "),
@@ -201,9 +201,9 @@ export function renderMcpPrompt(name: string, args: Record<string, string>): { d
         description: "Combine traffic, listing completeness, and booking demand into one concrete next move",
         text: [
           "Call get_workspace_context, then get_site_analytics for the last 30 days to see traffic, top pages, and whether traffic is up or down versus the prior period.",
-          "Call list_locations and every relevant list_location_products page to check whether Products have clear pricing, descriptions, and availability. Call list_all_bookings and get_reservation_inquiries to see current demand and whether anything is sitting unconfirmed or unanswered.",
-          "Cross-reference the three: if traffic is healthy but the listing is thin or bookings are stalling unconfirmed, say so explicitly — don't treat these as separate topics.",
-          "Suggest exactly one highest-impact next move, not a list — for example confirming stalled bookings, completing a thin listing, or publishing a post about a specific under-booked Product. Explain it in plain language tied to what you actually found in the data.",
+          "Call list_locations and every relevant list_location_products page to check whether Products have clear pricing, descriptions, and availability. Call get_reservation_inquiries to see current demand and whether anything is sitting unanswered.",
+          "Cross-reference the three: if traffic is healthy but the listing is thin or reservations are sitting unanswered, say so explicitly — don't treat these as separate topics.",
+          "Suggest exactly one highest-impact next move, not a list — for example answering waiting reservations, completing a thin listing, or publishing a post about a specific under-booked Product. Explain it in plain language tied to what you actually found in the data.",
           "Ask the user to confirm before doing anything. If they approve a post, use create_post; if they approve a listing fix, use update_product or set_media as appropriate. Do not change pricing or availability without explicit approval.",
         ].join(" "),
       };

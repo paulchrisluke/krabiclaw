@@ -88,8 +88,8 @@
               class="flex items-start gap-5"
             >
               <NuxtLink
-                v-if="product.image && isAvailable(product) && productHref(product)"
-                :to="productHref(product)!"
+                v-if="product.image && isAvailable(product, group.location_id) && productHref(product, group.location_id)"
+                :to="productHref(product, group.location_id)!"
                 class="shrink-0"
               >
                 <SayaMenuItemPreview :item="previewItem(product)" />
@@ -104,15 +104,15 @@
                 <div class="flex items-baseline gap-2">
                   <div class="flex items-baseline gap-2 text-base font-medium text-default">
                     <NuxtLink
-                      v-if="isAvailable(product) && productHref(product)"
-                      :to="productHref(product)!"
+                      v-if="isAvailable(product, group.location_id) && productHref(product, group.location_id)"
+                      :to="productHref(product, group.location_id)!"
                       class="text-default no-underline underline-offset-2 hover:underline"
                     >
                       {{ product.name }}
                     </NuxtLink>
                     <span v-else class="text-default opacity-50">{{ product.name }}</span>
                     <SayaBadgeUnavailable
-                      v-if="!isAvailable(product)"
+                      v-if="!isAvailable(product, group.location_id)"
                       :text="t('saya.menu_page.unavailable')"
                     />
                     <span
@@ -123,11 +123,11 @@
                       {{ tag }}
                     </span>
                   </div>
-                  <template v-if="priceLabel(product)">
+                  <template v-if="priceLabel(product, group.location_id)">
                     <div class="saya-dotted-leader" />
                     <div class="flex shrink-0 items-baseline gap-1.5 tabular-nums text-base text-default">
-                      <span v-if="compareAtPrice(product)" class="text-sm text-muted line-through">{{ compareAtPrice(product) }}</span>
-                      <span>{{ priceLabel(product) }}</span>
+                      <span v-if="compareAtPrice(product, group.location_id)" class="text-sm text-muted line-through">{{ compareAtPrice(product, group.location_id) }}</span>
+                      <span>{{ priceLabel(product, group.location_id) }}</span>
                     </div>
                   </template>
                 </div>
@@ -153,7 +153,7 @@
         <h2 class="saya-display saya-italic mb-8 border-b border-default pb-6 text-5xl">{{ group.category }}</h2>
         <div class="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
           <article v-for="product in group.products" :key="product.id">
-            <component :is="productHref(product) ? 'NuxtLink' : 'div'" :to="productHref(product) ?? undefined" class="group block text-default no-underline">
+            <component :is="productHref(product, group.location_id) ? NuxtLinkComponent : 'div'" :to="productHref(product, group.location_id) ?? undefined" class="group block text-default no-underline">
               <div v-if="product.image?.public_url" class="relative aspect-[4/3] overflow-hidden rounded-lg bg-muted">
                 <img
                   :src="product.image.public_url"
@@ -161,7 +161,7 @@
                   class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
                 >
                 <SayaBadgeUnavailable
-                  v-if="!isAvailable(product)"
+                  v-if="!isAvailable(product, group.location_id)"
                   overlay
                   :text="t('saya.menu_page.unavailable')"
                 />
@@ -169,9 +169,9 @@
               <div class="mt-5">
                 <div class="flex items-start justify-between gap-4">
                   <h3 class="text-lg font-semibold transition-colors group-hover:text-primary">{{ product.name }}</h3>
-                  <span v-if="priceLabel(product)" class="shrink-0 tabular-nums">{{ priceLabel(product) }}</span>
+                  <span v-if="priceLabel(product, group.location_id)" class="shrink-0 tabular-nums">{{ priceLabel(product, group.location_id) }}</span>
                 </div>
-                <p v-if="showLocations" class="mt-1 text-xs font-medium uppercase tracking-wide text-muted">{{ locationTitle(productLocationId(product) ?? '') }}</p>
+                <p v-if="showLocations && productLocationId(product, group.location_id)" class="mt-1 text-xs font-medium uppercase tracking-wide text-muted">{{ locationTitle(productLocationId(product, group.location_id)!) }}</p>
                 <p v-if="product.description" class="mt-1 line-clamp-2 text-sm leading-6 text-muted">{{ product.description }}</p>
               </div>
             </component>
@@ -188,9 +188,15 @@ import { useSchemaOrg } from '~/composables/useSchemaOrg'
 import type { CurrencyCode } from '~/shared/currencies'
 import { formatProductMoney } from '~/utils/product-money'
 import { minorAmountToMajor, selectPrice, type Price } from '~/shared/prices'
+import { PRICING_NOTE_HANDLE } from '~/shared/metafields'
 import { groupProductsByCollection, productLocationCollectionPath } from '~/utils/product-presentation'
 
 interface LocationSummary { id: string; slug: string; title: string }
+
+// Resolved once: a dynamic `:is` given the string 'NuxtLink' renders a literal
+// <NuxtLink> element that no browser follows, so the card looked linked in the
+// markup and was not.
+const NuxtLinkComponent = resolveComponent('NuxtLink')
 
 const props = defineProps<{
   products: Product[]
@@ -227,8 +233,14 @@ const currentLocation = computed(() => {
  * route to be unambiguous. Several, and there is no single path — the product
  * is linked from each location's own collection instead.
  */
-const productLocationId = (product: Product): string | null => {
+const productLocationId = (product: Product, collectionLocationId: string | null = null): string | null => {
   if (props.locationId) return props.locationId
+  // A location's collection is that branch's menu, so a dish offered at two
+  // branches is linked, priced and labelled as the branch whose section it is
+  // being read in. Only under a site-wide collection is there nothing to say
+  // which branch it belongs to, and then it has no single route.
+  if (collectionLocationId && locationMap.value.has(collectionLocationId)
+    && product.locations.some(entry => entry.location_id === collectionLocationId && entry.published)) return collectionLocationId
   const here = product.locations.filter(entry => entry.published && locationMap.value.has(entry.location_id))
   return here.length === 1 ? here[0]!.location_id : null
 }
@@ -249,15 +261,15 @@ const locationTitle = (id: string) => {
  * this location offers it, and it has an applicable price. None of them
  * substitutes for another, and none of them is a stock statement.
  */
-const isAvailable = (product: Product): boolean => {
+const isAvailable = (product: Product, collectionLocationId: string | null = null): boolean => {
   if (!product.active) return false
-  const id = productLocationId(product)
+  const id = productLocationId(product, collectionLocationId)
   if (id && !product.locations.some(entry => entry.location_id === id && entry.active)) return false
-  return priceFor(product) !== null
+  return priceFor(product, collectionLocationId) !== null
 }
 
-const productHref = (product: Product): string | null => {
-  const id = productLocationId(product)
+const productHref = (product: Product, collectionLocationId: string | null = null): string | null => {
+  const id = productLocationId(product, collectionLocationId)
   return id ? localePath(props.presentation.productPath(locationSlug(id), product.slug)) : null
 }
 
@@ -268,16 +280,28 @@ const productHref = (product: Product): string | null => {
  * "from" price — an explicit choice made here, not a fallback: every variant's
  * own price is on the product's own page.
  */
-const priceFor = (product: Product): Price | null => {
-  const selection = { currency: props.currency, location_id: productLocationId(product), at: new Date().toISOString() }
+const priceFor = (product: Product, collectionLocationId: string | null = null): Price | null => {
+  const selection = { currency: props.currency, location_id: productLocationId(product, collectionLocationId), at: new Date().toISOString() }
   const offers = product.variants.flatMap(variant => selectPrice(variant.prices, selection) ?? [])
   return offers.reduce<Price | null>((lowest, offer) => (!lowest || offer.unit_amount < lowest.unit_amount ? offer : lowest), null)
 }
-const priceLabel = (product: Product): string | null => formatProductMoney(priceFor(product))
+/**
+ * What this card says about price.
+ *
+ * An amount when the product has one, the merchant's own words when it is
+ * priced in words instead, and nothing at all when it states neither. A
+ * missing amount never becomes zero, "Free" or "Market price" here.
+ */
+const priceLabel = (product: Product, collectionLocationId: string | null = null): string | null => {
+  const amount = formatProductMoney(priceFor(product, collectionLocationId))
+  if (amount) return amount
+  const note = product.metafields[PRICING_NOTE_HANDLE]
+  return typeof note === 'string' && note.trim() ? note : null
+}
 // One section per collection, in the merchant's order — see
 // groupProductsByCollection for what membership does and does not imply.
 const groups = computed(() => groupProductsByCollection(props.products, props.collections)
-  .map(group => ({ id: group.id, category: group.name, sort_order: group.sort_order, products: group.products })))
+  .map(group => ({ id: group.id, category: group.name, sort_order: group.sort_order, location_id: group.location_id, products: group.products })))
 const categoryTabs = computed(() => groups.value.map(group => ({
   key: group.id,
   label: group.category,
@@ -320,8 +344,8 @@ function dietaryTags(product: Product): string[] {
   return notes.filter(note => note === 'V' || note === 'VG' || note === 'GF')
 }
 
-function compareAtPrice(product: Product): string | null {
-  const price = priceFor(product)
+function compareAtPrice(product: Product, collectionLocationId: string | null = null): string | null {
+  const price = priceFor(product, collectionLocationId)
   if (!price || price.compare_at_unit_amount === null) return null
   return formatProductMoney({ ...price, unit_amount: price.compare_at_unit_amount, compare_at_unit_amount: null })
 }
