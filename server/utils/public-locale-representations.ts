@@ -2,7 +2,7 @@ import { HTTPError } from 'nitro'
 import { queryAll, type DbClient } from '~/server/db'
 import { assertSiteLanguageEntitlement, getPersistedSourceLocale } from '~/server/utils/localization'
 import { platformLocale } from '~/shared/platform-locales'
-import type { LocalizedResourceType } from '~/server/utils/localization-registry'
+import { RESOURCE_LOCALIZATION_REGISTRY, type LocalizedResourceType } from '~/server/utils/localization-registry'
 import { tenantBlogPostPath } from '~/utils/tenant-blog-route'
 import { postPublicPath } from '~/utils/post-slugs'
 import type { PublicLocaleRepresentation } from '~/utils/public-resource-contracts'
@@ -25,22 +25,11 @@ export async function resolvePublicLocalizationSourcePath(
   if (resource.type === 'business_location') {
     const [row] = await queryAll<{ slug: string }>(db, 'SELECT slug FROM business_locations WHERE site_id = ? AND id = ? LIMIT 1', [siteId, resource.id])
     sourcePath = row ? `/locations/${row.slug}` : null
-  } else if (resource.type === 'product') {
-    // A product's public route runs through a location it is published at.
-    // With several, the caller must say which — there is no primary location
-    // to fall back on, so an ambiguous product has no single source path.
-    const rows = await queryAll<{ slug: string; location_slug: string; vertical: string }>(db, `
-      SELECT p.slug, l.slug AS location_slug, s.vertical
-        FROM products p
-        JOIN product_locations pl ON pl.product_id = p.id AND pl.organization_id = p.organization_id AND pl.published = 1
-        JOIN business_locations l ON l.id = pl.location_id AND l.site_id = ?
-        JOIN sites s ON s.id = l.site_id
-       WHERE p.id = ?
-       ORDER BY l.slug
-    `, [siteId, resource.id])
-    const row = rows.length === 1 ? rows[0] : undefined
-    sourcePath = row ? `/locations/${row.location_slug}/${row.vertical === 'restaurant' ? 'menu' : 'products'}/${row.slug}` : null
   }
+  // A Product's route is not resolved here: it runs through a location that
+  // offers it, and a Product offered at two locations has two routes. The
+  // caller passes the one it is rendering.
+
   if (sourcePath) return sourcePath
   throw new HTTPError({
     statusCode: 500,
@@ -92,17 +81,20 @@ export async function listPublicLocaleRepresentations(
     route_path: input.sourcePath,
     source: 'source',
   }]
+  // A resource whose localized route is derived has no stored path: the route
+  // is the locale prefix on the source path the caller is rendering.
+  const derivesRoute = input.resource ? RESOURCE_LOCALIZATION_REGISTRY[input.resource.type].route === 'derived' : false
   const candidates = input.resource
     ? await queryAll<{ locale: string; route_path: string }>(db, `
-        SELECT rl.locale, rl.route_path
+        SELECT rl.locale, ${derivesRoute ? "'/' || rl.locale || ?" : 'rl.route_path'} AS route_path
           FROM resource_localizations rl
           JOIN site_locales sl
             ON sl.organization_id = rl.organization_id AND sl.site_id = rl.site_id AND sl.locale = rl.locale
          WHERE rl.organization_id = ? AND rl.site_id = ?
-           AND rl.resource_type = ? AND rl.resource_id = ? AND rl.route_path IS NOT NULL
+           AND rl.resource_type = ? AND rl.resource_id = ?${derivesRoute ? '' : ' AND rl.route_path IS NOT NULL'}
            AND sl.status = 'published'
          ORDER BY rl.locale
-      `, [input.organizationId, input.siteId, input.resource.type, input.resource.id])
+      `, [...(derivesRoute ? [input.sourcePath] : []), input.organizationId, input.siteId, input.resource.type, input.resource.id])
     : input.documentId
       ? await queryAll<{ locale: string; route_path: string }>(db, `
           SELECT v.locale,

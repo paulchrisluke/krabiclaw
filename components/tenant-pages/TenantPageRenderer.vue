@@ -116,7 +116,7 @@
         <TenantPagePricingCalculator :rows="calculatorRows(block)" :note="calculatorNote(block)" />
       </template>
 
-      <template v-else-if="block.type === 'feature_grid' || block.type === 'testimonial_grid' || block.type === 'product_grid' || block.type === 'location_grid'">
+      <template v-else-if="block.type === 'feature_grid' || block.type === 'testimonial_grid' || block.type === 'product_grid' || block.type === 'location_grid' || block.type === 'page_grid'">
         <section class="my-12">
           <h2 v-if="text(block.data.title)" class="mb-6 text-2xl font-semibold">{{ text(block.data.title) }}</h2>
           <div class="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
@@ -165,7 +165,7 @@ defineProps<{ page: PublicTenantPage; template: 'saya' | 'blawby' | 'platform' }
 const sanitizer = useHtmlSanitizer()
 const { t } = useI18n()
 
-const canonicalBlawbyPaths = new Set(['/about', '/pricing', '/donate', '/policies/privacy', '/policies/terms', '/third-party-notices'])
+const canonicalBlawbyPaths = new Set(['/about', '/services', '/pricing', '/donate', '/policies/privacy', '/policies/terms', '/third-party-notices'])
 const isCanonicalBlawbyPage = (path: string) => canonicalBlawbyPaths.has(path)
 
 type GridItem = { id?: string; title?: string; description?: string; value?: string; media?: Array<{ slot?: string; public_url?: string | null; thumbnail_url?: string | null; alt_text?: string | null }>; label?: string; labelKey?: string; url?: string; amount?: string }

@@ -130,7 +130,6 @@ const props = defineProps<{
   resourceId: string
   resourceLabel: string
   fields: readonly LocalizationField[]
-  routePath?: (locale: string) => string
   languageSettingsPath?: string
   disabled?: boolean
   loadValues?: (locale: string) => Promise<Record<string, unknown>>
@@ -324,7 +323,6 @@ async function save(): Promise<void> {
           body: {
             values,
             ...(documentRevision?.locale === requestedLocale ? { expected_updated_at: documentRevision.updatedAt } : {}),
-            ...(props.routePath ? { route_path: props.routePath(requestedLocale) } : {}),
           },
           validate: isLocalizationResponse,
         },

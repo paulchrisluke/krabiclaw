@@ -22,10 +22,23 @@ export type LocalizedValues = Record<string, unknown>
  */
 type ValueShape = 'text' | 'string_array' | 'metafields' | { readonly [field: string]: ValueShape }
 
+/**
+ * How a localized resource is addressed publicly.
+ *
+ * - `stored`: the resource has exactly one public route, and the localized
+ *   path is stored on its localization row.
+ * - `derived`: the resource reaches the public through a location that offers
+ *   it, so its localized path is the locale prefix on that location-scoped
+ *   route. A Product offered at two locations has two localized routes, and no
+ *   single stored path could name both.
+ * - `none`: the resource has no route of its own.
+ */
+type LocalizedRouteAddressing = 'none' | 'stored' | 'derived'
+
 interface ResourceLocalizationDefinition {
   table: string
   fields: Readonly<Record<string, ValueShape>>
-  route: 'none' | 'location' | 'product'
+  route: LocalizedRouteAddressing
 }
 
 const POLICY_FIELDS = { additional_notes_html: 'text' } as const
@@ -35,11 +48,11 @@ export const RESOURCE_LOCALIZATION_REGISTRY: Readonly<Record<LocalizedResourceTy
     compliance: { service_area: 'text', disclaimer: 'text', footer_disclaimer: 'text' }, consultation: { cta_label: 'text' } }, route: 'none' },
   business_location: { table: 'business_locations', fields: { title: 'text', address: 'text', city: 'text',
     neighborhood: 'text', description: 'text', short_description: 'text', seo_title: 'text', seo_description: 'text',
-    reservation: { policy: POLICY_FIELDS } }, route: 'location' },
+    reservation: { policy: POLICY_FIELDS } }, route: 'stored' },
   // Product SEO is owned by the canonical content document, so it is not
   // localized here: a second SEO source would be a second thing to keep true.
   product: { table: 'products', fields: { name: 'text', description: 'text', tags: 'string_array',
-    marketing_features: 'string_array', unit_label: 'text', metafields: 'metafields' }, route: 'product' },
+    marketing_features: 'string_array', unit_label: 'text', metafields: 'metafields' }, route: 'derived' },
   collection: { table: 'collections', fields: { name: 'text', description: 'text' }, route: 'none' },
   media_asset: { table: 'media_assets', fields: { alt_text: 'text' }, route: 'none' },
 })
@@ -125,23 +138,16 @@ export function validateLocalizedValues(
 
 const SEGMENT = '[^/?#]+'
 
-export function validateLocalizedRoutePath(resourceType: LocalizedResourceType, locale: string, routePath: unknown,
-  vertical: string): string | null {
+export function validateLocalizedRoutePath(resourceType: LocalizedResourceType, locale: string, routePath: unknown): string | null {
   const definition = RESOURCE_LOCALIZATION_REGISTRY[resourceType]
-  if (definition.route === 'none') {
+  if (definition.route !== 'stored') {
     if (routePath !== undefined && routePath !== null) localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', resourceType + ' does not accept route_path')
     return null
   }
   if (typeof routePath !== 'string' || !routePath.trim()) localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', 'route_path is required for ' + resourceType)
   const path = routePath.trim()
   const prefix = '/' + locale + '/'
-  const family = vertical === 'restaurant' ? 'menu' : 'products'
-  // A product's public route is its location-family path. There is no
-  // separate experience route: an experience is a product whose page is a
-  // content document like any other.
-  const suffix = definition.route === 'location'
-    ? 'locations/' + SEGMENT
-    : 'locations/' + SEGMENT + '/' + family + '/' + SEGMENT
+  const suffix = 'locations/' + SEGMENT
   if (!path.startsWith(prefix) || !new RegExp('^' + suffix + '$').test(path.slice(prefix.length)) || path.includes('//')) localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', 'route_path is invalid for ' + resourceType, { route_path: path })
   return path
 }

@@ -86,7 +86,8 @@
     "stripe:catalog:plan": "node scripts/seed-stripe.mjs --dry-run",
     "stripe:catalog:apply": "node scripts/seed-stripe.mjs --apply",
     "perf:lighthouse": "node scripts/lighthouse-check.mjs",
-    "db:pull:preview": "node --experimental-strip-types scripts/pull-production-snapshot.ts --preview"
+    "db:pull:preview": "node --experimental-strip-types scripts/pull-production-snapshot.ts --preview",
+    "db:pull:local": "node --experimental-strip-types scripts/pull-production-snapshot.ts --local"
   },
   "//resolutions": "kysely pinned to 0.28.17: @better-auth/kysely-adapter (bundled transitively by better-auth even though this app only uses drizzleAdapter) imports DEFAULT_MIGRATION_TABLE from the top-level kysely package, which kysely 0.29.x stopped re-exporting from its main barrel. That breaks yarn build's Nitro/Rollup bundling pass. Remove this pin once better-auth's kysely-adapter fixes its import path or drops the kysely dependency.",
   "resolutions": {

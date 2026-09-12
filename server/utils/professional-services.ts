@@ -361,7 +361,7 @@ export async function getPublicBlawbyDocumentData(
     getPublicBlawbyShellData(db, siteId, { locale, localizations }),
     getPublicBlawbyRouteData(db, siteId, recipe, { ...options, locale, localizations }, env),
   ])
-  const pagePath = ROUTE_PAGE_PATHS[recipe]
+  const pagePath = recipe === 'page' ? options.slug ?? null : ROUTE_PAGE_PATHS[recipe]
   if (recipe === 'article') return { shell, route }
   // Every route on this template is a page now, so locale representations
   // come from the document — there is no second resource kind to branch on.
@@ -414,6 +414,8 @@ const ROUTE_PAGE_PATHS: Record<PublicBlawbyRouteData['recipe'], string | null> =
   privacy: '/policies/privacy',
   terms: '/policies/terms',
   'third-party-notices': '/third-party-notices',
+  // A generic page names its own path, so it has no fixed entry here.
+  page: null,
 }
 function faqBlockQa(page: { blocks: Array<{ type: string; data: Record<string, unknown> }> } | null): PublicSiteQa[] {
   const block = page?.blocks.find(candidate => candidate.type === 'faq')
@@ -494,7 +496,7 @@ export async function getPublicBlawbyRouteData(
 ): Promise<PublicBlawbyRouteData> {
   const needsReviews = ['home', 'about', 'contact', 'schedule'].includes(recipe)
   const postLimit = recipe === 'home' ? 3 : recipe === 'blog' ? 50 : 0
-  const pagePath = ROUTE_PAGE_PATHS[recipe]
+  const pagePath = recipe === 'page' ? options.slug ?? null : ROUTE_PAGE_PATHS[recipe]
   const localized = options.locale !== undefined && options.locale !== 'en'
 
   const [page, reviewRows, initialPosts, postRow] = await Promise.all([

@@ -8,8 +8,8 @@
     >
       <div :data-page-id="item.id" class="aspect-[704/478] w-full overflow-hidden rounded-lg bg-gray-100">
         <img
-          v-if="heroImage(item)"
-          :src="heroImage(item) || undefined"
+          v-if="coverImage(item)"
+          :src="coverImage(item) || undefined"
           :alt="item.title"
           width="704"
           height="478"
@@ -46,14 +46,15 @@ interface PageGridItem {
 const props = defineProps<{ items: PageGridItem[] }>()
 
 /**
- * The page's hero image, and only that.
+ * The page's cover, and only that.
  *
  * This used to try thumbnail, then hero, then the first gallery image. Three
  * slots are three different decisions the editor made, and quietly promoting a
- * gallery photo into a card meant nobody could tell which one would show.
+ * gallery photo into a card meant nobody could tell which one would show. A
+ * page states its card image in one slot: `cover`.
  */
-function heroImage(item: PageGridItem): string | null {
-  return item.media?.find(media => media.slot === 'hero')?.public_url ?? null
+function coverImage(item: PageGridItem): string | null {
+  return item.media?.find(media => media.slot === 'cover')?.public_url ?? null
 }
 
 // Referenced so the props type is used in the template above.

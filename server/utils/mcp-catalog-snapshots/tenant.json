@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:2ff488ebb0d39cdd379e3184ac72f730da200033bf75d04479acbdf95015201f",
+  "fingerprint": "sha256:6887260bf3545e77def3aaeefbdf24694674fa67cc5bf1ed1649d87db8bbc0b9",
   "tools": [
     {
       "name": "attach_media",
@@ -11959,9 +11959,6 @@
                 "product_id": {
                   "type": "string"
                 },
-                "route_path": {
-                  "type": "string"
-                },
                 "values": {
                   "additionalProperties": true,
                   "description": "Localized values follow the canonical owner fields. content_document uses title, summary, slug, SEO fields and typed metadata; content_blocks edits its representation. Other allowed fields depend on resource_type. For collection, use { name }. Product values never include a collection; collection names are localized on the collection record.",
@@ -11970,8 +11967,7 @@
               },
               "required": [
                 "product_id",
-                "values",
-                "route_path"
+                "values"
               ],
               "type": "object"
             },

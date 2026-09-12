@@ -113,9 +113,8 @@ export const LOCALES_TOOLS: McpToolDefinition[] = [
           properties: {
             product_id: { type: 'string' },
             values: localizedValuesSchema,
-            route_path: { type: 'string' },
           },
-          required: ['product_id', 'values', 'route_path'],
+          required: ['product_id', 'values'],
           additionalProperties: false,
         },
       },

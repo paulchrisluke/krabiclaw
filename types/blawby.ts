@@ -85,6 +85,9 @@ export const BLAWBY_ROUTE_RECIPES = [
   'privacy',
   'terms',
   'third-party-notices',
+  // Any other page this site publishes, addressed by its own path. The named
+  // recipes above are pages with branded sections; this one is the page.
+  'page',
 ] as const
 
 export type BlawbyRouteRecipe = typeof BLAWBY_ROUTE_RECIPES[number]

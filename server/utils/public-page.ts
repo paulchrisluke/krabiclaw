@@ -636,8 +636,15 @@ async function loadPublicPageSource(
     })
     // Collections are the site's merchandising order, which is what the
     // public grouping renders. A page with products and no collections shows
-    // no groups rather than inventing one.
-    collections = await listCollections(db, { organizationId: orgId, siteId })
+    // no groups rather than inventing one. A location page shows the site's
+    // own collections and that location's — never another branch's, which a
+    // Product offered at both would otherwise drag onto the page.
+    collections = locationId
+      ? [
+          ...await listCollections(db, { organizationId: orgId, siteId, locationId: null }),
+          ...await listCollections(db, { organizationId: orgId, siteId, locationId }),
+        ]
+      : await listCollections(db, { organizationId: orgId, siteId })
     if (localizedLocale) {
       collections = projectExactLocalizedCollection('collection', collections, publicLocalizations)
       products = projectExactLocalizedCollection('product', products, publicLocalizations).map(product => ({

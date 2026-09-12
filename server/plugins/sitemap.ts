@@ -126,6 +126,7 @@ export default definePlugin((nitroApp) => {
     }
 
     const template = resolvePublicTemplate({ themeId: site.theme_id, vertical: site.vertical })
+    const productPresentation = resolveProductPresentation(site.vertical)
 
     const localizedLocales = await queryAll<{ locale: string; organization_id: string }>(db, `
       SELECT l.locale, l.organization_id
@@ -157,6 +158,25 @@ export default definePlugin((nitroApp) => {
         `, [siteId, candidate.locale]),
       ])
       for (const resource of resources) entries.push({ loc: resource.route_path, lastmod: resource.updated_at })
+      // A Product's localized route is derived from the location it is offered
+      // at, so a Product offered at two locations lists both.
+      if (productPresentation) {
+        const localizedProducts = await queryAll<{ location_slug: string; slug: string; updated_at: string }>(db, `
+          SELECT bl.slug AS location_slug, p.slug, rl.updated_at
+            FROM resource_localizations rl
+            JOIN products p ON p.id = rl.resource_id AND p.organization_id = rl.organization_id AND p.active = 1
+            JOIN product_publications pub ON pub.product_id = p.id AND pub.organization_id = p.organization_id
+             AND pub.site_id = rl.site_id AND pub.published = 1
+            JOIN product_locations pl ON pl.product_id = p.id AND pl.organization_id = p.organization_id
+             AND pl.published = 1 AND pl.active = 1
+            JOIN business_locations bl ON bl.id = pl.location_id AND bl.site_id = rl.site_id AND bl.status = 'active'
+           WHERE rl.site_id = ? AND rl.locale = ? AND rl.resource_type = 'product'
+           ORDER BY bl.slug, p.slug
+        `, [siteId, candidate.locale])
+        for (const product of localizedProducts) {
+          entries.push({ loc: `/${candidate.locale}${productPresentation.productPath(product.location_slug, product.slug)}`, lastmod: product.updated_at })
+        }
+      }
       for (const page of pages) {
         if (/noindex/i.test(page.robots || '')) continue
         const localizedPath = page.path === '/' ? `/${candidate.locale}` : `/${candidate.locale}${page.path}`
@@ -204,7 +224,6 @@ export default definePlugin((nitroApp) => {
       return
     }
 
-    const productPresentation = resolveProductPresentation(site.vertical)
     const [locations, products, posts, tenantPages] = await Promise.all([
       queryAll<ApiRecord>(
         db,
@@ -217,7 +236,7 @@ export default definePlugin((nitroApp) => {
       ),
       queryAll<ApiRecord>(
         db,
-        `SELECT p.slug, p.location_id, bl.slug AS location_slug, p.updated_at
+        `SELECT p.id, p.slug, pl.location_id, bl.slug AS location_slug, p.updated_at
          FROM products p
          JOIN product_publications pub ON pub.product_id = p.id AND pub.organization_id = p.organization_id AND pub.published = 1
          JOIN product_locations pl ON pl.product_id = p.id AND pl.organization_id = p.organization_id AND pl.published = 1 AND pl.active = 1

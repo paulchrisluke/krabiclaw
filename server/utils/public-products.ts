@@ -186,10 +186,8 @@ export async function loadPublicProductDetail(
   if (!resolved) return null
   const localizations = await loadExactPublicLocalizations(db, resolved.site.organization_id, siteId, locale)
   const localizedLocationPath = `/${locale}/locations/${locationSlug}`
-  const localizedProductPath = `${localizedLocationPath}/${routeKind}/${productSlug}`
   const locationId = resolveLocalizedRouteResourceId(localizations, 'business_location', localizedLocationPath)
-  const productId = resolveLocalizedRouteResourceId(localizations, 'product', localizedProductPath)
-  if (!locationId || !productId) return null
+  if (!locationId) return null
   const sourceLocation = await queryFirst<PublicProductLocation>(db, `
     SELECT id, slug, title, feature_overrides FROM business_locations
      WHERE organization_id = ? AND site_id = ? AND id = ? AND status = 'active' LIMIT 1
@@ -198,9 +196,13 @@ export async function loadPublicProductDetail(
   const collection = await loadPublicProductCollection(db, siteId, routeKind, previewAuthorized, sourceLocation.slug)
   const location = collection?.locations[0]
   if (!collection || !location) return null
-  const sourceProduct = collection.products.find(product => product.id === productId)
+  // The Product is named by the same slug its English route names: a Product
+  // reaches the public through each location that offers it, so its localized
+  // route is that location's route under a locale prefix, not a stored path of
+  // its own.
+  const sourceProduct = collection.products.find(product => product.slug === productSlug)
   const locationLocalization = localizations.find(item => item.resourceType === 'business_location' && item.resourceId === location.id)
-  const productLocalization = localizations.find(item => item.resourceType === 'product' && item.resourceId === productId)
+  const productLocalization = localizations.find(item => item.resourceType === 'product' && item.resourceId === sourceProduct?.id)
   const siteLocalization = localizations.find(item => item.resourceType === 'site' && item.resourceId === siteId)
   if (!sourceProduct || !locationLocalization || !productLocalization) return null
   const localizedProduct = projectExactLocalizedResource('product', sourceProduct, productLocalization)

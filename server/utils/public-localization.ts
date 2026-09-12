@@ -1,9 +1,11 @@
 import {
+  loadMetafieldDefinitionIndex,
   parseLocalizedResourceType,
   RESOURCE_LOCALIZATION_REGISTRY,
   validateLocalizedValues,
   type LocalizedResourceType,
   type LocalizedValues,
+  type MetafieldDefinitionIndex,
 } from '~/server/utils/localization-registry'
 import { HTTPError } from 'nitro'
 import { queryAll, type DbClient } from '~/server/db'
@@ -39,7 +41,10 @@ export async function loadExactPublicLocalizations(
      WHERE organization_id = ? AND site_id = ? AND locale = ?
      ORDER BY resource_type, resource_id
   `, [organizationId, siteId, locale])
-  return indexStoredPublicLocalizations(rows)
+  // Which translated Product attributes are valid is the tenant's own
+  // definition set, so the reader loads it rather than validating against a
+  // list it does not have.
+  return indexStoredPublicLocalizations(rows, await loadMetafieldDefinitionIndex(db, organizationId))
 }
 
 const PROJECTED_FIELD_NAMES: Partial<Record<LocalizedResourceType, Readonly<Record<string, string>>>> = {
@@ -57,7 +62,10 @@ function localizedSlug(routePath: string | null): string | null {
   return routePath.split('/').filter(Boolean).at(-1) ?? null
 }
 
-export function indexStoredPublicLocalizations(rows: readonly StoredPublicLocalizationRow[]): ExactPublicLocalization[] {
+export function indexStoredPublicLocalizations(
+  rows: readonly StoredPublicLocalizationRow[],
+  definitions: MetafieldDefinitionIndex,
+): ExactPublicLocalization[] {
   return rows.map((row) => {
     const resourceType = parseLocalizedResourceType(row.resource_type)
     const parsedValues: unknown = JSON.parse(row.values_json)
@@ -65,7 +73,7 @@ export function indexStoredPublicLocalizations(rows: readonly StoredPublicLocali
       resourceType,
       resourceId: row.resource_id,
       locale: row.locale,
-      values: validateLocalizedValues(resourceType, parsedValues),
+      values: validateLocalizedValues(resourceType, parsedValues, definitions),
       routePath: row.route_path,
     }
   })
@@ -81,8 +89,11 @@ export function projectExactLocalizedResource<T extends { id: string }>(
   }
   const fieldNames = PROJECTED_FIELD_NAMES[resourceType] ?? {}
   const definition = RESOURCE_LOCALIZATION_REGISTRY[resourceType]
+  // Clearing a field is the empty state of its declared type. A map of
+  // translated attributes empties to a map with nothing in it: "this product
+  // has no translated attributes" is a readable answer, an absent map is not.
   const clearedValues = Object.fromEntries(
-    Object.keys(definition.fields).map(field => [fieldNames[field] ?? field, undefined]),
+    Object.entries(definition.fields).map(([field, shape]) => [fieldNames[field] ?? field, shape === 'metafields' ? {} : undefined]),
   )
   const projectedValues = Object.fromEntries(Object.entries(localization.values).map(([field, value]) => [
     fieldNames[field] ?? field,

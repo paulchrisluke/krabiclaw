@@ -11,6 +11,12 @@
       <BlawbyConsultationCta v-if="ctaBlock && ctaProps.title && ctaProps.label && ctaProps.destination" v-bind="ctaProps" />
     </template>
 
+    <template v-else-if="page.path === '/services'">
+      <BlawbyServicesSection v-if="servicesBlock" v-bind="servicesProps" :items="serviceItems" />
+      <BlawbyFaqSection :items="faqs" :decoration-url="faqDecoration" />
+      <BlawbyConsultationCta v-if="ctaBlock && ctaProps.title && ctaProps.label && ctaProps.destination" v-bind="ctaProps" />
+    </template>
+
     <template v-else-if="page.path === '/pricing'">
       <BlawbyPageHero :title="heroTitle" :description="heroDescription" variant="pricing" />
       <BlawbyShieldDivider variant="pricing" />
@@ -168,7 +174,10 @@ const reviews = computed<PublicSiteReview[]>(() => arrayRecords(reviewsBlock.val
   google_review_metadata: null,
 })).filter(item => item.id && item.author_name))
 
-const pricingBlock = computed(() => block('product_grid', data => data.section === 'pricing'))
+// Sliding-scale tiers the firm wrote, not catalog rows: a product_grid's items
+// are replaced by the products it references, so authored cards live in a
+// feature_grid like every other authored card set on this page.
+const pricingBlock = computed(() => block('feature_grid', data => data.section === 'pricing'))
 const pricingPlans = computed(() => arrayRecords(pricingBlock.value?.data.items).map(item => ({
   discount: stringValue(item.title),
   price: stringValue(item.value),

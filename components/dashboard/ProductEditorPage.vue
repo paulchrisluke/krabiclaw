@@ -723,12 +723,6 @@ const productLocalizationFields = computed(() => {
 
 const siteLocalizationSettingsPath = computed(() => `/dashboard/${route.params.orgSlug}/sites/${route.params.siteSlug}/settings/localization`)
 
-function localizedProductPath(locale: string): string {
-  const row = product.value
-  if (!row) throw new Error(`The ${presentation.itemLabel.toLowerCase()} is no longer available.`)
-  return `/${locale}${presentation.productPath(String(route.params.locationSlug), row.slug)}`
-}
-
 function isProductLocalizationResponse(value: unknown): value is { localization: { values: Record<string, unknown> } } {
   return isRecord(value) && isRecord(value.localization) && isRecord(value.localization.values)
 }
@@ -765,7 +759,7 @@ async function saveProductLocalization(locale: string, submitted: Record<string,
   if (Object.keys(metafields).length) values.metafields = metafields
   await dashboardApi(`/api/editor/sites/${siteId}/localization/product/${row.id}/${encodeURIComponent(locale)}`, {
     method: 'PUT',
-    body: { values, route_path: localizedProductPath(locale) },
+    body: { values },
     validate: isProductLocalizationResponse,
   })
 }

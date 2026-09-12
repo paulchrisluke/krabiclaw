@@ -19,6 +19,7 @@ import {
 
 const RECIPES = new Set<BlawbyRouteRecipe>(BLAWBY_ROUTE_RECIPES)
 const SLUG_PATTERN = /^[a-z0-9_-]+$/
+const PAGE_PATH_PATTERN = /^\/[a-z0-9/_-]*$/
 
 export interface PublicBlawbyDocumentLoadOptions {
   previewAuthorized?: boolean
@@ -49,10 +50,11 @@ export async function loadPublicBlawbyDocument(
   if (!RECIPES.has(recipe)) {
     throw new HTTPError({ statusCode: 400, statusMessage: 'Valid Blawby route recipe required' })
   }
-  if (recipe === 'article' && !slug) {
+  if ((recipe === 'article' || recipe === 'page') && !slug) {
     throw new HTTPError({ statusCode: 400, statusMessage: 'Blawby route slug required' })
   }
-  if (slug && !SLUG_PATTERN.test(slug)) {
+  // A generic page is addressed by its path; every other recipe by a slug.
+  if (slug && !(recipe === 'page' ? PAGE_PATH_PATTERN : SLUG_PATTERN).test(slug)) {
     throw new HTTPError({ statusCode: 400, statusMessage: 'Invalid Blawby route slug' })
   }
 
