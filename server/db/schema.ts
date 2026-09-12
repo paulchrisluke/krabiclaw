@@ -1555,6 +1555,9 @@ export const legal_intake_references = sqliteTable("legal_intake_references", {
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 }, (table) => [
 	foreignKey({ columns: [table.organization_id, table.site_id], foreignColumns: [sites.organization_id, sites.id], name: "legal_intake_references_site_scope_fk" }).onDelete("restrict"),
+	// Membership is normally kept out of the schema because D1 cannot rebuild a
+	// referenced parent when a value set grows. Nothing references this table,
+	// so it can be rebuilt, and the check earns its place.
 	check("legal_intake_references_actor_kind_check", sql`original_actor_kind IN ('human', 'anonymous')`),
 	index("idx_legal_intake_references_site_actor").on(table.site_id, table.original_actor_id),
 	index("legal_intake_references_organization_id_idx").on(table.organization_id),
