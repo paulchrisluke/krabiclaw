@@ -137,11 +137,14 @@ async function loadOwner(db: DbClient, owner: SocialCardOwner): Promise<OwnerRec
         COALESCE(NULLIF(trim(seo_description), ''), NULLIF(trim(short_description), ''), NULLIF(trim(description), '')) AS description,
         'Location' AS label, city AS location FROM business_locations WHERE id = ? LIMIT 1`, [owner.owner_id]) ?? null
     case 'product':
-      return await queryFirst<OwnerRecord>(db, `SELECT p.organization_id, p.site_id,
-        COALESCE(NULLIF(trim(p.seo_title), ''), p.name) AS title,
-        COALESCE(NULLIF(trim(p.seo_description), ''), NULLIF(trim(p.description), '')) AS description,
+      return await queryFirst<OwnerRecord>(db, `SELECT p.organization_id, pub.site_id,
+        p.name AS title,
+        NULLIF(trim(p.description), '') AS description,
         'Product' AS label, NULL AS location
-        FROM products p JOIN business_locations bl ON bl.id = p.location_id WHERE p.id = ? LIMIT 1`, [owner.owner_id]) ?? null
+        FROM products p
+        JOIN product_publications pub ON pub.product_id = p.id
+          AND pub.organization_id = p.organization_id AND pub.published = 1
+        WHERE p.id = ? LIMIT 1`, [owner.owner_id]) ?? null
     case 'content_document':
       return await queryFirst<OwnerRecord>(db, `SELECT d.organization_id, d.site_id,
         COALESCE(NULLIF(trim(d.seo_title), ''), NULLIF(trim(d.title), ''), NULLIF(trim(substr(d.summary, 1, 80)), '')) AS title,
