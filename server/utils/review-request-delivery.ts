@@ -1,5 +1,6 @@
 import type { DbClient } from '~/server/db'
 import type { CloudflareEnv } from '~/server/utils/auth'
+import { formatTimestamp } from '~/utils/timezone'
 import { notifyReviewRequest } from '~/server/utils/notifications'
 import {
   createOrRotateReviewRequest,
@@ -18,7 +19,9 @@ function siteBaseUrl(context: ReviewBookingContext): string {
   return publicUrl
 }
 
-function bookingLabel(context: ReviewBookingContext): string {
+// Headline copy only: "How was your reservation?". This is a sentence fragment,
+// not a value — the detail rows carry the visit itself.
+function bookingPhrase(context: ReviewBookingContext): string {
   return context.booking_type === 'reservation' ? 'your reservation' : 'your experience booking'
 }
 
@@ -56,7 +59,9 @@ export async function sendReviewRequestForBooking(
       guestName: context.customer_name || context.guest_name || 'there',
       email: recipientEmail,
       locationName: context.location_title,
-      bookingLabel: bookingLabel(context),
+      bookingPhrase: bookingPhrase(context),
+      visitAt: formatTimestamp(context.visit_starts_at, 'en', context.visit_timezone),
+      partySize: context.party_size === 1 ? '1 guest' : `${context.party_size} guests`,
       reviewUrl,
       optOutUrl,
     })

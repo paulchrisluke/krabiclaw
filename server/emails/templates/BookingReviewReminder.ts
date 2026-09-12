@@ -9,7 +9,8 @@ export default defineComponent({
     guestName: { type: String, required: true },
     siteName: { type: String, required: true },
     locationName: { type: String as PropType<string | null>, default: null },
-    bookingLabel: { type: String, required: true },
+    visitAt: { type: String, required: true },
+    partySize: { type: String, required: true },
     reviewUrl: { type: String, required: true },
     optOutUrl: { type: String, required: true },
     platformDomain: { type: String, required: true },
@@ -26,7 +27,8 @@ export default defineComponent({
         rows: [
           ['Business', props.siteName],
           props.locationName ? ['Location', props.locationName] : null,
-          ['Booking', props.bookingLabel],
+          ['Visit', props.visitAt],
+          ['Party size', props.partySize],
         ].filter(Boolean) as [string, string][],
       }),
       h(EmailAction, {
