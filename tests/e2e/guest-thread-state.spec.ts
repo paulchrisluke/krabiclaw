@@ -1,5 +1,5 @@
 import { dismissPreviewToolbar } from './helpers'
-import { localDateAt } from '../../utils/timezone'
+import { localDateAt, localNow } from '../../utils/timezone'
 import { createHmac } from 'node:crypto'
 import { expect, test, type APIRequestContext, type APIResponse } from '@playwright/test'
 import type {
@@ -43,6 +43,48 @@ const local = ['localhost', '127.0.0.1'].includes(new URL(baseURL).hostname)
 async function expectStatus(response: APIResponse, status: number) {
   expect(response.status(), await response.text()).toBe(status)
 }
+
+// Far enough ahead that the slot is still in the future when the reservation POST
+// re-reads availability a second or two later, and short enough that the unusable
+// window at the end of the location's local day stays this many minutes wide.
+const TODAY_SLOT_LEAD_MINUTES = 6
+
+interface LocationSlot { date: string; time: string }
+
+// The first HH:MM still ahead of the location's own clock today, or null when today
+// has already run out — the caller skips rather than pretending a booking could land.
+function nextOpenableSlotToday(timeZone: string): LocationSlot | null {
+  const { date, time } = localNow(timeZone)
+  const [hours, minutes] = time.split(':').map(Number)
+  const minuteOfDay = hours! * 60 + minutes! + TODAY_SLOT_LEAD_MINUTES
+  if (minuteOfDay >= 24 * 60) return null
+  const slot = `${String(Math.floor(minuteOfDay / 60)).padStart(2, '0')}:${String(minuteOfDay % 60).padStart(2, '0')}`
+  return { date, time: slot }
+}
+
+function setLocationSlot(request: APIRequestContext, slot: LocationSlot, directive: 'set' | 'inherit') {
+  return request.put('/api/editor/sites/site-demo/locations/loc-demo/reservation-availability', {
+    data: {
+      changes: [{
+        override_date: slot.date,
+        time_slot: slot.time,
+        directive,
+        ...(directive === 'set' ? { status: 'open' } : {}),
+      }],
+    },
+  })
+}
+
+// Set while the Today journey holds an opened slot, so the override is taken back even
+// when the test fails partway and leaves loc-demo open at an hour it does not serve.
+let openedTodaySlot: LocationSlot | null = null
+
+test.afterEach(async ({ page }) => {
+  if (!openedTodaySlot) return
+  const slot = openedTodaySlot
+  openedTodaySlot = null
+  await setLocationSlot(page.request, slot, 'inherit')
+})
 
 async function loadThreadList(request: APIRequestContext, search: string) {
   const response = await request.get(`/api/dashboard/sites/${siteId}/guest-threads`, {
@@ -239,28 +281,47 @@ test('Today uses the CMS patterns and sends one reservation change request', asy
   await expectStatus(availability, 200)
   const { timezone } = await availability.json() as { timezone: string }
   expect(timezone).toEqual(expect.any(String))
+  // The Today tab shows only bookings whose day key equals the *location's* current
+  // local day (listTodayAgenda), and listReservationSlots drops every slot already in
+  // the past. loc-demo's ordinary hours end at 20:00 Asia/Bangkok, so once CI runs
+  // after that — 13:00-17:00 UTC, every day — the location's today has no bookable
+  // slot left and a guest who "arrives today" cannot be created at all. Opening a slot
+  // for the rest of today is what the availability override exists for, so the test
+  // opens one instead of depending on the hour CI happens to start.
+  const todaySlot = nextOpenableSlotToday(timezone)
+  test.skip(
+    !todaySlot,
+    `${timezone} is within ${TODAY_SLOT_LEAD_MINUTES} minutes of midnight, so no reservation can still arrive today`,
+  )
+  await expectStatus(await setLocationSlot(page.request, todaySlot!, 'set'), 200)
+  openedTodaySlot = todaySlot!
+
   const bookingIds: string[] = []
-  for (const [name, email, instant] of [
-    [guestName, guestEmail, now],
+  for (const [name, email, plan] of [
+    [guestName, guestEmail, todaySlot!],
     [`Priya${now} Patel`, `priya-${now}@example.test`, now + 86_400_000],
   ] as const) {
-    // The time comes from the location's own availability, not a clock time that
-    // is only open while the test happens to run before it. The *day* has to be
-    // resolved the same way: every slot on the location's current day is already
-    // in the past once CI runs late in its timezone (Asia/Bangkok here), so this
-    // walks forward to the first day that still has an open slot.
-    let date = localDateAt(new Date(instant), timezone)
-    let slot: { time_slot: string; is_closed: boolean } | undefined
-    for (let dayOffset = 0; dayOffset < 4 && !slot; dayOffset += 1) {
-      date = localDateAt(new Date(instant + dayOffset * 86_400_000), timezone)
-      const day = await page.request.get('/api/public/sites/site-demo/reservations/availability', { params: { date, location_id: 'loc-demo' } })
-      await expectStatus(day, 200)
-      const { dates } = await day.json() as { dates: Array<{ slots: Array<{ time_slot: string; is_closed: boolean }> }> }
-      slot = dates[0]?.slots.filter(candidate => !candidate.is_closed).at(-1)
+    let date: string
+    let time: string
+    if (typeof plan === 'number') {
+      // The upcoming guest only has to land on some later day the location is open,
+      // so it takes the location's own availability and walks forward to find one.
+      let slot: { time_slot: string; is_closed: boolean } | undefined
+      date = localDateAt(new Date(plan), timezone)
+      for (let dayOffset = 0; dayOffset < 4 && !slot; dayOffset += 1) {
+        date = localDateAt(new Date(plan + dayOffset * 86_400_000), timezone)
+        const day = await page.request.get('/api/public/sites/site-demo/reservations/availability', { params: { date, location_id: 'loc-demo' } })
+        await expectStatus(day, 200)
+        const { dates } = await day.json() as { dates: Array<{ slots: Array<{ time_slot: string; is_closed: boolean }> }> }
+        slot = dates[0]?.slots.filter(candidate => !candidate.is_closed).at(-1)
+      }
+      expect(slot, `loc-demo offers no open slot within four days of ${localDateAt(new Date(plan), timezone)}`).toBeTruthy()
+      time = slot!.time_slot
+    } else {
+      ({ date, time } = plan)
     }
-    expect(slot, `loc-demo offers no open slot within four days of ${localDateAt(new Date(instant), timezone)}`).toBeTruthy()
     const response = await page.request.post('/api/public/sites/site-demo/reservations', {
-      data: { name, email, phone: '+12025550123', date, time: slot!.time_slot, guests: '2', location_id: 'loc-demo' },
+      data: { name, email, phone: '+12025550123', date, time, guests: '2', location_id: 'loc-demo' },
     })
     await expectStatus(response, 201)
     const { id } = await response.json() as { id: string }
