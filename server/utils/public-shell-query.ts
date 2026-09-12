@@ -67,19 +67,31 @@ export function appendPublicShellQueries(
                 FROM sites s, json_each(s.settings_json, '$.config') setting
                WHERE s.organization_id = ? AND s.id = ?
                  AND setting.key IN ('brand_color', 'font_preset', 'press_email', 'partnerships_email', 'catering_email', 'careers_email', 'google_site_verification', 'default_timezone')
-              UNION ALL
-              SELECT '__experience_count',
-                     CAST((SELECT COUNT(*) FROM products p JOIN business_locations bl ON bl.id = p.location_id AND bl.site_id = p.site_id AND bl.organization_id = p.organization_id WHERE p.site_id = ? AND p.product_type = 'experience' AND p.is_visible = 1 AND bl.status = 'active') AS TEXT)
-              `, [organizationId, siteId, siteId]),
+              `, [organizationId, siteId]),
     locales: push(`SELECT locale, label, is_source, status
                 FROM site_locales
                WHERE organization_id = ? AND site_id = ?
                  AND (is_source = 1 OR status = 'published')
                ORDER BY is_source DESC, locale ASC`, [organizationId, siteId]),
-    productLocations: push(`SELECT DISTINCT location_id
-                              FROM products
-                             WHERE organization_id = ? AND site_id = ? AND product_type = 'standard' AND is_visible = 1
-                             ORDER BY location_id`, [organizationId, siteId]),
+    // Where this site has something to show: the Product is published to the
+    // site, offered and published at the location, and active itself. All three
+    // are separate states (see product_publications / product_locations in
+    // server/db/schema.ts) and the nav asks for all three at once.
+    // `bookable` is what separates the two surfaces: a Product that takes
+    // bookings is an Experience and is read on /experiences, everything else
+    // on the vertical's own Menu or Products. The nav needs both facts per
+    // location so a surface with nothing on it is not offered.
+    productLocations: push(`SELECT pl.location_id,
+                                   MAX(CASE WHEN bc.product_id IS NULL THEN 0 ELSE 1 END) AS bookable,
+                                   MAX(CASE WHEN bc.product_id IS NULL THEN 1 ELSE 0 END) AS unbookable
+                              FROM product_locations pl
+                              JOIN products p ON p.id = pl.product_id AND p.organization_id = pl.organization_id
+                              JOIN product_publications pp ON pp.product_id = p.id AND pp.organization_id = p.organization_id
+                              LEFT JOIN product_booking_configs bc ON bc.product_id = p.id AND bc.organization_id = p.organization_id
+                             WHERE pl.organization_id = ? AND pp.site_id = ? AND pp.published = 1
+                               AND pl.published = 1 AND pl.active = 1 AND p.active = 1
+                             GROUP BY pl.location_id
+                             ORDER BY pl.location_id`, [organizationId, siteId]),
   }
 }
 
@@ -181,17 +193,19 @@ export function buildPublicShellPayload(
       label: locale.label ?? locale.locale,
       is_source: Boolean(locale.is_source),
     })),
-    hasExperiences: Number(configRows.find(({ key }) => key === '__experience_count')?.value ?? 0) > 0,
-    hasProducts: (() => {
-      const productLocationIds = new Set(((results[indexes.productLocations]?.results ?? []) as Array<{ location_id: string }>).map(row => row.location_id))
-      return rawLocations.some((location) => {
-        if (!productLocationIds.has(String(location.id))) return false
+    ...(() => {
+      const rows = (results[indexes.productLocations]?.results ?? []) as Array<{ location_id: string; bookable: number; unbookable: number }>
+      const byLocation = new Map(rows.map(row => [String(row.location_id), row]))
+      const carries = (pick: (_row: { bookable: number; unbookable: number }) => number) => rawLocations.some((location) => {
+        const row = byLocation.get(String(location.id))
+        if (!row || pick(row) !== 1) return false
         const { capabilities } = resolveSiteCmsCapabilities(String(site.vertical), site.theme_id, {
           siteEnabledFeatures: site.feature_overrides,
           locationEnabledFeatures: location.feature_overrides as string | null,
         })
         return capabilities.managers.some(manager => manager.key === 'location.products')
       })
+      return { hasProducts: carries(row => row.unbookable), hasBookableProducts: carries(row => row.bookable) }
     })(),
   }
 }

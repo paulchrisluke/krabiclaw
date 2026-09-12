@@ -259,6 +259,13 @@ test('Today uses the CMS patterns and sends one reservation change request', asy
       slot = dates[0]?.slots.filter(candidate => !candidate.is_closed).at(-1)
     }
     expect(slot, `loc-demo offers no open slot within four days of ${localDateAt(new Date(instant), timezone)}`).toBeTruthy()
+    // The journey below is the Today page, so the first guest has to arrive on
+    // the location's current day. Once its last slot has closed there is no
+    // reservation that can, and a walk to tomorrow would assert "arrives today"
+    // about a guest who does not -- measured at 23:26 Asia/Bangkok, where both
+    // guests landed on the 13th and the Today list was empty. Name that instead.
+    test.skip(instant === now && date !== localDateAt(new Date(now), timezone),
+      `loc-demo has no open slot left on ${localDateAt(new Date(now), timezone)} (${timezone}), so nothing can arrive today`)
     const response = await page.request.post('/api/public/sites/site-demo/reservations', {
       data: { name, email, phone: '+12025550123', date, time: slot!.time_slot, guests: '2', location_id: 'loc-demo' },
     })

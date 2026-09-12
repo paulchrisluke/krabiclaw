@@ -2,9 +2,9 @@
   <div
     class="tenant-layout saya-theme min-h-screen flex flex-col font-sans bg-default text-default"
     :style="themeStyles"
-    :data-font-preset="fontPreset"
     :data-hydrated="hydrated ? 'true' : 'false'"
     :data-public-critical-shell="isHome ? 'true' : undefined"
+    :data-font-preset="fontPreset"
   >
     <!-- Teleport target for Saya components (e.g. BookingModal) that need to escape
          page overflow/stacking contexts but still must render inside this div to
@@ -20,7 +20,7 @@
       :site="resolvedSite"
       :locations="locations"
       :has-products="shell.hasProducts.value"
-      :has-experiences="hasExperiences"
+      :has-bookable-products="shell.hasBookableProducts.value"
     />
     <main class="grow" :data-route-shell="route.path">
       <slot />
@@ -33,13 +33,12 @@
       :error="bootstrapError"
       :config="config"
       :has-products="shell.hasProducts.value"
-      :has-experiences="hasExperiences"
+      :has-bookable-products="shell.hasBookableProducts.value"
     />
   </div>
 </template>
 
 <script setup lang="ts">
-import { getPreviewSubpath } from '~/composables/usePublicPageRequest'
 import sayaCriticalCss from '~/assets/css/saya-critical.css?raw'
 import '~/assets/css/saya-entry.css'
 import { NON_INDEXABLE_ROBOTS_INTENT, normalizeRobotsIntent, type RobotsIntent } from '~/shared/robots-directive'
@@ -50,8 +49,7 @@ const hydrated = ref(false)
 onMounted(() => { hydrated.value = true })
 const { locale: activeLocale } = useI18n()
 const isHome = computed(() => route.path === '/'
-  || (activeLocale.value !== 'en' && route.path === `/${activeLocale.value}`)
-  || getPreviewSubpath(route.path) === '/')
+  || (activeLocale.value !== 'en' && route.path === `/${activeLocale.value}`))
 const sayaStylesheetHref = '/_nuxt/surfaces/saya.css'
 const sayaStylesheetForRoute = computed(() => {
   return sayaStylesheetHref
@@ -88,7 +86,7 @@ const shell = useSiteShellState()
 // Await the existing keyed shell on every SSR route, not only the homepage,
 // so a direct menu/contact visit cannot serialize Default and hydrate as Mali.
 if (import.meta.server) await shell.ready
-const { config, locations, hasExperiences, locales, error: bootstrapError, site: shellSite } = shell
+const { config, locations, locales, error: bootstrapError, site: shellSite } = shell
 const { isPlatform, site } = useTenantSite()
 const resolvedSite = computed(() => shellSite.value || site)
 const brandColor = computed(
@@ -137,13 +135,25 @@ const themeStyles = computed(() => {
 // Slug matching works in every locale because the shell's locations are fetched
 // per locale and carry the same localized slugs the route does.
 const scopedLocationSlug = computed(() => {
-  const path = getPreviewSubpath(route.path) ?? route.path
+  const path = route.path
   const localePrefix = `/${activeLocale.value}`
   const sourcePath = activeLocale.value !== 'en' && path.startsWith(localePrefix)
     ? path.slice(localePrefix.length)
     : path
   const matched = sourcePath.match(/^\/locations\/([^/]+)/)?.[1]
-  return matched === undefined ? null : decodeURIComponent(matched)
+  if (matched === undefined) return null
+  try {
+    return decodeURIComponent(matched)
+  }
+  catch {
+    // A segment that is not a valid escape sequence. The request layer decodes
+    // the pathname first and answers 400 for the ones I could construct
+    // (`/locations/%`, `/locations/%252`), so nothing reaches here today —
+    // this layout does not decide its own behaviour on that staying true. A
+    // segment naming no location scopes the footer to nothing, and the page
+    // below answers with its own 404.
+    return null
+  }
 })
 const footerLocations = computed(() => (scopedLocationSlug.value === null
   ? locations.value
@@ -215,6 +225,11 @@ useHead(() => {
 <style>
 /* Saya theme CSS variables */
 .saya-theme {
-  --brand-color: #16a34a;
+  /* A site that has not chosen a colour yet wears the platform's, so the first
+     preview in onboarding already looks like KrabiClaw rather than a green
+     nobody picked. themeStyles above replaces both values the moment the owner
+     answers the brand step. */
+  --brand-color: var(--kc-coral);
+  --brand-color-foreground: #fff;
 }
 </style>
