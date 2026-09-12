@@ -2,8 +2,8 @@ import type Stripe from 'stripe'
 import { execute, queryFirst, type DbClient } from '~/server/db'
 import {
   invoiceSubscriptionId,
-  MAX_STRIPE_WEBHOOK_ATTEMPTS,
 } from '~/server/utils/better-auth-stripe'
+import { MAX_STRIPE_WEBHOOK_ATTEMPTS } from '~/server/utils/stripe-webhook-events'
 import {
   createOperatorApprovalToken,
   OperatorApprovalError,

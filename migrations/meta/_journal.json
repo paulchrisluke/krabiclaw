@@ -8,6 +8,13 @@
       "when": 1789215383036,
       "tag": "0000_baseline",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1789231899070,
+      "tag": "0001_cool_paladin",
+      "breakpoints": true
     }
   ]
 }
