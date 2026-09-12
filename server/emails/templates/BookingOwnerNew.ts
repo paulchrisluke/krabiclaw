@@ -7,7 +7,7 @@ export default defineComponent({
   props: {
     guestName: { type: String, required: true },
     siteName: { type: String, required: true },
-    experienceTitle: { type: String, required: true },
+    productTitle: { type: String, required: true },
     date: { type: String, required: true },
     time: { type: String, required: true },
     partySize: { type: Number, required: true },
@@ -29,7 +29,7 @@ export default defineComponent({
       h(EmailDetails, {
         rows: [
           ['Business', props.siteName],
-          ['Experience', props.experienceTitle],
+          ['Booking', props.productTitle],
           ['Customer', props.guestName],
           ['Date', props.date],
           ['Time', props.time],

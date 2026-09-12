@@ -6,7 +6,6 @@ import { getVerticalCopy, type SiteVertical } from "~/utils/vertical-copy";
 import { heroBlockSection } from "~/utils/tenant-page-blocks";
 import { executeBatch, queryFirst, type BatchQuery, type DbClient } from "~/server/db";
 import { createTenantPagesBatch } from "~/server/utils/content/pages";
-import { upsertProfessionalServiceContent } from "~/server/utils/professional-services-editor";
 
 function uid(prefix: string) {
   return `${prefix}-${crypto.randomUUID()}`;
@@ -143,18 +142,28 @@ export async function seedNewSite(
       [siteId],
     );
     if (!configured?.present) {
-      await upsertProfessionalServiceContent(db, {
-        organizationId,
-        siteId,
-        data: {
-          consultation: {
+      // Consultation settings live on the site, read back by
+      // server/utils/professional-services.ts. The editor that used to wrap
+      // this write went with the offerings model; the setting did not.
+      await executeBatch(db, [{
+        query: `UPDATE sites SET settings_json = json_set(COALESCE(settings_json, '{}'), '$.consultation', json(?)), updated_at = ?
+                 WHERE id = ? AND organization_id = ?`,
+        params: [
+          JSON.stringify({
             mode: "native_disabled",
             cta_label: getVerticalCopy(vertical).reservationRequestButton,
+            external_url: null,
             schedule_path: "/schedule",
             confirmation_path: "/contact/confirmed",
-          },
-        },
-      });
+            tracking_enabled: false,
+            contact_form_enabled: true,
+            metadata: {},
+          }),
+          new Date().toISOString(),
+          siteId,
+          organizationId,
+        ],
+      }], { operation: 'Seed consultation settings' });
     }
   }
 

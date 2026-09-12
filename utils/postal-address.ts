@@ -35,7 +35,14 @@ export interface PostalAddressParts {
  */
 export function composePostalAddress(parts: PostalAddressParts): string {
   const street = parts.streetAddress.trim()
-  const alreadyInStreet = (segment: string) => street.toLowerCase().includes(segment.toLowerCase())
+  // Word boundaries, not substrings: the region "CA" occurs inside "123 Acacia
+  // Ave", and treating that as "already written" dropped the state from the
+  // composed address.
+  const streetWords = new Set(street.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter(Boolean))
+  const alreadyInStreet = (segment: string) => {
+    const words = segment.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter(Boolean)
+    return words.length > 0 && words.every(word => streetWords.has(word))
+  }
 
   const locality = [parts.city, parts.region, parts.postalCode]
     .map(part => part.trim())

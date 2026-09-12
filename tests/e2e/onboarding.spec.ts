@@ -1,7 +1,22 @@
 import { expect, test } from '@playwright/test'
 import { collectPageErrors, dismissPreviewToolbar } from './helpers'
 import { loginAs } from './helpers/auth'
-import { tenantHostIsAddressable } from './test-env'
+import { tenantHostIsAddressable, testBaseUrl } from './test-env'
+import { environmentTenantAliasSlug } from '../../server/utils/tenant-hosts'
+
+/**
+ * The subdomain the site is stored under, from the host this environment frames
+ * it at.
+ *
+ * Deployed environments address a tenant as `<subdomain>-preview.krabiclaw.com`,
+ * so the first label of that hostname carries the environment suffix and is not
+ * the stored value. Everywhere else the first label IS the subdomain.
+ */
+function siteSubdomain(origin: string): string {
+  const hostname = new URL(origin).hostname
+  const alias = environmentTenantAliasSlug(hostname, { NUXT_PUBLIC_PLATFORM_DOMAIN: testBaseUrl() })
+  return alias ? alias : hostname.split('.')[0]!
+}
 
 // The manual-name path of the new-site flow, driven the way an owner drives it:
 // the welcome screen, then one question per route, each advanced by the shell's
@@ -81,7 +96,7 @@ test('a new owner builds a draft and creates a site through the routed flow', as
   // every other tenant spec here does.
   const asAnyone = tenantHostIsAddressable()
     ? { url: `${siteOrigin}/`, headers: {} }
-    : { url: `${baseURL}/`, headers: { 'x-preview-tenant': new URL(siteOrigin).hostname.split('.')[0]! } }
+    : { url: `${baseURL}/`, headers: { 'x-preview-tenant': siteSubdomain(siteOrigin) } }
   expect(await (await request.get(asAnyone.url, { headers: asAnyone.headers })).text()).not.toContain(name)
 
   await page.getByRole('button', { name: 'Enter the details myself' }).click()
@@ -148,7 +163,7 @@ test('a new owner builds a draft and creates a site through the routed flow', as
   // owns exactly one site.
   const context = await (await page.request.get('/api/dashboard/context', { params: { org: created!.slug } })).json() as { sites: Array<{ subdomain: string | null }> }
   expect(context.sites).toHaveLength(1)
-  expect(context.sites[0]!.subdomain).toBe(new URL(siteOrigin).hostname.split('.')[0])
+  expect(context.sites[0]!.subdomain).toBe(siteSubdomain(siteOrigin))
 
   // And the request that a moment ago did not get the site now does, with no
   // preview token anywhere: that is what activation means.

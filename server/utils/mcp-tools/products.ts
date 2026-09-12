@@ -1,122 +1,220 @@
 import type { McpToolDefinition } from './shared'
-import { pageInfoObject, paginationInputSchema, resolvedMediaAssetObject, ROBOTS_DIRECTIVE_ENUM, siteTool } from './shared'
-import { PRODUCT_DETAILS_INPUT_SCHEMA, PRODUCT_LIMITS } from '~/server/utils/product-validation'
+import { pageInfoObject, paginationInputSchema, resolvedMediaAssetObject, siteTool } from './shared'
+import { PRODUCT_LIMITS } from '~/server/utils/product-validation'
 import { SUPPORTED_CURRENCIES } from '~/shared/currencies'
+import { METAFIELD_VALUE_TYPES } from '~/shared/metafields'
+import { PRICE_RECURRING_INTERVALS, PRICE_TAX_BEHAVIORS, PRICE_TYPES } from '~/shared/prices'
+
+/**
+ * The catalog tool surface.
+ *
+ * These schemas are generated from the same registries the runtime validates
+ * against, so a tool cannot advertise a value the writer rejects. Every
+ * contract here speaks the canonical model: a product belongs to the
+ * organization, a variant is what gets bought, a price belongs to a variant,
+ * and where it is sold and shown are explicit relationships.
+ */
 
 const priceObject = {
-  type: ['object', 'null'],
+  type: 'object',
   properties: {
-    id: { type: 'string' }, amount_minor: { type: 'integer' }, currency: { type: 'string' },
-    unit: { type: 'string', enum: ['item', 'person', 'table'] },
-    tax_behavior: { type: 'string', enum: ['unspecified', 'inclusive', 'exclusive'] },
-    compare_at_amount_minor: { type: ['integer', 'null'] }, valid_from: { type: 'string' },
-    valid_until: { type: ['string', 'null'] }, provenance: { type: 'string' },
+    id: { type: 'string' },
+    location_id: { type: ['string', 'null'], description: 'The location this offer applies at, or null for a location-neutral offer. Null is a declared scope, not a missing value.' },
+    active: { type: 'boolean' },
+    currency: { type: 'string' },
+    unit_amount: { type: 'integer', description: 'Integer amount in the currency smallest unit.' },
+    type: { type: 'string', enum: [...PRICE_TYPES] },
+    recurring_interval: { type: ['string', 'null'], enum: [...PRICE_RECURRING_INTERVALS, null] },
+    recurring_interval_count: { type: ['integer', 'null'] },
+    tax_behavior: { type: 'string', enum: [...PRICE_TAX_BEHAVIORS] },
+    compare_at_unit_amount: { type: ['integer', 'null'] },
+    valid_from_at: { type: ['string', 'null'] },
+    valid_until_at: { type: ['string', 'null'] },
   },
-  required: ['id', 'amount_minor', 'currency', 'unit', 'tax_behavior', 'compare_at_amount_minor', 'valid_from', 'valid_until', 'provenance'],
+  required: ['id', 'location_id', 'active', 'currency', 'unit_amount', 'type', 'tax_behavior'],
 } as const
 
 const priceWrite = {
-  type: ['object', 'null'],
-  description: 'Fixed numeric price, or null when this Product has no fixed amount. Zero means free and must not be used as a placeholder. Put explicit customer-facing wording in a details entry with key "price-note". Currency defaults to the site currency, unit defaults to item, and tax_behavior defaults to unspecified.',
+  type: 'object',
+  description: 'A monetary offer on this variant. unit_amount is an integer in the currency smallest unit; 0 is an explicit free offer, and a variant with no price is not purchasable rather than free. Billing recurrence describes when the customer is charged, never when a class runs.',
   properties: {
-    amount_minor: { type: 'integer', minimum: 0, maximum: Number.MAX_SAFE_INTEGER }, currency: { type: 'string', enum: [...SUPPORTED_CURRENCIES] },
-    unit: { type: 'string', enum: ['item', 'person', 'table'] },
-    tax_behavior: { type: 'string', enum: ['unspecified', 'inclusive', 'exclusive'] },
-    compare_at_amount_minor: { type: ['integer', 'null'], minimum: 0, maximum: Number.MAX_SAFE_INTEGER }, valid_from: { type: 'string', format: 'date-time' }, valid_until: { type: ['string', 'null'], format: 'date-time' },
+    unit_amount: { type: 'integer', minimum: 0, maximum: Number.MAX_SAFE_INTEGER },
+    currency: { type: 'string', enum: [...SUPPORTED_CURRENCIES] },
+    location_id: { type: ['string', 'null'], description: 'Scope this offer to one location, or null for every location the product is offered at.' },
+    active: { type: 'boolean' },
+    type: { type: 'string', enum: [...PRICE_TYPES] },
+    recurring_interval: { type: ['string', 'null'], enum: [...PRICE_RECURRING_INTERVALS, null] },
+    recurring_interval_count: { type: ['integer', 'null'], minimum: 1 },
+    tax_behavior: { type: 'string', enum: [...PRICE_TAX_BEHAVIORS] },
+    compare_at_unit_amount: { type: ['integer', 'null'], minimum: 0 },
+    valid_from_at: { type: ['string', 'null'], format: 'date-time' },
+    valid_until_at: { type: ['string', 'null'], format: 'date-time' },
   },
-  required: ['amount_minor'],
+  required: ['unit_amount'],
   additionalProperties: false,
 } as const
 
-const productCategoryObject = {
+const optionValueWrite = {
   type: 'object',
-  properties: {
-    id: { type: 'string' }, location_id: { type: 'string' }, name: { type: 'string' }, slug: { type: 'string' },
-    sort_order: { type: 'number' },
-    created_at: { type: 'string' }, updated_at: { type: 'string' }, created_by: { type: 'string' }, updated_by: { type: 'string' },
-  },
-  required: ['id', 'location_id', 'name', 'slug', 'sort_order', 'created_at', 'updated_at', 'created_by', 'updated_by'],
+  properties: { id: { type: 'string' }, value: { type: 'string' }, sort_order: { type: 'integer' } },
+  required: ['value'],
+  additionalProperties: false,
 } as const
 
-/** The category as carried on a Product read. Writes reference it by category_id. */
-const productCategoryRefObject = {
+const optionWrite = {
   type: 'object',
-  properties: { id: { type: 'string' }, name: { type: 'string' }, slug: { type: 'string' }, sort_order: { type: 'number' } },
-  required: ['id', 'name', 'slug', 'sort_order'],
+  properties: {
+    id: { type: 'string' }, name: { type: 'string' }, sort_order: { type: 'integer' },
+    values: { type: 'array', minItems: 1, maxItems: PRODUCT_LIMITS.optionValues, items: optionValueWrite },
+  },
+  required: ['name', 'values'],
+  additionalProperties: false,
+} as const
+
+const variantWrite = {
+  type: 'object',
+  description: 'One buyable configuration. A product with no options still has exactly one. Keep the id when editing: a variant that keeps its id keeps its bookings.',
+  properties: {
+    id: { type: 'string' }, name: { type: 'string' }, sku: { type: ['string', 'null'] },
+    active: { type: 'boolean' }, sort_order: { type: 'integer' },
+    option_values: { type: 'object', additionalProperties: { type: 'string' }, description: 'Option id to option value id. Every option must be answered exactly once, and no two variants may answer identically.' },
+    prices: { type: 'array', maxItems: 20, items: priceWrite },
+  },
+  required: ['name'],
+  additionalProperties: false,
+} as const
+
+const variantObject = {
+  type: 'object',
+  properties: {
+    id: { type: 'string' }, product_id: { type: 'string' }, name: { type: 'string' },
+    sku: { type: ['string', 'null'] }, active: { type: 'boolean' }, sort_order: { type: 'integer' },
+    option_values: { type: 'object', additionalProperties: { type: 'string' } },
+    prices: { type: 'array', items: priceObject },
+  },
+  required: ['id', 'product_id', 'name', 'sku', 'active', 'sort_order', 'option_values', 'prices'],
+} as const
+
+const optionObject = {
+  type: 'object',
+  properties: {
+    id: { type: 'string' }, name: { type: 'string' }, sort_order: { type: 'integer' },
+    values: { type: 'array', items: { type: 'object', properties: { id: { type: 'string' }, value: { type: 'string' }, sort_order: { type: 'integer' } }, required: ['id', 'value', 'sort_order'] } },
+  },
+  required: ['id', 'name', 'sort_order', 'values'],
+} as const
+
+const publicationObject = {
+  type: 'object',
+  properties: { site_id: { type: 'string' }, published: { type: 'boolean' } },
+  required: ['site_id', 'published'],
+} as const
+
+const productLocationObject = {
+  type: 'object',
+  properties: { location_id: { type: 'string' }, active: { type: 'boolean' }, published: { type: 'boolean' } },
+  required: ['location_id', 'active', 'published'],
+} as const
+
+const collectionMembershipObject = {
+  type: 'object',
+  properties: { collection_id: { type: 'string' }, sort_order: { type: 'integer' } },
+  required: ['collection_id', 'sort_order'],
+} as const
+
+const collectionObject = {
+  type: 'object',
+  properties: {
+    id: { type: 'string' }, site_id: { type: 'string' }, location_id: { type: ['string', 'null'] },
+    name: { type: 'string' }, slug: { type: 'string' }, description: { type: ['string', 'null'] },
+    sort_order: { type: 'integer' },
+  },
+  required: ['id', 'site_id', 'location_id', 'name', 'slug', 'description', 'sort_order'],
+} as const
+
+const metafieldDefinitionObject = {
+  type: 'object',
+  properties: {
+    id: { type: 'string' }, namespace: { type: 'string' }, key: { type: 'string' }, name: { type: 'string' },
+    description: { type: ['string', 'null'] }, value_type: { type: 'string', enum: [...METAFIELD_VALUE_TYPES] },
+    validations: { type: 'object' }, localizable: { type: 'boolean' },
+  },
+  required: ['id', 'namespace', 'key', 'name', 'value_type', 'validations', 'localizable'],
 } as const
 
 const productObject = {
   type: 'object',
   properties: {
-    id: { type: 'string' }, location_id: { type: 'string' }, category_id: { type: 'string' }, category: productCategoryRefObject, name: { type: 'string' }, slug: { type: 'string' },
-    description: { type: 'string' }, price: priceObject, order_url: { type: ['string', 'null'] },
-    is_visible: { type: 'boolean' }, available: { type: 'boolean' }, featured: { type: 'boolean' }, featured_sort_order: { type: 'number' }, sort_order: { type: 'number' },
-    tags: { type: 'array', items: { type: 'string' } }, details: PRODUCT_DETAILS_INPUT_SCHEMA,
-    image: { ...resolvedMediaAssetObject, type: ['object', 'null'] }, gallery: { type: 'array', items: resolvedMediaAssetObject },
-    seo_title: { type: ['string', 'null'] }, seo_description: { type: ['string', 'null'] }, canonical_url: { type: ['string', 'null'] }, robots: { type: ['string', 'null'] },
+    id: { type: 'string' }, name: { type: 'string' }, slug: { type: 'string' }, description: { type: 'string' },
+    active: { type: 'boolean', description: 'The merchant sale switch. Not visibility and not stock: a disabled product is not sold out.' },
+    order_url: { type: ['string', 'null'] }, unit_label: { type: ['string', 'null'] },
+    marketing_features: { type: 'array', items: { type: 'string' } },
+    tags: { type: 'array', items: { type: 'string' } },
+    metadata: { type: 'object', additionalProperties: { type: 'string' } },
+    tax_code: { type: ['string', 'null'] },
+    options: { type: 'array', items: optionObject },
+    variants: { type: 'array', items: variantObject },
+    metafields: { type: 'object', description: 'Typed descriptive attributes keyed by "<namespace>.<key>".' },
+    publications: { type: 'array', items: publicationObject },
+    locations: { type: 'array', items: productLocationObject },
+    collections: { type: 'array', items: collectionMembershipObject },
+    image: { ...resolvedMediaAssetObject, type: ['object', 'null'] },
+    gallery: { type: 'array', items: resolvedMediaAssetObject },
     source: { type: 'string', enum: ['manual', 'template', 'ai', 'import', 'copy'] },
-    created_at: { type: 'string' }, updated_at: { type: 'string' }, created_by: { type: 'string' }, updated_by: { type: 'string' },
+    created_at: { type: 'string' }, updated_at: { type: 'string' },
   },
-  required: ['id', 'location_id', 'category_id', 'category', 'name', 'slug', 'description', 'price', 'is_visible', 'available', 'featured', 'featured_sort_order', 'sort_order', 'tags', 'details', 'image', 'gallery', 'source', 'created_at', 'updated_at', 'created_by', 'updated_by'],
-} as const
-
-const productListPriceObject = {
-  type: ['object', 'null'],
-  properties: {
-    amount_minor: { type: 'integer' },
-    currency: { type: 'string' },
-    unit: { type: 'string', enum: ['item', 'person', 'table'] },
-    tax_behavior: { type: 'string', enum: ['unspecified', 'inclusive', 'exclusive'] },
-    compare_at_amount_minor: { type: ['integer', 'null'] },
-  },
-  required: ['amount_minor', 'currency', 'unit', 'tax_behavior', 'compare_at_amount_minor'],
+  required: ['id', 'name', 'slug', 'description', 'active', 'options', 'variants', 'metafields', 'publications', 'locations', 'collections', 'source', 'created_at', 'updated_at'],
 } as const
 
 const productListItemObject = {
   type: 'object',
   properties: {
-    id: { type: 'string' },
-    location_id: { type: 'string' },
-    category_id: { type: 'string' },
-    category: productCategoryRefObject,
-    name: { type: 'string' },
-    description: { type: 'string' },
-    price: productListPriceObject,
-    is_visible: { type: 'boolean' },
-    available: { type: 'boolean' },
-    sort_order: { type: 'integer' },
+    id: { type: 'string' }, name: { type: 'string' }, slug: { type: 'string' }, description: { type: 'string' },
+    active: { type: 'boolean' }, variant_count: { type: 'integer' },
+    publications: { type: 'array', items: publicationObject },
+    locations: { type: 'array', items: productLocationObject },
   },
-  required: ['id', 'location_id', 'category_id', 'category', 'name', 'description', 'price', 'is_visible', 'available', 'sort_order'],
+  required: ['id', 'name', 'slug', 'description', 'active', 'variant_count', 'publications', 'locations'],
 } as const
 
-// Category membership is set on create and changed only by move_products, so
-// the update surface deliberately has no category_id: accepting one that
-// updateProduct ignores would report a move that never happened.
 const productWrite = {
-  category_id: { type: 'string', description: 'ID of a category at the selected location. Read list_product_categories first; use create_product_category when the intended section does not exist. Never send a category name in place of this ID.' }, name: { type: 'string' }, description: { type: 'string' }, price: priceWrite,
-  order_url: { type: ['string', 'null'] }, is_visible: { type: 'boolean' }, available: { type: 'boolean' }, featured: { type: 'boolean' },
-  featured_sort_order: { type: 'number' }, tags: { type: 'array', items: { type: 'string' } }, details: PRODUCT_DETAILS_INPUT_SCHEMA,
-  seo_title: { type: ['string', 'null'] }, seo_description: { type: ['string', 'null'] }, canonical_url: { type: ['string', 'null'] },
-  robots: { type: ['string', 'null'], enum: [...ROBOTS_DIRECTIVE_ENUM, null], description: 'Search engine indexing directive. Leave unset for the default index,follow.' },
+  name: { type: 'string' },
+  description: { type: 'string' },
+  active: { type: 'boolean', description: 'Enable or disable sale of this product. Independent of site and location publication.' },
+  order_url: { type: ['string', 'null'], description: 'A narrow ordering destination such as a delivery partner. Not the public product page.' },
+  unit_label: { type: ['string', 'null'], description: 'A unit noun such as "person" or "night". Never pricing prose.' },
+  marketing_features: { type: 'array', maxItems: PRODUCT_LIMITS.marketingFeatures, items: { type: 'string' }, description: 'Generic selling bullets. Inclusions, preparation instructions and policies are separate metafields.' },
+  tags: { type: 'array', maxItems: PRODUCT_LIMITS.tags, items: { type: 'string' } },
+  metadata: { type: 'object', additionalProperties: { type: 'string' }, description: 'Opaque string annotations for integrations. No pricing, scheduling, stock or filtering behavior may read these.' },
+  tax_code: { type: ['string', 'null'] },
+  options: { type: 'array', maxItems: PRODUCT_LIMITS.options, items: optionWrite },
+  variants: { type: 'array', minItems: 1, maxItems: PRODUCT_LIMITS.variants, items: variantWrite, description: 'Omit to create a single default variant. Required once the product has options.' },
+  metafields: { type: 'object', description: 'Values keyed by "<namespace>.<key>". The definition must already exist; create it with create_metafield_definition.' },
 } as const
-
-const { category_id: _createOnlyCategoryId, ...productUpdate } = productWrite
 
 const productResult = { type: 'object', properties: { product: productObject }, required: ['product'] } as const
 
 export const PRODUCTS_TOOLS: McpToolDefinition[] = [
-  siteTool({ name: 'list_location_products', description: 'Use this when you need the compact ordered Product list for one explicit location. Returns identity, category, name, description, current price, visibility, availability, and sort order. Call get_product for media, SEO, audit fields, or other full details.', domain: 'products', minimumRole: 'editor', confirmRequired: false, inputSchema: { location_id: { type: 'string' }, ...paginationInputSchema }, required: ['location_id'], outputSchema: { type: 'object', properties: { products: { type: 'array', items: productListItemObject }, page_info: pageInfoObject }, required: ['products', 'page_info'] } }),
-  siteTool({ name: 'get_product', description: 'Get a Product by ID.', domain: 'products', minimumRole: 'editor', confirmRequired: false, inputSchema: { product_id: { type: 'string' } }, required: ['product_id'], outputSchema: productResult }),
-  siteTool({ name: 'create_product', description: 'Create a Product at one explicit location.', domain: 'products', minimumRole: 'editor', confirmRequired: false, inputSchema: { location_id: { type: 'string' }, ...productWrite }, required: ['location_id', 'category_id', 'name', 'price'], outputSchema: productResult }),
-  siteTool({ name: 'update_product', description: 'Update a Product after resolving its stored owning location. Omit price to leave pricing unchanged. Use price: null to close the active fixed Price without creating a replacement. Use move_products to change which category a Product belongs to.', domain: 'products', minimumRole: 'editor', confirmRequired: false, inputSchema: { product_id: { type: 'string' }, ...productUpdate }, required: ['product_id'], outputSchema: productResult }),
-  siteTool({ name: 'delete_product', description: 'Delete a Product after resolving its stored owning location.', domain: 'products', minimumRole: 'editor', confirmRequired: true, inputSchema: { product_id: { type: 'string' } }, required: ['product_id'], outputSchema: { type: 'object', properties: { deleted: { type: 'boolean' } }, required: ['deleted'] } }),
-  siteTool({ name: 'move_products', description: 'Use this when the user wants Products to belong to a different category or menu section. The Products are appended to the end of the target category in the order given. This changes category membership only; use reorder_products to change the order inside a category.', domain: 'products', minimumRole: 'editor', confirmRequired: false, inputSchema: { location_id: { type: 'string' }, product_ids: { type: 'array', items: { type: 'string' }, minItems: 1 }, category_id: { type: 'string' } }, required: ['location_id', 'product_ids', 'category_id'], outputSchema: { type: 'object', properties: { moved: { type: 'boolean' } }, required: ['moved'] } }),
-  siteTool({ name: 'reorder_products', description: 'Use this when the user wants to change the order of Products inside one category. Read every list_location_products page and select Products with the intended category_id. Send every Product ID in that category exactly once, in the intended order; a partial order is rejected.', domain: 'products', minimumRole: 'editor', confirmRequired: false, inputSchema: { location_id: { type: 'string' }, category_id: { type: 'string' }, product_ids: { type: 'array', items: { type: 'string' }, minItems: 1 } }, required: ['location_id', 'category_id', 'product_ids'], outputSchema: { type: 'object', properties: { reordered: { type: 'boolean' } }, required: ['reordered'] } }),
-  siteTool({ name: 'list_product_categories', description: 'List the Product categories or menu sections at one explicit location, in the order customers see them.', domain: 'products', minimumRole: 'editor', confirmRequired: false, inputSchema: { location_id: { type: 'string' } }, required: ['location_id'], outputSchema: { type: 'object', properties: { categories: { type: 'array', items: productCategoryObject } }, required: ['categories'] } }),
-  siteTool({ name: 'create_product_category', description: 'Create an empty Product category or menu section at one explicit location. Products are added to it afterwards.', domain: 'products', minimumRole: 'editor', confirmRequired: false, inputSchema: { location_id: { type: 'string' }, name: { type: 'string' } }, required: ['location_id', 'name'], outputSchema: { type: 'object', properties: { category: productCategoryObject }, required: ['category'] } }),
-  siteTool({ name: 'reorder_product_categories', description: 'Use this when the user wants to change the order of whole categories or menu sections, such as putting desserts last. Send every category ID at the location exactly once, in the intended order. Read list_product_categories first; a partial order is rejected.', domain: 'products', minimumRole: 'editor', confirmRequired: false, inputSchema: { location_id: { type: 'string' }, category_ids: { type: 'array', items: { type: 'string' }, minItems: 1 } }, required: ['location_id', 'category_ids'], outputSchema: { type: 'object', properties: { categories: { type: 'array', items: productCategoryObject } }, required: ['categories'] } }),
-  siteTool({ name: 'rename_product_category', description: 'Rename a Product category or menu section. The name lives on the category itself, so this is one edit and every Product in it follows.', domain: 'products', minimumRole: 'editor', confirmRequired: false, inputSchema: { location_id: { type: 'string' }, category_id: { type: 'string' }, name: { type: 'string' } }, required: ['location_id', 'category_id', 'name'], outputSchema: { type: 'object', properties: { category: productCategoryObject }, required: ['category'] } }),
-  siteTool({ name: 'delete_product_category', description: 'Delete a Product category and every Product in it at one explicit location.', domain: 'products', minimumRole: 'editor', confirmRequired: true, inputSchema: { location_id: { type: 'string' }, category_id: { type: 'string' } }, required: ['location_id', 'category_id'], outputSchema: { type: 'object', properties: { deleted: { type: 'number' } }, required: ['deleted'] } }),
-  siteTool({ name: 'batch_create_products', description: 'Validate every row, then create all Products atomically at one explicit location. Any invalid row rolls back the complete request.', domain: 'products', minimumRole: 'editor', confirmRequired: false, inputSchema: { location_id: { type: 'string' }, products: { type: 'array', minItems: 1, maxItems: PRODUCT_LIMITS.batchCreate, items: { type: 'object', properties: productWrite, required: ['category_id', 'name', 'price'], additionalProperties: false } } }, required: ['location_id', 'products'], outputSchema: { type: 'object', properties: { products: { type: 'array', items: productObject } }, required: ['products'] } }),
-  siteTool({ name: 'reconcile_products', description: 'Create and update the supplied products at one explicit location in a single atomic reconciliation. This is a one-time write, not ongoing synchronization. Omitted products remain available unless set_missing_unavailable is explicitly true. Read every list_location_products page first. Any invalid row rolls back the complete request. Every row must include price; use null when the intended state has no active fixed Price.', domain: 'products', minimumRole: 'editor', confirmRequired: true, inputSchema: { location_id: { type: 'string' }, products: { type: 'array', maxItems: PRODUCT_LIMITS.reconcile, items: { type: 'object', properties: { product_id: { type: 'string', minLength: 1 }, ...productWrite }, required: ['category_id', 'name', 'price'], additionalProperties: false } }, set_missing_unavailable: { type: 'boolean', description: `When true, mark stored Products omitted from this complete request unavailable. At most ${PRODUCT_LIMITS.reconcile} intended rows may be supplied.` } }, required: ['location_id', 'products'], outputSchema: { type: 'object', properties: { products: { type: 'array', items: productObject } }, required: ['products'] } }),
+  siteTool({ name: 'list_products', description: 'List the products this site carries, published or withheld. The catalog belongs to the organization; a site carries a product through an explicit publication row.', domain: 'products', minimumRole: 'editor', confirmRequired: false, inputSchema: { published_only: { type: 'boolean' }, ...paginationInputSchema }, required: [], outputSchema: { type: 'object', properties: { products: { type: 'array', items: productListItemObject }, page_info: pageInfoObject }, required: ['products', 'page_info'] } }),
+  siteTool({ name: 'list_location_products', description: 'List the products offered at one explicit location.', domain: 'products', minimumRole: 'editor', confirmRequired: false, inputSchema: { location_id: { type: 'string' }, published_only: { type: 'boolean' }, ...paginationInputSchema }, required: ['location_id'], outputSchema: { type: 'object', properties: { products: { type: 'array', items: productListItemObject }, page_info: pageInfoObject }, required: ['products', 'page_info'] } }),
+  siteTool({ name: 'get_product', description: 'Get a product with its options, variants, prices, publication, locations, collection membership and metafields.', domain: 'products', minimumRole: 'editor', confirmRequired: false, inputSchema: { product_id: { type: 'string' } }, required: ['product_id'], outputSchema: productResult }),
+  siteTool({ name: 'create_product', description: 'Create a product in the organization catalog and have this site carry it. Carrying is not publishing: use set_product_publication to make it visible.', domain: 'products', minimumRole: 'editor', confirmRequired: false, inputSchema: { ...productWrite }, required: ['name'], outputSchema: productResult }),
+  siteTool({ name: 'update_product', description: 'Replace a product with the intended state. Options, variants and prices are supplied whole; keep a variant id to keep its bookings. Removing a variant that has live bookings is refused.', domain: 'products', minimumRole: 'editor', confirmRequired: false, inputSchema: { product_id: { type: 'string' }, ...productWrite }, required: ['product_id'], outputSchema: productResult }),
+  siteTool({ name: 'delete_product', description: 'Delete a product and everything it owns. Refused while a canonical product page still points at it.', domain: 'products', minimumRole: 'editor', confirmRequired: true, inputSchema: { product_id: { type: 'string' } }, required: ['product_id'], outputSchema: { type: 'object', properties: { deleted: { type: 'boolean' } }, required: ['deleted'] } }),
+  siteTool({ name: 'set_product_publication', description: 'Publish or withhold a product on this site. Independent of the merchant sale switch and of location publication.', domain: 'products', minimumRole: 'editor', confirmRequired: false, inputSchema: { product_id: { type: 'string' }, published: { type: 'boolean' } }, required: ['product_id', 'published'], outputSchema: productResult }),
+  siteTool({ name: 'set_product_location', description: 'Say whether one location offers a product, and whether it shows on that location surfaces. A price does not establish where a product is sold.', domain: 'products', minimumRole: 'editor', confirmRequired: false, inputSchema: { product_id: { type: 'string' }, location_id: { type: 'string' }, active: { type: 'boolean' }, published: { type: 'boolean' } }, required: ['product_id', 'location_id'], outputSchema: productResult }),
+  siteTool({ name: 'remove_product_location', description: 'Stop offering a product at one location. The product and its other locations are untouched.', domain: 'products', minimumRole: 'editor', confirmRequired: true, inputSchema: { product_id: { type: 'string' }, location_id: { type: 'string' } }, required: ['product_id', 'location_id'], outputSchema: productResult }),
+  siteTool({ name: 'batch_create_products', description: 'Validate every row, then create all products atomically. Any invalid row rolls back the complete request.', domain: 'products', minimumRole: 'editor', confirmRequired: false, inputSchema: { products: { type: 'array', minItems: 1, maxItems: PRODUCT_LIMITS.batchCreate, items: { type: 'object', properties: productWrite, required: ['name'], additionalProperties: false } } }, required: ['products'], outputSchema: { type: 'object', properties: { products: { type: 'array', items: productObject } }, required: ['products'] } }),
+  siteTool({ name: 'reconcile_products', description: 'Create and update the supplied products in one idempotent pass, keyed by product_id. Products omitted from the request are left alone unless deactivate_missing is true, which turns off their sale switch — it never deletes them and never claims they are sold out.', domain: 'products', minimumRole: 'editor', confirmRequired: true, inputSchema: { products: { type: 'array', maxItems: PRODUCT_LIMITS.reconcile, items: { type: 'object', properties: { product_id: { type: 'string', minLength: 1 }, ...productWrite }, required: ['name'], additionalProperties: false } }, deactivate_missing: { type: 'boolean' } }, required: ['products'], outputSchema: { type: 'object', properties: { products: { type: 'array', items: productObject } }, required: ['products'] } }),
+
+  siteTool({ name: 'list_collections', description: 'List this site merchandising collections, in the order customers see them. Omit location_id for every collection; send it to narrow to one location.', domain: 'products', minimumRole: 'editor', confirmRequired: false, inputSchema: { location_id: { type: ['string', 'null'] } }, required: [], outputSchema: { type: 'object', properties: { collections: { type: 'array', items: collectionObject } }, required: ['collections'] } }),
+  siteTool({ name: 'create_collection', description: 'Create an empty collection. Products are added to it afterwards with set_collection_products.', domain: 'products', minimumRole: 'editor', confirmRequired: false, inputSchema: { name: { type: 'string' }, description: { type: ['string', 'null'] }, location_id: { type: ['string', 'null'], description: 'Narrow this collection to one location, or omit for site-wide.' }, sort_order: { type: 'integer' } }, required: ['name'], outputSchema: { type: 'object', properties: { collection: collectionObject }, required: ['collection'] } }),
+  siteTool({ name: 'update_collection', description: 'Rename a collection or change its description or position.', domain: 'products', minimumRole: 'editor', confirmRequired: false, inputSchema: { collection_id: { type: 'string' }, name: { type: 'string' }, description: { type: ['string', 'null'] }, sort_order: { type: 'integer' } }, required: ['collection_id'], outputSchema: { type: 'object', properties: { collection: collectionObject }, required: ['collection'] } }),
+  siteTool({ name: 'delete_collection', description: 'Delete a collection. The products in it are untouched.', domain: 'products', minimumRole: 'editor', confirmRequired: true, inputSchema: { collection_id: { type: 'string' } }, required: ['collection_id'], outputSchema: { type: 'object', properties: { deleted: { type: 'boolean' } }, required: ['deleted'] } }),
+  siteTool({ name: 'set_collection_products', description: 'Replace the membership and order of one collection with exactly the product ids you send, in that order. Anything you leave out is removed from this collection — the products themselves are untouched. Position lives on the membership, so the same product can sit third here and first elsewhere.', domain: 'products', minimumRole: 'editor', confirmRequired: true, inputSchema: { collection_id: { type: 'string' }, product_ids: { type: 'array', items: { type: 'string' }, maxItems: PRODUCT_LIMITS.collectionProducts } }, required: ['collection_id', 'product_ids'], outputSchema: { type: 'object', properties: { products: { type: 'array', items: productListItemObject } }, required: ['products'] } }),
+  siteTool({ name: 'reorder_collections', description: 'Change the order of whole collections. Send every collection id in the scope exactly once, in the intended order; a partial order is rejected.', domain: 'products', minimumRole: 'editor', confirmRequired: false, inputSchema: { collection_ids: { type: 'array', items: { type: 'string' }, minItems: 1 }, location_id: { type: ['string', 'null'] } }, required: ['collection_ids'], outputSchema: { type: 'object', properties: { collections: { type: 'array', items: collectionObject } }, required: ['collections'] } }),
+
+  siteTool({ name: 'list_metafield_definitions', description: 'List the tenant descriptive product attribute vocabulary. Adding an attribute of a supported type is one definition here, not a schema change.', domain: 'products', minimumRole: 'editor', confirmRequired: false, inputSchema: {}, required: [], outputSchema: { type: 'object', properties: { definitions: { type: 'array', items: metafieldDefinitionObject } }, required: ['definitions'] } }),
+  siteTool({ name: 'create_metafield_definition', description: 'Define a product attribute: its name, type, constraints and whether it may be translated. Values are set on products through metafields.', domain: 'products', minimumRole: 'editor', confirmRequired: false, inputSchema: { namespace: { type: 'string' }, key: { type: 'string' }, name: { type: 'string' }, description: { type: ['string', 'null'] }, value_type: { type: 'string', enum: [...METAFIELD_VALUE_TYPES] }, validations: { type: 'object' }, localizable: { type: 'boolean' } }, required: ['namespace', 'key', 'name', 'value_type'], outputSchema: { type: 'object', properties: { definition: metafieldDefinitionObject }, required: ['definition'] } }),
+  siteTool({ name: 'delete_metafield_definition', description: 'Remove an attribute from the vocabulary. Its value is removed from every product that carried it.', domain: 'products', minimumRole: 'editor', confirmRequired: true, inputSchema: { definition_id: { type: 'string' } }, required: ['definition_id'], outputSchema: { type: 'object', properties: { deleted: { type: 'boolean' } }, required: ['deleted'] } }),
 ]

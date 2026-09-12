@@ -37,7 +37,7 @@
       </div>
     </section>
 
-    <section v-if="services && routeData.offerings.length && (services.title || services.accent || services.description)" class="relative bg-(--blawby-bg) pb-14 pt-14 sm:pb-20 sm:pt-14 lg:pb-14" data-parity-section="services">
+    <section v-if="services && serviceItems.length && (services.title || services.accent || services.description)" class="relative bg-(--blawby-bg) pb-14 pt-14 sm:pb-20 sm:pt-14 lg:pb-14" data-parity-section="services">
       <div class="blawby-container relative z-20">
         <BlawbySectionHeading
           :title="String(services.title || '')"
@@ -45,7 +45,7 @@
           :description="services.description"
           centered
         />
-        <BlawbyServiceGrid :offerings="routeData.offerings" class="mt-20" />
+        <BlawbyPageGrid :items="serviceItems" class="mt-20" />
       </div>
       <img v-if="servicesDecorationSrc" :src="servicesDecorationSrc || undefined" alt="" width="1920" height="400" loading="lazy" class="absolute inset-x-0 bottom-0 w-full object-contain">
     </section>
@@ -101,7 +101,7 @@ const routeData = computed(() => data.value!.route)
 function block(type: string): ApiRecord | null {
   const canonicalType = {
     home_hero: 'hero',
-    services_intro: 'offering_grid',
+    services_intro: 'product_grid',
     video_feature: 'feature_grid',
     qa: 'faq',
     reviews: 'testimonial_grid',
@@ -141,6 +141,33 @@ const heroBlock = block('home_hero')
 if (!heroBlock) throw createError({ statusCode: 502, statusMessage: 'Blawby homepage hero content is invalid' })
 const hero = computed(() => heroBlock)
 const services = computed(() => block('services_intro'))
+
+/**
+ * The pages the editor put in the services grid.
+ *
+ * These come from the page's own `page_grid` block, already resolved to
+ * titles, summaries and routes by the block hydration. The home page does not
+ * list "every service on the site" — a grid that grew whenever someone added a
+ * page is a grid nobody chose the contents of.
+ */
+interface ServiceGridItem { id: string; title: string; description?: string; url: string; media?: Array<{ slot: string; public_url: string }> }
+const serviceItems = computed<ServiceGridItem[]>(() => {
+  const grid = criticalPage.value.blocks.find(candidate => candidate.type === 'page_grid')
+  const items = grid?.data.items
+  if (!Array.isArray(items)) return []
+  return items.flatMap((item) => {
+    if (!item || typeof item !== 'object') return []
+    const row = item as Record<string, unknown>
+    if (typeof row.id !== 'string' || typeof row.title !== 'string' || typeof row.url !== 'string') return []
+    return [{
+      id: row.id,
+      title: row.title,
+      description: typeof row.description === 'string' ? row.description : undefined,
+      url: row.url,
+      media: Array.isArray(row.media) ? row.media as ServiceGridItem['media'] : undefined,
+    }]
+  })
+})
 const videoFeature = computed(() => block('video_feature'))
 const reviewsBlock = computed(() => block('reviews'))
 const qaBlock = computed(() => block('qa'))
@@ -207,10 +234,10 @@ useProfessionalServiceSchema(() => ({
   faqs: (routeData.value?.qa ?? [])
     .map(item => ({ question: item.question.trim(), answer: item.answer?.trim() ?? '' }))
     .filter(item => item.question && item.answer),
-  items: (routeData.value?.offerings ?? []).map(offering => ({
-    name: offering.name,
-    url: offering.canonical_path,
-    description: offering.short_description || offering.summary || undefined,
+  items: serviceItems.value.map(item => ({
+    name: item.title,
+    url: item.url,
+    description: item.description,
   })),
 }))
 </script>

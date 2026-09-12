@@ -48,9 +48,12 @@ const liveHost = computed(() => {
   }).replace(/^https?:\/\//, '')
 })
 
-const productsLabel = computed(() => state.value.vertical === 'restaurant'
-  ? 'Menu'
-  : state.value.vertical === 'experience' ? 'Experiences' : 'Services')
+// A service business is never asked what it sells — the products step declares
+// `applies: state => state.vertical !== 'service'` — so the ledger does not
+// list a row for it. It used to, permanently unfinished, for a question the
+// wizard never put.
+const asksForProducts = computed(() => state.value.vertical !== 'service')
+const productsLabel = computed(() => state.value.vertical === 'restaurant' ? 'Menu' : 'Products')
 
 // Add-location collects the place and nothing else: there is no menu and no
 // brand on a location, so those rows are not part of that flow's ledger.
@@ -70,13 +73,15 @@ const ledger = computed(() => {
   if (state.value.flow === 'add-location') return place
   return [
     ...place,
-    {
-      label: productsLabel.value,
-      value: state.value.products.length
-        ? `${state.value.products.length} ${state.value.products.length === 1 ? 'entry' : 'entries'}`
-        : 'None yet',
-      done: state.value.products.length > 0,
-    },
+    ...(asksForProducts.value
+      ? [{
+          label: productsLabel.value,
+          value: state.value.products.length
+            ? `${state.value.products.length} ${state.value.products.length === 1 ? 'entry' : 'entries'}`
+            : 'None yet',
+          done: state.value.products.length > 0,
+        }]
+      : []),
     {
       label: 'Colour, photo and headline',
       value: state.value.brand.brandColor || state.value.brand.heroHeadline ? 'Set' : 'Not set',

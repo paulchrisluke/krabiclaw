@@ -13,9 +13,9 @@ import { parseOpeningHours, parseSpecialHours } from '~/shared/reservation-hours
 import { googleReviewUpserts } from '~/server/utils/google-places'
 import { execute, executeBatch, queryAll, queryFirst, type BatchQuery } from '~/server/db'
 import { resourceLocalizationDeletionQueries } from '~/server/utils/localization'
-import { planProductCategories } from '~/server/utils/product-management'
+import { planProductCreateWrites } from '~/server/utils/product-management'
 import { updateLocation } from '~/server/utils/location-management'
-import { getDraftMedia, onboardingPageBlocks, onboardingPagePath, onboardingPageType, type OnboardingDraftPayload } from '~/server/utils/onboarding-drafts'
+import { getDraftMedia, onboardingPageBlocks, onboardingPagePath, onboardingPageType, slugify, type OnboardingDraftPayload } from '~/server/utils/onboarding-drafts'
 import { createMediaAsset, insertInitialMediaPlacements, type CreateInput } from '~/server/utils/media-asset-manager'
 import { applyOnboardingTenantPages } from '~/server/utils/content/pages'
 import { createOrganizationForSite, runSiteCreation } from '~/server/utils/site-creation'
@@ -250,57 +250,84 @@ export async function applyOnboardingDraftToSite(
   // sequential execute() calls here are unsafe.
   const now = new Date().toISOString()
   const orderedProducts = [...payload.preview.products].sort((a, b) => a.sort_order - b.sort_order)
-  const categoryPlan = await planProductCategories({
-    db, organizationId, siteId, locationId: locationRow.id, actor: userId,
-    names: [...orderedProducts.filter(product => product.is_visible), ...orderedProducts.filter(product => !product.is_visible)].map(product => product.category),
-  })
-  const standardProducts = { query: "SELECT id FROM products WHERE organization_id = ? AND site_id = ? AND product_type = 'standard'", params: [organizationId, siteId] }
-  const batchQueries: BatchQuery[] = [
-    ...categoryPlan.inserts,
-    ...resourceLocalizationDeletionQueries('product', standardProducts),
-    { query: `DELETE FROM media_placements WHERE owner_type = 'review' AND owner_id IN (SELECT id FROM reviews WHERE product_id IN (${standardProducts.query}))`, params: standardProducts.params },
-  ]
 
-  batchQueries.push({
-    query: `DELETE FROM media_placements WHERE owner_type = 'product' AND owner_id IN (${standardProducts.query})`,
-    params: standardProducts.params,
-  })
-  batchQueries.push({ query: `DELETE FROM reviews WHERE product_id IN (SELECT id FROM products WHERE site_id = ? AND product_type = 'standard')`, params: [siteId] })
-  batchQueries.push({ query: `DELETE FROM products WHERE organization_id = ? AND site_id = ? AND product_type = 'standard'`, params: [organizationId, siteId] })
-  for (const product of orderedProducts) {
-    const category = categoryPlan.resolved.get(product.category)!
-    batchQueries.push({
-      query: `
-        INSERT INTO products
-          (id, organization_id, site_id, location_id, product_type, category_id, name, slug, description, order_url,
-           is_visible, available, featured, featured_sort_order, sort_order, tags_json,
-           details_json, source, created_at, updated_at, created_by, updated_by)
-        VALUES (?, ?, ?, ?, 'standard', ?, ?, ?, ?, ?, ?, ?, ?, ?,
-          (SELECT COALESCE(MAX(sort_order) + 1, 0) FROM products WHERE category_id = ?), ?, ?, ?, ?, ?, ?, ?)
-      `, params: [
-        product.id, organizationId, siteId, locationRow.id, category.id, product.name,
-        product.slug, product.description, product.order_url,
-        product.is_visible ? 1 : 0, product.available ? 1 : 0, product.featured ? 1 : 0,
-        product.featured_sort_order, category.id, JSON.stringify(product.tags),
-        JSON.stringify(product.details), product.source, now, now, userId, userId,
-      ],
+  // Products go in through the one canonical writer, which owns variants,
+  // prices and slugs. This replaces the whole imported catalogue: the previous
+  // import's Products are removed first, so re-running onboarding does not
+  // leave two copies of every dish.
+  const previouslyImported = await queryAll<{ id: string }>(db, `
+    SELECT p.id FROM products p
+    JOIN product_publications pub ON pub.product_id = p.id AND pub.organization_id = p.organization_id AND pub.site_id = ?
+    WHERE p.organization_id = ? AND p.source = 'import'
+  `, [siteId, organizationId])
+  const batchQueries: BatchQuery[] = previouslyImported.length
+    ? [
+        ...resourceLocalizationDeletionQueries('product', { query: 'SELECT value FROM json_each(?)', params: [JSON.stringify(previouslyImported.map(row => row.id))] }),
+        { query: `DELETE FROM products WHERE organization_id = ? AND id IN (SELECT value FROM json_each(?))`, params: [organizationId, JSON.stringify(previouslyImported.map(row => row.id))] },
+      ]
+    : []
+
+  if (orderedProducts.length) {
+    const { ids, queries } = await planProductCreateWrites(db, {
+      organizationId,
+      siteId,
+      actor: { actorId: userId },
+      now,
+      products: orderedProducts.map(product => ({
+        name: product.name,
+        description: product.description,
+        order_url: product.order_url,
+        tags: product.tags,
+        source: product.source,
+        // What a customer buys is a variant, and the price belongs to it. A
+        // Product the owner did not price gets a variant with no price, which
+        // reads as "not purchasable here" rather than as a price of zero.
+        variants: [{
+          name: product.name,
+          // The writer resolves the site's currency for a price that names
+          // none — it reads the row this function has already updated — so
+          // resolving it a second time here could only disagree with it.
+          prices: product.price ? [product.price] : [],
+        }],
+      })),
     })
-    // A product the owner did not price gets no `prices` row at all. The public
-    // surfaces read `Product.price` as nullable and omit the price element, so
-    // an invented zero would be a price they never set.
-    const price = product.price
-    if (price) {
-      const currency = price.currency ?? defaultCurrency
+    batchQueries.push(...queries)
+
+    // Publication, location membership and collection grouping are separate
+    // rows, and onboarding states all three explicitly.
+    const collections = new Map<string, string>()
+    for (const product of orderedProducts) {
+      if (collections.has(product.collection)) continue
+      collections.set(product.collection, crypto.randomUUID())
+    }
+    for (const [name, id] of collections) {
       batchQueries.push({
-        query: `INSERT INTO prices (id, organization_id, site_id, location_id, product_id, amount_minor, currency, unit, tax_behavior, compare_at_amount_minor, valid_from, valid_until, provenance, created_by, created_at) VALUES (?,?,?,?,?,?,?,'item','unspecified',?,?,?,'import',?,?)`,
-        params: [crypto.randomUUID(), organizationId, siteId, locationRow.id, product.id,
-          price.amount_minor, currency,
-          price.compare_at_amount_minor ?? null,
-          price.valid_from ?? now,
-          price.valid_until ?? null,
-          userId, now],
+        query: `INSERT INTO collections (id, organization_id, site_id, location_id, name, slug, sort_order, created_at, updated_at, created_by, updated_by)
+                VALUES (?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT (organization_id, site_id, slug) WHERE location_id IS NULL DO UPDATE SET name = excluded.name, updated_at = excluded.updated_at`,
+        params: [id, organizationId, siteId, name, slugify(name) || id, [...collections.keys()].indexOf(name), now, now, userId, userId],
       })
     }
+    orderedProducts.forEach((product, index) => {
+      const productId = ids[index]!
+      batchQueries.push({
+        query: `INSERT INTO product_publications (organization_id, product_id, site_id, published, created_at, updated_at, created_by, updated_by)
+                VALUES (?, ?, ?, 1, ?, ?, ?, ?)`,
+        params: [organizationId, productId, siteId, now, now, userId, userId],
+      })
+      batchQueries.push({
+        query: `INSERT INTO product_locations (organization_id, product_id, location_id, active, published, created_at, updated_at, created_by, updated_by)
+                VALUES (?, ?, ?, 1, 1, ?, ?, ?, ?)`,
+        params: [organizationId, productId, locationRow.id, now, now, userId, userId],
+      })
+      batchQueries.push({
+        query: `INSERT INTO collection_products (organization_id, collection_id, product_id, sort_order, created_at, updated_at, created_by, updated_by)
+                SELECT ?, c.id, ?, ?, ?, ?, ?, ?
+                  FROM collections c
+                 WHERE c.organization_id = ? AND c.site_id = ? AND c.slug = ? AND c.location_id IS NULL`,
+        params: [organizationId, productId, index, now, now, userId, userId, organizationId, siteId, slugify(product.collection) || product.collection],
+      })
+    })
   }
 
   const replaced = await queryAll<{ id: string }>(db, "SELECT id FROM content_documents WHERE organization_id = ? AND site_id = ? AND row_role = 'root' AND kind IN ('qa','social_post')", [organizationId, siteId])
@@ -319,7 +346,9 @@ export async function applyOnboardingDraftToSite(
   batchQueries.push(...googleReviewUpserts({ organizationId, siteId, locationId: locationRow.id }, payload.preview.reviews, now))
 
   try {
-    await executeBatch(db, batchQueries)
+    // A draft with nothing in it yet — the owner has answered only the name —
+    // writes nothing, and D1 rejects an empty batch outright.
+    if (batchQueries.length) await executeBatch(db, batchQueries)
   } catch (batchError) {
     console.error('onboarding_site_apply_batch_failed', {
       siteId, organizationId, batchSize: batchQueries.length, contentRows: payload.preview.content.length, products: payload.preview.products.length, qaRows: payload.preview.qa.length, posts: payload.preview.posts.length, reviews: payload.preview.reviews.length, queries: summarizeBatchQueries(batchQueries), error: batchError instanceof Error ? {

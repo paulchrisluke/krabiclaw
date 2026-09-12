@@ -40,39 +40,83 @@ export interface PublicTenantPage {
   updated_at: string
 }
 
-export interface PublicTenantPageOfferingRow {
+/** A page referenced by a page_grid block. */
+export interface PublicTenantPageReferenceRow {
+  id: string
+  title: string
+  summary: string | null
+  slug: string
+  path: string
+  media: MediaPlacementItem[]
+}
+
+/** A product referenced by a product_grid block. */
+export interface PublicTenantPageProductRow {
   id: string
   name: string
-  label: string | null
-  summary: string | null
-  short_description: string | null
-  body: string | null
   slug: string
-  canonical_path: string | null
+  description: string
   media: MediaPlacementItem[]
-  sort_order: number
-  featured: number
 }
 
 export interface PublicTenantPageHydrationResources {
-  offerings?: Promise<PublicTenantPageOfferingRow[]>
+  pages?: Promise<PublicTenantPageReferenceRow[]>
 }
 
-export async function listPublicTenantPageOfferingRows(
+/**
+ * Resolve the pages a page_grid names.
+ *
+ * Only published roots, and only the ones named. A grid cannot list "every
+ * page on the site" — that source is gone, because it silently changed
+ * whenever anyone added a page.
+ */
+export async function listPublicTenantPageReferenceRows(
   db: DbClient,
   siteId: string,
-  offeringIds?: readonly string[],
-): Promise<PublicTenantPageOfferingRow[]> {
-  if (offeringIds?.length === 0) return []
-  const rows = await queryAll<Omit<PublicTenantPageOfferingRow, 'media'>>(db, `
-    SELECT o.id, o.name, o.label, o.summary, o.short_description, o.body, o.slug,
-           o.canonical_path, o.sort_order, o.featured
-      FROM offerings o
-     WHERE o.site_id = ?
-       ${offeringIds ? `AND o.id IN (SELECT value FROM json_each(?))` : ''}
-     ORDER BY o.sort_order ASC, o.name ASC
-  `, [siteId, ...(offeringIds ? [d1JsonStringSet(offeringIds)] : [])])
-  const placements = await loadPublicSocialMedia(db, siteId, 'offering', rows.map(row => row.id))
+  pageIds: readonly string[],
+  locale = 'en',
+): Promise<PublicTenantPageReferenceRow[]> {
+  if (pageIds.length === 0) return []
+  // The referenced root, rendered in the requested locale through its own
+  // representation row. A page with no translation keeps its English title and
+  // route rather than disappearing from the grid unexplained.
+  const rows = await queryAll<Omit<PublicTenantPageReferenceRow, 'media'>>(db, `
+    SELECT root.id, COALESCE(rep.title, root.title) AS title, COALESCE(rep.summary, root.summary) AS summary,
+           COALESCE(rep.slug, root.slug) AS slug, COALESCE(rep.path, root.path) AS path
+      FROM content_documents root
+      LEFT JOIN content_documents rep ON rep.root_id = root.id AND rep.row_role = 'representation' AND rep.locale = ?
+     WHERE root.site_id = ? AND root.row_role = 'root' AND root.kind = 'page'
+       AND root.path IS NOT NULL AND root.title IS NOT NULL
+       AND root.id IN (SELECT value FROM json_each(?))
+     ORDER BY root.sort_order ASC, root.title ASC
+  `, [locale, siteId, d1JsonStringSet(pageIds)])
+  const placements = await loadPublicSocialMedia(db, siteId, 'content_document', rows.map(row => row.id))
+  return rows.map(row => ({ ...row, media: placements.get(row.id)?.media ?? [] }))
+}
+
+/**
+ * Resolve the products a product_grid names, by collection or by id.
+ *
+ * The grid stores references only, so names and descriptions come from the
+ * product every time it renders and cannot go stale.
+ */
+export async function listPublicTenantPageProductRows(
+  db: DbClient,
+  siteId: string,
+  selection: { collectionId?: string | null; productIds?: readonly string[] },
+): Promise<PublicTenantPageProductRow[]> {
+  const productIds = selection.productIds ?? []
+  if (!selection.collectionId && productIds.length === 0) return []
+  const rows = await queryAll<Omit<PublicTenantPageProductRow, 'media'>>(db, `
+    SELECT p.id, p.name, p.slug, p.description
+      FROM products p
+      JOIN product_publications pub ON pub.product_id = p.id AND pub.organization_id = p.organization_id
+      LEFT JOIN collection_products cp ON cp.product_id = p.id AND cp.collection_id = ?
+     WHERE pub.site_id = ? AND pub.published = 1 AND p.active = 1
+       AND (cp.product_id IS NOT NULL OR p.id IN (SELECT value FROM json_each(?)))
+     ORDER BY cp.sort_order ASC, p.name ASC
+  `, [selection.collectionId ?? null, siteId, d1JsonStringSet(productIds)])
+  const placements = await loadPublicSocialMedia(db, siteId, 'product', rows.map(row => row.id))
   return rows.map(row => ({ ...row, media: placements.get(row.id)?.media ?? [] }))
 }
 
@@ -85,38 +129,40 @@ async function hydrateBlocks(
   resources: PublicTenantPageHydrationResources = {},
   localizations: readonly ExactPublicLocalization[] | null = null,
 ): Promise<TenantPageBlock[]> {
-  const offeringIds = new Set<string>()
+  const pageIds = new Set<string>()
+  const productIds = new Set<string>()
+  const collectionIds = new Set<string>()
   const locationIds = new Set<string>()
-  const hasOfferingSource = blocks.some(block => block.type === 'offering_grid' && block.data.source === 'site_offerings')
   const qaSources = new Set(blocks.map(faqBlockSource).filter((source): source is FaqBlockSource => source !== null))
   const hasReviewSource = blocks.some(block => block.type === 'testimonial_grid' && block.data.source === 'site_reviews')
   const hasPostSource = blocks.some(block => block.type === 'feature_grid' && block.data.source === 'site_posts')
   for (const block of blocks) {
-    if (block.type === 'offering_grid' && Array.isArray(block.data.offering_ids)) {
-      for (const value of block.data.offering_ids) if (typeof value === 'string' && value.trim()) offeringIds.add(value)
+    if (block.type === 'page_grid' && Array.isArray(block.data.page_ids)) {
+      for (const value of block.data.page_ids) if (typeof value === 'string' && value.trim()) pageIds.add(value)
+    }
+    if (block.type === 'product_grid') {
+      if (Array.isArray(block.data.product_ids)) {
+        for (const value of block.data.product_ids) if (typeof value === 'string' && value.trim()) productIds.add(value)
+      }
+      if (typeof block.data.collection_id === 'string' && block.data.collection_id.trim()) collectionIds.add(block.data.collection_id)
     }
     if (block.type === 'location_grid' && Array.isArray(block.data.location_ids)) {
       for (const value of block.data.location_ids) if (typeof value === 'string' && value.trim()) locationIds.add(value)
     }
   }
-  const sourceOfferings = offeringIds.size || hasOfferingSource
-    ? resources.offerings
-      ? (await resources.offerings).filter(offering => hasOfferingSource || offeringIds.has(offering.id))
-      : await listPublicTenantPageOfferingRows(db, siteId, hasOfferingSource ? undefined : [...offeringIds])
+  const sourcePages = pageIds.size
+    ? resources.pages
+      ? (await resources.pages).filter(page => pageIds.has(page.id))
+      : await listPublicTenantPageReferenceRows(db, siteId, [...pageIds], locale)
     : []
-  const offerings = localizations
-    ? projectExactLocalizedCollection('offering', sourceOfferings, localizations).map((offering) => {
-        const representation = localizations.find(item => item.resourceType === 'offering' && item.resourceId === offering.id)
-        if (!representation?.routePath?.startsWith('/')) {
-          throw new HTTPError({ statusCode: 500, statusMessage: 'Stored localized offering route is invalid', data: { code: 'INVALID_STORED_CONTENT' } })
-        }
-        return {
-          ...offering,
-          canonical_path: representation.routePath,
-          media: projectLocalizedMediaAlt(offering.media, localizations),
-        }
-      })
-    : sourceOfferings
+  // Each grid gets the products it named, and only those. Keyed by collection
+  // rather than flattened into one list: two grids on a page name two different
+  // collections, and a flat union rendered both collections in both grids.
+  const productsByCollection = new Map(await Promise.all([...collectionIds].map(async collectionId =>
+    [collectionId, await listPublicTenantPageProductRows(db, siteId, { collectionId })] as const)))
+  const productById = new Map((productIds.size
+    ? await listPublicTenantPageProductRows(db, siteId, { productIds: [...productIds] })
+    : []).map(product => [product.id, product]))
   const sourceLocations = locationIds.size
     ? await queryAll<{ id: string; title: string; slug: string; description: string | null; short_description: string | null; asset_id: string | null; public_url: string | null; thumbnail_url: string | null; kind: string | null; alt_text: string | null }>(db, `
         SELECT bl.id, bl.title, bl.slug, bl.description, bl.short_description, ma.id AS asset_id, ma.public_url, ma.thumbnail_url, ma.kind, ma.alt_text
@@ -149,8 +195,13 @@ async function hydrateBlocks(
   ])
   const reviewRows = sourceReviewRows
   const postRows = sourcePostRows
-  const sourceOfferingById = new Map(sourceOfferings.map(item => [item.id, item]))
-  const offeringById = new Map(offerings.map(item => [item.id, item]))
+  // A page's translation is its representation row, loaded by locale in the
+  // reference query above — not a resource_localizations entry. Only the media
+  // alt text needs projecting here.
+  const pages = localizations
+    ? sourcePages.map(page => ({ ...page, media: projectLocalizedMediaAlt(page.media, localizations) }))
+    : sourcePages
+  const pageById = new Map(pages.map(item => [item.id, item]))
   const sourceLocationById = new Map(sourceLocations.map(item => [item.id, item]))
   const locationById = new Map(locations.map(item => [item.id, item]))
   const reviewItems = (reviewRows as unknown as Array<Record<string, unknown>>).map(row => ({
@@ -174,23 +225,44 @@ async function hydrateBlocks(
   })
   return blocks.map(block => {
     const data = { ...block.data }
-    if (block.type === 'offering_grid' && Array.isArray(data.offering_ids)) {
-      data.items = data.offering_ids.flatMap((id) => {
-        const sourceOffering = typeof id === 'string' ? sourceOfferingById.get(id) : undefined
-        if (!sourceOffering) {
-          throw new HTTPError({ statusCode: 500, statusMessage: 'Tenant page offering reference is unavailable' })
-        }
-        const offering = offeringById.get(sourceOffering.id)
-        if (!offering) return []
-        return [{
-          id: offering.id,
-          title: offering.label || offering.name,
-          description: offering.summary || offering.short_description || offering.body || undefined,
-          url: offering.canonical_path || `/services/${offering.slug}`,
+    if (block.type === 'page_grid' && Array.isArray(data.page_ids)) {
+      data.items = data.page_ids.map((id) => {
+        const page = typeof id === 'string' ? pageById.get(id) : undefined
+        // A reference to a page that is gone or unpublished is a broken block,
+        // not a row to quietly drop: the editor chose it and needs to know.
+        if (!page) throw new HTTPError({ statusCode: 500, statusMessage: 'Tenant page reference is unavailable' })
+        return {
+          id: page.id,
+          title: page.title,
+          description: page.summary ?? undefined,
+          url: page.path,
           labelKey: 'saya.posts.cta_default',
-          media: offering.media,
-        }]
+          media: page.media,
+        }
       })
+    }
+    if (block.type === 'product_grid') {
+      // Either the block names products, or it names a collection. A block that
+      // names neither lists nothing — the same rule a page_grid follows.
+      const collectionId = typeof data.collection_id === 'string' && data.collection_id.trim() ? data.collection_id : null
+      const selected = Array.isArray(data.product_ids) && data.product_ids.length > 0
+        ? data.product_ids.map((id) => {
+            const product = typeof id === 'string' ? productById.get(id) : undefined
+            if (!product) throw new HTTPError({ statusCode: 500, statusMessage: 'Tenant page product reference is unavailable' })
+            return product
+          })
+        : collectionId
+          ? productsByCollection.get(collectionId)
+          : []
+      if (!selected) throw new HTTPError({ statusCode: 500, statusMessage: 'Tenant page collection reference is unavailable' })
+      data.items = selected.map(product => ({
+        id: product.id,
+        title: product.name,
+        description: product.description || undefined,
+        url: `/products/${product.slug}`,
+        labelKey: 'saya.posts.cta_default',
+        media: product.media,
+      }))
     }
     if (block.type === 'location_grid' && Array.isArray(data.location_ids)) {
       data.items = data.location_ids.flatMap((id) => {
@@ -210,18 +282,6 @@ async function hydrateBlocks(
             ? projectLocalizedMediaAlt([{ asset_id: location.asset_id, slot: 'hero', public_url: location.public_url, thumbnail_url: location.thumbnail_url, kind: location.kind, alt_text: location.alt_text }], localizations ?? [])
             : [],
         }]
-      })
-    }
-    if (block.type === 'offering_grid' && data.source === 'site_offerings') {
-      data.items = offerings.map(offering => {
-        return {
-          id: offering.id,
-          title: offering.label || offering.name,
-          description: offering.summary || offering.short_description || offering.body || undefined,
-          url: offering.canonical_path || `/services/${offering.slug}`,
-          labelKey: 'saya.posts.cta_default',
-          media: offering.media,
-        }
       })
     }
     const faqSource = faqBlockSource(block)

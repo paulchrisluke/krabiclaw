@@ -1,98 +1,72 @@
-import { isValidInstant } from '../../utils/timezone.ts'
 import assert from 'node:assert/strict'
 import test from 'node:test'
-
 import {
-  assertNonOverlappingPrices,
-  formatMinorAmount,
-  majorAmountToMinor,
-  priceAt,
-  replacePrice,
+  AmbiguousPriceError,
+  assertNoConflictingPrices,
+  assertPriceShape,
+  selectPrice,
   type Price,
-  type PriceInput,
 } from '../../shared/prices.ts'
-import { normalizePriceInput } from '../../server/utils/product-management.ts'
 
-const base: Price = {
-  id: 'price-1', organization_id: 'org', site_id: 'site', location_id: 'location', product_id: 'product',
-  amount_minor: 1250, currency: 'THB', unit: 'item', tax_behavior: 'unspecified',
-  compare_at_amount_minor: null, valid_from: '2026-01-01T00:00:00.000Z', valid_until: null,
-  provenance: 'manual', created_by: 'user', created_at: '2026-01-01T00:00:00.000Z',
+const base: Omit<Price, 'id'> = {
+  organization_id: 'org1', product_variant_id: 'v1', location_id: null, active: true,
+  currency: 'THB', unit_amount: 25000, type: 'one_time', recurring_interval: null,
+  recurring_interval_count: null, tax_behavior: 'unspecified', compare_at_unit_amount: null,
+  valid_from_at: null, valid_until_at: null, source: 'manual', created_by: 'u', updated_by: 'u',
+  created_at: '2026-01-01T00:00:00.000Z', updated_at: '2026-01-01T00:00:00.000Z',
 }
+const p = (id: string, over: Partial<Price> = {}): Price => ({ ...base, id, ...over })
+const AT = '2026-06-01T00:00:00.000Z'
 
-test('currency precision converts and formats canonical integer minor amounts', () => {
-  assert.equal(majorAmountToMinor('12.50', 'THB'), 1250)
-  assert.equal(majorAmountToMinor('1250', 'JPY'), 1250)
-  assert.equal(majorAmountToMinor('1250', 'VND'), 1250)
-  assert.throws(() => majorAmountToMinor('12.5', 'JPY'), /fraction digits/)
-  assert.throws(() => majorAmountToMinor('12.345', 'USD'), /fraction digits/)
-  assert.equal(formatMinorAmount(1250, 'THB', 'th-TH'), '฿12.50')
+test('no applicable offer returns null, never a substitute', () => {
+  assert.equal(selectPrice([], { currency: 'THB', location_id: null, at: AT }), null)
+  assert.equal(selectPrice([p('a')], { currency: 'USD', location_id: null, at: AT }), null, 'must not fall back to another currency')
+  assert.equal(selectPrice([p('a', { active: false })], { currency: 'THB', location_id: null, at: AT }), null)
+  assert.equal(selectPrice([p('a', { valid_until_at: '2026-05-01T00:00:00.000Z' })], { currency: 'THB', location_id: null, at: AT }), null, 'must not use a lapsed offer')
+  assert.equal(selectPrice([p('a', { valid_from_at: '2026-07-01T00:00:00.000Z' })], { currency: 'THB', location_id: null, at: AT }), null, 'must not use a future offer')
 })
 
-test('Product price normalization distinguishes no price from a complete fixed price', () => {
-  assert.throws(() => normalizePriceInput(undefined, 'THB'), /price is required/)
-  assert.equal(normalizePriceInput(null, 'THB'), null)
-  assert.deepEqual(
-    normalizePriceInput({
-      amount_minor: 500,
-      currency: 'USD',
-      unit: 'item',
-      tax_behavior: 'unspecified',
-      valid_from: '2026-06-01T00:00:00.000Z',
-    }, 'THB'),
-    {
-      amountMinor: 500,
-      currency: 'USD',
-      unit: 'item',
-      taxBehavior: 'unspecified',
-      compareAt: null,
-      validFrom: '2026-06-01T00:00:00.000Z',
-      validUntil: null,
-      provenance: 'manual',
-      validFromProvided: true,
-      validUntilProvided: false,
-    },
-  )
-  const defaulted = normalizePriceInput({ amount_minor: 500 }, 'THB')
-  assert.ok(defaulted)
-  assert.equal(defaulted.amountMinor, 500)
-  assert.equal(defaulted.currency, 'THB')
-  assert.equal(defaulted.unit, 'item')
-  assert.equal(defaulted.taxBehavior, 'unspecified')
-  assert.equal(defaulted.provenance, 'manual')
-  assert.equal(defaulted.validFromProvided, false)
-  assert.equal(isValidInstant(defaulted.validFrom), true)
-  assert.throws(
-    () => normalizePriceInput({ amount_minor: 500, provenance: 'caller' }, 'THB'),
-    /assigned by the server/,
-  )
-  assert.throws(
-    () => normalizePriceInput({ amount_minor: 500, currency: null } as unknown as PriceInput, 'THB'),
-    /currency must be a supported currency/,
-  )
+test('location scope precedence: specific wins, neutral is not a second source', () => {
+  const prices = [p('neutral'), p('locA', { location_id: 'locA' })]
+  assert.equal(selectPrice(prices, { currency: 'THB', location_id: 'locA', at: AT })!.id, 'locA')
+  assert.equal(selectPrice(prices, { currency: 'THB', location_id: 'locB', at: AT })!.id, 'neutral')
+  assert.equal(selectPrice(prices, { currency: 'THB', location_id: null, at: AT })!.id, 'neutral')
+  assert.equal(selectPrice([p('locA', { location_id: 'locA' })], { currency: 'THB', location_id: null, at: AT }), null,
+    'no location context must not reach a location-scoped offer')
 })
 
-test('priceAt selects one active interval and rejects overlapping schedules', () => {
-  assert.equal(isValidInstant('2026-02-28T12:34:56Z'), true)
-  assert.equal(isValidInstant('2026-02-28T12:34:56.789Z'), true)
-  assert.equal(isValidInstant('2026-02-30T12:34:56Z'), false)
-  assert.equal(isValidInstant('2026-04-31T12:34:56.000Z'), false)
-  const future = { ...base, id: 'price-2', amount_minor: 1500, valid_from: '2026-06-01T00:00:00.000Z' }
-  const closed = { ...base, valid_until: future.valid_from }
-  assert.equal(priceAt([closed, future], '2026-05-01T00:00:00.000Z')?.id, 'price-1')
-  assert.equal(priceAt([closed, future], future.valid_from)?.id, 'price-2')
-  assert.doesNotThrow(() => assertNonOverlappingPrices([closed, future]))
-  assert.throws(() => assertNonOverlappingPrices([base, future]), /overlap/)
+test('ambiguity throws instead of ordering and picking', () => {
+  assert.throws(() => selectPrice([p('a'), p('b')], { currency: 'THB', location_id: null, at: AT }), AmbiguousPriceError)
+  assert.throws(() => selectPrice([p('a', { location_id: 'locA' }), p('b', { location_id: 'locA' })], { currency: 'THB', location_id: 'locA', at: AT }), AmbiguousPriceError)
 })
 
-test('repricing closes the current immutable record and creates a replacement', () => {
-  const at = '2026-06-01T00:00:00.000Z'
-  const result = replacePrice(base, {
-    id: 'price-2', amount_minor: 1500, currency: 'THB', unit: 'person', tax_behavior: 'inclusive',
-    compare_at_amount_minor: 1800, valid_from: at, provenance: 'manual', created_by: 'user-2', created_at: at,
-  })
-  assert.equal(result.closed.valid_until, at)
-  assert.equal(result.replacement.product_id, base.product_id)
-  assert.equal(result.replacement.amount_minor, 1500)
-  assert.equal(base.valid_until, null)
+test('billing recurrence is never confused with anything else', () => {
+  const weekly = p('w', { type: 'recurring', recurring_interval: 'week', recurring_interval_count: 1 })
+  const once = p('o')
+  assert.equal(selectPrice([weekly, once], { currency: 'THB', location_id: null, at: AT })!.id, 'o', 'default asks for one-time')
+  assert.equal(selectPrice([weekly, once], { currency: 'THB', location_id: null, at: AT, billing: { type: 'recurring', interval: 'week', interval_count: 1 } })!.id, 'w')
+  assert.equal(selectPrice([weekly], { currency: 'THB', location_id: null, at: AT, billing: { type: 'recurring', interval: 'month', interval_count: 1 } }), null)
+})
+
+test('zero is an explicit offer, absence is not free', () => {
+  assert.equal(selectPrice([p('free', { unit_amount: 0 })], { currency: 'THB', location_id: null, at: AT })!.unit_amount, 0)
+  assert.equal(selectPrice([], { currency: 'THB', location_id: null, at: AT }), null)
+})
+
+test('shape validation rejects malformed offers', () => {
+  assert.throws(() => assertPriceShape(p('x', { unit_amount: -1 })), /non-negative/)
+  assert.throws(() => assertPriceShape(p('x', { currency: 'thb' as Price['currency'] })), /ISO 4217/)
+  assert.throws(() => assertPriceShape(p('x', { compare_at_unit_amount: 100 })), /must exceed/)
+  assert.throws(() => assertPriceShape(p('x', { type: 'recurring' })), /recurring price requires/)
+  assert.throws(() => assertPriceShape(p('x', { recurring_interval: 'week', recurring_interval_count: 1 })), /must not carry recurrence/)
+  assert.throws(() => assertPriceShape(p('x', { valid_from_at: '2026-02-01T00:00:00.000Z', valid_until_at: '2026-01-01T00:00:00.000Z' })), /positive/)
+})
+
+test('write-time conflict guard', () => {
+  assert.throws(() => assertNoConflictingPrices([p('a'), p('b')]), AmbiguousPriceError)
+  assertNoConflictingPrices([p('a', { valid_until_at: '2026-06-01T00:00:00.000Z' }), p('b', { valid_from_at: '2026-06-01T00:00:00.000Z' })])
+  assertNoConflictingPrices([p('a'), p('b', { location_id: 'locA' })])
+  assertNoConflictingPrices([p('a'), p('b', { currency: 'USD' })])
+  assertNoConflictingPrices([p('a'), p('b', { active: false })])
+  assert.throws(() => assertNoConflictingPrices([p('a', { valid_until_at: '2026-07-01T00:00:00.000Z' }), p('b', { valid_from_at: '2026-06-01T00:00:00.000Z' })]), AmbiguousPriceError)
 })

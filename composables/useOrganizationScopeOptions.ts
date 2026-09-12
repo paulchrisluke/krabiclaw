@@ -33,6 +33,10 @@ export function useOrganizationScopeOptions() {
     if (sites.value.length || sitesPending.value) return
     const requestId = ++sitesRequestId
     sitesPending.value = true
+    // A retry that succeeds clears the message the failed one left, the way
+    // the location loader below does. Without this the list rendered beside
+    // the error that no longer applies.
+    sitesError.value = null
     try {
       const response = await dashboardApi('/api/dashboard/context', { validate: isSitesResponse })
       if (requestId !== sitesRequestId) return
@@ -55,6 +59,9 @@ export function useOrganizationScopeOptions() {
     const options = computed(() => locations.value.map(location => ({ label: location.title, value: location.id })))
     const isCurrent = (id: number, site: string) => id === requestId && siteId.value === site
 
+    // Immediate, because both callers pass a ref that starts empty and then
+    // gets a site: without it the first value lands before anything is
+    // listening and the locations stay empty with no request ever made.
     watch(siteId, async (site) => {
       const id = ++requestId
       locations.value = []
@@ -75,7 +82,7 @@ export function useOrganizationScopeOptions() {
       } finally {
         if (isCurrent(id, site)) pending.value = false
       }
-    })
+    }, { immediate: true })
 
     return { locations, options, pending, error }
   }

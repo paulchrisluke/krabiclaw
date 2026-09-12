@@ -16,7 +16,6 @@ export function resolveBlawbyRouteTarget(path: string, params: Record<string, un
   if (routePath === '/') return { recipe: 'home', slug: null }
   if (routePath === '/links') return { recipe: 'links', slug: null }
   if (routePath === '/services') return { recipe: 'services', slug: null }
-  if (/^\/services\/[^/]+$/.test(routePath)) return { recipe: 'offering', slug: String(params.slug || '') }
   if (routePath === '/about') return { recipe: 'about', slug: null }
   if (routePath === '/pricing') return { recipe: 'pricing', slug: null }
   if (routePath === '/contact') return { recipe: 'contact', slug: null }
@@ -28,7 +27,9 @@ export function resolveBlawbyRouteTarget(path: string, params: Record<string, un
   if (routePath === '/policies/privacy') return { recipe: 'privacy', slug: null }
   if (routePath === '/policies/terms') return { recipe: 'terms', slug: null }
   if (routePath === '/third-party-notices') return { recipe: 'third-party-notices', slug: null }
-  throw createError({ statusCode: 404, statusMessage: 'Unsupported Blawby route' })
+  // Every other path is a page this site publishes; whether it exists is the
+  // page loader's answer, not a list kept here.
+  return { recipe: 'page', slug: routePath }
 }
 
 export async function useBlawbyDocument(

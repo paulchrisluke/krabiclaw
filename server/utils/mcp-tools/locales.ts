@@ -4,7 +4,7 @@ import { siteTool } from './shared'
 
 const localizedValuesSchema = {
   type: 'object',
-  description: 'Localized values follow the canonical owner fields. content_document uses title, summary, slug, SEO fields and typed metadata; content_blocks edits its representation. Other allowed fields depend on resource_type. For product_category, use { name }. Product values never include category; category names are localized on the category record.',
+  description: 'Localized values follow the canonical owner fields. content_document uses title, summary, slug, SEO fields and typed metadata; content_blocks edits its representation. Other allowed fields depend on resource_type. For collection, use { name }. Product values never include a collection; collection names are localized on the collection record.',
   additionalProperties: true,
 } as const
 
@@ -88,7 +88,7 @@ export const LOCALES_TOOLS: McpToolDefinition[] = [
   }),
   siteTool({
     name: 'get_product_catalog_localization',
-    description: 'List canonical Product IDs, category_id and category records, source Product fields, and existing Product localizations for one published secondary locale. Localize category names separately with get_resource_localization and put_resource_localization using resource_type product_category, resource_id category_id, and values { name }.',
+    description: 'List canonical Product IDs, source Product fields, and existing Product localizations for one published secondary locale. Localize collection names separately with get_resource_localization and put_resource_localization using resource_type collection, resource_id collection_id, and values { name }.',
     domain: 'locales',
     minimumRole: 'editor',
     confirmRequired: false,
@@ -113,9 +113,8 @@ export const LOCALES_TOOLS: McpToolDefinition[] = [
           properties: {
             product_id: { type: 'string' },
             values: localizedValuesSchema,
-            route_path: { type: 'string' },
           },
-          required: ['product_id', 'values', 'route_path'],
+          required: ['product_id', 'values'],
           additionalProperties: false,
         },
       },

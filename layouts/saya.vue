@@ -19,7 +19,6 @@
       :site="resolvedSite"
       :locations="locations"
       :has-products="shell.hasProducts.value"
-      :has-experiences="hasExperiences"
     />
     <main class="grow" :data-route-shell="route.path">
       <slot />
@@ -32,7 +31,6 @@
       :error="bootstrapError"
       :config="config"
       :has-products="shell.hasProducts.value"
-      :has-experiences="hasExperiences"
     />
   </div>
 </template>
@@ -81,7 +79,7 @@ if (import.meta.dev) useDebugLCP()
 // experience data comes from the keyed page loader and changes independently.
 const shell = useSiteShellState()
 if (import.meta.server && isHome.value) await shell.ready
-const { config, locations, hasExperiences, locales, error: bootstrapError, site: shellSite } = shell
+const { config, locations, locales, error: bootstrapError, site: shellSite } = shell
 const { isPlatform, site } = useTenantSite()
 const resolvedSite = computed(() => shellSite.value || site)
 const brandColor = computed(
@@ -114,7 +112,19 @@ const scopedLocationSlug = computed(() => {
     ? path.slice(localePrefix.length)
     : path
   const matched = sourcePath.match(/^\/locations\/([^/]+)/)?.[1]
-  return matched === undefined ? null : decodeURIComponent(matched)
+  if (matched === undefined) return null
+  try {
+    return decodeURIComponent(matched)
+  }
+  catch {
+    // A segment that is not a valid escape sequence. The request layer decodes
+    // the pathname first and answers 400 for the ones I could construct
+    // (`/locations/%`, `/locations/%252`), so nothing reaches here today —
+    // this layout does not decide its own behaviour on that staying true. A
+    // segment naming no location scopes the footer to nothing, and the page
+    // below answers with its own 404.
+    return null
+  }
 })
 const footerLocations = computed(() => (scopedLocationSlug.value === null
   ? locations.value

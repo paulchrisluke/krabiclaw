@@ -5,7 +5,6 @@ import { queryAll, queryFirst, type DbClient } from '~/server/db'
 import { getOrganizationBillingProjection } from '~/server/utils/organization-billing'
 import { listLocationQa } from '~/server/utils/location-qa'
 import { requireLocationAccess, requireSiteAccess } from '~/server/utils/location-access'
-import { listExperiences } from '~/server/utils/experiences'
 import {
   assertLocationAccess,
   assertResourceAccess,
@@ -30,6 +29,7 @@ import { createPreviewToken, PREVIEW_TOKEN_TTL_MS } from '~/server/utils/preview
 import { resolveSiteCmsCapabilities } from '~/server/utils/cms-capabilities'
 import { getEditablePages } from '~/config/content-registry'
 import { parseCmsFeatureOverrideDelta } from '~/config/cms-registry'
+import { getLocationReservationConfig } from '~/server/utils/reservations'
 
 interface EditorLocationRow {
   id: string
@@ -113,13 +113,24 @@ export async function loadDashboardLocationQa(
   return { qa: await listLocationQa(db, siteId, locationId) }
 }
 
-export async function loadDashboardLocationExperiences(
+/**
+ * The bookable products offered at one location.
+ *
+ * A booking config is what makes a product bookable, so this filters on that
+ * relationship rather than on a discriminator column.
+ */
+export async function loadDashboardLocationBookableProducts(
   event: H3Event,
   siteId: string,
   locationId: string,
 ) {
-  const { db } = await requireLocationAccess(event, siteId, locationId)
-  return { experiences: await listExperiences(db, siteId, { locationId }) }
+  const { db, site } = await requireLocationAccess(event, siteId, locationId)
+  const products = await listLocationProducts(db, { organizationId: site.organization_id, locationId })
+  const bookable = await queryAll<{ product_id: string }>(db, `
+    SELECT product_id FROM product_booking_configs WHERE organization_id = ?
+  `, [site.organization_id])
+  const bookableIds = new Set(bookable.map(row => row.product_id))
+  return { products: products.filter(product => bookableIds.has(product.id)) }
 }
 
 export interface DashboardMediaFilters {
@@ -215,7 +226,6 @@ export async function loadDashboardSettingsResource(
 
 export interface LocationContentCounts {
   photos: number
-  experiences: number
   posts: number
   qa: number
   upcomingReservations: number
@@ -247,16 +257,17 @@ async function loadLocationContentCounts(
          AND ma.status = 'active'
         WHERE mp.site_id = ? AND mp.owner_type = 'business_location' AND mp.owner_id = ?
           AND mp.slot IN ('hero', 'gallery') AND mp.status = 'active') AS photos,
-      (SELECT COUNT(*) FROM products WHERE product_type = 'experience' AND site_id = ? AND location_id = ?) AS experiences,
       (SELECT COUNT(*) FROM content_documents WHERE kind = 'social_post' AND row_role = 'root' AND site_id = ? AND location_id = ? AND status = 'published') AS posts,
       (SELECT COUNT(*) FROM content_documents WHERE kind = 'qa' AND row_role = 'root' AND site_id = ? AND location_id = ?) AS qa,
-      (SELECT COUNT(*) FROM requests
-        WHERE kind = 'reservation' AND site_id = ? AND location_id = ? AND status IN ('pending', 'confirmed')
-          AND booking_date >= date('now')) AS upcoming_reservations
-  `, Array.from({ length: 5 }, () => [siteId, locationId]).flat())
+      -- Counted on the reservation, not the thread: the thread holds the
+      -- conversation and the reservation holds the seating, including when it
+      -- starts and whether it still stands.
+      (SELECT COUNT(*) FROM reservations
+        WHERE site_id = ? AND location_id = ? AND status IN ('pending', 'confirmed')
+          AND starts_at >= strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) AS upcoming_reservations
+  `, Array.from({ length: 4 }, () => [siteId, locationId]).flat())
   return {
     photos: row?.photos ?? 0,
-    experiences: row?.experiences ?? 0,
     posts: row?.posts ?? 0,
     qa: row?.qa ?? 0,
     upcomingReservations: row?.upcoming_reservations ?? 0,
@@ -289,7 +300,7 @@ export async function loadDashboardLocationOverview(
       location.feature_overrides as string | null ?? null,
     ),
     options.includeProducts
-      ? listLocationProducts(db, organization.id, siteId, locationId)
+      ? listLocationProducts(db, { organizationId: organization.id, locationId })
       : Promise.resolve([]),
     loadDashboardGuestThreads(event, siteId, { locationId }),
     loadLocationContentCounts(db, siteId, locationId),
@@ -329,12 +340,17 @@ export async function loadDashboardLocationSettings(
     siteId,
     location.feature_overrides as string | null ?? null,
   )
+  // The reservation policy is a row of its own, and the settings editor opens
+  // its leaf from the same render — so it travels with the location rather than
+  // costing a second round trip from the client.
+  const reservationConfig = await getLocationReservationConfig(db, { organizationId: organization.id, locationId })
   return {
     location: {
       success: true as const,
       location: parseLocationPayload(location)!,
       ...capabilities,
     },
+    reservationConfig: { success: true as const, config: reservationConfig },
   }
 }
 
@@ -365,8 +381,12 @@ export async function loadDashboardProduct(
   productId: string,
 ) {
   const { db, site } = await requireLocationAccess(event, siteId, locationId)
-  const product = await getProduct(db, site.organization_id, siteId, locationId, productId)
-  if (!product) throw new HTTPError({ statusCode: 404, statusMessage: 'Product not found' })
+  const product = await getProduct(db, site.organization_id, productId)
+  // The catalog is organization-owned, so being offered here is what makes
+  // this location's editor the right place to open it.
+  if (!product.locations.some(entry => entry.location_id === locationId)) {
+    throw new HTTPError({ statusCode: 404, statusMessage: 'Product not found at this location' })
+  }
   return { success: true as const, product }
 }
 
@@ -377,7 +397,7 @@ export async function loadDashboardLocationProducts(
   locationId: string,
 ) {
   const { db, site } = await requireLocationAccess(event, siteId, locationId)
-  const products = await listLocationProducts(db, site.organization_id, siteId, locationId)
+  const products = await listLocationProducts(db, { organizationId: site.organization_id, locationId })
   return { success: true as const, products }
 }
 

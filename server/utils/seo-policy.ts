@@ -49,18 +49,20 @@ export const TENANT_ONLY_EXACT_ROUTES = new Set([
   '/order',
   '/photos',
   '/posts',
+  '/products',
   '/qa',
   '/reservations',
   '/reviews',
 ])
 
 export const TENANT_ONLY_ROUTE_PREFIXES = [
+  '/bookings/',
   '/contact/',
-  '/experiences/',
   '/locations/',
   '/menu/',
   '/order/',
   '/photos/',
+  '/products/',
   '/posts/',
   '/qa/',
   '/reservations/',

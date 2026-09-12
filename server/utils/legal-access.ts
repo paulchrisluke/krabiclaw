@@ -551,16 +551,17 @@ export async function requireLegalPublicActor(
     }
 
     // event.req.headers does not see the response's set-cookie, so
-    // getAuthSession(event, env) cannot be re-run to observe the new
-    // session — instead, resolve the fresh session directly from the
-    // freshly-issued cookie (its first set-cookie value, cookie-pair only,
-    // matching tests/integration/legal-entitlement-rollout-matrix-d1.test.ts's
-    // `.split(';')[0]` technique), after forwarding every set-cookie value
-    // onto the outgoing response so the browser retains the new session too.
+    // getAuthSession(event, env) cannot be re-run to observe the new session —
+    // instead, resolve it directly from the freshly-issued cookies, after
+    // forwarding every set-cookie value onto the outgoing response so the
+    // browser retains the new session too.
     const setCookies = forwardSetCookies(event, signIn)
-    const cookiePair = setCookies[0]?.split(';')[0]
-    const freshSession = cookiePair
-      ? await auth.api.getSession({ headers: new Headers({ cookie: cookiePair }) })
+    // Every cookie the sign-in issued, not whichever came back first: Better
+    // Auth decides how many it sets and in what order, and the session token is
+    // not promised to be the first of them.
+    const cookieHeader = setCookies.map(value => value.split(';')[0]).filter(Boolean).join('; ')
+    const freshSession = cookieHeader
+      ? await auth.api.getSession({ headers: new Headers({ cookie: cookieHeader }) })
       : null
     const freshActor = resolveLegalPublicActor(freshSession)
     if (!freshActor) {

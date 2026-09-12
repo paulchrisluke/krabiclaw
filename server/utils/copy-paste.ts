@@ -1,9 +1,7 @@
 import { executeBatch, queryAll, queryFirst, rawClient, type BatchQuery, type DbClient } from '~/server/db'
 import { createLocation, deleteLocation, updateLocation, type CreateLocationInput } from '~/server/utils/location-management'
-import { uniqueSlug } from '~/server/utils/experiences'
 import type { CloudflareEnv } from '~/server/utils/auth'
 import { buildMediaPlacementInsertQuery } from '~/server/utils/media-asset-manager'
-import { ensureExperienceCategory } from '~/server/utils/product-management'
 import { refreshSocialCard, type SocialCardOwner } from '~/server/utils/social-card'
 
 type SetupEnv = CloudflareEnv
@@ -13,7 +11,6 @@ export type CopyEntityType =
   | 'media_assets' 
   | 'reviews' 
   | 'location_qa' 
-  | 'experiences'
 
 export interface CopyEntityConfig {
   type: CopyEntityType
@@ -172,7 +169,6 @@ export async function copyLocationBatch(
       media_assets: { copied: 0, new_ids: [] },
       reviews: { copied: 0, new_ids: [] },
       location_qa: { copied: 0, new_ids: [] },
-      experiences: { copied: 0, new_ids: [] },
     },
     id_mappings: idMappings,
   }
@@ -190,18 +186,18 @@ export async function copyLocationBatch(
   }
 
   // Process entities in dependency order so copied owners exist before their placements.
-  const entityOrder: CopyEntityType[] = ['media_assets', 'products', 'experiences', 'reviews', 'location_qa']
+  const entityOrder: CopyEntityType[] = ['media_assets', 'products', 'reviews', 'location_qa']
   const requestedConfigs = new Map(entities.map((config) => [config.type, config]))
 
   try {
-    await copyLocationPolicies(db, source_location_id, targetLocationId, organizationId, siteId, now, statements)
+    await copyLocationPolicies(db, source_location_id, targetLocationId, organizationId, siteId, userId, now, statements)
     for (const type of entityOrder) {
       const entityConfig = requestedConfigs.get(type)
       if (!entityConfig) continue
 
       switch (entityConfig.type) {
         case 'products':
-          await copyProducts(db, source_location_id, targetLocationId, organizationId, siteId, userId, now, statements, manifest, idMappings)
+          await offerProductsAtTarget(db, source_location_id, targetLocationId, organizationId, siteId, userId, now, statements, manifest)
           break
         case 'media_assets':
           await copyMediaAssets(db, source_location_id, targetLocationId, organizationId, siteId, now, statements, manifest)
@@ -211,9 +207,6 @@ export async function copyLocationBatch(
           break
         case 'location_qa':
           await copyLocationQa(db, source_location_id, targetLocationId, organizationId, siteId, now, statements, manifest)
-          break
-        case 'experiences':
-          await copyExperiences(db, source_location_id, targetLocationId, organizationId, siteId, now, statements, manifest, idMappings, userId)
           break
       }
     }
@@ -238,16 +231,16 @@ export async function copyLocationBatch(
 
   try {
     const refreshOwners: SocialCardOwner[] = [{ owner_type: 'business_location', owner_id: targetLocationId }]
-    const copiedProductIds = manifest.entities.products.new_ids
-    if (copiedProductIds.length) {
+    const offeredProductIds = manifest.entities.products.new_ids
+    if (offeredProductIds.length) {
       const publicProducts = await queryAll<{ id: string }>(db, `
-        SELECT id FROM products
-         WHERE site_id = ? AND product_type = 'standard' AND is_visible = 1
-           AND id IN (SELECT value FROM json_each(?))
-      `, [siteId, JSON.stringify(copiedProductIds)])
+        SELECT p.id FROM products p
+         JOIN product_publications pub ON pub.product_id = p.id AND pub.organization_id = p.organization_id
+        WHERE pub.site_id = ? AND pub.published = 1 AND p.active = 1
+          AND p.id IN (SELECT value FROM json_each(?))
+      `, [siteId, JSON.stringify(offeredProductIds)])
       refreshOwners.push(...publicProducts.map(row => ({ owner_type: 'product' as const, owner_id: row.id })))
     }
-    refreshOwners.push(...manifest.entities.experiences.new_ids.map(owner_id => ({ owner_type: 'product' as const, owner_id })))
     const copiedReviewIds = manifest.entities.reviews.new_ids
     if (copiedReviewIds.length) {
       const publicReviews = await queryAll<{ id: string }>(db, `
@@ -271,7 +264,18 @@ export async function copyLocationBatch(
   return { success: true, manifest }
 }
 
-async function copyProducts(
+/**
+ * Offer the source location's products at the target location too.
+ *
+ * This inserts product_locations rows. It does NOT duplicate products, which
+ * is what it used to do: the catalog is organization-owned, so "also sell this
+ * at the new branch" is an association, and copying it produced a second
+ * product identity whose name, price and photo then drifted from the first.
+ *
+ * Duplicating a product as a genuinely new one is a different operation with
+ * a different meaning, and lives in product-management as createProduct.
+ */
+async function offerProductsAtTarget(
   db: DbClient,
   sourceLocationId: string,
   targetLocationId: string,
@@ -281,87 +285,61 @@ async function copyProducts(
   now: string,
   statements: BatchQuery[],
   manifest: CopyManifest,
-  idMappings: Record<string, string>,
 ) {
-  const products = await queryAll<{ id: string; slug: string; category_id: string; category_name: string; category_slug: string }>(
-    db, `SELECT p.id, p.slug, p.category_id, pc.name AS category_name, pc.slug AS category_slug
-           FROM products p JOIN product_categories pc ON pc.id = p.category_id
-          WHERE p.location_id = ? AND p.organization_id = ? AND p.site_id = ? AND p.product_type = 'standard'
-          ORDER BY pc.sort_order, p.sort_order, p.id`,
-    [sourceLocationId, organizationId, siteId],
-  )
-  const targetSlugs = new Set((await queryAll<{ slug: string }>(db, `SELECT slug FROM products WHERE site_id = ? AND location_id = ?`, [siteId, targetLocationId])).map(row => row.slug))
-  // Categories are per location, so a copied Product cannot reuse the source
-  // category row. Match the target's category by name and create the missing
-  // ones in the same batch, so a failed copy leaves no orphan categories.
-  const targetCategories = await queryAll<{ id: string; name: string; slug: string }>(
-    db, `SELECT id, name, slug FROM product_categories WHERE site_id = ? AND location_id = ? AND product_type = 'standard'`,
-    [siteId, targetLocationId],
-  )
-  const categoryIdByName = new Map(targetCategories.map(row => [row.name, row.id]))
-  const targetCategorySlugs = new Set(targetCategories.map(row => row.slug))
-  let nextCategorySortOrder = targetCategories.length
-  const productCountByCategory = new Map<string, number>()
-  for (const row of await queryAll<{ category_id: string; count: number }>(
-    db, `SELECT category_id, COUNT(*) AS count FROM products WHERE site_id = ? AND location_id = ? AND product_type = 'standard' GROUP BY category_id`,
-    [siteId, targetLocationId],
-  )) productCountByCategory.set(row.category_id, Number(row.count))
-  for (const product of products) {
-    if (categoryIdByName.has(product.category_name)) continue
-    const categoryId = crypto.randomUUID()
-    let categorySlug = product.category_slug
-    for (let suffix = 1; targetCategorySlugs.has(categorySlug); suffix += 1) {
-      const suffixText = `-${suffix + 1}`
-      categorySlug = `${product.category_slug.slice(0, 120 - suffixText.length).replace(/-+$/g, '')}${suffixText}`
-      if (suffix > 100) throw new Error(`Unable to create a target-location-safe Product category slug for ${product.category_id}`)
-    }
-    targetCategorySlugs.add(categorySlug)
-    categoryIdByName.set(product.category_name, categoryId)
+  const offered = await queryAll<{ product_id: string; active: number; published: number }>(db, `
+    SELECT pl.product_id, pl.active, pl.published
+      FROM product_locations pl
+     WHERE pl.organization_id = ? AND pl.location_id = ?
+     ORDER BY pl.product_id
+  `, [organizationId, sourceLocationId])
+
+  for (const row of offered) {
     statements.push({
-      query: `INSERT INTO product_categories (id, organization_id, site_id, location_id, product_type, name, slug, sort_order, created_at, updated_at, created_by, updated_by)
-              VALUES (?, ?, ?, ?, 'standard', ?, ?, ?, ?, ?, ?, ?)`,
-      params: [categoryId, organizationId, siteId, targetLocationId, product.category_name, categorySlug, nextCategorySortOrder, now, now, userId, userId],
+      query: `INSERT INTO product_locations (organization_id, product_id, location_id, active, published, created_at, updated_at, created_by, updated_by)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+              ON CONFLICT (product_id, location_id) DO UPDATE SET active = excluded.active, published = excluded.published,
+                updated_at = excluded.updated_at, updated_by = excluded.updated_by`,
+      params: [organizationId, row.product_id, targetLocationId, row.active, row.published, now, now, userId, userId],
     })
-    nextCategorySortOrder += 1
-  }
-  for (const product of products) {
-    const newId = crypto.randomUUID()
-    manifest.id_mappings[product.id] = newId
-    manifest.entities.products.new_ids.push(newId)
-    let newSlug = product.slug
-    for (let suffix = 1; targetSlugs.has(newSlug); suffix += 1) {
-      const suffixText = `-${suffix + 1}`
-      newSlug = `${product.slug.slice(0, 120 - suffixText.length).replace(/-+$/g, '')}${suffixText}`
-      if (suffix > 100) throw new Error(`Unable to create a target-location-safe Product slug for ${product.id}`)
-    }
-    targetSlugs.add(newSlug)
-    const targetCategoryId = categoryIdByName.get(product.category_name)!
-    const categoryOffset = productCountByCategory.get(targetCategoryId) ?? 0
-    productCountByCategory.set(targetCategoryId, categoryOffset + 1)
-    statements.push({
-      query: `INSERT INTO products (id, organization_id, site_id, location_id, product_type, category_id, name, slug, description, order_url, is_visible, available, featured, featured_sort_order, sort_order, tags_json, details_json, experience_json, seo_title, seo_description, canonical_url, robots, source, created_at, updated_at, created_by, updated_by)
-        SELECT ?, organization_id, site_id, ?, product_type, ?, name, ?, description, order_url, is_visible, available, featured, featured_sort_order, ?, tags_json, details_json, json_remove(experience_json, '$.overrides'), seo_title, seo_description, canonical_url, robots, 'copy', ?, ?, ?, ? FROM products WHERE id = ? AND organization_id = ? AND site_id = ? AND location_id = ?`,
-      params: [newId, targetLocationId, targetCategoryId, newSlug, categoryOffset, now, now, userId, userId, product.id, organizationId, siteId, sourceLocationId],
-    })
-    const priceRows = await queryAll<{ id: string }>(db, `SELECT id FROM prices WHERE product_id = ? ORDER BY valid_from, id`, [product.id])
-    for (const price of priceRows) statements.push({
-      query: `INSERT INTO prices (id, organization_id, site_id, location_id, product_id, amount_minor, currency, unit, tax_behavior, compare_at_amount_minor, valid_from, valid_until, provenance, created_by, created_at)
-        SELECT ?, organization_id, site_id, ?, ?, amount_minor, currency, unit, tax_behavior, compare_at_amount_minor, valid_from, valid_until, 'copy', ?, ? FROM prices WHERE id = ?`,
-      params: [crypto.randomUUID(), targetLocationId, newId, userId, now, price.id],
-    })
-    const mediaRows = await queryAll<{ slot: string; asset_id: string; sort_order: number }>(
-      db,
-      `SELECT slot, asset_id, sort_order FROM media_placements WHERE organization_id = ? AND site_id = ? AND owner_type = 'product' AND owner_id = ? AND slot IN ('image','gallery') AND status = 'active' ORDER BY slot, sort_order`,
-      [organizationId, siteId, product.id],
-    )
-    for (const media of mediaRows) {
-      const newAssetId = idMappings[media.asset_id] ?? media.asset_id
-      statements.push(buildMediaPlacementInsertQuery({
-        organizationId, siteId, ownerType: 'product', ownerId: newId, slot: media.slot,
-        assetId: newAssetId, sortOrder: media.sort_order, createdAt: now, updatedAt: now,
-      }))
-    }
+    // The same product, now sold in two places. Its id is unchanged, which is
+    // the whole point: there is one thing to edit.
+    manifest.id_mappings[row.product_id] = row.product_id
+    manifest.entities.products.new_ids.push(row.product_id)
     manifest.entities.products.copied++
+  }
+
+  // Location-scoped prices follow, because a price scoped to the source
+  // location says nothing about the target. A location-neutral price already
+  // applies everywhere and is deliberately left alone.
+  // Only prices belonging to the products this copy just offered at the
+  // target, and only where the target has no active price of its own for that
+  // variant and currency. Selecting every price at the source location copied
+  // prices for products the target does not carry, and re-running the copy
+  // minted a second price for every variant, leaving two active offers.
+  const scopedPrices = await queryAll<{ id: string }>(db, `
+    SELECT pr.id FROM prices pr
+      JOIN product_variants pv ON pv.organization_id = pr.organization_id AND pv.id = pr.product_variant_id
+      JOIN product_locations pl ON pl.organization_id = pr.organization_id AND pl.product_id = pv.product_id
+        AND pl.location_id = ?
+     WHERE pr.organization_id = ? AND pr.location_id = ? AND pr.active = 1
+       AND NOT EXISTS (
+         SELECT 1 FROM prices existing
+          WHERE existing.organization_id = pr.organization_id
+            AND existing.product_variant_id = pr.product_variant_id
+            AND existing.location_id = ? AND existing.active = 1
+            AND existing.currency = pr.currency AND existing.type = pr.type)
+     ORDER BY pr.id
+  `, [sourceLocationId, organizationId, sourceLocationId, targetLocationId])
+  for (const price of scopedPrices) {
+    statements.push({
+      query: `INSERT INTO prices (id, organization_id, product_variant_id, location_id, active, currency, unit_amount, type,
+                recurring_interval, recurring_interval_count, tax_behavior, compare_at_unit_amount, valid_from_at, valid_until_at,
+                source, created_at, updated_at, created_by, updated_by)
+              SELECT ?, organization_id, product_variant_id, ?, active, currency, unit_amount, type,
+                recurring_interval, recurring_interval_count, tax_behavior, compare_at_unit_amount, valid_from_at, valid_until_at,
+                'copy', ?, ?, ?, ? FROM prices WHERE id = ?`,
+      params: [crypto.randomUUID(), targetLocationId, now, now, userId, userId, price.id],
+    })
   }
 }
 
@@ -396,29 +374,43 @@ async function copyMediaAssets(
   }
 }
 
+/**
+ * Give the target location the source location's reservation policy, if it
+ * has none of its own.
+ *
+ * A typed row, copied once. There is no experience policy to copy: a product's
+ * booking terms are its own metafields and belong to the product, not to a
+ * location, so they are already correct wherever it is offered.
+ */
 async function copyLocationPolicies(
   db: DbClient,
   sourceLocationId: string,
   targetLocationId: string,
   organizationId: string,
   siteId: string,
+  userId: string,
   now: string,
   statements: BatchQuery[],
 ) {
-  for (const kind of ['reservation', 'experience']) {
-    const path = `$.${kind}.policy`
-    statements.push({
-      query: `UPDATE business_locations SET booking_json = json_set(booking_json, ?, (
-        SELECT json_extract(booking_json, ?) FROM business_locations
-        WHERE id = ? AND organization_id = ? AND site_id = ?
-      )), updated_at = ? WHERE id = ? AND organization_id = ? AND site_id = ?
-        AND json_type(booking_json, ?) IS NULL AND EXISTS (
-          SELECT 1 FROM business_locations WHERE id = ? AND organization_id = ? AND site_id = ?
-            AND json_type(booking_json, ?) = 'object')`,
-      params: [path, path, sourceLocationId, organizationId, siteId, now, targetLocationId, organizationId, siteId,
-        path, sourceLocationId, organizationId, siteId, path],
-    })
-  }
+  const source = await queryFirst<{ location_id: string }>(db, `
+    SELECT location_id FROM location_reservation_configs WHERE organization_id = ? AND location_id = ?
+  `, [organizationId, sourceLocationId])
+  if (!source) return
+  statements.push({
+    query: `INSERT INTO location_reservation_configs (
+              location_id, organization_id, slot_capacity, advance_notice_minutes, minimum_guest_age,
+              deposit_required, deposit_trigger_party_size, free_cancellation_until_minutes,
+              reschedule_allowed, reschedule_cutoff_minutes, accessibility_contact_required,
+              additional_notes_html, created_at, updated_at, created_by, updated_by
+            )
+            SELECT ?, organization_id, slot_capacity, advance_notice_minutes, minimum_guest_age,
+              deposit_required, deposit_trigger_party_size, free_cancellation_until_minutes,
+              reschedule_allowed, reschedule_cutoff_minutes, accessibility_contact_required,
+              additional_notes_html, ?, ?, ?, ?
+              FROM location_reservation_configs WHERE organization_id = ? AND location_id = ?
+            ON CONFLICT (location_id) DO NOTHING`,
+    params: [targetLocationId, now, now, userId, userId, organizationId, sourceLocationId],
+  })
 }
 
 async function copyReviews(
@@ -503,68 +495,5 @@ async function copyLocationQa(
     })
 
     manifest.entities.location_qa.copied++
-  }
-}
-
-async function copyExperiences(
-  db: DbClient,
-  sourceLocationId: string,
-  targetLocationId: string,
-  organizationId: string,
-  siteId: string,
-  now: string,
-  statements: BatchQuery[],
-  manifest: CopyManifest,
-  idMappings: Record<string, string>,
-  userId: string,
-) {
-  const experiences = await queryAll<{ id: string; slug: string }>(
-    db,
-    "SELECT id, slug FROM products WHERE product_type = 'experience' AND location_id = ? AND organization_id = ? AND site_id = ?",
-    [sourceLocationId, organizationId, siteId],
-  )
-  const targetExperienceCount = Number((await queryFirst<{ count: number }>(db, `SELECT COUNT(*) AS count FROM products WHERE site_id = ? AND location_id = ? AND product_type = 'experience'`, [siteId, targetLocationId]))?.count ?? 0)
-  const targetExperienceCategoryId = experiences.length
-    ? await ensureExperienceCategory(db, organizationId, siteId, targetLocationId, userId)
-    : null
-
-  for (const [experienceIndex, exp] of experiences.entries()) {
-    const newId = crypto.randomUUID()
-    manifest.id_mappings[exp.id] = newId
-    manifest.entities.experiences.new_ids.push(newId)
-
-    // Experience product slugs are unique per site, including copies.
-    const newSlug = await uniqueSlug(db, siteId, exp.slug)
-
-    statements.push({
-      query: `INSERT INTO products (id, organization_id, site_id, location_id, product_type, category_id, name, slug, description, order_url, is_visible, available, featured, featured_sort_order, sort_order, tags_json, details_json, experience_json, seo_title, seo_description, canonical_url, robots, source, created_at, updated_at, created_by, updated_by)
-        SELECT ?, organization_id, site_id, ?, 'experience', ?, name, ?, description, order_url, is_visible, available, featured, featured_sort_order, ?, tags_json, details_json, json_remove(experience_json, '$.overrides'), seo_title, seo_description, canonical_url, robots, 'copy', ?, ?, created_by, updated_by FROM products WHERE id = ?`,
-      params: [newId, targetLocationId, targetExperienceCategoryId, newSlug, targetExperienceCount + experienceIndex, now, now, exp.id],
-    })
-    const priceRows = await queryAll<{ id: string }>(db, `SELECT id FROM prices WHERE product_id = ? ORDER BY valid_from, id`, [exp.id])
-    for (const price of priceRows) statements.push({
-      query: `INSERT INTO prices (id, organization_id, site_id, location_id, product_id, amount_minor, currency, unit, tax_behavior, compare_at_amount_minor, valid_from, valid_until, provenance, created_by, created_at)
-        SELECT ?, organization_id, site_id, ?, ?, amount_minor, currency, unit, tax_behavior, compare_at_amount_minor, valid_from, valid_until, 'copy', created_by, ? FROM prices WHERE id = ?`,
-      params: [crypto.randomUUID(), targetLocationId, newId, now, price.id],
-    })
-
-    const experienceMedia = await queryAll<{ asset_id: string; sort_order: number }>(
-      db,
-      `SELECT asset_id, sort_order
-         FROM media_placements
-        WHERE organization_id = ? AND site_id = ? AND owner_type = 'product' AND owner_id = ? AND slot = 'gallery' AND status = 'active'
-        ORDER BY sort_order ASC`,
-      [organizationId, siteId, exp.id],
-    )
-    for (const item of experienceMedia) {
-      const newAssetId = idMappings[item.asset_id] ?? item.asset_id
-      statements.push(buildMediaPlacementInsertQuery({
-        organizationId, siteId, ownerType: 'product', ownerId: newId, slot: 'gallery',
-        assetId: newAssetId, sortOrder: item.sort_order, createdAt: now, updatedAt: now,
-      }))
-    }
-
-
-    manifest.entities.experiences.copied++
   }
 }

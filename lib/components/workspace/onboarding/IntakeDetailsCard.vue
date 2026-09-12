@@ -164,7 +164,6 @@ const currencyOptions = CURRENCY_OPTIONS
 const countries = listPhoneCountries()
 const phone = ref('')
 const phoneTouched = ref(false)
-const hydratingStoredPhone = ref(false)
 
 // One country for the whole intake: the Location step's "Country" and the phone
 // picker on the Contact step read and write the same `form.country`, so the
@@ -174,7 +173,16 @@ const hydratingStoredPhone = ref(false)
 // stay inert while no country is set.
 const countryCode = computed<CountryCode | undefined>({
   get: () => getPhoneCountry(form.value.country)?.code,
-  set: value => {
+  set: (value) => {
+    // Choosing a different country discards the number typed for the previous
+    // one: a national number is meaningless under another dial code. It
+    // happens HERE, where the picker writes, because only the picker is the
+    // owner choosing. A watcher on the value could not tell that apart from
+    // the parent hydrating a stored country, and cleared an imported number.
+    if (props.section === 'contact' && value !== countryCode.value) {
+      phone.value = ''
+      form.value.phone = ''
+    }
     form.value.country = value ? value : ''
   },
 })
@@ -184,14 +192,6 @@ const parsedPhone = computed(() =>
     ? parsePhone(phone.value, { defaultCountry: countryCode.value })
     : parsePhone(phone.value)
 )
-
-// Picking a different country on the Contact step discards the number typed for
-// the previous one; a national number is meaningless under another dial code.
-watch(countryCode, () => {
-  if (props.section !== 'contact' || hydratingStoredPhone.value) return
-  phone.value = ''
-  form.value.phone = ''
-})
 
 const digitsOf = (value: string) => value.replace(/\D/g, '')
 
@@ -242,14 +242,10 @@ watch(() => form.value.phone, value => {
   if (!value || value === parsedPhone.value.e164) return
   const parsed = parsePhone(value)
   if (parsed.valid && parsed.country && parsed.e164) {
-    hydratingStoredPhone.value = true
     if (!form.value.country) form.value.country = parsed.country
     phone.value = parsed.country === countryCode.value
       ? formatPhoneAsTyped(parsed.nationalFormat ?? parsed.e164, parsed.country)
       : formatPhoneAsTyped(parsed.e164, parsed.country)
-    nextTick(() => {
-      hydratingStoredPhone.value = false
-    })
     return
   }
   phone.value = value

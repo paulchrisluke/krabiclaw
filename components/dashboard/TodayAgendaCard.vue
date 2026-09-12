@@ -56,7 +56,7 @@ const headline = computed(() => {
   return `${firstName(props.item.title)} ${arrival}${guests}`
 })
 
-const resourceIcon = computed(() => props.item.kind === 'experience_booking'
+const resourceIcon = computed(() => props.item.kind === 'booking'
   ? 'i-lucide-ticket'
   : 'i-lucide-map-pin')
 

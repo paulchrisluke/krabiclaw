@@ -130,6 +130,11 @@ const props = defineProps<{
   resourceId: string
   resourceLabel: string
   fields: readonly LocalizationField[]
+  /**
+   * The localized public path for a resource that stores one. The writer
+   * requires it for those resources and rejects it for the rest, so the caller
+   * that owns a route passes this and nobody else does.
+   */
   routePath?: (locale: string) => string
   languageSettingsPath?: string
   disabled?: boolean
@@ -323,8 +328,8 @@ async function save(): Promise<void> {
           method: 'PUT',
           body: {
             values,
-            ...(documentRevision?.locale === requestedLocale ? { expected_updated_at: documentRevision.updatedAt } : {}),
             ...(props.routePath ? { route_path: props.routePath(requestedLocale) } : {}),
+            ...(documentRevision?.locale === requestedLocale ? { expected_updated_at: documentRevision.updatedAt } : {}),
           },
           validate: isLocalizationResponse,
         },

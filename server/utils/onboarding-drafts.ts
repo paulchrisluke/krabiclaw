@@ -47,23 +47,26 @@ export interface DraftLocationRecord {
   status: 'active'
 }
 
+/**
+ * A Product the owner named on the onboarding products step.
+ *
+ * Expressed the way the catalog stores it: the Product belongs to the
+ * organization, `collection` is the grouping the site presents it in, and the
+ * price belongs to the variant a customer buys. A blank price stays absent —
+ * a zero would be a price the owner never named.
+ */
 export interface DraftProductRecord {
   id: string
   location_id: string
-  category: string
+  collection: string
   name: string
   slug: string
   description: string
-  /** Absent when the owner has not priced this yet: no `prices` row is written. */
+  /** Absent when the owner has not priced it yet: the variant carries no price row. */
   price: PriceInput | null
   order_url: string | null
-  is_visible: boolean
-  available: boolean
-  featured: boolean
-  featured_sort_order: number
   sort_order: number
   tags: string[]
-  details: Array<{ key: string; label: string; values: string[] }>
   source: 'import'
 }
 
@@ -129,7 +132,6 @@ export interface OnboardingDraftPayload {
     posts: DraftPostRecord[]
     content: DraftContentRecord[]
     locales: Array<{ code: string; label: string; is_source: boolean }>
-    hasExperiences: boolean
   }
 }
 
@@ -232,7 +234,7 @@ export interface PlaceDetailsSnapshot {
   reviews: PlaceReview[]
 }
 
-function slugify(value: string) {
+export function slugify(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'site'
 }
 
@@ -310,33 +312,25 @@ export function buildOnboardingDraftPayload(input: {
   const locationId = 'draft-location-main'
 
   const description = null
-  // A product the owner named on the products step. The category is the row's
-  // own, not a default: applyOnboardingDraftToSite creates the category when it
-  // does not exist, and an unnamed one groups under the vertical's own word for
-  // "everything else". A blank price stays absent — `prices` is a separate
-  // table and nothing in `products` requires a row in it, so a zero or
-  // defaulted amount would be a price the owner never named.
   const products: DraftProductRecord[] = (input.products ?? []).map((product, index) => {
     const name = product.name.trim()
-    const category = product.category.trim() || defaultProductCategory(input.vertical)
+    const collection = product.category.trim() || defaultProductCategory(input.vertical)
     return {
       id: `draft-product-${slugify(name) || index}`,
       location_id: locationId,
-      category,
+      collection,
       name,
       slug: slugify(name) || `item-${index + 1}`,
       description: '',
+      // No currency of its own when the onboarding details carry none: the
+      // price is normalized against the site's currency, and hardcoding USD
+      // here overrode what the tenant actually sells in.
       price: product.amountMinor === null
         ? null
-        : { amount_minor: product.amountMinor, currency: input.details.currency ?? undefined },
+        : { unit_amount: product.amountMinor, ...(input.details.currency ? { currency: input.details.currency } : {}) },
       order_url: null,
-      is_visible: true,
-      available: true,
-      featured: false,
-      featured_sort_order: 0,
       sort_order: index,
       tags: [],
-      details: [],
       source: 'import' as const,
     }
   })
@@ -408,7 +402,6 @@ export function buildOnboardingDraftPayload(input: {
       posts,
       content,
       locales: [{ code: 'en', label: 'English', is_source: true }],
-      hasExperiences: input.vertical === 'experience',
     },
   }
 }

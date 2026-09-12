@@ -186,6 +186,11 @@ const slug = computed(() => String(route.params.slug))
 
 // Bootstrap: location data + page content (parking/notes) — 1 SSR call
 const { location, getField: getContentField, pending } = await usePublicPageData()
+// A slug naming no location is a URL that does not exist. Rendering the page
+// around a null location answered 200 with an empty shell — a soft 404 a
+// crawler indexes. The sibling menu and product indexes already refuse it.
+if (!location.value) throw createError({ statusCode: 404, statusMessage: 'Location not found' })
+
 
 const formattedAddress = computed(() => {
   const loc = location.value

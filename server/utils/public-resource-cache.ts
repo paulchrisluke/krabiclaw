@@ -7,7 +7,7 @@ import { normalizeHost } from '~/server/utils/tenant-hosts'
 // params instead of host + pathname — public resources are looked up by siteId
 // directly, not by tenant hostname, so no hostname resolution is needed here.
 //
-// Cache key: public~<siteId>~v3~<contract>~<page>~<location>~<experience>~<datasets>~<blogSlug>~<locale>,
+// Cache key: public~<siteId>~v3~<contract>~<page>~<location>~<datasets>~<blogSlug>~<locale>,
 // each field percent-encoded (mirrors composables/usePublicPageRequest.ts's
 // usePublicPageKey(), minus `token` — cached entries are never preview/draft-authorized,
 // see the preview authorization guard in the shell and page services).
@@ -78,17 +78,7 @@ export async function drainPublicResourceCacheInvalidations(
     if (Number(claim.meta?.changes ?? 0) !== 1) continue
     const claimedAttemptCount = row.attempt_count + 1
     try {
-      await purgePublicResourceCache(kv, row.site_id)
-      const domains = await queryAll<{ domain: string }>(db, `
-        SELECT domain FROM site_domains WHERE site_id = ? AND status = 'active'
-      `, [row.site_id])
-      const sites = await queryAll<{ subdomain: string | null }>(db, `
-        SELECT subdomain FROM sites WHERE id = ? LIMIT 1
-      `, [row.site_id])
-      const site = sites[0]
-      const hostnames = new Set<string>(domains.map(domain => domain.domain))
-      if (site?.subdomain) hostnames.add(`${site.subdomain}.${freeSiteDomain}`)
-      await purgeSiteKvCache(kv, [...hostnames])
+      await purgeSiteCaches(db, kv, row.site_id, freeSiteDomain)
       const finalized = await execute(db, `
         UPDATE public_resource_cache_invalidations
            SET status = 'processed', processed_at = ?, last_error = NULL
@@ -113,7 +103,6 @@ export interface PublicResourceCacheParams {
   contract: 'shell' | 'page'
   page: string | null
   location: string | null
-  experience: string | null
   datasets: readonly string[]
   blogSlug: string | null
   locale: string | undefined
@@ -149,7 +138,6 @@ export function buildPublicResourceCacheKey(siteId: string, params: PublicResour
     params.contract,
     encodeKeyField(params.page),
     encodeKeyField(params.location),
-    encodeKeyField(params.experience),
     encodeKeyField([...params.datasets].sort().join(',')),
     encodeKeyField(params.blogSlug),
     encodeKeyField(params.locale),
@@ -176,6 +164,26 @@ export async function putPublicResourceCache(
 /**
  * Purge all cached public resource entries for a site.
  */
+/**
+ * Clear both caches this site is served from: its public resource entries and
+ * the HTML entries under every hostname it answers on.
+ *
+ * This is the purge itself, with none of the queue's bookkeeping around it —
+ * the drainer wraps it in claiming and retries, and a write path calls it
+ * directly so what it just wrote cannot be read back stale.
+ */
+export async function purgeSiteCaches(db: DbClient, kv: KVNamespace, siteId: string, freeSiteDomainInput?: string | null): Promise<void> {
+  const freeSiteDomain = normalizeHost(freeSiteDomainInput)
+  const [domains, sites] = await Promise.all([
+    queryAll<{ domain: string }>(db, "SELECT domain FROM site_domains WHERE site_id = ? AND status = 'active'", [siteId]),
+    queryAll<{ subdomain: string | null }>(db, 'SELECT subdomain FROM sites WHERE id = ? LIMIT 1', [siteId]),
+  ])
+  const hostnames = new Set<string>(domains.map(domain => domain.domain))
+  const subdomain = sites[0]?.subdomain
+  if (subdomain && freeSiteDomain) hostnames.add(`${subdomain}.${freeSiteDomain}`)
+  await Promise.all([purgePublicResourceCache(kv, siteId), purgeSiteKvCache(kv, [...hostnames])])
+}
+
 export async function purgePublicResourceCache(kv: KVNamespace, siteId: string): Promise<void> {
   const prefix = `public~${encodeKeyField(siteId)}~`
   const deletions: Promise<void>[] = []
@@ -208,15 +216,18 @@ export async function purgePublicResourceCacheSafe(
   const kv = maybeEnv?.SITE_CACHE
   if (!kv) return
 
+  // This request clears its own site's entries, so nothing it wrote can be
+  // read back stale. Everything else — the retention sweep, retry bookkeeping,
+  // claiming, the domain and site reads — belongs to the drainer, which runs
+  // on its own schedule rather than inside a mutation's response time. The
+  // queued row is what makes every other worker converge.
   const purgePromise = maybeEnv.DB
     ? (async () => {
-        const invalidation = publicResourceCacheInvalidationQuery(siteId, 'legacy-safe-wrapper')
-        await execute(maybeEnv.DB!, invalidation.query, invalidation.params)
-        await drainPublicResourceCacheInvalidations(maybeEnv.DB!, kv, {
-          limit: 1,
-          siteId,
-          freeSiteDomain: maybeEnv.NUXT_PUBLIC_FREE_SITE_DOMAIN,
-        })
+        const invalidation = publicResourceCacheInvalidationQuery(siteId, 'write-through-purge')
+        await Promise.all([
+          execute(maybeEnv.DB!, invalidation.query, invalidation.params),
+          purgeSiteCaches(maybeEnv.DB!, kv, siteId, maybeEnv.NUXT_PUBLIC_FREE_SITE_DOMAIN),
+        ])
       })()
     : purgePublicResourceCache(kv, siteId)
 

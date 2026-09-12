@@ -60,7 +60,7 @@ const { sitePaths } = useDashboardSiteLinks()
 const pages = ref<PageSummary[]>([])
 const loading = ref(true)
 const loadError = ref<string | null>(null)
-const managedPageRecipes = new Set(['locations', 'menu', 'order', 'experiences', 'reservations', 'qa', 'reviews', 'posts', 'photos', 'blog', 'services', 'pricing', 'donate', 'schedule'])
+const managedPageRecipes = new Set(['locations', 'menu', 'order', 'products', 'reservations', 'qa', 'reviews', 'posts', 'photos', 'blog', 'services', 'pricing', 'donate', 'schedule'])
 const visiblePages = computed(() => pages.value
   .filter(page => (!page.recipe || !managedPageRecipes.has(page.recipe)) && !page.path.startsWith('/locations/'))
   .sort((left, right) => Number(right.path === '/') - Number(left.path === '/')))

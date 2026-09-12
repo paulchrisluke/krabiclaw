@@ -24,11 +24,10 @@ export const isQaRow = (value: unknown): value is QaRow =>
 export const isQaResponse = (value: unknown): value is { qa: QaRow[] } =>
   isRecord(value) && Array.isArray(value.qa) && value.qa.every(isQaRow)
 
-export const isQaCreated = (value: unknown): value is QaRow =>
-  isRecord(value)
-  && typeof value.id === 'string'
-  && typeof value.question === 'string'
-  && typeof value.sort_order === 'number'
+// A created row is a QaRow, so it is checked as one: callers read `status` and
+// `answer` off the result, and a guard that never looked at them promised
+// fields the response might not carry.
+export const isQaCreated = (value: unknown): value is QaRow => isQaRow(value)
 
 export const isQaUpdated = (value: unknown): value is { updated: true; qa_id: string } =>
   isRecord(value) && value.updated === true && typeof value.qa_id === 'string'

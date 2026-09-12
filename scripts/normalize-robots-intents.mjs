@@ -75,6 +75,10 @@ const unnameable = []
 for (const table of TABLES) {
   const rows = d1(`SELECT robots AS value, count(*) AS rows FROM ${table} WHERE robots IS NOT NULL GROUP BY robots`)
   for (const row of rows) {
+    // A blank is not an unnameable intent, it is an unset one, and the sweep
+    // below clears it. Listing it here made the script fix the rows and then
+    // exit 1 saying it could not.
+    if (!String(row.value).trim()) continue
     const intent = canonical(row.value)
     if (!intent) {
       unnameable.push(`${table}: ${JSON.stringify(row.value)} (${row.rows} row(s))`)

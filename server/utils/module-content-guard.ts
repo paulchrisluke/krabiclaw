@@ -12,31 +12,29 @@ export interface ModuleContentGuardResult {
 }
 
 async function productsHaveLiveData(db: DbClient, scope: ModuleContentGuardScope): Promise<boolean> {
-  const row = await queryFirst<{ id: string }>(db, `
-    SELECT id FROM products
-    WHERE site_id = ? ${scope.locationId ? 'AND location_id = ?' : ''} AND is_visible = 1
-    LIMIT 1
-  `, scope.locationId ? [scope.siteId, scope.locationId] : [scope.siteId])
-  return Boolean(row)
-}
-
-async function experiencesHasLiveData(db: DbClient, scope: ModuleContentGuardScope): Promise<boolean> {
+  // Published to this site, offered at this location, and on sale: the three
+  // separate states a customer needs before a Product is live for them.
   const row = await queryFirst<{ id: string }>(db, `
     SELECT p.id FROM products p
-    WHERE p.product_type = \'experience\' AND p.site_id = ? ${scope.locationId ? 'AND p.location_id = ?' : ''} AND p.is_visible = 1 AND p.available = 1
+    JOIN product_publications pub ON pub.product_id = p.id AND pub.organization_id = p.organization_id
+      AND pub.site_id = ? AND pub.published = 1
+    ${scope.locationId ? 'JOIN product_locations pl ON pl.product_id = p.id AND pl.organization_id = p.organization_id AND pl.location_id = ? AND pl.published = 1' : ''}
+    WHERE p.active = 1
     LIMIT 1
   `, scope.locationId ? [scope.siteId, scope.locationId] : [scope.siteId])
   return Boolean(row)
 }
 
 async function reservationsHasLiveData(db: DbClient, scope: ModuleContentGuardScope): Promise<boolean> {
-  const today = new Date().toISOString().slice(0, 10)
+  // Read from the reservation, which holds the seating and its state; the
+  // thread it hangs off holds only the conversation.
   const row = await queryFirst<{ id: string }>(db, `
-    SELECT id FROM requests
-    WHERE kind = 'reservation' AND site_id = ? ${scope.locationId ? 'AND location_id = ?' : ''}
-      AND status NOT IN ('cancelled', 'completed') AND booking_date >= ?
+    SELECT id FROM reservations
+    WHERE site_id = ? ${scope.locationId ? 'AND location_id = ?' : ''}
+      AND status NOT IN ('cancelled', 'completed')
+      AND starts_at >= strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
     LIMIT 1
-  `, scope.locationId ? [scope.siteId, scope.locationId, today] : [scope.siteId, today])
+  `, scope.locationId ? [scope.siteId, scope.locationId] : [scope.siteId])
   return Boolean(row)
 }
 
@@ -50,16 +48,27 @@ async function orderingHasLiveData(db: DbClient, scope: ModuleContentGuardScope)
   return Boolean(row)
 }
 
+/**
+ * A service page is the services page or a page beneath it.
+ *
+ * Its path is the whole definition. A page carries no `status` — the column is
+ * required of articles, social posts and Q&A, and every page root on every site
+ * has it NULL — so a `status = 'published'` predicate here matched nothing and
+ * reported every site as having no services. The onboarding checklist asked the
+ * same question through a `metadata_json.recipe` marker that no page carries,
+ * and got the same nothing. One question, one predicate.
+ */
+export const SERVICE_PAGE_SQL = `kind = 'page' AND row_role = 'root' AND (path = '/services' OR path LIKE '/services/%')`
+
 async function servicesHasLiveData(db: DbClient, scope: ModuleContentGuardScope): Promise<boolean> {
   const row = await queryFirst<{ id: string }>(db, `
-    SELECT id FROM offerings WHERE site_id = ? LIMIT 1
+    SELECT id FROM content_documents WHERE site_id = ? AND ${SERVICE_PAGE_SQL} LIMIT 1
   `, [scope.siteId])
   return Boolean(row)
 }
 
 const MODULE_LABELS: Partial<Record<ProductFeature, string>> = {
-  products: 'visible Products',
-  experiences: 'active experiences',
+  products: 'live Products',
   reservations: 'upcoming reservations',
   ordering: 'active delivery links',
   services: 'published services',
@@ -67,7 +76,6 @@ const MODULE_LABELS: Partial<Record<ProductFeature, string>> = {
 
 const MODULE_CHECKS: Partial<Record<ProductFeature, (_db: DbClient, _scope: ModuleContentGuardScope) => Promise<boolean>>> = {
   products: productsHaveLiveData,
-  experiences: experiencesHasLiveData,
   reservations: reservationsHasLiveData,
   ordering: orderingHasLiveData,
   services: servicesHasLiveData,

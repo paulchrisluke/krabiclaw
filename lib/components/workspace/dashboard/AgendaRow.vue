@@ -21,7 +21,7 @@ const formattedTime = computed(() => formatTimestamp(props.item.startsAt, 'en', 
 const details = computed(() => [props.item.subtitle, props.item.locationTitle, agendaKindLabel(props.item.kind)].filter(Boolean).join(' · '))
 
 function agendaKindLabel(kind: AgendaItem['kind']) {
-  if (kind === 'experience_booking') return 'Experience booking'
+  if (kind === 'booking') return 'Booking'
   return kind.charAt(0).toUpperCase() + kind.slice(1)
 }
 </script>

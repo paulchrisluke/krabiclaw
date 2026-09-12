@@ -78,8 +78,15 @@ export function exceedsPhoneLength(input: string, country: CountryCode): boolean
   // E.164's hard ceiling: 15 digits including the country calling code. Some
   // countries' metadata still calls longer strings "possible" (Thailand reports
   // possible at 14 national digits), and no such number exists.
-  const nationalDigits = input.replace(/\D/g, '').length
-  return nationalDigits + getCountryCallingCode(country).length > 15
+  const callingCode = getCountryCallingCode(country)
+  const digits = input.replace(/\D/g, '')
+  // `digits` is every digit typed, so a number entered in international form
+  // already carries the calling code. Adding it again counted it twice and
+  // refused valid numbers a digit or two short of the ceiling.
+  const nationalDigits = input.trim().startsWith('+') && digits.startsWith(callingCode)
+    ? digits.slice(callingCode.length)
+    : digits
+  return nationalDigits.length + callingCode.length > 15
 }
 
 export interface PhoneParseResult {

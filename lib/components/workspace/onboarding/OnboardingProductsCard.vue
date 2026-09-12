@@ -108,7 +108,13 @@ function parseAmount(value: string): ParsedAmount {
   if (!raw) return { blank: true }
   // A price is never negative, and stripping the sign read "-5" as 5.
   if (raw.includes('-')) return { invalid: true }
-  const written = raw.replace(/[^\d.,]/g, '')
+  // Spaces and the currency symbol this field prompts for are dropped — "1 234,50"
+  // is one number written with a group separator, and the placeholder invites
+  // "฿450". Anything else that is not a digit or a separator is the typo this
+  // function exists to report: stripping it read "12a.50" as 12.50 and stored a
+  // price the owner never typed.
+  const written = raw.split(currencySymbol.value).join('').replace(/\s/g, '')
+  if (/[^\d.,]/.test(written)) return { invalid: true }
   // "1,234.50", "1.234,50" and "1 234,50" are one number written three ways, so
   // the separators are read rather than substituted: a separator followed by
   // exactly three digits groups thousands, and a shorter trailing run is the

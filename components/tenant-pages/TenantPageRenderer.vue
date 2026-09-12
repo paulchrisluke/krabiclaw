@@ -116,7 +116,7 @@
         <TenantPagePricingCalculator :rows="calculatorRows(block)" :note="calculatorNote(block)" />
       </template>
 
-      <template v-else-if="block.type === 'feature_grid' || block.type === 'testimonial_grid' || block.type === 'offering_grid' || block.type === 'location_grid'">
+      <template v-else-if="block.type === 'feature_grid' || block.type === 'testimonial_grid' || block.type === 'product_grid' || block.type === 'location_grid' || block.type === 'page_grid'">
         <section class="my-12">
           <h2 v-if="text(block.data.title)" class="mb-6 text-2xl font-semibold">{{ text(block.data.title) }}</h2>
           <div class="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
@@ -129,6 +129,22 @@
             </article>
           </div>
           <p v-if="!gridItems(block).length" class="rounded-2xl border border-dashed border-default p-6 text-sm text-muted">This section has no published items yet.</p>
+        </section>
+      </template>
+
+      <template v-else-if="block.type === 'team_grid'">
+        <section class="my-12">
+          <h2 v-if="text(block.data.title)" class="text-2xl font-semibold">{{ text(block.data.title) }}</h2>
+          <p v-if="text(block.data.description)" class="mt-2 text-muted">{{ text(block.data.description) }}</p>
+          <div class="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            <article v-for="(person, index) in teamItems(block)" :key="person.name || index" class="rounded-2xl border border-default bg-default p-6 shadow-sm">
+              <img v-if="person.image" :src="person.image.url" :alt="person.name" class="mb-5 aspect-square w-full rounded-xl object-cover">
+              <h3 class="text-lg font-semibold">{{ person.name }}</h3>
+              <p v-if="person.role" class="text-sm text-muted">{{ person.role }}</p>
+              <p v-if="person.bio" class="mt-2 text-sm leading-6 text-muted">{{ person.bio }}</p>
+              <TenantPageButton v-if="person.url" class="mt-4" :label="person.name" :url="person.url" />
+            </article>
+          </div>
         </section>
       </template>
 
@@ -165,10 +181,10 @@ defineProps<{ page: PublicTenantPage; template: 'saya' | 'blawby' | 'platform' }
 const sanitizer = useHtmlSanitizer()
 const { t } = useI18n()
 
-const canonicalBlawbyPaths = new Set(['/about', '/pricing', '/donate', '/policies/privacy', '/policies/terms', '/third-party-notices'])
+const canonicalBlawbyPaths = new Set(['/about', '/services', '/pricing', '/donate', '/policies/privacy', '/policies/terms', '/third-party-notices'])
 const isCanonicalBlawbyPage = (path: string) => canonicalBlawbyPaths.has(path)
 
-type GridItem = { id?: string; title?: string; description?: string; value?: string; media?: Array<{ slot?: string; public_url?: string | null; thumbnail_url?: string | null; alt_text?: string | null }>; label?: string; labelKey?: string; url?: string; amount?: string }
+type GridItem = { id?: string; title?: string; description?: string; value?: string; media?: Array<{ slot?: string; public_url?: string | null; thumbnail_url?: string | null; alt_text?: string | null; kind?: string | null }>; label?: string; labelKey?: string; url?: string; amount?: string }
 
 function text(value: unknown): string {
   return typeof value === 'string' ? value.trim() : ''
@@ -192,40 +208,86 @@ function blockMedia(block: TenantPageBlock, slot: string) {
   return block.media.find(item => item.slot === slot && item.public_url) ?? null
 }
 
+/**
+ * One item shape. `name`, `summary`, `body`, `cta_label` and `cta_url` were
+ * also accepted here — spellings no writer produces and the block registry
+ * does not declare, kept in case some row somewhere used them.
+ *
+ * `media` is whatever the item arrived with: a referenced page, product or
+ * location carries its own resolved image, and the server puts it here.
+ */
 function asItems(value: unknown): GridItem[] {
   if (!Array.isArray(value)) return []
   return value.filter((item): item is Record<string, unknown> => Boolean(item && typeof item === 'object' && !Array.isArray(item))).map(item => ({
     id: text(item.id) || undefined,
-    title: text(item.title) || text(item.name) || undefined,
-    description: text(item.description) || text(item.summary) || text(item.body) || undefined,
+    title: text(item.title) || undefined,
+    description: text(item.description) || undefined,
     value: text(item.value) || undefined,
     media: Array.isArray(item.media) ? item.media as GridItem['media'] : [],
-    label: text(item.label) || text(item.cta_label) || undefined,
+    label: text(item.label) || undefined,
     labelKey: text(item.labelKey) || undefined,
-    url: text(item.url) || text(item.cta_url) || undefined,
+    url: text(item.url) || undefined,
     amount: item.amount == null ? undefined : String(item.amount),
   }))
+}
+
+/**
+ * Does this block own its items, or does it reference resources?
+ *
+ * A reference grid names pages, products or locations and the server resolves
+ * each one's own image; an authored grid's items are written in the block and
+ * their images are its own placements. Which of the two decides where an
+ * item's image comes from — it is one question with one answer per block, not
+ * a search for whichever media turns up.
+ */
+function referencesResources(block: TenantPageBlock): boolean {
+  if (block.type === 'page_grid' || block.type === 'product_grid' || block.type === 'location_grid') return true
+  return text(block.data.source) !== '' && text(block.data.source) !== 'manual'
 }
 
 function itemLabel(item: GridItem): string {
   return item.labelKey ? t(item.labelKey) : item.label || ''
 }
 
+/**
+ * The one image an item carries — the referenced resource's own, or the
+ * block's placement at `items.<index>.image`, decided above by which kind of
+ * grid this is. There is no search across slots and no "whichever asset came
+ * first": the item has that image or it has none.
+ */
 function gridItemImage(item: GridItem): { url: string; alt: string } | null {
-  const media = item.media ?? []
-  const asset = media.find(candidate => ['thumbnail', 'hero', 'featured', 'cover'].includes(candidate.slot ?? '')) ?? media[0]
-  const url = asset?.thumbnail_url || asset?.public_url
-  return url ? { url, alt: asset?.alt_text ?? '' } : null
+  const asset = (item.media ?? [])[0]
+  if (!asset) return null
+  const url = asset.kind === 'video' ? asset.thumbnail_url : asset.public_url
+  return url ? { url, alt: asset.alt_text ?? '' } : null
 }
 
+
 function gridItems(block: TenantPageBlock): GridItem[] {
-  const items = block.type === 'feature_grid'
-    ? asItems(block.data.items ?? block.data.features ?? block.data.statistics ?? block.data.people)
-    : asItems(block.data.items)
-  return items.map((item, index) => {
-    const media = block.media.filter(asset => asset.slot === `items.${index}.image`)
-    return { ...item, media: media.length ? media : item.media }
-  })
+  const items = asItems(block.data.items)
+  if (referencesResources(block)) return items
+  return items.map((item, index) => ({
+    ...item,
+    media: block.media.filter(asset => asset.slot === `items.${index}.image`),
+  }))
+}
+
+/** The people a team_grid names, each with the image in its own slot. */
+function teamItems(block: TenantPageBlock) {
+  const people = Array.isArray(block.data.items) ? block.data.items : []
+  return people
+    .filter((person): person is Record<string, unknown> => Boolean(person && typeof person === 'object' && !Array.isArray(person)))
+    .map((person, index) => {
+      const asset = block.media.find(item => item.slot === `items.${index}.image` && item.public_url)
+      return {
+        name: [text(person.first_name), text(person.last_name)].filter(Boolean).join(' '),
+        role: text(person.title),
+        bio: text(person.bio),
+        url: text(person.url),
+        image: asset?.public_url ? { url: asset.public_url } : null,
+      }
+    })
+    .filter(person => person.name)
 }
 
 function donationItems(block: TenantPageBlock): GridItem[] {
@@ -240,7 +302,7 @@ function howToSteps(block: TenantPageBlock): Array<{ name: string; text: string 
 }
 
 function faqItems(block: TenantPageBlock): Array<{ question: string; answer: string }> {
-  return asItems(block.data.items ?? block.data.faqs).map(item => ({ question: item.title || '', answer: item.description || '' })).filter(item => item.question)
+  return asItems(block.data.items).map(item => ({ question: item.title || '', answer: item.description || '' })).filter(item => item.question)
 }
 
 function buttons(block: TenantPageBlock): Array<{ label: string; url: string }> {

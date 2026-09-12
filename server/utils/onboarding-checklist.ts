@@ -5,6 +5,7 @@ import { queryFirst } from '~/server/db'
 import { cloudflareEnv } from '~/server/utils/api-response'
 import { getDashboardContext } from '~/server/utils/dashboard-context'
 import { requireSiteAccess } from '~/server/utils/location-access'
+import { SERVICE_PAGE_SQL } from '~/server/utils/module-content-guard'
 import { normalizeVertical } from '~/utils/vertical-copy'
 
 export interface OnboardingChecklist {
@@ -42,8 +43,7 @@ interface ChecklistRow {
   business_info: number
   has_hero: number
   products: number
-  experiences: number
-  offerings: number
+  service_pages: number
   story: number
   post: number
 }
@@ -86,9 +86,10 @@ export async function loadOnboardingChecklist(
         JOIN media_assets ma ON ma.id = mp.asset_id AND ma.status = 'active'
         WHERE mp.site_id = s.id AND mp.owner_type = 'business_location' AND mp.slot = 'hero' AND mp.status = 'active'
       ) AS has_hero,
-      (SELECT COUNT(*) FROM products WHERE site_id = s.id AND is_visible = 1) AS products,
-      (SELECT COUNT(*) FROM products WHERE product_type = 'experience' AND site_id = s.id) AS experiences,
-      (SELECT COUNT(*) FROM offerings WHERE site_id = s.id) AS offerings,
+      (SELECT COUNT(DISTINCT p.id) FROM products p
+         JOIN product_publications pub ON pub.product_id = p.id AND pub.organization_id = p.organization_id
+        WHERE pub.site_id = s.id AND pub.published = 1 AND p.active = 1) AS products,
+      (SELECT COUNT(*) FROM content_documents WHERE site_id = s.id AND ${SERVICE_PAGE_SQL}) AS service_pages,
       (
         SELECT COUNT(*)
         FROM content_documents v
@@ -118,11 +119,8 @@ export async function loadOnboardingChecklist(
     items: {
       business_info: Boolean(row.business_info),
       hero_image: heroIsReal,
-      core_offering: vertical === 'experience'
-        ? row.experiences > 0
-        : vertical === 'service'
-          ? row.offerings > 0
-          : row.products > 0,
+      // Every Saya vertical sells Products; only the word for them differs.
+      core_offering: vertical === 'service' ? row.service_pages > 0 : row.products > 0,
       story: row.story > 0,
       post: row.post > 0,
     },

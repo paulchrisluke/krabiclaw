@@ -85,6 +85,30 @@ export const FORBIDDEN_ACTIVE_PATTERNS = [
   /\bSELECT\b[^;`]{0,800}\bs\.plan\b/i,
   /\bob\.(?:plan|status|current_period_end|cancel_at_period_end|ga_client_id|ga_user_id)\b/,
   /\borganization_billing\b[^;]{0,500}\b(?:ga_client_id|ga_user_id)\b/,
+  // The catalog convergence (#919): one Product model across every vertical.
+  // Offerings, experiences and product categories were the same idea under
+  // three names; prices belong to variants; publication and location
+  // membership are rows, not columns on the product.
+  /\boffering(?:s)?_(?:id|json|slug|family)\b/,
+  /\bFROM\s+offerings\b/i,
+  /\bproduct_categories\b/,
+  /\bcategory_id\b/,
+  /\bproduct_type\b/,
+  /\bis_visible\b/,
+  /\bfeatured_sort_order\b/,
+  /\bexperience_json\b/,
+  /\brecurring_slots\b/,
+  /\bamount_minor\b/,
+  /\bcompare_at_amount_minor\b/,
+  /\bbooking_json\b/,
+  /\b(?:create|update|delete|rename|reorder)_(?:offering|experience|product_category)s?\b/,
+  /\bmove_products\b/,
+  /\boffering_grid\b/,
+  /\bexperiencePolic(?:y|ies)\b/,
+  /\bexperiencesList\b/,
+  /\bhasExperiences\b/,
+  /\bresolveSiteExperienceHref\b/,
+  /\bformatProductPriceLabel\b/,
 ]
 const FORBIDDEN_SEED_NAMING_PATTERNS = [
   /\bsiteContent\b/,

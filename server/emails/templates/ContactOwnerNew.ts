@@ -20,7 +20,7 @@ export default defineComponent({
     siteName: { type: String, required: true },
     platformDomain: { type: String, required: true },
     replyUrl: { type: String as PropType<string | null>, default: null },
-    experienceTitle: { type: String as PropType<string | null | undefined>, default: null },
+    productTitle: { type: String as PropType<string | null | undefined>, default: null },
     consentAcknowledged: { type: Boolean, default: false },
   },
   setup(props) {
@@ -37,7 +37,7 @@ export default defineComponent({
           ['From', props.guestName],
           ['Email', props.email],
           props.subject && ['Subject', SUBJECT_LABELS[props.subject] ?? props.subject],
-          props.experienceTitle && ['Regarding', props.experienceTitle],
+          props.productTitle && ['Regarding', props.productTitle],
           props.consentAcknowledged && ['Contact/privacy notice', 'Acknowledged'],
         ].filter(Boolean) as [string, string][]
       }),

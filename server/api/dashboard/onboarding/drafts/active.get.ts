@@ -61,8 +61,8 @@ export default defineHandler(async (event) => {
       config: payload.preview.config,
       products: payload.preview.products.map(product => ({
         name: product.name,
-        category: product.category,
-        amountMinor: product.price === null ? null : product.price.amount_minor,
+        category: product.collection,
+        amountMinor: product.price === null ? null : product.price.unit_amount,
       })),
       siteId: site?.id ?? null,
       subdomainCandidate: site?.subdomain ?? row.subdomain_candidate,

@@ -257,7 +257,6 @@ if (isPlatform || !siteId) throw createError({ statusCode: 404 })
 
 const { locale, localePath, t } = useI18n()
 const vertCopy = computed(() => getVerticalCopy(site?.vertical, locale.value))
-const route = useRoute()
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 // Plain-Tailwind form styling — replaces UInput/UTextarea's default look
@@ -338,7 +337,6 @@ const subjectOptions = computed(() => [
   { key: 'careers', label: t('saya.contact_page.careers') }
 ])
 
-const inquiryExperienceId = typeof route.query.experienceId === 'string' ? route.query.experienceId : null
 const tenantForm = ref<TenantContactForm>({
   name: '',
   email: '',
@@ -375,7 +373,7 @@ const handleTenantContact = async () => {
   try {
     await publicApiMutation<{ success: true }>(`/api/public/sites/${siteId}/contact`, {
       method: 'POST',
-      body: { ...tenantForm.value, experienceId: inquiryExperienceId },
+      body: { ...tenantForm.value },
       validate: (value): value is { success: true } => isRecord(value) && value.success === true,
     })
   } catch {

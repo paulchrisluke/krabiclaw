@@ -2,46 +2,10 @@ import type { GoogleReviewMetadata } from '~/shared/google-review'
 import type { SocialImageSource } from '~/utils/social-metadata'
 import type { PublicLocaleRepresentation } from '~/utils/public-resource-contracts'
 
-export interface PublicOfferingFeature {
-  title: string
-  description: string
-  icon: string | null
-  sort_order: number
-}
 
-export interface PublicOffering {
-  id: string
-  name: string
-  slug: string
-  label: string | null
-  summary: string | null
-  short_description: string | null
-  body: string | null
-  features: PublicOfferingFeature[]
-  faqs: Array<{ question: string; answer: string }>
-  cta_label: string | null
-  cta_url: string | null
-  media: Array<{ asset_id: string; slot: string; public_url: string; thumbnail_url: string | null; kind: string; alt_text: string | null; width: number | null; height: number | null }>
-  social_image: SocialImageSource | null
-  schema_type: string | null
-  seo_title: string | null
-  seo_description: string | null
-  canonical_path: string
-  sort_order: number
-  featured: boolean
-  /** Real business_locations data for this offering's own location (offerings.location_id), when one is set. Null for site-wide offerings. */
-  location_address_street: string | null
-  location_address_locality: string | null
-}
 
 export type BlawbyShieldVariant = 'about' | 'blog' | 'contact' | 'pricing' | 'schedule' | 'confirmation' | 'donate' | 'privacy' | 'terms' | 'third-party-notices'
 
-export interface PublicOfferingLink {
-  id: string
-  name: string
-  slug: string
-  canonical_path: string
-}
 
 export interface PublicBlawbyPageLink {
   id: string
@@ -49,18 +13,6 @@ export interface PublicBlawbyPageLink {
   title: string
 }
 
-export interface PublicOfferingSummary {
-  id: string
-  name: string
-  slug: string
-  label: string | null
-  summary: string | null
-  short_description: string | null
-  media: Array<{ asset_id: string; slot: string; public_url: string; thumbnail_url: string | null; kind: string; alt_text: string | null }>
-  canonical_path: string
-  sort_order: number
-  featured: boolean
-}
 
 export interface PublicSiteQa {
   id: string
@@ -122,7 +74,6 @@ export const BLAWBY_ROUTE_RECIPES = [
   'home',
   'links',
   'services',
-  'offering',
   'about',
   'pricing',
   'contact',
@@ -134,6 +85,9 @@ export const BLAWBY_ROUTE_RECIPES = [
   'privacy',
   'terms',
   'third-party-notices',
+  // Any other page this site publishes, addressed by its own path. The named
+  // recipes above are pages with branded sections; this one is the page.
+  'page',
 ] as const
 
 export type BlawbyRouteRecipe = typeof BLAWBY_ROUTE_RECIPES[number]
@@ -150,8 +104,6 @@ export interface PublicBlawbyRouteData {
   recipe: BlawbyRouteRecipe
   localeRepresentations: PublicLocaleRepresentation[]
   page: PublicTenantPage | null
-  offerings: PublicOfferingSummary[]
-  offering: PublicOffering | null
   qa: PublicSiteQa[]
   reviews: PublicSiteReview[]
   posts: PublicBlogSummary[]
@@ -223,12 +175,10 @@ export interface PublicBlawbyShellData {
   consultation: PublicConsultationSettings
   compliance: PublicCompliance | null
   themeTokens: ApiRecord
-  offeringLinks: PublicOfferingLink[]
   pageLinks: PublicBlawbyPageLink[]
 }
 
 export interface PublicBlawbyData {
-  offerings: PublicOffering[]
   tenantPages: PublicTenantPage[]
   compliance: PublicCompliance | null
   consultation: PublicConsultationSettings

@@ -1,4 +1,4 @@
-import { bookingPayloadForGuest, requestInsertQueries } from '~/server/domain/requests'
+import { requestInsertQueries, threadPayloadForGuest } from '~/server/domain/requests'
 import { publishGuestInboxThreadEvent } from '~/server/cloudflare/guest-inbox-events'
 import { queryFirst } from '~/server/db'
 import { cleanString, cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
@@ -7,9 +7,14 @@ import { notifyReservationCreated } from '~/server/utils/notifications'
 import { createReservationCancelToken, hashReservationCancelToken } from '~/server/utils/reservation-cancel-token'
 import { resolveLocationContact } from '~/server/utils/contact-resolution'
 import { resolveLocationTimezone, isDateBeforeTimezoneToday } from '~/server/utils/site-config'
-import { readAvailability, executeAvailabilityClaim } from '~/server/utils/availability'
-
-import { renderBookingPolicySummary, resolveBookingPolicy } from '~/server/utils/booking-policies'
+import {
+  claimReservation,
+  listReservationSlots,
+  renderBookingPolicySummary,
+  requireLocationReservationConfig,
+  reservationPolicySummarySource,
+  ReservationUnavailableError,
+} from '~/server/utils/reservations'
 import { getSourceLocale } from '~/server/utils/site-locales'
 import { deleteCustomerIfUnlinked, findOrCreateCustomer, recordCustomerBooking } from '~/server/utils/customers'
 import { getAuthSession } from '~/server/utils/auth'
@@ -31,8 +36,8 @@ export default defineHandler(async (event) => {
   const db = env.db
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
 
-  let body: ApiRecord
-  try { body = await readBody(event) } catch {
+  let body: Record<string, unknown>
+  try { body = (await readBody(event)) ?? {} } catch {
     return jsonResponse({ error: 'Invalid request body' }, { status: 400 })
   }
 
@@ -84,19 +89,18 @@ export default defineHandler(async (event) => {
   if (isDateBeforeTimezoneToday(date, reservationTimezone))
     return jsonResponse({ error: 'Please choose a valid future date.' }, { status: 400 })
 
-  const [snapshot] = await readAvailability(db, { siteId, owners: [{ kind: 'location', locationId: resolvedLocationId }], dates: [date] })
-  const slotAvailability = snapshot!.days[0]!.slots.find(s => s.time_slot === time)
-  if (!slotAvailability) {
-    return jsonResponse({ error: 'Please choose a valid time — this location is closed at that time.' }, { status: 400 })
-  }
-  if (slotAvailability?.is_closed) {
-    return jsonResponse({ error: 'This time is closed for booking.' }, { status: 409 })
-  }
+  const availability = await listReservationSlots(db, { organizationId: site.organization_id, locationId: resolvedLocationId, date })
+  const slot = availability.slots.find(entry => entry.time_slot === time)
+  if (!slot) return jsonResponse({ error: 'Please choose a valid time — this location is closed at that time.' }, { status: 400 })
+  if (slot.is_closed) return jsonResponse({ error: 'This time is closed for booking.' }, { status: 409 })
   const partySize = guests === '8+' ? 8 : Number.parseInt(guests, 10)
-  if (slotAvailability && slotAvailability.remaining !== null && partySize > slotAvailability.remaining) {
-    return jsonResponse({ error: `Only ${Math.max(slotAvailability.remaining, 0)} spot(s) left at this time.` }, { status: 409 })
+  // An early answer so the form can say something useful. The claim below
+  // carries its own predicate and is the authoritative one.
+  if (slot.remaining !== null && partySize > slot.remaining) {
+    return jsonResponse({ error: `Only ${Math.max(slot.remaining, 0)} spot(s) left at this time.` }, { status: 409 })
   }
   const id = crypto.randomUUID()
+  const reservationId = crypto.randomUUID()
   const clientIp = getClientIp(event)
   const ipHash = await hashClientIp(clientIp)
   const emailHash = await hashIdentifier(email)
@@ -125,15 +129,28 @@ export default defineHandler(async (event) => {
   const customer = await findOrCreateCustomer(db, customerInput)
 
   const now = new Date().toISOString()
-  const payload = bookingPayloadForGuest({ name, email, phone, notes: requests, ipHash, partySizeIsMinimum: guests.endsWith('+') })
+  const payload = threadPayloadForGuest({ name, email, phone, notes: requests, ipHash, partySizeIsMinimum: guests.endsWith('+') })
   payload.cancellation = { token_hash: cancellationTokenHash, expires_at: cancellation.expiresAt, used_at: null }
-  const [statement, ...following] = requestInsertQueries({ id, kind: 'reservation', organization_id: site.organization_id, site_id: siteId, location_id: resolvedLocationId, product_id: null, customer_id: customer.id, review_id: null,
-    status: 'confirmed', booking_date: date, time_slot: time, party_size: partySize, conversation_state: 'needs_attention', resolved_at: null, payload, created_at: now, updated_at: now })
-  statement.query = statement.query.replace(/VALUES \(([^)]+)\)/, 'SELECT $1 WHERE /* availability_claim */')
-  await executeAvailabilityClaim(db, { snapshot: snapshot!, date, time, partySize, statement, following })
-  const inserted = await queryFirst(db, 'SELECT id FROM requests WHERE id = ?', [id])
 
-  if (!inserted) {
+  // The reservation and its inbox thread commit in one batch, the thread
+  // conditional on the claim: the claim's capacity predicate decides whether
+  // the table is there, and nothing is left behind if it is not.
+  const durationMinutes = 120
+  try {
+    await claimReservation(db, {
+      organizationId: site.organization_id, siteId, locationId: resolvedLocationId,
+      reservationId, requestId: id, customerId: customer.id,
+      timezone: availability.timezone, startsAt: slot.starts_at,
+      endsAt: new Date(Date.parse(slot.starts_at) + durationMinutes * 60_000).toISOString(),
+      partySize, status: 'confirmed',
+      thread: requestInsertQueries({
+        id, kind: 'reservation', organization_id: site.organization_id, site_id: siteId,
+        location_id: resolvedLocationId, customer_id: customer.id, review_id: null,
+        conversation_state: 'needs_attention', resolved_at: null, payload, created_at: now, updated_at: now,
+      }, { query: 'SELECT 1 FROM reservations WHERE id = ?', params: [reservationId] }),
+    })
+  } catch (error) {
+    if (!(error instanceof ReservationUnavailableError)) throw error
     if (customer.created) await deleteCustomerIfUnlinked(db, customer.id)
     return jsonResponse({ error: 'This time is no longer available. Please choose another time.' }, { status: 409 })
   }
@@ -166,8 +183,7 @@ export default defineHandler(async (event) => {
 
   const requestedLocale = cleanString(body.locale, 10)
   const [policy, locale] = await Promise.all([
-    resolveBookingPolicy(db, {
-      siteId, policyType: 'reservation', locationId: resolvedLocationId, }),
+    requireLocationReservationConfig(db, { organizationId: site.organization_id, locationId: resolvedLocationId }),
     requestedLocale && /^[a-z]{2}(-[A-Z]{2})?$/.test(requestedLocale)
       ? requestedLocale
       : getSourceLocale(db, site.organization_id, siteId),
@@ -185,5 +201,5 @@ export default defineHandler(async (event) => {
   ])
 
   return jsonResponse({
-    success: true, id, cancellationToken: cancellation.token, message: 'Your reservation is confirmed.', policy_summary: policy.id ? renderBookingPolicySummary(policy, locale) : null, }, { status: 201 })
+    success: true, id, cancellationToken: cancellation.token, message: 'Your reservation is confirmed.', policy_summary: renderBookingPolicySummary(reservationPolicySummarySource(policy), locale), }, { status: 201 })
 })

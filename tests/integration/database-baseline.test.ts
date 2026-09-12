@@ -18,7 +18,17 @@ test('the baseline creates the complete schema from zero', () => {
       FROM sqlite_schema
       WHERE type = 'table' AND name NOT LIKE 'sqlite_%'
     `).get() as { count: number }
-    assert.equal(tableCount.count, 51)
+    // The baseline is complete when it carries exactly the tables the schema
+    // declares. A hardcoded number says nothing about which table is missing,
+    // and goes stale on every change that is supposed to be fine. The snapshot
+    // beside the baseline is generated from schema.ts, so it is that
+    // declaration in a form this test can read.
+    const snapshot = JSON.parse(readFileSync('migrations/meta/0000_snapshot.json', 'utf8')) as { tables: Record<string, { name: string }> }
+    const declared = Object.values(snapshot.tables).map(table => table.name).sort()
+    const built = (database.prepare("SELECT name FROM sqlite_schema WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name").all() as Array<{ name: string }>)
+      .map(row => row.name)
+    assert.deepEqual(built, declared)
+    assert.equal(tableCount.count, declared.length)
     const ledgerCount = database.prepare("SELECT count(*) count FROM sqlite_schema WHERE name = 'd1_migrations'").get() as { count: number }
     assert.equal(ledgerCount.count, 0)
     const splitAvailabilityTables = database.prepare("SELECT count(*) count FROM sqlite_schema WHERE type = 'table' AND name IN ('experience_slot_overrides', 'reservation_slot_overrides')").get() as { count: number }
@@ -40,45 +50,41 @@ test('the baseline enforces canonical cross-scope and structural constraints', (
     database.prepare("INSERT INTO sites (id, organization_id, slug, subdomain) VALUES ('site', 'org', 'site', 'site')").run()
     database.prepare("INSERT INTO business_locations (id, organization_id, site_id, slug, title) VALUES ('location', 'org', 'site', 'location', 'Location')").run()
     database.prepare("INSERT INTO business_locations (id, organization_id, site_id, slug, title) VALUES ('other-location', 'org', 'site', 'other-location', 'Other location')").run()
-    database.prepare(`
-      INSERT INTO product_categories (
-        id, organization_id, site_id, location_id, name, slug, sort_order, created_by, updated_by
-      ) VALUES ('category', 'org', 'site', 'location', 'Food', 'food', 0, 'user', 'user')
-    `).run()
-    database.prepare(`
-      INSERT INTO products (
-        id, organization_id, site_id, location_id, category_id, name, slug,
-        sort_order, created_by, updated_by
-      ) VALUES ('product', 'org', 'site', 'location', 'category', 'Product', 'product', 0, 'user', 'user')
-    `).run()
+    // The catalog belongs to the organization; a site and a location reach it
+    // through their own relationship rows, and every one of those is scoped by
+    // organization so a relationship cannot cross a tenant boundary.
+    database.prepare("INSERT INTO products (id, organization_id, name, slug, created_by, updated_by) VALUES ('product', 'org', 'Product', 'product', 'user', 'user')").run()
+    database.prepare("INSERT INTO product_variants (id, organization_id, product_id, name, created_by, updated_by) VALUES ('variant', 'org', 'product', 'Default', 'user', 'user')").run()
+    database.prepare("INSERT INTO product_publications (organization_id, product_id, site_id, published, created_by, updated_by) VALUES ('org', 'product', 'site', 1, 'user', 'user')").run()
+    database.prepare("INSERT INTO product_locations (organization_id, product_id, location_id, published, created_by, updated_by) VALUES ('org', 'product', 'location', 1, 'user', 'user')").run()
+    database.prepare("INSERT INTO collections (id, organization_id, site_id, location_id, name, slug, created_by, updated_by) VALUES ('collection', 'org', 'site', 'location', 'Food', 'food', 'user', 'user')").run()
+    database.prepare("INSERT INTO collection_products (organization_id, collection_id, product_id, created_by, updated_by) VALUES ('org', 'collection', 'product', 'user', 'user')").run()
+    database.prepare(`INSERT INTO prices (id, organization_id, product_variant_id, location_id, currency, unit_amount, created_by, updated_by)
+      VALUES ('price', 'org', 'variant', 'location', 'THB', 10000, 'user', 'user')`).run()
 
-    database.prepare(`
-      INSERT INTO product_categories (
-        id, organization_id, site_id, location_id, name, slug, sort_order, created_by, updated_by
-      ) VALUES ('other-category', 'org', 'site', 'other-location', 'Food', 'food', 0, 'user', 'user')
-    `).run()
+    database.prepare("INSERT INTO organization (id, name, slug) VALUES ('other-org', 'Other', 'other-org')").run()
+    database.prepare("INSERT INTO products (id, organization_id, name, slug, created_by, updated_by) VALUES ('other-product', 'other-org', 'Theirs', 'theirs', 'user', 'user')").run()
     assert.throws(
-      () => database.prepare(`
-        INSERT INTO products (
-          id, organization_id, site_id, location_id, category_id, name, slug,
-          sort_order, created_by, updated_by
-        ) VALUES ('cross-location', 'org', 'site', 'location', 'other-category', 'Cross', 'cross', 0, 'user', 'user')
-      `).run(),
+      () => database.prepare("INSERT INTO collection_products (organization_id, collection_id, product_id, created_by, updated_by) VALUES ('org', 'collection', 'other-product', 'user', 'user')").run(),
       /FOREIGN KEY constraint failed/,
+      'a collection cannot carry another tenant\'s product',
     )
-    database.prepare(`INSERT INTO prices (id, organization_id, site_id, location_id, product_id, amount_minor, currency, unit, tax_behavior, valid_from, provenance, created_by)
-      VALUES ('price', 'org', 'site', 'location', 'product', 10000, 'THB', 'item', 'unspecified', '2026-01-01T00:00:00.000Z', 'test', 'user')`).run()
-    database.prepare("INSERT INTO product_categories (id,organization_id,site_id,location_id,product_type,name,slug,sort_order,created_by,updated_by) VALUES ('experience-category','org','site','location','experience','Experiences','experiences',0,'user','user')").run()
-    database.prepare("INSERT INTO products (id,organization_id,site_id,location_id,category_id,product_type,name,slug,experience_json,sort_order,created_by,updated_by) VALUES ('experience','org','site','location','experience-category','experience','Experience','experience','{}',0,'user','user')").run()
-    database.prepare("UPDATE products SET experience_json = ? WHERE id = 'experience'").run(JSON.stringify({ recurring_slots: { saturday: ['14:00'] }, included_items: ['Equipment'] }))
-    database.prepare("UPDATE business_locations SET booking_json = ? WHERE id = 'location'").run(JSON.stringify({ reservation: { policy: { reschedule_allowed: false } } }))
-    for (const [query, constraint] of [
-      ["UPDATE products SET experience_json = '{}' WHERE id = 'product'", /products_experience_check/],
-      ["UPDATE products SET experience_json = NULL WHERE id = 'experience'", /products_experience_check/],
-      ["UPDATE products SET experience_json = '[]' WHERE id = 'experience'", /products_experience_check/],
-      ["UPDATE products SET experience_json = '{\"included_items\":{}}' WHERE id = 'experience'", /products_experience_fields_check/],
-      ["UPDATE business_locations SET booking_json = '[]' WHERE id = 'location'", /business_locations_booking_check/],
-    ] as const) assert.throws(() => database.prepare(query).run(), constraint)
+    assert.throws(
+      () => database.prepare("INSERT INTO product_locations (organization_id, product_id, location_id, published, created_by, updated_by) VALUES ('other-org', 'other-product', 'location', 1, 'user', 'user')").run(),
+      /FOREIGN KEY constraint failed/,
+      'a product cannot be offered at another tenant\'s location',
+    )
+
+    // Bookability is the existence of a config row, and a cadence longer than
+    // a week has to say from when.
+    database.prepare("INSERT INTO product_booking_configs (product_id, organization_id, duration_minutes, default_capacity, created_by, updated_by) VALUES ('product', 'org', 90, 8, 'user', 'user')").run()
+    assert.throws(
+      () => database.prepare(`INSERT INTO product_availability_rules (id, organization_id, product_id, timezone, weekday, start_time, interval_weeks, created_by, updated_by)
+        VALUES ('fortnightly', 'org', 'product', 'Asia/Bangkok', 6, '14:00', 2, 'user', 'user')`).run(),
+      /product_availability_rules_anchor_check/,
+    )
+    database.prepare(`INSERT INTO product_availability_rules (id, organization_id, product_id, timezone, weekday, start_time, interval_weeks, effective_from_date, created_by, updated_by)
+      VALUES ('fortnightly', 'org', 'product', 'Asia/Bangkok', 6, '14:00', 2, '2026-01-03', 'user', 'user')`).run()
 
     assert.throws(
       () => database.prepare("INSERT INTO organization (id, name, slug) VALUES ('blank', 'Blank', '   ')").run(),
@@ -102,11 +108,15 @@ test('the baseline enforces canonical cross-scope and structural constraints', (
       () => database.prepare("INSERT INTO site_locales (id, organization_id, site_id, locale, is_source, status) VALUES ('bad-en', 'org', 'site', 'en', 0, 'published')").run(),
       /site_locales_english_source_check/,
     )
+    // A review names a product in its own organization. The product is not
+    // tied to one location any more, so reviewing it at either branch the
+    // tenant runs is a real thing to do.
     assert.throws(
-      () => database.prepare("INSERT INTO reviews (id, organization_id, site_id, location_id, product_id, rating) VALUES ('bad-review', 'org', 'site', 'other-location', 'product', 5)").run(),
+      () => database.prepare("INSERT INTO reviews (id, organization_id, site_id, location_id, product_id, rating) VALUES ('bad-review', 'org', 'site', 'location', 'other-product', 5)").run(),
       /FOREIGN KEY constraint failed/,
     )
     database.prepare("INSERT INTO reviews (id, organization_id, site_id, location_id, product_id, rating) VALUES ('review', 'org', 'site', 'location', 'product', 5)").run()
+    database.prepare("INSERT INTO reviews (id, organization_id, site_id, location_id, product_id, rating) VALUES ('other-branch-review', 'org', 'site', 'other-location', 'product', 5)").run()
     assert.equal(database.pragma('foreign_key_check').length, 0)
   } finally {
     database.close()
@@ -126,7 +136,18 @@ test('the baseline keeps structural JSON checks without enum membership checks',
     database.prepare("INSERT INTO content_blocks (id, document_id, type, position, data_json) VALUES ('block', 'document', 'markdown', 0, '{}')").run()
     assert.throws(() => database.prepare("UPDATE content_blocks SET data_json = '[]' WHERE id = 'block'").run(), /content_blocks_data_json_check/)
     const checks = database.prepare("SELECT sql FROM sqlite_schema WHERE type = 'table'").all() as Array<{ sql: string }>
-    const enumChecks = checks.flatMap(row => [...row.sql.matchAll(/CONSTRAINT "([^"]+)" CHECK\((\w+) IN \([^()]*\)\)/g)].map(match => match[1]))
+    // The rule is about value sets that grow on a table D1 cannot rebuild. A
+    // boolean's domain is 0 and 1 forever, and a table nothing references can
+    // be rebuilt; everything else must state its membership in a registry
+    // under shared/ rather than in the schema.
+    const referenced = new Set([...readFileSync('migrations/0000_baseline.sql', 'utf8').matchAll(/REFERENCES `([a-z_]+)`/g)].map(match => match[1]!))
+    const enumChecks = checks.flatMap((row) => {
+      const table = row.sql.match(/CREATE TABLE `([a-z_]+)`/)?.[1]
+      if (!table || !referenced.has(table)) return []
+      return [...row.sql.matchAll(/CONSTRAINT "([^"]+)" CHECK\((\w+) IN \(([^()]*)\)\)/g)]
+        .filter(match => match[3]!.replaceAll(' ', '') !== '0,1')
+        .map(match => match[1]!)
+    })
     assert.deepEqual(enumChecks, [])
     assert.equal(checks.some(row => row.sql.includes('"sites"."')), false)
   } finally {

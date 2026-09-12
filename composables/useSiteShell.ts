@@ -85,7 +85,6 @@ export const useSiteShellState = () => {
   const shellSite = computed(() => data.value?.site ?? null);
   const googleBusiness = computed(() => data.value?.googleBusiness ?? null);
   const locales = computed(() => data.value?.locales ?? []);
-  const hasExperiences = computed(() => data.value?.hasExperiences ?? false);
   const hasProducts = computed(() => data.value?.hasProducts ?? false);
   const platformMessages = useState<Record<string, string> | null>('platform-locale-messages', () => null)
   watch(
@@ -99,7 +98,6 @@ export const useSiteShellState = () => {
     site: shellSite,
     googleBusiness,
     locales,
-    hasExperiences,
     hasProducts,
     data,
     pending,

@@ -59,11 +59,13 @@ function parseProducts(value: unknown, existing: OnboardingDraftPayload | null):
   if (value === undefined) {
     return existing ? existing.preview.products.map(product => ({
       name: product.name,
-      category: product.category,
-      amountMinor: product.price === null ? null : product.price.amount_minor,
+      category: product.collection,
+      amountMinor: product.price === null ? null : product.price.unit_amount,
     })) : null
   }
-  if (!Array.isArray(value)) return []
+  // A malformed value is a bad request, not an instruction to clear the list:
+  // returning [] here erased every product the owner had entered.
+  if (!Array.isArray(value)) return null
   return value.flatMap((entry): DraftProductInput[] => {
     if (!entry || typeof entry !== 'object') return []
     const record = entry as Record<string, unknown>
@@ -181,6 +183,9 @@ export default defineHandler(async (event) => {
 
   const details = detailsFromBody(rawDetails, existingPayload?.source.details ?? null, name, place)
   const brandDraft = brandFromBody(body.brandDraft && typeof body.brandDraft === 'object' ? body.brandDraft : null, existingPayload)
+  if (body?.products !== undefined && !Array.isArray(body.products)) {
+    return jsonResponse({ error: 'products must be an array' }, { status: 400 })
+  }
   const products = parseProducts(body?.products, existingPayload)
   const payload = buildOnboardingDraftPayload({
     name, vertical, place, details, brandDraft, products, })

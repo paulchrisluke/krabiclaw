@@ -59,7 +59,7 @@ export function useSiteConversionTracking(consultationSource?: MaybeRefOrGetter<
     })
   }
 
-  function mirrorSubmission(eventName: 'contact_submit' | 'reservation_submit' | 'experience_booking_submit', locationId?: string | null) {
+  function mirrorSubmission(eventName: 'contact_submit' | 'reservation_submit' | 'booking_submit', locationId?: string | null) {
     mirrorConversion({ event_name: eventName, stage: 'submitted', location_id: locationId })
   }
 

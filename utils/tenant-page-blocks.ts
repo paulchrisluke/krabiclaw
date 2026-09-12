@@ -13,11 +13,13 @@ export type TenantPageBlockType =
   | 'hero'
   | 'button_group'
   | 'feature_grid'
+  | 'team_grid'
   | 'testimonial_grid'
   | 'contact_cta'
   | 'booking_cta'
   | 'donation_choices'
-  | 'offering_grid'
+  | 'page_grid'
+  | 'product_grid'
   | 'location_grid'
 
 export type TenantPageType = 'custom' | 'recipe' | 'legal' | 'system'
@@ -77,7 +79,7 @@ export interface TenantPageBlockDefinition {
 const ALL_RECIPES = [
   'custom', 'about', 'pricing', 'donate', 'legal', 'contact', 'schedule', 'home',
   'services', 'privacy', 'terms', 'third-party-notices', 'locations', 'menu', 'order',
-  'experiences', 'reservations', 'qa', 'reviews', 'posts', 'photos', 'blog',
+  'products', 'reservations', 'qa', 'reviews', 'posts', 'photos', 'blog',
 ] as const
 
 export const TENANT_PAGE_RECIPE_REGISTRY = new Set<string>(ALL_RECIPES)
@@ -96,11 +98,23 @@ export const TENANT_PAGE_BLOCK_REGISTRY: Record<TenantPageBlockType, TenantPageB
   hero: blockDefinitionWithMetadata('hero', 'Hero', 'A page hero section.', ALL_RECIPES, ['eyebrow', 'title', 'subtitle', 'cta_label', 'cta_url'], { accessibility: 'required', seo: 'structured' }),
   button_group: blockDefinitionWithMetadata('button_group', 'Button group', 'A group of typed links.', ALL_RECIPES, ['buttons']),
   feature_grid: blockDefinitionWithMetadata('feature_grid', 'Feature grid', 'A grid of structured features or a configured source.', ALL_RECIPES, ['title', 'items', 'source', 'calculator']),
+  // The people a business puts its name to. Separate from feature_grid because
+  // a person is not a feature: the two used to share one block, one holding
+  // `features` and `people` side by side under keys no writer declared, and
+  // nothing could edit either of them.
+  team_grid: blockDefinitionWithMetadata('team_grid', 'Team', 'The people behind the business.', ALL_RECIPES, ['title', 'description', 'items']),
   testimonial_grid: blockDefinitionWithMetadata('testimonial_grid', 'Testimonials', 'A grid of customer testimonials.', ALL_RECIPES, ['title', 'items']),
   contact_cta: blockDefinitionWithMetadata('contact_cta', 'Contact CTA', 'A contact-focused call to action.', ALL_RECIPES, ['title', 'description', 'label', 'url']),
   booking_cta: blockDefinitionWithMetadata('booking_cta', 'Booking CTA', 'A booking-focused call to action.', ALL_RECIPES, ['title', 'description', 'label', 'url']),
   donation_choices: blockDefinitionWithMetadata('donation_choices', 'Donation choices', 'Structured donation options.', ['donate'], ['title', 'description', 'tiers', 'destination'], { allowedPageTypes: ['recipe'] }),
-  offering_grid: blockDefinitionWithMetadata('offering_grid', 'Offering grid', 'References canonical offerings.', ['home', 'about', 'pricing', 'custom', 'services'], ['title', 'offering_ids'], { allowedPageTypes: ['custom', 'recipe', 'system'] }),
+  // References other pages by id. Practice areas and service pages are
+  // documents like any other, so a grid of them is a grid of pages — there is
+  // no separate offering record for it to point at.
+  page_grid: blockDefinitionWithMetadata('page_grid', 'Page grid', 'References other pages on this site.', ['home', 'about', 'pricing', 'custom', 'services'], ['title', 'page_ids'], { allowedPageTypes: ['custom', 'recipe', 'system'] }),
+  // References the canonical catalog: a collection, or explicit products. It
+  // carries no prices or names of its own — those are read through the
+  // product, so a grid can never show a stale price.
+  product_grid: blockDefinitionWithMetadata('product_grid', 'Product grid', 'References a collection or explicit products.', ['home', 'about', 'pricing', 'custom', 'services', 'menu', 'order', 'products'], ['title', 'collection_id', 'product_ids'], { allowedPageTypes: ['custom', 'recipe', 'system'] }),
   location_grid: blockDefinitionWithMetadata('location_grid', 'Location grid', 'References canonical locations.', ['home', 'about', 'contact', 'custom'], ['title', 'location_ids'], { allowedPageTypes: ['custom', 'recipe', 'system'] }),
 }
 
@@ -179,7 +193,7 @@ const STRING_FIELDS = new Set([
   'label', 'url', 'body', 'tone', 'cta_label', 'cta_url', 'source',
   'source_url', 'effective_date', 'field', 'section', 'destination',
 ])
-const ARRAY_FIELDS = new Set(['offering_ids', 'location_ids'])
+const ARRAY_FIELDS = new Set(['page_ids', 'product_ids', 'location_ids'])
 
 function validateBlockData(type: TenantPageBlockType, data: Record<string, unknown>): Record<string, unknown> {
   assertNoEmbeddedMediaFields(data, type)

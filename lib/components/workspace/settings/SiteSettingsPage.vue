@@ -286,10 +286,20 @@ async function scheduleWorkspaceDeletion() {
     if (response?.success !== true) throw new Error('Scheduling the deletion failed. Please try again.')
     if (typeof response?.grace_days === 'number') deletionGraceDays.value = response.grace_days
     deletionConfirmText.value = ''
-    await dashboard.refresh()
-    toast.add({ title: 'Deletion scheduled', description: `Everything is deleted on ${deletionDateLabel.value}. Cancel here any time before then.`, icon: 'i-lucide-clock', color: 'warning' })
   } catch (error) {
     deletionError.value = error instanceof Error ? error.message : 'Scheduling the deletion failed. Please try again.'
+    deletionSaving.value = false
+    return
+  }
+  // The deletion is scheduled. Reloading the workspace is what the date in the
+  // message is read from, and a failure there is a failure to REFRESH: saying
+  // "Scheduling the deletion failed" for a deletion that happened is how an
+  // owner schedules it twice, or believes their workspace is safe.
+  try {
+    await dashboard.refresh()
+    toast.add({ title: 'Deletion scheduled', description: `Everything is deleted on ${deletionDateLabel.value}. Cancel here any time before then.`, icon: 'i-lucide-clock', color: 'warning' })
+  } catch {
+    toast.add({ title: 'Deletion scheduled', description: 'Reload this page to see the date it happens on.', icon: 'i-lucide-clock', color: 'warning' })
   } finally {
     deletionSaving.value = false
   }
@@ -304,11 +314,16 @@ async function keepWorkspace() {
       validate: (value): value is { success?: boolean } => isRecord(value),
     })
     if (response?.success !== true) throw new Error('Cancelling the deletion failed. Please try again.')
-    await dashboard.refresh()
-    toast.add({ title: 'Deletion cancelled', icon: 'i-lucide-circle-check', color: 'success' })
   } catch (error) {
     deletionError.value = error instanceof Error ? error.message : 'Cancelling the deletion failed. Please try again.'
+    deletionSaving.value = false
+    return
+  }
+  // Cancelled. As above, the refresh that follows is a separate thing to fail.
+  try {
+    await dashboard.refresh()
   } finally {
+    toast.add({ title: 'Deletion cancelled', icon: 'i-lucide-circle-check', color: 'success' })
     deletionSaving.value = false
   }
 }

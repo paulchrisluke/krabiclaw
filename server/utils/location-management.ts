@@ -353,6 +353,13 @@ export async function createLocation(
     return { status: 400, data: { error: "Location title is required." } };
   }
 
+  // An unusable robots value is a bad request, like every other field checked
+  // here. Left to `normalizeLocationRobots`, it threw mid-write and reached the
+  // caller as a 500 saying nothing about which field was wrong.
+  if (input.robots !== undefined && !parseRobotsIntent(input.robots).ok) {
+    return { status: 400, data: { error: `robots must be one of: ${ROBOTS_INTENTS.join(", ")}` } };
+  }
+
   if (
     input.rating !== undefined &&
     input.rating !== null &&
@@ -557,6 +564,13 @@ export async function updateLocation(
 
   if (input.title !== undefined && !input.title.trim()) {
     return { status: 400, data: { error: "title cannot be empty." } };
+  }
+
+  // An unusable robots value is a bad request, like every other field checked
+  // here. Left to `normalizeLocationRobots`, it threw mid-write and reached the
+  // caller as a 500 saying nothing about which field was wrong.
+  if (input.robots !== undefined && !parseRobotsIntent(input.robots).ok) {
+    return { status: 400, data: { error: `robots must be one of: ${ROBOTS_INTENTS.join(", ")}` } };
   }
   const updateFeaturesResult = await resolveValidatedLocationFeatures(db, organizationId, siteId, input.feature_overrides, locationId);
   if (!updateFeaturesResult.ok) {
@@ -859,21 +873,17 @@ export async function deleteLocation(
   const statements = [
     ...prepareContentDocumentDeletion({ locationId, organizationId, siteId }),
     ...resourceLocalizationDeletionQueries('business_location', { query: 'SELECT id FROM business_locations WHERE id = ? AND organization_id = ? AND site_id = ?', params: [locationId, organizationId, siteId] }),
-    ...([
-      ['product', 'products'], ['product_category', 'product_categories'],
-    ] as const).flatMap(([type, table]) => resourceLocalizationDeletionQueries(type, {
-      query: `SELECT id FROM ${table} WHERE location_id = ? AND organization_id = ? AND site_id = ?`, params: [locationId, organizationId, siteId],
-    })),
+    // Deleting a location does NOT delete the products it offered: the
+    // catalog belongs to the organization and other locations may still sell
+    // them. The membership row goes (cascaded by the foreign key) and the
+    // product stays. Only the location's own media and redirects are removed.
     { query: `DELETE FROM site_redirects WHERE organization_id = ? AND site_id = ? AND (
         (owner_type = 'business_location' AND owner_id = ?) OR
-        (owner_type = 'product' AND owner_id IN (SELECT id FROM products WHERE location_id = ?)) OR
-        (owner_type = 'product_category' AND owner_id IN (SELECT id FROM product_categories WHERE location_id = ?)) OR
-        (owner_type = 'review' AND owner_id IN (SELECT id FROM reviews WHERE location_id = ?))
-      )`, params: [organizationId, siteId, locationId, locationId, locationId, locationId] },
-    { query: `DELETE FROM media_placements WHERE organization_id = ? AND site_id = ? AND (
-        (owner_type = 'product' AND owner_id IN (SELECT id FROM products WHERE location_id = ?)) OR
         (owner_type = 'review' AND owner_id IN (SELECT id FROM reviews WHERE location_id = ?))
       )`, params: [organizationId, siteId, locationId, locationId] },
+    { query: `DELETE FROM media_placements WHERE organization_id = ? AND site_id = ? AND
+        owner_type = 'review' AND owner_id IN (SELECT id FROM reviews WHERE location_id = ?)
+      `, params: [organizationId, siteId, locationId] },
     { query: 'DELETE FROM reviews WHERE location_id = ? AND organization_id = ? AND site_id = ?', params: [locationId, organizationId, siteId] },
     {
       query: `
@@ -893,7 +903,7 @@ export async function deleteLocation(
     },
     {
       query: `
-      DELETE FROM requests WHERE organization_id = ? AND site_id = ? AND location_id = ? AND kind IN ('reservation', 'experience_booking')
+      DELETE FROM requests WHERE organization_id = ? AND site_id = ? AND location_id = ? AND kind IN ('reservation', 'booking')
     `,
       params: [organizationId, siteId, locationId],
     },

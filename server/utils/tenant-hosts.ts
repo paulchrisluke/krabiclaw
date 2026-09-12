@@ -96,7 +96,10 @@ export function environmentTenantAliasSlug(host: string, env: TenantHostEnv): st
 // first-level tenant aliases instead.
 export function usesTenantHeader(host: string): boolean {
   const hostname = hostnameOf(host).toLowerCase().replace(/\.$/, '')
-  if (hostname === 'localhost' || hostname === '127.0.0.1') return true
+  // A tenant is framed locally as <subdomain>.localhost, which is as
+  // non-production as localhost itself. Missing that served every local page
+  // from the public resource cache, so an edit appeared to change nothing.
+  if (hostname === 'localhost' || hostname.endsWith('.localhost') || hostname === '127.0.0.1') return true
   return WORKERS_DEV_PREVIEW_HOST_PATTERN.test(hostname)
 }
 
@@ -109,7 +112,10 @@ export function usesTenantHeader(host: string): boolean {
 // their hostname.
 export function isNonProductionHost(host: string): boolean {
   const hostname = hostnameOf(host).toLowerCase().replace(/\.$/, '')
-  if (hostname === 'localhost' || hostname === '127.0.0.1') return true
+  // A tenant is framed locally as <subdomain>.localhost, which is as
+  // non-production as localhost itself. Missing that served every local page
+  // from the public resource cache, so an edit appeared to change nothing.
+  if (hostname === 'localhost' || hostname.endsWith('.localhost') || hostname === '127.0.0.1') return true
   if (hostname === 'preview.krabiclaw.com' || hostname === 'staging.krabiclaw.com') return true
   if (isEnvironmentTenantAliasHost(hostname)) return true
   return WORKERS_DEV_PREVIEW_HOST_PATTERN.test(hostname)

@@ -1,6 +1,6 @@
 import type { SiteSettings, SiteIntegrations } from '../../shared/site-settings'
 import { sql } from "drizzle-orm"
-import { sqliteTable, integer, text, real, unique, uniqueIndex, index, check, foreignKey } from "drizzle-orm/sqlite-core"
+import { sqliteTable, integer, text, real, unique, uniqueIndex, index, check, foreignKey, primaryKey } from "drizzle-orm/sqlite-core"
 import type { AnySQLiteColumn } from "drizzle-orm/sqlite-core"
 import type { CONTENT_DOCUMENT_KINDS } from "../../shared/content-registries"
 import { NONPROFIT_STATUS_CANONICAL } from "../../utils/professional-service-schema"
@@ -52,7 +52,6 @@ export const customers = sqliteTable("customers", {
 ]);
 
 export const business_locations = sqliteTable("business_locations", {
- booking_json: text().default("{}").notNull(),
 	id: text().primaryKey(),
 	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
 	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" } ),
@@ -104,31 +103,50 @@ export const business_locations = sqliteTable("business_locations", {
 	feature_overrides: text(),
 }, (table) => [
 	check("business_locations_instants_check", sql`(last_synced_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', last_synced_at, '+0 days') IS last_synced_at) AND (created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)`),
- check("business_locations_booking_check", sql`json_valid(booking_json) AND json_type(booking_json) = 'object'`),
 	foreignKey({ columns: [table.organization_id, table.site_id], foreignColumns: [sites.organization_id, sites.id], name: "business_locations_site_scope_fk" }).onDelete("cascade"),
 	check("business_locations_address_check", sql`address IS NULL OR (json_valid(address) AND json_type(address) IS 'object')`),
 	check("business_locations_categories_check", sql`categories IS NULL OR (json_valid(categories) AND json_type(categories) IS 'array')`),
 	check("business_locations_feature_overrides_check", sql`feature_overrides IS NULL OR (json_valid(feature_overrides) AND json_type(feature_overrides) IS 'object')`),
 	unique("business_locations_organization_id_site_id_slug_unique").on(table.organization_id, table.site_id, table.slug),
 	unique("business_locations_organization_id_site_id_id_unique").on(table.organization_id, table.site_id, table.id),
+	// Parent key for the organization-scoped catalog relations (prices,
+	// product_locations, availability rules, sessions, inventory levels,
+	// reservation configuration) which scope by organization + location without
+	// restating the site.
+	unique("business_locations_organization_id_id_unique").on(table.organization_id, table.id),
 	check("business_locations_opening_hours_check", sql`opening_hours IS NULL OR (json_valid(opening_hours) AND json_type(opening_hours) IS 'object' AND json_type(opening_hours, '$.periods') IS 'array')`),
 	check("business_locations_special_hours_check", sql`special_hours IS NULL OR (json_valid(special_hours) AND json_type(special_hours) IS 'array')`),
 ]);
 
 
+// The inbox: one conversation thread with a guest, and its workflow state.
+// Row meaning: someone contacted this site, and this is the thread.
+// Owner/scope: organization + site; location_id routes the thread to a branch.
+// This table does NOT own booking truth. It used to carry
+//   (product_id, booking_date, time_slot, party_size, status) as an
+//   independently writable copy of an occurrence; the occurrence is now a
+//   product_sessions row, the seat claim a bookings row, and a table
+//   reservation a reservations row. Each links back here through request_id.
+//   A contact thread has neither and is not forced into the booking model.
+// Null semantics: customer_id NULL is an unmatched guest. review_id NULL means
+//   no review was solicited from this thread. location_id NULL means the
+//   thread is site-wide.
+// Deletion: cascades from site; bookings and reservations survive with
+//   request_id set to NULL, because losing an inbox thread must not lose a
+//   seat allocation.
+// Read/write: server/domain/requests.ts.
 export const requests = sqliteTable("requests", {
  id: text().primaryKey(),
- kind: text({ enum: ["contact", "reservation", "experience_booking", "work"] }).notNull(),
+ // The inbox thread type. The OPERATIONAL record for a booking or a
+ // reservation is the bookings / reservations row that links back here; this
+ // column only says which kind of thread the inbox is showing. A contact
+ // thread is not a degenerate booking and carries no booking columns.
+ kind: text({ enum: ["contact", "booking", "reservation", "work"] }).notNull(),
  organization_id: text().references((): AnySQLiteColumn => organization.id, { onDelete: "cascade" }),
  site_id: text().references((): AnySQLiteColumn => sites.id, { onDelete: "cascade" }),
  location_id: text().references((): AnySQLiteColumn => business_locations.id, { onDelete: "set null" }),
- product_id: text().references((): AnySQLiteColumn => products.id, { onDelete: "set null" }),
  customer_id: text().references((): AnySQLiteColumn => customers.id, { onDelete: "set null" }),
  review_id: text().references((): AnySQLiteColumn => reviews.id, { onDelete: "set null" }),
- status: text(),
- booking_date: text(),
- time_slot: text(),
- party_size: integer(),
  conversation_state: text({ enum: ["needs_attention", "waiting_on_guest", "resolved"] }),
  resolved_at: text(),
  payload_json: text().notNull(),
@@ -138,19 +156,15 @@ export const requests = sqliteTable("requests", {
 	check("requests_instants_check", sql`(resolved_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', resolved_at, '+0 days') IS resolved_at) AND (created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)`),
  foreignKey({ columns: [table.organization_id, table.site_id], foreignColumns: [sites.organization_id, sites.id], name: "requests_site_scope_fk" }).onDelete("cascade"),
  foreignKey({ columns: [table.organization_id, table.site_id, table.location_id], foreignColumns: [business_locations.organization_id, business_locations.site_id, business_locations.id], name: "requests_location_scope_fk" }),
- foreignKey({ columns: [table.organization_id, table.site_id, table.product_id], foreignColumns: [products.organization_id, products.site_id, products.id], name: "requests_product_site_scope_fk" }),
- foreignKey({ columns: [table.organization_id, table.site_id, table.location_id, table.product_id], foreignColumns: [products.organization_id, products.site_id, products.location_id, products.id], name: "requests_product_scope_fk" }),
  check("requests_payload_check", sql`json_valid(payload_json) AND json_type(payload_json) = 'object'`),
  check("requests_guest_payload_check", sql`(json_type(payload_json, '$.guest.name') IS 'text' AND json_type(payload_json, '$.guest.email') IS 'text' AND (json_type(payload_json, '$.guest.phone') IS 'text' OR json_type(payload_json, '$.guest.phone') IS 'null'))`),
- check("requests_booking_payload_check", sql`kind NOT IN ('reservation', 'experience_booking') OR (json_type(payload_json, '$.party_size_is_minimum') IN ('true', 'false') AND json_type(payload_json, '$.cancellation') IS 'object' AND json_type(payload_json, '$.completion') IS 'object' AND json_type(payload_json, '$.review') IS 'object' AND (kind != 'reservation' OR json_type(payload_json, '$.guest.phone') IS 'text')) IS TRUE`),
  check("requests_message_payload_check", sql`kind <> 'contact' OR json_type(payload_json, '$.message') IS 'text'`),
- check("requests_scope_check", sql`kind IN ('contact', 'reservation', 'experience_booking') AND organization_id IS NOT NULL AND site_id IS NOT NULL`),
- check("requests_booking_check", sql`(kind IN ('reservation', 'experience_booking') AND location_id IS NOT NULL AND booking_date IS NOT NULL AND date(booking_date, '+0 days') IS booking_date AND time_slot IS NOT NULL AND time_slot GLOB '[0-2][0-9]:[0-5][0-9]' AND time_slot < '24:00' AND party_size IS NOT NULL AND party_size > 0 AND status IS NOT NULL AND status IN ('pending', 'confirmed', 'cancelled', 'completed') AND (kind != 'experience_booking' OR product_id IS NOT NULL) AND (kind != 'reservation' OR product_id IS NULL)) OR (kind NOT IN ('reservation', 'experience_booking') AND booking_date IS NULL AND time_slot IS NULL AND party_size IS NULL)`),
- check("requests_state_check", sql`conversation_state IS NOT NULL AND conversation_state IN ('needs_attention', 'waiting_on_guest', 'resolved') AND (kind != 'contact' OR status IS NULL)`),
+ check("requests_scope_check", sql`organization_id IS NOT NULL AND site_id IS NOT NULL`),
+ check("requests_state_check", sql`conversation_state IS NOT NULL`),
  uniqueIndex("requests_review_owner_unique").on(table.organization_id, table.site_id, table.id, table.kind),
  uniqueIndex("requests_scope_id_unique").on(table.organization_id, table.site_id, table.id),
  index("requests_site_activity_idx").on(table.site_id, table.conversation_state, table.updated_at),
- index("requests_booking_slot_idx").on(table.site_id, table.kind, table.location_id, table.product_id, table.booking_date, table.time_slot, table.status),
+ index("requests_site_kind_idx").on(table.site_id, table.kind, table.location_id, table.updated_at),
  index("requests_customer_idx").on(table.customer_id),
  index("requests_org_created_idx").on(table.organization_id, table.created_at)
 ]);
@@ -333,65 +347,80 @@ export const teamMember = sqliteTable("teamMember", {
 	index("teamMember_userId_idx").on(table.userId),
 ]);
 
-// A category is a record, not a string on each Product. Category order lives in
-// product_categories.sort_order, and products.sort_order orders items *within*
-// one category. Categories are scoped by product_type so the single hardcoded
-// 'Experiences' category never collides with a restaurant's menu sections.
-export const product_categories = sqliteTable("product_categories", {
-	id: text().primaryKey(),
-	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" }),
-	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" }),
-	location_id: text().notNull().references(() => business_locations.id, { onDelete: "cascade" }),
-	product_type: text().$type<'standard' | 'experience'>().default("standard").notNull(),
-	name: text().notNull(),
-	slug: text().notNull(),
-	sort_order: integer().notNull(),
-	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-	created_by: text().notNull(),
-	updated_by: text().notNull(),
-}, (table) => [
-	check("product_categories_instants_check", sql`(created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)`),
-	foreignKey({
-		columns: [table.organization_id, table.site_id, table.location_id],
-		foreignColumns: [business_locations.organization_id, business_locations.site_id, business_locations.id],
-		name: "product_categories_location_scope_fk",
-	}).onDelete("cascade"),
-	// product_type is part of the parent key so the Products foreign key below can
-	// match on it: without that, a 'standard' Product could reference the
-	// location's 'experience' category and only application code would object.
-	unique("product_categories_scope_id_unique").on(table.organization_id, table.site_id, table.location_id, table.product_type, table.id),
-	unique("product_categories_location_type_slug_unique").on(table.site_id, table.location_id, table.product_type, table.slug),
-	unique("product_categories_location_type_name_unique").on(table.site_id, table.location_id, table.product_type, table.name),
-	index("product_categories_location_type_sort_idx").on(table.site_id, table.location_id, table.product_type, table.sort_order),
-	check("product_categories_name_not_blank_check", sql`trim(name) <> ''`),
-	check("product_categories_slug_check", sql`slug <> '' AND slug = lower(slug) AND slug NOT GLOB '*[^a-z0-9-]*' AND slug NOT LIKE '-%' AND slug NOT LIKE '%-' AND slug NOT LIKE '%--%'`),
-	check("product_categories_sort_order_check", sql`sort_order >= 0`),
-]);
+// ---------------------------------------------------------------------------
+// Catalog: products, variants, options, prices, publication, collections.
+//
+// One catalog for every vertical. A restaurant dish, a pottery class, and a
+// consultation are all Products; nothing about their storage differs. There is
+// no `product_type` discriminator, because a discriminator that selects a
+// schema is how five verticals became five half-models. Capabilities compose
+// instead: a Product gains booking by having a product_booking_configs row,
+// stock by having an inventory_items row, a page by being referenced from a
+// content_documents root. Absence of a capability row is the absence of the
+// capability, never a NULL to be interpreted.
+//
+// Value sets (price `type`, session/booking `status`, metafield `value_type`)
+// are NOT encoded as CHECK constraints. D1 enforces foreign keys on every
+// statement and cannot alter a CHECK in place, so a closed value set on a
+// referenced parent makes adding one value an impossible table rebuild. Value
+// sets live in the registries under `shared/` and `utils/` and are enforced by
+// the validators there. Every CHECK below is structural: JSON shape, canonical
+// instants, or a cross-column rule.
+// ---------------------------------------------------------------------------
 
+// A Product is catalog identity, owned by the organization and nothing else.
+// Row meaning: one thing a merchant sells, once, however many sites publish it
+//   or locations offer it. Another location or another site does not create
+//   another Product.
+// Owner/scope: organization. Deliberately NOT site, location, or category —
+//   those are relationships (product_publications, product_locations,
+//   collection_products), because a shared catalog is the point.
+// Keys: id; (organization_id, id) for children; (organization_id, slug) so a
+//   slug identifies one Product per tenant.
+// Null semantics: order_url NULL means no ordering destination is configured,
+//   never "use the site's". unit_label NULL means amounts are per unsuffixed
+//   unit. tax_code NULL means no declared code, not a default one.
+// Deletion: cascades to variants, options, publication/location rows,
+//   collection membership, metafield values, booking config, rules and
+//   sessions. A canonical page pointing at the product REFUSES the delete
+//   (content_documents_product_scope_fk is RESTRICT), and so does a booking:
+//   the domain checks both and says which, because the cascade would otherwise
+//   take seat allocations with it.
+// Read/write: server/utils/product-management.ts (writes),
+//   server/utils/product-validation.ts (validators),
+//   server/utils/public-products.ts (public reads).
 export const products = sqliteTable("products", {
- experience_json: text(),
 	id: text().primaryKey(),
 	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" }),
-	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" }),
-	location_id: text().notNull().references(() => business_locations.id, { onDelete: "cascade" }),
-	product_type: text().$type<'standard' | 'experience'>().default("standard").notNull(),
-	category_id: text().notNull(),
 	name: text().notNull(),
 	slug: text().notNull(),
 	description: text().default("").notNull(),
+	// Merchant sale-enable control. Not visibility, not stock, not a counter.
+	// Site visibility is product_publications.published; location visibility is
+	// product_locations.published; stock is inventory_levels; seats are
+	// product_sessions.capacity. A product with active = 0 is not sold out.
+	active: integer({ mode: "boolean" }).default(true).notNull(),
+	// Narrow ordering destination (a delivery partner, a booking host). NOT the
+	// public product page: that is resolved from an explicit publication/site
+	// context. Stripe's Product `url` is the page, not this.
 	order_url: text(),
-	is_visible: integer({ mode: "boolean" }).default(true).notNull(),
-	available: integer({ mode: "boolean" }).default(true).notNull(),
-	featured: integer({ mode: "boolean" }).default(false).notNull(),
-	featured_sort_order: integer().default(0).notNull(),
-	sort_order: integer().notNull(),
-	tags_json: text().default("[]").notNull(),
-	details_json: text().default("[]").notNull(),
-	seo_title: text(),
-	seo_description: text(),
-	canonical_url: text(),
-	robots: text(),
+	// Stripe Product `unit_label`: a unit noun such as 'person' or 'night'.
+	// Pricing prose is block content, never this column.
+	unit_label: text(),
+	// Stripe Product `marketing_features`: generic selling bullets. Not a merge
+	// of inclusions, preparation instructions, policies and features — those are
+	// separate metafield definitions.
+	marketing_features: text().default("[]").notNull(),
+	// Validated tag list with the domain/rendering behavior the old `tags_json`
+	// carried. A tag is not metadata and not a collection.
+	tags: text().default("[]").notNull(),
+	// Validated string-to-string annotation/integration escape hatch. The object
+	// shape is enforced here; string-valued entries are enforced by the shared
+	// validator, since a CHECK cannot iterate JSON. No pricing, scheduling,
+	// stock, permission, routing or filtering behavior may read this.
+	metadata: text().default("{}").notNull(),
+	tax_code: text(),
+	// Provenance of the row, retained with an explicit owner.
 	source: text().default("manual").notNull(),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
@@ -399,63 +428,860 @@ export const products = sqliteTable("products", {
 	updated_by: text().notNull(),
 }, (table) => [
 	check("products_instants_check", sql`(created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)`),
-	foreignKey({
-		columns: [table.organization_id, table.site_id, table.location_id],
-		foreignColumns: [business_locations.organization_id, business_locations.site_id, business_locations.id],
-		name: "products_location_scope_fk",
-	}).onDelete("cascade"),
-	foreignKey({
-		columns: [table.organization_id, table.site_id, table.location_id, table.product_type, table.category_id],
-		foreignColumns: [product_categories.organization_id, product_categories.site_id, product_categories.location_id, product_categories.product_type, product_categories.id],
-		name: "products_category_scope_fk",
-	}).onDelete("cascade"),
-	unique("products_scope_id_unique").on(table.organization_id, table.site_id, table.location_id, table.id),
- unique("products_org_site_id_unique").on(table.organization_id, table.site_id, table.id),
-	unique("products_site_location_slug_unique").on(table.site_id, table.location_id, table.slug),
-	index("products_category_sort_order_idx").on(table.category_id, table.sort_order),
-	index("products_site_location_type_sort_order_idx").on(table.site_id, table.location_id, table.product_type, table.sort_order),
-	index("products_site_location_visible_sort_idx").on(table.site_id, table.location_id, table.is_visible, table.sort_order),
-	index("products_site_location_featured_sort_idx").on(table.site_id, table.location_id, table.featured, table.featured_sort_order),
+	unique("products_org_id_unique").on(table.organization_id, table.id),
+	unique("products_org_slug_unique").on(table.organization_id, table.slug),
 	check("products_name_not_blank_check", sql`trim(name) <> ''`),
 	check("products_slug_check", sql`slug <> '' AND slug = lower(slug) AND slug NOT GLOB '*[^a-z0-9-]*' AND slug NOT LIKE '-%' AND slug NOT LIKE '%-' AND slug NOT LIKE '%--%'`),
-	check("products_sort_order_check", sql`sort_order >= 0`),
-	check("products_featured_sort_order_check", sql`featured_sort_order >= 0`),
-	check("products_boolean_check", sql`is_visible IN (0, 1) AND available IN (0, 1) AND featured IN (0, 1)`),
-	check("products_experience_check", sql`(product_type = 'experience' AND experience_json IS NOT NULL AND json_valid(experience_json) AND json_type(experience_json) = 'object') OR (product_type = 'standard' AND experience_json IS NULL)`),
- check("products_experience_fields_check", sql`experience_json IS NULL OR ((json_type(experience_json, '$.recurring_slots') IS NULL OR json_type(experience_json, '$.recurring_slots') IN ('null', 'object')) AND (json_type(experience_json, '$.included_items') IS NULL OR json_type(experience_json, '$.included_items') IN ('null', 'array')) AND (json_type(experience_json, '$.what_to_bring') IS NULL OR json_type(experience_json, '$.what_to_bring') IN ('null', 'array')))`),
-	check("products_tags_json_check", sql`json_valid(tags_json) AND json_type(tags_json) = 'array'`),
-	check("products_details_json_check", sql`json_valid(details_json) AND json_type(details_json) = 'array'`),
+	check("products_active_check", sql`active IN (0, 1)`),
+	check("products_marketing_features_check", sql`json_valid(marketing_features) AND json_type(marketing_features) = 'array'`),
+	check("products_tags_check", sql`json_valid(tags) AND json_type(tags) = 'array'`),
+	check("products_metadata_check", sql`json_valid(metadata) AND json_type(metadata) = 'object'`),
 	check("products_order_url_check", sql`order_url IS NULL OR (order_url LIKE 'https://_%' AND instr(order_url, '@') = 0 AND instr(order_url, char(10)) = 0 AND instr(order_url, char(13)) = 0)`),
 ]);
 
+// The purchasable unit. Every Product has at least one — a Product with no
+// customer-selectable options has one real default variant, not a special
+// product-only purchase path. "At least one" is an application invariant with
+// real-boundary coverage: SQL cannot express it without making inserts
+// circular.
+// Row meaning: one buyable configuration of a Product.
+// Owner/scope: organization, through product_id.
+// Keys: id; (organization_id, id) for prices/inventory/bookings;
+//   (organization_id, product_id, id) so option selections can prove
+//   same-product membership.
+// Null semantics: sku NULL means unstocked/untracked identity, not empty.
+// Deletion: cascades to prices, option-value selections, inventory items.
+//   Deleting the last variant of a Product is refused by the domain layer.
+// Do NOT create a variant for a currency, a location, a price revision, or
+// another scheduled class date. Those are prices, product_locations, price
+// validity periods and product_sessions respectively.
+// Read/write: server/utils/product-management.ts.
+export const product_variants = sqliteTable("product_variants", {
+	id: text().primaryKey(),
+	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" }),
+	product_id: text().notNull(),
+	name: text().notNull(),
+	sku: text(),
+	active: integer({ mode: "boolean" }).default(true).notNull(),
+	sort_order: integer().default(0).notNull(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	created_by: text().notNull(),
+	updated_by: text().notNull(),
+}, (table) => [
+	check("product_variants_instants_check", sql`(created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)`),
+	foreignKey({ columns: [table.organization_id, table.product_id], foreignColumns: [products.organization_id, products.id], name: "product_variants_product_scope_fk" }).onDelete("cascade"),
+	unique("product_variants_org_id_unique").on(table.organization_id, table.id),
+	unique("product_variants_product_id_unique").on(table.organization_id, table.product_id, table.id),
+	uniqueIndex("product_variants_org_sku_unique").on(table.organization_id, table.sku).where(sql`sku IS NOT NULL`),
+	index("product_variants_product_sort_idx").on(table.product_id, table.sort_order),
+	check("product_variants_name_not_blank_check", sql`trim(name) <> ''`),
+	check("product_variants_active_check", sql`active IN (0, 1)`),
+	check("product_variants_sort_order_check", sql`sort_order >= 0`),
+]);
+
+// A selectable dimension of a Product ("Size", "Noodle"). Options and their
+// values are Product-owned so a variant's selections can be proved to belong
+// to the same Product in SQL rather than in a validator's memory.
+// Keys: (organization_id, product_id, id) is the parent key every selection
+//   row matches on.
+// Deletion: cascades to values and to the selections referencing them.
+// Read/write: server/utils/product-management.ts.
+export const product_options = sqliteTable("product_options", {
+	id: text().primaryKey(),
+	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" }),
+	product_id: text().notNull(),
+	name: text().notNull(),
+	sort_order: integer().default(0).notNull(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+}, (table) => [
+	check("product_options_instants_check", sql`(created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)`),
+	foreignKey({ columns: [table.organization_id, table.product_id], foreignColumns: [products.organization_id, products.id], name: "product_options_product_scope_fk" }).onDelete("cascade"),
+	unique("product_options_product_id_unique").on(table.organization_id, table.product_id, table.id),
+	unique("product_options_product_name_unique").on(table.organization_id, table.product_id, table.name),
+	index("product_options_product_sort_idx").on(table.product_id, table.sort_order),
+	check("product_options_name_not_blank_check", sql`trim(name) <> ''`),
+	check("product_options_sort_order_check", sql`sort_order >= 0`),
+]);
+
+// One allowed value of one option. `product_id` is carried so the selection
+// table can match option, value and variant against a single Product key.
+// Keys: (organization_id, product_id, product_option_id, id).
+// Read/write: server/utils/product-management.ts.
+export const product_option_values = sqliteTable("product_option_values", {
+	id: text().primaryKey(),
+	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" }),
+	product_id: text().notNull(),
+	product_option_id: text().notNull(),
+	value: text().notNull(),
+	sort_order: integer().default(0).notNull(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+}, (table) => [
+	check("product_option_values_instants_check", sql`(created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)`),
+	foreignKey({ columns: [table.organization_id, table.product_id, table.product_option_id], foreignColumns: [product_options.organization_id, product_options.product_id, product_options.id], name: "product_option_values_option_scope_fk" }).onDelete("cascade"),
+	unique("product_option_values_option_id_unique").on(table.organization_id, table.product_id, table.product_option_id, table.id),
+	unique("product_option_values_option_value_unique").on(table.organization_id, table.product_option_id, table.value),
+	index("product_option_values_option_sort_idx").on(table.product_option_id, table.sort_order),
+	check("product_option_values_value_not_blank_check", sql`trim(value) <> ''`),
+	check("product_option_values_sort_order_check", sql`sort_order >= 0`),
+]);
+
+// Which option value each variant selects.
+// Row meaning: variant X answers option Y with value Z.
+// Enforced in SQL: value, option and variant all belong to the same Product
+//   (every foreign key below matches on product_id), and a variant selects at
+//   most ONE value per option (the composite primary key).
+// Enforced by the domain layer, with real-boundary coverage: required
+//   selections are complete, and two variants of one Product cannot select the
+//   same combination. Neither is expressible as a SQLite constraint.
+// Read/write: server/utils/product-management.ts.
+export const product_variant_option_values = sqliteTable("product_variant_option_values", {
+	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" }),
+	product_id: text().notNull(),
+	product_variant_id: text().notNull(),
+	product_option_id: text().notNull(),
+	product_option_value_id: text().notNull(),
+}, (table) => [
+	primaryKey({ columns: [table.product_variant_id, table.product_option_id], name: "product_variant_option_values_pk" }),
+	foreignKey({ columns: [table.organization_id, table.product_id, table.product_variant_id], foreignColumns: [product_variants.organization_id, product_variants.product_id, product_variants.id], name: "product_variant_option_values_variant_scope_fk" }).onDelete("cascade"),
+	foreignKey({ columns: [table.organization_id, table.product_id, table.product_option_id], foreignColumns: [product_options.organization_id, product_options.product_id, product_options.id], name: "product_variant_option_values_option_scope_fk" }).onDelete("cascade"),
+	foreignKey({ columns: [table.organization_id, table.product_id, table.product_option_id, table.product_option_value_id], foreignColumns: [product_option_values.organization_id, product_option_values.product_id, product_option_values.product_option_id, product_option_values.id], name: "product_variant_option_values_value_scope_fk" }).onDelete("cascade"),
+	index("product_variant_option_values_variant_idx").on(table.product_variant_id),
+]);
+
+// A monetary offer on one variant.
+// Row meaning: this variant costs this much, in this currency, under these
+//   billing terms, optionally only at this location, optionally only during
+//   this period.
+// Owner/scope: organization, through the variant. There is NO product_id
+//   column: the Product is resolved through product_variant_id. Two writable
+//   parents that can disagree is the defect this replaces.
+// Null semantics: location_id NULL is a DECLARED location-neutral scope, not a
+//   missing association and not a wildcard to fall back to. valid_from_at NULL
+//   means "since always"; valid_until_at NULL means "until further notice".
+//   compare_at_unit_amount NULL means no strike-through. A variant with no
+//   price row is not free — it is not purchasable, and the surface says so.
+//   unit_amount = 0 is an explicit free offer.
+// Deletion: cascades from the variant. Historical purchase amounts are
+//   snapshots elsewhere and are never rewritten by editing a price.
+// Read/write: shared/prices.ts owns the one deterministic selection contract
+//   over (variant, currency, location, effective instant, billing terms). It
+//   REFUSES an ambiguous selection rather than ordering rows and taking the
+//   first. No caller re-implements precedence.
 export const prices = sqliteTable("prices", {
 	id: text().primaryKey(),
 	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" }),
-	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" }),
-	location_id: text().notNull().references(() => business_locations.id, { onDelete: "cascade" }),
-	product_id: text().notNull().references(() => products.id, { onDelete: "cascade" }),
-	amount_minor: integer().notNull(),
+	product_variant_id: text().notNull(),
+	location_id: text(),
+	active: integer({ mode: "boolean" }).default(true).notNull(),
+	// Normalized ISO 4217 code, uppercase.
 	currency: text().notNull(),
-	unit: text().$type<'item' | 'person' | 'table'>().default("item").notNull(),
+	// Integer amount in the currency's smallest unit. Never floating point.
+	unit_amount: integer().notNull(),
+	// Billing recurrence: 'one_time' | 'recurring' (shared/prices.ts). This is
+	// BILLING, not class dates. A weekly class is product_availability_rules,
+	// never a weekly recurring price.
+	type: text().$type<'one_time' | 'recurring'>().default("one_time").notNull(),
+	recurring_interval: text().$type<'day' | 'week' | 'month' | 'year'>(),
+	recurring_interval_count: integer(),
 	tax_behavior: text().$type<'unspecified' | 'inclusive' | 'exclusive'>().default("unspecified").notNull(),
-	compare_at_amount_minor: integer(),
-	valid_from: text().notNull(),
-	valid_until: text(),
-	provenance: text().notNull(),
-	created_by: text().notNull(),
+	compare_at_unit_amount: integer(),
+	valid_from_at: text(),
+	valid_until_at: text(),
+	source: text().default("manual").notNull(),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	created_by: text().notNull(),
+	updated_by: text().notNull(),
 }, (table) => [
-	check("prices_instants_check", sql`(strftime('%Y-%m-%dT%H:%M:%fZ', valid_from, '+0 days') IS valid_from) AND (valid_until IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', valid_until, '+0 days') IS valid_until) AND (created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at)`),
-	foreignKey({
-		columns: [table.organization_id, table.site_id, table.location_id, table.product_id],
-		foreignColumns: [products.organization_id, products.site_id, products.location_id, products.id],
-		name: "prices_product_scope_fk",
-	}).onDelete("cascade"),
-	index("prices_product_validity_idx").on(table.organization_id, table.site_id, table.product_id, table.valid_from, table.valid_until),
-	index("prices_site_location_validity_idx").on(table.site_id, table.location_id, table.valid_from, table.valid_until),
-	check("prices_amount_check", sql`amount_minor >= 0`),
-	check("prices_compare_at_check", sql`compare_at_amount_minor IS NULL OR compare_at_amount_minor > amount_minor`),
-	check("prices_validity_check", sql`valid_until IS NULL OR valid_until > valid_from`),
+	check("prices_instants_check", sql`(valid_from_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', valid_from_at, '+0 days') IS valid_from_at) AND (valid_until_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', valid_until_at, '+0 days') IS valid_until_at) AND (created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)`),
+	foreignKey({ columns: [table.organization_id, table.product_variant_id], foreignColumns: [product_variants.organization_id, product_variants.id], name: "prices_variant_scope_fk" }).onDelete("cascade"),
+	foreignKey({ columns: [table.organization_id, table.location_id], foreignColumns: [business_locations.organization_id, business_locations.id], name: "prices_location_scope_fk" }).onDelete("cascade"),
+	index("prices_variant_validity_idx").on(table.organization_id, table.product_variant_id, table.active, table.valid_from_at, table.valid_until_at),
+	index("prices_location_idx").on(table.organization_id, table.location_id),
+	check("prices_active_check", sql`active IN (0, 1)`),
+	check("prices_currency_check", sql`length(currency) = 3 AND currency = upper(currency) AND currency NOT GLOB '*[^A-Z]*'`),
+	check("prices_unit_amount_check", sql`unit_amount >= 0`),
+	check("prices_compare_at_check", sql`compare_at_unit_amount IS NULL OR compare_at_unit_amount > unit_amount`),
+	check("prices_validity_check", sql`valid_until_at IS NULL OR valid_from_at IS NULL OR valid_until_at > valid_from_at`),
+	// Cross-column rule, not a value set: recurrence fields exist exactly when
+	// the price recurs. An unsupported billing mode is rejected by the
+	// validator in shared/prices.ts, loudly.
+	check("prices_recurring_check", sql`(type = 'recurring' AND recurring_interval IS NOT NULL AND recurring_interval_count IS NOT NULL AND recurring_interval_count > 0) OR (type <> 'recurring' AND recurring_interval IS NULL AND recurring_interval_count IS NULL)`),
+]);
+
+// Which sites publish a Product.
+// Row meaning: this site carries this Product in its catalog, published or not.
+// Site publication is independent of products.active and of
+//   product_locations.published. All three are distinct, separately tested
+//   states; none implies another.
+// Null semantics: no row means the site does not carry the Product at all —
+//   distinct from a row with published = 0, which means "carried, withheld".
+// Deletion: cascades from Product and from site.
+// Read/write: server/utils/product-management.ts;
+//   server/utils/public-products.ts for site projections. A publication change
+//   enqueues public_resource_cache_invalidations for every affected site, so a
+//   Product in several documents cannot leave independently stale copies.
+export const product_publications = sqliteTable("product_publications", {
+	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" }),
+	product_id: text().notNull(),
+	site_id: text().notNull(),
+	published: integer({ mode: "boolean" }).default(false).notNull(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	created_by: text().notNull(),
+	updated_by: text().notNull(),
+}, (table) => [
+	primaryKey({ columns: [table.product_id, table.site_id], name: "product_publications_pk" }),
+	check("product_publications_instants_check", sql`(created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)`),
+	foreignKey({ columns: [table.organization_id, table.product_id], foreignColumns: [products.organization_id, products.id], name: "product_publications_product_scope_fk" }).onDelete("cascade"),
+	foreignKey({ columns: [table.organization_id, table.site_id], foreignColumns: [sites.organization_id, sites.id], name: "product_publications_site_scope_fk" }).onDelete("cascade"),
+	index("product_publications_site_idx").on(table.site_id, table.published),
+	check("product_publications_published_check", sql`published IN (0, 1)`),
+]);
+
+// Where a Product is offered.
+// Row meaning: this location offers this Product. Membership exists
+//   independently of prices and of stock — a price does not establish where a
+//   Product is sold, and a location with no price row still offers it (at a
+//   location-neutral price, or not purchasably, which the surface states).
+// `active` enables sale at that location; `published` includes it on that
+//   location's surfaces. Both are independent of products.active and of site
+//   publication.
+// Authorization: a location-scoped editor may write THIS row and that
+//   location's prices, sessions and reservation configuration. It does not
+//   grant them edit rights on the organization-wide Product or on another
+//   location's rows — enforced by server/utils/organization-access.ts, not by
+//   this table.
+// Deletion: cascades from Product and from location.
+// Read/write: server/utils/product-management.ts.
+export const product_locations = sqliteTable("product_locations", {
+	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" }),
+	product_id: text().notNull(),
+	location_id: text().notNull(),
+	active: integer({ mode: "boolean" }).default(true).notNull(),
+	published: integer({ mode: "boolean" }).default(false).notNull(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	created_by: text().notNull(),
+	updated_by: text().notNull(),
+}, (table) => [
+	primaryKey({ columns: [table.product_id, table.location_id], name: "product_locations_pk" }),
+	check("product_locations_instants_check", sql`(created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)`),
+	foreignKey({ columns: [table.organization_id, table.product_id], foreignColumns: [products.organization_id, products.id], name: "product_locations_product_scope_fk" }).onDelete("cascade"),
+	foreignKey({ columns: [table.organization_id, table.location_id], foreignColumns: [business_locations.organization_id, business_locations.id], name: "product_locations_location_scope_fk" }).onDelete("cascade"),
+	index("product_locations_location_idx").on(table.location_id, table.published, table.active),
+	check("product_locations_active_check", sql`active IN (0, 1) AND published IN (0, 1)`),
+]);
+
+// Merchant merchandising: a named, ordered grouping a site presents.
+// This replaces `product_categories` and the `featured` / `featured_sort_order`
+// columns. A curated "Featured" grouping is a Collection whose membership is
+// explicit; there is no second featured-product truth on products. This is
+// merchandising, not a taxonomy — no unused classification system is
+// introduced to preserve the old table's name.
+// Row meaning: one grouping on one site, optionally narrowed to one location
+//   (a menu section that exists only at one branch).
+// Null semantics: location_id NULL means the grouping applies site-wide.
+// Deletion: cascades from site and location; cascades to membership. Deleting
+//   a Collection never deletes its Products.
+// Read/write: server/utils/product-management.ts;
+//   server/utils/public-products.ts.
+export const collections = sqliteTable("collections", {
+	id: text().primaryKey(),
+	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" }),
+	site_id: text().notNull(),
+	location_id: text(),
+	name: text().notNull(),
+	slug: text().notNull(),
+	description: text(),
+	sort_order: integer().default(0).notNull(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	created_by: text().notNull(),
+	updated_by: text().notNull(),
+}, (table) => [
+	check("collections_instants_check", sql`(created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)`),
+	foreignKey({ columns: [table.organization_id, table.site_id], foreignColumns: [sites.organization_id, sites.id], name: "collections_site_scope_fk" }).onDelete("cascade"),
+	foreignKey({ columns: [table.organization_id, table.site_id, table.location_id], foreignColumns: [business_locations.organization_id, business_locations.site_id, business_locations.id], name: "collections_location_scope_fk" }).onDelete("cascade"),
+	unique("collections_org_id_unique").on(table.organization_id, table.id),
+	uniqueIndex("collections_site_slug_unique").on(table.site_id, table.slug).where(sql`location_id IS NULL`),
+	uniqueIndex("collections_location_slug_unique").on(table.site_id, table.location_id, table.slug).where(sql`location_id IS NOT NULL`),
+	index("collections_site_sort_idx").on(table.site_id, table.location_id, table.sort_order),
+	check("collections_name_not_blank_check", sql`trim(name) <> ''`),
+	check("collections_slug_check", sql`slug <> '' AND slug = lower(slug) AND slug NOT GLOB '*[^a-z0-9-]*' AND slug NOT LIKE '-%' AND slug NOT LIKE '%-' AND slug NOT LIKE '%--%'`),
+	check("collections_sort_order_check", sql`sort_order >= 0`),
+]);
+
+// Collection membership, and the position of a Product WITHIN that collection.
+// Position lives here, not on products: the same Product can sit third on one
+// site's menu and first in another location's grouping without being copied.
+// Deletion: cascades from Collection and from Product.
+// Read/write: server/utils/product-management.ts.
+export const collection_products = sqliteTable("collection_products", {
+	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" }),
+	collection_id: text().notNull(),
+	product_id: text().notNull(),
+	sort_order: integer().default(0).notNull(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	created_by: text().notNull(),
+	updated_by: text().notNull(),
+}, (table) => [
+	primaryKey({ columns: [table.collection_id, table.product_id], name: "collection_products_pk" }),
+	check("collection_products_instants_check", sql`(created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)`),
+	foreignKey({ columns: [table.organization_id, table.collection_id], foreignColumns: [collections.organization_id, collections.id], name: "collection_products_collection_scope_fk" }).onDelete("cascade"),
+	foreignKey({ columns: [table.organization_id, table.product_id], foreignColumns: [products.organization_id, products.id], name: "collection_products_product_scope_fk" }).onDelete("cascade"),
+	// Ordering is (sort_order, product_id) — fully deterministic without a
+	// uniqueness constraint, which would turn every menu reorder into a
+	// two-phase update over hundreds of rows.
+	index("collection_products_order_idx").on(table.collection_id, table.sort_order, table.product_id),
+	index("collection_products_product_idx").on(table.product_id),
+	check("collection_products_sort_order_check", sql`sort_order >= 0`),
+]);
+
+// ---------------------------------------------------------------------------
+// Typed descriptive extensions.
+//
+// This replaces `products.details_json` and the descriptive half of
+// `experience_json`. A definition names an attribute and states its type and
+// constraints once, for the tenant; a value row supplies one Product's answer.
+// That is the whole extension mechanism: adding an eleventh attribute of a
+// supported type is one definition row — no column, no field-specific handler,
+// no localization-registry entry, no rendering branch.
+//
+// This is deliberately NOT a universal `owner_type + owner_id + payload`
+// store. It carries reusable descriptive product attributes and nothing else.
+// Operational identities, money, capacity allocations and independently
+// referenced records have their own relations below. Page-only prose is block
+// content.
+// ---------------------------------------------------------------------------
+
+// Row meaning: one attribute this tenant's Products may carry.
+// Owner/scope: organization. Namespaced so an imported vocabulary cannot
+//   collide with a merchant's own.
+// `value_type` names a supported type from the registry in shared/ (scalar and
+//   list forms). `validations` is the typed constraint object for that type.
+//   Neither is a CHECK here: a closed set on a referenced parent cannot be
+//   altered in D1.
+// `localizable` is the definition's declaration of localization eligibility.
+//   The localization machinery reads THIS, rather than keeping its own
+//   hardcoded list of attribute names.
+// Null semantics: validations '{}' means "the type's own rules only".
+// Deletion: cascades to every product value of that definition. Deleting a
+//   definition is a deliberate vocabulary change, not a cleanup.
+// Read/write: server/utils/product-validation.ts owns definition and value
+//   validation for every caller — imports, CMS, MCP, onboarding.
+export const metafield_definitions = sqliteTable("metafield_definitions", {
+	id: text().primaryKey(),
+	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" }),
+	namespace: text().notNull(),
+	key: text().notNull(),
+	name: text().notNull(),
+	description: text(),
+	value_type: text().notNull(),
+	validations: text().default("{}").notNull(),
+	localizable: integer({ mode: "boolean" }).default(false).notNull(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	created_by: text().notNull(),
+	updated_by: text().notNull(),
+}, (table) => [
+	check("metafield_definitions_instants_check", sql`(created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)`),
+	unique("metafield_definitions_org_id_unique").on(table.organization_id, table.id),
+	unique("metafield_definitions_namespace_key_unique").on(table.organization_id, table.namespace, table.key),
+	check("metafield_definitions_namespace_check", sql`namespace <> '' AND namespace = lower(namespace) AND namespace NOT GLOB '*[^a-z0-9_-]*'`),
+	check("metafield_definitions_key_check", sql`key <> '' AND key = lower(key) AND key NOT GLOB '*[^a-z0-9_-]*'`),
+	check("metafield_definitions_name_not_blank_check", sql`trim(name) <> ''`),
+	check("metafield_definitions_validations_check", sql`json_valid(validations) AND json_type(validations) = 'object'`),
+	check("metafield_definitions_localizable_check", sql`localizable IN (0, 1)`),
+]);
+
+// Row meaning: this Product's value for this definition.
+// Enforced in SQL: one value per (product, definition), and the Product and
+//   the definition belong to the same organization.
+// Enforced by server/utils/product-validation.ts: the value conforms to the
+//   definition's value_type and validations. A typed list is stored as a JSON
+//   array; the shape is structural here, the element type is the validator's.
+// Null semantics: no row means the Product does not carry the attribute.
+//   There is no per-definition default that a missing row falls back to.
+// Deletion: cascades from Product and from definition.
+// Localized values live in resource_localizations under the product resource
+//   type, gated by metafield_definitions.localizable.
+export const product_metafields = sqliteTable("product_metafields", {
+	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" }),
+	product_id: text().notNull(),
+	definition_id: text().notNull(),
+	value: text().notNull(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	created_by: text().notNull(),
+	updated_by: text().notNull(),
+}, (table) => [
+	primaryKey({ columns: [table.product_id, table.definition_id], name: "product_metafields_pk" }),
+	check("product_metafields_instants_check", sql`(created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)`),
+	foreignKey({ columns: [table.organization_id, table.product_id], foreignColumns: [products.organization_id, products.id], name: "product_metafields_product_scope_fk" }).onDelete("cascade"),
+	foreignKey({ columns: [table.organization_id, table.definition_id], foreignColumns: [metafield_definitions.organization_id, metafield_definitions.id], name: "product_metafields_definition_scope_fk" }).onDelete("cascade"),
+	index("product_metafields_definition_idx").on(table.definition_id),
+	check("product_metafields_value_check", sql`json_valid(value)`),
+]);
+
+// ---------------------------------------------------------------------------
+// Booking capability: configuration, recurrence rules, concrete sessions.
+//
+// This replaces `products.experience_json` and the tuple-keyed booking columns
+// on `requests`. The chain is deliberate and one-directional: a config row
+// says the Product is bookable; rules describe when sessions should exist;
+// sessions ARE the occurrences and own their own time, capacity and state; a
+// booking claims seats on one session. Nothing infers a step from the absence
+// of another.
+// ---------------------------------------------------------------------------
+
+// The existence of this row is what makes a Product bookable. Not a non-null
+// duration, not a vertical name, not a product_type discriminator.
+// Row meaning: this Product takes bookings, with these defaults.
+// Keys: product_id is the primary key — one config per Product.
+// Null semantics: duration_minutes NULL means each rule or session states its
+//   own length. default_capacity NULL means unlimited unless a rule or session
+//   states a number — which is different from default_capacity = 0, meaning
+//   bookable in principle but currently seatless.
+// Deletion: cascades from Product; cascades to rules and sessions, and through
+//   sessions to bookings. Removing booking capability is explicit and
+//   destructive by design, never a side effect of editing a page.
+// Read/write: server/utils/availability.ts.
+export const product_booking_configs = sqliteTable("product_booking_configs", {
+	product_id: text().primaryKey(),
+	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" }),
+	duration_minutes: integer(),
+	default_capacity: integer(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	created_by: text().notNull(),
+	updated_by: text().notNull(),
+}, (table) => [
+	check("product_booking_configs_instants_check", sql`(created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)`),
+	foreignKey({ columns: [table.organization_id, table.product_id], foreignColumns: [products.organization_id, products.id], name: "product_booking_configs_product_scope_fk" }).onDelete("cascade"),
+	// Parent key for rules and sessions: they scope by (organization, product)
+	// so a rule can never attach to another tenant's Product.
+	unique("product_booking_configs_org_product_unique").on(table.organization_id, table.product_id),
+	check("product_booking_configs_duration_check", sql`duration_minutes IS NULL OR duration_minutes > 0`),
+	check("product_booking_configs_capacity_check", sql`default_capacity IS NULL OR default_capacity >= 0`),
+]);
+
+// Typed weekly recurrence. This replaces the `recurring_slots` JSON map; it is
+// not that map relocated into another ungoverned column.
+// Row meaning: sessions of this Product should exist on this weekday at this
+//   local start time, every `interval_weeks` weeks, within the effective dates.
+// Recurrence is defined in LOCAL WALL TIME plus an IANA timezone — an offset
+//   alone is not a recurrence timezone, because offsets move and wall clocks
+//   do not. Session instants are stored in UTC. Nonexistent and ambiguous
+//   local times (spring-forward gaps, fall-back repeats) have defined
+//   behavior in server/utils/availability.ts with real coverage.
+// Null semantics: location_id NULL means the rule is not location-specific.
+//   duration_minutes / capacity NULL defer to product_booking_configs.
+//   effective_from_date / effective_until_date NULL mean open-ended.
+// Deletion: cascades from Product and location. Sessions already generated
+//   keep their own times and capacity — deleting a rule does not delete or
+//   move them, and editing one does not silently reschedule existing bookings.
+//   Series edits are explicit, scoped operations in the domain layer.
+// Read/write: server/utils/availability.ts.
+export const product_availability_rules = sqliteTable("product_availability_rules", {
+	id: text().primaryKey(),
+	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" }),
+	product_id: text().notNull(),
+	location_id: text(),
+	// IANA zone name, e.g. 'Asia/Bangkok'.
+	timezone: text().notNull(),
+	// 0 = Sunday .. 6 = Saturday.
+	weekday: integer().notNull(),
+	// Local wall-clock 'HH:MM'.
+	start_time: text().notNull(),
+	interval_weeks: integer().default(1).notNull(),
+	effective_from_date: text(),
+	effective_until_date: text(),
+	duration_minutes: integer(),
+	capacity: integer(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	created_by: text().notNull(),
+	updated_by: text().notNull(),
+}, (table) => [
+	check("product_availability_rules_instants_check", sql`(created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)`),
+	foreignKey({ columns: [table.organization_id, table.product_id], foreignColumns: [product_booking_configs.organization_id, product_booking_configs.product_id], name: "product_availability_rules_config_scope_fk" }).onDelete("cascade"),
+	foreignKey({ columns: [table.organization_id, table.location_id], foreignColumns: [business_locations.organization_id, business_locations.id], name: "product_availability_rules_location_scope_fk" }).onDelete("cascade"),
+	unique("product_availability_rules_org_id_unique").on(table.organization_id, table.id),
+	// SQLite UNIQUE treats NULLs as distinct, so a single key over the nullable
+	// location_id would let a location-neutral rule be inserted repeatedly —
+	// the common case. Two partial indexes instead, one per location state.
+	// effective_from_date is deliberately NOT part of the key: two rules for the
+	// same weekday and time differing only by effective window are an ambiguity
+	// about which one governs, not two distinct slots.
+	uniqueIndex("product_availability_rules_slot_unique").on(table.product_id, table.location_id, table.weekday, table.start_time, table.interval_weeks).where(sql`location_id IS NOT NULL`),
+	uniqueIndex("product_availability_rules_neutral_slot_unique").on(table.product_id, table.weekday, table.start_time, table.interval_weeks).where(sql`location_id IS NULL`),
+	index("product_availability_rules_product_idx").on(table.product_id, table.weekday, table.start_time),
+	check("product_availability_rules_weekday_check", sql`weekday BETWEEN 0 AND 6`),
+	check("product_availability_rules_start_time_check", sql`start_time GLOB '[0-2][0-9]:[0-5][0-9]' AND start_time < '24:00'`),
+	check("product_availability_rules_interval_check", sql`interval_weeks >= 1`),
+	// A cadence longer than a week has to say from when, or "every other
+	// Saturday" means a different Saturday depending on the day generation
+	// happens to run. The anchor is the rule's own effective start.
+	check("product_availability_rules_anchor_check", sql`interval_weeks = 1 OR effective_from_date IS NOT NULL`),
+	check("product_availability_rules_dates_check", sql`(effective_from_date IS NULL OR date(effective_from_date, '+0 days') IS effective_from_date) AND (effective_until_date IS NULL OR date(effective_until_date, '+0 days') IS effective_until_date) AND (effective_from_date IS NULL OR effective_until_date IS NULL OR effective_until_date >= effective_from_date)`),
+	check("product_availability_rules_duration_check", sql`duration_minutes IS NULL OR duration_minutes > 0`),
+	check("product_availability_rules_capacity_check", sql`capacity IS NULL OR capacity >= 0`),
+	check("product_availability_rules_timezone_check", sql`timezone <> '' AND timezone NOT GLOB '*[^A-Za-z0-9/_+-]*'`),
+]);
+
+// A concrete occurrence. Sessions own actual times, capacity and state — the
+// rule that generated one is provenance, not authority.
+// Row meaning: this Product runs at this instant, seating this many.
+// Null semantics: availability_rule_id NULL is a legitimate one-off session,
+//   not an orphan. location_id NULL means the session is not location-bound.
+//   capacity NULL means unlimited; capacity = 0 means no seats. These are
+//   different and both are tested.
+// `source_occurrence_key` is the stable generation identity (rule + intended
+//   local occurrence), NOT the mutable start time. It is what makes
+//   materialization idempotent: re-running generation cannot duplicate a
+//   session, resurrect a cancelled one, overwrite an edited one, or recreate a
+//   rescheduled one under its old start. NULL for one-off sessions.
+// Deletion: cascades from Product; cascades to bookings. Cancelling is a
+//   status change, not a delete — a deleted session loses its booking history.
+// Read/write: server/utils/availability.ts owns generation and the single
+//   protected capacity-allocation operation. Session identity alone is not the
+//   concurrency control; that operation is.
+export const product_sessions = sqliteTable("product_sessions", {
+	id: text().primaryKey(),
+	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" }),
+	product_id: text().notNull(),
+	location_id: text(),
+	availability_rule_id: text(),
+	source_occurrence_key: text(),
+	timezone: text().notNull(),
+	starts_at: text().notNull(),
+	ends_at: text().notNull(),
+	capacity: integer(),
+	// 'scheduled' | 'cancelled' | 'completed' (registry in shared/). Which
+	// statuses consume capacity is declared there, not inferred here.
+	status: text().default("scheduled").notNull(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	created_by: text().notNull(),
+	updated_by: text().notNull(),
+}, (table) => [
+	check("product_sessions_instants_check", sql`(strftime('%Y-%m-%dT%H:%M:%fZ', starts_at, '+0 days') IS starts_at) AND (strftime('%Y-%m-%dT%H:%M:%fZ', ends_at, '+0 days') IS ends_at) AND (created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)`),
+	foreignKey({ columns: [table.organization_id, table.product_id], foreignColumns: [product_booking_configs.organization_id, product_booking_configs.product_id], name: "product_sessions_config_scope_fk" }).onDelete("cascade"),
+	foreignKey({ columns: [table.organization_id, table.location_id], foreignColumns: [business_locations.organization_id, business_locations.id], name: "product_sessions_location_scope_fk" }).onDelete("cascade"),
+	// RESTRICT for the same composite-SET-NULL reason as above. Deleting a rule
+	// must not delete or move the sessions it generated, so the domain operation
+	// clears availability_rule_id on those sessions first — dropping provenance
+	// deliberately — and only then deletes the rule.
+	foreignKey({ columns: [table.organization_id, table.availability_rule_id], foreignColumns: [product_availability_rules.organization_id, product_availability_rules.id], name: "product_sessions_rule_scope_fk" }).onDelete("restrict"),
+	unique("product_sessions_org_id_unique").on(table.organization_id, table.id),
+	// Parent key for bookings: a booking matches on product_id too, so a ticket
+	// variant from another Product cannot be booked onto this session.
+	unique("product_sessions_org_product_id_unique").on(table.organization_id, table.product_id, table.id),
+	// Idempotent materialization: one session per generated occurrence.
+	uniqueIndex("product_sessions_occurrence_unique").on(table.product_id, table.source_occurrence_key).where(sql`source_occurrence_key IS NOT NULL`),
+	// One session per product, location and instant. Ticket tiers are variants
+	// sharing this session, never a session each. Partial indexes again, because
+	// location_id is nullable and NULLs are distinct under UNIQUE.
+	uniqueIndex("product_sessions_location_instant_unique").on(table.product_id, table.location_id, table.starts_at).where(sql`location_id IS NOT NULL`),
+	uniqueIndex("product_sessions_neutral_instant_unique").on(table.product_id, table.starts_at).where(sql`location_id IS NULL`),
+	index("product_sessions_product_start_idx").on(table.product_id, table.starts_at, table.status),
+	index("product_sessions_location_start_idx").on(table.location_id, table.starts_at, table.status),
+	check("product_sessions_interval_check", sql`ends_at > starts_at`),
+	check("product_sessions_capacity_check", sql`capacity IS NULL OR capacity >= 0`),
+	check("product_sessions_timezone_check", sql`timezone <> '' AND timezone NOT GLOB '*[^A-Za-z0-9/_+-]*'`),
+]);
+
+// A claim on seats of one session.
+// Row meaning: this party holds this many seats on this session, in this
+//   variant, in this state.
+// Enforced in SQL: the variant belongs to the session's Product (the composite
+//   foreign key matches on product_id), so a ticket type from another class
+//   cannot be booked onto this one. party_size is positive.
+// Ticket variants SHARE the session's capacity — each price does not create
+//   its own seat pool. Capacity is claimed through the one protected operation
+//   in server/utils/availability.ts, which declares which statuses consume
+//   capacity, how cancellation releases it, how a pending hold expires, and
+//   the idempotency key. Concurrent claims cannot exceed capacity; that is a
+//   tested property, not an assumption about row locking.
+// Null semantics: customer_id NULL is a guest booking with contact details on
+//   the linked request. request_id NULL is a booking made without an inbox
+//   thread (dashboard, MCP) — the booking is still the operational truth.
+// Deletion: cascades from session; customer_id becomes NULL if the customer
+//   record goes. An inbox thread cannot be deleted while a booking links to
+//   it, so a seat record can never be lost by tidying the inbox.
+// A confirmed booking is NOT a successful payment. Money is not represented
+//   here, and no column may be widened to represent it.
+export const bookings = sqliteTable("bookings", {
+	id: text().primaryKey(),
+	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" }),
+	site_id: text().notNull(),
+	product_id: text().notNull(),
+	product_session_id: text().notNull(),
+	product_variant_id: text().notNull(),
+	customer_id: text().references((): AnySQLiteColumn => customers.id, { onDelete: "set null" }),
+	request_id: text(),
+	party_size: integer().notNull(),
+	// 'pending' | 'confirmed' | 'cancelled' | 'completed' (registry in shared/).
+	status: text().default("pending").notNull(),
+	// Hold expiry for a pending claim. NULL means the claim does not expire.
+	hold_expires_at: text(),
+	cancelled_at: text(),
+	completed_at: text(),
+	cancellation_reason: text(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+}, (table) => [
+	check("bookings_instants_check", sql`(hold_expires_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', hold_expires_at, '+0 days') IS hold_expires_at) AND (cancelled_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', cancelled_at, '+0 days') IS cancelled_at) AND (completed_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', completed_at, '+0 days') IS completed_at) AND (created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)`),
+	foreignKey({ columns: [table.organization_id, table.site_id], foreignColumns: [sites.organization_id, sites.id], name: "bookings_site_scope_fk" }).onDelete("cascade"),
+	// A booking pins what it holds. Deleting the session or the variant it
+	// names is refused while the booking exists — a guest's seat is not
+	// something an edit, a capability change or a product deletion may erase as
+	// a side effect. The domain checks first so the merchant reads a sentence
+	// instead of a constraint name; this is what makes the check true under a
+	// booking that arrives between the check and the write.
+	foreignKey({ columns: [table.organization_id, table.product_id, table.product_session_id], foreignColumns: [product_sessions.organization_id, product_sessions.product_id, product_sessions.id], name: "bookings_session_scope_fk" }).onDelete("restrict"),
+	foreignKey({ columns: [table.organization_id, table.product_id, table.product_variant_id], foreignColumns: [product_variants.organization_id, product_variants.product_id, product_variants.id], name: "bookings_variant_scope_fk" }).onDelete("restrict"),
+	// RESTRICT for the same composite-SET-NULL reason. Deleting an inbox thread
+	// must not delete a seat allocation, so the domain operation unlinks the
+	// booking first. Losing the whole site cascades both away together.
+	foreignKey({ columns: [table.organization_id, table.site_id, table.request_id], foreignColumns: [requests.organization_id, requests.site_id, requests.id], name: "bookings_request_scope_fk" }).onDelete("restrict"),
+	uniqueIndex("bookings_request_unique").on(table.request_id).where(sql`request_id IS NOT NULL`),
+	index("bookings_session_status_idx").on(table.product_session_id, table.status),
+	index("bookings_site_created_idx").on(table.site_id, table.created_at),
+	index("bookings_customer_idx").on(table.customer_id),
+	index("bookings_hold_expiry_idx").on(table.hold_expires_at).where(sql`hold_expires_at IS NOT NULL`),
+	check("bookings_party_size_check", sql`party_size > 0`),
+]);
+
+// ---------------------------------------------------------------------------
+// Location reservations.
+//
+// A restaurant table reservation is not a product session and the restaurant
+// is not selling a catalog item by taking it. This capability is location-owned
+// and stays that way; it replaces `business_locations.booking_json` with typed
+// columns and is NOT a second experience-booking implementation wearing the
+// reservation name.
+//
+// Opening hours and special hours remain on business_locations as the declared
+// hours source. They are not copied into a product schedule.
+// ---------------------------------------------------------------------------
+
+// Reservation policy for one location, typed. This replaces the eleven keys
+// that lived under booking_json.$.reservation.policy.
+// Row meaning: this location takes reservations, under this policy. The
+//   existence of the row is the capability; there is no enabled flag and no
+//   operational JSON reader.
+// Capacity contract: capacity is per START-TIME SLOT, not per overlapping
+//   interval. That choice is preserved consistently by
+//   server/utils/reservations.ts and is not re-decided per caller.
+// Null semantics: every policy field NULL means the policy does not constrain
+//   that dimension — not that a platform default applies.
+// Deletion: cascades from location; cascades to overrides. Reservations keep
+//   their own records.
+// Read/write: server/utils/reservations.ts.
+export const location_reservation_configs = sqliteTable("location_reservation_configs", {
+	location_id: text().primaryKey(),
+	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" }),
+	slot_capacity: integer(),
+	advance_notice_minutes: integer(),
+	minimum_guest_age: integer(),
+	deposit_required: integer({ mode: "boolean" }).default(false).notNull(),
+	deposit_trigger_party_size: integer(),
+	free_cancellation_until_minutes: integer(),
+	reschedule_allowed: integer({ mode: "boolean" }).default(true).notNull(),
+	reschedule_cutoff_minutes: integer(),
+	accessibility_contact_required: integer({ mode: "boolean" }).default(false).notNull(),
+	additional_notes_html: text(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	created_by: text().notNull(),
+	updated_by: text().notNull(),
+}, (table) => [
+	check("location_reservation_configs_instants_check", sql`(created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)`),
+	foreignKey({ columns: [table.organization_id, table.location_id], foreignColumns: [business_locations.organization_id, business_locations.id], name: "location_reservation_configs_location_scope_fk" }).onDelete("cascade"),
+	// Parent key for overrides.
+	unique("location_reservation_configs_org_location_unique").on(table.organization_id, table.location_id),
+	check("location_reservation_configs_booleans_check", sql`deposit_required IN (0, 1) AND reschedule_allowed IN (0, 1) AND accessibility_contact_required IN (0, 1)`),
+	check("location_reservation_configs_slot_capacity_check", sql`slot_capacity IS NULL OR slot_capacity >= 0`),
+	check("location_reservation_configs_minutes_check", sql`(advance_notice_minutes IS NULL OR advance_notice_minutes >= 0) AND (free_cancellation_until_minutes IS NULL OR free_cancellation_until_minutes >= 0) AND (reschedule_cutoff_minutes IS NULL OR reschedule_cutoff_minutes >= 0)`),
+	check("location_reservation_configs_party_check", sql`deposit_trigger_party_size IS NULL OR deposit_trigger_party_size > 0`),
+	check("location_reservation_configs_age_check", sql`minimum_guest_age IS NULL OR minimum_guest_age >= 0`),
+]);
+
+// A deliberate exception to a location's normal reservation availability.
+// Row meaning: on this date at this local slot, this location is closed, or
+//   seats a different number than the policy implies.
+// Null semantics: capacity NULL with status 'closed' means no seats at all;
+//   capacity set with status 'open' overrides the slot capacity. time_slot
+//   NULL applies to the whole date.
+// This is the location-side counterpart of editing a session directly. It does
+//   NOT exist on the product side: an experience override is a change to the
+//   actual product_sessions row.
+// Deletion: cascades from the config.
+// Read/write: server/utils/reservations.ts.
+export const location_reservation_overrides = sqliteTable("location_reservation_overrides", {
+	id: text().primaryKey(),
+	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" }),
+	location_id: text().notNull(),
+	override_date: text().notNull(),
+	time_slot: text(),
+	// 'open' | 'closed' (registry in shared/).
+	status: text().notNull(),
+	capacity: integer(),
+	note: text(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	created_by: text().notNull(),
+	updated_by: text().notNull(),
+}, (table) => [
+	check("location_reservation_overrides_instants_check", sql`(created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)`),
+	foreignKey({ columns: [table.organization_id, table.location_id], foreignColumns: [location_reservation_configs.organization_id, location_reservation_configs.location_id], name: "location_reservation_overrides_config_scope_fk" }).onDelete("cascade"),
+	uniqueIndex("location_reservation_overrides_slot_unique").on(table.location_id, table.override_date, table.time_slot).where(sql`time_slot IS NOT NULL`),
+	uniqueIndex("location_reservation_overrides_date_unique").on(table.location_id, table.override_date).where(sql`time_slot IS NULL`),
+	index("location_reservation_overrides_date_idx").on(table.location_id, table.override_date),
+	check("location_reservation_overrides_date_check", sql`date(override_date, '+0 days') IS override_date`),
+	check("location_reservation_overrides_time_slot_check", sql`time_slot IS NULL OR (time_slot GLOB '[0-2][0-9]:[0-5][0-9]' AND time_slot < '24:00')`),
+	check("location_reservation_overrides_capacity_check", sql`capacity IS NULL OR capacity >= 0`),
+]);
+
+// A table reservation.
+// Row meaning: this party holds this location for this interval, in this state.
+// Owner/scope: location, which carries site and organization.
+// Null semantics: customer_id NULL is a guest reservation with contact details
+//   on the linked request. request_id NULL is a reservation taken without an
+//   inbox thread.
+// Deletion: cascades from location. An inbox thread cannot be deleted while a
+//   reservation links to it; the domain operation unlinks first.
+// Read/write: server/utils/reservations.ts for policy,
+//   server/domain/requests.ts for the inbox thread linkage.
+export const reservations = sqliteTable("reservations", {
+	id: text().primaryKey(),
+	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" }),
+	site_id: text().notNull(),
+	location_id: text().notNull(),
+	customer_id: text().references((): AnySQLiteColumn => customers.id, { onDelete: "set null" }),
+	request_id: text(),
+	timezone: text().notNull(),
+	starts_at: text().notNull(),
+	ends_at: text().notNull(),
+	party_size: integer().notNull(),
+	// 'pending' | 'confirmed' | 'cancelled' | 'completed' (registry in shared/).
+	status: text().default("pending").notNull(),
+	cancelled_at: text(),
+	completed_at: text(),
+	cancellation_reason: text(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+}, (table) => [
+	check("reservations_instants_check", sql`(strftime('%Y-%m-%dT%H:%M:%fZ', starts_at, '+0 days') IS starts_at) AND (strftime('%Y-%m-%dT%H:%M:%fZ', ends_at, '+0 days') IS ends_at) AND (cancelled_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', cancelled_at, '+0 days') IS cancelled_at) AND (completed_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', completed_at, '+0 days') IS completed_at) AND (created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)`),
+	foreignKey({ columns: [table.organization_id, table.site_id, table.location_id], foreignColumns: [business_locations.organization_id, business_locations.site_id, business_locations.id], name: "reservations_location_scope_fk" }).onDelete("cascade"),
+	foreignKey({ columns: [table.organization_id, table.site_id, table.request_id], foreignColumns: [requests.organization_id, requests.site_id, requests.id], name: "reservations_request_scope_fk" }).onDelete("restrict"),
+	uniqueIndex("reservations_request_unique").on(table.request_id).where(sql`request_id IS NOT NULL`),
+	index("reservations_location_start_idx").on(table.location_id, table.starts_at, table.status),
+	index("reservations_site_created_idx").on(table.site_id, table.created_at),
+	index("reservations_customer_idx").on(table.customer_id),
+	check("reservations_interval_check", sql`ends_at > starts_at`),
+	check("reservations_party_size_check", sql`party_size > 0`),
+	check("reservations_timezone_check", sql`timezone <> '' AND timezone NOT GLOB '*[^A-Za-z0-9/_+-]*'`),
+]);
+
+// ---------------------------------------------------------------------------
+// Inventory.
+//
+// Optional capability: a service has no inventory row and that is correct, not
+// missing data. Stock is variant-and-location identity. It is NOT a price
+// attribute and NOT a boolean on products — the old `products.available`
+// column conflated a merchant control with a stock count, and both are gone.
+//
+// Available stock derives from ONE authoritative quantity model: on_hand minus
+// reserved, per level. No second counter is maintained anywhere.
+// ---------------------------------------------------------------------------
+
+// Row meaning: this variant's stock is tracked.
+// Keys: one item per variant.
+// Deletion: cascades from variant; cascades to levels.
+// Read/write: server/utils/product-management.ts.
+export const inventory_items = sqliteTable("inventory_items", {
+	id: text().primaryKey(),
+	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" }),
+	product_variant_id: text().notNull(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+}, (table) => [
+	check("inventory_items_instants_check", sql`(created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)`),
+	foreignKey({ columns: [table.organization_id, table.product_variant_id], foreignColumns: [product_variants.organization_id, product_variants.id], name: "inventory_items_variant_scope_fk" }).onDelete("cascade"),
+	unique("inventory_items_org_id_unique").on(table.organization_id, table.id),
+	unique("inventory_items_variant_unique").on(table.product_variant_id),
+]);
+
+// Row meaning: how much of this item is held at this location.
+// `on_hand` is physical quantity; `reserved` is the part already allocated.
+//   Available is on_hand - reserved, computed, never stored.
+// Deletion: cascades from item and from location.
+// Read/write: server/utils/product-management.ts.
+export const inventory_levels = sqliteTable("inventory_levels", {
+	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" }),
+	inventory_item_id: text().notNull(),
+	location_id: text().notNull(),
+	on_hand: integer().default(0).notNull(),
+	reserved: integer().default(0).notNull(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+}, (table) => [
+	primaryKey({ columns: [table.inventory_item_id, table.location_id], name: "inventory_levels_pk" }),
+	check("inventory_levels_instants_check", sql`(created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)`),
+	foreignKey({ columns: [table.organization_id, table.inventory_item_id], foreignColumns: [inventory_items.organization_id, inventory_items.id], name: "inventory_levels_item_scope_fk" }).onDelete("cascade"),
+	foreignKey({ columns: [table.organization_id, table.location_id], foreignColumns: [business_locations.organization_id, business_locations.id], name: "inventory_levels_location_scope_fk" }).onDelete("cascade"),
+	index("inventory_levels_location_idx").on(table.location_id),
+	check("inventory_levels_quantities_check", sql`on_hand >= 0 AND reserved >= 0 AND reserved <= on_hand`),
+]);
+
+// ---------------------------------------------------------------------------
+// Stripe identity mapping.
+//
+// Local ids are local identity. Stripe ids live here, keyed by local entity,
+// Stripe account and livemode — never in a metadata key, and a local id is
+// never reused as a provider id.
+//
+// The adapter: Stripe Price references a Stripe Product; locally a price
+// references a VARIANT, whose parent identifies the product. So a variant maps
+// to a Stripe Product when it is exported. Stripe has no native variant and no
+// class-session concept; nothing here pretends otherwise.
+//
+// An exported default price must belong to the mapped product. It is not a
+// universal selector across local variants, currencies or locations — price
+// selection is shared/prices.ts, always.
+//
+// Platform subscription billing (`subscription`, `organization_billing`,
+// `stripe_*` webhook tables) is the PLATFORM's billing, not a merchant's
+// catalog. These mappings never join to it.
+// Read/write: server/utils/stripe-catalog.ts.
+// ---------------------------------------------------------------------------
+export const stripe_catalog_mappings = sqliteTable("stripe_catalog_mappings", {
+	id: text().primaryKey(),
+	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" }),
+	// 'product_variant' | 'price' (registry in shared/). Which local relation
+	// `local_id` points at.
+	local_entity: text().notNull(),
+	local_id: text().notNull(),
+	stripe_account_id: text().notNull(),
+	livemode: integer({ mode: "boolean" }).notNull(),
+	// 'prod_...' for a variant, 'price_...' for a price.
+	stripe_id: text().notNull(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+}, (table) => [
+	check("stripe_catalog_mappings_instants_check", sql`(created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)`),
+	unique("stripe_catalog_mappings_local_unique").on(table.local_entity, table.local_id, table.stripe_account_id, table.livemode),
+	unique("stripe_catalog_mappings_stripe_unique").on(table.stripe_account_id, table.livemode, table.stripe_id),
+	index("stripe_catalog_mappings_org_idx").on(table.organization_id, table.local_entity),
+	check("stripe_catalog_mappings_livemode_check", sql`livemode IN (0, 1)`),
+	check("stripe_catalog_mappings_ids_check", sql`trim(local_id) <> '' AND trim(stripe_id) <> '' AND trim(stripe_account_id) <> ''`),
 ]);
 
 
@@ -737,6 +1563,9 @@ export const legal_intake_references = sqliteTable("legal_intake_references", {
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 }, (table) => [
 	foreignKey({ columns: [table.organization_id, table.site_id], foreignColumns: [sites.organization_id, sites.id], name: "legal_intake_references_site_scope_fk" }).onDelete("restrict"),
+	// Membership is normally kept out of the schema because D1 cannot rebuild a
+	// referenced parent when a value set grows. Nothing references this table,
+	// so it can be rebuilt, and the check earns its place.
 	check("legal_intake_references_actor_kind_check", sql`original_actor_kind IN ('human', 'anonymous')`),
 	index("idx_legal_intake_references_site_actor").on(table.site_id, table.original_actor_id),
 	index("legal_intake_references_organization_id_idx").on(table.organization_id),
@@ -789,9 +1618,12 @@ export const reviews = sqliteTable("reviews", {
 	foreignKey({ columns: [table.organization_id, table.site_id], foreignColumns: [sites.organization_id, sites.id], name: "reviews_site_scope_fk" }).onDelete("cascade"),
 	check("reviews_google_review_metadata_check", sql`google_review_metadata IS NULL OR (json_valid(google_review_metadata) AND json_type(google_review_metadata) IS 'object')`),
 	uniqueIndex("reviews_google_review_scope_unique").on(table.organization_id, table.site_id, table.location_id, table.google_review_id),
+	// The catalog is organization-owned, so a product review scopes to
+	// (organization, product). The review's own site/location remain its
+	// display scope and are unrelated to where the Product is offered.
 	foreignKey({
-		columns: [table.organization_id, table.site_id, table.location_id, table.product_id],
-		foreignColumns: [products.organization_id, products.site_id, products.location_id, products.id],
+		columns: [table.organization_id, table.product_id],
+		foreignColumns: [products.organization_id, products.id],
 		name: "reviews_product_scope_fk",
 	}).onDelete("restrict"),
 	index("idx_reviews_request_id").on(table.review_request_id),
@@ -800,7 +1632,7 @@ export const reviews = sqliteTable("reviews", {
 	index("idx_reviews_site_status").on(table.site_id, table.status, table.created_at).where(sql`location_id IS NULL`),
 	index("idx_reviews_product_status_created").on(table.product_id, table.status, table.created_at),
 	check("reviews_rating_check", sql`rating BETWEEN 1 AND 5`),
-	check("reviews_product_scope_check", sql`product_id IS NULL OR (organization_id IS NOT NULL AND site_id IS NOT NULL AND location_id IS NOT NULL)`),
+	check("reviews_product_scope_check", sql`product_id IS NULL OR (organization_id IS NOT NULL AND site_id IS NOT NULL)`),
 	check("reviews_owner_entered_provenance_check", sql`source != 'owner_entered' OR (organization_id IS NOT NULL AND site_id IS NOT NULL AND location_id IS NULL AND entered_by_user_id IS NOT NULL AND collection_method IS NOT NULL AND publication_authorized = 1)`),
 	index("reviews_organization_id_idx").on(table.organization_id),
 ]);
@@ -822,40 +1654,6 @@ export const session = sqliteTable("session", {
 ]);
 
 
-export const offerings = sqliteTable("offerings", {
-	id: text().primaryKey(),
-	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
-	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" } ),
-	location_id: text().references(() => business_locations.id, { onDelete: "set null" } ),
-	name: text().notNull(),
-	slug: text().notNull(),
-	label: text(),
-	summary: text(),
-	short_description: text(),
-	body: text(),
-	features: text(),
-	faqs: text(),
-	cta_label: text(),
-	cta_url: text(),
-	schema_type: text(),
-	seo_title: text(),
-	seo_description: text(),
-	canonical_path: text(),
-	sort_order: integer().default(0).notNull(),
-	featured: integer().default(0).notNull(),
-	source: text().default("manual").notNull(),
-	source_ref: text(),
-	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-	updated_by: text(),
-}, (table) => [
-	check("offerings_instants_check", sql`(created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)`),
-	foreignKey({ columns: [table.organization_id, table.site_id], foreignColumns: [sites.organization_id, sites.id], name: "offerings_site_scope_fk" }).onDelete("cascade"),
-	check("offerings_features_check", sql`features IS NULL OR (json_valid(features) AND json_type(features) IS 'array')`),
-	check("offerings_faqs_check", sql`faqs IS NULL OR (json_valid(faqs) AND json_type(faqs) IS 'array')`),
-	unique("offerings_organization_id_site_id_slug_unique").on(table.organization_id, table.site_id, table.slug),
-	index("offerings_site_sort_idx").on(table.site_id, table.sort_order),
-]);
 
 export const site_redirects = sqliteTable("site_redirects", {
 	id: text().primaryKey(),
@@ -1261,6 +2059,15 @@ export const content_documents = sqliteTable("content_documents", {
 	root_role: text().$type<'root'>(),
 	locale: text(),
 	location_id: text().references(() => business_locations.id, { onDelete: "cascade" }),
+	// The canonical product page binding, on ROOT rows only. Localized
+	// representations inherit it through root_id and must not duplicate it.
+	// A product slug and a document route have different owners: this foreign
+	// key is the relationship, never a '/menu/<slug>' string convention. Other
+	// documents may display the same Product through block references without
+	// becoming additional canonical pages. Deleting or unpublishing the document
+	// never touches the Product; deleting a Product that still has a canonical
+	// page is refused until the page is explicitly unbound or deleted.
+	product_id: text(),
 	scope_path: text(),
 	title: text(),
 	slug: text(),
@@ -1287,6 +2094,16 @@ export const content_documents = sqliteTable("content_documents", {
 }, (table) => [
 	check("content_documents_instants_check", sql`(published_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', published_at, '+0 days') IS published_at) AND (first_published_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', first_published_at, '+0 days') IS first_published_at) AND (scheduled_for IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', scheduled_for, '+0 days') IS scheduled_for) AND (created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)`),
 	foreignKey({ columns: [table.organization_id, table.site_id, table.location_id], foreignColumns: [business_locations.organization_id, business_locations.site_id, business_locations.id], name: "content_documents_location_scope_fk" }).onDelete("cascade"),
+	// RESTRICT, not SET NULL: this is a composite key, and SQLite's SET NULL
+	// would null organization_id too, which is NOT NULL — the delete would fail
+	// with a confusing constraint error instead of unlinking. Deleting a Product
+	// that still has a canonical page is refused; the domain operation unbinds
+	// or deletes the page first, explicitly.
+	foreignKey({ columns: [table.organization_id, table.product_id], foreignColumns: [products.organization_id, products.id], name: "content_documents_product_scope_fk" }).onDelete("restrict"),
+	// At most one canonical product page per site per product. Scoped to root
+	// rows so locale representations are unaffected, and per site so two sites
+	// publishing one Product each get their own canonical page.
+	uniqueIndex("content_documents_product_root_unique").on(table.site_id, table.product_id).where(sql`row_role = 'root' AND product_id IS NOT NULL`),
 	unique("content_documents_scope_role_unique").on(table.organization_id, table.site_id, table.id, table.row_role, table.kind),
 	foreignKey({ columns: [table.organization_id, table.site_id], foreignColumns: [sites.organization_id, sites.id], name: "content_documents_site_scope_fk" }).onDelete("cascade"),
 	foreignKey({ columns: [table.organization_id, table.site_id, table.root_id, table.root_role, table.kind], foreignColumns: [table.organization_id, table.site_id, table.id, table.row_role, table.kind], name: "content_documents_root_scope_fk" }).onDelete("cascade"),
@@ -1301,7 +2118,7 @@ export const content_documents = sqliteTable("content_documents", {
 	index("content_documents_facebook_post_idx").on(table.site_id, sql`(metadata_json ->> '$.channels.facebook.provider_post_id')`).where(sql`row_role = 'root' AND kind = 'social_post'`),
 	index("content_documents_instagram_post_idx").on(table.site_id, sql`(metadata_json ->> '$.channels.instagram.provider_post_id')`).where(sql`row_role = 'root' AND kind = 'social_post'`),
 	check("content_documents_metadata_check", sql`json_valid(metadata_json) AND json_type(metadata_json) IS 'object'`),
-	check("content_documents_role_check", sql`(row_role = 'root' AND root_id IS NULL AND root_role IS NULL AND locale = 'en') OR (row_role = 'representation' AND root_id IS NOT NULL AND root_id <> id AND root_role = 'root' AND locale IS NOT NULL AND locale <> 'en' AND location_id IS NULL AND scope_path IS NULL AND status IS NULL AND visibility IS NULL AND source IS NULL AND author_id IS NULL AND published_at IS NULL AND first_published_at IS NULL AND scheduled_for IS NULL)`),
+	check("content_documents_role_check", sql`(row_role = 'root' AND root_id IS NULL AND root_role IS NULL AND locale = 'en') OR (row_role = 'representation' AND root_id IS NOT NULL AND root_id <> id AND root_role = 'root' AND locale IS NOT NULL AND locale <> 'en' AND product_id IS NULL AND location_id IS NULL AND scope_path IS NULL AND status IS NULL AND visibility IS NULL AND source IS NULL AND author_id IS NULL AND published_at IS NULL AND first_published_at IS NULL AND scheduled_for IS NULL)`),
 	check("content_documents_path_check", sql`path IS NULL OR (path LIKE '/%' AND path NOT LIKE '//%')`),
 	check("content_documents_page_copy_check", sql`kind <> 'page' OR (path IS NOT NULL AND title IS NOT NULL)`),
 	check("content_documents_page_type_check", sql`kind <> 'page' OR row_role <> 'root' OR ((metadata_json ->> '$.page_type') IN ('custom','recipe','legal','system')) IS 1`),
@@ -1431,7 +2248,7 @@ export const analytics_events = sqliteTable("analytics_events", {
   index("analytics_events_site_visitor_idx").on(table.site_id, table.kind, table.visitor_id),
   index("analytics_events_conversion_name_idx").on(table.kind, sql`(payload_json ->> '$.event_name')`, table.created_at),
   index("analytics_events_conversion_entity_idx").on(table.site_id, sql`(payload_json ->> '$.entity_type')`, sql`(payload_json ->> '$.entity_id')`).where(sql`kind = 'conversion'`),
-  uniqueIndex("analytics_events_conversion_entity_unique").on(table.site_id, sql`(payload_json ->> '$.event_name')`, sql`(payload_json ->> '$.entity_type')`, sql`(payload_json ->> '$.entity_id')`).where(sql`kind = 'conversion' AND (payload_json ->> '$.entity_type') IS NOT NULL AND (payload_json ->> '$.entity_id') IS NOT NULL AND (payload_json ->> '$.event_name') IN ('contact_submit', 'reservation_submit', 'experience_booking_submit')`),
+  uniqueIndex("analytics_events_conversion_entity_unique").on(table.site_id, sql`(payload_json ->> '$.event_name')`, sql`(payload_json ->> '$.entity_type')`, sql`(payload_json ->> '$.entity_id')`).where(sql`kind = 'conversion' AND (payload_json ->> '$.entity_type') IS NOT NULL AND (payload_json ->> '$.entity_id') IS NOT NULL AND (payload_json ->> '$.event_name') IN ('contact_submit', 'reservation_submit', 'booking_submit')`),
 ]);
 
 export const analytics_summaries = sqliteTable("analytics_summaries", {

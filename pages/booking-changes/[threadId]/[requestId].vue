@@ -29,7 +29,6 @@
 </template>
 
 <script setup lang="ts">
-const { formatDate } = useLocaleDate()
 import { $fetch } from 'ofetch'
 import { getErrorMessage } from '~/utils/errors'
 import type { respondToBookingChange } from '~/server/domain/guest-threads/booking-changes'
@@ -46,10 +45,11 @@ const { data: proposal, pending, error } = await useAsyncData(endpoint, () => $f
 const noun = computed(() => proposal.value?.noun ?? 'booking')
 const sending = ref(false)
 const decisionError = ref('')
+// One instant, one label: the server formats both sides in the booking's own
+// zone, so this page never re-derives a local time the email disagrees with.
 const fields = computed(() => proposal.value ? [
   { label: 'Location', before: proposal.value.originalLocationTitle, after: proposal.value.locationTitle },
-  { label: 'Date', before: formatDate(proposal.value.before.bookingDate), after: formatDate(proposal.value.after.bookingDate) },
-  { label: 'Time', before: proposal.value.before.bookingTime, after: proposal.value.after.bookingTime },
+  { label: 'When', before: proposal.value.before.whenLabel, after: proposal.value.after.whenLabel },
   { label: 'Guests', before: String(proposal.value.before.partySize), after: String(proposal.value.after.partySize) },
 ] : [])
 async function respond(decision: 'accept' | 'decline') {

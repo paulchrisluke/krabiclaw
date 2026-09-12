@@ -246,7 +246,9 @@ function discardActions(site: Site): DropdownMenuItem[] | undefined {
 function siteDashboardPath(site: Site) {
   if (site.onboarding_status !== 'active' && site.id === discardableSiteId.value) return '/dashboard/onboarding'
   if (!site.subdomain) {
-    throw createError({ statusCode: 500, statusMessage: `Site ${site.id} is active with no subdomain` })
+    // Says what is actually true here: this branch is reached by any site that
+    // is not the caller's own discardable draft, live or not.
+    throw createError({ statusCode: 500, statusMessage: `Site ${site.id} has no subdomain to open` })
   }
   return `/dashboard/${orgSlug.value}/sites/${site.subdomain}`
 }

@@ -117,6 +117,15 @@ test.describe.serial('published Thai content saves through the CMS and renders w
     }
     expect(links.items).toHaveLength(2)
 
+    // A practice area is a page, so it localizes like every other page, and the
+    // services grid names the pages it lists. Its id belongs to the tenant, so
+    // it is read from the site rather than written here as a constant.
+    const pagesResponse = await owner.get(`/api/editor/sites/${siteId}/pages`)
+    await expectStatus(pagesResponse, 200)
+    const { pages } = await pagesResponse.json() as { pages: Array<{ page_id: string; path: string }> }
+    const familyPage = pages.find(page => page.path === '/services/family')
+    expect(familyPage, 'NCLS publishes a family practice area page').toBeTruthy()
+
     await createPageVariant(owner, {
       pageId: 'page_ncls_home',
       path: '/',
@@ -136,9 +145,9 @@ test.describe.serial('published Thai content saves through the CMS and renders w
           media: [],
         },
         {
-          type: 'offering_grid',
+          type: 'page_grid',
           position: 1,
-          data: { section: 'services', source: 'site_offerings' },
+          data: { section: 'services', page_ids: [familyPage!.page_id] },
           media: [],
         },
       ],
@@ -151,13 +160,18 @@ test.describe.serial('published Thai content saves through the CMS and renders w
     })
 
     await expectStatus(await owner.get(`/api/editor/sites/${siteId}/localization/site/${siteId}/${locale}`), 404)
-    await putLocalization(owner, 'offering', 'offering_ncls_family', {
+    // A page representation carries its own translated body: a Thai page with
+    // no blocks is an empty page, which is why the writer rejects one.
+    await putLocalization(owner, 'content_document', familyPage!.page_id, {
       route_path: '/th/services/family-th',
       values: {
-        name: 'กฎหมายครอบครัวภาษาไทย',
+        title: 'กฎหมายครอบครัวภาษาไทย',
         summary: 'คำแนะนำเรื่องครอบครัวที่ชัดเจน',
-        body: 'ทีมกฎหมายของเราช่วยอธิบายทางเลือกและขั้นตอนเป็นภาษาไทย',
       },
+      content_blocks: [
+        { type: 'heading', position: 0, level: 2, data: { text: 'กฎหมายครอบครัวภาษาไทย' }, media: [] },
+        { type: 'markdown', position: 1, data: { markdown: 'ทีมงานของเราช่วยเรื่องครอบครัวเป็นภาษาไทย', editor_mode: 'source' }, media: [] },
+      ],
     })
     await putLocalization(owner, 'content_document', 'blog_ncls_writing-your-own-will-how-it-works', {
       route_path: '/th/article/will-th',

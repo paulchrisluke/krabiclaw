@@ -130,7 +130,7 @@
         </div>
       </template>
 
-      <template v-if="block.type === 'offering_grid'">
+      <template v-if="block.type === 'page_grid'">
         <UFormField label="Offering references"><UTextarea :model-value="stringArray('offering_ids').join('\n')" :rows="3" placeholder="One offering ID per line" @update:model-value="setStringList('offering_ids', $event)" /></UFormField>
       </template>
       <template v-else-if="block.type === 'location_grid'">
@@ -184,12 +184,12 @@ const toneOptions = ['neutral', 'info', 'success', 'warning', 'error'].map(value
 
 const validationErrors = computed(() => validateTenantPageBlock(props.block))
 const isCtaBlock = computed(() => ['cta', 'contact_cta', 'booking_cta'].includes(props.block.type))
-const isGridBlock = computed(() => ['feature_grid', 'testimonial_grid', 'offering_grid', 'location_grid'].includes(props.block.type))
+const isGridBlock = computed(() => ['feature_grid', 'testimonial_grid', 'page_grid', 'location_grid'].includes(props.block.type))
 const sourceOptions = computed(() => {
   switch (props.block.type) {
     case 'feature_grid': return [{ label: 'Manual items', value: 'manual' }, { label: 'Published posts', value: 'site_posts' }, { label: 'Pricing calculator', value: 'calculator' }]
     case 'testimonial_grid': return [{ label: 'Manual items', value: 'manual' }, { label: 'Published reviews', value: 'site_reviews' }]
-    case 'offering_grid': return [{ label: 'Manual items', value: 'manual' }, { label: 'Published offerings', value: 'site_offerings' }]
+    case 'page_grid': return [{ label: 'Manual items', value: 'manual' }, { label: 'Published offerings', value: 'site_offerings' }]
     case 'location_grid': return [{ label: 'Manual items', value: 'manual' }]
     default: return []
   }

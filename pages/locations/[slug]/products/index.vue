@@ -1,5 +1,5 @@
 <template>
-  <ProductCollectionPage :products="products" :locations="productLocations" :location-id="locationId" :currency="currency" :presentation="presentation" :vertical="vertical" :title="`${locationTitle} Products`" :brand-name="brandName" />
+  <ProductCollectionPage :products="products" :collections="collections" :locations="productLocations" :location-id="locationId" :currency="currency" :presentation="presentation" :vertical="vertical" :title="`${locationTitle} Products`" :brand-name="brandName" />
 </template>
 
 <script setup lang="ts">
@@ -10,7 +10,7 @@ import { requireProductPresentation } from '~/utils/product-presentation'
 definePageMeta({ layout: 'saya' })
 const { isBlawby } = usePublicTemplate()
 if (isBlawby.value) throw createError({ statusCode: 404 })
-const { products, locations, location, config, site } = await usePublicPageData({ lazy: false })
+const { products, collections, locations, location, config, site } = await usePublicPageData({ lazy: false })
 const currentLocation = location.value
 if (!currentLocation) throw createError({ statusCode: 404 })
 const brandName = site.value?.brand_name

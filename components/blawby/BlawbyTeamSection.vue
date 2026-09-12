@@ -1,18 +1,5 @@
 <template>
   <section v-if="people.length" class="bg-[var(--blawby-accent-200)] pb-16" data-parity-section="team">
-    <div v-if="features.length" class="relative pb-16 pt-4 sm:pb-16 sm:pt-4 lg:pb-16">
-      <div class="blawby-container">
-        <div class="relative z-20 mt-4 grid gap-10 sm:grid-cols-2 lg:grid-cols-3">
-          <article v-for="feature in features" :key="feature.title" class="relative h-full rounded-2xl bg-white p-6 shadow-xl shadow-slate-900/10">
-            <div class="size-16 rounded-lg">
-              <img v-if="feature.media[0]?.public_url" :src="feature.media[0].public_url" :alt="feature.title" width="64" height="64" loading="eager" class="size-16 rounded object-cover">
-            </div>
-            <h3 class="mt-4 blawby-display text-xl font-bold uppercase text-[var(--blawby-primary)]">{{ feature.title }}</h3>
-            <p class="mt-4 text-sm text-[var(--blawby-primary)]">{{ feature.description }}</p>
-          </article>
-        </div>
-      </div>
-    </div>
     <div class="mx-auto max-w-7xl px-6 lg:px-8">
       <ul class="-mt-12 space-y-12 divide-y divide-gray-200" role="list">
         <li v-for="person in people" :key="`${person.first_name}-${person.last_name}`" class="flex flex-col gap-10 pt-12 sm:flex-row">
@@ -35,12 +22,10 @@
 </template>
 
 <script setup lang="ts">
+// People only. The feature cards that used to ride along in this section are
+// their own block and their own component now, so a page can show either
+// without the other.
 defineProps<{
-  features: Array<{
-    title: string
-    description: string
-    media: Array<{ public_url?: string | null }>
-  }>
   people: Array<{
     first_name: string
     last_name: string
