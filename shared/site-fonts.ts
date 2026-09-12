@@ -51,16 +51,12 @@ export const MALI_FONT_FILES = MALI_FACES.flatMap(face => Object.entries(MALI_SU
 // 0.0616 CLS with `Tahoma` in the stack, 0.1239 without it, 0.0052-0.0349 on
 // macOS -- the number tracks the platform's fallback, not anything we control.
 // `optional` gives the face a block period and then declines to swap, so no
-// platform reflows. The preload below is what gets Mali inside that period.
+// platform reflows. Measured with the faces served under the same throttle:
+// Mali still reached `loaded` on every cold sample, with no preload -- the
+// layout's one preload belongs to the hero image (useHeroLcpPreload), which is
+// what decides LCP, and a webfont hint ahead of it is what that budget exists
+// to prevent.
 export const MALI_FONT_CSS = MALI_FONT_FILES.map(face => `@font-face{font-family:"Mali";font-style:${face.style};font-weight:${face.weight};font-display:optional;src:url("${MALI_ASSET_BASE}/${face.filename}") format("woff2");unicode-range:${face.unicodeRange};}`).join('\n')
-
-// `optional` renders the fallback for the whole page view when the face misses
-// its block period, so the faces that carry the page have to be discoverable in
-// the document head rather than at first layout. Body copy is 400; 500, 600 and
-// italic are a handful of nodes that the browser fetches on demand.
-export const MALI_PRELOAD_FILES = MALI_FONT_FILES
-  .filter(face => face.weight === 400 && face.style === 'normal')
-  .map(face => `${MALI_ASSET_BASE}/${face.filename}`)
 
 export function siteFontStyles(preset: SiteFontPreset): Record<string, string> {
   if (preset === 'default') return {}

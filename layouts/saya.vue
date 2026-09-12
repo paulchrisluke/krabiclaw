@@ -42,7 +42,7 @@
 import sayaCriticalCss from '~/assets/css/saya-critical.css?raw'
 import '~/assets/css/saya-entry.css'
 import { NON_INDEXABLE_ROBOTS_INTENT, normalizeRobotsIntent, type RobotsIntent } from '~/shared/robots-directive'
-import { MALI_FONT_CSS, MALI_PRELOAD_FILES, resolveSiteFontPreset, siteFontStyles } from '~/shared/site-fonts'
+import { MALI_FONT_CSS, resolveSiteFontPreset, siteFontStyles } from '~/shared/site-fonts'
 
 const route = useRoute()
 const hydrated = ref(false)
@@ -96,22 +96,11 @@ const brandTextColor = computed(() => getContrastColor(brandColor.value))
 const fontPreset = computed(() => resolveSiteFontPreset(config.value.font_preset))
 
 // The existing SSR shell supplies the choice. No mounted font loader, extra
-// settings request, or global font stylesheet. The preloads are the two body
-// faces, not the whole family: the faces are declared `optional`, so a face the
-// browser only discovers at first layout is never applied to that page view.
+// settings request, global font stylesheet, or font preloads: the faces are
+// `optional`, and the head's preload is the page's hero (useHeroLcpPreload).
 useHead(() => ({
   style: fontPreset.value === 'mali'
     ? [{ key: 'saya-font-preset', innerHTML: MALI_FONT_CSS, tagPriority: 'critical' }]
-    : [],
-  link: fontPreset.value === 'mali'
-    ? MALI_PRELOAD_FILES.map(href => ({
-        key: `saya-font-preload:${href}`,
-        rel: 'preload',
-        as: 'font',
-        type: 'font/woff2',
-        href,
-        crossorigin: 'anonymous',
-      }))
     : [],
 }))
 

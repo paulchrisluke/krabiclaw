@@ -2,7 +2,6 @@ import { expect, test, type APIResponse, type Browser } from '@playwright/test'
 import { openTenantPage, potteryHouseBaseURL, potteryHouseExtraHeaders } from './helpers'
 import { loginAs } from './helpers/auth'
 import { acquireTenantMutationLock } from './helpers/tenant-mutation-lock'
-import { MALI_PRELOAD_FILES } from '../../shared/site-fonts'
 import { kikuzukiTestBaseUrl, kikuzukiTestExtraHeaders, testBaseUrl } from './test-env'
 
 type Metrics = { lcp: number; cls: number; fontBytes: number; fontRequests: number; lcpElement: string }
@@ -216,15 +215,10 @@ test('Mali saves through Brand, renders before hydration, and stays within the c
         expect(html).toContain('data-font-preset="mali"')
         expect(html).toContain('--font-saya:')
         expect(html).toContain('@font-face{font-family:"Mali"')
-        // `optional` is what keeps the swap from reflowing the page, and the
-        // preloads are what keep `optional` from dropping Mali entirely. Both
-        // are load-bearing, so both are asserted in the served HTML rather than
-        // only inferred from the five-minute cold-mobile matrix below.
+        // `optional` is what keeps the swap from reflowing the page. It is
+        // load-bearing, so it is asserted in the served HTML rather than only
+        // inferred from the five-minute cold-mobile matrix below.
         expect(html).toContain('font-display:optional;src:url("/assets/fonts/mali-')
-        for (const preloaded of MALI_PRELOAD_FILES) {
-          expect(html, `${path} preloads ${preloaded}`)
-            .toMatch(new RegExp(`<link[^>]*rel="preload"[^>]*href="${preloaded}"`))
-        }
         await expect(page.locator('.tenant-layout')).toHaveAttribute('data-hydrated', 'true')
         await expect(page.locator('.tenant-layout')).toHaveCSS('font-family', /Mali/)
         await page.evaluate(() => document.fonts.ready.then(() => undefined))
@@ -283,8 +277,8 @@ test('Mali saves through Brand, renders before hydration, and stays within the c
     // What choosing Mali costs the tenant's visitors, and nothing else. The faces
     // are declared `font-display: optional`, so a face that misses its block
     // period is never applied and no text reflows: measured 0 CLS on three cold
-    // samples of the Thai home page, against 0.023-0.045 with `swap` and the same
-    // preloads, and 0.1239 with `swap` and no preloads.
+    // samples of the Thai home page, against 0.035-0.045 with `swap`, and 0.1239
+    // with `swap` in CI.
     //
     // The absolute CLS of these pages is not asserted here. It is a property of
     // the tenant's own hero media -- the default preset alone measured 0.0042 and
