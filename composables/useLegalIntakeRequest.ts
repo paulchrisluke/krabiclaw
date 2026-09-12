@@ -1,8 +1,8 @@
 // Creates, retains, and clears the browser-side public intake request
 // reference that server/api/public/sites/[siteId]/legal/intakes/*.ts
-// forward to Blawby as requestReference (R14, plan step 1-3). Follows
-// composables/useLegalConnect.ts's U5 sessionStorage-recovery pattern, but
-// keyed per SITE (not per organization) -- R14 explicitly calls for a
+// forward to Blawby as requestReference (R14, plan step 1-3). Follows the
+// repo's U5 sessionStorage-recovery pattern, keyed per SITE (not per
+// organization) -- R14 explicitly calls for a
 // "site-scoped sessionStorage entry", since a public visitor's request is
 // bound to the site they are on, never to a dashboard organization
 // context they have no session for.
@@ -14,7 +14,7 @@ function storageKey(siteId: string): string {
 }
 
 // crypto.randomUUID() is available in every browser this public site
-// already requires; no polyfill added (matches useLegalConnect.ts).
+// already requires; no polyfill added.
 function generateUuidV4(): string {
   return crypto.randomUUID()
 }

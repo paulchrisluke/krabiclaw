@@ -305,6 +305,37 @@ test('editing a product keeps variant identity, so bookings survive', { timeout:
     )
     assert.equal(await db.prepare("SELECT count(*) n FROM bookings WHERE id = 'b1'").first<number>('n'), 1,
       'a cancelled booking is history, not something an edit deletes')
+
+    // The race the pre-check cannot see: a booking that lands after the check
+    // and before the write. The variant's foreign key RESTRICTS its deletion,
+    // and D1 applies a batch whole or not at all — so the same statements the
+    // writer runs, with a booking now present, leave the product exactly as it
+    // was: variant, selections and prices, not a surviving id with nothing
+    // behind it.
+    await db.prepare("UPDATE bookings SET status = 'confirmed', cancelled_at = NULL WHERE id = 'b1'").run()
+    await db.prepare("INSERT INTO product_options (id, organization_id, product_id, name, sort_order) VALUES ('opt', ?, ?, 'Size', 0)").bind(ORG, product.id).run()
+    await db.prepare("INSERT INTO product_option_values (id, organization_id, product_id, product_option_id, value, sort_order) VALUES ('val', ?, ?, 'opt', 'Adult', 0)").bind(ORG, product.id).run()
+    await db.prepare("INSERT INTO product_variant_option_values (organization_id, product_id, product_variant_id, product_option_id, product_option_value_id) VALUES (?, ?, 'var-adult', 'opt', 'val')").bind(ORG, product.id).run()
+    const before = {
+      prices: await db.prepare("SELECT count(*) n FROM prices WHERE product_variant_id = 'var-adult'").first<number>('n'),
+      selections: await db.prepare("SELECT count(*) n FROM product_variant_option_values WHERE product_variant_id = 'var-adult'").first<number>('n'),
+      values: await db.prepare("SELECT count(*) n FROM product_option_values WHERE id = 'val'").first<number>('n'),
+    }
+    assert.deepEqual(before, { prices: 1, selections: 1, values: 1 })
+    await assert.rejects(db.batch([
+      db.prepare('DELETE FROM product_variant_option_values WHERE organization_id = ? AND product_id = ?').bind(ORG, product.id),
+      db.prepare('DELETE FROM prices WHERE organization_id = ? AND product_variant_id IN (SELECT id FROM product_variants WHERE organization_id = ? AND product_id = ?)').bind(ORG, ORG, product.id),
+      db.prepare("DELETE FROM product_variants WHERE organization_id = ? AND product_id = ? AND id NOT IN ('var-child')").bind(ORG, product.id),
+      db.prepare("DELETE FROM product_option_values WHERE organization_id = ? AND product_id = ? AND id NOT IN ('none')").bind(ORG, product.id),
+      db.prepare("UPDATE products SET description = 'half-written' WHERE id = ?").bind(product.id),
+    ]))
+    const after = {
+      prices: await db.prepare("SELECT count(*) n FROM prices WHERE product_variant_id = 'var-adult'").first<number>('n'),
+      selections: await db.prepare("SELECT count(*) n FROM product_variant_option_values WHERE product_variant_id = 'var-adult'").first<number>('n'),
+      values: await db.prepare("SELECT count(*) n FROM product_option_values WHERE id = 'val'").first<number>('n'),
+      description: (await getProduct(db, ORG, product.id)).description,
+    }
+    assert.deepEqual(after, { ...before, description: 'Now with clay' }, 'the refused batch changed nothing')
   } finally { await runtime.dispose() }
 })
 

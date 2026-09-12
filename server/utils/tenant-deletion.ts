@@ -22,7 +22,7 @@
 // only path — a raw call to that route would skip the grace period and leak
 // every external resource above.
 
-import { execute, queryAll, queryFirst, type DbClient } from '~/server/db'
+import { execute, executeBatch, queryAll, queryFirst, type DbClient } from '~/server/db'
 import { d1JsonStringSet } from '~/server/db/d1-limits'
 import { createAuth, type CloudflareEnv } from '~/server/utils/auth'
 import { deleteImage } from '~/server/utils/cloudflare-images'
@@ -202,6 +202,15 @@ export async function deleteOrganizationNow(env: CloudflareEnv, organizationId: 
     })
   }
 
+  // What the organization's guests hold goes with it, stated rather than left
+  // to cascade order: a booking pins its session and its variant (both foreign
+  // keys RESTRICT), so a tenant that still has one cannot be deleted until
+  // this says it may be.
+  await executeBatch(db, [
+    { query: 'DELETE FROM bookings WHERE organization_id = ?', params: [organizationId] },
+    { query: 'DELETE FROM reservations WHERE organization_id = ?', params: [organizationId] },
+  ], { operation: 'Release organization guest records' })
+
   const adapter = await organizationAdapter(env)
   await adapter.deleteOrganization(organizationId)
 }
@@ -300,6 +309,12 @@ export async function deleteAbandonedDraftTenant(
     })
   }
   await deleteSiteCustomDomains(env, db, site.id)
+  // As above: the site's own guest records are released before the site, so
+  // the deletion does not depend on which cascade SQLite resolves first.
+  await executeBatch(db, [
+    { query: 'DELETE FROM bookings WHERE site_id = ?', params: [site.id] },
+    { query: 'DELETE FROM reservations WHERE site_id = ?', params: [site.id] },
+  ], { operation: 'Release site guest records' })
   await execute(db, 'DELETE FROM sites WHERE id = ?', [site.id])
   // Read the row back rather than counting changes: a cascade makes
   // meta.changes the number of rows the whole tree lost (15 for a seeded

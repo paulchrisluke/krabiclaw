@@ -324,6 +324,11 @@ const {
   config: pageConfig,
   postsList,
 } = await usePublicPageData()
+// A slug naming no location is a URL that does not exist. Rendering the page
+// around a null location answered 200 with an empty shell — a soft 404 a
+// crawler indexes. The sibling menu and product indexes already refuse it.
+if (!location.value) throw createError({ statusCode: 404, statusMessage: 'Location not found' })
+
 
 const productPresentation = computed(() => resolveProductPresentation((site as ApiValue)?.vertical as string | null | undefined))
 const locationProducts = computed(() => products.value.filter(product =>

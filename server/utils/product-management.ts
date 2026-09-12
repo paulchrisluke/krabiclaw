@@ -1109,13 +1109,12 @@ async function planProductUpdate(db: DbClient, input: {
     // Options, values and variants are UPSERTED, never dropped and recreated:
     // bookings reference variant identity, and recreating a variant under a
     // fresh id is the same as deleting it as far as they are concerned. Only
-    // rows the caller actually removed are deleted, and never one a booking
-    // points at — the foreign key would cascade the seat allocation away.
-    {
-      query: `DELETE FROM product_variants WHERE organization_id = ? AND product_id = ? AND id NOT IN (SELECT value FROM json_each(?))
-                AND NOT EXISTS (SELECT 1 FROM bookings b WHERE b.product_variant_id = product_variants.id)`,
-      params: [organizationId, productId, keptVariants],
-    },
+    // rows the caller actually removed are deleted — and a booking RESTRICTS
+    // that delete, so a booking taken after the check above raises here and
+    // takes the whole rewrite down with it. Keeping the variant row while the
+    // statements around it deleted its prices and selections would preserve an
+    // id and nothing it meant.
+    { query: 'DELETE FROM product_variants WHERE organization_id = ? AND product_id = ? AND id NOT IN (SELECT value FROM json_each(?))', params: [organizationId, productId, keptVariants] },
     { query: 'DELETE FROM product_option_values WHERE organization_id = ? AND product_id = ? AND id NOT IN (SELECT value FROM json_each(?))', params: [organizationId, productId, keptValues] },
     { query: 'DELETE FROM product_options WHERE organization_id = ? AND product_id = ? AND id NOT IN (SELECT value FROM json_each(?))', params: [organizationId, productId, keptOptions] },
     ...productWrites(organizationId, planned, input.definitions, input.actor, input.now, 'upsert', { writePrices: writesPrices }),
@@ -1167,18 +1166,14 @@ export async function updateProduct(db: DbClient, input: {
     conflict(`${booked.join(', ')} ${booked.length > 1 ? 'have' : 'has'} bookings, so ${booked.length > 1 ? 'they cannot be removed' : 'it cannot be removed'}. Turn ${booked.length > 1 ? 'them' : 'it'} off instead.`)
   }
 
-  await executeBatch(db, writes, { operation: 'Update product' })
-
-  // Someone booked one of the removed options while this edit was in flight.
-  // The predicate above kept both the variant and the booking; the edit itself
-  // stands, and the merchant is told which option is still there and why.
-  const kept = await queryAll<{ name: string }>(db, `
-    SELECT v.name FROM product_variants v
-    WHERE v.organization_id = ? AND v.product_id = ? AND v.id NOT IN (SELECT value FROM json_each(?))
-  `, [input.organizationId, input.productId, keptVariants])
-  if (kept.length > 0) {
-    conflict(`${kept.map(variant => variant.name).join(', ')} was booked while you were editing, so it was kept. Turn it off instead of removing it.`)
-  }
+  // A booking taken between the check above and this batch makes the variant
+  // delete raise, and D1 rolls the whole batch back: the product is exactly as
+  // it was, and the merchant is told why rather than reading a constraint name.
+  await executeBatch(db, writes, { operation: 'Update product' }).catch(async (error: unknown) => {
+    const raced = await bookedRemovals(db, input.organizationId, [{ productId: input.productId, keptVariants }])
+    if (raced.length === 0) throw error
+    conflict(`${raced.join(', ')} was booked while you were editing, so nothing was changed. Turn it off instead of removing it.`)
+  })
   return getProduct(db, input.organizationId, input.productId)
 }
 
@@ -1542,7 +1537,11 @@ export async function reconcileProducts(db: DbClient, input: {
   const taken = new Set<string>()
   const now = new Date().toISOString()
   const touched: string[] = []
-  const writes: BatchQuery[] = []
+  // Kept per product, not flattened: rewriting a product deletes its prices and
+  // selections before restating them, so a batch boundary in the middle of one
+  // leaves that product half-rewritten. Whole products are what a batch is
+  // filled with.
+  const perProduct: BatchQuery[][] = []
   const removals: Array<{ productId: string; keptVariants: string }> = []
 
   for (const entry of input.products) {
@@ -1555,7 +1554,7 @@ export async function reconcileProducts(db: DbClient, input: {
         // One invalidation per site at the end of the batch, not one per product.
         cacheInvalidations: [],
       })
-      writes.push(...planned.writes)
+      perProduct.push(planned.writes)
       removals.push({ productId: current.id, keptVariants: planned.keptVariants })
       touched.push(current.id)
       continue
@@ -1564,18 +1563,19 @@ export async function reconcileProducts(db: DbClient, input: {
       siteId: input.siteId, existingId: productId, defaultCurrency, takenSlugs: taken, idOwners, knownSlugs,
     })
     assertVariantPricesConsistent(planned)
-    writes.push(...productWrites(input.organizationId, planned, definitions, input.actor, now, 'insert'))
+    const creates = productWrites(input.organizationId, planned, definitions, input.actor, now, 'insert')
     // The site that reconciles its catalog carries what the reconcile creates,
     // withheld until someone publishes it — the same rule batch creation
     // follows, and what makes "missing from this site's import" answerable.
     if (input.siteId) {
-      writes.push({
+      creates.push({
         query: `INSERT INTO product_publications (organization_id, product_id, site_id, published, created_at, updated_at, created_by, updated_by)
                 VALUES (?, ?, ?, 0, ?, ?, ?, ?)
                 ON CONFLICT (product_id, site_id) DO NOTHING`,
         params: [input.organizationId, planned.id, input.siteId, now, now, input.actor.actorId, input.actor.actorId],
       })
     }
+    perProduct.push(creates)
     touched.push(planned.id)
   }
 
@@ -1586,11 +1586,25 @@ export async function reconcileProducts(db: DbClient, input: {
     conflict(`${booked.join(', ')} ${booked.length > 1 ? 'have' : 'has'} bookings, so ${booked.length > 1 ? 'they cannot be removed' : 'it cannot be removed'}. Turn ${booked.length > 1 ? 'them' : 'it'} off instead.`)
   }
 
-  for (const siteId of cacheSites) writes.push(publicResourceCacheInvalidationQuery(siteId, 'products_reconciled'))
-  // Everything lands together, in batches the size D1 accepts.
-  for (let index = 0; index < writes.length; index += MAX_D1_BATCH_STATEMENTS) {
-    await executeBatch(db, writes.slice(index, index + MAX_D1_BATCH_STATEMENTS), { operation: 'Reconcile products' })
+  // A product whose rewrite alone exceeds what one batch can carry is refused
+  // before anything runs: there is no way to apply it atomically, and applying
+  // it in pieces is what leaves a product half-written.
+  const oversized = perProduct.findIndex(product => product.length > MAX_D1_BATCH_STATEMENTS)
+  if (oversized >= 0) {
+    invalid(`products[${oversized}] needs ${perProduct[oversized]!.length} statements to rewrite, more than the ${MAX_D1_BATCH_STATEMENTS} one transaction can carry`)
   }
+  perProduct.push(cacheSites.map(siteId => publicResourceCacheInvalidationQuery(siteId, 'products_reconciled')))
+
+  // Whole products per batch, so a boundary never falls inside one.
+  let batch: BatchQuery[] = []
+  for (const product of perProduct) {
+    if (batch.length + product.length > MAX_D1_BATCH_STATEMENTS) {
+      await executeBatch(db, batch, { operation: 'Reconcile products' })
+      batch = []
+    }
+    batch.push(...product)
+  }
+  if (batch.length > 0) await executeBatch(db, batch, { operation: 'Reconcile products' })
 
   // Products the reconcile did not mention. A reconcile for one site speaks
   // only for that site's catalog: an organization's other sites keep theirs.

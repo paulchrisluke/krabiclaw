@@ -212,6 +212,9 @@ function blockMedia(block: TenantPageBlock, slot: string) {
  * One item shape. `name`, `summary`, `body`, `cta_label` and `cta_url` were
  * also accepted here — spellings no writer produces and the block registry
  * does not declare, kept in case some row somewhere used them.
+ *
+ * `media` is whatever the item arrived with: a referenced page, product or
+ * location carries its own resolved image, and the server puts it here.
  */
 function asItems(value: unknown): GridItem[] {
   if (!Array.isArray(value)) return []
@@ -220,7 +223,7 @@ function asItems(value: unknown): GridItem[] {
     title: text(item.title) || undefined,
     description: text(item.description) || undefined,
     value: text(item.value) || undefined,
-    media: [],
+    media: Array.isArray(item.media) ? item.media as GridItem['media'] : [],
     label: text(item.label) || undefined,
     labelKey: text(item.labelKey) || undefined,
     url: text(item.url) || undefined,
@@ -228,14 +231,29 @@ function asItems(value: unknown): GridItem[] {
   }))
 }
 
+/**
+ * Does this block own its items, or does it reference resources?
+ *
+ * A reference grid names pages, products or locations and the server resolves
+ * each one's own image; an authored grid's items are written in the block and
+ * their images are its own placements. Which of the two decides where an
+ * item's image comes from — it is one question with one answer per block, not
+ * a search for whichever media turns up.
+ */
+function referencesResources(block: TenantPageBlock): boolean {
+  if (block.type === 'page_grid' || block.type === 'product_grid' || block.type === 'location_grid') return true
+  return text(block.data.source) !== '' && text(block.data.source) !== 'manual'
+}
+
 function itemLabel(item: GridItem): string {
   return item.labelKey ? t(item.labelKey) : item.label || ''
 }
 
 /**
- * The one image an item carries, in the slot that names the item's position.
- * There is no search across slots and no "whichever asset came first": the
- * item either has an image at `items.<index>.image` or it has none.
+ * The one image an item carries — the referenced resource's own, or the
+ * block's placement at `items.<index>.image`, decided above by which kind of
+ * grid this is. There is no search across slots and no "whichever asset came
+ * first": the item has that image or it has none.
  */
 function gridItemImage(item: GridItem): { url: string; alt: string } | null {
   const asset = (item.media ?? [])[0]
@@ -244,8 +262,11 @@ function gridItemImage(item: GridItem): { url: string; alt: string } | null {
   return url ? { url, alt: asset.alt_text ?? '' } : null
 }
 
+
 function gridItems(block: TenantPageBlock): GridItem[] {
-  return asItems(block.data.items).map((item, index) => ({
+  const items = asItems(block.data.items)
+  if (referencesResources(block)) return items
+  return items.map((item, index) => ({
     ...item,
     media: block.media.filter(asset => asset.slot === `items.${index}.image`),
   }))

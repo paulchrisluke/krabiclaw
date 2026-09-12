@@ -1038,8 +1038,14 @@ export const bookings = sqliteTable("bookings", {
 }, (table) => [
 	check("bookings_instants_check", sql`(hold_expires_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', hold_expires_at, '+0 days') IS hold_expires_at) AND (cancelled_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', cancelled_at, '+0 days') IS cancelled_at) AND (completed_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', completed_at, '+0 days') IS completed_at) AND (created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)`),
 	foreignKey({ columns: [table.organization_id, table.site_id], foreignColumns: [sites.organization_id, sites.id], name: "bookings_site_scope_fk" }).onDelete("cascade"),
-	foreignKey({ columns: [table.organization_id, table.product_id, table.product_session_id], foreignColumns: [product_sessions.organization_id, product_sessions.product_id, product_sessions.id], name: "bookings_session_scope_fk" }).onDelete("cascade"),
-	foreignKey({ columns: [table.organization_id, table.product_id, table.product_variant_id], foreignColumns: [product_variants.organization_id, product_variants.product_id, product_variants.id], name: "bookings_variant_scope_fk" }).onDelete("cascade"),
+	// A booking pins what it holds. Deleting the session or the variant it
+	// names is refused while the booking exists — a guest's seat is not
+	// something an edit, a capability change or a product deletion may erase as
+	// a side effect. The domain checks first so the merchant reads a sentence
+	// instead of a constraint name; this is what makes the check true under a
+	// booking that arrives between the check and the write.
+	foreignKey({ columns: [table.organization_id, table.product_id, table.product_session_id], foreignColumns: [product_sessions.organization_id, product_sessions.product_id, product_sessions.id], name: "bookings_session_scope_fk" }).onDelete("restrict"),
+	foreignKey({ columns: [table.organization_id, table.product_id, table.product_variant_id], foreignColumns: [product_variants.organization_id, product_variants.product_id, product_variants.id], name: "bookings_variant_scope_fk" }).onDelete("restrict"),
 	// RESTRICT for the same composite-SET-NULL reason. Deleting an inbox thread
 	// must not delete a seat allocation, so the domain operation unlinks the
 	// booking first. Losing the whole site cascades both away together.

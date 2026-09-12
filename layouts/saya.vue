@@ -112,7 +112,19 @@ const scopedLocationSlug = computed(() => {
     ? path.slice(localePrefix.length)
     : path
   const matched = sourcePath.match(/^\/locations\/([^/]+)/)?.[1]
-  return matched === undefined ? null : decodeURIComponent(matched)
+  if (matched === undefined) return null
+  try {
+    return decodeURIComponent(matched)
+  }
+  catch {
+    // A segment that is not a valid escape sequence. The request layer decodes
+    // the pathname first and answers 400 for the ones I could construct
+    // (`/locations/%`, `/locations/%252`), so nothing reaches here today —
+    // this layout does not decide its own behaviour on that staying true. A
+    // segment naming no location scopes the footer to nothing, and the page
+    // below answers with its own 404.
+    return null
+  }
 })
 const footerLocations = computed(() => (scopedLocationSlug.value === null
   ? locations.value

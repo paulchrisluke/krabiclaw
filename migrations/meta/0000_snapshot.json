@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "bfb2e1a6-f04d-4e31-9afd-89ac28aa5149",
+  "id": "61ba5912-f99b-42cb-ad24-54de0e844c2b",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "account": {
@@ -1087,7 +1087,7 @@
             "product_id",
             "id"
           ],
-          "onDelete": "cascade",
+          "onDelete": "restrict",
           "onUpdate": "no action"
         },
         "bookings_variant_scope_fk": {
@@ -1104,7 +1104,7 @@
             "product_id",
             "id"
           ],
-          "onDelete": "cascade",
+          "onDelete": "restrict",
           "onUpdate": "no action"
         },
         "bookings_request_scope_fk": {
