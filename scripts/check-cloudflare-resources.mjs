@@ -56,12 +56,11 @@ for (const config of CONFIGS) {
     fail(`${config.label} historical migration changed`)
   }
 
-  const deletesCommand = hasInSection(wranglerToml, migrationSection, 'deleted_classes = ["GuestThreadCommandObject"]')
-  if (deletesCommand === (config.label !== 'production')) {
+  if (hasInSection(wranglerToml, migrationSection, 'deleted_classes = ["GuestThreadCommandObject"]')) {
     pass(`${config.label} command namespace lifecycle`)
   }
   else {
-    fail(`${config.label} command namespace lifecycle`, 'retain production for rollback; preserve preview/staging deletion history')
+    fail(`${config.label} command namespace lifecycle`, 'every environment deletes the retired command namespace')
   }
 }
 
