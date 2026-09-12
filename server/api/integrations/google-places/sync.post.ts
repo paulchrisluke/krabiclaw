@@ -6,11 +6,11 @@ import { queryFirst } from '~/server/db'
 import { requireRequestedLocationAccess } from '~/server/utils/location-access'
 
 export default defineHandler(async (event) => {
-  const body = await readBody(event).catch(() => ({})) as { siteId?: string; locationId?: string }
-  const { locationId } = body
+  const body = await readBody(event) as { siteId?: string; locationId?: string } | undefined
+  const locationId = body?.locationId
   if (!locationId) return jsonResponse({ error: 'locationId is required' }, { status: 400 })
 
-  const { env, db, site } = await requireRequestedLocationAccess(event, locationId, body.siteId)
+  const { env, db, site } = await requireRequestedLocationAccess(event, locationId, body?.siteId)
 
   if (!await hasSiteEntitlement(db, site.id, 'google_places')) {
     return jsonResponse({ error: 'Google Places sync requires a Growth plan or higher.' }, { status: 403 })
