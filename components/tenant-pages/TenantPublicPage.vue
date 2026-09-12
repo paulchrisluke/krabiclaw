@@ -1,5 +1,11 @@
 <template>
-  <TenantPageRenderer :page="page" :template="template" />
+  <!--
+    One renderer per template, chosen here. Every Blawby page is a Blawby page:
+    the practice areas were the only ones an allowlist of seven paths left out,
+    so they rendered in the Saya markup on a Blawby site.
+  -->
+  <BlawbyCanonicalPage v-if="isBlawby" :page="page" />
+  <TenantPageRenderer v-else :page="page" template="saya" />
 </template>
 
 <script setup lang="ts">
@@ -67,7 +73,6 @@ if (!page.value.localeRepresentations) {
   throw createError({ statusCode: 500, statusMessage: 'Tenant page locale representations were not returned' })
 }
 useState<PublicLocaleRepresentation[]>('public-locale-representations', () => []).value = page.value.localeRepresentations
-const template = computed<'saya' | 'blawby'>(() => isBlawby.value ? 'blawby' : 'saya')
 const schemaContext = inject<{ identity: ComputedRef<PublicBlawbyIdentity>; compliance: ComputedRef<PublicCompliance | null> } | null>('blawby-schema-context', null)
 const schemaOrg = useBlawbyOrgIdentity(() => schemaContext?.identity.value, () => schemaContext?.compliance.value)
 const supportedSchemaRecipes = new Set(['home', 'about', 'contact', 'pricing', 'donate', 'schedule'])
