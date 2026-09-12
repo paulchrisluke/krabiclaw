@@ -4,6 +4,7 @@ import { queryFirst } from '~/server/db'
 import { cloudflareEnv } from '~/server/utils/api-response'
 import { TENANT_TYPES } from '~/utils/tenant-routing'
 import { resolveLocalizedRedirect } from '~/server/utils/localization'
+import { EXPERIENCE_PRESENTATION } from '~/utils/product-presentation'
 
 const redirects: Record<string, string> = {
   '/docs/mcp-setup': '/docs/integrations/mcp-setup',
@@ -23,6 +24,47 @@ const redirects: Record<string, string> = {
 // these (e.g. /posts) are real, valid routes on tenant sites and must keep
 // working there.
 const PLATFORM_GONE_PATHS = new Set(['/changelog', '/posts'])
+
+/**
+ * Links written before the catalog epoch (#919), and during the week it moved.
+ *
+ * `/experiences` and `/locations/<location>/experiences` are routes again, so
+ * nothing redirects them. Two things still point at pages that moved: the
+ * cancellation link mailed with every booking taken before the cutover, and
+ * the location-scoped URL a bookable product briefly had between the cutover
+ * and this change. An experience's page is named by its own slug.
+ */
+async function resolveRetiredExperiencePath(event: H3Event, path: string) {
+  // A guest cancelling from an email sent before the epoch. The link carries
+  // the booking in its query and the token in its fragment, and the page that
+  // reads both is the same page under its own name.
+  if (path === '/experiences/cancel') return '/bookings/cancel'
+
+  const moved = /^\/locations\/[^/]+\/(?:products|menu)\/([^/]+)$/.exec(path)
+  if (!moved) return null
+  // A stale link can carry anything; a pathname the URL parser kept but
+  // percent-decoding rejects is simply not a slug we ever issued.
+  let slug: string
+  try {
+    slug = decodeURIComponent(moved[1]!)
+  } catch {
+    return null
+  }
+  const db = cloudflareEnv(event).db
+  const siteId = event.context.siteId as string | null | undefined
+  if (!db || !siteId) return null
+  // Bookable is what moved: a dish or a piece of merchandise still lives at
+  // its branch's URL, and only a product that takes bookings is an experience.
+  const bookable = await queryFirst<{ slug: string } | null>(db, `
+    SELECT p.slug FROM products p
+      JOIN product_publications pp ON pp.product_id = p.id AND pp.site_id = ? AND pp.published = 1
+      JOIN product_booking_configs bc ON bc.product_id = p.id
+     WHERE p.slug = ? AND p.active = 1
+     LIMIT 1
+  `, [siteId, slug])
+  if (!bookable) return null
+  return EXPERIENCE_PRESENTATION.productPath('', bookable.slug)
+}
 
 async function resolveTenantRedirectForRequest(event: H3Event) {
   const siteId = event.context.siteId as string | null | undefined
@@ -144,6 +186,14 @@ export default defineHandler(async (event) => {
           })()
       return redirect(target, statusCode)
     }
+  }
+
+  // After the tenant's own redirects: a merchant who has written a rule for
+  // one of these paths has said where it goes, and this is the default for the
+  // ones nobody wrote.
+  if (event.context.tenantType === TENANT_TYPES.TENANT) {
+    const retired = await resolveRetiredExperiencePath(event, normalizedPathname)
+    if (retired) return redirect(`${retired}${url.search}${url.hash}`, 301)
   }
 
   if (event.req.method === 'GET') {

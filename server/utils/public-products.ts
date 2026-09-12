@@ -1,8 +1,8 @@
 import { queryAll, queryFirst, type DbClient } from '~/server/db'
 import { resolveSiteCmsCapabilities } from '~/server/utils/cms-capabilities'
 import { getProductBySlug, hydrateProductMedia, listCollections, listLocationProducts } from '~/server/utils/product-management'
-import type { Collection, Product, ProductBookingConfig, ProductPresentation } from '~/server/types/products'
-import { resolveProductPresentation } from '~/utils/product-presentation'
+import type { Collection, Product, ProductBookingConfig, ProductPresentation, ProductSurface } from '~/server/types/products'
+import { EXPERIENCE_PRESENTATION, isExperience, productSurfaceOf, resolveProductPresentation } from '~/utils/product-presentation'
 import { isCurrencyCode, type CurrencyCode } from '~/shared/currencies'
 import {
   loadExactPublicLocalizations,
@@ -74,7 +74,7 @@ export interface PublicProductReview {
 
 // previewAuthorized carries the site's one preview authorization down from the
 // request: a site that has not finished onboarding is readable only with it.
-async function loadProductSite(db: DbClient, siteId: string, routeKind: 'menu' | 'products', previewAuthorized: boolean) {
+async function loadProductSite(db: DbClient, siteId: string, routeKind: ProductSurface, previewAuthorized: boolean) {
   const site = await queryFirst<PublicProductSiteRow>(db, `
     SELECT id, organization_id, brand_name, vertical, theme_id, feature_overrides, default_currency
       FROM sites
@@ -83,8 +83,13 @@ async function loadProductSite(db: DbClient, siteId: string, routeKind: 'menu' |
      LIMIT 1
   `, [siteId])
   if (!site) return null
-  const presentation = resolveProductPresentation(site.vertical)
-  if (!presentation || presentation.locationCollectionSegment !== routeKind) return null
+  // Experiences are a surface of their own on every vertical that sells
+  // products at all: a restaurant keeps its Menu and gains Experiences. The
+  // vertical's own surface still answers only to its own segment.
+  const verticalPresentation = resolveProductPresentation(site.vertical)
+  if (!verticalPresentation) return null
+  const presentation = routeKind === 'experiences' ? EXPERIENCE_PRESENTATION : verticalPresentation
+  if (presentation.locationCollectionSegment !== routeKind) return null
   if (!isCurrencyCode(site.default_currency)) throw new Error(`Unsupported site currency: ${site.default_currency}`)
   return { site, presentation, currency: site.default_currency }
 }
@@ -100,7 +105,7 @@ function locationHasProducts(site: PublicProductSiteRow, location: PublicProduct
 export async function loadPublicProductCollection(
   db: DbClient,
   siteId: string,
-  routeKind: 'menu' | 'products',
+  routeKind: ProductSurface,
   previewAuthorized: boolean,
   locationSlug?: string | null,
 ): Promise<PublicProductCollection | null> {
@@ -121,10 +126,14 @@ export async function loadPublicProductCollection(
   const perLocation = await Promise.all(locations.map(location =>
     listLocationProducts(db, { organizationId: resolved.site.organization_id, locationId: location.id, publishedOnSiteId: siteId })))
   const seen = new Set<string>()
+  // The only place a Product is assigned to a surface: it takes bookings, so
+  // it is an Experience, or it belongs to the vertical's own surface. Every
+  // caller below reads this same filtered list, so the collection page, the
+  // detail page and their siblings cannot disagree about what a route holds.
   const products = await hydrateProductMedia(db, siteId, perLocation.flat().filter((product) => {
     if (seen.has(product.id)) return false
     seen.add(product.id)
-    return true
+    return productSurfaceOf(resolved.site.vertical, product) === routeKind
   }))
   const collections = (await Promise.all([
     listCollections(db, { organizationId: resolved.site.organization_id, siteId, locationId: null }),
@@ -136,7 +145,7 @@ export async function loadPublicProductCollection(
 export async function loadPublicProductDetail(
   db: DbClient,
   siteId: string,
-  routeKind: 'menu' | 'products',
+  routeKind: ProductSurface,
   previewAuthorized: boolean,
   locationSlug: string,
   productSlug: string,
@@ -152,7 +161,8 @@ export async function loadPublicProductDetail(
     // something the site withholds, or something that branch does not sell.
     const offeredHere = found?.locations.some(entry => entry.location_id === location.id && entry.published && entry.active)
     const publishedHere = found?.publications.some(entry => entry.site_id === siteId && entry.published)
-    if (!found || !offeredHere || !publishedHere) return null
+    const onThisSurface = found ? productSurfaceOf(collection.site.vertical, found) === routeKind : false
+    if (!found || !offeredHere || !publishedHere || !onThisSurface) return null
     const [product] = await hydrateProductMedia(db, siteId, [found])
     if (!product) return null
     const localeRepresentations = await listPublicLocaleRepresentations(db, {
@@ -224,6 +234,49 @@ export async function loadPublicProductDetail(
   }
 }
 
+/**
+ * Resolve `/experiences/<product-slug>`.
+ *
+ * An Experience's page is the site's, not a branch's — the slug on the card a
+ * guest is holding names one page. So the URL carries no location and this
+ * resolves the one location that offers it. Two branches offering the same
+ * Experience make the URL ambiguous: that is a 404 here, not a choice made on
+ * the merchant's behalf.
+ */
+export async function loadPublicExperienceDetail(
+  db: DbClient,
+  siteId: string,
+  previewAuthorized: boolean,
+  productSlug: string,
+  locale = 'en',
+): Promise<PublicProductDetail | null> {
+  const resolved = await loadProductSite(db, siteId, 'experiences', previewAuthorized)
+  if (!resolved) return null
+  const found = await getProductBySlug(db, resolved.site.organization_id, productSlug)
+  if (!found || !isExperience(found)) return null
+  if (!found.publications.some(entry => entry.site_id === siteId && entry.published)) return null
+  const offeredAt = new Set(found.locations.filter(entry => entry.published && entry.active).map(entry => entry.location_id))
+  const locationRows = await queryAll<PublicProductLocation>(db, `
+    SELECT id, slug, title, feature_overrides
+      FROM business_locations
+     WHERE organization_id = ? AND site_id = ? AND status = 'active'
+     ORDER BY title, id
+  `, [resolved.site.organization_id, siteId])
+  const locations = locationRows.filter(location => offeredAt.has(location.id) && locationHasProducts(resolved.site, location))
+  if (locations.length !== 1) return null
+  const location = locations[0]!
+  if (locale === 'en') {
+    return loadPublicProductDetail(db, siteId, 'experiences', previewAuthorized, location.slug, productSlug, locale)
+  }
+  // The localized reader names its location by the localized route the tenant
+  // published for it, so hand it that route's slug rather than the source one.
+  const localizations = await loadExactPublicLocalizations(db, resolved.site.organization_id, siteId, locale)
+  const localizedRoute = localizations.find(item => item.resourceType === 'business_location' && item.resourceId === location.id)?.routePath
+  const localizedLocationSlug = localizedRoute ? localizedRoute.split('/').filter(Boolean).at(-1) : null
+  if (!localizedLocationSlug) return null
+  return loadPublicProductDetail(db, siteId, 'experiences', previewAuthorized, localizedLocationSlug, productSlug, locale)
+}
+
 export async function loadPublicProductApiCollection(
   db: DbClient,
   siteId: string,
@@ -244,10 +297,15 @@ export async function loadPublicProductApiDetail(
   productSlug: string,
   locale = 'en',
 ): Promise<PublicProductDetail | null> {
-  const site = await queryFirst<{ vertical: string }>(db, `SELECT vertical FROM sites WHERE id = ? AND status = 'active'${previewAuthorized ? '' : " AND onboarding_status = 'active'"} LIMIT 1`, [siteId])
+  const site = await queryFirst<{ organization_id: string; vertical: string }>(db, `SELECT organization_id, vertical FROM sites WHERE id = ? AND status = 'active'${previewAuthorized ? '' : " AND onboarding_status = 'active'"} LIMIT 1`, [siteId])
   const presentation = site ? resolveProductPresentation(site.vertical) : null
-  if (!presentation) return null
-  return loadPublicProductDetail(db, siteId, presentation.locationCollectionSegment, previewAuthorized, locationSlug, productSlug, locale)
+  if (!site || !presentation) return null
+  // The surface is the Product's own — an Experience answers here too, so its
+  // reviews are read and written through the same location-scoped API as every
+  // other Product's.
+  const product = await getProductBySlug(db, site.organization_id, productSlug)
+  if (!product) return null
+  return loadPublicProductDetail(db, siteId, productSurfaceOf(site.vertical, product), previewAuthorized, locationSlug, productSlug, locale)
 }
 
 export async function loadPublicProductReviews(

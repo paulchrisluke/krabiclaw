@@ -254,7 +254,6 @@ export default defineNuxtConfig({
           '/transfer',
           '/accept-invitation',
           '/contact/confirmed',
-          '/experiences/confirmed',
           '/forgot-password',
           '/login',
           '/reservations/cancel',

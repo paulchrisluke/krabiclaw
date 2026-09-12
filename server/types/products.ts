@@ -194,16 +194,26 @@ export interface ReorderCollectionsInput {
 
 export type ReconcileProductInput = CreateProductInput & { product_id?: string }
 
+/**
+ * The public surfaces a catalog reaches customers through.
+ *
+ * Three, because customers read three different things: a restaurant's dishes
+ * are its Menu, anything a guest books a seat on is an Experience, and the
+ * goods a merchant sells are Products. One Product model, named on the page
+ * the way the customer says it.
+ */
+export type ProductSurface = 'menu' | 'products' | 'experiences'
+
 export interface ProductPresentation {
   feature: 'products'
-  collectionPath: '/menu' | '/products'
-  locationCollectionSegment: 'menu' | 'products'
+  collectionPath: '/menu' | '/products' | '/experiences'
+  locationCollectionSegment: ProductSurface
   productPath: (_locationSlug: string, _productSlug: string) => string
-  collectionLabel: 'Menu' | 'Products'
-  itemLabel: 'Dish' | 'Product'
+  collectionLabel: 'Menu' | 'Products' | 'Experiences'
+  itemLabel: 'Dish' | 'Product' | 'Experience'
   // English plurals are irregular enough here ("Dish" -> "Dishes",
   // "Collection" -> "Collections") that appending an "s" produces visible typos.
-  itemLabelPlural: 'Dishes' | 'Products'
+  itemLabelPlural: 'Dishes' | 'Products' | 'Experiences'
   collectionGroupLabel: 'Section' | 'Collection'
   collectionGroupLabelPlural: 'Sections' | 'Collections'
   structuredDataType: 'MenuItem' | 'Product'

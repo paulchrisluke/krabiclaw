@@ -1,5 +1,53 @@
-import type { Collection, Product, ProductPresentation } from '~/server/types/products'
+import type { Collection, Product, ProductPresentation, ProductSurface } from '~/server/types/products'
 import { normalizeVertical } from '~/utils/vertical-copy'
+
+/**
+ * Anything a guest books a seat on is an Experience, whatever the site sells
+ * otherwise.
+ *
+ * The booking configuration row IS the capability — server/db/schema.ts says
+ * so, and it is what the merchant switches on. A restaurant with a teppanyaki
+ * counter keeps its Menu and gains an Experiences page; a studio's clay and
+ * its t-shirts are not the same page. This reads the same fact the old
+ * category type column recorded: on production every product that came across
+ * from an 'experience' category takes bookings, and none of the 380 'standard'
+ * ones do.
+ */
+export function isExperience(product: Pick<Product, 'booking'>): boolean {
+  return product.booking !== null
+}
+
+export function productSurfaceOf(vertical: string | null | undefined, product: Pick<Product, 'booking'>): ProductSurface {
+  return isExperience(product) ? 'experiences' : requireProductPresentation(vertical).locationCollectionSegment
+}
+
+/**
+ * Experiences read the same on every vertical, so they have one presentation
+ * rather than one per vertical. The page is the site's, not a branch's: an
+ * experience is named by its own slug, the way it was printed on the card the
+ * guest is holding.
+ */
+export const EXPERIENCE_PRESENTATION: ProductPresentation = {
+  feature: 'products',
+  collectionPath: '/experiences',
+  locationCollectionSegment: 'experiences',
+  productPath: (_locationSlug, productSlug) => `/experiences/${encodeURIComponent(productSlug)}`,
+  collectionLabel: 'Experiences',
+  itemLabel: 'Experience',
+  itemLabelPlural: 'Experiences',
+  collectionGroupLabel: 'Collection',
+  collectionGroupLabelPlural: 'Collections',
+  structuredDataType: 'Product',
+}
+
+/** The surface this product is read on, and the paths and words that go with it. */
+export function presentationForProduct(vertical: string | null | undefined, product: Pick<Product, 'booking'>): ProductPresentation {
+  return isExperience(product) ? EXPERIENCE_PRESENTATION : requireProductPresentation(vertical)
+}
+
+export function presentationForSurface(vertical: string | null | undefined, surface: ProductSurface): ProductPresentation {
+  return surface === 'experiences' ? EXPERIENCE_PRESENTATION : requireProductPresentation(vertical)
+}
 
 export function resolveProductPresentation(vertical: string | null | undefined): ProductPresentation | null {
   if (vertical === null || vertical === undefined || vertical.trim() === '') return null

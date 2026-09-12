@@ -76,12 +76,20 @@ export function appendPublicShellQueries(
     // site, offered and published at the location, and active itself. All three
     // are separate states (see product_publications / product_locations in
     // server/db/schema.ts) and the nav asks for all three at once.
-    productLocations: push(`SELECT DISTINCT pl.location_id
+    // `bookable` is what separates the two surfaces: a Product that takes
+    // bookings is an Experience and is read on /experiences, everything else
+    // on the vertical's own Menu or Products. The nav needs both facts per
+    // location so a surface with nothing on it is not offered.
+    productLocations: push(`SELECT pl.location_id,
+                                   MAX(CASE WHEN bc.product_id IS NULL THEN 0 ELSE 1 END) AS bookable,
+                                   MAX(CASE WHEN bc.product_id IS NULL THEN 1 ELSE 0 END) AS unbookable
                               FROM product_locations pl
                               JOIN products p ON p.id = pl.product_id AND p.organization_id = pl.organization_id
                               JOIN product_publications pp ON pp.product_id = p.id AND pp.organization_id = p.organization_id
+                              LEFT JOIN product_booking_configs bc ON bc.product_id = p.id AND bc.organization_id = p.organization_id
                              WHERE pl.organization_id = ? AND pp.site_id = ? AND pp.published = 1
                                AND pl.published = 1 AND pl.active = 1 AND p.active = 1
+                             GROUP BY pl.location_id
                              ORDER BY pl.location_id`, [organizationId, siteId]),
   }
 }
@@ -183,16 +191,19 @@ export function buildPublicShellPayload(
       label: locale.label ?? locale.locale,
       is_source: Boolean(locale.is_source),
     })),
-    hasProducts: (() => {
-      const productLocationIds = new Set(((results[indexes.productLocations]?.results ?? []) as Array<{ location_id: string }>).map(row => row.location_id))
-      return rawLocations.some((location) => {
-        if (!productLocationIds.has(String(location.id))) return false
+    ...(() => {
+      const rows = (results[indexes.productLocations]?.results ?? []) as Array<{ location_id: string; bookable: number; unbookable: number }>
+      const byLocation = new Map(rows.map(row => [String(row.location_id), row]))
+      const carries = (pick: (_row: { bookable: number; unbookable: number }) => number) => rawLocations.some((location) => {
+        const row = byLocation.get(String(location.id))
+        if (!row || pick(row) !== 1) return false
         const { capabilities } = resolveSiteCmsCapabilities(String(site.vertical), site.theme_id, {
           siteEnabledFeatures: site.feature_overrides,
           locationEnabledFeatures: location.feature_overrides as string | null,
         })
         return capabilities.managers.some(manager => manager.key === 'location.products')
       })
+      return { hasProducts: carries(row => row.unbookable), hasBookableProducts: carries(row => row.bookable) }
     })(),
   }
 }

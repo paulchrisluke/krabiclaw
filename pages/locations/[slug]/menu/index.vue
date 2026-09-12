@@ -1,16 +1,19 @@
 <template>
-  <ProductCollectionPage :products="products" :collections="collections" :locations="productLocations" :location-id="locationId" :currency="currency" :presentation="presentation" :vertical="vertical" :title="`${locationTitle} Menu`" :brand-name="brandName" />
+  <ProductCollectionPage :products="goods" :collections="collections" :locations="productLocations" :location-id="locationId" :currency="currency" :presentation="presentation" :vertical="vertical" :title="`${locationTitle} Menu`" :brand-name="brandName" />
 </template>
 
 <script setup lang="ts">
 import ProductCollectionPage from '~/components/products/ProductCollectionPage.vue'
 import { isCurrencyCode } from '~/shared/currencies'
-import { requireProductPresentation } from '~/utils/product-presentation'
+import { isExperience, requireProductPresentation } from '~/utils/product-presentation'
 
 definePageMeta({ layout: 'saya' })
 const { isBlawby } = usePublicTemplate()
 if (isBlawby.value) throw createError({ statusCode: 404 })
 const { products, collections, locations, location, config, site } = await usePublicPageData({ lazy: false })
+// What the merchant sells over the counter. Anything a guest books a seat on
+// is an Experience and has its own surface, so it is not listed twice.
+const goods = computed(() => products.value.filter(product => !isExperience(product)))
 const currentLocation = location.value
 if (!currentLocation) throw createError({ statusCode: 404 })
 const brandName = site.value?.brand_name

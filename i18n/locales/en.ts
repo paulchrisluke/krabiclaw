@@ -171,6 +171,11 @@ export default {
       "empty": "No products published.",
       "meta_description": "Products from {site}."
     },
+    "experiences": {
+      "collection_title": "{site} Experiences",
+      "empty": "No experiences available right now. Check back soon.",
+      "meta_description": "Experiences you can book at {site}."
+    },
     "product_detail": {
       "choose_option": "Choose an option",
       "more_in_category": "More in {category}",

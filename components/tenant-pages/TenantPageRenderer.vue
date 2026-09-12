@@ -1,15 +1,12 @@
 <template>
-  <BlawbyCanonicalPage v-if="template === 'blawby' && isCanonicalBlawbyPage(page.path)" :page="page" />
   <article
-    v-else
     data-tenant-page
-    :data-parity-root="template === 'blawby' ? '' : undefined"
     :data-template="template"
-    :class="template === 'blawby' ? 'blawby-container min-h-screen bg-white text-gray-900' : 'mx-auto max-w-7xl px-4 py-16 text-default sm:px-6 lg:px-8'"
+    class="mx-auto max-w-7xl px-4 py-16 text-default sm:px-6 lg:px-8"
   >
     <section v-for="block in page.blocks" :key="block.id" :data-block-type="block.type" :data-parity-section="sectionKey(block)" class="tenant-page-block">
       <template v-if="block.type === 'hero'">
-        <div :class="template === 'blawby' ? 'py-20 text-center sm:py-28' : 'py-12 sm:py-20'">
+        <div class="py-12 sm:py-20">
           <p v-if="text(block.data.eyebrow)" class="mb-4 text-xs font-semibold uppercase tracking-[0.2em] text-primary">{{ text(block.data.eyebrow) }}</p>
           <h1 v-if="text(block.data.title)" class="text-4xl font-bold tracking-tight sm:text-6xl">{{ text(block.data.title) }}</h1>
           <p v-if="text(block.data.subtitle)" class="mx-auto mt-6 max-w-3xl text-lg leading-8 text-muted">
@@ -175,14 +172,10 @@
 <script setup lang="ts">
 import type { PublicTenantPage } from '~/server/utils/public-tenant-pages'
 import type { TenantPageBlock } from '~/utils/tenant-page-blocks'
-import BlawbyCanonicalPage from './BlawbyCanonicalPage.vue'
 
-defineProps<{ page: PublicTenantPage; template: 'saya' | 'blawby' | 'platform' }>()
+defineProps<{ page: PublicTenantPage; template: 'saya' | 'platform' }>()
 const sanitizer = useHtmlSanitizer()
 const { t } = useI18n()
-
-const canonicalBlawbyPaths = new Set(['/about', '/services', '/pricing', '/donate', '/policies/privacy', '/policies/terms', '/third-party-notices'])
-const isCanonicalBlawbyPage = (path: string) => canonicalBlawbyPaths.has(path)
 
 type GridItem = { id?: string; title?: string; description?: string; value?: string; media?: Array<{ slot?: string; public_url?: string | null; thumbnail_url?: string | null; alt_text?: string | null; kind?: string | null }>; label?: string; labelKey?: string; url?: string; amount?: string }
 

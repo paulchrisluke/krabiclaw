@@ -1,8 +1,98 @@
 <template>
   <div class="min-h-screen bg-default text-default">
     <AppBreadcrumb :crumbs="breadcrumbs" />
-    <article class="mx-auto max-w-7xl px-4 pb-20 sm:px-6 lg:px-8">
-      <div class="rounded-2xl bg-elevated p-6 sm:p-10 lg:p-12">
+
+    <!-- One responsive primary action: the mobile bar and the desktop card
+         resolve the same booking, so the page never shows two of them. -->
+    <div
+      v-if="booking && isAvailable"
+      class="fixed inset-x-0 bottom-0 z-30 flex items-center justify-between gap-4 border-t border-default bg-default/95 px-5 py-4 shadow-lg backdrop-blur-sm lg:hidden"
+    >
+      <div v-if="priceLabel" class="min-w-0">
+        <p v-if="compareAtLabel" class="text-xs text-muted line-through">{{ compareAtLabel }}</p>
+        <p class="font-semibold leading-tight text-default">{{ priceLabel }}</p>
+      </div>
+      <SayaButton class="shrink-0" control-id="product-booking-toggle" @click="openBooking">
+        {{ t('saya.experience_detail.book_now') }}
+      </SayaButton>
+    </div>
+
+    <article :class="booking ? 'mx-auto max-w-7xl px-4 pb-28 sm:px-6 lg:px-8 lg:pb-20' : 'mx-auto max-w-7xl px-4 pb-20 sm:px-6 lg:px-8'">
+      <!-- A bookable product is read the way it is sold: the gallery and the
+           prose on the left, and the price, the facts and the booking control
+           travelling with the reader on the right. A product that takes no
+           bookings has nothing to put in that column, so it keeps the single
+           card. -->
+      <div v-if="booking" class="grid gap-10 lg:grid-cols-[1fr_420px] lg:items-start">
+        <div class="min-w-0">
+          <SayaMediaGallery :items="galleryItems" :title="product.name" />
+
+          <!-- Mobile carries the title under the gallery; on desktop it sits in
+               the card, so exactly one of them is ever rendered. -->
+          <div class="mt-7 space-y-4 lg:hidden">
+            <div>
+              <p class="saya-kicker mb-2">{{ collectionName }}</p>
+              <h1 class="text-2xl font-bold leading-tight text-default">{{ product.name }}</h1>
+              <p class="mt-2 text-sm text-muted">{{ location.title }}</p>
+            </div>
+            <div v-if="factChips.length" class="flex flex-wrap gap-2">
+              <span
+                v-for="fact in factChips"
+                :key="fact.icon"
+                class="inline-flex items-center gap-1.5 rounded-full border border-default bg-elevated px-3 py-1 text-xs font-medium text-muted"
+              >
+                <SayaIcon :name="fact.icon" class="size-3.5" />
+                {{ fact.label }}
+              </span>
+            </div>
+          </div>
+
+          <div v-if="product.description" class="mt-10 border-t border-default pt-10">
+            <p class="text-base leading-relaxed text-muted sm:text-lg">{{ product.description }}</p>
+          </div>
+
+          <dl v-if="visibleDetails.length" class="mt-10 divide-y divide-default border-y border-default">
+            <div v-for="detail in visibleDetails" :key="detail.key" class="py-4">
+              <dt class="font-medium">{{ detail.label }}</dt>
+              <dd class="mt-1 text-sm text-muted">{{ detail.values.join(', ') }}</dd>
+            </div>
+          </dl>
+        </div>
+
+        <div class="hidden lg:sticky lg:top-8 lg:block">
+          <div class="space-y-5 rounded-xl border border-default bg-elevated p-6 shadow-sm">
+            <div>
+              <p class="saya-kicker mb-2">{{ collectionName }}</p>
+              <h1 class="text-2xl font-bold leading-tight text-default">{{ product.name }}</h1>
+              <p class="mt-1.5 text-sm text-muted">{{ location.title }}</p>
+            </div>
+            <div v-if="priceLabel" class="flex items-baseline gap-1.5">
+              <span v-if="compareAtLabel" class="text-lg text-muted line-through">{{ compareAtLabel }}</span>
+              <span class="text-2xl font-bold tabular-nums text-default">{{ priceLabel }}</span>
+            </div>
+            <div v-if="factChips.length" class="flex flex-wrap gap-2">
+              <span
+                v-for="fact in factChips"
+                :key="fact.icon"
+                class="inline-flex items-center gap-1.5 rounded-full border border-default bg-default px-3 py-1 text-xs font-medium text-muted"
+              >
+                <SayaIcon :name="fact.icon" class="size-3.5" />
+                {{ fact.label }}
+              </span>
+            </div>
+            <p v-if="!isAvailable" class="rounded-lg bg-elevated px-4 py-3 text-center text-sm font-semibold text-muted">
+              {{ t('saya.common.temporarily_unavailable') }}
+            </p>
+            <div v-else class="pt-2">
+              <SayaButton block control-id="product-booking-toggle" @click="openBooking">
+                {{ t('saya.experience_detail.book_now') }}
+              </SayaButton>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div v-else class="rounded-2xl bg-elevated p-6 sm:p-10 lg:p-12">
         <div :class="product.image?.public_url ? 'grid gap-10 lg:grid-cols-2 items-start' : 'max-w-3xl'">
           <div v-if="product.image?.public_url">
             <img
@@ -22,11 +112,6 @@
             <p v-if="product.description" class="mt-6 text-base sm:text-lg leading-relaxed text-muted">{{ product.description }}</p>
             <p v-if="!isAvailable" class="mt-6 font-semibold text-muted">{{ t('saya.common.temporarily_unavailable') }}</p>
             <div class="mt-8 flex flex-wrap items-center gap-5">
-              <SayaButton
-                v-if="booking && isAvailable"
-                control-id="product-booking-toggle"
-                @click="openBooking"
-              >{{ t('saya.experience_detail.book_now') }}</SayaButton>
               <SayaButton
                 v-if="isAvailable && product.order_url"
                 :href="product.order_url"
@@ -66,7 +151,9 @@
         </ul>
       </section>
 
-      <section v-if="product.gallery.length" class="mt-16">
+      <!-- The bookable layout already shows every photograph in its gallery;
+           this strip is the card layout's only place for them. -->
+      <section v-if="!booking && product.gallery.length" class="mt-16">
         <h2 class="saya-display saya-italic text-4xl">{{ t('saya.footer.gallery') }}</h2>
         <div class="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <img
@@ -204,13 +291,18 @@ const props = defineProps<{
 
 const { trackProductOrder } = useSiteConversionTracking()
 const { locale, localePath, t } = useI18n()
-const collectionLabel = computed(() => props.presentation.collectionPath === '/menu'
-  ? t('saya.footer.menu')
-  : t('saya.footer.products'))
+const collectionLabel = computed(() => {
+  if (props.presentation.locationCollectionSegment === 'menu') return t('saya.footer.menu')
+  return props.presentation.locationCollectionSegment === 'experiences'
+    ? t('saya.footer.experiences')
+    : t('saya.footer.products')
+})
 const breadcrumbs = computed(() => [
   { to: localePath('/'), label: t('saya.experience_detail.home') },
   { to: localePath(props.presentation.collectionPath), label: collectionLabel.value },
-  { to: localePath(productLocationCollectionPath(props.vertical, props.location.slug)), label: props.location.title },
+  { to: localePath(props.presentation.locationCollectionSegment === 'experiences'
+    ? `/locations/${encodeURIComponent(props.location.slug)}/experiences`
+    : productLocationCollectionPath(props.vertical, props.location.slug)), label: props.location.title },
   { to: localePath(props.presentation.productPath(props.location.slug, props.product.slug)), label: props.product.name },
 ])
 
@@ -262,6 +354,52 @@ const isAvailable = computed(() =>
   && sellableVariants.value.length > 0)
 
 
+
+/**
+ * Every photograph this product has, cover first, in one gallery.
+ *
+ * The cover is the `product:image` placement and the rest are `product:gallery`
+ * — two slots, read as the two things they are, not one list with a chosen
+ * head.
+ */
+const galleryItems = computed(() => [
+  ...(props.product.image ? [props.product.image] : []),
+  ...props.product.gallery,
+].map(asset => ({
+  url: asset.public_url,
+  kind: asset.kind,
+  poster: asset.kind === 'video' ? asset.thumbnail_url : undefined,
+  alt: asset.alt_text ?? undefined,
+})))
+
+/**
+ * The two facts a guest decides on before opening the form: how long it runs
+ * and how many it takes. Both come from the product's booking configuration,
+ * which is also what its sessions are generated from, so the page and the
+ * calendar cannot disagree.
+ */
+const factChips = computed(() => {
+  const config = props.product.booking
+  if (!config) return []
+  const chips: Array<{ icon: 'clock' | 'user-group'; label: string }> = []
+  if (config.duration_minutes) {
+    const minutes = config.duration_minutes
+    const hours = Math.floor(minutes / 60)
+    const rest = minutes % 60
+    chips.push({
+      icon: 'clock',
+      label: minutes < 60
+        ? t('saya.experience_detail.minutes', { count: minutes })
+        : rest
+          ? t('saya.experience_detail.hours_minutes', { hours, minutes: rest })
+          : t('saya.experience_detail.hours', { count: hours }),
+    })
+  }
+  if (config.default_capacity) {
+    chips.push({ icon: 'user-group', label: t('saya.experience_detail.capacity', { count: config.default_capacity }) })
+  }
+  return chips
+})
 
 /**
  * The labelled facts under the product, named by the tenant's own definitions.

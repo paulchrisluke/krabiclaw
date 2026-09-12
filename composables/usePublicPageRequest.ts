@@ -58,7 +58,7 @@ export function getPublicPageRequest(path: string): Omit<PublicPageRequest, "loc
       datasets: [
         ...(page === 'location' || page === 'contact' ? ['content'] as const : []),
         'location',
-        ...(page === 'location' || page === 'menu' || page === 'products' ? ['products'] as const : []),
+        ...(page === 'location' || page === 'menu' || page === 'products' || page === 'experiences' ? ['products'] as const : []),
         ...(page === "location" ? ['reviews', 'posts'] as const : []),
         ...(fullData ? [fullData] as PublicPageDataset[] : []),
       ],
@@ -170,6 +170,17 @@ export function getPublicPageRequest(path: string): Omit<PublicPageRequest, "loc
   if (path === '/products' || path.startsWith('/products/'))
     return {
       page: 'products',
+      location: null,
+      datasets: ['products'],
+      blogSlug: null,
+    };
+  // Experiences are their own surface on every vertical that sells products: a
+  // restaurant reaches /menu and /experiences, a studio /products and
+  // /experiences. An Experience's own page is site-wide, so /experiences/<slug>
+  // reads the same dataset as its collection.
+  if (path === '/experiences' || path.startsWith('/experiences/'))
+    return {
+      page: 'experiences',
       location: null,
       datasets: ['products'],
       blogSlug: null,

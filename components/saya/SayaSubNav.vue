@@ -26,11 +26,11 @@
 </template>
 
 <script setup lang="ts">
-import { resolveProductPresentation, productLocationCollectionPath } from '~/utils/product-presentation'
+import { isExperience, resolveProductPresentation, productLocationCollectionPath } from '~/utils/product-presentation'
 
 const props = defineProps<{
   locationSlug: string
-  active: 'overview' | 'menu' | 'products' | 'posts' | 'reviews' | 'photos' | 'qa' | 'contact'
+  active: 'overview' | 'menu' | 'products' | 'experiences' | 'posts' | 'reviews' | 'photos' | 'qa' | 'contact'
 }>()
 
 const { products, location } = await usePublicPageData({ lazy: false })
@@ -43,13 +43,25 @@ const items = computed(() => {
   const list = [
     { key: 'overview', label: t('saya.subnav.overview'), href: `/locations/${props.locationSlug}` }
   ]
-  if (location.value && products.value.some(product => product.locations.some(entry => entry.location_id === location.value?.id && entry.published)) && productPresentation.value) {
+  // Two surfaces, each shown only when this branch has something on it: what
+  // the branch sells over the counter, and what a guest can book a seat on.
+  const here = location.value
+    ? products.value.filter(product => product.locations.some(entry => entry.location_id === location.value?.id && entry.published))
+    : []
+  if (here.some(product => !isExperience(product)) && productPresentation.value) {
     list.push({
       key: productPresentation.value.locationCollectionSegment,
       label: productPresentation.value.locationCollectionSegment === 'menu'
         ? t('saya.subnav.menu')
         : t('saya.footer.products'),
       href: productLocationCollectionPath((site as ApiRecord | null)?.vertical as string | null | undefined, props.locationSlug),
+    })
+  }
+  if (here.some(isExperience)) {
+    list.push({
+      key: 'experiences',
+      label: t('saya.footer.experiences'),
+      href: `/locations/${props.locationSlug}/experiences`,
     })
   }
   list.push(
