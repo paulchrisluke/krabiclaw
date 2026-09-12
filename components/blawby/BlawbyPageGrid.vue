@@ -17,12 +17,12 @@
           class="size-full object-cover"
         >
       </div>
-      <h3 class="mt-6 blawby-display text-xl font-bold text-[var(--blawby-primary)]">
+      <span class="mt-6 inline-block rounded bg-[var(--blawby-primary-dark)] px-2 text-sm font-semibold uppercase text-white">
         {{ item.title }}
-      </h3>
-      <p v-if="item.description" class="mt-4 text-sm leading-6 text-[var(--blawby-primary)]">
+      </span>
+      <h3 v-if="item.description" class="mt-2 blawby-display text-xl font-bold text-[var(--blawby-primary)]">
         {{ item.description }}
-      </p>
+      </h3>
     </NuxtLink>
   </div>
 </template>
@@ -33,6 +33,19 @@
  * editor chose. The items come from the page's own `page_grid` block, already
  * resolved to titles, summaries and routes, so this component holds no
  * knowledge of what kind of page it is showing.
+ *
+ * The card is the practice-area card this site has always had, and each part
+ * of it reads exactly one field:
+ *
+ * - the image reads the `cover` media placement (see `coverImage`);
+ * - the small-caps chip reads `item.title`, the referenced page's own title;
+ * - the display headline reads `item.description`, which the page_grid block
+ *   fills from that page's `summary`.
+ *
+ * A page with no summary renders the chip alone. There is no second field to
+ * promote into the headline, and a card that says only its name is how the
+ * missing summary becomes visible instead of being papered over with the title
+ * printed twice.
  */
 interface PageGridMedia { slot: string; public_url: string }
 interface PageGridItem {

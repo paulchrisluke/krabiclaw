@@ -36,10 +36,12 @@
       </header>
     </template>
 
-    <header v-else class="mx-auto max-w-7xl px-4 pb-10 pt-12 text-center sm:px-6 lg:px-8">
-      <p v-if="collectionLabel" class="saya-kicker mb-4">{{ collectionLabel }}</p>
-      <h1 class="saya-display-md text-default">{{ title }}</h1>
-      <div v-if="locations.length > 1 && !locationId" class="mt-8 flex flex-wrap justify-center gap-3">
+    <header v-else class="mx-auto max-w-7xl px-4 pb-10 pt-16 sm:px-6 lg:px-8">
+      <div class="max-w-2xl">
+        <p v-if="collectionLabel" class="saya-kicker mb-4">{{ collectionLabel }}</p>
+        <h1 class="saya-display-md text-default">{{ title }}</h1>
+      </div>
+      <div v-if="locations.length > 1 && !locationId" class="mt-8 flex flex-wrap gap-3">
         <NuxtLink
           v-for="location in locations"
           :key="location.id"
@@ -149,17 +151,34 @@
     </div>
 
     <div v-else class="mx-auto max-w-7xl px-4 pb-24 sm:px-6 lg:px-8">
-      <section v-for="group in groups" :key="group.category" class="mb-20">
-        <h2 class="saya-display saya-italic mb-8 border-b border-default pb-6 text-5xl">{{ group.category }}</h2>
+      <section v-for="group in groups" :key="group.id" class="mb-20">
+        <div class="mb-8 border-b border-default pb-6">
+          <p v-if="showLocations && group.location_id" class="saya-kicker mb-2">{{ locationTitle(group.location_id) }}</p>
+          <h2 class="saya-display saya-italic text-5xl">{{ group.category }}</h2>
+        </div>
         <div class="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
           <article v-for="product in group.products" :key="product.id">
             <component :is="productHref(product, group.location_id) ? NuxtLinkComponent : 'div'" :to="productHref(product, group.location_id) ?? undefined" class="group block text-default no-underline">
-              <div v-if="product.image?.public_url" class="relative aspect-[4/3] overflow-hidden rounded-lg bg-muted">
-                <img
-                  :src="product.image.public_url"
-                  :alt="product.image.alt_text || product.name"
-                  class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-                >
+              <div class="relative aspect-[4/3] overflow-hidden rounded-lg bg-muted">
+                <template v-if="coverUrl(product)">
+                  <img
+                    :src="coverUrl(product)!"
+                    :alt="product.image!.alt_text || product.name"
+                    class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                  >
+                  <span
+                    v-if="product.image!.kind === 'video'"
+                    class="absolute inset-0 flex items-center justify-center bg-black/10"
+                    aria-hidden="true"
+                  >
+                    <span class="flex size-12 items-center justify-center rounded-full bg-black/55 text-white">
+                      <SayaIcon name="play" class="ml-0.5 size-5" />
+                    </span>
+                  </span>
+                </template>
+                <div v-else class="flex h-full items-center justify-center">
+                  <SayaIcon name="sparkles" class="size-12 text-dimmed" />
+                </div>
                 <SayaBadgeUnavailable
                   v-if="!isAvailable(product, group.location_id)"
                   overlay
@@ -167,12 +186,29 @@
                 />
               </div>
               <div class="mt-5">
-                <div class="flex items-start justify-between gap-4">
-                  <h3 class="text-lg font-semibold transition-colors group-hover:text-primary">{{ product.name }}</h3>
-                  <span v-if="priceLabel(product, group.location_id)" class="shrink-0 tabular-nums">{{ priceLabel(product, group.location_id) }}</span>
-                </div>
+                <h3 class="text-lg font-semibold transition-colors group-hover:text-primary">{{ product.name }}</h3>
                 <p v-if="showLocations && productLocationId(product, group.location_id)" class="mt-1 text-xs font-medium uppercase tracking-wide text-muted">{{ locationTitle(productLocationId(product, group.location_id)!) }}</p>
                 <p v-if="product.description" class="mt-1 line-clamp-2 text-sm leading-6 text-muted">{{ product.description }}</p>
+
+                <div class="mt-4 flex flex-wrap gap-x-5 gap-y-1.5 text-xs text-muted">
+                  <span v-if="priceLabel(product, group.location_id)" class="flex items-center gap-1">
+                    <SayaIcon name="banknotes" class="size-3.5" />
+                    {{ priceLabel(product, group.location_id) }}
+                  </span>
+                  <span v-if="product.booking?.duration_minutes" class="flex items-center gap-1">
+                    <SayaIcon name="clock" class="size-3.5" />
+                    {{ durationLabel(product.booking.duration_minutes) }}
+                  </span>
+                  <span v-if="product.booking?.default_capacity" class="flex items-center gap-1">
+                    <SayaIcon name="user-group" class="size-3.5" />
+                    {{ product.booking.default_capacity }} {{ verticalCopy.guestsMaxLabel }}
+                  </span>
+                </div>
+
+                <div v-if="productHref(product, group.location_id)" class="mt-4 flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-primary">
+                  {{ verticalCopy.viewExperienceCta }}
+                  <SayaIcon name="arrow-right" class="size-3.5 transition-transform group-hover:translate-x-1" />
+                </div>
               </div>
             </component>
           </article>
@@ -190,6 +226,7 @@ import { formatProductMoney } from '~/utils/product-money'
 import { minorAmountToMajor, selectPrice, type Price } from '~/shared/prices'
 import { PRICING_NOTE_HANDLE } from '~/shared/metafields'
 import { groupProductsByCollection, productLocationCollectionPath } from '~/utils/product-presentation'
+import { getVerticalCopy } from '~/utils/vertical-copy'
 
 interface LocationSummary { id: string; slug: string; title: string }
 
@@ -210,7 +247,8 @@ const props = defineProps<{
   brandName: string
 }>()
 
-const { localePath, t } = useI18n()
+const { localePath, t, locale } = useI18n()
+const verticalCopy = computed(() => getVerticalCopy(props.vertical, locale.value))
 const { formatDate } = useLocaleDate()
 const isMenu = computed(() => props.presentation.structuredDataType === 'MenuItem')
 const collectionLabel = computed(() => isMenu.value
@@ -339,6 +377,26 @@ const menuUpdated = computed<string | null>(() => {
 watch(groups, () => {
   userSelectedCategory.value = ''
 })
+
+/**
+ * What the card shows for a cover. A video's poster frame stands in for the
+ * video itself — the same asset, not a second one — and a card with no cover
+ * shows the empty state rather than borrowing a gallery photograph.
+ */
+function coverUrl(product: Product): string | null {
+  const cover = product.image
+  if (!cover) return null
+  return cover.kind === 'video' ? cover.thumbnail_url : cover.public_url
+}
+
+function durationLabel(minutes: number): string {
+  if (minutes < 60) return t('saya.experience_detail.minutes', { count: minutes })
+  const hours = Math.floor(minutes / 60)
+  const rest = minutes % 60
+  return rest
+    ? t('saya.experience_detail.hours_minutes', { hours, minutes: rest })
+    : t('saya.experience_detail.hours', { count: hours })
+}
 
 function previewItem(product: Product) {
   return {

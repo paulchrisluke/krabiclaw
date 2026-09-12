@@ -4,6 +4,7 @@ import { queryFirst } from '~/server/db'
 import { cloudflareEnv } from '~/server/utils/api-response'
 import { TENANT_TYPES } from '~/utils/tenant-routing'
 import { resolveLocalizedRedirect } from '~/server/utils/localization'
+import { resolveProductPresentation } from '~/utils/product-presentation'
 
 const redirects: Record<string, string> = {
   '/docs/mcp-setup': '/docs/integrations/mcp-setup',
@@ -23,6 +24,47 @@ const redirects: Record<string, string> = {
 // these (e.g. /posts) are real, valid routes on tenant sites and must keep
 // working there.
 const PLATFORM_GONE_PATHS = new Set(['/changelog', '/posts'])
+
+/**
+ * The experience surface became the product catalogue (#919).
+ *
+ * `/experiences` and `/experiences/<slug>` are printed on cards, indexed by
+ * Google and pasted into guests' chats, so they answer with the product's own
+ * page instead of a 404 — a restaurant's classes are on its menu now, an
+ * activity operator's are in its catalogue. A slug is only redirected when the
+ * product is published to this site at exactly one location: with two, the old
+ * URL names no single new one, and guessing which is not a redirect but a lie.
+ */
+async function resolveRetiredExperiencePath(event: H3Event, path: string) {
+  if (path !== '/experiences' && !path.startsWith('/experiences/')) return null
+  const vertical = (event.context.site as { vertical?: string } | undefined)?.vertical
+  const presentation = resolveProductPresentation(vertical)
+  if (!presentation) return null
+  if (path === '/experiences') return presentation.collectionPath
+
+  // A stale link can carry anything; a pathname the URL parser kept but
+  // percent-decoding rejects is simply not a slug we ever issued.
+  let slug: string
+  try {
+    slug = decodeURIComponent(path.slice('/experiences/'.length))
+  } catch {
+    return null
+  }
+  if (!slug || slug.includes('/')) return null
+  const db = cloudflareEnv(event).db
+  const siteId = event.context.siteId as string | null | undefined
+  if (!db || !siteId) return null
+  const located = await queryFirst<{ location_slug: string; locations: number } | null>(db, `
+    SELECT min(bl.slug) AS location_slug, count(*) AS locations
+      FROM products p
+      JOIN product_publications pp ON pp.product_id = p.id AND pp.site_id = ? AND pp.published = 1
+      JOIN product_locations pl ON pl.product_id = p.id AND pl.published = 1
+      JOIN business_locations bl ON bl.id = pl.location_id
+     WHERE p.slug = ? AND p.active = 1
+  `, [siteId, slug])
+  if (!located || located.locations !== 1) return null
+  return presentation.productPath(located.location_slug, slug)
+}
 
 async function resolveTenantRedirectForRequest(event: H3Event) {
   const siteId = event.context.siteId as string | null | undefined
@@ -144,6 +186,14 @@ export default defineHandler(async (event) => {
           })()
       return redirect(target, statusCode)
     }
+  }
+
+  // After the tenant's own redirects: a merchant who has written a rule for
+  // one of these paths has said where it goes, and this is the default for the
+  // ones nobody wrote.
+  if (event.context.tenantType === TENANT_TYPES.TENANT) {
+    const retired = await resolveRetiredExperiencePath(event, normalizedPathname)
+    if (retired) return redirect(`${retired}${url.search}${url.hash}`, 301)
   }
 
   if (event.req.method === 'GET') {

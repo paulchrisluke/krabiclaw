@@ -26,6 +26,7 @@ import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import Database from 'better-sqlite3'
 import { CONTENT_DOCUMENT_SCOPE_QUERY, MEDIA_PLACEMENT_OWNER_AUDIT_QUERY } from './audit-orphaned-media-placements.mjs'
+import { PROMOTE_PRODUCT_COVERS_SQL, RENUMBER_PRODUCT_GALLERIES_SQL } from './lib/product-covers.mjs'
 import { serializeMetafieldValue } from '../shared/metafields.ts'
 import { occurrenceKey } from '../shared/bookings.ts'
 import { isSupportedMediaPlacement } from '../shared/media-placement-contract.ts'
@@ -538,7 +539,12 @@ function deriveProductMedia(stage, record) {
        GROUP BY mp.site_id, m.new_id, mp.slot, mp.asset_id)`).run().changes)
   record('product_social_cards_regenerated', stage.prepare(`SELECT count(*) AS n FROM old.media_placements mp JOIN temp.product_map m ON m.old_id = mp.owner_id
     WHERE mp.owner_type = 'product' AND mp.slot = 'social_card' AND mp.owner_id <> m.new_id`).get().n)
+  const promoted = stage.prepare(PROMOTE_PRODUCT_COVERS_SQL).run().changes
+  if (promoted > 0) stage.prepare(RENUMBER_PRODUCT_GALLERIES_SQL).run()
+  record('product_covers_promoted', promoted)
 }
+
+
 
 /**
  * An Offering was a second content model for a page: prose, a feature list and

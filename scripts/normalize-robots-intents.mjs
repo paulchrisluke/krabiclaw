@@ -41,7 +41,10 @@ if (!local && !environment) {
   console.error('Pass --local or --env <preview|staging|production>')
   process.exit(1)
 }
-const target = local ? ['--local'] : ['--env', environment, '--remote']
+// The production binding is the top-level [[d1_databases]]; every other
+// environment is addressed through wrangler's --env flag (scripts/reset-d1.mjs
+// says the same thing, for the same reason).
+const target = local ? ['--local'] : [...(environment === 'production' ? [] : ['--env', environment]), '--remote']
 
 function d1(sql) {
   const result = spawnSync(WRANGLER_BIN, ['d1', 'execute', 'DB', ...target, '--json', '--command', sql], {
