@@ -6,6 +6,7 @@ import * as schema from '../../server/db/schema.ts'
 import {
   buildStripeConnectOnboardingUrls,
   deriveStripeConnectStatus,
+  ensureStripeConnectedAccount,
   getStripeConnectedAccount,
   projectStripeConnectedAccount,
   reserveStripeConnectedAccount,
@@ -43,6 +44,72 @@ test('connected account reservation is organization-scoped and retry-stable', as
       reserveStripeConnectedAccount(db, { organizationId: 'org', country: 'GB', livemode: false }),
       /country cannot be changed/i,
     )
+  })
+})
+
+test('connected accounts use Express dashboard with platform fee and loss responsibility', async () => {
+  await withD1(async (db) => {
+    let createParams: unknown
+    let createOptions: unknown
+    const stripe = {
+      v2: { core: { accounts: { create: async (params: unknown, options: unknown) => {
+        createParams = params
+        createOptions = options
+        throw new Error('stop after capturing account configuration')
+      } } } },
+    }
+
+    await assert.rejects(
+      ensureStripeConnectedAccount(db, stripe as never, {
+        organizationId: 'org',
+        organizationName: 'Org',
+        contactEmail: 'owner@example.com',
+        country: 'US',
+        livemode: false,
+      }),
+      /stop after capturing account configuration/,
+    )
+    assert.deepEqual(
+      createParams && typeof createParams === 'object'
+        ? {
+            dashboard: Reflect.get(createParams, 'dashboard'),
+            responsibilities: Reflect.get(Reflect.get(createParams, 'defaults'), 'responsibilities'),
+          }
+        : null,
+      {
+        dashboard: 'express',
+        responsibilities: { fees_collector: 'application', losses_collector: 'application' },
+      },
+    )
+    assert.deepEqual(createOptions, { idempotencyKey: 'krabiclaw-connect-account:express:org' })
+  })
+})
+
+test('projection failures do not mark successful Stripe account creation as failed', async () => {
+  await withD1(async (db) => {
+    const stripe = {
+      v2: { core: { accounts: { create: async () => ({
+        id: 'acct_created',
+        configuration: { merchant: { capabilities: { card_payments: { status: 'active' } } } },
+        identity: null,
+        requirements: { entries: [] },
+      }) } } },
+    }
+
+    await assert.rejects(
+      ensureStripeConnectedAccount(db, stripe as never, {
+        organizationId: 'org',
+        organizationName: 'Org',
+        contactEmail: 'owner@example.com',
+        country: 'US',
+        livemode: false,
+      }),
+      /country/i,
+    )
+    const reservation = await getStripeConnectedAccount(db, 'org')
+    assert.ok(reservation)
+    assert.equal(reservation.status, 'creating')
+    assert.equal(reservation.lastError, null)
   })
 })
 

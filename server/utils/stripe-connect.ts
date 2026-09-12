@@ -306,27 +306,28 @@ export async function ensureStripeConnectedAccount(
   const reservation = await reserveStripeConnectedAccount(db, input)
   if (reservation.stripeAccountId) return await refreshStripeConnectedAccount(db, stripe, reservation)
 
+  let account: Stripe.V2.Core.Account
   try {
-    const account = await stripe.v2.core.accounts.create({
+    account = await stripe.v2.core.accounts.create({
       contact_email: input.contactEmail,
       display_name: input.organizationName,
-      dashboard: 'full',
+      dashboard: 'express',
       identity: { country: reservation.country.toLowerCase() },
       configuration: {
         merchant: { capabilities: { card_payments: { requested: true } } },
       },
       defaults: {
-        responsibilities: { fees_collector: 'stripe', losses_collector: 'stripe' },
+        responsibilities: { fees_collector: 'application', losses_collector: 'application' },
       },
       metadata: { krabiclaw_organization_id: input.organizationId },
       include: STRIPE_CONNECT_ACCOUNT_INCLUDE,
-    }, { idempotencyKey: `krabiclaw-connect-account:${input.organizationId}` })
-    return await projectStripeConnectedAccount(db, accountProjection(reservation, account))
+    }, { idempotencyKey: `krabiclaw-connect-account:express:${input.organizationId}` })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Stripe account creation failed'
     await markStripeConnectedAccountCreationFailed(db, reservation.id, message)
     throw error
   }
+  return await projectStripeConnectedAccount(db, accountProjection(reservation, account))
 }
 
 export async function createStripeConnectOnboardingLink(

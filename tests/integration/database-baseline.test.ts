@@ -1,12 +1,25 @@
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import test from 'node:test'
 import Database from 'better-sqlite3'
+import { rebaseline } from '../../scripts/rebaseline-data.mjs'
 
 function baselineDatabase() {
   const database = new Database(':memory:')
   database.pragma('foreign_keys = ON')
   database.exec(readFileSync('migrations/0000_baseline.sql', 'utf8'))
+  return database
+}
+
+function currentSchemaDatabase() {
+  const database = new Database(':memory:')
+  database.pragma('foreign_keys = ON')
+  const migrations = readdirSync('migrations')
+    .filter(name => /^\d{4}_.+\.sql$/u.test(name))
+    .sort()
+  for (const migration of migrations) database.exec(readFileSync(join('migrations', migration), 'utf8'))
   return database
 }
 
@@ -40,6 +53,26 @@ test('the baseline creates the complete schema from zero', () => {
     assert.equal(database.pragma('foreign_key_check').length, 0)
   } finally {
     database.close()
+  }
+})
+
+test('a rebaseline payload applies to the complete migrated schema', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'krabiclaw-rebaseline-'))
+  const targetPath = join(directory, 'target.sqlite')
+  const payloadPath = join(directory, 'payload.sql')
+  let destination: Database.Database | undefined
+  try {
+    rebaseline('migrations/0000_baseline.sql', targetPath, { payloadPath, withoutJwks: true })
+    destination = currentSchemaDatabase()
+    destination.exec(readFileSync(payloadPath, 'utf8'))
+
+    const tables = destination.prepare("SELECT name FROM sqlite_schema WHERE type = 'table'").all() as Array<{ name: string }>
+    assert.equal(tables.some(table => table.name === 'legal_intake_references'), false)
+    assert.equal(tables.some(table => table.name === 'stripe_connected_accounts'), true)
+    assert.equal(destination.pragma('foreign_key_check').length, 0)
+  } finally {
+    destination?.close()
+    rmSync(directory, { recursive: true, force: true })
   }
 })
 
