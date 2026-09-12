@@ -85,31 +85,55 @@ test('connected accounts use Express dashboard with platform fee and loss respon
   })
 })
 
-test('projection failures do not mark successful Stripe account creation as failed', async () => {
+test('projection failures retain the created account for refresh on retry', async () => {
   await withD1(async (db) => {
+    let createCalls = 0
+    const retrievedAccountIds: string[] = []
     const stripe = {
-      v2: { core: { accounts: { create: async () => ({
-        id: 'acct_created',
-        configuration: { merchant: { capabilities: { card_payments: { status: 'active' } } } },
-        identity: null,
-        requirements: { entries: [] },
-      }) } } },
+      v2: { core: { accounts: {
+        create: async () => {
+          createCalls += 1
+          return {
+            id: 'acct_created',
+            configuration: { merchant: { capabilities: { card_payments: { status: 'active' } } } },
+            identity: null,
+            requirements: { entries: [] },
+          }
+        },
+        retrieve: async (accountId: string) => {
+          retrievedAccountIds.push(accountId)
+          return {
+            id: accountId,
+            livemode: false,
+            configuration: { merchant: { capabilities: { card_payments: { status: 'active' } } } },
+            identity: { country: 'us' },
+            requirements: { entries: [] },
+          }
+        },
+      } } },
     }
 
+    const input = {
+      organizationId: 'org',
+      organizationName: 'Org',
+      contactEmail: 'owner@example.com',
+      country: 'US',
+      livemode: false,
+    }
     await assert.rejects(
-      ensureStripeConnectedAccount(db, stripe as never, {
-        organizationId: 'org',
-        organizationName: 'Org',
-        contactEmail: 'owner@example.com',
-        country: 'US',
-        livemode: false,
-      }),
+      ensureStripeConnectedAccount(db, stripe as never, input),
       /country/i,
     )
     const reservation = await getStripeConnectedAccount(db, 'org')
     assert.ok(reservation)
-    assert.equal(reservation.status, 'creating')
+    assert.equal(reservation.status, 'pending_review')
+    assert.equal(reservation.stripeAccountId, 'acct_created')
     assert.equal(reservation.lastError, null)
+
+    const recovered = await ensureStripeConnectedAccount(db, stripe as never, input)
+    assert.equal(recovered.status, 'ready')
+    assert.equal(createCalls, 1)
+    assert.deepEqual(retrievedAccountIds, ['acct_created'])
   })
 })
 

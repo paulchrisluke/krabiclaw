@@ -210,6 +210,25 @@ export async function markStripeConnectedAccountCreationFailed(
   `, [message.slice(0, 1000), new Date().toISOString(), reservationId])
 }
 
+async function recordStripeConnectedAccountId(
+  db: DbClient,
+  reservation: StripeConnectedAccount,
+  stripeAccountId: string,
+): Promise<StripeConnectedAccount> {
+  const updated = await execute(db, `
+    UPDATE stripe_connected_accounts
+    SET stripe_account_id = ?, status = 'pending_review', last_error = NULL, updated_at = ?
+    WHERE id = ? AND organization_id = ?
+      AND (stripe_account_id IS NULL OR stripe_account_id = ?)
+  `, [stripeAccountId, new Date().toISOString(), reservation.id, reservation.organizationId, stripeAccountId])
+  if (Number(updated.meta.changes) !== 1) throw new Error('Stripe Connect account ID did not match its reservation')
+  const connected = await getStripeConnectedAccount(db, reservation.organizationId)
+  if (!connected || connected.stripeAccountId !== stripeAccountId) {
+    throw new Error('Stripe Connect account ID was not persisted')
+  }
+  return connected
+}
+
 export async function projectStripeConnectedAccount(
   db: DbClient,
   input: StripeConnectProjection,
@@ -327,7 +346,8 @@ export async function ensureStripeConnectedAccount(
     await markStripeConnectedAccountCreationFailed(db, reservation.id, message)
     throw error
   }
-  return await projectStripeConnectedAccount(db, accountProjection(reservation, account))
+  const connected = await recordStripeConnectedAccountId(db, reservation, account.id)
+  return await projectStripeConnectedAccount(db, accountProjection(connected, account))
 }
 
 export async function createStripeConnectOnboardingLink(
