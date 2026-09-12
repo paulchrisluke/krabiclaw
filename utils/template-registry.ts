@@ -35,8 +35,8 @@ export const publicTemplateRegistry: Record<PublicTemplateSlug, PublicTemplateDe
       articlePathHasCategory: false,
     },
     sitemap: {
-      exactPaths: ['/', '/menu', '/products', '/contact', '/blog', '/locations', '/reservations', '/posts', '/photos', '/qa', '/reviews'],
-      dynamicPrefixes: ['/blog/', '/locations/', '/posts/'],
+      exactPaths: ['/', '/menu', '/products', '/experiences', '/contact', '/blog', '/locations', '/reservations', '/posts', '/photos', '/qa', '/reviews'],
+      dynamicPrefixes: ['/blog/', '/experiences/', '/locations/', '/posts/'],
     },
     nonIndexableExactPaths: ['/contact/confirmed', '/bookings/cancel', '/bookings/confirmed', '/reservations/cancel', '/reservations/confirmed'],
   },

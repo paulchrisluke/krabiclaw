@@ -1,4 +1,5 @@
 import type { Product } from '~/server/types/products'
+import { isExperience } from '~/utils/product-presentation'
 import { formatProductMoney } from '~/utils/product-money'
 import { selectPrice, type PriceSelection } from '~/shared/prices'
 import { DESCRIPTION_MAX_LENGTH, truncateForSeo } from '~/utils/social-metadata'
@@ -50,8 +51,12 @@ export function selectProductCollectionSiblings(
   selection: PriceSelection,
   limit: number = COLLECTION_SIBLING_LIMIT,
 ): ProductCollectionSibling[] {
+  // Siblings share the surface the page is read on: an experience links to
+  // experiences, a dish to dishes. A collection holding both would otherwise
+  // send a reader to a page that does not exist under this route's name.
   const inCollection = products.filter(candidate =>
     candidate.collections.some(membership => membership.collection_id === collectionId)
+    && isExperience(candidate) === isExperience(product)
     && isOfferedProduct(candidate, selection))
   const index = inCollection.findIndex(candidate => candidate.id === product.id)
   const rotated = index === -1

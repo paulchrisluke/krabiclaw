@@ -7,7 +7,6 @@ export const PLATFORM_SITEMAP_ROUTES = [
   '/about',
   '/blog',
   '/docs',
-  '/experiences',
   '/features',
   '/help',
   '/legal',
@@ -45,6 +44,7 @@ export const PRIVATE_EXACT_ROUTES = new Set([
 export const TENANT_ONLY_EXACT_ROUTES = new Set([
   '/contact',
   '/locations',
+  '/experiences',
   '/menu',
   '/order',
   '/photos',
@@ -58,6 +58,7 @@ export const TENANT_ONLY_EXACT_ROUTES = new Set([
 export const TENANT_ONLY_ROUTE_PREFIXES = [
   '/bookings/',
   '/contact/',
+  '/experiences/',
   '/locations/',
   '/menu/',
   '/order/',

@@ -225,7 +225,8 @@ async function loadPublicPageSource(
   // the page value; allowlisting against the real route set bounds that space.
   const VALID_PAGES = new Set([
     'home', 'locations', 'location', 'about', 'contact', 'reservations',
-    'order', 'qa', 'reviews', 'posts', 'photos', 'menu', 'products', 'blog',
+    'order', 'qa', 'reviews', 'posts', 'photos', 'menu', 'products',
+    'experiences', 'blog',
   ]);
   const areDatasetsValid = [...requestedDatasets].every(dataset => VALID_DATASETS.has(dataset));
   const isValidLocale = locale === undefined || /^[a-z]{2}(-[A-Z]{2})?$/.test(locale);

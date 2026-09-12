@@ -19,6 +19,7 @@
       :site="resolvedSite"
       :locations="locations"
       :has-products="shell.hasProducts.value"
+      :has-experiences="shell.hasExperiences.value"
     />
     <main class="grow" :data-route-shell="route.path">
       <slot />
@@ -31,6 +32,7 @@
       :error="bootstrapError"
       :config="config"
       :has-products="shell.hasProducts.value"
+      :has-experiences="shell.hasExperiences.value"
     />
   </div>
 </template>

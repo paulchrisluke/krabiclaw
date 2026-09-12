@@ -291,13 +291,18 @@ const props = defineProps<{
 
 const { trackProductOrder } = useSiteConversionTracking()
 const { locale, localePath, t } = useI18n()
-const collectionLabel = computed(() => props.presentation.collectionPath === '/menu'
-  ? t('saya.footer.menu')
-  : t('saya.footer.products'))
+const collectionLabel = computed(() => {
+  if (props.presentation.locationCollectionSegment === 'menu') return t('saya.footer.menu')
+  return props.presentation.locationCollectionSegment === 'experiences'
+    ? t('saya.footer.experiences')
+    : t('saya.footer.products')
+})
 const breadcrumbs = computed(() => [
   { to: localePath('/'), label: t('saya.experience_detail.home') },
   { to: localePath(props.presentation.collectionPath), label: collectionLabel.value },
-  { to: localePath(productLocationCollectionPath(props.vertical, props.location.slug)), label: props.location.title },
+  { to: localePath(props.presentation.locationCollectionSegment === 'experiences'
+    ? `/locations/${encodeURIComponent(props.location.slug)}/experiences`
+    : productLocationCollectionPath(props.vertical, props.location.slug)), label: props.location.title },
   { to: localePath(props.presentation.productPath(props.location.slug, props.product.slug)), label: props.product.name },
 ])
 

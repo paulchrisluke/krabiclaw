@@ -36,23 +36,30 @@
       </header>
     </template>
 
-    <header v-else class="mx-auto max-w-7xl px-4 pb-10 pt-16 sm:px-6 lg:px-8">
-      <div class="max-w-2xl">
-        <p v-if="collectionLabel" class="saya-kicker mb-4">{{ collectionLabel }}</p>
-        <h1 class="saya-display-md text-default">{{ title }}</h1>
-      </div>
-      <div v-if="locations.length > 1 && !locationId" class="mt-8 flex flex-wrap gap-3">
-        <NuxtLink
-          v-for="location in locations"
-          :key="location.id"
-          :to="localePath(productLocationCollectionPath(vertical, location.slug))"
-          class="inline-flex items-center gap-2 rounded-full border border-default px-5 py-2.5 text-sm text-muted no-underline transition hover:bg-muted hover:text-default"
-        >
-          <SayaIcon name="map-pin" class="size-3.5 opacity-70" />
-          {{ location.title }}
-        </NuxtLink>
-      </div>
-    </header>
+    <template v-else>
+      <SayaSubNav
+        v-if="currentLocation"
+        :location-slug="currentLocation.slug"
+        :active="presentation.locationCollectionSegment"
+      />
+      <header class="mx-auto max-w-7xl px-4 pb-10 pt-16 sm:px-6 lg:px-8">
+        <div class="max-w-2xl">
+          <p v-if="collectionLabel" class="saya-kicker mb-4">{{ collectionLabel }}</p>
+          <h1 class="saya-display-md text-default">{{ title }}</h1>
+        </div>
+        <div v-if="locations.length > 1 && !locationId" class="mt-8 flex flex-wrap gap-3">
+          <NuxtLink
+            v-for="location in locations"
+            :key="location.id"
+            :to="localePath(`/locations/${encodeURIComponent(location.slug)}/${presentation.locationCollectionSegment}`)"
+            class="inline-flex items-center gap-2 rounded-full border border-default px-5 py-2.5 text-sm text-muted no-underline transition hover:bg-muted hover:text-default"
+          >
+            <SayaIcon name="map-pin" class="size-3.5 opacity-70" />
+            {{ location.title }}
+          </NuxtLink>
+        </div>
+      </header>
+    </template>
 
     <div v-if="products.length === 0 && (isMenu || emptyCollectionMessage)" class="mx-auto max-w-xl px-4 py-24 text-center sm:px-6">
       <p v-if="currentLocation && isMenu || emptyCollectionMessage" class="saya-display saya-italic text-3xl">
@@ -251,10 +258,14 @@ const { localePath, t, locale } = useI18n()
 const verticalCopy = computed(() => getVerticalCopy(props.vertical, locale.value))
 const { formatDate } = useLocaleDate()
 const isMenu = computed(() => props.presentation.structuredDataType === 'MenuItem')
-const collectionLabel = computed(() => isMenu.value
-  ? t('saya.footer.menu')
-  : t('saya.footer.products'))
-const emptyCollectionMessage = computed(() => t('saya.products.empty'))
+const isExperiences = computed(() => props.presentation.locationCollectionSegment === 'experiences')
+const collectionLabel = computed(() => {
+  if (isMenu.value) return t('saya.footer.menu')
+  return isExperiences.value ? t('saya.footer.experiences') : t('saya.footer.products')
+})
+const emptyCollectionMessage = computed(() => (isExperiences.value
+  ? t('saya.experiences.empty')
+  : t('saya.products.empty')))
 const locationMap = computed(() => new Map(props.locations.map(location => [location.id, location])))
 const showLocations = computed(() => !props.locationId && props.locations.length > 1)
 const currentLocation = computed(() => {

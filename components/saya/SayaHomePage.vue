@@ -25,13 +25,9 @@
       <LazySayaFeaturedContent
         :data="{
           items: featuredProductCards,
-          kicker: productPresentation?.locationCollectionSegment === 'menu'
-            ? t('saya.footer.menu')
-            : t('saya.footer.products'),
-          heading: productPresentation?.locationCollectionSegment === 'menu'
-            ? t('saya.footer.menu')
-            : t('saya.products.collection_title', { site: brandName }),
-          linkTarget: productPresentation ? productPresentation.collectionPath : null
+          kicker: previewKicker,
+          heading: previewHeading,
+          linkTarget: previewPresentation ? previewPresentation.collectionPath : null
         }"
       />
 
@@ -261,7 +257,7 @@
 
 <script setup>
 import { formatProductMoney } from '~/utils/product-money'
-import { groupProductsByCollection, resolveProductPresentation } from '~/utils/product-presentation'
+import { EXPERIENCE_PRESENTATION, groupProductsByCollection, isExperience, presentationForProduct, resolveProductPresentation } from '~/utils/product-presentation'
 import { getActiveSpecialClosure } from '~/utils/formatters'
 import { selectPrice } from '~/shared/prices'
 import { normalizeRobotsIntent } from '~/shared/robots-directive'
@@ -415,6 +411,37 @@ if (siteId) {
 const previewProducts = computed(() => groupProductsByCollection(products.value, collections.value)
   .flatMap(group => group.products.map(product => ({ product, collectionName: group.name })))
   .slice(0, 4))
+
+/**
+ * Which surface this preview's "view all" link belongs to.
+ *
+ * A bookable product is read on /experiences and everything else on the
+ * vertical's own collection, so the section header has to name the surface the
+ * cards under it actually go to. When the front of the arrangement is entirely
+ * bookable that surface is Experiences; otherwise it is the vertical's
+ * collection, which is where the non-bookable cards land.
+ */
+const previewPresentation = computed(() => {
+  if (!previewProducts.value.length) return null
+  return previewProducts.value.every(({ product }) => isExperience(product))
+    ? EXPERIENCE_PRESENTATION
+    : productPresentation.value
+})
+const isExperiencePreview = computed(() => previewPresentation.value === EXPERIENCE_PRESENTATION)
+const previewKicker = computed(() => {
+  if (!previewPresentation.value) return ''
+  if (isExperiencePreview.value) return homeCopy.value.experiencesPageTitle
+  return previewPresentation.value.locationCollectionSegment === 'menu'
+    ? t('saya.footer.menu')
+    : t('saya.footer.products')
+})
+const previewHeading = computed(() => {
+  if (!previewPresentation.value) return ''
+  if (isExperiencePreview.value) return t('saya.experiences.collection_title', { site: brandName.value })
+  return previewPresentation.value.locationCollectionSegment === 'menu'
+    ? t('saya.footer.menu')
+    : t('saya.products.collection_title', { site: brandName.value })
+})
 const isExperienceTenant = computed(() => site?.vertical === 'experience')
 const homePrimaryCtaRoute = computed(() => {
   // An experience tenant's primary action is to browse what is on offer; the
@@ -517,14 +544,18 @@ const currency = computed(() => {
   return code
 })
 const featuredProductCards = computed(() => {
-  const presentation = productPresentation.value
-  if (!presentation) return []
+  // A vertical that presents no catalogue previews none of it.
+  if (!productPresentation.value) return []
   return previewProducts.value.map(({ product, collectionName }) => {
     // A product offered at several of this site's locations has no single
     // route, so it is previewed without a link rather than linked to a
     // location the merchant did not name.
     const published = product.locations.filter(entry => entry.published && locationSlugById.value.has(entry.location_id))
     const locationId = published.length === 1 ? published[0].location_id : null
+    const locationSlug = locationId ? locationSlugById.value.get(locationId) : null
+    // The product's own surface, not the site's: a bookable one is read at
+    // /experiences/<slug> whatever the site sells otherwise.
+    const productSurface = presentationForProduct(publicSite.value?.vertical, product)
     // Each variant resolves its own offer through the one selection contract;
     // the card shows the lowest of them, the same "from" price the collection
     // page shows.
@@ -542,7 +573,12 @@ const featuredProductCards = computed(() => {
         : null,
       image: product.image?.public_url || null,
       alt: product.image?.alt_text || product.name,
-      href: locationId ? presentation.productPath(locationSlugById.value.get(locationId), product.slug) : null,
+      // An experience is named by its own slug on the site-wide surface, so it
+      // links whether or not one location owns it; the vertical's own product
+      // page is location-scoped and needs that single location.
+      href: isExperience(product) || locationSlug
+        ? productSurface.productPath(locationSlug, product.slug)
+        : null,
       unavailable: !product.active
         || (locationId !== null && closedLocationIds.value.has(locationId))
         || price === null,

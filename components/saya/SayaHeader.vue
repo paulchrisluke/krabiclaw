@@ -23,6 +23,14 @@
           </NuxtLink>
 
           <NuxtLink
+            v-if="showExperiences"
+            :to="localePath(EXPERIENCE_PRESENTATION.collectionPath)"
+            class="rounded-full px-3 py-2 text-sm text-muted transition hover:bg-muted hover:text-default"
+          >
+            {{ t('saya.footer.experiences') }}
+          </NuxtLink>
+
+          <NuxtLink
             v-if="!isExperienceSite"
             :to="localePath('/reservations')"
             class="rounded-full px-3 py-2 text-sm text-muted transition hover:bg-muted hover:text-default"
@@ -62,6 +70,9 @@
               <nav class="grid gap-1" :aria-label="t('saya.header.mobile_nav_aria')">
                 <NuxtLink v-if="showProducts" :to="localePath(productPresentation!.collectionPath)" class="rounded-full px-4 py-3 text-sm font-semibold text-default hover:bg-muted" @click="closeMobileNav">
                   {{ productCollectionLabel }}
+                </NuxtLink>
+                <NuxtLink v-if="showExperiences" :to="localePath(EXPERIENCE_PRESENTATION.collectionPath)" class="rounded-full px-4 py-3 text-sm font-semibold text-default hover:bg-muted" @click="closeMobileNav">
+                  {{ t('saya.footer.experiences') }}
                 </NuxtLink>
                 <NuxtLink v-if="locations.length > 1" :to="localePath('/locations')" class="rounded-full px-4 py-3 text-sm text-default hover:bg-muted" @click="closeMobileNav">
                   {{ t('saya.header.locations') }}
@@ -105,7 +116,7 @@ interface I18nComposable {
 
 
 import { getVerticalCopy } from '~/utils/vertical-copy'
-import { resolveProductPresentation } from '~/utils/product-presentation'
+import { EXPERIENCE_PRESENTATION, resolveProductPresentation } from '~/utils/product-presentation'
 
 // Data comes from layouts/saya.vue, which already owns the single shared
 // bootstrap/tenant-site fetch — header is presentation-only, not a fetcher.
@@ -113,6 +124,7 @@ const props = defineProps<{
   site: Site | null
   locations: ApiRecord[]
   hasProducts: boolean
+  hasExperiences: boolean
 }>()
 
 const i18n = useI18n() as ApiValue as I18nComposable
@@ -158,6 +170,9 @@ const isExperienceSite = computed(() => props.site?.vertical === 'experience')
 
 const productPresentation = computed(() => resolveProductPresentation(props.site?.vertical))
 const showProducts = computed(() => props.hasProducts && productPresentation.value !== null)
+// Two surfaces, each offered only when the site has something on it: what the
+// merchant sells, and what a guest books a seat on.
+const showExperiences = computed(() => props.hasExperiences)
 const productCollectionLabel = computed(() => productPresentation.value?.locationCollectionSegment === 'menu'
   ? t('saya.header.menu')
   : t('saya.footer.products'))

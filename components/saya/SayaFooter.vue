@@ -73,6 +73,7 @@
           <h4 class="saya-eyebrow mb-5 text-inverted/50">{{ t('saya.footer.heading_experience') }}</h4>
           <ul class="space-y-3 text-sm">
             <li v-if="showProducts"><NuxtLink :to="localePath(productPresentation!.collectionPath)" class="text-inverted/60 no-underline transition hover:text-inverted">{{ productCollectionLabel }}</NuxtLink></li>
+            <li v-if="showExperiences"><NuxtLink :to="localePath(EXPERIENCE_PRESENTATION.collectionPath)" class="text-inverted/60 no-underline transition hover:text-inverted">{{ t('saya.footer.experiences') }}</NuxtLink></li>
             <li v-if="!isExperienceSite"><NuxtLink :to="localePath('/reservations')" class="text-inverted/60 no-underline transition hover:text-inverted">{{ copy.reservationPageKicker }}</NuxtLink></li>
             <li v-if="!isExperienceSite"><NuxtLink :to="localePath('/photos')" class="text-inverted/60 no-underline transition hover:text-inverted">{{ t('saya.footer.gallery') }}</NuxtLink></li>
             <li><NuxtLink :to="localePath('/about')" class="text-inverted/60 no-underline transition hover:text-inverted">{{ t('saya.footer.our_story') }}</NuxtLink></li>
@@ -161,7 +162,7 @@
 import { getActiveSpecialClosure } from '~/utils/formatters'
 import { getTodayHoursLabel, type OpeningHours, type SpecialHours } from '~/shared/reservation-hours'
 import { getVerticalCopy } from '~/utils/vertical-copy'
-import { resolveProductPresentation } from '~/utils/product-presentation'
+import { EXPERIENCE_PRESENTATION, resolveProductPresentation } from '~/utils/product-presentation'
 
 interface Site {
   brand_name?: string | null
@@ -212,6 +213,7 @@ const props = defineProps<{
   error: unknown
   config: Record<string, string>
   hasProducts: boolean
+  hasExperiences: boolean
 }>()
 
 const isDark = ref(false)
@@ -252,6 +254,8 @@ const locationsError = computed(() => props.error)
 
 const productPresentation = computed(() => resolveProductPresentation(props.site?.vertical))
 const showProducts = computed(() => props.hasProducts && productPresentation.value !== null)
+// Offered only when the site has something a guest can book.
+const showExperiences = computed(() => props.hasExperiences)
 const productCollectionLabel = computed(() => productPresentation.value?.locationCollectionSegment === 'menu'
   ? t('saya.footer.menu')
   : t('saya.footer.products'))
