@@ -21,7 +21,7 @@
 // A source that already carries the baseline has no `offerings` table, the
 // derivation reads nothing, and the plain copy transfers it.
 import { createHash } from 'node:crypto'
-import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import Database from 'better-sqlite3'
@@ -281,7 +281,8 @@ function deriveCatalog(stage, now, record) {
     SELECT id, organization_id, site_id, location_id, name, slug, NULL, sort_order, created_at, updated_at, created_by, updated_by FROM old.product_categories`).run().changes)
   record('collection_products', stage.prepare(`INSERT INTO collection_products (organization_id, collection_id, product_id, sort_order, created_at, updated_at, created_by, updated_by)
     SELECT max(p.organization_id), p.category_id, m.new_id, min(p.sort_order), min(p.created_at), max(p.updated_at), max(p.created_by), max(p.updated_by)
-    FROM old.products p JOIN temp.product_map m ON m.old_id = p.id GROUP BY p.category_id, m.new_id`).run().changes)
+    FROM old.products p JOIN temp.product_map m ON m.old_id = p.id
+    WHERE p.category_id IS NOT NULL GROUP BY p.category_id, m.new_id`).run().changes)
 
   deriveDraftPayloads(stage, record)
   deriveMetafields(stage, now, record)
@@ -377,12 +378,16 @@ function deriveMetafields(stage, now, record) {
   }
   const insertValue = stage.prepare(`INSERT INTO product_metafields (organization_id, product_id, definition_id, value, created_at, updated_at, created_by, updated_by)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (product_id, definition_id) DO NOTHING`)
+  // Several old products merge into one, so they offer the same attribute more
+  // than once. The manifest is this transfer's evidence, so it counts rows
+  // written rather than attempts made.
+  let written = 0
   for (const entry of values) {
-    insertValue.run(entry.organization_id, entry.product_id, entry.definition.id,
-      serializeMetafieldValue(entry.definition, entry.value), now, now, entry.created_by, entry.created_by)
+    written += insertValue.run(entry.organization_id, entry.product_id, entry.definition.id,
+      serializeMetafieldValue(entry.definition, entry.value), now, now, entry.created_by, entry.created_by).changes
   }
   record('metafield_definitions', definitions.size)
-  record('product_metafields', values.length)
+  record('product_metafields', written)
 }
 
 /**
@@ -410,7 +415,10 @@ function deriveBookingCapability(stage, now, record) {
       assert(weekday >= 0, `Unknown weekday "${day}" on product ${row.product_id}`)
       for (const time of Array.isArray(times) ? times : []) {
         assert(row.timezone, `Product ${row.product_id} schedules slots at a location with no timezone`)
-        insertRule.run(`rule-${row.product_id}-${weekday}-${String(time).replace(':', '')}`, row.organization_id, row.product_id, row.location_id, row.timezone, weekday, String(time), now, now, row.created_by, row.created_by)
+        // A rule belongs to one product AT one location. Old products were
+        // per-location and several map onto one new product, so an id without
+        // the location collides the moment two branches run the same slot.
+        insertRule.run(`rule-${row.product_id}-${row.location_id}-${weekday}-${String(time).replace(':', '')}`, row.organization_id, row.product_id, row.location_id, row.timezone, weekday, String(time), now, now, row.created_by, row.created_by)
         rules += 1
       }
     }
@@ -598,8 +606,11 @@ function deriveGuestRecords(stage, record) {
     assert(row.mapped_product_id, `Request ${row.id} books a product that no longer exists`)
     const config = stage.prepare('SELECT duration_minutes, default_capacity FROM product_booking_configs WHERE product_id = ?').get(row.mapped_product_id)
     assert(config, `Request ${row.id} books product ${row.mapped_product_id}, which takes no bookings`)
-    const rule = stage.prepare(`SELECT id FROM product_availability_rules WHERE product_id = ? AND start_time = ?
-      AND weekday = CAST(strftime('%w', ?) AS INTEGER) LIMIT 1`).get(row.mapped_product_id, row.time_slot, row.booking_date)
+    // The location is part of the rule's identity, so it is part of the lookup:
+    // matching on product and time alone picked whichever branch's rule came
+    // back first.
+    const rule = stage.prepare(`SELECT id FROM product_availability_rules WHERE product_id = ? AND location_id IS ? AND start_time = ?
+      AND weekday = CAST(strftime('%w', ?) AS INTEGER)`).get(row.mapped_product_id, row.location_id, row.time_slot, row.booking_date)
     const duration = config.duration_minutes ?? RESERVATION_DURATION_MINUTES
     const sessionId = `session-${row.mapped_product_id}-${row.booking_date}-${row.time_slot.replace(':', '')}`
     insertSession.run(sessionId, row.organization_id, row.mapped_product_id, row.location_id, rule?.id ?? null,
@@ -841,6 +852,9 @@ export function rebaseline(sourcePath, targetPath, { payloadPath = null, without
     source.close()
     stage.close()
     target.close()
+    // The scratch copy is the whole source database, customer rows included.
+    // It exists only so ATTACH has a file to read.
+    rmSync(sourceFile, { force: true })
   }
 }
 

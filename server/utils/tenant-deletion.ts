@@ -139,9 +139,19 @@ export async function scheduleAccountDeletion(
   return { scheduledAt, organizationIds }
 }
 
+/**
+ * Clear what is actually scheduled.
+ *
+ * Not a fresh computation of which organizations the user owns alone: during a
+ * thirty-day grace period a second owner can be added, and recomputing then
+ * left the organization scheduled for deletion with nothing able to cancel it.
+ * The scheduled instant on the organization is the record, so it is the thing
+ * read.
+ */
 export async function cancelAccountDeletion(env: CloudflareEnv, userId: string): Promise<void> {
-  for (const organizationId of await listSoleOwnedOrganizationIds(env, userId)) {
-    await setOrganizationDeletionScheduledAt(env, organizationId, null)
+  for (const organization of await listUserOrganizations(env, userId)) {
+    if (!organization.deletionScheduledAt) continue
+    await setOrganizationDeletionScheduledAt(env, organization.id, null)
   }
   await setUserDeletionScheduledAt(env, userId, null)
 }

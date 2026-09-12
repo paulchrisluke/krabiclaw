@@ -38,7 +38,6 @@ export default defineHandler(async (event) => {
     ? (() => { try { return JSON.parse(JSON.stringify(body.agent_metadata_json)) as ApiValue } catch { return null } })()
     : null
   if (agentMetadata !== null && JSON.stringify(agentMetadata).length > 10_000) return jsonResponse({ error: 'agent_metadata_json is too large.' }, { status: 400 })
-  const experienceIdInput = cleanString(body.experienceId, 100)
   const locationIdInput = cleanString(body.location_id, 100) || cleanString(body.locationId, 100)
 
   if (!name) return jsonResponse({ error: 'Please enter your name.' }, { status: 400 })
@@ -59,9 +58,9 @@ export default defineHandler(async (event) => {
   }
 
   const assignment = await resolveContactSubmissionAssignment(db, {
-    siteId, locationId: locationIdInput || null, experienceId: experienceIdInput || null, })
+    siteId, locationId: locationIdInput || null, })
   if (assignment.error) return jsonResponse({ error: assignment.error }, { status: 400 })
-  const { assignedLocationId, experience } = assignment
+  const { assignedLocationId } = assignment
 
   const id = crypto.randomUUID()
   const clientIp = getClientIp(event)
@@ -91,7 +90,7 @@ export default defineHandler(async (event) => {
 
   try {
     await notifyContactSubmitted(env, db, {
-      organizationId: site.organization_id, siteId, locationId: assignedLocationId, siteName: site.brand_name, contactId: id, guestName: name, email, subject: subject || topic || null, message, consentAcknowledged, experienceId: experience?.id ?? null, experienceTitle: experience?.title ?? null, })
+      organizationId: site.organization_id, siteId, locationId: assignedLocationId, siteName: site.brand_name, contactId: id, guestName: name, email, subject: subject || topic || null, message, consentAcknowledged, })
   } catch (error) {
     console.error('contact_notification_failed', {
       organizationId: site.organization_id, siteId, contactId: id, error: error instanceof Error ? error.message : String(error)

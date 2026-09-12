@@ -311,11 +311,25 @@ async function offerProductsAtTarget(
   // Location-scoped prices follow, because a price scoped to the source
   // location says nothing about the target. A location-neutral price already
   // applies everywhere and is deliberately left alone.
+  // Only prices belonging to the products this copy just offered at the
+  // target, and only where the target has no active price of its own for that
+  // variant and currency. Selecting every price at the source location copied
+  // prices for products the target does not carry, and re-running the copy
+  // minted a second price for every variant, leaving two active offers.
   const scopedPrices = await queryAll<{ id: string }>(db, `
     SELECT pr.id FROM prices pr
+      JOIN product_variants pv ON pv.organization_id = pr.organization_id AND pv.id = pr.product_variant_id
+      JOIN product_locations pl ON pl.organization_id = pr.organization_id AND pl.product_id = pv.product_id
+        AND pl.location_id = ?
      WHERE pr.organization_id = ? AND pr.location_id = ? AND pr.active = 1
+       AND NOT EXISTS (
+         SELECT 1 FROM prices existing
+          WHERE existing.organization_id = pr.organization_id
+            AND existing.product_variant_id = pr.product_variant_id
+            AND existing.location_id = ? AND existing.active = 1
+            AND existing.currency = pr.currency AND existing.type = pr.type)
      ORDER BY pr.id
-  `, [organizationId, sourceLocationId])
+  `, [sourceLocationId, organizationId, sourceLocationId, targetLocationId])
   for (const price of scopedPrices) {
     statements.push({
       query: `INSERT INTO prices (id, organization_id, product_variant_id, location_id, active, currency, unit_amount, type,

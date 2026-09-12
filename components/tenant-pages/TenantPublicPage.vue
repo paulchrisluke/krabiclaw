@@ -87,7 +87,10 @@ const schemaRecipe = computed<'home' | 'about' | 'contact' | 'pricing' | 'donate
 useProfessionalServiceSchema(() => {
   if (!isBlawby.value || !schemaContext) return null
   const faqBlock = page.value.blocks.find(block => block.type === 'faq')
-  const productBlock = page.value.blocks.find(block => block.type === 'product_grid')
+  // The services this page lists are pages, and the page renders them from its
+  // page_grid. Reading a product_grid here described a block these pages do not
+  // carry, so the schema listed no services at all.
+  const servicesBlock = page.value.blocks.find(block => block.type === 'page_grid' && block.data.section === 'services')
   const donationBlock = page.value.blocks.find(block => block.type === 'donation_choices')
   const faqItems = Array.isArray(faqBlock?.data.items)
     ? faqBlock.data.items.filter(item => item && typeof item === 'object' && !Array.isArray(item)).map(item => {
@@ -95,8 +98,8 @@ useProfessionalServiceSchema(() => {
         return { question: typeof record.title === 'string' ? record.title : null, answer: typeof record.description === 'string' ? record.description : null }
       })
     : []
-  const productItems = Array.isArray(productBlock?.data.items)
-    ? productBlock.data.items.filter(item => item && typeof item === 'object' && !Array.isArray(item)).map(item => {
+  const serviceItems = Array.isArray(servicesBlock?.data.items)
+    ? servicesBlock.data.items.filter(item => item && typeof item === 'object' && !Array.isArray(item)).map(item => {
         const record = item as Record<string, unknown>
         return {
           name: typeof record.title === 'string' ? record.title : '',
@@ -113,7 +116,7 @@ useProfessionalServiceSchema(() => {
     pageTitle: page.value.title,
     pageDescription: page.value.seo_description || page.value.summary,
     faqs: faqItems,
-    items: productItems,
+    items: serviceItems,
     donationUrl,
   }
 })

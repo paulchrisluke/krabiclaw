@@ -175,11 +175,20 @@ function moveProduct(item: { row: Product }, direction: -1 | 1) {
   orderDirty.value = true
 }
 
-async function commitOrder() {
+/**
+ * Save the pending order and return the order this collection now has.
+ *
+ * The caller needs that list: once the local order is cleared, `products`
+ * recomputes from a catalog that has not been refetched, so it reads back the
+ * order from before the reorder. A caller that then sent it as definitive
+ * silently undid what the merchant had just arranged. Null means the save
+ * failed and the list was reloaded.
+ */
+async function commitOrder(): Promise<string[] | null> {
   const id = locationId.value
-  if (!id || !orderDirty.value) return
-  orderDirty.value = false
   const order = products.value.map(row => row.id)
+  if (!id || !orderDirty.value) return order
+  orderDirty.value = false
   localOrder.value = null
   try {
     // The complete intended membership and order for this collection.
@@ -191,7 +200,9 @@ async function commitOrder() {
   } catch (error) {
     toast.add({ description: getErrorMessage(error, 'Failed to save the new order'), color: 'error' })
     await load()
+    return null
   }
+  return order
 }
 
 watch(editing, (value, previous) => {
@@ -214,10 +225,11 @@ async function moveSelected() {
     // Commit any pending reorder first. Closing the edit state below would
     // otherwise fire commitOrder with the pre-move list, sending IDs that no
     // longer belong to this category.
-    await commitOrder()
+    const committed = await commitOrder()
+    if (!committed) return
     // Moving is a membership change: the products leave this collection and
     // join the target, and each collection's order is sent whole.
-    const remaining = products.value.filter(product => !selected.value.includes(product.id)).map(product => product.id)
+    const remaining = committed.filter(productId => !selected.value.includes(productId))
     const targetPositions = new Map<string, number>()
     for (const product of catalog.products.value) {
       const membership = product.collections.find(entry => entry.collection_id === moveTargetId.value)

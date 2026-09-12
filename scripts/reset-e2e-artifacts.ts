@@ -27,6 +27,8 @@ const GUEST_BOOKING_SITE_IDS = ['site-pottery-house', 'site-kikuzuki', 'site-ncl
 // Retained/audit tables are explicit because their site foreign keys are often
 // SET NULL (or intentionally polymorphic), so deleting the site alone would
 // leave rows behind in the shared preview database.
+// `reservations` and `bookings` restrict their request's deletion, so they are
+// swept first. Order here is the order the statements are emitted in.
 const RETAINED_SITE_TABLES = [
   'usage_events',
   'stripe_ga4_subscription_intents',
@@ -34,6 +36,8 @@ const RETAINED_SITE_TABLES = [
   'activity_entries',
   'analytics_events',
   'analytics_summaries',
+  'reservations',
+  'bookings',
   'requests',
 ] as const
 
@@ -138,6 +142,17 @@ const retainedSiteDeletes = RETAINED_SITE_TABLES.map(table => `
 DELETE FROM ${table} WHERE site_id IN (${eligibleSiteIds});
 `).join('\n')
 
+// What a guest booked holds its request open: `reservations` and `bookings`
+// reference it ON DELETE RESTRICT, so both are cleared before the request is.
+const disposableGuestRequestIds = `
+  SELECT id FROM requests
+  WHERE site_id IN (${guestBookingSiteIdList})
+    AND kind IN ('contact', 'reservation', 'booking')
+    AND payload_json ->> '$.guest.email' LIKE '%@playwright.example'
+    AND created_at < '${cutoff}'
+  ORDER BY id LIMIT ${batchSize}
+`
+
 const sql = `-- Sweeps E2E-generated rows from local/preview so they don't accumulate forever.
 -- Safe to re-run: only ever targets organizations outside the fixed fixture allowlist and the
 -- '@playwright.example' guest-email marker that tests/e2e specs already use. Curated fixtures
@@ -172,14 +187,9 @@ WHERE site_id IN (${eligibleSiteIds})
 DELETE FROM sites WHERE id IN (${eligibleE2eFixtureSiteIds});
 DELETE FROM organization WHERE id IN (${eligibleOrgIds});
 
-DELETE FROM requests WHERE id IN (
-  SELECT id FROM requests
-  WHERE site_id IN (${guestBookingSiteIdList})
-    AND kind IN ('contact', 'reservation', 'booking')
-    AND payload_json ->> '$.guest.email' LIKE '%@playwright.example'
-    AND created_at < '${cutoff}'
-  ORDER BY id LIMIT ${batchSize}
-);
+DELETE FROM reservations WHERE request_id IN (${disposableGuestRequestIds});
+DELETE FROM bookings WHERE request_id IN (${disposableGuestRequestIds});
+DELETE FROM requests WHERE id IN (${disposableGuestRequestIds});
 DELETE FROM user WHERE id IN (${eligibleUserIds});
 `
 

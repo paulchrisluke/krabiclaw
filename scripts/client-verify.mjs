@@ -285,11 +285,14 @@ if (OUT_DIR) {
 
 // ── Phase 2: Experience / Product slug routing ────────────────────────────────
 
-if (SITE_ID && (VERTICAL === "experience" || VERTICAL === "restaurant")) {
+// Wellness sells Products on the same /products route as experience, so it is
+// checked here too: gating on experience/restaurant let a wellness site pass
+// verification without its product routes ever being loaded.
+if (SITE_ID && (VERTICAL === "experience" || VERTICAL === "restaurant" || VERTICAL === "wellness")) {
   info("── Slug route checks");
 
   // Every Saya vertical sells Products; only the route segment differs.
-  const pageKind = VERTICAL === "experience" ? "products" : "menu";
+  const pageKind = VERTICAL === "restaurant" ? "menu" : "products";
   const apiPath = `/api/public/sites/${SITE_ID}/page?page=${pageKind}&datasets=products`;
   const res = await get(apiPath);
 
@@ -305,7 +308,7 @@ if (SITE_ID && (VERTICAL === "experience" || VERTICAL === "restaurant")) {
         if (!item.slug) continue;
         // A Product's page lives under the location that offers it, in the
         // segment this vertical presents its catalogue at.
-        const segment = VERTICAL === "experience" ? "products" : "menu";
+        const segment = VERTICAL === "restaurant" ? "menu" : "products";
         const owning = (item.locations ?? []).find((entry) => entry.published && locationsById.has(entry.location_id));
         const route = `/locations/${locationsById.get(owning?.location_id)?.slug}/${segment}/${item.slug}`;
         if (route.includes('/undefined/')) {

@@ -57,7 +57,7 @@
               <div class="flex items-center gap-4">
                 <img v-if="changeLocation?.imageUrl" :src="changeLocation.imageUrl" alt="" class="size-16 rounded-xl object-cover">
                 <p class="min-w-0 flex-1 font-semibold text-highlighted">{{ changeLocation?.title }}</p>
-                <UButton :to="`${bookingPath}/change/location`" icon="i-lucide-pencil" aria-label="Change location" color="neutral" variant="soft" square />
+                <UButton v-if="props.bookingType === 'reservation'" :to="`${bookingPath}/change/location`" icon="i-lucide-pencil" aria-label="Change location" color="neutral" variant="soft" square />
               </div>
             </UCard>
             <section>
@@ -433,13 +433,35 @@ const changeAttemptKey = ref<string | null>(null)
 const changeAttemptDraft = ref('')
 const changeFieldOriginal = ref<string | number | null>(null)
 const changeLocation = computed(() => booking.value?.locations.find(location => location.id === changeDraft.value.locationId))
-const changeDirty = computed(() => Boolean(booking.value) && (changeDraft.value.bookingDate !== booking.value?.bookingDate || changeDraft.value.bookingTime !== booking.value?.bookingTime.slice(0, 5) || changeDraft.value.partySize !== booking.value?.partySize || changeDraft.value.locationId !== booking.value?.locationId))
-const changeFields = computed(() => [
-  { key: 'date', label: 'Date', summary: changeDraft.value.bookingDate ? formatCalendarDate(changeDraft.value.bookingDate, 'en') : 'Choose a date' },
-  { key: 'time', label: 'Time', summary: changeDraft.value.bookingTime ? formatTime(changeDraft.value.bookingTime, 'en') : 'Choose a time' },
-  { key: 'guests', label: 'Guests', summary: `${changeDraft.value.partySize} ${changeDraft.value.partySize === 1 ? 'guest' : 'guests'}` },
-])
-const changeValid = computed(() => Boolean(changeDraft.value.bookingDate && changeDraft.value.bookingTime && Number.isInteger(changeDraft.value.partySize) && changeDraft.value.partySize > 0))
+const changeDirty = computed(() => {
+  if (!booking.value) return false
+  if (changeDraft.value.partySize !== booking.value.partySize) return true
+  // Only the fields this kind can actually change count as a change.
+  return props.bookingType === 'reservation' && (
+    changeDraft.value.bookingDate !== booking.value.bookingDate
+    || changeDraft.value.bookingTime !== booking.value.bookingTime.slice(0, 5)
+    || changeDraft.value.locationId !== booking.value.locationId)
+})
+/**
+ * What this record can be changed to.
+ *
+ * A reservation moves to a location, date and time. A booking moves to another
+ * SESSION of its product — an occurrence that exists as a row — so a date and
+ * time picker cannot express one, and the screen offers party size only until
+ * it can name a session.
+ */
+const changeFields = computed(() => props.bookingType === 'reservation'
+  ? [
+      { key: 'date', label: 'Date', summary: changeDraft.value.bookingDate ? formatCalendarDate(changeDraft.value.bookingDate, 'en') : 'Choose a date' },
+      { key: 'time', label: 'Time', summary: changeDraft.value.bookingTime ? formatTime(changeDraft.value.bookingTime, 'en') : 'Choose a time' },
+      { key: 'guests', label: 'Guests', summary: `${changeDraft.value.partySize} ${changeDraft.value.partySize === 1 ? 'guest' : 'guests'}` },
+    ]
+  : [
+      { key: 'guests', label: 'Guests', summary: `${changeDraft.value.partySize} ${changeDraft.value.partySize === 1 ? 'guest' : 'guests'}` },
+    ])
+const changeValid = computed(() => props.bookingType === 'reservation'
+  ? Boolean(changeDraft.value.bookingDate && changeDraft.value.bookingTime && changeDraft.value.locationId && Number.isInteger(changeDraft.value.partySize) && changeDraft.value.partySize > 0)
+  : Boolean(booking.value?.sessionId && Number.isInteger(changeDraft.value.partySize) && changeDraft.value.partySize > 0))
 const pendingAction = ref<string | null>(null)
 const actionAttempt = ref<{ draft: string; key: string } | null>(null)
 const noteDraft = ref('')
@@ -591,12 +613,18 @@ async function sendChangeRequest() {
   }
   changeSaving.value = true
   try {
-    const proposal = {
-      bookingDate: changeDraft.value.bookingDate,
-      bookingTime: changeDraft.value.bookingTime,
-      partySize: changeDraft.value.partySize,
-      locationId: changeDraft.value.locationId,
-    }
+    // The writer takes one shape per kind and refuses anything else, so the
+    // screen says which it is sending rather than posting a reservation-shaped
+    // body for both — which is how every change request came back a 400.
+    const proposal = props.bookingType === 'reservation'
+      ? {
+          kind: 'reservation' as const,
+          bookingDate: changeDraft.value.bookingDate,
+          bookingTime: changeDraft.value.bookingTime,
+          partySize: changeDraft.value.partySize,
+          locationId: changeDraft.value.locationId,
+        }
+      : { kind: 'booking' as const, sessionId: booking.value?.sessionId ?? '', partySize: changeDraft.value.partySize }
     const response = await dashboardApi<{ booking: DashboardBookingDetails }>(
       `/api/dashboard/bookings/${props.bookingType}/${encodeURIComponent(props.bookingId)}/changes`,
       {

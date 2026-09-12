@@ -24,3 +24,15 @@ export function formatOperationalStatusLabel(type: GuestThreadSubmissionType, st
       .map(word => word.charAt(0).toUpperCase() + word.slice(1))
       .join(' ')
 }
+
+/**
+ * The instant, in the zone the guest booked it in.
+ *
+ * Every surface that prints a booking time goes through here: the inbox list
+ * used to concatenate the raw UTC instant in SQL while the detail pane
+ * formatted the same row in its own timezone, so the two disagreed about when
+ * the guest was coming.
+ */
+export function formatThreadWhenLabel(startsAt: string, timezone: string): string {
+  return new Intl.DateTimeFormat('en-US', { timeZone: timezone, dateStyle: 'medium', timeStyle: 'short' }).format(new Date(startsAt))
+}

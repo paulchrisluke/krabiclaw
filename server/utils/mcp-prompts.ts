@@ -48,7 +48,7 @@ export const MCP_PROMPTS: McpPromptDefinition[] = [
   },
   {
     name: "add_photos_to_site",
-    description: "Add the user's own photos to the right places on the site (homepage, location, Products, experiences, or posts).",
+    description: "Add the user's own photos to the right places on the site (homepage, location, Products, or posts).",
     arguments: [],
   },
   {
@@ -58,7 +58,7 @@ export const MCP_PROMPTS: McpPromptDefinition[] = [
   },
   {
     name: "make_site_more_bookable",
-    description: "Review calls-to-action, contact info, and reservation/experience setup, and suggest changes to get more bookings.",
+    description: "Review calls-to-action, contact info, and reservation/booking setup, and suggest changes to get more bookings.",
     arguments: [],
   },
   {
@@ -91,7 +91,7 @@ export function renderMcpPrompt(name: string, args: Record<string, string>): { d
           "Call get_workspace_context and list_locations, then use the explicit location_id selected by the user.",
           "Call every list_location_products page before deciding whether this is a create or reconciliation.",
           "Call list_collections for that site. Match the user's section names to collection records, call create_collection for any new section, and use set_collection_products with every Product ID in the intended order — membership and position live on the membership row, so the same Product can sit in several collections at once. Use reorder_collections with every collection ID for section order.",
-          `Parse the following into individual Products (name and description where given). What is bought is a variant, and a price belongs to a variant: give each Product at least one variant carrying a price with an integer unit_amount in the site's default currency unless a currency is stated. A Product whose price is simply missing, unclear, or not mentioned is a question for the user — never invent a price and never leave a variant priceless to stand in for one. Then call batch_create_products for entirely new Products or reconcile_products for mixed create/update work, and set_product_publication plus set_product_location to say where each one is sold: ${itemsDescription}`,
+          `Parse the following into individual Products (name and description where given). What is bought is a variant, and a price belongs to a variant: give each Product at least one variant carrying a price with an integer unit_amount in the site's default currency unless a currency is stated. A Product the user prices in words rather than numbers — \"market price\", \"seasonal\", \"ask your server\" — is not priceless: give its variant no price and set the metafield pricing.note to the wording they used, which is what the page shows where an amount would be. The two are mutually exclusive and a Product carrying both is rejected, so never add a number alongside the note. A Product whose price is simply missing, unclear, or not mentioned is neither: it is a question for the user — never invent an amount, and never reach for pricing.note to cover a price nobody stated. Then call batch_create_products for entirely new Products or reconcile_products for mixed create/update work, and set_product_publication plus set_product_location to say where each one is sold: ${itemsDescription}`,
           "If the user has photos or videos, offer to attach them after creation. Use set_media with { owner_type: 'product', owner_id: <exact Product id>, slot: 'image' } for the explicit primary and attach_media with slot 'gallery' for detail-gallery assets.",
           "Report the Products that were created or updated.",
         ].join(" "),
@@ -156,7 +156,7 @@ export function renderMcpPrompt(name: string, args: Record<string, string>): { d
         description: "Add the user's own photos to the right places on the site",
         text: [
           "If the user hasn't already attached photos in this conversation, ask them to attach the photos they want to add directly in ChatGPT.",
-          "For each attached photo, inspect it visually first, then ask the user (or infer from context) where it should go: the homepage main photo, a specific location's main photo, the about/story section, a Product, an experience, or a post.",
+          "For each attached photo, inspect it visually first, then ask the user (or infer from context) where it should go: the homepage main photo, a specific location's main photo, the about/story section, a Product, or a post.",
           "Confirm the target site and placement with the user before uploading anything.",
           "After confirmation, call upload_user_media exactly once for each confirmed attachment with file set to its resolved ChatGPT file reference. Upload every confirmed photo before reporting any of them as placed. Use set_media with asset_id for a single cover/hero/logo placement; use attach_media once per new asset for a gallery or document list, and reorder_media only when needed. Always use the exact owner id returned by a read tool. Never switch to a bare file_id or invent a download URL.",
           "Reply confirming exactly where each photo was placed.",
@@ -169,7 +169,7 @@ export function renderMcpPrompt(name: string, args: Record<string, string>): { d
         text: [
           "Call get_workspace_context first. If there is no active site yet, call list_sites and help the user pick or create one before continuing.",
           "Check what's in place: call get_site_media_assets (kind=\"image\") to see available photos, call list_tenant_pages and get_tenant_page for the variants whose paths are \"/\" and \"/about\", call list_locations, then call every list_location_products page for each relevant location.",
-          "Identify the single most important missing piece — a main photo, Products or experiences, the about/story text, or a first post — and ask the user if they want to work on that now.",
+          "Identify the single most important missing piece — a main photo, Products, the about/story text, or a first post — and ask the user if they want to work on that now.",
           "Guide them through completing just that one thing at a time. Don't ask for everything up front.",
         ].join(" "),
       };
@@ -180,7 +180,7 @@ export function renderMcpPrompt(name: string, args: Record<string, string>): { d
         text: [
           "Call get_workspace_context, then call list_tenant_pages and get_tenant_page for the variant whose path is \"/\" to check the call-to-action button text, and list_locations to check whether contact info and hours are filled in.",
           "If the business takes reservations or bookings, check list_location_products for the explicit location to make sure Products have clear prices and descriptions.",
-          "Suggest concrete changes that make it easier for a visitor to take action — a clearer call-to-action, visible contact info, or more complete Product/experience listings. Explain suggestions in plain language.",
+          "Suggest concrete changes that make it easier for a visitor to take action — a clearer call-to-action, visible contact info, or more complete Product listings. Explain suggestions in plain language.",
           "Apply changes only after the user approves each one.",
         ].join(" "),
       };
@@ -190,7 +190,7 @@ export function renderMcpPrompt(name: string, args: Record<string, string>): { d
         description: "General visual and content review with concrete suggestions",
         text: [
           "Call get_workspace_context, then call list_tenant_pages and get_tenant_page for the variant whose path is \"/\", plus get_site_media_assets, to see current photos and text.",
-          "Review the main photo, headline, story section, and overall completeness. Note anything that looks unfinished, generic, or low-quality (e.g. a missing or blurry main photo, thin story text, no Products or experiences).",
+          "Review the main photo, headline, story section, and overall completeness. Note anything that looks unfinished, generic, or low-quality (e.g. a missing or blurry main photo, thin story text, no Products).",
           "Suggest specific, actionable improvements in plain language — avoid internal field names. Offer to act on one at a time, starting with whichever has the biggest visual impact (usually the main photo).",
           "Only make changes the user has explicitly approved.",
         ].join(" "),

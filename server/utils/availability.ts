@@ -316,18 +316,6 @@ export class CapacityUnavailableError extends Error {
 }
 
 /**
- * The single protected capacity operation.
- *
- * Every booking claim — guest checkout, dashboard, MCP, ChowBot, WhatsApp —
- * goes through here. Session identity alone is not the concurrency control:
- * the insert carries its own capacity predicate, so two concurrent claims for
- * the last seat cannot both succeed. D1 applies each statement atomically, and
- * the second one inserts zero rows and raises.
- *
- * `idempotencyKey` is the caller's own request identity: replaying a claim
- * returns the booking already made instead of claiming a second time.
- */
-/**
  * The capacity-claiming INSERT, as a query rather than an execution.
  *
  * Exposed so a caller that must move a booking — cancel one claim and take
@@ -354,12 +342,16 @@ export function sessionClaimQuery(input: {
    */
   replacingBookingId?: string | null
   /**
-   * The request this claim is part of answering, and the version it was read
-   * at. The claim lands only if that request is still exactly what the caller
-   * saw — otherwise a decision that is about to be refused would still have
-   * taken a seat.
+   * The request this claim is part of answering, the version it was read at,
+   * and the decision key that records the answer.
+   *
+   * The claim lands only while that request is still exactly what the caller
+   * saw *and* nobody has answered the proposal yet. A competing decline
+   * records its decision without touching the request, so the version alone
+   * would let a losing acceptance take seats it then cannot attach to
+   * anything.
    */
-  requireRequestVersion?: { requestId: string; siteId: string; updatedAt: string } | null
+  requireUndecided?: { requestId: string; siteId: string; updatedAt: string; decisionDedupeKey: string } | null
   now: string
 }): BatchQuery {
   return {
@@ -369,7 +361,10 @@ export function sessionClaimQuery(input: {
         customer_id, request_id, party_size, status, hold_expires_at, created_at, updated_at
       )
       SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?
-      WHERE ${input.requireRequestVersion ? 'EXISTS (SELECT 1 FROM requests WHERE id = ? AND site_id = ? AND updated_at = ?) AND ' : ''}EXISTS (
+      WHERE ${input.requireUndecided
+        ? `EXISTS (SELECT 1 FROM requests WHERE id = ? AND site_id = ? AND updated_at = ?)
+           AND NOT EXISTS (SELECT 1 FROM activity_entries WHERE dedupe_key = ?) AND `
+        : ''}EXISTS (
         SELECT 1 FROM product_sessions s
         WHERE s.id = ? AND s.organization_id = ? AND s.product_id = ?
           AND s.status = 'scheduled'
@@ -391,8 +386,8 @@ export function sessionClaimQuery(input: {
     params: [
       input.bookingId, input.organizationId, input.siteId, input.productId, input.sessionId, input.productVariantId,
       input.customerId ?? null, input.requestId ?? null, input.partySize, input.holdExpiresAt ?? null, input.now, input.now,
-      ...(input.requireRequestVersion
-        ? [input.requireRequestVersion.requestId, input.requireRequestVersion.siteId, input.requireRequestVersion.updatedAt]
+      ...(input.requireUndecided
+        ? [input.requireUndecided.requestId, input.requireUndecided.siteId, input.requireUndecided.updatedAt, input.requireUndecided.decisionDedupeKey]
         : []),
       input.sessionId, input.organizationId, input.productId, input.now, input.partySize, input.replacingBookingId ?? null, input.now,
     ],
@@ -421,7 +416,12 @@ export async function claimSessionCapacity(db: DbClient, input: {
   customerId?: string | null
   requestId?: string | null
   holdExpiresAt?: string | null
-  idempotencyKey?: string | null
+  /**
+   * Writes that must land before the claim — the request row it references —
+   * and after it. All of them commit in the one batch the claim commits in, so
+   * a thread without its booking is not a state anything has to reconcile.
+   */
+  preceding?: BatchQuery[]
   following?: BatchQuery[]
 }): Promise<{ bookingId: string }> {
   if (!Number.isSafeInteger(input.partySize) || input.partySize < 1) badRequest('party_size must be a positive integer')
@@ -433,10 +433,11 @@ export async function claimSessionCapacity(db: DbClient, input: {
     if (existing) return { bookingId: existing.id }
   }
 
-  const bookingId = input.idempotencyKey ?? crypto.randomUUID()
+  const bookingId = crypto.randomUUID()
   const claim = sessionClaimQuery({ ...input, bookingId, now: new Date().toISOString() })
-  const results = await executeBatch(db, [claim, ...(input.following ?? [])], { operation: 'Claim session capacity' })
-  if ((results[0]?.meta?.changes ?? 0) === 0) throw new CapacityUnavailableError()
+  const preceding = input.preceding ?? []
+  const results = await executeBatch(db, [...preceding, claim, ...(input.following ?? [])], { operation: 'Claim session capacity' })
+  if ((results[preceding.length]?.meta?.changes ?? 0) === 0) throw new CapacityUnavailableError()
   return { bookingId }
 }
 
@@ -561,10 +562,14 @@ export async function updateSession(db: DbClient, input: {
       ...(capacity === null ? [] : [capacity, now]),
     ],
   }], { operation: 'Update product session' })
-  if (capacity !== null && written[0]?.meta?.changes === 0) {
+  if (written[0]?.meta?.changes === 0) {
     throw new HTTPError({
       statusCode: 409,
-      statusMessage: `This session took more seats while you were editing it; cancel bookings before reducing capacity to ${capacity}`,
+      statusMessage: capacity === null
+        // No capacity predicate to fail, so the row itself is gone: it was
+        // deleted between the read above and this write.
+        ? 'This session is no longer there; reload the calendar'
+        : `This session took more seats while you were editing it; cancel bookings before reducing capacity to ${capacity}`,
     })
   }
 }

@@ -110,7 +110,7 @@ interface Destination { locationId: string | null; title: string; label: string;
  * For a reservation the slot is checked against the location's configured
  * capacity for that start time.
  */
-async function validateDestination(db: DbClient, thread: GuestThreadRow, before: Source, after: Fields): Promise<Destination> {
+async function validateDestination(db: DbClient, thread: GuestThreadRow, before: Source, after: Fields, decisionDedupeKey?: string): Promise<Destination> {
   if (after.kind === 'booking') {
     if (before.recordKind !== 'booking' || !before.productId) throw new HTTPError({ statusCode: 409, message: 'This conversation is a reservation, not a booking' })
     const [target] = await listSessions(db, {
@@ -136,11 +136,15 @@ async function validateDestination(db: DbClient, thread: GuestThreadRow, before:
         bookingId, organizationId: thread.organization_id, siteId: thread.site_id, productId: before.productId!,
         sessionId: target.id, productVariantId: booking.product_variant_id, partySize: after.partySize,
         customerId: booking.customer_id, requestId: null, replacingBookingId: before.recordId,
-        requireRequestVersion: { requestId: thread.id, siteId: thread.site_id, updatedAt: before.updatedAt }, now,
+        requireUndecided: {
+          requestId: thread.id, siteId: thread.site_id, updatedAt: before.updatedAt,
+          decisionDedupeKey: decisionDedupeKey ?? '',
+        }, now,
       }),
     }
   }
 
+  if (before.recordKind !== 'reservation') throw new HTTPError({ statusCode: 409, message: 'This conversation is a booking, not a reservation' })
   const location = await queryFirst<{ id: string; title: string; timezone: string | null }>(db,
     'SELECT id, title, timezone FROM business_locations WHERE id = ? AND site_id = ? AND organization_id = ?',
     [after.locationId, thread.site_id, thread.organization_id])
@@ -225,7 +229,11 @@ export async function requestBookingChange(db: DbClient, env: CloudflareEnv, thr
   } else {
     if (before.updatedAt !== meta.expectedUpdatedAt) throw new HTTPError({ statusCode: 409, message: 'The reservation changed. Reload before sending a request.' })
     const destination = await validateDestination(db, thread, before, after)
-    if (destination.label === localLabel(before.startsAt, before.timezone) && after.partySize === before.partySize) {
+    // Moving a reservation to another branch at the same time for the same
+    // party is a change; comparing only the label and the party size rejected it.
+    if (destination.label === localLabel(before.startsAt, before.timezone)
+      && after.partySize === before.partySize
+      && destination.locationId === before.locationId) {
       throw new HTTPError({ statusCode: 400, message: 'Choose at least one change' })
     }
     const original = before.locationId
@@ -238,7 +246,7 @@ export async function requestBookingChange(db: DbClient, env: CloudflareEnv, thr
       eventName: 'booking_change.requested', dedupeKey: externalId,
       body: `Requested ${destination.label} for ${after.partySize} guests${destination.title ? ` at ${destination.title}` : ''}.`,
       payloadJson: { before: sourceSchema.parse(before), after, updatedAt: before.updatedAt,
-        locationTitle: destination.title, originalLocationTitle: original?.title || destination.title, afterLabel: destination.label },
+        locationTitle: destination.title, originalLocationTitle: original?.title ?? '', afterLabel: destination.label },
     })
   }
   const noun = await bookingNoun(db, thread)
@@ -267,7 +275,7 @@ export async function respondToBookingChange(db: DbClient, env: ChangeEnv, input
 
   if (!result && input.decision) {
     if (!['pending', 'confirmed'].includes(current.status)) throw new HTTPError({ statusCode: 409, message: 'This reservation or booking can no longer be changed' })
-    const destination = input.decision === 'accept' ? await validateDestination(db, thread as GuestThreadRow, current, proposal.after) : null
+    const destination = input.decision === 'accept' ? await validateDestination(db, thread as GuestThreadRow, current, proposal.after, resultId) : null
     const id = crypto.randomUUID()
     const now = new Date().toISOString()
 

@@ -85,8 +85,6 @@ interface ContactNotificationInput extends SiteContext {
   subject?: string | null
   message: string
   consentAcknowledged?: boolean
-  experienceId?: string | null
-  experienceTitle?: string | null
 }
 
 interface BookingNotificationInput extends SiteContext {

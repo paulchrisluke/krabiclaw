@@ -5,6 +5,7 @@ import { jsonResponse, readStrictBody, rethrowHttpError } from '~/server/utils/a
 import { requireLocationAccess } from '~/server/utils/location-access'
 import { requireLocationReservationConfig } from '~/server/utils/reservations'
 import { LOCATION_RESERVATION_OVERRIDE_STATUSES } from '~/shared/bookings'
+import { isValidCalendarDate } from '~/utils/timezone'
 
 interface OverrideChange {
   override_date: string
@@ -15,8 +16,11 @@ interface OverrideChange {
   note?: string | null
 }
 
-const DATE = /^\d{4}-\d{2}-\d{2}$/
 const TIME = /^([01]\d|2[0-3]):[0-5]\d$/
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+}
 
 /**
  * Open or close specific reservation dates and slots.
@@ -36,11 +40,19 @@ export default defineHandler(async (event) => {
     if (!Array.isArray(body.changes) || body.changes.length === 0) {
       return jsonResponse({ error: 'At least one change is required' }, { status: 400 })
     }
-    const changes = body.changes as OverrideChange[]
+    const changes: OverrideChange[] = []
     const seen = new Set<string>()
-    for (const change of changes) {
-      if (!DATE.test(change.override_date)) return jsonResponse({ error: 'override_date must be YYYY-MM-DD' }, { status: 400 })
+    for (const candidate of body.changes) {
+      if (!isRecord(candidate)) return jsonResponse({ error: 'Each change must be an object' }, { status: 400 })
+      const change = candidate as unknown as OverrideChange
+      // The calendar is Gregorian, so 2026-02-31 is not a date. Letting the
+      // pattern alone decide pushed it to the CHECK constraint, which answers
+      // with a 500 instead of saying which field is wrong.
+      if (!isValidCalendarDate(change.override_date)) return jsonResponse({ error: 'override_date must be a YYYY-MM-DD calendar date' }, { status: 400 })
       if (change.time_slot != null && !TIME.test(change.time_slot)) return jsonResponse({ error: 'time_slot must be HH:MM' }, { status: 400 })
+      if (change.directive !== 'inherit' && change.directive !== 'set') {
+        return jsonResponse({ error: "directive must be 'inherit' or 'set'" }, { status: 400 })
+      }
       const key = `${change.override_date}|${change.time_slot ?? ''}`
       if (seen.has(key)) return jsonResponse({ error: `Duplicate change for ${key}` }, { status: 400 })
       seen.add(key)
@@ -50,6 +62,7 @@ export default defineHandler(async (event) => {
       if (change.capacity != null && (!Number.isSafeInteger(change.capacity) || change.capacity < 0)) {
         return jsonResponse({ error: 'capacity must be a non-negative integer or null' }, { status: 400 })
       }
+      changes.push(change)
     }
 
     const now = new Date().toISOString()
@@ -63,7 +76,12 @@ export default defineHandler(async (event) => {
           query: `INSERT INTO location_reservation_overrides
                     (id, organization_id, location_id, override_date, time_slot, status, capacity, note, created_at, updated_at, created_by, updated_by)
                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                  ON CONFLICT (location_id, override_date, time_slot) WHERE time_slot IS NOT NULL DO UPDATE SET
+                  ${change.time_slot == null
+                    // A date-wide override is unique on (location, date) alone —
+                    // its own partial index. Naming only the slot index left the
+                    // second save of a whole day raising UNIQUE.
+                    ? 'ON CONFLICT (location_id, override_date) WHERE time_slot IS NULL DO UPDATE SET'
+                    : 'ON CONFLICT (location_id, override_date, time_slot) WHERE time_slot IS NOT NULL DO UPDATE SET'}
                     status = excluded.status, capacity = excluded.capacity, note = excluded.note,
                     updated_at = excluded.updated_at, updated_by = excluded.updated_by`,
           params: [crypto.randomUUID(), site.organization_id, locationId, change.override_date, change.time_slot ?? null,

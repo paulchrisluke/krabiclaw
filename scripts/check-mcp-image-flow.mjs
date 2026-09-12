@@ -178,6 +178,10 @@ async function createSecondProduct(headers, siteId) {
   expectStatus('create_product (second) succeeds', response)
   const id = data(response.body)?.product?.id
   expectValue('create_product (second) returns Product id', Boolean(id), response.body)
+  // Carrying is not publishing, and the media steps below read this Product
+  // through the site. The first Product publishes itself; this one did not, so
+  // the later site-scoped reads were exercising an unpublished row.
+  expectStatus('set_product_publication (second) succeeds', await mcp(headers, 'set_product_publication', { site_id: siteId, product_id: id, published: true }))
   return id
 }
 

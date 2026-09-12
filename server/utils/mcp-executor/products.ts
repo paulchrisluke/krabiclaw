@@ -25,6 +25,7 @@ import {
 import { assertResourceAccess } from '~/server/utils/member-access'
 import { mcpPageInfo, mcpPageWindow } from '~/server/utils/mcp-pagination'
 import { MCP_ERROR, mcpProtocolError } from '~/server/utils/mcp-protocol'
+import { listSitesForUser } from '~/server/utils/mcp-workflows'
 import type { MetafieldDefinition } from '~/shared/metafields'
 import type { McpExecutorContext } from './shared'
 import { NOT_HANDLED, objectArray, omit, requiredString, requiredStringArray } from './shared'
@@ -146,7 +147,17 @@ export async function handleProductsTools(ctx: McpExecutorContext) {
     }
     case 'set_product_publication': {
       const productId = requiredString(args, 'product_id')
-      await getProduct(site.db, site.organizationId, productId)
+      const target = await getProduct(site.db, site.organizationId, productId)
+      // Attaching a product to this site is not a way in to a product the
+      // caller could not already reach. One carried by a site outside their
+      // access stays outside it — otherwise publishing it here would be the
+      // permission to edit it everywhere.
+      if (target.publications.length > 0) {
+        const visible = new Set((await listSitesForUser(site.db, site.env, site.userId)).map(row => String(row.id)))
+        if (target.publications.some(entry => !visible.has(entry.site_id))) {
+          throw mcpProtocolError(MCP_ERROR.invalidParams, 'That product is carried by a site you do not have access to')
+        }
+      }
       if (typeof args.published !== 'boolean') throw mcpProtocolError(MCP_ERROR.invalidParams, 'published must be a boolean')
       await setProductPublication(site.db, { ...scope, productId, published: args.published, actor })
       return { product: await getProduct(site.db, site.organizationId, productId) }

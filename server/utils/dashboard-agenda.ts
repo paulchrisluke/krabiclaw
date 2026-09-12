@@ -1,4 +1,4 @@
-import { assertCalendarDate, isValidTimezone, instantDate, localDateAt, localDateTimeToInstant, addLocalDays } from '~/utils/timezone'
+import { assertCalendarDate, isValidTimezone, instantDate, localDateAt, addLocalDays } from '~/utils/timezone'
 import { queryAll, type DbClient } from '~/server/db'
 import { d1JsonStringSet } from '~/server/db/d1-limits'
 import { resolveSiteCmsCapabilities } from '~/server/utils/cms-capabilities'
@@ -72,8 +72,6 @@ export interface AgendaPayload {
 interface SourceRow {
   id: string
   kind: AgendaKind
-  local_date: string | null
-  local_time: string | null
   starts_at: string | null
   ends_at: string | null
   title: string
@@ -227,15 +225,22 @@ export async function listAgenda(
   `
   const params = () => scopeParams(organizationId, query)
 
-  if (requestedKinds.has('reservation')) sourceQueries.push(queryAll(db, `${commonSelect('r', 'reservation', `r.booking_date AS local_date, r.time_slot AS local_time, NULL AS starts_at, NULL AS ends_at,
-    json_extract(r.payload_json, '$.guest.name') AS title, printf('%d%s guests', r.party_size, CASE json_extract(r.payload_json, '$.party_size_is_minimum') WHEN 1 THEN '+' ELSE '' END) AS subtitle, r.party_size, r.status`)} AND r.booking_date BETWEEN ? AND ?`, [...params(), query.from, query.to]))
-  if (requestedKinds.has('booking')) sourceQueries.push(queryAll(db, `${commonSelect('b', 'booking', `b.booking_date AS local_date, b.time_slot AS local_time, NULL AS starts_at, NULL AS ends_at,
-    json_extract(b.payload_json, '$.guest.name') AS title, printf('%d guests', b.party_size) AS subtitle, b.party_size AS party_size, b.status`, {
-    joins: `LEFT JOIN products agenda_product ON agenda_product.id = b.product_id AND agenda_product.organization_id = b.organization_id AND agenda_product.site_id = b.site_id`,
-    resourceImage: `COALESCE(${mediaUrlSelect('b', 'product', 'b.product_id', ['gallery'])}, ${locationMediaUrlSelect('b')}, ${siteMediaUrlSelect('b')})`,
+  // A held table and a booked seat are their own rows, and each states one
+  // instant in its own zone. The window here is deliberately broad in UTC; the
+  // day a row belongs to is decided below, in that row's zone.
+  if (requestedKinds.has('reservation')) sourceQueries.push(queryAll(db, `${commonSelect('r', 'reservation', `agenda_reservation.starts_at, agenda_reservation.ends_at,
+    json_extract(r.payload_json, '$.guest.name') AS title, printf('%d%s guests', agenda_reservation.party_size, CASE json_extract(r.payload_json, '$.party_size_is_minimum') WHEN 1 THEN '+' ELSE '' END) AS subtitle, agenda_reservation.party_size, agenda_reservation.status`, {
+    joins: 'JOIN reservations agenda_reservation ON agenda_reservation.request_id = r.id',
+  })} AND agenda_reservation.starts_at BETWEEN ? AND ?`, [...params(), broadFrom, broadTo]))
+  if (requestedKinds.has('booking')) sourceQueries.push(queryAll(db, `${commonSelect('b', 'booking', `agenda_session.starts_at, agenda_session.ends_at,
+    json_extract(b.payload_json, '$.guest.name') AS title, printf('%d guests', agenda_booking.party_size) AS subtitle, agenda_booking.party_size AS party_size, agenda_booking.status`, {
+    joins: `JOIN bookings agenda_booking ON agenda_booking.request_id = b.id
+      JOIN product_sessions agenda_session ON agenda_session.id = agenda_booking.product_session_id
+      LEFT JOIN products agenda_product ON agenda_product.id = agenda_booking.product_id AND agenda_product.organization_id = agenda_booking.organization_id`,
+    resourceImage: `COALESCE(${mediaUrlSelect('b', 'product', 'agenda_booking.product_id', ['gallery'])}, ${locationMediaUrlSelect('b')}, ${siteMediaUrlSelect('b')})`,
     resourceTitle: 'COALESCE(agenda_product.name, l.title, s.brand_name, s.subdomain, s.id)',
-  })} AND b.booking_date BETWEEN ? AND ?`, [...params(), query.from, query.to]))
-  if (requestedKinds.has('post')) sourceQueries.push(queryAll(db, `${commonSelect('p', 'post', `NULL AS local_date, NULL AS local_time, CASE p.status WHEN 'published' THEN p.published_at WHEN 'scheduled' THEN p.scheduled_for END AS starts_at, NULL AS ends_at,
+  })} AND agenda_session.starts_at BETWEEN ? AND ?`, [...params(), broadFrom, broadTo]))
+  if (requestedKinds.has('post')) sourceQueries.push(queryAll(db, `${commonSelect('p', 'post', `CASE p.status WHEN 'published' THEN p.published_at WHEN 'scheduled' THEN p.scheduled_for END AS starts_at, NULL AS ends_at,
     NULLIF(COALESCE(NULLIF(p.title, ''), json_extract(p.metadata_json, '$.event.title')), '') AS title, json_extract(p.metadata_json, '$.post_type') AS subtitle, NULL AS party_size, p.status`, {
     resourceImage: `COALESCE(${mediaUrlSelect('p', 'content_document', 'p.id', ['cover'])}, ${locationMediaUrlSelect('p')}, ${siteMediaUrlSelect('p')})`,
   })}
@@ -250,12 +255,8 @@ export async function listAgenda(
   const items = rows.flatMap<AgendaItem>((row) => {
     const timeZone = row.timezone
     if (!isValidTimezone(timeZone)) throw new Error(`Timezone is not configured for agenda item ${row.id}`)
-    const isBooking = row.kind === 'reservation' || row.kind === 'booking'
-    if (isBooking && (!row.local_date || !row.local_time)) throw new Error(`Booking date and time are missing for agenda item ${row.id}`)
-    if (!isBooking && !row.starts_at) throw new Error(`Publication time is missing for agenda item ${row.id}`)
-    const startsAt = isBooking
-      ? localDateTimeToInstant(row.local_date!, row.local_time!, timeZone).toISOString()
-      : instantDate(row.starts_at!).toISOString()
+    if (!row.starts_at) throw new Error(`Start time is missing for agenda item ${row.id}`)
+    const startsAt = instantDate(row.starts_at).toISOString()
     const dayKey = localDateAt(instantDate(startsAt), timeZone)
     if (dayKey < query.from || dayKey > query.to) return []
     const siteBase = `/dashboard/${organizationSlug}/sites/${row.site_slug}`

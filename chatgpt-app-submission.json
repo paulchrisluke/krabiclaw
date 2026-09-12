@@ -1084,10 +1084,18 @@
     },
     {
       "description": "Refuse to invent a price nobody stated.",
-      "user_prompt": "At Ember & Slice, West Village, in Submission Drinks, add Submission Seasonal Drink with description “Ask about today’s selection”. The price changes daily.",
+      "user_prompt": "At Ember & Slice, West Village, in Submission Drinks, add Submission Seasonal Drink with description “Ask about today’s selection”.",
       "file_attachment_urls": null,
       "tools_triggered": "list_sites, list_locations, list_collections, list_location_products",
       "expected_output": "Asks what the Product should cost rather than creating it: what a customer buys is a variant and a variant carries its price, so it does not substitute zero, an estimate, or a priceless variant standing in for one.",
+      "expected_output_url": null
+    },
+    {
+      "description": "Price a Product in words when the owner asks for it.",
+      "user_prompt": "At Ember & Slice, West Village, in Submission Drinks, add Submission Daily Catch and price it as “Market price” — it changes every day, so do not put a number on it.",
+      "file_attachment_urls": null,
+      "tools_triggered": "list_sites, list_locations, list_collections, create_metafield_definition, create_product, set_product_location, set_product_publication, set_collection_products",
+      "expected_output": "Creates the Product with a variant carrying no price and the metafield pricing.note set to “Market price”, defining that attribute first if the tenant has not, and says the menu will show those words where an amount would be. It does not add a number alongside the note, which the writer rejects.",
       "expected_output_url": null
     },
     {

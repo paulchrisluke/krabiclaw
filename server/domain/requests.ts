@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { queryFirst, type BatchQuery, type DbClient } from '~/server/db'
+import { executeBatch, queryFirst, type BatchQuery, type DbClient } from '~/server/db'
 
 /**
  * The inbox.
@@ -170,18 +170,35 @@ export async function cancelBookingRequest(db: DbClient, input: {
   const record = await getThreadOperationalRecord(db, current.id)
   if (!record || !['pending', 'confirmed'].includes(record.status)) return null
 
-  const row = await queryFirst<Record<string, unknown>>(db, `UPDATE requests SET
-      payload_json = json_set(payload_json, '$.cancellation.used_at', ?), updated_at = ?
-    WHERE id = ? AND site_id = ? AND kind = ?
-      AND json_extract(payload_json, '$.cancellation.token_hash') = ?
-      AND json_extract(payload_json, '$.cancellation.used_at') IS NULL
-      AND json_extract(payload_json, '$.cancellation.expires_at') > ? RETURNING *`,
-  [input.now, input.now, input.id, input.siteId, input.kind, input.tokenHash, input.now])
-  if (!row) return null
-
+  // Two writes, one batch, each carrying the other's condition: the token is
+  // spent only while the record is still cancellable, and the record is
+  // cancelled only where the token was spent. Separately, a record whose status
+  // moved in between left the guest with a consumed token and a live booking
+  // still holding its seats.
   const table = record.kind === 'booking' ? 'bookings' : 'reservations'
-  await queryFirst(db, `UPDATE ${table} SET status = 'cancelled', cancelled_at = ?, cancellation_reason = 'guest_cancelled', updated_at = ?
-    WHERE id = ? AND status = ?`, [input.now, input.now, record.id, record.status])
+  const [consumed, released] = await executeBatch(db, [
+    {
+      query: `UPDATE requests SET
+          payload_json = json_set(payload_json, '$.cancellation.used_at', ?), updated_at = ?
+        WHERE id = ? AND site_id = ? AND kind = ?
+          AND json_extract(payload_json, '$.cancellation.token_hash') = ?
+          AND json_extract(payload_json, '$.cancellation.used_at') IS NULL
+          AND json_extract(payload_json, '$.cancellation.expires_at') > ?
+          AND EXISTS (SELECT 1 FROM ${table} WHERE id = ? AND status = ?) RETURNING *`,
+      params: [input.now, input.now, input.id, input.siteId, input.kind, input.tokenHash, input.now, record.id, record.status],
+    },
+    {
+      query: `UPDATE ${table} SET status = 'cancelled', cancelled_at = ?, cancellation_reason = 'guest_cancelled', updated_at = ?
+        WHERE id = ? AND status = ?
+          AND EXISTS (SELECT 1 FROM requests WHERE id = ? AND site_id = ?
+            AND json_extract(payload_json, '$.cancellation.used_at') = ?)`,
+      params: [input.now, input.now, record.id, record.status, input.id, input.siteId, input.now],
+    },
+  ], { operation: 'Cancel booking request' })
+
+  const row = (consumed?.results?.[0] ?? null) as Record<string, unknown> | null
+  if (!row) return null
+  if ((released?.meta?.changes ?? 0) !== 1) throw new Error('Cancellation consumed the token without releasing the booking')
 
   const request = parseGuestRequest(row)
   if (request.kind === 'contact') throw new Error('Cancellation returned a contact thread')

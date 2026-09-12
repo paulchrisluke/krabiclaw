@@ -49,7 +49,8 @@ export interface PriceInput {
    */
   id?: string
   unit_amount: number
-  currency: CurrencyCode
+  /** Omitted when the price takes the site's own currency, which the writer resolves. */
+  currency?: CurrencyCode
   location_id?: string | null
   active?: boolean
   type?: PriceType
@@ -240,25 +241,3 @@ export function minorAmountToMajor(unitAmount: number, currency: CurrencyCode): 
   return digits === 0 ? String(unitAmount) : (unitAmount / (10 ** digits)).toFixed(digits)
 }
 
-// Close an open offer at the instant its replacement begins. Both rows persist:
-// a referenced transaction amount is a snapshot elsewhere and is never rewritten
-// by editing the offer.
-export function replacePrice(
-  current: Price,
-  replacement: Omit<Price, 'organization_id' | 'product_variant_id' | 'location_id' | 'valid_until_at'>,
-): { closed: Price; replacement: Price } {
-  if (!replacement.valid_from_at) throw new Error('a replacement offer must declare valid_from_at')
-  assertInstant(replacement.valid_from_at, 'valid_from_at')
-  if (current.valid_until_at !== null || replacement.valid_from_at <= (current.valid_from_at ?? '')) {
-    throw new Error('only an open price may be replaced at a later instant')
-  }
-  const next: Price = {
-    ...replacement,
-    organization_id: current.organization_id,
-    product_variant_id: current.product_variant_id,
-    location_id: current.location_id,
-    valid_until_at: null,
-  }
-  assertPriceShape(next)
-  return { closed: { ...current, valid_until_at: replacement.valid_from_at }, replacement: next }
-}

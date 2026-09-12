@@ -67,7 +67,7 @@ test('a dish with no description of its own is described by its price and locati
     locationTitle: 'Kikuzuki Ao Nang',
     priceSelection: SELECTION,
   }, translate)
-  assert.equal(readable(description), 'Sprite — . THB 320.00 at Kikuzuki Ao Nang.')
+  assert.equal(readable(description), 'Sprite. THB 320.00 at Kikuzuki Ao Nang.')
 })
 
 test('two dishes at the same location get different descriptions', () => {
@@ -98,7 +98,7 @@ test('a Product with no applicable price is not offered and is described without
   assert.equal(isOfferedProduct(unpriced, SELECTION), false)
   assert.equal(
     readable(composeProductSeoDescription({ product: unpriced, locationTitle: 'Kikuzuki Ao Nang', priceSelection: SELECTION }, translate)),
-    'Market Fish — . Available at Kikuzuki Ao Nang.',
+    'Market Fish. Available at Kikuzuki Ao Nang.',
   )
 })
 

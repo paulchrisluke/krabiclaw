@@ -6,7 +6,7 @@ import { notifyBookingCreated } from '~/server/utils/notifications'
 import { recordSubmissionConversionSafe } from '~/server/utils/site-conversions'
 import { resolveLocationContact } from '~/server/utils/contact-resolution'
 import { parsePhone } from '~/utils/phone'
-import { executeBatch, queryAll, queryFirst } from '~/server/db'
+import { queryAll, queryFirst } from '~/server/db'
 import { productPolicySummarySource, renderBookingPolicySummary } from '~/server/utils/reservations'
 import { getProduct } from '~/server/utils/product-management'
 import { getSourceLocale } from '~/server/utils/site-locales'
@@ -139,24 +139,25 @@ export default defineHandler(async (event) => {
   payload.cancellation = { token_hash: cancellationTokenHash, expires_at: cancellation.expiresAt, used_at: null }
 
   try {
-    // The inbox thread and the seat claim commit together: a thread with no
-    // booking, or a booking with no thread, would each be a broken state
-    // somebody has to reconcile by hand.
-    await executeBatch(db, requestInsertQueries({
-      kind: 'booking', id: threadId, organization_id: site.organization_id, site_id: siteId,
-      location_id: session.location_id, customer_id: customer.id, review_id: null,
-      conversation_state: 'needs_attention', resolved_at: null, payload,
-      created_at: now, updated_at: now,
-    }), { operation: 'Create booking thread' })
-
+    // The inbox thread and the seat claim commit together, in one batch: a
+    // thread with no booking, or a booking with no thread, would each be a
+    // broken state somebody has to reconcile by hand. The thread is written
+    // first because the booking references it.
     await claimSessionCapacity(db, {
       organizationId: site.organization_id, siteId, productId: product.id, sessionId: session.id,
       productVariantId, partySize, customerId: customer.id, requestId: threadId,
+      preceding: requestInsertQueries({
+        kind: 'booking', id: threadId, organization_id: site.organization_id, site_id: siteId,
+        location_id: session.location_id, customer_id: customer.id, review_id: null,
+        conversation_state: 'needs_attention', resolved_at: null, payload,
+        created_at: now, updated_at: now,
+      }),
     })
   } catch (error) {
-    if (!(error instanceof CapacityUnavailableError)) throw error
-    await executeBatch(db, [{ query: 'DELETE FROM requests WHERE id = ?', params: [threadId] }], { operation: 'Roll back booking thread' })
+    // Nothing to roll back: the batch either applied whole or not at all. The
+    // customer row is the exception — it was written before this.
     if (customer.created) await deleteCustomerIfUnlinked(db, customer.id)
+    if (!(error instanceof CapacityUnavailableError)) throw error
     return jsonResponse({ error: 'This session just filled up. Please pick another time.' }, { status: 409 })
   }
 

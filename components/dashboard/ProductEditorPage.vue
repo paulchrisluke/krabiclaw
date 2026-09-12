@@ -385,10 +385,20 @@ watch(locationId, load)
 interface OptionValueDraft { id: string | null; value: string }
 interface OptionDraft { id: string; name: string; values: OptionValueDraft[] }
 interface VariantDraft {
+  /**
+   * The combination of option values this variant selects, not its row id.
+   *
+   * A rebuild after an option edit looks a variant up by the combination it
+   * describes; keying by id here made every surviving combination look new,
+   * which took its id and its prices with it.
+   */
   key: string
   id: string | null
   name: string
   selections: Record<string, string>
+  /** Restated on save: a submitted variant is its complete state. */
+  sku: string | null
+  active: boolean
   price_major: string
   /** The amount this box held when the product was loaded. */
   loaded_price_major: string
@@ -434,10 +444,12 @@ function loadForm(row: Product) {
     values: option.values.map(value => ({ id: value.id, value: value.value })),
   }))
   form.variants = row.variants.map(variant => ({
-    key: variant.id,
+    key: form.options.length ? combinationKey(variant.option_values) : 'default',
     id: variant.id,
     name: variant.name,
     selections: { ...variant.option_values },
+    sku: variant.sku,
+    active: variant.active,
     price_major: variantPriceMajor(variant),
     loaded_price_major: variantPriceMajor(variant),
     prices: variant.prices.map(price => ({ ...price })),
@@ -450,6 +462,19 @@ function loadForm(row: Product) {
   form.location_published = here?.published ?? false
   form.image_asset_id = row.image?.asset_id ?? null
   loadedCatalogShape.value = catalogShapeOf()
+}
+
+/**
+ * The label combination a set of selections names, in option order.
+ *
+ * Both the loaded variants and the rebuilt ones are keyed by this, so a
+ * combination that survives an option edit is recognised as the same one.
+ */
+function combinationKey(selections: Record<string, string>): string {
+  return form.options
+    .filter(option => option.name.trim() && option.values.length)
+    .map(option => option.values.find(value => (value.id ?? value.value) === selections[option.id])?.value ?? '')
+    .join(' / ')
 }
 
 function metafieldKey(definition: MetafieldDefinition): string {
@@ -513,6 +538,7 @@ function rebuildVariants() {
     const first = form.variants[0]
     form.variants = [{
       key: 'default', id: first?.id ?? null, name: form.name || 'Default', selections: {},
+      sku: first?.sku ?? null, active: first?.active ?? true,
       price_major: first?.price_major ?? '', loaded_price_major: first?.loaded_price_major ?? '', prices: first?.prices ?? [],
     }]
     return
@@ -533,6 +559,8 @@ function rebuildVariants() {
       id: prior?.id ?? null,
       name: key,
       selections: combination.selections,
+      sku: prior?.sku ?? null,
+      active: prior?.active ?? true,
       price_major: prior?.price_major ?? '',
       loaded_price_major: prior?.loaded_price_major ?? '',
       prices: prior?.prices ?? [],
@@ -671,9 +699,14 @@ function buildCatalog() {
       values: option.values.map((value, valueIndex) => ({ id: value.id ?? undefined, value: value.value, sort_order: valueIndex })),
   }))
   const variants = form.variants.map((variant, index) => ({
-      id: variant.id ?? undefined,
-      name: variant.name,
-      sort_order: index,
+    id: variant.id ?? undefined,
+    name: variant.name,
+    // Restated whole: the server takes a submitted variant as its complete
+    // state, so omitting these would clear a SKU and switch a disabled variant
+    // back on.
+    sku: variant.sku,
+    active: variant.active,
+    sort_order: index,
       // A selection names its option the same way the declaration above does:
       // a saved option by id, one being created by its name.
       option_values: Object.fromEntries(Object.entries(variant.selections)

@@ -264,8 +264,19 @@ const locationTitle = (id: string) => {
 const isAvailable = (product: Product, collectionLocationId: string | null = null): boolean => {
   if (!product.active) return false
   const id = productLocationId(product, collectionLocationId)
-  if (id && !product.locations.some(entry => entry.location_id === id && entry.active)) return false
+  // Under a site-wide collection a product offered at several branches has no
+  // single one to name, and the question becomes whether any branch this page
+  // covers offers it. Skipping the check entirely there made a product offered
+  // nowhere read as available.
+  const offeredHere = id
+    ? product.locations.some(entry => entry.location_id === id && entry.active)
+    : product.locations.some(entry => entry.active && entry.published && locationMap.value.has(entry.location_id))
+  if (!offeredHere) return false
+  // On sale means the merchant is selling it here. A product priced in words —
+  // "Market price" — is on sale; an amount is what online checkout needs, and
+  // that is a different question.
   return priceFor(product, collectionLocationId) !== null
+    || typeof product.metafields[PRICING_NOTE_HANDLE] === 'string'
 }
 
 const productHref = (product: Product, collectionLocationId: string | null = null): string | null => {
@@ -282,7 +293,9 @@ const productHref = (product: Product, collectionLocationId: string | null = nul
  */
 const priceFor = (product: Product, collectionLocationId: string | null = null): Price | null => {
   const selection = { currency: props.currency, location_id: productLocationId(product, collectionLocationId), at: new Date().toISOString() }
-  const offers = product.variants.flatMap(variant => selectPrice(variant.prices, selection) ?? [])
+  // Only variants a customer can choose: a disabled variant's price would
+  // otherwise undercut the one actually on offer.
+  const offers = product.variants.filter(variant => variant.active !== false).flatMap(variant => selectPrice(variant.prices, selection) ?? [])
   return offers.reduce<Price | null>((lowest, offer) => (!lowest || offer.unit_amount < lowest.unit_amount ? offer : lowest), null)
 }
 /**
@@ -350,8 +363,8 @@ function compareAtPrice(product: Product, collectionLocationId: string | null = 
   return formatProductMoney({ ...price, unit_amount: price.compare_at_unit_amount, compare_at_unit_amount: null })
 }
 
-function offerFor(product: Product) {
-  const price = priceFor(product)
+function offerFor(product: Product, collectionLocationId: string | null = null) {
+  const price = priceFor(product, collectionLocationId)
   return price ? { '@type': 'Offer', price: minorAmountToMajor(price.unit_amount, price.currency), priceCurrency: price.currency } : undefined
 }
 
@@ -366,7 +379,10 @@ useSchemaOrg(computed(() => props.presentation.structuredDataType === 'MenuItem'
           '@type': 'MenuItem',
           name: product.name,
           description: product.description,
-          offers: offerFor(product),
+          // The same branch the card is priced for: a menu section belongs to
+          // one location, and structured data that disagreed with the visible
+          // price would be the page contradicting itself.
+          offers: offerFor(product, group.location_id),
         })),
       })),
     }

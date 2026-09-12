@@ -92,11 +92,11 @@
         <div v-if="bookingStep === 1" class="flex min-h-0 flex-1 flex-col">
           <!-- What is being booked. One option is not a choice; several are,
                and the guest makes it rather than the server picking an order. -->
-          <fieldset v-if="bookableVariants.length > 1" class="mb-5">
+          <fieldset v-if="sellableVariants.length > 1" class="mb-5">
             <legend class="mb-2 text-sm font-medium">{{ t('saya.product_detail.choose_option') }}</legend>
             <div class="flex flex-col gap-2">
               <label
-                v-for="variant in bookableVariants"
+                v-for="variant in sellableVariants"
                 :key="variant.id"
                 class="flex cursor-pointer items-baseline justify-between gap-3 rounded-lg border border-default px-4 py-3 text-sm"
                 :class="selectedVariantId === variant.id ? 'border-primary bg-primary/5' : ''"
@@ -221,7 +221,9 @@ const breadcrumbs = computed(() => [
  */
 const offer = computed<Price | null>(() => {
   const selection = { currency: props.currency, location_id: props.location.id, at: new Date().toISOString() }
-  const offers = props.product.variants.flatMap(variant => selectPrice(variant.prices, selection) ?? [])
+  // Only variants a customer can actually choose: a disabled variant's price
+  // would otherwise headline an amount the selector never offers.
+  const offers = sellableVariants.value.flatMap(variant => selectPrice(variant.prices, selection) ?? [])
   return offers.reduce<Price | null>((lowest, candidate) => (!lowest || candidate.unit_amount < lowest.unit_amount ? candidate : lowest), null)
 })
 /**
@@ -242,14 +244,24 @@ const compareAtLabel = computed(() => {
 })
 
 /**
- * Whether a customer can buy this here: the merchant is selling it, this
- * location offers it, and an applicable price exists. Three facts, all
- * required, none substituting for another.
+ * Whether this branch is selling it at all: the merchant's switch and this
+ * location's. Two facts, neither substituting for the other.
+ *
+ * A price is not one of them. A product priced in words — "Market price" — is
+ * on sale; it just cannot be checked out online, which is a different question
+ * asked below.
  */
+/** The options a customer can actually choose. A retired variant is not one. */
+const sellableVariants = computed(() => props.product.variants.filter(variant => variant.active !== false))
+
 const isAvailable = computed(() =>
   props.product.active
   && props.product.locations.some(entry => entry.location_id === props.location.id && entry.active)
-  && offer.value !== null)
+  // Every option retired is the merchant having nothing left to sell here. The
+  // booking form otherwise asked for an option it had none to offer.
+  && sellableVariants.value.length > 0)
+
+
 
 /**
  * The labelled facts under the product, named by the tenant's own definitions.
@@ -285,9 +297,8 @@ interface PublicSession {
 const bookingOpen = ref(false)
 const bookingStep = ref(1)
 const partySize = ref(1)
-/** The purchasable options this product actually offers. */
-const bookableVariants = computed(() => props.product.variants.filter(variant => variant.active !== false))
-const selectedVariantId = ref<string | null>(bookableVariants.value.length === 1 ? bookableVariants.value[0]!.id : null)
+/** The options a customer can actually choose — what is priced, and what is booked. */
+const selectedVariantId = ref<string | null>(sellableVariants.value.length === 1 ? sellableVariants.value[0]!.id : null)
 function variantPriceLabel(variant: Product['variants'][number]) {
   return formatProductMoney(selectPrice(variant.prices, { currency: props.currency, location_id: props.location.id, at: new Date().toISOString() }))
 }
@@ -332,15 +343,26 @@ const selectedSession = computed<PublicSession | null>(() => {
   return sessions.value.find(session => localDateOf(session) === selection.day && localTimeOf(session) === selection.time) ?? null
 })
 
+/**
+ * Load what the form needs. Opening is the checkbox's job.
+ *
+ * The control is a label for the modal's checkbox, so pressing it toggles that
+ * checkbox and the modal reports the new state back through v-model. Setting
+ * `bookingOpen` here as well raced the label's own activation: the state said
+ * open, the checkbox had been flipped back, and the dialog stayed hidden with
+ * its sessions loaded behind it.
+ */
 async function openBooking() {
-  bookingOpen.value = true
   bookingStep.value = 1
   bookingError.value = ''
   if (sessions.value.length || sessionsPending.value) return
   sessionsPending.value = true
   try {
     const response = await publicApiRequest<{ success: true; sessions: PublicSession[] }>(
-      `/api/public/sites/${encodeURIComponent(props.siteId)}/products/${encodeURIComponent(props.product.slug)}/sessions`,
+      // This page is one branch's page, so it asks for that branch's
+      // occurrences. Two branches running the same class at the same hour
+      // would otherwise be indistinguishable by date and time alone.
+      `/api/public/sites/${encodeURIComponent(props.siteId)}/products/${encodeURIComponent(props.product.slug)}/sessions?location_id=${encodeURIComponent(props.location.id)}`,
       {
         validate: (value): value is { success: true; sessions: PublicSession[] } =>
           isRecord(value) && value.success === true && Array.isArray(value.sessions),
@@ -429,6 +451,8 @@ useSchemaOrg(computed(() => ({
   name: props.product.name,
   description: props.product.description,
   image: props.product.image?.public_url,
+  // An offer node states an amount, so a product priced in words has none to
+  // state. It is still on sale; it simply is not quoted here.
   offers: offer.value
     ? {
         '@type': 'Offer',

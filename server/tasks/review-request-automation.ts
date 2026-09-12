@@ -1,7 +1,5 @@
-import { localDateTimeToInstant } from '~/utils/timezone'
 import type { D1Database } from '@cloudflare/workers-types'
 import { queryAll } from '~/server/db'
-import { resolveLocationTimezone } from '~/server/utils/site-config'
 import type { ReviewBookingType } from '~/server/utils/review-requests'
 import { executeGuestThreadOperation } from '~/server/domain/guest-threads/operations'
 import { sendReviewRequestForBooking } from '~/server/utils/review-request-delivery'
@@ -18,8 +16,7 @@ interface AutoCompleteRow {
   organization_id: string
   site_id: string
   location_id: string | null
-  booking_date: string
-  time_slot: string
+  ends_at: string
   duration_minutes: number | null
   access_plan: string | null
   access_expires_at: string | null
@@ -53,20 +50,26 @@ interface TaskResult {
 }
 
 async function autoCompleteBookings(db: D1Database, env: ApiRecord, kind: ReviewBookingType): Promise<number> {
+  // When it happened and how long it runs belong to the record — a session for
+  // a booking, the held table for a reservation — so the sweep reads them
+  // there rather than from a thread that no longer carries them.
   const rows = await collectScheduledPaidRows((limit, offset) => queryAll<AutoCompleteRow>(db, `
-      SELECT r.id, r.organization_id, r.site_id, r.location_id, r.booking_date, r.time_slot,
-             cfg.duration_minutes AS duration_minutes,
+      SELECT r.id, r.organization_id, r.site_id, record.location_id, record.ends_at,
              ob.access_plan, ob.access_expires_at, ob.payment_status, ob.paid_through, ob.past_due_since, ob.updated_at
-        FROM requests r LEFT JOIN products p ON p.id = r.product_id
+        FROM requests r
+        JOIN (
+          SELECT b.request_id, b.status, ps.location_id, ps.ends_at FROM bookings b JOIN product_sessions ps ON ps.id = b.product_session_id
+          UNION ALL
+          SELECT res.request_id, res.status, res.location_id, res.ends_at FROM reservations res
+        ) record ON record.request_id = r.id
         JOIN organization_billing ob ON ob.organization_id = r.organization_id AND ob.access_plan = 'growth'
-       WHERE r.kind = ? AND r.status = 'confirmed' AND json_extract(r.payload_json, '$.completion.at') IS NULL
+       WHERE r.kind = ? AND record.status = 'confirmed' AND json_extract(r.payload_json, '$.completion.at') IS NULL
        ORDER BY r.id LIMIT ? OFFSET ?
     `, [kind, limit, offset]), 'review_requests')
   let completed = 0
   for (const row of rows) {
-    const timezone = await resolveLocationTimezone(db, row.organization_id, row.site_id, row.location_id)
-    const duration = kind === 'reservation' ? 180 : row.duration_minutes ?? 360
-    if (Date.now() < localDateTimeToInstant(row.booking_date, row.time_slot, timezone).getTime() + duration * 60_000) continue
+    // The record says when it ends. Nothing here needs a duration to guess with.
+    if (Date.now() < Date.parse(row.ends_at)) continue
     const outcome = await executeGuestThreadOperation(db, { threadId: row.id, siteId: row.site_id, action: 'complete', actorUserId: null, completionSource: 'auto', env, idempotencyKey: `auto-complete:${row.id}` })
     if (outcome.ok) {
       completed += 1
@@ -85,8 +88,13 @@ async function sendDue(db: D1Database, env: ApiRecord, kind: 'first' | 'reminder
       SELECT r.id, r.organization_id, r.site_id, r.kind AS booking_type,
              ob.access_plan, ob.access_expires_at, ob.payment_status, ob.paid_through, ob.past_due_since, ob.updated_at
         FROM requests r JOIN customers c ON c.id = r.customer_id
+        JOIN (
+          SELECT request_id, status FROM bookings
+          UNION ALL
+          SELECT request_id, status FROM reservations
+        ) record ON record.request_id = r.id
         JOIN organization_billing ob ON ob.organization_id = r.organization_id AND ob.access_plan = 'growth'
-       WHERE r.kind IN ('reservation', 'booking') AND r.status = 'completed'
+       WHERE r.kind IN ('reservation', 'booking') AND record.status = 'completed'
          AND json_extract(r.payload_json, '$.completion.at') IS NOT NULL
          AND json_extract(r.payload_json, '$.review.submitted_at') IS NULL
          AND c.review_request_opted_out_at IS NULL

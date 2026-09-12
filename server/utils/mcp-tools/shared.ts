@@ -5,6 +5,7 @@ import type { McpToolRole } from '~/server/utils/mcp-auth'
 import { SUPPORTED_CURRENCIES } from '~/shared/currencies'
 import { PUBLICATION_CONTENT_BLOCK_TYPES } from '~/shared/content-registries'
 import { ROBOTS_INTENTS } from '~/shared/robots-directive'
+import { RESERVATION_STATUSES } from '~/shared/bookings'
 
 export interface McpToolDefinition {
   name: string
@@ -654,7 +655,7 @@ export const reservationSubmissionObject = {
     date: { type: ['string', 'null'] },
     time: { type: ['string', 'null'] },
     requests: { type: ['string', 'null'] },
-    status: { type: 'string', enum: ['new', 'confirmed', 'cancelled', 'completed'] },
+    status: { type: 'string', enum: [...RESERVATION_STATUSES] },
     created_at: { type: 'string' },
     location_id: { type: ['string', 'null'] },
     location_title: { type: ['string', 'null'] },

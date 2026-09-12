@@ -94,5 +94,10 @@ test('deployed MCP transport prices variants, and refuses to invent a missing am
       ] }],
     },
   })
-  expect(JSON.stringify(await ambiguous.json())).toMatch(/isError|conflict|ambiguous/i)
+  // The refusal itself, not a word in the response: the product is called
+  // "Ambiguous Roll", so a pattern matching "ambiguous" passed on the tool
+  // echoing the name back after a successful create.
+  const ambiguousBody = await ambiguous.json() as { result?: { isError?: unknown; content?: Array<{ text?: string }> } }
+  expect(ambiguousBody.result?.isError, JSON.stringify(ambiguousBody)).toBe(true)
+  expect(ambiguousBody.result?.content?.map(part => part.text).join(' ')).toMatch(/price/i)
 })

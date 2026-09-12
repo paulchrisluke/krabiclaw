@@ -108,9 +108,13 @@ test('DST gaps and folds are reported, never silently resolved', { timeout: 120_
     // inside that window rather than hardcoded — the test stays true as time
     // passes instead of expiring on a fixed date.
     const zone = 'America/Los_Angeles'
+    // One window for both the search and the generation: searching a day
+    // further than sessions are generated could find a transition the run never
+    // reached, depending on the date the suite happened to run.
+    const WINDOW_DAYS = 359
     const findSunday = (time: string): string | null => {
       const today = localNow(zone).date
-      for (let offset = 1; offset <= 360; offset += 1) {
+      for (let offset = 1; offset <= WINDOW_DAYS; offset += 1) {
         const date = addLocalDays(today, offset)
         if (new Date(`${date}T00:00:00Z`).getUTCDay() !== 0) continue
         try { localDateTimeToInstant(date, time, zone, 'reject') }
@@ -126,7 +130,7 @@ test('DST gaps and folds are reported, never silently resolved', { timeout: 120_
     await addRule(db, 'rule-gap', { timezone: zone, weekday: 0, start_time: '02:30', location_id: null })
     await addRule(db, 'rule-fold', { timezone: zone, weekday: 0, start_time: '01:30', location_id: null })
     const result = await materializeSessions(db, {
-      organizationId: ORG, productId: PRODUCT, throughDate: addLocalDays(localNow(zone).date, 359), actorId: ACTOR,
+      organizationId: ORG, productId: PRODUCT, throughDate: addLocalDays(localNow(zone).date, WINDOW_DAYS), actorId: ACTOR,
     })
 
     const gap = result.skipped.find(entry => entry.local_date === gapDate && entry.local_start_time === '02:30')

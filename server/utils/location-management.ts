@@ -353,6 +353,13 @@ export async function createLocation(
     return { status: 400, data: { error: "Location title is required." } };
   }
 
+  // An unusable robots value is a bad request, like every other field checked
+  // here. Left to `normalizeLocationRobots`, it threw mid-write and reached the
+  // caller as a 500 saying nothing about which field was wrong.
+  if (input.robots !== undefined && !parseRobotsIntent(input.robots).ok) {
+    return { status: 400, data: { error: `robots must be one of: ${ROBOTS_INTENTS.join(", ")}` } };
+  }
+
   if (
     input.rating !== undefined &&
     input.rating !== null &&
@@ -557,6 +564,13 @@ export async function updateLocation(
 
   if (input.title !== undefined && !input.title.trim()) {
     return { status: 400, data: { error: "title cannot be empty." } };
+  }
+
+  // An unusable robots value is a bad request, like every other field checked
+  // here. Left to `normalizeLocationRobots`, it threw mid-write and reached the
+  // caller as a 500 saying nothing about which field was wrong.
+  if (input.robots !== undefined && !parseRobotsIntent(input.robots).ok) {
+    return { status: 400, data: { error: `robots must be one of: ${ROBOTS_INTENTS.join(", ")}` } };
   }
   const updateFeaturesResult = await resolveValidatedLocationFeatures(db, organizationId, siteId, input.feature_overrides, locationId);
   if (!updateFeaturesResult.ok) {

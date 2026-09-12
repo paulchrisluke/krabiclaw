@@ -28,6 +28,12 @@ export default defineHandler(async (event) => {
     if (body.status !== undefined && !(PRODUCT_SESSION_STATUSES as readonly unknown[]).includes(body.status)) {
       return jsonResponse({ error: `status must be one of: ${PRODUCT_SESSION_STATUSES.join(', ')}` }, { status: 400 })
     }
+    // Seats, like status, are checked here rather than cast: a capacity of
+    // "12" or -1 reached the writer as a number it then wrote.
+    if (body.capacity !== undefined && body.capacity !== null
+      && (!Number.isSafeInteger(body.capacity) || (body.capacity as number) < 0)) {
+      return jsonResponse({ error: 'capacity must be a non-negative integer or null' }, { status: 400 })
+    }
     await updateSession(db, {
       organizationId: site.organization_id, sessionId, actorId: auth.user.id,
       startsAt: typeof body.starts_at === 'string' ? body.starts_at : undefined,

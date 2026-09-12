@@ -155,10 +155,14 @@ async function hydrateBlocks(
       ? (await resources.pages).filter(page => pageIds.has(page.id))
       : await listPublicTenantPageReferenceRows(db, siteId, [...pageIds], locale)
     : []
-  const products = (await Promise.all([...collectionIds].map(collectionId =>
-    listPublicTenantPageProductRows(db, siteId, { collectionId })))).flat()
-    .concat(productIds.size ? await listPublicTenantPageProductRows(db, siteId, { productIds: [...productIds] }) : [])
-  const productById = new Map(products.map(product => [product.id, product]))
+  // Each grid gets the products it named, and only those. Keyed by collection
+  // rather than flattened into one list: two grids on a page name two different
+  // collections, and a flat union rendered both collections in both grids.
+  const productsByCollection = new Map(await Promise.all([...collectionIds].map(async collectionId =>
+    [collectionId, await listPublicTenantPageProductRows(db, siteId, { collectionId })] as const)))
+  const productById = new Map((productIds.size
+    ? await listPublicTenantPageProductRows(db, siteId, { productIds: [...productIds] })
+    : []).map(product => [product.id, product]))
   const sourceLocations = locationIds.size
     ? await queryAll<{ id: string; title: string; slug: string; description: string | null; short_description: string | null; asset_id: string | null; public_url: string | null; thumbnail_url: string | null; kind: string | null; alt_text: string | null }>(db, `
         SELECT bl.id, bl.title, bl.slug, bl.description, bl.short_description, ma.id AS asset_id, ma.public_url, ma.thumbnail_url, ma.kind, ma.alt_text
@@ -238,13 +242,19 @@ async function hydrateBlocks(
       })
     }
     if (block.type === 'product_grid') {
+      // Either the block names products, or it names a collection. A block that
+      // names neither lists nothing — the same rule a page_grid follows.
+      const collectionId = typeof data.collection_id === 'string' && data.collection_id.trim() ? data.collection_id : null
       const selected = Array.isArray(data.product_ids) && data.product_ids.length > 0
         ? data.product_ids.map((id) => {
             const product = typeof id === 'string' ? productById.get(id) : undefined
             if (!product) throw new HTTPError({ statusCode: 500, statusMessage: 'Tenant page product reference is unavailable' })
             return product
           })
-        : products
+        : collectionId
+          ? productsByCollection.get(collectionId)
+          : []
+      if (!selected) throw new HTTPError({ statusCode: 500, statusMessage: 'Tenant page collection reference is unavailable' })
       data.items = selected.map(product => ({
         id: product.id,
         title: product.name,

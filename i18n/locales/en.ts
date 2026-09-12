@@ -175,7 +175,9 @@ export default {
       "choose_option": "Choose an option",
       "more_in_category": "More in {category}",
       "meta_description": "{name} — {detail}. Available at {location}.",
-      "meta_description_priced": "{name} — {detail}. {price} at {location}."
+      "meta_description_priced": "{name} — {detail}. {price} at {location}.",
+      "meta_description_undescribed": "{name}. Available at {location}.",
+      "meta_description_undescribed_priced": "{name}. {price} at {location}."
     },
     "photos": {
       "title": "Photos from every room.",

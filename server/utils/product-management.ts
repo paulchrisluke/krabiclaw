@@ -1,5 +1,6 @@
 import { HTTPError } from 'nitro'
 import { d1JsonArray, executeBatch, queryAll, queryFirst, type BatchQuery, type DbClient } from '~/server/db'
+import { MAX_D1_BATCH_STATEMENTS } from '~/server/db/d1-limits'
 import { resourceLocalizationDeletionQueries } from '~/server/utils/localization'
 import { loadPublicSocialMedia } from '~/server/utils/public-social-image'
 import { publicResourceCacheInvalidationQuery } from '~/server/utils/public-resource-cache'
@@ -1310,7 +1311,15 @@ export async function reconcileProducts(db: DbClient, input: {
     }
   })
 
+  // The tenant's attribute vocabulary and the site's currency are the same for
+  // every row in one reconcile: asked once, not once per product.
+  const definitions = await loadMetafieldDefinitions(db, input.organizationId)
+  const defaultCurrency = input.siteId ? await organizationDefaultCurrency(db, input.organizationId, input.siteId) : null
+  const taken = new Set<string>()
+  const now = new Date().toISOString()
   const touched: string[] = []
+  const creates: BatchQuery[] = []
+
   for (const entry of input.products) {
     const { product_id: productId, ...rest } = entry
     const existing = productId
@@ -1321,22 +1330,53 @@ export async function reconcileProducts(db: DbClient, input: {
       touched.push(existing.id)
       continue
     }
-    const definitions = await loadMetafieldDefinitions(db, input.organizationId)
-    const planned = await planProduct(db, input.organizationId, rest, { siteId: input.siteId, existingId: productId })
+    const planned = await planProduct(db, input.organizationId, rest, {
+      siteId: input.siteId, existingId: productId, defaultCurrency, takenSlugs: taken,
+    })
     assertVariantPricesConsistent(planned)
-    await executeBatch(db, productWrites(input.organizationId, planned, definitions, input.actor, new Date().toISOString(), 'insert'), { operation: 'Reconcile product' })
+    creates.push(...productWrites(input.organizationId, planned, definitions, input.actor, now, 'insert'))
+    // The site that reconciles its catalog carries what the reconcile creates,
+    // withheld until someone publishes it — the same rule batch creation
+    // follows, and what makes "missing from this site's import" answerable.
+    if (input.siteId) {
+      creates.push({
+        query: `INSERT INTO product_publications (organization_id, product_id, site_id, published, created_at, updated_at, created_by, updated_by)
+                VALUES (?, ?, ?, 0, ?, ?, ?, ?)
+                ON CONFLICT (product_id, site_id) DO NOTHING`,
+        params: [input.organizationId, planned.id, input.siteId, now, now, input.actor.actorId, input.actor.actorId],
+      })
+    }
     touched.push(planned.id)
   }
-
-  if (input.deactivateMissing) {
-    const now = new Date().toISOString()
-    await executeBatch(db, [{
-      query: `UPDATE products SET active = 0, updated_at = ?, updated_by = ?
-              WHERE organization_id = ? AND id NOT IN (SELECT value FROM json_each(?))`,
-      params: [now, input.actor.actorId, input.organizationId, d1JsonArray(touched)],
-    }], { operation: 'Deactivate products missing from reconcile' })
+  // Everything new lands together, in batches the size D1 accepts.
+  for (let index = 0; index < creates.length; index += MAX_D1_BATCH_STATEMENTS) {
+    await executeBatch(db, creates.slice(index, index + MAX_D1_BATCH_STATEMENTS), { operation: 'Reconcile products' })
   }
 
-  const rows = await queryAll<Row>(db, `SELECT ${PRODUCT_COLUMNS} FROM products p WHERE p.organization_id = ? AND p.id IN (SELECT value FROM json_each(?)) ORDER BY p.name, p.id`, [input.organizationId, d1JsonArray(touched)])
+  // Products the reconcile did not mention. A reconcile for one site speaks
+  // only for that site's catalog: an organization's other sites keep theirs.
+  const deactivated: string[] = []
+  if (input.deactivateMissing) {
+    const scope = input.siteId
+      ? { clause: 'AND EXISTS (SELECT 1 FROM product_publications pub WHERE pub.product_id = products.id AND pub.site_id = ?)', params: [input.siteId] }
+      : { clause: '', params: [] as string[] }
+    const missing = await queryAll<{ id: string }>(db, `
+      SELECT id FROM products
+       WHERE organization_id = ? AND active = 1 AND id NOT IN (SELECT value FROM json_each(?)) ${scope.clause}
+    `, [input.organizationId, d1JsonArray(touched), ...scope.params])
+    if (missing.length > 0) {
+      deactivated.push(...missing.map(row => row.id))
+      await executeBatch(db, [{
+        query: `UPDATE products SET active = 0, updated_at = ?, updated_by = ?
+                WHERE organization_id = ? AND id IN (SELECT value FROM json_each(?))`,
+        params: [now, input.actor.actorId, input.organizationId, d1JsonArray(deactivated)],
+      }], { operation: 'Deactivate products missing from reconcile' })
+    }
+  }
+
+  // Everything the reconcile decided about, including what it switched off:
+  // a caller that asked for deactivation is told which products it got.
+  const answered = d1JsonArray([...touched, ...deactivated])
+  const rows = await queryAll<Row>(db, `SELECT ${PRODUCT_COLUMNS} FROM products p WHERE p.organization_id = ? AND p.id IN (SELECT value FROM json_each(?)) ORDER BY p.name, p.id`, [input.organizationId, answered])
   return hydrate(db, input.organizationId, rows.map(mapProductRow))
 }

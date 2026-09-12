@@ -316,7 +316,10 @@ interface GoogleMapsPlaceResolverDependencies {
 // Google Maps links arrive on whichever Google domain the owner's browser was
 // on: google.com, google.de, google.co.uk, maps.google.fr. All of them are
 // Google; anything that merely ends in a Google-looking string is not.
-const GOOGLE_DOMAIN_PATTERN = /^(?:[a-z0-9-]+\.)*google(?:\.[a-z]{2,3})?\.[a-z]{2,3}$/
+// The registrable domain must BE google's: `google.<tld>`, or `google.<second
+// level>.<cc>` for the country forms. Allowing any two labels after "google"
+// also matched google.ab.com — a subdomain of ab.com, which anyone can buy.
+const GOOGLE_DOMAIN_PATTERN = /^(?:[a-z0-9-]+\.)*google\.(?:[a-z]{2,3}|(?:com|co|org|net|ac)\.[a-z]{2})$/
 
 export function isAllowedGoogleMapsHost(hostname: string): boolean {
   const h = hostname.toLowerCase()

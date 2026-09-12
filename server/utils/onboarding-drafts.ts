@@ -322,9 +322,12 @@ export function buildOnboardingDraftPayload(input: {
       name,
       slug: slugify(name) || `item-${index + 1}`,
       description: '',
+      // No currency of its own when the onboarding details carry none: the
+      // price is normalized against the site's currency, and hardcoding USD
+      // here overrode what the tenant actually sells in.
       price: product.amountMinor === null
         ? null
-        : { unit_amount: product.amountMinor, currency: input.details.currency ?? 'USD' },
+        : { unit_amount: product.amountMinor, ...(input.details.currency ? { currency: input.details.currency } : {}) },
       order_url: null,
       sort_order: index,
       tags: [],

@@ -2,7 +2,7 @@ import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { queryAll, queryFirst } from '~/server/db'
 import { bookingWindow, listSessions } from '~/server/utils/availability'
 import { defineHandler } from 'nitro'
-import { getRouterParam } from 'nitro/h3'
+import { getQuery, getRouterParam } from 'nitro/h3'
 
 /**
  * The sessions a guest can book.
@@ -11,6 +11,11 @@ import { getRouterParam } from 'nitro/h3'
  * a product whose sessions have not been generated returns an empty list and
  * the page says there is nothing to book. It does not invent slots from a
  * recurrence rule the merchant has not materialized.
+ *
+ * `location_id` scopes the answer to one branch. A product page belongs to a
+ * branch, and two branches can run the same class at the same hour: without
+ * the scope the page would offer occurrences of the other one, and the guest
+ * would be booked into a class they did not choose.
  */
 export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
@@ -42,6 +47,11 @@ export default defineHandler(async (event) => {
      WHERE pl.product_id = ? AND pl.active = 1 AND pl.published = 1
   `, [siteId, product.id])).map(row => row.location_id))
 
+  const requestedLocation = typeof getQuery(event).location_id === 'string' ? String(getQuery(event).location_id) : null
+  if (requestedLocation && !sellingLocations.has(requestedLocation)) {
+    return jsonResponse({ error: 'This product is not on sale at that location' }, { status: 404 })
+  }
+
   const window = bookingWindow(product.timezone)
   const sessions = await listSessions(db, {
     organizationId: product.organization_id, productId: product.id,
@@ -50,9 +60,13 @@ export default defineHandler(async (event) => {
   return jsonResponse({
     success: true,
     product: { id: product.id, name: product.name, slug },
-    sessions: sessions.filter(session => session.location_id === null || sellingLocations.has(session.location_id)).map(session => ({
-      id: session.id, starts_at: session.starts_at, ends_at: session.ends_at,
-      timezone: session.timezone, remaining: session.remaining, is_full: session.is_full,
-    })),
+    sessions: sessions
+      .filter(session => (requestedLocation
+        ? session.location_id === requestedLocation
+        : session.location_id === null || sellingLocations.has(session.location_id)))
+      .map(session => ({
+        id: session.id, starts_at: session.starts_at, ends_at: session.ends_at, location_id: session.location_id,
+        timezone: session.timezone, remaining: session.remaining, is_full: session.is_full,
+      })),
   })
 })

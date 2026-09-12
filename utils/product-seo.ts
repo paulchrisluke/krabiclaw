@@ -116,20 +116,29 @@ export function composeProductSeoDescription(
   const priceLabel = formatProductMoney(
     input.product.variants.flatMap(variant => selectPrice(variant.prices, input.priceSelection) ?? []).at(0) ?? null,
   )
-  const key = priceLabel
-    ? 'saya.product_detail.meta_description_priced'
-    : 'saya.product_detail.meta_description'
   const named = {
     name: input.product.name.trim(),
     location: input.locationTitle.trim(),
     ...(priceLabel ? { price: priceLabel.trim() } : {}),
   }
-  const detailBudget = DESCRIPTION_MAX_LENGTH - translate(key, { ...named, detail: '' }).length
+  const subject = productSubjectLine(input.product)
+  const describedKey = priceLabel
+    ? 'saya.product_detail.meta_description_priced'
+    : 'saya.product_detail.meta_description'
+  const detailBudget = DESCRIPTION_MAX_LENGTH - translate(describedKey, { ...named, detail: '' }).length
   // Under a word's worth of budget the frame alone already fills the tag; adding
   // an ellipsis-only fragment would just be noise.
-  const detail = detailBudget < MIN_DETAIL_BUDGET
+  const detail = !subject || detailBudget < MIN_DETAIL_BUDGET
     ? ''
-    : truncateForSeo(productSubjectLine(input.product), detailBudget) ?? ''
+    : truncateForSeo(subject, detailBudget) ?? ''
+  // A product with nothing of its own to say gets the frame written for that
+  // case. Feeding an empty detail into the described frame published the
+  // punctuation around it — "Sprite — . THB 320.00 at Kikuzuki Ao Nang."
+  const key = detail
+    ? describedKey
+    : priceLabel
+      ? 'saya.product_detail.meta_description_undescribed_priced'
+      : 'saya.product_detail.meta_description_undescribed'
   const composed = truncateForSeo(translate(key, { ...named, detail }), DESCRIPTION_MAX_LENGTH)
   if (!composed) throw new Error('Product SEO description composed to an empty string')
   return composed

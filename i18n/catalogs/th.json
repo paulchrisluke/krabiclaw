@@ -237,6 +237,8 @@
   "saya.product_detail.more_in_category": "รายการอื่นใน {category}",
   "saya.product_detail.meta_description": "{name} — {detail} มีให้บริการที่ {location}",
   "saya.product_detail.meta_description_priced": "{name} — {detail} ราคา {price} ที่ {location}",
+  "saya.product_detail.meta_description_undescribed": "{name} มีให้บริการที่ {location}",
+  "saya.product_detail.meta_description_undescribed_priced": "{name} ราคา {price} ที่ {location}",
   "saya.products.collection_title": "สินค้าจาก {site}",
   "saya.products.empty": "ยังไม่มีสินค้าที่เผยแพร่",
   "saya.products.meta_description": "เลือกชมสินค้าจาก {site}",

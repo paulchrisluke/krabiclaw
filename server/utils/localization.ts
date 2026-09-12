@@ -234,6 +234,21 @@ async function getSiteVertical(db: DbClient, organizationId: string, siteId: str
   return site.vertical
 }
 
+/**
+ * Does this site carry this resource? Every variant takes the same three
+ * parameters — organization, site, resource — so the same SQL serves both the
+ * existence check and the NOT EXISTS clause that clears a localization whose
+ * canonical row has since gone.
+ */
+function canonicalResourceQuery(resourceType: LocalizedResourceType): string {
+  const { table, siteScope } = RESOURCE_LOCALIZATION_REGISTRY[resourceType]
+  if (siteScope === 'self') return `SELECT id FROM ${table} WHERE organization_id = ? AND id = ? AND id = ?`
+  if (siteScope === 'site_column') return `SELECT id FROM ${table} WHERE organization_id = ? AND site_id = ? AND id = ?`
+  return `SELECT p.id FROM ${table} p
+    JOIN product_publications pub ON pub.organization_id = p.organization_id AND pub.product_id = p.id
+    WHERE p.organization_id = ? AND pub.site_id = ? AND p.id = ?`
+}
+
 async function assertCanonicalResourceExists(
   db: DbClient,
   organizationId: string,
@@ -241,13 +256,10 @@ async function assertCanonicalResourceExists(
   resourceType: LocalizedResourceType,
   resourceId: string,
 ): Promise<BatchQuery> {
-  const table = RESOURCE_LOCALIZATION_REGISTRY[resourceType].table
-  const query = resourceType === 'site'
-    ? `SELECT id FROM ${table} WHERE organization_id = ? AND id = ?`
-    : `SELECT id FROM ${table} WHERE organization_id = ? AND site_id = ? AND id = ?`
-  const params = resourceType === 'site' ? [organizationId, resourceId] : [organizationId, siteId, resourceId]
+  const query = canonicalResourceQuery(resourceType)
+  const params = [organizationId, siteId, resourceId]
   const row = await queryFirst<{ id: string }>(db, query, params)
-  if (!row || (resourceType === 'site' && resourceId !== siteId)) {
+  if (!row) {
     localizationError(404, 'LOCALIZATION_NOT_FOUND', 'Canonical resource was not found', { resource_type: resourceType, resource_id: resourceId })
   }
   return {

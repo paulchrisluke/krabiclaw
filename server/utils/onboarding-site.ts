@@ -284,7 +284,10 @@ export async function applyOnboardingDraftToSite(
         // reads as "not purchasable here" rather than as a price of zero.
         variants: [{
           name: product.name,
-          prices: product.price ? [{ ...product.price, currency: product.price.currency ?? defaultCurrency }] : [],
+          // The writer resolves the site's currency for a price that names
+          // none — it reads the row this function has already updated — so
+          // resolving it a second time here could only disagree with it.
+          prices: product.price ? [product.price] : [],
         }],
       })),
     })
@@ -343,7 +346,9 @@ export async function applyOnboardingDraftToSite(
   batchQueries.push(...googleReviewUpserts({ organizationId, siteId, locationId: locationRow.id }, payload.preview.reviews, now))
 
   try {
-    await executeBatch(db, batchQueries)
+    // A draft with nothing in it yet — the owner has answered only the name —
+    // writes nothing, and D1 rejects an empty batch outright.
+    if (batchQueries.length) await executeBatch(db, batchQueries)
   } catch (batchError) {
     console.error('onboarding_site_apply_batch_failed', {
       siteId, organizationId, batchSize: batchQueries.length, contentRows: payload.preview.content.length, products: payload.preview.products.length, qaRows: payload.preview.qa.length, posts: payload.preview.posts.length, reviews: payload.preview.reviews.length, queries: summarizeBatchQueries(batchQueries), error: batchError instanceof Error ? {

@@ -194,6 +194,9 @@ if (expRes.ok) {
   for (const product of products.slice(0, 3)) {
     if (!product.slug) continue
     const owning = (product.locations ?? []).find(entry => entry.published && locationsById.has(entry.location_id))
+    // A published product with no location publishing it has no page at all.
+    // Skipping it quietly is how a broken catalogue passed this gate.
+    assert(`Product ${product.slug} is published at a location`, Boolean(owning), true)
     if (!owning) continue
     const route = `/locations/${locationsById.get(owning.location_id).slug}/products/${product.slug}`
     const r = await get(route)

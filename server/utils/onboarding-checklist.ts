@@ -5,6 +5,7 @@ import { queryFirst } from '~/server/db'
 import { cloudflareEnv } from '~/server/utils/api-response'
 import { getDashboardContext } from '~/server/utils/dashboard-context'
 import { requireSiteAccess } from '~/server/utils/location-access'
+import { SERVICE_PAGE_SQL } from '~/server/utils/module-content-guard'
 import { normalizeVertical } from '~/utils/vertical-copy'
 
 export interface OnboardingChecklist {
@@ -88,7 +89,7 @@ export async function loadOnboardingChecklist(
       (SELECT COUNT(DISTINCT p.id) FROM products p
          JOIN product_publications pub ON pub.product_id = p.id AND pub.organization_id = p.organization_id
         WHERE pub.site_id = s.id AND pub.published = 1 AND p.active = 1) AS products,
-      (SELECT COUNT(*) FROM content_documents WHERE site_id = s.id AND row_role = 'root' AND kind = 'page' AND (metadata_json ->> '$.recipe') = 'services') AS service_pages,
+      (SELECT COUNT(*) FROM content_documents WHERE site_id = s.id AND ${SERVICE_PAGE_SQL}) AS service_pages,
       (
         SELECT COUNT(*)
         FROM content_documents v

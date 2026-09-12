@@ -173,6 +173,10 @@ export async function createQa(db: DbClient, scope: QaScope, input: CreateQaInpu
       page_path: pagePath,
       status,
       sort_order: sortOrder,
+      // A newly created question has no votes yet. It is stated rather than
+      // omitted: this is the same row shape the list returns, and the CMS
+      // validates it as one.
+      upvote_count: 0,
       created: true,
     },
   }

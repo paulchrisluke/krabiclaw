@@ -3,6 +3,7 @@ import {
   openTenantPage, potteryHouseBaseURL, potteryHouseExtraHeaders,
 } from './helpers'
 import { devLoginHeaders, kikuzukiTestBaseUrl, kikuzukiTestExtraHeaders, testBaseUrl } from './test-env'
+import { loginAs } from './helpers/auth'
 
 type NotificationRow = { template: string }
 type DeliveryRow = { channel: 'email' | 'whatsapp'; purpose: string; status: string }
@@ -56,13 +57,16 @@ test.describe('tenant guest journeys (disposable local/preview data only)', () =
     // A guest books an occurrence, and occurrences are materialized from the
     // product's rules. Generation is idempotent, so the journey makes sure
     // there is something on the calendar to book before it tries.
+    await loginAs(request, testBaseUrl(), 'user-e2e-pottery-owner')
     const generated = await request.post(`${testBaseUrl()}/api/editor/sites/site-pottery-house/products/exp-ph-wheel/sessions/generate`, {
-      headers: { ...devLoginHeaders(), 'x-preview-tenant': 'pottery-house' },
+      headers: { 'x-preview-tenant': 'pottery-house' },
       data: { through: new Date(Date.now() + 30 * 86_400_000).toISOString().slice(0, 10) },
     })
     expect(generated.status(), await generated.text()).toBe(200)
     await openTenantPage(page, `${potteryHouseBaseURL}/locations/krabi/products/pottery-wheel-class`, potteryHouseExtraHeaders)
-    await page.locator('#product-booking-toggle').first().click()
+    // What a guest presses is the labelled control; the checkbox behind it is
+    // screen-reader-only and has no clickable box of its own.
+    await page.getByRole('button', { name: 'Book now' }).first().click()
     await chooseFirstAvailableTime(page)
     await page.getByLabel('Full name').fill('Pottery Journey Test')
     await page.getByLabel('Email address').fill(email)
@@ -104,12 +108,15 @@ test.describe('tenant guest journeys (disposable local/preview data only)', () =
     if (typeof reservation.id !== 'string' || typeof reservation.cancellationToken !== 'string') {
       throw new Error('Reservation response omitted its lookup credentials')
     }
-    const persisted = await request.get(`${baseURL}/api/public/sites/site-kikuzuki/reservations/${reservation.id}`, {
+    // A booking and a reservation are read back through one route: what holds
+    // the seats differs, what the guest is shown does not.
+    const persisted = await request.get(`${baseURL}/api/public/sites/site-kikuzuki/booking-requests/${reservation.id}`, {
       headers: { ...kikuzukiTestExtraHeaders(), Authorization: `Bearer ${reservation.cancellationToken}` },
     })
-    expect(persisted.status()).toBe(200)
-    const persistedBody: { reservation?: { status?: unknown } } = await persisted.json()
-    expect(persistedBody.reservation?.status).toBe('confirmed')
+    expect(persisted.status(), await persisted.text()).toBe(200)
+    const persistedBody: { booking?: { kind?: unknown; status?: unknown } } = await persisted.json()
+    expect(persistedBody.booking?.kind).toBe('reservation')
+    expect(persistedBody.booking?.status).toBe('confirmed')
     await expect(page).toHaveURL(/\/reservations\/confirmed/)
     await expect(page.locator('main')).toContainText('Reservation confirmed')
     await expect(page.locator('main')).not.toContainText(/confirm your .* shortly/i)
