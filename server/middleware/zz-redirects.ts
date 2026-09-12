@@ -28,19 +28,27 @@ const PLATFORM_GONE_PATHS = new Set(['/changelog', '/posts'])
 /**
  * The experience surface became the product catalogue (#919).
  *
- * `/experiences` and `/experiences/<slug>` are printed on cards, indexed by
- * Google and pasted into guests' chats, so they answer with the product's own
- * page instead of a 404 — a restaurant's classes are on its menu now, an
- * activity operator's are in its catalogue. A slug is only redirected when the
- * product is published to this site at exactly one location: with two, the old
- * URL names no single new one, and guessing which is not a redirect but a lie.
+ * `/experiences`, `/locations/<location>/experiences`, `/experiences/<slug>`
+ * and the cancellation link mailed with every booking taken before the cutover
+ * are printed on cards, indexed by Google and pasted into guests' chats, so
+ * they answer with the page that replaced them instead of a 404 — a
+ * restaurant's classes are on its menu now, an activity operator's are in its
+ * catalogue. A slug is only redirected when the product is published to this
+ * site at exactly one location: with two, the old URL names no single new one,
+ * and guessing which is not a redirect but a lie.
  */
 async function resolveRetiredExperiencePath(event: H3Event, path: string) {
-  if (path !== '/experiences' && !path.startsWith('/experiences/')) return null
+  const locationCollection = /^\/locations\/([^/]+)\/experiences$/.exec(path)
+  if (path !== '/experiences' && !path.startsWith('/experiences/') && !locationCollection) return null
   const vertical = (event.context.site as { vertical?: string } | undefined)?.vertical
   const presentation = resolveProductPresentation(vertical)
   if (!presentation) return null
   if (path === '/experiences') return presentation.collectionPath
+  // A guest cancelling from an email sent before the epoch. The link carries
+  // the booking in its query and the token in its fragment, and the page that
+  // reads both is the same page under its own name.
+  if (path === '/experiences/cancel') return '/bookings/cancel'
+  if (locationCollection) return `/locations/${locationCollection[1]}/${presentation.locationCollectionSegment}`
 
   // A stale link can carry anything; a pathname the URL parser kept but
   // percent-decoding rejects is simply not a slug we ever issued.
