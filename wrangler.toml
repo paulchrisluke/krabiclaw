@@ -148,7 +148,7 @@ enabled = true
 # against preview.krabiclaw.com. Dedicated resources isolated from staging/prod.
 #
 # Dedicated preview resources:
-#   krabiclaw-preview            D1
+#   krabiclaw-preview-v1         D1
 #   krabiclaw-media-preview      R2
 #   krabiclaw-site-cache-preview KV   69252567b9cd4becbd486a337ab1e589
 [env.preview]
