@@ -70,7 +70,7 @@ test('one product identity serves two sites and two locations', { timeout: 120_0
     assert.equal(await db.prepare('SELECT count(*) n FROM products').first<number>('n'), 1, 'publishing twice did not duplicate identity')
     assert.equal((await listSiteProducts(db, { organizationId: ORG, siteId: 'site-a', publishedOnly: true })).length, 1)
     assert.equal((await listSiteProducts(db, { organizationId: ORG, siteId: 'site-b', publishedOnly: true })).length, 1)
-    assert.equal((await listLocationProducts(db, { organizationId: ORG, locationId: 'loc-a', publishedOnly: true })).length, 1)
+    assert.equal((await listLocationProducts(db, { organizationId: ORG, locationId: 'loc-a', publishedOnSiteId: 'site-a' })).length, 1)
 
     // Scope-specific prices stay independent, resolved through one contract.
     const variant = (await getProduct(db, ORG, product.id)).variants[0]!
@@ -279,5 +279,109 @@ test('editing a product keeps variant identity, so bookings survive', { timeout:
       'editing the product did not drop the booking')
     assert.equal((await getProduct(db, ORG, product.id)).description, 'Now with clay')
     assert.equal(await db.prepare("SELECT count(*) n FROM product_sessions WHERE id = 's1'").first<number>('n'), 1)
+  } finally { await runtime.dispose() }
+})
+
+test('a site that withholds a product does not show it, at any location', { timeout: 120_000 }, async () => {
+  const { runtime, db } = await boot()
+  try {
+    const product = await createProduct(db, { organizationId: ORG, siteId: 'site-a', actor: ACTOR, product: {
+      name: 'Seasonal Special', variants: [{ name: 'Default', prices: [{ unit_amount: 19000, currency: 'THB' }] }],
+    } })
+    await setProductPublication(db, { organizationId: ORG, productId: product.id, siteId: 'site-a', published: true, actor: ACTOR })
+    await setProductLocation(db, { organizationId: ORG, productId: product.id, locationId: 'loc-a', published: true, actor: ACTOR })
+    assert.equal((await listLocationProducts(db, { organizationId: ORG, locationId: 'loc-a', publishedOnSiteId: 'site-a' })).length, 1)
+
+    // Site publication and location publication are separate switches, and the
+    // public answer needs both. Withholding it on the site hides it even
+    // though the location still offers it.
+    await setProductPublication(db, { organizationId: ORG, productId: product.id, siteId: 'site-a', published: false, actor: ACTOR })
+    assert.equal((await listLocationProducts(db, { organizationId: ORG, locationId: 'loc-a', publishedOnSiteId: 'site-a' })).length, 0,
+      'a withheld product is not public at its location')
+    assert.equal((await listLocationProducts(db, { organizationId: ORG, locationId: 'loc-a' })).length, 1,
+      'the merchant still sees what the site is withholding')
+  } finally { await runtime.dispose() }
+})
+
+test('a patch that says nothing about variants leaves every price row as it was', { timeout: 120_000 }, async () => {
+  const { runtime, db } = await boot()
+  try {
+    const product = await createProduct(db, { organizationId: ORG, siteId: 'site-a', actor: ACTOR, product: {
+      name: 'Pad Thai', variants: [{ name: 'Default', prices: [
+        { unit_amount: 18000, currency: 'THB', location_id: 'loc-a' },
+        { unit_amount: 14000, currency: 'THB', location_id: 'loc-b' },
+      ] }],
+    } })
+    const before = (await getProduct(db, ORG, product.id)).variants[0]!.prices
+      .map(price => `${price.id}:${price.unit_amount}:${price.location_id}:${price.created_at}`).sort()
+    assert.equal(before.length, 2)
+
+    await updateProduct(db, { organizationId: ORG, siteId: 'site-a', productId: product.id, patch: { description: 'With prawns' }, actor: ACTOR })
+    const after = (await getProduct(db, ORG, product.id)).variants[0]!.prices
+      .map(price => `${price.id}:${price.unit_amount}:${price.location_id}:${price.created_at}`).sort()
+    assert.deepEqual(after, before, 'editing the description kept both offers, their scopes and their identity')
+
+    // A caller that does restate the variants keeps the identity it restates.
+    const kept = (await getProduct(db, ORG, product.id)).variants[0]!
+    await updateProduct(db, { organizationId: ORG, siteId: 'site-a', productId: product.id, actor: ACTOR, patch: {
+      variants: [{ id: kept.id, name: kept.name, option_values: {}, prices: kept.prices.map(price => ({
+        id: price.id, unit_amount: price.location_id === 'loc-a' ? 19000 : price.unit_amount,
+        currency: price.currency, location_id: price.location_id,
+      })) }],
+    } })
+    const repriced = (await getProduct(db, ORG, product.id)).variants[0]!.prices
+    assert.deepEqual(repriced.map(price => price.id).sort(), kept.prices.map(price => price.id).sort(), 'restated prices kept their identity')
+    assert.equal(repriced.find(price => price.location_id === 'loc-a')!.unit_amount, 19000)
+    assert.equal(repriced.find(price => price.location_id === 'loc-b')!.unit_amount, 14000, 'the other location was not touched')
+  } finally { await runtime.dispose() }
+})
+
+test('two options can offer the same value label without colliding', { timeout: 120_000 }, async () => {
+  const { runtime, db } = await boot()
+  try {
+    const product = await createProduct(db, { organizationId: ORG, siteId: 'site-a', actor: ACTOR, product: {
+      name: 'Mug',
+      options: [
+        { name: 'Inside colour', values: [{ value: 'White' }, { value: 'Blue' }] },
+        { name: 'Outside colour', values: [{ value: 'White' }, { value: 'Green' }] },
+      ],
+      variants: [
+        { name: 'White / White', option_values: { 'Inside colour': 'White', 'Outside colour': 'White' }, prices: [{ unit_amount: 40000, currency: 'THB' }] },
+        { name: 'Blue / Green', option_values: { 'Inside colour': 'Blue', 'Outside colour': 'Green' }, prices: [{ unit_amount: 45000, currency: 'THB' }] },
+      ],
+    } })
+    const stored = await getProduct(db, ORG, product.id)
+    const inside = stored.options.find(option => option.name === 'Inside colour')!
+    const outside = stored.options.find(option => option.name === 'Outside colour')!
+    const whiteWhite = stored.variants.find(variant => variant.name === 'White / White')!
+    assert.equal(whiteWhite.option_values[inside.id], inside.values.find(value => value.value === 'White')!.id,
+      'the inside selection points at the inside option own value')
+    assert.equal(whiteWhite.option_values[outside.id], outside.values.find(value => value.value === 'White')!.id,
+      'the outside selection points at the outside option own value')
+    assert.notEqual(whiteWhite.option_values[inside.id], whiteWhite.option_values[outside.id])
+  } finally { await runtime.dispose() }
+})
+
+test('an id from another tenant is refused, not upserted onto', { timeout: 120_000 }, async () => {
+  const { runtime, db } = await boot()
+  try {
+    await db.prepare("INSERT INTO organization (id, name, slug) VALUES ('org-other', 'Other', 'other')").run()
+    await db.prepare("INSERT INTO user (id, name, email, emailVerified, createdAt, updatedAt) VALUES ('actor-other', 'Other', 'other@example.test', 0, 0, 0)").run()
+    await db.prepare(`INSERT INTO products (id, organization_id, name, slug, created_by, updated_by) VALUES ('prod-other','org-other','Their Product','their-product','actor-other','actor-other')`).run()
+    await db.prepare(`INSERT INTO product_variants (id, organization_id, product_id, name, created_by, updated_by) VALUES ('var-other','org-other','prod-other','Their Variant','actor-other','actor-other')`).run()
+
+    const mine = await createProduct(db, { organizationId: ORG, siteId: 'site-a', actor: ACTOR, product: {
+      name: 'Mine', variants: [{ name: 'Default', prices: [{ unit_amount: 1000, currency: 'THB' }] }],
+    } })
+    await assert.rejects(
+      updateProduct(db, { organizationId: ORG, siteId: 'site-a', productId: mine.id, actor: ACTOR, patch: {
+        variants: [{ id: 'var-other', name: 'Hijacked', option_values: {}, prices: [] }],
+      } }),
+      /does not belong to this product/,
+    )
+    assert.equal(await db.prepare("SELECT name FROM product_variants WHERE id='var-other'").first<string>('name'), 'Their Variant',
+      "another tenant's variant was not touched")
+    assert.equal(await db.prepare("SELECT count(*) n FROM product_variants WHERE product_id = ?").bind(mine.id).first<number>('n'), 1,
+      'the refused edit left this product with its own variant')
   } finally { await runtime.dispose() }
 })

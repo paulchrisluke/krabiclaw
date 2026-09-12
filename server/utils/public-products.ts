@@ -133,7 +133,7 @@ export async function loadPublicProductCollection(
   // Location publication is the public gate here: a product carried by the
   // site but withheld at this branch is absent, not shown greyed out.
   const perLocation = await Promise.all(locations.map(location =>
-    listLocationProducts(db, { organizationId: resolved.site.organization_id, locationId: location.id, publishedOnly: true })))
+    listLocationProducts(db, { organizationId: resolved.site.organization_id, locationId: location.id, publishedOnSiteId: siteId })))
   const seen = new Set<string>()
   const products = await hydrateProductMedia(db, siteId, perLocation.flat().filter((product) => {
     if (seen.has(product.id)) return false
@@ -161,10 +161,12 @@ export async function loadPublicProductDetail(
     const location = collection?.locations[0]
     if (!collection || !location) return null
     const found = await getProductBySlug(db, collection.site.organization_id, productSlug)
-    // The product must actually be offered at this location and published
-    // there: reaching it by slug alone would render a branch's page for
-    // something that branch does not sell.
-    if (!found || !found.locations.some(entry => entry.location_id === location.id && entry.published && entry.active)) return null
+    // The product must be published on this site and actually offered at this
+    // location: reaching it by slug alone would render a branch's page for
+    // something the site withholds, or something that branch does not sell.
+    const offeredHere = found?.locations.some(entry => entry.location_id === location.id && entry.published && entry.active)
+    const publishedHere = found?.publications.some(entry => entry.site_id === siteId && entry.published)
+    if (!found || !offeredHere || !publishedHere) return null
     const [product] = await hydrateProductMedia(db, siteId, [found])
     if (!product) return null
     const localeRepresentations = await listPublicLocaleRepresentations(db, {

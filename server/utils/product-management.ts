@@ -331,16 +331,28 @@ export async function listSiteProducts(db: DbClient, input: {
   return hydrate(db, input.organizationId, rows.map(mapProductRow))
 }
 
-/** Products offered at one location. Membership is its own relationship, not a price. */
+/**
+ * Products offered at one location. Membership is its own relationship, not a
+ * price.
+ *
+ * `publishedOnSiteId` asks the public question, and it needs a site to ask it
+ * of: a product is publicly visible at a location only when the site publishes
+ * it *and* the location publishes it *and* the location offering is active.
+ * Those are three separate switches, so a caller that wants the public answer
+ * names the site rather than passing a bare flag that could only check two.
+ */
 export async function listLocationProducts(db: DbClient, input: {
-  organizationId: string; locationId: string; publishedOnly?: boolean
+  organizationId: string; locationId: string; publishedOnSiteId?: string
 }): Promise<Product[]> {
+  const published = input.publishedOnSiteId !== undefined
   const rows = await queryAll<Row>(db, `
     SELECT ${PRODUCT_COLUMNS} FROM products p
     JOIN product_locations pl ON pl.product_id = p.id AND pl.organization_id = p.organization_id
-    WHERE p.organization_id = ? AND pl.location_id = ? AND (? = 0 OR (pl.published = 1 AND pl.active = 1))
+    ${published ? `JOIN product_publications pub ON pub.product_id = p.id AND pub.organization_id = p.organization_id
+      AND pub.site_id = ? AND pub.published = 1` : ''}
+    WHERE p.organization_id = ? AND pl.location_id = ?${published ? ' AND pl.published = 1 AND pl.active = 1' : ''}
     ORDER BY p.name, p.id
-  `, [input.organizationId, input.locationId, input.publishedOnly ? 1 : 0])
+  `, [...(published ? [input.publishedOnSiteId] : []), input.organizationId, input.locationId])
   return hydrate(db, input.organizationId, rows.map(mapProductRow))
 }
 
@@ -354,6 +366,25 @@ export async function listCollectionProducts(db: DbClient, input: {
     ORDER BY cp.sort_order, p.id
   `, [input.organizationId, input.collectionId])
   return hydrate(db, input.organizationId, rows.map(mapProductRow))
+}
+
+/**
+ * The Product this site carries, or a 404.
+ *
+ * The catalog belongs to the organization, so a site reaches a product through
+ * its publication row. Authorizing the site says nothing about the product
+ * behind an id the caller supplied: without this, a caller authorized for its
+ * own site can name another tenant's product and have a write land on it.
+ */
+export async function requireSiteProduct(db: DbClient, input: {
+  organizationId: string; siteId: string; productId: string
+}): Promise<Product> {
+  const product = await getProduct(db, input.organizationId, input.productId).catch(() => null)
+  if (!product) notFound()
+  if (!product.publications.some(entry => entry.site_id === input.siteId)) {
+    notFound('This site does not carry that product')
+  }
+  return product
 }
 
 export async function getProductBySlug(db: DbClient, organizationId: string, slug: string): Promise<Product | null> {
@@ -436,7 +467,7 @@ export function normalizePriceInput(input: PriceInput, defaultCurrency: Currency
   const taxBehavior = input.tax_behavior ?? 'unspecified'
   if (!PRICE_TAX_BEHAVIORS.includes(taxBehavior)) invalid(`${field}.tax_behavior must be supported`)
   const normalized: NormalizedPrice = {
-    id: crypto.randomUUID(),
+    id: typeof input.id === 'string' && input.id.trim() ? input.id.trim() : crypto.randomUUID(),
     location_id: input.location_id ?? null,
     active: input.active ?? true,
     currency,
@@ -494,12 +525,25 @@ interface PlannedProduct {
  * variant that keeps its id keeps the bookings and prices pointing at it,
  * rather than being deleted and recreated as a stranger.
  */
+/**
+ * Give every option and value its real id, and restate each variant's
+ * selections in those ids.
+ *
+ * A value label is unique within its option, never across them: a mug with
+ * "Inside colour: White" and "Outside colour: White" has two different values
+ * that read the same. Resolution is therefore per option, and a reference that
+ * resolves to nothing is rejected here rather than passed through as a raw key
+ * for a foreign key to refuse later.
+ */
 function resolveIds(options: NormalizedProductOption[], variants: NormalizedProductVariant[]): { options: PlannedOption[]; variantOptionValues: Map<string, Record<string, string>> } {
   const optionIds = new Map<string, string>()
-  const valueIds = new Map<string, string>()
+  const valueIdsByOption = new Map<string, Map<string, string>>()
   const planned = options.map((option) => {
     const id = option.id ?? crypto.randomUUID()
-    optionIds.set(option.id ?? option.name, id)
+    const optionKey = option.id ?? option.name
+    optionIds.set(optionKey, id)
+    const valueIds = new Map<string, string>()
+    valueIdsByOption.set(optionKey, valueIds)
     return {
       id, name: option.name, sort_order: option.sort_order,
       values: option.values.map((value) => {
@@ -512,10 +556,48 @@ function resolveIds(options: NormalizedProductOption[], variants: NormalizedProd
   const variantOptionValues = new Map<string, Record<string, string>>()
   variants.forEach((variant, index) => {
     variantOptionValues.set(variant.id ?? String(index), Object.fromEntries(
-      Object.entries(variant.option_values).map(([optionKey, valueKey]) => [optionIds.get(optionKey) ?? optionKey, valueIds.get(valueKey) ?? valueKey]),
+      Object.entries(variant.option_values).map(([optionKey, valueKey]) => {
+        const optionId = optionIds.get(optionKey)
+        const valueId = valueIdsByOption.get(optionKey)?.get(valueKey)
+        if (!optionId || !valueId) invalid(`variants[${index}] selects ${optionKey} = ${valueKey}, which this product does not define`)
+        return [optionId, valueId]
+      }),
     ))
   })
   return { options: planned, variantOptionValues }
+}
+
+/**
+ * Every id the caller supplied is either new or already this product's.
+ *
+ * The writes below upsert by primary key, so an id belonging to another
+ * tenant's product would land an update on their row. Authorizing the site the
+ * caller is editing says nothing about an id in the body, so each one is
+ * checked against the product being written.
+ */
+async function assertSuppliedIdsBelongHere(
+  db: DbClient,
+  organizationId: string,
+  productId: string | null,
+  options: NormalizedProductOption[],
+  variants: NormalizedProductVariant[],
+): Promise<void> {
+  const supplied = {
+    product_options: options.map(option => option.id).filter((id): id is string => Boolean(id)),
+    product_option_values: options.flatMap(option => option.values.map(value => value.id)).filter((id): id is string => Boolean(id)),
+    product_variants: variants.map(variant => variant.id).filter((id): id is string => Boolean(id)),
+  }
+  for (const [table, ids] of Object.entries(supplied)) {
+    if (ids.length === 0) continue
+    const foreign = await queryAll<{ id: string }>(db, `
+      SELECT id FROM ${table}
+       WHERE id IN (SELECT value FROM json_each(?))
+         AND NOT (organization_id = ? AND product_id IS ?)
+    `, [d1JsonArray(ids), organizationId, productId])
+    if (foreign.length > 0) {
+      notFound(`${table.replace('product_', '').replaceAll('_', ' ')} ${foreign.map(row => row.id).join(', ')} does not belong to this product`)
+    }
+  }
 }
 
 /**
@@ -540,6 +622,8 @@ async function planProduct(
   if (options.length > 0 && input.variants === undefined) {
     invalid('a product with options must declare the variants that select them')
   }
+
+  await assertSuppliedIdsBelongHere(db, organizationId, context.existingId ?? null, options, variants)
 
   const defaultCurrency = context.siteId ? await organizationDefaultCurrency(db, organizationId, context.siteId) : null
   const declaredVariants = input.variants ?? []
@@ -598,6 +682,10 @@ function productWrites(
   actor: Actor,
   now: string,
   mode: 'insert' | 'upsert',
+  // Prices are rewritten only by a caller that actually supplied variants.
+  // Saving a description restates nothing about money, and must not retire and
+  // remint every offer a product has.
+  options: { writePrices: boolean } = { writePrices: true },
 ): BatchQuery[] {
   const upsert = mode === 'upsert'
   const writes: BatchQuery[] = [{
@@ -608,7 +696,8 @@ function productWrites(
            ON CONFLICT (id) DO UPDATE SET name = excluded.name, slug = excluded.slug, description = excluded.description,
              active = excluded.active, order_url = excluded.order_url, unit_label = excluded.unit_label,
              marketing_features = excluded.marketing_features, tags = excluded.tags, metadata = excluded.metadata,
-             tax_code = excluded.tax_code, updated_at = excluded.updated_at, updated_by = excluded.updated_by`
+             tax_code = excluded.tax_code, updated_at = excluded.updated_at, updated_by = excluded.updated_by
+           WHERE products.organization_id = excluded.organization_id`
       : `INSERT INTO products (id, organization_id, name, slug, description, active, order_url, unit_label,
              marketing_features, tags, metadata, tax_code, source, created_at, updated_at, created_by, updated_by)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -621,7 +710,8 @@ function productWrites(
     writes.push({
       query: upsert
         ? `INSERT INTO product_options (id, organization_id, product_id, name, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)
-             ON CONFLICT (id) DO UPDATE SET name = excluded.name, sort_order = excluded.sort_order, updated_at = excluded.updated_at`
+             ON CONFLICT (id) DO UPDATE SET name = excluded.name, sort_order = excluded.sort_order, updated_at = excluded.updated_at
+             WHERE product_options.organization_id = excluded.organization_id AND product_options.product_id = excluded.product_id`
         : `INSERT INTO product_options (id, organization_id, product_id, name, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
       params: [option.id, organizationId, planned.id, option.name, option.sort_order, now, now],
     })
@@ -630,7 +720,8 @@ function productWrites(
         query: upsert
           ? `INSERT INTO product_option_values (id, organization_id, product_id, product_option_id, value, sort_order, created_at, updated_at)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-               ON CONFLICT (id) DO UPDATE SET value = excluded.value, sort_order = excluded.sort_order, updated_at = excluded.updated_at`
+               ON CONFLICT (id) DO UPDATE SET value = excluded.value, sort_order = excluded.sort_order, updated_at = excluded.updated_at
+               WHERE product_option_values.organization_id = excluded.organization_id AND product_option_values.product_id = excluded.product_id`
           : `INSERT INTO product_option_values (id, organization_id, product_id, product_option_id, value, sort_order, created_at, updated_at)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
         params: [value.id, organizationId, planned.id, option.id, value.value, value.sort_order, now, now],
@@ -644,7 +735,8 @@ function productWrites(
         ? `INSERT INTO product_variants (id, organization_id, product_id, name, sku, active, sort_order, created_at, updated_at, created_by, updated_by)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
              ON CONFLICT (id) DO UPDATE SET name = excluded.name, sku = excluded.sku, active = excluded.active,
-               sort_order = excluded.sort_order, updated_at = excluded.updated_at, updated_by = excluded.updated_by`
+               sort_order = excluded.sort_order, updated_at = excluded.updated_at, updated_by = excluded.updated_by
+             WHERE product_variants.organization_id = excluded.organization_id AND product_variants.product_id = excluded.product_id`
         : `INSERT INTO product_variants (id, organization_id, product_id, name, sku, active, sort_order, created_at, updated_at, created_by, updated_by)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       params: [variant.id, organizationId, planned.id, variant.name, variant.sku, variant.active ? 1 : 0, variant.sort_order, now, now, actor.actorId, actor.actorId],
@@ -656,7 +748,7 @@ function productWrites(
         params: [organizationId, planned.id, variant.id, optionId, valueId],
       })
     }
-    for (const price of variant.prices) {
+    for (const price of options.writePrices ? variant.prices : []) {
       writes.push({
         query: `INSERT INTO prices (id, organization_id, product_variant_id, location_id, active, currency, unit_amount, type,
                   recurring_interval, recurring_interval_count, tax_behavior, compare_at_unit_amount, valid_from_at, valid_until_at,
@@ -799,6 +891,7 @@ export async function updateProduct(db: DbClient, input: {
       id: variant.id, name: variant.name, sku: variant.sku, active: variant.active, sort_order: variant.sort_order,
       option_values: variant.option_values,
       prices: variant.prices.map(price => ({
+        id: price.id,
         unit_amount: price.unit_amount, currency: price.currency, location_id: price.location_id, active: price.active,
         type: price.type, recurring_interval: price.recurring_interval, recurring_interval_count: price.recurring_interval_count,
         tax_behavior: price.tax_behavior, compare_at_unit_amount: price.compare_at_unit_amount,
@@ -829,12 +922,18 @@ export async function updateProduct(db: DbClient, input: {
     conflict(`Cancel the bookings on ${orphaned.map(variant => variant.name).join(', ')} before removing ${orphaned.length > 1 ? 'those variants' : 'that variant'}`)
   }
 
+  // A patch that says nothing about variants says nothing about money. Its
+  // prices keep their rows, their identity and their scopes; only a caller
+  // that restated the variants is describing the offers.
+  const writesPrices = input.patch.variants !== undefined
   const writes: BatchQuery[] = [
-    // Selections, prices and metafield values are rebuilt wholesale: nothing
+    // Selections and metafield values are rebuilt wholesale: nothing
     // references them, so replacing them is simpler and cannot drift.
     { query: 'DELETE FROM product_metafields WHERE organization_id = ? AND product_id = ?', params: [input.organizationId, input.productId] },
     { query: 'DELETE FROM product_variant_option_values WHERE organization_id = ? AND product_id = ?', params: [input.organizationId, input.productId] },
-    { query: 'DELETE FROM prices WHERE organization_id = ? AND product_variant_id IN (SELECT id FROM product_variants WHERE organization_id = ? AND product_id = ?)', params: [input.organizationId, input.organizationId, input.productId] },
+    ...(writesPrices
+      ? [{ query: 'DELETE FROM prices WHERE organization_id = ? AND product_variant_id IN (SELECT id FROM product_variants WHERE organization_id = ? AND product_id = ?)', params: [input.organizationId, input.organizationId, input.productId] }]
+      : []),
     // Options, values and variants are UPSERTED, never dropped and recreated:
     // bookings reference variant identity, and recreating a variant under a
     // fresh id is the same as deleting it as far as they are concerned. Only
@@ -842,7 +941,7 @@ export async function updateProduct(db: DbClient, input: {
     { query: 'DELETE FROM product_variants WHERE organization_id = ? AND product_id = ? AND id NOT IN (SELECT value FROM json_each(?))', params: [input.organizationId, input.productId, keptVariants] },
     { query: 'DELETE FROM product_option_values WHERE organization_id = ? AND product_id = ? AND id NOT IN (SELECT value FROM json_each(?))', params: [input.organizationId, input.productId, keptValues] },
     { query: 'DELETE FROM product_options WHERE organization_id = ? AND product_id = ? AND id NOT IN (SELECT value FROM json_each(?))', params: [input.organizationId, input.productId, keptOptions] },
-    ...productWrites(input.organizationId, planned, definitions, input.actor, now, 'upsert'),
+    ...productWrites(input.organizationId, planned, definitions, input.actor, now, 'upsert', { writePrices: writesPrices }),
     ...(await productCacheInvalidations(db, input.organizationId, input.productId, 'product_updated')),
   ]
   await executeBatch(db, writes, { operation: 'Update product' })

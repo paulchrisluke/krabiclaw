@@ -233,6 +233,7 @@
   "saya.posts.subtitle": "ข่าวสารและกิจกรรม",
   "saya.posts.title": "อัปเดตล่าสุด",
   "saya.posts.view_all": "ดูอัปเดตทั้งหมด",
+  "saya.product_detail.choose_option": "เลือกตัวเลือก",
   "saya.product_detail.more_in_category": "รายการอื่นใน {category}",
   "saya.product_detail.meta_description": "{name} — {detail} มีให้บริการที่ {location}",
   "saya.product_detail.meta_description_priced": "{name} — {detail} ราคา {price} ที่ {location}",

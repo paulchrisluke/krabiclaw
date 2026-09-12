@@ -90,6 +90,25 @@
         @back="bookingStep = 1"
       >
         <div v-if="bookingStep === 1" class="flex min-h-0 flex-1 flex-col">
+          <!-- What is being booked. One option is not a choice; several are,
+               and the guest makes it rather than the server picking an order. -->
+          <fieldset v-if="bookableVariants.length > 1" class="mb-5">
+            <legend class="mb-2 text-sm font-medium">{{ t('saya.product_detail.choose_option') }}</legend>
+            <div class="flex flex-col gap-2">
+              <label
+                v-for="variant in bookableVariants"
+                :key="variant.id"
+                class="flex cursor-pointer items-baseline justify-between gap-3 rounded-lg border border-default px-4 py-3 text-sm"
+                :class="selectedVariantId === variant.id ? 'border-primary bg-primary/5' : ''"
+              >
+                <span class="flex items-baseline gap-3">
+                  <input v-model="selectedVariantId" type="radio" :value="variant.id" name="booking-variant">
+                  <span>{{ variant.name }}</span>
+                </span>
+                <span v-if="variantPriceLabel(variant)" class="tabular-nums">{{ variantPriceLabel(variant) }}</span>
+              </label>
+            </div>
+          </fieldset>
           <p v-if="!sessionsPending && availabilityDates.length === 0" class="py-10 text-center text-sm text-muted">
             {{ t('saya.experience_detail.nothing_scheduled') }}
           </p>
@@ -252,6 +271,12 @@ interface PublicSession {
 const bookingOpen = ref(false)
 const bookingStep = ref(1)
 const partySize = ref(1)
+/** The purchasable options this product actually offers. */
+const bookableVariants = computed(() => props.product.variants.filter(variant => variant.active !== false))
+const selectedVariantId = ref<string | null>(bookableVariants.value.length === 1 ? bookableVariants.value[0]!.id : null)
+function variantPriceLabel(variant: Product['variants'][number]) {
+  return formatProductMoney(selectPrice(variant.prices, { currency: props.currency, location_id: props.location.id, at: new Date().toISOString() }))
+}
 const timeSelection = ref<TimeSlotSelection | null>(null)
 const submitting = ref(false)
 const bookingError = ref('')
@@ -323,6 +348,11 @@ async function submitBooking(contact: ContactFormState) {
     bookingStep.value = 1
     return
   }
+  if (!selectedVariantId.value) {
+    bookingError.value = t('saya.product_detail.choose_option')
+    bookingStep.value = 1
+    return
+  }
   submitting.value = true
   bookingError.value = ''
   try {
@@ -332,6 +362,7 @@ async function submitBooking(contact: ContactFormState) {
         method: 'POST',
         body: {
           session_id: session.id,
+          variant_id: selectedVariantId.value,
           party_size: partySize.value,
           guest_name: contact.name,
           guest_email: contact.email,

@@ -42,6 +42,12 @@ export interface Price {
 }
 
 export interface PriceInput {
+  /**
+   * The identity of a price that already exists. A caller restating a price it
+   * loaded keeps that row: an edit to a product's description must not retire
+   * every offer and mint new ones with today's date on them.
+   */
+  id?: string
   unit_amount: number
   currency: CurrencyCode
   location_id?: string | null

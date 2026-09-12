@@ -128,10 +128,14 @@ async function validateDestination(db: DbClient, thread: GuestThreadRow, before:
     return {
       locationId: target.location_id, title: location?.title ?? '', sessionId: target.id,
       startsAt: target.starts_at, label: localLabel(target.starts_at, target.timezone),
+      // The replacement is claimed before the original is released, so a
+      // destination that is full leaves the guest's booking exactly as it was.
+      // It therefore cannot take request_id yet — the original still holds it —
+      // and the seat it is giving up is excluded from the capacity it must fit.
       claim: (bookingId, now) => sessionClaimQuery({
         bookingId, organizationId: thread.organization_id, siteId: thread.site_id, productId: before.productId!,
         sessionId: target.id, productVariantId: booking.product_variant_id, partySize: after.partySize,
-        customerId: booking.customer_id, requestId: thread.id, now,
+        customerId: booking.customer_id, requestId: null, replacingBookingId: before.recordId, now,
       }),
     }
   }
@@ -283,24 +287,37 @@ export async function respondToBookingChange(db: DbClient, env: ChangeEnv, input
         thread.id, thread.site_id, current.updatedAt],
     }
 
-    const queries: BatchQuery[] = [entryInsert]
+    const guard = `EXISTS (SELECT 1 FROM activity_entries WHERE id = ?)`
+    const movedBookingId = destination?.claim ? crypto.randomUUID() : null
+    const claimed = `EXISTS (SELECT 1 FROM bookings WHERE id = ?)`
+    const queries: BatchQuery[] = []
+    if (destination && current.recordKind === 'booking' && destination.claim && movedBookingId) {
+      // Take the new seat before giving up the old one, and record the decision
+      // only once the seat is taken. A destination that filled up inserts
+      // nothing, so the rest of the batch is a no-op and the guest keeps the
+      // booking they had — the batch cannot half-apply a move.
+      queries.push(destination.claim(movedBookingId, now))
+      queries.push({
+        ...entryInsert,
+        query: entryInsert.query.replace('AND source.updated_at = ?', `AND source.updated_at = ? AND ${claimed}`),
+        params: [...entryInsert.params as unknown[], movedBookingId],
+      })
+      queries.push({
+        query: `UPDATE bookings SET status = 'cancelled', cancelled_at = ?, cancellation_reason = 'changed', request_id = NULL, updated_at = ?
+                 WHERE id = ? AND ${guard}`,
+        params: [now, now, current.recordId, id],
+      })
+      // request_id is unique per booking, so the replacement takes it only
+      // once the original has released it above.
+      queries.push({
+        query: `UPDATE bookings SET request_id = ?, updated_at = ? WHERE id = ? AND ${guard}`,
+        params: [thread.id, now, movedBookingId, id],
+      })
+    } else {
+      queries.push(entryInsert)
+    }
     if (destination) {
-      const guard = `EXISTS (SELECT 1 FROM activity_entries WHERE id = ?)`
-      if (current.recordKind === 'booking' && destination.claim) {
-        // Release the old seat and take the new one in the same batch. The
-        // release lands first, so the claim's capacity predicate counts it as
-        // freed — a guest moving within a full class is not blocked by their
-        // own seat, and a guest moving into a full one still fails.
-        queries.push({
-          query: `UPDATE bookings SET status = 'cancelled', cancelled_at = ?, cancellation_reason = 'changed', updated_at = ?
-                   WHERE id = ? AND ${guard}`,
-          params: [now, now, current.recordId, id],
-        })
-        // request_id is unique per booking, so the old row must release it
-        // before the replacement can take it.
-        queries.push({ query: `UPDATE bookings SET request_id = NULL WHERE id = ? AND ${guard}`, params: [current.recordId, id] })
-        queries.push(destination.claim(crypto.randomUUID(), now))
-      } else {
+      if (!movedBookingId) {
         // The reservation keeps its length: moving a 7pm table for two to 8pm
         // does not silently change how long the table is held.
         const durationMs = Date.parse(current.endsAt) - Date.parse(current.startsAt)
@@ -320,12 +337,14 @@ export async function respondToBookingChange(db: DbClient, env: ChangeEnv, input
 
     await executeBatch(db, queries, { operation: 'respond to booking change' })
     result = await findEntryByDedupeKey(db, resultId)
-    if (!result) throw new HTTPError({ statusCode: 409, message: 'This reservation changed or is no longer available' })
-    if (destination && current.recordKind === 'booking') {
-      const moved = await queryFirst<{ id: string }>(db, 'SELECT id FROM bookings WHERE request_id = ? AND status <> ?', [thread.id, 'cancelled'])
-      // The claim carries its own capacity predicate, so a full session
-      // simply inserts nothing. Say so rather than reporting success.
-      if (!moved) throw new HTTPError({ statusCode: 409, message: 'That session filled up before the change was accepted' })
+    if (!result) {
+      // The decision row is recorded only when the seat was taken, so its
+      // absence after a move means the destination filled up first. The
+      // original booking is untouched either way.
+      if (movedBookingId && !await queryFirst<{ id: string }>(db, 'SELECT id FROM bookings WHERE id = ?', [movedBookingId])) {
+        throw new HTTPError({ statusCode: 409, message: 'That session filled up before the change was accepted' })
+      }
+      throw new HTTPError({ statusCode: 409, message: 'This reservation changed or is no longer available' })
     }
   }
 

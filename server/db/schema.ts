@@ -922,6 +922,10 @@ export const product_availability_rules = sqliteTable("product_availability_rule
 	check("product_availability_rules_weekday_check", sql`weekday BETWEEN 0 AND 6`),
 	check("product_availability_rules_start_time_check", sql`start_time GLOB '[0-2][0-9]:[0-5][0-9]' AND start_time < '24:00'`),
 	check("product_availability_rules_interval_check", sql`interval_weeks >= 1`),
+	// A cadence longer than a week has to say from when, or "every other
+	// Saturday" means a different Saturday depending on the day generation
+	// happens to run. The anchor is the rule's own effective start.
+	check("product_availability_rules_anchor_check", sql`interval_weeks = 1 OR effective_from_date IS NOT NULL`),
 	check("product_availability_rules_dates_check", sql`(effective_from_date IS NULL OR date(effective_from_date, '+0 days') IS effective_from_date) AND (effective_until_date IS NULL OR date(effective_until_date, '+0 days') IS effective_until_date) AND (effective_from_date IS NULL OR effective_until_date IS NULL OR effective_until_date >= effective_from_date)`),
 	check("product_availability_rules_duration_check", sql`duration_minutes IS NULL OR duration_minutes > 0`),
 	check("product_availability_rules_capacity_check", sql`capacity IS NULL OR capacity >= 0`),

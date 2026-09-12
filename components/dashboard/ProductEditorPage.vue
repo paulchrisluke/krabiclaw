@@ -209,6 +209,21 @@
                 class="w-full"
                 @update:model-value="form.metafields[metafieldKey(definition)] = $event"
               />
+              <!-- A typed attribute is edited in its own type. A number typed
+                   into a text box arrives as a string the validator refuses,
+                   and a boolean has no text form at all. -->
+              <UInputNumber
+                v-else-if="definition.value_type === 'integer'"
+                :model-value="integerValue(definition)"
+                class="w-full"
+                @update:model-value="setIntegerMetafield(definition, $event)"
+              />
+              <UCheckbox
+                v-else-if="definition.value_type === 'boolean'"
+                :model-value="booleanValue(definition)"
+                :label="definition.name"
+                @update:model-value="form.metafields[metafieldKey(definition)] = $event === true"
+              />
               <UInput
                 v-else
                 :model-value="textValue(definition)"
@@ -261,7 +276,7 @@ import type { MetafieldDefinition, MetafieldValue } from '~/shared/metafields'
 import { metafieldHandle } from '~/shared/metafields'
 import { PRODUCT_LIMITS } from '~/shared/product-limits'
 import { isCurrencyCode } from '~/shared/currencies'
-import { majorAmountToMinor, minorAmountToMajor, selectPrice } from '~/shared/prices'
+import { majorAmountToMinor, minorAmountToMajor, selectPrice, type Price } from '~/shared/prices'
 import { formatProductMoney } from '~/utils/product-money'
 import { requireProductPresentation } from '~/utils/product-presentation'
 import { getErrorMessage, isNotFoundError } from '~/utils/errors'
@@ -369,7 +384,17 @@ watch(locationId, load)
 // ── The form ────────────────────────────────────────────
 interface OptionValueDraft { id: string | null; value: string }
 interface OptionDraft { id: string; name: string; values: OptionValueDraft[] }
-interface VariantDraft { key: string; id: string | null; name: string; selections: Record<string, string>; price_major: string }
+interface VariantDraft {
+  key: string
+  id: string | null
+  name: string
+  selections: Record<string, string>
+  price_major: string
+  /** The amount this box held when the product was loaded. */
+  loaded_price_major: string
+  /** Every offer this variant already has, kept whole so an edit here cannot retire the others. */
+  prices: Price[]
+}
 
 const form = reactive({
   name: '',
@@ -395,6 +420,9 @@ function variantPriceMajor(variant: Product['variants'][number]): string {
   return price ? minorAmountToMajor(price.unit_amount, price.currency) : ''
 }
 
+/** The options, variants and prices as loaded, so a save can tell what changed. */
+const loadedCatalogShape = ref('')
+
 function loadForm(row: Product) {
   form.name = row.name
   form.description = row.description
@@ -411,6 +439,8 @@ function loadForm(row: Product) {
     name: variant.name,
     selections: { ...variant.option_values },
     price_major: variantPriceMajor(variant),
+    loaded_price_major: variantPriceMajor(variant),
+    prices: variant.prices.map(price => ({ ...price })),
   }))
   form.metafields = { ...row.metafields }
   form.active = row.active
@@ -419,6 +449,7 @@ function loadForm(row: Product) {
   form.location_active = here?.active ?? true
   form.location_published = here?.published ?? false
   form.image_asset_id = row.image?.asset_id ?? null
+  loadedCatalogShape.value = catalogShapeOf()
 }
 
 function metafieldKey(definition: MetafieldDefinition): string {
@@ -431,6 +462,24 @@ function listValue(definition: MetafieldDefinition): string[] {
 function textValue(definition: MetafieldDefinition): string {
   const value = form.metafields[metafieldKey(definition)]
   return typeof value === 'string' ? value : ''
+}
+function integerValue(definition: MetafieldDefinition): number | undefined {
+  const value = form.metafields[metafieldKey(definition)]
+  // undefined is "not set", which is what an empty number box means. Zero is a
+  // value someone typed.
+  return typeof value === 'number' ? value : undefined
+}
+function setIntegerMetafield(definition: MetafieldDefinition, value: unknown) {
+  const key = metafieldKey(definition)
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    form.metafields[key] = Math.trunc(value)
+    return
+  }
+  // An emptied box is the attribute being unset, not a zero.
+  form.metafields = Object.fromEntries(Object.entries(form.metafields).filter(([entry]) => entry !== key))
+}
+function booleanValue(definition: MetafieldDefinition): boolean {
+  return form.metafields[metafieldKey(definition)] === true
 }
 
 // ── Options and the combinations they produce ───────────
@@ -462,11 +511,13 @@ function rebuildVariants() {
   const options = form.options.filter(option => option.name.trim() && option.values.length)
   if (!options.length) {
     const first = form.variants[0]
-    form.variants = [{ key: 'default', id: first?.id ?? null, name: form.name || 'Default', selections: {}, price_major: first?.price_major ?? '' }]
+    form.variants = [{
+      key: 'default', id: first?.id ?? null, name: form.name || 'Default', selections: {},
+      price_major: first?.price_major ?? '', loaded_price_major: first?.loaded_price_major ?? '', prices: first?.prices ?? [],
+    }]
     return
   }
-  const priceByKey = new Map(form.variants.map(variant => [variant.key, variant.price_major]))
-  const idByKey = new Map(form.variants.map(variant => [variant.key, variant.id]))
+  const draftByKey = new Map(form.variants.map(variant => [variant.key, variant]))
   let combinations: Array<{ selections: Record<string, string>; labels: string[] }> = [{ selections: {}, labels: [] }]
   for (const option of options) {
     combinations = combinations.flatMap(combination => option.values.map(value => ({
@@ -476,12 +527,15 @@ function rebuildVariants() {
   }
   form.variants = combinations.map((combination) => {
     const key = combination.labels.join(' / ')
+    const prior = draftByKey.get(key)
     return {
       key,
-      id: idByKey.get(key) ?? null,
+      id: prior?.id ?? null,
       name: key,
       selections: combination.selections,
-      price_major: priceByKey.get(key) ?? '',
+      price_major: prior?.price_major ?? '',
+      loaded_price_major: prior?.loaded_price_major ?? '',
+      prices: prior?.prices ?? [],
     }
   })
 }
@@ -577,33 +631,75 @@ const navigationGroups = computed<EditorNavigationGroup[]>(() => {
 })
 
 // ── Save / cancel ───────────────────────────────────────
-function payload() {
+/** The options, variants and prices this form is describing, exactly as they would be sent. */
+function buildCatalog() {
+  const declaredOptions = form.options.filter(option => option.name.trim() && option.values.length)
+  const submittedOptionKeys = new Map(declaredOptions.map(option => [
+    option.id,
+    option.id.startsWith('new-option-') ? option.name.trim() : option.id,
+  ]))
+  // This box shows one amount: what this location pays, in this site's
+  // currency. Every other offer the variant carries — another location's
+  // price, another currency, a recurring term — is restated untouched, with
+  // its own id, so editing the one amount on screen cannot silently retire the
+  // ones that are not.
+  const selection = { currency, location_id: locationId.value, at: new Date().toISOString() }
+  const carry = (price: Price) => ({
+    id: price.id, unit_amount: price.unit_amount, currency: price.currency, location_id: price.location_id,
+    active: price.active, type: price.type, recurring_interval: price.recurring_interval,
+    recurring_interval_count: price.recurring_interval_count, tax_behavior: price.tax_behavior,
+    compare_at_unit_amount: price.compare_at_unit_amount, valid_from_at: price.valid_from_at,
+    valid_until_at: price.valid_until_at, source: price.source,
+  })
   const priceFor = (variant: VariantDraft) => {
     const typed = variant.price_major.trim()
+    if (typed === variant.loaded_price_major.trim()) return variant.prices.map(carry)
+    const governing = selectPrice(variant.prices, selection)
     // An empty box is not a price of zero. Zero is typed, and means free.
-    if (!typed) return []
-    return [{ unit_amount: majorAmountToMinor(typed, currency), currency }]
+    if (!typed) return variant.prices.filter(price => price.id !== governing?.id).map(carry)
+    if (!governing) {
+      return [...variant.prices.map(carry), { unit_amount: majorAmountToMinor(typed, currency), currency, location_id: locationId.value }]
+    }
+    return variant.prices.map(price => (price.id === governing.id
+      ? { ...carry(price), unit_amount: majorAmountToMinor(typed, price.currency) }
+      : carry(price)))
   }
+  const options = declaredOptions.map((option, index) => ({
+      id: option.id.startsWith('new-option-') ? undefined : option.id,
+      name: option.name.trim(),
+      sort_order: index,
+      values: option.values.map((value, valueIndex) => ({ id: value.id ?? undefined, value: value.value, sort_order: valueIndex })),
+  }))
+  const variants = form.variants.map((variant, index) => ({
+      id: variant.id ?? undefined,
+      name: variant.name,
+      sort_order: index,
+      // A selection names its option the same way the declaration above does:
+      // a saved option by id, one being created by its name.
+      option_values: Object.fromEntries(Object.entries(variant.selections)
+        .filter(([draftOptionId]) => submittedOptionKeys.has(draftOptionId))
+        .map(([draftOptionId, valueKey]) => [submittedOptionKeys.get(draftOptionId)!, valueKey])),
+    prices: priceFor(variant),
+  }))
+  return { options, variants }
+}
+
+function catalogShapeOf() {
+  return JSON.stringify(buildCatalog())
+}
+
+function payload() {
+  // Options, variants and prices are restated only when they changed. A save
+  // that renames a product says nothing about what it costs, and a patch that
+  // omits variants leaves every offer exactly as it is.
+  const catalog = buildCatalog()
+  const changed = JSON.stringify(catalog) !== loadedCatalogShape.value
   return {
     name: form.name.trim(),
     description: form.description,
     order_url: form.order_url || null,
     tags: form.tags.map(tag => tag.trim()).filter(Boolean),
-    options: form.options
-      .filter(option => option.name.trim() && option.values.length)
-      .map((option, index) => ({
-        id: option.id.startsWith('new-option-') ? undefined : option.id,
-        name: option.name.trim(),
-        sort_order: index,
-        values: option.values.map((value, valueIndex) => ({ id: value.id ?? undefined, value: value.value, sort_order: valueIndex })),
-      })),
-    variants: form.variants.map((variant, index) => ({
-      id: variant.id ?? undefined,
-      name: variant.name,
-      sort_order: index,
-      option_values: variant.selections,
-      prices: priceFor(variant),
-    })),
+    ...(changed ? catalog : {}),
     metafields: form.metafields,
     active: form.active,
   }

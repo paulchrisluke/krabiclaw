@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "597ee22a-c345-488f-bd86-c18f2a53f60f",
+  "id": "f4de2681-39d5-481d-b226-37f94347ac8a",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "account": {
@@ -6736,6 +6736,10 @@
         "product_availability_rules_interval_check": {
           "name": "product_availability_rules_interval_check",
           "value": "interval_weeks >= 1"
+        },
+        "product_availability_rules_anchor_check": {
+          "name": "product_availability_rules_anchor_check",
+          "value": "interval_weeks = 1 OR effective_from_date IS NOT NULL"
         },
         "product_availability_rules_dates_check": {
           "name": "product_availability_rules_dates_check",

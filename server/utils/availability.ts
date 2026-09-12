@@ -215,14 +215,16 @@ export async function materializeSessions(db: DbClient, input: {
       .reduce((earliest, value) => (value < earliest ? value : earliest))
     if (from > through) continue
 
-    // Anchor the interval_weeks cadence on the rule's effective start so a
-    // fortnightly class keeps its parity no matter when generation runs.
-    const anchor = rule.effective_from_date ?? from
+    // A cadence longer than a week counts from the rule's own effective start,
+    // which the schema requires it to have. Counting from the generation
+    // window instead would move every other Saturday to the other Saturday
+    // whenever generation ran on a different day.
     for (let date = from; date <= through; date = addLocalDays(date, 1)) {
       if (new Date(`${date}T00:00:00Z`).getUTCDay() !== rule.weekday) continue
       if (rule.interval_weeks > 1) {
+        if (!rule.effective_from_date) throw new HTTPError({ statusCode: 500, statusMessage: `Rule ${rule.id} repeats every ${rule.interval_weeks} weeks with no effective start` })
         const weeksSinceAnchor = Math.floor(
-          (Date.parse(`${date}T00:00:00Z`) - Date.parse(`${anchor}T00:00:00Z`)) / (7 * 86_400_000),
+          (Date.parse(`${date}T00:00:00Z`) - Date.parse(`${rule.effective_from_date}T00:00:00Z`)) / (7 * 86_400_000),
         )
         if (weeksSinceAnchor % rule.interval_weeks !== 0) continue
       }
@@ -344,6 +346,13 @@ export function sessionClaimQuery(input: {
   customerId?: string | null
   requestId?: string | null
   holdExpiresAt?: string | null
+  /**
+   * A booking this claim replaces. Its seats are not counted against the
+   * destination's capacity: a guest moving within a full session is not
+   * blocked by the seat they are giving up, and one moving into a session
+   * that is full without them still is.
+   */
+  replacingBookingId?: string | null
   now: string
 }): BatchQuery {
   return {
@@ -360,7 +369,7 @@ export function sessionClaimQuery(input: {
           AND s.starts_at > ?
           AND (s.capacity IS NULL OR s.capacity >= ? + COALESCE((
             SELECT SUM(b.party_size) FROM bookings b
-            WHERE b.product_session_id = s.id AND ${CAPACITY_CONSUMING_SQL}
+            WHERE b.product_session_id = s.id AND b.id IS NOT ? AND ${CAPACITY_CONSUMING_SQL}
           ), 0))
       )
       ON CONFLICT (id) DO NOTHING
@@ -368,7 +377,7 @@ export function sessionClaimQuery(input: {
     params: [
       input.bookingId, input.organizationId, input.siteId, input.productId, input.sessionId, input.productVariantId,
       input.customerId ?? null, input.requestId ?? null, input.partySize, input.holdExpiresAt ?? null, input.now, input.now,
-      input.sessionId, input.organizationId, input.productId, input.now, input.partySize, input.now,
+      input.sessionId, input.organizationId, input.productId, input.now, input.partySize, input.replacingBookingId ?? null, input.now,
     ],
   }
 }

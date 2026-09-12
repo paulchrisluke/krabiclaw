@@ -97,7 +97,8 @@ export async function handleProductsTools(ctx: McpExecutorContext) {
       const locationId = requiredString(args, 'location_id')
       await authorizeLocation(ctx, locationId)
       const products = await listLocationProducts(site.db, {
-        organizationId: site.organizationId, locationId, publishedOnly: args.published_only === true,
+        organizationId: site.organizationId, locationId,
+        ...(args.published_only === true ? { publishedOnSiteId: site.siteId } : {}),
       })
       return paginateMcpCollection(products.map(productListItem), args, { resource: 'products' })
     }

@@ -935,6 +935,7 @@ CREATE TABLE `product_availability_rules` (
 	CONSTRAINT "product_availability_rules_weekday_check" CHECK(weekday BETWEEN 0 AND 6),
 	CONSTRAINT "product_availability_rules_start_time_check" CHECK(start_time GLOB '[0-2][0-9]:[0-5][0-9]' AND start_time < '24:00'),
 	CONSTRAINT "product_availability_rules_interval_check" CHECK(interval_weeks >= 1),
+	CONSTRAINT "product_availability_rules_anchor_check" CHECK(interval_weeks = 1 OR effective_from_date IS NOT NULL),
 	CONSTRAINT "product_availability_rules_dates_check" CHECK((effective_from_date IS NULL OR date(effective_from_date, '+0 days') IS effective_from_date) AND (effective_until_date IS NULL OR date(effective_until_date, '+0 days') IS effective_until_date) AND (effective_from_date IS NULL OR effective_until_date IS NULL OR effective_until_date >= effective_from_date)),
 	CONSTRAINT "product_availability_rules_duration_check" CHECK(duration_minutes IS NULL OR duration_minutes > 0),
 	CONSTRAINT "product_availability_rules_capacity_check" CHECK(capacity IS NULL OR capacity >= 0),

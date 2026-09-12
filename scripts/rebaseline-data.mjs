@@ -104,7 +104,7 @@ export const TARGET_INVARIANT_QUERIES = {
   localized_resource_owner_scope: `SELECT r.id FROM resource_localizations r WHERE NOT (
     ${Object.entries(LOCALIZED_OWNER_TABLES).map(([type, table]) => `(r.resource_type = '${type}' AND EXISTS (SELECT 1 FROM ${table} o WHERE o.id = r.resource_id AND o.organization_id = r.organization_id${type === 'site' ? ' AND o.id = r.site_id' : type === 'product' ? '' : ' AND o.site_id = r.site_id'}))`).join(' OR ')})`,
   activity_request_scope: `SELECT e.id FROM activity_entries e WHERE e.scope_kind = 'request' AND NOT EXISTS (
-    SELECT 1 FROM requests r WHERE r.id = e.request_id AND r.kind IN ('contact','reservation','experience_booking'))`,
+    SELECT 1 FROM requests r WHERE r.id = e.request_id AND r.kind IN ('contact','reservation','booking'))`,
   // The retired model must leave no trace.
   no_hero_description: "SELECT id FROM content_blocks WHERE type = 'hero' AND json_type(data_json, '$.description') IS NOT NULL",
   no_slug_cased_page_titles: "SELECT id FROM content_documents WHERE kind = 'page' AND title IN ('home','about','contact','location','services','pricing','donate','schedule','privacy','terms','third-party-notices')",
@@ -512,6 +512,9 @@ function deriveOfferingPages(stage, now, record) {
  * stays the guest conversation it always was.
  */
 function deriveGuestRecords(stage, record) {
+  // An experience booking is a booking: the second kind existed only because
+  // experiences were a second catalog.
+  record('booking_requests_renamed', stage.prepare("UPDATE requests SET kind = 'booking' WHERE kind = 'experience_booking'").run().changes)
   const rows = stage.prepare(`SELECT r.*, (SELECT l.timezone FROM old.business_locations l WHERE l.id = r.location_id) AS timezone,
       (SELECT m.new_id FROM temp.product_map m WHERE m.old_id = r.product_id) AS mapped_product_id
     FROM old.requests r WHERE r.booking_date IS NOT NULL ORDER BY r.id`).all()

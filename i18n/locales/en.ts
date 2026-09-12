@@ -172,6 +172,7 @@ export default {
       "meta_description": "Products from {site}."
     },
     "product_detail": {
+      "choose_option": "Choose an option",
       "more_in_category": "More in {category}",
       "meta_description": "{name} — {detail}. Available at {location}.",
       "meta_description_priced": "{name} — {detail}. {price} at {location}."

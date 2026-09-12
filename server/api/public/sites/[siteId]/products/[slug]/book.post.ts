@@ -6,7 +6,7 @@ import { notifyBookingCreated } from '~/server/utils/notifications'
 import { recordSubmissionConversionSafe } from '~/server/utils/site-conversions'
 import { resolveLocationContact } from '~/server/utils/contact-resolution'
 import { parsePhone } from '~/utils/phone'
-import { executeBatch, queryFirst } from '~/server/db'
+import { executeBatch, queryAll, queryFirst } from '~/server/db'
 import { productPolicySummarySource, renderBookingPolicySummary } from '~/server/utils/reservations'
 import { getProduct } from '~/server/utils/product-management'
 import { getSourceLocale } from '~/server/utils/site-locales'
@@ -60,6 +60,7 @@ export default defineHandler(async (event) => {
     normalizedGuestPhone = parsedPhone.e164
   }
   const sessionId = cleanString(body.session_id, 64)
+  const requestedVariantId = cleanString(body.variant_id, 64)
   const notes = cleanString(body.notes, 1000)
   const partySizeValue = typeof body.party_size === 'number' || typeof body.party_size === 'string' ? Number(body.party_size) : Number.NaN
   if (!Number.isInteger(partySizeValue) || partySizeValue < 1 || partySizeValue > 99) {
@@ -74,16 +75,31 @@ export default defineHandler(async (event) => {
   if (shouldSendRealEmail(env) && isReservedTestDomain(guestEmail)) return jsonResponse({ error: 'Please enter a real email address.' }, { status: 422 })
   if (!sessionId) return jsonResponse({ error: 'A session is required' }, { status: 400 })
 
-  const session = await queryFirst<{ id: string; location_id: string | null; starts_at: string; timezone: string; variant_id: string }>(db, `
-    SELECT s.id, s.location_id, s.starts_at, s.timezone,
-           (SELECT v.id FROM product_variants v WHERE v.product_id = s.product_id AND v.active = 1 ORDER BY v.sort_order, v.id LIMIT 1) AS variant_id
+  const session = await queryFirst<{ id: string; location_id: string | null; starts_at: string; timezone: string }>(db, `
+    SELECT s.id, s.location_id, s.starts_at, s.timezone
       FROM product_sessions s
      WHERE s.id = ? AND s.product_id = ? AND s.organization_id = ? AND s.status = 'scheduled'
   `, [sessionId, product.id, site.organization_id])
   if (!session) return jsonResponse({ error: 'That session is not open for booking' }, { status: 404 })
-  // A product with no active variant has nothing purchasable; say so rather
-  // than booking a seat against nothing.
-  if (!session.variant_id) return jsonResponse({ error: 'This product has no bookable option' }, { status: 409 })
+
+  // What is being bought is a variant. Adult and child seats, or a class and
+  // its private package, are different things at different prices, so the
+  // guest's choice is carried here — never resolved by sort order. One active
+  // variant is not a choice; several with none named is a request that cannot
+  // be filled.
+  const variants = await queryAll<{ id: string }>(db, `
+    SELECT id FROM product_variants
+     WHERE product_id = ? AND organization_id = ? AND active = 1
+     ORDER BY sort_order, id
+  `, [product.id, site.organization_id])
+  if (variants.length === 0) return jsonResponse({ error: 'This product has no bookable option' }, { status: 409 })
+  if (requestedVariantId && !variants.some(variant => variant.id === requestedVariantId)) {
+    return jsonResponse({ error: 'That option is not available for this product' }, { status: 400 })
+  }
+  if (!requestedVariantId && variants.length > 1) {
+    return jsonResponse({ error: 'Choose an option before booking' }, { status: 400 })
+  }
+  const productVariantId = requestedVariantId || variants[0]!.id
 
   const clientIp = getClientIp(event)
   const ipHash = await hashClientIp(clientIp)
@@ -127,7 +143,7 @@ export default defineHandler(async (event) => {
 
     await claimSessionCapacity(db, {
       organizationId: site.organization_id, siteId, productId: product.id, sessionId: session.id,
-      productVariantId: session.variant_id, partySize, customerId: customer.id, requestId: threadId,
+      productVariantId, partySize, customerId: customer.id, requestId: threadId,
     })
   } catch (error) {
     if (!(error instanceof CapacityUnavailableError)) throw error

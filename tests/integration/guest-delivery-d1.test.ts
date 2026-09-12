@@ -368,3 +368,67 @@ test('D1 status-email retries preserve recorded content and reject superseded bo
     await runtime.dispose()
   }
 })
+
+test('a booking move into a full session leaves the original booking exactly as it was', async () => {
+  const runtime = new Miniflare({ workers: [{ config: {
+    name: 'booking-move-proof', type: 'worker', compatibilityDate: '2024-11-01',
+    manifest: { mainModule: 'index.mjs', modules: { 'index.mjs': { type: 'esm', contents: 'export class Hub { fetch() { return new Response(null, { status: 204 }) } } export default { fetch() { return new Response("ok") } }' } } },
+    exports: { Hub: { type: 'durable-object', storage: 'sqlite' } },
+    env: { DB: { type: 'd1' }, GUEST_INBOX_HUBS: { type: 'durable-object', workerName: 'booking-move-proof', exportName: 'Hub' } },
+  } }] })
+  try {
+    const db = await runtime.getD1Database('DB')
+    const env = { ...await runtime.getBindings<CloudflareEnv>(), BETTER_AUTH_SECRET: 'local-proof-secret-long-enough-for-auth', BETTER_AUTH_URL: 'https://proof.example',
+      STRIPE_SECRET_KEY: 'sk_test_local_d1_no_stripe_requests',
+      NUXT_PUBLIC_PLATFORM_DOMAIN: 'https://proof.example', EMAIL_REPLY_SECRET: 'local-reply-proof', EMAIL_DELIVERY_MODE: 'log_only', WHATSAPP_DELIVERY_MODE: 'log_only' }
+    await db.batch((await generateSQLiteMigration(await generateSQLiteDrizzleJson({}), await generateSQLiteDrizzleJson(schema))).map(statement => db.prepare(statement)))
+    const now = new Date().toISOString()
+    // Both sessions sit inside the window a change request looks at.
+    const at = (days: number, hours = 0) => new Date(Date.now() + days * 86_400_000 + hours * 3_600_000).toISOString()
+    const soon = at(30)
+    const soonEnd = at(30, 1)
+    const later = at(60)
+    const laterEnd = at(60, 1)
+    for (const statement of [
+      "INSERT INTO organization (id, name, slug) VALUES ('org-move', 'Move', 'move')",
+      "INSERT INTO sites (id, organization_id, slug, subdomain, brand_name) VALUES ('site-move', 'org-move', 'move', 'move', 'Move')",
+      "INSERT INTO user (id, name, email) VALUES ('user-move', 'Owner', 'owner@move.example')",
+      "INSERT INTO member (id, organizationId, userId, role) VALUES ('member-move','org-move','user-move','owner')",
+      "INSERT INTO business_locations (id,organization_id,site_id,slug,title,timezone) VALUES ('loc-move','org-move','site-move','move','Move','Asia/Bangkok')",
+      "INSERT INTO products (id, organization_id, name, slug, created_by, updated_by) VALUES ('prod-move','org-move','Class','class','user-move','user-move')",
+      "INSERT INTO product_variants (id, organization_id, product_id, name, created_by, updated_by) VALUES ('var-move','org-move','prod-move','Adult','user-move','user-move')",
+      "INSERT INTO product_booking_configs (product_id, organization_id, duration_minutes, default_capacity, created_by, updated_by) VALUES ('prod-move','org-move',60,4,'user-move','user-move')",
+      // The destination holds two seats and already has both taken.
+      `INSERT INTO product_sessions (id,organization_id,product_id,location_id,timezone,starts_at,ends_at,capacity,status,created_by,updated_by) VALUES ('session-from','org-move','prod-move','loc-move','Asia/Bangkok','${soon}','${soonEnd}',4,'scheduled','user-move','user-move')`,
+      `INSERT INTO product_sessions (id,organization_id,product_id,location_id,timezone,starts_at,ends_at,capacity,status,created_by,updated_by) VALUES ('session-to','org-move','prod-move','loc-move','Asia/Bangkok','${later}','${laterEnd}',2,'scheduled','user-move','user-move')`,
+      "INSERT INTO bookings (id,organization_id,site_id,product_id,product_session_id,product_variant_id,party_size,status) VALUES ('booking-other','org-move','site-move','prod-move','session-to','var-move',2,'confirmed')",
+    ]) await db.prepare(statement).run()
+    const thread = requestInsertQueries({ id: 'move-proof', kind: 'booking', organization_id: 'org-move', site_id: 'site-move', location_id: 'loc-move',
+      customer_id: null, review_id: null, conversation_state: 'needs_attention', resolved_at: null,
+      payload: threadPayloadForGuest({ name: 'Guest', email: 'guest@move.example', phone: '+66812345678' }), created_at: now, updated_at: now })
+    await db.batch(thread.map(write => db.prepare(write.query).bind(...write.params)))
+    await db.prepare(`INSERT INTO bookings (id,organization_id,site_id,product_id,product_session_id,product_variant_id,request_id,party_size,status)
+      VALUES ('booking-move','org-move','site-move','prod-move','session-from','var-move','move-proof',1,'confirmed')`).run()
+
+    const current = await getGuestRequest(db, 'move-proof')
+    assert(current)
+    await requestBookingChange(db, env, current, 'user-move', { kind: 'booking', sessionId: 'session-to', partySize: 1, expectedUpdatedAt: current.updated_at }, 'full-session')
+    const requestId = await db.prepare('SELECT id FROM activity_entries WHERE dedupe_key=?').bind('booking-change-request:move-proof:full-session').first<string>('id')
+    assert(requestId)
+    const token = createHmac('sha256', env.EMAIL_REPLY_SECRET).update(`booking-change:v1:move-proof:${requestId}`).digest('hex')
+
+    await assert.rejects(
+      respondToBookingChange(db, env, { threadId: 'move-proof', requestId, token, decision: 'accept' }),
+      /filled up/,
+      'a full destination refuses the move',
+    )
+    // Nothing about the original may have moved: not its session, not its
+    // status, not the thread it answers.
+    const original = await db.prepare("SELECT product_session_id, status, request_id FROM bookings WHERE id='booking-move'").first<{ product_session_id: string; status: string; request_id: string | null }>()
+    assert.deepEqual(original, { product_session_id: 'session-from', status: 'confirmed', request_id: 'move-proof' })
+    assert.equal(await db.prepare("SELECT count(*) AS count FROM bookings WHERE product_session_id='session-to'").first('count'), 1,
+      'no replacement seat was taken in the full session')
+    assert.equal(await db.prepare("SELECT count(*) AS count FROM activity_entries WHERE request_id='move-proof' AND event_name='booking_change.accepted'").first('count'), 0,
+      'the decision was not recorded for a move that did not happen')
+  } finally { await runtime.dispose() }
+})
