@@ -285,7 +285,7 @@ import { PRODUCT_LIMITS } from '~/shared/product-limits'
 import { isCurrencyCode } from '~/shared/currencies'
 import { majorAmountToMinor, minorAmountToMajor, selectPrice, type Price } from '~/shared/prices'
 import { formatProductMoney } from '~/utils/product-money'
-import { requireProductPresentation } from '~/utils/product-presentation'
+import { presentationForProduct, requireProductPresentation } from '~/utils/product-presentation'
 import { getErrorMessage, isNotFoundError } from '~/utils/errors'
 
 const route = useRoute()
@@ -305,7 +305,11 @@ const dashboardLocation = useDashboardLocation()
 
 const vertical = dashboard.site.value?.vertical
 if (!vertical) throw createError({ statusCode: 500, statusMessage: 'Site vertical is not configured' })
-const presentation = requireProductPresentation(vertical)
+// The words follow the product: a class is an experience whatever the site
+// sells otherwise. Until the row has loaded, and for a product being created,
+// the screen speaks the vertical's own surface — it is not yet known to be
+// anything else.
+const presentation = computed(() => (product.value ? presentationForProduct(vertical, product.value) : requireProductPresentation(vertical)))
 const rawCurrency = dashboard.site.value?.default_currency
 if (!isCurrencyCode(rawCurrency)) throw createError({ statusCode: 500, statusMessage: 'Unsupported site currency' })
 const currency = rawCurrency
@@ -376,12 +380,12 @@ async function load() {
     collections.value = collectionResponse.collections
     definitions.value = definitionResponse.definitions
     const found = productResponse.products.find(row => row.id === productId.value)
-    if (!found) return showError(createError({ statusCode: 404, statusMessage: `${presentation.itemLabel} not found` }))
+    if (!found) return showError(createError({ statusCode: 404, statusMessage: `${presentation.value.itemLabel} not found` }))
     product.value = found
     loadForm(found)
   } catch (error) {
-    if (isNotFoundError(error)) return showError(createError({ statusCode: 404, statusMessage: `${presentation.itemLabel} not found` }))
-    loadError.value = getErrorMessage(error, `Failed to load this ${presentation.itemLabel.toLowerCase()}`)
+    if (isNotFoundError(error)) return showError(createError({ statusCode: 404, statusMessage: `${presentation.value.itemLabel} not found` }))
+    loadError.value = getErrorMessage(error, `Failed to load this ${presentation.value.itemLabel.toLowerCase()}`)
   }
 }
 
@@ -621,6 +625,13 @@ const navigationGroups = computed<EditorNavigationGroup[]>(() => {
     id: 'item',
     items: [{ id: 'name', label: 'Name', summary: form.name || 'Not named yet', placeholder: !form.name, to: `${itemPath.value}/name` }],
   }]
+  // Until the row is here there is nothing to summarize. "Not named yet" and
+  // "Not bookable" are statements about a product; shown while loading they
+  // were statements about the network.
+  if (!product.value) return [{
+    id: 'item',
+    items: [{ id: 'loading', label: 'Loading', summary: `Loading this ${presentation.value.itemLabel.toLowerCase()}…`, placeholder: true, to: itemPath.value }],
+  }]
   return [
     {
       id: 'item',
@@ -762,7 +773,7 @@ const { createActionLabel, saveLabel, saveDisabled, save: saveCurrentEditor, sta
   labels: sectionLabels,
   order: ['name'],
   missing: () => !form.name.trim(),
-  noun: presentation.itemLabel.toLowerCase(),
+  noun: presentation.value.itemLabel.toLowerCase(),
   saving,
   existingBlocked: () => !sectionValid.value,
   commit,
@@ -797,7 +808,7 @@ async function commit() {
     await load()
     await navigateTo(itemPath.value)
   } catch (error) {
-    toast.add({ description: getErrorMessage(error, `Failed to save ${presentation.itemLabel.toLowerCase()}`), color: 'error' })
+    toast.add({ description: getErrorMessage(error, `Failed to save ${presentation.value.itemLabel.toLowerCase()}`), color: 'error' })
   } finally {
     saving.value = false
   }
@@ -933,7 +944,7 @@ async function loadProductLocalization(locale: string): Promise<Record<string, u
 
 async function saveProductLocalization(locale: string, submitted: Record<string, unknown>): Promise<void> {
   const row = product.value
-  if (!row) throw new Error(`The ${presentation.itemLabel.toLowerCase()} is unavailable.`)
+  if (!row) throw new Error(`The ${presentation.value.itemLabel.toLowerCase()} is unavailable.`)
   const values: Record<string, unknown> = {}
   for (const key of ['name', 'description', 'tags']) {
     if (Object.hasOwn(submitted, key)) values[key] = submitted[key]
@@ -950,5 +961,5 @@ async function saveProductLocalization(locale: string, submitted: Record<string,
   })
 }
 
-useSeoMeta({ title: () => `${form.name || presentation.itemLabel} | KrabiClaw Dashboard`, robots: 'noindex, nofollow' })
+useSeoMeta({ title: () => `${form.name || presentation.value.itemLabel} | KrabiClaw Dashboard`, robots: 'noindex, nofollow' })
 </script>
