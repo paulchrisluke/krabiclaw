@@ -189,26 +189,24 @@
               <span v-if="location.review_count" class="text-muted">· {{ t('saya.reviews_page.based_on', { count: location.review_count }) }}</span>
             </h2>
           </div>
+          <p v-if="reviewsPreview.some((review: ApiRecord) => review.source === 'google_places')" class="mb-4 text-xs text-muted">{{ t('saya.reviews.google_order_notice') }}</p>
           <div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            <div v-for="review in reviewsPreview" :key="review.id" class="border border-default bg-default p-8">
-              <div class="mb-3 flex gap-1" :aria-label="t('saya.reviews.stars_aria', { rating: review.rating })">
-                <SayaIcon
-                  v-for="s in 5"
-                  :key="s"
-                  name="star"
-                  solid
-                  aria-hidden="true"
-                  class="size-3.5"
-                  :class="s <= review.rating ? 'text-primary' : 'text-muted'"
-                />
-                <span class="sr-only">{{ t('saya.reviews.stars_aria', { rating: review.rating }) }}</span>
-              </div>
-              <p class="text-sm leading-relaxed text-default">"{{ review.content }}"</p>
-              <div class="mt-6 border-t border-default pt-4">
-                <div class="text-sm font-medium text-default">{{ review.author_name }}</div>
-                <GoogleReviewAttribution v-if="review.source === 'google_places'" :metadata="review.google_review_metadata" :source-url="review.original_reference" />
-              </div>
-            </div>
+            <SayaReviewCard
+              v-for="review in reviewsPreview"
+              :key="review.id"
+              variant="compact"
+              :review="{
+                id: review.id,
+                author: review.author_name,
+                rating: review.rating,
+                content: review.content,
+                title: review.title,
+                dateLabel: formatDate(review.source === 'google_places' ? review.original_review_date : review.created_at),
+                source: review.source,
+                original_reference: review.original_reference,
+                google_review_metadata: review.google_review_metadata,
+              }"
+            />
           </div>
         </div>
       </section>
@@ -366,6 +364,7 @@ const otherLocations = computed(() => locations.value.filter((l: ApiRecord) => l
 
 // Reviews preview from bootstrap
 const reviewsPreview = computed(() => locationReviews.value.slice(0, 3))
+const { formatDate } = useLocaleDate()
 
 // Neutral default until the owner picks a brand color in onboarding.
 const locationHeroBrandColor = computed(() => pageConfig.value?.brand_color || '#3F3F46')

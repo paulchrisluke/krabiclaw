@@ -1,3 +1,4 @@
+import type { GoogleReviewMetadata } from '~/shared/google-review'
 import { queryAll, queryFirst, type DbClient } from '~/server/db'
 import { resolveSiteCmsCapabilities } from '~/server/utils/cms-capabilities'
 import { getProductBySlug, hydrateProductMedia, listCollections, listLocationProducts } from '~/server/utils/product-management'
@@ -87,6 +88,9 @@ export interface PublicProductReview {
   title: string | null
   content: string
   createdAt: string
+  source: string
+  original_reference: string | null
+  google_review_metadata: GoogleReviewMetadata | null
 }
 
 // previewAuthorized carries the site's one preview authorization down from the
@@ -337,9 +341,10 @@ export async function loadPublicProductReviews(
   db: DbClient,
   detail: PublicProductDetail,
 ): Promise<PublicProductReview[]> {
-  return queryAll<PublicProductReview>(db, `
+  const rows = await queryAll<Omit<PublicProductReview, 'google_review_metadata'> & { google_review_metadata: string | null }>(db, `
     SELECT id, author_name AS author, rating, title, content,
-           COALESCE(original_review_date, created_at) AS createdAt
+           COALESCE(original_review_date, created_at) AS createdAt,
+           source, original_reference, google_review_metadata
      FROM reviews
      WHERE organization_id = ? AND site_id = ? AND status = 'approved'
        AND location_id = ?
@@ -349,4 +354,8 @@ export async function loadPublicProductReviews(
      ORDER BY createdAt DESC, id DESC
      LIMIT 50
   `, [detail.site.organization_id, detail.site.id, detail.location.id, detail.product.id])
+  return rows.map(row => ({
+    ...row,
+    google_review_metadata: row.google_review_metadata ? JSON.parse(row.google_review_metadata) as GoogleReviewMetadata : null,
+  }))
 }

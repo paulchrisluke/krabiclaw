@@ -220,7 +220,13 @@ export default {
       "aggregate_only_title": "Rated {average} on Google from {count} reviews",
       "aggregate_only_desc": "Individual reviews aren't available here yet — check back soon.",
       "view_all": "View All Reviews",
-      "anonymous": "Anonymous"
+      "anonymous": "Anonymous",
+      "google_order_notice": "Written reviews, newest first. Google supplies a selection ordered by relevance.",
+      "author_profile": "Author profile",
+      "view_on_google": "View review on Google Maps",
+      "report_review": "Report review",
+      "visited": "Visited {date}",
+      "translated_review": "Translated review · View original ({language})"
     },
     "subnav": {
       "overview": "Overview",

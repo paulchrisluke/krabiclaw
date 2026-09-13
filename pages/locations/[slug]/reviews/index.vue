@@ -115,6 +115,7 @@
         </div>
 
         <div v-else class="flex flex-col gap-8">
+          <p v-if="filtered.some(review => review.source === 'google_places')" class="text-xs text-muted">{{ t('saya.reviews.google_order_notice') }}</p>
           <SayaReviewCard
             v-for="review in filtered"
             :key="review.id"

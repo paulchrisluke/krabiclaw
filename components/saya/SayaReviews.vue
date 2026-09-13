@@ -21,49 +21,14 @@
       </div>
     </div>
 
-    <p v-if="reviews.some(review => review.source === 'google_places')" class="mb-4 text-xs text-muted">Written reviews, newest first. Google supplies a selection ordered by relevance.</p>
+    <p v-if="reviews.some(review => review.source === 'google_places')" class="mb-4 text-xs text-muted">{{ $t('saya.reviews.google_order_notice') }}</p>
     <div :class="['grid gap-8', layoutClass]">
-      <div
-        v-for="review in displayedReviews"
-        :key="review.id"
-        class="flex flex-col rounded-lg bg-default p-8 shadow-sm border border-default hover:shadow-md transition-all"
-      >
-        <div
-          class="flex items-center gap-1 text-yellow-400 mb-4"
-          :aria-label="$t('saya.reviews.stars_aria', { rating: reviewRating(review) })"
-          role="img"
-        >
-          <span v-for="i in 5" :key="i" class="text-sm" aria-hidden="true">
-            {{ i <= reviewRating(review) ? '★' : '☆' }}
-          </span>
-        </div>
-        
-        <blockquote class="grow">
-          <p class="text-default leading-relaxed italic text-sm">
-            "{{ reviewText(review) }}"
-          </p>
-        </blockquote>
-
-        <!-- Review Reply -->
-        <div v-if="review.reviewReply?.comment" class="mt-4 bg-muted border border-default rounded-xl p-4 text-xs">
-          <p class="font-bold text-default mb-1">{{ $t('saya.reviews.response_label') }}</p>
+      <SayaReviewCard v-for="review in displayedReviews" :key="review.id" variant="compact" :review="cardReview(review)">
+        <div v-if="review.reviewReply?.comment" class="mt-4 rounded-xl border border-default bg-muted p-4 text-xs">
+          <p class="mb-1 font-bold text-default">{{ $t('saya.reviews.response_label') }}</p>
           <p class="text-muted">{{ typeof review.reviewReply.comment === 'string' ? review.reviewReply.comment : review.reviewReply.comment?.text || '' }}</p>
         </div>
-
-        <div class="mt-6 flex items-center gap-3 pt-6 border-t border-default">
-          <span class="flex size-10 shrink-0 items-center justify-center rounded-full bg-inverted text-xs font-bold uppercase text-inverted">
-            {{ reviewAuthor(review).charAt(0) }}
-          </span>
-          <div>
-            <p class="text-sm font-bold text-default">{{ reviewAuthor(review) }}</p>
-            <time v-if="review.source === 'google_places' ? review.original_review_date : review.created_at" :datetime="review.source === 'google_places' ? review.original_review_date : review.created_at" class="block text-xs text-muted">
-              {{ formatDate(review.source === 'google_places' ? review.original_review_date : review.created_at) }}
-            </time>
-          </div>
-        </div>
-        <GoogleReviewAttribution v-if="review.source === 'google_places'" :metadata="review.google_review_metadata" :source-url="review.original_reference" />
-      </div>
-
+      </SayaReviewCard>
     </div>
 
     <!-- Aggregate-only state: verified Google rating exists, but no individual review rows yet -->
@@ -142,7 +107,17 @@ const reviewText = review => {
   }
   return text
 }
-const reviewRating = review => review.rating
+const cardReview = review => ({
+  id: review.id,
+  author: reviewAuthor(review),
+  rating: review.rating,
+  content: reviewText(review),
+  title: review.title ?? null,
+  dateLabel: formatDate(review.source === 'google_places' ? review.original_review_date : review.created_at),
+  source: review.source ?? null,
+  original_reference: review.original_reference ?? null,
+  google_review_metadata: review.google_review_metadata ?? null,
+})
 
 const displayedReviews = computed(() => {
   const filtered = props.reviews.filter(review => reviewText(review) && reviewAuthor(review))

@@ -49,7 +49,10 @@ function isPublicProductDetailPayload(value: unknown): value is PublicProductDet
       && typeof review.rating === 'number'
       && (typeof review.title === 'string' || review.title === null)
       && typeof review.content === 'string'
-      && typeof review.createdAt === 'string')
+      && typeof review.createdAt === 'string'
+      && typeof review.source === 'string'
+      && (typeof review.original_reference === 'string' || review.original_reference === null)
+      && (isRecord(review.google_review_metadata) || review.google_review_metadata === null))
     && typeof value.collectionName === 'string'
     && Array.isArray(value.collectionSiblings)
     && value.collectionSiblings.every(sibling => isRecord(sibling)

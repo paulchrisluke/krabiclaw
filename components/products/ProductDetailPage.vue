@@ -350,15 +350,9 @@
             <SayaIcon name="star" solid class="size-4 text-default" />{{ averageRating }} · {{ reviewCountLabel }}
           </span>
         </div>
-        <div class="mt-6 grid gap-4 sm:grid-cols-2">
-          <article v-for="review in reviews" :key="review.id" class="rounded-xl border border-default bg-elevated p-5">
-            <div class="flex items-center gap-1" :aria-label="`${review.rating}/5`">
-              <SayaIcon v-for="star in 5" :key="star" name="star" solid class="size-4" :class="star <= review.rating ? 'text-default' : 'text-dimmed'" />
-            </div>
-            <h3 v-if="review.title" class="mt-3 font-semibold text-default">{{ review.title }}</h3>
-            <p class="mt-2 text-sm leading-6 text-muted">{{ review.content }}</p>
-            <p class="mt-3 text-xs text-muted">{{ review.author }} · {{ reviewDateLabel(review) }}</p>
-          </article>
+        <p v-if="reviews.some(review => review.source === 'google_places')" class="mt-4 text-xs text-muted">{{ t('saya.reviews.google_order_notice') }}</p>
+        <div class="mt-6 grid gap-6 sm:grid-cols-2">
+          <SayaReviewCard v-for="review in reviewCards" :key="review.id" variant="compact" :review="review" />
         </div>
       </section>
     </article>
@@ -377,6 +371,7 @@ import type { MetafieldDefinition, MetafieldValue } from '~/shared/metafields'
 import { metafieldHandle, PRICING_NOTE_HANDLE } from '~/shared/metafields'
 import type { PublicProductBooking, PublicProductLocationPayload, PublicProductReview } from '~/server/utils/public-products'
 import { formatLocationAddress } from '~/utils/location-address'
+import SayaReviewCard from '~/components/saya/SayaReviewCard.vue'
 import BookingModal from '~/components/booking/BookingModal.vue'
 import BookingRecap from '~/components/booking/BookingRecap.vue'
 import BookingContactForm, { type ContactFormState } from '~/components/booking/BookingContactForm.vue'
@@ -691,9 +686,19 @@ function sessionTimeLabel(session: PublicSession): string {
   const format = new Intl.DateTimeFormat(locale.value, { hour: 'numeric', minute: '2-digit', timeZone: session.timezone })
   return `${format.format(new Date(session.starts_at))} – ${format.format(new Date(session.ends_at))}`
 }
-function reviewDateLabel(review: PublicProductReview): string {
-  return new Intl.DateTimeFormat(locale.value, { month: 'short', year: 'numeric' }).format(new Date(review.createdAt))
-}
+const { formatDate } = useLocaleDate()
+
+const reviewCards = computed(() => props.reviews.map(review => ({
+  id: review.id,
+  author: review.author,
+  rating: review.rating,
+  content: review.content,
+  title: review.title,
+  dateLabel: formatDate(review.createdAt),
+  source: review.source,
+  original_reference: review.original_reference,
+  google_review_metadata: review.google_review_metadata,
+})))
 
 /** What guests say, in one number: the mean rating to one decimal, or none. */
 const averageRating = computed(() => {
