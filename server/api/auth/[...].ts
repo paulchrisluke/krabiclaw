@@ -4,11 +4,10 @@ import { getQuery } from 'nitro/h3';
 import { createAuth, healStaleCimdClient, type CloudflareEnv } from '~/server/utils/auth'
 import { cloudflareEnv } from '~/server/utils/api-response'
 import { parsePhoneOrThrow } from '~/utils/phone'
-import { createDb } from '~/server/db'
 import { HTTPError, type H3Event } from 'nitro';
 
 import { errorChainForTelemetry } from '~/server/utils/error-telemetry'
-import { getRequestDataMetrics, safeRoute, unwrapInstrumentedD1 } from '~/server/utils/request-metrics'
+import { getRequestDataMetrics, safeRoute } from '~/server/utils/request-metrics'
 
 const MAX_PHONE_AUTH_BODY_BYTES = 64 * 1024
 
@@ -140,7 +139,7 @@ export default defineHandler(async (event) => {
       const clientId = await extractOAuthClientId(request)
       if (clientId) {
         try {
-          await healStaleCimdClient(createDb(unwrapInstrumentedD1(env.DB)), clientId)
+          await healStaleCimdClient(await auth.$context, clientId)
         } catch (error) {
           // Best-effort self-heal — never let it block the underlying OAuth request.
           console.warn('[AUTH_HANDLER] healStaleCimdClient failed', errorChainForTelemetry(error))
