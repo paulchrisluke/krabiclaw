@@ -9,7 +9,8 @@ KrabiClaw has one shared preview deployment, so every PR's E2E job runs
 serially behind every other PR's. A ready PR costs 5 minutes when its changed
 files are classified and 13 when they are not, and every push to a ready PR
 pays again. CodeRabbit's local CLI and web review are both rate-limited. The
-whole procedure below exists to spend each of those exactly once per PR.
+whole procedure below exists to spend the preview once per PR and CodeRabbit
+only as many times as its findings demand.
 
 Read `AGENTS.md` first. It says what must be true; this file says the order.
 
@@ -37,16 +38,32 @@ Open the issue's checklist and prove each item. Then run an adversarial pass:
 boundary values, rows persisted by the previous schema, real latency. Write
 "not checked" only for what genuinely needs the deployed preview.
 
-## 2. Local CodeRabbit, once, at the end
+## 2. CodeRabbit, once, on the finished HEAD you ship
 
 ```bash
-~/.local/bin/coderabbit review --agent --committed --base staging
+node scripts/coderabbit-gate.mjs review
 ```
 
-Run it once the change is complete, not per iteration. Fix every finding
-through the canonical path or state in the PR why a finding is wrong. Nothing
-stays "deferred". Do not run it again unless the fix changed more than the
-flagged lines.
+The plan allows 3 CLI reviews per developer per rolling hour and 150 files
+per review. So: do not review while you work. Finish the whole change, commit,
+run the gate, fix every finding, commit, and run the gate again on that HEAD.
+Repeat until a run returns zero findings; only that HEAD ships. Usually one or
+two runs per PR, never more than the findings demand. `status` says how many
+slots are left and when the next opens.
+
+Never call the CLI directly and never pass `--use-credits`. The gate refuses a
+dirty tree, refuses when the hour is spent, refuses a diff over the
+files-per-review cap (split the PR; a `--dir` slice is not a review of the
+commit), and reviews committed HEAD against `staging`. A finding
+you believe is wrong stays a finding until the re-review agrees; say why in the
+PR body if it does not.
+
+A review belongs to one commit SHA. A committed PreToolUse hook runs
+`coderabbit-gate.mjs check` before `gh pr ready`, `gh pr merge` and any push
+to staging, and blocks unless the exact commit being shipped has a completed
+review in the CLI's own store with zero open findings. Twenty commits with no
+review is fine; one unreviewed commit on top of a reviewed one is not. There is
+no flag to skip it.
 
 ## 3. The Checks job, step for step
 
@@ -113,8 +130,30 @@ gh pr merge <number> --merge --delete-branch
 
 PRs target `staging`, so GitHub's `Closes #N` does not fire. Close each issue
 yourself with one comment that links the PR and quotes the measurement that
-proves each checklist item, or says which item is still open and why. Move the
-board card. Remove the worktree.
+proves each checklist item, or says which item is still open and why.
+
+The board is project 3, "KrabiClaw Project". Its Status field moves an issue
+through Backlog, Ready, In progress, In review, Done. Set it at each step, on
+the issue's item id:
+
+```bash
+gh project item-list 3 --owner paulchrisluke --format json --limit 100 --jq '.items[] | select(.content.number == <issue>) | .id'
+gh project item-edit --project-id PVT_kwHOAFbjZM4BjJML --id <item id> --field-id PVTSSF_lAHOAFbjZM4BjJMLzhh-pkM --single-select-option-id <option>
+```
+
+| Status | Option id | When |
+| --- | --- | --- |
+| In progress | `47fc9ee4` | the worktree is cut |
+| In review | `df73e18b` | the PR is flipped to ready |
+| Done | `98236657` | the PR is merged and the issue closed |
+
+An issue not yet on the board: `gh project item-add 3 --owner paulchrisluke --url <issue url>`,
+then look up its item id with the `item-list` query above and set its Status
+with `item-edit`; adding does not set a status.
+`gh pr edit` fails on this repository (a projects-classic GraphQL field); edit
+a PR body with `gh api -X PATCH repos/paulchrisluke/krabiclaw/pulls/<n> --input body.json`.
+
+Remove the worktree.
 
 A staging fix that is not a feature goes straight to `staging` with no PR,
 after steps 2 and 3.
