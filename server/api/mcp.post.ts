@@ -4,14 +4,16 @@ import type { H3Event } from "nitro";
 import {
   createMcpHandler,
   McpServer,
+  ProtocolError,
   hostHeaderValidationResponse,
   originValidationResponse,
   localhostAllowedHostnames,
   localhostAllowedOrigins,
   type AuthInfo,
+  type ListToolsResult,
   type McpRequestContext,
 } from "@modelcontextprotocol/server";
-import { asMcpError, mcpSuccess, mcpFailure, MCP_ERROR, mcpProtocolError, type JsonRpcId } from "~/server/utils/mcp-protocol";
+import { asMcpError, mcpSuccess, mcpFailure, MCP_ERROR, type JsonRpcId } from "~/server/utils/mcp-protocol";
 import { catalogFingerprint, catalogMeta } from "~/server/utils/mcp-catalog";
 import { executeMcpToolCall } from "~/server/utils/mcp-executor";
 import { isMcpRenderResponse } from "~/server/utils/mcp-render";
@@ -149,7 +151,7 @@ interface McpFactoryContext {
 
 function factoryContextFrom(ctx: McpRequestContext): McpFactoryContext {
   const extra = ctx.authInfo?.extra as McpFactoryContext | undefined;
-  if (!extra) throw mcpProtocolError(MCP_ERROR.internal, "Missing authenticated MCP request context.");
+  if (!extra) throw new ProtocolError(MCP_ERROR.internal, "Missing authenticated MCP request context.");
   return extra;
 }
 
@@ -175,7 +177,7 @@ function createTenantMcpServer(ctx: McpRequestContext): McpServer {
   server.setRequestHandler("resources/templates/list", async () => ({ resourceTemplates: [] }));
   server.setRequestHandler("resources/read", async (request) => {
     const uri = typeof request.params?.uri === "string" ? request.params.uri : "";
-    throw mcpProtocolError(MCP_ERROR.invalidParams, `Unknown MCP app resource: ${uri}`);
+    throw new ProtocolError(MCP_ERROR.invalidParams, `Unknown MCP app resource: ${uri}`);
   });
 
   server.setRequestHandler("prompts/list", async () => ({ prompts: MCP_PROMPTS }));
@@ -198,7 +200,7 @@ function createTenantMcpServer(ctx: McpRequestContext): McpServer {
 
   server.setRequestHandler("tools/list", async (request) => {
     const { event, mcpUser, cfEnv } = factoryContextFrom(ctx);
-    if (!mcpUser) throw mcpProtocolError(MCP_ERROR.internal, "Missing authenticated MCP request context.");
+    if (!mcpUser) throw new ProtocolError(MCP_ERROR.internal, "Missing authenticated MCP request context.");
     const hasSiteIdParam = Object.prototype.hasOwnProperty.call(request.params ?? {}, "site_id");
     const siteId = typeof (request.params as Record<string, unknown> | undefined)?.site_id === "string"
       ? ((request.params as Record<string, unknown>).site_id as string).trim()
@@ -236,12 +238,16 @@ function createTenantMcpServer(ctx: McpRequestContext): McpServer {
     logMcpEventDetached(event, cfEnv.DB, {
       organizationId: siteCtx?.organizationId ?? null, siteId: siteCtx?.siteId ?? null, userId: mcpUser.userId, requestId: null, method: "tools/list", result: { count: tools.length, domains }, status: "success", httpStatus: 200, oauthClientId: mcpUser.oauthClientId ?? null, });
 
-    return { tools, _meta: catalogMeta(MCP_PUBLIC_TOOLS) };
+    // Our own McpToolDefinition types inputSchema/outputSchema as a loose
+    // Record<string, unknown>; every entry in mcp-tools/*.ts is a real JSON
+    // Schema object (validated by yarn mcp:catalog), just not provably so to
+    // TS against the SDK's stricter Tool type.
+    return { tools, _meta: catalogMeta(MCP_PUBLIC_TOOLS) } as unknown as ListToolsResult;
   });
 
   server.setRequestHandler("tools/call", async (request) => {
     const { event, mcpUser, cfEnv } = factoryContextFrom(ctx);
-    if (!mcpUser) throw mcpProtocolError(MCP_ERROR.internal, "Missing authenticated MCP request context.");
+    if (!mcpUser) throw new ProtocolError(MCP_ERROR.internal, "Missing authenticated MCP request context.");
     const toolName = typeof request.params?.name === "string" ? request.params.name : "";
     const rawArgsValue = (request.params as { arguments?: unknown } | undefined)?.arguments;
     const rawArgs = (rawArgsValue && typeof rawArgsValue === "object" && !Array.isArray(rawArgsValue)
@@ -271,12 +277,14 @@ function createTenantMcpServer(ctx: McpRequestContext): McpServer {
       const mcpErr = asMcpError(toolError);
       if (mcpErr.kind === "protocol") {
         // Unknown-tool and similar protocol-level failures become a real
-        // JSON-RPC error (the SDK maps the thrown mcpProtocolError), not a
-        // tool result — rethrow and let createMcpHandler shape the response.
+        // JSON-RPC error, not a tool result. `toolError` carries our own
+        // `.mcp`-tagged shape, which the SDK doesn't read — throw its own
+        // ProtocolError so createMcpHandler maps the code/data correctly
+        // instead of falling back to a generic internal error.
         const telemetryErrorMessage = describeErrorForTelemetry(toolError);
         logMcpEventDetached(event, cfEnv.DB, {
           userId: mcpUser.userId, organizationId: mcpUser.activeOrganizationId ?? null, siteId: null, requestId: null, method: "tools/call", toolName, toolDomain: toolDef?.domain ?? null, isMutating: false, arguments: rawArgs, status: "error", errorCode: mcpErr.code, errorMessage: telemetryErrorMessage, httpStatus: 200, jsonrpcErrorCode: mcpErr.code, jsonrpcErrorMessage: telemetryErrorMessage, unknownToolName: toolName || null, oauthClientId: mcpUser.oauthClientId ?? null, durationMs: Date.now() - toolStartedAt, });
-        throw toolError;
+        throw new ProtocolError(mcpErr.code, mcpErr.message, mcpErr.data);
       }
       logMcpEventDetached(event, cfEnv.DB, {
         userId: mcpUser.userId, organizationId: mcpUser.activeOrganizationId ?? null, siteId: null, requestId: null, method: "tools/call", toolName, toolDomain: toolDef?.domain ?? null, isMutating: isMcpMutatingTool(toolDef), arguments: rawArgs, status: "error", errorCode: mcpErr.code, errorMessage: describeErrorForTelemetry(toolError), httpStatus: 200, oauthClientId: mcpUser.oauthClientId ?? null, durationMs: Date.now() - toolStartedAt, });
@@ -404,9 +412,13 @@ export default defineHandler(async (event) => {
 
   const allowedHostnames = [new URL(baseUrl).hostname, ...localhostAllowedHostnames()];
   const allowedOriginHostnames = [new URL(baseUrl).hostname, ...localhostAllowedOrigins()];
-  const rejectedHost = hostHeaderValidationResponse(event.req, allowedHostnames);
+  // Nitro's TypedServerRequest structurally differs from the Workers-typed
+  // Request these SDK helpers expect (an optional vs. required `cache`
+  // field) despite both being the same object at runtime.
+  const webRequest = event.req as unknown as Request;
+  const rejectedHost = hostHeaderValidationResponse(webRequest, allowedHostnames);
   if (rejectedHost) return rejectedHost;
-  const rejectedOrigin = originValidationResponse(event.req, allowedOriginHostnames);
+  const rejectedOrigin = originValidationResponse(webRequest, allowedOriginHostnames);
   if (rejectedOrigin) return rejectedOrigin;
 
   const tenantAuthOptions = { audiences: [`${baseUrl}/api/mcp`], requiredScopes: ["tenant"] };
@@ -455,7 +467,7 @@ export default defineHandler(async (event) => {
           const authChallenge = buildMcpAuthChallengeForError(error, {
             resourceMetadataUrl: resourceMetadataUrl(baseUrl), defaultDescription: TENANT_AUTH_DESCRIPTION, });
           logMcpEventDetached(event, cfEnv.DB, {
-            requestId: null, method: requestMethod ?? null, status: "auth_required", errorCode: mcpError.code, errorMessage: describeMcpAuthTelemetryError(error), httpStatus: isToolCall ? 200 : 401, });
+            requestId: null, method: requestMethod ?? "unknown", status: "auth_required", errorCode: mcpError.code, errorMessage: describeMcpAuthTelemetryError(error), httpStatus: isToolCall ? 200 : 401, });
           if (isToolCall) return mcpSuccess(requestId, mcpAuthRequiredResult({ challenge: authChallenge, message: TENANT_AUTH_REQUIRED_TEXT }));
           event.res.status = 401;
           setMcpAuthChallenge(event, authChallenge);
@@ -477,7 +489,7 @@ export default defineHandler(async (event) => {
       extra: factoryContext as unknown as Record<string, unknown>,
     };
 
-    const response = await mcpHandler.fetch(event.req, { authInfo, parsedBody: body });
+    const response = await mcpHandler.fetch(webRequest, { authInfo, parsedBody: body });
     // MCP clients (e.g. ChatGPT) read Mcp-Session-Id off the initialize
     // response and echo it on later calls. The server is fully stateless —
     // nothing here actually keys off this id — but issuing one preserves the
