@@ -108,33 +108,44 @@ function withSlotLock(fn) {
       try { return fn() } finally { rmSync(LOCK, { recursive: true, force: true }) }
     } catch (error) {
       if (error.code !== 'EEXIST') throw error
-      if (Date.now() - statSync(LOCK).mtimeMs > 10 * 60 * 1000) { rmSync(LOCK, { recursive: true, force: true }); continue }
+      let heldSince
+      try { heldSince = statSync(LOCK).mtimeMs } catch (statError) {
+        if (statError.code === 'ENOENT') continue // the holder released it between our mkdir and stat
+        throw statError
+      }
+      if (Date.now() - heldSince > 10 * 60 * 1000) { rmSync(LOCK, { recursive: true, force: true }); continue }
       execFileSync('sleep', ['0.1'])
     }
   }
   fail('could not take the review-slot lock; another gate has held it for over a minute', 3)
 }
 
-function check(sha) {
-  // A commit SHA is unique, so a review from any worktree or --dir slice counts.
-  const head = sha ? git(['rev-parse', '--verify', `${sha}^{commit}`]) : git(['rev-parse', 'HEAD'])
-  const matching = sessions().filter(session => session.head === head && session.state === 'complete')
-  if (matching.length === 0) {
-    fail(`no completed CodeRabbit review for ${head.slice(0, 8)}. Run: node scripts/coderabbit-gate.mjs review`, 2)
-  }
-  const latest = matching[0]
-  // A --dir session carries the same head but reviewed a slice. Its diff record
-  // lists what it saw; every file the commit changes must be in it.
+// The newest completed session for this commit whose diff record covers every
+// file the commit changes against staging. A --dir slice never qualifies, and a
+// newer slice cannot hide an older whole-commit review.
+function coveringSession(head) {
   const changed = changedFiles(head)
-  const unreviewed = changed.filter(file => !latest.reviewedFiles.has(file))
-  if (unreviewed.length > 0) {
-    fail(`review of ${head.slice(0, 8)} covered ${latest.reviewedFiles.size} of ${changed.length} changed files; not reviewed:\n  ${unreviewed.join('\n  ')}\nRun the gate on the whole commit.`, 2)
+  const complete = sessions().filter(session => session.head === head && session.state === 'complete')
+  const covering = complete.find(session => changed.every(file => session.reviewedFiles.has(file)))
+  return { changed, complete, covering }
+}
+
+function check(sha) {
+  const head = sha ? git(['rev-parse', '--verify', `${sha}^{commit}`]) : git(['rev-parse', 'HEAD'])
+  const { changed, complete, covering } = coveringSession(head)
+  if (!covering) {
+    if (complete.length === 0) {
+      fail(`no completed CodeRabbit review for ${head.slice(0, 8)}. Run: node scripts/coderabbit-gate.mjs review`, 2)
+    }
+    const partial = complete[0]
+    const unreviewed = changed.filter(file => !partial.reviewedFiles.has(file))
+    fail(`review of ${head.slice(0, 8)} covered ${partial.reviewedFiles.size} of ${changed.length} changed files; not reviewed:\n  ${unreviewed.join('\n  ')}\nRun the gate on the whole commit.`, 2)
   }
-  if (latest.findings.length > 0) {
-    const lines = latest.findings.map(finding => `  ${finding.fileName}:${finding.startLine} ${finding.severity} — ${finding.title}`)
-    fail(`${latest.findings.length} open finding(s) on ${head.slice(0, 8)}:\n${lines.join('\n')}\nFix them, commit, and review the new HEAD.`, 2)
+  if (covering.findings.length > 0) {
+    const lines = covering.findings.map(finding => `  ${finding.fileName}:${finding.startLine} ${finding.severity} — ${finding.title}`)
+    fail(`${covering.findings.length} open finding(s) on ${head.slice(0, 8)}:\n${lines.join('\n')}\nFix them, commit, and review the new HEAD.`, 2)
   }
-  process.stdout.write(`coderabbit-gate: ${head.slice(0, 8)} reviewed ${new Date(latest.startedAt).toISOString()}, no open findings\n`)
+  process.stdout.write(`coderabbit-gate: ${head.slice(0, 8)} reviewed ${new Date(covering.startedAt).toISOString()}, no open findings\n`)
 }
 
 function review() {
@@ -142,12 +153,11 @@ function review() {
     fail('working tree is not clean. A review covers a commit; commit first.', 2)
   }
   const head = git(['rev-parse', 'HEAD'])
-  const already = sessions().find(session => session.head === head && session.state === 'complete')
-  if (already) {
-    process.stdout.write(`coderabbit-gate: ${head.slice(0, 8)} already reviewed at ${new Date(already.startedAt).toISOString()}; not spending a run\n`)
+  const { changed: files, covering } = coveringSession(head)
+  if (covering) {
+    process.stdout.write(`coderabbit-gate: ${head.slice(0, 8)} already reviewed at ${new Date(covering.startedAt).toISOString()}; not spending a run\n`)
     return check(head)
   }
-  const files = changedFiles(head)
   if (files.length === 0) fail('no committed changes against origin/staging to review', 2)
   if (files.length > FILES_PER_REVIEW) {
     fail(`${files.length} changed files exceeds the plan's ${FILES_PER_REVIEW} per review, and a --dir slice does not count as a review of the commit. Split the PR.`, 2)
@@ -184,8 +194,48 @@ function status() {
   }
 }
 
+// Every commit a shell command would ship: the head of each PR it readies or
+// merges, and the source of each push whose destination is staging, full ref or
+// short, in any segment of the command. Deletions have no source commit.
+function commitsShippedBy(commandLine) {
+  const shas = new Set()
+  const segments = commandLine.split(/&&|\|\||;|\||\n/)
+  for (const segment of segments) {
+    const words = segment.trim().split(/\s+/).filter(Boolean)
+    const ghAt = words.findIndex((word, index) => word === 'gh' && words[index + 1] === 'pr' && ['ready', 'merge'].includes(words[index + 2]))
+    if (ghAt !== -1) {
+      const target = words.slice(ghAt + 3).find(word => !word.startsWith('-'))
+      if (words.includes('--undo')) continue
+      shas.add(target
+        ? execFileSync('gh', ['pr', 'view', target, '--json', 'headRefOid', '--jq', '.headRefOid'], { encoding: 'utf8' }).trim()
+        : git(['rev-parse', 'HEAD']))
+      continue
+    }
+    const pushAt = words.findIndex((word, index) => word === 'git' && words[index + 1] === 'push')
+    if (pushAt === -1) continue
+    const args = words.slice(pushAt + 2).filter(word => !word.startsWith('-'))
+    const refspecs = args.slice(1) // args[0] is the remote
+    const isStaging = ref => ref === 'staging' || ref === 'refs/heads/staging'
+    if (refspecs.length === 0) {
+      if (git(['rev-parse', '--abbrev-ref', 'HEAD']) === 'staging') shas.add(git(['rev-parse', 'HEAD']))
+      continue
+    }
+    for (const refspec of refspecs) {
+      const [source, destination] = refspec.includes(':') ? refspec.split(':') : [refspec, refspec]
+      if (!isStaging(destination) || source === '') continue
+      shas.add(git(['rev-parse', '--verify', `${source}^{commit}`]))
+    }
+  }
+  return [...shas]
+}
+
+function guard(commandLine) {
+  for (const sha of commitsShippedBy(commandLine)) check(sha)
+}
+
 const [command, argument] = process.argv.slice(2)
 if (command === 'review') review()
 else if (command === 'check') check(argument)
 else if (command === 'status') status()
-else fail('usage: coderabbit-gate.mjs review | check [<sha>] | status', 2)
+else if (command === 'guard') guard(argument ?? '')
+else fail('usage: coderabbit-gate.mjs review | check [<sha>] | status | guard <shell command>', 2)
