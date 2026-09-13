@@ -3,7 +3,7 @@ import { expect, test } from '@playwright/test'
 import { loginAs } from './helpers/auth'
 import { devLoginHeaders } from './test-env'
 
-test('signed Stripe ingress processes one event and rejects invalid signatures', async ({ request }) => {
+test('signed Stripe ingress accepts a signed event and rejects invalid signatures', async ({ request }) => {
   const eventId = `evt_e2e_${randomUUID().replaceAll('-', '')}`
   const payload = JSON.stringify({
     id: eventId, object: 'event', type: 'customer.created',
@@ -15,19 +15,14 @@ test('signed Stripe ingress processes one event and rejects invalid signatures',
   })
   expect(signatureResponse.status(), await signatureResponse.text()).toBe(200)
   const { signature } = await signatureResponse.json()
+  // Stripe's own delivery retries are the retry mechanism, so a redelivery is
+  // simply accepted again; there is no application-owned webhook queue to read.
   for (let attempt = 0; attempt < 2; attempt++) {
     const response = await request.post('/api/auth/stripe/webhook', {
       headers: { 'content-type': 'application/json', 'stripe-signature': signature }, data: payload,
     })
     expect(response.status(), await response.text()).toBe(200)
   }
-  const stateResponse = await request.get('/api/dev/billing-state', {
-    headers: devLoginHeaders(), params: { organization_id: 'org-demo', stripe_event_id: eventId },
-  })
-  expect(stateResponse.status(), await stateResponse.text()).toBe(200)
-  const state = await stateResponse.json()
-  expect(state.webhook_events).toHaveLength(1)
-  expect(state.webhook_events[0]).toMatchObject({ stripe_event_id: eventId, status: 'processed', attempt_count: 1 })
   const invalid = await request.post('/api/auth/stripe/webhook', {
     headers: { 'content-type': 'application/json', 'stripe-signature': `${signature}0` }, data: payload,
   })

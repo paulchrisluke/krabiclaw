@@ -21,11 +21,8 @@ import { fireOrganizationEventSafe } from '~/server/utils/organization-events'
 import type { InferSelectModel } from 'drizzle-orm'
 import { organizationAccessControl, organizationRoles } from '~/utils/organization-access'
 import { platformAdminAccessControl, platformAdminRoles } from '~/utils/platform-admin-access'
-import {
-  createStripePlanLoader,
-  enqueueStripeEvent,
-} from '~/server/utils/better-auth-stripe'
-import { processStripeEvent } from '~/server/utils/stripe-event-processing'
+import { createStripePlanLoader } from '~/server/utils/better-auth-stripe'
+import { handleStripeGa4Event } from '~/server/utils/stripe-ga4'
 import { createStripeClient } from '~/server/utils/stripe-client'
 import { unwrapInstrumentedD1 } from '~/server/utils/request-metrics'
 import { timingSafeEqualText } from '~/server/utils/dev-route-auth'
@@ -504,23 +501,12 @@ export function createAuth(env: CloudflareEnv) {
             }, ctx)
           },
         },
+        // The plugin's own /api/auth/stripe/webhook handlers own the
+        // `subscription` table, and Stripe's delivery retries are the retry
+        // mechanism. This hook adds analytics only; a throw here returns a
+        // non-2xx so Stripe redelivers the event.
         onEvent: async (event) => {
-          const queued = await enqueueStripeEvent(db, event)
-          if (!queued || !env.STRIPE_SECRET_KEY) return
-          const authContext = await instance.$context
-          await processStripeEvent(
-            env,
-            db,
-            event,
-            stripeClient,
-            authContext.adapter as unknown as import('~/server/utils/better-auth-stripe').BetterAuthSubscriptionAdapter,
-            loadStripePlans,
-          ).catch((error) => {
-            console.error('stripe_webhook_immediate_processing_failed', {
-              stripeEventId: event.id,
-              error: error instanceof Error ? error.message : String(error),
-            })
-          })
+          await handleStripeGa4Event(env, db, stripeClient, event)
         },
       }),
       admin({

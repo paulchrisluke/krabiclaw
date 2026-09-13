@@ -41,7 +41,7 @@ export async function sendReviewRequestForBooking(
   const recipientEmail = context.customer_email || context.guest_email || ''
   if (!recipientEmail) throw new Error('Booking customer has no email address')
 
-  const { request, token } = await createOrRotateReviewRequest(db, context)
+  const { request, token } = await createOrRotateReviewRequest(env as CloudflareEnv, db, context)
   const baseUrl = siteBaseUrl(context)
   const reviewUrl = `${baseUrl}/locations/${encodeURIComponent(context.location_slug)}/review-submit?token=${encodeURIComponent(token)}`
   const optOutUrl = `${reviewUrl}&optOut=1`

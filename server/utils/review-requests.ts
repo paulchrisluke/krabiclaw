@@ -74,10 +74,6 @@ export function addDays(iso: string, days: number): string {
   return isoFromMs(new Date(iso).getTime() + days * 86_400_000)
 }
 
-export async function hasReviewRequestsEntitlement(db: DbClient, siteId: string): Promise<boolean> {
-  return await hasSiteEntitlement(db, siteId, 'review_requests')
-}
-
 export function createReviewRequestToken(): string {
   const bytes = new Uint8Array(32)
   crypto.getRandomValues(bytes)
@@ -162,6 +158,7 @@ export async function getReviewRequestByToken(
 }
 
 export async function createOrRotateReviewRequest(
+  env: CloudflareEnv,
   db: DbClient,
   context: ReviewBookingContext,
   now = new Date().toISOString(),
@@ -172,7 +169,7 @@ export async function createOrRotateReviewRequest(
   if (context.review_submitted_at || context.review_id) throw new Error('Booking already has a submitted review')
   if (context.customer_opted_out_at) throw new Error('Customer has opted out of review requests')
 
-  const entitled = await hasReviewRequestsEntitlement(db, context.site_id)
+  const entitled = await hasSiteEntitlement(env, db, context.site_id, 'review_requests')
   if (!entitled) throw new Error('Review requests are not enabled for this site')
 
   const token = createReviewRequestToken()

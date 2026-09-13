@@ -74,11 +74,12 @@ const localizedData = localeSegment.value
           import('~/server/db'),
           import('~/server/utils/localization'),
         ])
-        const db = cloudflareEnv(requestEvent).db
+        const env = cloudflareEnv(requestEvent)
+        const db = env.db
         if (!db) throw createError({ statusCode: 503, statusMessage: 'Database unavailable' })
         const currentSite = await queryFirst<{ organization_id: string }>(db, 'SELECT organization_id FROM sites WHERE id = ? AND status = \'active\' LIMIT 1', [siteId])
         if (!currentSite) throw createError({ statusCode: 404, statusMessage: 'Site not found' })
-        return { route: await resolveLocalizedPublicRoute(db, currentSite.organization_id, siteId, pagePath.value) }
+        return { route: await resolveLocalizedPublicRoute(env, db, currentSite.organization_id, siteId, pagePath.value) }
       }
       const endpoint: string = `/api/public/sites/${encodeURIComponent(siteId)}/localized-route`
       return await publicApiRequest(endpoint, {

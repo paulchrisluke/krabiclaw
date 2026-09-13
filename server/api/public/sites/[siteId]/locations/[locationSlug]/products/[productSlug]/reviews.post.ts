@@ -14,10 +14,11 @@ export default defineHandler(async (event) => {
   const productSlug = getRouterParam(event, 'productSlug')
   if (!siteId || !locationSlug || !productSlug) return jsonResponse({ error: 'Site, location, and Product slugs are required' }, { status: 400 })
   try {
-    const db = cloudflareEnv(event).DB
+    const env = cloudflareEnv(event)
+    const db = env.DB
     if (!db) return jsonResponse({ error: 'Database unavailable' }, { status: 503 })
     const previewAuthorized = await resolvePreviewAuthorization(event, siteId, previewSecretOf(cloudflareEnv(event)))
-    const resolved = await loadPublicProductApiDetail(db, siteId, previewAuthorized, locationSlug, productSlug)
+    const resolved = await loadPublicProductApiDetail(env, db, siteId, previewAuthorized, locationSlug, productSlug)
     if (!resolved) return jsonResponse({ error: 'Product not found' }, { status: 404 })
     const body = await readBody(event) as ApiRecord
     const author = cleanString(body.author, 80)

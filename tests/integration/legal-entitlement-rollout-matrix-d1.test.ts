@@ -13,8 +13,8 @@ import {
 //
 // 1. "Every real subscription plan denies legal_operations" — already fully
 //    covered (tests/unit/billing-plans.test.ts asserts both real plans,
-//    'free' and 'growth', the only two organization_billing.access_plan
-//    values the schema's own CHECK constraint allows). Not re-proven here;
+//    'free' and 'growth', the only two plan values getPlanEntitlements
+//    accepts). Not re-proven here;
 //    see task-U7-report.md's gap-ledger section for the citation.
 // 2. "All six rollout-group flags default-deny" — already fully covered
 //    (tests/unit/legal-access.test.ts's first test). Not re-proven here.
@@ -38,7 +38,7 @@ import {
 //   session cookie, which is then forwarded through a hand-built H3Event's
 //   `req.headers`/`req.runtime.cloudflare.env` exactly the way Nitro's real
 //   event shape works. No getAuthSession/getDashboardContext/
-//   getOrganizationBillingProjection/getActiveBlawbySite call is mocked;
+//   getOrganizationPlan/getActiveBlawbySite call is mocked;
 //   every one of them runs for real against the real D1 rows below.
 // - This is real, provable route-POLICY coverage, but it is deliberately
 //   NOT full H3Event route (defineHandler) dispatch: the handful of actual
@@ -133,7 +133,7 @@ test('no real subscription plan ever entitles legal_operations (staff and public
     await db.batch([
       "INSERT INTO organization (id,name,slug) VALUES ('org-free','Org Free','org-free')",
       "INSERT INTO organization (id,name,slug) VALUES ('org-growth','Org Growth','org-growth')",
-      "INSERT INTO organization_billing (organization_id,access_plan) VALUES ('org-growth','growth')",
+      "INSERT INTO subscription (id,plan,referenceId,status,periodEnd) VALUES ('sub-growth','growth','org-growth','active',4102444800)",
       "INSERT INTO sites (id,organization_id,slug,subdomain,vertical,theme_id,status,onboarding_status) VALUES ('site-free','org-free','site-free','site-free','service','blawby-theme-v1','active','active')",
       "INSERT INTO sites (id,organization_id,slug,subdomain,vertical,theme_id,status,onboarding_status) VALUES ('site-growth','org-growth','site-growth','site-growth','service','blawby-theme-v1','active','active')",
       "INSERT INTO site_domains (id,organization_id,site_id,domain,type,role,status) VALUES ('dom-free','org-free','site-free','site-free.example.com','custom','canonical','active')",

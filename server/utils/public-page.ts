@@ -328,7 +328,7 @@ async function loadPublicPageSource(
   const localizedLocale = locale && locale !== 'en' ? locale : null
   let publicLocalizations: ExactPublicLocalization[] = []
   if (localizedLocale) {
-    publicLocalizations = await loadExactPublicLocalizations(db, orgId, siteId, localizedLocale)
+    publicLocalizations = await loadExactPublicLocalizations(env, db, orgId, siteId, localizedLocale)
   }
 
   const localizedLocationId = localizedLocale && locationSlug
@@ -608,11 +608,11 @@ async function loadPublicPageSource(
   }
   const [tenantPage, storyPage] = await Promise.all([
     contentPagePath
-      ? getPublicTenantPageForPath(db, siteId, contentPagePath, tenantPageOptions)
+      ? getPublicTenantPageForPath(env, db, siteId, contentPagePath, tenantPageOptions)
       : null,
     // The home teaser renders the story; every other route reads its own page.
     contentPagePath === '/'
-      ? getPublicTenantPageForPath(db, siteId, STORY_SOURCE_PATH, tenantPageOptions)
+      ? getPublicTenantPageForPath(env, db, siteId, STORY_SOURCE_PATH, tenantPageOptions)
       : null,
   ])
   // These complete built-in routes may display an optional CMS content overlay.
@@ -877,7 +877,7 @@ async function loadPublicPageSource(
   }
   const localeRepresentations = !representationResource && tenantPage?.localeRepresentations
     ? tenantPage.localeRepresentations
-    : await listPublicLocaleRepresentations(db, {
+    : await listPublicLocaleRepresentations(env, db, {
         organizationId: orgId,
         siteId,
         sourcePath: representationSourcePath,

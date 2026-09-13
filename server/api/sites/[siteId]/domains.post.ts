@@ -1,7 +1,7 @@
 import { jsonResponse } from '~/server/utils/api-response'
 import { requireSiteAccess } from '~/server/utils/location-access'
 import {
-  createCustomDomainPair, hasCustomDomainsEntitlement, inspectDomainResolution, validateCustomDomain
+  createCustomDomainPair, inspectDomainResolution, validateCustomDomain
 } from '~/server/utils/domains'
 import { canonicalDomainForPair, domainPair } from '~/server/utils/domain-shared'
 import { domainInstructions, groupCustomDomains } from '~/server/utils/domain-read-model'
@@ -27,7 +27,7 @@ export default defineHandler(async (event) => {
   const actorType = site.member_role as 'owner' | 'admin' | 'editor'
 
 
-  if (!(await hasCustomDomainsEntitlement(db, siteId))) {
+  if (!(await hasSiteEntitlement(env, db, siteId, 'custom_domains'))) {
     return jsonResponse({ error: 'Custom domains require a paid plan.' }, { status: 403 })
   }
 

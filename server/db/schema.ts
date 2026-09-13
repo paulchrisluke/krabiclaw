@@ -1257,9 +1257,8 @@ export const inventory_levels = sqliteTable("inventory_levels", {
 // universal selector across local variants, currencies or locations — price
 // selection is shared/prices.ts, always.
 //
-// Platform subscription billing (`subscription`, `organization_billing`,
-// `stripe_*` webhook tables) is the PLATFORM's billing, not a merchant's
-// catalog. These mappings never join to it.
+// Platform subscription billing (Better Auth's `subscription` table) is the
+// PLATFORM's billing, not a merchant's catalog. These mappings never join to it.
 // Read/write: server/utils/stripe-catalog.ts.
 // ---------------------------------------------------------------------------
 export const stripe_catalog_mappings = sqliteTable("stripe_catalog_mappings", {
@@ -1450,21 +1449,6 @@ export const subscription = sqliteTable("subscription", {
 }, (table) => [
 	index("subscription_referenceId_idx").on(table.referenceId),
 	index("subscription_status_idx").on(table.status),
-]);
-
-export const organization_billing = sqliteTable("organization_billing", {
-	organization_id: text().primaryKey().references(() => organization.id, { onDelete: "cascade" } ),
-	payment_status: text().default("unknown").notNull(),
-	paid_through: text(),
-	past_due_since: text(),
-	last_paid_invoice_id: text(),
-	last_payment_event_created: integer(),
-	last_payment_event_id: text(),
-	access_plan: text().default("free").notNull(),
-	access_expires_at: text(),
-	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-}, () => [
-	check("organization_billing_instants_check", sql`(access_expires_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', access_expires_at, '+0 days') IS access_expires_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at) AND (paid_through IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', paid_through, '+0 days') IS paid_through) AND (past_due_since IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', past_due_since, '+0 days') IS past_due_since)`),
 ]);
 
 export const onboarding_drafts = sqliteTable("onboarding_drafts", {
@@ -1892,57 +1876,20 @@ export const sites = sqliteTable("sites", {
 	index("sites_created_at_idx").on(table.created_at),
 ]);
 
-export const stripe_webhook_events = sqliteTable("stripe_webhook_events", {
-	id: text().primaryKey(),
-	stripe_event_id: text().notNull().unique(),
-	event_type: text(),
-	status: text().default("pending").notNull(),
-	payload: text(),
-	error: text(),
+// GA4 purchase delivery is at-most-once per Stripe invoice. Stripe's own
+// webhook retries are the retry mechanism; this ledger only stops a retry from
+// sending the same purchase to GA4 twice. Read/write: server/utils/stripe-ga4-intents.ts.
+export const stripe_ga4_invoice_deliveries = sqliteTable("stripe_ga4_invoice_deliveries", {
+	stripe_invoice_id: text().primaryKey(),
+	status: text().default("sending").notNull(),
+	event_id: text().notNull(),
 	claimed_at: text(),
-	lease_expires_at: text(),
-	claim_token: text(),
-	next_attempt_at: text(),
-	dead_lettered_at: text(),
-	attempt_count: integer().default(0).notNull(),
-	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-}, (table) => [
-	check("stripe_webhook_events_instants_check", sql`(claimed_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', claimed_at, '+0 days') IS claimed_at) AND (lease_expires_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', lease_expires_at, '+0 days') IS lease_expires_at) AND (next_attempt_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', next_attempt_at, '+0 days') IS next_attempt_at) AND (dead_lettered_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', dead_lettered_at, '+0 days') IS dead_lettered_at) AND (created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at)`),
-	check("stripe_webhook_events_payload_check", sql`payload IS NULL OR (json_valid(payload))`),
-	index("stripe_webhook_events_retry_idx").on(table.status, table.next_attempt_at),
-]);
-
-export const stripe_subscription_versions = sqliteTable("stripe_subscription_versions", {
-	stripe_subscription_id: text().primaryKey(),
-	last_event_created: integer().notNull(),
-	last_event_id: text().notNull(),
+	sent_at: text(),
+	error: text(),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 }, () => [
-	check("stripe_subscription_versions_instants_check", sql`(updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)`),
-]);
-
-export const stripe_invoice_payments = sqliteTable("stripe_invoice_payments", {
-	stripe_invoice_id: text().primaryKey(),
-	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
-	stripe_subscription_id: text().notNull(),
-	base_plan_price_id: text(),
-	status: text().notNull(),
-	period_start: text(),
-	period_end: text(),
-	past_due_since: text(),
-	last_event_created: integer().notNull(),
-	last_event_id: text().notNull(),
-	ga4_purchase_status: text().default("pending").notNull(),
-	ga4_purchase_event_id: text(),
-	ga4_purchase_attempt_count: integer().default(0).notNull(),
-	ga4_purchase_claimed_at: text(),
-	ga4_purchase_sent_at: text(),
-	ga4_purchase_error: text(),
-	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-}, (table) => [
-	check("stripe_invoice_payments_instants_check", sql`(ga4_purchase_claimed_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', ga4_purchase_claimed_at, '+0 days') IS ga4_purchase_claimed_at) AND (ga4_purchase_sent_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', ga4_purchase_sent_at, '+0 days') IS ga4_purchase_sent_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at) AND (period_start IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', period_start, '+0 days') IS period_start) AND (period_end IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', period_end, '+0 days') IS period_end) AND (past_due_since IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', past_due_since, '+0 days') IS past_due_since)`),
-	index("stripe_invoice_payments_organization_idx").on(table.organization_id, table.period_end),
-	index("stripe_invoice_payments_subscription_idx").on(table.stripe_subscription_id, table.period_end),
+	check("stripe_ga4_invoice_deliveries_instants_check", sql`(claimed_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', claimed_at, '+0 days') IS claimed_at) AND (sent_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', sent_at, '+0 days') IS sent_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)`),
+	check("stripe_ga4_invoice_deliveries_status_check", sql`status IN ('sending', 'sent', 'failed')`),
 ]);
 
 export const stripe_ga4_subscription_intents = sqliteTable("stripe_ga4_subscription_intents", {

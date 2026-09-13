@@ -2,7 +2,7 @@ import { HTTPError } from 'nitro';
 
 import type { H3Event } from 'nitro'
 import { queryAll, queryFirst, type DbClient } from '~/server/db'
-import { getOrganizationBillingProjection } from '~/server/utils/organization-billing'
+import { getOrganizationEntitlements } from '~/server/utils/billing-access'
 import { listLocationQa } from '~/server/utils/location-qa'
 import { requireLocationAccess, requireSiteAccess } from '~/server/utils/location-access'
 import {
@@ -52,18 +52,17 @@ export async function loadDashboardEditorContext(event: H3Event, siteId: string)
   }
   await assertSiteContextAccess(db, principal)
   const accessibleLocationIds = await listAccessibleLocationIds(db, principal)
-  const [locationRows, billing] = await Promise.all([
+  const [locationRows, entitlements] = await Promise.all([
     queryAll<EditorLocationRow>(db, `
       SELECT id, slug, title, status, feature_overrides
         FROM business_locations
        WHERE organization_id = ? AND site_id = ? AND status = 'active'
        ORDER BY title ASC
     `, [site.organization_id, siteId]),
-    getOrganizationBillingProjection(db, site.organization_id),
+    getOrganizationEntitlements(env, site.organization_id),
   ])
   const locations = locationRows
     .filter(location => accessibleLocationIds === null || accessibleLocationIds.includes(location.id))
-  const entitlements = billing.entitlements
   if (typeof env.PREVIEW_SECRET !== 'string' || !env.PREVIEW_SECRET) {
     throw new HTTPError({ statusCode: 500, statusMessage: 'PREVIEW_SECRET is required for editor previews' })
   }

@@ -83,8 +83,13 @@ export const FORBIDDEN_ACTIVE_PATTERNS = [
   /\bblog_draft\b/,
   /\bunpublish_(?:blog_post|platform_blog_post|platform_doc)\b/,
   /\bSELECT\b[^;`]{0,800}\bs\.plan\b/i,
-  /\bob\.(?:plan|status|current_period_end|cancel_at_period_end|ga_client_id|ga_user_id)\b/,
-  /\borganization_billing\b[^;]{0,500}\b(?:ga_client_id|ga_user_id)\b/,
+  // The billing-layer deletion (#937): Better Auth's `subscription` table is
+  // the only store of subscription entitlement. An application projection of
+  // it, and the webhook queue that reconciled one, are not coming back.
+  /\borganization_billing\b/,
+  /\bstripe_webhook_events\b/,
+  /\bstripe_invoice_payments\b/,
+  /\bstripe_subscription_versions\b/,
   // The catalog convergence (#919): one Product model across every vertical.
   // Offerings, experiences and product categories were the same idea under
   // three names; prices belong to variants; publication and location

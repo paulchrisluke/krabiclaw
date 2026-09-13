@@ -269,7 +269,7 @@ async function performSeeding(
   // preview token, but it is not public until activateSite() is called.
   activate: boolean,
 ): Promise<SiteCreationResult> {
-  const locationId = await seedNewSite(db, { organizationId, siteId, name, vertical })
+  const locationId = await seedNewSite(db, { env: env as CloudflareEnv, organizationId, siteId, name, vertical })
 
   await createSystemSubdomain(env, db, siteId, organizationId, subdomain)
 

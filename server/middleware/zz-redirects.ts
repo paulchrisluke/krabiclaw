@@ -69,7 +69,8 @@ async function resolveRetiredExperiencePath(event: H3Event, path: string) {
 async function resolveTenantRedirectForRequest(event: H3Event) {
   const siteId = event.context.siteId as string | null | undefined
   if (!siteId) return null
-  const db = cloudflareEnv(event).db
+  const env = cloudflareEnv(event)
+  const db = env.db
   if (!db) return null
   const url = event.url
   const path = url.pathname === '/' ? '/' : url.pathname.replace(/\/$/, '')
@@ -98,7 +99,7 @@ async function resolveTenantRedirectForRequest(event: H3Event) {
     // language license lapsed or the catalog went unavailable after this
     // locale was published, fall through to a normal 404 instead of leaking
     // the billing/catalog error to every visitor hitting a stale link.
-    const resolved = await resolveLocalizedRedirect(db, site.organization_id, siteId, path).catch(error => {
+    const resolved = await resolveLocalizedRedirect(env, db, site.organization_id, siteId, path).catch(error => {
       if (error instanceof HTTPError) return null
       throw error
     })

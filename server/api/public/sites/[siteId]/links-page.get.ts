@@ -12,7 +12,7 @@ export default defineHandler(async (event) => {
 
   const query = getQuery(event)
   const locale = typeof query.locale === 'string' ? query.locale : 'en'
-  const linksPage = await getPublicLinksPage(db, siteId, locale)
+  const linksPage = await getPublicLinksPage(env, db, siteId, locale)
   if (!linksPage) return jsonResponse({ error: 'Links page not found' }, { status: 404 })
 
   return jsonResponse({ success: true, ...linksPage })
