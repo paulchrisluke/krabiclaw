@@ -216,15 +216,13 @@ const props = defineProps<{
   hasBookableProducts: boolean
 }>()
 
-const isDark = ref(false)
-const syncDarkMode = () => {
-  isDark.value = document.documentElement.classList.contains('dark')
-}
-onMounted(syncDarkMode)
+// Theme state is read from the one composable that owns it. A local copy read
+// off the DOM went stale the moment the theme changed anywhere else, so the
+// button's icon and label described the mode the visitor was not in.
+const { value: colorMode, setPreference } = usePlatformTheme()
+const isDark = computed(() => colorMode.value === 'dark')
 function toggleColorMode() {
-  if (!window.toggleSayaDark) return
-  window.toggleSayaDark()
-  syncDarkMode()
+  setPreference(isDark.value ? 'light' : 'dark')
 }
 const { locale } = useI18n()
 const platformSiteUrl = useRuntimeConfig().public.siteUrl

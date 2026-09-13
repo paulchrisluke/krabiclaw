@@ -7,7 +7,11 @@
           <div v-if="logoUrl" class="size-10 shrink-0 rounded-full overflow-hidden">
             <img :src="logoUrl" :alt="restaurantName" loading="eager" decoding="async" class="h-full w-full object-cover" />
           </div>
-          <div v-else class="flex size-10 items-center justify-center rounded-full bg-(--kc-navy) text-white font-bold text-base shrink-0">
+          <!-- No logo asset: a monogram of the tenant's own name, in the
+               tenant's own brand color. It used to be --kc-navy, which put
+               KrabiClaw's platform navy on every tenant site that had not
+               uploaded a logo. -->
+          <div v-else class="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary text-base font-bold text-(--primary-foreground)">
             {{ restaurantName.charAt(0).toUpperCase() }}
           </div>
         </NuxtLink>

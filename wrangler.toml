@@ -113,8 +113,9 @@ class_name = "GuestInboxHubObject"
 tag = "v1_guest_inbox_infra"
 new_sqlite_classes = ["GuestThreadCommandObject", "GuestInboxHubObject"]
 
-# Keep the production command namespace stable across Worker redeploys.
-# Preview and staging already applied their deletion; preserve that history below.
+[[migrations]]
+tag = "v2_delete_guest_thread_command"
+deleted_classes = ["GuestThreadCommandObject"]
 
 [[r2_buckets]]
 binding = "MEDIA_BUCKET"
@@ -148,7 +149,7 @@ enabled = true
 # against preview.krabiclaw.com. Dedicated resources isolated from staging/prod.
 #
 # Dedicated preview resources:
-#   krabiclaw-preview            D1
+#   krabiclaw-preview-v1         D1
 #   krabiclaw-media-preview      R2
 #   krabiclaw-site-cache-preview KV   69252567b9cd4becbd486a337ab1e589
 [env.preview]
