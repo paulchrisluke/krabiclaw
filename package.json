@@ -136,6 +136,8 @@
     "@better-auth/oauth-provider": "1.7.4",
     "@better-auth/stripe": "1.7.4",
     "@internationalized/date": "^3.12.3",
+    "@modelcontextprotocol/core": "2.0.0",
+    "@modelcontextprotocol/server": "2.0.0",
     "@noble/hashes": "^2.4.0",
     "@nuxt/ui": "^4.11.0",
     "@nuxtjs/robots": "6.2.0",
@@ -166,6 +168,7 @@
     "satori": "^0.29.0",
     "slugify": "^1.6.9",
     "stripe": "^22.6.0",
-    "vue-i18n": "11.4.10"
+    "vue-i18n": "11.4.10",
+    "zod": "^4.2.0"
   }
 }

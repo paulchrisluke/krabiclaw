@@ -150,9 +150,9 @@ async function verifyBearerToken(
     // Always 401, matching the pre-existing behavior for both invalid_token
     // and insufficient_scope: asMcpError maps statusCode 403 to kind
     // 'forbidden', a different code path used for tool-role permission
-    // denials (respondToMcpError returns a plain tool-error result there,
-    // dropping the WWW-Authenticate challenge). RFC 6750 §3.1 permits 401
-    // for insufficient_scope too ("MAY" 403, not "SHOULD"), so this stays
+    // denials (server/api/mcp.post.ts returns a plain tool-error result
+    // there, dropping the WWW-Authenticate challenge). RFC 6750 §3.1 permits
+    // 401 for insufficient_scope too ("MAY" 403, not "SHOULD"), so this stays
     // spec-compliant while keeping the challenge intact on every path.
     throw new HTTPError({
       statusCode: 401,
