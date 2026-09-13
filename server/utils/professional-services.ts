@@ -102,8 +102,8 @@ export async function listPublicBlogSummaries(db: DbClient, siteId: string, limi
   }))
 }
 
-export async function listPublicTenantPages(db: DbClient, siteId: string): Promise<PublicTenantPage[]> {
-  const pages = await listCanonicalTenantPages(db, siteId)
+export async function listPublicTenantPages(env: CloudflareEnv, db: DbClient, siteId: string): Promise<PublicTenantPage[]> {
+  const pages = await listCanonicalTenantPages(env, db, siteId)
   return pages.map(page => ({
     id: page.id,
     page_id: page.page_id,
@@ -126,6 +126,7 @@ export async function listPublicTenantPages(db: DbClient, siteId: string): Promi
 }
 
 export async function getPublicTenantPageByPath(
+  env: CloudflareEnv,
   db: DbClient,
   siteId: string,
   path: string,
@@ -135,7 +136,7 @@ export async function getPublicTenantPageByPath(
     localizations?: readonly ExactPublicLocalization[] | null
   } = {},
 ): Promise<PublicTenantPage | null> {
-  const page = await getPublicTenantPageForPath(db, siteId, path, options)
+  const page = await getPublicTenantPageForPath(env, db, siteId, path, options)
   if (!page) return null
   return {
     id: page.id,
@@ -355,7 +356,7 @@ export async function getPublicBlawbyDocumentData(
   const locale = options.locale?.trim() || 'en'
   const localizations = locale === 'en'
     ? []
-    : await loadExactPublicLocalizations(db, site.organization_id, siteId, locale)
+    : await loadExactPublicLocalizations(env, db, site.organization_id, siteId, locale)
 
   const [shell, route] = await Promise.all([
     getPublicBlawbyShellData(db, siteId, { locale, localizations }),
@@ -365,7 +366,7 @@ export async function getPublicBlawbyDocumentData(
   if (recipe === 'article') return { shell, route }
   // Every route on this template is a page now, so locale representations
   // come from the document — there is no second resource kind to branch on.
-  route.localeRepresentations = await listPublicLocaleRepresentations(db, {
+  route.localeRepresentations = await listPublicLocaleRepresentations(env, db, {
     organizationId: site.organization_id,
     siteId,
     sourcePath: pagePath ?? '/',
@@ -501,7 +502,7 @@ export async function getPublicBlawbyRouteData(
 
   const [page, reviewRows, initialPosts, postRow] = await Promise.all([
     pagePath
-      ? getPublicTenantPageByPath(db, siteId, pagePath, {
+      ? getPublicTenantPageByPath(env, db, siteId, pagePath, {
           locale: options.locale,
           localizations: localized ? options.localizations ?? [] : null,
         })
@@ -545,9 +546,9 @@ export function hasPublicBlawbyRouteContent(route: PublicBlawbyRouteData): boole
   return Boolean(route.page)
 }
 
-export async function getPublicBlawbyData(db: DbClient, siteId: string): Promise<PublicBlawbyData> {
+export async function getPublicBlawbyData(env: CloudflareEnv, db: DbClient, siteId: string): Promise<PublicBlawbyData> {
   const [tenantPages, compliance, consultation, themeTokens] = await Promise.all([
-    listPublicTenantPages(db, siteId),
+    listPublicTenantPages(env, db, siteId),
     getPublicCompliance(db, siteId),
     getPublicConsultationSettings(db, siteId),
     getPublicThemeTokens(db, siteId),

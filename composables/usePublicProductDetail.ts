@@ -97,12 +97,13 @@ export async function usePublicProductDetail(routeKind: ProductSurface) {
           import('~/utils/product-seo'),
           import('~/server/utils/product-management'),
         ])
-        const db = cloudflareEnv(requestEvent).DB
+        const env = cloudflareEnv(requestEvent)
+        const db = env.DB
         if (!db) throw createError({ statusCode: 500, statusMessage: 'Database not available' })
         const previewAuthorized = Boolean(requestEvent.context.previewAuthorized)
         const detail = siteWideExperience
-          ? await loadPublicExperienceDetail(db, siteId, previewAuthorized, productSlug, locale)
-          : await loadPublicProductDetail(db, siteId, routeKind, previewAuthorized, locationSlug, productSlug, locale)
+          ? await loadPublicExperienceDetail(env, db, siteId, previewAuthorized, productSlug, locale)
+          : await loadPublicProductDetail(env, db, siteId, routeKind, previewAuthorized, locationSlug, productSlug, locale)
         if (!detail) return null
         // The collection this product belongs to on this site, in the site's
         // own order. Several means the first by that order — one documented

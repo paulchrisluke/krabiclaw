@@ -160,6 +160,7 @@ export async function loadPublicProductCollection(
 }
 
 export async function loadPublicProductDetail(
+  env: CloudflareEnv,
   db: DbClient,
   siteId: string,
   routeKind: ProductSurface,
@@ -182,7 +183,7 @@ export async function loadPublicProductDetail(
     if (!found || !offeredHere || !publishedHere || !onThisSurface) return null
     const [product] = await hydrateProductMedia(db, siteId, [found])
     if (!product) return null
-    const localeRepresentations = await listPublicLocaleRepresentations(db, {
+    const localeRepresentations = await listPublicLocaleRepresentations(env, db, {
       organizationId: collection.site.organization_id,
       siteId,
       sourcePath: collection.presentation.productPath(location.slug, product.slug),
@@ -199,7 +200,7 @@ export async function loadPublicProductDetail(
 
   const resolved = await loadProductSite(db, siteId, routeKind, previewAuthorized)
   if (!resolved) return null
-  const localizations = await loadExactPublicLocalizations(db, resolved.site.organization_id, siteId, locale)
+  const localizations = await loadExactPublicLocalizations(env, db, resolved.site.organization_id, siteId, locale)
   const localizedLocationPath = `/${locale}/locations/${locationSlug}`
   const locationId = resolveLocalizedRouteResourceId(localizations, 'business_location', localizedLocationPath)
   if (!locationId) return null
@@ -232,7 +233,7 @@ export async function loadPublicProductDetail(
   const localizedSite = siteLocalization
     ? projectExactLocalizedResource('site', collection.site, siteLocalization)
     : { ...collection.site, brand_name: '' }
-  const localeRepresentations = await listPublicLocaleRepresentations(db, {
+  const localeRepresentations = await listPublicLocaleRepresentations(env, db, {
     organizationId: collection.site.organization_id,
     siteId,
     sourcePath: collection.presentation.productPath(location.slug, sourceProduct.slug),
@@ -261,6 +262,7 @@ export async function loadPublicProductDetail(
  * the merchant's behalf.
  */
 export async function loadPublicExperienceDetail(
+  env: CloudflareEnv,
   db: DbClient,
   siteId: string,
   previewAuthorized: boolean,
@@ -283,15 +285,15 @@ export async function loadPublicExperienceDetail(
   if (locations.length !== 1) return null
   const location = locations[0]!
   if (locale === 'en') {
-    return loadPublicProductDetail(db, siteId, 'experiences', previewAuthorized, location.slug, productSlug, locale)
+    return loadPublicProductDetail(env, db, siteId, 'experiences', previewAuthorized, location.slug, productSlug, locale)
   }
   // The localized reader names its location by the localized route the tenant
   // published for it, so hand it that route's slug rather than the source one.
-  const localizations = await loadExactPublicLocalizations(db, resolved.site.organization_id, siteId, locale)
+  const localizations = await loadExactPublicLocalizations(env, db, resolved.site.organization_id, siteId, locale)
   const localizedRoute = localizations.find(item => item.resourceType === 'business_location' && item.resourceId === location.id)?.routePath
   const localizedLocationSlug = localizedRoute ? localizedRoute.split('/').filter(Boolean).at(-1) : null
   if (!localizedLocationSlug) return null
-  return loadPublicProductDetail(db, siteId, 'experiences', previewAuthorized, localizedLocationSlug, productSlug, locale)
+  return loadPublicProductDetail(env, db, siteId, 'experiences', previewAuthorized, localizedLocationSlug, productSlug, locale)
 }
 
 export async function loadPublicProductApiCollection(
@@ -307,6 +309,7 @@ export async function loadPublicProductApiCollection(
 }
 
 export async function loadPublicProductApiDetail(
+  env: CloudflareEnv,
   db: DbClient,
   siteId: string,
   previewAuthorized: boolean,
@@ -322,7 +325,7 @@ export async function loadPublicProductApiDetail(
   // other Product's.
   const product = await getProductBySlug(db, site.organization_id, productSlug)
   if (!product) return null
-  return loadPublicProductDetail(db, siteId, productSurfaceOf(site.vertical, product), previewAuthorized, locationSlug, productSlug, locale)
+  return loadPublicProductDetail(env, db, siteId, productSurfaceOf(site.vertical, product), previewAuthorized, locationSlug, productSlug, locale)
 }
 
 export async function loadPublicProductReviews(

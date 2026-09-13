@@ -235,7 +235,7 @@ Common workflows: manage a site's Products and the collections that group them, 
         : [];
       const activeEntitlements = siteCtx
         ? await getActiveEntitlements(
-            user.db, siteCtx.organizationId, entitlementKeys, siteCtx.siteId, )
+            cfEnv, siteCtx.organizationId, entitlementKeys, siteCtx.siteId, )
         : new Set<string>();
 
       const tools = visibleSurfaceTools.filter((tool) => {

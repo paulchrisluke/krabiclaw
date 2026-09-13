@@ -23,7 +23,7 @@ import { apiErrorResponse, cloudflareEnv, jsonResponse } from '~/server/utils/ap
 import { getDashboardContext } from '~/server/utils/dashboard-context'
 import { assertOrganizationAccess } from '~/server/utils/member-access'
 import { getActiveBlawbySite } from '~/server/utils/professional-services'
-import { getOrganizationBillingProjection } from '~/server/utils/organization-billing'
+import { getOrganizationEntitlements } from '~/server/utils/billing-access'
 import { getRequestDataMetrics } from '~/server/utils/request-metrics'
 import {
   isLegalPracticeReadEnabled,
@@ -228,7 +228,7 @@ export async function resolveLegalStaffAccess(
     })
   }
 
-  const entitled = await resolveEntitlement(context.db, organizationId)
+  const entitled = await resolveEntitlement(context.env, organizationId)
   if (!entitled) {
     denyLegal({
       event, reason: 'entitlement_missing', organizationId, siteId: site.id, actorKind: 'staff',
@@ -345,12 +345,10 @@ export interface LegalPublicSiteContext {
 // -- U7: test-only entitlement injection seam --------------------------------
 //
 // Neither real plan ever sets legal_operations: true — both 'free' and
-// 'growth' hardcode it false in billing-entitlements.ts, and
-// organization-billing.ts's PLANS Set rejects any other stored plan value
-// before getPlanEntitlements ever runs (proven by
-// tests/unit/billing-plans.test.ts). That means no real D1 seed data can
+// 'growth' hardcode it false in billing-entitlements.ts, and getPlanEntitlements
+// throws on any other plan value. That means no real D1 seed data can
 // exercise the "entitled" branch of resolveLegalPublicSiteAccess without
-// mocking getOrganizationBillingProjection outright, which this repo's
+// mocking the entitlement read outright, which this repo's
 // no-internal-mocking rule (docs/testing-strategy.md) bans.
 //
 // This resolver type is the alternative: a typed, optional dependency
@@ -367,11 +365,10 @@ export interface LegalPublicSiteContext {
 // `resolveLegalStaffAccess(` across server/api for confirmation) — so this
 // parameter is always the default in the shipped Worker. See
 // task-U7-report.md for the yarn-build verification of this claim.
-export type LegalEntitlementResolver = (db: DbClient, organizationId: string) => Promise<boolean>
+export type LegalEntitlementResolver = (env: CloudflareEnv, organizationId: string) => Promise<boolean>
 
-async function defaultLegalEntitlementResolver(db: DbClient, organizationId: string): Promise<boolean> {
-  const billing = await getOrganizationBillingProjection(db, organizationId)
-  return billing.entitlements.legal_operations === true
+async function defaultLegalEntitlementResolver(env: CloudflareEnv, organizationId: string): Promise<boolean> {
+  return (await getOrganizationEntitlements(env, organizationId)).legal_operations === true
 }
 
 export interface ResolveLegalPublicSiteAccessOptions {
@@ -438,7 +435,7 @@ export async function resolveLegalPublicSiteAccess(
     })
   }
 
-  const entitled = await resolveEntitlement(db, organizationId)
+  const entitled = await resolveEntitlement(env, organizationId)
   if (!entitled) {
     denyLegal({
       event, reason: 'entitlement_missing', organizationId, siteId, actorKind: null,

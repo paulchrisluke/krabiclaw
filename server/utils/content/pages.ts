@@ -155,10 +155,10 @@ function metadataForInput(input: TenantPageEditorInput, locale: string, path: st
   }
 }
 
-async function assertTenantPageSupport(db: DbClient, organizationId: string, siteId: string, input: TenantPageEditorInput, blocks: TenantPageBlock[], options: { checkCustomPageEntitlement?: boolean } = {}) {
+async function assertTenantPageSupport(env: CloudflareEnv, db: DbClient, organizationId: string, siteId: string, input: TenantPageEditorInput, blocks: TenantPageBlock[], options: { checkCustomPageEntitlement?: boolean } = {}) {
   const pageType = input.pageType ?? 'custom'
   if (!TENANT_PAGE_TYPES.includes(pageType)) badRequest('pageType is invalid')
-  if (pageType === 'custom' && options.checkCustomPageEntitlement !== false && !(await hasSiteEntitlement(db, siteId, 'custom_pages'))) {
+  if (pageType === 'custom' && options.checkCustomPageEntitlement !== false && !(await hasSiteEntitlement(env, db, siteId, 'custom_pages'))) {
     throw new HTTPError({ statusCode: 402, statusMessage: 'Custom tenant pages require the Growth plan or higher' })
   }
   const recipe = input.recipe?.trim() || null
@@ -555,6 +555,7 @@ export async function resolvePublishedTenantPageIdentity(
 export async function createTenantPagesBatch(
   db: DbClient,
   input: {
+    env: CloudflareEnv
     organizationId: string
     siteId: string
     userId?: string | null
@@ -608,7 +609,7 @@ export async function createTenantPagesBatch(
     const effectiveData: TenantPageEditorInput = { ...data, locale, path, pageType }
     const metadata = metadataForInput(effectiveData, locale, path)
     const blocks = normalizeTenantPageBlocks(effectiveData.blocks)
-    await assertTenantPageSupport(db, input.organizationId, input.siteId, effectiveData, blocks)
+    await assertTenantPageSupport(input.env, db, input.organizationId, input.siteId, effectiveData, blocks)
 
     const pageId = effectiveData.id ?? crypto.randomUUID()
     const variantId = pageId
@@ -656,6 +657,7 @@ interface OnboardingPageRepresentationRow extends PageRepresentationRow {
 export async function applyOnboardingTenantPages(
   db: DbClient,
   input: {
+    env: CloudflareEnv
     organizationId: string
     siteId: string
     userId: string | null
@@ -712,7 +714,7 @@ export async function applyOnboardingTenantPages(
     }
     const metadata = metadataForInput(effectiveData, locale, page.path)
     const blocks = normalizeTenantPageBlocks(page.blocks)
-    await assertTenantPageSupport(db, input.organizationId, input.siteId, effectiveData, blocks)
+    await assertTenantPageSupport(input.env, db, input.organizationId, input.siteId, effectiveData, blocks)
 
     const document = {
       id: row.id,
@@ -747,6 +749,7 @@ export async function applyOnboardingTenantPages(
   let created = 0
   if (missingPages.length) {
     const result = await createTenantPagesBatch(db, {
+      env: input.env,
       organizationId: input.organizationId,
       siteId: input.siteId,
       userId: input.userId,
@@ -827,7 +830,7 @@ export async function createTenantPage(db: DbClient, input: { organizationId: st
   })
   const metadata = metadataForInput(effectiveData, locale, path)
   const blocks = normalizeTenantPageBlocks(effectiveData.blocks)
-  await assertTenantPageSupport(db, input.organizationId, input.siteId, effectiveData, blocks)
+  await assertTenantPageSupport(input.env, db, input.organizationId, input.siteId, effectiveData, blocks)
   const pageId = existingPage?.id ?? effectiveData.id ?? crypto.randomUUID()
   const variantId = existingPage ? effectiveData.id ?? crypto.randomUUID() : pageId
   const now = new Date().toISOString()
@@ -885,7 +888,7 @@ export async function updateTenantPage(db: DbClient, variantId: string, input: {
   const path = await assertTenantPagePathAvailable(db, { siteId: row.site_id, locale: row.locale, path: input.data.path ?? row.path, excludeVariantId: variantId, allowSystemPath: row.page_type === 'system' })
   const metadata = metadataForInput(effectiveInput, row.locale, path)
   const blocks = normalizeTenantPageBlocks(preserveOmittedBlockMedia(input.data.blocks, currentBlocks))
-  await assertTenantPageSupport(db, row.organization_id, row.site_id, effectiveInput, blocks, { checkCustomPageEntitlement: row.page_type !== 'custom' && pageType === 'custom' })
+  await assertTenantPageSupport(input.env, db, row.organization_id, row.site_id, effectiveInput, blocks, { checkCustomPageEntitlement: row.page_type !== 'custom' && pageType === 'custom' })
   const now = new Date().toISOString()
   const placementQueries = await tenantPagePlacementQueries(db, input.scope.organizationId, input.scope.siteId, blocks, now)
   const pathChanged = path !== row.path

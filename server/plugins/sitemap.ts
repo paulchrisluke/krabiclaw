@@ -136,7 +136,7 @@ export default definePlugin((nitroApp) => {
     `, [siteId])
     for (const candidate of localizedLocales) {
       try {
-        await assertSiteLanguageEntitlement(db, candidate.organization_id, siteId, candidate.locale)
+        await assertSiteLanguageEntitlement(env, db, candidate.organization_id, siteId, candidate.locale)
       } catch (error) {
         if (error instanceof HTTPError && (error.data?.code === 'LANGUAGE_ENTITLEMENT_REQUIRED' || error.data?.code === 'PLATFORM_LOCALE_UNAVAILABLE')) continue
         throw error

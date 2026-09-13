@@ -122,7 +122,7 @@ export async function handlePostsTools(ctx: McpExecutorContext): Promise<unknown
       if (wantsFacebook || wantsInstagram) {
         if (!socialEnabled) {
           socialSkipReason = "social_publishing_disabled";
-        } else if (!(await hasSiteEntitlement(site.db, site.siteId, "managed_service"))) {
+        } else if (!(await hasSiteEntitlement(site.env as CloudflareEnv, site.db, site.siteId, "managed_service"))) {
           socialSkipReason = "not_entitled";
         } else {
           facebookConnection = await getFacebookPagesConnection(

@@ -1,7 +1,6 @@
 import type Stripe from 'stripe'
 import type { DbClient } from '~/server/db'
 import type { CloudflareEnv } from '~/server/utils/auth'
-import { invoiceSubscriptionId } from '~/server/utils/better-auth-stripe'
 import {
   invoiceLineIsProration,
   invoiceLineIsSubscription,
@@ -333,8 +332,7 @@ async function sendStripeGa4Purchase(
   })
 
   const delivery = await claimStripeGa4PurchaseDelivery(db, invoice.id, event.id)
-  if (delivery === 'sent' || delivery === 'busy') return
-  if (delivery === 'missing') throw new Error(`Stripe invoice ${invoice.id} has no payment ledger row for GA4 delivery; retrying`)
+  if (delivery !== 'claimed') return
   try {
     await sendGa4Event(env, {
       clientId: context.clientId,
@@ -493,6 +491,20 @@ async function sendStripeGa4Refund(
       purchaseType: purchaseType ?? undefined,
     }),
   })
+}
+
+/** The subscription an invoice belongs to, across both Stripe invoice shapes. */
+function invoiceSubscriptionId(invoice: {
+  subscription?: unknown
+  parent?: unknown
+}): string | null {
+  const parent = invoice.parent as { subscription_details?: { subscription?: unknown } | null } | null | undefined
+  const subscriptionValue = invoice.subscription ?? parent?.subscription_details?.subscription
+  return typeof subscriptionValue === 'string'
+    ? subscriptionValue
+    : subscriptionValue && typeof subscriptionValue === 'object' && 'id' in subscriptionValue && typeof subscriptionValue.id === 'string'
+      ? subscriptionValue.id
+      : null
 }
 
 export async function handleStripeGa4Event(

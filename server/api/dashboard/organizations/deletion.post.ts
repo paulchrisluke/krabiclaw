@@ -16,7 +16,7 @@ export default defineHandler(async (event) => {
     return jsonResponse({ error: 'Only an owner can delete this workspace' }, { status: 403 })
   }
 
-  const paidOrganizationId = await findPaidOrganization(db, [organization.id], new Date())
+  const paidOrganizationId = await findPaidOrganization(env, [organization.id], new Date())
   if (paidOrganizationId) {
     return jsonResponse({
       error: 'active_subscription',

@@ -68,9 +68,10 @@ const { data, error } = await useAsyncData<PublicLinksPayload | null>(
         import('~/server/utils/api-response'),
         import('~/server/utils/site-links'),
       ])
-      const db = cloudflareEnv(requestEvent).db
+      const env = cloudflareEnv(requestEvent)
+      const db = env.db
       if (!db) throw createError({ statusCode: 500, statusMessage: 'Database not available' })
-      const response = await getPublicLinksPage(db, siteId, locale)
+      const response = await getPublicLinksPage(env, db, siteId, locale)
       if (response !== null && !isPublicLinksPayload(response)) {
         throw new ApiClientError('Public links response did not match its contract', 502, 'INVALID_PUBLIC_LINKS_RESPONSE', null)
       }

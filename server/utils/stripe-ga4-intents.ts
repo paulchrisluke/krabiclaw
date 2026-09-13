@@ -259,8 +259,18 @@ export async function consumeStripeGa4Intent(
   `, [now, eventId, now, intentId])
 }
 
-export type StripeGa4PurchaseDeliveryClaim = 'claimed' | 'sent' | 'busy' | 'missing'
+export type StripeGa4PurchaseDeliveryClaim = 'claimed' | 'sent' | 'busy'
 
+const GA4_PURCHASE_DELIVERY_LEASE_MS = 15 * 60 * 1000
+
+/**
+ * GA4 purchase delivery is at-most-once per invoice. Stripe retries
+ * `invoice.paid` on its own, so this ledger only has to stop a retry from
+ * sending the same purchase to GA4 twice; it carries no attempt budget and no
+ * dead letter. It used to live on `stripe_invoice_payments.ga4_purchase_*`,
+ * which required the deleted billing layer to have written an invoice row
+ * first.
+ */
 export async function claimStripeGa4PurchaseDelivery(
   db: DbClient,
   invoiceId: string,
@@ -268,29 +278,25 @@ export async function claimStripeGa4PurchaseDelivery(
   now = new Date(),
 ): Promise<StripeGa4PurchaseDeliveryClaim> {
   const nowIso = now.toISOString()
-  const leaseCutoff = new Date(now.getTime() - 15 * 60 * 1000).toISOString()
+  const leaseCutoff = new Date(now.getTime() - GA4_PURCHASE_DELIVERY_LEASE_MS).toISOString()
   const claimed = await execute(db, `
-    UPDATE stripe_invoice_payments
-       SET ga4_purchase_status = 'sending',
-           ga4_purchase_event_id = ?,
-           ga4_purchase_attempt_count = COALESCE(ga4_purchase_attempt_count, 0) + 1,
-           ga4_purchase_claimed_at = ?,
-           ga4_purchase_error = NULL,
-           updated_at = ?
-     WHERE stripe_invoice_id = ?
-       AND (
-         ga4_purchase_status IS NULL
-         OR ga4_purchase_status IN ('pending', 'failed')
-         OR (ga4_purchase_status = 'sending' AND (ga4_purchase_claimed_at IS NULL OR ga4_purchase_claimed_at < ?))
-       )
-  `, [eventId, nowIso, nowIso, invoiceId, leaseCutoff])
+    INSERT INTO stripe_ga4_invoice_deliveries
+      (stripe_invoice_id, status, event_id, claimed_at, updated_at)
+    VALUES (?, 'sending', ?, ?, ?)
+    ON CONFLICT(stripe_invoice_id) DO UPDATE SET
+      status = 'sending', event_id = excluded.event_id,
+      claimed_at = excluded.claimed_at, error = NULL, updated_at = excluded.updated_at
+    WHERE stripe_ga4_invoice_deliveries.status = 'failed'
+       OR (stripe_ga4_invoice_deliveries.status = 'sending'
+           AND (stripe_ga4_invoice_deliveries.claimed_at IS NULL
+                OR stripe_ga4_invoice_deliveries.claimed_at < ?))
+  `, [invoiceId, eventId, nowIso, nowIso, leaseCutoff])
   if (Number(claimed?.meta.changes ?? 0) === 1) return 'claimed'
 
-  const row = await queryFirst<{ status: string | null }>(db, `
-    SELECT ga4_purchase_status AS status
-      FROM stripe_invoice_payments WHERE stripe_invoice_id = ? LIMIT 1
+  const row = await queryFirst<{ status: string }>(db, `
+    SELECT status FROM stripe_ga4_invoice_deliveries WHERE stripe_invoice_id = ? LIMIT 1
   `, [invoiceId])
-  if (!row) return 'missing'
+  if (!row) throw new Error(`GA4 purchase delivery for invoice ${invoiceId} was neither claimed nor recorded`)
   return row.status === 'sent' ? 'sent' : 'busy'
 }
 
@@ -301,10 +307,9 @@ export async function markStripeGa4PurchaseDeliverySent(
   now = new Date().toISOString(),
 ): Promise<void> {
   const result = await execute(db, `
-    UPDATE stripe_invoice_payments
-       SET ga4_purchase_status = 'sent', ga4_purchase_sent_at = ?,
-           ga4_purchase_claimed_at = NULL, ga4_purchase_error = NULL, updated_at = ?
-     WHERE stripe_invoice_id = ? AND ga4_purchase_status = 'sending' AND ga4_purchase_event_id = ?
+    UPDATE stripe_ga4_invoice_deliveries
+       SET status = 'sent', sent_at = ?, claimed_at = NULL, error = NULL, updated_at = ?
+     WHERE stripe_invoice_id = ? AND status = 'sending' AND event_id = ?
   `, [now, now, invoiceId, eventId])
   if (Number(result?.meta.changes ?? 0) !== 1) throw new Error(`GA4 purchase delivery lease was lost for invoice ${invoiceId}`)
 }
@@ -317,10 +322,9 @@ export async function markStripeGa4PurchaseDeliveryFailed(
   now = new Date().toISOString(),
 ): Promise<void> {
   await execute(db, `
-    UPDATE stripe_invoice_payments
-       SET ga4_purchase_status = 'failed', ga4_purchase_claimed_at = NULL,
-           ga4_purchase_error = ?, updated_at = ?
-     WHERE stripe_invoice_id = ? AND ga4_purchase_status = 'sending' AND ga4_purchase_event_id = ?
+    UPDATE stripe_ga4_invoice_deliveries
+       SET status = 'failed', claimed_at = NULL, error = ?, updated_at = ?
+     WHERE stripe_invoice_id = ? AND status = 'sending' AND event_id = ?
   `, [error, now, invoiceId, eventId])
 }
 

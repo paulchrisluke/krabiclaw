@@ -689,7 +689,7 @@ export async function getPublishedLocalizedSiteBlogPost(
     if (!post || typeof post.id !== 'string') return post
     return {
       ...post,
-      localeRepresentations: await listPublicLocaleRepresentations(db, {
+      localeRepresentations: await listPublicLocaleRepresentations(env, db, {
         organizationId: site.organization_id,
         siteId,
         sourcePath: `/${prefix}/${slug}`,
@@ -698,7 +698,7 @@ export async function getPublishedLocalizedSiteBlogPost(
     }
   }
 
-  const localizations = await loadExactPublicLocalizations(db, site.organization_id, siteId, locale)
+  const localizations = await loadExactPublicLocalizations(env, db, site.organization_id, siteId, locale)
   const row = await queryFirst<{ id: string; root_id: string; title: string | null; summary: string | null;
     seo_title: string | null; seo_description: string | null; seo_keywords: string | null; metadata_json: string;
     source_slug: string; updated_at: string }>(db, `
@@ -725,7 +725,7 @@ export async function getPublishedLocalizedSiteBlogPost(
     content_blocks: contentBlocks.map(block => ({ ...block, media: projectLocalizedMediaAlt(block.media.map(item => ({ ...item, alt_text: item.alt_text ?? null })), localizations) })),
     media: projectLocalizedMediaAlt(social.get(row.id)?.media ?? [], localizations),
     social_image: social.get(row.id)?.social_image ?? null,
-    localeRepresentations: await listPublicLocaleRepresentations(db, { organizationId: site.organization_id, siteId,
+    localeRepresentations: await listPublicLocaleRepresentations(env, db, { organizationId: site.organization_id, siteId,
       sourcePath: '/' + prefix + '/' + row.source_slug, documentId: row.root_id }),
   }
 }

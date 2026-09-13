@@ -20,7 +20,7 @@ export default defineHandler(async (event) => {
   const userId = session.user.id
   const soleOwnedOrganizationIds = await listSoleOwnedOrganizationIds(env, userId)
 
-  const paidOrganizationId = await findPaidOrganization(db, soleOwnedOrganizationIds, new Date())
+  const paidOrganizationId = await findPaidOrganization(env, soleOwnedOrganizationIds, new Date())
   if (paidOrganizationId) {
     return jsonResponse({
       error: 'active_subscription',

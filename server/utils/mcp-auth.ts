@@ -7,7 +7,7 @@ import { createAuth, getAuthSession, type CloudflareEnv } from '~/server/utils/a
 import { hasPlatformEventPermission } from '~/server/utils/platform-admin-users'
 import { queryFirst } from '~/server/db'
 import { assertSiteWideAccess, isOrganizationWideRole, resolveOrganizationMembership } from '~/server/utils/member-access'
-import { getOrganizationBillingProjection } from '~/server/utils/organization-billing'
+import { getOrganizationEntitlements } from '~/server/utils/billing-access'
 import { cloudflareEnv } from '~/server/utils/api-response'
 
 export type McpToolRole = 'owner' | 'admin' | 'editor'
@@ -418,19 +418,10 @@ export async function getVisibleSiteContext(
   }
 }
 
-export async function getActiveEntitlements(db: D1Database, organizationId: string, keys: string[], _siteId?: string): Promise<Set<string>> {
+export async function getActiveEntitlements(env: CloudflareEnv, organizationId: string, keys: string[], _siteId?: string): Promise<Set<string>> {
   if (!keys.length) return new Set()
-  const projection = await getOrganizationBillingProjection(db, organizationId)
-  if (
-    !projection
-    || typeof projection !== 'object'
-    || !projection.entitlements
-    || typeof projection.entitlements !== 'object'
-    || Array.isArray(projection.entitlements)
-  ) {
-    throw new Error('Invalid organization billing projection entitlements.')
-  }
-  return new Set(keys.filter(key => projection.entitlements[key] === true))
+  const entitlements = await getOrganizationEntitlements(env, organizationId)
+  return new Set(keys.filter(key => entitlements[key] === true))
 }
 
 export function roleSatisfies(actual: McpToolRole, minimum: McpToolRole) {

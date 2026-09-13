@@ -25,6 +25,7 @@
 import { execute, executeBatch, queryAll, queryFirst, type DbClient } from '~/server/db'
 import { d1JsonStringSet } from '~/server/db/d1-limits'
 import { createAuth, type CloudflareEnv } from '~/server/utils/auth'
+import { FREE_PLAN, getOrganizationPlans } from '~/server/utils/billing-access'
 import { deleteImage } from '~/server/utils/cloudflare-images'
 import { deleteOrganizationCustomDomains, deleteSiteCustomDomains } from '~/server/utils/domains'
 import { listOrganizationMembers, listUserOrganizations, organizationAdapter, resolveOrganizationMembership, type OrganizationAdapter } from '~/server/utils/member-access'
@@ -58,24 +59,19 @@ export async function listSoleOwnedOrganizationIds(env: CloudflareEnv, userId: s
 }
 
 /**
- * A paid plan has to be cancelled first: deleting the organization would take
- * the billing projection with it and leave the Stripe subscription charging a
- * customer with nothing to show for it.
+ * A paid plan has to be cancelled first: deleting the organization would leave
+ * the Stripe subscription charging a customer with nothing to show for it.
  */
 export async function findPaidOrganization(
-  db: DbClient,
+  env: CloudflareEnv,
   organizationIds: string[],
   now: Date,
 ): Promise<string | null> {
   if (organizationIds.length === 0) return null
-  const paid = await queryFirst<{ organization_id: string }>(db, `
-    SELECT organization_id FROM organization_billing
-    WHERE organization_id IN (SELECT value FROM json_each(?))
-      AND access_plan <> 'free'
-      AND (access_expires_at IS NULL OR access_expires_at > ?)
-    LIMIT 1
-  `, [d1JsonStringSet(organizationIds), now.toISOString()])
-  return paid?.organization_id ?? null
+  for (const [organizationId, plan] of await getOrganizationPlans(env, organizationIds, now)) {
+    if (plan !== FREE_PLAN) return organizationId
+  }
+  return null
 }
 
 async function setOrganizationDeletionScheduledAt(
@@ -358,7 +354,7 @@ export async function sweepScheduledDeletions(env: CloudflareEnv, now = new Date
   const result: DeletionSweepResult = { organizations: 0, users: 0, skipped: [] }
 
   for (const user of await findDueRows(env, 'user', now)) {
-    const paid = await findPaidOrganization(db, await listSoleOwnedOrganizationIds(env, user.id), now)
+    const paid = await findPaidOrganization(env, await listSoleOwnedOrganizationIds(env, user.id), now)
     if (paid) {
       result.skipped.push(`user:${user.id}:paid_plan`)
       continue
@@ -368,7 +364,7 @@ export async function sweepScheduledDeletions(env: CloudflareEnv, now = new Date
   }
 
   for (const organization of await findDueRows(env, 'organization', now)) {
-    const paid = await findPaidOrganization(db, [organization.id], now)
+    const paid = await findPaidOrganization(env, [organization.id], now)
     if (paid) {
       result.skipped.push(`organization:${organization.id}:paid_plan`)
       continue
