@@ -27,6 +27,11 @@ const AI_SEARCH_CUSTOM_METADATA: AiSearchConfig['custom_metadata'] = [
   { field_name: 'display', data_type: 'text' },
   { field_name: 'site_id', data_type: 'text' },
 ]
+// AI Search caps an instance at five declared custom metadata fields ("Too big: expected
+// array to have <=5 items", returned by the config API), and all five above are read back
+// or filtered on. The rebuild's `content_hash` is therefore written as undeclared item
+// metadata: it is never filtered on, only compared after `items.list()` returns it.
+
 
 export type PublicSearchType = PlatformKnowledgeResultType
 
@@ -341,22 +346,14 @@ function platformKnowledgeInstanceConfig(): Omit<AiSearchConfig, 'metadata'> {
   }
 }
 
+// The instance itself is provisioned infrastructure (docs/ai-search.md), not something a
+// blog write conjures into existence. This only re-asserts the retrieval configuration the
+// code depends on, and lets the error through: an earlier `update()` / catch `create()`
+// pair turned every real failure — a rate limit, a bad field — into "instance already
+// exists" thrown from the create, which is what made issue #917 undiagnosable. `id` is not
+// an updatable field and is already carried by the instance handle, so it is not sent.
 export async function ensurePlatformKnowledgeInstance(env: CloudflareEnv) {
-  const instanceId = platformKnowledgeInstanceId(env)
-  const namespace = searchNamespace(env)
-
-  try {
-    const instance = namespace.get(instanceId)
-    await instance.update({
-      id: instanceId,
-      ...platformKnowledgeInstanceConfig(),
-    })
-  } catch {
-    await namespace.create({
-      id: instanceId,
-      ...platformKnowledgeInstanceConfig(),
-    })
-  }
+  await searchNamespace(env).get(platformKnowledgeInstanceId(env)).update(platformKnowledgeInstanceConfig())
 }
 
 export async function listAllItems(env: CloudflareEnv) {
@@ -379,14 +376,19 @@ export async function listAllItems(env: CloudflareEnv) {
 // AiSearchInternalError: unable_to_connect_to_ai_search) unrelated to the request's own
 // validity — a brief retry absorbs those without masking a real, deterministic failure
 // (which will still exhaust all attempts and throw).
-async function withRetries<T>(fn: () => Promise<T>, attempts = 3, delayMs = 500): Promise<T> {
+// Backoff is exponential rather than linear because the error this most often absorbs is
+// "AiSearchError: You are being rate limited" (issue #917): AI Search sheds load for a
+// window, and retrying 500ms later inside that window just spends another token against
+// it. 1s/2s/4s/8s clears a short window without turning a deterministic failure into a
+// 15-second stall per item — that one still exhausts every attempt and throws.
+async function withRetries<T>(fn: () => Promise<T>, attempts = 5, delayMs = 1000): Promise<T> {
   let lastError: unknown
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     try {
       return await fn()
     } catch (error) {
       lastError = error
-      if (attempt < attempts) await new Promise(resolve => setTimeout(resolve, delayMs * attempt))
+      if (attempt < attempts) await new Promise(resolve => setTimeout(resolve, delayMs * 2 ** (attempt - 1)))
     }
   }
   throw lastError
@@ -636,6 +638,16 @@ export function expandDocumentsForSurfaces(records: PlatformKnowledgeDocument[])
   )
 }
 
+// The exact bytes a rebuild would upload for one expanded record, fingerprinted so the
+// rebuild can recognise an item it has already uploaded unchanged. The hash covers the
+// rendered body *and* the metadata, because a title or path edit changes only the latter
+// and still has to reach the index.
+export function indexItemPayload(record: ExpandedPlatformKnowledgeDocument) {
+  const content = renderDocumentContent(record)
+  const contentHash = shortItemKeyHash(`${content}\u0000${JSON.stringify(record.metadata)}`)
+  return { content, metadata: { ...record.metadata, content_hash: contentHash }, contentHash }
+}
+
 // Records get expanded across every surface they support (a doc record alone spans 6:
 // public/docs/blog/help/chowbot/dashboard), so the real upload count for the full
 // corpus is a multiple of the base document count — sequential one-at-a-time uploads
@@ -662,34 +674,37 @@ export async function rebuildPlatformKnowledgeIndex(
   db: DbClient,
   options: { confirmIndexing?: boolean } = {},
 ) {
-  // Temporary phase timing: two identical "fetch failed" (raw connection death) results
-  // at ~5:01 elapsed survived a 10x concurrency change to the upload loop with no
-  // improvement — meaning uploads themselves are very unlikely to be the bottleneck.
-  // Leading theory: every earlier failed run died before reaching the delete-stale-items
-  // step, so orphaned items from several different key formats (raw slug, id-based,
-  // hash-based) have been accumulating across attempts, and listAllItems()'s pagination
-  // (which runs before any upload starts) may now be working through a much larger
-  // corpus than a normal rebuild would ever see. Logging elapsed time per phase to
-  // confirm where the time actually goes instead of guessing again.
   const rebuildStartedAt = Date.now()
   const elapsed = () => `${((Date.now() - rebuildStartedAt) / 1000).toFixed(1)}s`
 
   await ensurePlatformKnowledgeInstance(env)
-  console.warn(`[ai-search] ensurePlatformKnowledgeInstance done at ${elapsed()}`)
 
   const [existingItems, baseRecords] = await Promise.all([
     listAllItems(env),
     buildPlatformKnowledgeDocuments(db),
   ])
-  console.warn(`[ai-search] listAllItems + buildPlatformKnowledgeDocuments done at ${elapsed()}: ${existingItems.length} existing items, ${baseRecords.length} base records`)
 
   const records = expandDocumentsForSurfaces(baseRecords)
   const nextKeys = new Set(records.map(record => record.key))
-  console.warn(`[ai-search] expanded to ${records.length} records to upload`)
+  const existingByKey = new Map(existingItems.map(item => [item.key, item]))
 
-  await runWithConcurrency(records, UPLOAD_CONCURRENCY, async (record) => {
+  // Every blog mutation schedules this rebuild, and re-uploading the whole corpus each
+  // time is what exhausted AI Search's rate limit on every tenant MCP blog write (issue
+  // #917) — a one-post edit was spending ~222 uploads. An item whose stored content_hash
+  // still matches what we would send is already correct in the index, so sending it again
+  // buys nothing. Items that failed to index are re-sent regardless of their hash: the
+  // stored fingerprint describes what was uploaded, not what was successfully indexed.
+  const changed = records
+    .map(record => ({ record, payload: indexItemPayload(record) }))
+    .filter(({ record, payload }) => {
+      const existing = existingByKey.get(record.key)
+      if (!existing || existing.status === 'error') return true
+      return existing.metadata?.content_hash !== payload.contentHash
+    })
+
+  await runWithConcurrency(changed, UPLOAD_CONCURRENCY, async ({ record, payload }) => {
     try {
-      await uploadIndexItem(env, record.key, renderDocumentContent(record), record.metadata)
+      await uploadIndexItem(env, record.key, payload.content, payload.metadata)
     } catch (error) {
       // Name the specific failing item/key rather than failing generically — this is
       // what actually revealed the production filename_exceeds_maximum_length root
@@ -699,12 +714,10 @@ export async function rebuildPlatformKnowledgeIndex(
       throw new Error(`uploadIndexItem failed for key "${record.key}" (length ${record.key.length}): ${message}`, { cause: error })
     }
   })
-  console.warn(`[ai-search] uploads done at ${elapsed()}`)
 
   const staleItems = existingItems.filter(item => !nextKeys.has(item.key))
-  console.warn(`[ai-search] ${staleItems.length} stale items to delete`)
   await runWithConcurrency(staleItems, UPLOAD_CONCURRENCY, (item) => deleteIndexItem(env, item.id))
-  console.warn(`[ai-search] deletes done at ${elapsed()}`)
+  console.warn(`[ai-search] rebuild uploaded ${changed.length}/${records.length} records, deleted ${staleItems.length} stale items in ${elapsed()}`)
 
   // Cloudflare processes indexing asynchronously regardless of whether this request
   // stays open to observe it, and the Workers platform enforces a request-duration
@@ -727,7 +740,8 @@ export async function rebuildPlatformKnowledgeIndex(
 
   return {
     instanceId: platformKnowledgeInstanceId(env),
-    indexed: records.length,
+    indexed: changed.length,
+    unchanged: records.length - changed.length,
     deleted: staleItems.length,
     indexingConfirmed,
   }

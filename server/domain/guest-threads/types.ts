@@ -68,12 +68,35 @@ export interface ThreadSummaryProjection {
   operationalStatus: string | null
 }
 
+/**
+ * The opening submission's fields, named once here so the detail API and the
+ * conversation view cannot drift apart. A `Record<string, unknown>` is what let
+ * the view read `date`/`time`/`requests` — names the API never emitted — and
+ * silently render a reservation with no date on it.
+ *
+ * A contact thread carries `subject`/`message`; a reservation or booking
+ * carries the occurrence, read from its operational record. A field the thread
+ * does not have is null, never a stand-in from somewhere else.
+ */
+export interface ThreadDetailSourceFields {
+  subject?: string | null
+  message?: string | null
+  whenLabel?: string | null
+  startsAt?: string | null
+  timezone?: string | null
+  guests?: string | null
+  partySize?: number | null
+  notes?: string | null
+  locationTitle?: string | null
+  productTitle?: string | null
+}
+
 export interface ThreadDetailSourceModel {
   submissionType: GuestThreadSubmissionType
   submissionId: string
   operationalStatus: string | null
   operationalStatusLabel: string | null
-  fields: Record<string, unknown>
+  fields: ThreadDetailSourceFields
 }
 
 

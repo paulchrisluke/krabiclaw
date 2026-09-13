@@ -129,7 +129,9 @@ interface ReviewRequestNotificationInput extends SiteContext {
   guestName: string
   email: string
   locationName?: string | null
-  bookingLabel: string
+  bookingPhrase: string
+  visitAt: string
+  partySize: string
   reviewUrl: string
   optOutUrl: string
 }
@@ -922,14 +924,18 @@ export async function notifyReviewRequest(
   const templateComponent = opts.kind === 'reminder' ? BookingReviewReminder : BookingThankYouReviewRequest
   const templateName = opts.kind === 'reminder' ? 'booking_review_reminder' : 'booking_thank_you_review_request'
   const title = opts.kind === 'reminder'
-    ? `Review reminder for ${opts.bookingLabel}`
-    : `Review request for ${opts.bookingLabel}`
+    ? `Review reminder for ${opts.bookingPhrase}`
+    : `Review request for ${opts.bookingPhrase}`
 
   const email = await renderEmail(templateComponent, {
     guestName: opts.guestName,
     siteName: restaurant,
     locationName: opts.locationName ?? null,
-    bookingLabel: opts.bookingLabel,
+    // Only the thank-you headline asks "How was <phrase>?"; the reminder
+    // headline names the business, so it does not take the phrase at all.
+    ...(opts.kind === 'reminder' ? {} : { bookingPhrase: opts.bookingPhrase }),
+    visitAt: opts.visitAt,
+    partySize: opts.partySize,
     reviewUrl: opts.reviewUrl,
     optOutUrl: opts.optOutUrl,
     platformDomain,
@@ -945,7 +951,9 @@ export async function notifyReviewRequest(
       booking_type: opts.bookingType,
       booking_id: opts.bookingId,
       guest_name: opts.guestName,
-      booking_label: opts.bookingLabel,
+      booking_phrase: opts.bookingPhrase,
+      visit_at: opts.visitAt,
+      party_size: opts.partySize,
       review_url: opts.reviewUrl,
       opt_out_url: opts.optOutUrl,
       site_name: restaurant,

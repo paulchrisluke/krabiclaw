@@ -89,6 +89,23 @@ test('Japanese is a second secondary language and keeps its public shell through
       },
     }), 200)
 
+    // A locale shows exactly what has been translated into it: a product with
+    // no ja row is absent from /ja, not shown in English. Kikuzuki's one
+    // bookable product carries /experiences, so without a ja row that route is
+    // an empty collection and 404s by design -- which is what CI measured once
+    // experiences became a surface of their own. Translate every bookable
+    // product the site actually has, by its own id, the way the Thai journey
+    // translates its sushi.
+    const productsResponse = await owner.get(`/api/editor/sites/${siteId}/products`)
+    await expectStatus(productsResponse, 200)
+    const { products } = await productsResponse.json() as { products: Array<{ id: string; slug: string; booking: unknown | null }> }
+    const bookable = products.filter(product => product.booking !== null)
+    expect(bookable.map(product => product.slug), 'Kikuzuki has one bookable product to translate').toEqual(['teppanyaki-experience'])
+    const japaneseExperience = { name: '鉄板焼き体験', description: 'シェフの目の前で楽しむ鉄板焼き', tags: [] as string[] }
+    await expectStatus(await owner.put(`/api/editor/sites/${siteId}/localization/product/${bookable[0]!.id}/ja`, {
+      data: { values: japaneseExperience },
+    }), 200)
+
     for (const path of ['/ja/reservations', '/ja/contact', '/ja/experiences']) {
       const response = await openTenantPage(page, `${kikuzukiTestBaseUrl()}${path}`, kikuzukiTestExtraHeaders())
       expect(response?.status(), path).toBe(200)
@@ -103,6 +120,9 @@ test('Japanese is a second secondary language and keeps its public shell through
       await expect(page.getByRole('link', { name: '席を予約する' }).first()).toBeVisible()
       if (path === '/ja/contact') {
         await expect(page.getByText('各店舗の営業時間・住所・電話番号。', { exact: true })).toBeVisible()
+      }
+      if (path === '/ja/experiences') {
+        await expect(page.getByText(japaneseExperience.name, { exact: true }).first()).toBeVisible()
       }
     }
     await page.reload()

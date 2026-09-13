@@ -52,6 +52,9 @@ export interface ReviewBookingContext {
   location_title: string | null
   google_place_id: string | null
   google_review_url: string | null
+  visit_starts_at: string
+  visit_timezone: string
+  party_size: number
 }
 
 export const REVIEW_REQUEST_TTL_DAYS = 30
@@ -104,14 +107,23 @@ export async function getReviewBookingContext(
 ): Promise<ReviewBookingContext | null> {
   return queryFirst<ReviewBookingContext>(db, `SELECT r.kind AS booking_type, r.id AS booking_id, r.organization_id, r.site_id, r.location_id, r.customer_id,
     c.name AS customer_name, c.email AS customer_email, c.review_request_opted_out_at AS customer_opted_out_at,
-    json_extract(r.payload_json, '$.guest.name') AS guest_name, json_extract(r.payload_json, '$.guest.email') AS guest_email, r.status,
+    json_extract(r.payload_json, '$.guest.name') AS guest_name, json_extract(r.payload_json, '$.guest.email') AS guest_email, record.status,
     json_extract(r.payload_json, '$.completion.at') AS completed_at,
     json_extract(r.payload_json, '$.review.request_sent_at') AS review_request_sent_at,
     json_extract(r.payload_json, '$.review.reminder_sent_at') AS review_reminder_sent_at,
     json_extract(r.payload_json, '$.review.submitted_at') AS review_submitted_at, r.review_id,
     s.brand_name AS site_name, (SELECT 'https://' || domain FROM site_domains WHERE site_id = s.id AND role = 'canonical' AND status = 'active') AS site_public_url,
-    s.subdomain AS site_subdomain, bl.slug AS location_slug, bl.title AS location_title, bl.google_place_id, bl.google_review_url
+    s.subdomain AS site_subdomain, bl.slug AS location_slug, bl.title AS location_title, bl.google_place_id, bl.google_review_url,
+    record.starts_at AS visit_starts_at, record.timezone AS visit_timezone, record.party_size
     FROM requests r JOIN sites s ON s.id = r.site_id LEFT JOIN customers c ON c.id = r.customer_id LEFT JOIN business_locations bl ON bl.id = r.location_id
+    -- The visit itself lives on the operational record, never on the thread. A
+    -- review request only exists once that record reached 'completed', so this
+    -- join is total: same UNION shape the automation sweep uses.
+    JOIN (
+      SELECT b.request_id, b.status, ps.timezone, ps.starts_at, b.party_size FROM bookings b JOIN product_sessions ps ON ps.id = b.product_session_id
+      UNION ALL
+      SELECT res.request_id, res.status, res.timezone, res.starts_at, res.party_size FROM reservations res
+    ) record ON record.request_id = r.id
     WHERE r.id = ? AND r.kind = ?`, [bookingId, bookingType])
 }
 

@@ -137,11 +137,14 @@ async function loadOwner(db: DbClient, owner: SocialCardOwner): Promise<OwnerRec
         COALESCE(NULLIF(trim(seo_description), ''), NULLIF(trim(short_description), ''), NULLIF(trim(description), '')) AS description,
         'Location' AS label, city AS location FROM business_locations WHERE id = ? LIMIT 1`, [owner.owner_id]) ?? null
     case 'product':
-      return await queryFirst<OwnerRecord>(db, `SELECT p.organization_id, p.site_id,
-        COALESCE(NULLIF(trim(p.seo_title), ''), p.name) AS title,
-        COALESCE(NULLIF(trim(p.seo_description), ''), NULLIF(trim(p.description), '')) AS description,
+      return await queryFirst<OwnerRecord>(db, `SELECT p.organization_id, pub.site_id,
+        p.name AS title,
+        NULLIF(trim(p.description), '') AS description,
         'Product' AS label, NULL AS location
-        FROM products p JOIN business_locations bl ON bl.id = p.location_id WHERE p.id = ? LIMIT 1`, [owner.owner_id]) ?? null
+        FROM products p
+        JOIN product_publications pub ON pub.product_id = p.id
+          AND pub.organization_id = p.organization_id AND pub.published = 1
+        WHERE p.id = ? LIMIT 1`, [owner.owner_id]) ?? null
     case 'content_document':
       return await queryFirst<OwnerRecord>(db, `SELECT d.organization_id, d.site_id,
         COALESCE(NULLIF(trim(d.seo_title), ''), NULLIF(trim(d.title), ''), NULLIF(trim(substr(d.summary, 1, 80)), '')) AS title,
@@ -165,11 +168,30 @@ async function loadSite(db: DbClient, siteId: string): Promise<SiteRecord | null
     FROM sites s WHERE s.id = ? LIMIT 1`, [siteId]) ?? null
 }
 
-/** The document's leading image block, whose `media` placement is the article's cover. */
+/**
+ * The page's own picture: its first top-level block carrying a `media` placement.
+ *
+ * A site's page is its home document, which is not a content_document owner of
+ * its own — without this the home page is the one page whose card never reads
+ * its own content. Block type is not the test, because the block that leads a
+ * page differs per template: NCLS opens with `hero`, Ember & Slice with
+ * `heading` then `hero`, Kikuzuki with `markdown`, `heading`, then `hero`. An
+ * article opens with `image`. Carrying a picture is what they have in common.
+ */
 async function loadCoverBlockId(db: DbClient, owner: SocialCardOwner): Promise<string | null> {
-  if (owner.owner_type !== 'content_document') return null
-  const block = await queryFirst<{ id: string }>(db, `SELECT id FROM content_blocks
-    WHERE document_id = ? AND parent_block_id IS NULL AND position = 0 AND type = 'image' LIMIT 1`, [owner.owner_id])
+  const documentId = owner.owner_type === 'content_document'
+    ? owner.owner_id
+    : owner.owner_type === 'site'
+      ? (await queryFirst<{ id: string }>(db, `SELECT id FROM content_documents
+          WHERE site_id = ? AND kind = 'page' AND path = '/' LIMIT 1`, [owner.owner_id]))?.id ?? null
+      : null
+  if (!documentId) return null
+  const block = await queryFirst<{ id: string }>(db, `SELECT cb.id FROM content_blocks cb
+    JOIN media_placements mp ON mp.owner_type = 'content_block' AND mp.owner_id = cb.id
+      AND mp.slot = 'media' AND mp.status = 'active'
+    JOIN media_assets ma ON ma.id = mp.asset_id AND ma.status = 'active'
+    WHERE cb.document_id = ? AND cb.parent_block_id IS NULL
+    ORDER BY cb.position LIMIT 1`, [documentId])
   return block?.id ?? null
 }
 

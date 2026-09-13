@@ -22,8 +22,8 @@ export default defineHandler(async (event) => {
     env,
     memberId: site.member_id, role: site.member_role, organizationId: site.organization_id, siteId, resourceLocationId: submission.location_id, })
 
-  const body = await readBody(event).catch(() => ({})) as { kind?: string }
-  const kind = body.kind === 'reminder' ? 'reminder' : 'first'
+  const body = await readBody(event) as { kind?: string } | undefined
+  const kind = body?.kind === 'reminder' ? 'reminder' : 'first'
   const result = await sendReviewRequestForBooking(env, db, 'reservation', submissionId, kind)
 
   return jsonResponse(result, { status: result.sent ? 200 : 502 })
