@@ -17,13 +17,20 @@
         <div data-story class="my-16 max-w-4xl">
           <p class="saya-kicker mb-6">{{ storyKicker }}</p>
           <h2 v-if="story.title" class="saya-display-md text-default">{{ story.title }}</h2>
+          <video
+            v-if="story.media?.kind === 'video'"
+            :src="story.media.public_url!"
+            :poster="story.media.thumbnail_url ?? undefined"
+            autoplay muted loop playsinline
+            class="mt-10 aspect-4/3 w-full object-cover"
+          />
           <img
-            v-if="story.image"
-            :src="story.image.url"
-            :alt="story.image.alt"
+            v-else-if="story.media"
+            :src="story.media.public_url!"
+            :alt="story.media.alt_text ?? ''"
             class="mt-10 aspect-4/3 w-full object-cover"
           >
-          <p v-if="story.body" class="mt-10 text-base leading-relaxed text-muted">{{ story.body }}</p>
+          <TenantPageRichTextBlock v-if="story.bodyBlock" :block="story.bodyBlock" :page-title="page.title" />
         </div>
       </template>
 
@@ -223,17 +230,19 @@ const renderedBlocks = computed(() => {
 /**
  * The story's three fields, each read from the block that carries it. A field
  * no block carries is absent from the story, not filled in from elsewhere.
+ *
+ * The words keep the block they arrived in and the renderer every other
+ * markdown block on this page uses, so the story reads the same as the rest of
+ * it — sanitized, and with the paragraph breaks the author wrote.
  */
 const story = computed(() => {
   const blockFor = (field: string) => storyBlocks.value.find(block => text(block.data.field) === field) ?? null
   const titleBlock = blockFor('story.title')
-  const bodyBlock = blockFor('story.body')
   const imageBlock = blockFor('story.image')
-  const image = imageBlock ? blockMedia(imageBlock, 'media') : null
   return {
     title: titleBlock ? text(titleBlock.data.text) : '',
-    body: bodyBlock ? text(bodyBlock.data.markdown) : '',
-    image: image ? { url: image.public_url!, alt: image.alt_text ?? '' } : null,
+    bodyBlock: blockFor('story.body'),
+    media: imageBlock ? blockMedia(imageBlock, 'media') : null,
   }
 })
 
