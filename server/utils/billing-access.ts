@@ -62,6 +62,7 @@ export async function getOrganizationPlans(
   for (let offset = 0; offset < uniqueIds.length; offset += ORGANIZATION_CHUNK) {
     const chunk = uniqueIds.slice(offset, offset + ORGANIZATION_CHUNK)
     const rows = await listSubscriptions(adapter, chunk)
+    const current = new Set<string>()
     for (const row of rows) {
       if (!plans.has(row.referenceId)) continue
       if (row.status !== 'active' && row.status !== 'trialing') continue
@@ -69,7 +70,8 @@ export async function getOrganizationPlans(
         const periodEnd = Date.parse(betterAuthTimestampToIso(row.periodEnd, 'subscription.periodEnd'))
         if (periodEnd <= now.getTime()) continue
       }
-      if (plans.get(row.referenceId) !== FREE_PLAN) subscriptionStateInvalid(row.referenceId, 'has multiple current subscriptions')
+      if (current.has(row.referenceId)) subscriptionStateInvalid(row.referenceId, 'has multiple current subscriptions')
+      current.add(row.referenceId)
       const plan = row.plan?.trim().toLowerCase()
       if (!plan) subscriptionStateInvalid(row.referenceId, `subscription ${row.id} has no plan`)
       plans.set(row.referenceId, plan)
