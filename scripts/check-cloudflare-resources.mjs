@@ -32,7 +32,7 @@ function sections(source, name) {
 }
 
 function hasInSection(source, name, text) {
-  return sections(source, name).some(section => section.includes(text))
+  return sections(source, name).some(section => typeof text === 'string' ? section.includes(text) : text.test(section))
 }
 
 const wranglerToml = await readFile(path.resolve(import.meta.dirname, '..', 'wrangler.toml'), 'utf8')
@@ -56,7 +56,7 @@ for (const config of CONFIGS) {
     fail(`${config.label} historical migration changed`)
   }
 
-  if (hasInSection(wranglerToml, migrationSection, 'deleted_classes = ["GuestThreadCommandObject"]')) {
+  if (hasInSection(wranglerToml, migrationSection, /^[ \t]*deleted_classes[ \t]*=[ \t]*\["GuestThreadCommandObject"\][ \t]*(?:#.*)?$/m)) {
     pass(`${config.label} command namespace lifecycle`)
   }
   else {
