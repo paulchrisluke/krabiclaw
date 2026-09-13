@@ -232,6 +232,13 @@ export async function materializeSessions(db: DbClient, input: {
       const resolved = instantsFor(rule, date, duration)
       if ('reason' in resolved) { skipped.push(resolved); continue }
       planned += 1
+      // A slot that was removed and added back meets its own old sessions at
+      // the same instant: the removal cancelled the unbooked ones and left the
+      // booked ones scheduled, and cut every one of them loose from the rule.
+      // Those orphans are adopted by the new rule (a cancelled one is scheduled
+      // again) rather than tripping the instant-unique index and failing the
+      // whole batch. A session another live rule owns, or one a merchant made
+      // by hand (no occurrence key), is left alone.
       writes.push({
         query: `
           INSERT INTO product_sessions (
@@ -239,6 +246,18 @@ export async function materializeSessions(db: DbClient, input: {
             timezone, starts_at, ends_at, capacity, status, created_at, updated_at, created_by, updated_by
           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'scheduled', ?, ?, ?, ?)
           ON CONFLICT (product_id, source_occurrence_key) WHERE source_occurrence_key IS NOT NULL DO NOTHING
+          ON CONFLICT (product_id, location_id, starts_at) WHERE location_id IS NOT NULL DO UPDATE SET
+            availability_rule_id = excluded.availability_rule_id, source_occurrence_key = excluded.source_occurrence_key,
+            status = CASE WHEN product_sessions.status = 'cancelled' THEN 'scheduled' ELSE product_sessions.status END,
+            ends_at = excluded.ends_at, capacity = excluded.capacity, timezone = excluded.timezone,
+            updated_at = excluded.updated_at, updated_by = excluded.updated_by
+            WHERE product_sessions.availability_rule_id IS NULL AND product_sessions.source_occurrence_key IS NOT NULL
+          ON CONFLICT (product_id, starts_at) WHERE location_id IS NULL DO UPDATE SET
+            availability_rule_id = excluded.availability_rule_id, source_occurrence_key = excluded.source_occurrence_key,
+            status = CASE WHEN product_sessions.status = 'cancelled' THEN 'scheduled' ELSE product_sessions.status END,
+            ends_at = excluded.ends_at, capacity = excluded.capacity, timezone = excluded.timezone,
+            updated_at = excluded.updated_at, updated_by = excluded.updated_by
+            WHERE product_sessions.availability_rule_id IS NULL AND product_sessions.source_occurrence_key IS NOT NULL
         `,
         params: [
           crypto.randomUUID(), input.organizationId, input.productId, rule.location_id, rule.id,

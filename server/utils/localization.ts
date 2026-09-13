@@ -1,7 +1,7 @@
 import { HTTPError } from 'nitro'
 import { platformLocale } from '~/shared/platform-locales'
 import { executeBatch, queryAll, queryFirst, type BatchQuery, type DbClient } from '~/server/db'
-import { getOrganizationPlan } from '~/server/utils/billing-access'
+import { getOrganizationPlan, isSubscriptionStateInvalid } from '~/server/utils/billing-access'
 import type { CloudflareEnv } from '~/server/utils/auth'
 import {
   createContentDocumentWithBlocks,
@@ -196,8 +196,12 @@ export async function assertPublicSiteLanguageEntitlement(
     const code = data && typeof data === 'object' && 'code' in data
       ? data.code
       : null
+    if (isSubscriptionStateInvalid(error)) {
+      console.error('organization_subscription_state_invalid', { organizationId, siteId, locale })
+    }
     if (
-      status === 402
+      isSubscriptionStateInvalid(error)
+      || status === 402
       || code === 'LANGUAGE_ENTITLEMENT_REQUIRED'
       || code === 'PLATFORM_LOCALE_UNAVAILABLE'
     ) {

@@ -120,18 +120,7 @@
             v-for="review in filtered"
             :key="review.id"
             variant="full"
-            :review="{
-              id: review.id,
-              author: review.author_name,
-              media: review.media,
-              original_reference: review.original_reference,
-              google_review_metadata: review.google_review_metadata,
-              rating: review.rating,
-              content: review.content,
-              title: review.title,
-              dateLabel: formatReviewDate(review.created_at),
-              source: review.source
-            }"
+            :review="reviewCard(review, formatDate)"
           >
             <NuxtLink :to="localePath(`/locations/${slug}/reviews/${review.id}`)" class="mt-4 inline-flex text-sm font-medium text-primary no-underline hover:underline">
               {{ t('saya.reviews_page.read_review') }}
@@ -173,6 +162,7 @@
 </template>
 
 <script setup lang="ts">
+import { reviewCard } from '~/utils/review-card'
 definePageMeta({ layout: 'saya' })
 
 const { localePath, t } = useI18n()

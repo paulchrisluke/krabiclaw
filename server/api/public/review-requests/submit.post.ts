@@ -126,11 +126,11 @@ export default defineHandler(async (event) => {
   batch.push(
     {
       query: `INSERT INTO reviews (
-        id, organization_id, site_id, location_id, customer_id, booking_id, booking_type, review_request_id, user_id, author_name, rating, title, content, status, source, ip_hash, user_agent, created_at, updated_at
+        id, organization_id, site_id, location_id, product_id, customer_id, booking_id, booking_type, review_request_id, user_id, author_name, rating, title, content, status, source, ip_hash, user_agent, created_at, updated_at
       )
-      SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', 'direct', ?, ?, ?, ?
+      SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', 'direct', ?, ?, ?, ?
       WHERE ${requestIsSubmittable}`, params: [
-        reviewId, result.context.organization_id, result.context.site_id, result.context.location_id, result.request.customer_id, result.request.booking_id, result.request.booking_type, result.request.id, reviewUserId, authorName, rating, title, content, ipHash, userAgent, now, now, ...requestGuardParams, ], }, batchAssertion('changes() = 1', [], 'review insert lost its request-state guard'), {
+        reviewId, result.context.organization_id, result.context.site_id, result.context.location_id, result.context.product_id, result.request.customer_id, result.request.booking_id, result.request.booking_type, result.request.id, reviewUserId, authorName, rating, title, content, ipHash, userAgent, now, now, ...requestGuardParams, ], }, batchAssertion('changes() = 1', [], 'review insert lost its request-state guard'), {
       query: `UPDATE review_requests
         SET submitted_at = ?, user_id = COALESCE(user_id, ?), anonymous_user_id = COALESCE(anonymous_user_id, ?), updated_at = ?
         WHERE id = ?

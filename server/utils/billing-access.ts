@@ -1,4 +1,5 @@
 import type { Subscription } from '@better-auth/stripe'
+import { HTTPError } from 'nitro'
 import { createAuth, type CloudflareEnv } from '~/server/utils/auth'
 import { betterAuthTimestampToIso } from '~/server/utils/better-auth-timestamps'
 import { getPlanEntitlements, type EntitlementsMap } from '~/server/utils/billing-entitlements'
@@ -11,12 +12,42 @@ import { getPlanEntitlements, type EntitlementsMap } from '~/server/utils/billin
  * An organization's plan is the plan of the single `active`/`trialing` row
  * whose `periodEnd` has not passed. No qualifying row means `free`: the absence
  * of a subscription, not a substituted source. Two qualifying rows is corrupt
- * state and throws, because picking one would hide the corruption.
+ * state and throws SUBSCRIPTION_STATE_INVALID, because picking one would hide
+ * the corruption; callers that serve other organizations too (scheduled
+ * scans, public locale checks) refuse that organization and go on.
  */
 export const FREE_PLAN = 'free'
+export const SUBSCRIPTION_STATE_INVALID = 'SUBSCRIPTION_STATE_INVALID'
 
 const ORGANIZATION_CHUNK = 50
-const SUBSCRIPTIONS_PER_ORGANIZATION_BOUND = 20
+const SUBSCRIPTION_PAGE = 200
+
+export function isSubscriptionStateInvalid(error: unknown): boolean {
+  return error instanceof HTTPError && error.data?.code === SUBSCRIPTION_STATE_INVALID
+}
+
+function subscriptionStateInvalid(organizationId: string, detail: string): never {
+  throw new HTTPError({
+    statusCode: 409,
+    statusMessage: `Organization ${organizationId} ${detail}`,
+    data: { code: SUBSCRIPTION_STATE_INVALID, organization_id: organizationId },
+  })
+}
+
+async function listSubscriptions(adapter: Awaited<ReturnType<typeof createAuth>['$context']>['adapter'], chunk: string[]): Promise<Subscription[]> {
+  const rows: Subscription[] = []
+  for (let offset = 0; ; offset += SUBSCRIPTION_PAGE) {
+    const page = await adapter.findMany<Subscription>({
+      model: 'subscription',
+      where: [{ field: 'referenceId', operator: 'in', value: chunk }],
+      limit: SUBSCRIPTION_PAGE,
+      offset,
+      sortBy: { field: 'id', direction: 'asc' },
+    })
+    rows.push(...page)
+    if (page.length < SUBSCRIPTION_PAGE) return rows
+  }
+}
 
 export async function getOrganizationPlans(
   env: CloudflareEnv,
@@ -30,15 +61,8 @@ export async function getOrganizationPlans(
   const adapter = (await createAuth(env).$context).adapter
   for (let offset = 0; offset < uniqueIds.length; offset += ORGANIZATION_CHUNK) {
     const chunk = uniqueIds.slice(offset, offset + ORGANIZATION_CHUNK)
-    const limit = chunk.length * SUBSCRIPTIONS_PER_ORGANIZATION_BOUND
-    const rows = await adapter.findMany<Subscription>({
-      model: 'subscription',
-      where: [{ field: 'referenceId', operator: 'in', value: chunk }],
-      limit,
-    })
-    if (rows.length >= limit) {
-      throw new Error('Organization subscription scan exceeded its bound')
-    }
+    const rows = await listSubscriptions(adapter, chunk)
+    const current = new Set<string>()
     for (const row of rows) {
       if (!plans.has(row.referenceId)) continue
       if (row.status !== 'active' && row.status !== 'trialing') continue
@@ -46,11 +70,10 @@ export async function getOrganizationPlans(
         const periodEnd = Date.parse(betterAuthTimestampToIso(row.periodEnd, 'subscription.periodEnd'))
         if (periodEnd <= now.getTime()) continue
       }
-      if (plans.get(row.referenceId) !== FREE_PLAN) {
-        throw new Error(`Organization ${row.referenceId} has multiple current subscriptions`)
-      }
+      if (current.has(row.referenceId)) subscriptionStateInvalid(row.referenceId, 'has multiple current subscriptions')
+      current.add(row.referenceId)
       const plan = row.plan?.trim().toLowerCase()
-      if (!plan) throw new Error(`Subscription ${row.id} has no plan`)
+      if (!plan) subscriptionStateInvalid(row.referenceId, `subscription ${row.id} has no plan`)
       plans.set(row.referenceId, plan)
     }
   }
@@ -87,7 +110,25 @@ export async function filterEntitledRows<T extends { organization_id: string }>(
   now = new Date(),
 ): Promise<T[]> {
   if (rows.length === 0) return []
-  const plans = await getOrganizationPlans(env, rows.map(row => row.organization_id), now)
+  const organizationIds = Array.from(new Set(rows.map(row => row.organization_id)))
+  let plans: Map<string, string>
+  try {
+    plans = await getOrganizationPlans(env, organizationIds, now)
+  } catch (error) {
+    if (!isSubscriptionStateInvalid(error)) throw error
+    // One organization's corrupt subscription state is that organization's
+    // problem: it is logged and left out, and every other organization in the
+    // scan is still served.
+    plans = new Map()
+    for (const organizationId of organizationIds) {
+      try {
+        plans.set(organizationId, await getOrganizationPlan(env, organizationId, now))
+      } catch (single) {
+        if (!isSubscriptionStateInvalid(single)) throw single
+        console.error('organization_subscription_state_invalid', { organizationId, error: single instanceof Error ? single.message : String(single) })
+      }
+    }
+  }
   const entitled = new Map<string, boolean>()
   for (const [organizationId, plan] of plans) {
     entitled.set(organizationId, getPlanEntitlements(plan)[entitlement] === true)
