@@ -43,6 +43,18 @@
             </div>
           </dl>
 
+
+          <ul v-if="message.deliveries.length" class="mt-3 flex flex-wrap gap-x-3 gap-y-1 border-t border-dashed border-default pt-3">
+            <li
+              v-for="delivery in message.deliveries"
+              :key="delivery.id"
+              class="flex items-center gap-1 text-[11px]"
+              :class="deliveryTone(delivery)"
+            >
+              <UIcon :name="deliveryIcon(delivery)" class="size-3 shrink-0" />
+              <span>{{ deliveryLabel(delivery) }}</span>
+            </li>
+          </ul>
           <div v-if="actionItems.length" class="mt-4 flex flex-wrap gap-2 border-t border-dashed border-default pt-3">
             <UButton
               v-for="action in actionItems"
@@ -94,6 +106,21 @@
                 : 'rounded-tl-[5px] border-default bg-elevated text-default'"
             >
               {{ message.body }}
+            </div>
+            <div
+              v-if="message.deliveries.length"
+              class="flex flex-wrap items-center gap-x-3 gap-y-1"
+              :class="message.actorKind === 'member' ? 'justify-end' : ''"
+            >
+              <span
+                v-for="delivery in message.deliveries"
+                :key="delivery.id"
+                class="flex items-center gap-1 text-[11px]"
+                :class="deliveryTone(delivery)"
+              >
+                <UIcon :name="deliveryIcon(delivery)" class="size-3 shrink-0" />
+                {{ deliveryLabel(delivery) }}
+              </span>
             </div>
           </div>
         </div>
@@ -151,6 +178,13 @@ export interface GuestThreadDeliveryFailure {
   createdAt: string
 }
 
+export interface GuestThreadEntryDelivery {
+  id: string
+  channel: 'email' | 'whatsapp'
+  purpose: 'owner_alert' | 'guest_acknowledgement' | 'member_reply' | 'status_update'
+  status: 'pending' | 'accepted' | 'sent' | 'delivered' | 'read' | 'failed' | 'unknown'
+}
+
 export interface GuestThreadEntryMessage {
   id: string
   kind: EntryKind
@@ -161,6 +195,7 @@ export interface GuestThreadEntryMessage {
   eventName: string | null
   payload: Record<string, unknown> | null
   occurredAt: string
+  deliveries: GuestThreadEntryDelivery[]
   // ConversationShell's generic message type requires a `role` field; unused for rendering
   // (the #message slot below is fully overridden) but keeps the shared shell's type happy.
   role: string
@@ -172,6 +207,18 @@ const DELIVERY_PURPOSE_LABELS = {
   member_reply: 'reply',
   status_update: 'status update',
 } satisfies Record<GuestThreadDeliveryFailure['purpose'], string>
+
+// The provider's own words for what happened, not a summary of them: 'sent'
+// and 'read' are different facts and the thread says which one it has.
+const DELIVERY_STATUS_LABELS = {
+  pending: 'queued',
+  accepted: 'accepted',
+  sent: 'sent',
+  delivered: 'delivered',
+  read: 'read',
+  failed: 'failed',
+  unknown: 'unconfirmed',
+} satisfies Record<GuestThreadEntryDelivery['status'], string>
 
 const draft = defineModel<string>('input', { required: true })
 
@@ -262,6 +309,24 @@ function actorLabel(message: GuestThreadEntryMessage) {
   if (message.actorKind === 'guest') return 'Guest'
   if (message.actorKind === 'member') return message.actorLabel || 'Owner'
   return 'System'
+}
+
+function deliveryLabel(delivery: GuestThreadEntryDelivery) {
+  const channel = delivery.channel === 'whatsapp' ? 'WhatsApp' : 'Email'
+  return `${channel} ${DELIVERY_PURPOSE_LABELS[delivery.purpose]} \u00b7 ${DELIVERY_STATUS_LABELS[delivery.status]}`
+}
+
+function deliveryTone(delivery: GuestThreadEntryDelivery) {
+  if (delivery.status === 'failed' || delivery.status === 'unknown') return 'text-warning'
+  if (delivery.status === 'delivered' || delivery.status === 'read') return 'text-success'
+  return 'text-muted'
+}
+
+function deliveryIcon(delivery: GuestThreadEntryDelivery) {
+  if (delivery.status === 'failed' || delivery.status === 'unknown') return 'i-lucide-triangle-alert'
+  if (delivery.status === 'read') return 'i-lucide-check-check'
+  if (delivery.status === 'delivered' || delivery.status === 'sent' || delivery.status === 'accepted') return 'i-lucide-check'
+  return 'i-lucide-clock'
 }
 
 function channelLabel(channel: Channel | null) {

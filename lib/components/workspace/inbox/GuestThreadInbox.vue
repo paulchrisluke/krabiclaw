@@ -144,6 +144,7 @@ import GuestThreadConversation, {
   type GuestThreadDeliveryFailure,
   type GuestThreadEntryMessage,
 } from '~/components/conversation/GuestThreadConversation.vue'
+import type { GuestThreadDetailViewModel } from '~/server/domain/guest-threads/types'
 import { parseCmsFeatureOverrideDelta, resolveCmsCapabilities, type ProductFeature } from '~/config/cms-registry'
 import { resolvePublicTemplate } from '~/utils/template-registry'
 import { normalizeVertical, type SiteVertical } from '~/utils/vertical-copy'
@@ -178,45 +179,10 @@ interface ThreadListItem {
   needsAttention: boolean
 }
 
-interface ThreadEntry {
-  id: string
-  kind: 'submission' | 'message' | 'operation' | 'assignment' | 'resolution'
-  actorKind: 'guest' | 'member' | 'system'
-  actorUserId: string | null
-  actorLabel: string | null
-  channel: 'web' | 'email' | 'whatsapp' | 'system' | null
-  body: string | null
-  eventName: string | null
-  payload: Record<string, unknown> | null
-  sequence: number | null
-  occurredAt: string
-}
-
-interface ThreadDetail {
-  id: string
-  guestName: string
-  guestEmail: string | null
-  guestPhone: string | null
-  submissionType: SubmissionType
-  submissionId: string
-  contextLabel: string
-  locationLabel: string | null
-  conversationState: ConversationState
-  conversationStateLabel: string
-  source: {
-    submissionType: SubmissionType
-    submissionId: string
-    operationalStatus: string | null
-    operationalStatusLabel: string | null
-    fields: Record<string, unknown>
-  }
-  entries: ThreadEntry[]
-  availableActions: string[]
-  deliveryFailures: GuestThreadDeliveryFailure[]
-  createdAt: string
-  updatedAt: string
-  resolvedAt: string | null
-}
+// The detail API's own view model, not a copy of it. Hand-maintained twins of
+// this shape are what let the conversation read field names the server had
+// stopped sending, so there is one declaration and this reads it.
+type ThreadDetail = GuestThreadDetailViewModel
 
 const threadTypeMeta: Record<SubmissionType, { label: string; color: UiColor }> = {
   contact: { label: 'Contact', color: 'info' },

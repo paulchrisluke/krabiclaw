@@ -6,7 +6,7 @@ import { threadPayloadForGuest, requestInsertQueries, getGuestRequest } from '..
 import { upsertLocationReservationConfig } from '../../server/utils/reservations.ts'
 import test from 'node:test'
 import { Miniflare } from 'miniflare'
-import { claimDelivery, createDeliveryReceipt, getDeliveryById, getDeliveryRetryEligibility, listDeliveryFailures, recordDeliveryOutcome } from '../../server/domain/guest-threads/deliveries.ts'
+import { claimDelivery, createDeliveryReceipt, getDeliveryById, getDeliveryRetryEligibility, isVisibleDeliveryFailure, listThreadDeliveries, recordDeliveryOutcome } from '../../server/domain/guest-threads/deliveries.ts'
 import { appendEntry } from '../../server/domain/guest-threads/entries.ts'
 import { executeGuestThreadOperation } from '../../server/domain/guest-threads/operations.ts'
 import { listGuestThreads, updateThreadProjectionIfLatestEntry } from '../../server/domain/guest-threads/repository.ts'
@@ -149,7 +149,11 @@ test('D1 claims fence concurrent sends and bound ambiguous provider retries', as
     })
     const heldClaim = await claimDelivery(db, heldReceipt.id)
     assert.equal(heldClaim.claimed, true)
-    assert.equal((await listDeliveryFailures(db, 'contact-proof')).some(delivery => delivery.id === deliveryId), false)
+    const heldDeliveries = await listThreadDeliveries(db, 'contact-proof')
+    assert.equal(heldDeliveries.filter(delivery => isVisibleDeliveryFailure(delivery)).some(delivery => delivery.id === deliveryId), false,
+      'a claim still in flight is not surfaced as a failure')
+    assert.equal(heldDeliveries.some(delivery => delivery.id === heldReceipt.id), true,
+      'but the thread still knows the send exists, and on which channel')
 
     const accepted = await executeGuestThreadOperation(db, {
       threadId: 'contact-proof',

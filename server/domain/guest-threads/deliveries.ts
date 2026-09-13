@@ -226,13 +226,23 @@ export async function deliverGuestThreadEmail(
   }
 }
 
-export async function listDeliveryFailures(db: DbClient, threadId: string): Promise<GuestThreadDeliveryRow[]> {
-  const deliveries = await queryAll<GuestThreadDeliveryRow>(db, `
+/**
+ * Every delivery this thread produced, newest first. The thread is the only
+ * place that knows a message went out over WhatsApp rather than email, so the
+ * detail view reads all of them from here and decides what to show; a query
+ * that returned failures alone is why a successful send had no channel on it.
+ */
+export async function listThreadDeliveries(db: DbClient, threadId: string): Promise<GuestThreadDeliveryRow[]> {
+  return queryAll<GuestThreadDeliveryRow>(db, `
     SELECT d.* FROM guest_thread_deliveries d
     JOIN activity_entries e ON e.id = d.entry_id
-    WHERE e.request_id = ? AND d.status IN ('failed', 'unknown')
+    WHERE e.request_id = ?
     ORDER BY d.created_at DESC
   `, [threadId])
-  const nowMs = Date.now()
-  return deliveries.filter(delivery => !isDeliveryClaimInFlight(delivery, nowMs))
+}
+
+/** A failure worth showing: settled badly, and not a claim still in flight. */
+export function isVisibleDeliveryFailure(delivery: GuestThreadDeliveryRow, nowMs = Date.now()): boolean {
+  if (delivery.status !== 'failed' && delivery.status !== 'unknown') return false
+  return !isDeliveryClaimInFlight(delivery, nowMs)
 }
