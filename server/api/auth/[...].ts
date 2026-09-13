@@ -115,7 +115,7 @@ async function extractOAuthClientId(request: Request): Promise<string | null> {
   if (request.method === 'GET' || request.method === 'HEAD') {
     return new URL(request.url).searchParams.get('client_id')
   }
-  const contentType = request.headers.get('content-type') ?? ''
+  const contentType = request.headers.get('content-type')?.toLowerCase() ?? ''
   if (!contentType.includes('application/x-www-form-urlencoded')) return null
   try {
     // Clone so the token/introspection/revocation body is still readable by
