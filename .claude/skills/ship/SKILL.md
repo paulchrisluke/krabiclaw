@@ -45,9 +45,10 @@ node scripts/coderabbit-gate.mjs review
 
 The plan allows 3 CLI reviews per developer per rolling hour and 150 files
 per review. So: do not review while you work. Finish the whole change, commit,
-run the gate once, fix any findings, commit, run it once more on that HEAD,
-ship. One or two runs per PR. `status` says how many slots are left and when
-the next opens.
+run the gate, fix every finding, commit, and run the gate again on that HEAD.
+Repeat until a run returns zero findings; only that HEAD ships. Usually one or
+two runs per PR, never more than the findings demand. `status` says how many
+slots are left and when the next opens.
 
 Never call the CLI directly and never pass `--use-credits`. The gate refuses a
 dirty tree, refuses when the hour is spent, refuses a diff over the
