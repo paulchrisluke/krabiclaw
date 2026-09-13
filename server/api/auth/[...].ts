@@ -1,10 +1,9 @@
 
 import { defineHandler } from 'nitro';
 import { getQuery } from 'nitro/h3';
-import { createAuth } from '~/server/utils/auth'
+import { createAuth, healStaleCimdClient, type CloudflareEnv } from '~/server/utils/auth'
 import { cloudflareEnv } from '~/server/utils/api-response'
 import { parsePhoneOrThrow } from '~/utils/phone'
-import type { CloudflareEnv } from '~/server/utils/auth'
 import { HTTPError, type H3Event } from 'nitro';
 
 import { errorChainForTelemetry } from '~/server/utils/error-telemetry'
@@ -112,14 +111,42 @@ async function normalizedAuthRequest(event: H3Event): Promise<Request> {
   })
 }
 
+async function extractOAuthClientId(request: Request): Promise<string | null> {
+  if (request.method === 'GET' || request.method === 'HEAD') {
+    return new URL(request.url).searchParams.get('client_id')
+  }
+  const contentType = request.headers.get('content-type')?.toLowerCase() ?? ''
+  if (!contentType.includes('application/x-www-form-urlencoded')) return null
+  try {
+    // Clone so the token/introspection/revocation body is still readable by
+    // auth.handler below — a Request body can only be consumed once.
+    return new URLSearchParams(await request.clone().text()).get('client_id')
+  } catch {
+    return null
+  }
+}
+
 export default defineHandler(async (event) => {
   const env = cloudflareEnv(event) as CloudflareEnv
   const auth = createAuth(env)
-  
+
   const isHeadRequest = event.req.method === 'HEAD'
 
   try {
     const request = await normalizedAuthRequest(event)
+
+    if (new URL(request.url).pathname.startsWith('/api/auth/oauth2/')) {
+      const clientId = await extractOAuthClientId(request)
+      if (clientId) {
+        try {
+          await healStaleCimdClient(await auth.$context, clientId)
+        } catch (error) {
+          // Best-effort self-heal — never let it block the underlying OAuth request.
+          console.warn('[AUTH_HANDLER] healStaleCimdClient failed', errorChainForTelemetry(error))
+        }
+      }
+    }
+
     const response = await auth.handler(request)
 
     // HEAD must carry the GET status and headers with no body.
