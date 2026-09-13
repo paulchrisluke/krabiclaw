@@ -1,12 +1,7 @@
-import { createAuth, type CloudflareEnv } from '~/server/utils/auth'
 import { execute, queryAll, type DbClient } from '~/server/db'
-import { createStripePlanLoader, recordStripeEventFailure, type BetterAuthSubscriptionAdapter } from '~/server/utils/better-auth-stripe'
-import type Stripe from 'stripe'
-import { processStripeEvent } from '~/server/utils/stripe-event-processing'
 import { createStripeClient } from '~/server/utils/stripe-client'
 import { processStripeConnectEvent } from '~/server/utils/stripe-connect-events'
-import { MAX_STRIPE_WEBHOOK_ATTEMPTS, recordStripeWebhookEventFailure, type StripeWebhookProcessor } from '~/server/utils/stripe-webhook-events'
-import { expireStripeGa4Intents } from '~/server/utils/stripe-ga4-intents'
+import { MAX_STRIPE_WEBHOOK_ATTEMPTS, recordStripeWebhookEventFailure } from '~/server/utils/stripe-webhook-events'
 import { defineScheduledTask } from '~/server/utils/scheduled-task'
 
 interface StripeTaskContext {
@@ -16,7 +11,6 @@ interface StripeTaskContext {
 interface RetryableStripeEvent {
   stripe_event_id: string
   payload: string | null
-  processor: StripeWebhookProcessor
 }
 
 interface StripeTaskResult {
@@ -39,10 +33,16 @@ async function clearExpiredStripeEventPayloads(db: DbClient, now = new Date()): 
   `, [cutoff])
 }
 
+/**
+ * Retries Stripe Connect marketplace webhook events whose processing did not
+ * complete. Platform billing has no queue any more: the @better-auth/stripe
+ * plugin maintains the `subscription` table from its own webhook route and
+ * Stripe's delivery retries are the retry mechanism.
+ */
 export default defineScheduledTask({
   meta: {
-    name: 'billing:stripe-reconciliation',
-    description: 'Retry leased Stripe events whose Better Auth or app projection did not complete',
+    name: 'stripe:webhook-retry',
+    description: 'Retry leased Stripe Connect webhook events whose processing did not complete',
   },
   async run({ context }): Promise<{ result: StripeTaskResult }> {
     const env = (context as StripeTaskContext | undefined)?.cloudflare?.env ?? {}
@@ -53,59 +53,38 @@ export default defineScheduledTask({
     if (!env.STRIPE_SECRET_KEY) return { result: { ...empty, skipped: 'STRIPE_SECRET_KEY is not configured' } }
 
     const stripe = createStripeClient(env.STRIPE_SECRET_KEY)
-    const loadStripePlans = createStripePlanLoader(stripe, env)
-    const auth = createAuth(env as CloudflareEnv)
-    const authContext = await auth.$context
-    const adapter = authContext.adapter as unknown as BetterAuthSubscriptionAdapter
     await clearExpiredStripeEventPayloads(db)
-    await expireStripeGa4Intents(db)
+    const nowIso = new Date().toISOString()
     const events = await queryAll<RetryableStripeEvent>(db, `
-      SELECT stripe_event_id, payload, processor
+      SELECT stripe_event_id, payload
       FROM stripe_webhook_events
-      WHERE attempt_count < ?
+      WHERE processor = 'connect_marketplace'
+        AND attempt_count < ?
         AND status IN ('failed', 'pending')
         AND (lease_expires_at IS NULL OR lease_expires_at <= ?)
         AND (next_attempt_at IS NULL OR next_attempt_at <= ?)
       ORDER BY CASE WHEN status = 'pending' THEN 0 ELSE 1 END, created_at
       LIMIT 100
-    `, [MAX_STRIPE_WEBHOOK_ATTEMPTS, new Date().toISOString(), new Date().toISOString()])
+    `, [MAX_STRIPE_WEBHOOK_ATTEMPTS, nowIso, nowIso])
 
     let processed = 0
     let failed = 0
     for (const row of events) {
       if (!row.payload) {
-        if (row.processor === 'platform_billing') {
-          await recordStripeEventFailure(db, row.stripe_event_id, 'Stripe webhook payload is missing after retention cleanup')
-        } else {
-          await recordStripeWebhookEventFailure(db, row.processor, row.stripe_event_id, 'Stripe webhook payload is missing after retention cleanup')
-        }
+        await recordStripeWebhookEventFailure(db, 'connect_marketplace', row.stripe_event_id, 'Stripe webhook payload is missing after retention cleanup')
         failed += 1
         continue
       }
-
       try {
-        let claimed: boolean
-        if (row.processor === 'connect_marketplace') {
-          const notification = stripe.parseEventNotificationWithoutVerification(row.payload)
-          claimed = await processStripeConnectEvent(db, stripe, notification, row.payload)
-        } else {
-          const event = JSON.parse(row.payload) as Stripe.Event
-          claimed = await processStripeEvent(env as CloudflareEnv, db, event, stripe, adapter, loadStripePlans)
-        }
-        if (claimed) processed += 1
+        const notification = stripe.parseEventNotificationWithoutVerification(row.payload)
+        if (await processStripeConnectEvent(db, stripe, notification, row.payload)) processed += 1
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error)
-        if (row.processor === 'platform_billing') await recordStripeEventFailure(db, row.stripe_event_id, message)
-        else await recordStripeWebhookEventFailure(db, row.processor, row.stripe_event_id, message)
+        await recordStripeWebhookEventFailure(db, 'connect_marketplace', row.stripe_event_id, message)
         failed += 1
-        console.error('stripe_reconciliation_event_failed', {
-          stripeEventId: row.stripe_event_id,
-          processor: row.processor,
-          error: message,
-        })
+        console.error('stripe_webhook_retry_event_failed', { stripeEventId: row.stripe_event_id, error: message })
       }
     }
-
     return { result: { checked: events.length, processed, failed } }
   },
 })

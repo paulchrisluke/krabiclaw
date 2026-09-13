@@ -17,5 +17,5 @@ notes: |
   Hero is a Cloudflare R2 video asset.
   Source data: prod-backup-kikuzuki-2026-05-20.sql (can be deleted once typed fixture is verified).
   canonical AI quota balance: 302 (lifetime_used: 198)
-  organization_billing: free plan
+  subscription: none (free plan)
   Opening hours: daily 14:00–23:00

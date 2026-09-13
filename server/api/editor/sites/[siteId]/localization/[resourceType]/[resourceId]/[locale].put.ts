@@ -18,7 +18,7 @@ export default defineHandler(async (event) => {
     throw createError({ statusCode: 403, statusMessage: 'Demo site is read-only' })
   }
   const body = await readRequiredBody<{ values?: unknown; route_path?: unknown; content_blocks?: unknown; expected_updated_at?: unknown }>(event)
-  return { localization: await putLocalizationForAuthoring(db, {
+  return { localization: await putLocalizationForAuthoring(env, db, {
     organizationId: site.organization_id,
     siteId,
     resourceType,

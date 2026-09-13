@@ -9,7 +9,7 @@ import { getAuthSession } from '~/server/utils/auth'
 import { queryAll, queryFirst, type DbClient } from '~/server/db'
 import { d1JsonStringSet } from '~/server/db/d1-limits'
 import { assertDashboardPathPermission, assertMemberSiteAccess, isOrganizationWideRole, resolveUserOrganization } from '~/server/utils/member-access'
-import { getOrganizationBillingProjection } from '~/server/utils/organization-billing'
+import { getOrganizationPlan } from '~/server/utils/billing-access'
 
 function safeJsonParse(value: string): unknown {
   return JSON.parse(value)
@@ -354,7 +354,7 @@ export async function getDashboardContext(event: H3Event, options: DashboardCont
   const site = rawSite
     ? {
         ...rawSite,
-        effective_plan: (await getOrganizationBillingProjection(db, organization.id)).effectivePlan,
+        effective_plan: await getOrganizationPlan(env, organization.id),
         media: siteSocialMedia,
         social_image: resolveSocialImageFromMedia(siteSocialMedia),
       }
@@ -397,6 +397,7 @@ export interface DashboardSiteSummaryRow {
 }
 
 export async function listOrganizationSites(
+  env: CloudflareEnv,
   db: DbClient,
   organizationId: string,
   principal?: { role: string; teamIds: string[] | null },
@@ -412,7 +413,7 @@ export async function listOrganizationSites(
       ${scopedTeamIds ? `AND s.team_id IN (SELECT value FROM json_each(?))` : ''}
     ORDER BY s.created_at ASC, s.id ASC
   `, scopedTeamIdsJson ? [organizationId, scopedTeamIdsJson] : [organizationId])
-  const effectivePlan = (await getOrganizationBillingProjection(db, organizationId)).effectivePlan
+  const effectivePlan = await getOrganizationPlan(env, organizationId)
 
   // Site cards render the same image the public pages do. This used to run its
   // own query against the home page hero block's social_card — a different

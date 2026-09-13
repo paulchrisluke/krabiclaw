@@ -52,7 +52,7 @@ export async function loadDashboardContext(
     ? null
     : await listUserOrganizationTeamIds({ env: cloudflareEnv(event), organizationId: organization.id, userId })
   const principal = { env, memberId: organization.memberId, role: organization.role, teamIds }
-  const sites = await listOrganizationSites(db, organization.id, principal)
+  const sites = await listOrganizationSites(env, db, organization.id, principal)
   if (!site) {
     return {
       success: true as const,

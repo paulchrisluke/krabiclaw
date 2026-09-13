@@ -85,7 +85,7 @@ import { getErrorMessage } from '~/utils/errors'
 import { formatProductMoney } from '~/utils/product-money'
 import { selectPrice } from '~/shared/prices'
 import { isCurrencyCode } from '~/shared/currencies'
-import { requireProductPresentation } from '~/utils/product-presentation'
+import { presentationForProducts } from '~/utils/product-presentation'
 
 
 const route = useRoute()
@@ -97,7 +97,6 @@ const dashboardLocation = useDashboardLocation()
 
 const vertical = dashboard.site.value?.vertical
 if (!vertical) throw createError({ statusCode: 500, statusMessage: 'Site vertical is not configured' })
-const presentation = requireProductPresentation(vertical)
 const collectionId = computed(() => String(route.params.collectionId ?? route.params.categoryId ?? ''))
 const rawCurrency = dashboard.site.value?.default_currency
 if (!isCurrencyCode(rawCurrency)) throw createError({ statusCode: 500, statusMessage: 'Unsupported site currency' })
@@ -113,7 +112,6 @@ const collectionPath = computed(() => `${productsPath.value}/${collectionId.valu
 const catalog = useLocationProductCatalog(siteId, locationId)
 const collections = catalog.collections
 const pending = catalog.pending
-const loadError = computed(() => (catalog.error.value ? getErrorMessage(catalog.error.value, `Failed to load ${presentation.itemLabelPlural.toLowerCase()}`) : null))
 
 // Reorder is a mode: the local order stands while the edit state is open and
 // commits once when it closes, so it is held apart from the shared catalog.
@@ -140,10 +138,14 @@ const selected = ref<string[]>([])
 const orderDirty = ref(false)
 
 const collection = computed(() => collections.value.find(row => row.id === collectionId.value) ?? null)
+// A collection of classes is read as experiences, a collection of dishes as
+// the menu: the words come from what is in it.
+const presentation = computed(() => presentationForProducts(vertical, products.value))
+const loadError = computed(() => (catalog.error.value ? getErrorMessage(catalog.error.value, `Failed to load ${presentation.value.itemLabelPlural.toLowerCase()}`) : null))
 const listItems = computed(() => products.value.map(row => ({ id: row.id, title: row.name, row })))
 const moveTargets = computed(() => collections.value.filter(row => row.id !== collectionId.value))
 
-useSeoMeta({ title: () => `${collection.value?.name ?? presentation.collectionLabel} | KrabiClaw Dashboard`, robots: 'noindex, nofollow' })
+useSeoMeta({ title: () => `${collection.value?.name ?? presentation.value.collectionLabel} | KrabiClaw Dashboard`, robots: 'noindex, nofollow' })
 
 /** The offer this location shows, resolved through the one selection contract. */
 function priceLabel(product: Product) {
@@ -159,7 +161,7 @@ const load = catalog.refresh
 // would be an unhandled rejection rather than the 404 screen, so it is shown.
 watchEffect(() => {
   if (!catalog.pending.value && catalog.collections.value.length && !collection.value) {
-    showError(createError({ statusCode: 404, statusMessage: `${presentation.collectionGroupLabel} not found` }))
+    showError(createError({ statusCode: 404, statusMessage: `${presentation.value.collectionGroupLabel} not found` }))
   }
 })
 
@@ -249,7 +251,7 @@ async function moveSelected() {
     editing.value = false
     await load()
   } catch (error) {
-    toast.add({ description: getErrorMessage(error, `Failed to move ${presentation.itemLabelPlural.toLowerCase()}`), color: 'error' })
+    toast.add({ description: getErrorMessage(error, `Failed to move ${presentation.value.itemLabelPlural.toLowerCase()}`), color: 'error' })
   } finally {
     moving.value = false
   }

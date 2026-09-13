@@ -760,6 +760,7 @@ export async function getPublishedPostBySlug(
 }
 
 export async function getPublishedPostByPublicRoute(
+  env: CloudflareEnv,
   db: DbClient,
   siteId: string,
   slug: string,
@@ -768,7 +769,7 @@ export async function getPublishedPostByPublicRoute(
   const site = await queryFirst<{ organization_id: string }>(db, 'SELECT organization_id FROM sites WHERE id = ? AND status = \'active\' LIMIT 1', [siteId])
   if (!site) return null
 
-  const localizations = locale === 'en' ? [] : await loadExactPublicLocalizations(db, site.organization_id, siteId, locale)
+  const localizations = locale === 'en' ? [] : await loadExactPublicLocalizations(env, db, site.organization_id, siteId, locale)
   const translated = locale === 'en' ? null : await queryFirst<{
     id: string; root_id: string; title: string | null; summary: string | null;
     seo_title: string | null; seo_description: string | null; metadata_json: string;
@@ -800,7 +801,7 @@ export async function getPublishedPostByPublicRoute(
     }
   }
 
-  const localeRepresentations = await listPublicLocaleRepresentations(db, {
+  const localeRepresentations = await listPublicLocaleRepresentations(env, db, {
     organizationId: site.organization_id,
     siteId,
     sourcePath: sourcePost.public_path,

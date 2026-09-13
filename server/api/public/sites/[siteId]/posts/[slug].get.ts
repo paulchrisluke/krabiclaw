@@ -12,7 +12,7 @@ export default defineHandler(async (event) => {
 
   const query = getQuery(event)
   const locale = typeof query.locale === 'string' ? query.locale : 'en'
-  const post = await getPublishedPostByPublicRoute(db, siteId, slug, locale)
+  const post = await getPublishedPostByPublicRoute(env, db, siteId, slug, locale)
   if (!post) return apiErrorResponse(event, 404, 'POST_NOT_FOUND', 'Post not found')
 
   return jsonResponse({ success: true, post })

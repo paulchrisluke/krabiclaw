@@ -220,6 +220,7 @@ export async function applyOnboardingDraftToSite(
     contentByPage.set(row.page, rows)
   }
   await applyOnboardingTenantPages(db, {
+    env,
     organizationId, siteId, userId: userId, pages: [...contentByPage].map(([pageName, rows]) => {
       const pageType = onboardingPageType(pageName)
       return {

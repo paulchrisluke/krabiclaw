@@ -280,6 +280,7 @@ export async function executeMcpToolCall(
   if (
     tool.requiredEntitlement &&
     !(await hasSiteEntitlement(
+      site.env as CloudflareEnv,
       site.db,
       site.siteId,
       tool.requiredEntitlement,

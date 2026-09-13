@@ -54,7 +54,8 @@ export default defineNuxtRouteMiddleware(async (to) => {
     import('~/server/db'),
     import('~/server/utils/localization'),
   ])
-  const db = cloudflareEnv(event).db
+  const env = cloudflareEnv(event)
+  const db = env.db
   if (!db) throw createError({ statusCode: 503, statusMessage: 'Database unavailable' })
   const currentSite = await queryFirst<{ organization_id: string }>(db, `
     SELECT organization_id FROM sites WHERE id = ? AND status = 'active' LIMIT 1
@@ -76,7 +77,7 @@ export default defineNuxtRouteMiddleware(async (to) => {
      LIMIT 1
   `, [siteId, candidate])
   if (!locale) throw createError({ statusCode: 404, statusMessage: 'Language is not enabled for this site' })
-  const entitlement = await assertPublicSiteLanguageEntitlement(db, locale.organization_id, siteId, locale.locale)
+  const entitlement = await assertPublicSiteLanguageEntitlement(env, db, locale.organization_id, siteId, locale.locale)
   if (!entitlement.platform_messages) {
     throw createError({ statusCode: 503, statusMessage: 'Published platform locale messages are unavailable' })
   }

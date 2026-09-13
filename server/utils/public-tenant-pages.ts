@@ -323,6 +323,7 @@ function mapPage(
 }
 
 export async function getPublicTenantPageForPath(
+  env: CloudflareEnv,
   db: DbClient,
   siteId: string,
   path: string,
@@ -339,7 +340,7 @@ export async function getPublicTenantPageForPath(
   if (!page) return null
   const localizations = page.locale === 'en'
     ? null
-    : options.localizations ?? await loadExactPublicLocalizations(db, page.organization_id, siteId, page.locale)
+    : options.localizations ?? await loadExactPublicLocalizations(env, db, page.organization_id, siteId, page.locale)
   const [blocks, media, sourceLocale] = await Promise.all([
     hydrateBlocks(db, siteId, page.path, page.locale, page.blocks, options.hydrationResources, localizations),
     loadPublicSocialMedia(db, siteId, 'content_document', [page.id]),
@@ -366,7 +367,7 @@ export async function getPublicTenantPageForPath(
   if (!sourceLocale) {
     throw new HTTPError({ statusCode: 500, statusMessage: 'Site primary language is missing' })
   }
-  const localeRepresentations = await listPublicLocaleRepresentations(db, {
+  const localeRepresentations = await listPublicLocaleRepresentations(env, db, {
     organizationId: page.organization_id,
     siteId,
     sourcePath: await resolvePublicDocumentSourcePath(db, siteId, page.page_id),
@@ -391,11 +392,11 @@ async function resolveVariantId(db: DbClient, siteId: string, path: string, loca
   return row.id
 }
 
-export async function listCanonicalTenantPages(db: DbClient, siteId: string, locale?: string | null) {
+export async function listCanonicalTenantPages(env: CloudflareEnv, db: DbClient, siteId: string, locale?: string | null) {
   const paths = await listPublishedTenantPagePaths(db, siteId, locale)
   const pages: PublicTenantPage[] = []
   for (const item of paths) {
-    const page = await getPublicTenantPageForPath(db, siteId, item.path, { locale })
+    const page = await getPublicTenantPageForPath(env, db, siteId, item.path, { locale })
     if (page) pages.push(page)
   }
   return pages

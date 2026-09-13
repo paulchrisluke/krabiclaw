@@ -1,6 +1,7 @@
 import { cloudflareEnv, jsonResponse, rethrowHttpError } from '~/server/utils/api-response'
 import { previewSecretOf, resolvePreviewAuthorization } from '~/server/utils/preview-token'
 import { loadPublicProductApiDetail, loadPublicProductReviews } from '~/server/utils/public-products'
+import { publicLocationPayload } from '~/server/utils/public-products'
 import { defineHandler } from 'nitro'
 import { getRouterParam } from 'nitro/h3'
 import { getQuery } from 'nitro/h3'
@@ -14,11 +15,12 @@ export default defineHandler(async (event) => {
   const productSlug = getRouterParam(event, 'productSlug')
   if (!siteId || !locationSlug || !productSlug) return jsonResponse({ error: 'Site, location, and Product slugs are required' }, { status: 400 })
   try {
-    const db = cloudflareEnv(event).DB
+    const env = cloudflareEnv(event)
+    const db = env.DB
     if (!db) return jsonResponse({ error: 'Database unavailable' }, { status: 503 })
     const locale = assertExactCanonicalLocale(getQuery(event).locale ?? 'en')
     const previewAuthorized = await resolvePreviewAuthorization(event, siteId, previewSecretOf(cloudflareEnv(event)))
-    const result = await loadPublicProductApiDetail(db, siteId, previewAuthorized, locationSlug, productSlug, locale)
+    const result = await loadPublicProductApiDetail(env, db, siteId, previewAuthorized, locationSlug, productSlug, locale)
     if (!result) return jsonResponse({ error: 'Product not found' }, { status: 404 })
     const reviews = await loadPublicProductReviews(db, result)
     // The collection this product belongs to on this site, in the site's own
@@ -28,7 +30,7 @@ export default defineHandler(async (event) => {
     const priceSelection = { currency: result.currency, location_id: result.location.id, at: new Date().toISOString() }
     return jsonResponse({
       product: result.product,
-      location: { id: result.location.id, slug: result.location.slug, title: result.location.title },
+      location: publicLocationPayload(result.location),
       currency: result.currency,
       vertical: result.site.vertical,
       brandName: result.site.brand_name,

@@ -44,7 +44,7 @@ const { data, error } = await useAsyncData(key, async () => {
     const env = cloudflareEnv(requestEvent)
     const db = env.db
     if (!db) throw createError({ statusCode: 503, statusMessage: 'Database not available' })
-    const page = await getPublicTenantPageForPath(db, siteId, pagePath, { locale: activeLocale.value, preview })
+    const page = await getPublicTenantPageForPath(env, db, siteId, pagePath, { locale: activeLocale.value, preview })
     if (!page) throw createError({ statusCode: 404, statusMessage: 'Tenant page not found' })
     return { success: true as const, page }
   }

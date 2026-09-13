@@ -16,5 +16,5 @@ export default defineHandler(async (event) => {
   if (isDemoOrg(site.organization_id) && !(await hasPlatformEventPermission(event, env, { platform: ['access'] }))) {
     throw createError({ statusCode: 403, statusMessage: 'Demo site is read-only' })
   }
-  return await deleteLocalization(db, { organizationId: site.organization_id, siteId, resourceType, resourceId, locale })
+  return await deleteLocalization(env, db, { organizationId: site.organization_id, siteId, resourceType, resourceId, locale })
 })

@@ -17,10 +17,10 @@ export type ScheduledTaskName =
   | 'google-places-sync'
   | 'instagram-sync-process'
   | 'review-request-automation'
-  | 'stripe-reconciliation'
   | 'social-card-backfill'
   | 'sessions-materialize'
   | 'deletion-sweep'
+  | 'stripe-webhook-retry'
 
 type TaskLoader = () => Promise<{ default: ScheduledTaskDefinition }>
 
@@ -31,7 +31,7 @@ export const SCHEDULED_TASKS: Readonly<Record<string, readonly ScheduledTaskName
   '*/10 * * * *': ['domain-reconciliation', 'zaraz-analytics-reconciliation'],
   '0 3 * * *': ['domain-reconciliation-daily', 'analytics-aggregate-daily', 'deletion-sweep'],
   '0 0 * * SUN': ['google-places-sync'],
-  '0 * * * *': ['instagram-sync-process', 'review-request-automation', 'stripe-reconciliation'],
+  '0 * * * *': ['instagram-sync-process', 'review-request-automation', 'stripe-webhook-retry'],
 }
 
 const TASK_LOADERS: Readonly<Record<ScheduledTaskName, TaskLoader>> = {
@@ -48,7 +48,7 @@ const TASK_LOADERS: Readonly<Record<ScheduledTaskName, TaskLoader>> = {
   'google-places-sync': async () => import('./tasks/google-places-sync'),
   'instagram-sync-process': async () => import('./tasks/instagram-sync-process'),
   'review-request-automation': async () => import('./tasks/review-request-automation'),
-  'stripe-reconciliation': async () => import('./tasks/stripe-reconciliation'),
+  'stripe-webhook-retry': async () => import('./tasks/stripe-webhook-retry'),
 }
 
 export function getScheduledTaskNames(cron: string): readonly ScheduledTaskName[] {
