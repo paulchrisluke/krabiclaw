@@ -67,23 +67,31 @@ function sessions() {
   return out.sort((a, b) => b.startedAt - a.startedAt)
 }
 
-// Runs started in the last hour: the CLI's sessions plus this gate's own log,
-// de-duplicated to the minute, so a session the CLI later prunes still counts.
+// Runs started in the last hour: this gate's own log plus any CLI session the
+// log does not already represent. A log entry and a session are the same run
+// when they share a head, or, for a session the CLI has pruned to no head,
+// when they started within five minutes of each other.
 function runsInLastHour() {
   const hourAgo = Date.now() - 60 * 60 * 1000
-  const seen = new Map()
+  const logged = existsSync(RUN_LOG)
+    ? readFileSync(RUN_LOG, 'utf8').split('\n').filter(Boolean).map(line => JSON.parse(line)).filter(run => run.startedAt >= hourAgo)
+    : []
+  const runs = logged.map(run => ({ ...run, findings: [], currentBranch: run.branch }))
   for (const session of sessions()) {
-    if (session.startedAt >= hourAgo) seen.set(Math.floor(session.startedAt / 60000), session)
-  }
-  if (existsSync(RUN_LOG)) {
-    for (const line of readFileSync(RUN_LOG, 'utf8').split('\n').filter(Boolean)) {
-      const run = JSON.parse(line)
-      if (run.startedAt >= hourAgo && !seen.has(Math.floor(run.startedAt / 60000))) {
-        seen.set(Math.floor(run.startedAt / 60000), { ...run, findings: [], currentBranch: run.branch })
-      }
+    if (session.startedAt < hourAgo) continue
+    const represented = logged.some(run => session.head
+      ? run.head === session.head
+      : Math.abs(run.startedAt - session.startedAt) < 5 * 60 * 1000)
+    if (represented) {
+      const run = runs.find(entry => session.head
+        ? entry.head === session.head
+        : Math.abs(entry.startedAt - session.startedAt) < 5 * 60 * 1000)
+      if (run && session.findings.length > run.findings.length) run.findings = session.findings
+      continue
     }
+    runs.push(session)
   }
-  return [...seen.values()].sort((a, b) => b.startedAt - a.startedAt)
+  return runs.sort((a, b) => b.startedAt - a.startedAt)
 }
 
 function changedFiles(head) {
