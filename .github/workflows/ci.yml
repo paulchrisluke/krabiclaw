@@ -154,11 +154,21 @@ jobs:
       E2E_SELECTION_SCOPE: ${{ needs.e2e-plan.outputs.scope }}
       E2E_SELECTED_SPECS: ${{ needs.e2e-plan.outputs.specs }}
     steps:
-      # preview.krabiclaw.com is one deployment, so E2E runs serialize on it.
-      # A GitHub concurrency group holds one running and one pending job and
-      # cancels the pending one when a third arrives, which evicted E2E every
-      # time three PRs pushed inside a window. This queue is FIFO by run id and
-      # unbounded: wait while any older CI run still has its E2E job unfinished.
+      # preview.krabiclaw.com is one deployment over one database, and this job
+      # resets that database before it tests. Two of these overlapping is not a
+      # slow queue, it is one run wiping D1 under another run's assertions.
+      #
+      # The queue orders on when each E2E job STARTED, never on run id. A
+      # re-run keeps its original run id, so an id-ordered queue reads a job
+      # started today as older than everything created since and waits for
+      # nobody: run 34715334165 was created 19:50 the previous evening, was
+      # re-run at 05:10:36, and ran `db:reset:preview` at 05:11:28 through the
+      # middle of another run's suite. Every test after that timestamp failed
+      # with one D1 statement and a 404.
+      #
+      # A job that has not started yet is not waited on: when it starts it sees
+      # this one in progress and waits here instead. Equal start times, which
+      # the API reports at second resolution, fall back to run id.
       - name: Wait for the shared preview deployment
         env:
           GH_TOKEN: ${{ github.token }}
@@ -166,17 +176,29 @@ jobs:
           JOB_NAME: E2E representative tests (preview only)
         run: |
           set -euo pipefail
+          # --paginate or a busy repository silently truncates at 100 and the
+          # queue stops seeing the run it must wait for. jq runs per page, so
+          # every one of these takes the first line it produces.
+          mine=$(gh api --paginate "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/jobs?per_page=100" \
+            --jq "[.jobs[] | select(.name == \"${JOB_NAME}\")] | .[0].started_at // empty" | head -n 1)
+          if [ -z "$mine" ]; then
+            echo "::error::This job reported no start time, so the preview queue cannot be ordered."
+            exit 1
+          fi
+          echo "This job started at ${mine}."
           deadline=$((SECONDS + 100 * 60))
           while :; do
             busy=""
             for run_status in queued in_progress waiting pending requested; do
-              older=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs?status=${run_status}&per_page=100" \
-                --jq ".workflow_runs[] | select(.name == \"${GITHUB_WORKFLOW}\" and .id < ${RUN_ID}) | .id")
-              for id in $older; do
-                state=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${id}/jobs?per_page=100" \
-                  --jq "[.jobs[] | select(.name == \"${JOB_NAME}\")] | if length == 0 then \"absent\" else .[0].status end")
-                if [ "$state" != "completed" ]; then
-                  busy="${busy} ${id}(${state})"
+              others=$(gh api --paginate "repos/${GITHUB_REPOSITORY}/actions/runs?status=${run_status}&per_page=100" \
+                --jq ".workflow_runs[] | select(.name == \"${GITHUB_WORKFLOW}\" and .id != ${RUN_ID}) | .id")
+              for id in $others; do
+                ahead=$(gh api --paginate "repos/${GITHUB_REPOSITORY}/actions/runs/${id}/jobs?per_page=100" \
+                  --jq "[.jobs[] | select(.name == \"${JOB_NAME}\" and .status != \"completed\" and .started_at != null)]
+                        | map(select(.started_at < \"${mine}\" or (.started_at == \"${mine}\" and ${id} < ${RUN_ID})))
+                        | if length == 0 then empty else .[0].started_at end" | head -n 1)
+                if [ -n "$ahead" ]; then
+                  busy="${busy} ${id}(started ${ahead})"
                 fi
               done
             done
@@ -185,10 +207,10 @@ jobs:
               break
             fi
             if [ "$SECONDS" -ge "$deadline" ]; then
-              echo "::error::Gave up after 100 minutes waiting on older runs:${busy}"
+              echo "::error::Gave up after 100 minutes waiting on runs ahead of this one:${busy}"
               exit 1
             fi
-            echo "Waiting on older runs:${busy}"
+            echo "Waiting on runs ahead of this one:${busy}"
             sleep 30
           done
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1

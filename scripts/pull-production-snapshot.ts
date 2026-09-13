@@ -17,7 +17,7 @@
  *   node --experimental-strip-types scripts/pull-production-snapshot.ts --preview
  */
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { parseArgs } from 'node:util'
@@ -30,7 +30,43 @@ const { values } = parseArgs({
 if (values.local === values.preview) throw new Error('Choose exactly one of --local or --preview.')
 
 const wrangler = resolve('node_modules/wrangler/bin/wrangler.js')
-const run = (args: string[]) => execFileSync(process.execPath, [wrangler, ...args], { cwd: process.cwd(), stdio: 'inherit' })
+
+/**
+ * A failed `d1 execute` prints `✘ [ERROR]` with nothing after it and writes the
+ * reason to a file, so CI shows an import that died at query 16465 for no
+ * stated cause. WRANGLER_LOG_PATH puts that file in a directory we own — the
+ * default location differs per platform, and guessing it means the reporter
+ * throws ENOENT over the very error it was meant to report.
+ */
+const logDirectory = mkdtempSync(join(tmpdir(), 'krabiclaw-wrangler-logs-'))
+
+function printWranglerLogs(): void {
+  const names = readdirSync(logDirectory)
+  if (names.length === 0) {
+    console.error(`wrangler wrote no log under ${logDirectory}.`)
+    return
+  }
+  for (const name of names) {
+    const path = join(logDirectory, name)
+    console.error(`--- ${path} ---`)
+    console.error(readFileSync(path, 'utf8'))
+    console.error(`--- end ${path} ---`)
+  }
+}
+
+const run = (args: string[]) => {
+  try {
+    return execFileSync(process.execPath, [wrangler, ...args], {
+      cwd: process.cwd(),
+      stdio: 'inherit',
+      env: { ...process.env, WRANGLER_LOG_PATH: logDirectory },
+    })
+  } catch (error) {
+    console.error(`wrangler ${args.join(' ')} failed.`)
+    printWranglerLogs()
+    throw error
+  }
+}
 
 const directory = mkdtempSync(join(tmpdir(), 'krabiclaw-snapshot-'))
 try {
@@ -46,4 +82,5 @@ try {
   console.log(`Restored ${manifest.tables.length} tables (${rows} rows) from the production DB binding into ${values.preview ? 'preview' : 'local'} D1.`)
 } finally {
   rmSync(directory, { recursive: true, force: true })
+  rmSync(logDirectory, { recursive: true, force: true })
 }
