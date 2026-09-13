@@ -29,7 +29,24 @@ export interface PublicProductLocation {
   slug: string
   title: string
   feature_overrides: string | null
+  /** Where a guest turns up: the branch's own address, phone and map, as stored. */
+  address: string | null
+  phone: string | null
+  maps_url: string | null
+  latitude: number | null
+  longitude: number | null
 }
+
+/** The branch as the product page sends it to the browser. */
+export function publicLocationPayload(location: PublicProductLocation): PublicProductLocationPayload {
+  return {
+    id: location.id, slug: location.slug, title: location.title,
+    address: location.address, phone: location.phone, maps_url: location.maps_url,
+    latitude: location.latitude, longitude: location.longitude,
+  }
+}
+
+export type PublicProductLocationPayload = Omit<PublicProductLocation, 'feature_overrides'>
 
 export interface PublicProductCollection {
   site: PublicProductSiteRow
@@ -112,7 +129,7 @@ export async function loadPublicProductCollection(
   const resolved = await loadProductSite(db, siteId, routeKind, previewAuthorized)
   if (!resolved) return null
   const locationRows = await queryAll<PublicProductLocation>(db, `
-    SELECT id, slug, title, feature_overrides
+    SELECT id, slug, title, feature_overrides, address, phone, maps_url, latitude, longitude
       FROM business_locations
      WHERE organization_id = ? AND site_id = ? AND status = 'active'
        ${locationSlug ? 'AND slug = ?' : ''}
@@ -187,7 +204,7 @@ export async function loadPublicProductDetail(
   const locationId = resolveLocalizedRouteResourceId(localizations, 'business_location', localizedLocationPath)
   if (!locationId) return null
   const sourceLocation = await queryFirst<PublicProductLocation>(db, `
-    SELECT id, slug, title, feature_overrides FROM business_locations
+    SELECT id, slug, title, feature_overrides, address, phone, maps_url, latitude, longitude FROM business_locations
      WHERE organization_id = ? AND site_id = ? AND id = ? AND status = 'active' LIMIT 1
   `, [resolved.site.organization_id, siteId, locationId])
   if (!sourceLocation) return null
@@ -257,7 +274,7 @@ export async function loadPublicExperienceDetail(
   if (!found.publications.some(entry => entry.site_id === siteId && entry.published)) return null
   const offeredAt = new Set(found.locations.filter(entry => entry.published && entry.active).map(entry => entry.location_id))
   const locationRows = await queryAll<PublicProductLocation>(db, `
-    SELECT id, slug, title, feature_overrides
+    SELECT id, slug, title, feature_overrides, address, phone, maps_url, latitude, longitude
       FROM business_locations
      WHERE organization_id = ? AND site_id = ? AND status = 'active'
      ORDER BY title, id

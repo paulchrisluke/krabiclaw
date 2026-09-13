@@ -170,6 +170,7 @@
 
 <script setup lang="ts">
 import { formatOpeningHours, getIsOpenNow } from '~/utils/formatters'
+import { formatLocationAddress, type LocationAddressInput } from '~/utils/location-address'
 import { getTodayHoursLabel } from '~/shared/reservation-hours'
 const DOMPurify = useHtmlSanitizer()
 
@@ -196,11 +197,7 @@ const formattedAddress = computed(() => {
   const loc = location.value
   if (!loc) return ''
   if (locale.value !== 'en') return typeof loc.address_translated === 'string' ? loc.address_translated : ''
-  if (loc.address && typeof loc.address === 'object') {
-    const a = loc.address
-    return [a.addressLines?.[0], a.locality, a.administrativeArea, a.postalCode].filter(Boolean).join(', ')
-  }
-  return loc.address || loc.city || ''
+  return formatLocationAddress(loc.address as LocationAddressInput) || loc.city || ''
 })
 
 const weekHours = computed(() => formatOpeningHours(location.value?.opening_hours ?? null, locale.value, t('saya.location.closed'), location.value?.timezone))

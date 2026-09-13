@@ -5,7 +5,7 @@
  *
  * The catalog has one handle for a price in words, PRICING_NOTE_HANDLE =
  * 'pricing.note' (shared/metafields.ts). The rebaseline derived a class's
- * `experience_json.pricing_note` as 'experience.pricing_note' instead, so on
+ * legacy pricing note as 'experience.pricing_note' instead, so on
  * 2026-09-13 production held one such definition (Pottery House, 2 products:
  * "Contact us for group pricing", "Contact us") that the price never saw —
  * both products read "Unavailable" on the public grid and "No price set" in

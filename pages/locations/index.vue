@@ -102,9 +102,9 @@
 
 <script setup lang="ts">
 import { getTodayHoursLabel } from '~/shared/reservation-hours'
-definePageMeta({ layout: 'saya' })
+import { formatLocationAddress, type LocationAddressInput } from '~/utils/location-address'
 
-type AddressInput = string | { addressLines?: string[]; locality?: string; administrativeArea?: string; postalCode?: string } | null | undefined
+definePageMeta({ layout: 'saya' })
 
 const { siteId, site } = useTenantSite()
 if (!siteId) throw createError({ statusCode: 404 })
@@ -121,14 +121,8 @@ const locationMedia = (location: ApiRecord) => Array.isArray(location.media)
   ? (location.media as ApiRecord[]).find(item => item.slot === 'hero') ?? null
   : null
 
-function formatAddress(address: AddressInput) {
-  if (!address) return ''
-  if (typeof address === 'string') return address
-  return [address.addressLines?.[0], address.locality, address.administrativeArea, address.postalCode].filter(Boolean).join(', ')
-}
-
 function locationAddress(location: ApiRecord): string {
-  if (locale.value === 'en') return formatAddress(location.address as AddressInput)
+  if (locale.value === 'en') return formatLocationAddress(location.address as LocationAddressInput)
   return typeof location.address_translated === 'string' ? location.address_translated : ''
 }
 

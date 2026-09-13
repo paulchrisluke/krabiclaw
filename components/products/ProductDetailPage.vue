@@ -30,15 +30,24 @@
         <div class="min-w-0">
           <SayaMediaGallery :items="galleryItems" :title="product.name" />
 
-          <!-- Mobile carries the title under the gallery; on desktop it sits in
-               the card, so exactly one of them is ever rendered. -->
-          <div class="mt-7 space-y-4 lg:hidden">
-            <div>
-              <p class="saya-kicker mb-2">{{ collectionName }}</p>
-              <h1 class="text-2xl font-bold leading-tight text-default">{{ product.name }}</h1>
-              <p class="mt-2 text-sm text-muted">{{ location.title }}</p>
+          <!-- What it is, in one glance: name, tagline, how guests rate it,
+               where it runs, how long, how many. -->
+          <header class="mt-7">
+            <p class="saya-kicker mb-2">{{ collectionName }}</p>
+            <h1 class="saya-display text-3xl leading-tight text-default sm:text-4xl">{{ product.name }}</h1>
+            <p v-if="tagline" class="mt-2 text-lg text-muted">{{ tagline }}</p>
+            <div class="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted">
+              <template v-if="averageRating">
+                <span class="inline-flex items-center gap-1 font-medium text-default">
+                  <SayaIcon name="star" solid class="size-4" />{{ averageRating }}
+                </span>
+                <span aria-hidden="true">·</span>
+                <span>{{ reviewCountLabel }}</span>
+                <span aria-hidden="true">·</span>
+              </template>
+              <span>{{ location.title }}</span>
             </div>
-            <div v-if="factChips.length" class="flex flex-wrap gap-2">
+            <div v-if="factChips.length" class="mt-4 flex flex-wrap gap-2">
               <span
                 v-for="fact in factChips"
                 :key="fact.icon"
@@ -48,30 +57,114 @@
                 {{ fact.label }}
               </span>
             </div>
-          </div>
+          </header>
 
-          <div v-if="product.description" class="mt-10 border-t border-default pt-10">
-            <p class="text-base leading-relaxed text-muted sm:text-lg">{{ product.description }}</p>
-          </div>
+          <section v-if="product.description" class="mt-10 border-t border-default pt-10">
+            <h2 class="text-xl font-semibold text-default">{{ t('saya.experience_detail.what_youll_do') }}</h2>
+            <p class="mt-4 whitespace-pre-line text-base leading-relaxed text-muted sm:text-lg">{{ product.description }}</p>
+          </section>
 
-          <dl v-if="visibleDetails.length" class="mt-10 divide-y divide-default border-y border-default">
-            <div v-for="detail in visibleDetails" :key="detail.key" class="py-4">
-              <dt class="font-medium">{{ detail.label }}</dt>
-              <dd class="mt-1 text-sm text-muted">{{ detail.values.join(', ') }}</dd>
+          <!-- The next few sessions, on the page: a guest sees when it runs
+               before they open anything. The full picker is one press away. -->
+          <section v-if="isAvailable && !enquiryOnly" class="mt-10 border-t border-default pt-10">
+            <div class="flex flex-wrap items-baseline justify-between gap-4">
+              <h2 class="text-xl font-semibold text-default">{{ t('saya.experience_detail.upcoming_availability') }}</h2>
+              <SayaButton v-if="upcomingSessions.length" variant="ghost" control-id="product-booking-toggle" @click="openBooking">
+                {{ t('saya.experience_detail.see_all_dates') }} →
+              </SayaButton>
             </div>
-          </dl>
+            <p v-if="sessionsPending" class="mt-4 text-sm text-muted">{{ t('saya.experience_detail.processing') }}</p>
+            <p v-else-if="!upcomingSessions.length" class="mt-4 text-sm text-muted">{{ t('saya.experience_detail.no_availability', { count: PUBLIC_BOOKING_WINDOW_DAYS }) }}</p>
+            <ul v-else class="mt-5 grid gap-3 sm:grid-cols-2">
+              <li v-for="session in upcomingSessions" :key="session.id" class="flex items-center justify-between gap-4 rounded-xl border border-default bg-elevated px-4 py-3">
+                <div class="min-w-0">
+                  <p class="font-medium text-default">{{ sessionDayLabel(session) }}</p>
+                  <p class="text-sm text-muted">
+                    {{ sessionTimeLabel(session) }}
+                    <template v-if="session.remaining !== null"> · {{ t('saya.experience_detail.left', { count: session.remaining }) }}</template>
+                  </p>
+                </div>
+                <SayaButton control-id="product-booking-toggle" @click="openBookingAt(session)">
+                  {{ t('saya.experience_detail.book') }}
+                </SayaButton>
+              </li>
+            </ul>
+          </section>
+
+          <section v-if="includedItems.length || whatToBring.length" class="mt-10 grid gap-8 border-t border-default pt-10 sm:grid-cols-2">
+            <div v-if="includedItems.length">
+              <h2 class="text-xl font-semibold text-default">{{ t('saya.experience_detail.included') }}</h2>
+              <ul class="mt-4 space-y-2">
+                <li v-for="item in includedItems" :key="item" class="flex items-start gap-2 text-sm leading-6 text-muted">
+                  <SayaIcon name="check-circle" class="mt-1 size-4 shrink-0 text-primary" />{{ item }}
+                </li>
+              </ul>
+            </div>
+            <div v-if="whatToBring.length">
+              <h2 class="text-xl font-semibold text-default">{{ t('saya.experience_detail.what_to_bring') }}</h2>
+              <ul class="mt-4 space-y-2">
+                <li v-for="item in whatToBring" :key="item" class="flex items-start gap-2 text-sm leading-6 text-muted">
+                  <SayaIcon name="shopping-bag" class="mt-1 size-4 shrink-0 text-primary" />{{ item }}
+                </li>
+              </ul>
+            </div>
+          </section>
+
+          <section class="mt-10 border-t border-default pt-10">
+            <h2 class="text-xl font-semibold text-default">{{ t('saya.experience_detail.where_youll_meet') }}</h2>
+            <div class="mt-5 overflow-hidden rounded-xl border border-default bg-elevated">
+              <div class="flex items-start gap-4 p-6">
+                <SayaIcon name="map-pin" class="mt-0.5 size-5 shrink-0 text-primary" />
+                <div class="min-w-0">
+                  <p class="font-semibold text-default">{{ location.title }}</p>
+                  <p v-if="addressLine" class="mt-1 text-sm text-muted">{{ addressLine }}</p>
+                  <p v-if="location.phone" class="mt-1 text-sm text-muted">{{ location.phone }}</p>
+                  <p v-if="meetingPoint" class="mt-3 whitespace-pre-line text-sm leading-6 text-default">{{ meetingPoint }}</p>
+                  <a
+                    v-if="location.maps_url"
+                    :href="location.maps_url"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="mt-2 inline-flex items-center gap-1 text-xs text-primary hover:underline"
+                  >
+                    {{ t('saya.experience_detail.open_in_maps') }}
+                    <SayaIcon name="arrow-top-right-on-square" class="size-3" />
+                  </a>
+                </div>
+              </div>
+              <iframe
+                v-if="mapEmbedUrl"
+                :src="mapEmbedUrl"
+                :title="location.title"
+                class="h-56 w-full border-t border-default"
+                style="border-width: 1px 0 0"
+                loading="lazy"
+                referrerpolicy="no-referrer-when-downgrade"
+              />
+            </div>
+          </section>
+
+          <section v-if="thingsToKnow.length" class="mt-10 border-t border-default pt-10">
+            <h2 class="text-xl font-semibold text-default">{{ t('saya.experience_detail.things_to_know') }}</h2>
+            <div class="mt-5 grid gap-x-10 gap-y-6 sm:grid-cols-2">
+              <div v-for="detail in thingsToKnow" :key="detail.key">
+                <h3 class="text-sm font-semibold text-default">{{ detail.label }}</h3>
+                <ul class="mt-2 space-y-1.5">
+                  <li v-for="line in detail.values" :key="line" class="text-sm leading-6 text-muted">{{ line }}</li>
+                </ul>
+              </div>
+            </div>
+          </section>
         </div>
 
+        <!-- The decision, travelling with the reader: what it costs, when it
+             next runs, and the one action. -->
         <div class="hidden lg:sticky lg:top-8 lg:block">
           <div class="space-y-5 rounded-xl border border-default bg-elevated p-6 shadow-sm">
-            <div>
-              <p class="saya-kicker mb-2">{{ collectionName }}</p>
-              <h1 class="text-2xl font-bold leading-tight text-default">{{ product.name }}</h1>
-              <p class="mt-1.5 text-sm text-muted">{{ location.title }}</p>
-            </div>
             <div v-if="priceLabel" class="flex items-baseline gap-1.5">
               <span v-if="compareAtLabel" class="text-lg text-muted line-through">{{ compareAtLabel }}</span>
-              <span class="text-2xl font-bold tabular-nums text-default">{{ priceLabel }}</span>
+              <span class="text-2xl font-bold tabular-nums text-default">{{ enquiryOnly ? priceLabel : t('saya.experience_detail.from_price', { price: priceLabel }) }}</span>
+              <span v-if="!enquiryOnly" class="text-sm text-muted">{{ t('saya.experience_detail.per_person') }}</span>
             </div>
             <div v-if="factChips.length" class="flex flex-wrap gap-2">
               <span
@@ -83,7 +176,11 @@
                 {{ fact.label }}
               </span>
             </div>
-            <p v-if="!isAvailable" class="rounded-lg bg-elevated px-4 py-3 text-center text-sm font-semibold text-muted">
+            <p v-if="nextSession" class="inline-flex items-center gap-2 text-sm text-muted">
+              <SayaIcon name="calendar-days" class="size-4" />
+              {{ sessionDayLabel(nextSession) }} · {{ sessionTimeLabel(nextSession) }}
+            </p>
+            <p v-if="!isAvailable" class="rounded-lg bg-default px-4 py-3 text-center text-sm font-semibold text-muted">
               {{ t('saya.common.temporarily_unavailable') }}
             </p>
             <div v-else class="pt-2">
@@ -243,15 +340,20 @@
       </BookingModal>
 
       <section v-if="reviews.length" class="mt-16 border-t border-default pt-12">
-        <h2 class="saya-display saya-italic text-4xl">{{ t('saya.footer.reviews') }}</h2>
-        <div class="mt-6 divide-y divide-default">
-          <article v-for="review in reviews" :key="review.id" class="py-6">
-            <div class="flex justify-between gap-4">
-              <h3 class="font-semibold">{{ review.title }}</h3>
-              <span>{{ review.rating }}/5</span>
+        <div class="flex flex-wrap items-baseline gap-3">
+          <h2 class="saya-display saya-italic text-4xl">{{ t('saya.footer.reviews') }}</h2>
+          <span v-if="averageRating" class="inline-flex items-center gap-1 text-sm text-muted">
+            <SayaIcon name="star" solid class="size-4 text-default" />{{ averageRating }} · {{ reviewCountLabel }}
+          </span>
+        </div>
+        <div class="mt-6 grid gap-4 sm:grid-cols-2">
+          <article v-for="review in reviews" :key="review.id" class="rounded-xl border border-default bg-elevated p-5">
+            <div class="flex items-center gap-1" :aria-label="`${review.rating}/5`">
+              <SayaIcon v-for="star in 5" :key="star" name="star" solid class="size-4" :class="star <= review.rating ? 'text-default' : 'text-dimmed'" />
             </div>
-            <p class="mt-2 text-sm text-muted">{{ review.content }}</p>
-            <p class="mt-3 text-xs text-muted">{{ review.author }}</p>
+            <h3 v-if="review.title" class="mt-3 font-semibold text-default">{{ review.title }}</h3>
+            <p class="mt-2 text-sm leading-6 text-muted">{{ review.content }}</p>
+            <p class="mt-3 text-xs text-muted">{{ review.author }} · {{ reviewDateLabel(review) }}</p>
           </article>
         </div>
       </section>
@@ -267,9 +369,10 @@ import { minorAmountToMajor, selectPrice, type Price } from '~/shared/prices'
 import { formatProductMoney } from '~/utils/product-money'
 import { productLocationCollectionPath } from '~/utils/product-presentation'
 import type { ProductCollectionSibling } from '~/utils/product-seo'
-import type { MetafieldDefinition } from '~/shared/metafields'
+import type { MetafieldDefinition, MetafieldValue } from '~/shared/metafields'
 import { metafieldHandle, PRICING_NOTE_HANDLE } from '~/shared/metafields'
-import type { PublicProductBooking } from '~/server/utils/public-products'
+import type { PublicProductBooking, PublicProductLocationPayload } from '~/server/utils/public-products'
+import { formatLocationAddress } from '~/utils/location-address'
 import BookingModal from '~/components/booking/BookingModal.vue'
 import BookingRecap from '~/components/booking/BookingRecap.vue'
 import BookingContactForm, { type ContactFormState } from '~/components/booking/BookingContactForm.vue'
@@ -279,14 +382,13 @@ import { localPartsAt } from '~/utils/timezone'
 import { PUBLIC_BOOKING_WINDOW_DAYS } from '~/shared/bookings'
 import { getErrorMessage } from '~/utils/errors'
 
-interface LocationSummary { id: string; slug: string; title: string }
 interface ProductReview { id: string; author: string; rating: number; title: string; content: string; createdAt: string }
 
 const props = defineProps<{
   siteId: string
   vertical: string
   product: Product
-  location: LocationSummary
+  location: PublicProductLocationPayload
   reviews: ProductReview[]
   /** Non-null exactly when this Product takes bookings. */
   booking: PublicProductBooking | null
@@ -530,9 +632,8 @@ const selectedSession = computed<PublicSession | null>(() => {
  * open, the checkbox had been flipped back, and the dialog stayed hidden with
  * its sessions loaded behind it.
  */
-async function openBooking() {
-  bookingStep.value = 1
-  bookingError.value = ''
+/** The occurrences a guest can choose from, fetched once for the page and the form alike. */
+async function loadSessions() {
   if (sessions.value.length || sessionsPending.value) return
   sessionsPending.value = true
   try {
@@ -553,6 +654,83 @@ async function openBooking() {
     sessionsPending.value = false
   }
 }
+
+async function openBooking() {
+  bookingStep.value = 1
+  bookingError.value = ''
+  await loadSessions()
+}
+
+/** A guest pressing a time on the page arrives in the form with it chosen. */
+async function openBookingAt(session: PublicSession) {
+  timeSelection.value = { day: localDateOf(session), time: localTimeOf(session), label: sessionDayLabel(session) }
+  await openBooking()
+}
+
+// The page shows the next sessions itself, so they are loaded with it — only
+// for a product a guest can book here; an enquiry has no calendar.
+onMounted(() => {
+  if (props.booking && isAvailable.value && !enquiryOnly.value) void loadSessions()
+})
+
+const upcomingSessions = computed(() => {
+  const now = Date.now()
+  return sessions.value
+    .filter(session => Date.parse(session.starts_at) > now)
+    .sort((left, right) => left.starts_at.localeCompare(right.starts_at))
+    .slice(0, 4)
+})
+const nextSession = computed(() => upcomingSessions.value[0] ?? null)
+
+function sessionDayLabel(session: PublicSession): string {
+  return new Intl.DateTimeFormat(locale.value, { weekday: 'short', day: 'numeric', month: 'short', timeZone: session.timezone }).format(new Date(session.starts_at))
+}
+function sessionTimeLabel(session: PublicSession): string {
+  const format = new Intl.DateTimeFormat(locale.value, { hour: 'numeric', minute: '2-digit', timeZone: session.timezone })
+  return `${format.format(new Date(session.starts_at))} – ${format.format(new Date(session.ends_at))}`
+}
+function reviewDateLabel(review: ProductReview): string {
+  return new Intl.DateTimeFormat(locale.value, { month: 'short', year: 'numeric' }).format(new Date(review.createdAt))
+}
+
+/** What guests say, in one number: the mean rating to one decimal, or none. */
+const averageRating = computed(() => {
+  if (!props.reviews.length) return null
+  return (props.reviews.reduce((total, review) => total + review.rating, 0) / props.reviews.length).toFixed(1)
+})
+const reviewCountLabel = computed(() => (props.reviews.length === 1
+  ? t('saya.experience_detail.review_count_one')
+  : t('saya.experience_detail.review_count', { count: props.reviews.length })))
+
+/**
+ * The attributes the page gives their own place, found by the definition's
+ * key: the tenant names them, the page knows what a tagline, a list of what is
+ * included, what to bring and a meeting point are for. Everything else the
+ * tenant defined is "things to know".
+ */
+function attributeByKey<T>(key: string, read: (_value: MetafieldValue) => T | null): T | null {
+  const definition = props.metafieldDefinitions.find(entry => entry.key === key)
+  if (!definition) return null
+  const value = props.product.metafields[metafieldHandle(definition)]
+  return value === undefined || value === null ? null : read(value)
+}
+const asText = (value: MetafieldValue) => (typeof value === 'string' && value.trim() ? value : null)
+const asList = (value: MetafieldValue) => (Array.isArray(value) ? value.map(String).filter(Boolean) : null)
+const tagline = computed(() => attributeByKey('tagline', asText))
+const meetingPoint = computed(() => attributeByKey('meeting_point', asText))
+const includedItems = computed(() => attributeByKey('included_items', asList) ?? [])
+const whatToBring = computed(() => attributeByKey('what_to_bring', asList) ?? [])
+const PLACED_ATTRIBUTE_KEYS = new Set(['tagline', 'meeting_point', 'included_items', 'what_to_bring'])
+const thingsToKnow = computed(() => visibleDetails.value.filter((detail) => {
+  const definition = props.metafieldDefinitions.find(entry => entry.id === detail.key)
+  return !definition || !PLACED_ATTRIBUTE_KEYS.has(definition.key)
+}))
+
+const addressLine = computed(() => formatLocationAddress(props.location.address))
+// A map from the coordinates the branch already has; no key, no second source.
+const mapEmbedUrl = computed(() => (props.location.latitude !== null && props.location.longitude !== null
+  ? `https://www.google.com/maps?q=${props.location.latitude},${props.location.longitude}&output=embed`
+  : null))
 
 async function submitBooking(contact: ContactFormState) {
   const session = selectedSession.value

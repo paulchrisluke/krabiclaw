@@ -290,6 +290,7 @@
 
 <script setup lang="ts">
 import { formatOpeningHours, getIsOpenNow, getActiveSpecialClosure, formatClosureMessage } from '~/utils/formatters'
+import { formatLocationAddress, type LocationAddressInput } from '~/utils/location-address'
 import { getTodayHoursLabel } from '~/shared/reservation-hours'
 import { formatProductMoney } from '~/utils/product-money'
 import { productLocationCollectionPath, resolveProductPresentation } from '~/utils/product-presentation'
@@ -475,11 +476,7 @@ const sanitizedExtraNotes = computed(() => DOMPurify.sanitize(extraNotes.value))
 const canonicalFormattedAddress = computed(() => {
   const loc = location.value
   if (!loc) return ''
-  if (loc.address && typeof loc.address === 'object') {
-    const a = loc.address
-    return [a.addressLines?.[0], a.locality, a.administrativeArea, a.postalCode].filter(Boolean).join(', ')
-  }
-  return loc.address || loc.city || ''
+  return formatLocationAddress(loc.address as LocationAddressInput) || loc.city || ''
 })
 const formattedAddress = computed(() => locale.value === 'en'
   ? canonicalFormattedAddress.value

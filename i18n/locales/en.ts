@@ -104,6 +104,12 @@ export default {
       "things_to_know": "Things to know",
       "what_to_bring": "What to bring",
       "what_youll_do": "What you'll do",
+      "upcoming_availability": "Upcoming availability",
+      "see_all_dates": "See all dates",
+      "from_price": "From {price}",
+      "book": "Book",
+      "review_count": "{count} reviews",
+      "review_count_one": "1 review",
       "where_youll_meet": "Where you'll meet",
       "your_details": "Your details"
     },
