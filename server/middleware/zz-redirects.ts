@@ -71,7 +71,7 @@ async function resolveTenantRedirectForRequest(event: H3Event) {
   if (!siteId) return null
   const env = cloudflareEnv(event)
   const db = env.db
-  if (!db) return null
+  if (!db) throw new HTTPError({ statusCode: 500, statusMessage: 'Database not available' })
   const url = event.url
   const path = url.pathname === '/' ? '/' : url.pathname.replace(/\/$/, '')
   const firstSegment = path.split('/')[1] || ''

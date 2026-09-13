@@ -1,6 +1,6 @@
 import type { D1Database } from '@cloudflare/workers-types'
 import { syncPlaceToLocation } from '~/server/utils/google-places'
-import { queryAll } from '~/server/db'
+import { queryAllPages } from '~/server/db'
 import { recordUsageEvent } from '~/server/utils/usage-metering'
 import { defineScheduledTask } from '~/server/utils/scheduled-task'
 import type { CloudflareEnv } from '~/server/utils/auth'
@@ -15,7 +15,6 @@ interface SyncTaskContext {
   cloudflare?: { env?: ApiRecord }
 }
 
-const SYNC_CANDIDATE_LIMIT = 2000
 
 interface PlaceLocationRow {
   id: string
@@ -66,17 +65,13 @@ export default defineScheduledTask({
 
     // Better Auth's subscription table is the authority for paid scheduled
     // integrations; candidates are selected here and filtered against it below.
-    const candidates = await queryAll<PlaceLocationRow>(db, `
+    const candidates = await queryAllPages<PlaceLocationRow>(db, `
       SELECT bl.id, bl.organization_id, bl.site_id, bl.title, bl.google_place_id
       FROM business_locations bl
       WHERE bl.google_place_id IS NOT NULL
         AND bl.status = 'active'
       ORDER BY bl.organization_id, bl.site_id
-      LIMIT ?
-    `, [SYNC_CANDIDATE_LIMIT])
-    if (candidates.length >= SYNC_CANDIDATE_LIMIT) {
-      throw new Error('Google Places sync candidate scan exceeded its bound')
-    }
+    `, [])
     const locations = await filterEntitledRows(env as CloudflareEnv, candidates, 'google_places')
 
     if (locations.length === 0) {

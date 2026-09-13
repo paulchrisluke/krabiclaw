@@ -1,5 +1,5 @@
 import type { D1Database } from '@cloudflare/workers-types'
-import { queryAll } from '~/server/db'
+import { queryAllPages } from '~/server/db'
 import type { ReviewBookingType } from '~/server/utils/review-requests'
 import { executeGuestThreadOperation } from '~/server/domain/guest-threads/operations'
 import { sendReviewRequestForBooking } from '~/server/utils/review-request-delivery'
@@ -12,7 +12,6 @@ interface ReviewRequestTaskContext {
   cloudflare?: { env?: ApiRecord }
 }
 
-const REVIEW_CANDIDATE_LIMIT = 2000
 
 interface AutoCompleteRow {
   id: string
@@ -44,7 +43,7 @@ async function autoCompleteBookings(db: D1Database, env: ApiRecord, kind: Review
   // When it happened and how long it runs belong to the record — a session for
   // a booking, the held table for a reservation — so the sweep reads them
   // there rather than from a thread that no longer carries them.
-  const candidates = await queryAll<AutoCompleteRow>(db, `
+  const candidates = await queryAllPages<AutoCompleteRow>(db, `
       SELECT r.id, r.organization_id, r.site_id, record.location_id, record.ends_at
         FROM requests r
         JOIN (
@@ -53,11 +52,8 @@ async function autoCompleteBookings(db: D1Database, env: ApiRecord, kind: Review
           SELECT res.request_id, res.status, res.location_id, res.ends_at FROM reservations res
         ) record ON record.request_id = r.id
        WHERE r.kind = ? AND record.status = 'confirmed' AND json_extract(r.payload_json, '$.completion.at') IS NULL
-       ORDER BY r.id LIMIT ?
-    `, [kind, REVIEW_CANDIDATE_LIMIT])
-  if (candidates.length >= REVIEW_CANDIDATE_LIMIT) {
-    throw new Error('Review request auto-completion candidate scan exceeded its bound')
-  }
+       ORDER BY r.id
+    `, [kind])
   const rows = await filterEntitledRows(env as CloudflareEnv, candidates, 'review_requests')
   let completed = 0
   for (const row of rows) {
@@ -77,7 +73,7 @@ async function autoCompleteBookings(db: D1Database, env: ApiRecord, kind: Review
 async function sendDue(db: D1Database, env: ApiRecord, kind: 'first' | 'reminder'): Promise<{ sent: number; failed: number }> {
   const reservationDelay = kind === 'first' ? '-2 hours' : '-5 days'
   const experienceDelay = kind === 'first' ? '-24 hours' : '-5 days'
-  const candidates = await queryAll<SendDueRow>(db, `
+  const candidates = await queryAllPages<SendDueRow>(db, `
       SELECT r.id, r.organization_id, r.site_id, r.kind AS booking_type
         FROM requests r JOIN customers c ON c.id = r.customer_id
         JOIN (
@@ -92,11 +88,8 @@ async function sendDue(db: D1Database, env: ApiRecord, kind: 'first' | 'reminder
          AND ${kind === 'first'
            ? "json_extract(r.payload_json, '$.review.request_sent_at') IS NULL AND datetime(json_extract(r.payload_json, '$.completion.at')) <= datetime('now', CASE r.kind WHEN 'reservation' THEN ? ELSE ? END)"
            : "json_extract(r.payload_json, '$.review.request_sent_at') IS NOT NULL AND json_extract(r.payload_json, '$.review.reminder_sent_at') IS NULL AND datetime(json_extract(r.payload_json, '$.review.request_sent_at')) <= datetime('now', CASE r.kind WHEN 'reservation' THEN ? ELSE ? END)"}
-       ORDER BY booking_type, r.id LIMIT ?
-    `, [reservationDelay, experienceDelay, REVIEW_CANDIDATE_LIMIT])
-  if (candidates.length >= REVIEW_CANDIDATE_LIMIT) {
-    throw new Error('Review request delivery candidate scan exceeded its bound')
-  }
+       ORDER BY booking_type, r.id
+    `, [reservationDelay, experienceDelay])
   const rows = await filterEntitledRows(env as CloudflareEnv, candidates, 'review_requests')
 
   let sent = 0

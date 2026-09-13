@@ -14,7 +14,9 @@ export function formatLocationAddress(address: LocationAddressInput): string {
     try {
       return formatLocationAddress(JSON.parse(address) as LocationAddressInput)
     } catch {
-      return address
+      // Serialized but unreadable: there is no address to show, and the raw
+      // JSON is not one.
+      return ''
     }
   }
   return [address.addressLines?.[0], address.locality, address.administrativeArea, address.postalCode]

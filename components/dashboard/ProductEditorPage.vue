@@ -947,6 +947,8 @@ async function loadSchedule() {
   scheduleLoading.value = true
   try {
     const { rules } = await dashboardApi(`/api/editor/sites/${siteId}/products/${productId.value}/availability?location_id=${encodeURIComponent(id)}`, { validate: isRuleList })
+    // The reader moved on while this loaded; that location's own load owns the draft.
+    if (`${productId.value}:${locationId.value}` !== key) return
     schedule.value = rules.map(rule => ({ weekday: rule.weekday, start_time: rule.start_time, capacity: rule.capacity === null ? '' : String(rule.capacity) }))
     scheduleLoadedFor.value = key
   } finally {

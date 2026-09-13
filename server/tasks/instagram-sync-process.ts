@@ -6,7 +6,7 @@ import {
   syncInstagramPosts,
 } from '~/server/utils/facebook-pages'
 import { decryptSecret, encryptionEnv } from '~/server/utils/encryption'
-import { execute, queryAll } from '~/server/db'
+import { execute, queryAllPages } from '~/server/db'
 import { defineScheduledTask } from '~/server/utils/scheduled-task'
 import { filterEntitledRows } from '~/server/utils/billing-access'
 import type { CloudflareEnv } from '~/server/utils/auth'
@@ -15,7 +15,6 @@ interface SyncTaskContext {
   cloudflare?: { env?: ApiRecord }
 }
 
-const SYNC_CANDIDATE_LIMIT = 2000
 
 interface ConnectionRow {
   revision: string | null
@@ -60,7 +59,7 @@ export default defineScheduledTask({
 
     // Better Auth's subscription table is the authority for paid scheduled
     // integrations; candidates are selected here and filtered against it below.
-    const candidates = await queryAll<ConnectionRow>(db, `
+    const candidates = await queryAllPages<ConnectionRow>(db, `
       SELECT json_extract(s.integrations_json, '$.facebook.id') AS id, s.organization_id, s.id AS site_id,
              json_extract(s.integrations_json, '$.facebook.revision') AS revision,
              json_extract(s.integrations_json, '$.facebook.facebook_page_id') AS facebook_page_id,
@@ -70,11 +69,7 @@ export default defineScheduledTask({
       WHERE json_extract(s.integrations_json, '$.facebook.status') = 'active'
         OR (json_extract(s.integrations_json, '$.facebook.status') = 'error' AND json_extract(s.integrations_json, '$.facebook.updated_at') < strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-1 hour'))
       ORDER BY s.organization_id
-      LIMIT ?
-    `, [SYNC_CANDIDATE_LIMIT])
-    if (candidates.length >= SYNC_CANDIDATE_LIMIT) {
-      throw new Error('Instagram sync candidate scan exceeded its bound')
-    }
+    `, [])
     const connections = await filterEntitledRows(env as CloudflareEnv, candidates, 'managed_service')
 
     if (connections.length === 0) {

@@ -1,5 +1,5 @@
 import { jsonResponse, rethrowHttpError } from '~/server/utils/api-response'
-import { requireSiteAccess } from '~/server/utils/location-access'
+import { requireLocationAccess } from '~/server/utils/location-access'
 import { requireSiteProduct } from '~/server/utils/product-management'
 import { listAvailabilityRules } from '~/server/utils/availability'
 import { defineHandler } from 'nitro'
@@ -13,7 +13,7 @@ export default defineHandler(async (event) => {
   const locationId = getQuery(event).location_id
   if (typeof locationId !== 'string' || !locationId) return jsonResponse({ error: 'location_id is required' }, { status: 400 })
   try {
-    const { db, site } = await requireSiteAccess(event, siteId)
+    const { db, site } = await requireLocationAccess(event, siteId, locationId)
     // A product id in the path is not authorized by the site in the path.
     await requireSiteProduct(db, { organizationId: site.organization_id, siteId, productId })
     const rules = (await listAvailabilityRules(db, site.organization_id, productId)).filter(rule => rule.location_id === locationId)

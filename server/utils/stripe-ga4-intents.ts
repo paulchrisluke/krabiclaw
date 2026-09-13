@@ -262,6 +262,10 @@ export async function consumeStripeGa4Intent(
 export type StripeGa4PurchaseDeliveryClaim = 'claimed' | 'sent' | 'busy'
 
 const GA4_PURCHASE_DELIVERY_LEASE_MS = 15 * 60 * 1000
+// A 'sending' row whose lease lapsed is reclaimed. If the first sender did
+// reach GA4 before dying, the second send repeats the same transaction_id
+// (the Stripe invoice id, see stripe-ga4.ts), and GA4 de-duplicates purchase
+// events by transaction_id, so the reclaim cannot double a purchase.
 
 /**
  * GA4 purchase delivery is at-most-once per invoice. Stripe retries

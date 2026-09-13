@@ -370,8 +370,8 @@ onMounted(async () => {
 
   if (success === 'true') {
     trackSubscriptionCheckoutSuccess(selectedSite.value?.plan ?? undefined)
-    const subscriptionStatus = billing.value?.subscriptionStatus
-    const live = subscriptionStatus === 'active' || subscriptionStatus === 'trialing'
+    // The plan the guest paid for is in the query; the refreshed billing row says what Stripe has confirmed.
+    const live = typeof plan === 'string' && billing.value?.plan === plan
     toast.add({
       description: live
         ? 'Payment confirmed. Your plan has been updated.'

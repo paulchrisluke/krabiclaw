@@ -24,10 +24,14 @@ export default defineScheduledTask({
     // consumed ones past the 90-day window. It rode on the hourly Stripe
     // reconciliation task before that task and the billing layer it reconciled
     // were deleted; the daily tenant sweep is the only remaining retention job.
-    await expireStripeGa4Intents(env.DB)
     const result = await sweepScheduledDeletions(env)
     if (result.organizations || result.users || result.skipped.length) {
       console.log('tenant_deletion_sweep', result)
+    }
+    try {
+      await expireStripeGa4Intents(env.DB)
+    } catch (error) {
+      console.error('stripe_ga4_intent_retention_failed', { error: error instanceof Error ? error.message : String(error) })
     }
     return { result }
   },
