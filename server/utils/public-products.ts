@@ -84,7 +84,7 @@ export interface PublicProductReview {
   id: string
   author: string
   rating: number
-  title: string
+  title: string | null
   content: string
   createdAt: string
 }
@@ -325,18 +325,28 @@ export async function loadPublicProductApiDetail(
   return loadPublicProductDetail(db, siteId, productSurfaceOf(site.vertical, product), previewAuthorized, locationSlug, productSlug, locale)
 }
 
+/**
+ * Approved reviews of this product at the location the page is for: the ones
+ * written about the product, and the location's own reviews that name no
+ * product (Google Places reviews are about the place). A review of a
+ * different product at the same location is not shown. Google reviews carry
+ * no title, so a title is optional. A review is dated when it was written:
+ * `original_review_date` for an imported review, `created_at` for one written here.
+ */
 export async function loadPublicProductReviews(
   db: DbClient,
   detail: PublicProductDetail,
 ): Promise<PublicProductReview[]> {
   return queryAll<PublicProductReview>(db, `
-    SELECT id, author_name AS author, rating, title, content, created_at AS createdAt
+    SELECT id, author_name AS author, rating, title, content,
+           COALESCE(original_review_date, created_at) AS createdAt
      FROM reviews
-     WHERE product_id = ? AND organization_id = ? AND site_id = ? AND status = 'approved'
+     WHERE organization_id = ? AND site_id = ? AND status = 'approved'
+       AND location_id = ?
+       AND (product_id = ? OR product_id IS NULL)
        AND author_name IS NOT NULL AND trim(author_name) <> ''
-       AND title IS NOT NULL AND trim(title) <> ''
        AND content IS NOT NULL AND trim(content) <> ''
-     ORDER BY created_at DESC, id DESC
+     ORDER BY createdAt DESC, id DESC
      LIMIT 50
-  `, [detail.product.id, detail.site.organization_id, detail.site.id])
+  `, [detail.site.organization_id, detail.site.id, detail.location.id, detail.product.id])
 }

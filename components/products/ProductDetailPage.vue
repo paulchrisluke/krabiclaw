@@ -26,17 +26,17 @@
            travelling with the reader on the right. A product that takes no
            bookings has nothing to put in that column, so it keeps the single
            card. -->
-      <div v-if="booking" class="grid gap-10 lg:grid-cols-[1fr_420px] lg:items-start">
-        <div class="min-w-0">
-          <SayaMediaGallery :items="galleryItems" :title="product.name" />
+      <div v-if="booking">
+        <SayaMediaGallery :items="galleryItems" :title="product.name" />
 
-          <!-- What it is, in one glance: name, tagline, how guests rate it,
-               where it runs, how long, how many. -->
-          <header class="mt-7">
-            <p class="saya-kicker mb-2">{{ collectionName }}</p>
-            <h1 class="saya-display text-3xl leading-tight text-default sm:text-4xl">{{ product.name }}</h1>
-            <p v-if="tagline" class="mt-2 text-lg text-muted">{{ tagline }}</p>
-            <div class="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted">
+        <!-- What it is, in one glance: name, tagline, how guests rate it,
+             where it runs, how long, how many. Centred under the photographs
+             the way the rest of Saya introduces a place. -->
+        <header class="mx-auto mt-10 max-w-3xl text-center">
+          <p class="saya-kicker mb-3">{{ collectionName }}</p>
+          <h1 class="saya-display-md text-default">{{ product.name }}</h1>
+          <p v-if="tagline" class="mx-auto mt-4 max-w-2xl text-base text-muted sm:text-lg">{{ tagline }}</p>
+          <div class="mt-4 flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-sm text-muted">
               <template v-if="averageRating">
                 <span class="inline-flex items-center gap-1 font-medium text-default">
                   <SayaIcon name="star" solid class="size-4" />{{ averageRating }}
@@ -45,22 +45,24 @@
                 <span>{{ reviewCountLabel }}</span>
                 <span aria-hidden="true">·</span>
               </template>
-              <span>{{ location.title }}</span>
-            </div>
-            <div v-if="factChips.length" class="mt-4 flex flex-wrap gap-2">
-              <span
-                v-for="fact in factChips"
-                :key="fact.icon"
-                class="inline-flex items-center gap-1.5 rounded-full border border-default bg-elevated px-3 py-1 text-xs font-medium text-muted"
-              >
-                <SayaIcon :name="fact.icon" class="size-3.5" />
-                {{ fact.label }}
-              </span>
-            </div>
-          </header>
+            <span>{{ location.title }}</span>
+          </div>
+          <div v-if="factChips.length" class="mt-5 flex flex-wrap justify-center gap-2">
+            <span
+              v-for="fact in factChips"
+              :key="fact.icon"
+              class="inline-flex items-center gap-1.5 rounded-full border border-default bg-elevated px-3 py-1 text-xs font-medium text-muted"
+            >
+              <SayaIcon :name="fact.icon" class="size-3.5" />
+              {{ fact.label }}
+            </span>
+          </div>
+        </header>
 
-          <section v-if="product.description" class="mt-10 border-t border-default pt-10">
-            <h2 class="text-xl font-semibold text-default">{{ t('saya.experience_detail.what_youll_do') }}</h2>
+        <div class="mt-14 grid gap-10 lg:grid-cols-[1fr_380px] lg:items-start">
+        <div class="min-w-0">
+          <section v-if="product.description" class="border-t border-default pt-10">
+            <h2 class="saya-display text-2xl text-default sm:text-3xl">{{ t('saya.experience_detail.what_youll_do') }}</h2>
             <p class="mt-4 whitespace-pre-line text-base leading-relaxed text-muted sm:text-lg">{{ product.description }}</p>
           </section>
 
@@ -68,7 +70,7 @@
                before they open anything. The full picker is one press away. -->
           <section v-if="isAvailable && !enquiryOnly" class="mt-10 border-t border-default pt-10">
             <div class="flex flex-wrap items-baseline justify-between gap-4">
-              <h2 class="text-xl font-semibold text-default">{{ t('saya.experience_detail.upcoming_availability') }}</h2>
+              <h2 class="saya-display text-2xl text-default sm:text-3xl">{{ t('saya.experience_detail.upcoming_availability') }}</h2>
               <SayaButton v-if="upcomingSessions.length" variant="ghost" control-id="product-booking-toggle" @click="openBooking">
                 {{ t('saya.experience_detail.see_all_dates') }} →
               </SayaButton>
@@ -93,7 +95,7 @@
 
           <section v-if="includedItems.length || whatToBring.length" class="mt-10 grid gap-8 border-t border-default pt-10 sm:grid-cols-2">
             <div v-if="includedItems.length">
-              <h2 class="text-xl font-semibold text-default">{{ t('saya.experience_detail.included') }}</h2>
+              <h2 class="saya-display text-2xl text-default sm:text-3xl">{{ t('saya.experience_detail.included') }}</h2>
               <ul class="mt-4 space-y-2">
                 <li v-for="item in includedItems" :key="item" class="flex items-start gap-2 text-sm leading-6 text-muted">
                   <SayaIcon name="check-circle" class="mt-1 size-4 shrink-0 text-primary" />{{ item }}
@@ -101,7 +103,7 @@
               </ul>
             </div>
             <div v-if="whatToBring.length">
-              <h2 class="text-xl font-semibold text-default">{{ t('saya.experience_detail.what_to_bring') }}</h2>
+              <h2 class="saya-display text-2xl text-default sm:text-3xl">{{ t('saya.experience_detail.what_to_bring') }}</h2>
               <ul class="mt-4 space-y-2">
                 <li v-for="item in whatToBring" :key="item" class="flex items-start gap-2 text-sm leading-6 text-muted">
                   <SayaIcon name="shopping-bag" class="mt-1 size-4 shrink-0 text-primary" />{{ item }}
@@ -111,7 +113,7 @@
           </section>
 
           <section class="mt-10 border-t border-default pt-10">
-            <h2 class="text-xl font-semibold text-default">{{ t('saya.experience_detail.where_youll_meet') }}</h2>
+            <h2 class="saya-display text-2xl text-default sm:text-3xl">{{ t('saya.experience_detail.where_youll_meet') }}</h2>
             <div class="mt-5 overflow-hidden rounded-xl border border-default bg-elevated">
               <div class="flex items-start gap-4 p-6">
                 <SayaIcon name="map-pin" class="mt-0.5 size-5 shrink-0 text-primary" />
@@ -145,7 +147,7 @@
           </section>
 
           <section v-if="thingsToKnow.length" class="mt-10 border-t border-default pt-10">
-            <h2 class="text-xl font-semibold text-default">{{ t('saya.experience_detail.things_to_know') }}</h2>
+            <h2 class="saya-display text-2xl text-default sm:text-3xl">{{ t('saya.experience_detail.things_to_know') }}</h2>
             <div class="mt-5 grid gap-x-10 gap-y-6 sm:grid-cols-2">
               <div v-for="detail in thingsToKnow" :key="detail.key">
                 <h3 class="text-sm font-semibold text-default">{{ detail.label }}</h3>
@@ -161,10 +163,11 @@
              next runs, and the one action. -->
         <div class="hidden lg:sticky lg:top-8 lg:block">
           <div class="space-y-5 rounded-xl border border-default bg-elevated p-6 shadow-sm">
-            <div v-if="priceLabel" class="flex items-baseline gap-1.5">
-              <span v-if="compareAtLabel" class="text-lg text-muted line-through">{{ compareAtLabel }}</span>
-              <span class="text-2xl font-bold tabular-nums text-default">{{ enquiryOnly ? priceLabel : t('saya.experience_detail.from_price', { price: priceLabel }) }}</span>
-              <span v-if="!enquiryOnly" class="text-sm text-muted">{{ t('saya.experience_detail.per_person') }}</span>
+            <div v-if="priceLabel">
+              <p class="saya-display text-3xl tabular-nums text-default">
+                <span v-if="compareAtLabel" class="mr-2 text-lg text-muted line-through">{{ compareAtLabel }}</span>{{ enquiryOnly ? priceLabel : t('saya.experience_detail.from_price', { price: priceLabel }) }}
+              </p>
+              <p v-if="!enquiryOnly" class="mt-1 text-sm text-muted">{{ t('saya.experience_detail.per_person') }}</p>
             </div>
             <div v-if="factChips.length" class="flex flex-wrap gap-2">
               <span
@@ -192,6 +195,7 @@
               </SayaButton>
             </div>
           </div>
+        </div>
         </div>
       </div>
 
@@ -341,7 +345,7 @@
 
       <section v-if="reviews.length" class="mt-16 border-t border-default pt-12">
         <div class="flex flex-wrap items-baseline gap-3">
-          <h2 class="saya-display saya-italic text-4xl">{{ t('saya.footer.reviews') }}</h2>
+          <h2 class="saya-display saya-italic text-3xl sm:text-4xl">{{ t('saya.footer.reviews') }}</h2>
           <span v-if="averageRating" class="inline-flex items-center gap-1 text-sm text-muted">
             <SayaIcon name="star" solid class="size-4 text-default" />{{ averageRating }} · {{ reviewCountLabel }}
           </span>
@@ -371,7 +375,7 @@ import { productLocationCollectionPath } from '~/utils/product-presentation'
 import type { ProductCollectionSibling } from '~/utils/product-seo'
 import type { MetafieldDefinition, MetafieldValue } from '~/shared/metafields'
 import { metafieldHandle, PRICING_NOTE_HANDLE } from '~/shared/metafields'
-import type { PublicProductBooking, PublicProductLocationPayload } from '~/server/utils/public-products'
+import type { PublicProductBooking, PublicProductLocationPayload, PublicProductReview } from '~/server/utils/public-products'
 import { formatLocationAddress } from '~/utils/location-address'
 import BookingModal from '~/components/booking/BookingModal.vue'
 import BookingRecap from '~/components/booking/BookingRecap.vue'
@@ -382,14 +386,12 @@ import { localPartsAt } from '~/utils/timezone'
 import { PUBLIC_BOOKING_WINDOW_DAYS } from '~/shared/bookings'
 import { getErrorMessage } from '~/utils/errors'
 
-interface ProductReview { id: string; author: string; rating: number; title: string; content: string; createdAt: string }
-
 const props = defineProps<{
   siteId: string
   vertical: string
   product: Product
   location: PublicProductLocationPayload
-  reviews: ProductReview[]
+  reviews: PublicProductReview[]
   /** Non-null exactly when this Product takes bookings. */
   booking: PublicProductBooking | null
   collectionName: string
@@ -689,7 +691,7 @@ function sessionTimeLabel(session: PublicSession): string {
   const format = new Intl.DateTimeFormat(locale.value, { hour: 'numeric', minute: '2-digit', timeZone: session.timezone })
   return `${format.format(new Date(session.starts_at))} – ${format.format(new Date(session.ends_at))}`
 }
-function reviewDateLabel(review: ProductReview): string {
+function reviewDateLabel(review: PublicProductReview): string {
   return new Intl.DateTimeFormat(locale.value, { month: 'short', year: 'numeric' }).format(new Date(review.createdAt))
 }
 

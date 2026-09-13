@@ -47,7 +47,7 @@ function isPublicProductDetailPayload(value: unknown): value is PublicProductDet
       && typeof review.id === 'string'
       && typeof review.author === 'string'
       && typeof review.rating === 'number'
-      && typeof review.title === 'string'
+      && (typeof review.title === 'string' || review.title === null)
       && typeof review.content === 'string'
       && typeof review.createdAt === 'string')
     && typeof value.collectionName === 'string'
