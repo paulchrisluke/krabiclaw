@@ -2,9 +2,9 @@ import type { DbClient } from '~/server/db'
 import { getGuestRequest, getThreadOperationalRecord, requestSummary, requestActions } from '~/server/domain/requests'
 import { formatOperationalStatusLabel } from './status-labels'
 import { listThreadEntries, parseEntryPayload } from './entries'
-import { getDeliveryRetryEligibility, listDeliveryFailures } from './deliveries'
+import { getDeliveryRetryEligibility, isVisibleDeliveryFailure, listThreadDeliveries } from './deliveries'
 import { CONVERSATION_STATE_LABELS } from './types'
-import type { GuestThreadDetailViewModel, GuestThreadEntryViewModel } from './types'
+import type { GuestThreadDetailViewModel, GuestThreadEntryDeliveryViewModel, GuestThreadEntryViewModel } from './types'
 
 /** Builds the full canonical thread detail view model — the sole source for the detail API. */
 export async function getGuestThreadDetail(
@@ -16,10 +16,21 @@ export async function getGuestThreadDetail(
   if (!thread) return null
 
 
-  const [entryRows, deliveryFailureRows] = await Promise.all([
+  const [entryRows, deliveryRows] = await Promise.all([
     listThreadEntries(db, threadId),
-    listDeliveryFailures(db, threadId),
+    listThreadDeliveries(db, threadId),
   ])
+
+  // One read of the deliveries answers both questions the thread asks of them:
+  // where each entry went, and which sends still need a human.
+  const nowMs = Date.now()
+  const deliveriesByEntry = new Map<string, GuestThreadEntryDeliveryViewModel[]>()
+  for (const delivery of deliveryRows) {
+    const forEntry = deliveriesByEntry.get(delivery.entry_id) ?? []
+    forEntry.push({ id: delivery.id, channel: delivery.channel, purpose: delivery.purpose, status: delivery.status })
+    deliveriesByEntry.set(delivery.entry_id, forEntry)
+  }
+  const deliveryFailureRows = deliveryRows.filter(delivery => isVisibleDeliveryFailure(delivery, nowMs))
 
   const entries: GuestThreadEntryViewModel[] = entryRows.map(entry => ({
     id: entry.id,
@@ -33,6 +44,7 @@ export async function getGuestThreadDetail(
     payload: parseEntryPayload(entry),
     sequence: entry.sequence,
     occurredAt: entry.occurred_at,
+    deliveries: deliveriesByEntry.get(entry.id) ?? [],
   }))
 
   const summary = await requestSummary(db, thread)
