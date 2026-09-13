@@ -16,7 +16,7 @@
 import { execFileSync } from 'node:child_process'
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 
 const REVIEWS_PER_HOUR = 3
 const FILES_PER_REVIEW = 150
@@ -60,17 +60,10 @@ function sessions() {
   return out.sort((a, b) => b.startedAt - a.startedAt)
 }
 
-function repoRoot() {
-  return resolve(git(['rev-parse', '--show-toplevel']))
-}
-
 function check(sha) {
-  const root = repoRoot()
+  // A commit SHA is unique, so a review from any worktree or --dir slice counts.
   const head = sha ? git(['rev-parse', '--verify', `${sha}^{commit}`]) : git(['rev-parse', 'HEAD'])
-  const matching = sessions().filter(session =>
-    session.head === head
-    && session.state === 'complete'
-    && resolve(session.workingDirectory).startsWith(root.replace(/\/\.tmp\/.*$/, '')))
+  const matching = sessions().filter(session => session.head === head && session.state === 'complete')
   if (matching.length === 0) {
     fail(`no completed CodeRabbit review for ${head.slice(0, 8)}. Run: node scripts/coderabbit-gate.mjs review`, 2)
   }
