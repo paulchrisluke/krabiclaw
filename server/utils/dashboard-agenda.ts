@@ -263,9 +263,10 @@ export async function listAgenda(
            agenda_product.name AS resource_title
     FROM product_sessions agenda_session
     JOIN products agenda_product ON agenda_product.id = agenda_session.product_id AND agenda_product.organization_id = agenda_session.organization_id
+    LEFT JOIN business_locations l ON l.id = agenda_session.location_id
     JOIN product_publications pub ON pub.product_id = agenda_session.product_id AND pub.organization_id = agenda_session.organization_id
+      AND pub.published = 1 AND (agenda_session.location_id IS NULL OR pub.site_id = l.site_id)
     JOIN sites s ON s.id = pub.site_id AND s.organization_id = pub.organization_id
-    LEFT JOIN business_locations l ON l.id = agenda_session.location_id AND l.site_id = pub.site_id
     LEFT JOIN (SELECT b.product_session_id, SUM(b.party_size) AS claimed FROM bookings b WHERE ${CAPACITY_CONSUMING_SQL} GROUP BY b.product_session_id) agenda_claimed
       ON agenda_claimed.product_session_id = agenda_session.id
     WHERE agenda_session.organization_id = ? AND agenda_session.status = 'scheduled'

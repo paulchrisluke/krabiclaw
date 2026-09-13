@@ -61,6 +61,7 @@
 
 <script setup>
 import AppSection from '~/components/ui/AppSection.vue'
+import { reviewCard } from '~/utils/review-card'
 
 const { localePath } = useI18n()
 
@@ -107,17 +108,7 @@ const reviewText = review => {
   }
   return text
 }
-const cardReview = review => ({
-  id: review.id,
-  author: reviewAuthor(review),
-  rating: review.rating,
-  content: reviewText(review),
-  title: review.title ?? null,
-  dateLabel: formatDate(review.source === 'google_places' ? review.original_review_date : review.created_at),
-  source: review.source ?? null,
-  original_reference: review.original_reference ?? null,
-  google_review_metadata: review.google_review_metadata ?? null,
-})
+const cardReview = review => reviewCard(review, formatDate, { content: reviewText(review) })
 
 const displayedReviews = computed(() => {
   const filtered = props.reviews.filter(review => reviewText(review) && reviewAuthor(review))

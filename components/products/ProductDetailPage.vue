@@ -371,6 +371,7 @@ import type { MetafieldDefinition, MetafieldValue } from '~/shared/metafields'
 import { EXPERIENCE_ATTRIBUTE_HANDLES, metafieldHandle, PRICING_NOTE_HANDLE } from '~/shared/metafields'
 import type { PublicProductBooking, PublicProductLocationPayload, PublicProductReview } from '~/server/utils/public-products'
 import { formatLocationAddress } from '~/utils/location-address'
+import { reviewCard } from '~/utils/review-card'
 import SayaReviewCard from '~/components/saya/SayaReviewCard.vue'
 import BookingModal from '~/components/booking/BookingModal.vue'
 import BookingRecap from '~/components/booking/BookingRecap.vue'
@@ -688,17 +689,7 @@ function sessionTimeLabel(session: PublicSession): string {
 }
 const { formatDate } = useLocaleDate()
 
-const reviewCards = computed(() => props.reviews.map(review => ({
-  id: review.id,
-  author: review.author,
-  rating: review.rating,
-  content: review.content,
-  title: review.title,
-  dateLabel: formatDate(review.createdAt),
-  source: review.source,
-  original_reference: review.original_reference,
-  google_review_metadata: review.google_review_metadata,
-})))
+const reviewCards = computed(() => props.reviews.map(review => reviewCard(review, formatDate)))
 
 /** What guests say, in one number: the mean rating to one decimal, or none. */
 const averageRating = computed(() => {
@@ -831,7 +822,7 @@ useSchemaOrg(computed(() => ({
     : undefined,
   review: props.reviews.map(review => ({
     '@type': 'Review',
-    author: { '@type': 'Person', name: review.author },
+    author: { '@type': 'Person', name: review.author_name },
     name: review.title,
     reviewBody: review.content,
     reviewRating: { '@type': 'Rating', ratingValue: review.rating, bestRating: 5 },

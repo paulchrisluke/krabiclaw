@@ -1,4 +1,4 @@
-import type { GoogleReviewMetadata } from '~/shared/google-review'
+import { parseGoogleReviewMetadata, type GoogleReviewMetadata } from '~/shared/google-review'
 import { queryAll, queryFirst, type DbClient } from '~/server/db'
 import { resolveSiteCmsCapabilities } from '~/server/utils/cms-capabilities'
 import { getProductBySlug, hydrateProductMedia, listCollections, listLocationProducts } from '~/server/utils/product-management'
@@ -83,14 +83,15 @@ export interface PublicProductDetail extends PublicProductCollection {
 
 export interface PublicProductReview {
   id: string
-  author: string
+  author_name: string
   rating: number
   title: string | null
   content: string
-  createdAt: string
   source: string
   original_reference: string | null
   google_review_metadata: GoogleReviewMetadata | null
+  original_review_date: string | null
+  created_at: string
 }
 
 // previewAuthorized carries the site's one preview authorization down from the
@@ -334,31 +335,26 @@ export async function loadPublicProductApiDetail(
 
 /**
  * Approved reviews of this product at the location the page is for: the ones
- * written about the product, and the location's own reviews that name no
- * product (Google Places reviews are about the place). A review of a
- * different product at the same location is not shown. Google reviews carry
- * no title, so a title is optional. A review is dated when it was written:
- * `original_review_date` for an imported review, `created_at` for one written here.
+ * written about the product (a booking review names its product), and the
+ * place's Google reviews, which are about the location and name no product.
+ * A review of a different product at the same location is not shown. Google
+ * reviews carry no title, so a title is optional. Newest written first.
  */
 export async function loadPublicProductReviews(
   db: DbClient,
   detail: PublicProductDetail,
 ): Promise<PublicProductReview[]> {
   const rows = await queryAll<Omit<PublicProductReview, 'google_review_metadata'> & { google_review_metadata: string | null }>(db, `
-    SELECT id, author_name AS author, rating, title, content,
-           COALESCE(original_review_date, created_at) AS createdAt,
-           source, original_reference, google_review_metadata
+    SELECT id, author_name, rating, title, content, source, original_reference, google_review_metadata,
+           original_review_date, created_at
      FROM reviews
      WHERE organization_id = ? AND site_id = ? AND status = 'approved'
        AND location_id = ?
-       AND (product_id = ? OR product_id IS NULL)
+       AND (product_id = ? OR (product_id IS NULL AND source = 'google_places'))
        AND author_name IS NOT NULL AND trim(author_name) <> ''
        AND content IS NOT NULL AND trim(content) <> ''
-     ORDER BY createdAt DESC, id DESC
+     ORDER BY COALESCE(original_review_date, created_at) DESC, id DESC
      LIMIT 50
   `, [detail.site.organization_id, detail.site.id, detail.location.id, detail.product.id])
-  return rows.map(row => ({
-    ...row,
-    google_review_metadata: row.google_review_metadata ? JSON.parse(row.google_review_metadata) as GoogleReviewMetadata : null,
-  }))
+  return rows.map(row => ({ ...row, google_review_metadata: parseGoogleReviewMetadata(row.google_review_metadata) }))
 }

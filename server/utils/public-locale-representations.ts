@@ -1,3 +1,4 @@
+import { SUBSCRIPTION_STATE_INVALID } from '~/server/utils/billing-access'
 import { HTTPError } from 'nitro'
 import type { CloudflareEnv } from '~/server/utils/auth'
 import { queryAll, type DbClient } from '~/server/db'
@@ -68,6 +69,7 @@ function isUnavailableRepresentation(error: unknown): boolean {
     : null
   return code === 'LANGUAGE_ENTITLEMENT_REQUIRED'
     || code === 'PLATFORM_LOCALE_UNAVAILABLE'
+    || code === SUBSCRIPTION_STATE_INVALID
 }
 
 export async function listPublicLocaleRepresentations(

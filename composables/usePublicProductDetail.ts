@@ -45,11 +45,12 @@ function isPublicProductDetailPayload(value: unknown): value is PublicProductDet
     && Array.isArray(value.reviews)
     && value.reviews.every(review => isRecord(review)
       && typeof review.id === 'string'
-      && typeof review.author === 'string'
+      && typeof review.author_name === 'string'
       && typeof review.rating === 'number'
       && (typeof review.title === 'string' || review.title === null)
       && typeof review.content === 'string'
-      && typeof review.createdAt === 'string'
+      && (typeof review.original_review_date === 'string' || review.original_review_date === null)
+      && typeof review.created_at === 'string'
       && typeof review.source === 'string'
       && (typeof review.original_reference === 'string' || review.original_reference === null)
       && (isRecord(review.google_review_metadata) || review.google_review_metadata === null))

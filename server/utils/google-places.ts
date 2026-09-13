@@ -1,4 +1,3 @@
-import { d1JsonStringSet } from '~/server/db/d1-limits'
 import { normalizeGoogleOpeningHours, type OpeningHours } from '~/shared/reservation-hours'
 import { serializeOpeningHours } from '~/server/utils/location-management'
 import type { D1Database } from '@cloudflare/workers-types'
@@ -174,6 +173,29 @@ function normalizeDetail(place: RawPlace): PlaceDetails {
   }
 }
 
+/**
+ * A Google review row belongs to the place's canonical id: Google names reviews
+ * `places/<canonical id>/reviews/<id>`. Rows named under another place id (two
+ * place records Google merged) or under an id an import minted itself are the
+ * same reviews again; Beachfront Pottery Krabi showed each review three times
+ * (2026-09-13) for both reasons. Reviews Google no longer returns in its
+ * relevance-ranked five stay: they are still that place's reviews, and the
+ * owner's moderation of them stays with them.
+ */
+export function staleGoogleReviewDeletes(scope: { organizationId: string; siteId: string; locationId: string }, canonicalPlaceId: string) {
+  if (!canonicalPlaceId) return []
+  const prefix = `places/${canonicalPlaceId}/`
+  return [{
+    query: `
+      DELETE FROM reviews
+      WHERE organization_id = ? AND site_id = ? AND location_id = ?
+        AND source = 'google_places'
+        AND substr(google_review_id, 1, length(?)) <> ?
+    `,
+    params: [scope.organizationId, scope.siteId, scope.locationId, prefix, prefix],
+  }]
+}
+
 export function googleReviewUpserts(scope: { organizationId: string; siteId: string; locationId: string }, reviews: PlaceReview[], now: string) {
   const { organizationId, siteId, locationId } = scope
   return reviews.map(review => {
@@ -238,21 +260,9 @@ export async function syncPlaceToLocation(
     locationId,
     organizationId,
     siteId
-  ] }, {
-    // The location's Google reviews are exactly the ones Google returns for
-    // the place now. Google names them under its canonical place id, which can
-    // differ from the id we asked with when two place records were merged, and
-    // an earlier import minted its own ids; Beachfront Pottery Krabi showed
-    // each review three times (2026-09-13) for both reasons.
-    query: `
-      DELETE FROM reviews
-      WHERE organization_id = ? AND site_id = ? AND location_id = ?
-        AND source = 'google_places'
-        AND google_review_id NOT IN (SELECT value FROM json_each(?))
-    `,
-    params: [organizationId, siteId, locationId, d1JsonStringSet(place.reviews.map(review => review.google_review_id))],
-  }, ...googleReviewUpserts({ organizationId, siteId, locationId }, place.reviews, now)])
-  const reviewsUpserted = results.slice(2).reduce((count, result) => count + Number(result.meta?.changes ?? 0), 0)
+  ] }, ...staleGoogleReviewDeletes({ organizationId, siteId, locationId }, place.placeId),
+  ...googleReviewUpserts({ organizationId, siteId, locationId }, place.reviews, now)])
+  const reviewsUpserted = results.slice(results.length - place.reviews.length).reduce((count, result) => count + Number(result.meta?.changes ?? 0), 0)
 
   return { place, reviewsUpserted }
 }

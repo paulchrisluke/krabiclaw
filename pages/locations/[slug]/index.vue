@@ -195,17 +195,7 @@
               v-for="review in reviewsPreview"
               :key="review.id"
               variant="compact"
-              :review="{
-                id: review.id,
-                author: review.author_name,
-                rating: review.rating,
-                content: review.content,
-                title: review.title,
-                dateLabel: formatDate(review.source === 'google_places' ? review.original_review_date : review.created_at),
-                source: review.source,
-                original_reference: review.original_reference,
-                google_review_metadata: review.google_review_metadata,
-              }"
+              :review="reviewCard(review, formatDate)"
             />
           </div>
         </div>
@@ -287,6 +277,7 @@
 </template>
 
 <script setup lang="ts">
+import { reviewCard } from '~/utils/review-card'
 import { formatOpeningHours, getIsOpenNow, getActiveSpecialClosure, formatClosureMessage } from '~/utils/formatters'
 import { formatLocationAddress, type LocationAddressInput } from '~/utils/location-address'
 import { getTodayHoursLabel } from '~/shared/reservation-hours'
@@ -365,6 +356,7 @@ const otherLocations = computed(() => locations.value.filter((l: ApiRecord) => l
 // Reviews preview from bootstrap
 const reviewsPreview = computed(() => locationReviews.value.slice(0, 3))
 const { formatDate } = useLocaleDate()
+
 
 // Neutral default until the owner picks a brand color in onboarding.
 const locationHeroBrandColor = computed(() => pageConfig.value?.brand_color || '#3F3F46')
