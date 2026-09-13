@@ -129,8 +129,28 @@ gh pr merge <number> --merge --delete-branch
 
 PRs target `staging`, so GitHub's `Closes #N` does not fire. Close each issue
 yourself with one comment that links the PR and quotes the measurement that
-proves each checklist item, or says which item is still open and why. Move the
-board card. Remove the worktree.
+proves each checklist item, or says which item is still open and why.
+
+The board is project 3, "KrabiClaw Project". Its Status field moves an issue
+through Backlog, Ready, In progress, In review, Done. Set it at each step, on
+the issue's item id:
+
+```bash
+gh project item-list 3 --owner paulchrisluke --format json --limit 100 --jq '.items[] | select(.content.number == <issue>) | .id'
+gh project item-edit --project-id PVT_kwHOAFbjZM4BjJML --id <item id> --field-id PVTSSF_lAHOAFbjZM4BjJMLzhh-pkM --single-select-option-id <option>
+```
+
+| Status | Option id | When |
+| --- | --- | --- |
+| In progress | `47fc9ee4` | the worktree is cut |
+| In review | `df73e18b` | the PR is flipped to ready |
+| Done | `98236657` | the PR is merged and the issue closed |
+
+An issue not yet on the board: `gh project item-add 3 --owner paulchrisluke --url <issue url>`.
+`gh pr edit` fails on this repository (a projects-classic GraphQL field); edit
+a PR body with `gh api -X PATCH repos/paulchrisluke/krabiclaw/pulls/<n> --input body.json`.
+
+Remove the worktree.
 
 A staging fix that is not a feature goes straight to `staging` with no PR,
 after steps 2 and 3.
