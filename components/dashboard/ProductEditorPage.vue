@@ -265,6 +265,33 @@
               <UFormField label="Places per session" description="Leave empty for no limit. Zero means no places at all.">
                 <UInput v-model="form.booking_capacity" inputmode="numeric" placeholder="10" class="w-full" />
               </UFormField>
+
+              <!--
+                The weekly schedule at this branch. Each time is a slot the
+                merchant runs every week; sessions a guest can book are
+                generated from these, so this is where a class time is added,
+                moved or dropped.
+              -->
+              <div v-if="product?.booking" class="space-y-3 border-t border-default pt-4">
+                <div>
+                  <p class="text-sm font-medium">Weekly schedule</p>
+                  <p class="text-sm text-muted">Times this branch runs it, in the branch's own clock. Dropping a time cancels its future sessions that nobody has booked.</p>
+                </div>
+                <p v-if="scheduleLoading" class="text-sm text-muted">Loading the schedule…</p>
+                <div v-else class="space-y-3">
+                  <div v-for="day in WEEKDAYS" :key="day.value" class="flex flex-col gap-2 sm:flex-row sm:items-start">
+                    <p class="w-24 shrink-0 pt-2 text-sm font-medium">{{ day.label }}</p>
+                    <div class="flex-1 space-y-2">
+                      <div v-for="(slot, index) in slotsFor(day.value)" :key="`${day.value}-${index}`" class="flex items-center gap-2">
+                        <UInput v-model="slot.start_time" type="time" step="300" class="w-32" />
+                        <UInput v-model="slot.capacity" inputmode="numeric" :placeholder="form.booking_capacity || 'Default'" class="w-28" aria-label="Places for this time" />
+                        <UButton icon="i-lucide-x" color="neutral" variant="ghost" size="sm" aria-label="Remove this time" @click="removeSlot(slot)" />
+                      </div>
+                      <UButton icon="i-lucide-plus" color="neutral" variant="subtle" size="sm" label="Add a time" @click="addSlot(day.value)" />
+                    </div>
+                  </div>
+                </div>
+              </div>
             </template>
           </div>
         </template>
@@ -612,6 +639,14 @@ function priceSummary(): string {
   return formatProductMoney(price) ?? 'No price set'
 }
 
+function bookingSummary(): string {
+  const minutes = `${form.booking_duration || '?'} minutes`
+  const id = locationId.value
+  if (!id || scheduleLoadedFor.value !== `${productId.value}:${id}`) return minutes
+  const count = schedule.value.filter(slot => slot.start_time.trim()).length
+  return `${minutes} · ${count === 1 ? '1 time' : `${count} times`} a week`
+}
+
 function publicationSummary(): string {
   const parts: string[] = [form.active ? 'On sale' : 'Not on sale']
   parts.push(form.published ? 'published' : 'withheld')
@@ -676,7 +711,7 @@ const navigationGroups = computed<EditorNavigationGroup[]>(() => {
           to: `${itemPath.value}/attributes`,
         },
         { id: 'publication', label: 'Where it appears', summary: publicationSummary(), to: `${itemPath.value}/publication` },
-        { id: 'booking', label: 'Bookings', summary: form.bookable ? `${form.booking_duration || '?'} minutes` : 'Not bookable', placeholder: !form.bookable, to: `${itemPath.value}/booking` },
+        { id: 'booking', label: 'Bookings', summary: form.bookable ? bookingSummary() : 'Not bookable', placeholder: !form.bookable, to: `${itemPath.value}/booking` },
       ],
     },
   ]
@@ -870,6 +905,62 @@ async function saveBooking() {
     },
     validate: isRecord,
   })
+  // The schedule is saved with the capability it belongs to. A product that
+  // has just become bookable has no schedule loaded yet, and none to save.
+  await saveSchedule()
+}
+
+// ── The weekly schedule ─────────────────────────────────
+// One draft slot per (weekday, time) at this branch. Capacity is kept as the
+// merchant typed it and read as a number, or the product's default, on save.
+interface ScheduleSlotDraft { weekday: number; start_time: string; capacity: string }
+const WEEKDAYS = [
+  { value: 1, label: 'Monday' }, { value: 2, label: 'Tuesday' }, { value: 3, label: 'Wednesday' },
+  { value: 4, label: 'Thursday' }, { value: 5, label: 'Friday' }, { value: 6, label: 'Saturday' }, { value: 0, label: 'Sunday' },
+]
+const schedule = ref<ScheduleSlotDraft[]>([])
+const scheduleLoading = ref(false)
+const scheduleLoadedFor = ref<string | null>(null)
+const isRuleList = (value: unknown): value is { success: true; rules: Array<{ weekday: number; start_time: string; capacity: number | null }> } =>
+  isRecord(value) && Array.isArray(value.rules)
+
+function slotsFor(weekday: number) {
+  return schedule.value.filter(slot => slot.weekday === weekday)
+}
+function addSlot(weekday: number) {
+  schedule.value.push({ weekday, start_time: '', capacity: '' })
+}
+function removeSlot(slot: ScheduleSlotDraft) {
+  schedule.value = schedule.value.filter(entry => entry !== slot)
+}
+
+async function loadSchedule() {
+  const id = locationId.value
+  if (!id || !product.value?.booking) return
+  const key = `${productId.value}:${id}`
+  if (scheduleLoadedFor.value === key) return
+  scheduleLoading.value = true
+  try {
+    const { rules } = await dashboardApi(`/api/editor/sites/${siteId}/products/${productId.value}/availability?location_id=${encodeURIComponent(id)}`, { validate: isRuleList })
+    schedule.value = rules.map(rule => ({ weekday: rule.weekday, start_time: rule.start_time, capacity: rule.capacity === null ? '' : String(rule.capacity) }))
+    scheduleLoadedFor.value = key
+  } finally {
+    scheduleLoading.value = false
+  }
+}
+watch([editorKey, product, locationId], ([key]) => { if (key === 'booking') void loadSchedule() }, { immediate: true })
+
+/** The schedule as the writer takes it: every filled slot, capacity as a number or the default. */
+async function saveSchedule() {
+  const id = locationId.value
+  if (!id || scheduleLoadedFor.value !== `${productId.value}:${id}`) return
+  const slots = schedule.value
+    .filter(slot => slot.start_time.trim())
+    .map(slot => ({ weekday: slot.weekday, start_time: slot.start_time.trim().slice(0, 5), capacity: slot.capacity.trim() ? Number(slot.capacity) : null }))
+  await dashboardApi(`/api/editor/sites/${siteId}/products/${productId.value}/availability`, {
+    method: 'PUT', body: { location_id: id, slots }, validate: isRecord,
+  })
+  scheduleLoadedFor.value = null
 }
 
 async function cancelEditor() {
