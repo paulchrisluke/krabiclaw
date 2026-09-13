@@ -9,7 +9,8 @@ KrabiClaw has one shared preview deployment, so every PR's E2E job runs
 serially behind every other PR's. A ready PR costs 5 minutes when its changed
 files are classified and 13 when they are not, and every push to a ready PR
 pays again. CodeRabbit's local CLI and web review are both rate-limited. The
-whole procedure below exists to spend each of those exactly once per PR.
+whole procedure below exists to spend the preview once per PR and CodeRabbit
+only as many times as its findings demand.
 
 Read `AGENTS.md` first. It says what must be true; this file says the order.
 
@@ -146,7 +147,9 @@ gh project item-edit --project-id PVT_kwHOAFbjZM4BjJML --id <item id> --field-id
 | In review | `df73e18b` | the PR is flipped to ready |
 | Done | `98236657` | the PR is merged and the issue closed |
 
-An issue not yet on the board: `gh project item-add 3 --owner paulchrisluke --url <issue url>`.
+An issue not yet on the board: `gh project item-add 3 --owner paulchrisluke --url <issue url>`,
+then look up its item id with the `item-list` query above and set its Status
+with `item-edit`; adding does not set a status.
 `gh pr edit` fails on this repository (a projects-classic GraphQL field); edit
 a PR body with `gh api -X PATCH repos/paulchrisluke/krabiclaw/pulls/<n> --input body.json`.
 
