@@ -134,19 +134,27 @@ const accountInitial = computed(() =>
  */
 async function continueWithSession() {
   loading.value = true
-  if (isSelectAccountFlow.value) {
-    const { data, error: continueError } = await authClient.oauth2.continue({ selected: true })
-    if (continueError) {
-      error.value = continueError.message || 'Could not continue authorization.'
-      loading.value = false
+  try {
+    if (isSelectAccountFlow.value) {
+      const { data, error: continueError } = await authClient.oauth2.continue({ selected: true })
+      if (continueError) {
+        error.value = continueError.message || 'Could not continue authorization.'
+        return
+      }
+      const destination = oauthContinuationDestination(data)
+      window.location.href = destination || `/api/auth/oauth2/authorize${window.location.search}`
       return
     }
-    const destination = oauthContinuationDestination(data)
-    window.location.href = destination || `/api/auth/oauth2/authorize${window.location.search}`
-    return
-  }
 
-  window.location.href = `/api/auth/oauth2/authorize${window.location.search}`
+    window.location.href = `/api/auth/oauth2/authorize${window.location.search}`
+  } catch (cause) {
+    // A thrown continuation used to leave `loading` set forever. That only
+    // greyed out this button before; now it also holds the switch-account
+    // button down, so the page offers nothing at all until a reload.
+    error.value = getErrorMessage(cause, 'Could not continue authorization.')
+  } finally {
+    loading.value = false
+  }
 }
 
 /**
