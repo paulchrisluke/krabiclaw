@@ -55,6 +55,7 @@ export default {
     "experience_detail": {
       "available": "Available",
       "book_now": "Book now",
+      "enquire": "Enquire",
       "booking_failed": "Something went wrong. Please try again.",
       "nothing_scheduled": "There are no sessions scheduled right now.",
       "capacity": "Up to {count} guests",
@@ -345,6 +346,7 @@ export default {
       "your_name": "Your name",
       "email": "Email",
       "what_about": "What's this about?",
+      "about_product": "About {product}:",
       "your_message": "Your message",
       "brand_inquiries": "Brand inquiries",
       "reach_us_direct": "Or reach us direct.",

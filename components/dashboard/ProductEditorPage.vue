@@ -307,7 +307,7 @@ import DashboardCoverPhotoField from '~/components/dashboard/DashboardCoverPhoto
 import DashboardResourceLocalization from '~/components/dashboard/DashboardResourceLocalization.vue'
 import type { Collection, Product } from '~/server/types/products'
 import type { MetafieldDefinition, MetafieldValue } from '~/shared/metafields'
-import { metafieldHandle } from '~/shared/metafields'
+import { metafieldHandle, PRICING_NOTE_HANDLE } from '~/shared/metafields'
 import { PRODUCT_LIMITS } from '~/shared/product-limits'
 import { isCurrencyCode } from '~/shared/currencies'
 import { majorAmountToMinor, minorAmountToMajor, selectPrice, type Price } from '~/shared/prices'
@@ -636,7 +636,12 @@ function priceSummary(): string {
   const variant = row.variants[0]
   if (!variant) return 'No price set'
   const price = selectPrice(variant.prices, { currency, location_id: locationId.value, at: new Date().toISOString() })
-  return formatProductMoney(price) ?? 'No price set'
+  const amount = formatProductMoney(price)
+  if (amount) return amount
+  // Priced in words — "Contact us for group pricing" — is a price the merchant
+  // set, and the public page shows it; "No price set" would call it missing.
+  const note = row.metafields[PRICING_NOTE_HANDLE]
+  return typeof note === 'string' && note.trim() ? note : 'No price set'
 }
 
 function bookingSummary(): string {

@@ -337,11 +337,16 @@ const subjectOptions = computed(() => [
   { key: 'careers', label: t('saya.contact_page.careers') }
 ])
 
+// A guest arriving from a product priced in words has the product named for
+// them: the first line of their message is what they clicked, in the site's
+// language, and the rest is theirs to write.
+const route = useRoute()
+const aboutProduct = typeof route.query.about === 'string' ? route.query.about.trim().slice(0, 120) : ''
 const tenantForm = ref<TenantContactForm>({
   name: '',
   email: '',
   subject: 'general',
-  message: '',
+  message: aboutProduct ? `${t('saya.contact_page.about_product', { product: aboutProduct })}\n\n` : '',
 })
 const tenantSubmitting = ref(false)
 const { mirrorSubmission } = useSiteConversionTracking()

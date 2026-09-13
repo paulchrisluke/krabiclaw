@@ -12,7 +12,10 @@
         <p v-if="compareAtLabel" class="text-xs text-muted line-through">{{ compareAtLabel }}</p>
         <p class="font-semibold leading-tight text-default">{{ priceLabel }}</p>
       </div>
-      <SayaButton class="shrink-0" control-id="product-booking-toggle" @click="openBooking">
+      <SayaButton v-if="enquiryOnly" class="shrink-0" :to="enquiryPath">
+        {{ t('saya.experience_detail.enquire') }}
+      </SayaButton>
+      <SayaButton v-else class="shrink-0" control-id="product-booking-toggle" @click="openBooking">
         {{ t('saya.experience_detail.book_now') }}
       </SayaButton>
     </div>
@@ -84,7 +87,10 @@
               {{ t('saya.common.temporarily_unavailable') }}
             </p>
             <div v-else class="pt-2">
-              <SayaButton block control-id="product-booking-toggle" @click="openBooking">
+              <SayaButton v-if="enquiryOnly" block :to="enquiryPath">
+                {{ t('saya.experience_detail.enquire') }}
+              </SayaButton>
+              <SayaButton v-else block control-id="product-booking-toggle" @click="openBooking">
                 {{ t('saya.experience_detail.book_now') }}
               </SayaButton>
             </div>
@@ -112,6 +118,7 @@
             <p v-if="product.description" class="mt-6 text-base sm:text-lg leading-relaxed text-muted">{{ product.description }}</p>
             <p v-if="!isAvailable" class="mt-6 font-semibold text-muted">{{ t('saya.common.temporarily_unavailable') }}</p>
             <div class="mt-8 flex flex-wrap items-center gap-5">
+              <SayaButton v-if="isAvailable && enquiryOnly" :to="enquiryPath">{{ t('saya.experience_detail.enquire') }}</SayaButton>
               <SayaButton
                 v-if="isAvailable && product.order_url"
                 :href="product.order_url"
@@ -332,6 +339,15 @@ const priceLabel = computed(() => {
   const note = props.product.metafields[PRICING_NOTE_HANDLE]
   return typeof note === 'string' && note.trim() ? note : null
 })
+/**
+ * A product priced in words is sold by conversation: "Contact us for group
+ * pricing" is the merchant asking to be asked, not a seat to be claimed at a
+ * price. Its one action is the contact form, with the product named — the
+ * rule the old experience surface called inquiry_only.
+ */
+const enquiryOnly = computed(() => offer.value === null && priceLabel.value !== null)
+const enquiryPath = computed(() => `${localePath('/contact')}?about=${encodeURIComponent(props.product.name)}`)
+
 const compareAtLabel = computed(() => {
   const price = offer.value
   if (!price || price.compare_at_unit_amount === null) return null

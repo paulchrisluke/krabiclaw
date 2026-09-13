@@ -453,7 +453,14 @@ function deriveMetafields(stage, now, record) {
     for (const [key, spec] of Object.entries(EXPERIENCE_METAFIELDS)) {
       const raw = experience?.[key]
       if (raw === undefined || raw === null || (Array.isArray(raw) ? raw.length === 0 : String(raw).trim() === '')) continue
-      const definition = defineFor(row.organization_id, 'experience', key, spec.name, spec.value_type)
+      // A pricing note is a price in words, and the catalog reads exactly one
+      // handle for it (PRICING_NOTE_HANDLE = 'pricing.note') whether it came
+      // from a dish's price-note detail or a class's experience blob. Written
+      // under 'experience', it was an attribute row the price never saw, and
+      // the product read "Unavailable" on the public card.
+      const definition = key === 'pricing_note'
+        ? defineFor(row.organization_id, 'pricing', 'note', 'Pricing note', 'single_line_text')
+        : defineFor(row.organization_id, 'experience', key, spec.name, spec.value_type)
       values.push({ ...row, definition, value: Array.isArray(raw) ? raw.map(String) : String(raw) })
     }
   }
