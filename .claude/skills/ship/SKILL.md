@@ -52,7 +52,8 @@ slots are left and when the next opens.
 
 Never call the CLI directly and never pass `--use-credits`. The gate refuses a
 dirty tree, refuses when the hour is spent, refuses a diff over the
-files-per-review cap, and reviews committed HEAD against `staging`. A finding
+files-per-review cap (split the PR; a `--dir` slice is not a review of the
+commit), and reviews committed HEAD against `staging`. A finding
 you believe is wrong stays a finding until the re-review agrees; say why in the
 PR body if it does not.
 
