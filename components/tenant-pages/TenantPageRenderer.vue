@@ -4,8 +4,30 @@
     :data-template="template"
     class="mx-auto max-w-7xl px-4 py-16 text-default sm:px-6 lg:px-8"
   >
-    <section v-for="block in page.blocks" :key="block.id" :data-block-type="block.type" :data-parity-section="sectionKey(block)" class="tenant-page-block">
-      <template v-if="block.type === 'hero'">
+    <section v-for="block in renderedBlocks" :key="block.id" :data-block-type="block.type" :data-parity-section="sectionKey(block)" class="tenant-page-block">
+      <!--
+        The story is one thing — a headline, a photograph and the words — and it
+        reads headline, photograph, words. Its three fields arrived as three
+        unrelated blocks whose positions the content migration wrote in
+        alphabetical order of field name, which is why the photograph came last
+        and, on a page carrying story.title, why the headline came after it.
+        The story renders here as one section, at the first of those blocks.
+      -->
+      <template v-if="isStoryBlock(block)">
+        <div data-story class="my-16 max-w-4xl">
+          <p class="saya-kicker mb-6">{{ storyKicker }}</p>
+          <h2 v-if="story.title" class="saya-display-md text-default">{{ story.title }}</h2>
+          <img
+            v-if="story.image"
+            :src="story.image.url"
+            :alt="story.image.alt"
+            class="mt-10 aspect-4/3 w-full object-cover"
+          >
+          <p v-if="story.body" class="mt-10 text-base leading-relaxed text-muted">{{ story.body }}</p>
+        </div>
+      </template>
+
+      <template v-else-if="block.type === 'hero'">
         <div class="py-12 sm:py-20">
           <p v-if="text(block.data.eyebrow)" class="mb-4 text-xs font-semibold uppercase tracking-[0.2em] text-primary">{{ text(block.data.eyebrow) }}</p>
           <h1 v-if="text(block.data.title)" class="text-4xl font-bold tracking-tight sm:text-6xl">{{ text(block.data.title) }}</h1>
@@ -172,10 +194,48 @@
 <script setup lang="ts">
 import type { PublicTenantPage } from '~/server/utils/public-tenant-pages'
 import type { TenantPageBlock } from '~/utils/tenant-page-blocks'
+import { getVerticalCopy } from '~/utils/vertical-copy'
 
-defineProps<{ page: PublicTenantPage; template: 'saya' | 'platform' }>()
+const props = defineProps<{ page: PublicTenantPage; template: 'saya' | 'platform' }>()
 const sanitizer = useHtmlSanitizer()
-const { t } = useI18n()
+const { t, locale } = useI18n()
+const { site } = useTenantSite()
+const storyKicker = computed(() => getVerticalCopy(site?.vertical, locale.value).ourStoryKicker)
+
+const STORY_FIELDS = ['story.title', 'story.image', 'story.body'] as const
+
+function isStoryBlock(block: TenantPageBlock): boolean {
+  return (STORY_FIELDS as readonly string[]).includes(text(block.data.field))
+}
+
+const storyBlocks = computed(() => props.page.blocks.filter(isStoryBlock))
+
+/**
+ * The story's blocks collapse into the first of them, which renders the whole
+ * section; the rest leave the list so the page holds no empty sections where
+ * they used to be.
+ */
+const renderedBlocks = computed(() => {
+  const anchorId = storyBlocks.value[0]?.id ?? null
+  return props.page.blocks.filter(block => !isStoryBlock(block) || block.id === anchorId)
+})
+
+/**
+ * The story's three fields, each read from the block that carries it. A field
+ * no block carries is absent from the story, not filled in from elsewhere.
+ */
+const story = computed(() => {
+  const blockFor = (field: string) => storyBlocks.value.find(block => text(block.data.field) === field) ?? null
+  const titleBlock = blockFor('story.title')
+  const bodyBlock = blockFor('story.body')
+  const imageBlock = blockFor('story.image')
+  const image = imageBlock ? blockMedia(imageBlock, 'media') : null
+  return {
+    title: titleBlock ? text(titleBlock.data.text) : '',
+    body: bodyBlock ? text(bodyBlock.data.markdown) : '',
+    image: image ? { url: image.public_url!, alt: image.alt_text ?? '' } : null,
+  }
+})
 
 type GridItem = { id?: string; title?: string; description?: string; value?: string; media?: Array<{ slot?: string; public_url?: string | null; thumbnail_url?: string | null; alt_text?: string | null; kind?: string | null }>; label?: string; labelKey?: string; url?: string; amount?: string }
 
