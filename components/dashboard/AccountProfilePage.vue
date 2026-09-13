@@ -201,7 +201,7 @@ onMounted(async () => {
       googleStatus.value = 'error'
       return
     }
-    googleStatus.value = data?.some(account => account.providerId === 'google') ? 'connected' : 'not-connected'
+    googleStatus.value = data?.some((account: { providerId: string }) => account.providerId === 'google') ? 'connected' : 'not-connected'
   } catch {
     googleStatus.value = 'error'
   }
