@@ -94,6 +94,8 @@ import { parseCmsFeatureOverrideDelta, resolveCmsCapabilities, type ProductFeatu
 import { resolvePublicTemplate } from '~/utils/template-registry'
 import { getTodayHoursLabel, type OpeningHours } from '~/shared/reservation-hours'
 import { normalizeVertical, type SiteVertical } from '~/utils/vertical-copy'
+import { presentationForProducts } from '~/utils/product-presentation'
+import type { Product } from '~/server/types/products'
 
 definePageMeta({ layout: 'dashboard', ownsChrome: true })
 
@@ -186,6 +188,22 @@ const currentOpeningState = computed(() => {
   return getTodayHoursLabel(hours, 'Closed', location.value?.timezone) || 'Hours not set'
 })
 
+// What this branch's catalogue is called: a studio's classes are experiences,
+// a restaurant's dishes are its menu. The count speaks the same word.
+const catalogWords = computed(() => presentationForProducts(
+  dashboard.site.value?.vertical,
+  products.value.map(row => ({ booking: (row.booking ?? null) as Product['booking'] })),
+))
+
+// Plurals are the presentation's own ("Dish" → "Dishes"); appending an "s" is
+// how "dishs" reaches a merchant's screen.
+const catalogSummary = computed(() => {
+  const total = products.value.length
+  const words = catalogWords.value
+  if (!total) return `Add your first ${words.itemLabel.toLowerCase()}`
+  return `${total} ${(total === 1 ? words.itemLabel : words.itemLabelPlural).toLowerCase()}`
+})
+
 function countSummary(total: number, noun: string, empty: string): string {
   if (!total) return empty
   return `${total} ${total === 1 ? noun : `${noun}s`}`
@@ -193,7 +211,7 @@ function countSummary(total: number, noun: string, empty: string): string {
 
 const contentGroups = computed(() => {
   const items = [
-    { id: 'products', label: dashboard.site.value?.vertical === 'restaurant' ? 'Menu' : 'Products', summary: countSummary(products.value.length, 'item', 'Add your first item'), to: `${locationPath.value}/products`, visible: hasFeature('products') },
+    { id: 'products', label: catalogWords.value.collectionLabel, summary: catalogSummary.value, to: `${locationPath.value}/products`, visible: hasFeature('products') },
     { id: 'photos', label: 'Photos', summary: countSummary(counts.value.photos, 'photo', 'Add photos'), to: `${locationPath.value}/photos`, visible: hasFeature('photos') },
     { id: 'posts', label: 'Posts', summary: countSummary(counts.value.posts, 'published post', 'Write your first post'), to: `${locationPath.value}/posts`, visible: hasFeature('posts') },
     { id: 'qa', label: 'Q&A', summary: countSummary(counts.value.qa, 'question', 'Answer your first question'), to: `${locationPath.value}/qa`, visible: hasFeature('qa') },

@@ -1,3 +1,4 @@
+import type { GoogleReviewMetadata } from '~/shared/google-review'
 import { queryAll, queryFirst, type DbClient } from '~/server/db'
 import { resolveSiteCmsCapabilities } from '~/server/utils/cms-capabilities'
 import { getProductBySlug, hydrateProductMedia, listCollections, listLocationProducts } from '~/server/utils/product-management'
@@ -29,7 +30,24 @@ export interface PublicProductLocation {
   slug: string
   title: string
   feature_overrides: string | null
+  /** Where a guest turns up: the branch's own address, phone and map, as stored. */
+  address: string | null
+  phone: string | null
+  maps_url: string | null
+  latitude: number | null
+  longitude: number | null
 }
+
+/** The branch as the product page sends it to the browser. */
+export function publicLocationPayload(location: PublicProductLocation): PublicProductLocationPayload {
+  return {
+    id: location.id, slug: location.slug, title: location.title,
+    address: location.address, phone: location.phone, maps_url: location.maps_url,
+    latitude: location.latitude, longitude: location.longitude,
+  }
+}
+
+export type PublicProductLocationPayload = Omit<PublicProductLocation, 'feature_overrides'>
 
 export interface PublicProductCollection {
   site: PublicProductSiteRow
@@ -67,9 +85,12 @@ export interface PublicProductReview {
   id: string
   author: string
   rating: number
-  title: string
+  title: string | null
   content: string
   createdAt: string
+  source: string
+  original_reference: string | null
+  google_review_metadata: GoogleReviewMetadata | null
 }
 
 // previewAuthorized carries the site's one preview authorization down from the
@@ -112,7 +133,7 @@ export async function loadPublicProductCollection(
   const resolved = await loadProductSite(db, siteId, routeKind, previewAuthorized)
   if (!resolved) return null
   const locationRows = await queryAll<PublicProductLocation>(db, `
-    SELECT id, slug, title, feature_overrides
+    SELECT id, slug, title, feature_overrides, address, phone, maps_url, latitude, longitude
       FROM business_locations
      WHERE organization_id = ? AND site_id = ? AND status = 'active'
        ${locationSlug ? 'AND slug = ?' : ''}
@@ -187,7 +208,7 @@ export async function loadPublicProductDetail(
   const locationId = resolveLocalizedRouteResourceId(localizations, 'business_location', localizedLocationPath)
   if (!locationId) return null
   const sourceLocation = await queryFirst<PublicProductLocation>(db, `
-    SELECT id, slug, title, feature_overrides FROM business_locations
+    SELECT id, slug, title, feature_overrides, address, phone, maps_url, latitude, longitude FROM business_locations
      WHERE organization_id = ? AND site_id = ? AND id = ? AND status = 'active' LIMIT 1
   `, [resolved.site.organization_id, siteId, locationId])
   if (!sourceLocation) return null
@@ -257,7 +278,7 @@ export async function loadPublicExperienceDetail(
   if (!found.publications.some(entry => entry.site_id === siteId && entry.published)) return null
   const offeredAt = new Set(found.locations.filter(entry => entry.published && entry.active).map(entry => entry.location_id))
   const locationRows = await queryAll<PublicProductLocation>(db, `
-    SELECT id, slug, title, feature_overrides
+    SELECT id, slug, title, feature_overrides, address, phone, maps_url, latitude, longitude
       FROM business_locations
      WHERE organization_id = ? AND site_id = ? AND status = 'active'
      ORDER BY title, id
@@ -308,18 +329,33 @@ export async function loadPublicProductApiDetail(
   return loadPublicProductDetail(db, siteId, productSurfaceOf(site.vertical, product), previewAuthorized, locationSlug, productSlug, locale)
 }
 
+/**
+ * Approved reviews of this product at the location the page is for: the ones
+ * written about the product, and the location's own reviews that name no
+ * product (Google Places reviews are about the place). A review of a
+ * different product at the same location is not shown. Google reviews carry
+ * no title, so a title is optional. A review is dated when it was written:
+ * `original_review_date` for an imported review, `created_at` for one written here.
+ */
 export async function loadPublicProductReviews(
   db: DbClient,
   detail: PublicProductDetail,
 ): Promise<PublicProductReview[]> {
-  return queryAll<PublicProductReview>(db, `
-    SELECT id, author_name AS author, rating, title, content, created_at AS createdAt
+  const rows = await queryAll<Omit<PublicProductReview, 'google_review_metadata'> & { google_review_metadata: string | null }>(db, `
+    SELECT id, author_name AS author, rating, title, content,
+           COALESCE(original_review_date, created_at) AS createdAt,
+           source, original_reference, google_review_metadata
      FROM reviews
-     WHERE product_id = ? AND organization_id = ? AND site_id = ? AND status = 'approved'
+     WHERE organization_id = ? AND site_id = ? AND status = 'approved'
+       AND location_id = ?
+       AND (product_id = ? OR product_id IS NULL)
        AND author_name IS NOT NULL AND trim(author_name) <> ''
-       AND title IS NOT NULL AND trim(title) <> ''
        AND content IS NOT NULL AND trim(content) <> ''
-     ORDER BY created_at DESC, id DESC
+     ORDER BY createdAt DESC, id DESC
      LIMIT 50
-  `, [detail.product.id, detail.site.organization_id, detail.site.id])
+  `, [detail.site.organization_id, detail.site.id, detail.location.id, detail.product.id])
+  return rows.map(row => ({
+    ...row,
+    google_review_metadata: row.google_review_metadata ? JSON.parse(row.google_review_metadata) as GoogleReviewMetadata : null,
+  }))
 }

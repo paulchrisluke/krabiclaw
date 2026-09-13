@@ -26,7 +26,7 @@
         <DashboardMediaThumb :asset="item.row.cover" :label="item.row.name" fallback-icon="i-lucide-layout-list" />
         <span class="min-w-0 flex-1">
         <p class="truncate text-sm font-semibold text-highlighted">{{ item.row.name }}</p>
-        <p class="mt-1 text-sm text-muted">{{ item.row.product_count === 1 ? `1 ${presentation.itemLabel.toLowerCase()}` : `${item.row.product_count} ${presentation.itemLabelPlural.toLowerCase()}` }}</p>
+        <p class="mt-1 text-sm text-muted">{{ item.row.product_count === 1 ? `1 ${item.row.words.itemLabel.toLowerCase()}` : `${item.row.product_count} ${item.row.words.itemLabelPlural.toLowerCase()}` }}</p>
         </span>
       </NuxtLink>
     </template>
@@ -40,10 +40,10 @@
 // is the whole screen, the index column of a pair, or off screen entirely.
 import DashboardListEditor from '~/components/dashboard/DashboardListEditor.vue'
 import DashboardMediaThumb from '~/components/dashboard/DashboardMediaThumb.vue'
-import type { Collection } from '~/server/types/products'
+import type { Collection, Product, ProductPresentation } from '~/server/types/products'
 import type { ResolvedMediaAsset } from '~/server/utils/media-asset-manager'
 import { getErrorMessage } from '~/utils/errors'
-import { requireProductPresentation } from '~/utils/product-presentation'
+import { presentationForProducts } from '~/utils/product-presentation'
 
 
 const dashboardApi = useDashboardApi()
@@ -55,8 +55,6 @@ const dashboardLocation = useDashboardLocation()
 
 const vertical = dashboard.site.value?.vertical
 if (!vertical) throw createError({ statusCode: 500, statusMessage: 'Site vertical is not configured' })
-const presentation = requireProductPresentation(vertical)
-useSeoMeta({ title: `${presentation.collectionLabel} | KrabiClaw Dashboard`, robots: 'noindex, nofollow' })
 
 const locationId = computed(() => dashboardLocation.currentLocation.value?.id ?? null)
 // The path comes from the route this screen is mounted on, not from the
@@ -67,11 +65,16 @@ const productsPath = computed(() => `${locationPath.value}/products`)
 
 // The cover is the first Product in the category that has a photo, which is how
 // the category reads on the public site too.
-interface CollectionRow extends Collection { product_count: number; cover: ResolvedMediaAsset | null }
+interface CollectionRow extends Collection { product_count: number; cover: ResolvedMediaAsset | null; words: ProductPresentation }
 
 const catalog = useLocationProductCatalog(siteId, locationId)
 const pending = catalog.pending
-const loadError = computed(() => (catalog.error.value ? getErrorMessage(catalog.error.value, `Failed to load ${presentation.collectionGroupLabelPlural.toLowerCase()}`) : null))
+// The words follow what is being managed: a studio's catalogue is experiences,
+// a restaurant's is its menu, and one collection of classes on a menu counts
+// its own members as experiences.
+const presentation = computed(() => presentationForProducts(vertical, catalog.products.value))
+const loadError = computed(() => (catalog.error.value ? getErrorMessage(catalog.error.value, `Failed to load ${presentation.value.collectionGroupLabelPlural.toLowerCase()}`) : null))
+useSeoMeta({ title: () => `${presentation.value.collectionLabel} | KrabiClaw Dashboard`, robots: 'noindex, nofollow' })
 
 // The count and cover are what make a category legible at a glance, and they
 // are the only reason this level reads Items at all.
@@ -81,9 +84,11 @@ const catalogRows = computed<CollectionRow[]>(() => {
   // not several products.
   const counts = new Map<string, number>()
   const covers = new Map<string, ResolvedMediaAsset>()
+  const members = new Map<string, Product[]>()
   for (const product of catalog.products.value) {
     for (const membership of product.collections) {
       counts.set(membership.collection_id, (counts.get(membership.collection_id) ?? 0) + 1)
+      members.set(membership.collection_id, [...(members.get(membership.collection_id) ?? []), product])
       if (product.image && !covers.has(membership.collection_id)) covers.set(membership.collection_id, product.image)
     }
   }
@@ -91,6 +96,7 @@ const catalogRows = computed<CollectionRow[]>(() => {
     ...row,
     product_count: counts.get(row.id) ?? 0,
     cover: covers.get(row.id) ?? null,
+    words: presentationForProducts(vertical, members.get(row.id) ?? []),
   }))
 })
 
@@ -121,7 +127,7 @@ async function removeCollection(item: { row: CollectionRow }) {
   if (!id) return
   const count = item.row.product_count
   const warning = count
-    ? `Delete "${item.row.name}" and its ${count} ${count === 1 ? presentation.itemLabel.toLowerCase() : `${presentation.itemLabelPlural.toLowerCase()}`}?`
+    ? `Delete "${item.row.name}" and its ${count} ${count === 1 ? item.row.words.itemLabel.toLowerCase() : `${item.row.words.itemLabelPlural.toLowerCase()}`}?`
     : `Delete "${item.row.name}"?`
   if (!confirm(warning)) return
   removingId.value = item.row.id
@@ -129,7 +135,7 @@ async function removeCollection(item: { row: CollectionRow }) {
     await dashboardApi(`/api/editor/sites/${siteId}/collections/${item.row.id}`, { method: 'DELETE', validate: isRecord })
     await load()
   } catch (error) {
-    toast.add({ description: getErrorMessage(error, `Failed to delete ${presentation.collectionGroupLabel.toLowerCase()}`), color: 'error' })
+    toast.add({ description: getErrorMessage(error, `Failed to delete ${presentation.value.collectionGroupLabel.toLowerCase()}`), color: 'error' })
   } finally {
     removingId.value = null
   }

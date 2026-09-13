@@ -1,5 +1,5 @@
 import type { Product, ProductSurface } from '~/server/types/products'
-import type { PublicProductBooking, PublicProductReview } from '~/server/utils/public-products'
+import type { PublicProductBooking, PublicProductLocationPayload, PublicProductReview } from '~/server/utils/public-products'
 import { isCurrencyCode, type CurrencyCode } from '~/shared/currencies'
 import { isRecord, publicApiRequest } from '~/utils/api-clients'
 import type { ProductCollectionSibling } from '~/utils/product-seo'
@@ -8,7 +8,7 @@ import { isPublicProduct, type PublicLocaleRepresentation } from '~/utils/public
 
 export interface PublicProductDetailPayload {
   product: Product
-  location: { id: string; slug: string; title: string }
+  location: PublicProductLocationPayload
   currency: CurrencyCode
   vertical: string
   brandName: string
@@ -30,6 +30,11 @@ function isPublicProductDetailPayload(value: unknown): value is PublicProductDet
     && typeof value.location.id === 'string'
     && typeof value.location.slug === 'string'
     && typeof value.location.title === 'string'
+    && (value.location.address === null || typeof value.location.address === 'string')
+    && (value.location.phone === null || typeof value.location.phone === 'string')
+    && (value.location.maps_url === null || typeof value.location.maps_url === 'string')
+    && (value.location.latitude === null || typeof value.location.latitude === 'number')
+    && (value.location.longitude === null || typeof value.location.longitude === 'number')
     && isCurrencyCode(value.currency)
     && typeof value.vertical === 'string'
     && typeof value.brandName === 'string'
@@ -42,9 +47,12 @@ function isPublicProductDetailPayload(value: unknown): value is PublicProductDet
       && typeof review.id === 'string'
       && typeof review.author === 'string'
       && typeof review.rating === 'number'
-      && typeof review.title === 'string'
+      && (typeof review.title === 'string' || review.title === null)
       && typeof review.content === 'string'
-      && typeof review.createdAt === 'string')
+      && typeof review.createdAt === 'string'
+      && typeof review.source === 'string'
+      && (typeof review.original_reference === 'string' || review.original_reference === null)
+      && (isRecord(review.google_review_metadata) || review.google_review_metadata === null))
     && typeof value.collectionName === 'string'
     && Array.isArray(value.collectionSiblings)
     && value.collectionSiblings.every(sibling => isRecord(sibling)
@@ -86,7 +94,7 @@ export async function usePublicProductDetail(routeKind: ProductSurface) {
     async (_nuxtApp, { signal }) => {
       if (import.meta.server) {
         if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Request context unavailable' })
-        const [{ cloudflareEnv }, { loadPublicExperienceDetail, loadPublicProductDetail, loadPublicProductReviews }, { selectProductCollectionSiblings }, { listMetafieldDefinitions }] = await Promise.all([
+        const [{ cloudflareEnv }, { loadPublicExperienceDetail, loadPublicProductDetail, loadPublicProductReviews, publicLocationPayload }, { selectProductCollectionSiblings }, { listMetafieldDefinitions }] = await Promise.all([
           import('~/server/utils/api-response'),
           import('~/server/utils/public-products'),
           import('~/utils/product-seo'),
@@ -106,7 +114,7 @@ export async function usePublicProductDetail(routeKind: ProductSurface) {
         const siblingCollection = detail.collections.find(collection => membership.has(collection.id)) ?? null
         return {
           product: detail.product,
-          location: { id: detail.location.id, slug: detail.location.slug, title: detail.location.title },
+          location: publicLocationPayload(detail.location),
           currency: detail.currency,
           vertical: detail.site.vertical,
           brandName: detail.site.brand_name,

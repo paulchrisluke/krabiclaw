@@ -55,6 +55,7 @@ export default {
     "experience_detail": {
       "available": "Available",
       "book_now": "Book now",
+      "enquire": "Enquire",
       "booking_failed": "Something went wrong. Please try again.",
       "nothing_scheduled": "There are no sessions scheduled right now.",
       "capacity": "Up to {count} guests",
@@ -103,6 +104,12 @@ export default {
       "things_to_know": "Things to know",
       "what_to_bring": "What to bring",
       "what_youll_do": "What you'll do",
+      "upcoming_availability": "Upcoming availability",
+      "see_all_dates": "See all dates",
+      "from_price": "From {price}",
+      "book": "Book",
+      "review_count": "{count} reviews",
+      "review_count_one": "1 review",
       "where_youll_meet": "Where you'll meet",
       "your_details": "Your details"
     },
@@ -213,7 +220,13 @@ export default {
       "aggregate_only_title": "Rated {average} on Google from {count} reviews",
       "aggregate_only_desc": "Individual reviews aren't available here yet — check back soon.",
       "view_all": "View All Reviews",
-      "anonymous": "Anonymous"
+      "anonymous": "Anonymous",
+      "google_order_notice": "Written reviews, newest first. Google supplies a selection ordered by relevance.",
+      "author_profile": "Author profile",
+      "view_on_google": "View review on Google Maps",
+      "report_review": "Report review",
+      "visited": "Visited {date}",
+      "translated_review": "Translated review · View original ({language})"
     },
     "subnav": {
       "overview": "Overview",
@@ -345,6 +358,7 @@ export default {
       "your_name": "Your name",
       "email": "Email",
       "what_about": "What's this about?",
+      "about_product": "About {product}:",
       "your_message": "Your message",
       "brand_inquiries": "Brand inquiries",
       "reach_us_direct": "Or reach us direct.",

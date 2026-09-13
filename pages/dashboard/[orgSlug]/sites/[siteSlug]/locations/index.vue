@@ -40,8 +40,8 @@
   <DashboardSiteLocationSelector
     v-else
     :items="selectorItems"
-    missing-image-label="No social image"
-    missing-image-hint="Its social card has not been generated yet."
+    missing-image-label="No hero photo"
+    missing-image-hint="Add one under this location's photos."
   />
   </div>
 </template>

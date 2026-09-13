@@ -255,6 +255,116 @@ export async function materializeSessions(db: DbClient, input: {
   return { created, existing: planned - created, skipped }
 }
 
+export interface WeeklySlotInput {
+  weekday: number
+  start_time: string
+  capacity: number | null
+}
+
+/**
+ * Replace a product's weekly schedule at one location.
+ *
+ * The schedule is the set of (weekday, time) slots the merchant runs, each
+ * with its own places or the product's default. A slot that stays keeps its
+ * rule — and with it every session and booking already hanging off it; a slot
+ * that goes cancels its future sessions that nobody has booked, leaves the
+ * booked ones as the commitments they are, and then removes the rule. A slot
+ * that is new gets a rule and, straight away, its sessions inside the public
+ * window: the merchant sees on the site what they just saved, without waiting
+ * for the generator's next pass.
+ */
+export async function replaceWeeklySchedule(db: DbClient, input: {
+  organizationId: string
+  productId: string
+  locationId: string
+  timezone: string
+  slots: WeeklySlotInput[]
+  actorId: string
+}): Promise<{ rules: ProductAvailabilityRule[]; sessions: MaterializeSessionsResult; cancelled: number }> {
+  if (!isValidTimezone(input.timezone)) badRequest('timezone must be a valid IANA zone')
+  const seen = new Set<string>()
+  for (const slot of input.slots) {
+    if (!Number.isInteger(slot.weekday) || slot.weekday < 0 || slot.weekday > 6) badRequest('weekday must be 0 (Sunday) to 6 (Saturday)')
+    assertLocalStartTime(slot.start_time)
+    if (slot.capacity !== null && (!Number.isSafeInteger(slot.capacity) || slot.capacity < 0)) badRequest('capacity must be a non-negative integer or null')
+    const key = `${slot.weekday}:${slot.start_time}`
+    if (seen.has(key)) badRequest(`The schedule lists ${slot.start_time} twice on the same day`)
+    seen.add(key)
+  }
+  await requireBookingConfig(db, input.organizationId, input.productId)
+
+  const existing = (await listAvailabilityRules(db, input.organizationId, input.productId))
+    .filter(rule => rule.location_id === input.locationId)
+  const byKey = new Map(existing.map(rule => [`${rule.weekday}:${rule.start_time}`, rule]))
+  const kept = new Set<string>()
+  const now = new Date().toISOString()
+  const writes: BatchQuery[] = []
+
+  for (const slot of input.slots) {
+    const current = byKey.get(`${slot.weekday}:${slot.start_time}`)
+    if (current) {
+      kept.add(current.id)
+      if (current.capacity !== slot.capacity || current.timezone !== input.timezone) {
+        writes.push({
+          query: `UPDATE product_availability_rules SET capacity = ?, timezone = ?, updated_at = ?, updated_by = ?
+                  WHERE organization_id = ? AND id = ?`,
+          params: [slot.capacity, input.timezone, now, input.actorId, input.organizationId, current.id],
+        })
+      }
+      continue
+    }
+    writes.push({
+      query: `INSERT INTO product_availability_rules (
+                id, organization_id, product_id, location_id, timezone, weekday, start_time, interval_weeks,
+                effective_from_date, effective_until_date, duration_minutes, capacity, created_at, updated_at, created_by, updated_by
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, 1, NULL, NULL, NULL, ?, ?, ?, ?, ?)`,
+      params: [crypto.randomUUID(), input.organizationId, input.productId, input.locationId, input.timezone,
+        slot.weekday, slot.start_time, slot.capacity, now, now, input.actorId, input.actorId],
+    })
+  }
+
+  const removed = existing.filter(rule => !kept.has(rule.id))
+  for (const rule of removed) {
+    // Future sessions nobody holds a seat on go with the slot. A session with
+    // a booking stays scheduled: the guest was promised it.
+    writes.push({
+      query: `UPDATE product_sessions SET status = 'cancelled', updated_at = ?, updated_by = ?
+              WHERE organization_id = ? AND availability_rule_id = ? AND status = 'scheduled' AND starts_at > ?
+                AND NOT EXISTS (SELECT 1 FROM bookings b WHERE b.product_session_id = product_sessions.id AND ${CAPACITY_CONSUMING_SQL})`,
+      params: [now, input.actorId, input.organizationId, rule.id, now, now],
+    })
+    // The rule is the session's provenance, and the schema refuses to delete a
+    // rule that sessions still name (product_sessions_rule_scope_fk).
+    writes.push({
+      query: `UPDATE product_sessions SET availability_rule_id = NULL, updated_at = ?, updated_by = ?
+              WHERE organization_id = ? AND availability_rule_id = ?`,
+      params: [now, input.actorId, input.organizationId, rule.id],
+    })
+    writes.push({
+      query: 'DELETE FROM product_availability_rules WHERE organization_id = ? AND id = ?',
+      params: [input.organizationId, rule.id],
+    })
+  }
+
+  let cancelled = 0
+  if (writes.length) {
+    const results = await executeBatch(db, writes, { operation: 'Replace weekly schedule' })
+    // Every third write for a removed rule is the cancellation; its count is
+    // the sessions that left the calendar.
+    const first = writes.length - removed.length * 3
+    for (let index = 0; index < removed.length; index += 1) cancelled += results[first + index * 3]?.meta?.changes ?? 0
+  }
+
+  const today = localNow(input.timezone).date
+  const sessions = await materializeSessions(db, {
+    organizationId: input.organizationId, productId: input.productId,
+    throughDate: addLocalDays(today, PUBLIC_BOOKING_WINDOW_DAYS), actorId: input.actorId,
+  })
+  const rules = (await listAvailabilityRules(db, input.organizationId, input.productId))
+    .filter(rule => rule.location_id === input.locationId)
+  return { rules, sessions, cancelled }
+}
+
 export async function listSessions(db: DbClient, input: {
   organizationId: string
   productId?: string
