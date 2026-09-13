@@ -18,6 +18,7 @@ export function useOrganizationSettingsNavigation() {
     { id: 'appearance', label: 'Appearance', summary: `${preference.value.charAt(0).toUpperCase()}${preference.value.slice(1)} theme`, to: `${settingsPath.value}/appearance` },
     { id: 'members', label: 'Members', summary: 'People and organization access', to: `${settingsPath.value}/members` },
     { id: 'billing', label: 'Billing', summary: 'Plans and payments', to: `${settingsPath.value}/billing` },
+    { id: 'connect', label: 'Stripe Connect', summary: 'Complete Stripe business onboarding', to: `${settingsPath.value}/connect` },
     // Named for what it is — connecting Google's tools — so it does not read as
     // a second copy of Insights, which is where the figures actually live.
     { id: 'analytics', label: 'Google Analytics', summary: 'Connect Google Analytics and Search Console', to: `${settingsPath.value}/analytics` },

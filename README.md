@@ -224,3 +224,7 @@ yarn stripe:listen
 ```
 
 Copy the `whsec_...` signing secret it outputs into `.env` as `STRIPE_WEBHOOK_SECRET`. Swap back to the production webhook secret before deploying.
+
+Native marketplace onboarding uses a separate Accounts v2 thin-event
+destination and signing secret. See
+[Stripe Connect onboarding](docs/operations/stripe-connect.md).

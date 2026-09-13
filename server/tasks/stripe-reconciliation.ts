@@ -1,9 +1,11 @@
 import { createAuth, type CloudflareEnv } from '~/server/utils/auth'
 import { execute, queryAll, type DbClient } from '~/server/db'
-import { createStripePlanLoader, recordStripeEventFailure, MAX_STRIPE_WEBHOOK_ATTEMPTS, type BetterAuthSubscriptionAdapter } from '~/server/utils/better-auth-stripe'
+import { createStripePlanLoader, recordStripeEventFailure, type BetterAuthSubscriptionAdapter } from '~/server/utils/better-auth-stripe'
 import type Stripe from 'stripe'
 import { processStripeEvent } from '~/server/utils/stripe-event-processing'
 import { createStripeClient } from '~/server/utils/stripe-client'
+import { processStripeConnectEvent } from '~/server/utils/stripe-connect-events'
+import { MAX_STRIPE_WEBHOOK_ATTEMPTS, recordStripeWebhookEventFailure, type StripeWebhookProcessor } from '~/server/utils/stripe-webhook-events'
 import { expireStripeGa4Intents } from '~/server/utils/stripe-ga4-intents'
 import { defineScheduledTask } from '~/server/utils/scheduled-task'
 
@@ -14,6 +16,7 @@ interface StripeTaskContext {
 interface RetryableStripeEvent {
   stripe_event_id: string
   payload: string | null
+  processor: StripeWebhookProcessor
 }
 
 interface StripeTaskResult {
@@ -57,7 +60,7 @@ export default defineScheduledTask({
     await clearExpiredStripeEventPayloads(db)
     await expireStripeGa4Intents(db)
     const events = await queryAll<RetryableStripeEvent>(db, `
-      SELECT stripe_event_id, payload
+      SELECT stripe_event_id, payload, processor
       FROM stripe_webhook_events
       WHERE attempt_count < ?
         AND status IN ('failed', 'pending')
@@ -71,27 +74,34 @@ export default defineScheduledTask({
     let failed = 0
     for (const row of events) {
       if (!row.payload) {
-        await recordStripeEventFailure(db, row.stripe_event_id, 'Stripe webhook payload is missing after retention cleanup')
-        failed += 1
-        continue
-      }
-      let event: Stripe.Event
-      try {
-        event = JSON.parse(row.payload) as Stripe.Event
-      } catch {
-        await recordStripeEventFailure(db, row.stripe_event_id, 'Stripe webhook payload is not valid JSON')
+        if (row.processor === 'platform_billing') {
+          await recordStripeEventFailure(db, row.stripe_event_id, 'Stripe webhook payload is missing after retention cleanup')
+        } else {
+          await recordStripeWebhookEventFailure(db, row.processor, row.stripe_event_id, 'Stripe webhook payload is missing after retention cleanup')
+        }
         failed += 1
         continue
       }
 
       try {
-        const claimed = await processStripeEvent(env as CloudflareEnv, db, event, stripe, adapter, loadStripePlans)
+        let claimed: boolean
+        if (row.processor === 'connect_marketplace') {
+          const notification = stripe.parseEventNotificationWithoutVerification(row.payload)
+          claimed = await processStripeConnectEvent(db, stripe, notification, row.payload)
+        } else {
+          const event = JSON.parse(row.payload) as Stripe.Event
+          claimed = await processStripeEvent(env as CloudflareEnv, db, event, stripe, adapter, loadStripePlans)
+        }
         if (claimed) processed += 1
       } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        if (row.processor === 'platform_billing') await recordStripeEventFailure(db, row.stripe_event_id, message)
+        else await recordStripeWebhookEventFailure(db, row.processor, row.stripe_event_id, message)
         failed += 1
         console.error('stripe_reconciliation_event_failed', {
           stripeEventId: row.stripe_event_id,
-          error: error instanceof Error ? error.message : String(error),
+          processor: row.processor,
+          error: message,
         })
       }
     }

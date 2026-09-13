@@ -18,7 +18,6 @@ export function getPlanEntitlements(plan: string): EntitlementsMap {
     managed_service: false,
     messaging: false,
     review_requests: false,
-    legal_operations: false,
   }
 
   switch (plan) {

@@ -30,7 +30,6 @@ import { createStripeClient } from '~/server/utils/stripe-client'
 import { unwrapInstrumentedD1 } from '~/server/utils/request-metrics'
 import { timingSafeEqualText } from '~/server/utils/dev-route-auth'
 import { notifyOrganizationInvited } from '~/server/utils/notifications'
-import { linkLegalIntakeAuthorizedUser } from '~/server/utils/legal-intake-references'
 
 type MemberRow = InferSelectModel<typeof schema.member>
 type InvitationRow = InferSelectModel<typeof schema.invitation>
@@ -101,6 +100,7 @@ export interface CloudflareEnv {
   GOOGLE_CLIENT_SECRET: string
   STRIPE_SECRET_KEY?: string
   STRIPE_WEBHOOK_SECRET?: string
+  STRIPE_CONNECT_WEBHOOK_SECRET?: string
   GA4_MEASUREMENT_ID?: string
   GA4_API_SECRET?: string
   AI_SEARCH?: AiSearchNamespace
@@ -131,23 +131,6 @@ export interface CloudflareEnv {
   MEDIA_BUCKET?: R2Bucket
   SITE_CACHE?: KVNamespace
   GUEST_INBOX_HUBS?: DurableObjectNamespace
-  LEGAL_BLAWBY_ORIGIN?: string
-  LEGAL_BLAWBY_CLIENT_ID?: string
-  LEGAL_BLAWBY_CLIENT_SECRET?: string
-  LEGAL_BLAWBY_AUDIENCE?: string
-  LEGAL_BLAWBY_CALLBACK_URL_RETURN?: string
-  LEGAL_BLAWBY_CALLBACK_URL_REFRESH?: string
-  LEGAL_BLAWBY_TIMEOUT_MS?: string
-  LEGAL_PUBLIC_BUDGET_IP_SITE_OP_LIMIT?: string
-  LEGAL_PUBLIC_BUDGET_IP_SITE_OP_WINDOW_MS?: string
-  LEGAL_PUBLIC_BUDGET_ACTOR_SITE_OP_LIMIT?: string
-  LEGAL_PUBLIC_BUDGET_ACTOR_SITE_OP_WINDOW_MS?: string
-  LEGAL_PUBLIC_BUDGET_SITE_OP_LIMIT?: string
-  LEGAL_PUBLIC_BUDGET_SITE_OP_WINDOW_MS?: string
-  LEGAL_PUBLIC_BUDGET_REQUEST_REF_LIMIT?: string
-  LEGAL_PUBLIC_BUDGET_REQUEST_REF_WINDOW_MS?: string
-  LEGAL_DIGEST_KEY_ACTIVE?: string
-  LEGAL_DIGEST_KEYS_PREVIOUS?: string
   db?: ReturnType<typeof createDb>
   [key: string]: ApiValue
 }
@@ -167,9 +150,7 @@ export function shouldBypassE2eAuthRateLimit(
 // WeakMap keyed on the D1 binding instance — safe for the Worker lifecycle
 const authCache = new WeakMap<D1Database, unknown>()
 
-// Exported for U5's legal-access dashboard-origin resolution (see
-// server/utils/legal-access.ts) — the same normalization every other
-// trusted-origin comparison in this file already relies on.
+// The same normalization every trusted-origin comparison in this file relies on.
 export function normalizeOrigin(value: string | undefined): string | null {
   const trimmed = value?.trim().replace(/\/$/, '')
   if (!trimmed) return null
@@ -431,10 +412,6 @@ export function createAuth(env: CloudflareEnv) {
                  WHERE anonymous_user_id = ?
                )
           `, [newUser.user.id, now, anonymousUser.user.id, anonymousUser.user.id])
-          // U4/U9 (R27, KTD9): sets legal_intake_references.current_authorized_user_id
-          // once, from NULL only — replay-safe and collision-safe, never touches
-          // original_actor_id/kind (original anonymous attribution is preserved).
-          await linkLegalIntakeAuthorizedUser(db, anonymousUser.user.id, newUser.user.id)
         },
       }),
       oauthProvider({
