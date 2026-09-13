@@ -14,7 +14,7 @@
 // Essentials: 5 / 150. Team: 8 / 300. Set them to the org's plan here; never
 // pass --use-credits.
 import { execFileSync } from 'node:child_process'
-import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
+import { appendFileSync, existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 
@@ -22,6 +22,7 @@ const REVIEWS_PER_HOUR = 3
 const FILES_PER_REVIEW = 150
 const CLI = join(homedir(), '.local/bin/coderabbit')
 const STORE = join(homedir(), '.coderabbit/reviews')
+const RUN_LOG = join(homedir(), '.coderabbit-gate-runs.jsonl')
 
 function git(args, cwd = process.cwd()) {
   return execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim()
@@ -46,8 +47,9 @@ function sessions() {
         const dir = join(reviewsDir, id)
         const gitJson = join(dir, 'git.json')
         const complete = join(dir, '.session-complete-v2')
-        if (!existsSync(gitJson)) continue
-        const meta = JSON.parse(readFileSync(gitJson, 'utf8'))
+        // The CLI keeps git.json only on the newest session per directory. Older
+        // sessions still count against the hour, so keep them with head: null.
+        const meta = existsSync(gitJson) ? JSON.parse(readFileSync(gitJson, 'utf8')) : { head: null, currentBranch: '?' }
         const state = existsSync(complete) ? JSON.parse(readFileSync(complete, 'utf8')).state : 'incomplete'
         const findings = readdirSync(dir)
           .filter(name => name.endsWith('.json') && !['git.json', 'internalState.json', 'incrementalDiff.v2.json'].includes(name))
@@ -58,6 +60,25 @@ function sessions() {
     }
   }
   return out.sort((a, b) => b.startedAt - a.startedAt)
+}
+
+// Runs started in the last hour: the CLI's sessions plus this gate's own log,
+// de-duplicated to the minute, so a session the CLI later prunes still counts.
+function runsInLastHour() {
+  const hourAgo = Date.now() - 60 * 60 * 1000
+  const seen = new Map()
+  for (const session of sessions()) {
+    if (session.startedAt >= hourAgo) seen.set(Math.floor(session.startedAt / 60000), session)
+  }
+  if (existsSync(RUN_LOG)) {
+    for (const line of readFileSync(RUN_LOG, 'utf8').split('\n').filter(Boolean)) {
+      const run = JSON.parse(line)
+      if (run.startedAt >= hourAgo && !seen.has(Math.floor(run.startedAt / 60000))) {
+        seen.set(Math.floor(run.startedAt / 60000), { ...run, findings: [], currentBranch: run.branch })
+      }
+    }
+  }
+  return [...seen.values()].sort((a, b) => b.startedAt - a.startedAt)
 }
 
 function check(sha) {
@@ -85,8 +106,7 @@ function review() {
     process.stdout.write(`coderabbit-gate: ${head.slice(0, 8)} already reviewed at ${new Date(already.startedAt).toISOString()}; not spending a run\n`)
     return check(head)
   }
-  const hourAgo = Date.now() - 60 * 60 * 1000
-  const recent = sessions().filter(session => session.startedAt >= hourAgo)
+  const recent = runsInLastHour()
   if (recent.length >= REVIEWS_PER_HOUR) {
     const oldest = Math.min(...recent.map(session => session.startedAt))
     const waitMinutes = Math.ceil((oldest + 60 * 60 * 1000 - Date.now()) / 60000)
@@ -99,6 +119,7 @@ function review() {
     fail(`${files.length} changed files exceeds the plan's ${FILES_PER_REVIEW} per review. Review in slices with --dir, one run each:\n  ${CLI} review --agent --committed --base staging --dir <path>`, 2)
   }
   process.stdout.write(`coderabbit-gate: reviewing ${files.length} files on ${head.slice(0, 8)} (${recent.length + 1}/${REVIEWS_PER_HOUR} this hour)\n`)
+  appendFileSync(RUN_LOG, JSON.stringify({ startedAt: Date.now(), head, branch: git(['rev-parse', '--abbrev-ref', 'HEAD']) }) + '\n')
   try {
     execFileSync(CLI, ['review', '--agent', '--committed', '--base', 'staging'], { stdio: 'inherit' })
   } catch (error) {
@@ -108,11 +129,10 @@ function review() {
 }
 
 function status() {
-  const hourAgo = Date.now() - 60 * 60 * 1000
-  const recent = sessions().filter(session => session.startedAt >= hourAgo)
+  const recent = runsInLastHour()
   process.stdout.write(`coderabbit-gate: ${recent.length}/${REVIEWS_PER_HOUR} reviews used in the last hour\n`)
   for (const session of recent) {
-    process.stdout.write(`  ${new Date(session.startedAt).toISOString()} ${session.head.slice(0, 8)} ${session.currentBranch} findings=${session.findings.length}\n`)
+    process.stdout.write(`  ${new Date(session.startedAt).toISOString()} ${(session.head ?? 'pruned ').slice(0, 8)} ${session.currentBranch} findings=${session.findings.length}\n`)
   }
   if (recent.length >= REVIEWS_PER_HOUR) {
     const oldest = Math.min(...recent.map(session => session.startedAt))
