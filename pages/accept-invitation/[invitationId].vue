@@ -70,7 +70,14 @@ async function continueWithGoogle() {
 }
 
 async function switchAccount() {
+  // Better Auth resolves with { error } rather than throwing. Unreported, a
+  // failed sign-out left this page looking like it had switched account while
+  // the original session was still the one the invitation would be accepted by.
+  const { error: signOutError } = await authClient.signOut()
+  if (signOutError) {
+    acceptError.value = signOutError.message || 'Could not sign out. Please try again.'
+    return
+  }
   attempted.value = false
-  await authClient.signOut()
 }
 </script>
