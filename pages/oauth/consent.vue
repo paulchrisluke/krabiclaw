@@ -162,7 +162,15 @@ const switchingAccount = ref(false)
 async function switchAccount() {
   switchingAccount.value = true
   try {
-    await authClient.signOut()
+    // Better Auth resolves with { error } rather than throwing, so a failed
+    // sign-out arrives as a value and a catch never sees it. Navigating on
+    // past it lands the user on a sign-in form with their session intact.
+    const { error: signOutError } = await authClient.signOut()
+    if (signOutError) {
+      error.value = signOutError.message || 'Could not sign out. Please try again.'
+      switchingAccount.value = false
+      return
+    }
   } catch (cause) {
     error.value = getErrorMessage(cause, 'Could not sign out. Please try again.')
     switchingAccount.value = false

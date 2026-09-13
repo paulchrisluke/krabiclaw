@@ -134,6 +134,11 @@ const accountInitial = computed(() =>
  */
 async function continueWithSession() {
   loading.value = true
+  // A document stays interactive between assigning location.href and unload.
+  // Releasing the buttons there lets switchAccount sign the user out while the
+  // authorization request is still in flight, and the flow continues without
+  // the session it was authorizing. Only a failure gets them back.
+  let redirecting = false
   try {
     if (isSelectAccountFlow.value) {
       const { data, error: continueError } = await authClient.oauth2.continue({ selected: true })
@@ -142,18 +147,21 @@ async function continueWithSession() {
         return
       }
       const destination = oauthContinuationDestination(data)
+      redirecting = true
       window.location.href = destination || `/api/auth/oauth2/authorize${window.location.search}`
       return
     }
 
+    redirecting = true
     window.location.href = `/api/auth/oauth2/authorize${window.location.search}`
   } catch (cause) {
     // A thrown continuation used to leave `loading` set forever. That only
     // greyed out this button before; now it also holds the switch-account
     // button down, so the page offers nothing at all until a reload.
+    redirecting = false
     error.value = getErrorMessage(cause, 'Could not continue authorization.')
   } finally {
-    loading.value = false
+    if (!redirecting) loading.value = false
   }
 }
 
@@ -168,7 +176,15 @@ async function switchAccount() {
   // another concurrent signOut against the same session.
   switching.value = true
   try {
-    await authClient.signOut()
+    // Better Auth resolves with { error } rather than throwing — a 500 from
+    // the sign-out endpoint comes back as a value. Catching only throws meant
+    // a failed sign-out still cleared the session and offered the sign-in
+    // form while the server session was very much alive.
+    const { error: signOutError } = await authClient.signOut()
+    if (signOutError) {
+      error.value = signOutError.message || 'Could not sign out. Please try again.'
+      return
+    }
   } catch (cause) {
     error.value = getErrorMessage(cause, 'Could not sign out. Please try again.')
     return
