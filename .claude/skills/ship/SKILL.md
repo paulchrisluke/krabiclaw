@@ -37,16 +37,25 @@ Open the issue's checklist and prove each item. Then run an adversarial pass:
 boundary values, rows persisted by the previous schema, real latency. Write
 "not checked" only for what genuinely needs the deployed preview.
 
-## 2. Local CodeRabbit, once, at the end
+## 2. CodeRabbit, once per commit, through the gate
 
 ```bash
-~/.local/bin/coderabbit review --agent --committed --base staging
+node scripts/coderabbit-gate.mjs review
 ```
 
-Run it once the change is complete, not per iteration. Fix every finding
-through the canonical path or state in the PR why a finding is wrong. Nothing
-stays "deferred". Do not run it again unless the fix changed more than the
-flagged lines.
+Never call the CLI directly and never pass `--use-credits`. The gate refuses a
+dirty tree, refuses when the rolling hour is spent (`status` says when the next
+slot opens), refuses a diff over the plan's files-per-review cap, and reviews
+committed HEAD against `staging`. Fix every finding, commit, and run it again
+on the new HEAD. A finding you believe is wrong stays a finding until the
+re-review agrees; say why in the PR body if it does not.
+
+A review belongs to one commit SHA. A committed PreToolUse hook runs
+`coderabbit-gate.mjs check` before `gh pr ready`, `gh pr merge` and any push
+to staging, and blocks unless the exact commit being shipped has a completed
+review in the CLI's own store with zero open findings. There is no flag to skip
+it. Budget accordingly: the plan allows a few reviews per developer per rolling
+hour, so run the change to completion before spending one.
 
 ## 3. The Checks job, step for step
 
