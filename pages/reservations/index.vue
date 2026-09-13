@@ -176,6 +176,13 @@ const route = useRoute()
 const { locale, t } = useI18n()
 const resCopy = computed(() => getVerticalCopy((site as ApiValue)?.vertical, locale.value))
 const { locations, config, getField, reservationPolicyByLocation } = await usePublicPageData()
+
+// The first location card's hero is this route's LCP element.
+useHeroLcpPreload(computed(() => {
+  const first = locations.value[0]
+  return first ? getLocationPoster(first) : null
+}))
+
 const isExperienceSite = computed(() => (site as { vertical?: string | null } | null)?.vertical === 'experience')
 
 // Experience-vertical sites book each Product on its own page. The

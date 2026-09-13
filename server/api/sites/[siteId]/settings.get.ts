@@ -1,12 +1,11 @@
-import { resolvePublicTemplate } from '~/utils/template-registry'
 // GET site settings
 import { cloudflareEnv, jsonResponse, rethrowHttpError } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
-import { getConfig } from '~/server/utils/site-config'
 import { assertSiteWideAccess } from '~/server/utils/member-access'
 import { loadMemberSiteRow } from '~/server/utils/location-access'
-import { queryFirst } from '~/server/db'
-import { getMediaPlacements } from '~/server/utils/media-placement'
+import { loadSettingsPayload } from '~/server/utils/site-settings'
+import { defineHandler } from 'nitro'
+import { getRouterParam } from 'nitro/h3'
 
 export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
@@ -44,30 +43,8 @@ export default defineHandler(async (event) => {
       env,
       memberId: siteAccess.member_id, role: siteAccess.member_role, organizationId: siteAccess.organization_id, siteId, })
 
-    const site = await queryFirst<ApiRecord>(db, `
-      SELECT s.id, s.organization_id, s.subdomain, s.theme_id, s.status, (SELECT 'https://' || domain FROM site_domains WHERE site_id = s.id AND role = 'canonical' AND status = 'active') AS public_url, COALESCE((SELECT status FROM site_domains WHERE site_id = s.id AND type = 'custom' AND status NOT IN ('deleted', 'disabled') ORDER BY role = 'canonical' DESC, created_at, id LIMIT 1), 'none') AS custom_domain_status, s.default_currency, s.brand_name, s.brand_description,
-             s.contact_email, s.last_published_at, s.created_at, s.updated_at
-      FROM sites s
-      WHERE s.id = ? AND s.organization_id = ?
-      LIMIT 1
-    `, [siteId, siteAccess.organization_id])
-
-    if (!site) {
-      return jsonResponse({
-        error: 'Site not found or access denied'
-      }, { status: 404 })
-    }
-
-    const siteConfig = await getConfig(db, site.organization_id as string, site.id as string)
-    const placements = await getMediaPlacements(db, { siteId, ownerType: 'site', ownerIds: [siteId] })
-
-    const settings = {
-      id: site.id, organization_id: site.organization_id, site_id: site.id, subdomain: site.subdomain, theme: resolvePublicTemplate({ themeId: site.theme_id }).slug, status: site.status, public_url: site.public_url, custom_domain_status: site.custom_domain_status, brand_name: site.brand_name, brand_description: site.brand_description, media: (placements.get(siteId) ?? []).map(item => ({ asset_id: item.asset_id, slot: item.slot, public_url: item.public_url, thumbnail_url: item.thumbnail_url, kind: item.kind })), contact_email: site.contact_email, brand_color: siteConfig.brand_color || '', default_currency: site.default_currency, press_email: siteConfig.press_email || '', partnerships_email: siteConfig.partnerships_email || '', catering_email: siteConfig.catering_email || '', careers_email: siteConfig.careers_email || '', google_analytics_measurement_id: siteConfig.google_analytics_measurement_id || '', google_site_verification: siteConfig.google_site_verification || '', last_published_at: site.last_published_at, created_at: site.created_at, updated_at: site.updated_at
-    }
-
-    return jsonResponse({
-      success: true, settings
-    })
+    const settings = await loadSettingsPayload(db, siteAccess.organization_id, siteId)
+    return jsonResponse({ success: true, settings })
 
   } catch (error) {
     rethrowHttpError(error)
@@ -77,5 +54,3 @@ export default defineHandler(async (event) => {
     }, { status: 500 })
   }
 })
-import { defineHandler } from 'nitro';
-import { getRouterParam } from 'nitro/h3';

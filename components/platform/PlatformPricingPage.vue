@@ -9,7 +9,7 @@
           <span class="w-1.5 h-1.5 rounded-full bg-(--kc-teal) shrink-0 animate-ping" />
           Simple, Flexible Plans
         </span>
-        <h1 class="text-[clamp(36px,5vw,56px)] font-extrabold leading-[1.05] tracking-tight text-default text-balance m-0 mt-2">
+        <h1 class="text-[clamp(36px,5vw,56px)] font-bold leading-[1.05] tracking-tight text-default text-balance m-0 mt-2">
           Simple, <span class="bg-gradient-to-r from-primary via-(--kc-coral) to-(--kc-teal) bg-clip-text text-transparent">transparent</span> pricing.
         </h1>
         <p class="text-lg leading-relaxed text-muted m-0 max-w-2xl mt-2">
@@ -24,7 +24,7 @@
       <div class="max-w-3xl mx-auto mt-28">
         <div class="text-center mb-12 flex flex-col items-center gap-2">
           <span class="text-xs font-bold tracking-widest uppercase text-primary">Got Questions?</span>
-          <h2 class="text-3xl font-extrabold tracking-tight text-default mt-1">Frequently Asked Questions</h2>
+          <h2 class="text-3xl font-bold tracking-tight text-default mt-1">Frequently Asked Questions</h2>
         </div>
         <div class="space-y-4">
           <div

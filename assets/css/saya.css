@@ -1,7 +1,7 @@
 /* Saya theme tokens — KrabiClaw Design System */
 
 :root {
-  --font-saya: 'Instrument Serif', 'Iowan Old Style', Palatino, Georgia, serif;
+  --font-saya: "Instrument Serif", serif;
 
   /* Fixed dark surface pair — deliberately NOT re-scoped inside .dark
      .saya-theme below, unlike --saya-bg-inverted/--saya-fg-inverted (which

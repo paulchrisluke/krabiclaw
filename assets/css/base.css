@@ -15,7 +15,7 @@
 @theme static {
   --font-sans: "Poppins", sans-serif;
   --font-poppins: "Poppins", sans-serif;
-  --font-display: "Fredoka", "Poppins", ui-rounded, system-ui, sans-serif;
+  --font-display: "Fredoka", sans-serif;
 
   --breakpoint-xs: 375px;
   --breakpoint-sm: 576px;
@@ -231,6 +231,13 @@
 .dark .kc-wordmark__tld   { color: #EEF0F8; }
 
 /* ── Platform type utilities ──────────────────────────────── */
+/* krabiclaw.com sets headings in Fredoka, the same face as the wordmark, so the
+   marketing site, blog and docs read as one brand. Body copy stays Poppins.
+   Fredoka ships 500/600/700: headings must not ask for a weight above 700 or the
+   browser synthesises it and the result no longer matches the wordmark. */
+.platform-layout :is(h1, h2, h3) {
+  font-family: var(--font-display);
+}
 .kc-wordmark {
   font-family: var(--font-display);
   font-weight: 600;

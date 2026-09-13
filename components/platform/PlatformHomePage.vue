@@ -20,7 +20,7 @@
             </span>
 
             <!-- Headline -->
-            <h1 class="text-[clamp(40px,5vw,66px)] font-extrabold leading-[1.02] tracking-tight text-balance m-0">
+            <h1 class="text-[clamp(40px,5vw,66px)] font-bold leading-[1.02] tracking-tight text-balance m-0">
               <span class="text-default">Your local business,</span><br>
               <span style="background: linear-gradient(135deg, var(--kc-coral) 0%, #e0524c 40%, var(--kc-coral-400) 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">managed through</span><br>
               <span class="text-default">ChatGPT.</span>
@@ -71,7 +71,7 @@
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div class="text-center max-w-2xl mx-auto mb-14 flex flex-col items-center gap-3">
             <span class="kc-eyebrow text-primary">Tailored Operating Layers</span>
-            <h2 class="text-3xl sm:text-4xl font-extrabold tracking-tight text-default m-0">
+            <h2 class="text-3xl sm:text-4xl font-bold tracking-tight text-default m-0">
               Built for your specific industry
             </h2>
             <p class="text-base text-muted m-0">
@@ -147,7 +147,7 @@
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div class="text-center max-w-2xl mx-auto mb-14 flex flex-col items-center gap-4">
             <span class="kc-eyebrow text-muted">Everything your business needs</span>
-            <h2 class="text-[clamp(32px,4vw,48px)] font-extrabold tracking-tight leading-[1.05] m-0">
+            <h2 class="text-[clamp(32px,4vw,48px)] font-bold tracking-tight leading-[1.05] m-0">
               <span class="text-default">Everything your site needs.</span><br>
               <span class="text-muted font-bold">Nothing you don't.</span>
             </h2>
@@ -187,7 +187,7 @@
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div class="text-center max-w-2xl mx-auto mb-14 flex flex-col items-center gap-4">
             <span class="kc-eyebrow text-muted">Simple, transparent pricing</span>
-            <h2 class="text-[clamp(32px,4vw,48px)] font-extrabold tracking-tight leading-[1.05] m-0 text-default">
+            <h2 class="text-[clamp(32px,4vw,48px)] font-bold tracking-tight leading-[1.05] m-0 text-default">
               Start free. Grow when you're ready.
             </h2>
             <p class="text-lg leading-relaxed text-muted m-0">

@@ -462,6 +462,9 @@ const heroMedia = computed(() => {
   if (contentHero.value.image) return resolveMedia({ public_url: contentHero.value.image, kind: contentHero.value.imageKind || 'image' })
   return resolveMedia(location.value ? locationMedia(location.value as ApiRecord) : null)
 })
+// The full-bleed hero is this route's LCP element when it is an image.
+useHeroLcpPreload(computed(() => heroMedia.value.isVideo ? null : (heroMedia.value.url ?? null)))
+
 const locationSocialCard = computed(() => location.value?.social_image ?? null)
 const heroTitle = computed(() => contentHero.value.title || null)
 const heroSubtitle = computed(() => contentHero.value.subtitle || null)

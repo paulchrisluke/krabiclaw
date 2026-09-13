@@ -4,6 +4,8 @@ import { createSystemSubdomain, isSystemSubdomainSpent } from '~/server/utils/do
 import { reconcileZarazAnalytics } from '~/server/utils/zaraz-analytics'
 import { isCurrencyCode } from '~/shared/currencies'
 import { parseRobotsIntent, ROBOTS_INTENTS } from '~/shared/robots-directive'
+import { isSiteFontPreset, resolveSiteFontPreset } from '~/shared/site-fonts'
+import { purgePublicResourceCacheSafe } from '~/server/utils/public-resource-cache'
 import type { UpdateSiteSettingsRequest } from '~/server/types/site'
 import { execute, executeBatch, queryAll, queryFirst, type DbClient } from '~/server/db'
 import { defaultModuleFeaturesForVertical, parseCmsFeatureOverrideDelta, toggleableModulesForScope, type CmsCapabilityOverrideDelta, type ProductFeature } from '~/config/cms-registry'
@@ -182,7 +184,8 @@ export async function loadSettingsPayload(
     effective_features: effectiveFeatures,
     default_features: defaultFeatures,
     brand_color: siteConfig.brand_color || '',
-    default_currency: updatedSite.default_currency || 'USD',
+    font_preset: resolveSiteFontPreset(siteConfig.font_preset),
+    default_currency: updatedSite.default_currency,
     press_email: siteConfig.press_email || '',
     partnerships_email: siteConfig.partnerships_email || '',
     catering_email: siteConfig.catering_email || '',
@@ -265,6 +268,10 @@ async function attemptSiteUpdate(
   const params: Array<string | null> = []
   const siteMedia = updates.media
 
+  if (updates.font_preset !== undefined) {
+    setParts.push("settings_json = json_set(settings_json, '$.config.font_preset', ?)")
+    params.push(updates.font_preset)
+  }
   if (updates.brand_name !== undefined) {
     setParts.push('brand_name = ?', 'subdomain = ?')
     params.push(updates.brand_name, subdomain)
@@ -439,6 +446,10 @@ async function attemptSiteUpdate(
     }
   }
 
+  // All settings callers use this mutation path; refresh both public resource
+  // and HTML caches when typography changes, including a reset to Default.
+  if (updates.font_preset !== undefined) await purgePublicResourceCacheSafe(env, siteId)
+
   if (siteMedia !== undefined && siteMedia.length > 0) {
     const targetSlots = new Set(siteMedia.map(item => item.slot))
     const queries = [...targetSlots].flatMap(slot => buildSingleMediaPlacementQueries({
@@ -497,6 +508,16 @@ export async function updateSiteSettingsFields(
     return {
       status: 404,
       data: { error: 'Site not found or access denied' },
+    }
+  }
+
+  // Validate before any settings writes. Preset IDs are not CSS or font URLs.
+  if (updates.font_preset !== undefined) {
+    if (!isSiteFontPreset(updates.font_preset)) {
+      return { status: 400, data: { error: 'font_preset must be default or mali' } }
+    }
+    if (updates.font_preset === 'mali' && resolvePublicTemplate({ themeId: site.theme_id }).slug !== 'saya') {
+      return { status: 400, data: { error: 'Mali is available for the Saya template only' } }
     }
   }
 

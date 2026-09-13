@@ -61,6 +61,7 @@ export interface SiteIntegrations {
 export interface SiteSettings {
   config?: {
     brand_color?: string
+    font_preset?: import('./site-fonts').SiteFontPreset
     press_email?: string
     partnerships_email?: string
     catering_email?: string

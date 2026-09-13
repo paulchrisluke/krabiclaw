@@ -4,7 +4,7 @@
   color-scheme: light;
   background-color: var(--blawby-bg);
   color: var(--blawby-ink);
-  font-family: Poppins, ui-sans-serif, system-ui, sans-serif;
+  font-family: Poppins, sans-serif;
 
   --blawby-bg:            var(--blawby-token-bg, #fbfaf7);
   --blawby-surface:       var(--blawby-token-surface, #ffffff);
@@ -119,15 +119,15 @@ html.blawby-document {
 }
 
 .blawby-display {
-  font-family: Marcellus, Georgia, serif;
+  font-family: Marcellus, serif;
 }
 
 .blawby-shell .prose :where(h1, h2, h3, h4) {
-  font-family: Marcellus, Georgia, serif;
+  font-family: Marcellus, serif;
 }
 
 .blawby-shell .prose.blawby-policy-prose :where(h1, h2, h3, h4) {
-  font-family: Poppins, Arial, sans-serif;
+  font-family: Poppins, sans-serif;
 }
 
 .blawby-faq-answer p,

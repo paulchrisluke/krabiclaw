@@ -274,7 +274,7 @@
         </span>
       </UButton>
       <USeparator class="my-4" />
-      <UButton :label="`Change ${noun}`" icon="i-lucide-pencil" color="neutral" variant="ghost" size="xl" block class="justify-start" :to="`${bookingPath}/change`" @click="beginChange" />
+      <UButton :label="`Change ${noun}`" icon="i-lucide-pencil" color="neutral" variant="ghost" size="xl" block class="justify-start" :to="`${bookingPath}/change`" />
       <UButton
         v-for="action in availableActions"
         :key="action.value"
@@ -477,11 +477,18 @@ watch([detailsKey, () => selectedNote.value?.id, editorKey, editorField], () => 
   noteAttemptDraft.value = null
 }, { immediate: true })
 
-watch([booking, editorKey, editorField], ([currentBooking, key]) => {
+watch([booking, editorKey, editorField], ([currentBooking, key], previous) => {
   // A field leaf is a route, so Nuxt may recreate this component while moving
   // between it and the change hub. Keep the one staged draft in Nuxt state and
-  // only reseed it when it belongs to an older source revision.
-  if (currentBooking && key === 'change' && changeDraft.value.sourceUpdatedAt !== currentBooking.updatedAt) resetChangeDraft()
+  // only reseed it when it belongs to an older source revision, or when change
+  // mode is being entered afresh and the tenant should not inherit the edits
+  // they abandoned last time.
+  const entering = key === 'change' && previous !== undefined && previous[1] !== 'change'
+  if (currentBooking && key === 'change' && (entering || changeDraft.value.sourceUpdatedAt !== currentBooking.updatedAt)) resetChangeDraft()
+  // The route is what opens change mode, so the route is what closes the sheet
+  // that offers it. Closing it from the link's own click handler unmounted the
+  // link in the same tick as the navigation it had just started.
+  if (key === 'change') manageOpen.value = false
   if (key === 'change' && isChangeField(editorField.value)) changeFieldOriginal.value = changeDraft.value[draftKey(editorField.value)]
 }, { immediate: true })
 
@@ -502,11 +509,6 @@ function resetChangeDraft() {
   changeDraft.value.sourceUpdatedAt = booking.value.updatedAt
   changeAttemptKey.value = null
   changeAttemptDraft.value = ''
-}
-
-function beginChange() {
-  manageOpen.value = false
-  resetChangeDraft()
 }
 
 const availableActions = computed<Array<{ value: string; label: string; icon: string; color: ActionColor }>>(() => {

@@ -37,11 +37,12 @@ export async function enableSiteLanguage(
   const result = await execute(db, `
     INSERT INTO site_locales (id, organization_id, site_id, locale, label, is_source, status, activated_at, created_at, updated_at)
     SELECT ?, ?, ?, ?, ?, 0, 'published', ?, ?, ?
-     WHERE NOT EXISTS (SELECT 1 FROM site_locales WHERE organization_id = ? AND site_id = ? AND is_source = 0 AND status = 'published' AND locale <> ?)
+     WHERE (SELECT COUNT(*) FROM site_locales
+              WHERE organization_id = ? AND site_id = ? AND is_source = 0 AND status = 'published' AND locale <> ?) < 2
     ON CONFLICT(organization_id, site_id, locale) DO UPDATE SET label = excluded.label, status = 'published',
       activated_at = COALESCE(site_locales.activated_at, excluded.activated_at), disabled_at = NULL, updated_at = excluded.updated_at
   `, [`locale::${input.organizationId}::${input.siteId}::${locale}`, input.organizationId, input.siteId, locale, catalog.label, now, now, now, input.organizationId, input.siteId, locale])
-  if (result.meta?.changes !== 1) localizationError(409, 'LANGUAGE_ENTITLEMENT_REQUIRED', 'Language could not be enabled because another secondary language is already published.')
+  if (result.meta?.changes !== 1) localizationError(409, 'LANGUAGE_ENTITLEMENT_REQUIRED', 'Language could not be enabled because two secondary languages are already published.')
   return await loadLanguage(db, input.organizationId, input.siteId, locale)
 }
 

@@ -11,7 +11,7 @@
           <PlatformIcon name="calendar" class="size-3.5" />
           Experiences & Activities
         </span>
-        <h1 class="text-4xl sm:text-6xl font-extrabold tracking-tight leading-[1.05] text-default m-0 text-balance">
+        <h1 class="text-4xl sm:text-6xl font-bold tracking-tight leading-[1.05] text-default m-0 text-balance">
           Stop losing every booking to marketplaces. <br class="hidden sm:inline" />
           <span class="bg-gradient-to-r from-(--kc-teal) via-(--kc-coral) to-primary bg-clip-text text-transparent">
             Direct bookings & ticketing, managed in ChatGPT.
@@ -94,7 +94,7 @@
       <div class="rounded-3xl border border-default bg-elevated/40 p-8 sm:p-12 mb-24 max-w-5xl mx-auto backdrop-blur-md">
         <div class="text-center max-w-2xl mx-auto mb-10">
           <span class="kc-eyebrow text-(--kc-teal-600)">Conversational Studio Operations</span>
-          <h2 class="text-3xl font-extrabold text-default mt-2">Manage sessions & bookings by talking to ChatGPT</h2>
+          <h2 class="text-3xl font-bold text-default mt-2">Manage sessions & bookings by talking to ChatGPT</h2>
           <p class="text-sm text-muted mt-2">Update time slots, check booking demand, and publish promotions without touching code.</p>
         </div>
 
@@ -158,7 +158,7 @@
               <PlatformIcon name="sparkles" class="size-3.5 text-(--kc-coral)" />
               Verified Production Showcase
             </span>
-            <h2 class="text-3xl sm:text-4xl font-extrabold tracking-tight text-white m-0">
+            <h2 class="text-3xl sm:text-4xl font-bold tracking-tight text-white m-0">
               How Pottery House Krabi powers hands-on workshops
             </h2>
             <p class="text-white/80 text-[15px] sm:text-base leading-relaxed m-0">
@@ -213,7 +213,7 @@
       <div class="max-w-6xl mx-auto mb-24">
         <div class="text-center max-w-2xl mx-auto mb-14">
           <span class="kc-eyebrow text-muted">Tailored for Activities</span>
-          <h2 class="text-3xl sm:text-4xl font-extrabold text-default mt-2">Everything you need to run ticketed classes and tours</h2>
+          <h2 class="text-3xl sm:text-4xl font-bold text-default mt-2">Everything you need to run ticketed classes and tours</h2>
         </div>
         <div class="grid md:grid-cols-3 gap-6">
           <div
@@ -234,7 +234,7 @@
 
       <!-- ── 6. FAQ Section ─────────────────────────────────────────── -->
       <div class="max-w-4xl mx-auto mb-24">
-        <h2 class="text-3xl font-extrabold text-default text-center mb-12">Frequently Asked Experience Questions</h2>
+        <h2 class="text-3xl font-bold text-default text-center mb-12">Frequently Asked Experience Questions</h2>
         <div class="grid sm:grid-cols-2 gap-6">
           <div
             v-for="faq in faqs"
@@ -252,7 +252,7 @@
 
       <!-- ── 7. Bottom CTA ──────────────────────────────────────────── -->
       <div class="rounded-3xl border border-default bg-elevated p-10 sm:p-16 text-center max-w-4xl mx-auto shadow-sm flex flex-col items-center gap-6">
-        <h2 class="text-3xl sm:text-4xl font-extrabold text-default m-0">Start selling workshop tickets directly</h2>
+        <h2 class="text-3xl sm:text-4xl font-bold text-default m-0">Start selling workshop tickets directly</h2>
         <p class="text-base sm:text-lg text-muted max-w-xl m-0 leading-relaxed">
           Create your experience site in minutes, connect with ChatGPT, and accept commission-free bookings today.
         </p>

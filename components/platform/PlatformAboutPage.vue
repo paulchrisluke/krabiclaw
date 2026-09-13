@@ -9,7 +9,7 @@
         <span class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold uppercase tracking-wider bg-primary/10 text-primary border border-primary/20">
           About KrabiClaw
         </span>
-        <h1 class="text-4xl sm:text-6xl font-extrabold tracking-tight leading-[1.05] text-default m-0 text-balance">
+        <h1 class="text-4xl sm:text-6xl font-bold tracking-tight leading-[1.05] text-default m-0 text-balance">
           Websites that independent businesses can actually run.
         </h1>
         <p class="text-lg sm:text-xl text-muted leading-relaxed max-w-2xl mx-auto m-0">
@@ -70,7 +70,7 @@
 
       <!-- CTA Section -->
       <div class="rounded-3xl border border-default bg-elevated p-8 sm:p-12 text-center space-y-6 shadow-sm">
-        <h2 class="text-3xl font-extrabold text-default m-0">Ready to take control of your web presence?</h2>
+        <h2 class="text-3xl font-bold text-default m-0">Ready to take control of your web presence?</h2>
         <p class="text-base text-muted max-w-lg mx-auto m-0">
           Start completely free on a subdomain, connect the KrabiClaw app in ChatGPT, and experience website management through conversation.
         </p>

@@ -4,6 +4,7 @@
     :style="themeStyles"
     :data-hydrated="hydrated ? 'true' : 'false'"
     :data-public-critical-shell="isHome ? 'true' : undefined"
+    :data-font-preset="fontPreset"
   >
     <!-- Teleport target for Saya components (e.g. BookingModal) that need to escape
          page overflow/stacking contexts but still must render inside this div to
@@ -41,6 +42,7 @@
 import sayaCriticalCss from '~/assets/css/saya-critical.css?raw'
 import '~/assets/css/saya-entry.css'
 import { NON_INDEXABLE_ROBOTS_INTENT, normalizeRobotsIntent, type RobotsIntent } from '~/shared/robots-directive'
+import { MALI_FONT_CSS, resolveSiteFontPreset, siteFontStyles } from '~/shared/site-fonts'
 
 const route = useRoute()
 const hydrated = ref(false)
@@ -80,7 +82,10 @@ if (import.meta.dev) useDebugLCP()
 // Persistent chrome uses the minimal shell contract. Route-specific Product and
 // experience data comes from the keyed page loader and changes independently.
 const shell = useSiteShellState()
-if (import.meta.server && isHome.value) await shell.ready
+// The layout's root attributes are serialized before its children render.
+// Await the existing keyed shell on every SSR route, not only the homepage,
+// so a direct menu/contact visit cannot serialize Default and hydrate as Mali.
+if (import.meta.server) await shell.ready
 const { config, locations, locales, error: bootstrapError, site: shellSite } = shell
 const { isPlatform, site } = useTenantSite()
 const resolvedSite = computed(() => shellSite.value || site)
@@ -88,13 +93,24 @@ const brandColor = computed(
   () => config.value?.brand_color || null
 )
 const brandTextColor = computed(() => getContrastColor(brandColor.value))
+const fontPreset = computed(() => resolveSiteFontPreset(config.value.font_preset))
+
+// The existing SSR shell supplies the choice. No mounted font loader, extra
+// settings request, global font stylesheet, or font preloads: the faces are
+// `optional`, and the head's preload is the page's hero (useHeroLcpPreload).
+useHead(() => ({
+  style: fontPreset.value === 'mali'
+    ? [{ key: 'saya-font-preset', innerHTML: MALI_FONT_CSS, tagPriority: 'critical' }]
+    : [],
+}))
 
 const themeStyles = computed(() => {
-  if (!brandColor.value) return {}
-  return {
-    '--brand-color': brandColor.value,
-    '--brand-color-foreground': brandTextColor.value,
+  const styles = siteFontStyles(fontPreset.value)
+  if (brandColor.value) {
+    styles['--brand-color'] = brandColor.value
+    styles['--brand-color-foreground'] = brandTextColor.value
   }
+  return styles
 })
 
 // A page under /locations/<slug> is about exactly one location: the location
