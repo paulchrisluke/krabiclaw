@@ -1140,7 +1140,9 @@ export interface ReconcileOrganizationSubscriptionOptions {
 
 /**
  * Produce evidence only. This function intentionally has no write-capable DB
- * import and no Stripe mutation path; a future apply command must be separate.
+ * import and no Stripe mutation path. Its caller is the hourly
+ * server/tasks/stripe-reconciliation.ts, which acts on a report by requeueing
+ * the organization's dead-lettered webhook events for the canonical event path.
  */
 export async function reconcileOrganizationSubscription(
   options: ReconcileOrganizationSubscriptionOptions,
