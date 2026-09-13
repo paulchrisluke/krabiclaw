@@ -368,7 +368,7 @@ import { formatProductMoney } from '~/utils/product-money'
 import { productLocationCollectionPath } from '~/utils/product-presentation'
 import type { ProductCollectionSibling } from '~/utils/product-seo'
 import type { MetafieldDefinition, MetafieldValue } from '~/shared/metafields'
-import { metafieldHandle, PRICING_NOTE_HANDLE } from '~/shared/metafields'
+import { EXPERIENCE_ATTRIBUTE_HANDLES, metafieldHandle, PRICING_NOTE_HANDLE } from '~/shared/metafields'
 import type { PublicProductBooking, PublicProductLocationPayload, PublicProductReview } from '~/server/utils/public-products'
 import { formatLocationAddress } from '~/utils/location-address'
 import SayaReviewCard from '~/components/saya/SayaReviewCard.vue'
@@ -710,27 +710,24 @@ const reviewCountLabel = computed(() => (props.reviews.length === 1
   : t('saya.experience_detail.review_count', { count: props.reviews.length })))
 
 /**
- * The attributes the page gives their own place, found by the definition's
- * key: the tenant names them, the page knows what a tagline, a list of what is
- * included, what to bring and a meeting point are for. Everything else the
- * tenant defined is "things to know".
+ * The attributes the page gives their own place, read by their canonical
+ * handle (EXPERIENCE_ATTRIBUTE_HANDLES). Everything else the tenant defined
+ * is "things to know".
  */
-function attributeByKey<T>(key: string, read: (_value: MetafieldValue) => T | null): T | null {
-  const definition = props.metafieldDefinitions.find(entry => entry.key === key)
-  if (!definition) return null
-  const value = props.product.metafields[metafieldHandle(definition)]
+function attribute<T>(handle: string, read: (_value: MetafieldValue) => T | null): T | null {
+  const value = props.product.metafields[handle]
   return value === undefined || value === null ? null : read(value)
 }
 const asText = (value: MetafieldValue) => (typeof value === 'string' && value.trim() ? value : null)
 const asList = (value: MetafieldValue) => (Array.isArray(value) ? value.map(String).filter(Boolean) : null)
-const tagline = computed(() => attributeByKey('tagline', asText))
-const meetingPoint = computed(() => attributeByKey('meeting_point', asText))
-const includedItems = computed(() => attributeByKey('included_items', asList) ?? [])
-const whatToBring = computed(() => attributeByKey('what_to_bring', asList) ?? [])
-const PLACED_ATTRIBUTE_KEYS = new Set(['tagline', 'meeting_point', 'included_items', 'what_to_bring'])
+const tagline = computed(() => attribute(EXPERIENCE_ATTRIBUTE_HANDLES.tagline, asText))
+const meetingPoint = computed(() => attribute(EXPERIENCE_ATTRIBUTE_HANDLES.meetingPoint, asText))
+const includedItems = computed(() => attribute(EXPERIENCE_ATTRIBUTE_HANDLES.includedItems, asList) ?? [])
+const whatToBring = computed(() => attribute(EXPERIENCE_ATTRIBUTE_HANDLES.whatToBring, asList) ?? [])
+const PLACED_ATTRIBUTE_HANDLES = new Set<string>(Object.values(EXPERIENCE_ATTRIBUTE_HANDLES))
 const thingsToKnow = computed(() => visibleDetails.value.filter((detail) => {
   const definition = props.metafieldDefinitions.find(entry => entry.id === detail.key)
-  return !definition || !PLACED_ATTRIBUTE_KEYS.has(definition.key)
+  return !definition || !PLACED_ATTRIBUTE_HANDLES.has(metafieldHandle(definition))
 }))
 
 const addressLine = computed(() => formatLocationAddress(props.location.address))

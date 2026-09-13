@@ -194,6 +194,18 @@ export function validateMetafieldValue(definition: MetafieldDefinition, value: u
  */
 export const PRICING_NOTE_HANDLE = 'pricing.note'
 
+/**
+ * The experience attributes the public page gives their own place: the
+ * one-line tagline under the name, what is included, what to bring, and where
+ * to meet. Every other definition renders under "Things to know".
+ */
+export const EXPERIENCE_ATTRIBUTE_HANDLES = {
+  tagline: 'experience.tagline',
+  meetingPoint: 'experience.meeting_point',
+  includedItems: 'experience.included_items',
+  whatToBring: 'experience.what_to_bring',
+} as const
+
 /** Values are stored as JSON so a typed list stays a list, not a joined string. */
 export function serializeMetafieldValue(definition: MetafieldDefinition, value: unknown): string {
   return JSON.stringify(validateMetafieldValue(definition, value))

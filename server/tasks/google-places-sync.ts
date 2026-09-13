@@ -70,7 +70,7 @@ export default defineScheduledTask({
       FROM business_locations bl
       WHERE bl.google_place_id IS NOT NULL
         AND bl.status = 'active'
-      ORDER BY bl.organization_id, bl.site_id
+      ORDER BY bl.organization_id, bl.site_id, bl.id
     `, [])
     const locations = await filterEntitledRows(env as CloudflareEnv, candidates, 'google_places')
 

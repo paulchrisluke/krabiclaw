@@ -68,7 +68,7 @@ export default defineScheduledTask({
       FROM sites s
       WHERE json_extract(s.integrations_json, '$.facebook.status') = 'active'
         OR (json_extract(s.integrations_json, '$.facebook.status') = 'error' AND json_extract(s.integrations_json, '$.facebook.updated_at') < strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-1 hour'))
-      ORDER BY s.organization_id
+      ORDER BY s.organization_id, s.id
     `, [])
     const connections = await filterEntitledRows(env as CloudflareEnv, candidates, 'managed_service')
 

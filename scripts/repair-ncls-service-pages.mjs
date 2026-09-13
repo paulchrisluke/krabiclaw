@@ -117,7 +117,7 @@ const ICONS = {
     "IEP Process Support and Advocacy": "DocumentTextIcon",
     "Representation at IEP Meetings": "UserGroupIcon",
     "State Complaint Filing and Advocacy": "ExclamationCircleIcon",
-    "Due Process Hearings": "BalanceScaleIcon",
+    "Due Process Hearings": "ScaleIcon",
     "Section 504 Plan Development and Compliance": "ClipboardDocumentCheckIcon",
     "Resolution Meetings and Mediation": "HandshakeIcon",
     "Why Choose NCLS for Special Education Advocacy?": "StarIcon"
@@ -168,9 +168,11 @@ for (const block of blocks) {
     const map = ICONS[slug]
     if (!map) { unmapped.push(`${block.path}: no icon map for this page`); continue }
     for (const item of data.items ?? []) {
-      if (item.icon) continue
       const icon = map[item.title]
       if (!icon) { unmapped.push(`${block.path}: "${item.title}" has no archived icon`); continue }
+      // The map is the truth for these pages: a missing icon is set, a wrong
+      // one is corrected. A rerun with nothing to correct sets 0.
+      if (item.icon === icon) continue
       item.icon = icon
       iconsSet += 1
       changed = true
