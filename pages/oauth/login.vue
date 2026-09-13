@@ -47,13 +47,13 @@
             <SayaIcon name="check-circle" class="w-4 h-4 text-green-500 shrink-0" />
           </div>
 
-          <UButton block size="lg" :loading="loading" @click="continueWithSession">
+          <UButton block size="lg" :loading="loading" :disabled="switching" @click="continueWithSession">
             Continue as {{ existingSession.name?.split(' ')[0] || 'this account' }}
           </UButton>
 
           <USeparator label="or" />
 
-          <UButton color="neutral" variant="ghost" size="sm" block @click="switchAccount">
+          <UButton color="neutral" variant="ghost" size="sm" block :loading="switching" :disabled="loading" @click="switchAccount">
             Sign in with a different account
           </UButton>
         </div>
@@ -120,6 +120,7 @@ onMounted(async () => {
 
 // ── Existing session state ────────────────────────────────────────────────────
 const loading = ref(false)
+const switching = ref(false)
 const showPhone = ref(false)
 const accountInitial = computed(() =>
   (existingSession.value?.name || existingSession.value?.email || '?').charAt(0).toUpperCase()
@@ -154,11 +155,17 @@ async function continueWithSession() {
  */
 async function switchAccount() {
   error.value = null
+  // Signing out is a network round trip, and until it returns this button was
+  // unchanged and still clickable: no progress to see, and every extra click
+  // another concurrent signOut against the same session.
+  switching.value = true
   try {
     await authClient.signOut()
   } catch (cause) {
     error.value = getErrorMessage(cause, 'Could not sign out. Please try again.')
     return
+  } finally {
+    switching.value = false
   }
   existingSession.value = null
 }
