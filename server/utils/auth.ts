@@ -10,7 +10,7 @@ import { cimd } from '@better-auth/cimd'
 import { fetchCimdMetadataResource } from '~/server/utils/cimd-metadata-fetch'
 import type { GenericEndpointContext } from '@better-auth/core'
 import { HTTPError, type H3Event } from 'nitro';
-import { createDb, execute, schema, type DbClient } from '~/server/db'
+import { createDb, execute, schema } from '~/server/db'
 import { linkAnonymousCustomerToUser } from '~/server/utils/customers'
 import { sendWhatsAppOtp } from '~/server/utils/whatsapp'
 import { parsePhoneOrThrow } from '~/utils/phone'
@@ -91,6 +91,11 @@ async function configureCimdTenantScopes(event: {
   })
 }
 
+// The generic @better-auth/core AuthContext type doesn't line up with this
+// app's concrete plugin/options shape (each plugin narrows it further), so
+// derive the type actually produced by this file's own createAuth() instead.
+export type AppAuthContext = Awaited<ReturnType<typeof createAuth>['$context']>
+
 // Client IDs that must always be CIMD-discovered, never manually managed.
 // getClient() (in @better-auth/oauth-provider) treats any oauthClient row
 // without clientDiscoveryId as permanently "managed" and never re-enters CIMD
@@ -116,10 +121,23 @@ const KNOWN_CIMD_VENDOR_CLIENT_IDS = new Set<string>([
  * discovery in the same request — the same path any brand-new CIMD client
  * takes. This only ever touches the two hardcoded vendor client IDs above, so
  * it can't be used to reclassify an arbitrary client_id an attacker supplies.
+ *
+ * Takes an already-resolved `auth.$context` rather than `CloudflareEnv` so
+ * callers that already hold an auth instance (the route handler) don't pay
+ * for a second one, and so this stays testable against a bare adapter
+ * context without standing up all of createAuth()'s plugin dependencies.
  */
-export async function healStaleCimdClient(db: DbClient, clientId: string): Promise<void> {
+export async function healStaleCimdClient(context: AppAuthContext, clientId: string): Promise<void> {
   if (!KNOWN_CIMD_VENDOR_CLIENT_IDS.has(clientId)) return
-  await execute(db, 'DELETE FROM oauthClient WHERE clientId = ? AND clientDiscoveryId IS NULL', [clientId])
+  const existing = await context.adapter.findOne<{ clientDiscoveryId: string | null }>({
+    model: 'oauthClient',
+    where: [{ field: 'clientId', value: clientId }],
+  })
+  if (!existing || existing.clientDiscoveryId) return
+  await context.adapter.delete({
+    model: 'oauthClient',
+    where: [{ field: 'clientId', value: clientId }],
+  })
 }
 
 export interface CloudflareEnv {
