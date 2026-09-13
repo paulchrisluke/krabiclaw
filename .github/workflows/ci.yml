@@ -176,8 +176,11 @@ jobs:
           JOB_NAME: E2E representative tests (preview only)
         run: |
           set -euo pipefail
-          mine=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/jobs?per_page=100" \
-            --jq "[.jobs[] | select(.name == \"${JOB_NAME}\")] | .[0].started_at // empty")
+          # --paginate or a busy repository silently truncates at 100 and the
+          # queue stops seeing the run it must wait for. jq runs per page, so
+          # every one of these takes the first line it produces.
+          mine=$(gh api --paginate "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/jobs?per_page=100" \
+            --jq "[.jobs[] | select(.name == \"${JOB_NAME}\")] | .[0].started_at // empty" | head -n 1)
           if [ -z "$mine" ]; then
             echo "::error::This job reported no start time, so the preview queue cannot be ordered."
             exit 1
@@ -187,13 +190,13 @@ jobs:
           while :; do
             busy=""
             for run_status in queued in_progress waiting pending requested; do
-              others=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs?status=${run_status}&per_page=100" \
+              others=$(gh api --paginate "repos/${GITHUB_REPOSITORY}/actions/runs?status=${run_status}&per_page=100" \
                 --jq ".workflow_runs[] | select(.name == \"${GITHUB_WORKFLOW}\" and .id != ${RUN_ID}) | .id")
               for id in $others; do
-                ahead=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${id}/jobs?per_page=100" \
+                ahead=$(gh api --paginate "repos/${GITHUB_REPOSITORY}/actions/runs/${id}/jobs?per_page=100" \
                   --jq "[.jobs[] | select(.name == \"${JOB_NAME}\" and .status != \"completed\" and .started_at != null)]
                         | map(select(.started_at < \"${mine}\" or (.started_at == \"${mine}\" and ${id} < ${RUN_ID})))
-                        | if length == 0 then empty else .[0].started_at end")
+                        | if length == 0 then empty else .[0].started_at end" | head -n 1)
                 if [ -n "$ahead" ]; then
                   busy="${busy} ${id}(started ${ahead})"
                 fi
