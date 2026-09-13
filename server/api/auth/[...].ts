@@ -119,8 +119,13 @@ async function extractOAuthClientId(request: Request): Promise<string | null> {
   if (!contentType.includes('application/x-www-form-urlencoded')) return null
   try {
     // Clone so the token/introspection/revocation body is still readable by
-    // auth.handler below — a Request body can only be consumed once.
-    return new URLSearchParams(await request.clone().text()).get('client_id')
+    // auth.handler below — a Request body can only be consumed once. Reuse
+    // the same bounded reader as phone auth so an oversized body can't be
+    // fully buffered in memory just to peek at client_id; oversized/unreadable
+    // bodies just skip self-heal (best-effort) rather than rejecting the
+    // underlying request.
+    const bounded = await readBoundedBody(request.clone())
+    return new URLSearchParams(new TextDecoder().decode(bounded)).get('client_id')
   } catch {
     return null
   }

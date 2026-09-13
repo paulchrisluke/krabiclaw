@@ -134,9 +134,16 @@ export async function healStaleCimdClient(context: AppAuthContext, clientId: str
     where: [{ field: 'clientId', value: clientId }],
   })
   if (!existing || existing.clientDiscoveryId) return
+  // Re-assert clientDiscoveryId IS NULL in the delete's own where clause, not
+  // just the read above — a concurrent request can heal this same client_id
+  // between the findOne and this delete, and without this the delete would
+  // otherwise remove the row CIMD just (re)created correctly.
   await context.adapter.delete({
     model: 'oauthClient',
-    where: [{ field: 'clientId', value: clientId }],
+    where: [
+      { field: 'clientId', value: clientId },
+      { field: 'clientDiscoveryId', value: null },
+    ],
   })
 }
 
