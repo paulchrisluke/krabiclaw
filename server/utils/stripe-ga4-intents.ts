@@ -267,9 +267,9 @@ const GA4_PURCHASE_DELIVERY_LEASE_MS = 15 * 60 * 1000
  * GA4 purchase delivery is at-most-once per invoice. Stripe retries
  * `invoice.paid` on its own, so this ledger only has to stop a retry from
  * sending the same purchase to GA4 twice; it carries no attempt budget and no
- * dead letter. It used to live on `stripe_invoice_payments.ga4_purchase_*`,
- * which required the deleted billing layer to have written an invoice row
- * first.
+ * dead letter. It used to live on ga4_purchase_* columns of the deleted
+ * billing layer's invoice ledger, which had to have written the invoice row
+ * before GA4 could claim it.
  */
 export async function claimStripeGa4PurchaseDelivery(
   db: DbClient,

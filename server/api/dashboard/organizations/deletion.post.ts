@@ -11,7 +11,7 @@ import { getDashboardContext } from '~/server/utils/dashboard-context'
 import { DELETION_GRACE_DAYS, findPaidOrganization, scheduleOrganizationDeletion } from '~/server/utils/tenant-deletion'
 
 export default defineHandler(async (event) => {
-  const { env, db, organization } = await getDashboardContext(event, { requireSite: false })
+  const { env, organization } = await getDashboardContext(event, { requireSite: false })
   if (organization.role !== 'owner') {
     return jsonResponse({ error: 'Only an owner can delete this workspace' }, { status: 403 })
   }

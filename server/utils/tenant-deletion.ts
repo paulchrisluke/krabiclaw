@@ -350,7 +350,6 @@ async function findDueRows(env: CloudflareEnv, model: 'user' | 'organization', n
  * their organizations are removed by the account path rather than twice.
  */
 export async function sweepScheduledDeletions(env: CloudflareEnv, now = new Date()): Promise<DeletionSweepResult> {
-  const db = env.DB
   const result: DeletionSweepResult = { organizations: 0, users: 0, skipped: [] }
 
   for (const user of await findDueRows(env, 'user', now)) {
