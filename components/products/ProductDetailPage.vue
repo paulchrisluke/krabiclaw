@@ -660,7 +660,7 @@ async function openBooking() {
 
 /** A guest pressing a time on the page arrives in the form with it chosen. */
 async function openBookingAt(session: PublicSession) {
-  timeSelection.value = { day: localDateOf(session), time: localTimeOf(session), label: sessionDayLabel(session) }
+  timeSelection.value = { day: localDateOf(session), time: localTimeOf(session), label: `${sessionDayLabel(session)} · ${sessionTimeLabel(session)}` }
   await openBooking()
 }
 

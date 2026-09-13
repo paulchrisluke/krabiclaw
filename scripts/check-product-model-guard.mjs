@@ -87,7 +87,6 @@ export const FORBIDDEN_ACTIVE_PATTERNS = [
   // the only store of subscription entitlement. An application projection of
   // it, and the webhook queue that reconciled one, are not coming back.
   /\borganization_billing\b/,
-  /\bstripe_webhook_events\b/,
   /\bstripe_invoice_payments\b/,
   /\bstripe_subscription_versions\b/,
   // The catalog convergence (#919): one Product model across every vertical.

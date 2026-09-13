@@ -970,6 +970,8 @@ async function saveSchedule() {
 
 async function cancelEditor() {
   if (product.value) loadForm(product.value)
+  // The schedule draft goes with the form: reopening Bookings reloads the saved rules.
+  scheduleLoadedFor.value = null
   await navigateTo(itemPath.value)
 }
 

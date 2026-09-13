@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "d1a37c24-e182-439c-8a59-ce17406c9cac",
-  "prevId": "3f3796f3-f533-44cc-9c72-99020546a3ca",
+  "id": "e85b0088-0eae-4594-a49c-7a5b825ddf5f",
+  "prevId": "5473e9e7-06a1-4e14-a81c-7b9828d26425",
   "tables": {
     "account": {
       "name": "account",
@@ -3462,219 +3462,6 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "checkConstraints": {}
-    },
-    "legal_intake_references": {
-      "name": "legal_intake_references",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "organization_id": {
-          "name": "organization_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "site_id": {
-          "name": "site_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "original_actor_id": {
-          "name": "original_actor_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "original_actor_kind": {
-          "name": "original_actor_kind",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "current_authorized_user_id": {
-          "name": "current_authorized_user_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "payload_digest": {
-          "name": "payload_digest",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "digest_key_id": {
-          "name": "digest_key_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "digest_version": {
-          "name": "digest_version",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "blawby_intake_id": {
-          "name": "blawby_intake_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "checkout_session_id": {
-          "name": "checkout_session_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
-        }
-      },
-      "indexes": {
-        "legal_intake_references_blawby_intake_id_unique": {
-          "name": "legal_intake_references_blawby_intake_id_unique",
-          "columns": [
-            "blawby_intake_id"
-          ],
-          "isUnique": true
-        },
-        "legal_intake_references_checkout_session_id_unique": {
-          "name": "legal_intake_references_checkout_session_id_unique",
-          "columns": [
-            "checkout_session_id"
-          ],
-          "isUnique": true
-        },
-        "idx_legal_intake_references_site_actor": {
-          "name": "idx_legal_intake_references_site_actor",
-          "columns": [
-            "site_id",
-            "original_actor_id"
-          ],
-          "isUnique": false
-        },
-        "legal_intake_references_organization_id_idx": {
-          "name": "legal_intake_references_organization_id_idx",
-          "columns": [
-            "organization_id"
-          ],
-          "isUnique": false
-        },
-        "idx_legal_intake_references_actor": {
-          "name": "idx_legal_intake_references_actor",
-          "columns": [
-            "original_actor_id"
-          ],
-          "isUnique": false
-        }
-      },
-      "foreignKeys": {
-        "legal_intake_references_organization_id_organization_id_fk": {
-          "name": "legal_intake_references_organization_id_organization_id_fk",
-          "tableFrom": "legal_intake_references",
-          "tableTo": "organization",
-          "columnsFrom": [
-            "organization_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "restrict",
-          "onUpdate": "no action"
-        },
-        "legal_intake_references_site_id_sites_id_fk": {
-          "name": "legal_intake_references_site_id_sites_id_fk",
-          "tableFrom": "legal_intake_references",
-          "tableTo": "sites",
-          "columnsFrom": [
-            "site_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "restrict",
-          "onUpdate": "no action"
-        },
-        "legal_intake_references_original_actor_id_user_id_fk": {
-          "name": "legal_intake_references_original_actor_id_user_id_fk",
-          "tableFrom": "legal_intake_references",
-          "tableTo": "user",
-          "columnsFrom": [
-            "original_actor_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "restrict",
-          "onUpdate": "no action"
-        },
-        "legal_intake_references_current_authorized_user_id_user_id_fk": {
-          "name": "legal_intake_references_current_authorized_user_id_user_id_fk",
-          "tableFrom": "legal_intake_references",
-          "tableTo": "user",
-          "columnsFrom": [
-            "current_authorized_user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        },
-        "legal_intake_references_site_scope_fk": {
-          "name": "legal_intake_references_site_scope_fk",
-          "tableFrom": "legal_intake_references",
-          "tableTo": "sites",
-          "columnsFrom": [
-            "organization_id",
-            "site_id"
-          ],
-          "columnsTo": [
-            "organization_id",
-            "id"
-          ],
-          "onDelete": "restrict",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {
-        "legal_intake_references_actor_kind_check": {
-          "name": "legal_intake_references_actor_kind_check",
-          "value": "original_actor_kind IN ('human', 'anonymous')"
-        }
-      }
     },
     "location_reservation_configs": {
       "name": "location_reservation_configs",
@@ -11277,13 +11064,41 @@
         }
       }
     },
-    "stripe_ga4_invoice_deliveries": {
-      "name": "stripe_ga4_invoice_deliveries",
+    "stripe_connected_accounts": {
+      "name": "stripe_connected_accounts",
       "columns": {
-        "stripe_invoice_id": {
-          "name": "stripe_invoice_id",
+        "id": {
+          "name": "id",
           "type": "text",
           "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "stripe_account_id": {
+          "name": "stripe_account_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "country": {
+          "name": "country",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "livemode": {
+          "name": "livemode",
+          "type": "integer",
+          "primaryKey": false,
           "notNull": true,
           "autoincrement": false
         },
@@ -11293,35 +11108,44 @@
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false,
-          "default": "'sending'"
+          "default": "'creating'"
         },
-        "event_id": {
-          "name": "event_id",
+        "card_payments_status": {
+          "name": "card_payments_status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "requirements_json": {
+          "name": "requirements_json",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false
+          "autoincrement": false,
+          "default": "'[]'"
         },
-        "claimed_at": {
-          "name": "claimed_at",
+        "stripe_refreshed_at": {
+          "name": "stripe_refreshed_at",
           "type": "text",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
         },
-        "sent_at": {
-          "name": "sent_at",
+        "last_error": {
+          "name": "last_error",
           "type": "text",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
         },
-        "error": {
-          "name": "error",
+        "created_at": {
+          "name": "created_at",
           "type": "text",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
         },
         "updated_at": {
           "name": "updated_at",
@@ -11332,18 +11156,75 @@
           "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
         }
       },
-      "indexes": {},
-      "foreignKeys": {},
+      "indexes": {
+        "stripe_connected_accounts_stripe_account_id_unique": {
+          "name": "stripe_connected_accounts_stripe_account_id_unique",
+          "columns": [
+            "stripe_account_id"
+          ],
+          "isUnique": true
+        },
+        "stripe_connected_accounts_status_idx": {
+          "name": "stripe_connected_accounts_status_idx",
+          "columns": [
+            "status",
+            "updated_at"
+          ],
+          "isUnique": false
+        },
+        "stripe_connected_accounts_org_unique": {
+          "name": "stripe_connected_accounts_org_unique",
+          "columns": [
+            "organization_id"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "stripe_connected_accounts_organization_id_organization_id_fk": {
+          "name": "stripe_connected_accounts_organization_id_organization_id_fk",
+          "tableFrom": "stripe_connected_accounts",
+          "tableTo": "organization",
+          "columnsFrom": [
+            "organization_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "checkConstraints": {
-        "stripe_ga4_invoice_deliveries_instants_check": {
-          "name": "stripe_ga4_invoice_deliveries_instants_check",
-          "value": "(claimed_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', claimed_at, '+0 days') IS claimed_at) AND (sent_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', sent_at, '+0 days') IS sent_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)"
+        "stripe_connected_accounts_country_check": {
+          "name": "stripe_connected_accounts_country_check",
+          "value": "length(country) = 2 AND country = upper(country) AND country NOT GLOB '*[^A-Z]*'"
         },
-        "stripe_ga4_invoice_deliveries_status_check": {
-          "name": "stripe_ga4_invoice_deliveries_status_check",
-          "value": "status IN ('sending', 'sent', 'failed')"
+        "stripe_connected_accounts_livemode_check": {
+          "name": "stripe_connected_accounts_livemode_check",
+          "value": "livemode IN (0, 1)"
+        },
+        "stripe_connected_accounts_status_check": {
+          "name": "stripe_connected_accounts_status_check",
+          "value": "status IN ('creating', 'creation_failed', 'action_required', 'pending_review', 'restricted', 'ready')"
+        },
+        "stripe_connected_accounts_capability_check": {
+          "name": "stripe_connected_accounts_capability_check",
+          "value": "card_payments_status IS NULL OR card_payments_status IN ('active', 'pending', 'restricted', 'unsupported')"
+        },
+        "stripe_connected_accounts_requirements_check": {
+          "name": "stripe_connected_accounts_requirements_check",
+          "value": "json_valid(requirements_json) AND json_type(requirements_json) = 'array'"
+        },
+        "stripe_connected_accounts_identity_check": {
+          "name": "stripe_connected_accounts_identity_check",
+          "value": "(stripe_account_id IS NULL AND status IN ('creating', 'creation_failed')) OR (trim(stripe_account_id) <> '' AND status IN ('action_required', 'pending_review', 'restricted', 'ready'))"
+        },
+        "stripe_connected_accounts_instants_check": {
+          "name": "stripe_connected_accounts_instants_check",
+          "value": "(stripe_refreshed_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', stripe_refreshed_at, '+0 days') IS stripe_refreshed_at) AND (created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)"
         }
       }
     },
@@ -11571,6 +11452,144 @@
         "stripe_ga4_subscription_intents_instants_check": {
           "name": "stripe_ga4_subscription_intents_instants_check",
           "value": "(lifecycle_sent_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', lifecycle_sent_at, '+0 days') IS lifecycle_sent_at) AND (consumed_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', consumed_at, '+0 days') IS consumed_at) AND (expires_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', expires_at, '+0 days') IS expires_at) AND (created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)"
+        }
+      }
+    },
+    "stripe_webhook_events": {
+      "name": "stripe_webhook_events",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "stripe_event_id": {
+          "name": "stripe_event_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "event_type": {
+          "name": "event_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "processor": {
+          "name": "processor",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'platform_billing'"
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'pending'"
+        },
+        "payload": {
+          "name": "payload",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "error": {
+          "name": "error",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "claimed_at": {
+          "name": "claimed_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "lease_expires_at": {
+          "name": "lease_expires_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "claim_token": {
+          "name": "claim_token",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "next_attempt_at": {
+          "name": "next_attempt_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "dead_lettered_at": {
+          "name": "dead_lettered_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "attempt_count": {
+          "name": "attempt_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
+        }
+      },
+      "indexes": {
+        "stripe_webhook_events_stripe_event_id_unique": {
+          "name": "stripe_webhook_events_stripe_event_id_unique",
+          "columns": [
+            "stripe_event_id"
+          ],
+          "isUnique": true
+        },
+        "stripe_webhook_events_retry_idx": {
+          "name": "stripe_webhook_events_retry_idx",
+          "columns": [
+            "status",
+            "next_attempt_at",
+            "processor"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "stripe_webhook_events_instants_check": {
+          "name": "stripe_webhook_events_instants_check",
+          "value": "(claimed_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', claimed_at, '+0 days') IS claimed_at) AND (lease_expires_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', lease_expires_at, '+0 days') IS lease_expires_at) AND (next_attempt_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', next_attempt_at, '+0 days') IS next_attempt_at) AND (dead_lettered_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', dead_lettered_at, '+0 days') IS dead_lettered_at) AND (created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at)"
+        },
+        "stripe_webhook_events_payload_check": {
+          "name": "stripe_webhook_events_payload_check",
+          "value": "payload IS NULL OR (json_valid(payload))"
         }
       }
     },

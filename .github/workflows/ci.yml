@@ -129,10 +129,10 @@ jobs:
       && needs.e2e-plan.outputs.run_preview == 'true'
     needs: [typecheck, e2e-plan, preview-build]
     runs-on: ubuntu-latest
-    timeout-minutes: 90
-    concurrency:
-      group: shared-preview-deployment
-      cancel-in-progress: false
+    timeout-minutes: 180
+    permissions:
+      contents: read
+      actions: read
     env:
       STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY_TEST }}
       STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET_TEST }}
@@ -154,6 +154,43 @@ jobs:
       E2E_SELECTION_SCOPE: ${{ needs.e2e-plan.outputs.scope }}
       E2E_SELECTED_SPECS: ${{ needs.e2e-plan.outputs.specs }}
     steps:
+      # preview.krabiclaw.com is one deployment, so E2E runs serialize on it.
+      # A GitHub concurrency group holds one running and one pending job and
+      # cancels the pending one when a third arrives, which evicted E2E every
+      # time three PRs pushed inside a window. This queue is FIFO by run id and
+      # unbounded: wait while any older CI run still has its E2E job unfinished.
+      - name: Wait for the shared preview deployment
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.run_id }}
+          JOB_NAME: E2E representative tests (preview only)
+        run: |
+          set -euo pipefail
+          deadline=$((SECONDS + 100 * 60))
+          while :; do
+            busy=""
+            for run_status in queued in_progress waiting pending requested; do
+              older=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs?status=${run_status}&per_page=100" \
+                --jq ".workflow_runs[] | select(.name == \"${GITHUB_WORKFLOW}\" and .id < ${RUN_ID}) | .id")
+              for id in $older; do
+                state=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${id}/jobs?per_page=100" \
+                  --jq "[.jobs[] | select(.name == \"${JOB_NAME}\")] | if length == 0 then \"absent\" else .[0].status end")
+                if [ "$state" != "completed" ]; then
+                  busy="${busy} ${id}(${state})"
+                fi
+              done
+            done
+            if [ -z "$busy" ]; then
+              echo "Preview is free."
+              break
+            fi
+            if [ "$SECONDS" -ge "$deadline" ]; then
+              echo "::error::Gave up after 100 minutes waiting on older runs:${busy}"
+              exit 1
+            fi
+            echo "Waiting on older runs:${busy}"
+            sleep 30
+          done
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false

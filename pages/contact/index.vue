@@ -342,11 +342,12 @@ const subjectOptions = computed(() => [
 // language, and the rest is theirs to write.
 const route = useRoute()
 const aboutProduct = typeof route.query.about === 'string' ? route.query.about.trim().slice(0, 120) : ''
+const aboutPrefix = aboutProduct ? `${t('saya.contact_page.about_product', { product: aboutProduct })}\n\n` : ''
 const tenantForm = ref<TenantContactForm>({
   name: '',
   email: '',
   subject: 'general',
-  message: aboutProduct ? `${t('saya.contact_page.about_product', { product: aboutProduct })}\n\n` : '',
+  message: aboutPrefix,
 })
 const tenantSubmitting = ref(false)
 const { mirrorSubmission } = useSiteConversionTracking()
@@ -360,7 +361,9 @@ const validateTenantContact = (state: TenantContactForm): TenantFieldError[] => 
   if (!state.name) errors.push({ name: 'name', message: t('saya.contact_page.enter_name') })
   if (!state.email) errors.push({ name: 'email', message: t('saya.contact_page.enter_email') })
   else if (!emailPattern.test(state.email)) errors.push({ name: 'email', message: t('saya.contact_page.invalid_email') })
-  if (!state.message) errors.push({ name: 'message', message: t('saya.contact_page.enter_message') })
+  // The prefilled product line is context, not the guest's message.
+  const written = state.message.startsWith(aboutPrefix) ? state.message.slice(aboutPrefix.length) : state.message
+  if (!written.trim()) errors.push({ name: 'message', message: t('saya.contact_page.enter_message') })
   return errors
 }
 

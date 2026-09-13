@@ -268,7 +268,9 @@ export async function listAgenda(
     LEFT JOIN business_locations l ON l.id = agenda_session.location_id AND l.site_id = pub.site_id
     LEFT JOIN (SELECT b.product_session_id, SUM(b.party_size) AS claimed FROM bookings b WHERE ${CAPACITY_CONSUMING_SQL} GROUP BY b.product_session_id) agenda_claimed
       ON agenda_claimed.product_session_id = agenda_session.id
-    WHERE agenda_session.organization_id = ? AND agenda_session.status = 'scheduled' ${scopeConditions(query, 'pub')}
+    WHERE agenda_session.organization_id = ? AND agenda_session.status = 'scheduled'
+      ${query.siteId ? 'AND pub.site_id = ?' : ''}
+      ${query.locationId ? 'AND agenda_session.location_id = ?' : ''}
       AND agenda_session.starts_at BETWEEN ? AND ?
   `, [new Date().toISOString(), ...params(), broadFrom, broadTo]))
   if (requestedKinds.has('post')) sourceQueries.push(queryAll(db, `${commonSelect('p', 'post', `CASE p.status WHEN 'published' THEN p.published_at WHEN 'scheduled' THEN p.scheduled_for END AS starts_at, NULL AS ends_at,

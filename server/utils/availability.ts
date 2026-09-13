@@ -291,7 +291,9 @@ export async function replaceWeeklySchedule(db: DbClient, input: {
     if (seen.has(key)) badRequest(`The schedule lists ${slot.start_time} twice on the same day`)
     seen.add(key)
   }
-  await requireBookingConfig(db, input.organizationId, input.productId)
+  const config = await requireBookingConfig(db, input.organizationId, input.productId)
+  // Weekly slots carry no duration of their own; they read the product's.
+  if (config.duration_minutes === null) badRequest('Set the session duration before adding a weekly schedule')
 
   const existing = (await listAvailabilityRules(db, input.organizationId, input.productId))
     .filter(rule => rule.location_id === input.locationId)
@@ -304,9 +306,18 @@ export async function replaceWeeklySchedule(db: DbClient, input: {
     const current = byKey.get(`${slot.weekday}:${slot.start_time}`)
     if (current) {
       kept.add(current.id)
-      if (current.capacity !== slot.capacity || current.timezone !== input.timezone) {
+      // A kept slot is a weekly slot: the same defaults a new one is inserted
+      // with, so a rule that arrived with its own interval, dates or duration
+      // is brought back to the weekly shape rather than kept as an exception.
+      if (
+        current.capacity !== slot.capacity || current.timezone !== input.timezone
+        || current.interval_weeks !== 1 || current.effective_from_date !== null
+        || current.effective_until_date !== null || current.duration_minutes !== null
+      ) {
         writes.push({
-          query: `UPDATE product_availability_rules SET capacity = ?, timezone = ?, updated_at = ?, updated_by = ?
+          query: `UPDATE product_availability_rules
+                  SET capacity = ?, timezone = ?, interval_weeks = 1, effective_from_date = NULL,
+                      effective_until_date = NULL, duration_minutes = NULL, updated_at = ?, updated_by = ?
                   WHERE organization_id = ? AND id = ?`,
           params: [slot.capacity, input.timezone, now, input.actorId, input.organizationId, current.id],
         })

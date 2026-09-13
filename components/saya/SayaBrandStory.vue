@@ -34,22 +34,23 @@ import AppSection from '~/components/ui/AppSection.vue'
 const { localePath } = useI18n()
 
 interface Props {
-  data?: {
-    title?: string | null
-    body?: string | null
-    image?: string | null
-    ourStoryKicker?: string
-    readMoreCta?: string
+  data: {
+    title: string | null
+    body: string | null
+    image: string | null
+    ourStoryKicker: string
+    readMoreCta: string
   }
 }
 
-const props = withDefaults(defineProps<Props>(), {
-  data: () => ({}),
-})
+const props = defineProps<Props>()
 
-const title = computed(() => props.data?.title || '')
-const body = computed(() => props.data?.body || '')
-const image = computed(() => props.data?.image || '')
-const ourStoryKicker = computed(() => props.data?.ourStoryKicker || 'Our story')
-const readMoreCta = computed(() => props.data?.readMoreCta || 'Read more →')
+const title = computed(() => props.data.title ?? '')
+const body = computed(() => props.data.body ?? '')
+const image = computed(() => props.data.image ?? '')
+// The kicker and the link's words are the caller's vertical copy, in the
+// visitor's locale. An English literal here would have overridden a Thai page's
+// own words the moment a caller stopped passing them.
+const ourStoryKicker = computed(() => props.data.ourStoryKicker)
+const readMoreCta = computed(() => props.data.readMoreCta)
 </script>

@@ -12,15 +12,22 @@
     {
       "idx": 1,
       "version": "6",
-      "when": 1789276895665,
-      "tag": "0001_charming_karen_page",
+      "when": 1789231899070,
+      "tag": "0001_cool_paladin",
       "breakpoints": true
     },
     {
       "idx": 2,
       "version": "6",
-      "when": 1789276902212,
-      "tag": "0002_powerful_cargill",
+      "when": 1789278823813,
+      "tag": "0002_drop_billing_layer",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1789278825048,
+      "tag": "0003_stripe_ga4_invoice_deliveries",
       "breakpoints": true
     }
   ]

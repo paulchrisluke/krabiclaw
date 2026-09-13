@@ -110,9 +110,9 @@
       <LazySayaBrandStory
         v-if="story && (story.title || story.body)"
         :data="{
-          title: story?.title,
-          body: story?.body,
-          image: story?.image,
+          title: story?.title ?? null,
+          body: story?.body ?? null,
+          image: story?.image ?? null,
           ourStoryKicker: homeCopy.ourStoryKicker,
           readMoreCta: homeCopy.readMoreCta
         }"

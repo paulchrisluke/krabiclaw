@@ -9,8 +9,10 @@ export const HIGH_IMPACT_PATTERNS = [
 ]
 
 export const NON_RUNTIME_PATTERNS = [
-  '**/*.md', '.agents/**', '.claude/**', '.codex/**',
+  '**/*.md', '.agents/**', '.claude/**', '.codex/**', '.coderabbit.yaml',
   '.github/ISSUE_TEMPLATE/**', 'docs/**',
+  // Developer-machine gate over the CodeRabbit CLI; never bundled into the Worker.
+  'scripts/coderabbit-gate.mjs',
 ]
 
 export const CORE_ONLY_PATTERNS = [
