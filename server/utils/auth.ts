@@ -10,7 +10,7 @@ import { cimd } from '@better-auth/cimd'
 import { fetchCimdMetadataResource } from '~/server/utils/cimd-metadata-fetch'
 import type { GenericEndpointContext } from '@better-auth/core'
 import { HTTPError, type H3Event } from 'nitro';
-import { createDb, execute, schema } from '~/server/db'
+import { createDb, execute, schema, type DbClient } from '~/server/db'
 import { linkAnonymousCustomerToUser } from '~/server/utils/customers'
 import { sendWhatsAppOtp } from '~/server/utils/whatsapp'
 import { parsePhoneOrThrow } from '~/utils/phone'
@@ -89,6 +89,37 @@ async function configureCimdTenantScopes(event: {
     where: [{ field: 'clientId', value: client.clientId }],
     update,
   })
+}
+
+// Client IDs that must always be CIMD-discovered, never manually managed.
+// getClient() (in @better-auth/oauth-provider) treats any oauthClient row
+// without clientDiscoveryId as permanently "managed" and never re-enters CIMD
+// discovery for it, even when the clientId is a CIMD-shaped URL — see
+// healStaleCimdClient below. Both of these vendors only ever authenticate
+// through CIMD, so a stale non-discovery row for either is always the bug,
+// never a legitimate managed client.
+const KNOWN_CIMD_VENDOR_CLIENT_IDS = new Set<string>([
+  'https://chatgpt.com/oauth/client.json',
+  'https://claude.ai/oauth/mcp-oauth-client-metadata',
+])
+
+/**
+ * Self-heals the exact failure mode from incident #953: a Better Auth 1.7.4
+ * upgrade (or any other path) can leave an oauthClient row for a known CIMD
+ * vendor without clientDiscoveryId set. getClient() then returns that row
+ * as-is forever, CIMD discovery never runs again for it, and token exchange
+ * fails with "client jwks_uri is not trusted" — because validateJwksUri only
+ * allows the same-origin fast path when clientDiscoveryId is set.
+ *
+ * Deleting the stale row here, before the request reaches Better Auth's
+ * handler, makes getClient() see no existing client and fall through to CIMD
+ * discovery in the same request — the same path any brand-new CIMD client
+ * takes. This only ever touches the two hardcoded vendor client IDs above, so
+ * it can't be used to reclassify an arbitrary client_id an attacker supplies.
+ */
+export async function healStaleCimdClient(db: DbClient, clientId: string): Promise<void> {
+  if (!KNOWN_CIMD_VENDOR_CLIENT_IDS.has(clientId)) return
+  await execute(db, 'DELETE FROM oauthClient WHERE clientId = ? AND clientDiscoveryId IS NULL', [clientId])
 }
 
 export interface CloudflareEnv {
