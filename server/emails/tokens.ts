@@ -55,8 +55,13 @@ export const brand = {
 } as const
 
 /**
- * --font-sans and --font-display, each with a real fallback. Clients that
- * ignore webfonts land on the system stack we render today.
+ * --font-sans and --font-display, named first so a reader who already has them
+ * sees the brand face, each backed by a real system stack for everyone else.
+ *
+ * Deliberately no webfont request. A stylesheet link in an email tells whoever
+ * hosts it when each recipient opened the message and from which address — that
+ * is a tracking beacon pointed at a tenant's guests, and most clients strip it
+ * anyway, so it would cost privacy and buy almost nothing.
  */
 export const font = {
   body: "Poppins, -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, Helvetica, sans-serif",

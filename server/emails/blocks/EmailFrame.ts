@@ -35,7 +35,6 @@ export default defineComponent({
         h(EHead, null, () => [
           h('meta', { name: 'color-scheme', content: 'light dark' }),
           h('meta', { name: 'supported-color-schemes', content: 'light dark' }),
-          h('link', { rel: 'stylesheet', href: 'https://fonts.googleapis.com/css2?family=Fredoka:wght@600;700&family=Poppins:wght@400;600;700&display=swap' }),
           h(EStyle, null, () => `
             @media (prefers-color-scheme: dark) {
               body, .email-bg { background-color: ${dark.bg} !important; }

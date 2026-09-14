@@ -37,10 +37,14 @@ for (const entry of dualChannel) {
     }
   }
 
-  // A declared shortfall that no longer exists is stale documentation.
+  // A declared shortfall that no longer exists is stale documentation, and one
+  // that is now mapped is worse: it leaves an exemption standing that would
+  // hide the fact going missing again later.
   for (const key of Object.keys(mapping.cannotCarry ?? {})) {
     if (!message.facts.some(entry => entry.key === key)) {
       failures.push(`${template}: cannotCarry names "${key}", which this message no longer has`)
+    } else if (!omitted.includes(key)) {
+      failures.push(`${template}: cannotCarry names "${key}", but the template now carries it — drop the exemption`)
     }
   }
 
