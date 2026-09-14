@@ -189,7 +189,8 @@ async function deleteStripeCustomersOfSweptOrganizations(): Promise<void> {
     if (result.error) throw result.error
     const stdout = String(result.stdout ?? '')
     if (result.status !== 0) throw new Error((String(result.stderr ?? '') || stdout || `Wrangler exited ${result.status}`).trim())
-    const rows = (JSON.parse(stdout)[0]?.results ?? []) as Array<{ stripeCustomerId: string }>
+    // Wrangler prints upload progress lines before the JSON when the SQL comes from a file.
+    const rows = (JSON.parse(stdout.slice(stdout.indexOf('[')))[0]?.results ?? []) as Array<{ stripeCustomerId: string }>
     customerIds = rows.map(row => row.stripeCustomerId)
   } finally {
     rmSync(dir, { recursive: true, force: true })
