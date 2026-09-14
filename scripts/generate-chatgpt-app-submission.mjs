@@ -7,7 +7,7 @@ register('../tests/unit/support/alias-hooks.mjs', import.meta.url)
 const { MCP_PUBLIC_TOOLS } = await import('../server/utils/mcp-tools/index.ts')
 const { visibleConversationalMcpTools } = await import('../server/utils/conversational-tool-surface.ts')
 
-const SCHEMA_URL = 'https://developers.openai.com/apps-sdk/schemas/chatgpt-app-submission.v1.json'
+const SCHEMA_URL = 'https://developers.openai.com/plugins/schemas/chatgpt-app-submission.v1.json'
 const OUTPUT_PATH = 'chatgpt-app-submission.json'
 
 // Reviewed effects are authored here; annotation values still come from the registry.
