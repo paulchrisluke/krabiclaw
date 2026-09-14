@@ -229,6 +229,7 @@ const statusOptions = [
 const OWNER_TEMPLATES = new Set([
   'new_contact_msg',
   'new_reservation',
+  'new_booking',
   'reservation_cancelled',
   'domain_update',
   'new_review',

@@ -70,6 +70,10 @@ const sourceSchema = z.object({
 const proposalSchema = z.object({
   before: sourceSchema, after: fieldsSchema, updatedAt: z.string(),
   locationTitle: z.string(), originalLocationTitle: z.string(), afterLabel: z.string(),
+  // Written since the WhatsApp template gained real date and time slots.
+  // Proposals recorded before that are immutable facts without them, and the
+  // send falls back to the template's own placeholders for those.
+  afterDate: z.string().optional(), afterTime: z.string().optional(),
 })
 type Fields = z.infer<typeof fieldsSchema>
 type Source = z.infer<typeof sourceSchema> & { updatedAt: string }
@@ -80,7 +84,25 @@ async function sourceSummary(db: DbClient, thread: GuestThreadRow) {
 }
 
 function localLabel(instant: string, timezone: string): string {
-  return new Intl.DateTimeFormat('en-US', { timeZone: timezone, dateStyle: 'medium', timeStyle: 'short' }).format(new Date(instant))
+  return localParts(instant, timezone).label
+}
+
+/**
+ * The occurrence as one label and as its date and time separately, all read
+ * from the same instant and the same zone in one place.
+ *
+ * The split exists because the approved WhatsApp template has a date slot and a
+ * time slot; it is derived here rather than at the send site so there is still
+ * only one answer to "which zone did the guest agree to".
+ */
+function localParts(instant: string, timezone: string): { label: string; date: string; time: string } {
+  const at = new Date(instant)
+  const format = (options: Intl.DateTimeFormatOptions) => new Intl.DateTimeFormat('en-US', { timeZone: timezone, ...options }).format(at)
+  return {
+    label: format({ dateStyle: 'medium', timeStyle: 'short' }),
+    date: format({ dateStyle: 'medium' }),
+    time: format({ timeStyle: 'short' }),
+  }
 }
 
 /**
@@ -103,7 +125,7 @@ async function loadSource(db: DbClient, thread: GuestThreadRow): Promise<Source>
   }
 }
 
-interface Destination { locationId: string | null; title: string; label: string; startsAt: string; claim?: (bookingId: string, now: string) => BatchQuery; sessionId?: string }
+interface Destination { locationId: string | null; title: string; label: string; date: string; time: string; startsAt: string; claim?: (bookingId: string, now: string) => BatchQuery; sessionId?: string }
 
 /**
  * Check that the proposed target can actually take this party, and return the
@@ -131,7 +153,7 @@ async function validateDestination(db: DbClient, thread: GuestThreadRow, before:
       : null
     return {
       locationId: target.location_id, title: location?.title ?? '', sessionId: target.id,
-      startsAt: target.starts_at, label: localLabel(target.starts_at, target.timezone),
+      startsAt: target.starts_at, ...localParts(target.starts_at, target.timezone),
       // The replacement is claimed before the original is released, so a
       // destination that is full leaves the guest's booking exactly as it was.
       // It therefore cannot take request_id yet — the original still holds it —
@@ -167,7 +189,7 @@ async function validateDestination(db: DbClient, thread: GuestThreadRow, before:
       throw new HTTPError({ statusCode: 409, message: 'The requested time or guest count is no longer available' })
     }
   }
-  return { locationId: location.id, title: location.title, startsAt, label: localLabel(startsAt, location.timezone) }
+  return { locationId: location.id, title: location.title, startsAt, ...localParts(startsAt, location.timezone) }
 }
 
 function linkToken(env: ChangeEnv, threadId: string, requestId: string) {
@@ -221,7 +243,8 @@ async function deliverEmail(db: DbClient, env: ChangeEnv, thread: GuestThreadRow
     locationId: (status === 'accepted' && proposal.after.kind === 'reservation' ? proposal.after.locationId : proposal.before.locationId) ?? '',
     threadId: thread.id, submissionType: thread.kind === 'reservation' ? 'reservation' : 'booking', submissionId: thread.id, sourceEntryId: entryId,
     guestName: summary.guestName, guestEmail: summary.guestEmail, status, noun,
-    whenLabel: proposal.afterLabel, guests: proposal.after.partySize, locationTitle: proposal.locationTitle,
+    whenLabel: proposal.afterLabel, whenDate: proposal.afterDate ?? null, whenTime: proposal.afterTime ?? null,
+    guests: proposal.after.partySize, locationTitle: proposal.locationTitle,
   })
 }
 
@@ -267,7 +290,8 @@ export async function requestBookingChange(db: DbClient, env: CloudflareEnv, thr
       eventName: 'booking_change.requested', dedupeKey: externalId,
       body: `Requested ${destination.label} for ${after.partySize} guests${destination.title ? ` at ${destination.title}` : ''}.`,
       payloadJson: { before: sourceSchema.parse(before), after, updatedAt: before.updatedAt,
-        locationTitle: destination.title, originalLocationTitle: original?.title ?? '', afterLabel: destination.label },
+        locationTitle: destination.title, originalLocationTitle: original?.title ?? '', afterLabel: destination.label,
+        afterDate: destination.date, afterTime: destination.time },
     })
   }
   const noun = await bookingNoun(db, thread)

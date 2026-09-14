@@ -2,7 +2,7 @@ import { renderEmail } from '~/server/emails/vue-email'
 import type { DbClient } from '~/server/db'
 import type { CloudflareEnv } from '~/server/utils/auth'
 import { sendEmail } from '~/server/utils/email-delivery'
-import { getOrganizationOwnerRecipient } from '~/server/utils/member-access'
+import { getOrganizationOwnerRecipient, resolveAuthorizedWhatsAppRecipient } from '~/server/utils/member-access'
 import { wantsNotification } from '~/server/domain/notification-preferences'
 import { buildUnsubscribeUrls } from '~/server/utils/unsubscribe'
 import { createCanonicalNotification } from '~/server/utils/notification-center'
@@ -97,15 +97,33 @@ export async function notifyDomainLifecycle(
     if (result.status !== 'sent') console.error('domain_notification_email_send_failed', { siteId: opts.siteId, error: result.error })
   })
 
+  // Gated like every other owner alert. This send used to go straight to the
+  // site's number: it asked neither whether the account behind it wants
+  // site-and-billing mail nor whether that number is allowed to receive
+  // anything for this organization, so a tenant who switched the category off
+  // still got the WhatsApp.
   const phone = await getOrgWhatsAppPhone(db, opts.organizationId, opts.siteId)
   if (phone) {
-    const result = await sendWhatsAppNotification(env, {
+    const recipient = await resolveAuthorizedWhatsAppRecipient(db, {
+      env,
+      phone,
       organizationId: opts.organizationId,
       siteId: opts.siteId,
-      toPhone: phone,
-      template: 'domain_update',
-      vars: { domain: opts.domain, status: opts.status, dashboard_url: dashboardUrl },
+      locationId: null,
+      requireSiteWide: true,
     })
-    if (!result.success) console.error('domain_notification_whatsapp_send_failed', { siteId: opts.siteId, error: result.error })
+    const wanted = recipient ? await wantsNotification(db, recipient.userId, 'site_and_billing', 'whatsapp') : false
+    if (!recipient) {
+      console.error('whatsapp_delivery_blocked', { siteId: opts.siteId, reason: 'recipient_access_pending' })
+    } else if (wanted) {
+      const result = await sendWhatsAppNotification(env, {
+        organizationId: opts.organizationId,
+        siteId: opts.siteId,
+        toPhone: phone,
+        template: 'domain_update',
+        vars: { domain: opts.domain, status: opts.status, dashboard_url: dashboardUrl },
+      })
+      if (!result.success) console.error('domain_notification_whatsapp_send_failed', { siteId: opts.siteId, error: result.error })
+    }
   }
 }

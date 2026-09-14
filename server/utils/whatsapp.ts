@@ -55,7 +55,6 @@ export type WhatsAppTemplate =
   | 'reservation_cancelled'
   | 'booking_change_update'
   | 'domain_update'
-  | 'dashboard_access_invitation'
   | 'otp_code'
 
 interface TemplateHeaderComponent {
@@ -180,26 +179,6 @@ const TEMPLATES: Record<
       { type: 'button', sub_type: 'url', index: '0', parameters: [
         { type: 'text', text: cleanTemplateText(v.reply_path, '', 300) },
       ] },
-    ],
-  }),
-  dashboard_access_invitation: (v) => ({
-    name: 'dashboard_access_invitation',
-    language: { code: 'en_US' },
-    components: [
-      {
-        type: 'body',
-        parameters: [
-          { type: 'text', text: cleanTemplateText(v.site_name, '', 120) },
-        ],
-      },
-      {
-        type: 'button',
-        sub_type: 'url',
-        index: '0',
-        parameters: [
-          { type: 'text', text: cleanTemplateText(v.invitation_path, '', 300) },
-        ],
-      },
     ],
   }),
   new_review: (v) => ({

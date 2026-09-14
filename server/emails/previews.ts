@@ -116,7 +116,7 @@ export const EMAIL_PREVIEWS: EmailPreviewDefinition[] = [
   {
     id: 'owner-new-experience-booking-email',
     audience: 'owner',
-    template: 'new_reservation',
+    template: 'new_booking',
     title: 'Owner alert — new experience booking',
     subject: 'New booking request from Mina Park',
     component: BookingOwnerNew,

@@ -1033,7 +1033,10 @@ export async function notifyBookingCreated(
       ...opts,
       submissionType: 'booking',
       submissionId: opts.bookingId,
-      template: 'new_reservation',
+      // A booking is not a reservation. Recording both under 'new_reservation'
+      // meant the canonical record could not tell an experience booking from a
+      // restaurant table — the cancelled path already names itself correctly.
+      template: 'new_booking',
       category: 'reservations_bookings',
       title: `New booking request from ${opts.guestName}`,
       payload,
@@ -1189,6 +1192,13 @@ export async function notifyBookingChangeOwner(
      * place that has to agree with the session's zone, and it would not.
      */
     whenLabel: string
+    /**
+     * The same occurrence split for the approved WhatsApp template's date and
+     * time slots, derived beside whenLabel from one formatter. Null on
+     * proposals recorded before those slots were filled correctly.
+     */
+    whenDate: string | null
+    whenTime: string | null
     guests: number
     locationTitle: string
   },
@@ -1234,7 +1244,8 @@ export async function notifyBookingChangeOwner(
         guest_name: opts.guestName,
         status: opts.status,
         location: opts.locationTitle,
-        when: opts.whenLabel,
+        date: opts.whenDate ?? '',
+        time: opts.whenTime ?? '',
         guests: String(opts.guests),
         message,
         reply_path: inboxUrlToWhatsAppReplyPath(replyUrl),
