@@ -1,31 +1,24 @@
 import type { Component } from 'vue'
 import AuthResetPassword from './templates/AuthResetPassword'
 import AuthVerifyEmail from './templates/AuthVerifyEmail'
-import BookingChange from './templates/BookingChange'
 import BookingChangeProposal from './templates/BookingChangeProposal'
 import BookingGuestCancelled from './templates/BookingGuestCancelled'
 import BookingGuestReceived from './templates/BookingGuestReceived'
-import BookingOwnerCancelled from './templates/BookingOwnerCancelled'
-import BookingOwnerNew from './templates/BookingOwnerNew'
 import BookingReviewReminder from './templates/BookingReviewReminder'
 import BookingThankYouReviewRequest from './templates/BookingThankYouReviewRequest'
 import ContactGuestReceived from './templates/ContactGuestReceived'
-import ContactOwnerNew from './templates/ContactOwnerNew'
-import DomainUpdate from './templates/DomainUpdate'
-import GuestThreadOwnerAlert from './templates/GuestThreadOwnerAlert'
 import GuestThreadReply from './templates/GuestThreadReply'
 import GuestThreadStatusUpdate from './templates/GuestThreadStatusUpdate'
 import OrganizationInvite from './templates/OrganizationInvite'
 import PlatformArticleAnnouncement from './templates/PlatformArticleAnnouncement'
 import ReservationGuestCancelled from './templates/ReservationGuestCancelled'
 import ReservationGuestReceived from './templates/ReservationGuestReceived'
-import ReservationOwnerCancelled from './templates/ReservationOwnerCancelled'
-import ReservationOwnerNew from './templates/ReservationOwnerNew'
-import ReviewOwnerNew from './templates/ReviewOwnerNew'
 
 /**
- * Every email the product sends, with sample data, so /dev/notifications can
- * show all of them side by side.
+ * The component-rendered emails, with sample data, for /dev/notifications.
+ *
+ * Owner alerts are not here: they are NotificationMessages now, previewed from
+ * PARITY_CASES so the page shows the same object the parity guard checks.
  *
  * This is the single list the preview renders from, and
  * scripts/check-email-previews.mjs fails the build if a template in
@@ -47,7 +40,6 @@ export interface EmailPreviewDefinition {
 const platformDomain = 'krabiclaw.com'
 const restaurant = 'Ember & Slice'
 const studio = 'Pottery House Krabi'
-const dashboard = 'https://demo.krabiclaw.com/dashboard/ember-slice/sites/ember-slice'
 
 export const EMAIL_PREVIEWS: EmailPreviewDefinition[] = [
   {
@@ -78,15 +70,6 @@ export const EMAIL_PREVIEWS: EmailPreviewDefinition[] = [
     props: { organizationName: studio, inviterName: 'Priya Shah', role: 'admin', inviteUrl: 'https://demo.krabiclaw.com/accept-invitation/invite-preview-1', platformDomain },
   },
   {
-    id: 'owner-new-reservation-email',
-    audience: 'owner',
-    template: 'new_reservation',
-    title: 'Owner alert — new reservation',
-    subject: 'New confirmed reservation from Alex Carter',
-    component: ReservationOwnerNew,
-    props: { guestName: 'Alex Carter', siteName: restaurant, date: 'Tue, Jul 14, 2026', time: '7:00 PM', guests: '2', phone: '+1 555 123 4567', email: 'alex@example.com', platformDomain, replyUrl: `${dashboard}/locations/main/inbox/res-preview-1` },
-  },
-  {
     id: 'guest-reservation-received-email',
     audience: 'guest',
     template: 'reservation_customer_received',
@@ -94,15 +77,6 @@ export const EMAIL_PREVIEWS: EmailPreviewDefinition[] = [
     subject: 'Your reservation is confirmed',
     component: ReservationGuestReceived,
     props: { guestName: 'Alex Carter', siteName: restaurant, date: 'Tue, Jul 14, 2026', time: '7:00 PM', guests: '2', contactPhone: '+1 555 000 0000', contactEmail: 'hello@emberslice.example', cancelUrl: 'https://demo.krabiclaw.com/reservations/cancel?id=res-preview-1', platformDomain },
-  },
-  {
-    id: 'owner-reservation-cancelled-email',
-    audience: 'owner',
-    template: 'reservation_cancelled',
-    title: 'Owner alert — reservation cancelled',
-    subject: 'Reservation request cancelled by Alex Carter',
-    component: ReservationOwnerCancelled,
-    props: { guestName: 'Alex Carter', siteName: restaurant, date: 'Tue, Jul 14, 2026', time: '7:00 PM', guests: '2', phone: '+1 555 123 4567', email: 'alex@example.com', locationName: 'Main Dining Room', specialRequests: 'Window seat', wasConfirmed: false, platformDomain },
   },
   {
     id: 'guest-reservation-cancelled-email',
@@ -114,15 +88,6 @@ export const EMAIL_PREVIEWS: EmailPreviewDefinition[] = [
     props: { guestName: 'Alex Carter', siteName: restaurant, date: 'Tue, Jul 14, 2026', time: '7:00 PM', guests: '2', locationName: 'Main Dining Room', specialRequests: 'Window seat', wasConfirmed: false, platformDomain },
   },
   {
-    id: 'owner-new-experience-booking-email',
-    audience: 'owner',
-    template: 'new_booking',
-    title: 'Owner alert — new experience booking',
-    subject: 'New booking request from Mina Park',
-    component: BookingOwnerNew,
-    props: { guestName: 'Mina Park', siteName: studio, productTitle: 'Pottery Wheel Class', date: 'Mon, Jul 20, 2026', time: '10:00 AM', partySize: 2, email: 'mina@example.com', phone: '+66 76 000 0002', platformDomain, replyUrl: `${dashboard}/locations/main/inbox/booking-preview-1` },
-  },
-  {
     id: 'guest-experience-booking-received-email',
     audience: 'guest',
     template: 'booking_customer_received',
@@ -130,15 +95,6 @@ export const EMAIL_PREVIEWS: EmailPreviewDefinition[] = [
     subject: 'Your booking request was sent — Pottery Wheel Class',
     component: BookingGuestReceived,
     props: { guestName: 'Mina Park', siteName: studio, productTitle: 'Pottery Wheel Class', date: 'Mon, Jul 20, 2026', time: '10:00 AM', partySize: 2, contactPhone: '+66 76 000 0001', contactEmail: 'hello@example.com', cancelUrl: 'https://demo.krabiclaw.com/bookings/cancel?id=booking-preview-1', platformDomain },
-  },
-  {
-    id: 'owner-experience-booking-cancelled-email',
-    audience: 'owner',
-    template: 'booking_cancelled',
-    title: 'Owner alert — experience booking cancelled',
-    subject: 'Booking cancelled by Mina Park',
-    component: BookingOwnerCancelled,
-    props: { guestName: 'Mina Park', siteName: studio, productTitle: 'Pottery Wheel Class', date: 'Mon, Jul 20, 2026', time: '10:00 AM', partySize: 2, email: 'mina@example.com', phone: '+66 76 000 0002', notes: null, wasConfirmed: true, platformDomain, replyUrl: `${dashboard}/locations/main/inbox/booking-preview-1` },
   },
   {
     id: 'guest-experience-booking-cancelled-email',
@@ -150,15 +106,6 @@ export const EMAIL_PREVIEWS: EmailPreviewDefinition[] = [
     props: { guestName: 'Mina Park', siteName: studio, productTitle: 'Pottery Wheel Class', date: 'Mon, Jul 20, 2026', time: '10:00 AM', partySize: 2, notes: null, wasConfirmed: true, platformDomain },
   },
   {
-    id: 'owner-booking-change-email',
-    audience: 'owner',
-    template: 'booking.change_accepted',
-    title: 'Owner alert — booking change accepted',
-    subject: 'Mina Park accepted the booking change',
-    component: BookingChange,
-    props: { title: 'Mina Park accepted the booking change', body: 'Mina Park accepted your requested change: Tue, Jul 21, 2026 at 2:00 PM for 2 guests at Main Studio.', siteName: studio, actionUrl: `${dashboard}/locations/main/inbox/booking-preview-1`, actionLabel: 'Open thread in dashboard', platformDomain },
-  },
-  {
     id: 'guest-booking-change-proposal-email',
     audience: 'guest',
     template: 'booking.change_requested',
@@ -166,15 +113,6 @@ export const EMAIL_PREVIEWS: EmailPreviewDefinition[] = [
     subject: 'Please review changes to your booking',
     component: BookingChangeProposal,
     props: { guestName: 'Mina Park', siteName: studio, heading: 'Please review changes to your booking', intro: 'Hi Mina, your host has requested changes to your booking. It stays exactly as it is until you accept, and the link below expires in 7 days.', rows: [['Location', 'Main Studio'], ['When', 'Tue, Jul 21, 2026 at 2:00 PM'], ['Guests', '2']], actionUrl: 'https://demo.krabiclaw.com/booking-changes/booking-preview-1/entry-preview-1', actionText: 'Review the changes', platformDomain },
-  },
-  {
-    id: 'owner-new-contact-email',
-    audience: 'owner',
-    template: 'new_contact_msg',
-    title: 'Owner alert — new contact message',
-    subject: 'New website message from Jordan Lee',
-    component: ContactOwnerNew,
-    props: { guestName: 'Jordan Lee', email: 'jordan@example.com', message: 'Hi, do you have vegan options and parking nearby?', siteName: restaurant, platformDomain, replyUrl: `${dashboard}/inbox/contact-preview-1`, consentAcknowledged: true },
   },
   {
     id: 'guest-contact-received-email',
@@ -204,24 +142,6 @@ export const EMAIL_PREVIEWS: EmailPreviewDefinition[] = [
     props: { siteName: restaurant, heading: `Your reservation at ${restaurant} is confirmed`, body: 'Your reservation is confirmed: Tue, Jul 14, 2026 at 7:00 PM for 2 guests.', actionUrl: 'https://demo.krabiclaw.com/reservations/cancel?id=res-preview-1', actionText: 'Manage your reservation', platformDomain },
   },
   {
-    id: 'owner-guest-thread-reply-email',
-    audience: 'owner',
-    template: 'guest_thread_reply_email',
-    title: 'Owner alert — guest replied',
-    subject: 'New guest reply from Jordan Lee',
-    component: GuestThreadOwnerAlert,
-    props: { guestName: 'Jordan Lee', inboundChannel: 'email', messagePreview: 'Thanks! One more thing — is the terrace covered if it rains?', replyUrl: `${dashboard}/inbox/contact-preview-1`, siteName: restaurant, unsubscribeUrl: 'https://krabiclaw.com/unsubscribe?user=preview&category=guest_messages&token=preview', platformDomain },
-  },
-  {
-    id: 'owner-new-review-email',
-    audience: 'owner',
-    template: 'new_review',
-    title: 'Owner alert — new review',
-    subject: 'New 5-star review from Alex Carter',
-    component: ReviewOwnerNew,
-    props: { authorName: 'Alex Carter', siteName: restaurant, rating: 5, content: 'The wood-fired pizza was outstanding and the team could not have been kinder.', reviewsUrl: `${dashboard}/reviews?reply=review-preview-1`, platformDomain },
-  },
-  {
     id: 'guest-review-request-email',
     audience: 'guest',
     template: 'booking_thank_you_review_request',
@@ -238,15 +158,6 @@ export const EMAIL_PREVIEWS: EmailPreviewDefinition[] = [
     subject: `How was your visit to ${restaurant}?`,
     component: BookingReviewReminder,
     props: { guestName: 'Alex Carter', siteName: restaurant, locationName: 'Main Dining Room', visitAt: 'Tue, Jul 14, 2026 at 7:00 PM', partySize: '2 guests', reviewUrl: 'https://demo.krabiclaw.com/locations/main/review-submit?request=preview', optOutUrl: 'https://demo.krabiclaw.com/locations/main/review-submit?request=preview&optOut=1', platformDomain },
-  },
-  {
-    id: 'owner-domain-update-email',
-    audience: 'owner',
-    template: 'domain_update',
-    title: 'Owner alert — custom domain updated',
-    subject: 'emberslice.com is live',
-    component: DomainUpdate,
-    props: { title: 'emberslice.com is live', message: 'Your custom domain is verified and serving traffic.', domain: 'emberslice.com', status: 'active', dashboardUrl: `${dashboard}/settings/domains`, platformDomain },
   },
   {
     id: 'owner-article-announcement-email',

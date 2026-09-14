@@ -1,4 +1,6 @@
-import { renderEmail } from '~/server/emails/vue-email'
+import { renderNotificationEmail } from '~/server/emails/render'
+import { domainUpdateMessage } from '~/server/notifications/events'
+import { toWhatsAppVars } from '~/server/notifications/whatsapp-mapping'
 import type { DbClient } from '~/server/db'
 import type { CloudflareEnv } from '~/server/utils/auth'
 import { sendEmail } from '~/server/utils/email-delivery'
@@ -7,7 +9,6 @@ import { wantsNotification } from '~/server/domain/notification-preferences'
 import { buildUnsubscribeUrls } from '~/server/utils/unsubscribe'
 import { createCanonicalNotification } from '~/server/utils/notification-center'
 import { getOrgWhatsAppPhone, sendWhatsAppNotification } from '~/server/utils/whatsapp'
-import DomainUpdate from '~/server/emails/templates/DomainUpdate'
 
 interface DomainNotificationEnv extends CloudflareEnv {
   PLATFORM_OWNER_EMAILS?: string
@@ -64,13 +65,12 @@ export async function notifyDomainLifecycle(
   const configuredPlatformDomain = env.NUXT_PUBLIC_PLATFORM_DOMAIN?.trim()
   if (!configuredPlatformDomain) throw new Error('NUXT_PUBLIC_PLATFORM_DOMAIN is required')
   const platformDomain = configuredPlatformDomain.replace(/^https?:\/\//, '').replace(/\/$/, '')
-  const rendered = await renderEmail(DomainUpdate, {
-    title: opts.title,
+  const message = domainUpdateMessage({
+    headline: opts.title,
     message: opts.message,
     domain: opts.domain,
     status: opts.status,
     dashboardUrl,
-    platformDomain,
   })
   // The owner is asked whether they want site-and-billing mail; the platform
   // support addresses are operational routing, not a person's preference, so
@@ -80,17 +80,20 @@ export async function notifyDomainLifecycle(
   const ownerUnsubscribe = owner && ownerWantsEmail
     ? await buildUnsubscribeUrls(env, { userId: owner.userId, category: 'site_and_billing' })
     : null
-  const recipients: Array<{ to: string; unsubscribeOneClickUrl: string | null }> = [
-    ...(owner && ownerWantsEmail ? [{ to: owner.email, unsubscribeOneClickUrl: ownerUnsubscribe?.oneClickUrl ?? null }] : []),
+  const recipients: Array<{ to: string; unsubscribeUrl: string | null; unsubscribeOneClickUrl: string | null }> = [
+    ...(owner && ownerWantsEmail ? [{ to: owner.email, unsubscribeUrl: ownerUnsubscribe?.pageUrl ?? null, unsubscribeOneClickUrl: ownerUnsubscribe?.oneClickUrl ?? null }] : []),
     ...[...new Set(supportEmails(env))]
       .filter(address => address !== owner?.email)
-      .map(to => ({ to, unsubscribeOneClickUrl: null })),
+      .map(to => ({ to, unsubscribeUrl: null, unsubscribeOneClickUrl: null })),
   ]
-  const emailResults = await Promise.all(recipients.map(recipient => sendEmail(env, {
+  const emailResults = await Promise.all(recipients.map(async recipient => sendEmail(env, {
     to: recipient.to,
     subject: opts.title,
-    html: rendered.html,
-    text: rendered.text,
+    ...(await renderNotificationEmail(message, {
+      platformDomain,
+      preferencesUrl: `https://${platformDomain}/dashboard/account/profile/notifications`,
+      unsubscribeUrl: recipient.unsubscribeUrl,
+    })),
     unsubscribeOneClickUrl: recipient.unsubscribeOneClickUrl,
   })))
   emailResults.forEach((result) => {
@@ -121,7 +124,7 @@ export async function notifyDomainLifecycle(
         siteId: opts.siteId,
         toPhone: phone,
         template: 'domain_update',
-        vars: { domain: opts.domain, status: opts.status, dashboard_url: dashboardUrl },
+        vars: toWhatsAppVars(message, 'domain_update').vars,
       })
       if (!result.success) console.error('domain_notification_whatsapp_send_failed', { siteId: opts.siteId, error: result.error })
     }
