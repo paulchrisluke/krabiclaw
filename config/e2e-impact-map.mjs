@@ -11,6 +11,7 @@ export const HIGH_IMPACT_PATTERNS = [
 export const NON_RUNTIME_PATTERNS = [
   '**/*.md', '.agents/**', '.claude/**', '.codex/**', '.coderabbit.yaml',
   '.github/ISSUE_TEMPLATE/**', 'docs/**',
+  'chatgpt-app-submission.json', 'scripts/generate-chatgpt-app-submission.mjs',
   // Developer-machine gate over the CodeRabbit CLI; never bundled into the Worker.
   'scripts/coderabbit-gate.mjs',
 ]

@@ -24,6 +24,17 @@ test('documentation-only changes do not deploy a preview Worker', () => {
   assert.deepEqual(plan.specs, [])
 })
 
+test('ChatGPT submission metadata does not deploy a preview Worker', () => {
+  const plan = selectPreviewE2e([
+    'chatgpt-app-submission.json',
+    'scripts/generate-chatgpt-app-submission.mjs'
+  ], allSpecs)
+
+  assert.equal(plan.runPreview, false)
+  assert.equal(plan.scope, 'none')
+  assert.deepEqual(plan.specs, [])
+})
+
 test('a Saya presentation change selects tenant-public coverage', () => {
   const plan = selectPreviewE2e([
     'components/saya/SayaHeader.vue'
