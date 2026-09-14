@@ -390,8 +390,15 @@ test.describe('OAuth discovery endpoints', () => {
       },
     })
     expect(discovered.status()).toBe(400)
+    // @modelcontextprotocol/server classifies this as a modern (2026-07-28)
+    // exchange from the MCP-Protocol-Version header, then rejects it for a
+    // more precise reason than the old hand-rolled "unsupported version"
+    // check: the envelope is missing the modern protocol's required
+    // clientCapabilities field. Either way the legacy client sees a 400 and
+    // retries with a legacy initialize below, which is the actual contract
+    // under test.
     expect(await discovered.json()).toMatchObject({
-      id: 'openai-mcp-discover', error: { code: -32600, data: { requested: '2026-07-28' } },
+      id: 'openai-mcp-discover', error: { code: -32602, data: { envelope: { key: 'io.modelcontextprotocol/clientCapabilities', problem: 'missing' } } },
     })
     const initialized = await request.post(`${baseURL}/api/mcp`, {
       headers: mcpHeaders,

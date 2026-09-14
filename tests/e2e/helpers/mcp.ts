@@ -23,6 +23,15 @@ export async function mcpRequest(
     idempotent?: boolean
   },
 ) {
+  // Plain, standard JSON-RPC 2.0 — no `_meta['io.modelcontextprotocol/...']`
+  // claim and no `mcp-protocol-version`/`mcp-method`/`mcp-name` headers.
+  // Those were the old hand-rolled protocol layer's header/meta fallback for
+  // resolving method/tool name; @modelcontextprotocol/server reads `method`
+  // and `params.name`/`params.arguments` from the body per spec, and treats
+  // any `_meta['io.modelcontextprotocol/...']` key as a modern-protocol
+  // envelope claim — which this legacy-era (2025-06-18) suite doesn't carry
+  // the rest of (e.g. `clientCapabilities`), so every request was rejected
+  // as a malformed modern envelope regardless of method.
   const payload = {
     jsonrpc: '2.0',
     id: options.id ?? `${options.method}-${Date.now()}`,
@@ -30,11 +39,6 @@ export async function mcpRequest(
     params: options.params ?? (options.method === 'tools/call'
       ? { name: options.toolName, arguments: options.args ?? {} }
       : options.siteId ? { site_id: options.siteId } : {}),
-    _meta: {
-      'io.modelcontextprotocol/version': MCP_VERSION,
-      'io.modelcontextprotocol/method': options.method,
-      ...(options.method === 'tools/call' && options.toolName ? { 'io.modelcontextprotocol/name': options.toolName } : {}),
-    },
   }
 
   const requestId = randomUUID()
@@ -46,9 +50,6 @@ export async function mcpRequest(
       maxRetries: options.idempotent ? 1 : 0,
       headers: {
         'content-type': 'application/json',
-        'mcp-protocol-version': MCP_VERSION,
-        'mcp-method': options.method,
-        ...(options.method === 'tools/call' && options.toolName ? { 'mcp-name': options.toolName } : {}),
         ...(options.extraHeaders ?? {}),
         'x-request-id': requestId,
       },
