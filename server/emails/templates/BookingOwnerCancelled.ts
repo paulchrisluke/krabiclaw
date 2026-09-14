@@ -15,6 +15,7 @@ export default defineComponent({
     phone: { type: String as PropType<string | null>, default: null },
     notes: { type: String as PropType<string | null>, default: null },
     wasConfirmed: { type: Boolean, required: true },
+    unsubscribeUrl: { type: String as PropType<string | null>, default: null },
     platformDomain: { type: String, required: true },
     replyUrl: { type: String as PropType<string | null>, default: null },
   },
@@ -27,7 +28,8 @@ export default defineComponent({
         preheader: title,
         title,
         siteName: props.siteName,
-        platformDomain: props.platformDomain,
+        unsubscribeUrl: props.unsubscribeUrl,
+      platformDomain: props.platformDomain,
         ctaUrl: props.replyUrl ?? undefined,
         ctaText: props.replyUrl ? 'View in dashboard' : undefined,
       }, () => [

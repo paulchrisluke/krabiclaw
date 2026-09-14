@@ -14,6 +14,7 @@ export default defineComponent({
     email: { type: String, required: true },
     locationName: { type: String as PropType<string | null>, default: null },
     specialRequests: { type: String as PropType<string | null>, default: null },
+    unsubscribeUrl: { type: String as PropType<string | null>, default: null },
     platformDomain: { type: String, required: true },
     replyUrl: { type: String as PropType<string | null>, default: null },
   },
@@ -21,6 +22,7 @@ export default defineComponent({
     return () => h(EmailShell, {
       preheader: `New confirmed reservation for ${props.siteName}`,
       title: `New confirmed reservation from ${props.guestName}`,
+      unsubscribeUrl: props.unsubscribeUrl,
       platformDomain: props.platformDomain,
       ctaUrl: props.replyUrl ?? undefined,
       ctaText: props.replyUrl ? 'Reply in dashboard' : undefined,

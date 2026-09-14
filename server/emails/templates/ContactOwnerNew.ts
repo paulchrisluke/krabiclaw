@@ -18,6 +18,7 @@ export default defineComponent({
     subject: { type: String as PropType<string | null>, default: null },
     message: { type: String, required: true },
     siteName: { type: String, required: true },
+    unsubscribeUrl: { type: String as PropType<string | null>, default: null },
     platformDomain: { type: String, required: true },
     replyUrl: { type: String as PropType<string | null>, default: null },
     productTitle: { type: String as PropType<string | null | undefined>, default: null },
@@ -27,6 +28,7 @@ export default defineComponent({
     return () => h(EmailShell, {
       preheader: `New contact message for ${props.siteName}`,
       title: `New website message from ${props.guestName}`,
+      unsubscribeUrl: props.unsubscribeUrl,
       platformDomain: props.platformDomain,
       ctaUrl: props.replyUrl ?? undefined,
       ctaText: props.replyUrl ? 'Reply in dashboard' : undefined,

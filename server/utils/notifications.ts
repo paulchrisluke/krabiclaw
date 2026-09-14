@@ -524,7 +524,12 @@ async function notifyOwner(
     category: NotificationCategory
     title: string
     payload: Record<string, string>
-    email: EmailTemplate
+    /**
+     * Rendered after the recipient is known, so the footer can carry that
+     * person's opt-out link. Rendering first is why owner alerts used to send
+     * a List-Unsubscribe header with nothing in the body to match it.
+     */
+    email: (_unsubscribeUrl: string | null) => Promise<EmailTemplate>
     whatsapp?: {
       template: WhatsAppTemplate
       vars: Record<string, string>
@@ -588,7 +593,7 @@ async function notifyOwner(
     await sendEmailNotification(env, db, {
       ...opts,
       to,
-      unsubscribeUrl,
+      email: await opts.email(unsubscribeUrl),
       unsubscribeOneClickUrl,
       delivery: threadDelivery(threadContext, 'owner_alert', 'email', opts.template, to),
     })
@@ -657,10 +662,8 @@ export async function notifyReservationCreated(
     deep_link: inboxUrl ?? '',
   }
 
-  const [ownerEmail, guestEmail] = await Promise.all([
-    renderEmail(ReservationOwnerNew, { guestName: opts.guestName, siteName: restaurant, date: prettyDate, time: prettyTime, guests: opts.guests, phone: opts.phone, email: opts.email, locationName: opts.locationName, specialRequests: opts.requests, platformDomain, replyUrl: inboxUrl }),
-    renderEmail(ReservationGuestReceived, { guestName: opts.guestName, siteName: restaurant, date: prettyDate, time: prettyTime, guests: opts.guests, specialRequests: opts.requests, locationName: opts.locationName, contactPhone: opts.contactPhone, contactEmail: opts.contactEmail, cancelUrl: opts.cancelUrl, platformDomain }),
-  ])
+  const renderOwnerEmail = (unsubscribeUrl: string | null) => renderEmail(ReservationOwnerNew, { guestName: opts.guestName, siteName: restaurant, date: prettyDate, time: prettyTime, guests: opts.guests, phone: opts.phone, email: opts.email, locationName: opts.locationName, specialRequests: opts.requests, platformDomain, replyUrl: inboxUrl, unsubscribeUrl })
+  const guestEmail = await renderEmail(ReservationGuestReceived, { guestName: opts.guestName, siteName: restaurant, date: prettyDate, time: prettyTime, guests: opts.guests, specialRequests: opts.requests, locationName: opts.locationName, contactPhone: opts.contactPhone, contactEmail: opts.contactEmail, cancelUrl: opts.cancelUrl, platformDomain })
 
   const results = await Promise.allSettled([
     notifyOwner(env, db, {
@@ -671,7 +674,7 @@ export async function notifyReservationCreated(
       category: 'reservations_bookings',
       title: `New confirmed reservation from ${opts.guestName}`,
       payload,
-      email: { subject: `New confirmed reservation from ${opts.guestName}`, html: ownerEmail.html, text: ownerEmail.text },
+      email: async unsubscribeUrl => ({ subject: `New confirmed reservation from ${opts.guestName}`, ...(await renderOwnerEmail(unsubscribeUrl)) }),
       whatsapp: {
         template: 'new_reservation',
         vars: {
@@ -746,10 +749,8 @@ export async function notifyReservationCancelled(
     deep_link: inboxUrl ?? '',
   }
 
-  const [ownerEmail, guestEmail] = await Promise.all([
-    renderEmail(ReservationOwnerCancelled, { guestName: opts.guestName, siteName: restaurant, date: prettyDate, time: prettyTime, guests: opts.guests, phone: opts.phone, email: opts.email, locationName: opts.locationName, specialRequests: opts.requests, wasConfirmed: confirmed, platformDomain, replyUrl: inboxUrl }),
-    renderEmail(ReservationGuestCancelled, { guestName: opts.guestName, siteName: restaurant, date: prettyDate, time: prettyTime, guests: opts.guests, locationName: opts.locationName, specialRequests: opts.requests, wasConfirmed: confirmed, platformDomain }),
-  ])
+  const renderOwnerEmail = (unsubscribeUrl: string | null) => renderEmail(ReservationOwnerCancelled, { guestName: opts.guestName, siteName: restaurant, date: prettyDate, time: prettyTime, guests: opts.guests, phone: opts.phone, email: opts.email, locationName: opts.locationName, specialRequests: opts.requests, wasConfirmed: confirmed, platformDomain, replyUrl: inboxUrl, unsubscribeUrl })
+  const guestEmail = await renderEmail(ReservationGuestCancelled, { guestName: opts.guestName, siteName: restaurant, date: prettyDate, time: prettyTime, guests: opts.guests, locationName: opts.locationName, specialRequests: opts.requests, wasConfirmed: confirmed, platformDomain })
   const threadContext = await recordGuestCancellation(db, {
     submissionType: 'reservation',
     submissionId: opts.reservationId,
@@ -769,7 +770,7 @@ export async function notifyReservationCancelled(
       category: 'reservations_bookings',
       title: ownerCancelTitle,
       payload,
-      email: { subject: ownerCancelTitle, html: ownerEmail.html, text: ownerEmail.text },
+      email: async unsubscribeUrl => ({ subject: ownerCancelTitle, ...(await renderOwnerEmail(unsubscribeUrl)) }),
       whatsapp: {
         template: 'reservation_cancelled',
         vars: {
@@ -834,10 +835,8 @@ export async function notifyContactSubmitted(
     deep_link: inboxUrl ?? '',
   }
 
-  const [ownerEmail, guestEmail] = await Promise.all([
-    renderEmail(ContactOwnerNew, { guestName: opts.guestName, email: opts.email, subject: opts.subject, message: opts.message, siteName: restaurant, platformDomain, replyUrl: inboxUrl, productTitle: opts.productTitle, consentAcknowledged: opts.consentAcknowledged }),
-    renderEmail(ContactGuestReceived, { guestName: opts.guestName, siteName: restaurant, subject: opts.subject, message: opts.message, platformDomain, productTitle: opts.productTitle, consentAcknowledged: opts.consentAcknowledged }),
-  ])
+  const renderOwnerEmail = (unsubscribeUrl: string | null) => renderEmail(ContactOwnerNew, { guestName: opts.guestName, email: opts.email, subject: opts.subject, message: opts.message, siteName: restaurant, platformDomain, replyUrl: inboxUrl, productTitle: opts.productTitle, consentAcknowledged: opts.consentAcknowledged, unsubscribeUrl })
+  const guestEmail = await renderEmail(ContactGuestReceived, { guestName: opts.guestName, siteName: restaurant, subject: opts.subject, message: opts.message, platformDomain, productTitle: opts.productTitle, consentAcknowledged: opts.consentAcknowledged })
 
   const results = await Promise.allSettled([
     notifyOwner(env, db, {
@@ -848,7 +847,7 @@ export async function notifyContactSubmitted(
       category: 'guest_messages',
       title: `New website message from ${opts.guestName}`,
       payload,
-      email: { subject: `New website message from ${opts.guestName}`, html: ownerEmail.html, text: ownerEmail.text },
+      email: async unsubscribeUrl => ({ subject: `New website message from ${opts.guestName}`, ...(await renderOwnerEmail(unsubscribeUrl)) }),
       whatsapp: {
         template: 'new_contact_msg',
         vars: {
@@ -899,13 +898,14 @@ export async function notifyReviewReceived(
   })
 
   try {
-    const ownerEmail = await renderEmail(ReviewOwnerNew, {
+    const renderOwnerEmail = (unsubscribeUrl: string | null) => renderEmail(ReviewOwnerNew, {
       authorName: opts.authorName,
       rating: opts.rating,
       content: opts.content ?? '',
       siteName: restaurant,
       platformDomain,
       reviewsUrl,
+      unsubscribeUrl,
     })
 
     await notifyOwner(env, db, {
@@ -921,7 +921,7 @@ export async function notifyReviewReceived(
         site_name: restaurant,
         deep_link: reviewsUrl ?? '',
       },
-      email: { subject: `New review from ${opts.authorName}`, html: ownerEmail.html, text: ownerEmail.text },
+      email: async unsubscribeUrl => ({ subject: `New review from ${opts.authorName}`, ...(await renderOwnerEmail(unsubscribeUrl)) }),
       whatsapp: {
         template: 'new_review',
         vars: { rating: String(opts.rating), site_name: restaurant, excerpt: opts.content ?? '', reviews_url: reviewsUrl ?? '' },
@@ -1025,10 +1025,8 @@ export async function notifyBookingCreated(
     deep_link: inboxUrl ?? '',
   }
 
-  const [ownerEmail, guestEmail] = await Promise.all([
-    renderEmail(BookingOwnerNew, { guestName: opts.guestName, siteName: studio, productTitle: opts.productTitle, date: prettyDate, time: prettyTime, partySize: opts.partySize, email: opts.email, phone: opts.guestPhone ?? null, specialRequests: opts.notes, platformDomain, replyUrl: inboxUrl }),
-    renderEmail(BookingGuestReceived, { guestName: opts.guestName, siteName: studio, productTitle: opts.productTitle, date: prettyDate, time: prettyTime, partySize: opts.partySize, specialRequests: opts.notes, contactPhone: opts.contactPhone ?? null, contactEmail: opts.contactEmail ?? null, cancelUrl: opts.cancelUrl ?? null, platformDomain }),
-  ])
+  const renderOwnerEmail = (unsubscribeUrl: string | null) => renderEmail(BookingOwnerNew, { guestName: opts.guestName, siteName: studio, productTitle: opts.productTitle, date: prettyDate, time: prettyTime, partySize: opts.partySize, email: opts.email, phone: opts.guestPhone ?? null, specialRequests: opts.notes, platformDomain, replyUrl: inboxUrl, unsubscribeUrl })
+  const guestEmail = await renderEmail(BookingGuestReceived, { guestName: opts.guestName, siteName: studio, productTitle: opts.productTitle, date: prettyDate, time: prettyTime, partySize: opts.partySize, specialRequests: opts.notes, contactPhone: opts.contactPhone ?? null, contactEmail: opts.contactEmail ?? null, cancelUrl: opts.cancelUrl ?? null, platformDomain })
 
   const results = await Promise.allSettled([
     notifyOwner(env, db, {
@@ -1039,7 +1037,7 @@ export async function notifyBookingCreated(
       category: 'reservations_bookings',
       title: `New booking request from ${opts.guestName}`,
       payload,
-      email: { subject: `New booking request from ${opts.guestName}`, html: ownerEmail.html, text: ownerEmail.text },
+      email: async unsubscribeUrl => ({ subject: `New booking request from ${opts.guestName}`, ...(await renderOwnerEmail(unsubscribeUrl)) }),
       whatsapp: {
         template: 'new_reservation',
         vars: {
@@ -1113,10 +1111,8 @@ export async function notifyBookingCancelled(
     deep_link: inboxUrl ?? '',
   }
 
-  const [ownerEmail, guestEmail] = await Promise.all([
-    renderEmail(BookingOwnerCancelled, { guestName: opts.guestName, siteName: studio, productTitle: opts.productTitle, date: prettyDate, time: prettyTime, partySize: opts.partySize, email: opts.email, phone: opts.guestPhone, notes: opts.notes, wasConfirmed: confirmed, platformDomain, replyUrl: inboxUrl }),
-    renderEmail(BookingGuestCancelled, { guestName: opts.guestName, siteName: studio, productTitle: opts.productTitle, date: prettyDate, time: prettyTime, partySize: opts.partySize, notes: opts.notes, wasConfirmed: confirmed, platformDomain }),
-  ])
+  const renderOwnerEmail = (unsubscribeUrl: string | null) => renderEmail(BookingOwnerCancelled, { guestName: opts.guestName, siteName: studio, productTitle: opts.productTitle, date: prettyDate, time: prettyTime, partySize: opts.partySize, email: opts.email, phone: opts.guestPhone, notes: opts.notes, wasConfirmed: confirmed, platformDomain, replyUrl: inboxUrl, unsubscribeUrl })
+  const guestEmail = await renderEmail(BookingGuestCancelled, { guestName: opts.guestName, siteName: studio, productTitle: opts.productTitle, date: prettyDate, time: prettyTime, partySize: opts.partySize, notes: opts.notes, wasConfirmed: confirmed, platformDomain })
   const threadContext = await recordGuestCancellation(db, {
     submissionType: 'booking',
     submissionId: opts.bookingId,
@@ -1136,7 +1132,7 @@ export async function notifyBookingCancelled(
       category: 'reservations_bookings',
       title: ownerCancelTitle,
       payload,
-      email: { subject: ownerCancelTitle, html: ownerEmail.html, text: ownerEmail.text },
+      email: async unsubscribeUrl => ({ subject: ownerCancelTitle, ...(await renderOwnerEmail(unsubscribeUrl)) }),
       whatsapp: {
         template: 'reservation_cancelled',
         vars: {
@@ -1208,13 +1204,14 @@ export async function notifyBookingChangeOwner(
       : 'The guest declined. The original details remain unchanged.'
   const body = `${message}\n\nRequested location: ${opts.locationTitle}\nWhen: ${opts.whenLabel}\nGuests: ${opts.guests}`
   const replyUrl = await buildOwnerThreadInboxUrl(env, db, opts)
-  const email = await renderEmail(BookingChange, {
+  const renderOwnerEmail = (unsubscribeUrl: string | null) => renderEmail(BookingChange, {
     title,
     body,
     siteName: siteName(opts),
     platformDomain: getPlatformDomain(env),
     actionUrl: replyUrl ?? undefined,
     actionLabel: 'View in dashboard',
+    unsubscribeUrl,
   })
   await notifyOwner(env, db, {
     ...opts,
@@ -1229,7 +1226,7 @@ export async function notifyBookingChangeOwner(
       deep_link: replyUrl ?? '',
     },
     notificationSource: { threadId: opts.threadId, entryId: opts.sourceEntryId },
-    email: { subject: title, ...email },
+    email: async unsubscribeUrl => ({ subject: title, ...(await renderOwnerEmail(unsubscribeUrl)) }),
     whatsapp: {
       template: 'booking_change_update',
       vars: {

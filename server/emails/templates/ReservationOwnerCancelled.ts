@@ -15,6 +15,7 @@ export default defineComponent({
     locationName: { type: String as PropType<string | null>, default: null },
     specialRequests: { type: String as PropType<string | null>, default: null },
     wasConfirmed: { type: Boolean, required: true },
+    unsubscribeUrl: { type: String as PropType<string | null>, default: null },
     platformDomain: { type: String, required: true },
     replyUrl: { type: String as PropType<string | null>, default: null },
   },
@@ -26,7 +27,8 @@ export default defineComponent({
       return h(EmailShell, {
         preheader: `Cancellation for ${props.siteName}`,
         title,
-        platformDomain: props.platformDomain,
+        unsubscribeUrl: props.unsubscribeUrl,
+      platformDomain: props.platformDomain,
         ctaUrl: props.replyUrl ?? undefined,
         ctaText: props.replyUrl ? 'View in dashboard' : undefined,
       }, () => [
