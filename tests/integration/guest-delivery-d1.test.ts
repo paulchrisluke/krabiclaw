@@ -162,7 +162,7 @@ test('D1 claims fence concurrent sends and bound ambiguous provider retries', as
       actorUserId: 'user-proof',
       body: 'A held reply',
       idempotencyKey: operationKey,
-      env: { EMAIL_DELIVERY_MODE: 'provider' },
+      env: { EMAIL_DELIVERY_MODE: 'provider', NUXT_PUBLIC_PLATFORM_DOMAIN: 'proof.example' },
     })
     assert.deepEqual({ ok: accepted.ok, status: accepted.status }, { ok: true, status: 202 })
 
@@ -173,7 +173,7 @@ test('D1 claims fence concurrent sends and bound ambiguous provider retries', as
       actorUserId: 'user-proof',
       deliveryId,
       idempotencyKey: 'held-retry-proof',
-      env: { EMAIL_DELIVERY_MODE: 'provider' },
+      env: { EMAIL_DELIVERY_MODE: 'provider', NUXT_PUBLIC_PLATFORM_DOMAIN: 'proof.example' },
     })
     assert.deepEqual({ ok: acceptedRetry.ok, status: acceptedRetry.status }, { ok: true, status: 202 })
 
@@ -185,7 +185,7 @@ test('D1 claims fence concurrent sends and bound ambiguous provider retries', as
       actorUserId: 'user-proof',
       body: 'A held reply',
       idempotencyKey: operationKey,
-      env: { EMAIL_DELIVERY_MODE: 'provider' },
+      env: { EMAIL_DELIVERY_MODE: 'provider', NUXT_PUBLIC_PLATFORM_DOMAIN: 'proof.example' },
     })
     assert.deepEqual({ ok: replay.ok, status: replay.status }, { ok: true, status: 200 })
     assert.equal((await db.prepare('SELECT conversation_state FROM requests WHERE id = ?').bind('contact-proof').first<{ conversation_state: string }>())?.conversation_state, 'waiting_on_guest')
@@ -196,7 +196,7 @@ test('D1 claims fence concurrent sends and bound ambiguous provider retries', as
       action: 'resolve',
       actorUserId: 'user-proof',
       idempotencyKey: 'resolve-after-reply-proof',
-      env: { EMAIL_DELIVERY_MODE: 'provider' },
+      env: { EMAIL_DELIVERY_MODE: 'provider', NUXT_PUBLIC_PLATFORM_DOMAIN: 'proof.example' },
     })
     assert.deepEqual({ ok: resolved.ok, status: resolved.status }, { ok: true, status: 200 })
 
@@ -207,7 +207,7 @@ test('D1 claims fence concurrent sends and bound ambiguous provider retries', as
       actorUserId: 'user-proof',
       body: 'A held reply',
       idempotencyKey: operationKey,
-      env: { EMAIL_DELIVERY_MODE: 'provider' },
+      env: { EMAIL_DELIVERY_MODE: 'provider', NUXT_PUBLIC_PLATFORM_DOMAIN: 'proof.example' },
     })
     assert.deepEqual({ ok: replayAfterResolve.ok, status: replayAfterResolve.status }, { ok: true, status: 200 })
     assert.equal((await db.prepare('SELECT conversation_state FROM requests WHERE id = ?').bind('contact-proof').first<{ conversation_state: string }>())?.conversation_state, 'resolved')
@@ -253,7 +253,7 @@ test('D1 claims fence concurrent sends and bound ambiguous provider retries', as
       actorUserId: 'user-proof',
       body: 'A delayed reply',
       idempotencyKey: delayedOperationKey,
-      env: { EMAIL_DELIVERY_MODE: 'provider' },
+      env: { EMAIL_DELIVERY_MODE: 'provider', NUXT_PUBLIC_PLATFORM_DOMAIN: 'proof.example' },
     })
     assert.deepEqual({ ok: delayedCompletion.ok, status: delayedCompletion.status }, { ok: true, status: 200 })
     assert.equal((await db.prepare('SELECT conversation_state FROM requests WHERE id = ?').bind('contact-proof').first<{ conversation_state: string }>())?.conversation_state, 'needs_attention')
@@ -286,7 +286,7 @@ test('D1 claims fence concurrent sends and bound ambiguous provider retries', as
       action: 'resolve',
       actorUserId: 'user-proof',
       idempotencyKey: 'resolve-after-failed-reply-proof',
-      env: { EMAIL_DELIVERY_MODE: 'provider' },
+      env: { EMAIL_DELIVERY_MODE: 'provider', NUXT_PUBLIC_PLATFORM_DOMAIN: 'proof.example' },
     })
     assert.deepEqual({ ok: resolvedAfterFailure.ok, status: resolvedAfterFailure.status }, { ok: true, status: 200 })
 
@@ -297,7 +297,7 @@ test('D1 claims fence concurrent sends and bound ambiguous provider retries', as
       actorUserId: 'user-proof',
       deliveryId: retryReceipt.id,
       idempotencyKey: 'retry-after-resolve-proof',
-      env: {},
+      env: { NUXT_PUBLIC_PLATFORM_DOMAIN: 'proof.example' },
     })
     assert.deepEqual({ ok: retriedAfterResolve.ok, status: retriedAfterResolve.status }, { ok: true, status: 200 })
     assert.equal((await db.prepare('SELECT conversation_state FROM requests WHERE id = ?').bind('contact-proof').first<{ conversation_state: string }>())?.conversation_state, 'resolved')
@@ -314,7 +314,7 @@ test('D1 status-email retries preserve recorded content and reject superseded bo
     manifest: { mainModule: 'index.mjs', modules: { 'index.mjs': { type: 'esm', contents: 'export default { fetch() { return new Response("ok") } }' } } },
     env: { DB: { type: 'd1' } },
   } }] })
-  const requests: { subject: string; text: string }[] = []
+  const requests: { subject: string; text: string; html: string }[] = []
   let reject = true
   t.mock.method(globalThis, 'fetch', async (url: string, init: RequestInit) => {
     assert.equal(url, 'https://api.resend.com/emails')
@@ -340,7 +340,7 @@ test('D1 status-email retries preserve recorded content and reject superseded bo
 
     const input = {
       threadId: 'booking-status', siteId: 'site-status', actorUserId: 'user-status',
-      env: { EMAIL_DELIVERY_MODE: 'provider', RESEND_API_KEY: 'controlled-provider-only' },
+      env: { EMAIL_DELIVERY_MODE: 'provider', RESEND_API_KEY: 'controlled-provider-only', NUXT_PUBLIC_PLATFORM_DOMAIN: 'proof.example' },
     }
     const confirm = { ...input, action: 'confirm', idempotencyKey: 'confirm-status' }
     assert.equal((await executeGuestThreadOperation(db, confirm)).ok, true)
@@ -348,7 +348,10 @@ test('D1 status-email retries preserve recorded content and reject superseded bo
     const deliveryId = 'guest-thread-email:booking-status:confirm-status'
     assert.equal((await getDeliveryById(db, deliveryId))!.status, 'failed')
     const original = requests[0]!
-    assert.equal(original.text, 'Your reservation is confirmed: Oct 1, 2026, 6:00 PM for 2 guests.')
+    // The recorded body is now rendered inside the shared email shell, so the
+    // sent copy contains it rather than being it.
+    assert.ok(original.text.includes('Your reservation is confirmed: Oct 1, 2026, 6:00 PM for 2 guests.'))
+    assert.ok(original.html.includes('Your reservation is confirmed: Oct 1, 2026, 6:00 PM for 2 guests.'))
     assert.equal((await executeGuestThreadOperation(db, { ...input, action: 'retry_delivery', deliveryId, idempotencyKey: 'retry-unchanged' })).status, 502)
     assert.deepEqual(requests[1], original)
 
@@ -371,7 +374,7 @@ test('D1 status-email retries preserve recorded content and reject superseded bo
     assert.equal((await getDeliveryById(db, deliveryId))!.status, 'failed')
     const entry = await db.prepare('SELECT body, payload_json FROM activity_entries WHERE id = ?')
       .bind((await getDeliveryById(db, deliveryId))!.entry_id).first<{ body: string; payload_json: string }>()
-    assert.equal(entry!.body, original.text)
+    assert.ok(original.text.includes(entry!.body))
     assert.equal(JSON.parse(entry!.payload_json).subject, original.subject)
   } finally {
     await runtime.dispose()

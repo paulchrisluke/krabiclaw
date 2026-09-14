@@ -23,75 +23,22 @@
         @cancel="closeDetail"
         @save="saveDetail"
       >
-        <!--
-          The index previews every value and opens one at a time. Rows that
-          navigate away or act on the session — Reset password, Copy, Billing,
-          Log out — keep their own control here: they open nothing, so they are
-          not levels of the chain.
-        -->
         <template #index>
-          <section class="flex items-center gap-4 pb-[22px] max-sm:pb-[18px]">
+          <!--
+            One carded list of rows, the same surface every other settings hub
+            draws — this level used to hand-roll `.profile-row`, which is why it
+            was the only hub not on a card.
+
+            Rows that navigate away or act on the session — Reset password,
+            Copy, Billing, Log out — carry their own control. They open nothing,
+            so they are not levels of the chain and gain no chevron.
+          -->
+          <section class="flex items-center gap-4 pb-6">
             <UAvatar :src="sessionData?.user?.image ?? undefined" icon="i-lucide-user" alt="User avatar" class="size-14" :ui="{ icon: 'size-7' }" />
-            <span class="account-action text-muted" title="Avatar is managed by your sign-in provider">Change photo</span>
+            <span class="text-sm font-semibold text-muted" title="Avatar is managed by your sign-in provider">Change photo</span>
           </section>
 
-          <NuxtLink :to="`${profilePath}/name`" class="profile-row no-underline" :class="rowTone('name')">
-            <div class="min-w-0">
-              <h3 class="profile-label">Display name</h3>
-              <p class="profile-value">{{ sessionData?.user?.name || 'Not set' }}</p>
-            </div>
-            <UIcon name="i-lucide-chevron-right" class="size-4 shrink-0 text-muted" />
-          </NuxtLink>
-
-          <section class="profile-row" :class="rowTone('email')">
-            <div class="min-w-0">
-              <h3 class="profile-label">Email</h3>
-              <p class="profile-value">{{ sessionData?.user?.email }}</p>
-              <p v-if="sessionData?.user?.emailVerified" class="profile-meta text-success"><span class="size-1.5 rounded-full bg-current" />Verified</p>
-            </div>
-            <NuxtLink to="/forgot-password" class="account-action shrink-0">Reset password</NuxtLink>
-          </section>
-
-          <section class="profile-row" :class="rowTone('google')">
-            <div class="min-w-0">
-              <h3 class="profile-label">Google</h3>
-              <p class="profile-value">
-                <span v-if="googleStatus === 'loading'">Checking…</span>
-                <span v-else-if="googleStatus === 'connected'">Connected</span>
-                <span v-else-if="googleStatus === 'error'">Unable to check connection status</span>
-                <span v-else>Not connected</span>
-              </p>
-            </div>
-          </section>
-
-          <NuxtLink :to="`${profilePath}/phone`" class="profile-row no-underline" :class="rowTone('phone')">
-            <div class="min-w-0">
-              <h3 class="profile-label">Phone number</h3>
-              <p class="profile-value">{{ sessionData?.user?.phoneNumber || 'Not set' }}</p>
-              <p class="profile-meta" :class="sessionData?.user?.phoneNumberVerified ? 'text-success' : 'text-warning'"><span class="size-1.5 rounded-full bg-current" />{{ sessionData?.user?.phoneNumberVerified ? 'Verified' : 'Not verified' }}</p>
-            </div>
-            <UIcon name="i-lucide-chevron-right" class="size-4 shrink-0 text-muted" />
-          </NuxtLink>
-
-          <section class="profile-row" :class="rowTone('user-id')">
-            <div class="min-w-0"><h3 class="profile-label">User ID</h3><p class="profile-value font-mono">{{ sessionData?.user?.id }}</p></div>
-            <UButton variant="link" color="neutral" @click="copyUserId">Copy</UButton>
-          </section>
-
-          <section v-if="billingTo" class="profile-row" :class="rowTone('billing')">
-            <div class="min-w-0"><h3 class="profile-label">Billing</h3><p class="profile-value whitespace-normal">Plan and payments for {{ organizationParent?.label }}.</p></div>
-            <NuxtLink :to="billingTo" class="account-action shrink-0">Open</NuxtLink>
-          </section>
-
-          <NuxtLink :to="`${profilePath}/delete`" class="profile-row no-underline" :class="rowTone('delete')">
-            <div><h3 class="profile-label text-error">Delete account</h3><p class="profile-value whitespace-normal">{{ deletionScheduledAt ? `Scheduled for ${deletionDateLabel}. Cancel any time before then.` : 'Removes your account, organization, site, locations and menu data.' }}</p></div>
-            <UIcon name="i-lucide-chevron-right" class="size-4 shrink-0 text-muted" />
-          </NuxtLink>
-
-          <section class="profile-row" :class="rowTone('log-out')">
-            <div class="min-w-0"><h3 class="profile-label">Log out</h3><p class="profile-value whitespace-normal">Sign out on this device.</p></div>
-            <UButton variant="link" color="neutral" @click="handleSignOut">Log out</UButton>
-          </section>
+          <EditorNavigationList :groups="groups" :active-item="detailKey ?? undefined" @act="runRowAction" />
         </template>
 
         <template #detail>
@@ -171,6 +118,7 @@
 <script setup lang="ts">
 // -nocheck
 import EditorPaneShell from '~/components/dashboard/EditorPaneShell.vue'
+import EditorNavigationList, { type EditorNavigationGroup } from '~/components/dashboard/EditorNavigationList.vue'
 import { authClient } from '~/lib/auth-client'
 import { dashboardOrganizationParentKey } from '~/lib/components/workspace/dashboard/dashboardScopeHeaderContext'
 
@@ -194,6 +142,13 @@ const { signOut } = authClient
 // lookup is shown distinctly from "not connected" too, since defaulting an
 // error to false would misreport a real Google-linked account as unlinked.
 const googleStatus = ref<'loading' | 'connected' | 'not-connected' | 'error'>('loading')
+const GOOGLE_SUMMARIES = {
+  loading: 'Checking…',
+  connected: 'Connected',
+  error: 'Unable to check connection status',
+  'not-connected': 'Not connected',
+} as const
+const googleSummary = computed(() => GOOGLE_SUMMARIES[googleStatus.value])
 onMounted(async () => {
   try {
     const { data, error } = await authClient.listAccounts()
@@ -219,7 +174,6 @@ async function handleSignOut() {
 const nameInput = ref(sessionData.value?.user?.name || '')
 const nameDirty = computed(() => nameInput.value.trim() !== (sessionData.value?.user?.name || ''))
 const nameSaving = ref(false)
-type ProfileRow = 'avatar' | 'name' | 'email' | 'google' | 'phone' | 'user-id' | 'billing' | 'delete' | 'log-out'
 const DETAIL_LABELS: Record<string, string> = { name: 'Display name', phone: 'Phone number', delete: 'Delete account' }
 const detailKey = computed(() => frame.childSegment.value)
 /**
@@ -237,8 +191,81 @@ watchEffect(() => {
   }
 })
 
-function rowTone(row: ProfileRow) {
-  return detailKey.value && detailKey.value !== row ? 'opacity-40' : ''
+const { preferences: notificationPreferences, load: loadNotificationPreferences } = useNotificationPreferences()
+await loadNotificationPreferences()
+
+/**
+ * How many categories currently reach this person at all. The row previews the
+ * state rather than the concept, so the index answers "am I being notified"
+ * without opening the level.
+ */
+const notificationSummary = computed(() => {
+  const preferences = notificationPreferences.value
+  if (!preferences) return 'Manage what reaches you'
+  const on = Object.values(preferences).filter(setting => setting.email || setting.whatsapp).length
+  const total = Object.values(preferences).length
+  if (on === total) return 'All categories on'
+  if (on === 0) return 'All categories off'
+  return `${on} of ${total} categories on`
+})
+
+const groups = computed<EditorNavigationGroup[]>(() => [
+  {
+    id: 'profile',
+    label: 'Profile',
+    items: [
+      { id: 'name', label: 'Display name', summary: sessionData.value?.user?.name || 'Not set', placeholder: !sessionData.value?.user?.name, to: `${profilePath.value}/name` },
+      {
+        id: 'email',
+        label: 'Email',
+        summary: sessionData.value?.user?.email ?? '',
+        ...(sessionData.value?.user?.emailVerified ? { meta: { label: 'Verified', tone: 'success' as const } } : {}),
+        action: { label: 'Reset password', to: '/forgot-password' },
+      },
+      { id: 'google', label: 'Google', summary: googleSummary.value, placeholder: googleStatus.value === 'not-connected' },
+      {
+        id: 'phone',
+        label: 'Phone number',
+        summary: sessionData.value?.user?.phoneNumber || 'Not set',
+        placeholder: !sessionData.value?.user?.phoneNumber,
+        meta: sessionData.value?.user?.phoneNumberVerified
+          ? { label: 'Verified', tone: 'success' as const }
+          : { label: 'Not verified', tone: 'warning' as const },
+        to: `${profilePath.value}/phone`,
+      },
+      { id: 'user-id', label: 'User ID', summary: sessionData.value?.user?.id ?? '', action: { label: 'Copy' } },
+    ],
+  },
+  {
+    id: 'notifications',
+    label: 'Notifications',
+    items: [
+      { id: 'notifications', label: 'Notifications', summary: notificationSummary.value, to: `${profilePath.value}/notifications` },
+    ],
+  },
+  {
+    id: 'account',
+    label: 'Account',
+    items: [
+      ...(billingTo.value
+        ? [{ id: 'billing', label: 'Billing', summary: `Plan and payments for ${organizationParent?.value?.label ?? ''}`, action: { label: 'Open', to: billingTo.value } }]
+        : []),
+      {
+        id: 'delete',
+        label: 'Delete account',
+        summary: deletionScheduledAt.value
+          ? `Scheduled for ${deletionDateLabel.value}. Cancel any time before then.`
+          : 'Removes your account, organization, site, locations and menu data.',
+        to: `${profilePath.value}/delete`,
+      },
+      { id: 'log-out', label: 'Log out', summary: 'Sign out on this device.', action: { label: 'Log out' } },
+    ],
+  },
+])
+
+function runRowAction(id: string) {
+  if (id === 'user-id') return void copyUserId()
+  if (id === 'log-out') return void handleSignOut()
 }
 
 const saving = computed(() => openKey.value === 'name' ? nameSaving.value
@@ -477,20 +504,3 @@ async function keepAccount() {
 
 useSeoMeta({ title: 'Account | KrabiClaw Dashboard', robots: 'noindex, nofollow' })
 </script>
-
-<style scoped>
-.profile-row {
-  display: flex;
-  min-height: var(--ws-row-min-height, 66px);
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  padding-block: 20px;
-  border-bottom: 1px solid var(--ui-border);
-  transition: opacity 150ms ease;
-}
-.profile-label { font-size: 14px; font-weight: 600; color: var(--ui-text-highlighted); }
-.profile-value { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13.5px; color: var(--ui-text-muted); }
-.profile-meta { display: flex; align-items: center; gap: 6px; margin-top: 4px; font-size: 12px; }
-.account-action { flex-shrink: 0; font-size: 13.5px; font-weight: 600; color: var(--ui-text-highlighted); text-decoration: underline; text-underline-offset: 3px; }
-</style>

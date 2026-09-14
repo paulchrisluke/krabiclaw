@@ -172,16 +172,27 @@ async function listAllOrganizationMembers(adapter: OrganizationAdapter, organiza
   return members
 }
 
-export async function getOrganizationOwnerEmail(env: CloudflareEnv, organizationId: string): Promise<string | null> {
+/**
+ * The person internal alerts go to, as an identity rather than just an address.
+ *
+ * The user id comes back with the email because a notification preference is
+ * per person (user_notification_preferences), so the sender needs to know whose
+ * preference applies, not only where to post the message.
+ */
+export async function getOrganizationOwnerRecipient(
+  env: CloudflareEnv,
+  organizationId: string,
+): Promise<{ userId: string; email: string } | null> {
   const adapter = await organizationAdapter(env)
   const members = await listAllOrganizationMembers(adapter, organizationId)
-  return members
+  const owner = members
     .filter(member => member.user && (member.role === 'owner' || member.role === 'admin'))
     .sort((left, right) => {
       const roleOrder = Number(right.role === 'owner') - Number(left.role === 'owner')
       if (roleOrder) return roleOrder
       return Number(left.user.email.endsWith('@example.test')) - Number(right.user.email.endsWith('@example.test'))
-    })[0]?.user.email ?? null
+    })[0]
+  return owner ? { userId: owner.user.id, email: owner.user.email } : null
 }
 
 export async function listUserOrganizationTeamIds(input: {
@@ -560,22 +571,32 @@ export async function assertMemberSiteAccess(db: DbClient, input: MemberAccessPr
   await assertSiteContextAccess(db, input)
 }
 
-export async function isAuthorizedWhatsAppRecipient(
+/**
+ * Who, if anyone, may receive a WhatsApp message at this number for this scope.
+ *
+ * Returns the user id rather than a bare boolean because a notification also
+ * has to honour that person's own preference
+ * (user_notification_preferences), and resolving the number to an account
+ * twice — once to authorize, once to look up the preference — would be two
+ * implementations of the same lookup.
+ */
+export async function resolveAuthorizedWhatsAppRecipient(
   db: DbClient,
   input: ResourceScope & { env: CloudflareEnv; phone: string; requireSiteWide?: boolean },
-): Promise<boolean> {
+): Promise<{ userId: string } | null> {
   const { findVerifiedAuthUserByPhone } = await import('~/server/utils/auth')
   const user = await findVerifiedAuthUserByPhone(
     input.env,
     parsePhoneOrThrow(input.phone, { defaultCountry: 'TH' }),
   )
-  if (!user) return false
+  if (!user) return null
   const membership = await resolveOrganizationMembership(input.env, {
     organizationId: input.organizationId,
     userId: user.id,
   })
-  if (!membership || !isOperationalRole(membership.role)) return false
-  if (isOrganizationWideRole(membership.role)) return true
+  if (!membership || !isOperationalRole(membership.role)) return null
+  const recipient = { userId: user.id }
+  if (isOrganizationWideRole(membership.role)) return recipient
   const locationIds = await listAccessibleLocationIds(db, {
     env: input.env,
     memberId: membership.memberId,
@@ -583,6 +604,13 @@ export async function isAuthorizedWhatsAppRecipient(
     organizationId: input.organizationId,
     siteId: input.siteId,
   })
-  if (input.requireSiteWide || !input.locationId) return locationIds === null
-  return locationIds === null || locationIds.includes(input.locationId)
+  if (input.requireSiteWide || !input.locationId) return locationIds === null ? recipient : null
+  return locationIds === null || locationIds.includes(input.locationId) ? recipient : null
+}
+
+export async function isAuthorizedWhatsAppRecipient(
+  db: DbClient,
+  input: ResourceScope & { env: CloudflareEnv; phone: string; requireSiteWide?: boolean },
+): Promise<boolean> {
+  return (await resolveAuthorizedWhatsAppRecipient(db, input)) !== null
 }

@@ -2,7 +2,9 @@ import { renderEmail } from '~/server/emails/vue-email'
 import type { DbClient } from '~/server/db'
 import type { CloudflareEnv } from '~/server/utils/auth'
 import { sendEmail } from '~/server/utils/email-delivery'
-import { getOrganizationOwnerEmail } from '~/server/utils/member-access'
+import { getOrganizationOwnerRecipient } from '~/server/utils/member-access'
+import { wantsNotification } from '~/server/domain/notification-preferences'
+import { buildUnsubscribeUrl } from '~/server/utils/unsubscribe'
 import { createCanonicalNotification } from '~/server/utils/notification-center'
 import { getOrgWhatsAppPhone, sendWhatsAppNotification } from '~/server/utils/whatsapp'
 import DomainUpdate from '~/server/emails/templates/DomainUpdate'
@@ -70,13 +72,26 @@ export async function notifyDomainLifecycle(
     dashboardUrl,
     platformDomain,
   })
-  const ownerEmail = await getOrganizationOwnerEmail(env, opts.organizationId)
-  const recipients = [...new Set([ownerEmail, ...supportEmails(env)].filter(Boolean))] as string[]
-  const emailResults = await Promise.all(recipients.map(to => sendEmail(env, {
-    to,
+  // The owner is asked whether they want site-and-billing mail; the platform
+  // support addresses are operational routing, not a person's preference, so
+  // they are always copied and carry no unsubscribe link.
+  const owner = await getOrganizationOwnerRecipient(env, opts.organizationId)
+  const ownerWantsEmail = owner ? await wantsNotification(db, owner.userId, 'site_and_billing', 'email') : false
+  const ownerUnsubscribeUrl = owner && ownerWantsEmail
+    ? await buildUnsubscribeUrl(env, { userId: owner.userId, category: 'site_and_billing' })
+    : null
+  const recipients: Array<{ to: string; unsubscribeUrl: string | null }> = [
+    ...(owner && ownerWantsEmail ? [{ to: owner.email, unsubscribeUrl: ownerUnsubscribeUrl }] : []),
+    ...supportEmails(env)
+      .filter(address => address !== owner?.email)
+      .map(to => ({ to, unsubscribeUrl: null })),
+  ]
+  const emailResults = await Promise.all(recipients.map(recipient => sendEmail(env, {
+    to: recipient.to,
     subject: opts.title,
     html: rendered.html,
     text: rendered.text,
+    unsubscribeUrl: recipient.unsubscribeUrl,
   })))
   emailResults.forEach((result) => {
     if (result.status !== 'sent') console.error('domain_notification_email_send_failed', { siteId: opts.siteId, error: result.error })

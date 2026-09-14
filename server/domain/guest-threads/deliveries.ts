@@ -191,7 +191,7 @@ export async function deliverGuestThreadEmail(
     to: string
     fromName: string
     subject: string
-    body: string
+    email: { html: string; text: string }
     submissionType: GuestThreadSubmissionType
     submissionId: string
   },
@@ -205,7 +205,7 @@ export async function deliverGuestThreadEmail(
       to: input.to,
       fromName: input.fromName,
       subject: input.subject,
-      body: input.body,
+      email: input.email,
       submissionType: input.submissionType as SubmissionType,
       submissionId: input.submissionId,
       idempotencyKey: input.delivery.id,

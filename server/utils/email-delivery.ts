@@ -88,10 +88,21 @@ export async function sendEmail(
     to: string
     subject: string
     text: string
-    html?: string
+    /**
+     * Required. Every outbound message renders through server/emails — a send
+     * that can omit the HTML body is how inbox replies ended up as bare text
+     * (#969), so the type no longer allows one.
+     */
+    html: string
     replyTo?: string | null
     fromName?: string
     idempotencyKey?: string
+    /**
+     * One-click opt-out for the category this message belongs to. Sets the
+     * RFC 8058 headers so a mail client can unsubscribe without opening the
+     * message. Omitted for account-security mail, which cannot be switched off.
+     */
+    unsubscribeUrl?: string | null
   },
 ): Promise<EmailSendResult> {
   if (!shouldSendRealEmail(env) || isReservedTestDomain(input.to)) {
@@ -121,8 +132,16 @@ export async function sendEmail(
         to: [input.to],
         ...(input.replyTo ? { reply_to: input.replyTo } : {}),
         subject: input.subject,
-        ...(input.html ? { html: input.html } : {}),
+        html: input.html,
         text: input.text,
+        ...(input.unsubscribeUrl
+          ? {
+              headers: {
+                'List-Unsubscribe': `<${input.unsubscribeUrl}>`,
+                'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+              },
+            }
+          : {}),
       }),
       signal: controller.signal,
     })

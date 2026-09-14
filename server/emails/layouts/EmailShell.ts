@@ -28,10 +28,17 @@ export default defineComponent({
     ctaUrl: { type: String },
     ctaText: { type: String },
     footerNote: { type: String },
+    /**
+     * One-click opt-out for the category this message belongs to. Null for
+     * account-security mail, which has nothing to unsubscribe from.
+     */
+    unsubscribeUrl: { type: String as PropType<string | null>, default: null },
     platformDomain: { type: String, required: true },
   },
   setup(props, { slots }) {
     const year = new Date().getFullYear()
+    // Captured so the null check narrows inside the render closure.
+    const unsubscribeUrl = () => props.unsubscribeUrl
     const logoUrl = `https://${props.platformDomain.replace(/^https?:\/\//, '').replace(/\/$/, '')}/krabi-claw-logo.png`
     return () => h(EHtml, { lang: 'en', dir: 'ltr' }, () => [
       h(EHead, null, () => [
@@ -48,6 +55,8 @@ export default defineComponent({
             .email-details { border-color: ${BORDER_DARK} !important; }
             .email-details-label { color: ${FG_MUTED_DARK} !important; }
             .email-details-value { color: ${FG_DARK} !important; }
+            .email-quote { background-color: ${CARD_BG_DARK} !important; }
+            .email-quote-text { color: ${FG_MUTED_DARK} !important; }
           }
         `),
       ]),
@@ -96,6 +105,11 @@ export default defineComponent({
             props.footerNote
               ? h(EText, { class: 'email-footer', style: `margin:8px 0 0;font-size:12px;color:${FG_DIMMED};line-height:1.6` }, () => props.footerNote)
               : null,
+            ((url: string | null) => url
+              ? h(EText, { class: 'email-footer', style: `margin:8px 0 0;font-size:12px;color:${FG_DIMMED};line-height:1.6` }, () => [
+                  h(ELink, { class: 'email-footer-link', href: url, style: `color:${FG_MUTED};text-decoration:underline` }, () => 'Unsubscribe from these emails'),
+                ])
+              : null)(unsubscribeUrl()),
           ]),
         ]),
       ]),

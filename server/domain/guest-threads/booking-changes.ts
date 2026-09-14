@@ -11,6 +11,10 @@ import type { CloudflareEnv } from '~/server/utils/auth'
 import { notifyBookingChangeOwner } from '~/server/utils/notifications'
 import { appendEntry, findEntryByDedupeKey, getEntryById } from './entries'
 import { createDeliveryReceipt, deliverGuestThreadEmail } from './deliveries'
+import { getEmailDeliveryMode } from '~/server/utils/email-delivery'
+import { renderEmail } from '~/server/emails/vue-email'
+import { getPlatformDomain } from '~/server/utils/dashboard-notification-links'
+import BookingChangeProposal from '~/server/emails/templates/BookingChangeProposal'
 import { updateThreadProjection } from './repository'
 import { getGuestRequest, getThreadOperationalRecord, requestSummary } from '~/server/domain/requests'
 import type { GuestThreadRow } from './types'
@@ -171,7 +175,15 @@ function linkToken(env: ChangeEnv, threadId: string, requestId: string) {
   return createHmac('sha256', env.EMAIL_REPLY_SECRET).update(`booking-change:v1:${threadId}:${requestId}`).digest('hex')
 }
 
-async function deliverEmail(db: DbClient, env: ChangeEnv, thread: GuestThreadRow, entryId: string, subject: string, body: string, status: 'requested' | 'accepted' | 'declined', proposal: z.infer<typeof proposalSchema>, noun: string) {
+interface ChangeEmailContent {
+  subject: string
+  intro: string
+  rows?: Array<[string, string]>
+  actionUrl?: string
+  actionText?: string
+}
+
+async function deliverEmail(db: DbClient, env: ChangeEnv, thread: GuestThreadRow, entryId: string, content: ChangeEmailContent, status: 'requested' | 'accepted' | 'declined', proposal: z.infer<typeof proposalSchema>, noun: string) {
   const summary = await sourceSummary(db, thread)
   if (!summary.guestEmail) throw new HTTPError({ statusCode: 400, message: 'Guest email is required' })
   const site = await queryFirst<{ brand_name: string }>(db, 'SELECT brand_name FROM sites WHERE id = ?', [thread.site_id])
@@ -179,7 +191,7 @@ async function deliverEmail(db: DbClient, env: ChangeEnv, thread: GuestThreadRow
   const delivery = await createDeliveryReceipt(db, {
     entryId,
     channel: 'email',
-    provider: env.EMAIL_DELIVERY_MODE === 'provider' ? 'resend' : 'log_only',
+    provider: getEmailDeliveryMode(env) === 'provider' ? 'resend' : 'log_only',
     purpose: 'status_update',
     idempotencyKey: `booking-change:${entryId}`,
   })
@@ -188,8 +200,17 @@ async function deliverEmail(db: DbClient, env: ChangeEnv, thread: GuestThreadRow
     env,
     to: summary.guestEmail,
     fromName: site.brand_name,
-    subject,
-    body,
+    subject: content.subject,
+    email: await renderEmail(BookingChangeProposal, {
+      guestName: summary.guestName,
+      siteName: site.brand_name,
+      heading: content.subject,
+      intro: content.intro,
+      rows: content.rows ?? [],
+      actionUrl: content.actionUrl ?? null,
+      actionText: content.actionText ?? null,
+      platformDomain: getPlatformDomain(env),
+    }),
     submissionType: thread.kind,
     submissionId: thread.id,
   })
@@ -253,8 +274,17 @@ export async function requestBookingChange(db: DbClient, env: CloudflareEnv, thr
   const proposal = proposalSchema.parse(JSON.parse(entry.payload_json || '{}'))
   const url = new URL(`/booking-changes/${thread.id}/${entry.id}`, env.NUXT_PUBLIC_PLATFORM_DOMAIN)
   url.hash = linkToken(env, thread.id, entry.id)
-  await deliverEmail(db, env, thread, entry.id, `Please review changes to your ${noun}`,
-    `Hi ${summary.guestName},\n\nYour host has requested changes to your ${noun}:\n${proposal.locationTitle ? `Location: ${proposal.locationTitle}\n` : ''}When: ${proposal.afterLabel}\nGuests: ${proposal.after.partySize}\n\nReview and accept or decline: ${url.href}\n\nYour ${noun} stays unchanged until you accept. This link expires in 7 days. You can also reply to this email to talk with your host.`, 'requested', proposal, noun)
+  await deliverEmail(db, env, thread, entry.id, {
+    subject: `Please review changes to your ${noun}`,
+    intro: `Hi ${summary.guestName}, your host has requested changes to your ${noun}. It stays exactly as it is until you accept, and the link below expires in 7 days. You can also reply to this email to talk with your host.`,
+    rows: [
+      proposal.locationTitle ? ['Location', proposal.locationTitle] : null,
+      ['When', proposal.afterLabel],
+      ['Guests', String(proposal.after.partySize)],
+    ].filter(Boolean) as Array<[string, string]>,
+    actionUrl: url.href,
+    actionText: 'Review the changes',
+  }, 'requested', proposal, noun)
   await updateThreadProjection(db, thread.id, { conversationState: 'waiting_on_guest' })
 }
 
@@ -363,11 +393,19 @@ export async function respondToBookingChange(db: DbClient, env: ChangeEnv, input
   const summary = await sourceSummary(db, thread as GuestThreadRow)
   if (result && input.decision) {
     const accepted = result.event_name === 'booking_change.accepted'
-    await deliverEmail(db, env, thread as GuestThreadRow, result.id, `Your ${noun} change was ${accepted ? 'accepted' : 'declined'}`,
-      accepted
-        ? `Your changes are confirmed: ${proposal.afterLabel} for ${proposal.after.partySize} guests${proposal.locationTitle ? ` at ${proposal.locationTitle}` : ''}.`
+    await deliverEmail(db, env, thread as GuestThreadRow, result.id, {
+      subject: `Your ${noun} change was ${accepted ? 'accepted' : 'declined'}`,
+      intro: accepted
+        ? 'Your changes are confirmed.'
         : `You declined the requested changes. Your original ${noun} remains unchanged.`,
-      accepted ? 'accepted' : 'declined', proposal, noun)
+      rows: accepted
+        ? ([
+            proposal.locationTitle ? ['Location', proposal.locationTitle] : null,
+            ['When', proposal.afterLabel],
+            ['Guests', String(proposal.after.partySize)],
+          ].filter(Boolean) as Array<[string, string]>)
+        : [],
+    }, accepted ? 'accepted' : 'declined', proposal, noun)
     await updateThreadProjection(db, thread.id, { conversationState: 'resolved' })
   }
   return {

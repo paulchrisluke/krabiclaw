@@ -2,7 +2,6 @@ import { renderEmail } from '~/server/emails/vue-email'
 import { sendEmail, hashEmail } from '~/server/utils/email-delivery'
 import AuthResetPassword from '~/server/emails/templates/AuthResetPassword'
 import AuthVerifyEmail from '~/server/emails/templates/AuthVerifyEmail'
-import GuestClaimVerify from '~/server/emails/templates/GuestClaimVerify'
 
 export interface AuthEmailEnv {
   RESEND_API_KEY?: string
@@ -70,28 +69,6 @@ export async function sendVerificationEmail(
   await sendAuthEmail(env, {
     to: opts.email,
     subject: 'Verify your KrabiClaw email',
-    html,
-    text,
-  })
-}
-
-// Distinct from sendVerificationEmail above: this confirms an explicit request to
-// link an existing tenant's `customers` row to the signed-in account, not mailbox
-// ownership at signup. Guest accounts are separate from tenant organization membership.
-export async function sendGuestClaimVerificationEmail(
-  env: AuthEmailEnv,
-  opts: { email: string, verifyUrl: string, siteName: string },
-) {
-  const currentPlatformDomain = platformDomain(env)
-  const { html, text } = await renderEmail(GuestClaimVerify, {
-    verifyUrl: opts.verifyUrl,
-    siteName: opts.siteName,
-    platformDomain: currentPlatformDomain,
-  })
-
-  await sendAuthEmail(env, {
-    to: opts.email,
-    subject: `Confirm your ${opts.siteName} booking history`,
     html,
     text,
   })
