@@ -5,6 +5,9 @@ export const HIGH_IMPACT_PATTERNS = [
   'scripts/pull-production-snapshot.ts', 'scripts/provision-development-auth.ts',
   'config/development-auth-fixtures.ts',
   'server/plugins/**', 'tests/e2e/helpers.ts', 'tests/e2e/helpers/**',
+  // The root token sheet: every platform and tenant surface resolves its
+  // --ui-*/--kc-* values here, so a change to it is not scoped to one group.
+  'assets/css/base.css',
   'tests/e2e/test-env.ts', 'workers/**',
 ]
 
@@ -37,11 +40,31 @@ export const IMPACT_GROUPS = [
     specs: ['tests/e2e/platform-blog-ssr.spec.ts'],
   },
   {
+    // The shared public chrome: one header, one collapsed nav, one footer and
+    // the theme/search state behind them, across marketing, docs and blog.
+    id: 'platform-shell',
+    patterns: [
+      'assets/css/platform-*.css',
+      'components/platform/PlatformAccountCta.vue', 'components/platform/PlatformDrawer.vue',
+      'components/platform/PlatformFooter.vue', 'components/platform/PlatformHeader.vue',
+      'components/platform/PlatformIcon.vue', 'components/platform/PlatformMobileContentNav.vue',
+      'components/platform/PlatformSidebarNav.vue',
+      'components/platform/search/**',
+      'composables/usePlatformSearchPalette.ts', 'composables/usePlatformTheme.ts',
+      'layouts/blog.vue', 'layouts/docs.vue', 'layouts/platform.vue',
+    ],
+    specs: [
+      'tests/e2e/platform-blog-ssr.spec.ts',
+      'tests/e2e/post-login.spec.ts',
+    ],
+  },
+  {
     id: 'tenant-public',
     patterns: [
       'components/saya/**', 'components/blawby/**', 'components/blog/**',
       'components/content/**', 'components/menu/**', 'components/tenant-pages/**',
       'composables/loadPublicResourcePayload.ts', 'composables/usePublic*.ts',
+      'components/platform/search/**',
       'layouts/saya.vue', 'layouts/blawby.vue', 'pages/[...tenantPath].vue',
       'pages/about.vue', 'pages/article/**', 'pages/blog/**', 'pages/contact/**',
       'pages/donate.vue', 'pages/experiences/**', 'pages/locations/**',

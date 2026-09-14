@@ -45,5 +45,28 @@ export function usePlatformTheme() {
     sync()
   }
 
-  return { preference, value, sync, setPreference, restore }
+  /**
+   * Installs the client-side theme lifecycle for a public shell layout:
+   * restore the stored preference on mount, follow the OS while the
+   * preference is `system`, and re-apply whenever it changes. Every public
+   * layout calls this so the footer's control works on marketing, docs and
+   * blog alike.
+   */
+  const bootstrap = () => {
+    if (!import.meta.client) return
+
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)')
+    const onSystemThemeChange = () => sync()
+
+    onMounted(restore)
+    prefersDark.addEventListener('change', onSystemThemeChange)
+    const stopThemeWatch = watch(preference, sync)
+
+    onBeforeUnmount(() => {
+      prefersDark.removeEventListener('change', onSystemThemeChange)
+      stopThemeWatch()
+    })
+  }
+
+  return { preference, value, sync, setPreference, restore, bootstrap }
 }
