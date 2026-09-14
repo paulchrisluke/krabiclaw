@@ -175,9 +175,13 @@ function normalizeDetail(place: RawPlace): PlaceDetails {
 
 /**
  * A location's Google reviews are exactly what Google returned this sync.
- * Rows from an earlier sync that Google no longer returns go, and so do rows
- * imported under a merged or legacy place id (Beachfront Pottery Krabi showed
- * each review three times, 2026-09-13, for that reason).
+ * Google's Places API returns at most five reviews per place, chosen by
+ * Google, and the site shows exactly those (owner decision, 2026-09-14): a
+ * review Google no longer shows is not shown here either, and a row imported
+ * under a merged or legacy place id, or without a review id, is not a Google
+ * review of this place. Beachfront Pottery Krabi showed each review three
+ * times (2026-09-13) because earlier syncs kept everything ever imported.
+ * There is no fuller inventory to preserve: this response is the inventory.
  */
 export function staleGoogleReviewDeletes(scope: { organizationId: string; siteId: string; locationId: string }, reviews: PlaceReview[]) {
   return [{

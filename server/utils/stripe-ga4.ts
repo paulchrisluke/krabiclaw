@@ -328,6 +328,11 @@ async function sendStripeGa4Purchase(
     fallbackItems: subscriptionFallbackItems(subscription, invoice.currency ?? 'usd'),
   })
 
+  // Sent once per delivery. Stripe redelivers an event only when this handler
+  // did not answer 2xx, and never spontaneously: a sandbox run of 34 events on
+  // 2026-09-14 delivered 34 distinct ids. A purchase counted twice in GA4 in
+  // that failure case is accepted (owner decision, 2026-09-14) over keeping a
+  // delivery ledger for analytics.
   await sendGa4Event(env, {
     clientId: context.clientId,
     userId: context.userId,
