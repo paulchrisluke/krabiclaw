@@ -180,21 +180,19 @@ async function deleteStripeCustomersOfSweptOrganizations(): Promise<void> {
   const key = process.env.STRIPE_SECRET_KEY
   if (!key) throw new Error('STRIPE_SECRET_KEY is required: swept organizations may own Stripe customers')
   if (!/^(?:sk|rk)_test_/.test(key)) throw new Error('reset-e2e-artifacts refuses a live Stripe key')
-  const dir = mkdtempSync(join(tmpdir(), 'krabiclaw-reset-e2e-stripe-'))
-  const sqlPath = join(dir, 'customers.sql')
-  let customerIds: string[]
-  try {
-    writeFileSync(sqlPath, `SELECT stripeCustomerId FROM organization WHERE stripeCustomerId IS NOT NULL AND id IN (${eligibleOrgIds});`, 'utf8')
-    const result = spawnYarn(['wrangler', 'd1', 'execute', 'DB', ...envFlag.split(' '), ...remoteFlag.split(' ').filter(Boolean), '--file', sqlPath, '--json'], { encoding: 'utf8' })
-    if (result.error) throw result.error
-    const stdout = String(result.stdout ?? '')
-    if (result.status !== 0) throw new Error((String(result.stderr ?? '') || stdout || `Wrangler exited ${result.status}`).trim())
-    // Wrangler prints upload progress lines before the JSON when the SQL comes from a file.
-    const rows = (JSON.parse(stdout.slice(stdout.indexOf('[')))[0]?.results ?? []) as Array<{ stripeCustomerId: string }>
-    customerIds = rows.map(row => row.stripeCustomerId)
-  } finally {
-    rmSync(dir, { recursive: true, force: true })
-  }
+  // `--file` against a remote database goes through D1's import path, which
+  // returns an import summary instead of the rows; `--command` returns them.
+  const query = `SELECT stripeCustomerId FROM organization WHERE stripeCustomerId IS NOT NULL AND id IN (${eligibleOrgIds});`
+  const result = spawnYarn(['wrangler', 'd1', 'execute', 'DB', ...envFlag.split(' '), ...remoteFlag.split(' ').filter(Boolean), '--command', query, '--json'], { encoding: 'utf8' })
+  if (result.error) throw result.error
+  const stdout = String(result.stdout ?? '')
+  if (result.status !== 0) throw new Error((String(result.stderr ?? '') || stdout || `Wrangler exited ${result.status}`).trim())
+  const rows = (JSON.parse(stdout.slice(stdout.indexOf('[')))[0]?.results ?? []) as Array<Record<string, unknown>>
+  const customerIds = rows.map((row) => {
+    const id = row.stripeCustomerId
+    if (typeof id !== 'string' || !id.startsWith('cus_')) throw new Error(`Unexpected D1 row while listing Stripe customers: ${JSON.stringify(row)}`)
+    return id
+  })
   for (const id of customerIds) {
     const response = await fetch(`https://api.stripe.com/v1/customers/${encodeURIComponent(id)}`, { method: 'DELETE', headers: { authorization: `Bearer ${key}` } })
     if (response.status === 404) continue
