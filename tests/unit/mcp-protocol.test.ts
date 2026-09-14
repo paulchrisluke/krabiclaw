@@ -4,135 +4,16 @@ import test from 'node:test'
 import {
   asMcpError,
   MCP_ERROR,
-  MCP_PROTOCOL_VERSION,
   mcpProtocolError,
-  negotiatedMcpProtocolVersion,
-  parseMcpToolCallArguments,
-  readMcpRequest,
-  SUPPORTED_PROTOCOL_VERSIONS,
 } from '../../server/utils/mcp-protocol.ts'
 
-test('MCP protocol versions advertise only supported spec revisions', () => {
-  assert.equal(MCP_PROTOCOL_VERSION, '2025-11-25')
-  assert.deepEqual(SUPPORTED_PROTOCOL_VERSIONS, ['2025-11-25', '2025-06-18', '2025-03-26', '2024-11-05'])
-  assert.equal(Array.from(SUPPORTED_PROTOCOL_VERSIONS).includes('2026-07-28'), false)
-  assert.equal(Array.from(SUPPORTED_PROTOCOL_VERSIONS).includes('2025-11-25'), true)
-})
-
-test('negotiatedMcpProtocolVersion returns the client version when supported', () => {
-  assert.equal(
-    negotiatedMcpProtocolVersion({
-      _meta: { 'io.modelcontextprotocol/version': '2025-11-25' },
-    }),
-    '2025-11-25',
-  )
-  assert.equal(
-    negotiatedMcpProtocolVersion({
-      _meta: { 'io.modelcontextprotocol/version': '2025-03-26' },
-    }),
-    '2025-03-26',
-  )
-})
-
-test('negotiatedMcpProtocolVersion falls back to the current server revision', () => {
-  assert.equal(negotiatedMcpProtocolVersion({ _meta: {} }), MCP_PROTOCOL_VERSION)
-})
-
-test('readMcpRequest defaults missing protocol version to the current server revision', () => {
-  const event = {
-    req: new Request('http://localhost/api/mcp', { headers: {} }),
-  } as unknown as Parameters<typeof readMcpRequest>[0]
-  const request = readMcpRequest(event, {
-    jsonrpc: '2.0',
-    id: 'missing-version-call',
-    method: 'tools/call',
-    params: {
-      name: 'list_sites',
-      arguments: {},
-    },
-    _meta: {},
-  })
-
-  assert.equal(request.method, 'tools/call')
-  assert.equal(request._meta?.['io.modelcontextprotocol/version'], MCP_PROTOCOL_VERSION)
-})
-
-test('readMcpRequest defaults notification requests without protocol metadata to the current server revision', () => {
-  const event = {
-    req: new Request('http://localhost/api/mcp', { headers: {} }),
-  } as unknown as Parameters<typeof readMcpRequest>[0]
-  const request = readMcpRequest(event, {
-    jsonrpc: '2.0',
-    method: 'notifications/initialized',
-    params: {},
-  })
-
-  assert.equal(request.method, 'notifications/initialized')
-  assert.equal(request._meta?.['io.modelcontextprotocol/version'], MCP_PROTOCOL_VERSION)
-})
-
-test('readMcpRequest rejects unsupported request versions but negotiates during initialize', () => {
-  const event = {
-    req: new Request('http://localhost/api/mcp', {
-      headers: { 'mcp-protocol-version': '2026-07-28' },
-    }),
-  } as unknown as Parameters<typeof readMcpRequest>[0]
-
-  for (const method of ['server/discover', 'tools/list', 'tools/call']) {
-    assert.throws(() => readMcpRequest(event, {
-      jsonrpc: '2.0', id: 'unsupported', method, params: { name: 'list_sites' },
-    }), error => {
-      const mapped = asMcpError(error)
-      assert.equal(mapped.code, MCP_ERROR.invalidRequest)
-      assert.equal(mapped.kind, 'protocol')
-      assert.match(mapped.message, /Unsupported MCP protocol version/)
-      return true
-    })
-  }
-  const request = readMcpRequest(event, {
-    jsonrpc: '2.0', id: 'initialize', method: 'initialize',
-    params: { protocolVersion: '2026-07-28' },
-  })
-  assert.equal(negotiatedMcpProtocolVersion(request), MCP_PROTOCOL_VERSION)
-  const supported = readMcpRequest(event, {
-    jsonrpc: '2.0', id: 'initialize-supported', method: 'initialize',
-    params: { protocolVersion: '2025-06-18' },
-  })
-  assert.equal(negotiatedMcpProtocolVersion(supported), '2025-06-18')
-})
-
-test('readMcpRequest keeps a supported protocol version the client asked for', () => {
-  const event = {
-    req: new Request('http://localhost/api/mcp', {
-      headers: { 'mcp-protocol-version': '2025-06-18' },
-    }),
-  } as unknown as Parameters<typeof readMcpRequest>[0]
-
-  const request = readMcpRequest(event, {
-    jsonrpc: '2.0',
-    id: 'discover-2',
-    method: 'server/discover',
-    params: {},
-  })
-
-  assert.equal(negotiatedMcpProtocolVersion(request), '2025-06-18')
-})
-
-test('parseMcpToolCallArguments accepts only the canonical nested arguments envelope', () => {
-  assert.deepEqual(parseMcpToolCallArguments({ name: 'get_workspace_context' }), {})
-  assert.deepEqual(
-    parseMcpToolCallArguments({ name: 'get_site', arguments: { site_id: 'site-1' } }),
-    { site_id: 'site-1' },
-  )
-  assert.throws(
-    () => parseMcpToolCallArguments({ name: 'get_site', site_id: 'site-1' }),
-    /must be nested under params\.arguments/,
-  )
-  assert.throws(
-    () => parseMcpToolCallArguments({ name: 'get_site', arguments: [] }),
-    /arguments must be an object/,
-  )
-})
+// JSON-RPC envelope parsing, protocol-version negotiation, and JSON-RPC
+// argument-shape validation moved to @modelcontextprotocol/server (see
+// server/api/mcp.post.ts) — that coverage now lives in the e2e suite
+// (tests/e2e/mcp-*.spec.ts, tests/e2e/oauth-discovery.spec.ts) against the
+// real SDK behavior rather than as unit tests of hand-rolled parsing here.
+// asMcpError/mcpProtocolError remain ours: every tool executor throws
+// through this shape regardless of transport.
 
 test('asMcpError maps a plain mcpProtocolError through unchanged', () => {
   const error = mcpProtocolError(MCP_ERROR.invalidParams, 'bad input')

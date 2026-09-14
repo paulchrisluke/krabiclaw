@@ -1,6 +1,38 @@
 import { randomUUID } from 'node:crypto'
-import { expect, type APIRequestContext } from '@playwright/test'
+import { expect, type APIRequestContext, type APIResponse } from '@playwright/test'
 import { authRequestHeaders, loginAs } from './auth'
+
+// The Streamable HTTP transport requires clients to accept both
+// application/json and text/event-stream (see the Accept header below), and
+// @modelcontextprotocol/server reserves the right to answer with either —
+// our own stateless tool calls always resolve a single terminal result, but
+// the SDK still wraps it as a one-event SSE stream rather than a plain JSON
+// body. Real MCP clients already have to handle both; this makes
+// mcpRequest()'s return value do the same so every existing `.json()` call
+// site across the e2e suite keeps working unchanged.
+export async function mcpJson<T>(response: APIResponse): Promise<T> {
+  return parseMcpResponseBody<T>(response)
+}
+
+async function parseMcpResponseBody<T>(response: APIResponse): Promise<T> {
+  const contentType = response.headers()['content-type'] ?? ''
+  const text = await response.text()
+  if (!contentType.includes('text/event-stream')) return JSON.parse(text) as T
+  const dataLines = text.split('\n')
+    .filter(line => line.startsWith('data:'))
+    .map(line => line.slice('data:'.length).trim())
+  if (dataLines.length === 0) throw new Error(`SSE response carried no data: line(s): ${text.slice(0, 200)}`)
+  return JSON.parse(dataLines.join('')) as T
+}
+
+function withMcpJson(response: APIResponse): APIResponse {
+  return new Proxy(response, {
+    get(target, prop, receiver) {
+      if (prop === 'json') return () => parseMcpResponseBody(target)
+      return Reflect.get(target, prop, receiver)
+    },
+  })
+}
 
 export const MCP_VERSION = '2025-06-18'
 // Fixed fixture sites retained in the production snapshot with the matching plan already
@@ -23,18 +55,29 @@ export async function mcpRequest(
     idempotent?: boolean
   },
 ) {
+  // Plain, standard JSON-RPC 2.0 — no `_meta['io.modelcontextprotocol/...']`
+  // claim and no `mcp-protocol-version`/`mcp-method`/`mcp-name` headers.
+  // Those were the old hand-rolled protocol layer's header/meta fallback for
+  // resolving method/tool name; @modelcontextprotocol/server reads `method`
+  // and `params.name`/`params.arguments` from the body per spec, and treats
+  // any `_meta['io.modelcontextprotocol/...']` key as a modern-protocol
+  // envelope claim — which this legacy-era (2025-06-18) suite doesn't carry
+  // the rest of (e.g. `clientCapabilities`), so every request was rejected
+  // as a malformed modern envelope regardless of method.
+  // A JSON-RPC notification (notifications/initialized) must carry no `id`
+  // at all — that's the spec's own distinction between a notification (no
+  // response expected, 202 Accepted) and a request (a real result). This
+  // helper used to attach an id unconditionally, silently turning that
+  // notification into a request the SDK correctly answers as one (200 with
+  // a result) instead of 202.
+  const isNotification = options.method.startsWith('notifications/')
   const payload = {
     jsonrpc: '2.0',
-    id: options.id ?? `${options.method}-${Date.now()}`,
+    ...(isNotification ? {} : { id: options.id ?? `${options.method}-${Date.now()}` }),
     method: options.method,
     params: options.params ?? (options.method === 'tools/call'
       ? { name: options.toolName, arguments: options.args ?? {} }
-      : options.siteId ? { site_id: options.siteId } : {}),
-    _meta: {
-      'io.modelcontextprotocol/version': MCP_VERSION,
-      'io.modelcontextprotocol/method': options.method,
-      ...(options.method === 'tools/call' && options.toolName ? { 'io.modelcontextprotocol/name': options.toolName } : {}),
-    },
+      : {}),
   }
 
   const requestId = randomUUID()
@@ -46,9 +89,16 @@ export async function mcpRequest(
       maxRetries: options.idempotent ? 1 : 0,
       headers: {
         'content-type': 'application/json',
-        'mcp-protocol-version': MCP_VERSION,
-        'mcp-method': options.method,
-        ...(options.method === 'tools/call' && options.toolName ? { 'mcp-name': options.toolName } : {}),
+        // The Streamable HTTP transport requires clients to declare both
+        // response formats they accept; @modelcontextprotocol/server answers
+        // 406 without this (the old hand-rolled route never checked Accept).
+        accept: 'application/json, text/event-stream',
+        // site_id is a KrabiClaw extension for site-scoped tools/list
+        // discovery, not part of the MCP spec's ListToolsRequestParams —
+        // the SDK validates that against the spec's schema (only
+        // cursor/_meta) and silently drops anything else, so it has to
+        // travel as a header instead of a JSON-RPC param.
+        ...(options.siteId ? { 'x-krabiclaw-site-id': options.siteId } : {}),
         ...(options.extraHeaders ?? {}),
         'x-request-id': requestId,
       },
@@ -64,7 +114,7 @@ export async function mcpRequest(
       d1DurationMs: headers['x-d1-duration-ms'] ?? null,
       serverDurationMs: headers['x-total-duration-ms'] ?? null,
     }))
-    return response
+    return withMcpJson(response)
   } catch (error) {
     // Playwright puts the full request, cookies included, in the error's call log.
     // The first line is only the failure kind, e.g. "apiRequestContext.post: read ECONNRESET".

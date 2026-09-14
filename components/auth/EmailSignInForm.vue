@@ -29,7 +29,7 @@ const { loading, error, run } = useAuthOperation()
 
 async function submit() {
   const normalizedEmail = email.value.trim()
-  const result = await run(() => authClient.signIn.email({ email: normalizedEmail, password: password.value, callbackURL: props.callbackUrl }), 'Sign in failed. Please try again.')
+  const result = await run(() => authClient.signIn.email({ email: normalizedEmail, password: password.value, callbackURL: props.callbackUrl }), 'Sign in failed. Please try again.') as { error?: { message?: string, code?: unknown } & Record<string, unknown> } | null
   if (result?.error) {
     error.value = result.error.message || 'Sign in failed. Please try again.'
     if (requiresEmailVerification(result.error)) emit('verificationRequired', normalizedEmail)

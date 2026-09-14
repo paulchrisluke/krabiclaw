@@ -36,7 +36,7 @@ test.describe('stateless MCP server', () => {
 
     const blankSiteTools = await mcpRequest(request, baseURL!, {
       method: 'tools/list',
-      params: { site_id: '   ' },
+      extraHeaders: { 'x-krabiclaw-site-id': '   ' },
     })
     expect(blankSiteTools.status()).toBe(200)
     const blankSiteToolsBody = await blankSiteTools.json() as { result: { tools: Array<{ name: string }> } }
