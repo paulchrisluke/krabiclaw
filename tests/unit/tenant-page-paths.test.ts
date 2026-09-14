@@ -5,7 +5,7 @@ import {
   claimedRoutesFromPages,
   mergeClaimedRoutes,
 } from '../../build/claimed-public-routes.ts'
-import { templateAllowsPageDocumentAt } from '../../shared/tenant-page-paths.ts'
+import { isClaimedPublicPath, templateAllowsPageDocumentAt } from '../../shared/tenant-page-paths.ts'
 import { publicTemplateRegistry } from '../../utils/template-registry.ts'
 
 // The invariant: a path is writable when the site's template renders a tenant
@@ -109,4 +109,17 @@ test('the platform template holds no tenant page at all', () => {
   // path is not writable there either.
   assert.equal(allows('platform', '/our-story'), false)
   assert.equal(allows('platform', '/about'), false)
+})
+
+test('claimed route matching follows case-insensitive literals and constraints', () => {
+  assert.equal(allows('saya', '/Blog'), false)
+  assert.equal(allows('saya', '/TH/About'), false)
+  assert.equal(allows('saya', '/FR/About'), true)
+})
+
+test('Nitro single-segment wildcards claim concrete paths, without claiming descendants', () => {
+  const claims = claimedRoutesFromHandlers([{ route: '/feed/*' }, { route: '/files/:name' }])
+  assert.equal(isClaimedPublicPath(claims, '/feed/news'), true)
+  assert.equal(isClaimedPublicPath(claims, '/feed/news/archive'), false)
+  assert.equal(isClaimedPublicPath(claims, '/files/report'), true)
 })
