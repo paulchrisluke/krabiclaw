@@ -50,6 +50,10 @@ export async function mcpRequest(
       maxRetries: options.idempotent ? 1 : 0,
       headers: {
         'content-type': 'application/json',
+        // The Streamable HTTP transport requires clients to declare both
+        // response formats they accept; @modelcontextprotocol/server answers
+        // 406 without this (the old hand-rolled route never checked Accept).
+        accept: 'application/json, text/event-stream',
         ...(options.extraHeaders ?? {}),
         'x-request-id': requestId,
       },
