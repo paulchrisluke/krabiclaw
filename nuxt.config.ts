@@ -1,9 +1,22 @@
 // https://nuxt.com/docs/api/configuration/nuxt-config
 import { createRequire } from 'node:module'
+import { mkdirSync, writeFileSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
 import { getIcons } from '@iconify/utils'
 import { visualizer } from 'rollup-plugin-visualizer'
 import { ROBOTS_DISABLED_DIRECTIVE, ROBOTS_ENABLED_DIRECTIVE } from './shared/robots-directive'
 import { localizedPublicRouteAliases } from './build/localized-public-routes'
+import {
+  claimedRoutesFromHandlers,
+  claimedRoutesFromPages,
+  mergeClaimedRoutes,
+  nonRouteClaimedRoutes,
+  type ClaimedRoute,
+} from './build/claimed-public-routes'
+
+// Filled by the pages:extend hook and read by nitro:config, which runs after it.
+let claimedPageRoutes: ClaimedRoute[] = []
+const claimedRoutesModulePath = resolve(import.meta.dirname, '.nuxt-generated/claimed-public-routes.mjs')
 
 // nuxt/icon's serverBundle bundles a named collection in full — no usage-based
 // tree-shaking. lucide is the app's sole icon pack (it's also what Nuxt UI's
@@ -111,6 +124,10 @@ export default defineNuxtConfig({
     },
   },
 
+  alias: {
+    '#claimed-public-routes': claimedRoutesModulePath,
+  },
+
   compatibilityDate: '2024-11-01',
 
   experimental: {
@@ -199,11 +216,25 @@ export default defineNuxtConfig({
     },
     'pages:extend'(pages) {
       pages.push(...localizedPublicRouteAliases(pages))
+      // Captured here because this is where the resolved route tree exists. The
+      // Worker needs it to answer "does anything already claim this path?" — see
+      // build/claimed-public-routes.ts.
+      claimedPageRoutes = claimedRoutesFromPages(pages)
     },
     'nitro:config'(nitroConfig) {
       nitroConfig.handlers = nitroConfig.handlers?.filter(
         handler => handler.route !== '/api/_nuxt_icon/:collection',
       )
+      // Written to a real file rather than a Nitro virtual module because the
+      // page loader is reachable from the Vite SSR graph too (TenantPublicPage
+      // imports it), and both builders have to resolve the same artifact.
+      const claimed = mergeClaimedRoutes(
+        claimedPageRoutes,
+        claimedRoutesFromHandlers(nitroConfig.handlers ?? []),
+        nonRouteClaimedRoutes(),
+      )
+      mkdirSync(dirname(claimedRoutesModulePath), { recursive: true })
+      writeFileSync(claimedRoutesModulePath, `export const CLAIMED_PUBLIC_ROUTES = ${JSON.stringify(claimed)}\n`)
     },
     'vite:extendConfig'(viteConfig, { isClient }) {
       if (analyzeBundle && isClient) {

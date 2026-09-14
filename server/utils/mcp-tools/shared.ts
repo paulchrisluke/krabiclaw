@@ -834,7 +834,6 @@ const D = Object.freeze(openWorldDestructiveAnnotations())
 export const EXPECTED_TOOL_ANNOTATIONS = {
   attach_media: W,
   batch_create_products: W,
-  change_tenant_page_path: D,
   create_blog_post: W,
   create_location_qa: W,
   create_owner_entered_site_review: W,

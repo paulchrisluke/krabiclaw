@@ -42,6 +42,7 @@ import { isPublicPagePayload } from '~/utils/public-resource-contracts'
 import type { LocalizedResourceType } from '~/server/utils/localization-registry'
 import { listPublicLocaleRepresentations } from '~/server/utils/public-locale-representations'
 import { normalizeVertical } from '~/utils/vertical-copy'
+import { resolvePublicTemplate } from '~/utils/template-registry'
 import { isPublicSourceRouteRoot } from '~/shared/public-locale-routes'
 import {
   loadExactPublicLocalizations,
@@ -122,12 +123,19 @@ interface PublicPageLoadOptions {
   signal?: AbortSignal
 }
 
-function canonicalTenantPagePath(page: string | null): string | null {
+/**
+ * The canonical source path of this route, which is what a locale
+ * representation is keyed by. Every published locale route has one, whether or
+ * not it carries a tenant page document: /menu and /locations render products
+ * and locations, and still have /th/menu and /th/locations.
+ *
+ * Where the *document* lives is a different question, answered per template in
+ * utils/template-registry.ts. Collapsing the two is what made /th/menu 404.
+ */
+function routeSourcePath(page: string | null): string | null {
   if (!page) return null
   if (page === 'home') return '/'
-  // Location detail routes are backed by the canonical business_locations row
-  // and their route datasets. They are not tenant-page variants, so do not
-  // require a CMS page record for a valid location.
+  // A location detail route is its business_locations row, not a page.
   if (page === 'locations') return '/locations'
   if (isPublicSourceRouteRoot(page)) return `/${page}`
   return null
@@ -599,8 +607,12 @@ async function loadPublicPageSource(
       ? (batchResults[idxQa] as { results: Record<string, unknown>[] })
       : { results: [] as Record<string, unknown>[] };
   const sourceLocale = 'en';
-  const routePagePath = canonicalTenantPagePath(page)
-  const contentPagePath = requestedDatasets.has('content') ? routePagePath : null
+  const routePagePath = routeSourcePath(page)
+  // Which paths carry a tenant page document is declared once, per template.
+  const documentPath = page
+    ? resolvePublicTemplate({ themeId: site.theme_id, vertical: site.vertical }).pageDocuments.recipes[page] ?? null
+    : null
+  const contentPagePath = requestedDatasets.has('content') ? documentPath : null
   const tenantPageOptions = {
     locale,
     preview: isPreviewAuthorized,

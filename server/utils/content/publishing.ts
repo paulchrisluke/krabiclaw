@@ -271,7 +271,7 @@ function mediaPlacementScope(siteId: string, organizationId: string | null) {
 }
 
 /** The site's template and identity, which decide article URLs and editor chrome. */
-async function loadSiteTemplate(db: DbClient, siteId: string) {
+export async function loadSiteTemplate(db: DbClient, siteId: string) {
   const site = await queryFirst<{ organization_id: string; theme_id: string | null; vertical: string | null; brand_name: string | null; brand_color: string | null }>(db, `
     SELECT s.organization_id, s.theme_id, s.vertical, s.brand_name,
            json_extract(s.settings_json, '$.config.brand_color') AS brand_color

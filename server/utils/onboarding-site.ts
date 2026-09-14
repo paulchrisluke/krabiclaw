@@ -223,8 +223,12 @@ export async function applyOnboardingDraftToSite(
     env,
     organizationId, siteId, userId: userId, pages: [...contentByPage].map(([pageName, rows]) => {
       const pageType = onboardingPageType(pageName)
+      // The draft is the whole document. Onboarding does not collect SEO
+      // metadata or an explicit order, so it states null for them rather than
+      // leaving them to whatever a previous commit wrote.
       return {
-        path: onboardingPagePath(pageName), title: rows.find(row => row.field === 'hero')?.hero_title ?? pageName, pageType, recipe: pageName, blocks: onboardingPageBlocks(rows), trustedSystemPage: pageType === 'system', }
+        path: onboardingPagePath(pageName), title: rows.find(row => row.field === 'hero')?.hero_title ?? pageName, pageType, recipe: pageName, blocks: onboardingPageBlocks(rows), trustedSystemPage: pageType === 'system',
+        summary: null, seoTitle: null, seoDescription: null, canonicalUrl: null, robots: null, sortOrder: null, }
     }), })
 
   for (const [pageName, rows] of contentByPage) {

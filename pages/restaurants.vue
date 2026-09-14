@@ -266,7 +266,7 @@
       </div>
     </div>
     </div>
-    <TenantPublicPage v-else path="/restaurants" />
+    <TenantPublicPage v-else :path="documentPath" />
   </NuxtLayout>
 </template>
 
@@ -274,6 +274,7 @@
 definePageMeta({ layout: false })
 
 const { isPlatform } = useTenantSite()
+const documentPath = useTenantPageDocumentPath('/restaurants', 'path')
 
 const restaurantFeatures = [
   {
