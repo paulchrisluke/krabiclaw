@@ -79,9 +79,14 @@
           </div>
 
           <div v-else-if="!threadsError && threads.length === 0" class="px-6 py-14 text-center">
-            <UIcon name="i-lucide-inbox" class="mx-auto size-8 text-muted" />
-            <p class="mt-3 text-sm font-medium text-highlighted">No guest threads yet</p>
-            <p class="mt-1 text-xs text-muted">{{ emptyDescription }}</p>
+            <img
+              src="https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/de8b203b-a120-43c9-7ff2-5ebe40b66800/thumbnail"
+              alt=""
+              aria-hidden="true"
+              class="mx-auto size-28 object-contain"
+            >
+            <p class="mt-6 text-base font-semibold text-highlighted">No guest threads yet</p>
+            <p class="mt-1 text-sm text-muted">{{ emptyDescription }}</p>
           </div>
         </div>
       </div>
