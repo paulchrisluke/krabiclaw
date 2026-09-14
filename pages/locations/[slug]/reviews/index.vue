@@ -135,6 +135,7 @@ const slug = computed(() => String(route.params.slug))
 const siteName = computed(() => String((site as ApiValue)?.brand_name ?? '').trim())
 
 const { location, reviewsAggregate, reviewsList, pending } = await usePublicPageData()
+if (!location.value) throw createError({ statusCode: 404, statusMessage: 'Location not found' })
 const aggregate = reviewsAggregate
 const reviews = reviewsList
 
@@ -182,8 +183,8 @@ function distCount(star: number) {
 
 useSocialMetadata(() => ({
   path: `/locations/${slug.value}/reviews`,
-  title: `Reviews · ${location.value?.title || slug.value}`,
-  description: `Guest reviews for ${location.value?.title || slug.value} at ${siteName.value}.`,
+  title: `Reviews · ${location.value?.title ?? ''}`,
+  description: `Guest reviews for ${location.value?.title ?? ''} at ${siteName.value}.`,
   socialImage: location.value?.social_image ?? null,
   brand: {
     siteName: siteName.value,
