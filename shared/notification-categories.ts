@@ -54,37 +54,14 @@ export const NOTIFICATION_CATEGORY_DEFAULTS = {
   product_news: { email: true, whatsapp: false },
 } as const satisfies Record<NotificationCategory, NotificationCategorySetting>
 
-export interface NotificationCategoryCopy {
-  label: string
-  summary: string
-}
-
-export const NOTIFICATION_CATEGORY_COPY = {
-  account_security: {
-    label: 'Account and security',
-    summary: 'Password resets, email verification and organization invitations.',
-  },
-  reservations_bookings: {
-    label: 'Reservations and bookings',
-    summary: 'New, changed and cancelled reservations and bookings at your locations.',
-  },
-  guest_messages: {
-    label: 'Guest messages',
-    summary: 'Replies guests send to a conversation in your inbox.',
-  },
-  reviews: {
-    label: 'Reviews',
-    summary: 'Reviews guests leave after a visit.',
-  },
-  site_and_billing: {
-    label: 'Site and billing',
-    summary: 'Custom domain changes, plans and payments.',
-  },
-  product_news: {
-    label: 'KrabiClaw news',
-    summary: 'New articles and product updates from KrabiClaw.',
-  },
-} as const satisfies Record<NotificationCategory, NotificationCategoryCopy>
+export const NOTIFICATION_CATEGORY_LABELS = {
+  account_security: 'Account and security',
+  reservations_bookings: 'Reservations and bookings',
+  guest_messages: 'Guest messages',
+  reviews: 'New reviews',
+  site_and_billing: 'Site and billing',
+  product_news: 'KrabiClaw news',
+} as const satisfies Record<NotificationCategory, string>
 
 /** The state a settings row previews, without restating the channel names twice. */
 export function describeNotificationSetting(setting: NotificationCategorySetting): string {

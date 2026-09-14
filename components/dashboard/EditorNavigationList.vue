@@ -49,15 +49,15 @@
         :ui="{ body: 'p-0! sm:p-0!' }"
       >
         <component
-          :is="item.to && !item.action ? NuxtLink : 'div'"
+          :is="item.to ? NuxtLink : 'div'"
           v-for="(item, index) in group.items"
           :key="item.id"
-          v-bind="item.to && !item.action ? { to: item.to } : {}"
+          v-bind="item.to ? { to: item.to } : {}"
           class="group flex min-h-20 w-full items-center gap-4 text-left px-5 py-4 transition-colors focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-primary"
           :class="[
             index > 0 ? 'border-t border-default' : '',
             item.id === activeItem ? 'bg-elevated' : '',
-            item.to && !item.action ? 'hover:bg-elevated' : '',
+            item.to ? 'hover:bg-elevated' : '',
           ]"
           :aria-current="item.id === activeItem ? 'page' : undefined"
         >
@@ -69,13 +69,6 @@
               :class="item.placeholder ? 'italic text-dimmed' : 'text-muted'"
             >{{ item.summary }}</span>
 
-            <span
-              v-if="item.meta"
-              class="mt-1 flex items-center gap-1.5 text-xs"
-              :class="item.meta.tone === 'success' ? 'text-success' : 'text-warning'"
-            >
-              <span class="size-1.5 rounded-full bg-current" />{{ item.meta.label }}
-            </span>
 
             <!--
               The share card's own proportions, so the crop the tenant is
@@ -107,11 +100,10 @@
           -->
           <UButton
             v-if="item.action"
-            :to="item.action.to"
             variant="link"
             color="neutral"
             class="shrink-0"
-            @click="item.action.to ? undefined : $emit('act', item.id)"
+            @click="$emit('act', item.id)"
           >{{ item.action.label }}</UButton>
           <UIcon v-else-if="item.to" name="i-lucide-chevron-right" class="size-5 shrink-0 text-muted transition-transform group-hover:translate-x-0.5" />
         </component>
@@ -146,18 +138,12 @@ export interface EditorNavigationItem {
    */
   card?: { image: string | null; title: string; description: string | null; empty: string }
   /**
-   * A status line under the summary — "Verified", "Not verified". Distinct from
-   * the summary, which states the value; this states whether the value is in
-   * good standing.
+   * A row that acts on the session rather than opening anything — Log out. It
+   * is not a level of the chain, so it takes no chevron and carries its own
+   * control, and the id is emitted through `act`. A row that goes somewhere
+   * uses `to` and gets the chevron like any other.
    */
-  meta?: { label: string; tone: 'success' | 'warning' }
-  /**
-   * A row that acts instead of pushing into a deeper screen: Reset password,
-   * Copy, Log out. It is not a level of the chain, so it takes no chevron and
-   * carries its own control on the right. `to` navigates away; otherwise the
-   * id is emitted through `act`.
-   */
-  action?: { label: string; to?: string }
+  action?: { label: string }
 }
 
 export interface EditorNavigationGroup {
@@ -174,7 +160,7 @@ withDefaults(defineProps<{
 }>(), { variant: 'rows' })
 
 defineEmits<{
-  /** Emitted by a row's own action control when it has no `to`. */
+  /** Emitted by a session action row's control, carrying the item id. */
   act: [id: string]
 }>()
 </script>

@@ -9,12 +9,18 @@
       <UButton v-else-if="state === 'done'" to="/dashboard/account/profile/notifications" variant="subtle" size="lg">
         Manage all notifications
       </UButton>
+
+      <!-- Turning everything in a category off is rarely what someone wants;
+           the settings hub is one link away before they commit to it. -->
+      <p v-if="state === 'ready'" class="text-sm text-muted">
+        Or <NuxtLink to="/dashboard/account/profile/notifications" class="underline underline-offset-2">choose exactly what you receive</NuxtLink>.
+      </p>
     </div>
   </UCard>
 </template>
 
 <script setup lang="ts">
-import { NOTIFICATION_CATEGORY_COPY, isNotificationCategory } from '~/shared/notification-categories'
+import { NOTIFICATION_CATEGORY_LABELS, isNotificationCategory } from '~/shared/notification-categories'
 
 // The click, not the page load, performs the write. A mail client or link
 // scanner that prefetches the URL must not silently unsubscribe someone —
@@ -31,7 +37,7 @@ const submitting = ref(false)
 const failure = ref('')
 
 const category = computed(() => (isNotificationCategory(route.query.category) ? route.query.category : null))
-const categoryLabel = computed(() => (category.value ? NOTIFICATION_CATEGORY_COPY[category.value].label : ''))
+const categoryLabel = computed(() => (category.value ? NOTIFICATION_CATEGORY_LABELS[category.value] : ''))
 
 onMounted(() => {
   state.value = category.value && typeof route.query.user === 'string' && typeof route.query.token === 'string'
@@ -56,9 +62,11 @@ async function submit() {
   submitting.value = true
   failure.value = ''
   try {
+    // Same signed query the List-Unsubscribe header carries, so both routes in
+    // and the API have one contract.
     await $fetch('/api/public/notifications/unsubscribe', {
       method: 'POST',
-      body: { user: route.query.user, category: route.query.category, token: route.query.token },
+      query: { user: route.query.user, category: route.query.category, token: route.query.token },
     })
     state.value = 'done'
   } catch (cause) {

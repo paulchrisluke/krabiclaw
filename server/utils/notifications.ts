@@ -8,7 +8,7 @@ import { getWhatsAppDeliveryMode } from '~/server/utils/whatsapp-delivery'
 import { buildReplyToAddress } from '~/server/utils/submission-messages'
 import { resolveAuthorizedWhatsAppRecipient, getOrganizationOwnerRecipient } from '~/server/utils/member-access'
 import { wantsNotification } from '~/server/domain/notification-preferences'
-import { buildUnsubscribeUrl } from '~/server/utils/unsubscribe'
+import { buildUnsubscribeUrls } from '~/server/utils/unsubscribe'
 import type { NotificationCategory } from '~/shared/notification-categories'
 import GuestThreadOwnerAlert from '~/server/emails/templates/GuestThreadOwnerAlert'
 import GuestThreadReply from '~/server/emails/templates/GuestThreadReply'
@@ -253,7 +253,10 @@ async function buildOwnerReviewsUrl(
 export interface OwnerEmailRecipient {
   to: string
   userId: string
+  /** The footer link a person clicks. */
   unsubscribeUrl: string | null
+  /** The RFC 8058 endpoint a mail client POSTs to. */
+  unsubscribeOneClickUrl: string | null
 }
 
 export interface OwnerPhoneRecipient {
@@ -287,11 +290,13 @@ async function resolveOwnerRecipients(
 ): Promise<{ email: OwnerEmailRecipient | null; phones: OwnerPhoneRecipient[] }> {
   const owner = await getOrganizationOwnerRecipient(env, opts.organizationId)
 
+  const unsubscribe = owner ? await buildUnsubscribeUrls(env, { userId: owner.userId, category: opts.category }) : null
   const email = owner && await wantsNotification(db, owner.userId, opts.category, 'email')
     ? {
         to: owner.email,
         userId: owner.userId,
-        unsubscribeUrl: await buildUnsubscribeUrl(env, { userId: owner.userId, category: opts.category }),
+        unsubscribeUrl: unsubscribe?.pageUrl ?? null,
+        unsubscribeOneClickUrl: unsubscribe?.oneClickUrl ?? null,
       }
     : null
 
@@ -332,6 +337,7 @@ async function sendEmailNotification(
     payload: Record<string, string>
     email: EmailTemplate
     unsubscribeUrl?: string | null
+    unsubscribeOneClickUrl?: string | null
     delivery?: ThreadDeliveryContext | null
   }
 ): Promise<boolean> {
@@ -364,7 +370,7 @@ async function sendEmailNotification(
     subject: opts.email.subject,
     html: opts.email.html,
     text: opts.email.text,
-    unsubscribeUrl: opts.unsubscribeUrl ?? null,
+    unsubscribeOneClickUrl: opts.unsubscribeOneClickUrl ?? null,
     idempotencyKey: delivery?.id,
   })
   let requestWebhookRetry = false
@@ -581,11 +587,12 @@ async function notifyOwner(
   })
 
   if (recipients.email) {
-    const { to, unsubscribeUrl } = recipients.email
+    const { to, unsubscribeUrl, unsubscribeOneClickUrl } = recipients.email
     await sendEmailNotification(env, db, {
       ...opts,
       to,
       unsubscribeUrl,
+      unsubscribeOneClickUrl,
       delivery: threadDelivery(threadContext, 'owner_alert', 'email', opts.template, to),
     })
   }
@@ -1336,6 +1343,7 @@ async function notifyGuestThreadReplyInner(
         })),
       },
       unsubscribeUrl: recipients.email.unsubscribeUrl,
+      unsubscribeOneClickUrl: recipients.email.unsubscribeOneClickUrl,
       delivery: threadDelivery(threadContext, 'owner_alert', 'email', 'guest_thread_reply_email', recipients.email.to),
     })])
     : []

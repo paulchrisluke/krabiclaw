@@ -107,6 +107,17 @@ export async function deleteImage(env: CloudflareImagesEnv, imageId: string): Pr
 }
 
 /** Build a Cloudflare Images delivery URL for a given variant. */
+/**
+ * The image id inside one of our own delivery URLs, or null for anything else
+ * — an avatar still pointing at a sign-in provider's CDN is not ours to delete.
+ */
+export function parseOwnImageId(env: CloudflareImagesEnv, url: string | null | undefined): string | null {
+  const base = env.CLOUDFLARE_IMAGES_VARIANT_BASE
+  if (!base || !url || !url.startsWith(`${base}/`)) return null
+  const [imageId] = url.slice(base.length + 1).split('/')
+  return imageId || null
+}
+
 export function buildImageUrl(env: CloudflareImagesEnv, imageId: string, variant = 'public'): string {
   if (!env.CLOUDFLARE_IMAGES_VARIANT_BASE) {
     throw new Error('Cloudflare Images variant base not configured')

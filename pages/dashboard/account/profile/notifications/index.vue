@@ -1,12 +1,14 @@
 <template>
   <!--
-    The category list is the parent level's own column: `notifications.vue`
-    renders it beside this route, and with nothing open there is no detail to
-    draw. This exists so `/notifications` resolves to that parent.
+    With nothing open the pane shows the first category rather than empty
+    space, the way the account index opens on its first row.
   -->
-  <div />
+  <AccountNotificationCategoryPage :category="NOTIFICATION_CATEGORIES[0]" />
 </template>
 
 <script setup lang="ts">
+import AccountNotificationCategoryPage from '~/components/dashboard/AccountNotificationCategoryPage.vue'
+import { NOTIFICATION_CATEGORIES } from '~/shared/notification-categories'
+
 definePageMeta({ layout: 'dashboard' })
 </script>

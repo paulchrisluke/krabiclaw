@@ -11,17 +11,20 @@
     </template>
 
     <template #body>
+      <!--
+        `show-desktop-detail` so the pair is drawn at rest, like every other
+        hub in the chain. With nothing open the index route renders the first
+        category rather than leaving the column empty.
+      -->
       <EditorPaneShell
         :has-detail="frame.mode.value === 'pair'"
+        show-desktop-detail
         :detail-title="detailTitle"
         :dismiss-to="notificationsPath"
       >
         <template #index>
           <UAlert v-if="error" color="error" variant="soft" icon="i-lucide-triangle-alert" :description="error" class="mb-6" />
-          <p class="mb-6 text-base text-muted">
-            Choose what reaches you, and how. WhatsApp needs a verified phone number on your account.
-          </p>
-          <EditorNavigationList :groups="groups" :active-item="frame.childSegment.value" />
+          <EditorNavigationList :groups="groups" :active-item="activeItem" />
         </template>
 
         <template #detail>
@@ -37,7 +40,7 @@ import EditorPaneShell from '~/components/dashboard/EditorPaneShell.vue'
 import EditorNavigationList, { type EditorNavigationGroup } from '~/components/dashboard/EditorNavigationList.vue'
 import {
   NOTIFICATION_CATEGORIES,
-  NOTIFICATION_CATEGORY_COPY,
+  NOTIFICATION_CATEGORY_LABELS,
   describeNotificationSetting,
   isNotificationCategory,
 } from '~/shared/notification-categories'
@@ -50,22 +53,26 @@ const { sessionData } = await useAuthSession()
 const { preferences, error, load } = useNotificationPreferences(() => sessionData.value?.user?.id)
 await load()
 
-// The row states what is on rather than what the category is, so the index
-// answers "what reaches me" without opening anything.
+// Each row states what currently reaches this person, not what the category
+// means. The leaf is one screen away and says it with controls instead.
 const groups = computed<EditorNavigationGroup[]>(() => [{
   id: 'categories',
   items: NOTIFICATION_CATEGORIES.map(category => ({
     id: category,
-    label: NOTIFICATION_CATEGORY_COPY[category].label,
-    summary: preferences.value ? describeNotificationSetting(preferences.value[category]) : '—',
+    label: NOTIFICATION_CATEGORY_LABELS[category],
+    summary: preferences.value ? describeNotificationSetting(preferences.value[category]) : '',
     to: `${notificationsPath.value}/${category}`,
   })),
 }])
 
-const detailTitle = computed(() => {
+// With nothing open the first category is the one showing, so the index
+// highlights it rather than looking like nothing is selected.
+const openCategory = computed(() => {
   const open = frame.childSegment.value
-  return open && isNotificationCategory(open) ? NOTIFICATION_CATEGORY_COPY[open].label : undefined
+  return open && isNotificationCategory(open) ? open : NOTIFICATION_CATEGORIES[0]
 })
+const activeItem = computed(() => openCategory.value)
+const detailTitle = computed(() => NOTIFICATION_CATEGORY_LABELS[openCategory.value])
 
 // An unsupported category 404s rather than opening an empty pane.
 watchEffect(() => {

@@ -16,7 +16,7 @@
         show-desktop-detail
         :detail-title="detailTitle"
         :dismiss-to="profilePath"
-        show-actions
+        :show-actions="hasCommit"
         :saving="saving"
         :save-disabled="saveDisabled"
         :save-label="saveLabel"
@@ -25,32 +25,50 @@
       >
         <template #index>
           <!--
-            One carded list of rows, the same surface every other settings hub
-            draws — this level used to hand-roll `.profile-row`, which is why it
-            was the only hub not on a card.
-
-            Rows that navigate away or act on the session — Reset password,
-            Copy, Billing, Log out — carry their own control. They open nothing,
-            so they are not levels of the chain and gain no chevron.
+            One carded list of rows, the surface every other settings hub draws.
+            A row states its value and opens a level; Log out acts on the
+            session, so it carries a control instead of a chevron. Everything
+            else — whether an address is verified, how to reset a password —
+            lives one level down, where there is room for it.
           -->
-          <section class="flex items-center gap-4 pb-6">
-            <UAvatar :src="sessionData?.user?.image ?? undefined" icon="i-lucide-user" alt="User avatar" class="size-14" :ui="{ icon: 'size-7' }" />
-            <span class="text-sm font-semibold text-muted" title="Avatar is managed by your sign-in provider">Change photo</span>
-          </section>
+          <NuxtLink :to="`${profilePath}/photo`" class="mb-6 flex items-center gap-4 no-underline">
+            <UAvatar :src="sessionData?.user?.image ?? undefined" icon="i-lucide-user" alt="" class="size-16" :ui="{ icon: 'size-8' }" />
+            <span class="text-sm font-semibold text-highlighted underline underline-offset-4">Change photo</span>
+          </NuxtLink>
 
-          <EditorNavigationList :groups="groups" :active-item="detailKey ?? undefined" @act="runRowAction" />
+          <EditorNavigationList :groups="groups" :active-item="openKey" @act="runRowAction" />
         </template>
 
         <template #detail>
-          <UFormField v-if="openKey === 'name'" label="Display name">
+          <div v-if="openKey === 'photo'" class="space-y-6">
+            <UAvatar :src="photoPreview ?? sessionData?.user?.image ?? undefined" icon="i-lucide-user" alt="" class="size-32" :ui="{ icon: 'size-16' }" />
+            <UAlert v-if="photoError" color="error" variant="soft" icon="i-lucide-triangle-alert" :description="photoError" />
+            <UInput type="file" accept="image/*" size="xl" class="w-full" :disabled="photoSaving" @change="pickPhoto" />
+          </div>
+
+          <UFormField v-else-if="openKey === 'name'" label="Display name">
             <UInput v-model="nameInput" size="xl" autofocus class="w-full" @input="nameTouched = true" @keydown.enter="saveDetail" />
           </UFormField>
 
-          <div v-else-if="openKey === 'phone'" class="space-y-4">
-            <p class="text-base text-muted">A code is sent over WhatsApp to confirm the number before it is saved.</p>
-            <UFormField label="Phone number">
-              <UInput v-model="phoneInput" size="xl" placeholder="+1234567890" autofocus class="w-full" @input="phoneTouched = true" @keydown.enter="saveDetail" />
+          <div v-else-if="openKey === 'sign-in'" class="space-y-6">
+            <UFormField label="Email">
+              <UInput :model-value="sessionData?.user?.email" size="xl" readonly class="w-full" />
             </UFormField>
+            <div class="flex flex-wrap gap-2">
+              <UBadge v-if="sessionData?.user?.emailVerified" color="success" variant="subtle" icon="i-lucide-check">Verified</UBadge>
+              <UBadge v-else color="warning" variant="subtle" icon="i-lucide-alert-triangle">Not verified</UBadge>
+              <UBadge v-if="googleStatus === 'connected'" color="neutral" variant="subtle" icon="i-simple-icons-google">Google</UBadge>
+            </div>
+            <NuxtLink to="/forgot-password" class="block text-sm font-semibold text-highlighted underline underline-offset-4">Reset password</NuxtLink>
+          </div>
+
+          <div v-else-if="openKey === 'phone'" class="space-y-6">
+            <UFormField label="WhatsApp number" hint="Notifications and codes are sent over WhatsApp only.">
+              <UInput v-model="phoneInput" size="xl" placeholder="+66..." autofocus class="w-full" @input="phoneTouched = true" @keydown.enter="saveDetail" />
+            </UFormField>
+            <UBadge v-if="sessionData?.user?.phoneNumber" :color="sessionData?.user?.phoneNumberVerified ? 'success' : 'warning'" variant="subtle">
+              {{ sessionData?.user?.phoneNumberVerified ? 'Verified' : 'Not verified' }}
+            </UBadge>
           </div>
 
           <div v-else-if="openKey === 'delete'" class="space-y-4">
@@ -60,12 +78,12 @@
                 variant="soft"
                 icon="i-lucide-clock"
                 title="Deletion scheduled"
-                :description="`Your account, organization, site, locations and menu data are deleted on ${deletionDateLabel}. Everything keeps working until then, and your site stays online.`"
+                :description="`Everything is deleted on ${deletionDateLabel}. Your site stays online until then.`"
               />
               <UAlert v-if="deleteError" color="error" variant="soft" icon="i-lucide-triangle-alert" :description="deleteError" />
             </template>
             <template v-else>
-              <p class="text-base text-muted">This schedules your account, organization, site, locations and menu data for deletion in {{ graceDays }} days. Nothing is removed today, and you can cancel here until then.</p>
+              <p class="text-base text-muted">Your account, organization, site, locations and menu data are deleted in {{ graceDays }} days. You can cancel here until then.</p>
               <UAlert v-if="deleteError" color="error" variant="soft" icon="i-lucide-triangle-alert" :description="deleteError" />
               <UFormField label="Type DELETE to confirm">
                 <UInput v-model="deleteConfirmText" placeholder="DELETE" :disabled="deleting" autofocus class="w-full" @keydown.enter="saveDetail" />
@@ -73,6 +91,7 @@
             </template>
           </div>
         </template>
+
       </EditorPaneShell>
     </template>
   </UDashboardPanel>
@@ -82,8 +101,8 @@
     <template #content>
       <div class="p-6 space-y-4">
         <div>
-          <h3 class="text-lg font-semibold text-highlighted">Verify Phone Number</h3>
-          <p class="mt-1 text-sm text-muted">Enter the 6-digit code sent to {{ phoneInput }} via WhatsApp.</p>
+          <h3 class="text-lg font-semibold text-highlighted">Enter the code</h3>
+          <p class="mt-1 text-sm text-muted">Sent to {{ phoneInput }} on WhatsApp.</p>
         </div>
         
         <UAlert v-if="verifyError" color="error" variant="soft" :description="verifyError" />
@@ -136,19 +155,12 @@ const organizationParent = inject(dashboardOrganizationParentKey, null)
 const billingTo = computed(() => organizationParent?.value ? `${organizationParent.value.to}/settings/billing` : null)
 const { signOut } = authClient
 
-// listAccounts() doesn't expose a per-account email (only providerId/accountId/
-// scopes) — there's no Google-specific email to show, so "connected" renders a
-// generic label rather than implying we know a per-provider address. A failed
-// lookup is shown distinctly from "not connected" too, since defaulting an
-// error to false would misreport a real Google-linked account as unlinked.
+// Whether this account can sign in with Google. It is shown in the Sign in
+// leaf beside the address, because that is the concern it belongs to — it was
+// never a setting of its own, since nothing here links or unlinks a provider.
+// An error stays distinct from "not connected": defaulting a failed lookup to
+// false would misreport a real Google-linked account as unlinked.
 const googleStatus = ref<'loading' | 'connected' | 'not-connected' | 'error'>('loading')
-const GOOGLE_SUMMARIES = {
-  loading: 'Checking…',
-  connected: 'Connected',
-  error: 'Unable to check connection status',
-  'not-connected': 'Not connected',
-} as const
-const googleSummary = computed(() => GOOGLE_SUMMARIES[googleStatus.value])
 onMounted(async () => {
   try {
     const { data, error } = await authClient.listAccounts()
@@ -170,11 +182,49 @@ async function handleSignOut() {
   await signOut()
   await navigateTo({ path: '/login', query: { redirect } })
 }
+// Photo
+//
+// Better Auth owns `user.image`, so the upload posts the file to our own route,
+// which stores it in Cloudflare Images and writes the URL back through Better
+// Auth. Saving happens on pick — there is one control and nothing to commit.
+const photoPreview = ref<string | null>(null)
+const photoSaving = ref(false)
+const photoError = ref('')
+
+async function pickPhoto(event: Event) {
+  const file = (event.target as HTMLInputElement | null)?.files?.[0]
+  if (!file) return
+  photoSaving.value = true
+  photoError.value = ''
+  const body = new FormData()
+  body.append('file', file)
+  try {
+    const result = await applicationFetch<{ image: string }>('/api/user/avatar', {
+      method: 'POST',
+      body,
+      validate: (value): value is { image: string } => isRecord(value) && typeof value.image === 'string',
+    })
+    photoPreview.value = result.image
+    await refreshSession()
+    toast.add({ title: 'Photo updated', icon: 'i-lucide-circle-check', color: 'success' })
+  } catch (cause) {
+    photoError.value = cause instanceof Error ? cause.message : 'Upload failed. Please try again.'
+  } finally {
+    photoSaving.value = false
+  }
+}
+
 // Display Name
 const nameInput = ref(sessionData.value?.user?.name || '')
 const nameDirty = computed(() => nameInput.value.trim() !== (sessionData.value?.user?.name || ''))
 const nameSaving = ref(false)
-const DETAIL_LABELS: Record<string, string> = { name: 'Display name', phone: 'Phone number', delete: 'Delete account' }
+const DETAIL_LABELS: Record<string, string> = {
+  photo: 'Photo',
+  name: 'Display name',
+  'sign-in': 'Sign in',
+  phone: 'WhatsApp number',
+  delete: 'Delete account',
+}
 const detailKey = computed(() => frame.childSegment.value)
 /**
  * With nothing open the pane still shows the first row rather than empty space:
@@ -194,19 +244,13 @@ watchEffect(() => {
 const { preferences: notificationPreferences, load: loadNotificationPreferences } = useNotificationPreferences(() => sessionData.value?.user?.id)
 await loadNotificationPreferences()
 
-/**
- * How many categories currently reach this person at all. The row previews the
- * state rather than the concept, so the index answers "am I being notified"
- * without opening the level.
- */
+/** How many categories currently reach this person at all. */
 const notificationSummary = computed(() => {
   const preferences = notificationPreferences.value
-  if (!preferences) return 'Manage what reaches you'
-  const on = Object.values(preferences).filter(setting => setting.email || setting.whatsapp).length
-  const total = Object.values(preferences).length
-  if (on === total) return 'All categories on'
-  if (on === 0) return 'All categories off'
-  return `${on} of ${total} categories on`
+  if (!preferences) return ''
+  const settings = Object.values(preferences)
+  const on = settings.filter(setting => setting.email || setting.whatsapp).length
+  return on === settings.length ? 'All on' : `${on} of ${settings.length} on`
 })
 
 const groups = computed<EditorNavigationGroup[]>(() => [
@@ -215,25 +259,8 @@ const groups = computed<EditorNavigationGroup[]>(() => [
     label: 'Profile',
     items: [
       { id: 'name', label: 'Display name', summary: sessionData.value?.user?.name || 'Not set', placeholder: !sessionData.value?.user?.name, to: `${profilePath.value}/name` },
-      {
-        id: 'email',
-        label: 'Email',
-        summary: sessionData.value?.user?.email ?? '',
-        ...(sessionData.value?.user?.emailVerified ? { meta: { label: 'Verified', tone: 'success' as const } } : {}),
-        action: { label: 'Reset password', to: '/forgot-password' },
-      },
-      { id: 'google', label: 'Google', summary: googleSummary.value, placeholder: googleStatus.value === 'not-connected' },
-      {
-        id: 'phone',
-        label: 'Phone number',
-        summary: sessionData.value?.user?.phoneNumber || 'Not set',
-        placeholder: !sessionData.value?.user?.phoneNumber,
-        meta: sessionData.value?.user?.phoneNumberVerified
-          ? { label: 'Verified', tone: 'success' as const }
-          : { label: 'Not verified', tone: 'warning' as const },
-        to: `${profilePath.value}/phone`,
-      },
-      { id: 'user-id', label: 'User ID', summary: sessionData.value?.user?.id ?? '', action: { label: 'Copy' } },
+      { id: 'sign-in', label: 'Sign in', summary: sessionData.value?.user?.email ?? '', to: `${profilePath.value}/sign-in` },
+      { id: 'phone', label: 'WhatsApp number', summary: sessionData.value?.user?.phoneNumber || 'Not set', placeholder: !sessionData.value?.user?.phoneNumber, to: `${profilePath.value}/phone` },
     ],
   },
   {
@@ -248,25 +275,25 @@ const groups = computed<EditorNavigationGroup[]>(() => [
     label: 'Account',
     items: [
       ...(billingTo.value
-        ? [{ id: 'billing', label: 'Billing', summary: `Plan and payments for ${organizationParent?.value?.label ?? ''}`, action: { label: 'Open', to: billingTo.value } }]
+        ? [{ id: 'billing', label: 'Billing', summary: organizationParent?.value?.label ?? '', to: billingTo.value }]
         : []),
       {
         id: 'delete',
         label: 'Delete account',
-        summary: deletionScheduledAt.value
-          ? `Scheduled for ${deletionDateLabel.value}. Cancel any time before then.`
-          : 'Removes your account, organization, site, locations and menu data.',
+        summary: deletionScheduledAt.value ? `Scheduled for ${deletionDateLabel.value}` : '',
         to: `${profilePath.value}/delete`,
       },
-      { id: 'log-out', label: 'Log out', summary: 'Sign out on this device.', action: { label: 'Log out' } },
+      { id: 'log-out', label: 'Log out', action: { label: 'Log out' } },
     ],
   },
 ])
 
 function runRowAction(id: string) {
-  if (id === 'user-id') return void copyUserId()
   if (id === 'log-out') return void handleSignOut()
 }
+
+// Photo saves on pick and Sign in only reads, so neither draws a commit bar.
+const hasCommit = computed(() => openKey.value !== 'photo' && openKey.value !== 'sign-in')
 
 const saving = computed(() => openKey.value === 'name' ? nameSaving.value
   : openKey.value === 'phone' ? phoneSaving.value
@@ -389,17 +416,6 @@ const phoneTouched = ref(false)
 watch(() => sessionData.value?.user?.phoneNumber, (newVal) => {
   if (newVal !== undefined && !phoneTouched.value) phoneInput.value = newVal || ''
 }, { immediate: true })
-
-// User ID
-async function copyUserId() {
-  if (!sessionData.value?.user?.id) return
-  try {
-    await navigator.clipboard.writeText(sessionData.value.user.id)
-    toast.add({ title: 'User ID copied', icon: 'i-lucide-circle-check', color: 'success' })
-  } catch {
-    toast.add({ title: 'Failed to copy', color: 'error' })
-  }
-}
 
 // Danger Zone
 const deleteConfirmText = ref('')

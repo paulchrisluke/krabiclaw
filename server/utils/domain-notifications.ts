@@ -4,7 +4,7 @@ import type { CloudflareEnv } from '~/server/utils/auth'
 import { sendEmail } from '~/server/utils/email-delivery'
 import { getOrganizationOwnerRecipient } from '~/server/utils/member-access'
 import { wantsNotification } from '~/server/domain/notification-preferences'
-import { buildUnsubscribeUrl } from '~/server/utils/unsubscribe'
+import { buildUnsubscribeUrls } from '~/server/utils/unsubscribe'
 import { createCanonicalNotification } from '~/server/utils/notification-center'
 import { getOrgWhatsAppPhone, sendWhatsAppNotification } from '~/server/utils/whatsapp'
 import DomainUpdate from '~/server/emails/templates/DomainUpdate'
@@ -77,21 +77,21 @@ export async function notifyDomainLifecycle(
   // they are always copied and carry no unsubscribe link.
   const owner = await getOrganizationOwnerRecipient(env, opts.organizationId)
   const ownerWantsEmail = owner ? await wantsNotification(db, owner.userId, 'site_and_billing', 'email') : false
-  const ownerUnsubscribeUrl = owner && ownerWantsEmail
-    ? await buildUnsubscribeUrl(env, { userId: owner.userId, category: 'site_and_billing' })
+  const ownerUnsubscribe = owner && ownerWantsEmail
+    ? await buildUnsubscribeUrls(env, { userId: owner.userId, category: 'site_and_billing' })
     : null
-  const recipients: Array<{ to: string; unsubscribeUrl: string | null }> = [
-    ...(owner && ownerWantsEmail ? [{ to: owner.email, unsubscribeUrl: ownerUnsubscribeUrl }] : []),
-    ...supportEmails(env)
+  const recipients: Array<{ to: string; unsubscribeOneClickUrl: string | null }> = [
+    ...(owner && ownerWantsEmail ? [{ to: owner.email, unsubscribeOneClickUrl: ownerUnsubscribe?.oneClickUrl ?? null }] : []),
+    ...[...new Set(supportEmails(env))]
       .filter(address => address !== owner?.email)
-      .map(to => ({ to, unsubscribeUrl: null })),
+      .map(to => ({ to, unsubscribeOneClickUrl: null })),
   ]
   const emailResults = await Promise.all(recipients.map(recipient => sendEmail(env, {
     to: recipient.to,
     subject: opts.title,
     html: rendered.html,
     text: rendered.text,
-    unsubscribeUrl: recipient.unsubscribeUrl,
+    unsubscribeOneClickUrl: recipient.unsubscribeOneClickUrl,
   })))
   emailResults.forEach((result) => {
     if (result.status !== 'sent') console.error('domain_notification_email_send_failed', { siteId: opts.siteId, error: result.error })

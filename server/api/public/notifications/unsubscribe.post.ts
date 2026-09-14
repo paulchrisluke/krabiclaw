@@ -1,9 +1,14 @@
-// POST /api/public/notifications/unsubscribe — one-click opt-out from an email.
+// POST /api/public/notifications/unsubscribe?user=&category=&token=
 //
-// Public by design: the request carries no session, because it arrives from a
-// mail client acting on the RFC 8058 List-Unsubscribe header or from someone
-// opening the footer link on a device they are not signed in on. The HMAC over
-// (user, category) is what proves the request came from a message we sent.
+// Public by design: the request carries no session, because it arrives either
+// from a mail client acting on the RFC 8058 List-Unsubscribe header or from
+// someone opening the footer link on a device they are not signed in on. The
+// HMAC over (user, category) is what proves the request came from a message we
+// sent.
+//
+// The signed target is read from the query, not the body: a one-click
+// unsubscribe POSTs the fixed body `List-Unsubscribe=One-Click` and nothing
+// else, so the URL is the only place the target can travel.
 
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { disableCategoryEmail } from '~/server/domain/notification-preferences'
@@ -15,9 +20,9 @@ export default defineHandler(async (event) => {
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
   if (!env.EMAIL_REPLY_SECRET) return jsonResponse({ error: 'Unsubscribe is not configured' }, { status: 503 })
 
-  const body = await readBody(event) as { user?: unknown; category?: unknown; token?: unknown }
-  const target = parseUnsubscribeTarget(body)
-  const token = typeof body.token === 'string' ? body.token : ''
+  const query = getQuery(event)
+  const target = parseUnsubscribeTarget(query)
+  const token = typeof query.token === 'string' ? query.token : ''
   if (!target || !token) return jsonResponse({ error: 'This unsubscribe link is not valid' }, { status: 400 })
   if (!(await verifyUnsubscribeToken(env.EMAIL_REPLY_SECRET, target, token))) {
     return jsonResponse({ error: 'This unsubscribe link is not valid' }, { status: 403 })
@@ -30,4 +35,4 @@ export default defineHandler(async (event) => {
   return jsonResponse({ success: true, category: target.category })
 })
 import { defineHandler } from 'nitro';
-import { readBody } from 'nitro/h3';
+import { getQuery } from 'nitro/h3';

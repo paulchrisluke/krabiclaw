@@ -98,11 +98,13 @@ export async function sendEmail(
     fromName?: string
     idempotencyKey?: string
     /**
-     * One-click opt-out for the category this message belongs to. Sets the
-     * RFC 8058 headers so a mail client can unsubscribe without opening the
-     * message. Omitted for account-security mail, which cannot be switched off.
+     * The RFC 8058 one-click endpoint for this message's category, so a mail
+     * client can unsubscribe without opening the message. It must be a route
+     * that accepts POST — the header's own POST body is fixed by the RFC, so
+     * the signed target travels in the URL. Omitted for account-security mail,
+     * which cannot be switched off.
      */
-    unsubscribeUrl?: string | null
+    unsubscribeOneClickUrl?: string | null
   },
 ): Promise<EmailSendResult> {
   if (!shouldSendRealEmail(env) || isReservedTestDomain(input.to)) {
@@ -134,10 +136,10 @@ export async function sendEmail(
         subject: input.subject,
         html: input.html,
         text: input.text,
-        ...(input.unsubscribeUrl
+        ...(input.unsubscribeOneClickUrl
           ? {
               headers: {
-                'List-Unsubscribe': `<${input.unsubscribeUrl}>`,
+                'List-Unsubscribe': `<${input.unsubscribeOneClickUrl}>`,
                 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
               },
             }
