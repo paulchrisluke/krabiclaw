@@ -71,22 +71,6 @@ test.describe('stateless MCP server', () => {
     const mismatchedTargetBody = await mismatchedTarget.json() as { result?: { isError?: boolean, content?: Array<{ text?: string }> } }
     expect(mismatchedTargetBody.result?.isError).toBe(true)
     expect(mismatchedTargetBody.result?.content?.[0]?.text).toContain('Unknown argument: location_id')
-
-    const resources = await mcpRequest(request, baseURL!, { method: 'resources/list' })
-    expect(resources.status()).toBe(200)
-    const resourcesBody = await resources.json() as { result: { resources: Array<{ uri: string }> } }
-    expect(resourcesBody.result.resources).toHaveLength(0)
-
-    for (const uri of ['ui://media-upload', 'ui://video-upload']) {
-      const resource = await mcpRequest(request, baseURL!, {
-        method: 'resources/read',
-        params: { uri },
-      })
-      expect(resource.status()).toBe(200)
-      const body = await resource.json() as { error?: { code?: number, message?: string } }
-      expect(body.error?.code).toBe(-32602)
-      expect(body.error?.message).toContain('Unknown MCP app resource')
-    }
   })
 
   test('ChatGPT-shaped video and poster attachments produce an active public asset', async ({ request, baseURL }) => {

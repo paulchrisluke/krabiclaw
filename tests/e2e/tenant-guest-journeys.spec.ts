@@ -50,7 +50,7 @@ async function chooseFirstAvailableTime(page: Page) {
 test.describe('tenant guest journeys (disposable local/preview data only)', () => {
   test.skip(!writableEnvironment, 'guest writes are forbidden outside local and preview')
 
-  test('Pottery House Product booking persists and creates log-only owner dispatch', async ({ page, request }) => {
+  test('Pottery House Product booking persists and creates log-only owner dispatch @smoke', async ({ page, request }) => {
     test.setTimeout(90_000)
     const since = new Date().toISOString()
     const email = `pottery-booking-${Date.now()}@playwright.example`

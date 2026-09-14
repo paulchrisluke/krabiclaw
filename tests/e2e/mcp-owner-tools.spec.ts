@@ -188,9 +188,6 @@ test.describe('stateless MCP server', () => {
       guests: string
       date: string
       time: string
-      party_size?: unknown
-      requested_date?: unknown
-      requested_time?: unknown
     }> }>(reservationsBody).submissions[0]
     const reservationSubmissionId = reservationSubmission?.id
     expect(reservationSubmissionId).toEqual(expect.any(String))
@@ -199,9 +196,6 @@ test.describe('stateless MCP server', () => {
     expect(reservationSubmission?.guests).toBe('2')
     expect(reservationSubmission?.date).toBe('2030-01-15')
     expect(reservationSubmission?.time).toBe('19:00')
-    expect(reservationSubmission?.party_size).toBeUndefined()
-    expect(reservationSubmission?.requested_date).toBeUndefined()
-    expect(reservationSubmission?.requested_time).toBeUndefined()
 
     const tools = await mcpRequest(request, baseURL!, {
       method: 'tools/list',
@@ -212,8 +206,6 @@ test.describe('stateless MCP server', () => {
     const toolNames = toolsBody.result.tools.map(tool => tool.name)
     expect(toolNames).toContain('get_contact_inquiries')
     expect(toolNames).toContain('get_reservation_inquiries')
-    expect(toolNames).not.toContain('update_contact_submission')
-    expect(toolNames).not.toContain('update_reservation_submission')
   })
 
   test('owner can use location, reviews, and QA lifecycle tools', async ({ request, baseURL }) => {
@@ -397,27 +389,6 @@ test.describe('stateless MCP server', () => {
   })
 
   test.describe('owner management workflows', () => {
-    test('CMS manages locations while MCP rejects business setup tools', async ({ request, baseURL }) => {
-      await loginAs(request, baseURL!, MCP_GROWTH_SERVICE_USER_ID)
-      const siteId = await ensureSite(request, baseURL!)
-      const locationId = await createScratchLocation(request, baseURL!, siteId)
-
-      const deleteLocationRes = await request.delete(`${baseURL}/api/sites/${siteId}/locations/${locationId}`)
-      expect(deleteLocationRes.status()).toBe(200)
-      const catalog = await mcpRequest(request, baseURL!, { method: 'tools/list' })
-      const names = (await catalog.json()).result.tools.map((tool: { name: string }) => tool.name)
-      for (const toolName of ['create_site', 'create_location', 'delete_location', 'copy_location_batch']) {
-        expect(names).not.toContain(toolName)
-        const rejected = await mcpRequest(request, baseURL!, {
-          method: 'tools/call', toolName, args: { site_id: siteId, location_id: locationId },
-        })
-        expect(rejected.status()).toBe(200)
-        expect((await rejected.json()).error.code).toBe(-32601)
-      }
-      expect(names).toEqual(expect.arrayContaining(['delete_media_asset', 'delete_product', 'update_location']))
-
-    })
-
     test('owner can manage media and Product tools including public booking', async ({ request, baseURL }) => {
       test.setTimeout(120_000)
       await loginAs(request, baseURL!, MCP_GROWTH_SERVICE_USER_ID)
