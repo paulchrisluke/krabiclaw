@@ -1,140 +1,228 @@
 <template>
   <header class="sticky top-0 z-50 bg-default/85 backdrop-blur-md border-b border-default">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between gap-6 h-16">
+    <div class="mx-auto flex h-16 items-center justify-between gap-6 px-6" :class="containerClass">
 
-      <!-- Wordmark -->
-      <NuxtLink to="/" class="flex items-center gap-2.5 shrink-0 group">
-        <img src="/krabi-claw-logo-96.webp" alt="KrabiClaw" width="36" height="36" class="w-8.5 h-8.5 rounded-[9px] group-hover:rotate-12 transition-transform duration-200" />
-        <span class="kc-wordmark text-[19px]">
-          <span class="kc-wordmark__krabi">krabi</span><span class="kc-wordmark__claw">claw</span><span class="kc-wordmark__tld">.com</span>
+      <!-- Wordmark. Docs and blog carry their own contextual word; there is no
+           leading dot before it. -->
+      <NuxtLink to="/" class="group flex shrink-0 items-center gap-2.5 no-underline">
+        <img src="/krabi-claw-logo-96.webp" alt="KrabiClaw" width="34" height="34" class="size-8.5 rounded-lg transition-transform duration-200 group-hover:rotate-12" />
+        <span class="kc-wordmark text-[19px] leading-none">
+          <span class="kc-wordmark__krabi">krabi</span><span class="kc-wordmark__claw">claw</span><span v-if="sectionSuffix" class="kc-wordmark__suffix">{{ sectionSuffix }}</span><span v-else class="kc-wordmark__tld">.com</span>
         </span>
       </NuxtLink>
 
-      <!-- Pill nav (desktop) -->
-      <nav class="hidden lg:flex items-center gap-1 bg-elevated/50 border border-muted rounded-full px-1 py-1">
-        <!-- Solutions Dropdown -->
-        <div class="relative group">
+      <!-- Desktop nav pill -->
+      <nav aria-label="Main" class="hidden items-center gap-0.5 rounded-full border border-muted bg-elevated/50 p-1 nav:flex">
+        <div class="group relative">
           <button
             type="button"
-            class="flex items-center gap-1 px-3.5 py-2 rounded-full text-[13.5px] font-medium text-muted transition-colors hover:text-default cursor-pointer"
-            :class="isSolutionsActive ? 'bg-elevated text-default shadow-[0_1px_2px_rgba(31,37,71,0.06)]' : ''"
+            class="flex cursor-pointer items-center gap-1.5 rounded-full py-2 pl-4 pr-3.5 text-[15px] font-medium text-muted transition-colors hover:text-default"
+            :class="isSolutionsActive ? 'bg-elevated text-default shadow-xs' : ''"
+            aria-haspopup="true"
           >
             <span>Solutions</span>
-            <PlatformIcon name="chevron-down" class="size-3.5 transition-transform duration-200 group-hover:rotate-180" />
+            <PlatformIcon name="chevron-down" class="size-3.5 transition-transform duration-200 group-hover:rotate-180 group-focus-within:rotate-180" />
           </button>
-          <div class="absolute left-0 top-full pt-2 opacity-0 invisible group-hover:opacity-100 group-hover:visible group-focus-within:opacity-100 group-focus-within:visible transition-all duration-150 z-50">
-            <div class="w-60 p-1.5 rounded-2xl bg-default/95 backdrop-blur-md border border-default shadow-xl flex flex-col gap-0.5">
+          <div class="invisible absolute left-1/2 top-full z-50 -translate-x-1/2 pt-3 opacity-0 transition-all duration-150 group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100">
+            <div class="flex min-w-59 flex-col gap-0.5 rounded-[14px] border border-default bg-elevated p-2 shadow-lg">
               <NuxtLink
-                v-for="sol in solutionItems"
-                :key="sol.to"
-                :to="sol.to"
-                class="px-3 py-2 rounded-xl text-[13px] font-medium text-muted hover:text-default hover:bg-muted transition-colors no-underline flex items-start gap-2.5"
-                :class="isActiveRoute(sol.to) ? 'bg-muted text-default font-semibold' : ''"
+                v-for="solution in SOLUTION_ITEMS"
+                :key="solution.to"
+                :to="solution.to"
+                class="whitespace-nowrap rounded-lg px-3 py-2.25 text-[15px] font-medium text-muted no-underline transition-colors hover:bg-muted hover:text-default"
+                :class="isActiveRoute(solution.to) ? 'bg-muted text-default' : ''"
               >
-                <PlatformIcon :name="sol.icon" class="size-4 text-primary shrink-0 mt-0.5" />
-                <div>
-                  <div class="leading-tight text-default font-medium">{{ sol.label }}</div>
-                  <div class="text-[11px] text-muted leading-tight mt-0.5">{{ sol.desc }}</div>
-                </div>
+                {{ solution.label }}
               </NuxtLink>
             </div>
           </div>
         </div>
 
         <NuxtLink
-          v-for="item in navItems"
-          :key="item.label"
+          v-for="item in PRIMARY_ITEMS"
+          :key="item.to"
           :to="item.to"
-          class="px-3.5 py-2 rounded-full text-[13.5px] font-medium text-muted transition-colors hover:text-default no-underline"
-          :class="isActiveRoute(item.to) ? 'bg-elevated text-default shadow-[0_1px_2px_rgba(31,37,71,0.06)]' : ''"
+          class="rounded-full px-4 py-2 text-[15px] font-medium text-muted no-underline transition-colors hover:text-default"
+          :class="isActiveRoute(item.to) ? 'bg-elevated text-default shadow-xs' : ''"
         >
           {{ item.label }}
         </NuxtLink>
       </nav>
 
-      <!-- Right actions -->
-      <div class="flex items-center gap-2 shrink-0">
+      <!-- Account actions + the one shared hamburger -->
+      <div class="flex shrink-0 items-center gap-2.5">
         <PlatformAccountCta account />
-        <details ref="mobileMenu" class="group lg:hidden">
-          <summary
-            class="flex size-8 cursor-pointer list-none items-center justify-center rounded-md text-muted transition-colors hover:bg-muted hover:text-default [&::-webkit-details-marker]:hidden"
-            aria-label="Toggle menu"
-          >
-            <PlatformIcon name="menu" class="size-5 group-open:hidden" />
-            <PlatformIcon name="x" class="hidden size-5 group-open:block" />
-          </summary>
-          <div id="mobile-menu" class="absolute inset-x-0 top-16 border-t border-default bg-default">
-            <nav class="px-4 py-4 space-y-2">
-              <div class="pb-2 border-b border-default/50 mb-2">
-                <div class="px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-muted">Solutions</div>
-                <NuxtLink
-                  v-for="sol in solutionItems"
-                  :key="sol.to"
-                  :to="sol.to"
-                  @click="closeMobileMenu"
-                  class="block px-3 py-2 rounded-lg text-[13.5px] font-medium text-muted hover:text-default hover:bg-muted transition-colors no-underline"
-                  :class="isActiveRoute(sol.to) ? 'bg-muted text-default' : ''"
-                >
-                  <div class="font-semibold text-default flex items-center gap-2">
-                    <PlatformIcon :name="sol.icon" class="size-3.5 text-primary" />
-                    {{ sol.label }}
-                  </div>
-                  <div class="text-xs text-muted pl-5.5">{{ sol.desc }}</div>
-                </NuxtLink>
-              </div>
-
-              <NuxtLink
-                v-for="item in navItems"
-                :key="item.label"
-                :to="item.to"
-                @click="closeMobileMenu"
-                class="block px-4 py-3 rounded-lg text-[13.5px] font-medium text-muted hover:text-default hover:bg-muted transition-colors no-underline"
-                :class="isActiveRoute(item.to) ? 'bg-muted text-default' : ''"
-              >
-                {{ item.label }}
-              </NuxtLink>
-              <div class="pt-4 space-y-2">
-                <PlatformAccountCta account @click="closeMobileMenu" />
-              </div>
-            </nav>
-          </div>
-        </details>
+        <button
+          ref="toggleButton"
+          type="button"
+          class="grid size-9.5 place-items-center rounded-lg border border-default text-default transition-colors hover:bg-muted nav:hidden"
+          :aria-label="mobileOpen ? 'Close menu' : 'Open menu'"
+          :aria-expanded="mobileOpen"
+          aria-controls="platform-mobile-nav"
+          @click="mobileOpen = !mobileOpen"
+        >
+          <PlatformIcon :name="mobileOpen ? 'x' : 'menu'" class="size-4.75" />
+        </button>
       </div>
+    </div>
+
+    <!-- Collapsed navigation. One implementation for marketing, docs and blog. -->
+    <div
+      v-if="mobileOpen"
+      id="platform-mobile-nav"
+      class="max-h-[calc(100vh-4rem)] overflow-y-auto border-t border-default bg-default py-4.5 nav:hidden"
+    >
+      <nav aria-label="Site" class="mx-auto px-6" :class="containerClass">
+        <PlatformCommandSearchTrigger
+          :surface="searchSurface"
+          :label="searchLabel"
+          :aria-label="searchLabel"
+          class="mb-4 rounded-lg"
+          @click="close"
+        />
+
+        <div class="flex flex-col gap-0.5">
+          <details class="group/dis">
+            <summary class="flex cursor-pointer list-none items-center gap-2.5 rounded-lg px-3 py-2.75 text-[15px] font-medium text-muted transition-colors hover:bg-muted hover:text-default [&::-webkit-details-marker]:hidden">
+              Solutions
+              <PlatformIcon name="chevron-down" class="ml-auto size-4 transition-transform duration-200 group-open/dis:rotate-180" />
+            </summary>
+            <div class="my-1 ml-3 flex flex-col gap-0.5 border-l border-default pl-3">
+              <NuxtLink
+                v-for="solution in SOLUTION_ITEMS"
+                :key="solution.to"
+                :to="solution.to"
+                class="rounded-lg px-3 py-2.25 text-[14px] text-dimmed no-underline transition-colors hover:bg-muted hover:text-default"
+                @click="close"
+              >
+                {{ solution.label }}
+              </NuxtLink>
+            </div>
+          </details>
+
+          <NuxtLink
+            v-for="item in COLLAPSED_LINKS"
+            :key="item.to"
+            :to="item.to"
+            class="rounded-lg px-3 py-2.75 text-[15px] font-medium text-muted no-underline transition-colors hover:bg-muted hover:text-default"
+            :class="isActiveRoute(item.to) ? 'bg-elevated text-default' : ''"
+            @click="close"
+          >
+            {{ item.label }}
+          </NuxtLink>
+
+          <!-- Docs and Blog children come from the canonical article sources, so
+               they are fetched when the menu is first opened rather than on
+               every public page render. -->
+          <ClientOnly>
+            <Suspense>
+              <PlatformMobileContentNav @navigate="close" />
+              <template #fallback>
+                <p class="px-3 py-2.75 text-[15px] font-medium text-dimmed">Loading Docs and Blog…</p>
+              </template>
+            </Suspense>
+          </ClientOnly>
+        </div>
+
+        <div class="mt-4.5 flex flex-col gap-0.5 border-t border-default pt-3.5">
+          <p class="mb-1.5 px-3 text-[11px] font-semibold uppercase tracking-[0.08em] text-dimmed">More</p>
+          <NuxtLink
+            v-for="item in MORE_ITEMS"
+            :key="item.to"
+            :to="item.to"
+            class="rounded-lg px-3 py-2.75 text-[15px] font-medium text-muted no-underline transition-colors hover:bg-muted hover:text-default"
+            :class="isActiveRoute(item.to) ? 'bg-elevated text-default' : ''"
+            @click="close"
+          >
+            {{ item.label }}
+          </NuxtLink>
+        </div>
+      </nav>
     </div>
   </header>
 </template>
 
 <script setup lang="ts">
-const solutionItems = [
-  { label: 'Restaurants', to: '/restaurants', desc: 'Direct bookings & crawlable menus', icon: 'utensils' },
-  { label: 'Experiences', to: '/experiences', desc: 'Tours, workshops & ticketing', icon: 'calendar' },
-  { label: 'Legal & Professional', to: '/legal', desc: 'Practice areas & consultation intake', icon: 'briefcase' },
+import PlatformCommandSearchTrigger from '~/components/platform/search/PlatformCommandSearchTrigger.vue'
+import PlatformMobileContentNav from '~/components/platform/PlatformMobileContentNav.vue'
+import type { PlatformSearchPaletteSurface } from '~/composables/usePlatformSearchPalette'
+
+const props = withDefaults(defineProps<{ section?: 'platform' | 'docs' | 'blog' }>(), {
+  section: 'platform',
+})
+
+// Route migration to /services and /mcp belongs to #939; the approved labels
+// point at the destinations that work today.
+const SOLUTION_ITEMS = [
+  { label: 'Restaurants', to: '/restaurants' },
+  { label: 'Experiences', to: '/experiences' },
+  { label: 'Professional Services', to: '/legal' },
 ] as const
 
-const navItems = [
-  { label: 'Plugin', to: '/plugin' },
+const PRIMARY_ITEMS = [
   { label: 'Features', to: '/features' },
   { label: 'Pricing', to: '/pricing' },
   { label: 'Templates', to: '/templates' },
   { label: 'Docs', to: '/docs' },
-  { label: 'Blog', to: '/blog' },
-]
+] as const
+
+// Collapsed navigation renders Docs as a disclosure group below, so it drops
+// out of the plain-link run rather than being listed a second time.
+const COLLAPSED_LINKS = PRIMARY_ITEMS.filter(item => item.to !== '/docs')
+
+const MORE_ITEMS = [
+  { label: 'MCP', to: '/plugin' },
+  { label: 'About', to: '/about' },
+  { label: 'Help center', to: '/help' },
+] as const
 
 const route = useRoute()
-const mobileMenu = ref<HTMLDetailsElement | null>(null)
+const mobileOpen = ref(false)
+const toggleButton = ref<HTMLButtonElement | null>(null)
+const { acquire: acquireScrollLock, release: releaseScrollLock } = useScrollLock()
 
-const isSolutionsActive = computed(() =>
-  solutionItems.some(sol => route.path === sol.to || route.path.startsWith(`${sol.to}/`))
-)
+const sectionSuffix = computed(() => (props.section === 'platform' ? null : props.section))
+// Docs and blog keep their own wider information architecture; the marketing
+// shell uses the approved 1216px wrap.
+const containerClass = computed(() => (props.section === 'platform' ? 'max-w-304' : 'max-w-450'))
 
-function closeMobileMenu() {
-  if (mobileMenu.value) mobileMenu.value.open = false
-}
+const searchSurface = computed<PlatformSearchPaletteSurface>(() => (
+  props.section === 'platform' ? 'public' : props.section
+))
+const searchLabel = computed(() => {
+  if (props.section === 'docs') return 'Search docs, blog, help...'
+  if (props.section === 'blog') return 'Search blog, docs, help...'
+  return 'Search KrabiClaw'
+})
+
+const isSolutionsActive = computed(() => SOLUTION_ITEMS.some(solution => isActiveRoute(solution.to)))
 
 function isActiveRoute(to: string) {
-  const path = to.split('#')[0]!
-  if (path === '/') return route.fullPath === to
-  return route.fullPath === to || route.fullPath.startsWith(path)
+  return route.path === to || route.path.startsWith(`${to}/`)
 }
 
+function close() {
+  mobileOpen.value = false
+}
+
+function onKeydown(event: KeyboardEvent) {
+  if (event.key !== 'Escape' || !mobileOpen.value) return
+  close()
+  toggleButton.value?.focus()
+}
+
+watch(mobileOpen, (open) => {
+  if (open) acquireScrollLock()
+  else releaseScrollLock()
+})
+
+// A route change from anywhere (a child disclosure, the search modal, the
+// browser's back button) leaves the menu closed and the page scrollable.
+watch(() => route.fullPath, close)
+
+onMounted(() => document.addEventListener('keydown', onKeydown))
+onBeforeUnmount(() => {
+  document.removeEventListener('keydown', onKeydown)
+  releaseScrollLock()
+})
 </script>
