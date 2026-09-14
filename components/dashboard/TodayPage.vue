@@ -11,16 +11,16 @@
         screen, and a "Today" heading beside a "Today" pill reads as two
         different controls.
       -->
-      <UDashboardNavbar title="Today" :toggle="false" :ui="{ title: 'sr-only', center: 'flex flex-1 items-center justify-center' }">
-        <UTabs
-          v-model="rangeModel"
-          :items="ranges"
-          :content="false"
-          size="lg"
-          aria-label="Booking range"
-        />
+      <UDashboardNavbar title="Today" :toggle="false" :ui="{ title: 'sr-only', root: 'h-(--ui-header-height) shrink-0 flex items-center justify-between px-4 sm:px-6 gap-1.5', center: 'flex flex-1 items-center justify-center' }">
+        <div class="flex items-center gap-2">
+          <UTabs
+            v-model="rangeModel"
+            :items="ranges"
+            :content="false"
+            size="xl"
+            aria-label="Booking range"
+          />
 
-        <template #right>
           <UPopover v-model:open="filtersOpen" :content="{ align: 'end', side: 'bottom', sideOffset: 10 }">
             <UButton
               icon="i-lucide-sliders-horizontal"
@@ -48,7 +48,7 @@
               </div>
             </template>
           </UPopover>
-        </template>
+        </div>
       </UDashboardNavbar>
     </template>
 
@@ -95,10 +95,13 @@
           </div>
 
           <div v-else-if="!activeLoading && !activeError" class="py-24 text-center">
-            <div class="mx-auto flex size-14 items-center justify-center rounded-full bg-muted">
-              <UIcon :name="activeRange === 'today' ? 'i-lucide-sun' : 'i-lucide-calendar-days'" class="size-7 text-muted" />
-            </div>
-            <p class="mt-4 font-medium text-highlighted">{{ emptyTitle }}</p>
+            <img
+              src="https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/b2e34737-127b-4117-0666-814df0556800/thumbnail"
+              alt=""
+              aria-hidden="true"
+              class="mx-auto size-28 object-contain"
+            >
+            <p class="mt-6 text-base font-semibold text-highlighted">{{ emptyTitle }}</p>
             <p class="mt-1 text-sm text-muted">{{ emptyDescription }}</p>
           </div>
 

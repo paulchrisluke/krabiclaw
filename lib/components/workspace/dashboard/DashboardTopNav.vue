@@ -55,7 +55,7 @@
       <UButton
         v-if="items.length"
         color="neutral"
-        variant="ghost"
+        variant="soft"
         square
         icon="i-lucide-menu"
         aria-label="Open menu"
