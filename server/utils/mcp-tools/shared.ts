@@ -904,24 +904,24 @@ export const EXPECTED_TOOL_ANNOTATIONS = {
   update_tenant_page: D,
   upload_user_media: W,
   list_products: R,
-  set_product_publication: W,
-  set_product_location: W,
+  set_product_publication: D,
+  set_product_location: D,
   remove_product_location: D,
   list_collections: R,
   create_collection: W,
-  update_collection: W,
+  update_collection: D,
   delete_collection: D,
   // Replaces the whole membership list: products left out lose their place in
   // the collection, which is a removal the caller must mean.
   set_collection_products: D,
-  reorder_collections: W,
+  reorder_collections: D,
   list_metafield_definitions: R,
   create_metafield_definition: W,
   delete_metafield_definition: D,
   get_product_catalog_localization: R,
-  replace_product_localizations: W,
+  replace_product_localizations: D,
   get_reservation_policy: R,
-  update_reservation_policy: W,
+  update_reservation_policy: D,
 } as const satisfies Record<string, McpToolAnnotations>
 
 export function buildToolAnnotationsByName() {
