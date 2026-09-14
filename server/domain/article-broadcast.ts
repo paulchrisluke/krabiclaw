@@ -95,27 +95,37 @@ interface RecipientRow {
 }
 
 /**
- * Tenants who have not yet been sent this broadcast and still want the
- * category.
+ * Who an announcement is for, against the broadcast aliased `b`.
  *
  * Anonymous, banned, unverified and deletion-scheduled accounts are excluded:
  * none of them is a person who asked to hear from us, and mailing an unverified
  * address is how a sending domain's reputation goes.
+ *
+ * The `createdAt` bound is what keeps an old broadcast from reopening: someone
+ * who signs up next month has no delivery row for last month's article, and
+ * without this they would look like a pending recipient of every announcement
+ * ever sent. `user.createdAt` is a unix integer and `broadcasts.created_at` an
+ * ISO instant, so the bound converts rather than comparing the two directly.
  */
+const RECIPIENT_ELIGIBILITY_SQL = `u.emailVerified = 1
+       AND u.isAnonymous = 0
+       AND COALESCE(u.banned, 0) = 0
+       AND u.deletionScheduledAt IS NULL
+       AND u.createdAt <= unixepoch(b.created_at)`
+
+/** Tenants who have not yet been sent this broadcast and still want the category. */
 export async function listPendingRecipients(db: DbClient, broadcastId: string, limit: number): Promise<RecipientRow[]> {
   const wants = wantsCategoryEmailSql('u.id', BROADCAST_CATEGORY)
   return queryAll<RecipientRow>(db, `
     SELECT u.id, u.email
       FROM user u
-     WHERE u.emailVerified = 1
-       AND u.isAnonymous = 0
-       AND COALESCE(u.banned, 0) = 0
-       AND u.deletionScheduledAt IS NULL
+      JOIN broadcasts b ON b.id = ?
+     WHERE ${RECIPIENT_ELIGIBILITY_SQL}
        AND ${wants.sql}
-       AND NOT EXISTS (SELECT 1 FROM broadcast_deliveries d WHERE d.broadcast_id = ? AND d.user_id = u.id)
+       AND NOT EXISTS (SELECT 1 FROM broadcast_deliveries d WHERE d.broadcast_id = b.id AND d.user_id = u.id)
      ORDER BY u.createdAt ASC
      LIMIT ?
-  `, [...wants.params, broadcastId, limit])
+  `, [broadcastId, ...wants.params, limit])
 }
 
 /**
@@ -133,7 +143,7 @@ export async function findResumableBroadcast(db: DbClient): Promise<{ id: string
       FROM broadcasts b
      WHERE EXISTS (
        SELECT 1 FROM user u
-        WHERE u.emailVerified = 1 AND u.isAnonymous = 0 AND COALESCE(u.banned, 0) = 0 AND u.deletionScheduledAt IS NULL
+        WHERE ${RECIPIENT_ELIGIBILITY_SQL}
           AND ${wants.sql}
           AND NOT EXISTS (SELECT 1 FROM broadcast_deliveries d WHERE d.broadcast_id = b.id AND d.user_id = u.id)
      )
