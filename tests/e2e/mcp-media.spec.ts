@@ -104,11 +104,11 @@ test.describe('stateless MCP server', () => {
           category: 'other',
           file: {
             download_url: MCP_VIDEO_ATTACHMENT_URL,
-            file_id: 'sediment://file_widget_e2e_video',
+            file_id: 'sediment://file_e2e_video',
           },
           poster_file: {
             download_url: MCP_VIDEO_POSTER_URL,
-            file_id: 'sediment://file_widget_e2e_video_poster',
+            file_id: 'sediment://file_e2e_video_poster',
           },
         },
       })

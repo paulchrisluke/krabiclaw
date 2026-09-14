@@ -209,7 +209,7 @@ Common workflows: manage a site's Products and the collections that group them, 
           throw mcpProtocolError(MCP_ERROR.invalidParams, `Unknown MCP app resource: ${uri}`);
         }, }, prompts: { list: MCP_PROMPTS, render: renderMcpPrompt }, discover: {
         serverName: "krabiclaw-mcp", serverVersion: "phase-5", instructions:
-          "KrabiClaw MCP. Call get_workspace_context at the start of every conversation. site_id must be an internal id from get_workspace_context/list_sites, never a URL/domain/subdomain/name. Native ChatGPT attachments upload only through upload_user_media; never call stale open_*upload widget tools. If no active site is set yet, call list_sites, let the user choose, then persist it with set_workspace_context before mutating tools.", }, });
+          "KrabiClaw MCP. Call get_workspace_context at the start of every conversation. site_id must be an internal id from get_workspace_context/list_sites, never a URL/domain/subdomain/name. Native ChatGPT attachments upload only through upload_user_media. If no active site is set yet, call list_sites, let the user choose, then persist it with set_workspace_context before mutating tools.", }, });
     if (standardResponse !== undefined) return standardResponse;
 
     if (request.method === "tools/list") {
