@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:8344223d35751234dca990d8aa20d6ce7f69c461109e81c22f8bdf30c1dafe40",
+  "fingerprint": "sha256:2adb680b5b6f628666beb8c6f2ea97052a1bfb5203c16a0f44c9ac02fd2dcb74",
   "tools": [
     {
       "name": "attach_media",
@@ -3530,6 +3530,64 @@
         "properties": {
           "deleted": {
             "type": "boolean"
+          }
+        },
+        "required": [
+          "deleted"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "name": "delete_tenant_page",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "expected_updated_at": {
+            "description": "The document timestamp from the last read, so a page edited since is refused rather than silently removed.",
+            "type": "string"
+          },
+          "site_id": {
+            "description": "Internal KrabiClaw site ID from get_workspace_context or list_sites, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
+            "type": "string"
+          },
+          "variant_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "variant_id",
+          "expected_updated_at"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "properties": {
+          "deleted": {
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "locale": {
+                "type": "string"
+              },
+              "path": {
+                "type": "string"
+              },
+              "removed_locales": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "id",
+              "path",
+              "locale",
+              "removed_locales"
+            ],
+            "type": "object"
           }
         },
         "required": [

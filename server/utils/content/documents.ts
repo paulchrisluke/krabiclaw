@@ -211,7 +211,15 @@ export async function getContentRepresentation(db: DbClient, input: { rootId: st
   `, [input.rootId, input.locale ?? null, input.locale ?? null])
 }
 
-export function prepareContentDocumentDeletion(input: { organizationId: string; siteId: string } & ({ documentId: string } | { locationId: string })): BatchQuery[] {
+/**
+ * `expectedUpdatedAt` is enforced inside the batch, not by the caller reading the
+ * row first. A caller that checks a timestamp and then deletes has every query
+ * in between as a window for another writer, and would delete the newer version
+ * it never saw. The assertion is the same one an update uses, and it runs first,
+ * so a stale delete aborts before a placement, a redirect or a document is
+ * touched.
+ */
+export function prepareContentDocumentDeletion(input: { organizationId: string; siteId: string } & ({ documentId: string; expectedUpdatedAt?: string } | { locationId: string })): BatchQuery[] {
   const document = 'documentId' in input
   const owned = document
     ? 'SELECT id FROM content_documents WHERE (id = ? OR root_id = ?) AND organization_id = ? AND site_id = ?'
@@ -220,6 +228,12 @@ export function prepareContentDocumentDeletion(input: { organizationId: string; 
   const id = document ? input.documentId : input.locationId
   const params = [id, id, input.organizationId, input.siteId]
   return [
+    ...(document && input.expectedUpdatedAt !== undefined
+      ? [assertDocumentSnapshotQuery(input.documentId, new Date().toISOString(), input.expectedUpdatedAt)]
+      : []),
+    // Deleting a location removes every document scoped to it, so one
+    // document's timestamp says nothing about the set; the union above is what
+    // keeps a caller from passing one there and believing it was honoured.
     { query: `DELETE FROM site_redirects WHERE owner_type = 'content_document' AND owner_id IN (${owned})`, params },
     { query: `DELETE FROM site_redirects WHERE owner_type = 'content_block' AND owner_id IN (
       SELECT id FROM content_blocks WHERE document_id IN (${owned})

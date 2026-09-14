@@ -11,6 +11,7 @@ import {
 import { buildTenantPageReplacementConfirmationToken } from '~/server/utils/mcp-workflows'
 import {
   createTenantPage,
+  deleteTenantPage,
   getTenantPageById,
   listTenantPages,
   updateTenantPage,
@@ -166,6 +167,17 @@ export async function handleContentTools(ctx: McpExecutorContext): Promise<unkno
           env: site.env,
         });
         return tenantPageLifecycleResponse("Updated", updated);
+      } catch (error) {
+        return rethrowAsInvalidParams(error);
+      }
+    case "delete_tenant_page":
+      try {
+        const deleted = await deleteTenantPage(site.db, requiredString(args, "variant_id"), {
+          scope: { siteId: site.siteId, organizationId: site.organizationId },
+          expectedUpdatedAt: requiredString(args, "expected_updated_at"),
+          env: site.env,
+        });
+        return renderStructuredResponse(deleted, "Deleted tenant page.", { tenant_page: deleted });
       } catch (error) {
         return rethrowAsInvalidParams(error);
       }

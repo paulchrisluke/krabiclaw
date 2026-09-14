@@ -15,6 +15,7 @@ const OUTPUT_PATH = 'chatgpt-app-submission.json'
 const effects = {
   attach_media: 'Adds an existing asset to a public content collection without replacing its existing placements.',
   batch_create_products: 'Creates products from the supplied catalog entries and records product events.',
+  delete_tenant_page: 'Deletes a tenant page; deleting its source locale removes every translation with it.',
   create_blog_post: 'Creates a tenant blog article and its content document, with publication governed by its supplied status and schedule.',
   create_collection: 'Creates an empty collection for the selected site; products are added to it separately.',
   create_location_qa: 'Adds a public question and answer to the selected location.',

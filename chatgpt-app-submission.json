@@ -260,6 +260,18 @@
         "destructive_justification": "Deletes the selected site question and answer. Existing state is deleted, replaced or overwritten rather than only appended."
       }
     },
+    "delete_tenant_page": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Deletes a tenant page; deleting its source locale removes every translation with it.",
+        "open_world_justification": "Deletes a tenant page; deleting its source locale removes every translation with it. Its effects can change content or behavior on the public website.",
+        "destructive_justification": "Deletes a tenant page; deleting its source locale removes every translation with it. Existing state is deleted, replaced or overwritten rather than only appended."
+      }
+    },
     "get_blog_post": {
       "annotations": {
         "readOnlyHint": true,

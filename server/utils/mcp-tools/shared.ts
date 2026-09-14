@@ -901,6 +901,7 @@ export const EXPECTED_TOOL_ANNOTATIONS = {
   update_site_qa: D,
   update_site_settings: D,
   update_tenant_page: D,
+  delete_tenant_page: D,
   upload_user_media: W,
   list_products: R,
   set_product_publication: D,
