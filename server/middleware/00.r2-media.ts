@@ -2,7 +2,7 @@
 // Must run before tenant-resolution (filename prefix "00." ensures alphabetical priority).
 // Handles range requests so video seeking works in browsers.
 
-import { defineHandler, HTTPError  } from 'nitro';
+import { defineHandler } from 'nitro';
 import type { getHeader} from 'nitro/h3';
 import {  sendStream, setHeader, setResponseStatus } from 'nitro/h3';
 import { cloudflareEnv } from '~/server/utils/api-response'
@@ -22,9 +22,30 @@ function isWorkerMediaPathAllowed(event: Parameters<typeof getHeader>[0]): boole
   return isNonProductionHost(hostname)
 }
 
+const WORKER_MEDIA_ISOLATION_HEADERS = {
+  'content-security-policy': "sandbox; default-src 'none'",
+  'x-content-type-options': 'nosniff',
+}
+
 function isolateWorkerMediaResponse(event: Parameters<typeof getHeader>[0]): void {
-  setHeader(event, 'content-security-policy', "sandbox; default-src 'none'")
-  setHeader(event, 'x-content-type-options', 'nosniff')
+  for (const [name, value] of Object.entries(WORKER_MEDIA_ISOLATION_HEADERS)) setHeader(event, name, value)
+}
+
+// This host serves R2 objects and nothing else, so every answer it gives is a
+// bare response. Throwing here instead sent the request into Nuxt's error
+// pipeline, which renders /__nuxt_error through an internal self-fetch — and a
+// nested self-fetch inherits no Cloudflare bindings, so this same handler ran
+// again with no MEDIA_BUCKET and answered 503. That is how a missing
+// robots.txt reached the client as "Media storage unavailable" instead of 404.
+function mediaResponse(
+  isolated: boolean,
+  status: number,
+  headers: Record<string, string> = {},
+): Response {
+  return new Response(null, {
+    status,
+    headers: { ...(isolated ? WORKER_MEDIA_ISOLATION_HEADERS : {}), ...headers },
+  })
 }
 
 export default defineHandler(async (event) => {
@@ -37,74 +58,68 @@ export default defineHandler(async (event) => {
 
   const env = cloudflareEnv(event)
   const bucket = env.MEDIA_BUCKET
-  if (!bucket) {
-    throw new HTTPError({ statusCode: 503, statusMessage: 'Media storage unavailable' })
-  }
+  if (!bucket) return mediaResponse(isWorkerMediaPath, 503)
 
   const key = isWorkerMediaPath
     ? url.pathname.slice(WORKER_MEDIA_PREFIX.length)
     : url.pathname.replace(/^\/+/, '')
-  if (!key) {
-    throw new HTTPError({ statusCode: 404 })
-  }
+  if (!key) return mediaResponse(isWorkerMediaPath, 404)
 
   const rangeHeader = (event.req.headers.get('range'))
 
   if (rangeHeader) {
+    let head: Awaited<ReturnType<typeof bucket.head>>
     try {
-      const head = await bucket.head(key)
-      if (!head) throw new HTTPError({ statusCode: 404 })
-
-      const totalSize = head.size
-      const rangeMatch = rangeHeader.match(/bytes=(\d+)-(\d*)/)
-      if (!rangeMatch) {
-        setHeader(event, 'content-range', `bytes */${totalSize}`)
-        throw new HTTPError({ statusCode: 416 })
-      }
-
-      const start = parseInt(rangeMatch[1] ?? '0', 10)
-      const end = rangeMatch[2] ? parseInt(rangeMatch[2], 10) : totalSize - 1
-
-      if (start >= totalSize || start > end || start < 0) {
-        setHeader(event, 'content-range', `bytes */${totalSize}`)
-        throw new HTTPError({ statusCode: 416 })
-      }
-
-      const length = end - start + 1
-
-      const obj = await bucket.get(key, { range: { offset: start, length } })
-      if (!obj) throw new HTTPError({ statusCode: 404 })
-
-      setResponseStatus(event, 206)
-      setHeader(event, 'content-type', obj.httpMetadata?.contentType ?? 'application/octet-stream')
-      setHeader(event, 'content-range', `bytes ${start}-${end}/${totalSize}`)
-      setHeader(event, 'content-length', String(length))
-      setHeader(event, 'accept-ranges', 'bytes')
-      setHeader(event, 'cache-control', 'public, max-age=31536000, immutable')
-      return sendStream(event, obj.body)
-    } catch (err: unknown) {
-      // A missing object and an unsatisfiable range are answers, not R2 faults:
-      // rethrow the status this block already chose instead of relabelling
-      // every one of them 502.
-      if (err instanceof HTTPError) throw err
-      const msg = err instanceof Error ? err.message : 'R2 error'
-      throw new HTTPError({ statusCode: 502, statusMessage: msg })
+      head = await bucket.head(key)
+    } catch {
+      return mediaResponse(isWorkerMediaPath, 502)
     }
-  }
+    if (!head) return mediaResponse(isWorkerMediaPath, 404)
 
-  try {
-    const obj = await bucket.get(key)
-    if (!obj) throw new HTTPError({ statusCode: 404 })
+    const totalSize = head.size
+    const rangeMatch = rangeHeader.match(/bytes=(\d+)-(\d*)/)
+    // A missing object and an unsatisfiable range are answers, not R2 faults,
+    // so they keep the status this block chose rather than becoming a 502.
+    if (!rangeMatch) return mediaResponse(isWorkerMediaPath, 416, { 'content-range': `bytes */${totalSize}` })
 
+    const start = parseInt(rangeMatch[1] ?? '0', 10)
+    const end = rangeMatch[2] ? parseInt(rangeMatch[2], 10) : totalSize - 1
+
+    if (start >= totalSize || start > end || start < 0) {
+      return mediaResponse(isWorkerMediaPath, 416, { 'content-range': `bytes */${totalSize}` })
+    }
+
+    const length = end - start + 1
+
+    let obj: Awaited<ReturnType<typeof bucket.get>>
+    try {
+      obj = await bucket.get(key, { range: { offset: start, length } })
+    } catch {
+      return mediaResponse(isWorkerMediaPath, 502)
+    }
+    if (!obj) return mediaResponse(isWorkerMediaPath, 404)
+
+    setResponseStatus(event, 206)
     setHeader(event, 'content-type', obj.httpMetadata?.contentType ?? 'application/octet-stream')
-    setHeader(event, 'content-length', String(obj.size))
+    setHeader(event, 'content-range', `bytes ${start}-${end}/${totalSize}`)
+    setHeader(event, 'content-length', String(length))
     setHeader(event, 'accept-ranges', 'bytes')
-    setHeader(event, 'etag', obj.etag)
     setHeader(event, 'cache-control', 'public, max-age=31536000, immutable')
     return sendStream(event, obj.body)
-  } catch (err: unknown) {
-    if (err instanceof HTTPError) throw err
-    const msg = err instanceof Error ? err.message : 'R2 error'
-    throw new HTTPError({ statusCode: 502, statusMessage: msg })
   }
+
+  let obj: Awaited<ReturnType<typeof bucket.get>>
+  try {
+    obj = await bucket.get(key)
+  } catch {
+    return mediaResponse(isWorkerMediaPath, 502)
+  }
+  if (!obj) return mediaResponse(isWorkerMediaPath, 404)
+
+  setHeader(event, 'content-type', obj.httpMetadata?.contentType ?? 'application/octet-stream')
+  setHeader(event, 'content-length', String(obj.size))
+  setHeader(event, 'accept-ranges', 'bytes')
+  setHeader(event, 'etag', obj.etag)
+  setHeader(event, 'cache-control', 'public, max-age=31536000, immutable')
+  return sendStream(event, obj.body)
 })
