@@ -184,15 +184,18 @@ function normalizeDetail(place: RawPlace): PlaceDetails {
  * There is no fuller inventory to preserve: this response is the inventory.
  */
 export function staleGoogleReviewDeletes(scope: { organizationId: string; siteId: string; locationId: string }, reviews: PlaceReview[]) {
-  return [{
-    query: `
-      DELETE FROM reviews
+  const stale = `
+      SELECT id FROM reviews
       WHERE organization_id = ? AND site_id = ? AND location_id = ?
         AND source = 'google_places'
-        AND (google_review_id IS NULL OR google_review_id NOT IN (SELECT value FROM json_each(?)))
-    `,
-    params: [scope.organizationId, scope.siteId, scope.locationId, JSON.stringify(reviews.map(review => review.google_review_id))],
-  }]
+        AND (google_review_id IS NULL OR google_review_id NOT IN (SELECT value FROM json_each(?)))`
+  const params = [scope.organizationId, scope.siteId, scope.locationId, JSON.stringify(reviews.map(review => review.google_review_id))]
+  // A review's media placements (author portrait) have no foreign key to the
+  // review, so they go first, by the same predicate.
+  return [
+    { query: `DELETE FROM media_placements WHERE owner_type = 'review' AND owner_id IN (${stale})`, params },
+    { query: `DELETE FROM reviews WHERE id IN (${stale})`, params },
+  ]
 }
 
 export function googleReviewUpserts(scope: { organizationId: string; siteId: string; locationId: string }, reviews: PlaceReview[], now: string) {
