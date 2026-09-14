@@ -138,6 +138,8 @@
     "@better-auth/oauth-provider": "1.7.4",
     "@better-auth/stripe": "1.7.4",
     "@internationalized/date": "^3.12.3",
+    "@modelcontextprotocol/core": "2.0.0",
+    "@modelcontextprotocol/server": "2.0.0",
     "@noble/hashes": "^2.4.0",
     "@nuxt/ui": "^4.11.0",
     "@nuxtjs/robots": "6.2.0",
