@@ -29,10 +29,10 @@ function patternMatchesPath(claim: ClaimedRoute, path: string): boolean {
     // `:locale(th)` — and honouring it keeps `/foo/about` unclaimed while
     // `/th/about` is claimed.
     const param = /^:[^(]*\((.*)\)\*?$/.exec(segment)
-    if (!param) return segment === value
+    if (!param) return segment.startsWith(':') || segment.toLowerCase() === value.toLowerCase()
     const constraint = param[1]
     if (!constraint) return true
-    return new RegExp(`^(?:${constraint})$`).test(value)
+    return new RegExp(`^(?:${constraint})$`, 'i').test(value)
   })
 }
 
