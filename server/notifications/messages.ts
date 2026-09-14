@@ -10,6 +10,12 @@ import type { NotificationCategory } from '~/shared/notification-categories'
  * author. Neither renderer invents content; both read this.
  */
 export interface NotificationFact {
+  /**
+   * A stable identity for the fact, independent of its display label. The
+   * WhatsApp mapping keys off this, so translating a label cannot silently
+   * unmap a slot.
+   */
+  key: string
   label: string
   value: string
   /**
