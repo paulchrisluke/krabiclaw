@@ -14,18 +14,8 @@
         <h1 class="text-2xl font-semibold">Review not found</h1>
       </div>
 
-      <article v-else class="mt-12">
-        <div class="flex gap-1">
-          <SayaIcon v-for="star in 5" :key="star" name="star" solid class="size-5" :class="star <= Number(review.rating) ? 'text-primary' : 'text-muted'" />
-        </div>
-        <h1 class="mt-5 text-4xl font-semibold leading-tight">{{ review.title || `${review.rating}-star review` }}</h1>
-        <p class="mt-3 text-sm text-muted">
-          {{ review.author_name || 'Guest' }} / {{ formatDate(String(review.created_at)) }}
-        </p>
-        <GoogleReviewAttribution v-if="review.source === 'google_places'" :metadata="review.google_review_metadata" :source-url="review.original_reference" />
-        <p class="mt-8 whitespace-pre-line text-base leading-8">{{ review.content }}</p>
-
-        <div v-if="mediaItems.length" class="mt-8 grid grid-cols-2 gap-3 sm:grid-cols-3">
+      <SayaReviewCard v-else :review="review" class="mt-12">
+        <div v-if="mediaItems.length" class="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3">
           <button
             v-for="(item, index) in mediaItems"
             :key="item.id || index"
@@ -37,12 +27,7 @@
           </button>
         </div>
 
-        <div v-if="review.owner_reply" class="mt-10 rounded-lg border-l-4 border-primary bg-elevated p-5">
-          <p class="text-sm font-medium">{{ review.site_name }}</p>
-          <p class="mt-3 whitespace-pre-line text-sm leading-7 text-muted">{{ review.owner_reply }}</p>
-        </div>
-
-        <div class="mt-10 flex flex-wrap items-center gap-3">
+        <div class="mt-6 flex flex-wrap items-center gap-3">
           <SayaButton variant="soft" @click="markHelpful">
             Helpful / {{ helpfulCount }}
           </SayaButton>
@@ -50,7 +35,7 @@
             Share
           </SayaButton>
         </div>
-      </article>
+      </SayaReviewCard>
     </section>
 
     <SayaLightbox v-model:open="lightboxOpen" v-model:index="lightboxIndex" :items="lightboxItems" :title="review?.title || 'Review media'" />
@@ -68,7 +53,6 @@ if (!siteId) throw createError({ statusCode: 404 })
 
 const slug = computed(() => String(route.params.slug))
 const reviewId = computed(() => String(route.params.reviewId))
-const { formatDate } = useLocaleDate()
 
 const { data: review, pending, error } = await useAsyncData<ApiRecord>(
   () => `review-${slug.value}-${reviewId.value}`,

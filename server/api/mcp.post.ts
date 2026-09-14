@@ -154,7 +154,6 @@ This entire flow runs within the current conversation — do not tell the user t
 - Ask the user to attach the video directly in ChatGPT with the paperclip.
 - Every video requires a poster image. Ask the user to attach one before uploading the video.
 - Call upload_user_media({ site_id, file: <resolved video reference>, poster_file: <resolved poster image reference>, category, description }) for every video upload.
-- Never call or mention upload widget tools. No tool whose name starts with "open_" and contains "upload" exists in this connector.
 - After upload_user_media returns asset_id/public_url, use the exact owner id from a read tool. Call set_media with asset_id for a single cover/hero/logo; call attach_media for a gallery or document list and reorder_media only when needed.
 
 ## Choosing a content type
@@ -210,7 +209,7 @@ Common workflows: manage a site's Products and the collections that group them, 
           throw mcpProtocolError(MCP_ERROR.invalidParams, `Unknown MCP app resource: ${uri}`);
         }, }, prompts: { list: MCP_PROMPTS, render: renderMcpPrompt }, discover: {
         serverName: "krabiclaw-mcp", serverVersion: "phase-5", instructions:
-          "KrabiClaw MCP. Call get_workspace_context at the start of every conversation. site_id must be an internal id from get_workspace_context/list_sites, never a URL/domain/subdomain/name. Native ChatGPT attachments upload only through upload_user_media; never call stale open_*upload widget tools. If no active site is set yet, call list_sites, let the user choose, then persist it with set_workspace_context before mutating tools.", }, });
+          "KrabiClaw MCP. Call get_workspace_context at the start of every conversation. site_id must be an internal id from get_workspace_context/list_sites, never a URL/domain/subdomain/name. Native ChatGPT attachments upload only through upload_user_media. If no active site is set yet, call list_sites, let the user choose, then persist it with set_workspace_context before mutating tools.", }, });
     if (standardResponse !== undefined) return standardResponse;
 
     if (request.method === "tools/list") {
@@ -416,10 +415,9 @@ Common workflows: manage a site's Products and the collections that group them, 
     const mcpError = asMcpError(error);
     const toolCallPermissionError = requestMethod === "tools/call" && mcpError.kind === "forbidden";
     const mappedStatus = toolCallPermissionError ? 200 : mcpHttpStatusForError(mcpError);
-    // A malformed or stale client request is the client's fault, not ours.
-    // ChatGPT still asks for widget resources it cached from an older catalog
-    // (`ui://media-upload`), and logging those at error severity buries real
-    // faults — the same reason the auth handler already splits 4xx to warn.
+    // A malformed or stale client request is the client's fault, not ours;
+    // logging it at error severity buries real faults, so 4xx goes to warn,
+    // as the auth handler already does.
     const clientFault = mappedStatus < 500
     const logMcpError = clientFault ? console.warn : console.error
     logMcpError("[MCP_ERROR]", JSON.stringify({

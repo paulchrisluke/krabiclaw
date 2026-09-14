@@ -27,7 +27,6 @@
                     <img v-if="portrait(review)" :src="portrait(review)!.public_url" :alt="review.author_name" width="56" height="56" loading="lazy" class="size-14 object-cover">
                   </div>
                 </figcaption>
-                <GoogleReviewAttribution v-if="review.source === 'google_places'" :metadata="review.google_review_metadata" :source-url="review.original_reference" />
               </figure>
             </li>
           </ul>

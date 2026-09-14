@@ -1857,21 +1857,6 @@ export const sites = sqliteTable("sites", {
 	index("sites_created_at_idx").on(table.created_at),
 ]);
 
-// GA4 purchase delivery is at-most-once per Stripe invoice. Stripe's own
-// webhook retries are the retry mechanism; this ledger only stops a retry from
-// sending the same purchase to GA4 twice. Read/write: server/utils/stripe-ga4-intents.ts.
-export const stripe_ga4_invoice_deliveries = sqliteTable("stripe_ga4_invoice_deliveries", {
-	stripe_invoice_id: text().primaryKey(),
-	status: text().default("sending").notNull(),
-	event_id: text().notNull(),
-	claimed_at: text(),
-	sent_at: text(),
-	error: text(),
-	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-}, () => [
-	check("stripe_ga4_invoice_deliveries_instants_check", sql`(claimed_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', claimed_at, '+0 days') IS claimed_at) AND (sent_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', sent_at, '+0 days') IS sent_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)`),
-	check("stripe_ga4_invoice_deliveries_status_check", sql`status IN ('sending', 'sent', 'failed')`),
-]);
 export const stripe_webhook_events = sqliteTable("stripe_webhook_events", {
 	id: text().primaryKey(),
 	stripe_event_id: text().notNull().unique(),

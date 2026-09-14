@@ -13,9 +13,6 @@ import {
 } from '~/server/utils/stripe-invoice-lines'
 import {
   consumeStripeGa4Intent,
-  claimStripeGa4PurchaseDelivery,
-  markStripeGa4PurchaseDeliveryFailed,
-  markStripeGa4PurchaseDeliverySent,
   findConsumedStripeGa4CancellationIntent,
   findPendingInitialStripeGa4Intent,
   findPendingStripeGa4Intent,
@@ -331,21 +328,18 @@ async function sendStripeGa4Purchase(
     fallbackItems: subscriptionFallbackItems(subscription, invoice.currency ?? 'usd'),
   })
 
-  const delivery = await claimStripeGa4PurchaseDelivery(db, invoice.id, event.id)
-  if (delivery !== 'claimed') return
-  try {
-    await sendGa4Event(env, {
-      clientId: context.clientId,
-      userId: context.userId,
-      sessionId: context.sessionId,
-      sessionCapturedAt: context.sessionCapturedAt,
-      event: eventPayload,
-    })
-    await markStripeGa4PurchaseDeliverySent(db, invoice.id, event.id)
-  } catch (error) {
-    await markStripeGa4PurchaseDeliveryFailed(db, invoice.id, event.id, error instanceof Error ? error.message : String(error))
-    throw error
-  }
+  // Sent once per delivery. Stripe redelivers an event only when this handler
+  // did not answer 2xx, and never spontaneously: a sandbox run of 34 events on
+  // 2026-09-14 delivered 34 distinct ids. A purchase counted twice in GA4 in
+  // that failure case is accepted (owner decision, 2026-09-14) over keeping a
+  // delivery ledger for analytics.
+  await sendGa4Event(env, {
+    clientId: context.clientId,
+    userId: context.userId,
+    sessionId: context.sessionId,
+    sessionCapturedAt: context.sessionCapturedAt,
+    event: eventPayload,
+  })
 
   if (context.intent && (purchaseType === 'upgrade' || purchaseType === 'downgrade' || purchaseType === 'initial_subscription')) {
     await consumeStripeGa4Intent(db, context.intent.id, event.id)

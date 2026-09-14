@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test'
 import Ajv from 'ajv'
 import { loginAs } from './helpers/auth'
-import { MCP_FREE_USER_ID, MCP_GROWTH_SERVICE_USER_ID } from './helpers/plan-fixtures'
+import { MCP_GROWTH_USER_ID, MCP_GROWTH_SERVICE_USER_ID } from './helpers/plan-fixtures'
 import { MCP_VERSION, mcpRequest, mcpData, ensureSite } from './helpers/mcp'
 
 // Split out of mcp.spec.ts (content/publishing tool tests) — see
@@ -188,7 +188,7 @@ test.describe('stateless MCP server', () => {
 
   test('tenant blog tools preserve the canonical block document', async ({ request, baseURL }) => {
     test.setTimeout(120_000)
-    await loginAs(request, baseURL!, MCP_FREE_USER_ID)
+    await loginAs(request, baseURL!, MCP_GROWTH_USER_ID)
     const siteId = await ensureSite(request, baseURL!)
     const discovery = await mcpRequest(request, baseURL!, { method: 'tools/list' })
     expect(discovery.status()).toBe(200)

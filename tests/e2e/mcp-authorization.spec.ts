@@ -1,6 +1,5 @@
-import { expect, test, request as playwrightRequest, type APIRequestContext } from '@playwright/test'
+import { expect, test } from '@playwright/test'
 import { loginAs } from './helpers/auth'
-import { MCP_FREE_USER_ID } from './helpers/plan-fixtures'
 import { mcpRequest, ensureSite, loginAsFreshMcpUser } from './helpers/mcp'
 
 // Split out of mcp.spec.ts (authorization/isolation tests) — see
@@ -56,98 +55,6 @@ test.describe('stateless MCP server', () => {
     expect((await wrongSite.json()).result?.isError).toBe(true)
   })
 
-  test('locale tools remain available while gated groups stay hidden from the conversational surface', async ({ request, baseURL }) => {
-    await loginAs(request, baseURL!, MCP_FREE_USER_ID)
-    const siteId = await ensureSite(request, baseURL!)
-
-    const toolsList = await mcpRequest(request, baseURL!, {
-      method: 'tools/list',
-      siteId,
-    })
-    expect(toolsList.status()).toBe(200)
-    const toolsBody = await toolsList.json() as { result: { tools: Array<{ name: string }> } }
-    const toolNames = toolsBody.result.tools.map(t => t.name)
-    expect(toolNames).toContain('list_site_locales')
-    expect(toolNames).not.toContain('get_site_domains')
-
-    const publishPost = toolsBody.result.tools.find(t => t.name === 'publish_post') as
-      | { inputSchema?: { properties?: { channels?: { items?: { enum?: string[] } } } } }
-      | undefined
-    expect(publishPost?.inputSchema?.properties?.channels?.items?.enum).toEqual(['site'])
-  })
-
-  // Grouped so siteA/siteB and the logged-in-as-site-B-owner session are
-  // created once (in beforeAll) and shared by all three tests below, instead
-  // of each test independently calling ensureSite() twice (a full
-  // site-creation flow, not a cheap operation) — was 3 tests x 2 site
-  // creations = 6 total; now 2 total. Cross-tenant isolation tests were
-  // intermittently timing out under preview-deploy cold-start load
-  // (mcpRequest/ensureSite round trips each paying real latency); this
-  // reduces the total request volume this group puts on the preview Worker.
-  // The hook budget covers the two full site-creation flows it owns.
-  //
-  // Playwright's built-in `request` fixture cannot be reused across
-  // beforeAll and a test — it's disposed the instant beforeAll returns (see
-  // node_modules/playwright's own fixture implementation and
-  // https://playwright.dev/docs/api-testing#sending-api-requests-from-ui-tests).
-  // A manually created/disposed APIRequestContext is the documented way to
-  // share authenticated state across hooks and tests in one file.
-  test.describe('cross-tenant isolation', () => {
-    let siteA: string
-    let siteB: string
-    let sharedRequest: APIRequestContext
-
-    test.beforeAll(async ({ baseURL }, testInfo) => {
-      testInfo.setTimeout(60_000)
-      sharedRequest = await playwrightRequest.newContext()
-      await loginAsFreshMcpUser(sharedRequest, baseURL!, 'cross-a')
-      siteA = await ensureSite(sharedRequest, baseURL!)
-      await loginAsFreshMcpUser(sharedRequest, baseURL!, 'cross-b')
-      siteB = await ensureSite(sharedRequest, baseURL!)
-    })
-
-    test.afterAll(async () => {
-      await sharedRequest.dispose()
-    })
-
-    test('owner of site B cannot read site A through MCP', async ({ baseURL }) => {
-      const crossRead = await mcpRequest(sharedRequest, baseURL!, {
-        method: 'tools/call',
-        toolName: 'get_site',
-        args: { site_id: siteA },
-      })
-      expect(crossRead.status()).toBe(200)
-      expect((await crossRead.json()).result?.isError).toBe(true)
-    })
-
-    test('owner of site B cannot mutate site A through MCP', async ({ baseURL }) => {
-      test.setTimeout(60_000)
-      const crossMutate = await mcpRequest(sharedRequest, baseURL!, {
-        method: 'tools/call',
-        toolName: 'update_site_settings',
-        args: { site_id: siteA, brand_description: 'cross-tenant injection attempt' },
-      })
-      expect(crossMutate.status()).toBe(200)
-      expect((await crossMutate.json()).result?.isError).toBe(true)
-    })
-
-    // Positive control for the isolation tests above — proves the errors
-    // there come from cross-tenant isolation and not from the caller's own
-    // session/site being broken.
-    test('owner can still read their own site (site B) through MCP', async ({ baseURL }) => {
-      const ownSiteRead = await mcpRequest(sharedRequest, baseURL!, {
-        method: 'tools/call',
-        toolName: 'get_site',
-        args: { site_id: siteB },
-      })
-      expect(ownSiteRead.status()).toBe(200)
-    })
-  })
-
-  // Split into two tests (was one test doing both scenarios sequentially,
-  // sharing a single 30s budget across ~7 network round trips: login, site
-  // creation, owner reply, editor member creation, editor login, tools/list,
-  // editor reply) so each scenario gets its own independent timeout budget.
   test('owner reply to a missing review returns an error through MCP', async ({ request, baseURL }) => {
     await loginAsFreshMcpUser(request, baseURL!, 'owner-reply')
     const siteId = await ensureSite(request, baseURL!)

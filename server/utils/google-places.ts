@@ -174,26 +174,28 @@ function normalizeDetail(place: RawPlace): PlaceDetails {
 }
 
 /**
- * A Google review row belongs to the place's canonical id: Google names reviews
- * `places/<canonical id>/reviews/<id>`. Rows named under another place id (two
- * place records Google merged) or under an id an import minted itself are the
- * same reviews again; Beachfront Pottery Krabi showed each review three times
- * (2026-09-13) for both reasons. Reviews Google no longer returns in its
- * relevance-ranked five stay: they are still that place's reviews, and the
- * owner's moderation of them stays with them.
+ * A location's Google reviews are exactly what Google returned this sync.
+ * Google's Places API returns at most five reviews per place, chosen by
+ * Google, and the site shows exactly those (owner decision, 2026-09-14): a
+ * review Google no longer shows is not shown here either, and a row imported
+ * under a merged or legacy place id, or without a review id, is not a Google
+ * review of this place. Beachfront Pottery Krabi showed each review three
+ * times (2026-09-13) because earlier syncs kept everything ever imported.
+ * There is no fuller inventory to preserve: this response is the inventory.
  */
-export function staleGoogleReviewDeletes(scope: { organizationId: string; siteId: string; locationId: string }, canonicalPlaceId: string) {
-  if (!canonicalPlaceId) return []
-  const prefix = `places/${canonicalPlaceId}/`
-  return [{
-    query: `
-      DELETE FROM reviews
+export function staleGoogleReviewDeletes(scope: { organizationId: string; siteId: string; locationId: string }, reviews: PlaceReview[]) {
+  const stale = `
+      SELECT id FROM reviews
       WHERE organization_id = ? AND site_id = ? AND location_id = ?
         AND source = 'google_places'
-        AND substr(google_review_id, 1, length(?)) <> ?
-    `,
-    params: [scope.organizationId, scope.siteId, scope.locationId, prefix, prefix],
-  }]
+        AND (google_review_id IS NULL OR google_review_id NOT IN (SELECT value FROM json_each(?)))`
+  const params = [scope.organizationId, scope.siteId, scope.locationId, JSON.stringify(reviews.map(review => review.google_review_id))]
+  // A review's media placements (author portrait) have no foreign key to the
+  // review, so they go first, by the same predicate.
+  return [
+    { query: `DELETE FROM media_placements WHERE owner_type = 'review' AND owner_id IN (${stale})`, params },
+    { query: `DELETE FROM reviews WHERE id IN (${stale})`, params },
+  ]
 }
 
 export function googleReviewUpserts(scope: { organizationId: string; siteId: string; locationId: string }, reviews: PlaceReview[], now: string) {
@@ -260,7 +262,7 @@ export async function syncPlaceToLocation(
     locationId,
     organizationId,
     siteId
-  ] }, ...staleGoogleReviewDeletes({ organizationId, siteId, locationId }, place.placeId),
+  ] }, ...staleGoogleReviewDeletes({ organizationId, siteId, locationId }, place.reviews),
   ...googleReviewUpserts({ organizationId, siteId, locationId }, place.reviews, now)])
   const reviewsUpserted = results.slice(results.length - place.reviews.length).reduce((count, result) => count + Number(result.meta?.changes ?? 0), 0)
 

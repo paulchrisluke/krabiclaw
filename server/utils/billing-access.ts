@@ -20,7 +20,7 @@ export const FREE_PLAN = 'free'
 export const SUBSCRIPTION_STATE_INVALID = 'SUBSCRIPTION_STATE_INVALID'
 
 const ORGANIZATION_CHUNK = 50
-const SUBSCRIPTION_PAGE = 200
+const SUBSCRIPTION_PAGE = 100
 
 export function isSubscriptionStateInvalid(error: unknown): boolean {
   return error instanceof HTTPError && error.data?.code === SUBSCRIPTION_STATE_INVALID
@@ -32,21 +32,6 @@ function subscriptionStateInvalid(organizationId: string, detail: string): never
     statusMessage: `Organization ${organizationId} ${detail}`,
     data: { code: SUBSCRIPTION_STATE_INVALID, organization_id: organizationId },
   })
-}
-
-async function listSubscriptions(adapter: Awaited<ReturnType<typeof createAuth>['$context']>['adapter'], chunk: string[]): Promise<Subscription[]> {
-  const rows: Subscription[] = []
-  for (let offset = 0; ; offset += SUBSCRIPTION_PAGE) {
-    const page = await adapter.findMany<Subscription>({
-      model: 'subscription',
-      where: [{ field: 'referenceId', operator: 'in', value: chunk }],
-      limit: SUBSCRIPTION_PAGE,
-      offset,
-      sortBy: { field: 'id', direction: 'asc' },
-    })
-    rows.push(...page)
-    if (page.length < SUBSCRIPTION_PAGE) return rows
-  }
 }
 
 export async function getOrganizationPlans(
@@ -61,7 +46,22 @@ export async function getOrganizationPlans(
   const adapter = (await createAuth(env).$context).adapter
   for (let offset = 0; offset < uniqueIds.length; offset += ORGANIZATION_CHUNK) {
     const chunk = uniqueIds.slice(offset, offset + ORGANIZATION_CHUNK)
-    const rows = await listSubscriptions(adapter, chunk)
+    // Better Auth caps findMany at 100 rows unless a limit is given, and a chunk
+    // of 50 organizations can carry more subscription rows than that once
+    // canceled ones accumulate. A truncated read would leave a paying
+    // organization on free with no error, so read every page.
+    const rows: Subscription[] = []
+    for (let page = 0; ; page += SUBSCRIPTION_PAGE) {
+      const batch = await adapter.findMany<Subscription>({
+        model: 'subscription',
+        where: [{ field: 'referenceId', operator: 'in', value: chunk }],
+        sortBy: { field: 'id', direction: 'asc' },
+        limit: SUBSCRIPTION_PAGE,
+        offset: page,
+      })
+      rows.push(...batch)
+      if (batch.length < SUBSCRIPTION_PAGE) break
+    }
     const current = new Set<string>()
     for (const row of rows) {
       if (!plans.has(row.referenceId)) continue
