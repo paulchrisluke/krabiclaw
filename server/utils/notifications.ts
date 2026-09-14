@@ -172,17 +172,6 @@ interface GuestThreadReplyNotificationInput extends SiteContext {
   messagePreview: string
 }
 
-export interface NotificationCopyPreview {
-  id: string
-  audience: 'owner' | 'guest'
-  channel: 'email' | 'whatsapp'
-  template: string
-  title: string
-  subject?: string
-  html?: string
-  text: string
-}
-
 function siteName(opts: SiteContext): string {
   const value = opts.siteName?.trim()
   if (!value) throw new Error('Tenant site name is required for notifications')
@@ -1397,11 +1386,27 @@ export async function notifyOrganizationInvited(
  * silently drifted to covering 14 of 23 templates. WhatsApp copy stays inline
  * because it is approved template text, not a component we render.
  */
-export async function getNotificationCopyPreviews(): Promise<NotificationCopyPreview[]> {
-  // One catalog, so the preview shows exactly what the guards check and what
-  // the send path renders. The WhatsApp entry is the approved template's real
-  // slots, not prose written to stand in for them.
-  const entries = await Promise.all(NOTIFICATION_CATALOG.map(async (entry) => {
+export interface CatalogPreviewEntry {
+  id: string
+  title: string
+  audience: 'owner' | 'guest'
+  subject: string
+  html: string
+  text: string
+  /** What this event actually sends, for the row that previews it. */
+  channels: string[]
+  whatsapp: { template: string; text: string } | null
+}
+
+/**
+ * The catalog, rendered, for /dev/notifications.
+ *
+ * One entry per event carrying both channels, because the question the page
+ * answers is whether they agree — and the WhatsApp side is the approved
+ * template's filled slots rather than prose written to stand in for them.
+ */
+export async function renderNotificationCatalog(): Promise<CatalogPreviewEntry[]> {
+  return Promise.all(NOTIFICATION_CATALOG.map(async (entry) => {
     const rendered = await renderNotificationEmail(entry.message, {
       platformDomain: 'krabiclaw.com',
       preferencesUrl: 'https://krabiclaw.com/dashboard/account/profile/notifications',
@@ -1410,35 +1415,28 @@ export async function getNotificationCopyPreviews(): Promise<NotificationCopyPre
         : 'https://krabiclaw.com/unsubscribe?user=preview&category=preview&token=preview',
     })
 
-    const previews: NotificationCopyPreview[] = [{
-      id: `${entry.id}-email`,
-      audience: entry.audience,
-      channel: 'email',
-      template: entry.id,
-      title: entry.title,
-      subject: entry.message.title,
-      html: rendered.html,
-      text: rendered.text,
-    }]
-
+    let whatsapp: CatalogPreviewEntry['whatsapp'] = null
     if (entry.whatsappTemplate) {
       const { vars } = toWhatsAppVars(entry.message, entry.whatsappTemplate)
       const payload = buildWhatsAppTemplatePayload(entry.whatsappTemplate, vars)
-      previews.push({
-        id: `${entry.id}-whatsapp`,
-        audience: entry.audience,
-        channel: 'whatsapp',
+      whatsapp = {
         template: entry.whatsappTemplate,
-        title: entry.title,
         text: payload.components
           .flatMap(component => component.parameters.map(parameter => parameter.text))
           .filter(Boolean)
-          .join(' · '),
-      })
+          .join('\n'),
+      }
     }
 
-    return previews
+    return {
+      id: entry.id,
+      title: entry.title,
+      audience: entry.audience,
+      subject: entry.message.title,
+      html: rendered.html,
+      text: rendered.text,
+      channels: whatsapp ? ['Email', 'WhatsApp'] : ['Email'],
+      whatsapp,
+    }
   }))
-
-  return entries.flat()
 }
