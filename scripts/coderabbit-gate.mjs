@@ -163,16 +163,19 @@ function review() {
     fail(`${files.length} changed files exceeds the plan's ${FILES_PER_REVIEW} per review, and a --dir slice does not count as a review of the commit. Split the PR.`, 2)
   }
   // Count and record under one lock so two gates cannot both take the last slot.
-  const used = withSlotLock(() => {
+  // fail() exits the process, which skips the lock's finally; decide under the
+  // lock and fail outside it, or a rate-limited gate leaves the lock behind.
+  const slot = withSlotLock(() => {
     const recent = runsInLastHour()
     if (recent.length >= REVIEWS_PER_HOUR) {
       const oldest = Math.min(...recent.map(session => session.startedAt))
-      const waitMinutes = Math.ceil((oldest + 60 * 60 * 1000 - Date.now()) / 60000)
-      fail(`${recent.length} reviews in the last hour is the plan's limit (${REVIEWS_PER_HOUR}). Next slot in ${waitMinutes} min. Credits are never used.`, 3)
+      return { limited: recent.length, waitMinutes: Math.ceil((oldest + 60 * 60 * 1000 - Date.now()) / 60000) }
     }
     appendFileSync(RUN_LOG, JSON.stringify({ startedAt: Date.now(), head, branch: git(['rev-parse', '--abbrev-ref', 'HEAD']) }) + '\n')
-    return recent.length + 1
+    return { used: recent.length + 1 }
   })
+  if (slot.limited) fail(`${slot.limited} reviews in the last hour is the plan's limit (${REVIEWS_PER_HOUR}). Next slot in ${slot.waitMinutes} min. Credits are never used.`, 3)
+  const used = slot.used
   process.stdout.write(`coderabbit-gate: reviewing ${files.length} files on ${head.slice(0, 8)} (${used}/${REVIEWS_PER_HOUR} this hour)\n`)
   try {
     execFileSync(CLI, ['review', '--agent', '--committed', '--base', 'staging'], { stdio: 'inherit' })
