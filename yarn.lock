@@ -10729,6 +10729,7 @@ __metadata:
     autocannon: "npm:^8.0.0"
     autoprefixer: "npm:^10.5.4"
     better-auth: "npm:1.7.4"
+    better-call: "npm:1.4.0"
     better-sqlite3: "npm:^12.11.1"
     cross-env: "npm:^10.1.0"
     drizzle-kit: "npm:0.31.10"
