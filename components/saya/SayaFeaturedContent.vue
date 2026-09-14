@@ -19,7 +19,7 @@
       class="flex snap-x snap-mandatory gap-5 overflow-x-auto pb-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
     >
       <component
-        :is="item.href ? 'NuxtLink' : 'div'"
+        :is="item.href ? NuxtLinkComponent : 'div'"
         v-for="(item, i) in items"
         :key="i"
         :to="item.href ? localePath(item.href) : undefined"
@@ -56,7 +56,7 @@
               <span>{{ item.price }}</span>
             </p>
             <span v-if="item.href" class="border-b border-current pb-0.5 text-xs uppercase tracking-widest text-default">
-              {{ t('saya.common.view_dish') }} →
+              {{ item.ctaText || t('saya.common.view_dish') }} →
             </span>
           </div>
         </div>
@@ -102,6 +102,8 @@
 import AppSection from '~/components/ui/AppSection.vue'
 import { cfImageSrcset } from '~/utils/cf-image'
 
+const NuxtLinkComponent = resolveComponent('NuxtLink')
+
 interface Props {
   data?: {
     items?: Array<{
@@ -115,6 +117,7 @@ interface Props {
       unavailable?: boolean
       category?: string | null
       description?: string | null
+      ctaText?: string
     }>
     kicker: string
     heading: string

@@ -43,11 +43,14 @@
         />
 
         <div v-if="sites.length === 0" class="rounded-2xl border border-default bg-elevated px-6 py-20 text-center">
-          <div class="mx-auto flex size-14 items-center justify-center rounded-full bg-muted">
-            <UIcon name="i-lucide-globe" class="size-6 text-muted" />
-          </div>
-          <h2 class="mt-5 text-base font-semibold text-highlighted">No sites available</h2>
-          <p class="mt-2 text-sm text-muted">Your organization’s sites will appear here.</p>
+          <img
+            src="https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/de8b203b-a120-43c9-7ff2-5ebe40b66800/thumbnail"
+            alt=""
+            aria-hidden="true"
+            class="mx-auto size-28 object-contain"
+          >
+          <h2 class="mt-6 text-base font-semibold text-highlighted">No sites available</h2>
+          <p class="mt-1 text-sm text-muted">Your organization’s sites will appear here.</p>
           <UButton
             v-if="canManageOrganization"
             label="Add your first site"

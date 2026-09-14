@@ -35,6 +35,8 @@ export default {
     "common": {
       "view_all": "View all",
       "view_dish": "View Dish",
+      "view_experience": "View experience",
+      "view_item": "View item",
       "temporarily_unavailable": "Temporarily unavailable"
     },
     "search": {

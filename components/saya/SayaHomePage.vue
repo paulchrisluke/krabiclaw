@@ -566,6 +566,7 @@ const featuredProductCards = computed(() => {
       href: isExperience(product) || locationSlug
         ? productSurface.productPath(locationSlug, product.slug)
         : null,
+      ctaText: isExperience(product) ? t('saya.common.view_experience') : t('saya.common.view_dish'),
       unavailable: !product.active
         || (locationId !== null && closedLocationIds.value.has(locationId))
         || price === null,
