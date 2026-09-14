@@ -1,7 +1,7 @@
 <template>
   <NuxtLayout :name="isPlatform ? 'platform' : isBlawby ? 'blawby' : 'saya'">
     <PlatformAboutPage v-if="isPlatform" />
-    <TenantPublicPage v-else path="/about" />
+    <TenantPublicPage v-else :path="documentPath" />
   </NuxtLayout>
 </template>
 
@@ -10,4 +10,5 @@ definePageMeta({ layout: false })
 
 const { isPlatform } = useTenantSite()
 const { isBlawby } = usePublicTemplate()
+const documentPath = useTenantPageDocumentPath('about')
 </script>

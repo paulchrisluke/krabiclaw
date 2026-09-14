@@ -66,3 +66,6 @@ seeds/*.sql
 .tmp/
 .valo/
 tsconfig.spot.json
+
+# Generated at build from the resolved route table (see nuxt.config.ts).
+.nuxt-generated/

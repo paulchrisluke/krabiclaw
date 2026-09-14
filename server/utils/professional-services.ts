@@ -12,7 +12,9 @@ import {
 } from '~/server/utils/public-localization'
 import { loadPublicSocialMedia } from '~/server/utils/public-social-image'
 import { listPublicLocaleRepresentations } from '~/server/utils/public-locale-representations'
-import { siteSupportsBlawbyTemplate } from '~/utils/template-registry'
+import { publicTemplateRegistry, siteSupportsBlawbyTemplate } from '~/utils/template-registry'
+
+const BLAWBY_TEMPLATE = publicTemplateRegistry.blawby
 import {
   getPublicTenantPageForPath,
   listCanonicalTenantPages,
@@ -362,7 +364,9 @@ export async function getPublicBlawbyDocumentData(
     getPublicBlawbyShellData(db, siteId, { locale, localizations }),
     getPublicBlawbyRouteData(db, siteId, recipe, { ...options, locale, localizations }, env),
   ])
-  const pagePath = recipe === 'page' ? options.slug ?? null : ROUTE_PAGE_PATHS[recipe]
+  // Which path each recipe's document lives at is declared once, per template,
+  // in utils/template-registry.ts; 'page' names its own path.
+  const pagePath = recipe === 'page' ? options.slug ?? null : BLAWBY_TEMPLATE.pageDocuments.recipes[recipe] ?? null
   if (recipe === 'article') return { shell, route }
   // Every route on this template is a page now, so locale representations
   // come from the document — there is no second resource kind to branch on.
@@ -400,24 +404,6 @@ export async function resolvePublicBlawbyDocumentOrThrow(
   return { success: true, ...document }
 }
 
-const ROUTE_PAGE_PATHS: Record<PublicBlawbyRouteData['recipe'], string | null> = {
-  home: '/',
-  links: null,
-  services: '/services',
-  about: '/about',
-  pricing: '/pricing',
-  contact: '/contact',
-  confirmation: null,
-  schedule: '/schedule',
-  blog: '/blog',
-  article: null,
-  donate: '/donate',
-  privacy: '/policies/privacy',
-  terms: '/policies/terms',
-  'third-party-notices': '/third-party-notices',
-  // A generic page names its own path, so it has no fixed entry here.
-  page: null,
-}
 function faqBlockQa(page: { blocks: Array<{ type: string; data: Record<string, unknown> }> } | null): PublicSiteQa[] {
   const block = page?.blocks.find(candidate => candidate.type === 'faq')
   if (!block || !Array.isArray(block.data.items)) return []
@@ -497,7 +483,8 @@ export async function getPublicBlawbyRouteData(
 ): Promise<PublicBlawbyRouteData> {
   const needsReviews = ['home', 'about', 'contact', 'schedule'].includes(recipe)
   const postLimit = recipe === 'home' ? 3 : recipe === 'blog' ? 50 : 0
-  const pagePath = recipe === 'page' ? options.slug ?? null : ROUTE_PAGE_PATHS[recipe]
+  // Declared once, per template, in utils/template-registry.ts.
+  const pagePath = recipe === 'page' ? options.slug ?? null : BLAWBY_TEMPLATE.pageDocuments.recipes[recipe] ?? null
   const localized = options.locale !== undefined && options.locale !== 'en'
 
   const [page, reviewRows, initialPosts, postRow] = await Promise.all([

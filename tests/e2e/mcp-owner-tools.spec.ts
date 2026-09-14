@@ -49,9 +49,17 @@ test.describe('stateless MCP server', () => {
     const pageBeforeData = mcpData<{
       page: {
         document: { updated_at: string }
+        path: string
+        title: string
+        sort_order: number
+        page_type: string
+        recipe: string | null
         blocks: Array<{ id: string; type: string; position: number; data: Record<string, unknown>; media: unknown[] }>
       }
     }>(await pageBefore.json()).page
+    // update_tenant_page replaces the document, so the writer states the path,
+    // title, position and identity it read rather than leaving them to be
+    // filled in from the stored row.
     const contentUpdate = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
       toolName: 'update_tenant_page',
@@ -59,6 +67,11 @@ test.describe('stateless MCP server', () => {
         site_id: siteId,
         variant_id: homeVariant!.id,
         expected_updated_at: pageBeforeData.document.updated_at,
+        path: pageBeforeData.path,
+        title: pageBeforeData.title,
+        sortOrder: pageBeforeData.sort_order,
+        pageType: pageBeforeData.page_type,
+        recipe: pageBeforeData.recipe,
         blocks: pageBeforeData.blocks.map(block => ({
           id: block.id,
           type: block.type,

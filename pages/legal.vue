@@ -266,7 +266,7 @@
       </div>
     </div>
     </div>
-    <TenantPublicPage v-else path="/legal" />
+    <TenantPublicPage v-else :path="documentPath" />
   </NuxtLayout>
 </template>
 
@@ -274,6 +274,7 @@
 definePageMeta({ layout: false })
 
 const { isPlatform } = useTenantSite()
+const documentPath = useTenantPageDocumentPath('/legal', 'path')
 
 const legalFeatures = [
   {

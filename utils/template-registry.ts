@@ -19,6 +19,29 @@ export interface PublicTemplateDefinition {
     dynamicPrefixes: string[]
   }
   nonIndexableExactPaths: string[]
+  /**
+   * Where this template renders a tenant page document.
+   *
+   * One declaration, read by the renderer that loads the document and by the
+   * writer that decides whether a page may exist there. They used to be six
+   * separate lists and they disagreed: /services was reserved against routes
+   * deleted two commits earlier, /order and /reservations were reserved against
+   * routes that do read a document, and /blog differs per template.
+   *
+   * `recipes` is the lookup the Blawby route loader performs; a null recipe
+   * renders from shell data and holds no document. `paths` are the documents a
+   * route binds by path alone. `prefixes` are subtrees served as documents.
+   * `catchAll` says whether pages/[...tenantPath].vue renders unclaimed paths
+   * for this template — it throws 404 for platform sites, so the platform
+   * template holds no tenant page at all until its own renderer reads
+   * documents (#903).
+   */
+  pageDocuments: {
+    recipes: Record<string, string>
+    paths: string[]
+    prefixes: string[]
+    catchAll: boolean
+  }
 }
 
 export const publicTemplateRegistry: Record<PublicTemplateSlug, PublicTemplateDefinition> = {
@@ -39,6 +62,16 @@ export const publicTemplateRegistry: Record<PublicTemplateSlug, PublicTemplateDe
       dynamicPrefixes: ['/blog/', '/experiences/', '/locations/', '/posts/'],
     },
     nonIndexableExactPaths: ['/contact/confirmed', '/bookings/cancel', '/bookings/confirmed', '/reservations/cancel', '/reservations/confirmed'],
+    // Saya reads a document on the routes that request the 'content' dataset.
+    // /menu, /products, /experiences, /qa, /reviews, /posts, /photos and
+    // /locations/<slug> are absent on purpose: they render their own data, and
+    // a document stored at one of them would never be shown.
+    pageDocuments: {
+      recipes: { home: '/', about: '/about', contact: '/contact', order: '/order', reservations: '/reservations' },
+      paths: ['/legal', '/restaurants'],
+      prefixes: [],
+      catchAll: true,
+    },
   },
   blawby: {
     slug: 'blawby',
@@ -57,6 +90,21 @@ export const publicTemplateRegistry: Record<PublicTemplateSlug, PublicTemplateDe
       dynamicPrefixes: ['/services/', '/article/'],
     },
     nonIndexableExactPaths: ['/contact/confirmed'],
+    // The Blawby route loader looks a recipe up here. 'links', 'confirmation',
+    // 'article' and 'page' are absent because they hold no document of their
+    // own: the first two render from shell data, an article is a blog post, and
+    // 'page' names its own path through the catch-all.
+    pageDocuments: {
+      recipes: {
+        home: '/', services: '/services', about: '/about', pricing: '/pricing', contact: '/contact',
+        schedule: '/schedule', blog: '/blog', donate: '/donate',
+        privacy: '/policies/privacy', terms: '/policies/terms',
+        'third-party-notices': '/third-party-notices',
+      },
+      paths: ['/legal', '/restaurants'],
+      prefixes: ['/services/'],
+      catchAll: true,
+    },
   },
   // KrabiClaw's own site: the marketing pages, documentation and blog. It is an
   // ordinary site row rendered by the platform layout; the platform host resolves
@@ -78,6 +126,11 @@ export const publicTemplateRegistry: Record<PublicTemplateSlug, PublicTemplateDe
       dynamicPrefixes: ['/blog/', '/docs/'],
     },
     nonIndexableExactPaths: [],
+    // KrabiClaw's own site renders its marketing pages from components, and
+    // pages/[...tenantPath].vue throws 404 for platform sites. Nothing here
+    // reads a tenant page document, so nothing may be written as one. #903 is
+    // what changes that.
+    pageDocuments: { recipes: {}, paths: [], prefixes: [], catchAll: false },
   },
 }
 

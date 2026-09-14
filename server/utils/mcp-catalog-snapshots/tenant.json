@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:fbf055e450dd9d5f9b2c5b5665e44fcfbc6be0bc4d13fae93aa848abf94911d1",
+  "fingerprint": "sha256:8344223d35751234dca990d8aa20d6ce7f69c461109e81c22f8bdf30c1dafe40",
   "tools": [
     {
       "name": "attach_media",
@@ -950,44 +950,6 @@
         "required": [
           "products"
         ],
-        "type": "object"
-      }
-    },
-    {
-      "name": "change_tenant_page_path",
-      "inputSchema": {
-        "additionalProperties": false,
-        "properties": {
-          "expected_updated_at": {
-            "type": "string"
-          },
-          "new_path": {
-            "type": "string"
-          },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context or list_sites, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
-            "type": "string"
-          },
-          "variant_id": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "variant_id",
-          "new_path",
-          "expected_updated_at"
-        ],
-        "type": "object"
-      },
-      "outputSchema": {
-        "properties": {
-          "page": {
-            "type": "object"
-          },
-          "replacement_confirmation": {
-            "type": "object"
-          }
-        },
         "type": "object"
       }
     },
@@ -3120,6 +3082,7 @@
             ]
           },
           "pageType": {
+            "description": "The page's type. Send the page_type from the last read unless you are changing it.",
             "enum": [
               "custom",
               "recipe",
@@ -3135,9 +3098,11 @@
             ]
           },
           "path": {
+            "description": "The page path to write. Send the current path unless you are moving the page; a different path moves it and creates the locale-scoped redirect.",
             "type": "string"
           },
           "recipe": {
+            "description": "The template section this page fills, or null for a page that fills none. Send the recipe from the last read unless you are changing it; an omitted recipe is not kept.",
             "type": [
               "string",
               "null"
@@ -3174,10 +3139,8 @@
             "type": "string"
           },
           "sortOrder": {
-            "type": [
-              "number",
-              "null"
-            ]
+            "description": "The page's position in the site's page list. Send the sort_order from the last read unless you are reordering.",
+            "type": "number"
           },
           "summary": {
             "type": [
@@ -3186,6 +3149,7 @@
             ]
           },
           "title": {
+            "description": "The page title to write. Always sent in full — an omitted title is not kept.",
             "type": "string"
           },
           "variant_id": {
@@ -17165,6 +17129,7 @@
             "type": "string"
           },
           "pageType": {
+            "description": "The page's type. Send the page_type from the last read unless you are changing it.",
             "enum": [
               "custom",
               "recipe",
@@ -17174,9 +17139,11 @@
             "type": "string"
           },
           "path": {
+            "description": "The page path to write. Send the current path unless you are moving the page; a different path moves it and creates the locale-scoped redirect.",
             "type": "string"
           },
           "recipe": {
+            "description": "The template section this page fills, or null for a page that fills none. Send the recipe from the last read unless you are changing it; an omitted recipe is not kept.",
             "type": [
               "string",
               "null"
@@ -17219,10 +17186,8 @@
             "type": "string"
           },
           "sortOrder": {
-            "type": [
-              "number",
-              "null"
-            ]
+            "description": "The page's position in the site's page list. Send the sort_order from the last read unless you are reordering.",
+            "type": "number"
           },
           "summary": {
             "type": [
@@ -17231,6 +17196,7 @@
             ]
           },
           "title": {
+            "description": "The page title to write. Always sent in full — an omitted title is not kept.",
             "type": "string"
           },
           "variant_id": {
@@ -17240,6 +17206,11 @@
         "required": [
           "variant_id",
           "expected_updated_at",
+          "path",
+          "title",
+          "pageType",
+          "recipe",
+          "sortOrder",
           "blocks"
         ],
         "type": "object"
