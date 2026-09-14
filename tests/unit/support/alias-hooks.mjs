@@ -22,7 +22,16 @@ function isFile(candidate) {
   }
 }
 
+// Build-only virtual modules the Nitro bundle provides; see the file itself for
+// why this resolves to something that throws rather than to an empty value.
+const BUILD_VIRTUAL_MODULES = {
+  '#claimed-public-routes': 'tests/unit/support/claimed-public-routes-unavailable.mjs',
+}
+
 function resolveAliasedPath(specifier) {
+  const virtualModule = BUILD_VIRTUAL_MODULES[specifier]
+  if (virtualModule) return path.join(rootDir, virtualModule)
+
   const isTilde = specifier === '~' || specifier.startsWith('~/')
   const isDoubleTilde = specifier === '~~' || specifier.startsWith('~~/')
   if (!isTilde && !isDoubleTilde) return null

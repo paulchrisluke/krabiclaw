@@ -32,18 +32,6 @@
         "destructive_justification": "Creates products from the supplied catalog entries and records product events. Existing content is not deleted or overwritten."
       }
     },
-    "change_tenant_page_path": {
-      "annotations": {
-        "readOnlyHint": false,
-        "openWorldHint": true,
-        "destructiveHint": true
-      },
-      "justifications": {
-        "read_only_justification": "Changes a tenant page URL and its routing records.",
-        "open_world_justification": "Changes a tenant page URL and its routing records. Its effects can change content or behavior on the public website.",
-        "destructive_justification": "Changes a tenant page URL and its routing records. Existing state is deleted, replaced or overwritten rather than only appended."
-      }
-    },
     "create_blog_post": {
       "annotations": {
         "readOnlyHint": false,

@@ -136,9 +136,16 @@ async function main() {
     fail('get_tenant_page did not return canonical blocks', contentBefore.body)
     process.exit(1)
   }
+  // update_tenant_page replaces the document, so state the path, title, position
+  // and identity that were just read rather than leaving them to be filled in.
   const save = await mcp(headers, 'update_tenant_page', {
     variant_id: homeVariant.id,
     expected_updated_at: pageBefore.document.updated_at,
+    path: pageBefore.path,
+    title: pageBefore.title,
+    sortOrder: pageBefore.sort_order,
+    pageType: pageBefore.page_type,
+    recipe: pageBefore.recipe,
     blocks: blocks.map(block => ({
       id: block.id,
       type: block.type,

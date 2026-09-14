@@ -64,7 +64,11 @@ export async function seedNewSite(
     ['home', { path: '/', title: 'Home', pageType: 'system', recipe: 'home' }],
     ['about', { path: '/about', title: 'About', pageType: 'system', recipe: 'about' }],
     ['contact', { path: '/contact', title: 'Contact', pageType: 'system', recipe: 'contact' }],
-    ['location', { path: '/locations/main', title: 'Location', pageType: 'system', recipe: 'locations' }],
+    // There is no '/locations/main' page. A location detail route renders the
+    // business_locations row and its datasets: usePublicPageRequest gives it the
+    // page key 'location', canonicalTenantPagePath() has no entry for that, and
+    // ROUTE_PAGE_PATHS has no 'locations' recipe. The page document this used to
+    // create was never read by anything.
   ]);
   if (vertical === 'service') {
     for (const [page, path, title, pageType] of [
