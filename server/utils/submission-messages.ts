@@ -95,11 +95,15 @@ export interface SendReplyEmailResult {
 // Sends an owner's typed reply to a customer, with reply-to set so the customer's own reply
 // lands back on the same thread. This is a one-off message, not a fixed notification template,
 // so it bypasses the `notifications` table logging sendEmailNotification does for system emails.
+//
+// The caller renders the message through server/emails: this used to take a raw
+// string and post it as the text body with no HTML at all, which is why every
+// guest-facing inbox email arrived unstyled (#969).
 export async function sendReplyEmail(env: ReplyEmailEnv, opts: {
   to: string
   fromName: string
   subject: string
-  body: string
+  email: { html: string; text: string }
   submissionType: SubmissionType
   submissionId: string
   idempotencyKey?: string
@@ -109,7 +113,8 @@ export async function sendReplyEmail(env: ReplyEmailEnv, opts: {
     to: opts.to,
     fromName: opts.fromName,
     subject: opts.subject,
-    text: opts.body,
+    html: opts.email.html,
+    text: opts.email.text,
     replyTo,
     idempotencyKey: opts.idempotencyKey,
   })

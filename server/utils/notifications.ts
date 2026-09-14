@@ -1,28 +1,39 @@
 import { formatCalendarDate, formatTime } from '~/utils/timezone'
 import { getGuestRequest } from '~/server/domain/requests'
-import { renderEmail } from '~/server/emails/vue-email'
 import { queryFirst, type DbClient } from '~/server/db'
 import { getEmailDeliveryMode, hashEmail, isReservedTestDomain, sendEmail } from '~/server/utils/email-delivery'
-import { getOrgWhatsAppPhone, sendWhatsAppNotification, toDashboardButtonPath, type WhatsAppTemplate } from '~/server/utils/whatsapp'
+import { buildWhatsAppTemplatePayload, getOrgWhatsAppPhone, sendWhatsAppNotification, type WhatsAppTemplate } from '~/server/utils/whatsapp'
 import { getWhatsAppDeliveryMode } from '~/server/utils/whatsapp-delivery'
 import { buildReplyToAddress } from '~/server/utils/submission-messages'
-import { isAuthorizedWhatsAppRecipient, getOrganizationOwnerEmail  } from '~/server/utils/member-access'
+import { resolveAuthorizedWhatsAppRecipient, getOrganizationOwnerRecipient } from '~/server/utils/member-access'
+import { wantsNotification } from '~/server/domain/notification-preferences'
+import { buildUnsubscribeUrls } from '~/server/utils/unsubscribe'
+import type { NotificationCategory } from '~/shared/notification-categories'
+import { renderNotificationEmail } from '~/server/emails/render'
+import { toWhatsAppVars } from '~/server/notifications/whatsapp-mapping'
+import { NOTIFICATION_CATALOG } from '~/server/notifications/catalog'
+import { locationHero, productHero, resolveHero } from '~/server/notifications/hero'
+import {
+  guestBookingCancelledMessage,
+  guestBookingReceivedMessage,
+  guestContactReceivedMessage,
+  guestReservationCancelledMessage,
+  guestReservationReceivedMessage,
+  organizationInviteMessage,
+  reviewRequestMessage,
+} from '~/server/notifications/guest-events'
+import type { NotificationMessage } from '~/server/notifications/messages'
+import {
+  bookingCancelledMessage,
+  bookingChangeMessage,
+  bookingCreatedMessage,
+  contactReceivedMessage,
+  guestReplyMessage,
+  reservationCancelledMessage,
+  reservationCreatedMessage,
+  reviewReceivedMessage,
+} from '~/server/notifications/events'
 import type { CloudflareEnv } from '~/server/utils/auth'
-import ReservationOwnerNew from '~/server/emails/templates/ReservationOwnerNew'
-import ReservationOwnerCancelled from '~/server/emails/templates/ReservationOwnerCancelled'
-import ReservationGuestReceived from '~/server/emails/templates/ReservationGuestReceived'
-import ReservationGuestCancelled from '~/server/emails/templates/ReservationGuestCancelled'
-import ContactOwnerNew from '~/server/emails/templates/ContactOwnerNew'
-import ContactGuestReceived from '~/server/emails/templates/ContactGuestReceived'
-import ReviewOwnerNew from '~/server/emails/templates/ReviewOwnerNew'
-import BookingOwnerNew from '~/server/emails/templates/BookingOwnerNew'
-import BookingGuestReceived from '~/server/emails/templates/BookingGuestReceived'
-import BookingOwnerCancelled from '~/server/emails/templates/BookingOwnerCancelled'
-import BookingGuestCancelled from '~/server/emails/templates/BookingGuestCancelled'
-import BookingChange from '~/server/emails/templates/BookingChange'
-import BookingThankYouReviewRequest from '~/server/emails/templates/BookingThankYouReviewRequest'
-import BookingReviewReminder from '~/server/emails/templates/BookingReviewReminder'
-import OrganizationInvite from '~/server/emails/templates/OrganizationInvite'
 import { createCanonicalNotification } from '~/server/utils/notification-center'
 import { buildOwnerThreadInboxUrl, getPlatformDomain, resolveSiteLocationSlugs } from '~/server/utils/dashboard-notification-links'
 import { claimDelivery, createDeliveryReceipt, getDeliveryClaimEligibility, recordDeliveryOutcome } from '~/server/domain/guest-threads/deliveries'
@@ -88,6 +99,8 @@ interface ContactNotificationInput extends SiteContext {
 }
 
 interface BookingNotificationInput extends SiteContext {
+  /** So the email can lead with the experience's own photo. */
+  productId?: string | null
   locationId?: string | null
   bookingId: string
   guestName: string
@@ -162,17 +175,6 @@ interface GuestThreadReplyNotificationInput extends SiteContext {
   messagePreview: string
 }
 
-export interface NotificationCopyPreview {
-  id: string
-  audience: 'owner' | 'guest'
-  channel: 'email' | 'whatsapp'
-  template: string
-  title: string
-  subject?: string
-  html?: string
-  text: string
-}
-
 function siteName(opts: SiteContext): string {
   const value = opts.siteName?.trim()
   if (!value) throw new Error('Tenant site name is required for notifications')
@@ -182,19 +184,8 @@ function siteName(opts: SiteContext): string {
 // The WhatsApp "Reply in dashboard" button URL is declared in the approved Meta
 // template as a fixed prefix + single {{1}} variable, so only the path/query
 // suffix after that prefix can be sent per-message.
-function inboxUrlToWhatsAppReplyPath(inboxUrl: string | null): string {
-  return toDashboardButtonPath(inboxUrl ?? undefined, '')
-}
 
-function buildReservationWhatsAppContext(locationName?: string | null): string {
-  return locationName?.trim() ? `Location: ${locationName.trim()}` : 'Location not provided'
-}
 
-function buildExperienceWhatsAppContext(experienceTitle: string, siteName?: string | null): string {
-  const business = siteName?.trim()
-  if (!business) throw new Error('Tenant site name is required for WhatsApp notifications')
-  return `Business: ${business} · Experience: ${experienceTitle}`
-}
 
 // Deep-links an owner notification straight to the dashboard inbox thread for that submission.
 async function buildOwnerInboxUrl(
@@ -242,30 +233,79 @@ async function buildOwnerReviewsUrl(
   return `${base}?${new URLSearchParams({ reply: opts.reviewId }).toString()}`
 }
 
-async function getOwnerNotificationChannels(
+export interface OwnerEmailRecipient {
+  to: string
+  userId: string
+  /** The footer link a person clicks. */
+  unsubscribeUrl: string | null
+  /** The RFC 8058 endpoint a mail client POSTs to. */
+  unsubscribeOneClickUrl: string | null
+}
+
+export interface OwnerPhoneRecipient {
+  phone: string
+  requireSiteWide: boolean
+}
+
+/**
+ * Who actually receives this alert, on which channel.
+ *
+ * Replaced the per-site `settings_json.$.config.owner_notification_channels`
+ * array. A notification is delivered to a person, so the choice belongs to the
+ * person — and the array's unset behaviour picked a channel from whichever data
+ * happened to exist (`hasWhatsAppPhone ? ['whatsapp'] : ['email']`), which meant
+ * configuring a business number silently switched a tenant's email off.
+ *
+ * Preference and authorization stay separate: `resolveAuthorizedWhatsAppRecipient`
+ * decides whether a number may receive anything at all, and only then is the
+ * account behind it asked whether it wants this category.
+ */
+async function resolveOwnerRecipients(
+  env: NotificationEnv,
   db: DbClient,
-  opts: SiteContext,
-  hasWhatsAppPhone: boolean
-): Promise<NotificationChannel[]> {
-  const row = await queryFirst<{ value?: string }>(db, `
-    SELECT json_extract(settings_json, '$.config.owner_notification_channels') AS value FROM sites WHERE organization_id = ? AND id = ?
-    LIMIT 1
-  `, [opts.organizationId, opts.siteId])
+  opts: {
+    organizationId: string
+    siteId: string
+    locationId?: string | null
+    category: NotificationCategory
+    candidatePhones: OwnerPhoneRecipient[]
+  },
+): Promise<{ email: OwnerEmailRecipient | null; phones: OwnerPhoneRecipient[] }> {
+  const owner = await getOrganizationOwnerRecipient(env, opts.organizationId)
 
-  if (!row?.value) return hasWhatsAppPhone ? ['whatsapp'] : ['email']
+  const unsubscribe = owner ? await buildUnsubscribeUrls(env, { userId: owner.userId, category: opts.category }) : null
+  const email = owner && await wantsNotification(db, owner.userId, opts.category, 'email')
+    ? {
+        to: owner.email,
+        userId: owner.userId,
+        unsubscribeUrl: unsubscribe?.pageUrl ?? null,
+        unsubscribeOneClickUrl: unsubscribe?.oneClickUrl ?? null,
+      }
+    : null
 
-  const parsedChannels: unknown = JSON.parse(row.value)
-  if (!Array.isArray(parsedChannels) || !parsedChannels.every(channel => typeof channel === 'string')) {
-    throw new Error('Stored owner notification channels are invalid')
+  const phones: OwnerPhoneRecipient[] = []
+  for (const target of opts.candidatePhones) {
+    const recipient = await resolveAuthorizedWhatsAppRecipient(db, {
+      env,
+      phone: target.phone,
+      organizationId: opts.organizationId,
+      siteId: opts.siteId,
+      locationId: opts.locationId ?? null,
+      requireSiteWide: target.requireSiteWide,
+    })
+    if (!recipient) {
+      console.error('whatsapp_delivery_blocked', {
+        organizationId: opts.organizationId,
+        siteId: opts.siteId,
+        locationId: opts.locationId ?? null,
+        reason: 'recipient_access_pending',
+      })
+      continue
+    }
+    if (await wantsNotification(db, recipient.userId, opts.category, 'whatsapp')) phones.push(target)
   }
-  const rawChannels = parsedChannels
 
-  const channels = rawChannels
-    .map(channel => channel.trim().toLowerCase())
-    .filter((channel): channel is NotificationChannel => channel === 'email' || channel === 'whatsapp')
-
-  const uniqueChannels = [...new Set(channels)]
-  return uniqueChannels
+  return { email, phones }
 }
 
 async function sendEmailNotification(
@@ -279,6 +319,8 @@ async function sendEmailNotification(
     title: string
     payload: Record<string, string>
     email: EmailTemplate
+    unsubscribeUrl?: string | null
+    unsubscribeOneClickUrl?: string | null
     delivery?: ThreadDeliveryContext | null
   }
 ): Promise<boolean> {
@@ -311,6 +353,7 @@ async function sendEmailNotification(
     subject: opts.email.subject,
     html: opts.email.html,
     text: opts.email.text,
+    unsubscribeOneClickUrl: opts.unsubscribeOneClickUrl ?? null,
     idempotencyKey: delivery?.id,
   })
   let requestWebhookRetry = false
@@ -465,11 +508,15 @@ async function notifyOwner(
     template: string
     title: string
     payload: Record<string, string>
-    email: EmailTemplate
-    whatsapp?: {
-      template: WhatsAppTemplate
-      vars: Record<string, string>
-    }
+    /**
+     * The event, described once. The email is rendered from it after the
+     * recipient is known — so the footer carries that person's own opt-out
+     * link — and the WhatsApp vars are selected from the same facts, so the
+     * two channels cannot describe the event differently.
+     */
+    message: NotificationMessage
+    /** The approved template the same facts are mapped onto. */
+    whatsappTemplate?: WhatsAppTemplate
     submissionType?: 'contact' | 'reservation' | 'booking' | 'invitation' | null
     submissionId?: string | null
     notificationSource?: { threadId: string; entryId: string }
@@ -480,7 +527,7 @@ async function notifyOwner(
     : opts.submissionType && opts.submissionType !== 'invitation' && opts.submissionId
       ? await getOpeningThreadContext(db, opts.submissionType, opts.submissionId)
       : null
-  const [, sitePhone, locationPhone, ownerEmail] = await Promise.all([
+  const [, sitePhone, locationPhone] = await Promise.all([
     createCanonicalNotification(db, {
       publishEnv: env,
       scope: 'site',
@@ -495,62 +542,67 @@ async function notifyOwner(
     }),
     getOrgWhatsAppPhone(db, opts.organizationId, opts.siteId),
     opts.locationId ? getLocationNotificationPhone(db, opts.locationId, opts.organizationId, opts.siteId) : null,
-    getOrganizationOwnerEmail(env, opts.organizationId),
   ])
 
   const configuredTargets = [
     locationPhone ? { phone: locationPhone, requireSiteWide: false } : null,
     sitePhone ? { phone: sitePhone, requireSiteWide: true } : null,
-  ].filter(Boolean) as Array<{ phone: string; requireSiteWide: boolean }>
-  const targetByPhone = new Map<string, { phone: string; requireSiteWide: boolean }>()
+  ].filter(Boolean) as OwnerPhoneRecipient[]
+  const targetByPhone = new Map<string, OwnerPhoneRecipient>()
   for (const target of configuredTargets) {
     const existing = targetByPhone.get(target.phone)
-    targetByPhone.set(target.phone, { phone: target.phone, requireSiteWide: Boolean(existing?.requireSiteWide || target.requireSiteWide) })
+    // A number that is both the location's and the site's is reachable at
+    // location scope, so the *least* restrictive of the two wins. Taking the
+    // most restrictive locked a location-scoped editor out of alerts for their
+    // own location whenever the site reused their number.
+    targetByPhone.set(target.phone, {
+      phone: target.phone,
+      requireSiteWide: existing ? existing.requireSiteWide && target.requireSiteWide : target.requireSiteWide,
+    })
   }
-  const phoneTargets = [...targetByPhone.values()]
-  const phones = [...new Set(phoneTargets.map(target => target.phone))]
+
   // Internal email alerts always go to the org owner/admin account.
   // Public contact emails are guest-facing data and must not double as notification routing.
-  const emails = [...new Set([ownerEmail].filter(Boolean))] as string[]
+  const recipients = await resolveOwnerRecipients(env, db, {
+    organizationId: opts.organizationId,
+    siteId: opts.siteId,
+    locationId: opts.locationId ?? null,
+    category: opts.message.category,
+    candidatePhones: [...targetByPhone.values()],
+  })
 
-  const channels = await getOwnerNotificationChannels(db, opts, phones.length > 0)
-
-  if (channels.includes('email') && emails.length > 0) {
-    await Promise.allSettled(emails.map(to =>
-      sendEmailNotification(env, db, {
-        ...opts,
-        to,
-        delivery: threadDelivery(threadContext, 'owner_alert', 'email', opts.template, to),
-      })
-    ))
+  if (recipients.email) {
+    const { to, unsubscribeUrl, unsubscribeOneClickUrl } = recipients.email
+    const rendered = await renderNotificationEmail(opts.message, {
+      platformDomain: getPlatformDomain(env),
+      preferencesUrl: `https://${getPlatformDomain(env)}/dashboard/account/profile/notifications`,
+      unsubscribeUrl,
+    })
+    await sendEmailNotification(env, db, {
+      ...opts,
+      to,
+      email: { subject: sanitizeEmailHeaderValue(opts.message.title), html: rendered.html, text: rendered.text },
+      unsubscribeOneClickUrl,
+      delivery: threadDelivery(threadContext, 'owner_alert', 'email', opts.template, to),
+    })
   }
 
-  if (channels.includes('whatsapp') && opts.whatsapp && phones.length > 0) {
-    await Promise.allSettled(phoneTargets.map(async target => {
-      const authorized = await isAuthorizedWhatsAppRecipient(db, {
-        env,
-        phone: target.phone,
-        organizationId: opts.organizationId,
-        siteId: opts.siteId,
-        locationId: opts.locationId ?? null,
-        requireSiteWide: target.requireSiteWide,
-      })
-      if (!authorized) {
-        console.error('whatsapp_delivery_blocked', {
-          organizationId: opts.organizationId,
-          siteId: opts.siteId,
-          locationId: opts.locationId ?? null,
-          reason: 'recipient_access_pending',
-        })
-        return
-      }
+  if (opts.whatsappTemplate && recipients.phones.length > 0) {
+    const { vars, omitted } = toWhatsAppVars(opts.message, opts.whatsappTemplate)
+    if (omitted.length) {
+      // Declared in WHATSAPP_MAPPINGS.cannotCarry and enforced by
+      // lint:notification-parity, so this is a record of a known template
+      // limit rather than a surprise.
+      console.info('whatsapp_facts_omitted', { template: opts.whatsappTemplate, omitted })
+    }
+    await Promise.allSettled(recipients.phones.map(async target => {
       const sendOptions = {
         organizationId: opts.organizationId,
         siteId: opts.siteId,
         locationId: opts.locationId ?? null,
         toPhone: target.phone,
-        template: opts.whatsapp!.template,
-        vars: opts.whatsapp!.vars,
+        template: opts.whatsappTemplate!,
+        vars,
       }
       const delivery = threadDelivery(threadContext, 'owner_alert', 'whatsapp', opts.template, target.phone)
       if (delivery) {
@@ -562,45 +614,10 @@ async function notifyOwner(
   }
 }
 
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;')
-}
-
 // Email subjects go into a header context, not HTML — strip CR/LF so a guest name can't
 // inject additional headers, independent of the HTML-body escaping used elsewhere.
 function sanitizeEmailHeaderValue(value: string): string {
   return value.replace(/[\r\n]+/g, ' ').trim()
-}
-
-function buildGuestReplyOwnerEmail(opts: {
-  guestName: string
-  inboundChannel: 'email' | 'whatsapp'
-  messagePreview: string
-  replyUrl: string | null
-}): EmailTemplate {
-  const sourceLabel = opts.inboundChannel === 'whatsapp' ? 'WhatsApp' : 'email'
-  const escapedGuestName = escapeHtml(opts.guestName)
-  const escapedPreview = escapeHtml(opts.messagePreview)
-  const replyLink = opts.replyUrl
-    ? `<p style="margin:16px 0 0;"><a href="${escapeHtml(opts.replyUrl)}" style="display:inline-block;padding:10px 16px;border-radius:8px;background:#fb7461;color:#1a0805;text-decoration:none;font-weight:600;">Open thread in dashboard</a></p>`
-    : ''
-
-  return {
-    subject: `New guest reply from ${sanitizeEmailHeaderValue(opts.guestName)}`,
-    html: `
-      <div style="font-family:Arial,sans-serif;line-height:1.5;color:#111827;">
-        <p style="margin:0 0 12px;">${escapedGuestName} sent a new reply by ${sourceLabel}.</p>
-        <blockquote style="margin:0;padding:12px 14px;border-left:4px solid #fb7461;background:#fff7f4;color:#374151;">${escapedPreview}</blockquote>
-        ${replyLink}
-      </div>
-    `,
-    text: `${opts.guestName} sent a new reply by ${sourceLabel}.\n\n${opts.messagePreview}\n\n${opts.replyUrl ?? ''}`.trim(),
-  }
 }
 
 export async function notifyReservationCreated(
@@ -640,10 +657,19 @@ export async function notifyReservationCreated(
     deep_link: inboxUrl ?? '',
   }
 
-  const [ownerEmail, guestEmail] = await Promise.all([
-    renderEmail(ReservationOwnerNew, { guestName: opts.guestName, siteName: restaurant, date: prettyDate, time: prettyTime, guests: opts.guests, phone: opts.phone, email: opts.email, locationName: opts.locationName, specialRequests: opts.requests, platformDomain, replyUrl: inboxUrl }),
-    renderEmail(ReservationGuestReceived, { guestName: opts.guestName, siteName: restaurant, date: prettyDate, time: prettyTime, guests: opts.guests, specialRequests: opts.requests, locationName: opts.locationName, contactPhone: opts.contactPhone, contactEmail: opts.contactEmail, cancelUrl: opts.cancelUrl, platformDomain }),
-  ])
+  const hero = await resolveHero(() => locationHero(db, opts.siteId, opts.locationId))
+  const ownerMessage = reservationCreatedMessage({
+    guestName: opts.guestName, guestEmail: opts.email, guestPhone: opts.phone ?? null,
+    date: prettyDate, time: prettyTime, partySize: opts.guests,
+    locationName: opts.locationName ?? null, siteName: restaurant,
+    notes: opts.requests ?? null, heroImageUrl: hero?.imageUrl ?? null, replyUrl: inboxUrl,
+  })
+  const guestEmail = await renderNotificationEmail(guestReservationReceivedMessage({
+    guestName: opts.guestName, siteName: restaurant, date: prettyDate, time: prettyTime,
+    partySize: opts.guests, notes: opts.requests, locationName: opts.locationName,
+    contactPhone: opts.contactPhone, contactEmail: opts.contactEmail, cancelUrl: opts.cancelUrl,
+    heroImageUrl: hero?.imageUrl ?? null,
+  }), { platformDomain })
 
   const results = await Promise.allSettled([
     notifyOwner(env, db, {
@@ -651,23 +677,10 @@ export async function notifyReservationCreated(
       submissionType: 'reservation',
       submissionId: opts.reservationId,
       template: 'new_reservation',
-      title: `New confirmed reservation from ${opts.guestName}`,
+      title: ownerMessage.title,
       payload,
-      email: { subject: `New confirmed reservation from ${opts.guestName}`, html: ownerEmail.html, text: ownerEmail.text },
-      whatsapp: {
-        template: 'new_reservation',
-        vars: {
-          guest_name: opts.guestName,
-          date: prettyDate,
-          time: prettyTime,
-          guests: opts.guests,
-          phone: opts.phone ?? '',
-          email: opts.email,
-          context: buildReservationWhatsAppContext(opts.locationName),
-          requests: opts.requests ?? '',
-          reply_path: inboxUrlToWhatsAppReplyPath(inboxUrl),
-        },
-      },
+      message: ownerMessage,
+      whatsappTemplate: 'new_reservation',
     }),
     sendEmailNotification(env, db, {
       ...opts,
@@ -709,7 +722,6 @@ export async function notifyReservationCancelled(
     tab: 'reservations',
     submissionId: opts.reservationId,
   })
-  const ownerCancelTitle = confirmed
     ? `Reservation cancelled for ${opts.guestName}`
     : `Reservation request cancelled by ${opts.guestName}`
   const guestCancelTitle = confirmed ? 'Your reservation was cancelled' : 'Your reservation request was cancelled'
@@ -728,10 +740,17 @@ export async function notifyReservationCancelled(
     deep_link: inboxUrl ?? '',
   }
 
-  const [ownerEmail, guestEmail] = await Promise.all([
-    renderEmail(ReservationOwnerCancelled, { guestName: opts.guestName, siteName: restaurant, date: prettyDate, time: prettyTime, guests: opts.guests, phone: opts.phone, email: opts.email, locationName: opts.locationName, specialRequests: opts.requests, wasConfirmed: confirmed, platformDomain, replyUrl: inboxUrl }),
-    renderEmail(ReservationGuestCancelled, { guestName: opts.guestName, siteName: restaurant, date: prettyDate, time: prettyTime, guests: opts.guests, locationName: opts.locationName, specialRequests: opts.requests, wasConfirmed: confirmed, platformDomain }),
-  ])
+  const ownerMessage = reservationCancelledMessage({
+    guestName: opts.guestName, guestEmail: opts.email, guestPhone: opts.phone ?? null,
+    date: prettyDate, time: prettyTime, partySize: opts.guests,
+    locationName: opts.locationName ?? null, siteName: restaurant,
+    notes: opts.requests ?? null, heroImageUrl: null, replyUrl: inboxUrl,
+    wasConfirmed: confirmed,
+  })
+  const guestEmail = await renderNotificationEmail(guestReservationCancelledMessage({
+    guestName: opts.guestName, siteName: restaurant, date: prettyDate, time: prettyTime,
+    partySize: opts.guests, notes: opts.requests, locationName: opts.locationName, wasConfirmed: confirmed,
+  }), { platformDomain })
   const threadContext = await recordGuestCancellation(db, {
     submissionType: 'reservation',
     submissionId: opts.reservationId,
@@ -748,22 +767,10 @@ export async function notifyReservationCancelled(
       submissionType: 'reservation',
       submissionId: opts.reservationId,
       template: 'reservation_cancelled',
-      title: ownerCancelTitle,
+      title: ownerMessage.title,
       payload,
-      email: { subject: ownerCancelTitle, html: ownerEmail.html, text: ownerEmail.text },
-      whatsapp: {
-        template: 'reservation_cancelled',
-        vars: {
-          guest_name: opts.guestName,
-          date: prettyDate,
-          time: prettyTime,
-          guests: opts.guests,
-          phone: opts.phone ?? '',
-          context: buildReservationWhatsAppContext(opts.locationName),
-          requests: opts.requests ?? '',
-          reply_path: inboxUrlToWhatsAppReplyPath(inboxUrl),
-        },
-      },
+      message: ownerMessage,
+      whatsappTemplate: 'reservation_cancelled',
     }),
     sendEmailNotification(env, db, {
       ...opts,
@@ -815,10 +822,18 @@ export async function notifyContactSubmitted(
     deep_link: inboxUrl ?? '',
   }
 
-  const [ownerEmail, guestEmail] = await Promise.all([
-    renderEmail(ContactOwnerNew, { guestName: opts.guestName, email: opts.email, subject: opts.subject, message: opts.message, siteName: restaurant, platformDomain, replyUrl: inboxUrl, productTitle: opts.productTitle, consentAcknowledged: opts.consentAcknowledged }),
-    renderEmail(ContactGuestReceived, { guestName: opts.guestName, siteName: restaurant, subject: opts.subject, message: opts.message, platformDomain, productTitle: opts.productTitle, consentAcknowledged: opts.consentAcknowledged }),
-  ])
+  const ownerMessage = contactReceivedMessage({
+    guestName: opts.guestName, guestEmail: opts.email,
+    subject: SUBJECT_LABELS[opts.subject ?? 'general'] ?? opts.subject ?? 'General',
+    message: opts.message, productTitle: opts.productTitle ?? null,
+    siteName: restaurant, consentAcknowledged: Boolean(opts.consentAcknowledged), replyUrl: inboxUrl,
+  })
+  const guestEmail = await renderNotificationEmail(guestContactReceivedMessage({
+    guestName: opts.guestName, siteName: restaurant,
+    subject: opts.subject ? (SUBJECT_LABELS[opts.subject] ?? opts.subject) : null,
+    productTitle: opts.productTitle ?? null, message: opts.message,
+    consentAcknowledged: Boolean(opts.consentAcknowledged),
+  }), { platformDomain })
 
   const results = await Promise.allSettled([
     notifyOwner(env, db, {
@@ -826,19 +841,10 @@ export async function notifyContactSubmitted(
       submissionType: 'contact',
       submissionId: opts.contactId,
       template: 'new_contact_msg',
-      title: `New website message from ${opts.guestName}`,
+      title: ownerMessage.title,
       payload,
-      email: { subject: `New website message from ${opts.guestName}`, html: ownerEmail.html, text: ownerEmail.text },
-      whatsapp: {
-        template: 'new_contact_msg',
-        vars: {
-          guest_name: opts.guestName,
-          email: opts.email,
-          subject: opts.subject ? SUBJECT_LABELS[opts.subject] ?? opts.subject : '',
-          message_preview: opts.consentAcknowledged ? `${opts.message}\n\nContact/privacy notice acknowledged.` : opts.message,
-          reply_path: inboxUrlToWhatsAppReplyPath(inboxUrl),
-        },
-      },
+      message: ownerMessage,
+      whatsappTemplate: 'new_contact_msg',
     }),
     sendEmailNotification(env, db, {
       ...opts,
@@ -870,7 +876,6 @@ export async function notifyReviewReceived(
   opts: ReviewNotificationInput
 ) {
   const restaurant = siteName(opts)
-  const platformDomain = getPlatformDomain(env)
   const reviewsUrl = await buildOwnerReviewsUrl(env, db, {
     organizationId: opts.organizationId,
     siteId: opts.siteId,
@@ -879,19 +884,18 @@ export async function notifyReviewReceived(
   })
 
   try {
-    const ownerEmail = await renderEmail(ReviewOwnerNew, {
+    const ownerMessage = reviewReceivedMessage({
       authorName: opts.authorName,
       rating: opts.rating,
       content: opts.content ?? '',
       siteName: restaurant,
-      platformDomain,
       reviewsUrl,
     })
 
     await notifyOwner(env, db, {
       ...opts,
       template: 'new_review',
-      title: `New ${opts.rating}-star review from ${opts.authorName}`,
+      title: ownerMessage.title,
       payload: {
         review_id: opts.reviewId,
         author_name: opts.authorName,
@@ -900,11 +904,8 @@ export async function notifyReviewReceived(
         site_name: restaurant,
         deep_link: reviewsUrl ?? '',
       },
-      email: { subject: `New review from ${opts.authorName}`, html: ownerEmail.html, text: ownerEmail.text },
-      whatsapp: {
-        template: 'new_review',
-        vars: { rating: String(opts.rating), site_name: restaurant, excerpt: opts.content ?? '', reviews_url: reviewsUrl ?? '' },
-      },
+      message: ownerMessage,
+      whatsappTemplate: 'new_review',
     })
   } catch (error) {
     console.error('notifyReviewReceived_failed', {
@@ -921,25 +922,21 @@ export async function notifyReviewRequest(
 ): Promise<boolean> {
   const restaurant = siteName(opts)
   const platformDomain = getPlatformDomain(env)
-  const templateComponent = opts.kind === 'reminder' ? BookingReviewReminder : BookingThankYouReviewRequest
   const templateName = opts.kind === 'reminder' ? 'booking_review_reminder' : 'booking_thank_you_review_request'
   const title = opts.kind === 'reminder'
     ? `Review reminder for ${opts.bookingPhrase}`
     : `Review request for ${opts.bookingPhrase}`
 
-  const email = await renderEmail(templateComponent, {
+  const email = await renderNotificationEmail(reviewRequestMessage({
     guestName: opts.guestName,
     siteName: restaurant,
     locationName: opts.locationName ?? null,
-    // Only the thank-you headline asks "How was <phrase>?"; the reminder
-    // headline names the business, so it does not take the phrase at all.
-    ...(opts.kind === 'reminder' ? {} : { bookingPhrase: opts.bookingPhrase }),
     visitAt: opts.visitAt,
     partySize: opts.partySize,
     reviewUrl: opts.reviewUrl,
     optOutUrl: opts.optOutUrl,
-    platformDomain,
-  })
+    reminder: opts.kind === 'reminder',
+  }), { platformDomain })
 
   return await sendEmailNotification(env, db, {
     ...opts,
@@ -1004,34 +1001,33 @@ export async function notifyBookingCreated(
     deep_link: inboxUrl ?? '',
   }
 
-  const [ownerEmail, guestEmail] = await Promise.all([
-    renderEmail(BookingOwnerNew, { guestName: opts.guestName, siteName: studio, productTitle: opts.productTitle, date: prettyDate, time: prettyTime, partySize: opts.partySize, email: opts.email, phone: opts.guestPhone ?? null, specialRequests: opts.notes, platformDomain, replyUrl: inboxUrl }),
-    renderEmail(BookingGuestReceived, { guestName: opts.guestName, siteName: studio, productTitle: opts.productTitle, date: prettyDate, time: prettyTime, partySize: opts.partySize, specialRequests: opts.notes, contactPhone: opts.contactPhone ?? null, contactEmail: opts.contactEmail ?? null, cancelUrl: opts.cancelUrl ?? null, platformDomain }),
-  ])
+  const hero = await resolveHero(() => productHero(db, opts.siteId, opts.productId))
+  const ownerMessage = bookingCreatedMessage({
+    guestName: opts.guestName, guestEmail: opts.email, guestPhone: opts.guestPhone ?? null,
+    date: prettyDate, time: prettyTime, partySize: String(opts.partySize),
+    locationName: null, siteName: studio, productTitle: opts.productTitle,
+    notes: opts.notes ?? null, heroImageUrl: hero?.imageUrl ?? null, replyUrl: inboxUrl,
+  })
+  const guestEmail = await renderNotificationEmail(guestBookingReceivedMessage({
+    guestName: opts.guestName, siteName: studio, productTitle: opts.productTitle,
+    date: prettyDate, time: prettyTime, partySize: String(opts.partySize), notes: opts.notes,
+    contactPhone: opts.contactPhone ?? null, contactEmail: opts.contactEmail ?? null, cancelUrl: opts.cancelUrl ?? null,
+    heroImageUrl: hero?.imageUrl ?? null,
+  }), { platformDomain })
 
   const results = await Promise.allSettled([
     notifyOwner(env, db, {
       ...opts,
       submissionType: 'booking',
       submissionId: opts.bookingId,
-      template: 'new_reservation',
-      title: `New booking request from ${opts.guestName}`,
+      // A booking is not a reservation. Recording both under 'new_reservation'
+      // meant the canonical record could not tell an experience booking from a
+      // restaurant table — the cancelled path already names itself correctly.
+      template: 'new_booking',
+      title: ownerMessage.title,
       payload,
-      email: { subject: `New booking request from ${opts.guestName}`, html: ownerEmail.html, text: ownerEmail.text },
-      whatsapp: {
-        template: 'new_reservation',
-        vars: {
-          guest_name: opts.guestName,
-          date: prettyDate,
-          time: prettyTime,
-          guests: String(opts.partySize),
-          phone: opts.guestPhone ?? '',
-          email: opts.email,
-          context: buildExperienceWhatsAppContext(opts.productTitle, opts.siteName),
-          requests: opts.notes ?? '',
-          reply_path: inboxUrlToWhatsAppReplyPath(inboxUrl),
-        },
-      },
+      message: ownerMessage,
+      whatsappTemplate: 'new_reservation',
     }),
     sendEmailNotification(env, db, {
       ...opts,
@@ -1073,7 +1069,6 @@ export async function notifyBookingCancelled(
     tab: 'bookings',
     submissionId: opts.bookingId,
   })
-  const ownerCancelTitle = confirmed
     ? `Booking cancelled for ${opts.guestName}`
     : `Booking request cancelled by ${opts.guestName}`
   const guestCancelTitle = confirmed ? 'Your booking was cancelled' : 'Your booking request was cancelled'
@@ -1091,10 +1086,17 @@ export async function notifyBookingCancelled(
     deep_link: inboxUrl ?? '',
   }
 
-  const [ownerEmail, guestEmail] = await Promise.all([
-    renderEmail(BookingOwnerCancelled, { guestName: opts.guestName, siteName: studio, productTitle: opts.productTitle, date: prettyDate, time: prettyTime, partySize: opts.partySize, email: opts.email, phone: opts.guestPhone, notes: opts.notes, wasConfirmed: confirmed, platformDomain, replyUrl: inboxUrl }),
-    renderEmail(BookingGuestCancelled, { guestName: opts.guestName, siteName: studio, productTitle: opts.productTitle, date: prettyDate, time: prettyTime, partySize: opts.partySize, notes: opts.notes, wasConfirmed: confirmed, platformDomain }),
-  ])
+  const ownerMessage = bookingCancelledMessage({
+    guestName: opts.guestName, guestEmail: opts.email, guestPhone: opts.guestPhone ?? null,
+    date: prettyDate, time: prettyTime, partySize: String(opts.partySize),
+    locationName: null, siteName: studio, productTitle: opts.productTitle,
+    notes: opts.notes ?? null, heroImageUrl: null, replyUrl: inboxUrl,
+    wasConfirmed: confirmed,
+  })
+  const guestEmail = await renderNotificationEmail(guestBookingCancelledMessage({
+    guestName: opts.guestName, siteName: studio, productTitle: opts.productTitle,
+    date: prettyDate, time: prettyTime, partySize: String(opts.partySize), notes: opts.notes, wasConfirmed: confirmed,
+  }), { platformDomain })
   const threadContext = await recordGuestCancellation(db, {
     submissionType: 'booking',
     submissionId: opts.bookingId,
@@ -1111,22 +1113,10 @@ export async function notifyBookingCancelled(
       submissionType: 'booking',
       submissionId: opts.bookingId,
       template: 'booking_cancelled',
-      title: ownerCancelTitle,
+      title: ownerMessage.title,
       payload,
-      email: { subject: ownerCancelTitle, html: ownerEmail.html, text: ownerEmail.text },
-      whatsapp: {
-        template: 'reservation_cancelled',
-        vars: {
-          guest_name: opts.guestName,
-          date: prettyDate,
-          time: prettyTime,
-          guests: String(opts.partySize),
-          phone: opts.guestPhone ?? '',
-          context: buildExperienceWhatsAppContext(opts.productTitle, opts.siteName),
-          requests: opts.notes ?? '',
-          reply_path: inboxUrlToWhatsAppReplyPath(inboxUrl),
-        },
-      },
+      message: ownerMessage,
+      whatsappTemplate: 'reservation_cancelled',
     }),
     sendEmailNotification(env, db, {
       ...opts,
@@ -1170,6 +1160,13 @@ export async function notifyBookingChangeOwner(
      * place that has to agree with the session's zone, and it would not.
      */
     whenLabel: string
+    /**
+     * The same occurrence split for the approved WhatsApp template's date and
+     * time slots, derived beside whenLabel from one formatter. Null on
+     * proposals recorded before those slots were filled correctly.
+     */
+    whenDate: string | null
+    whenTime: string | null
     guests: number
     locationTitle: string
   },
@@ -1183,15 +1180,19 @@ export async function notifyBookingChangeOwner(
     : opts.status === 'accepted'
       ? 'The guest accepted. The updated details are now confirmed.'
       : 'The guest declined. The original details remain unchanged.'
-  const body = `${message}\n\nRequested location: ${opts.locationTitle}\nWhen: ${opts.whenLabel}\nGuests: ${opts.guests}`
   const replyUrl = await buildOwnerThreadInboxUrl(env, db, opts)
-  const email = await renderEmail(BookingChange, {
-    title,
-    body,
+  const ownerMessage = bookingChangeMessage({
+    recordKind: noun,
+    guestName: opts.guestName,
+    status: opts.status,
+    location: opts.locationTitle,
+    date: opts.whenDate,
+    time: opts.whenTime,
+    whenLabel: opts.whenLabel,
+    partySize: String(opts.guests),
+    summary: message,
+    replyUrl,
     siteName: siteName(opts),
-    platformDomain: getPlatformDomain(env),
-    actionUrl: replyUrl ?? undefined,
-    actionLabel: 'View in dashboard',
   })
   await notifyOwner(env, db, {
     ...opts,
@@ -1205,20 +1206,8 @@ export async function notifyBookingChangeOwner(
       deep_link: replyUrl ?? '',
     },
     notificationSource: { threadId: opts.threadId, entryId: opts.sourceEntryId },
-    email: { subject: title, ...email },
-    whatsapp: {
-      template: 'booking_change_update',
-      vars: {
-        booking_type: noun,
-        guest_name: opts.guestName,
-        status: opts.status,
-        location: opts.locationTitle,
-        when: opts.whenLabel,
-        guests: String(opts.guests),
-        message,
-        reply_path: inboxUrlToWhatsAppReplyPath(replyUrl),
-      },
-    },
+    message: ownerMessage,
+    whatsappTemplate: 'booking_change_update',
   })
 }
 
@@ -1264,12 +1253,6 @@ async function notifyGuestThreadReplyInner(
   }
 
   const title = `New guest reply from ${opts.guestName}`
-  const email = buildGuestReplyOwnerEmail({
-    guestName: opts.guestName,
-    inboundChannel: opts.inboundChannel,
-    messagePreview: opts.messagePreview,
-    replyUrl,
-  })
 
   const template = opts.inboundChannel === 'email' ? 'submission_reply_email' : 'submission_reply_whatsapp'
   await createCanonicalNotification(db, {
@@ -1286,32 +1269,54 @@ async function notifyGuestThreadReplyInner(
 
   const sitePhone = await getOrgWhatsAppPhone(db, opts.organizationId, opts.siteId)
   const locationPhone = opts.locationId ? await getLocationNotificationPhone(db, opts.locationId, opts.organizationId, opts.siteId) : null
-  const ownerEmail = await getOrganizationOwnerEmail(env, opts.organizationId)
-  const phones = [...new Set([locationPhone, sitePhone].filter(Boolean))] as string[]
-  const emails = [...new Set([ownerEmail].filter(Boolean))] as string[]
-  const channels = await getOwnerNotificationChannels(db, {
+  const candidatePhones: OwnerPhoneRecipient[] = [
+    locationPhone ? { phone: locationPhone, requireSiteWide: false } : null,
+    sitePhone && sitePhone !== locationPhone ? { phone: sitePhone, requireSiteWide: true } : null,
+  ].filter(Boolean) as OwnerPhoneRecipient[]
+
+  const ownerMessage = guestReplyMessage({
+    guestName: opts.guestName,
+    guestEmail: opts.guestEmail ?? null,
+    inboundChannel: opts.inboundChannel,
+    messagePreview: opts.messagePreview,
+    siteName: opts.siteName ?? null,
+    replyUrl,
+  })
+
+  const recipients = await resolveOwnerRecipients(env, db, {
     organizationId: opts.organizationId,
     siteId: opts.siteId,
-    siteName: opts.siteName ?? null,
-  }, phones.length > 0)
+    locationId: opts.locationId ?? null,
+    category: ownerMessage.category,
+    candidatePhones,
+  })
 
-  const emailResults = channels.includes('email') && emails.length > 0
-    ? await Promise.allSettled(emails.map(to => sendEmailNotification(env, db, {
+  const emailResults = recipients.email
+    ? await Promise.allSettled([sendEmailNotification(env, db, {
       organizationId: opts.organizationId,
       siteId: opts.siteId,
       siteName: opts.siteName ?? null,
       locationId: opts.locationId ?? null,
-      to,
+      to: recipients.email.to,
       template: 'guest_thread_reply_email',
       title,
       payload,
-      email,
-      delivery: threadDelivery(threadContext, 'owner_alert', 'email', 'guest_thread_reply_email', to),
-    })))
+      email: {
+        subject: sanitizeEmailHeaderValue(ownerMessage.title),
+        ...(await renderNotificationEmail(ownerMessage, {
+          platformDomain: getPlatformDomain(env),
+          preferencesUrl: `https://${getPlatformDomain(env)}/dashboard/account/profile/notifications`,
+          unsubscribeUrl: recipients.email.unsubscribeUrl,
+        })),
+      },
+      unsubscribeUrl: recipients.email.unsubscribeUrl,
+      unsubscribeOneClickUrl: recipients.email.unsubscribeOneClickUrl,
+      delivery: threadDelivery(threadContext, 'owner_alert', 'email', 'guest_thread_reply_email', recipients.email.to),
+    })])
     : []
 
-  if (channels.includes('whatsapp') && phones.length > 0) {
-    await Promise.allSettled(phones.map(async (toPhone) => {
+  if (recipients.phones.length > 0) {
+    await Promise.allSettled(recipients.phones.map(async ({ phone: toPhone }) => {
       const delivery = threadDelivery(threadContext, 'owner_alert', 'whatsapp', 'guest_thread_reply_whatsapp', toPhone)
       if (!delivery) throw new Error('Guest reply delivery context is missing')
       await sendWhatsAppThreadNotification(env, db, {
@@ -1320,13 +1325,7 @@ async function notifyGuestThreadReplyInner(
         locationId: opts.locationId ?? null,
         toPhone,
         template: 'guest_thread_reply_whatsapp',
-        vars: {
-          guest_name: opts.guestName,
-          email: opts.guestEmail ?? 'No email provided',
-          subject: opts.inboundChannel === 'whatsapp' ? 'WhatsApp reply' : 'Email reply',
-          message_preview: opts.messagePreview,
-          reply_path: inboxUrlToWhatsAppReplyPath(replyUrl),
-        },
+        vars: toWhatsAppVars(ownerMessage, 'guest_thread_reply_whatsapp').vars,
         delivery,
       })
     }))
@@ -1359,13 +1358,12 @@ export async function notifyOrganizationInvited(
   const platformDomain = getPlatformDomain(env)
   const inviteUrl = `https://${platformDomain}/accept-invitation/${opts.invitationId}`
 
-  const rendered = await renderEmail(OrganizationInvite, {
+  const rendered = await renderNotificationEmail(organizationInviteMessage({
     organizationName: opts.organizationName,
     inviterName: opts.inviterName,
     role: opts.role,
     inviteUrl,
-    platformDomain,
-  })
+  }), { platformDomain })
 
   await sendEmailNotification(env, db, {
     organizationId: opts.organizationId,
@@ -1387,163 +1385,65 @@ export async function notifyOrganizationInvited(
   })
 }
 
-export async function getNotificationCopyPreviews(): Promise<NotificationCopyPreview[]> {
-  const restaurant = 'Ember & Slice'
-  const studio = 'Pottery House Krabi'
-  const platformDomain = 'krabiclaw.com'
+/**
+ * Every piece of outbound copy, for /dev/notifications.
+ *
+ * Email previews come from the single EMAIL_PREVIEWS registry, so a template
+ * cannot exist without appearing here — the previous hand-maintained list had
+ * silently drifted to covering 14 of 23 templates. WhatsApp copy stays inline
+ * because it is approved template text, not a component we render.
+ */
+export interface CatalogPreviewEntry {
+  id: string
+  title: string
+  audience: 'owner' | 'guest'
+  subject: string
+  html: string
+  text: string
+  /** What this event actually sends, for the row that previews it. */
+  channels: string[]
+  whatsapp: { template: string; text: string } | null
+}
 
-  const [
-    ownerReservation,
-    guestReservationReceived,
-    guestReservationCancelled,
-    ownerReservationCancelled,
-    ownerContact,
-    guestContact,
-    ownerBooking,
-    guestBooking,
-    organizationInvite,
-  ] = await Promise.all([
-    renderEmail(ReservationOwnerNew, { guestName: 'Alex Carter', siteName: restaurant, date: 'Tue, Jul 14, 2026', time: '7:00 PM', guests: '2', phone: '+1 555 123 4567', email: 'alex@example.com', platformDomain, replyUrl: 'https://demo.krabiclaw.com/dashboard/ember-slice/sites/ember-slice/locations/main/inbox/res-preview-1' }),
-    renderEmail(ReservationGuestReceived, { guestName: 'Alex Carter', siteName: restaurant, date: 'Tue, Jul 14, 2026', time: '7:00 PM', guests: '2', contactPhone: '+1 555 000 0000', contactEmail: 'hello@emberslice.example', cancelUrl: 'https://demo.krabiclaw.com/reservations/cancel?id=res-preview-1', platformDomain }),
-    renderEmail(ReservationGuestCancelled, { guestName: 'Alex Carter', siteName: restaurant, date: 'Tue, Jul 14, 2026', time: '7:00 PM', guests: '2', locationName: 'Main Dining Room', specialRequests: 'Window seat', wasConfirmed: false, platformDomain }),
-    renderEmail(ReservationOwnerCancelled, { guestName: 'Alex Carter', siteName: restaurant, date: 'Tue, Jul 14, 2026', time: '7:00 PM', guests: '2', phone: '+1 555 123 4567', email: 'alex@example.com', locationName: 'Main Dining Room', specialRequests: 'Window seat', wasConfirmed: false, platformDomain }),
-    renderEmail(ContactOwnerNew, { guestName: 'Jordan Lee', email: 'jordan@example.com', message: 'Hi, do you have vegan options and parking nearby?', siteName: restaurant, platformDomain, replyUrl: 'https://demo.krabiclaw.com/dashboard/ember-slice/sites/ember-slice/inbox/contact-preview-1', consentAcknowledged: true }),
-    renderEmail(ContactGuestReceived, { guestName: 'Jordan Lee', siteName: restaurant, subject: 'general', message: 'Hi, do you have vegan options and parking nearby?', platformDomain, consentAcknowledged: true }),
-    renderEmail(BookingOwnerNew, { guestName: 'Mina Park', siteName: studio, productTitle: 'Pottery Wheel Class', date: 'Mon, Jul 20, 2026', time: '10:00 AM', partySize: 2, email: 'mina@example.com', phone: '+66 76 000 0002', platformDomain, replyUrl: 'https://demo.krabiclaw.com/dashboard/pottery-house-krabi/sites/pottery-house/locations/main/inbox/booking-preview-1' }),
-    renderEmail(BookingGuestReceived, { guestName: 'Mina Park', siteName: studio, productTitle: 'Pottery Wheel Class', date: 'Mon, Jul 20, 2026', time: '10:00 AM', partySize: 2, contactPhone: '+66 76 000 0001', contactEmail: 'hello@example.com', cancelUrl: 'https://demo.krabiclaw.com/bookings/cancel?id=booking-preview-1', platformDomain }),
-    renderEmail(OrganizationInvite, { organizationName: studio, inviterName: 'Priya Shah', role: 'admin', inviteUrl: 'https://demo.krabiclaw.com/accept-invitation/invite-preview-1', platformDomain }),
-  ])
+/**
+ * The catalog, rendered, for /dev/notifications.
+ *
+ * One entry per event carrying both channels, because the question the page
+ * answers is whether they agree — and the WhatsApp side is the approved
+ * template's filled slots rather than prose written to stand in for them.
+ */
+export async function renderNotificationCatalog(): Promise<CatalogPreviewEntry[]> {
+  return Promise.all(NOTIFICATION_CATALOG.map(async (entry) => {
+    const rendered = await renderNotificationEmail(entry.message, {
+      platformDomain: 'krabiclaw.com',
+      preferencesUrl: 'https://krabiclaw.com/dashboard/account/profile/notifications',
+      unsubscribeUrl: entry.message.category === 'account_security'
+        ? null
+        : 'https://krabiclaw.com/unsubscribe?user=preview&category=preview&token=preview',
+    })
 
-  return [
-    {
-      id: 'owner-new-reservation-email',
-      audience: 'owner',
-      channel: 'email',
-      template: 'new_reservation',
-      title: 'Owner alert — new reservation',
-      subject: 'New confirmed reservation from Alex Carter',
-      html: ownerReservation.html,
-      text: ownerReservation.text,
-    },
-    {
-      id: 'guest-reservation-received-email',
-      audience: 'guest',
-      channel: 'email',
-      template: 'reservation_customer_received',
-      title: 'Guest confirmation — reservation confirmed',
-      subject: 'Your reservation is confirmed',
-      html: guestReservationReceived.html,
-      text: guestReservationReceived.text,
-    },
-    {
-      id: 'guest-reservation-cancelled-email',
-      audience: 'guest',
-      channel: 'email',
-      template: 'reservation_customer_cancelled',
-      title: 'Guest confirmation — reservation request cancelled',
-      subject: 'Your reservation request was cancelled',
-      html: guestReservationCancelled.html,
-      text: guestReservationCancelled.text,
-    },
-    {
-      id: 'owner-reservation-cancelled-email',
-      audience: 'owner',
-      channel: 'email',
-      template: 'reservation_cancelled',
-      title: 'Owner alert — reservation cancelled',
-      subject: 'Reservation request cancelled by Alex Carter',
-      html: ownerReservationCancelled.html,
-      text: ownerReservationCancelled.text,
-    },
-    {
-      id: 'owner-new-contact-email',
-      audience: 'owner',
-      channel: 'email',
-      template: 'new_contact_msg',
-      title: 'Owner alert — new contact message',
-      subject: 'New website message from Jordan Lee',
-      html: ownerContact.html,
-      text: ownerContact.text,
-    },
-    {
-      id: 'guest-contact-received-email',
-      audience: 'guest',
-      channel: 'email',
-      template: 'contact_customer_received',
-      title: 'Guest confirmation — message sent',
-      subject: 'Your message was sent',
-      html: guestContact.html,
-      text: guestContact.text,
-    },
-    {
-      id: 'owner-new-experience-booking-email',
-      audience: 'owner',
-      channel: 'email',
-      template: 'new_reservation',
-      title: 'Owner alert — new experience booking',
-      subject: 'New booking request from Mina Park',
-      html: ownerBooking.html,
-      text: ownerBooking.text,
-    },
-    {
-      id: 'guest-experience-booking-received-email',
-      audience: 'guest',
-      channel: 'email',
-      template: 'booking_customer_received',
-      title: 'Guest confirmation — experience booking request sent',
-      subject: 'Your booking request was sent — Pottery Wheel Class',
-      html: guestBooking.html,
-      text: guestBooking.text,
-    },
-    {
-      id: 'owner-new-contact-whatsapp',
-      audience: 'owner',
-      channel: 'whatsapp',
-      template: 'new_contact_msg',
-      title: 'Owner WhatsApp — new contact message',
-      text: 'New website message from Jordan Lee: "Hi, do you have vegan options and parking nearby?" Reply: jordan@example.com',
-    },
-    {
-      id: 'owner-new-reservation-whatsapp',
-      audience: 'owner',
-      channel: 'whatsapp',
-      template: 'new_reservation',
-      title: 'Owner WhatsApp — new reservation',
-      text: 'New confirmed reservation: Alex Carter, Tue, Jul 14, 2026 at 7:00 PM, 2 guests. Phone: +1 555 123 4567. Email: alex@example.com. Location: Main Dining Room. Special requests: Window seat.',
-    },
-    {
-      id: 'owner-reservation-cancelled-whatsapp',
-      audience: 'owner',
-      channel: 'whatsapp',
-      template: 'reservation_cancelled',
-      title: 'Owner WhatsApp — reservation cancelled',
-      text: 'Reservation cancelled: Alex Carter, Tue, Jul 14, 2026 at 7:00 PM, 2 guests. Phone: +1 555 123 4567. Location: Main Dining Room.',
-    },
-    {
-      id: 'owner-new-experience-booking-whatsapp',
-      audience: 'owner',
-      channel: 'whatsapp',
-      template: 'new_reservation',
-      title: 'Owner WhatsApp — new experience booking',
-      text: 'New booking request: Mina Park, Mon, Jul 20, 2026 at 10:00 AM, 2 guests. Phone: +66 76 000 0002. Email: mina@example.com. Business: Pottery House Krabi · Experience: Pottery Wheel Class. Special requests: None.',
-    },
-    {
-      id: 'owner-experience-booking-cancelled-whatsapp',
-      audience: 'owner',
-      channel: 'whatsapp',
-      template: 'reservation_cancelled',
-      title: 'Owner WhatsApp — experience booking cancelled',
-      text: 'Booking cancelled: Mina Park, Mon, Jul 20, 2026 at 10:00 AM, 2 guests. Phone: +66 76 000 0002. Business: Pottery House Krabi · Experience: Pottery Wheel Class.',
-    },
-    {
-      id: 'organization-invite-email',
-      audience: 'guest',
-      channel: 'email',
-      template: 'organization_invited',
-      title: 'Invitee — organization invitation',
-      subject: `You're invited to join ${studio} on KrabiClaw`,
-      html: organizationInvite.html,
-      text: organizationInvite.text,
-    },
-  ]
+    let whatsapp: CatalogPreviewEntry['whatsapp'] = null
+    if (entry.whatsappTemplate) {
+      const { vars } = toWhatsAppVars(entry.message, entry.whatsappTemplate)
+      const payload = buildWhatsAppTemplatePayload(entry.whatsappTemplate, vars)
+      whatsapp = {
+        template: entry.whatsappTemplate,
+        text: payload.components
+          .flatMap(component => component.parameters.map(parameter => parameter.text))
+          .filter(Boolean)
+          .join('\n'),
+      }
+    }
+
+    return {
+      id: entry.id,
+      title: entry.title,
+      audience: entry.audience,
+      subject: entry.message.title,
+      html: rendered.html,
+      text: rendered.text,
+      channels: whatsapp ? ['Email', 'WhatsApp'] : ['Email'],
+      whatsapp,
+    }
+  }))
 }
