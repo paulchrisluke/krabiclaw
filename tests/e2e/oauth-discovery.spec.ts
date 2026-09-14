@@ -2,7 +2,6 @@ import { expect, test } from '@playwright/test'
 import { createHash } from 'node:crypto'
 import { decodeProtectedHeader, importJWK, SignJWT } from 'jose'
 import { loginAs } from './helpers/auth'
-import { mcpJson } from './helpers/mcp'
 
 const PRIVATE_CLIENT_TEST_KEY_ID = 'krabiclaw-cimd-e2e-rs256'
 const PRIVATE_CLIENT_TEST_JWK = {
@@ -78,7 +77,7 @@ test.describe('OAuth discovery endpoints', () => {
       },
     })
     expect(workspace.status()).toBe(200)
-    const result = await mcpJson<{ result: { isError: boolean; structuredContent: { sites: Array<{ id: string }> } } }>(workspace)
+    const result = await workspace.json() as { result: { isError: boolean; structuredContent: { sites: Array<{ id: string }> } } }
     expect(result.result.isError).toBe(false)
     expect(result.result.structuredContent.sites.some(site => site.id === 'site-kikuzuki')).toBe(true)
   })
@@ -214,7 +213,7 @@ test.describe('OAuth discovery endpoints', () => {
       },
     })
     expect(initialized.status(), await initialized.text()).toBe(200)
-    expect(await mcpJson(initialized)).toMatchObject({ result: { protocolVersion: '2025-06-18' } })
+    expect(await initialized.json()).toMatchObject({ result: { protocolVersion: '2025-06-18' } })
 
     const tools = await request.post(`${baseURL}/api/mcp`, {
       headers: {
@@ -225,7 +224,7 @@ test.describe('OAuth discovery endpoints', () => {
       data: { jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} },
     })
     expect(tools.status(), await tools.text()).toBe(200)
-    const toolsBody = await mcpJson<{ result: { tools: Array<{ name: string }> } }>(tools)
+    const toolsBody = await tools.json()
     expect(toolsBody.error).toBeUndefined()
     expect(toolsBody.result.tools.length).toBeGreaterThan(0)
 
@@ -391,15 +390,8 @@ test.describe('OAuth discovery endpoints', () => {
       },
     })
     expect(discovered.status()).toBe(400)
-    // @modelcontextprotocol/server classifies this as a modern (2026-07-28)
-    // exchange from the MCP-Protocol-Version header, then rejects it for a
-    // more precise reason than the old hand-rolled "unsupported version"
-    // check: the envelope is missing the modern protocol's required
-    // clientCapabilities field. Either way the legacy client sees a 400 and
-    // retries with a legacy initialize below, which is the actual contract
-    // under test.
-    expect(await mcpJson(discovered)).toMatchObject({
-      id: 'openai-mcp-discover', error: { code: -32602, data: { envelope: { key: 'io.modelcontextprotocol/clientCapabilities', problem: 'missing' } } },
+    expect(await discovered.json()).toMatchObject({
+      id: 'openai-mcp-discover', error: { code: -32600, data: { requested: '2026-07-28' } },
     })
     const initialized = await request.post(`${baseURL}/api/mcp`, {
       headers: mcpHeaders,
@@ -411,13 +403,13 @@ test.describe('OAuth discovery endpoints', () => {
       },
     })
     expect(initialized.status()).toBe(200)
-    expect(await mcpJson(initialized)).toMatchObject({ result: { protocolVersion: '2025-11-25' } })
+    expect(await initialized.json()).toMatchObject({ result: { protocolVersion: '2025-11-25' } })
     const tools = await request.post(`${baseURL}/api/mcp`, {
       headers: { ...mcpHeaders, 'MCP-Protocol-Version': '2025-11-25' },
       data: { jsonrpc: '2.0', id: 'legacy-tools', method: 'tools/list', params: {} },
     })
     expect(tools.status()).toBe(200)
-    expect((await mcpJson<{ result: { tools: unknown[] } }>(tools)).result.tools.length).toBeGreaterThan(0)
+    expect((await tools.json()).result.tools.length).toBeGreaterThan(0)
 
     const secondAuthorize = await request.get(oauthAuthorizeUrl(baseURL!, {
       ...authorizeParams,

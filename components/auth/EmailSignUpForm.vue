@@ -28,7 +28,7 @@ async function submit() {
   emailError.value = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail) ? '' : 'Please enter a valid email address.'
   passwordError.value = validatePassword(password.value)
   if (emailError.value || passwordError.value) return
-  const result = await run(() => authClient.signUp.email({ email: normalizedEmail, password: password.value, name: normalizedEmail.split('@')[0] || 'User', callbackURL: props.callbackUrl }), 'Sign up failed. Please try again.') as { error?: { message?: string } & Record<string, unknown> } | null
+  const result = await run(() => authClient.signUp.email({ email: normalizedEmail, password: password.value, name: normalizedEmail.split('@')[0] || 'User', callbackURL: props.callbackUrl }), 'Sign up failed. Please try again.')
   if (result?.error) error.value = result.error.message || 'Sign up failed. Please try again.'
   else if (result) emit('success', normalizedEmail)
 }
