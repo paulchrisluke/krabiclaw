@@ -136,6 +136,17 @@
           >
             {{ item.label }}
           </NuxtLink>
+          <!-- At 620px and below the header bar gives up its `Sign in` text
+               link, so the collapsed navigation carries the only remaining
+               route to it. -->
+          <NuxtLink
+            v-if="!user"
+            to="/login"
+            class="rounded-lg px-3 py-2.75 text-[15px] font-medium text-muted no-underline transition-colors hover:bg-muted hover:text-default nav:hidden"
+            @click="close"
+          >
+            Sign in
+          </NuxtLink>
         </div>
       </nav>
     </div>
@@ -177,6 +188,8 @@ const MORE_ITEMS = [
 ] as const
 
 const route = useRoute()
+// The same hydrated Better Auth session PlatformAccountCta reads; no extra request.
+const { user } = await useAuthSession()
 const mobileOpen = ref(false)
 const toggleButton = ref<HTMLButtonElement | null>(null)
 const { acquire: acquireScrollLock, release: releaseScrollLock } = useScrollLock()
