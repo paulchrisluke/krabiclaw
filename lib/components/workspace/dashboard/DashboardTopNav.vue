@@ -48,6 +48,7 @@
           color="neutral"
           variant="soft"
           square
+          :ui="{ rounded: 'rounded-full' }"
           @click="action.onSelect()"
         />
       </ClientOnly>
@@ -57,6 +58,7 @@
         color="neutral"
         variant="soft"
         square
+        :ui="{ rounded: 'rounded-full' }"
         icon="i-lucide-menu"
         aria-label="Open menu"
         data-testid="dashboard-top-nav-menu-button"

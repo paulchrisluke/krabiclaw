@@ -27,6 +27,7 @@
               :color="hasActiveFilters ? 'primary' : 'neutral'"
               :variant="hasActiveFilters ? 'solid' : 'soft'"
               square
+              :ui="{ rounded: 'rounded-full' }"
               aria-label="Filter bookings"
             />
 
