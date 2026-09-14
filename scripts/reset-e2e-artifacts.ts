@@ -9,11 +9,6 @@ import { spawnYarn } from './utils/spawn-yarn.mjs'
 const FIXTURE_ORG_IDS = [
   'platform',
   'org-demo',
-  'org-mcp-free',
-  'org-mcp-growth',
-  'org-mcp-growth-service',
-  'org-pottery-house',
-  'org-kikuzuki',
   'org-ncls-blawby',
 ]
 

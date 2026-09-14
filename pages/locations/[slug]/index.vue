@@ -179,7 +179,7 @@
       />
 
       <!-- Reviews preview -->
-      <section v-if="reviewsPreview.length" class="bg-elevated">
+      <section v-if="reviewsPreview.length">
         <div class="mx-auto max-w-7xl px-4 py-24 sm:px-6 lg:px-8">
           <div class="mb-16 max-w-2xl">
             <p class="saya-kicker mb-6">{{ t('saya.reviews.subtitle') }}</p>
@@ -189,12 +189,11 @@
               <span v-if="location.review_count" class="text-muted">· {{ t('saya.reviews_page.based_on', { count: location.review_count }) }}</span>
             </h2>
           </div>
-          <p v-if="reviewsPreview.some((review: ApiRecord) => review.source === 'google_places')" class="mb-4 text-xs text-muted">{{ t('saya.reviews.google_order_notice') }}</p>
           <div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             <SayaReviewCard
               v-for="review in reviewsPreview"
               :key="review.id"
-              variant="compact"
+             
               :review="review"
             />
           </div>

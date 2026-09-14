@@ -174,25 +174,20 @@ function normalizeDetail(place: RawPlace): PlaceDetails {
 }
 
 /**
- * A Google review row belongs to the place's canonical id: Google names reviews
- * `places/<canonical id>/reviews/<id>`. Rows named under another place id (two
- * place records Google merged) or under an id an import minted itself are the
- * same reviews again; Beachfront Pottery Krabi showed each review three times
- * (2026-09-13) for both reasons. Reviews Google no longer returns in its
- * relevance-ranked five stay: they are still that place's reviews, and the
- * owner's moderation of them stays with them.
+ * A location's Google reviews are exactly what Google returned this sync.
+ * Rows from an earlier sync that Google no longer returns go, and so do rows
+ * imported under a merged or legacy place id (Beachfront Pottery Krabi showed
+ * each review three times, 2026-09-13, for that reason).
  */
-export function staleGoogleReviewDeletes(scope: { organizationId: string; siteId: string; locationId: string }, canonicalPlaceId: string) {
-  if (!canonicalPlaceId) return []
-  const prefix = `places/${canonicalPlaceId}/`
+export function staleGoogleReviewDeletes(scope: { organizationId: string; siteId: string; locationId: string }, reviews: PlaceReview[]) {
   return [{
     query: `
       DELETE FROM reviews
       WHERE organization_id = ? AND site_id = ? AND location_id = ?
         AND source = 'google_places'
-        AND substr(google_review_id, 1, length(?)) <> ?
+        AND (google_review_id IS NULL OR google_review_id NOT IN (SELECT value FROM json_each(?)))
     `,
-    params: [scope.organizationId, scope.siteId, scope.locationId, prefix, prefix],
+    params: [scope.organizationId, scope.siteId, scope.locationId, JSON.stringify(reviews.map(review => review.google_review_id))],
   }]
 }
 
@@ -260,7 +255,7 @@ export async function syncPlaceToLocation(
     locationId,
     organizationId,
     siteId
-  ] }, ...staleGoogleReviewDeletes({ organizationId, siteId, locationId }, place.placeId),
+  ] }, ...staleGoogleReviewDeletes({ organizationId, siteId, locationId }, place.reviews),
   ...googleReviewUpserts({ organizationId, siteId, locationId }, place.reviews, now)])
   const reviewsUpserted = results.slice(results.length - place.reviews.length).reduce((count, result) => count + Number(result.meta?.changes ?? 0), 0)
 

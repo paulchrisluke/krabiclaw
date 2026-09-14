@@ -350,9 +350,8 @@
             <SayaIcon name="star" solid class="size-4 text-default" />{{ averageRating }} · {{ reviewCountLabel }}
           </span>
         </div>
-        <p v-if="reviews.some(review => review.source === 'google_places')" class="mt-4 text-xs text-muted">{{ t('saya.reviews.google_order_notice') }}</p>
         <div class="mt-6 grid gap-6 sm:grid-cols-2">
-          <SayaReviewCard v-for="review in reviews" :key="review.id" variant="compact" :review="review" />
+          <SayaReviewCard v-for="review in reviews" :key="review.id" :review="review" />
         </div>
       </section>
     </article>

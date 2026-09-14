@@ -47,7 +47,7 @@
               />
             </div>
             <p class="mt-4 text-sm text-default">{{ t('saya.reviews_page.based_on', { count: aggregate?.review_count?.toLocaleString() ?? 0 }) }}</p>
-            <p class="mt-1 text-xs tracking-wide text-muted">{{ t('saya.reviews_page.synced_live') }}</p>
+            <a v-if="location.maps_url" :href="location.maps_url" target="_blank" rel="noopener noreferrer" class="mt-1 block text-xs tracking-wide text-muted no-underline hover:underline">{{ t('saya.reviews_page.synced_live') }}</a>
           </div>
 
           <!-- Star distribution -->
@@ -115,35 +115,7 @@
         </div>
 
         <div v-else class="flex flex-col gap-8">
-          <p v-if="activeFilter === 'recent' && filtered.some(review => review.source === 'google_places')" class="text-xs text-muted">{{ t('saya.reviews.google_order_notice') }}</p>
-          <SayaReviewCard
-            v-for="review in filtered"
-            :key="review.id"
-            variant="full"
-            :review="review"
-          >
-            <NuxtLink :to="localePath(`/locations/${slug}/reviews/${review.id}`)" class="mt-4 inline-flex text-sm font-medium text-primary no-underline hover:underline">
-              {{ t('saya.reviews_page.read_review') }}
-            </NuxtLink>
-
-            <!-- Photos -->
-            <div v-if="reviewMedia(review, 'media').length" class="mt-5 flex flex-wrap gap-2">
-              <div
-                v-for="(asset, i) in reviewMedia(review, 'media')"
-                :key="i"
-                class="size-28 overflow-hidden rounded-xl bg-muted"
-              >
-                <img
-                  v-if="!failedPhotoIndices[`${review.id}-${i}`]"
-                  :src="asset.kind === 'video' ? asset.thumbnail_url : asset.public_url"
-                  alt=""
-                  class="h-full w-full object-cover"
-                  @error="handleReviewImageError(review.id, i)"
-                >
-              </div>
-            </div>
-
-          </SayaReviewCard>
+          <SayaReviewCard v-for="review in filtered" :key="review.id" :review="review" />
         </div>
       </section>
     </template>
@@ -204,11 +176,7 @@ function distCount(star: number) {
   return aggregate.value?.distribution?.find((d: ApiValue) => d.star === star)?.count ?? 0
 }
 
-const failedPhotoIndices = ref<Record<string, boolean>>({})
 
-function handleReviewImageError(reviewId: string | number, index: string | number) {
-  failedPhotoIndices.value[`${String(reviewId)}-${String(index)}`] = true
-}
 
 
 

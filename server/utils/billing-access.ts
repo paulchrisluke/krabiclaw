@@ -20,7 +20,6 @@ export const FREE_PLAN = 'free'
 export const SUBSCRIPTION_STATE_INVALID = 'SUBSCRIPTION_STATE_INVALID'
 
 const ORGANIZATION_CHUNK = 50
-const SUBSCRIPTION_PAGE = 200
 
 export function isSubscriptionStateInvalid(error: unknown): boolean {
   return error instanceof HTTPError && error.data?.code === SUBSCRIPTION_STATE_INVALID
@@ -32,21 +31,6 @@ function subscriptionStateInvalid(organizationId: string, detail: string): never
     statusMessage: `Organization ${organizationId} ${detail}`,
     data: { code: SUBSCRIPTION_STATE_INVALID, organization_id: organizationId },
   })
-}
-
-async function listSubscriptions(adapter: Awaited<ReturnType<typeof createAuth>['$context']>['adapter'], chunk: string[]): Promise<Subscription[]> {
-  const rows: Subscription[] = []
-  for (let offset = 0; ; offset += SUBSCRIPTION_PAGE) {
-    const page = await adapter.findMany<Subscription>({
-      model: 'subscription',
-      where: [{ field: 'referenceId', operator: 'in', value: chunk }],
-      limit: SUBSCRIPTION_PAGE,
-      offset,
-      sortBy: { field: 'id', direction: 'asc' },
-    })
-    rows.push(...page)
-    if (page.length < SUBSCRIPTION_PAGE) return rows
-  }
 }
 
 export async function getOrganizationPlans(
@@ -61,7 +45,7 @@ export async function getOrganizationPlans(
   const adapter = (await createAuth(env).$context).adapter
   for (let offset = 0; offset < uniqueIds.length; offset += ORGANIZATION_CHUNK) {
     const chunk = uniqueIds.slice(offset, offset + ORGANIZATION_CHUNK)
-    const rows = await listSubscriptions(adapter, chunk)
+    const rows = await adapter.findMany<Subscription>({ model: 'subscription', where: [{ field: 'referenceId', operator: 'in', value: chunk }] })
     const current = new Set<string>()
     for (const row of rows) {
       if (!plans.has(row.referenceId)) continue

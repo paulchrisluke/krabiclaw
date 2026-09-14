@@ -36,8 +36,20 @@
       </div>
     </header>
 
-    <!-- Reviews grid -->
-    <LazySayaReviews :reviews="visibleReviews" :rating-summary="googleReviewSummary" :show-title="false" />
+    <section class="mx-auto max-w-7xl px-4 pb-16 sm:px-6 lg:px-8">
+      <div v-if="visibleReviews.length" class="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+        <SayaReviewCard
+          v-for="review in visibleReviews"
+          :key="review.id"
+          :review="review"
+          :location-title="locations.length > 1 ? review.location_title : null"
+        />
+      </div>
+      <div v-else class="rounded-2xl border border-dashed border-default py-20 text-center">
+        <h2 class="saya-display saya-italic text-3xl text-default">{{ t('saya.reviews.empty_title') }}</h2>
+        <p class="mt-2 text-sm text-muted">{{ t('saya.reviews.empty_desc') }}</p>
+      </div>
+    </section>
 
     <!-- Load more -->
     <div v-if="hasMore" class="mx-auto max-w-7xl px-4 pb-20 sm:px-6 lg:px-8 text-center">

@@ -176,7 +176,7 @@
             :key="review.id"
             :review="review"
             :location-title="locations.length > 1 ? review.location_title : null"
-            variant="compact"
+           
           />
         </div>
       </section>
