@@ -123,7 +123,7 @@ export function guestReservationCancelledMessage(input: GuestBookingInput & { wa
   }
 }
 
-export function guestBookingReceivedMessage(input: GuestBookingInput): NotificationMessage {
+export function guestBookingReceivedMessage(input: GuestBookingInput & { productTitle: string }): NotificationMessage {
   return {
     title: `Your booking request was sent`,
     preheader: `${input.productTitle} · ${input.date} at ${input.time}`,
@@ -138,7 +138,7 @@ export function guestBookingReceivedMessage(input: GuestBookingInput): Notificat
   }
 }
 
-export function guestBookingCancelledMessage(input: GuestBookingInput & { wasConfirmed: boolean }): NotificationMessage {
+export function guestBookingCancelledMessage(input: GuestBookingInput & { productTitle: string; wasConfirmed: boolean }): NotificationMessage {
   return {
     title: input.wasConfirmed ? 'Your booking was cancelled' : 'Your booking request was cancelled',
     preheader: `${input.productTitle} · ${input.date} at ${input.time}`,

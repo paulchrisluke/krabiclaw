@@ -243,8 +243,12 @@ export function bookingChangeMessage(input: BookingChangeEventInput): Notificati
       fact('guestName', 'Guest', input.guestName, true),
       fact('status', 'Decision', input.status, true),
       fact('location', 'Location', input.location),
+      // The approved template has a date slot and a time slot. A proposal
+      // recorded before those were stored separately has only the combined
+      // label, so it fills the date slot and the time slot says to look it up
+      // rather than falling back to the template's own placeholder.
       fact('date', 'Date', input.date ?? input.whenLabel, true),
-      fact('time', 'Time', input.time ?? ''),
+      fact('time', 'Time', input.time ?? 'See dashboard', true),
       fact('partySize', 'Party size', input.partySize, true),
       fact('summary', 'Summary', input.summary),
     ),

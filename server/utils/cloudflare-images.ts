@@ -108,14 +108,34 @@ export async function deleteImage(env: CloudflareImagesEnv, imageId: string): Pr
 
 /** Build a Cloudflare Images delivery URL for a given variant. */
 /**
- * The image id inside one of our own delivery URLs, or null for anything else
- * — an avatar still pointing at a sign-in provider's CDN is not ours to delete.
+ * The stored filename of an image, from Cloudflare rather than from anything a
+ * client sent. Null when the image is gone.
  */
-export function parseOwnImageId(env: CloudflareImagesEnv, url: string | null | undefined): string | null {
-  const base = env.CLOUDFLARE_IMAGES_VARIANT_BASE
-  if (!base || !url || !url.startsWith(`${base}/`)) return null
-  const [imageId] = url.slice(base.length + 1).split('/')
-  return imageId || null
+export async function getImageFilename(env: CloudflareImagesEnv, imageId: string): Promise<string | null> {
+  const res = await fetch(`${apiBase(env)}/v1/${imageId}`, {
+    headers: authHeader(env),
+    signal: AbortSignal.timeout(30_000),
+  })
+  if (res.status === 404) return null
+  if (!res.ok) throw new Error(`CF Images lookup error ${res.status}: ${await res.text()}`)
+  const data = await res.json() as { result?: { filename?: string } }
+  return typeof data?.result?.filename === 'string' ? data.result.filename : null
+}
+
+/**
+ * Deletes an image only when Cloudflare says it carries the expected filename.
+ *
+ * Ownership is never inferred from a delivery URL. `user.image` is a plain
+ * Better Auth field an authenticated client can set to any string, so a URL
+ * there proves nothing — someone could point it at another person's image and
+ * have us delete it with the account-wide token. The filename we set at upload
+ * is server-trusted state, and this checks it.
+ */
+export async function deleteImageOwnedBy(env: CloudflareImagesEnv, imageId: string, expectedFilename: string): Promise<boolean> {
+  const filename = await getImageFilename(env, imageId)
+  if (filename !== expectedFilename) return false
+  await deleteImage(env, imageId)
+  return true
 }
 
 export function buildImageUrl(env: CloudflareImagesEnv, imageId: string, variant = 'public'): string {

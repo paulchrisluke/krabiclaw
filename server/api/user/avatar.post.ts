@@ -8,7 +8,7 @@
 
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { createAuth, getAuthSession } from '~/server/utils/auth'
-import { deleteImage, hasCloudflareImagesConfig, parseOwnImageId, uploadImageBuffer } from '~/server/utils/cloudflare-images'
+import { deleteImage, deleteImageOwnedBy, hasCloudflareImagesConfig, uploadImageBuffer } from '~/server/utils/cloudflare-images'
 import { sniffMediaMimeType, POSTER_IMAGE_MIME_TYPES } from '~/server/utils/media-mime'
 
 const MAX_AVATAR_BYTES = 5 * 1024 * 1024
@@ -31,7 +31,10 @@ export default defineHandler(async (event) => {
     return jsonResponse({ error: 'Upload a JPEG, PNG, WebP, AVIF or GIF image' }, { status: 415 })
   }
 
-  const uploaded = await uploadImageBuffer(env, buffer, `avatar-${session.user.id}`, mimeType)
+  // The filename is this account's id, so ownership can be checked against
+  // Cloudflare later rather than guessed from a URL a client can set.
+  const avatarFilename = `avatar-${session.user.id}`
+  const uploaded = await uploadImageBuffer(env, buffer, avatarFilename, mimeType)
 
   const previous = typeof session.user.image === 'string' ? session.user.image : null
   try {
@@ -46,12 +49,16 @@ export default defineHandler(async (event) => {
     throw cause
   }
 
-  // Replacing an avatar we hosted removes the old image; one hosted elsewhere
-  // is left alone.
-  const previousImageId = parseOwnImageId(env, previous)
+  // Replacing an avatar we hosted removes the old image; one hosted elsewhere,
+  // or one belonging to somebody else, is left alone. `previous` comes from
+  // `user.image`, which an authenticated client can set to any string through
+  // Better Auth — so it names a candidate, and Cloudflare's own record of the
+  // filename decides whether it is ours to delete.
+  const previousImageId = previous?.split('/').at(-2)
   if (previousImageId && previousImageId !== uploaded.imageId) {
-    await deleteImage(env, previousImageId).catch((cause: unknown) => {
+    await deleteImageOwnedBy(env, previousImageId, avatarFilename).catch((cause: unknown) => {
       console.error('avatar_previous_image_delete_failed', { error: cause instanceof Error ? cause.message : String(cause) })
+      return false
     })
   }
 

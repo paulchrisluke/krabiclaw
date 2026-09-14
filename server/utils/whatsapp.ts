@@ -170,9 +170,11 @@ const TEMPLATES: Record<
         { type: 'text', text: cleanTemplateText(v.booking_type, 'reservation') },
         { type: 'text', text: cleanTemplateText(v.guest_name, 'Guest') },
         { type: 'text', text: cleanTemplateText(v.status, 'requested') },
-        { type: 'text', text: cleanTemplateText(v.location, 'Location') },
-        { type: 'text', text: cleanTemplateText(v.date, 'Date') },
-        { type: 'text', text: cleanTemplateText(v.time, 'Time') },
+        { type: 'text', text: cleanTemplateText(v.location, 'Location not provided') },
+        // Never the bare field name: a slot that falls back to "Date" is what
+        // told guests their booking moved to "Date" at "Time".
+        { type: 'text', text: cleanTemplateText(v.date, 'See dashboard') },
+        { type: 'text', text: cleanTemplateText(v.time, 'See dashboard') },
         { type: 'text', text: cleanTemplateText(v.guests, '1') },
         { type: 'text', text: cleanTemplateText(v.message, 'Open the dashboard for details.', 250) },
       ] },

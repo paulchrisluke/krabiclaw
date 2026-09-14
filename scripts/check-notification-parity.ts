@@ -12,6 +12,14 @@
 import { WHATSAPP_MAPPINGS, toWhatsAppVars } from '~/server/notifications/whatsapp-mapping'
 import { buildWhatsAppTemplatePayload, type WhatsAppTemplate } from '~/server/utils/whatsapp'
 import { NOTIFICATION_CATALOG } from '~/server/notifications/catalog'
+import type { NotificationMessage } from '~/server/notifications/messages'
+
+/**
+ * Words a slot must never render. Each is the name of the thing the slot is
+ * for, which is what a guest saw when a template fell back to its own
+ * placeholder instead of the real value.
+ */
+const FIELD_NAME_PLACEHOLDERS = new Set(['date', 'time', 'location', 'guest', 'email', 'phone', 'status', 'subject', 'rating'])
 
 const failures: string[] = []
 
@@ -26,7 +34,7 @@ for (const entry of dualChannel) {
     continue
   }
 
-  const { vars, omitted } = toWhatsAppVars(message, template as WhatsAppTemplate)
+  const { omitted } = toWhatsAppVars(message, template as WhatsAppTemplate)
 
   for (const key of omitted) {
     const fact = message.facts.find(entry => entry.key === key)!
@@ -50,11 +58,24 @@ for (const entry of dualChannel) {
 
   // The slots must actually fill: an empty one renders the template's own
   // placeholder text, which is how "Date" and "Time" shipped to guests.
-  const payload = buildWhatsAppTemplatePayload(template as WhatsAppTemplate, vars)
-  for (const component of payload.components) {
-    component.parameters.forEach((parameter, index) => {
-      if (!parameter.text.trim()) failures.push(`${template}: ${component.type} slot ${index + 1} renders empty`)
-    })
+  //
+  // Checked twice — once with the sample as written, and once with every
+  // optional fact removed. Real data is full of nulls (a reservation with no
+  // phone, a proposal recorded before the time was stored separately), and a
+  // happy-path sample hides exactly the case that misfired.
+  const stripped: NotificationMessage = { ...message, facts: message.facts.filter(entry => entry.lead) }
+  for (const [label, candidate] of [['as sampled', message], ['with optional facts removed', stripped]] as const) {
+    const payload = buildWhatsAppTemplatePayload(template as WhatsAppTemplate, toWhatsAppVars(candidate, template as WhatsAppTemplate).vars)
+    for (const component of payload.components) {
+      component.parameters.forEach((parameter, index) => {
+        const text = parameter.text.trim()
+        if (!text) {
+          failures.push(`${template} (${label}): ${component.type} slot ${index + 1} renders empty`)
+        } else if (FIELD_NAME_PLACEHOLDERS.has(text.toLowerCase())) {
+          failures.push(`${template} (${label}): ${component.type} slot ${index + 1} renders "${text}" — a field name, not a value`)
+        }
+      })
+    }
   }
 }
 
