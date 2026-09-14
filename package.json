@@ -158,7 +158,6 @@
     "@vue-email/style": "0.0.3",
     "@vue-email/text": "0.0.3",
     "better-auth": "1.7.4",
-    "better-call": "1.4.0",
     "drizzle-orm": "^0.45.2",
     "h3": "2.0.1-rc.26",
     "isomorphic-dompurify": "^3.23.0",
@@ -169,7 +168,6 @@
     "satori": "^0.29.0",
     "slugify": "^1.6.9",
     "stripe": "^22.6.0",
-    "vue-i18n": "11.4.10",
-    "zod": "^4.2.0"
+    "vue-i18n": "11.4.10"
   }
 }

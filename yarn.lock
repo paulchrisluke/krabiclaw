@@ -10729,7 +10729,6 @@ __metadata:
     autocannon: "npm:^8.0.0"
     autoprefixer: "npm:^10.5.4"
     better-auth: "npm:1.7.4"
-    better-call: "npm:1.4.0"
     better-sqlite3: "npm:^12.11.1"
     cross-env: "npm:^10.1.0"
     drizzle-kit: "npm:0.31.10"
@@ -10759,7 +10758,6 @@ __metadata:
     vue-router: "npm:^5.3.0"
     vue-tsc: "npm:^3.3.11"
     wrangler: "npm:4.127.0"
-    zod: "npm:^4.2.0"
   dependenciesMeta:
     better-sqlite3:
       built: true
