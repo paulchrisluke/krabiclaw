@@ -171,9 +171,41 @@ DELETE FROM requests WHERE id IN (${disposableGuestRequestIds});
 DELETE FROM user WHERE id IN (${eligibleUserIds});
 `
 
+// An organization the sweep deletes may own a Stripe customer, created when a
+// test drove checkout. Stripe never learns the organization is gone, so the
+// customer is deleted here, before the rows that name it. Only a test-mode key
+// may run this: the sweep exists for local and preview databases, and a live
+// key here would be a configuration fault, not a cleanup.
+async function deleteStripeCustomersOfSweptOrganizations(): Promise<void> {
+  const key = process.env.STRIPE_SECRET_KEY
+  if (!key) throw new Error('STRIPE_SECRET_KEY is required: swept organizations may own Stripe customers')
+  if (!/^(?:sk|rk)_test_/.test(key)) throw new Error('reset-e2e-artifacts refuses a live Stripe key')
+  const dir = mkdtempSync(join(tmpdir(), 'krabiclaw-reset-e2e-stripe-'))
+  const sqlPath = join(dir, 'customers.sql')
+  let customerIds: string[]
+  try {
+    writeFileSync(sqlPath, `SELECT stripeCustomerId FROM organization WHERE stripeCustomerId IS NOT NULL AND id IN (${eligibleOrgIds});`, 'utf8')
+    const result = spawnYarn(['wrangler', 'd1', 'execute', 'DB', ...envFlag.split(' '), ...remoteFlag.split(' ').filter(Boolean), '--file', sqlPath, '--json'], { encoding: 'utf8' })
+    if (result.error) throw result.error
+    const stdout = String(result.stdout ?? '')
+    if (result.status !== 0) throw new Error((String(result.stderr ?? '') || stdout || `Wrangler exited ${result.status}`).trim())
+    const rows = (JSON.parse(stdout)[0]?.results ?? []) as Array<{ stripeCustomerId: string }>
+    customerIds = rows.map(row => row.stripeCustomerId)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+  for (const id of customerIds) {
+    const response = await fetch(`https://api.stripe.com/v1/customers/${encodeURIComponent(id)}`, { method: 'DELETE', headers: { authorization: `Bearer ${key}` } })
+    if (response.status === 404) continue
+    if (!response.ok) throw new Error(`Stripe customer ${id} was not deleted: ${response.status} ${await response.text()}`)
+  }
+  console.log(`[reset-e2e-artifacts] Deleted ${customerIds.length} Stripe test customer(s) of swept organizations.`)
+}
+
 if (isStdout) {
   process.stdout.write(sql)
 } else {
+  await deleteStripeCustomersOfSweptOrganizations()
   const dir = mkdtempSync(join(tmpdir(), 'krabiclaw-reset-e2e-'))
   const sqlPath = join(dir, 'reset-e2e-artifacts.sql')
 
