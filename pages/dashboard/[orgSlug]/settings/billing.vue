@@ -370,12 +370,13 @@ onMounted(async () => {
 
   if (success === 'true') {
     trackSubscriptionCheckoutSuccess(selectedSite.value?.plan ?? undefined)
-    const paymentStatus = billing.value?.paymentStatus
+    // The plan the guest paid for is in the query; the refreshed billing row says what Stripe has confirmed.
+    const live = typeof plan === 'string' && billing.value?.plan === plan
     toast.add({
-      description: paymentStatus === 'paid'
+      description: live
         ? 'Payment confirmed. Your plan has been updated.'
-        : 'Payment is processing. Your plan will activate after Stripe confirms the invoice.',
-      color: paymentStatus === 'paid' ? 'success' : 'warning',
+        : 'Payment is processing. Your plan will activate after Stripe confirms the subscription.',
+      color: live ? 'success' : 'warning',
     })
   }
   if (canceled === 'true') {

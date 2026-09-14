@@ -1,3 +1,4 @@
+import { isSubscriptionStateInvalid } from '~/server/utils/billing-access'
 import type { SitemapUrlInput } from '#sitemap/types'
 
 import { definePlugin, HTTPError } from 'nitro'
@@ -136,9 +137,13 @@ export default definePlugin((nitroApp) => {
     `, [siteId])
     for (const candidate of localizedLocales) {
       try {
-        await assertSiteLanguageEntitlement(db, candidate.organization_id, siteId, candidate.locale)
+        await assertSiteLanguageEntitlement(env, db, candidate.organization_id, siteId, candidate.locale)
       } catch (error) {
         if (error instanceof HTTPError && (error.data?.code === 'LANGUAGE_ENTITLEMENT_REQUIRED' || error.data?.code === 'PLATFORM_LOCALE_UNAVAILABLE')) continue
+        if (isSubscriptionStateInvalid(error)) {
+          console.error('organization_subscription_state_invalid', { organizationId: candidate.organization_id, siteId, locale: candidate.locale })
+          continue
+        }
         throw error
       }
       const [resources, pages] = await Promise.all([

@@ -1257,11 +1257,40 @@ export const inventory_levels = sqliteTable("inventory_levels", {
 // universal selector across local variants, currencies or locations — price
 // selection is shared/prices.ts, always.
 //
-// Platform subscription billing (`subscription`, `organization_billing`,
-// `stripe_*` webhook tables) is the PLATFORM's billing, not a merchant's
-// catalog. These mappings never join to it.
+// Platform subscription billing (Better Auth's `subscription` table) is the
+// PLATFORM's billing, not a merchant's catalog. These mappings never join to it.
 // Read/write: server/utils/stripe-catalog.ts.
 // ---------------------------------------------------------------------------
+export const stripe_connected_accounts = sqliteTable("stripe_connected_accounts", {
+	id: text().primaryKey(),
+	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" }),
+	stripe_account_id: text().unique(),
+	country: text().notNull(),
+	livemode: integer({ mode: "boolean" }).notNull(),
+	// 'creating' | 'creation_failed' | 'action_required' | 'pending_review' |
+	// 'restricted' | 'ready'. Derived only from an Accounts v2 retrieval.
+	status: text().default("creating").notNull(),
+	// Accounts v2 merchant.card_payments capability status.
+	card_payments_status: text(),
+	// Normalized requirements needed by the dashboard. Stripe remains the
+	// authority; KrabiClaw never collects or stores the requested KYC values.
+	requirements_json: text().default("[]").notNull(),
+	stripe_refreshed_at: text(),
+	last_error: text(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+}, (table) => [
+	unique("stripe_connected_accounts_org_unique").on(table.organization_id),
+	index("stripe_connected_accounts_status_idx").on(table.status, table.updated_at),
+	check("stripe_connected_accounts_country_check", sql`length(country) = 2 AND country = upper(country) AND country NOT GLOB '*[^A-Z]*'`),
+	check("stripe_connected_accounts_livemode_check", sql`livemode IN (0, 1)`),
+	check("stripe_connected_accounts_status_check", sql`status IN ('creating', 'creation_failed', 'action_required', 'pending_review', 'restricted', 'ready')`),
+	check("stripe_connected_accounts_capability_check", sql`card_payments_status IS NULL OR card_payments_status IN ('active', 'pending', 'restricted', 'unsupported')`),
+	check("stripe_connected_accounts_requirements_check", sql`json_valid(requirements_json) AND json_type(requirements_json) = 'array'`),
+	check("stripe_connected_accounts_identity_check", sql`(stripe_account_id IS NULL AND status IN ('creating', 'creation_failed')) OR (trim(stripe_account_id) <> '' AND status IN ('action_required', 'pending_review', 'restricted', 'ready'))`),
+	check("stripe_connected_accounts_instants_check", sql`(stripe_refreshed_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', stripe_refreshed_at, '+0 days') IS stripe_refreshed_at) AND (created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)`),
+]);
+
 export const stripe_catalog_mappings = sqliteTable("stripe_catalog_mappings", {
 	id: text().primaryKey(),
 	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" }),
@@ -1452,21 +1481,6 @@ export const subscription = sqliteTable("subscription", {
 	index("subscription_status_idx").on(table.status),
 ]);
 
-export const organization_billing = sqliteTable("organization_billing", {
-	organization_id: text().primaryKey().references(() => organization.id, { onDelete: "cascade" } ),
-	payment_status: text().default("unknown").notNull(),
-	paid_through: text(),
-	past_due_since: text(),
-	last_paid_invoice_id: text(),
-	last_payment_event_created: integer(),
-	last_payment_event_id: text(),
-	access_plan: text().default("free").notNull(),
-	access_expires_at: text(),
-	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-}, () => [
-	check("organization_billing_instants_check", sql`(access_expires_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', access_expires_at, '+0 days') IS access_expires_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at) AND (paid_through IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', paid_through, '+0 days') IS paid_through) AND (past_due_since IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', past_due_since, '+0 days') IS past_due_since)`),
-]);
-
 export const onboarding_drafts = sqliteTable("onboarding_drafts", {
 	id: text().primaryKey(),
 	user_id: text().notNull().references(() => user.id, { onDelete: "cascade" } ),
@@ -1532,55 +1546,6 @@ export const review_requests = sqliteTable("review_requests", {
 	index("review_requests_organization_id_idx").on(table.organization_id),
 ]);
 
-// U4/U9: durable KrabiClaw authorization and recovery record for public legal
-// (Blawby) intake requests. id is the R14 browser-generated UUID v4 request
-// reference — the row's primary key IS the idempotency key, not a separate
-// surrogate id. organization_id/site_id use "restrict" (not "cascade", unlike
-// review_requests) because this is a legal-request attribution record: the
-// data model explicitly says it "must not cascade-delete legal request
-// attribution," so an org/site delete must be blocked rather than silently
-// erasing the record — following the same "restrict" precedent already used
-// for site_transfer_requests.initiated_by_user_id below rather than inventing
-// a new FK policy. original_actor_id is likewise "restrict" (never silently
-// nulled) since R15 requires it stay immutable; current_authorized_user_id
-// stays "set null" (matching review_requests.user_id) since it is explicitly
-// the nullable, replaceable-by-linking field. blawby_intake_id and
-// checkout_session_id are separately unique so two request references can
-// never bind the same upstream identifier (R17).
-export const legal_intake_references = sqliteTable("legal_intake_references", {
-	id: text().primaryKey(),
-	organization_id: text().notNull().references(() => organization.id, { onDelete: "restrict" } ),
-	site_id: text().notNull().references(() => sites.id, { onDelete: "restrict" } ),
-	original_actor_id: text().notNull().references(() => user.id, { onDelete: "restrict" } ),
-	original_actor_kind: text().notNull(),
-	current_authorized_user_id: text().references(() => user.id, { onDelete: "set null" } ),
-	payload_digest: text().notNull(),
-	digest_key_id: text().notNull(),
-	digest_version: integer().notNull(),
-	blawby_intake_id: text().unique(),
-	checkout_session_id: text().unique(),
-	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-}, (table) => [
-	foreignKey({ columns: [table.organization_id, table.site_id], foreignColumns: [sites.organization_id, sites.id], name: "legal_intake_references_site_scope_fk" }).onDelete("restrict"),
-	// Membership is normally kept out of the schema because D1 cannot rebuild a
-	// referenced parent when a value set grows. Nothing references this table,
-	// so it can be rebuilt, and the check earns its place.
-	check("legal_intake_references_actor_kind_check", sql`original_actor_kind IN ('human', 'anonymous')`),
-	index("idx_legal_intake_references_site_actor").on(table.site_id, table.original_actor_id),
-	index("legal_intake_references_organization_id_idx").on(table.organization_id),
-	// U9 reconciliation (task-u8-reconciliation-brief.md section 6):
-	// linkLegalIntakeAuthorizedUser's account-link query
-	// (server/utils/legal-intake-references.ts) filters on
-	// original_actor_id alone, with no site_id predicate -- it cannot use
-	// idx_legal_intake_references_site_actor's leftmost-prefix (site_id
-	// leads that index), so it was a full table scan on every Better Auth
-	// account-link event. This index leads with original_actor_id so that
-	// query can use it. The existing (site_id, original_actor_id) index is
-	// left untouched -- it still serves the more frequent per-request
-	// site+actor ownership lookup (findLegalIntakeReferenceForActor).
-	index("idx_legal_intake_references_actor").on(table.original_actor_id),
-]);
 
 export const reviews = sqliteTable("reviews", {
 	id: text().primaryKey(),
@@ -1896,6 +1861,9 @@ export const stripe_webhook_events = sqliteTable("stripe_webhook_events", {
 	id: text().primaryKey(),
 	stripe_event_id: text().notNull().unique(),
 	event_type: text(),
+	// 'platform_billing' | 'connect_marketplace'. Both processors share this
+	// table's lease, retry, retention and operator requeue contract.
+	processor: text().default("platform_billing").notNull(),
 	status: text().default("pending").notNull(),
 	payload: text(),
 	error: text(),
@@ -1909,41 +1877,9 @@ export const stripe_webhook_events = sqliteTable("stripe_webhook_events", {
 }, (table) => [
 	check("stripe_webhook_events_instants_check", sql`(claimed_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', claimed_at, '+0 days') IS claimed_at) AND (lease_expires_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', lease_expires_at, '+0 days') IS lease_expires_at) AND (next_attempt_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', next_attempt_at, '+0 days') IS next_attempt_at) AND (dead_lettered_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', dead_lettered_at, '+0 days') IS dead_lettered_at) AND (created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at)`),
 	check("stripe_webhook_events_payload_check", sql`payload IS NULL OR (json_valid(payload))`),
-	index("stripe_webhook_events_retry_idx").on(table.status, table.next_attempt_at),
+	index("stripe_webhook_events_retry_idx").on(table.status, table.next_attempt_at, table.processor),
 ]);
 
-export const stripe_subscription_versions = sqliteTable("stripe_subscription_versions", {
-	stripe_subscription_id: text().primaryKey(),
-	last_event_created: integer().notNull(),
-	last_event_id: text().notNull(),
-	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-}, () => [
-	check("stripe_subscription_versions_instants_check", sql`(updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)`),
-]);
-
-export const stripe_invoice_payments = sqliteTable("stripe_invoice_payments", {
-	stripe_invoice_id: text().primaryKey(),
-	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
-	stripe_subscription_id: text().notNull(),
-	base_plan_price_id: text(),
-	status: text().notNull(),
-	period_start: text(),
-	period_end: text(),
-	past_due_since: text(),
-	last_event_created: integer().notNull(),
-	last_event_id: text().notNull(),
-	ga4_purchase_status: text().default("pending").notNull(),
-	ga4_purchase_event_id: text(),
-	ga4_purchase_attempt_count: integer().default(0).notNull(),
-	ga4_purchase_claimed_at: text(),
-	ga4_purchase_sent_at: text(),
-	ga4_purchase_error: text(),
-	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-}, (table) => [
-	check("stripe_invoice_payments_instants_check", sql`(ga4_purchase_claimed_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', ga4_purchase_claimed_at, '+0 days') IS ga4_purchase_claimed_at) AND (ga4_purchase_sent_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', ga4_purchase_sent_at, '+0 days') IS ga4_purchase_sent_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at) AND (period_start IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', period_start, '+0 days') IS period_start) AND (period_end IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', period_end, '+0 days') IS period_end) AND (past_due_since IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', past_due_since, '+0 days') IS past_due_since)`),
-	index("stripe_invoice_payments_organization_idx").on(table.organization_id, table.period_end),
-	index("stripe_invoice_payments_subscription_idx").on(table.stripe_subscription_id, table.period_end),
-]);
 
 export const stripe_ga4_subscription_intents = sqliteTable("stripe_ga4_subscription_intents", {
 	id: text().primaryKey(),
@@ -2287,4 +2223,3 @@ export const analytics_summaries = sqliteTable("analytics_summaries", {
   index("analytics_summaries_session_seen_idx").on(table.site_id, sql`(payload_json ->> '$.last_seen_at')`).where(sql`kind = 'session'`),
   index("analytics_summaries_session_visitor_idx").on(table.site_id, sql`(payload_json ->> '$.visitor_id')`, sql`(payload_json ->> '$.started_at')`).where(sql`kind = 'session'`),
 ]);
-

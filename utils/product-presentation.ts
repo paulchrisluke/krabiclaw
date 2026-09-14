@@ -45,6 +45,17 @@ export function presentationForProduct(vertical: string | null | undefined, prod
   return isExperience(product) ? EXPERIENCE_PRESENTATION : requireProductPresentation(vertical)
 }
 
+/**
+ * The surface a list of products is read on — a collection, a location's
+ * catalogue, an editor screen. Every product bookable means the merchant is
+ * looking at experiences and the screen says so; anything else is the
+ * vertical's own goods and keeps its words. An empty list has no products to
+ * be experiences, so it reads as the vertical's surface.
+ */
+export function presentationForProducts(vertical: string | null | undefined, products: ReadonlyArray<Pick<Product, 'booking'>>): ProductPresentation {
+  return products.length > 0 && products.every(isExperience) ? EXPERIENCE_PRESENTATION : requireProductPresentation(vertical)
+}
+
 export function presentationForSurface(vertical: string | null | undefined, surface: ProductSurface): ProductPresentation {
   return surface === 'experiences' ? EXPERIENCE_PRESENTATION : requireProductPresentation(vertical)
 }

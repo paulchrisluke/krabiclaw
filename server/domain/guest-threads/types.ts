@@ -119,6 +119,18 @@ export interface GuestThreadListItemViewModel {
   needsAttention: boolean
 }
 
+/**
+ * What became of one outbound send. `channel` here is where the message went,
+ * which is not the entry's own channel: a reservation submitted on the web can
+ * alert its owner over WhatsApp, and only this says so.
+ */
+export interface GuestThreadEntryDeliveryViewModel {
+  id: string
+  channel: GuestThreadDeliveryChannel
+  purpose: GuestThreadDeliveryPurpose
+  status: GuestThreadDeliveryStatus
+}
+
 export interface GuestThreadEntryViewModel {
   id: string
   kind: GuestThreadEntryKind
@@ -131,6 +143,7 @@ export interface GuestThreadEntryViewModel {
   payload: Record<string, unknown> | null
   sequence: number | null
   occurredAt: string
+  deliveries: GuestThreadEntryDeliveryViewModel[]
 }
 
 export interface GuestThreadDeliveryFailureViewModel {

@@ -47,13 +47,13 @@
             <SayaIcon name="check-circle" class="w-4 h-4 text-green-500 shrink-0" />
           </div>
 
-          <UButton block size="lg" :loading="loading" @click="continueWithSession">
+          <UButton block size="lg" :loading="loading" :disabled="switching" @click="continueWithSession">
             Continue as {{ existingSession.name?.split(' ')[0] || 'this account' }}
           </UButton>
 
           <USeparator label="or" />
 
-          <UButton color="neutral" variant="ghost" size="sm" block @click="switchAccount">
+          <UButton color="neutral" variant="ghost" size="sm" block :loading="switching" :disabled="loading" @click="switchAccount">
             Sign in with a different account
           </UButton>
         </div>
@@ -120,6 +120,7 @@ onMounted(async () => {
 
 // ── Existing session state ────────────────────────────────────────────────────
 const loading = ref(false)
+const switching = ref(false)
 const showPhone = ref(false)
 const accountInitial = computed(() =>
   (existingSession.value?.name || existingSession.value?.email || '?').charAt(0).toUpperCase()
@@ -133,19 +134,35 @@ const accountInitial = computed(() =>
  */
 async function continueWithSession() {
   loading.value = true
-  if (isSelectAccountFlow.value) {
-    const { data, error: continueError } = await authClient.oauth2.continue({ selected: true })
-    if (continueError) {
-      error.value = continueError.message || 'Could not continue authorization.'
-      loading.value = false
+  // A document stays interactive between assigning location.href and unload.
+  // Releasing the buttons there lets switchAccount sign the user out while the
+  // authorization request is still in flight, and the flow continues without
+  // the session it was authorizing. Only a failure gets them back.
+  let redirecting = false
+  try {
+    if (isSelectAccountFlow.value) {
+      const { data, error: continueError } = await authClient.oauth2.continue({ selected: true })
+      if (continueError) {
+        error.value = continueError.message || 'Could not continue authorization.'
+        return
+      }
+      const destination = oauthContinuationDestination(data)
+      redirecting = true
+      window.location.href = destination || `/api/auth/oauth2/authorize${window.location.search}`
       return
     }
-    const destination = oauthContinuationDestination(data)
-    window.location.href = destination || `/api/auth/oauth2/authorize${window.location.search}`
-    return
-  }
 
-  window.location.href = `/api/auth/oauth2/authorize${window.location.search}`
+    redirecting = true
+    window.location.href = `/api/auth/oauth2/authorize${window.location.search}`
+  } catch (cause) {
+    // A thrown continuation used to leave `loading` set forever. That only
+    // greyed out this button before; now it also holds the switch-account
+    // button down, so the page offers nothing at all until a reload.
+    redirecting = false
+    error.value = getErrorMessage(cause, 'Could not continue authorization.')
+  } finally {
+    if (!redirecting) loading.value = false
+  }
 }
 
 /**
@@ -154,11 +171,25 @@ async function continueWithSession() {
  */
 async function switchAccount() {
   error.value = null
+  // Signing out is a network round trip, and until it returns this button was
+  // unchanged and still clickable: no progress to see, and every extra click
+  // another concurrent signOut against the same session.
+  switching.value = true
   try {
-    await authClient.signOut()
+    // Better Auth resolves with { error } rather than throwing — a 500 from
+    // the sign-out endpoint comes back as a value. Catching only throws meant
+    // a failed sign-out still cleared the session and offered the sign-in
+    // form while the server session was very much alive.
+    const { error: signOutError } = await authClient.signOut()
+    if (signOutError) {
+      error.value = signOutError.message || 'Could not sign out. Please try again.'
+      return
+    }
   } catch (cause) {
     error.value = getErrorMessage(cause, 'Could not sign out. Please try again.')
     return
+  } finally {
+    switching.value = false
   }
   existingSession.value = null
 }

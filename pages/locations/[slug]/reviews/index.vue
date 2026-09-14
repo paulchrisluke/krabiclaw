@@ -47,7 +47,7 @@
               />
             </div>
             <p class="mt-4 text-sm text-default">{{ t('saya.reviews_page.based_on', { count: aggregate?.review_count?.toLocaleString() ?? 0 }) }}</p>
-            <p class="mt-1 text-xs tracking-wide text-muted">{{ t('saya.reviews_page.synced_live') }}</p>
+            <a v-if="location.maps_url" :href="location.maps_url" target="_blank" rel="noopener noreferrer" class="mt-1 block text-xs tracking-wide text-muted no-underline hover:underline">{{ t('saya.reviews_page.synced_live') }}</a>
           </div>
 
           <!-- Star distribution -->
@@ -115,56 +115,7 @@
         </div>
 
         <div v-else class="flex flex-col gap-8">
-          <SayaReviewCard
-            v-for="review in filtered"
-            :key="review.id"
-            variant="full"
-            :review="{
-              id: review.id,
-              author: review.author_name,
-              media: review.media,
-              original_reference: review.original_reference,
-              google_review_metadata: review.google_review_metadata,
-              rating: review.rating,
-              content: review.content,
-              title: review.title,
-              dateLabel: formatReviewDate(review.created_at),
-              source: review.source
-            }"
-          >
-            <NuxtLink :to="localePath(`/locations/${slug}/reviews/${review.id}`)" class="mt-4 inline-flex text-sm font-medium text-primary no-underline hover:underline">
-              {{ t('saya.reviews_page.read_review') }}
-            </NuxtLink>
-
-            <!-- Photos -->
-            <div v-if="reviewMedia(review, 'media').length" class="mt-5 flex flex-wrap gap-2">
-              <div
-                v-for="(asset, i) in reviewMedia(review, 'media')"
-                :key="i"
-                class="size-28 overflow-hidden rounded-xl bg-muted"
-              >
-                <img
-                  v-if="!failedPhotoIndices[`${review.id}-${i}`]"
-                  :src="asset.kind === 'video' ? asset.thumbnail_url : asset.public_url"
-                  alt=""
-                  class="h-full w-full object-cover"
-                  @error="handleReviewImageError(review.id, i)"
-                >
-              </div>
-            </div>
-
-            <!-- Owner reply -->
-            <div
-              v-if="review.owner_reply"
-              class="mt-6 rounded-2xl border-l-4 border-primary bg-elevated p-5"
-            >
-              <div class="mb-2 flex items-center gap-3">
-                <span class="inline-flex items-center rounded-full border border-default px-2 py-0.5 text-xs font-semibold text-muted">{{ siteName }}</span>
-                <span class="text-xs text-muted">{{ t('saya.reviews_page.owner_response') }} · {{ formatReviewDate(review.owner_reply_at) }}</span>
-              </div>
-              <p class="text-sm leading-relaxed text-default">{{ review.owner_reply }}</p>
-            </div>
-          </SayaReviewCard>
+          <SayaReviewCard v-for="review in filtered" :key="review.id" :review="review" />
         </div>
       </section>
     </template>
@@ -184,7 +135,6 @@ const slug = computed(() => String(route.params.slug))
 const siteName = computed(() => String((site as ApiValue)?.brand_name ?? '').trim())
 
 const { location, reviewsAggregate, reviewsList, pending } = await usePublicPageData()
-const { formatDate } = useLocaleDate()
 const aggregate = reviewsAggregate
 const reviews = reviewsList
 
@@ -226,16 +176,8 @@ function distCount(star: number) {
   return aggregate.value?.distribution?.find((d: ApiValue) => d.star === star)?.count ?? 0
 }
 
-const failedPhotoIndices = ref<Record<string, boolean>>({})
 
-function handleReviewImageError(reviewId: string | number, index: string | number) {
-  failedPhotoIndices.value[`${String(reviewId)}-${String(index)}`] = true
-}
 
-function formatReviewDate(ts: string | null) {
-  if (!ts) return ''
-  return formatDate(ts)
-}
 
 
 useSocialMetadata(() => ({

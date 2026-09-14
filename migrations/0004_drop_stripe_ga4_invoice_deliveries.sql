@@ -1,0 +1,1 @@
+DROP TABLE `stripe_ga4_invoice_deliveries`;

@@ -120,6 +120,8 @@
             <div class="grid gap-3 sm:grid-cols-2">
               <UFormField label="Title"><UInput :model-value="objectField(index, 'items', 'title', ['name'])" @update:model-value="setObjectField('items', index, 'title', $event)" /></UFormField>
               <UFormField label="Value"><UInput :model-value="objectField(index, 'items', 'value')" @update:model-value="setObjectField('items', index, 'value', $event)" /></UFormField>
+              <!-- A feature's icon is a Heroicons name; the page's icon component decides what it can draw. -->
+              <UFormField v-if="block.type === 'feature_grid'" label="Icon" description="Heroicons name, e.g. ScaleIcon"><UInput :model-value="objectField(index, 'items', 'icon')" @update:model-value="setObjectField('items', index, 'icon', $event)" /></UFormField>
               <UFormField class="sm:col-span-2" label="Description"><UTextarea :model-value="objectField(index, 'items', 'description', ['summary', 'body'])" :rows="2" autoresize @update:model-value="setObjectField('items', index, 'description', $event)" /></UFormField>
               <UFormField label="Image"><MediaPicker :site-id="siteId" :model-value="mediaAt(`items.${index}.image`, 0)?.asset_id" accept="image" @update:model-value="setMediaAt(`items.${index}.image`, 0, $event)" /></UFormField>
               <UFormField label="Link URL"><UInput :model-value="objectField(index, 'items', 'url', ['cta_url'])" @update:model-value="setObjectField('items', index, 'url', $event)" /></UFormField>

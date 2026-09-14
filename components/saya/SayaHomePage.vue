@@ -110,9 +110,9 @@
       <LazySayaBrandStory
         v-if="story && (story.title || story.body)"
         :data="{
-          title: story?.title,
-          body: story?.body,
-          image: story?.image,
+          title: story?.title ?? null,
+          body: story?.body ?? null,
+          image: story?.image ?? null,
           ourStoryKicker: homeCopy.ourStoryKicker,
           readMoreCta: homeCopy.readMoreCta
         }"
@@ -175,7 +175,8 @@
             v-for="review in featuredReviews"
             :key="review.id"
             :review="review"
-            variant="compact"
+            :location-title="locations.length > 1 ? review.location_title : null"
+           
           />
         </div>
       </section>
@@ -331,25 +332,19 @@ const googleBusiness = computed(() => {
     : null
   return {
     ...gb,
-    reviews: ((supplemental?.reviews ?? gb.reviews) || []).map((r) => ({
-      ...r,
-      author_name: r.author_name ?? '',
-      date: r.date || r.createTime || r.updateTime
-    })),
+    reviews: (supplemental?.reviews ?? gb.reviews) || [],
     posts: supplemental?.posts ?? gb.posts ?? [],
   }
 })
 
-const starRatingMap = { ONE: 1, TWO: 2, THREE: 3, FOUR: 4, FIVE: 5 }
 const businessTitle = computed(() => googleBusiness.value?.business?.title ?? null)
 const businessSubtitle = computed(() => googleBusiness.value?.business?.profile?.description ?? null)
 const googlePosts = computed(() => googleBusiness.value?.posts || [])
 const googleReviews = computed(() => googleBusiness.value?.reviews ?? [])
-const googleReviewRating = review => starRatingMap[review.starRating] ?? Number(review.starRating ?? review.rating ?? 0)
 const googleReviewSummary = computed(() => {
   const summary = googleBusiness.value?.business?.reviewSummary
   if (!summary) {
-    const ratings = googleReviews.value.map(googleReviewRating).filter(Boolean)
+    const ratings = googleReviews.value.map(review => review.rating).filter(Boolean)
     if (ratings.length === 0) return null
     return { average: (ratings.reduce((s, r) => s + r, 0) / ratings.length).toFixed(1), count: ratings.length }
   }
@@ -483,16 +478,7 @@ onBeforeUnmount(() => postVideoObserver?.disconnect())
 
 const hasGoogleBusiness = computed(() => !!googleBusiness.value?.business)
 const featuredReviews = computed(() =>
-  googleReviews.value.slice(0, 3).map((review, i) => ({
-    id: review.id ?? review.name ?? i,
-    author: review.author_name ?? '',
-    source: review.source,
-    original_reference: review.original_reference,
-    google_review_metadata: review.google_review_metadata,
-    content: review.comment?.text || review.content || '',
-    rating: googleReviewRating(review),
-    locationTitle: locations.value.length > 1 ? review.location_title || null : null,
-  })).filter(review => review.author && review.content)
+  googleReviews.value.filter(review => review.author_name && review.content).slice(0, 3)
 )
 
 // Recent posts — shown in the "Lately" section, each tile links to the real

@@ -36,8 +36,20 @@
       </div>
     </header>
 
-    <!-- Reviews grid -->
-    <LazySayaReviews :reviews="visibleReviews" :rating-summary="googleReviewSummary" :show-title="false" />
+    <section class="mx-auto max-w-7xl px-4 pb-16 sm:px-6 lg:px-8">
+      <div v-if="visibleReviews.length" class="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+        <SayaReviewCard
+          v-for="review in visibleReviews"
+          :key="review.id"
+          :review="review"
+          :location-title="locations.length > 1 ? review.location_title : null"
+        />
+      </div>
+      <div v-else class="rounded-2xl border border-dashed border-default py-20 text-center">
+        <h2 class="saya-display saya-italic text-3xl text-default">{{ t('saya.reviews.empty_title') }}</h2>
+        <p class="mt-2 text-sm text-muted">{{ t('saya.reviews.empty_desc') }}</p>
+      </div>
+    </section>
 
     <!-- Load more -->
     <div v-if="hasMore" class="mx-auto max-w-7xl px-4 pb-20 sm:px-6 lg:px-8 text-center">
@@ -59,14 +71,12 @@ if (!siteId) throw createError({ statusCode: 404 })
 const { localePath, t } = useI18n()
 
 const { googleBusiness, locations } = await usePublicPageData()
-const starRatingMap = { ONE: 1, TWO: 2, THREE: 3, FOUR: 4, FIVE: 5 }
 const allReviews = computed(() => googleBusiness.value?.reviews ?? [])
-const googleReviewRating = r => starRatingMap[r.starRating] ?? Number(r.starRating ?? r.rating ?? 0)
 
 const googleReviewSummary = computed(() => {
   const summary = googleBusiness.value?.business?.reviewSummary
   if (!summary) {
-    const ratings = allReviews.value.map(googleReviewRating).filter(Boolean)
+    const ratings = allReviews.value.map(r => r.rating).filter(Boolean)
     if (!ratings.length) return null
     return { average: (ratings.reduce((s, r) => s + r, 0) / ratings.length).toFixed(1), count: ratings.length }
   }
@@ -101,10 +111,10 @@ useSchemaOrg([
     name: siteName.value,
     review: allReviews.value.map(r => ({
       '@type': 'Review',
-      author: { '@type': 'Person', name: r.reviewer?.displayName || t('saya.qa.guest') },
-      datePublished: r.createTime,
-      reviewBody: typeof r.comment === 'string' ? r.comment : r.comment?.text ?? r.content ?? '',
-      reviewRating: { '@type': 'Rating', ratingValue: googleReviewRating(r), bestRating: 5 }
+      author: { '@type': 'Person', name: r.author_name || t('saya.qa.guest') },
+      datePublished: r.source === 'google_places' ? r.original_review_date : r.created_at,
+      reviewBody: r.content ?? '',
+      reviewRating: { '@type': 'Rating', ratingValue: r.rating, bestRating: 5 }
     }))
   }))
 ])

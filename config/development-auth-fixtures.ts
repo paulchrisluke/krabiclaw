@@ -63,21 +63,9 @@ export const E2E_AUTH_FIXTURES: readonly E2eAuthFixture[] = [
     memberships: [{ organizationId: 'org-ncls-blawby', role: 'owner' }],
   },
   {
-    id: 'user-e2e-growth-owner',
-    name: 'E2E Growth Owner',
-    email: 'growth-owner@playwright.example',
-    memberships: [{ organizationId: 'org-mcp-growth', role: 'owner' }],
-  },
-  {
     id: 'user-e2e-growth-service-owner',
     name: 'E2E Growth Service Owner',
     email: 'growth-service-owner@playwright.example',
-  },
-  {
-    id: 'user-e2e-free-owner',
-    name: 'E2E Free Owner',
-    email: 'free-owner@playwright.example',
-    memberships: [{ organizationId: 'org-mcp-free', role: 'owner' }],
   },
   ...[
     'oauth-cimd',

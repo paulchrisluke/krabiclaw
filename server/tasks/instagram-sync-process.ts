@@ -6,13 +6,15 @@ import {
   syncInstagramPosts,
 } from '~/server/utils/facebook-pages'
 import { decryptSecret, encryptionEnv } from '~/server/utils/encryption'
-import { execute, queryAll } from '~/server/db'
+import { execute, queryAllPages } from '~/server/db'
 import { defineScheduledTask } from '~/server/utils/scheduled-task'
-import { hasScheduledPaidEntitlement } from '~/server/utils/scheduled-billing-access'
+import { filterEntitledRows } from '~/server/utils/billing-access'
+import type { CloudflareEnv } from '~/server/utils/auth'
 
 interface SyncTaskContext {
   cloudflare?: { env?: ApiRecord }
 }
+
 
 interface ConnectionRow {
   revision: string | null
@@ -22,12 +24,6 @@ interface ConnectionRow {
   facebook_page_id: string | null
   encrypted_user_token: string
   encrypted_page_token: string | null
-  access_plan: string | null
-  access_expires_at: string | null
-  payment_status: string | null
-  paid_through: string | null
-  past_due_since: string | null
-  updated_at: string | null
 }
 
 interface SyncConnectionResult {
@@ -61,25 +57,20 @@ export default defineScheduledTask({
     }
     if (!db) throw new Error('DB is required')
 
-    // The organization billing projection is the authority for paid scheduled
-    // integrations; legacy entitlement caches are not access grants here.
-    const billingRows = await queryAll<ConnectionRow>(db, `
+    // Better Auth's subscription table is the authority for paid scheduled
+    // integrations; candidates are selected here and filtered against it below.
+    const candidates = await queryAllPages<ConnectionRow>(db, `
       SELECT json_extract(s.integrations_json, '$.facebook.id') AS id, s.organization_id, s.id AS site_id,
              json_extract(s.integrations_json, '$.facebook.revision') AS revision,
              json_extract(s.integrations_json, '$.facebook.facebook_page_id') AS facebook_page_id,
              json_extract(s.integrations_json, '$.facebook.encrypted_user_token') AS encrypted_user_token,
-             json_extract(s.integrations_json, '$.facebook.encrypted_page_token') AS encrypted_page_token,
-             ob.access_plan,
-             ob.access_expires_at, ob.payment_status, ob.paid_through, ob.past_due_since, ob.updated_at
+             json_extract(s.integrations_json, '$.facebook.encrypted_page_token') AS encrypted_page_token
       FROM sites s
-      INNER JOIN organization_billing ob
-        ON ob.organization_id = s.organization_id
-       AND ob.access_plan = 'growth'
       WHERE json_extract(s.integrations_json, '$.facebook.status') = 'active'
         OR (json_extract(s.integrations_json, '$.facebook.status') = 'error' AND json_extract(s.integrations_json, '$.facebook.updated_at') < strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-1 hour'))
-      ORDER BY s.organization_id
-    `)
-    const connections = billingRows.filter((row) => hasScheduledPaidEntitlement(row, 'managed_service'))
+      ORDER BY s.organization_id, s.id
+    `, [])
+    const connections = await filterEntitledRows(env as CloudflareEnv, candidates, 'managed_service')
 
     if (connections.length === 0) {
       return { result: { connections: 0, passed: 0, failed: 0, details: [] } }

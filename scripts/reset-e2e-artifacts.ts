@@ -9,11 +9,6 @@ import { spawnYarn } from './utils/spawn-yarn.mjs'
 const FIXTURE_ORG_IDS = [
   'platform',
   'org-demo',
-  'org-mcp-free',
-  'org-mcp-growth',
-  'org-mcp-growth-service',
-  'org-pottery-house',
-  'org-kikuzuki',
   'org-ncls-blawby',
 ]
 
@@ -114,17 +109,6 @@ const eligibleOrgIds = `
   LIMIT ${batchSize}
 `
 
-// Better Auth's subscription.referenceId intentionally has no foreign key to
-// organization. Capture disposable Stripe subscription IDs while those rows
-// still exist so the unscoped version table can be pruned before deleting the
-// organization. The LIMIT keeps each reset invocation bounded.
-const eligibleSubscriptionIds = `
-  SELECT stripeSubscriptionId FROM subscription
-  WHERE referenceId IN (${eligibleOrgIds})
-    AND stripeSubscriptionId IS NOT NULL
-  LIMIT ${batchSize}
-`
-
 const eligibleUserIds = `
   SELECT id FROM user
   WHERE id NOT IN (${fixtureUserIdList})
@@ -162,13 +146,7 @@ const sql = `-- Sweeps E2E-generated rows from local/preview so they don't accum
 PRAGMA foreign_keys = ON;
 
 -- Better Auth subscription rows are not organization children, so remove them
--- explicitly. stripe_subscription_versions is also unscoped; its IDs are
--- selected before the subscription rows disappear. Processed webhook audit
--- rows are intentionally retained because stripe_webhook_events has no safe
--- organization foreign key and this sweep must not infer ownership from JSON.
-DELETE FROM stripe_subscription_versions
-WHERE stripe_subscription_id IN (${eligibleSubscriptionIds});
-
+-- explicitly.
 DELETE FROM subscription WHERE referenceId IN (${eligibleOrgIds});
 
 ${retainedSiteDeletes}
@@ -193,9 +171,40 @@ DELETE FROM requests WHERE id IN (${disposableGuestRequestIds});
 DELETE FROM user WHERE id IN (${eligibleUserIds});
 `
 
+// An organization the sweep deletes may own a Stripe customer, created when a
+// test drove checkout. Stripe never learns the organization is gone, so the
+// customer is deleted here, before the rows that name it. Only a test-mode key
+// may run this: the sweep exists for local and preview databases, and a live
+// key here would be a configuration fault, not a cleanup.
+async function deleteStripeCustomersOfSweptOrganizations(): Promise<void> {
+  const key = process.env.STRIPE_SECRET_KEY
+  if (!key) throw new Error('STRIPE_SECRET_KEY is required: swept organizations may own Stripe customers')
+  if (!/^(?:sk|rk)_test_/.test(key)) throw new Error('reset-e2e-artifacts refuses a live Stripe key')
+  // `--file` against a remote database goes through D1's import path, which
+  // returns an import summary instead of the rows; `--command` returns them.
+  const query = `SELECT stripeCustomerId FROM organization WHERE stripeCustomerId IS NOT NULL AND id IN (${eligibleOrgIds});`
+  const result = spawnYarn(['wrangler', 'd1', 'execute', 'DB', ...envFlag.split(' '), ...remoteFlag.split(' ').filter(Boolean), '--command', query, '--json'], { encoding: 'utf8' })
+  if (result.error) throw result.error
+  const stdout = String(result.stdout ?? '')
+  if (result.status !== 0) throw new Error((String(result.stderr ?? '') || stdout || `Wrangler exited ${result.status}`).trim())
+  const rows = (JSON.parse(stdout.slice(stdout.indexOf('[')))[0]?.results ?? []) as Array<Record<string, unknown>>
+  const customerIds = rows.map((row) => {
+    const id = row.stripeCustomerId
+    if (typeof id !== 'string' || !id.startsWith('cus_')) throw new Error(`Unexpected D1 row while listing Stripe customers: ${JSON.stringify(row)}`)
+    return id
+  })
+  for (const id of customerIds) {
+    const response = await fetch(`https://api.stripe.com/v1/customers/${encodeURIComponent(id)}`, { method: 'DELETE', headers: { authorization: `Bearer ${key}` } })
+    if (response.status === 404) continue
+    if (!response.ok) throw new Error(`Stripe customer ${id} was not deleted: ${response.status} ${await response.text()}`)
+  }
+  console.log(`[reset-e2e-artifacts] Deleted ${customerIds.length} Stripe test customer(s) of swept organizations.`)
+}
+
 if (isStdout) {
   process.stdout.write(sql)
 } else {
+  await deleteStripeCustomersOfSweptOrganizations()
   const dir = mkdtempSync(join(tmpdir(), 'krabiclaw-reset-e2e-'))
   const sqlPath = join(dir, 'reset-e2e-artifacts.sql')
 

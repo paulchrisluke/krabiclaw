@@ -6,7 +6,7 @@ import { threadPayloadForGuest, requestInsertQueries, getGuestRequest } from '..
 import { upsertLocationReservationConfig } from '../../server/utils/reservations.ts'
 import test from 'node:test'
 import { Miniflare } from 'miniflare'
-import { claimDelivery, createDeliveryReceipt, getDeliveryById, getDeliveryRetryEligibility, listDeliveryFailures, recordDeliveryOutcome } from '../../server/domain/guest-threads/deliveries.ts'
+import { claimDelivery, createDeliveryReceipt, getDeliveryById, getDeliveryRetryEligibility, isVisibleDeliveryFailure, listThreadDeliveries, recordDeliveryOutcome } from '../../server/domain/guest-threads/deliveries.ts'
 import { appendEntry } from '../../server/domain/guest-threads/entries.ts'
 import { executeGuestThreadOperation } from '../../server/domain/guest-threads/operations.ts'
 import { listGuestThreads, updateThreadProjectionIfLatestEntry } from '../../server/domain/guest-threads/repository.ts'
@@ -149,7 +149,11 @@ test('D1 claims fence concurrent sends and bound ambiguous provider retries', as
     })
     const heldClaim = await claimDelivery(db, heldReceipt.id)
     assert.equal(heldClaim.claimed, true)
-    assert.equal((await listDeliveryFailures(db, 'contact-proof')).some(delivery => delivery.id === deliveryId), false)
+    const heldDeliveries = await listThreadDeliveries(db, 'contact-proof')
+    assert.equal(heldDeliveries.filter(delivery => isVisibleDeliveryFailure(delivery)).some(delivery => delivery.id === deliveryId), false,
+      'a claim still in flight is not surfaced as a failure')
+    assert.equal(heldDeliveries.some(delivery => delivery.id === heldReceipt.id), true,
+      'but the thread still knows the send exists, and on which channel')
 
     const accepted = await executeGuestThreadOperation(db, {
       threadId: 'contact-proof',
@@ -462,7 +466,8 @@ test('a review request reads the visit from the record that holds it', async () 
       "INSERT INTO site_domains (id, organization_id, site_id, domain, role, status, type) VALUES ('domain-review','org-review','site-review','review.example','canonical','active','custom')",
       "INSERT INTO business_locations (id,organization_id,site_id,slug,title,timezone,max_capacity) VALUES ('loc-review','org-review','site-review','main','Main Room','Asia/Bangkok',40)",
       "INSERT INTO customers (id, organization_id, site_id, name, email, source) VALUES ('cust-review','org-review','site-review','Sivan','sivan@proof.example','reservation')",
-      "INSERT INTO organization_billing (organization_id, payment_status, access_plan, paid_through, access_expires_at) VALUES ('org-review','paid','growth','2099-01-01T00:00:00.000Z','2099-01-01T00:00:00.000Z')",
+      // Better Auth's subscription table is the only store of plan entitlement.
+      "INSERT INTO subscription (id, plan, referenceId, status, periodEnd) VALUES ('sub-review','growth','org-review','active',4102444800)",
     ]) await db.prepare(statement).run()
     const thread = requestInsertQueries({ id: 'reservation-review', kind: 'reservation', organization_id: 'org-review', site_id: 'site-review', location_id: 'loc-review',
       customer_id: 'cust-review', review_id: null, conversation_state: 'resolved', resolved_at: now,

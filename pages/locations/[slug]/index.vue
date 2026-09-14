@@ -179,7 +179,7 @@
       />
 
       <!-- Reviews preview -->
-      <section v-if="reviewsPreview.length" class="bg-elevated">
+      <section v-if="reviewsPreview.length">
         <div class="mx-auto max-w-7xl px-4 py-24 sm:px-6 lg:px-8">
           <div class="mb-16 max-w-2xl">
             <p class="saya-kicker mb-6">{{ t('saya.reviews.subtitle') }}</p>
@@ -190,25 +190,12 @@
             </h2>
           </div>
           <div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            <div v-for="review in reviewsPreview" :key="review.id" class="border border-default bg-default p-8">
-              <div class="mb-3 flex gap-1" :aria-label="t('saya.reviews.stars_aria', { rating: review.rating })">
-                <SayaIcon
-                  v-for="s in 5"
-                  :key="s"
-                  name="star"
-                  solid
-                  aria-hidden="true"
-                  class="size-3.5"
-                  :class="s <= review.rating ? 'text-primary' : 'text-muted'"
-                />
-                <span class="sr-only">{{ t('saya.reviews.stars_aria', { rating: review.rating }) }}</span>
-              </div>
-              <p class="text-sm leading-relaxed text-default">"{{ review.content }}"</p>
-              <div class="mt-6 border-t border-default pt-4">
-                <div class="text-sm font-medium text-default">{{ review.author_name }}</div>
-                <GoogleReviewAttribution v-if="review.source === 'google_places'" :metadata="review.google_review_metadata" :source-url="review.original_reference" />
-              </div>
-            </div>
+            <SayaReviewCard
+              v-for="review in reviewsPreview"
+              :key="review.id"
+             
+              :review="review"
+            />
           </div>
         </div>
       </section>
@@ -290,6 +277,7 @@
 
 <script setup lang="ts">
 import { formatOpeningHours, getIsOpenNow, getActiveSpecialClosure, formatClosureMessage } from '~/utils/formatters'
+import { formatLocationAddress, type LocationAddressInput } from '~/utils/location-address'
 import { getTodayHoursLabel } from '~/shared/reservation-hours'
 import { formatProductMoney } from '~/utils/product-money'
 import { productLocationCollectionPath, resolveProductPresentation } from '~/utils/product-presentation'
@@ -365,6 +353,7 @@ const otherLocations = computed(() => locations.value.filter((l: ApiRecord) => l
 
 // Reviews preview from bootstrap
 const reviewsPreview = computed(() => locationReviews.value.slice(0, 3))
+
 
 // Neutral default until the owner picks a brand color in onboarding.
 const locationHeroBrandColor = computed(() => pageConfig.value?.brand_color || '#3F3F46')
@@ -475,11 +464,7 @@ const sanitizedExtraNotes = computed(() => DOMPurify.sanitize(extraNotes.value))
 const canonicalFormattedAddress = computed(() => {
   const loc = location.value
   if (!loc) return ''
-  if (loc.address && typeof loc.address === 'object') {
-    const a = loc.address
-    return [a.addressLines?.[0], a.locality, a.administrativeArea, a.postalCode].filter(Boolean).join(', ')
-  }
-  return loc.address || loc.city || ''
+  return formatLocationAddress(loc.address as LocationAddressInput) || loc.city || ''
 })
 const formattedAddress = computed(() => locale.value === 'en'
   ? canonicalFormattedAddress.value

@@ -6,8 +6,8 @@ import type { Subscription } from '@better-auth/stripe'
 import { betterAuthTimestampToIso } from '~/server/utils/better-auth-timestamps'
 import { createAuth, type CloudflareEnv } from '~/server/utils/auth'
 import { getOrgAdapter, hasPermission } from 'better-auth/plugins'
-import type { EntitlementsMap } from '~/server/utils/billing-entitlements'
-import { getOrganizationBillingProjection } from '~/server/utils/organization-billing'
+import { getPlanEntitlements, type EntitlementsMap } from '~/server/utils/billing-entitlements'
+import { getOrganizationEntitlements, getOrganizationPlan } from '~/server/utils/billing-access'
 import { createStripeClient } from '~/server/utils/stripe-client'
 import { organizationAccessControl, organizationRoles } from '~/utils/organization-access'
 import { assertNewSalePlan } from '~/shared/billing-model'
@@ -27,7 +27,6 @@ export interface SiteBillingStatus {
   stripeCustomerId?: string
   stripeSubscriptionId?: string
   subscriptionStatus?: string
-  paymentStatus?: string
   currentPeriodEnd?: string
   cancelAtPeriodEnd?: boolean
   entitlements: EntitlementsMap
@@ -63,8 +62,7 @@ export async function getOrganizationBillingStatus(
 ): Promise<SiteBillingStatus> {
   const authContext = await createAuth(env).$context
   const organizationAdapter = getOrgAdapter(authContext as Parameters<typeof getOrgAdapter>[0], {})
-  const [projection, organization, subscriptions] = await Promise.all([
-    getOrganizationBillingProjection(db, organizationId),
+  const [organization, subscriptions] = await Promise.all([
     organizationAdapter.findOrganizationById(organizationId),
     authContext.adapter.findMany<Subscription>({
       model: 'subscription',
@@ -77,6 +75,7 @@ export async function getOrganizationBillingStatus(
   const current = subscriptions.filter(row => row.status !== 'canceled' && row.status !== 'incomplete_expired')
   if (current.length > 1) throw new Error('Organization has multiple current subscriptions')
   const subscription = current[0]
+  const plan = await getOrganizationPlan(env, organizationId)
   const customerId = 'stripeCustomerId' in organization && typeof organization.stripeCustomerId === 'string'
     ? organization.stripeCustomerId
     : undefined
@@ -84,35 +83,37 @@ export async function getOrganizationBillingStatus(
     throw new Error('Subscription customer does not match its organization')
   }
   return {
-    plan: projection.effectivePlan,
+    plan,
     stripeCustomerId: customerId,
     stripeSubscriptionId: subscription?.stripeSubscriptionId ?? undefined,
     subscriptionStatus: subscription?.status ?? undefined,
-    paymentStatus: projection.paymentStatus,
     currentPeriodEnd: subscription?.periodEnd ? betterAuthTimestampToIso(subscription.periodEnd, 'subscription.periodEnd') : undefined,
     cancelAtPeriodEnd: subscription ? Boolean(subscription.cancelAtPeriodEnd) : undefined,
-    entitlements: projection.entitlements,
+    entitlements: getPlanEntitlements(plan),
   }
 }
 
 // ── Per-site entitlements ─────────────────────────────────────────────────────
 
-export async function hasSiteEntitlement(db: DbClient, siteId: string, key: string): Promise<boolean> {
+export async function hasSiteEntitlement(
+  env: CloudflareEnv,
+  db: DbClient,
+  siteId: string,
+  key: string,
+): Promise<boolean> {
   const site = await queryFirst<{ organization_id: string }>(db, `
     SELECT organization_id FROM sites WHERE id = ? LIMIT 1
   `, [siteId])
   if (!site) return false
-  const projection = await getOrganizationBillingProjection(db, site.organization_id)
-  return projection.entitlements[key] === true
+  return (await getOrganizationEntitlements(env, site.organization_id))[key] === true
 }
 
 export async function hasOrganizationEntitlement(
-  db: DbClient,
+  env: CloudflareEnv,
   organizationId: string,
   key: string,
 ): Promise<boolean> {
-  const projection = await getOrganizationBillingProjection(db, organizationId)
-  return projection.entitlements[key] === true
+  return (await getOrganizationEntitlements(env, organizationId))[key] === true
 }
 
 // ── Stripe helpers ────────────────────────────────────────────────────────────

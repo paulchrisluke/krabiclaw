@@ -328,7 +328,7 @@ async function loadPublicPageSource(
   const localizedLocale = locale && locale !== 'en' ? locale : null
   let publicLocalizations: ExactPublicLocalization[] = []
   if (localizedLocale) {
-    publicLocalizations = await loadExactPublicLocalizations(db, orgId, siteId, localizedLocale)
+    publicLocalizations = await loadExactPublicLocalizations(env, db, orgId, siteId, localizedLocale)
   }
 
   const localizedLocationId = localizedLocale && locationSlug
@@ -430,7 +430,7 @@ async function loadPublicPageSource(
     idxReviews = push(
       `SELECT r.id, r.author_name, r.rating, r.content, r.created_at, r.source,
               r.original_review_date, r.original_reference, r.google_review_metadata,
-              r.location_id, bl.title AS location_title
+              r.owner_reply, r.owner_reply_at, r.location_id, bl.title AS location_title
        FROM reviews r
        LEFT JOIN business_locations bl ON bl.id = r.location_id
        WHERE r.site_id = ? AND r.status = 'approved'
@@ -444,7 +444,7 @@ async function loadPublicPageSource(
 
   if (locationId && requestedDatasets.has("reviews"))
     idxLocReviews = push(
-      `SELECT r.id, r.author_name, r.rating, r.content, r.created_at, r.source, r.original_review_date, r.original_reference, r.google_review_metadata
+      `SELECT r.id, r.author_name, r.rating, r.content, r.created_at, r.source, r.original_review_date, r.original_reference, r.google_review_metadata, r.owner_reply, r.owner_reply_at
        FROM reviews r WHERE r.location_id = ? AND r.site_id = ? AND r.status = 'approved'
        ORDER BY CASE WHEN r.source = 'google_places' THEN r.original_review_date ELSE r.created_at END DESC, r.id ASC LIMIT 3`,
       [locationId, siteId],
@@ -608,11 +608,11 @@ async function loadPublicPageSource(
   }
   const [tenantPage, storyPage] = await Promise.all([
     contentPagePath
-      ? getPublicTenantPageForPath(db, siteId, contentPagePath, tenantPageOptions)
+      ? getPublicTenantPageForPath(env, db, siteId, contentPagePath, tenantPageOptions)
       : null,
     // The home teaser renders the story; every other route reads its own page.
     contentPagePath === '/'
-      ? getPublicTenantPageForPath(db, siteId, STORY_SOURCE_PATH, tenantPageOptions)
+      ? getPublicTenantPageForPath(env, db, siteId, STORY_SOURCE_PATH, tenantPageOptions)
       : null,
   ])
   // These complete built-in routes may display an optional CMS content overlay.
@@ -877,7 +877,7 @@ async function loadPublicPageSource(
   }
   const localeRepresentations = !representationResource && tenantPage?.localeRepresentations
     ? tenantPage.localeRepresentations
-    : await listPublicLocaleRepresentations(db, {
+    : await listPublicLocaleRepresentations(env, db, {
         organizationId: orgId,
         siteId,
         sourcePath: representationSourcePath,

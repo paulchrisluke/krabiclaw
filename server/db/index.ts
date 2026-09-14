@@ -136,3 +136,17 @@ export async function executeBatch(
 }
 
 export { rawClient, schema }
+
+/**
+ * Every row of a scan that has no natural bound, read a page at a time so a
+ * long list is neither cut off nor loaded in one statement. `sql` ends before
+ * its LIMIT; the page size and offset are bound here.
+ */
+export async function queryAllPages<T>(db: DbClient, sql: string, params: unknown[], pageSize = 500): Promise<T[]> {
+  const rows: T[] = []
+  for (let offset = 0; ; offset += pageSize) {
+    const page = await queryAll<T>(db, `${sql} LIMIT ? OFFSET ?`, [...params, pageSize, offset])
+    rows.push(...page)
+    if (page.length < pageSize) return rows
+  }
+}

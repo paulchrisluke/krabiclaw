@@ -168,11 +168,30 @@ async function loadSite(db: DbClient, siteId: string): Promise<SiteRecord | null
     FROM sites s WHERE s.id = ? LIMIT 1`, [siteId]) ?? null
 }
 
-/** The document's leading image block, whose `media` placement is the article's cover. */
+/**
+ * The page's own picture: its first top-level block carrying a `media` placement.
+ *
+ * A site's page is its home document, which is not a content_document owner of
+ * its own — without this the home page is the one page whose card never reads
+ * its own content. Block type is not the test, because the block that leads a
+ * page differs per template: NCLS opens with `hero`, Ember & Slice with
+ * `heading` then `hero`, Kikuzuki with `markdown`, `heading`, then `hero`. An
+ * article opens with `image`. Carrying a picture is what they have in common.
+ */
 async function loadCoverBlockId(db: DbClient, owner: SocialCardOwner): Promise<string | null> {
-  if (owner.owner_type !== 'content_document') return null
-  const block = await queryFirst<{ id: string }>(db, `SELECT id FROM content_blocks
-    WHERE document_id = ? AND parent_block_id IS NULL AND position = 0 AND type = 'image' LIMIT 1`, [owner.owner_id])
+  const documentId = owner.owner_type === 'content_document'
+    ? owner.owner_id
+    : owner.owner_type === 'site'
+      ? (await queryFirst<{ id: string }>(db, `SELECT id FROM content_documents
+          WHERE site_id = ? AND kind = 'page' AND path = '/' LIMIT 1`, [owner.owner_id]))?.id ?? null
+      : null
+  if (!documentId) return null
+  const block = await queryFirst<{ id: string }>(db, `SELECT cb.id FROM content_blocks cb
+    JOIN media_placements mp ON mp.owner_type = 'content_block' AND mp.owner_id = cb.id
+      AND mp.slot = 'media' AND mp.status = 'active'
+    JOIN media_assets ma ON ma.id = mp.asset_id AND ma.status = 'active'
+    WHERE cb.document_id = ? AND cb.parent_block_id IS NULL
+    ORDER BY cb.position LIMIT 1`, [documentId])
   return block?.id ?? null
 }
 

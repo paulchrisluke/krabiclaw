@@ -1,7 +1,6 @@
 import type Stripe from 'stripe'
 import type { DbClient } from '~/server/db'
 import type { CloudflareEnv } from '~/server/utils/auth'
-import { invoiceSubscriptionId } from '~/server/utils/better-auth-stripe'
 import {
   invoiceLineIsProration,
   invoiceLineIsSubscription,
@@ -14,9 +13,6 @@ import {
 } from '~/server/utils/stripe-invoice-lines'
 import {
   consumeStripeGa4Intent,
-  claimStripeGa4PurchaseDelivery,
-  markStripeGa4PurchaseDeliveryFailed,
-  markStripeGa4PurchaseDeliverySent,
   findConsumedStripeGa4CancellationIntent,
   findPendingInitialStripeGa4Intent,
   findPendingStripeGa4Intent,
@@ -332,22 +328,18 @@ async function sendStripeGa4Purchase(
     fallbackItems: subscriptionFallbackItems(subscription, invoice.currency ?? 'usd'),
   })
 
-  const delivery = await claimStripeGa4PurchaseDelivery(db, invoice.id, event.id)
-  if (delivery === 'sent' || delivery === 'busy') return
-  if (delivery === 'missing') throw new Error(`Stripe invoice ${invoice.id} has no payment ledger row for GA4 delivery; retrying`)
-  try {
-    await sendGa4Event(env, {
-      clientId: context.clientId,
-      userId: context.userId,
-      sessionId: context.sessionId,
-      sessionCapturedAt: context.sessionCapturedAt,
-      event: eventPayload,
-    })
-    await markStripeGa4PurchaseDeliverySent(db, invoice.id, event.id)
-  } catch (error) {
-    await markStripeGa4PurchaseDeliveryFailed(db, invoice.id, event.id, error instanceof Error ? error.message : String(error))
-    throw error
-  }
+  // Sent once per delivery. Stripe redelivers an event only when this handler
+  // did not answer 2xx, and never spontaneously: a sandbox run of 34 events on
+  // 2026-09-14 delivered 34 distinct ids. A purchase counted twice in GA4 in
+  // that failure case is accepted (owner decision, 2026-09-14) over keeping a
+  // delivery ledger for analytics.
+  await sendGa4Event(env, {
+    clientId: context.clientId,
+    userId: context.userId,
+    sessionId: context.sessionId,
+    sessionCapturedAt: context.sessionCapturedAt,
+    event: eventPayload,
+  })
 
   if (context.intent && (purchaseType === 'upgrade' || purchaseType === 'downgrade' || purchaseType === 'initial_subscription')) {
     await consumeStripeGa4Intent(db, context.intent.id, event.id)
@@ -493,6 +485,20 @@ async function sendStripeGa4Refund(
       purchaseType: purchaseType ?? undefined,
     }),
   })
+}
+
+/** The subscription an invoice belongs to, across both Stripe invoice shapes. */
+function invoiceSubscriptionId(invoice: {
+  subscription?: unknown
+  parent?: unknown
+}): string | null {
+  const parent = invoice.parent as { subscription_details?: { subscription?: unknown } | null } | null | undefined
+  const subscriptionValue = invoice.subscription ?? parent?.subscription_details?.subscription
+  return typeof subscriptionValue === 'string'
+    ? subscriptionValue
+    : subscriptionValue && typeof subscriptionValue === 'object' && 'id' in subscriptionValue && typeof subscriptionValue.id === 'string'
+      ? subscriptionValue.id
+      : null
 }
 
 export async function handleStripeGa4Event(

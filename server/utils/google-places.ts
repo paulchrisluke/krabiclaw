@@ -173,6 +173,31 @@ function normalizeDetail(place: RawPlace): PlaceDetails {
   }
 }
 
+/**
+ * A location's Google reviews are exactly what Google returned this sync.
+ * Google's Places API returns at most five reviews per place, chosen by
+ * Google, and the site shows exactly those (owner decision, 2026-09-14): a
+ * review Google no longer shows is not shown here either, and a row imported
+ * under a merged or legacy place id, or without a review id, is not a Google
+ * review of this place. Beachfront Pottery Krabi showed each review three
+ * times (2026-09-13) because earlier syncs kept everything ever imported.
+ * There is no fuller inventory to preserve: this response is the inventory.
+ */
+export function staleGoogleReviewDeletes(scope: { organizationId: string; siteId: string; locationId: string }, reviews: PlaceReview[]) {
+  const stale = `
+      SELECT id FROM reviews
+      WHERE organization_id = ? AND site_id = ? AND location_id = ?
+        AND source = 'google_places'
+        AND (google_review_id IS NULL OR google_review_id NOT IN (SELECT value FROM json_each(?)))`
+  const params = [scope.organizationId, scope.siteId, scope.locationId, JSON.stringify(reviews.map(review => review.google_review_id))]
+  // A review's media placements (author portrait) have no foreign key to the
+  // review, so they go first, by the same predicate.
+  return [
+    { query: `DELETE FROM media_placements WHERE owner_type = 'review' AND owner_id IN (${stale})`, params },
+    { query: `DELETE FROM reviews WHERE id IN (${stale})`, params },
+  ]
+}
+
 export function googleReviewUpserts(scope: { organizationId: string; siteId: string; locationId: string }, reviews: PlaceReview[], now: string) {
   const { organizationId, siteId, locationId } = scope
   return reviews.map(review => {
@@ -215,6 +240,7 @@ export async function syncPlaceToLocation(
       timezone = COALESCE(?, timezone),
       rating = COALESCE(?, rating),
       review_count = COALESCE(?, review_count),
+      google_place_id = COALESCE(?, google_place_id),
       last_synced_at = ?,
       updated_at = ?
     WHERE id = ? AND organization_id = ? AND site_id = ?
@@ -230,13 +256,15 @@ export async function syncPlaceToLocation(
     place.timezone,
     place.rating,
     place.ratingCount,
+    place.placeId || null,
     now,
     now,
     locationId,
     organizationId,
     siteId
-  ] }, ...googleReviewUpserts({ organizationId, siteId, locationId }, place.reviews, now)])
-  const reviewsUpserted = results.slice(1).reduce((count, result) => count + Number(result.meta?.changes ?? 0), 0)
+  ] }, ...staleGoogleReviewDeletes({ organizationId, siteId, locationId }, place.reviews),
+  ...googleReviewUpserts({ organizationId, siteId, locationId }, place.reviews, now)])
+  const reviewsUpserted = results.slice(results.length - place.reviews.length).reduce((count, result) => count + Number(result.meta?.changes ?? 0), 0)
 
   return { place, reviewsUpserted }
 }

@@ -14,6 +14,7 @@ function uid(prefix: string) {
 export async function seedNewSite(
   db: DbClient,
   params: {
+    env: CloudflareEnv;
     organizationId: string;
     siteId: string;
     name: string;
@@ -22,7 +23,7 @@ export async function seedNewSite(
 ): Promise<string> {
   if (!db) throw new Error("Database not configured");
 
-  const { organizationId, siteId, name, vertical } = params;
+  const { env, organizationId, siteId, name, vertical } = params;
 
   // Reuse existing location on resume (site may have failed mid-seed)
   const existing = await queryFirst<{ id: string }>(
@@ -122,7 +123,7 @@ export async function seedNewSite(
       },
     })
   }
-  await createTenantPagesBatch(db, { organizationId, siteId, pages: pagesToCreate })
+  await createTenantPagesBatch(db, { env, organizationId, siteId, pages: pagesToCreate })
 
   // ── Consultation settings (professional services only) ────────────────────
   // The Blawby shell reads settings_json.$.consultation on every route and

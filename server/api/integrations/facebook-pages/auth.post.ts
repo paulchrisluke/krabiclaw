@@ -7,10 +7,10 @@ import { hasSiteEntitlement } from '~/server/utils/billing'
 import { requireRequestedSiteWideAccess } from '~/server/utils/location-access'
 
 export default defineHandler(async (event) => {
-  const body = await readBody(event).catch(() => ({})) as { siteId?: string }
-  const { env, db, session, site } = await requireRequestedSiteWideAccess(event, body.siteId)
+  const body = await readBody(event) as { siteId?: string } | undefined
+  const { env, db, session, site } = await requireRequestedSiteWideAccess(event, body?.siteId)
 
-  const allowed = await hasSiteEntitlement(db, site.id, 'managed_service')
+  const allowed = await hasSiteEntitlement(env, db, site.id, 'managed_service')
   if (!allowed) {
     return jsonResponse({ error: 'Facebook sync requires Growth.' }, { status: 403 })
   }
