@@ -325,10 +325,6 @@ export default defineNuxtConfig({
       pathPrefix: false,
     },
     {
-      path: '~/components/reviews',
-      pathPrefix: false,
-    },
-    {
       path: '~/lib/components/workspace/dashboard',
       pathPrefix: false,
     },
