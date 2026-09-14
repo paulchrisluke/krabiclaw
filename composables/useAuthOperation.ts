@@ -1,14 +1,7 @@
 import { authClient } from '~/lib/auth-client'
 import { googleSignInOptions } from '~/shared/auth/oauth-login'
 
-export interface UseAuthOperationResult {
-  loading: Readonly<Ref<boolean>>
-  error: Ref<string | null>
-  run: <T>(operation: () => Promise<T>, fallback: string) => Promise<T | null>
-  signInWithGoogle: (callbackURL?: string, loginHint?: string) => Promise<unknown>
-}
-
-export function useAuthOperation(): UseAuthOperationResult {
+export function useAuthOperation() {
   const loading = ref(false)
   const error = ref<string | null>(null)
 

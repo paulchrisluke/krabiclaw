@@ -1,13 +1,21 @@
-// Error-shaping shared between the MCP route (server/api/mcp.post.ts) and
-// every tool executor. JSON-RPC envelope parsing, protocol-version
-// negotiation, and the standard non-tool-call methods now belong to
-// @modelcontextprotocol/server (see server/api/mcp.post.ts) — this file only
-// keeps the pieces executors and the route still need: a typed error shape
-// business logic can throw, and the two envelope builders used for the
-// handful of responses the route still builds by hand (credential-missing,
-// pre-dispatch auth failures) before handing off to the SDK.
+
+
+import type { H3Event } from 'nitro';
+
+
+export const MCP_PROTOCOL_VERSION = '2025-11-25'
+export const SUPPORTED_PROTOCOL_VERSIONS = ['2025-11-25', '2025-06-18', '2025-03-26', '2024-11-05'] as const
+const SUPPORTED_PROTOCOL_VERSION_SET = new Set<string>(SUPPORTED_PROTOCOL_VERSIONS)
 
 export type JsonRpcId = string | number | null
+
+export interface McpRpcRequest {
+  jsonrpc?: string
+  id?: JsonRpcId
+  method?: string
+  params?: Record<string, unknown>
+  _meta?: Record<string, unknown>
+}
 
 export interface McpErrorShape {
   code: number
@@ -31,6 +39,82 @@ export const MCP_ERROR = {
   internal: -32603,
 } as const
 
+function metaString(request: McpRpcRequest, key: string) {
+  const value = request._meta?.[key]
+  return typeof value === 'string' ? value : null
+}
+
+/**
+ * Legacy initialize negotiates a version; ordinary requests must already use
+ * a supported revision (validated by readMcpRequest).
+ */
+function supportedProtocolVersionOrDefault(requested: string | null) {
+  return requested && SUPPORTED_PROTOCOL_VERSION_SET.has(requested) ? requested : MCP_PROTOCOL_VERSION
+}
+
+export function readMcpRequest(event: H3Event, body: unknown): McpRpcRequest {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    throw mcpProtocolError(MCP_ERROR.invalidRequest, 'Invalid JSON-RPC request body.')
+  }
+
+  const request = body as McpRpcRequest
+  const headerMethod = (event.req.headers.get('mcp-method'))
+  const headerVersion = (event.req.headers.get('mcp-protocol-version'))
+  const headerName = (event.req.headers.get('mcp-name'))
+
+  const method = request.method ?? headerMethod ?? metaString(request, 'io.modelcontextprotocol/method')
+  if (!method) {
+    throw mcpProtocolError(MCP_ERROR.invalidRequest, 'Missing MCP method.')
+  }
+
+  // For `initialize`, the version lives in params.protocolVersion (body), not a header.
+  const bodyVersion = typeof (body as Record<string, unknown> & { params?: { protocolVersion?: unknown } })
+    ?.params?.protocolVersion === 'string'
+    ? (body as { params: { protocolVersion: string } }).params.protocolVersion
+    : null
+  const requestedVersion = method === 'initialize'
+    ? bodyVersion
+    : headerVersion
+  // This is a legacy server. HTTP 400 with a legacy error lets dual-era HTTP
+  // clients detect it and initialize; a successful modern discovery would
+  // incorrectly identify us as supporting stateless 2026 semantics.
+  if (method !== 'initialize' && requestedVersion !== null && !SUPPORTED_PROTOCOL_VERSION_SET.has(requestedVersion)) {
+    throw mcpProtocolError(MCP_ERROR.invalidRequest, `Unsupported MCP protocol version: ${requestedVersion}.`, {
+      supported: SUPPORTED_PROTOCOL_VERSIONS,
+      requested: requestedVersion,
+    }, 'protocol')
+  }
+  const version = supportedProtocolVersionOrDefault(requestedVersion)
+
+  if (request.jsonrpc && request.jsonrpc !== '2.0') {
+    throw mcpProtocolError(MCP_ERROR.invalidRequest, 'Only JSON-RPC 2.0 is supported.')
+  }
+
+  if (method === 'tools/call') {
+    const toolName = headerName
+      ?? metaString(request, 'io.modelcontextprotocol/name')
+      ?? (typeof request.params?.name === 'string' ? request.params.name : null)
+    if (!toolName) {
+      throw mcpProtocolError(MCP_ERROR.invalidRequest, 'Missing MCP tool name.')
+    }
+    request.params = {
+      ...(request.params ?? {}),
+      name: toolName,
+    }
+  }
+
+  request.method = method
+  request._meta = {
+    ...(request._meta ?? {}),
+    'io.modelcontextprotocol/version': version,
+  }
+  return request
+}
+
+export function negotiatedMcpProtocolVersion(request: McpRpcRequest) {
+  return supportedProtocolVersionOrDefault(metaString(request, 'io.modelcontextprotocol/version'))
+}
+
 export function mcpSuccess(id: JsonRpcId | undefined, result: unknown) {
   return {
     jsonrpc: '2.0',
@@ -51,6 +135,30 @@ export function mcpProtocolError(code: number, message: string, data?: unknown, 
   const error = new Error(message) as Error & { mcp: McpErrorShape }
   error.mcp = { code, message, data, kind }
   return error
+}
+
+// Protocol-level fields that can legitimately appear alongside `arguments` in
+// a `tools/call` params object.
+const MCP_CALL_PROTOCOL_PARAM_KEYS = new Set(['name', '_meta', 'task'])
+
+// Shared by the MCP route (server/api/mcp.post.ts)
+// so `tools/call` argument parsing stays one canonical contract.
+export function parseMcpToolCallArguments(params: Record<string, unknown> | undefined): Record<string, unknown> {
+  const callParams = params ?? {}
+  const unexpectedKeys = Object.keys(callParams)
+    .filter(key => key !== 'arguments' && !MCP_CALL_PROTOCOL_PARAM_KEYS.has(key))
+  if (unexpectedKeys.length > 0) {
+    throw mcpProtocolError(
+      MCP_ERROR.invalidParams,
+      `Tool arguments must be nested under params.arguments. Unexpected params: ${unexpectedKeys.join(', ')}.`,
+    )
+  }
+  if (!('arguments' in callParams)) return {}
+  const argsValue = callParams.arguments
+  if (!argsValue || typeof argsValue !== 'object' || Array.isArray(argsValue)) {
+    throw mcpProtocolError(MCP_ERROR.invalidParams, 'arguments must be an object.')
+  }
+  return argsValue as Record<string, unknown>
 }
 
 export function asMcpError(error: unknown): McpErrorShape {
@@ -78,4 +186,13 @@ export function asMcpError(error: unknown): McpErrorShape {
   }
 
   return { code: MCP_ERROR.internal, message: 'Internal server error', kind: 'transport' }
+}
+
+export function protocolCache(resultType: string, payload: Record<string, unknown>, ttlMs = 30_000) {
+  return {
+    resultType,
+    ttlMs,
+    cacheScope: 'private',
+    ...payload,
+  }
 }
