@@ -6,7 +6,7 @@
 // (user, category) is what proves the request came from a message we sent.
 
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
-import { getNotificationPreferences, setNotificationPreference } from '~/server/domain/notification-preferences'
+import { disableCategoryEmail } from '~/server/domain/notification-preferences'
 import { parseUnsubscribeTarget, verifyUnsubscribeToken } from '~/server/utils/unsubscribe'
 
 export default defineHandler(async (event) => {
@@ -24,12 +24,9 @@ export default defineHandler(async (event) => {
   }
 
   // Unsubscribing silences the email, not the whole category: an owner who
-  // still wants the WhatsApp alert keeps it.
-  const current = await getNotificationPreferences(db, target.userId)
-  await setNotificationPreference(db, target.userId, target.category, {
-    email: false,
-    whatsapp: current[target.category].whatsapp,
-  })
+  // still wants the WhatsApp alert keeps it. Written as one statement rather
+  // than read-then-write, so a settings save landing in between is not undone.
+  await disableCategoryEmail(db, target.userId, target.category)
   return jsonResponse({ success: true, category: target.category })
 })
 import { defineHandler } from 'nitro';

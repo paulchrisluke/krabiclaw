@@ -560,7 +560,14 @@ async function notifyOwner(
   const targetByPhone = new Map<string, OwnerPhoneRecipient>()
   for (const target of configuredTargets) {
     const existing = targetByPhone.get(target.phone)
-    targetByPhone.set(target.phone, { phone: target.phone, requireSiteWide: Boolean(existing?.requireSiteWide || target.requireSiteWide) })
+    // A number that is both the location's and the site's is reachable at
+    // location scope, so the *least* restrictive of the two wins. Taking the
+    // most restrictive locked a location-scoped editor out of alerts for their
+    // own location whenever the site reused their number.
+    targetByPhone.set(target.phone, {
+      phone: target.phone,
+      requireSiteWide: existing ? existing.requireSiteWide && target.requireSiteWide : target.requireSiteWide,
+    })
   }
 
   // Internal email alerts always go to the org owner/admin account.

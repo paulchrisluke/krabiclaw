@@ -21,10 +21,14 @@ function isPreferenceMap(value: unknown): value is { preferences: NotificationPr
  * rather than fetching their own: a save in the leaf has to change what the row
  * behind it says, and two fetches would let those disagree.
  */
-export function useNotificationPreferences() {
-  const state = useState<NotificationPreferenceMap | null>('account-notification-preferences', () => null)
-  const pending = useState('account-notification-preferences-pending', () => false)
-  const error = useState<string | null>('account-notification-preferences-error', () => null)
+export function useNotificationPreferences(userId: MaybeRefOrGetter<string | null | undefined>) {
+  // Keyed by account. A sign-out followed by a sign-in without a document
+  // reload keeps the old key's payload alive, and an unscoped key would show —
+  // and then save — one person's settings under another person's session.
+  const key = computed(() => `account-notification-preferences:${toValue(userId) ?? 'anonymous'}`)
+  const state = useState<NotificationPreferenceMap | null>(key.value, () => null)
+  const pending = useState(`${key.value}:pending`, () => false)
+  const error = useState<string | null>(`${key.value}:error`, () => null)
 
   async function load(force = false) {
     if (state.value && !force) return

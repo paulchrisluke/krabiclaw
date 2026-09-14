@@ -46,7 +46,8 @@ const notificationsPath = computed(() => '/dashboard/account/profile/notificatio
 const profilePath = '/dashboard/account/profile'
 const frame = useEditorFrame(notificationsPath)
 
-const { preferences, error, load } = useNotificationPreferences()
+const { sessionData } = await useAuthSession()
+const { preferences, error, load } = useNotificationPreferences(() => sessionData.value?.user?.id)
 await load()
 
 // The row states what is on rather than what the category is, so the index

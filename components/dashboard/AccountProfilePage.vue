@@ -191,7 +191,7 @@ watchEffect(() => {
   }
 })
 
-const { preferences: notificationPreferences, load: loadNotificationPreferences } = useNotificationPreferences()
+const { preferences: notificationPreferences, load: loadNotificationPreferences } = useNotificationPreferences(() => sessionData.value?.user?.id)
 await loadNotificationPreferences()
 
 /**

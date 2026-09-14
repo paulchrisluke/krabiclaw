@@ -37,8 +37,8 @@ const category = computed(() => {
   return segment
 })
 
-const { preferences, save } = useNotificationPreferences()
 const { sessionData } = await useAuthSession()
+const { preferences, save } = useNotificationPreferences(() => sessionData.value?.user?.id)
 
 const copy = computed(() => NOTIFICATION_CATEGORY_COPY[category.value])
 const setting = computed(() => preferences.value?.[category.value] ?? null)

@@ -4,7 +4,7 @@ import { getPlatformSite } from '~/server/utils/platform-site'
 import { getPlatformDomain } from '~/server/utils/dashboard-notification-links'
 import { sendEmail, type EmailDeliveryMode } from '~/server/utils/email-delivery'
 import { buildUnsubscribeUrl } from '~/server/utils/unsubscribe'
-import { filterUsersWantingEmail } from '~/server/domain/notification-preferences'
+import { wantsCategoryEmailSql } from '~/server/domain/notification-preferences'
 import { collectionArticlePath } from '~/utils/article-collections'
 import { coverJoinSql } from '~/server/utils/content/cover'
 import PlatformArticleAnnouncement from '~/server/emails/templates/PlatformArticleAnnouncement'
@@ -103,20 +103,54 @@ interface RecipientRow {
  * address is how a sending domain's reputation goes.
  */
 export async function listPendingRecipients(db: DbClient, broadcastId: string, limit: number): Promise<RecipientRow[]> {
-  const candidates = await queryAll<RecipientRow>(db, `
+  const wants = wantsCategoryEmailSql('u.id', BROADCAST_CATEGORY)
+  return queryAll<RecipientRow>(db, `
     SELECT u.id, u.email
       FROM user u
      WHERE u.emailVerified = 1
        AND u.isAnonymous = 0
        AND COALESCE(u.banned, 0) = 0
        AND u.deletionScheduledAt IS NULL
+       AND ${wants.sql}
        AND NOT EXISTS (SELECT 1 FROM broadcast_deliveries d WHERE d.broadcast_id = ? AND d.user_id = u.id)
      ORDER BY u.createdAt ASC
      LIMIT ?
-  `, [broadcastId, limit])
+  `, [...wants.params, broadcastId, limit])
+}
 
-  const wanted = await filterUsersWantingEmail(db, candidates.map(row => row.id), BROADCAST_CATEGORY)
-  return candidates.filter(row => wanted.has(row.id))
+/**
+ * A broadcast that still has someone left to mail.
+ *
+ * Checked before a new article is claimed. Claiming inserts the `broadcasts`
+ * row, which is also what excludes the article from findAnnounceableArticle —
+ * so without this, the first tick would send one batch and every recipient
+ * past BROADCAST_SENDS_PER_RUN would never be mailed at all.
+ */
+export async function findResumableBroadcast(db: DbClient): Promise<{ id: string; content_document_id: string } | null> {
+  const wants = wantsCategoryEmailSql('u.id', BROADCAST_CATEGORY)
+  return queryFirst<{ id: string; content_document_id: string }>(db, `
+    SELECT b.id, b.content_document_id
+      FROM broadcasts b
+     WHERE EXISTS (
+       SELECT 1 FROM user u
+        WHERE u.emailVerified = 1 AND u.isAnonymous = 0 AND COALESCE(u.banned, 0) = 0 AND u.deletionScheduledAt IS NULL
+          AND ${wants.sql}
+          AND NOT EXISTS (SELECT 1 FROM broadcast_deliveries d WHERE d.broadcast_id = b.id AND d.user_id = u.id)
+     )
+     ORDER BY b.created_at ASC
+     LIMIT 1
+  `, wants.params)
+}
+
+/** The article a claimed broadcast refers to, for rendering the next batch. */
+export async function loadBroadcastArticle(db: DbClient, contentDocumentId: string): Promise<AnnounceableArticle | null> {
+  return queryFirst<AnnounceableArticle>(db, `
+    SELECT p.id, p.title, p.slug, p.summary, (p.metadata_json ->> '$.category') AS category,
+           cover_asset.public_url AS cover_public_url
+      FROM content_documents p
+      ${coverJoinSql('p')}
+     WHERE p.id = ?
+  `, [contentDocumentId])
 }
 
 export async function recordBroadcastDelivery(
@@ -146,10 +180,20 @@ export interface BroadcastRunResult {
  * wrote, so the next tick resumes rather than restarting.
  */
 export async function runArticleBroadcast(db: DbClient, env: BroadcastEnv, now = new Date()): Promise<BroadcastRunResult> {
-  const article = await findAnnounceableArticle(db, now)
-  if (!article) return { broadcast_id: null, article_id: null, sent: 0, failed: 0, skipped: 'no article to announce' }
+  // Finish what is already in flight before starting anything new, so a
+  // recipient list longer than one batch is actually drained.
+  const resumable = await findResumableBroadcast(db)
+  const claimed = resumable
+    ? { broadcastId: resumable.id, article: await loadBroadcastArticle(db, resumable.content_document_id) }
+    : await (async () => {
+        const article = await findAnnounceableArticle(db, now)
+        return article ? { broadcastId: await claimBroadcast(db, article.id), article } : null
+      })()
 
-  const broadcastId = await claimBroadcast(db, article.id)
+  if (!claimed) return { broadcast_id: null, article_id: null, sent: 0, failed: 0, skipped: 'no article to announce' }
+  const { broadcastId, article } = claimed
+  if (!article) throw new Error(`Broadcast ${broadcastId} refers to an article that is gone`)
+
   const recipients = await listPendingRecipients(db, broadcastId, BROADCAST_SENDS_PER_RUN)
   if (recipients.length === 0) {
     return { broadcast_id: broadcastId, article_id: article.id, sent: 0, failed: 0, skipped: 'no pending recipients' }

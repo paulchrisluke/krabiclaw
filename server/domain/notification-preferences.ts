@@ -69,6 +69,33 @@ export async function setNotificationPreference(
 }
 
 /**
+ * Turns one category's email off without reading the row first.
+ *
+ * An unsubscribe silences the email and leaves WhatsApp alone, but doing that
+ * as read-then-write would let a settings save between the two be overwritten
+ * by whatever the read saw. On conflict only email_enabled moves; a person with
+ * no row yet gets one carrying the category's default WhatsApp setting.
+ */
+export async function disableCategoryEmail(
+  db: DbClient,
+  userId: string,
+  category: NotificationCategory,
+): Promise<void> {
+  if (isMandatoryEmailCategory(category)) {
+    throw new Error(`${category} email cannot be disabled`)
+  }
+  await execute(
+    db,
+    `INSERT INTO user_notification_preferences (user_id, category, email_enabled, whatsapp_enabled, updated_at)
+     VALUES (?, ?, 0, ?, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+     ON CONFLICT (user_id, category) DO UPDATE SET
+       email_enabled = 0,
+       updated_at = excluded.updated_at`,
+    [userId, category, NOTIFICATION_CATEGORY_DEFAULTS[category].whatsapp ? 1 : 0],
+  )
+}
+
+/**
  * Whether one person wants one category on one channel.
  *
  * This is a preference, not an authorization. A `true` here means the person
@@ -92,26 +119,18 @@ export async function wantsNotification(
 }
 
 /**
- * The subset of the given users who want this category over email, in one
- * query. The broadcast task reads thousands of recipients and must not issue a
- * preference lookup per person.
+ * A SQL predicate for "this user wants `category` over email", for callers that
+ * must page recipients — filtering in JavaScript after a LIMIT returns an empty
+ * batch whenever the first page is all opt-outs, and the same page then comes
+ * back forever.
+ *
+ * Returns the fragment and the parameters it consumes, in order.
  */
-export async function filterUsersWantingEmail(
-  db: DbClient,
-  userIds: string[],
-  category: NotificationCategory,
-): Promise<Set<string>> {
-  if (userIds.length === 0) return new Set()
-  if (isMandatoryEmailCategory(category)) return new Set(userIds)
-
-  const placeholders = userIds.map(() => '?').join(', ')
-  const rows = await queryAll<{ user_id: string; email_enabled: number }>(
-    db,
-    `SELECT user_id, email_enabled FROM user_notification_preferences
-      WHERE category = ? AND user_id IN (${placeholders})`,
-    [category, ...userIds],
-  )
-  const stored = new Map(rows.map(row => [row.user_id, Boolean(row.email_enabled)]))
-  const whenUnset = NOTIFICATION_CATEGORY_DEFAULTS[category].email
-  return new Set(userIds.filter(userId => stored.get(userId) ?? whenUnset))
+export function wantsCategoryEmailSql(userIdColumn: string, category: NotificationCategory): { sql: string; params: unknown[] } {
+  if (isMandatoryEmailCategory(category)) return { sql: '1 = 1', params: [] }
+  return {
+    sql: `COALESCE((SELECT pref.email_enabled FROM user_notification_preferences pref
+            WHERE pref.user_id = ${userIdColumn} AND pref.category = ?), ?) = 1`,
+    params: [category, NOTIFICATION_CATEGORY_DEFAULTS[category].email ? 1 : 0],
+  }
 }
