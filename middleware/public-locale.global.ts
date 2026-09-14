@@ -26,7 +26,17 @@ export default defineNuxtRouteMiddleware(async (to) => {
       // the language is the destination page's own answer: its data load is
       // what holds that fact, and it 404s when it does not.
       const catalog = platformLocale(requested)
-      if (!catalog) throw createError({ statusCode: 404, statusMessage: 'Language is not enabled for this site' })
+      // A path prefix is only a language when it names one. `Intl` calls every
+      // well-formed subtag a locale, and our own routes include several —
+      // `/dev`, `/qa` — so reading the prefix as a language here 404'd real
+      // pages after the server had already rendered them. A route that
+      // declares a `locale` param means what it says and still 404s.
+      if (!catalog) {
+        if (typeof to.params.locale === 'string' && to.params.locale) {
+          throw createError({ statusCode: 404, statusMessage: 'Language is not enabled for this site' })
+        }
+        return
+      }
       state.value = catalog.locale
       setAppLocale(catalog.locale, { ...catalog.messages })
       return

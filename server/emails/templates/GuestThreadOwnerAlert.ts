@@ -3,10 +3,10 @@ import { EText, ESection } from '../vue-email'
 import EmailShell from '../layouts/EmailShell'
 import EmailAction from '../components/EmailAction'
 
-const PRIMARY = '#FB7461'
-const QUOTE_BG = '#fff7f4'
-const QUOTE_FG = '#374151'
-const FG_MUTED = '#52525b'
+const PRIMARY = '#FB7461' // --kc-coral
+const QUOTE_BG = '#FFF3F0' // a coral-tinted cream, the light card's accent
+const QUOTE_FG = '#1F2547' // --kc-navy
+const FG_MUTED = '#4A5380' // --kc-navy-500
 
 /**
  * Tells a member a guest has replied, and quotes enough of the message to

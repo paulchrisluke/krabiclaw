@@ -34,10 +34,17 @@ export default defineHandler(async (event) => {
   const uploaded = await uploadImageBuffer(env, buffer, `avatar-${session.user.id}`, mimeType)
 
   const previous = typeof session.user.image === 'string' ? session.user.image : null
-  await createAuth(env).api.updateUser({
-    headers: event.req.headers,
-    body: { image: uploaded.publicUrl },
-  })
+  try {
+    await createAuth(env).api.updateUser({
+      headers: event.req.headers,
+      body: { image: uploaded.publicUrl },
+    })
+  } catch (cause) {
+    // The image exists before the account points at it, so a failed update
+    // would otherwise leave it orphaned in Cloudflare Images forever.
+    await deleteImage(env, uploaded.imageId).catch(() => undefined)
+    throw cause
+  }
 
   // Replacing an avatar we hosted removes the old image; one hosted elsewhere
   // is left alone.

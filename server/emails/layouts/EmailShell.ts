@@ -1,24 +1,29 @@
 import { defineComponent, h, type PropType } from 'vue'
 import { EHtml, EHead, EBody, EPreview, EContainer, ESection, EText, EHeading, EButton, ELink, EImg, EStyle } from '../vue-email'
 
-// Nuxt UI-inspired color tokens (email-safe inline styles)
-// Light mode
-const PRIMARY = '#FB7461' // coral
-const PRIMARY_TEXT = '#1F2547' // navy
-const BG = '#fafafa' // zinc-50
-const FG = '#18181b' // zinc-900
-const FG_MUTED = '#52525b' // zinc-600
-const FG_DIMMED = '#71717a' // zinc-500
-const BORDER = '#e4e4e7' // zinc-200
-const CARD_BG = '#ffffff' // white
+// The product's own palette, not a generic neutral one. These mirror
+// assets/css/base.css: cream and navy in light, the navy dark theme in dark.
+// Email cannot read CSS variables, so the values are copied — keep them in step
+// with base.css when the brand palette moves.
+//
+// Light (--kc-cream / --kc-cream-elev / --kc-navy)
+const PRIMARY = '#FB7461' // --kc-coral
+const PRIMARY_TEXT = '#1F2547' // --kc-navy
+const BG = '#F8F6F3' // --kc-cream
+const FG = '#1F2547' // --kc-navy
+const FG_MUTED = '#4A5380' // --kc-navy-500
+const FG_DIMMED = '#8C92B0' // --kc-navy-300
+const BORDER = '#E6E1D9' // --kc-border
+const CARD_BG = '#FFFFFF' // --kc-cream-elev
 
-// Dark mode
-const BG_DARK = '#09090b' // zinc-950
-const FG_DARK = '#fafafa' // zinc-50
-const FG_MUTED_DARK = '#a1a1aa' // zinc-400
-const FG_DIMMED_DARK = '#71717a' // zinc-500
-const BORDER_DARK = '#27272a' // zinc-800
-const CARD_BG_DARK = '#18181b' // zinc-900
+// Dark: the dashboard's dark theme, which is navy rather than near-black —
+// zinc-950 on zinc-900 read as a different product beside the app it comes from.
+const BG_DARK = '#0F1225' // --ui-bg dark
+const FG_DARK = '#F5F4FB' // --ui-text-highlighted dark
+const FG_MUTED_DARK = '#C4C6DE' // --ui-text dark
+const FG_DIMMED_DARK = '#A0A3C4' // --ui-text-muted dark
+const BORDER_DARK = '#2C3360' // --kc-navy-700
+const CARD_BG_DARK = '#1F2547' // --ui-bg-elevated dark
 
 export default defineComponent({
   props: {
@@ -48,15 +53,30 @@ export default defineComponent({
           @media (prefers-color-scheme: dark) {
             body { background-color: ${BG_DARK} !important; }
             .email-card { background-color: ${CARD_BG_DARK} !important; border-color: ${BORDER_DARK} !important; }
+
+            /*
+              Body copy is recoloured by element, not by class. Every template
+              writes its own inline colour and most never carried .email-text,
+              so a class-only rule left the majority of our mail as dark grey
+              on a dark card — legible in the preview, unreadable in a real
+              dark-mode client. Matching the element is what makes a new
+              template correct without having to remember a class.
+            */
+            .email-card p { color: ${FG_MUTED_DARK} !important; }
+            .email-card strong, .email-card h1, .email-card h2, .email-card h3 { color: ${FG_DARK} !important; }
+            .email-card hr { border-color: ${BORDER_DARK} !important; }
+
             .email-title { color: ${FG_DARK} !important; }
             .email-text { color: ${FG_MUTED_DARK} !important; }
             .email-footer { color: ${FG_DIMMED_DARK} !important; }
             .email-footer-link { color: ${FG_MUTED_DARK} !important; }
             .email-details { border-color: ${BORDER_DARK} !important; }
-            .email-details-label { color: ${FG_MUTED_DARK} !important; }
-            .email-details-value { color: ${FG_DARK} !important; }
-            .email-quote { background-color: ${CARD_BG_DARK} !important; }
-            .email-quote-text { color: ${FG_MUTED_DARK} !important; }
+            .email-card .email-details-label { color: ${FG_MUTED_DARK} !important; }
+            .email-card .email-details-value { color: ${FG_DARK} !important; }
+            .email-card .email-quote { background-color: ${BG_DARK} !important; }
+            .email-card .email-quote-text { color: ${FG_MUTED_DARK} !important; }
+            /* The CTA keeps the brand coral and its navy label in both modes. */
+            .email-card .email-action-cta { color: ${PRIMARY_TEXT} !important; }
           }
         `),
       ]),

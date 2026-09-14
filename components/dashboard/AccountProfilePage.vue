@@ -205,13 +205,16 @@ async function pickPhoto(event: Event) {
       validate: (value): value is { image: string } => isRecord(value) && typeof value.image === 'string',
     })
     photoPreview.value = result.image
-    await refreshSession()
     toast.add({ title: 'Photo updated', icon: 'i-lucide-circle-check', color: 'success' })
   } catch (cause) {
     photoError.value = cause instanceof Error ? cause.message : 'Upload failed. Please try again.'
+    return
   } finally {
     photoSaving.value = false
   }
+  // Separate from the upload: the photo is already stored by now, so a failed
+  // refresh is a stale header, not a failed save, and must not read as one.
+  await refreshSession()
 }
 
 // Display Name

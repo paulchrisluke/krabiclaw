@@ -11,10 +11,7 @@ import { wantsNotification } from '~/server/domain/notification-preferences'
 import { buildUnsubscribeUrls } from '~/server/utils/unsubscribe'
 import type { NotificationCategory } from '~/shared/notification-categories'
 import GuestThreadOwnerAlert from '~/server/emails/templates/GuestThreadOwnerAlert'
-import GuestThreadReply from '~/server/emails/templates/GuestThreadReply'
-import GuestThreadStatusUpdate from '~/server/emails/templates/GuestThreadStatusUpdate'
-import BookingChangeProposal from '~/server/emails/templates/BookingChangeProposal'
-import PlatformArticleAnnouncement from '~/server/emails/templates/PlatformArticleAnnouncement'
+import { EMAIL_PREVIEWS } from '~/server/emails/previews'
 import type { CloudflareEnv } from '~/server/utils/auth'
 import ReservationOwnerNew from '~/server/emails/templates/ReservationOwnerNew'
 import ReservationOwnerCancelled from '~/server/emails/templates/ReservationOwnerCancelled'
@@ -1425,174 +1422,31 @@ export async function notifyOrganizationInvited(
   })
 }
 
+/**
+ * Every piece of outbound copy, for /dev/notifications.
+ *
+ * Email previews come from the single EMAIL_PREVIEWS registry, so a template
+ * cannot exist without appearing here — the previous hand-maintained list had
+ * silently drifted to covering 14 of 23 templates. WhatsApp copy stays inline
+ * because it is approved template text, not a component we render.
+ */
 export async function getNotificationCopyPreviews(): Promise<NotificationCopyPreview[]> {
-  const restaurant = 'Ember & Slice'
-  const studio = 'Pottery House Krabi'
-  const platformDomain = 'krabiclaw.com'
-
-  const [
-    ownerReservation,
-    guestReservationReceived,
-    guestReservationCancelled,
-    ownerReservationCancelled,
-    ownerContact,
-    guestContact,
-    ownerBooking,
-    guestBooking,
-    organizationInvite,
-    guestThreadReply,
-    guestThreadStatusUpdate,
-    guestThreadOwnerAlert,
-    bookingChangeProposal,
-    articleAnnouncement,
-  ] = await Promise.all([
-    renderEmail(ReservationOwnerNew, { guestName: 'Alex Carter', siteName: restaurant, date: 'Tue, Jul 14, 2026', time: '7:00 PM', guests: '2', phone: '+1 555 123 4567', email: 'alex@example.com', platformDomain, replyUrl: 'https://demo.krabiclaw.com/dashboard/ember-slice/sites/ember-slice/locations/main/inbox/res-preview-1' }),
-    renderEmail(ReservationGuestReceived, { guestName: 'Alex Carter', siteName: restaurant, date: 'Tue, Jul 14, 2026', time: '7:00 PM', guests: '2', contactPhone: '+1 555 000 0000', contactEmail: 'hello@emberslice.example', cancelUrl: 'https://demo.krabiclaw.com/reservations/cancel?id=res-preview-1', platformDomain }),
-    renderEmail(ReservationGuestCancelled, { guestName: 'Alex Carter', siteName: restaurant, date: 'Tue, Jul 14, 2026', time: '7:00 PM', guests: '2', locationName: 'Main Dining Room', specialRequests: 'Window seat', wasConfirmed: false, platformDomain }),
-    renderEmail(ReservationOwnerCancelled, { guestName: 'Alex Carter', siteName: restaurant, date: 'Tue, Jul 14, 2026', time: '7:00 PM', guests: '2', phone: '+1 555 123 4567', email: 'alex@example.com', locationName: 'Main Dining Room', specialRequests: 'Window seat', wasConfirmed: false, platformDomain }),
-    renderEmail(ContactOwnerNew, { guestName: 'Jordan Lee', email: 'jordan@example.com', message: 'Hi, do you have vegan options and parking nearby?', siteName: restaurant, platformDomain, replyUrl: 'https://demo.krabiclaw.com/dashboard/ember-slice/sites/ember-slice/inbox/contact-preview-1', consentAcknowledged: true }),
-    renderEmail(ContactGuestReceived, { guestName: 'Jordan Lee', siteName: restaurant, subject: 'general', message: 'Hi, do you have vegan options and parking nearby?', platformDomain, consentAcknowledged: true }),
-    renderEmail(BookingOwnerNew, { guestName: 'Mina Park', siteName: studio, productTitle: 'Pottery Wheel Class', date: 'Mon, Jul 20, 2026', time: '10:00 AM', partySize: 2, email: 'mina@example.com', phone: '+66 76 000 0002', platformDomain, replyUrl: 'https://demo.krabiclaw.com/dashboard/pottery-house-krabi/sites/pottery-house/locations/main/inbox/booking-preview-1' }),
-    renderEmail(BookingGuestReceived, { guestName: 'Mina Park', siteName: studio, productTitle: 'Pottery Wheel Class', date: 'Mon, Jul 20, 2026', time: '10:00 AM', partySize: 2, contactPhone: '+66 76 000 0001', contactEmail: 'hello@example.com', cancelUrl: 'https://demo.krabiclaw.com/bookings/cancel?id=booking-preview-1', platformDomain }),
-    renderEmail(OrganizationInvite, { organizationName: studio, inviterName: 'Priya Shah', role: 'admin', inviteUrl: 'https://demo.krabiclaw.com/accept-invitation/invite-preview-1', platformDomain }),
-    renderEmail(GuestThreadReply, { siteName: restaurant, body: 'Hi Jordan,\n\nYes — we have a full vegan menu, and there is street parking on Soi 3 right outside. See you Tuesday!', platformDomain }),
-    renderEmail(GuestThreadStatusUpdate, { siteName: restaurant, heading: `Your reservation at ${restaurant} is confirmed`, body: 'Your reservation is confirmed: Tue, Jul 14, 2026 at 7:00 PM for 2 guests.', actionUrl: 'https://demo.krabiclaw.com/reservations/cancel?id=res-preview-1', actionText: 'Manage your reservation', platformDomain }),
-    renderEmail(GuestThreadOwnerAlert, { guestName: 'Jordan Lee', inboundChannel: 'email', messagePreview: 'Thanks! One more thing — is the terrace covered if it rains?', replyUrl: 'https://demo.krabiclaw.com/dashboard/ember-slice/sites/ember-slice/inbox/contact-preview-1', siteName: restaurant, unsubscribeUrl: 'https://krabiclaw.com/unsubscribe?user=preview&category=guest_messages&token=preview', platformDomain }),
-    renderEmail(BookingChangeProposal, { guestName: 'Mina Park', siteName: studio, heading: 'Please review changes to your booking', intro: 'Hi Mina, your host has requested changes to your booking. It stays exactly as it is until you accept, and the link below expires in 7 days.', rows: [['Location', 'Main Studio'], ['When', 'Tue, Jul 21, 2026 at 2:00 PM'], ['Guests', '2']], actionUrl: 'https://demo.krabiclaw.com/booking-changes/booking-preview-1/entry-preview-1', actionText: 'Review the changes', platformDomain }),
-    renderEmail(PlatformArticleAnnouncement, { title: 'Turning walk-ins into repeat guests', summary: 'Three things the best-performing KrabiClaw sites do after a guest leaves.', coverImageUrl: null, articleUrl: 'https://krabiclaw.com/blog/operations/turning-walk-ins-into-repeat-guests', unsubscribeUrl: 'https://krabiclaw.com/unsubscribe?user=preview&category=product_news&token=preview', platformDomain }),
-  ])
+  const emails = await Promise.all(EMAIL_PREVIEWS.map(async (preview) => {
+    const { html, text } = await renderEmail(preview.component, preview.props)
+    return {
+      id: preview.id,
+      audience: preview.audience,
+      channel: 'email' as const,
+      template: preview.template,
+      title: preview.title,
+      subject: preview.subject,
+      html,
+      text,
+    }
+  }))
 
   return [
-    {
-      id: 'guest-thread-reply-email',
-      audience: 'guest',
-      channel: 'email',
-      template: 'guest_thread_member_reply',
-      title: 'Guest — a reply from the business',
-      subject: `Re: your message to ${restaurant}`,
-      html: guestThreadReply.html,
-      text: guestThreadReply.text,
-    },
-    {
-      id: 'guest-thread-status-update-email',
-      audience: 'guest',
-      channel: 'email',
-      template: 'guest_thread_status_update',
-      title: 'Guest — reservation status changed',
-      subject: `Your reservation at ${restaurant} is confirmed`,
-      html: guestThreadStatusUpdate.html,
-      text: guestThreadStatusUpdate.text,
-    },
-    {
-      id: 'owner-guest-thread-reply-email',
-      audience: 'owner',
-      channel: 'email',
-      template: 'guest_thread_reply_email',
-      title: 'Owner alert — guest replied',
-      subject: 'New guest reply from Jordan Lee',
-      html: guestThreadOwnerAlert.html,
-      text: guestThreadOwnerAlert.text,
-    },
-    {
-      id: 'guest-booking-change-proposal-email',
-      audience: 'guest',
-      channel: 'email',
-      template: 'booking.change_requested',
-      title: 'Guest — booking change proposed',
-      subject: 'Please review changes to your booking',
-      html: bookingChangeProposal.html,
-      text: bookingChangeProposal.text,
-    },
-    {
-      id: 'owner-article-announcement-email',
-      audience: 'owner',
-      channel: 'email',
-      template: 'platform_article_announcement',
-      title: 'KrabiClaw news — new article published',
-      subject: 'Turning walk-ins into repeat guests',
-      html: articleAnnouncement.html,
-      text: articleAnnouncement.text,
-    },
-    {
-      id: 'owner-new-reservation-email',
-      audience: 'owner',
-      channel: 'email',
-      template: 'new_reservation',
-      title: 'Owner alert — new reservation',
-      subject: 'New confirmed reservation from Alex Carter',
-      html: ownerReservation.html,
-      text: ownerReservation.text,
-    },
-    {
-      id: 'guest-reservation-received-email',
-      audience: 'guest',
-      channel: 'email',
-      template: 'reservation_customer_received',
-      title: 'Guest confirmation — reservation confirmed',
-      subject: 'Your reservation is confirmed',
-      html: guestReservationReceived.html,
-      text: guestReservationReceived.text,
-    },
-    {
-      id: 'guest-reservation-cancelled-email',
-      audience: 'guest',
-      channel: 'email',
-      template: 'reservation_customer_cancelled',
-      title: 'Guest confirmation — reservation request cancelled',
-      subject: 'Your reservation request was cancelled',
-      html: guestReservationCancelled.html,
-      text: guestReservationCancelled.text,
-    },
-    {
-      id: 'owner-reservation-cancelled-email',
-      audience: 'owner',
-      channel: 'email',
-      template: 'reservation_cancelled',
-      title: 'Owner alert — reservation cancelled',
-      subject: 'Reservation request cancelled by Alex Carter',
-      html: ownerReservationCancelled.html,
-      text: ownerReservationCancelled.text,
-    },
-    {
-      id: 'owner-new-contact-email',
-      audience: 'owner',
-      channel: 'email',
-      template: 'new_contact_msg',
-      title: 'Owner alert — new contact message',
-      subject: 'New website message from Jordan Lee',
-      html: ownerContact.html,
-      text: ownerContact.text,
-    },
-    {
-      id: 'guest-contact-received-email',
-      audience: 'guest',
-      channel: 'email',
-      template: 'contact_customer_received',
-      title: 'Guest confirmation — message sent',
-      subject: 'Your message was sent',
-      html: guestContact.html,
-      text: guestContact.text,
-    },
-    {
-      id: 'owner-new-experience-booking-email',
-      audience: 'owner',
-      channel: 'email',
-      template: 'new_reservation',
-      title: 'Owner alert — new experience booking',
-      subject: 'New booking request from Mina Park',
-      html: ownerBooking.html,
-      text: ownerBooking.text,
-    },
-    {
-      id: 'guest-experience-booking-received-email',
-      audience: 'guest',
-      channel: 'email',
-      template: 'booking_customer_received',
-      title: 'Guest confirmation — experience booking request sent',
-      subject: 'Your booking request was sent — Pottery Wheel Class',
-      html: guestBooking.html,
-      text: guestBooking.text,
-    },
+    ...emails,
     {
       id: 'owner-new-contact-whatsapp',
       audience: 'owner',
@@ -1632,16 +1486,6 @@ export async function getNotificationCopyPreviews(): Promise<NotificationCopyPre
       template: 'reservation_cancelled',
       title: 'Owner WhatsApp — experience booking cancelled',
       text: 'Booking cancelled: Mina Park, Mon, Jul 20, 2026 at 10:00 AM, 2 guests. Phone: +66 76 000 0002. Business: Pottery House Krabi · Experience: Pottery Wheel Class.',
-    },
-    {
-      id: 'organization-invite-email',
-      audience: 'guest',
-      channel: 'email',
-      template: 'organization_invited',
-      title: 'Invitee — organization invitation',
-      subject: `You're invited to join ${studio} on KrabiClaw`,
-      html: organizationInvite.html,
-      text: organizationInvite.text,
     },
   ]
 }
