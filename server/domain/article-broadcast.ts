@@ -1,5 +1,6 @@
 import { execute, queryAll, queryFirst, type DbClient } from '~/server/db'
-import { renderEmail } from '~/server/emails/vue-email'
+import { renderNotificationEmail } from '~/server/emails/render'
+import { articleAnnouncementMessage } from '~/server/notifications/guest-events'
 import { getPlatformSite } from '~/server/utils/platform-site'
 import { getPlatformDomain } from '~/server/utils/dashboard-notification-links'
 import { sendEmail, type EmailDeliveryMode } from '~/server/utils/email-delivery'
@@ -7,7 +8,6 @@ import { buildUnsubscribeUrls } from '~/server/utils/unsubscribe'
 import { wantsCategoryEmailSql } from '~/server/domain/notification-preferences'
 import { collectionArticlePath } from '~/utils/article-collections'
 import { coverJoinSql } from '~/server/utils/content/cover'
-import PlatformArticleAnnouncement from '~/server/emails/templates/PlatformArticleAnnouncement'
 
 export interface BroadcastEnv {
   EMAIL_REPLY_SECRET?: string
@@ -218,14 +218,12 @@ export async function runArticleBroadcast(db: DbClient, env: BroadcastEnv, now =
     const unsubscribe = await buildUnsubscribeUrls(env, { userId: recipient.id, category: BROADCAST_CATEGORY })
     if (!unsubscribe) throw new Error('EMAIL_REPLY_SECRET is required to send a broadcast')
 
-    const rendered = await renderEmail(PlatformArticleAnnouncement, {
+    const rendered = await renderNotificationEmail(articleAnnouncementMessage({
       title: article.title,
       summary: article.summary,
       coverImageUrl: article.cover_public_url,
       articleUrl,
-      unsubscribeUrl: unsubscribe.pageUrl,
-      platformDomain,
-    })
+    }), { platformDomain, preferencesUrl: `https://${platformDomain}/dashboard/account/profile/notifications`, unsubscribeUrl: unsubscribe.pageUrl })
     const result = await sendEmail(env, {
       to: recipient.email,
       subject: article.title,

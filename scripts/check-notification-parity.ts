@@ -11,11 +11,15 @@
 
 import { WHATSAPP_MAPPINGS, toWhatsAppVars } from '~/server/notifications/whatsapp-mapping'
 import { buildWhatsAppTemplatePayload, type WhatsAppTemplate } from '~/server/utils/whatsapp'
-import { PARITY_CASES } from '~/server/notifications/parity-cases'
+import { NOTIFICATION_CATALOG } from '~/server/notifications/catalog'
 
 const failures: string[] = []
 
-for (const { template, message } of PARITY_CASES) {
+const dualChannel = NOTIFICATION_CATALOG.filter(entry => entry.whatsappTemplate)
+
+for (const entry of dualChannel) {
+  const template = entry.whatsappTemplate!
+  const message = entry.message
   const mapping = WHATSAPP_MAPPINGS[template as WhatsAppTemplate]
   if (!mapping) {
     failures.push(`${template}: no WhatsApp mapping declared`)
@@ -55,4 +59,4 @@ if (failures.length) {
   process.exit(1)
 }
 
-console.log(`Notification parity passed: ${PARITY_CASES.length} events, every lead fact reaches both channels`)
+console.log(`Notification parity passed: ${dualChannel.length} dual-channel events, every lead fact reaches both channels`)

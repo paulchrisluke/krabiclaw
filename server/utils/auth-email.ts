@@ -1,7 +1,6 @@
-import { renderEmail } from '~/server/emails/vue-email'
+import { renderNotificationEmail } from '~/server/emails/render'
 import { sendEmail, hashEmail } from '~/server/utils/email-delivery'
-import AuthResetPassword from '~/server/emails/templates/AuthResetPassword'
-import AuthVerifyEmail from '~/server/emails/templates/AuthVerifyEmail'
+import { resetPasswordMessage, verifyEmailMessage } from '~/server/notifications/guest-events'
 
 export interface AuthEmailEnv {
   RESEND_API_KEY?: string
@@ -43,10 +42,7 @@ export async function sendPasswordResetEmail(
   opts: { email: string, resetUrl: string },
 ) {
   const currentPlatformDomain = platformDomain(env)
-  const { html, text } = await renderEmail(AuthResetPassword, {
-    resetUrl: opts.resetUrl,
-    platformDomain: currentPlatformDomain,
-  })
+  const { html, text } = await renderNotificationEmail(resetPasswordMessage({ resetUrl: opts.resetUrl }), { platformDomain: currentPlatformDomain })
 
   await sendAuthEmail(env, {
     to: opts.email,
@@ -61,10 +57,7 @@ export async function sendVerificationEmail(
   opts: { email: string, verificationUrl: string },
 ) {
   const currentPlatformDomain = platformDomain(env)
-  const { html, text } = await renderEmail(AuthVerifyEmail, {
-    verificationUrl: opts.verificationUrl,
-    platformDomain: currentPlatformDomain,
-  })
+  const { html, text } = await renderNotificationEmail(verifyEmailMessage({ verificationUrl: opts.verificationUrl }), { platformDomain: currentPlatformDomain })
 
   await sendAuthEmail(env, {
     to: opts.email,

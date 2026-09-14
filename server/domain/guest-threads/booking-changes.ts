@@ -12,9 +12,9 @@ import { notifyBookingChangeOwner } from '~/server/utils/notifications'
 import { appendEntry, findEntryByDedupeKey, getEntryById } from './entries'
 import { createDeliveryReceipt, deliverGuestThreadEmail } from './deliveries'
 import { getEmailDeliveryMode } from '~/server/utils/email-delivery'
-import { renderEmail } from '~/server/emails/vue-email'
+import { renderNotificationEmail } from '~/server/emails/render'
+import { bookingChangeProposalMessage } from '~/server/notifications/guest-events'
 import { getPlatformDomain } from '~/server/utils/dashboard-notification-links'
-import BookingChangeProposal from '~/server/emails/templates/BookingChangeProposal'
 import { updateThreadProjection } from './repository'
 import { getGuestRequest, getThreadOperationalRecord, requestSummary } from '~/server/domain/requests'
 import type { GuestThreadRow } from './types'
@@ -223,16 +223,15 @@ async function deliverEmail(db: DbClient, env: ChangeEnv, thread: GuestThreadRow
     to: summary.guestEmail,
     fromName: site.brand_name,
     subject: content.subject,
-    email: await renderEmail(BookingChangeProposal, {
+    email: await renderNotificationEmail(bookingChangeProposalMessage({
       guestName: summary.guestName,
       siteName: site.brand_name,
       heading: content.subject,
       intro: content.intro,
       rows: content.rows ?? [],
       actionUrl: content.actionUrl ?? null,
-      actionText: content.actionText ?? null,
-      platformDomain: getPlatformDomain(env),
-    }),
+      actionLabel: content.actionText ?? null,
+    }), { platformDomain: getPlatformDomain(env) }),
     submissionType: thread.kind,
     submissionId: thread.id,
   })

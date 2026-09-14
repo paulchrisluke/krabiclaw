@@ -1,6 +1,5 @@
 import { formatCalendarDate, formatTime } from '~/utils/timezone'
 import { getGuestRequest } from '~/server/domain/requests'
-import { renderEmail } from '~/server/emails/vue-email'
 import { queryFirst, type DbClient } from '~/server/db'
 import { getEmailDeliveryMode, hashEmail, isReservedTestDomain, sendEmail } from '~/server/utils/email-delivery'
 import { buildWhatsAppTemplatePayload, getOrgWhatsAppPhone, sendWhatsAppNotification, type WhatsAppTemplate } from '~/server/utils/whatsapp'
@@ -10,10 +9,18 @@ import { resolveAuthorizedWhatsAppRecipient, getOrganizationOwnerRecipient } fro
 import { wantsNotification } from '~/server/domain/notification-preferences'
 import { buildUnsubscribeUrls } from '~/server/utils/unsubscribe'
 import type { NotificationCategory } from '~/shared/notification-categories'
-import { EMAIL_PREVIEWS } from '~/server/emails/previews'
 import { renderNotificationEmail } from '~/server/emails/render'
 import { toWhatsAppVars } from '~/server/notifications/whatsapp-mapping'
-import { PARITY_CASES } from '~/server/notifications/parity-cases'
+import { NOTIFICATION_CATALOG } from '~/server/notifications/catalog'
+import {
+  guestBookingCancelledMessage,
+  guestBookingReceivedMessage,
+  guestContactReceivedMessage,
+  guestReservationCancelledMessage,
+  guestReservationReceivedMessage,
+  organizationInviteMessage,
+  reviewRequestMessage,
+} from '~/server/notifications/guest-events'
 import type { NotificationMessage } from '~/server/notifications/messages'
 import {
   bookingCancelledMessage,
@@ -26,14 +33,6 @@ import {
   reviewReceivedMessage,
 } from '~/server/notifications/events'
 import type { CloudflareEnv } from '~/server/utils/auth'
-import ReservationGuestReceived from '~/server/emails/templates/ReservationGuestReceived'
-import ReservationGuestCancelled from '~/server/emails/templates/ReservationGuestCancelled'
-import ContactGuestReceived from '~/server/emails/templates/ContactGuestReceived'
-import BookingGuestReceived from '~/server/emails/templates/BookingGuestReceived'
-import BookingGuestCancelled from '~/server/emails/templates/BookingGuestCancelled'
-import BookingThankYouReviewRequest from '~/server/emails/templates/BookingThankYouReviewRequest'
-import BookingReviewReminder from '~/server/emails/templates/BookingReviewReminder'
-import OrganizationInvite from '~/server/emails/templates/OrganizationInvite'
 import { createCanonicalNotification } from '~/server/utils/notification-center'
 import { buildOwnerThreadInboxUrl, getPlatformDomain, resolveSiteLocationSlugs } from '~/server/utils/dashboard-notification-links'
 import { claimDelivery, createDeliveryReceipt, getDeliveryClaimEligibility, recordDeliveryOutcome } from '~/server/domain/guest-threads/deliveries'
@@ -672,7 +671,11 @@ export async function notifyReservationCreated(
     locationName: opts.locationName ?? null, siteName: restaurant,
     notes: opts.requests ?? null, heroImageUrl: null, replyUrl: inboxUrl,
   })
-  const guestEmail = await renderEmail(ReservationGuestReceived, { guestName: opts.guestName, siteName: restaurant, date: prettyDate, time: prettyTime, guests: opts.guests, specialRequests: opts.requests, locationName: opts.locationName, contactPhone: opts.contactPhone, contactEmail: opts.contactEmail, cancelUrl: opts.cancelUrl, platformDomain })
+  const guestEmail = await renderNotificationEmail(guestReservationReceivedMessage({
+    guestName: opts.guestName, siteName: restaurant, date: prettyDate, time: prettyTime,
+    partySize: opts.guests, notes: opts.requests, locationName: opts.locationName,
+    contactPhone: opts.contactPhone, contactEmail: opts.contactEmail, cancelUrl: opts.cancelUrl,
+  }), { platformDomain })
 
   const results = await Promise.allSettled([
     notifyOwner(env, db, {
@@ -750,7 +753,10 @@ export async function notifyReservationCancelled(
     notes: opts.requests ?? null, heroImageUrl: null, replyUrl: inboxUrl,
     wasConfirmed: confirmed,
   })
-  const guestEmail = await renderEmail(ReservationGuestCancelled, { guestName: opts.guestName, siteName: restaurant, date: prettyDate, time: prettyTime, guests: opts.guests, locationName: opts.locationName, specialRequests: opts.requests, wasConfirmed: confirmed, platformDomain })
+  const guestEmail = await renderNotificationEmail(guestReservationCancelledMessage({
+    guestName: opts.guestName, siteName: restaurant, date: prettyDate, time: prettyTime,
+    partySize: opts.guests, notes: opts.requests, locationName: opts.locationName, wasConfirmed: confirmed,
+  }), { platformDomain })
   const threadContext = await recordGuestCancellation(db, {
     submissionType: 'reservation',
     submissionId: opts.reservationId,
@@ -828,7 +834,12 @@ export async function notifyContactSubmitted(
     message: opts.message, productTitle: opts.productTitle ?? null,
     siteName: restaurant, consentAcknowledged: Boolean(opts.consentAcknowledged), replyUrl: inboxUrl,
   })
-  const guestEmail = await renderEmail(ContactGuestReceived, { guestName: opts.guestName, siteName: restaurant, subject: opts.subject, message: opts.message, platformDomain, productTitle: opts.productTitle, consentAcknowledged: opts.consentAcknowledged })
+  const guestEmail = await renderNotificationEmail(guestContactReceivedMessage({
+    guestName: opts.guestName, siteName: restaurant,
+    subject: opts.subject ? (SUBJECT_LABELS[opts.subject] ?? opts.subject) : null,
+    productTitle: opts.productTitle ?? null, message: opts.message,
+    consentAcknowledged: Boolean(opts.consentAcknowledged),
+  }), { platformDomain })
 
   const results = await Promise.allSettled([
     notifyOwner(env, db, {
@@ -917,25 +928,21 @@ export async function notifyReviewRequest(
 ): Promise<boolean> {
   const restaurant = siteName(opts)
   const platformDomain = getPlatformDomain(env)
-  const templateComponent = opts.kind === 'reminder' ? BookingReviewReminder : BookingThankYouReviewRequest
   const templateName = opts.kind === 'reminder' ? 'booking_review_reminder' : 'booking_thank_you_review_request'
   const title = opts.kind === 'reminder'
     ? `Review reminder for ${opts.bookingPhrase}`
     : `Review request for ${opts.bookingPhrase}`
 
-  const email = await renderEmail(templateComponent, {
+  const email = await renderNotificationEmail(reviewRequestMessage({
     guestName: opts.guestName,
     siteName: restaurant,
     locationName: opts.locationName ?? null,
-    // Only the thank-you headline asks "How was <phrase>?"; the reminder
-    // headline names the business, so it does not take the phrase at all.
-    ...(opts.kind === 'reminder' ? {} : { bookingPhrase: opts.bookingPhrase }),
     visitAt: opts.visitAt,
     partySize: opts.partySize,
     reviewUrl: opts.reviewUrl,
     optOutUrl: opts.optOutUrl,
-    platformDomain,
-  })
+    reminder: opts.kind === 'reminder',
+  }), { platformDomain })
 
   return await sendEmailNotification(env, db, {
     ...opts,
@@ -1006,7 +1013,11 @@ export async function notifyBookingCreated(
     locationName: null, siteName: studio, productTitle: opts.productTitle,
     notes: opts.notes ?? null, heroImageUrl: null, replyUrl: inboxUrl,
   })
-  const guestEmail = await renderEmail(BookingGuestReceived, { guestName: opts.guestName, siteName: studio, productTitle: opts.productTitle, date: prettyDate, time: prettyTime, partySize: opts.partySize, specialRequests: opts.notes, contactPhone: opts.contactPhone ?? null, contactEmail: opts.contactEmail ?? null, cancelUrl: opts.cancelUrl ?? null, platformDomain })
+  const guestEmail = await renderNotificationEmail(guestBookingReceivedMessage({
+    guestName: opts.guestName, siteName: studio, productTitle: opts.productTitle,
+    date: prettyDate, time: prettyTime, partySize: String(opts.partySize), notes: opts.notes,
+    contactPhone: opts.contactPhone ?? null, contactEmail: opts.contactEmail ?? null, cancelUrl: opts.cancelUrl ?? null,
+  }), { platformDomain })
 
   const results = await Promise.allSettled([
     notifyOwner(env, db, {
@@ -1086,7 +1097,10 @@ export async function notifyBookingCancelled(
     notes: opts.notes ?? null, heroImageUrl: null, replyUrl: inboxUrl,
     wasConfirmed: confirmed,
   })
-  const guestEmail = await renderEmail(BookingGuestCancelled, { guestName: opts.guestName, siteName: studio, productTitle: opts.productTitle, date: prettyDate, time: prettyTime, partySize: opts.partySize, notes: opts.notes, wasConfirmed: confirmed, platformDomain })
+  const guestEmail = await renderNotificationEmail(guestBookingCancelledMessage({
+    guestName: opts.guestName, siteName: studio, productTitle: opts.productTitle,
+    date: prettyDate, time: prettyTime, partySize: String(opts.partySize), notes: opts.notes, wasConfirmed: confirmed,
+  }), { platformDomain })
   const threadContext = await recordGuestCancellation(db, {
     submissionType: 'booking',
     submissionId: opts.bookingId,
@@ -1348,13 +1362,12 @@ export async function notifyOrganizationInvited(
   const platformDomain = getPlatformDomain(env)
   const inviteUrl = `https://${platformDomain}/accept-invitation/${opts.invitationId}`
 
-  const rendered = await renderEmail(OrganizationInvite, {
+  const rendered = await renderNotificationEmail(organizationInviteMessage({
     organizationName: opts.organizationName,
     inviterName: opts.inviterName,
     role: opts.role,
     inviteUrl,
-    platformDomain,
-  })
+  }), { platformDomain })
 
   await sendEmailNotification(env, db, {
     organizationId: opts.organizationId,
@@ -1385,59 +1398,47 @@ export async function notifyOrganizationInvited(
  * because it is approved template text, not a component we render.
  */
 export async function getNotificationCopyPreviews(): Promise<NotificationCopyPreview[]> {
-  const emails = await Promise.all(EMAIL_PREVIEWS.map(async (preview) => {
-    const { html, text } = await renderEmail(preview.component, preview.props)
-    return {
-      id: preview.id,
-      audience: preview.audience,
-      channel: 'email' as const,
-      template: preview.template,
-      title: preview.title,
-      subject: preview.subject,
-      html,
-      text,
-    }
-  }))
-
-  // The owner alerts, rendered from the same NotificationMessage the parity
-  // guard checks and mapped onto the same approved template Meta will render —
-  // so what this page shows is what actually goes out, rather than the
-  // hand-written prose that used to stand in for WhatsApp here.
-  const events = await Promise.all(PARITY_CASES.map(async ({ id, template, message }) => {
-    const rendered = await renderNotificationEmail(message, {
+  // One catalog, so the preview shows exactly what the guards check and what
+  // the send path renders. The WhatsApp entry is the approved template's real
+  // slots, not prose written to stand in for them.
+  const entries = await Promise.all(NOTIFICATION_CATALOG.map(async (entry) => {
+    const rendered = await renderNotificationEmail(entry.message, {
       platformDomain: 'krabiclaw.com',
       preferencesUrl: 'https://krabiclaw.com/dashboard/account/profile/notifications',
-      unsubscribeUrl: 'https://krabiclaw.com/unsubscribe?user=preview&category=preview&token=preview',
+      unsubscribeUrl: entry.message.category === 'account_security'
+        ? null
+        : 'https://krabiclaw.com/unsubscribe?user=preview&category=preview&token=preview',
     })
-    const { vars } = toWhatsAppVars(message, template)
-    const payload = buildWhatsAppTemplatePayload(template, vars)
-    const slots = payload.components
-      .filter(component => component.type === 'body')
-      .flatMap(component => component.parameters.map(parameter => parameter.text))
-    return [
-      {
-        id: `${id}-email`,
-        audience: 'owner' as const,
-        channel: 'email' as const,
-        template,
-        title: message.title,
-        subject: message.title,
-        html: rendered.html,
-        text: rendered.text,
-      },
-      {
-        id: `${id}-whatsapp`,
-        audience: 'owner' as const,
-        channel: 'whatsapp' as const,
-        template,
-        title: message.title,
-        text: slots.join(' · '),
-      },
-    ]
+
+    const previews: NotificationCopyPreview[] = [{
+      id: `${entry.id}-email`,
+      audience: entry.audience,
+      channel: 'email',
+      template: entry.id,
+      title: entry.title,
+      subject: entry.message.title,
+      html: rendered.html,
+      text: rendered.text,
+    }]
+
+    if (entry.whatsappTemplate) {
+      const { vars } = toWhatsAppVars(entry.message, entry.whatsappTemplate)
+      const payload = buildWhatsAppTemplatePayload(entry.whatsappTemplate, vars)
+      previews.push({
+        id: `${entry.id}-whatsapp`,
+        audience: entry.audience,
+        channel: 'whatsapp',
+        template: entry.whatsappTemplate,
+        title: entry.title,
+        text: payload.components
+          .flatMap(component => component.parameters.map(parameter => parameter.text))
+          .filter(Boolean)
+          .join(' · '),
+      })
+    }
+
+    return previews
   }))
 
-  return [
-    ...events.flat(),
-    ...emails,
-  ]
+  return entries.flat()
 }

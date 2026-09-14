@@ -1,55 +1,60 @@
 #!/usr/bin/env node
-// Every email template appears in /dev/notifications, and every preview renders.
+// Every message in the catalog renders a complete email.
 //
-// The preview is the only place anyone can see what the product's mail looks
-// like. A hand-maintained list drifted to covering 14 of 23 templates without
-// anyone noticing, and a preview whose props are wrong renders a page saying
-// "How was undefined?" while Vue only warns — so this checks both coverage and
-// that each entry actually produces a complete email.
+// The catalog is what /dev/notifications shows and what the send path uses, so
+// a broken entry is a broken email. A missing or mistyped value is a Vue
+// warning rather than an exception — a preview once rendered "How was
+// undefined?" and still passed — so warnings are failures here.
+//
+// It also holds the line that made the redesign possible: no colour is written
+// outside server/emails/tokens.ts. Twenty-two of twenty-three templates used to
+// carry their own, which is how zinc greys ended up inside a navy shell.
 
 import { readdirSync, readFileSync } from 'node:fs'
-import { renderEmail } from '~/server/emails/vue-email'
-import { EMAIL_PREVIEWS } from '~/server/emails/previews'
-
-const TEMPLATE_DIR = 'server/emails/templates'
-const REGISTRY = 'server/emails/previews.ts'
-
-const templates = readdirSync(TEMPLATE_DIR)
-  .filter(name => name.endsWith('.ts'))
-  .map(name => name.replace(/\.ts$/, ''))
-  .sort()
-
-const registry = readFileSync(REGISTRY, 'utf8')
-const imported = new Set(
-  [...registry.matchAll(/^import\s+\w+\s+from\s+'\.\/templates\/(\w+)'$/gm)].map(match => match[1]!),
-)
+import { join } from 'node:path'
+import { renderNotificationEmail } from '~/server/emails/render'
+import { NOTIFICATION_CATALOG } from '~/server/notifications/catalog'
 
 const failures: string[] = []
 
-for (const name of templates) {
-  if (!imported.has(name)) failures.push(`${name} has no EMAIL_PREVIEWS entry in ${REGISTRY}`)
-}
-for (const name of imported) {
-  if (!templates.includes(name)) failures.push(`${REGISTRY} imports ${name}, which is no longer a template`)
+function walk(dir: string): string[] {
+  return readdirSync(dir, { withFileTypes: true }).flatMap(entry =>
+    entry.isDirectory() ? walk(join(dir, entry.name)) : [join(dir, entry.name)],
+  )
 }
 
-// A missing or mistyped prop is a Vue warning, not an exception, so warnings
-// are failures here — otherwise a preview renders "undefined" and still passes.
+for (const file of walk('server/emails')) {
+  if (!file.endsWith('.ts') || file.endsWith('tokens.ts')) continue
+  const source = readFileSync(file, 'utf8')
+  for (const [hex] of source.matchAll(/#[0-9a-fA-F]{3,8}\b/g)) {
+    failures.push(`${file} writes the colour ${hex}; take it from server/emails/tokens.ts`)
+  }
+}
+
 const warnings: string[] = []
 const originalWarn = console.warn
 console.warn = (...args: unknown[]) => { warnings.push(args.map(String).join(' ')) }
 
-for (const preview of EMAIL_PREVIEWS) {
+for (const entry of NOTIFICATION_CATALOG) {
   warnings.length = 0
   try {
-    const { html, text } = await renderEmail(preview.component, preview.props)
-    if (!html.includes('krabi-claw-logo.png')) failures.push(`${preview.id} did not render through EmailShell`)
-    if (!text.trim()) failures.push(`${preview.id} rendered an empty plain-text body`)
+    const { html, text } = await renderNotificationEmail(entry.message, {
+      platformDomain: 'krabiclaw.com',
+      preferencesUrl: 'https://krabiclaw.com/dashboard/account/profile/notifications',
+      unsubscribeUrl: 'https://krabiclaw.com/unsubscribe?x=preview',
+    })
+    if (!html.includes('krabi-claw-logo.png')) failures.push(`${entry.id} did not render through EmailFrame`)
+    if (!text.trim()) failures.push(`${entry.id} rendered an empty plain-text body`)
+    // Against the plain-text render: the HTML escapes apostrophes and
+    // ampersands, so comparing a raw title to it reports false failures.
+    if (!text.toLowerCase().includes(entry.message.title.toLowerCase())) {
+      failures.push(`${entry.id} does not show its own title`)
+    }
   } catch (error) {
-    failures.push(`${preview.id} failed to render: ${error instanceof Error ? error.message.split('\n')[0] : String(error)}`)
+    failures.push(`${entry.id} failed to render: ${error instanceof Error ? error.message.split('\n')[0] : String(error)}`)
   }
   for (const warning of warnings.filter(entry => entry.includes('[Vue warn]'))) {
-    failures.push(`${preview.id}: ${warning.split('\n')[0]}`)
+    failures.push(`${entry.id}: ${warning.split('\n')[0]}`)
   }
 }
 
@@ -60,4 +65,4 @@ if (failures.length) {
   process.exit(1)
 }
 
-console.log(`Email preview coverage passed: ${templates.length} templates, ${EMAIL_PREVIEWS.length} previews rendered`)
+console.log(`Email catalog passed: ${NOTIFICATION_CATALOG.length} messages rendered, no colour written outside tokens`)

@@ -5,10 +5,9 @@ import { getGuestRequest, getThreadOperationalRecord, requestActions, requestSum
 import { deliverGuestThreadEmail, getDeliveryById, getDeliveryClaimEligibility, getDeliveryRetryEligibility, isDeliveryClaimInFlight } from './deliveries'
 import { findEntryByDedupeKey, getEntryById } from './entries'
 import { updateThreadProjectionIfLatestEntry } from './repository'
-import { renderEmail } from '~/server/emails/vue-email'
+import { renderNotificationEmail } from '~/server/emails/render'
+import { guestThreadReplyMessage, guestThreadStatusMessage } from '~/server/notifications/guest-events'
 import { getPlatformDomain } from '~/server/utils/dashboard-notification-links'
-import GuestThreadReply from '~/server/emails/templates/GuestThreadReply'
-import GuestThreadStatusUpdate from '~/server/emails/templates/GuestThreadStatusUpdate'
 import type {
   GuestThreadDeliveryProvider,
   GuestThreadDeliveryRow,
@@ -280,11 +279,11 @@ function replySubject(submissionType: GuestThreadSubmissionType, fromName: strin
  * update leads with what changed.
  */
 function renderMemberReply(env: ReplyEmailEnv, siteName: string, body: string) {
-  return renderEmail(GuestThreadReply, { siteName, body, platformDomain: getPlatformDomain(env) })
+  return renderNotificationEmail(guestThreadReplyMessage({ siteName, body }), { platformDomain: getPlatformDomain(env) })
 }
 
 function renderStatusUpdate(env: ReplyEmailEnv, siteName: string, heading: string, body: string) {
-  return renderEmail(GuestThreadStatusUpdate, { siteName, heading, body, platformDomain: getPlatformDomain(env) })
+  return renderNotificationEmail(guestThreadStatusMessage({ siteName, heading, body }), { platformDomain: getPlatformDomain(env) })
 }
 
 function recordedEmailSubject(entry: GuestThreadEntryRow): string | null {
