@@ -120,7 +120,7 @@
             v-for="review in filtered"
             :key="review.id"
             variant="full"
-            :review="reviewCard(review, formatDate)"
+            :review="review"
           >
             <NuxtLink :to="localePath(`/locations/${slug}/reviews/${review.id}`)" class="mt-4 inline-flex text-sm font-medium text-primary no-underline hover:underline">
               {{ t('saya.reviews_page.read_review') }}
@@ -143,17 +143,6 @@
               </div>
             </div>
 
-            <!-- Owner reply -->
-            <div
-              v-if="review.owner_reply"
-              class="mt-6 rounded-2xl border-l-4 border-primary bg-elevated p-5"
-            >
-              <div class="mb-2 flex items-center gap-3">
-                <span class="inline-flex items-center rounded-full border border-default px-2 py-0.5 text-xs font-semibold text-muted">{{ siteName }}</span>
-                <span class="text-xs text-muted">{{ t('saya.reviews_page.owner_response') }} · {{ formatReviewDate(review.owner_reply_at) }}</span>
-              </div>
-              <p class="text-sm leading-relaxed text-default">{{ review.owner_reply }}</p>
-            </div>
           </SayaReviewCard>
         </div>
       </section>
@@ -162,7 +151,6 @@
 </template>
 
 <script setup lang="ts">
-import { reviewCard } from '~/utils/review-card'
 definePageMeta({ layout: 'saya' })
 
 const { localePath, t } = useI18n()
@@ -175,7 +163,6 @@ const slug = computed(() => String(route.params.slug))
 const siteName = computed(() => String((site as ApiValue)?.brand_name ?? '').trim())
 
 const { location, reviewsAggregate, reviewsList, pending } = await usePublicPageData()
-const { formatDate } = useLocaleDate()
 const aggregate = reviewsAggregate
 const reviews = reviewsList
 
@@ -223,10 +210,6 @@ function handleReviewImageError(reviewId: string | number, index: string | numbe
   failedPhotoIndices.value[`${String(reviewId)}-${String(index)}`] = true
 }
 
-function formatReviewDate(ts: string | null) {
-  if (!ts) return ''
-  return formatDate(ts)
-}
 
 
 useSocialMetadata(() => ({

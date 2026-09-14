@@ -195,7 +195,7 @@
               v-for="review in reviewsPreview"
               :key="review.id"
               variant="compact"
-              :review="reviewCard(review, formatDate)"
+              :review="review"
             />
           </div>
         </div>
@@ -277,7 +277,6 @@
 </template>
 
 <script setup lang="ts">
-import { reviewCard } from '~/utils/review-card'
 import { formatOpeningHours, getIsOpenNow, getActiveSpecialClosure, formatClosureMessage } from '~/utils/formatters'
 import { formatLocationAddress, type LocationAddressInput } from '~/utils/location-address'
 import { getTodayHoursLabel } from '~/shared/reservation-hours'
@@ -355,7 +354,6 @@ const otherLocations = computed(() => locations.value.filter((l: ApiRecord) => l
 
 // Reviews preview from bootstrap
 const reviewsPreview = computed(() => locationReviews.value.slice(0, 3))
-const { formatDate } = useLocaleDate()
 
 
 // Neutral default until the owner picks a brand color in onboarding.

@@ -23,12 +23,7 @@
 
     <p v-if="reviews.some(review => review.source === 'google_places')" class="mb-4 text-xs text-muted">{{ $t('saya.reviews.google_order_notice') }}</p>
     <div :class="['grid gap-8', layoutClass]">
-      <SayaReviewCard v-for="review in displayedReviews" :key="review.id" variant="compact" :review="cardReview(review)">
-        <div v-if="review.reviewReply?.comment" class="mt-4 rounded-xl border border-default bg-muted p-4 text-xs">
-          <p class="mb-1 font-bold text-default">{{ $t('saya.reviews.response_label') }}</p>
-          <p class="text-muted">{{ typeof review.reviewReply.comment === 'string' ? review.reviewReply.comment : review.reviewReply.comment?.text || '' }}</p>
-        </div>
-      </SayaReviewCard>
+      <SayaReviewCard v-for="review in displayedReviews" :key="review.id" variant="compact" :review="review" :content="reviewText(review)" />
     </div>
 
     <!-- Aggregate-only state: verified Google rating exists, but no individual review rows yet -->
@@ -61,7 +56,6 @@
 
 <script setup>
 import AppSection from '~/components/ui/AppSection.vue'
-import { reviewCard } from '~/utils/review-card'
 
 const { localePath } = useI18n()
 
@@ -96,8 +90,6 @@ const props = defineProps({
   }
 })
 
-const { formatDate } = useLocaleDate()
-
 const reviewAuthor = review => {
   return review.author_name ?? ''
 }
@@ -108,8 +100,6 @@ const reviewText = review => {
   }
   return text
 }
-const cardReview = review => reviewCard(review, formatDate, { content: reviewText(review) })
-
 const displayedReviews = computed(() => {
   const filtered = props.reviews.filter(review => reviewText(review) && reviewAuthor(review))
   return props.limit ? filtered.slice(0, props.limit) : filtered

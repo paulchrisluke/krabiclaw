@@ -352,7 +352,7 @@
         </div>
         <p v-if="reviews.some(review => review.source === 'google_places')" class="mt-4 text-xs text-muted">{{ t('saya.reviews.google_order_notice') }}</p>
         <div class="mt-6 grid gap-6 sm:grid-cols-2">
-          <SayaReviewCard v-for="review in reviewCards" :key="review.id" variant="compact" :review="review" />
+          <SayaReviewCard v-for="review in reviews" :key="review.id" variant="compact" :review="review" />
         </div>
       </section>
     </article>
@@ -371,7 +371,6 @@ import type { MetafieldDefinition, MetafieldValue } from '~/shared/metafields'
 import { EXPERIENCE_ATTRIBUTE_HANDLES, metafieldHandle, PRICING_NOTE_HANDLE } from '~/shared/metafields'
 import type { PublicProductBooking, PublicProductLocationPayload, PublicProductReview } from '~/server/utils/public-products'
 import { formatLocationAddress } from '~/utils/location-address'
-import { reviewCard } from '~/utils/review-card'
 import SayaReviewCard from '~/components/saya/SayaReviewCard.vue'
 import BookingModal from '~/components/booking/BookingModal.vue'
 import BookingRecap from '~/components/booking/BookingRecap.vue'
@@ -687,9 +686,6 @@ function sessionTimeLabel(session: PublicSession): string {
   const format = new Intl.DateTimeFormat(locale.value, { hour: 'numeric', minute: '2-digit', timeZone: session.timezone })
   return `${format.format(new Date(session.starts_at))} – ${format.format(new Date(session.ends_at))}`
 }
-const { formatDate } = useLocaleDate()
-
-const reviewCards = computed(() => props.reviews.map(review => reviewCard(review, formatDate)))
 
 /** What guests say, in one number: the mean rating to one decimal, or none. */
 const averageRating = computed(() => {

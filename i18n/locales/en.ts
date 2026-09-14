@@ -214,7 +214,6 @@ export default {
       "subtitle": "What Our Guests Say",
       "stars_aria": "{rating} out of 5 stars",
       "rating_summary": "{average} / 5.0 from {count} reviews",
-      "response_label": "Restaurant Response:",
       "empty_title": "No reviews yet.",
       "empty_desc": "Be the first to share your experience with us.",
       "aggregate_only_title": "Rated {average} on Google from {count} reviews",
