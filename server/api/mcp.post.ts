@@ -180,6 +180,19 @@ function createTenantMcpServer(ctx: McpRequestContext): McpServer {
     throw new ProtocolError(MCP_ERROR.invalidParams, `Unknown MCP app resource: ${uri}`);
   });
 
+  // server/discover is a pre-handshake optimization some clients use to skip
+  // the spec's own initialize-retry version negotiation. @modelcontextprotocol/
+  // server@2.0.0 only wires it up for servers that speak the modern
+  // (2026-07-28+) protocol era — see _ondiscover in the SDK's Server
+  // constructor, gated on modernProtocolVersions(...).length > 0. This server
+  // only serves the legacy eras, so an unregistered server/discover correctly
+  // falls through to -32601 Method not found; clients fall back to the
+  // spec-mandated initialize → version-mismatch → retry path instead. This is
+  // the deliberate replacement for issue #922/#923's old hand-rolled,
+  // partial server/discover shim — bolting a bespoke discover handler onto a
+  // legacy-only server is exactly the one-off-per-client pattern that caused
+  // those incidents.
+
   server.setRequestHandler("prompts/list", async () => ({ prompts: MCP_PROMPTS }));
 
   server.setRequestHandler("prompts/get", async (request) => {
@@ -198,13 +211,20 @@ function createTenantMcpServer(ctx: McpRequestContext): McpServer {
     };
   });
 
-  server.setRequestHandler("tools/list", async (request) => {
+  server.setRequestHandler("tools/list", async () => {
     const { event, mcpUser, cfEnv } = factoryContextFrom(ctx);
     if (!mcpUser) throw new ProtocolError(MCP_ERROR.internal, "Missing authenticated MCP request context.");
-    const hasSiteIdParam = Object.prototype.hasOwnProperty.call(request.params ?? {}, "site_id");
-    const siteId = typeof (request.params as Record<string, unknown> | undefined)?.site_id === "string"
-      ? ((request.params as Record<string, unknown>).site_id as string).trim()
-      : null;
+    // site_id is a KrabiClaw-specific extension for site-scoped tool
+    // discovery — not part of the MCP spec's ListToolsRequestParams (only
+    // cursor/_meta). @modelcontextprotocol/server validates tools/list
+    // params against the spec's schema and silently drops unrecognized
+    // properties, so a client-supplied params.site_id never reaches this
+    // handler (confirmed empirically: request.params arrives as {}). It has
+    // to travel outside the validated params object — a request header,
+    // which the SDK doesn't touch — instead.
+    const siteIdHeader = event.req.headers.get("x-krabiclaw-site-id");
+    const hasSiteIdParam = siteIdHeader !== null;
+    const siteId = siteIdHeader?.trim() || null;
     const siteCtx = siteId ? await getVisibleSiteContext(event, siteId) : null;
 
     const visibleSurfaceTools = visibleConversationalMcpTools(MCP_PUBLIC_TOOLS, cfEnv);
@@ -382,7 +402,12 @@ function createTenantMcpServer(ctx: McpRequestContext): McpServer {
   return mcpServer;
 }
 
-const mcpHandler = createMcpHandler(createTenantMcpServer);
+// responseMode: 'json' — this server is fully stateless and never emits a
+// progress/logging notification before a result, so there's nothing for the
+// SDK's default 'auto' mode to ever upgrade to SSE for; forcing 'json' keeps
+// every response a flat JSON body instead of leaving that upgrade decision
+// implicit to callers that don't expect it.
+const mcpHandler = createMcpHandler(createTenantMcpServer, { responseMode: "json" });
 
 // Best-effort peek at the JSON-RPC method for logging and for the two methods
 // (ping, notifications/initialized) that intentionally skip full token
