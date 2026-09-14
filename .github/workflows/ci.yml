@@ -329,6 +329,11 @@ jobs:
       - run: corepack yarn playwright install --with-deps chromium
       - name: Build staging Worker
         run: yarn build
+      - name: Capture Nuxt build ID
+        id: nuxt_build
+        run: |
+          build_id="$(node -p 'JSON.parse(require("node:fs").readFileSync(".output/public/_nuxt/builds/latest.json", "utf8")).id')"
+          printf 'id=%s\n' "$build_id" >> "$GITHUB_OUTPUT"
       # Migrations run before the deploy. A migration is backward compatible with the
       # Worker already running -- contractions ship a release after the code that
       # stopped reading the column -- so the old Worker keeps serving against the new
@@ -355,6 +360,18 @@ jobs:
         run: curl --fail-with-body --retry 5 --retry-all-errors --retry-delay 5 "https://staging.krabiclaw.com/api/public/search?q=booking&type=all&surface=public"
       - name: Run read-only tenant MCP discovery smoke
         run: yarn test:mcp
+      # A Worker version reaches colos gradually. Until every colo serves the new
+      # version, one colo renders the page while another serves the assets, and the
+      # old build's chunks 404. Production already waits for this; staging did not,
+      # and its first run after a deploy failed on exactly that.
+      - name: Wait for staging assets to converge
+        env:
+          EXPECTED_NUXT_BUILD_ID: ${{ steps.nuxt_build.outputs.id }}
+        run: >-
+          node scripts/wait-for-nuxt-deployment.mjs
+          https://pottery-house-staging.krabiclaw.com
+          https://kikuzuki-krabi-thailand-staging.krabiclaw.com
+          https://ncls-staging.krabiclaw.com
       - name: Run read-only tenant rendering
         run: yarn test:e2e:tenant-rendering
       - name: Upload staging Playwright report
