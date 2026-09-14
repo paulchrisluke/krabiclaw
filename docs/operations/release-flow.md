@@ -4,7 +4,7 @@ KrabiClaw uses one branch-driven GitHub Actions workflow and three Cloudflare Wo
 
 | Git event | Worker | Release-blocking validation |
 | --- | --- | --- |
-| Pull request to `staging` | `krabiclaw-preview` when affected | Tenant rendering/navigation plus affected guest or tenant MCP journeys |
+| Pull request to `staging` | `krabiclaw-preview` | The fixed `@smoke` suite: Saya and blawby public navigation, one guest booking write, the public auth session, MCP OAuth, an MCP write reaching the public API, and one authorization boundary |
 | Push to `staging` | `krabiclaw-staging` | Read-only rendering on Pottery House, Kikuzuki, and NCLS aliases; read-only tenant MCP OAuth/content smoke |
 | `staging` to `main` pull request | None | Reuses checks attached to the exact staging SHA |
 | Push to `main` | `krabiclaw` | Read-only rendering/navigation on all three customer custom domains |

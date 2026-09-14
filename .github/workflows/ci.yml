@@ -52,30 +52,6 @@ jobs:
       - run: yarn lint:schema-drift
       - run: yarn test:migrations
 
-  e2e-plan:
-    name: Plan affected browser coverage
-    if: >-
-      github.event_name == 'pull_request'
-      && github.event.pull_request.draft == false
-      && !(github.base_ref == 'main' && github.head_ref == 'staging')
-    runs-on: ubuntu-latest
-    outputs:
-      run_preview: ${{ steps.plan.outputs.run_preview }}
-      scope: ${{ steps.plan.outputs.scope }}
-      groups: ${{ steps.plan.outputs.groups }}
-      specs: ${{ steps.plan.outputs.specs }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          persist-credentials: false
-          fetch-depth: 0
-      - name: Select coverage from changed files
-        id: plan
-        env:
-          E2E_BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
-          E2E_HEAD_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
-        run: node scripts/select-preview-e2e.mjs --github-output "$GITHUB_OUTPUT"
-
   preview-build:
     name: Build preview Worker
     if: >-
@@ -83,8 +59,6 @@ jobs:
       && github.event.pull_request.draft == false
       && github.event.pull_request.head.repo.full_name == github.repository
       && !(github.base_ref == 'main' && github.head_ref == 'staging')
-      && needs.e2e-plan.outputs.run_preview == 'true'
-    needs: e2e-plan
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
@@ -119,17 +93,16 @@ jobs:
           include-hidden-files: true
           retention-days: 2
 
-  e2e-representative:
-    name: E2E representative tests (preview only)
+  e2e-preview-smoke:
+    name: Preview smoke
     if: >-
       github.event_name == 'pull_request'
       && github.event.pull_request.draft == false
       && github.event.pull_request.head.repo.full_name == github.repository
       && !(github.base_ref == 'main' && github.head_ref == 'staging')
-      && needs.e2e-plan.outputs.run_preview == 'true'
-    needs: [typecheck, e2e-plan, preview-build]
+    needs: [typecheck, preview-build]
     runs-on: ubuntu-latest
-    timeout-minutes: 180
+    timeout-minutes: 60
     permissions:
       contents: read
       actions: read
@@ -150,9 +123,7 @@ jobs:
       MCP_CIMD_CLIENT_URL: https://preview.krabiclaw.com/api/auth/oauth2/test-client-metadata
       MCP_PRIVATE_CIMD_CLIENT_URL: https://preview.krabiclaw.com/api/auth/oauth2/test-private-client-metadata
       PLAYWRIGHT_PREVIEW_URL: https://preview.krabiclaw.com
-      PLAYWRIGHT_WORKERS: "1"
-      E2E_SELECTION_SCOPE: ${{ needs.e2e-plan.outputs.scope }}
-      E2E_SELECTED_SPECS: ${{ needs.e2e-plan.outputs.specs }}
+      PLAYWRIGHT_WORKERS: "2"
     steps:
       # preview.krabiclaw.com is one deployment over one database, and this job
       # resets that database before it tests. Two of these overlapping is not a
@@ -173,7 +144,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           RUN_ID: ${{ github.run_id }}
-          JOB_NAME: E2E representative tests (preview only)
+          JOB_NAME: Preview smoke
         run: |
           set -euo pipefail
           # --paginate or a busy repository silently truncates at 100 and the
@@ -282,8 +253,8 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: yarn fixtures:verify:preview
-      - name: Run tenant public and affected preview coverage
-        run: yarn test:e2e:preview:selected
+      - name: Run the preview smoke suite
+        run: yarn test:e2e:preview:smoke
 
   e2e-staging:
     name: Deploy and test staging
