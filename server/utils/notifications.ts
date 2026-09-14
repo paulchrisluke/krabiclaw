@@ -12,6 +12,7 @@ import type { NotificationCategory } from '~/shared/notification-categories'
 import { renderNotificationEmail } from '~/server/emails/render'
 import { toWhatsAppVars } from '~/server/notifications/whatsapp-mapping'
 import { NOTIFICATION_CATALOG } from '~/server/notifications/catalog'
+import { locationHero, productHero, resolveHero } from '~/server/notifications/hero'
 import {
   guestBookingCancelledMessage,
   guestBookingReceivedMessage,
@@ -98,6 +99,8 @@ interface ContactNotificationInput extends SiteContext {
 }
 
 interface BookingNotificationInput extends SiteContext {
+  /** So the email can lead with the experience's own photo. */
+  productId?: string | null
   locationId?: string | null
   bookingId: string
   guestName: string
@@ -654,16 +657,18 @@ export async function notifyReservationCreated(
     deep_link: inboxUrl ?? '',
   }
 
+  const hero = await resolveHero(() => locationHero(db, opts.siteId, opts.locationId))
   const ownerMessage = reservationCreatedMessage({
     guestName: opts.guestName, guestEmail: opts.email, guestPhone: opts.phone ?? null,
     date: prettyDate, time: prettyTime, partySize: opts.guests,
     locationName: opts.locationName ?? null, siteName: restaurant,
-    notes: opts.requests ?? null, heroImageUrl: null, replyUrl: inboxUrl,
+    notes: opts.requests ?? null, heroImageUrl: hero?.imageUrl ?? null, replyUrl: inboxUrl,
   })
   const guestEmail = await renderNotificationEmail(guestReservationReceivedMessage({
     guestName: opts.guestName, siteName: restaurant, date: prettyDate, time: prettyTime,
     partySize: opts.guests, notes: opts.requests, locationName: opts.locationName,
     contactPhone: opts.contactPhone, contactEmail: opts.contactEmail, cancelUrl: opts.cancelUrl,
+    heroImageUrl: hero?.imageUrl ?? null,
   }), { platformDomain })
 
   const results = await Promise.allSettled([
@@ -996,16 +1001,18 @@ export async function notifyBookingCreated(
     deep_link: inboxUrl ?? '',
   }
 
+  const hero = await resolveHero(() => productHero(db, opts.siteId, opts.productId))
   const ownerMessage = bookingCreatedMessage({
     guestName: opts.guestName, guestEmail: opts.email, guestPhone: opts.guestPhone ?? null,
     date: prettyDate, time: prettyTime, partySize: String(opts.partySize),
     locationName: null, siteName: studio, productTitle: opts.productTitle,
-    notes: opts.notes ?? null, heroImageUrl: null, replyUrl: inboxUrl,
+    notes: opts.notes ?? null, heroImageUrl: hero?.imageUrl ?? null, replyUrl: inboxUrl,
   })
   const guestEmail = await renderNotificationEmail(guestBookingReceivedMessage({
     guestName: opts.guestName, siteName: studio, productTitle: opts.productTitle,
     date: prettyDate, time: prettyTime, partySize: String(opts.partySize), notes: opts.notes,
     contactPhone: opts.contactPhone ?? null, contactEmail: opts.contactEmail ?? null, cancelUrl: opts.cancelUrl ?? null,
+    heroImageUrl: hero?.imageUrl ?? null,
   }), { platformDomain })
 
   const results = await Promise.allSettled([

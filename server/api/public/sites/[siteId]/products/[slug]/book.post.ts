@@ -184,7 +184,7 @@ export default defineHandler(async (event) => {
     await notifyBookingCreated(env, db, {
       organizationId: site.organization_id, siteId, siteName: site.brand_name, locationId: session.location_id,
       bookingId: threadId, guestName, email: guestEmail, guestPhone: normalizedGuestPhone,
-      productTitle: product.name, startsAt: session.starts_at, timezone: session.timezone,
+      productId: product.id, productTitle: product.name, startsAt: session.starts_at, timezone: session.timezone,
       partySize, notes: notes || null,
       cancelUrl, contactPhone, contactEmail, ownerInboxUrl,
     })

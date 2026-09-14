@@ -64,8 +64,13 @@ const reservation = {
   replyUrl: inbox,
 }
 
+// A real tenant asset, so the preview shows what a hero actually looks like
+// rather than a message that happens to have none.
+const sampleCover = 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/245066b6-926f-4dbb-e731-53ebb0e22700/public'
+
 const booking = {
   ...reservation,
+  heroImageUrl: sampleCover,
   guestName: 'Mina Park',
   guestEmail: 'mina@example.com',
   guestPhone: '+66 76 000 0002',
@@ -88,7 +93,7 @@ const guestVisit = {
   contactPhone: '+1 555 000 0000',
   contactEmail: 'hello@emberslice.example',
   cancelUrl: 'https://demo.krabiclaw.com/reservations/cancel?id=preview',
-  heroImageUrl: null,
+  heroImageUrl: sampleCover,
 }
 
 export const NOTIFICATION_CATALOG: CatalogEntry[] = [

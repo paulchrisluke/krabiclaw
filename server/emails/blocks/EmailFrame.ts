@@ -48,11 +48,12 @@ export default defineComponent({
               /* The hero's letterbox is the page behind the picture, so it
                  follows the scheme rather than staying a light band. */
               .email-hero-img { background-color: ${dark.bg} !important; }
-              /* The label lives in a span inside the anchor, and the generic
-                 span rule above sets that span's own colour directly, so the
-                 button has to out-specify it: a class plus universal selector
-                 loses to a class plus element, which left the label muted grey
-                 on coral at 1.61:1. */
+              /* The coral button keeps its white label in both schemes, like
+                 the product's own. The label lives in a span inside the anchor
+                 and the generic span rule above sets that span's colour
+                 directly, so the button has to out-specify it: a class plus
+                 universal selector loses to a class plus element, which left
+                 the label muted grey on coral at 1.61:1. */
               .email-body .email-cta-secondary, .email-body .email-cta-secondary span { border-color: ${dark.border} !important; color: ${dark.text} !important; }
               .email-body .email-cta-primary, .email-body .email-cta-primary span { color: ${brand.onPrimary} !important; }
             }

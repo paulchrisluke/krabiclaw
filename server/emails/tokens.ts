@@ -42,8 +42,16 @@ export const dark = {
 export const brand = {
   /** --kc-coral */
   primary: '#FB7461',
-  /** --kc-navy, the label on a coral button */
-  onPrimary: '#1F2547',
+  /**
+   * White, in both schemes, because that is what the product's own primary
+   * button renders — measured at rgb(245,244,251) on rgb(251,116,97). The
+   * emails had navy here, which made them the only surface that disagreed.
+   *
+   * It is a brand decision rather than a contrast-led one: white on this coral
+   * measures 2.70:1, under the 4.5:1 AA floor. The platform already ships that,
+   * so matching it keeps one answer rather than two.
+   */
+  onPrimary: '#FFFFFF',
 } as const
 
 /**
