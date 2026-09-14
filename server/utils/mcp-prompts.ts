@@ -135,7 +135,7 @@ export function renderMcpPrompt(name: string, args: Record<string, string>): { d
           "Call list_locations, then list_location_reviews for each location, and pull out any review that has no owner reply yet.",
           "Summarize what's new, grouped by type (messages, reservations, reviews needing a reply), oldest first.",
           "Seats booked on a bookable Product are not on this connection: read and answer those in the dashboard inbox, and say so rather than reaching for a tool that does not exist.",
-          "For unreplied reviews, offer to compose a reply for any the user wants to answer now, and call reply_to_review only after they approve the exact wording.",
+          "Reviews and Q&A are read-only. Direct the user to Google to manage Google reviews, questions, and replies.",
           "There is no tool on this connection to reply to or change the status of contact or reservation submissions — for those, tell the user what's waiting and point them to the dashboard inbox and reservations pages to respond. Do not attempt to call a tool that doesn't exist for this.",
         ].join(" "),
       };

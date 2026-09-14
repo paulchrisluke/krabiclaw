@@ -25,14 +25,8 @@ interface RouteTreeNode {
 // The catch-all is what renders an unclaimed path, so it never claims one.
 const TENANT_CATCH_ALL_SEGMENT = ':tenantPath('
 
-// Claimed, but absent from the route table at the point the config hooks run.
-//
-// `/api` is scanned from server/api/** by Nitro after nitro:config, so
-// nitroConfig.handlers holds only module-registered routes there. The namespace
-// is exact rather than approximate: every file under server/api/ answers
-// /api/..., and nothing else does.
-//
-// Build output and worker media are served before any route runs.
+// Reserve the API namespace, plus build output and Worker media served before
+// routes. File-based server routes are collected from Nitro's scanned handlers.
 const NON_ROUTE_CLAIMED_SUBTREES = ['/api', '/_nuxt', '/__media']
 
 function joinRoutePath(parent: string, child: string): string {

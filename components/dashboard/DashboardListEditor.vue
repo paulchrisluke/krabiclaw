@@ -17,9 +17,9 @@
 
         <div class="flex shrink-0 items-center gap-2">
           <slot name="actions" />
-          <slot v-if="editing && selected.length" name="selection-actions" :selected="selected" />
+          <slot v-if="!readOnly && editing && selected.length" name="selection-actions" :selected="selected" />
           <UButton
-            v-if="items.length"
+            v-if="!readOnly && items.length"
             :label="editing ? 'Done' : 'Edit'"
             color="neutral"
             :variant="editing ? 'solid' : 'soft'"
@@ -27,6 +27,7 @@
             @click="editing = !editing"
           />
           <UButton
+            v-if="!readOnly"
             icon="i-lucide-plus"
             :aria-label="addLabel"
             color="neutral"
@@ -42,7 +43,7 @@
         In the edit state the description gives way to the selection count, so
         the row that told you what the list is tells you what you are acting on.
       -->
-      <p v-if="editing && selectable" class="mt-2 text-sm text-muted" data-testid="list-editor-selection-count">
+      <p v-if="!readOnly && editing && selectable" class="mt-2 text-sm text-muted" data-testid="list-editor-selection-count">
         {{ selected.length ? `${selected.length} selected` : 'Select items to move them' }}
       </p>
       <p v-else-if="description" class="mt-2 text-sm text-muted">{{ description }}</p>
@@ -84,7 +85,7 @@
           strand a half-edited list behind a back button.
         -->
         <UCheckbox
-          v-if="editing && selectable"
+          v-if="!readOnly && editing && selectable"
           :model-value="selected.includes(item.id)"
           :aria-label="`Select ${item.title}`"
           :data-testid="`list-editor-select-${item.id}`"
@@ -92,7 +93,7 @@
         />
 
         <UButton
-          v-if="editing && !selectable"
+          v-if="!readOnly && editing && !selectable"
           icon="i-lucide-circle-minus"
           :aria-label="`Remove ${item.title}`"
           color="neutral"
@@ -110,7 +111,7 @@
           </slot>
         </div>
 
-        <div v-if="editing" class="flex shrink-0 items-center gap-1">
+        <div v-if="!readOnly && editing" class="flex shrink-0 items-center gap-1">
           <template v-if="reorderable">
             <UButton
               icon="i-lucide-arrow-up"
@@ -159,7 +160,8 @@ defineProps<{
   emptyTitle: string
   emptyIcon: string
   /** Names the add control for screen readers, e.g. "Add a question". */
-  addLabel: string
+  addLabel?: string
+  readOnly?: boolean
   pending?: boolean
   error?: string | null
   /** Lists with a persisted order gain move controls in the edit state. */

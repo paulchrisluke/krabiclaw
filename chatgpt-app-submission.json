@@ -56,18 +56,6 @@
         "destructive_justification": "Creates an empty collection for the selected site; products are added to it separately. Existing content is not deleted or overwritten."
       }
     },
-    "create_location_qa": {
-      "annotations": {
-        "readOnlyHint": false,
-        "openWorldHint": true,
-        "destructiveHint": false
-      },
-      "justifications": {
-        "read_only_justification": "Adds a public question and answer to the selected location.",
-        "open_world_justification": "Adds a public question and answer to the selected location. Its effects can change content or behavior on the public website.",
-        "destructive_justification": "Adds a public question and answer to the selected location. Existing content is not deleted or overwritten."
-      }
-    },
     "create_metafield_definition": {
       "annotations": {
         "readOnlyHint": false,
@@ -78,18 +66,6 @@
         "read_only_justification": "Defines a typed product attribute for the organization, which is what makes that attribute storable at all.",
         "open_world_justification": "Defines a typed product attribute for the organization, which is what makes that attribute storable at all. Its effects can change content or behavior on the public website.",
         "destructive_justification": "Defines a typed product attribute for the organization, which is what makes that attribute storable at all. Existing content is not deleted or overwritten."
-      }
-    },
-    "create_owner_entered_site_review": {
-      "annotations": {
-        "readOnlyHint": false,
-        "openWorldHint": true,
-        "destructiveHint": false
-      },
-      "justifications": {
-        "read_only_justification": "Creates an owner-entered review with source and attribution provenance for the selected site.",
-        "open_world_justification": "Creates an owner-entered review with source and attribution provenance for the selected site. Its effects can change content or behavior on the public website.",
-        "destructive_justification": "Creates an owner-entered review with source and attribution provenance for the selected site. Existing content is not deleted or overwritten."
       }
     },
     "create_post": {
@@ -114,18 +90,6 @@
         "read_only_justification": "Creates a product with explicit variants, prices and attributes; publication and placements are assigned separately.",
         "open_world_justification": "Creates a product with explicit variants, prices and attributes; publication and placements are assigned separately. Its effects can change content or behavior on the public website.",
         "destructive_justification": "Creates a product with explicit variants, prices and attributes; publication and placements are assigned separately. Existing content is not deleted or overwritten."
-      }
-    },
-    "create_site_qa": {
-      "annotations": {
-        "readOnlyHint": false,
-        "openWorldHint": true,
-        "destructiveHint": false
-      },
-      "justifications": {
-        "read_only_justification": "Adds a public question and answer to the selected site.",
-        "open_world_justification": "Adds a public question and answer to the selected site. Its effects can change content or behavior on the public website.",
-        "destructive_justification": "Adds a public question and answer to the selected site. Existing content is not deleted or overwritten."
       }
     },
     "create_tenant_page": {
@@ -164,18 +128,6 @@
         "destructive_justification": "Deletes the selected collection and every product membership in it; the products themselves are untouched. Existing state is deleted, replaced or overwritten rather than only appended."
       }
     },
-    "delete_location_qa": {
-      "annotations": {
-        "readOnlyHint": false,
-        "openWorldHint": true,
-        "destructiveHint": true
-      },
-      "justifications": {
-        "read_only_justification": "Deletes the selected location question and answer.",
-        "open_world_justification": "Deletes the selected location question and answer. Its effects can change content or behavior on the public website.",
-        "destructive_justification": "Deletes the selected location question and answer. Existing state is deleted, replaced or overwritten rather than only appended."
-      }
-    },
     "delete_media_asset": {
       "annotations": {
         "readOnlyHint": false,
@@ -198,18 +150,6 @@
         "read_only_justification": "Deletes a typed product attribute definition and every product value stored under it.",
         "open_world_justification": "Deletes a typed product attribute definition and every product value stored under it. Its effects can change content or behavior on the public website.",
         "destructive_justification": "Deletes a typed product attribute definition and every product value stored under it. Existing state is deleted, replaced or overwritten rather than only appended."
-      }
-    },
-    "delete_owner_entered_site_review": {
-      "annotations": {
-        "readOnlyHint": false,
-        "openWorldHint": true,
-        "destructiveHint": true
-      },
-      "justifications": {
-        "read_only_justification": "Deletes the selected owner-entered site review.",
-        "open_world_justification": "Deletes the selected owner-entered site review. Its effects can change content or behavior on the public website.",
-        "destructive_justification": "Deletes the selected owner-entered site review. Existing state is deleted, replaced or overwritten rather than only appended."
       }
     },
     "delete_post": {
@@ -246,18 +186,6 @@
         "read_only_justification": "Deletes the selected translated resource representation.",
         "open_world_justification": "Deletes the selected translated resource representation. Its effects can change content or behavior on the public website.",
         "destructive_justification": "Deletes the selected translated resource representation. Existing state is deleted, replaced or overwritten rather than only appended."
-      }
-    },
-    "delete_site_qa": {
-      "annotations": {
-        "readOnlyHint": false,
-        "openWorldHint": true,
-        "destructiveHint": true
-      },
-      "justifications": {
-        "read_only_justification": "Deletes the selected site question and answer.",
-        "open_world_justification": "Deletes the selected site question and answer. Its effects can change content or behavior on the public website.",
-        "destructive_justification": "Deletes the selected site question and answer. Existing state is deleted, replaced or overwritten rather than only appended."
       }
     },
     "get_blog_post": {
@@ -692,18 +620,6 @@
         "destructive_justification": "Overwrites the order collections are presented in on the selected site. Existing state is deleted, replaced or overwritten rather than only appended."
       }
     },
-    "reorder_location_qa": {
-      "annotations": {
-        "readOnlyHint": false,
-        "openWorldHint": true,
-        "destructiveHint": true
-      },
-      "justifications": {
-        "read_only_justification": "Overwrites question-and-answer order for the selected location.",
-        "open_world_justification": "Overwrites question-and-answer order for the selected location. Its effects can change content or behavior on the public website.",
-        "destructive_justification": "Overwrites question-and-answer order for the selected location. Existing state is deleted, replaced or overwritten rather than only appended."
-      }
-    },
     "reorder_media": {
       "annotations": {
         "readOnlyHint": false,
@@ -714,18 +630,6 @@
         "read_only_justification": "Overwrites media placement ordering for the selected public content collection.",
         "open_world_justification": "Overwrites media placement ordering for the selected public content collection. Its effects can change content or behavior on the public website.",
         "destructive_justification": "Overwrites media placement ordering for the selected public content collection. Existing state is deleted, replaced or overwritten rather than only appended."
-      }
-    },
-    "reorder_site_qa": {
-      "annotations": {
-        "readOnlyHint": false,
-        "openWorldHint": true,
-        "destructiveHint": true
-      },
-      "justifications": {
-        "read_only_justification": "Overwrites question-and-answer order for the selected site.",
-        "open_world_justification": "Overwrites question-and-answer order for the selected site. Its effects can change content or behavior on the public website.",
-        "destructive_justification": "Overwrites question-and-answer order for the selected site. Existing state is deleted, replaced or overwritten rather than only appended."
       }
     },
     "replace_blog_content": {
@@ -750,18 +654,6 @@
         "read_only_justification": "Replaces the submitted product translations for one locale; omitted products remain untouched.",
         "open_world_justification": "Replaces the submitted product translations for one locale; omitted products remain untouched. Its effects can change content or behavior on the public website.",
         "destructive_justification": "Replaces the submitted product translations for one locale; omitted products remain untouched. Existing state is deleted, replaced or overwritten rather than only appended."
-      }
-    },
-    "reply_to_review": {
-      "annotations": {
-        "readOnlyHint": false,
-        "openWorldHint": true,
-        "destructiveHint": true
-      },
-      "justifications": {
-        "read_only_justification": "Overwrites or clears the owner reply stored on a site review; it does not send a reply to Google.",
-        "open_world_justification": "Overwrites or clears the owner reply stored on a site review; it does not send a reply to Google. Its effects can change content or behavior on the public website.",
-        "destructive_justification": "Overwrites or clears the owner reply stored on a site review; it does not send a reply to Google. Existing state is deleted, replaced or overwritten rather than only appended."
       }
     },
     "save_generated_image": {
@@ -932,18 +824,6 @@
         "destructive_justification": "Overwrites location hours, contact details, capacity or notification settings supplied by the user. Existing state is deleted, replaced or overwritten rather than only appended."
       }
     },
-    "update_location_qa": {
-      "annotations": {
-        "readOnlyHint": false,
-        "openWorldHint": true,
-        "destructiveHint": true
-      },
-      "justifications": {
-        "read_only_justification": "Overwrites the selected location question or answer.",
-        "open_world_justification": "Overwrites the selected location question or answer. Its effects can change content or behavior on the public website.",
-        "destructive_justification": "Overwrites the selected location question or answer. Existing state is deleted, replaced or overwritten rather than only appended."
-      }
-    },
     "update_media_asset": {
       "annotations": {
         "readOnlyHint": false,
@@ -954,18 +834,6 @@
         "read_only_justification": "Overwrites media metadata such as alt text or category.",
         "open_world_justification": "Overwrites media metadata such as alt text or category. Its effects can change content or behavior on the public website.",
         "destructive_justification": "Overwrites media metadata such as alt text or category. Existing state is deleted, replaced or overwritten rather than only appended."
-      }
-    },
-    "update_owner_entered_site_review": {
-      "annotations": {
-        "readOnlyHint": false,
-        "openWorldHint": true,
-        "destructiveHint": true
-      },
-      "justifications": {
-        "read_only_justification": "Overwrites selected owner-entered review fields while enforcing provenance rules.",
-        "open_world_justification": "Overwrites selected owner-entered review fields while enforcing provenance rules. Its effects can change content or behavior on the public website.",
-        "destructive_justification": "Overwrites selected owner-entered review fields while enforcing provenance rules. Existing state is deleted, replaced or overwritten rather than only appended."
       }
     },
     "update_post": {
@@ -1002,18 +870,6 @@
         "read_only_justification": "Creates or overwrites the reservation policy of the selected location, which is what opens reservations there.",
         "open_world_justification": "Creates or overwrites the reservation policy of the selected location, which is what opens reservations there. Its effects can change content or behavior on the public website.",
         "destructive_justification": "Creates or overwrites the reservation policy of the selected location, which is what opens reservations there. Existing state is deleted, replaced or overwritten rather than only appended."
-      }
-    },
-    "update_site_qa": {
-      "annotations": {
-        "readOnlyHint": false,
-        "openWorldHint": true,
-        "destructiveHint": true
-      },
-      "justifications": {
-        "read_only_justification": "Overwrites the selected site question or answer.",
-        "open_world_justification": "Overwrites the selected site question or answer. Its effects can change content or behavior on the public website.",
-        "destructive_justification": "Overwrites the selected site question or answer. Existing state is deleted, replaced or overwritten rather than only appended."
       }
     },
     "update_site_settings": {

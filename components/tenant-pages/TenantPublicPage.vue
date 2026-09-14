@@ -34,7 +34,7 @@ const isPageResponse = (value: unknown): value is { success: true; page: PublicT
   isRecord(value) && value.success === true && isRecord(value.page) && typeof value.page.path === 'string' && Array.isArray(value.page.blocks)
 
 const requestEvent = useRequestEvent()
-const { data, error } = await useAsyncData(key, async () => {
+const { data, error, status, execute } = await useAsyncData(key, async () => {
   if (import.meta.server) {
     if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Request context unavailable' })
     const [{ cloudflareEnv }, { getPublicTenantPageForPath }] = await Promise.all([
@@ -65,6 +65,9 @@ const { data, error } = await useAsyncData(key, async () => {
   },
 })
 
+// Nuxt can defer a child request until mount while the previous route is
+// still hydrating. Await that same request before requiring its document.
+if (status.value === 'idle' || status.value === 'pending') await execute({ dedupe: 'defer' })
 if (error.value) throw error.value
 if (!data.value?.page) throw createError({ statusCode: 500, statusMessage: 'Tenant page data was not returned' })
 

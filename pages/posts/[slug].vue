@@ -1,7 +1,7 @@
 <template>
-  <main v-if="post" class="min-h-screen bg-default text-default">
+  <div v-if="post" class="min-h-screen bg-default text-default">
     <SayaPostDetail :post="post" :brand="postBrand" />
-  </main>
+  </div>
 </template>
 
 <script setup lang="ts">

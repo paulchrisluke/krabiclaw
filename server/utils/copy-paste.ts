@@ -9,8 +9,6 @@ type SetupEnv = CloudflareEnv
 export type CopyEntityType = 
   | 'products'
   | 'media_assets' 
-  | 'reviews' 
-  | 'location_qa' 
 
 export interface CopyEntityConfig {
   type: CopyEntityType
@@ -29,7 +27,6 @@ export interface CopyManifest {
   target_location_id: string
   target_location_slug: string
   entities: Record<CopyEntityType, { copied: number; new_ids: string[] }>
-  id_mappings: Record<string, string> // old_id -> new_id
 }
 
 export interface CopyBatchResult {
@@ -75,21 +72,6 @@ export async function copyLocationBatch(
     return { success: false, error: 'field_overrides can only be used with new_location, not an existing target_location_id' }
   }
 
-  // Validated before any location is created so a bad entities list can't strand
-  // an orphaned location.
-  const requestedTypes = new Set(entities.map((config) => config.type))
-  if (requestedTypes.has('reviews') && !requestedTypes.has('products')) {
-    const productReview = await queryFirst<{ id: string }>(
-      db,
-      `SELECT id FROM reviews
-       WHERE location_id = ? AND organization_id = ? AND site_id = ? AND product_id IS NOT NULL
-       LIMIT 1`,
-      [source_location_id, organizationId, siteId],
-    )
-    if (productReview) {
-      return { success: false, error: 'Copying Product reviews requires also copying products so every review keeps its Product owner' }
-    }
-  }
   let targetLocationId: string
   let targetLocationSlug: string
   let createdNewLocation = false
@@ -159,18 +141,13 @@ export async function copyLocationBatch(
     return result
   }
 
-  // Build ID mapping table for foreign key remapping
-  const idMappings: Record<string, string> = {}
   const manifest: CopyManifest = {
     target_location_id: targetLocationId,
     target_location_slug: targetLocationSlug,
     entities: {
       products: { copied: 0, new_ids: [] },
       media_assets: { copied: 0, new_ids: [] },
-      reviews: { copied: 0, new_ids: [] },
-      location_qa: { copied: 0, new_ids: [] },
     },
-    id_mappings: idMappings,
   }
 
   const now = new Date().toISOString()
@@ -186,7 +163,7 @@ export async function copyLocationBatch(
   }
 
   // Process entities in dependency order so copied owners exist before their placements.
-  const entityOrder: CopyEntityType[] = ['media_assets', 'products', 'reviews', 'location_qa']
+  const entityOrder: CopyEntityType[] = ['media_assets', 'products']
   const requestedConfigs = new Map(entities.map((config) => [config.type, config]))
 
   try {
@@ -202,12 +179,7 @@ export async function copyLocationBatch(
         case 'media_assets':
           await copyMediaAssets(db, source_location_id, targetLocationId, organizationId, siteId, now, statements, manifest)
           break
-        case 'reviews':
-          await copyReviews(db, source_location_id, targetLocationId, organizationId, siteId, now, statements, manifest, idMappings)
-          break
-        case 'location_qa':
-          await copyLocationQa(db, source_location_id, targetLocationId, organizationId, siteId, now, statements, manifest)
-          break
+
       }
     }
   } catch (error) {
@@ -240,14 +212,6 @@ export async function copyLocationBatch(
           AND p.id IN (SELECT value FROM json_each(?))
       `, [siteId, JSON.stringify(offeredProductIds)])
       refreshOwners.push(...publicProducts.map(row => ({ owner_type: 'product' as const, owner_id: row.id })))
-    }
-    const copiedReviewIds = manifest.entities.reviews.new_ids
-    if (copiedReviewIds.length) {
-      const publicReviews = await queryAll<{ id: string }>(db, `
-        SELECT id FROM reviews
-         WHERE site_id = ? AND status = 'approved' AND id IN (SELECT value FROM json_each(?))
-      `, [siteId, JSON.stringify(copiedReviewIds)])
-      refreshOwners.push(...publicReviews.map(row => ({ owner_type: 'review' as const, owner_id: row.id })))
     }
     for (const owner of refreshOwners) {
       await refreshSocialCard({ db, env, owner, actorId: userId })
@@ -303,7 +267,6 @@ async function offerProductsAtTarget(
     })
     // The same product, now sold in two places. Its id is unchanged, which is
     // the whole point: there is one thing to edit.
-    manifest.id_mappings[row.product_id] = row.product_id
     manifest.entities.products.new_ids.push(row.product_id)
     manifest.entities.products.copied++
   }
@@ -411,89 +374,4 @@ async function copyLocationPolicies(
             ON CONFLICT (location_id) DO NOTHING`,
     params: [targetLocationId, now, now, userId, userId, organizationId, sourceLocationId],
   })
-}
-
-async function copyReviews(
-  db: DbClient,
-  sourceLocationId: string,
-  targetLocationId: string,
-  organizationId: string,
-  siteId: string,
-  now: string,
-  statements: BatchQuery[],
-  manifest: CopyManifest,
-  idMappings: Record<string, string>,
-) {
-  const reviews = await queryAll<{ id: string; product_id: string | null }>(
-    db,
-    'SELECT id, product_id FROM reviews WHERE location_id = ? AND organization_id = ? AND site_id = ?',
-    [sourceLocationId, organizationId, siteId],
-  )
-
-  for (const review of reviews) {
-    const newId = crypto.randomUUID()
-    const newProductId = review.product_id ? idMappings[review.product_id] : null
-    if (review.product_id && !newProductId) {
-      throw new Error(`Review ${review.id} cannot be copied without its Product owner`)
-    }
-    manifest.entities.reviews.new_ids.push(newId)
-
-    // google_review_id is uniquely indexed (idx_reviews_google_id) and ip_hash/user_agent
-    // are visitor PII tied to the original submission — none should carry over to a copy.
-    statements.push({
-      query: `
-        INSERT INTO reviews (id, organization_id, site_id, location_id, product_id, author_name, rating, title, content, google_review_id, owner_reply, owner_reply_at, helpful_count, status, source, ip_hash, user_agent, created_at, updated_at)
-        SELECT ?, organization_id, site_id, ?, CASE WHEN product_id IS NULL THEN NULL ELSE ? END, author_name, rating, title, content, NULL, owner_reply, owner_reply_at, helpful_count, status, source, NULL, NULL, ?, ?
-        FROM reviews WHERE id = ?
-      `,
-      params: [newId, targetLocationId, newProductId, now, now, review.id],
-    })
-
-    const media = await queryAll<{ slot: string; asset_id: string; sort_order: number }>(db, `
-      SELECT slot, asset_id, sort_order FROM media_placements
-       WHERE organization_id = ? AND site_id = ? AND owner_type = 'review' AND owner_id = ? AND slot <> 'social_card' AND status = 'active'
-       ORDER BY slot, sort_order
-    `, [organizationId, siteId, review.id])
-    for (const placement of media) {
-      statements.push(buildMediaPlacementInsertQuery({
-        organizationId, siteId, ownerType: 'review', ownerId: newId, slot: placement.slot,
-        assetId: placement.asset_id, sortOrder: placement.sort_order, createdAt: now, updatedAt: now,
-      }))
-    }
-
-    manifest.entities.reviews.copied++
-  }
-}
-
-async function copyLocationQa(
-  db: DbClient,
-  sourceLocationId: string,
-  targetLocationId: string,
-  organizationId: string,
-  siteId: string,
-  now: string,
-  statements: BatchQuery[],
-  manifest: CopyManifest,
-) {
-  const qa = await queryAll<{ id: string }>(
-    db,
-    "SELECT id FROM content_documents WHERE kind = 'qa' AND row_role = 'root' AND location_id = ? AND organization_id = ? AND site_id = ?",
-    [sourceLocationId, organizationId, siteId],
-  )
-
-  for (const item of qa) {
-    const newId = crypto.randomUUID()
-    manifest.entities.location_qa.new_ids.push(newId)
-
-    statements.push({
-      query: `
-        INSERT INTO content_documents (id, organization_id, site_id, location_id, kind, row_role, locale, title, summary, metadata_json, source, status, visibility, sort_order, created_by, updated_by, created_at, updated_at)
-        SELECT ?, organization_id, site_id, ?, 'qa', 'root', 'en', title, summary, metadata_json, source, status, visibility, sort_order, created_by, updated_by, ?, ?
-        FROM content_documents WHERE id = ? AND kind = 'qa' AND row_role = 'root' AND organization_id = ? AND site_id = ?
-      `,
-      params: [newId, targetLocationId, now, now, item.id, organizationId, siteId],
-    })
-
-    manifest.entities.location_qa.copied++
-  }
 }

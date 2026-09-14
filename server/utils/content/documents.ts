@@ -3,7 +3,7 @@ import { HTTPError } from 'nitro';
 
 import { executeBatch, queryAll, queryFirst, type BatchQuery, type DbClient } from '../../db/index.ts'
 import { d1JsonStringSet } from '../../db/d1-limits.ts'
-import { assertNoEmbeddedMediaFields } from '../../../utils/tenant-page-blocks.ts'
+import { validateContentBlockData } from '../../../utils/tenant-page-blocks.ts'
 import type { content_documents } from '../../db/schema.ts'
 import {
   CONTENT_BLOCK_TYPES,
@@ -134,18 +134,20 @@ function asObject(value: unknown, field: string) {
 function mediaFreeBlockData(type: ContentBlockType, value: unknown, field: string) {
   const data = asObject(value, field)
   try {
-    assertNoEmbeddedMediaFields(data, field)
+    validateContentBlockData(type, data)
   } catch (error) {
-    badRequest(error instanceof Error ? error.message : `${field} contains embedded media`)
+    badRequest(error instanceof Error ? error.message : `${field} contains invalid block data`)
   }
-  if (type === 'image' && 'url' in data) badRequest(`${field}.url must use a media placement`)
   // A heading's text is `text`, and its level is the `level` column. Importers
   // also wrote a `markdown` key holding `'#'.repeat(level) + ' ' + text` — a
   // second copy of both, which no reader consumes and which the CMS leaves
   // behind when it edits `text`, so the row ends up asserting two different
   // headlines. Drop it on write: the block is exactly what the registry says
   // it is.
-  if (type === 'heading') delete data.markdown
+  if (type === 'heading') {
+    delete data.markdown
+    delete data.level
+  }
   // The markdown contract lives here, on the one batch builder every content
   // document write passes through, because `content_blocks` is one table and a
   // block cannot mean different things depending on which caller wrote it.
@@ -442,7 +444,7 @@ export function prepareContentDocumentWithBlocks(
 
   const write = buildDocumentWriteBatch(document, blocks.map((block, index) => ({
     id: block.id, source_block_id: block.source_block_id ?? null, parent_block_id: block.parent_block_id ?? null, type: block.type,
-    position: index, level: block.level ?? null, data: block.data,
+    position: block.position ?? index, level: block.level ?? null, data: block.data,
   })), { bodyMarkdown: opts.bodyMarkdown, additionalQueriesAfter: opts.additionalQueriesAfter })
   return { document, ...write, queries: [...(opts.additionalQueriesBefore ?? []), documentInsert, ...write.queries] }
 }
@@ -698,7 +700,7 @@ export async function updateContentDocument(
   }
   const snapshots = input.blocks?.map((block, index) => ({
     id: block.id, source_block_id: block.source_block_id ?? null, parent_block_id: block.parent_block_id ?? null,
-    type: assertBlockType(block.type), position: index, level: block.level ?? null,
+    type: assertBlockType(block.type), position: block.position ?? index, level: block.level ?? null,
     data: asObject(block.data, `content block ${index} data`), updated_at: null,
   }))
   const result = await writeDocumentBlocks(db, document, snapshots, {
@@ -723,7 +725,7 @@ export function prepareContentDocumentUpdate(
   }
   const snapshots = input.blocks?.map((block, index) => ({
     id: block.id, source_block_id: block.source_block_id ?? null, parent_block_id: block.parent_block_id ?? null, type: assertBlockType(block.type),
-    position: index, level: block.level ?? null, data: asObject(block.data, `content block ${index} data`), updated_at: null,
+    position: block.position ?? index, level: block.level ?? null, data: asObject(block.data, `content block ${index} data`), updated_at: null,
   }))
   return buildDocumentWriteBatch(document, snapshots, {
     changes: input.changes, expectedDocument: { id: document.id, updatedAt: input.expected_updated_at },

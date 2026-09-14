@@ -36,6 +36,7 @@ import { loadSiteTemplate } from '~/server/utils/content/publishing'
 import { templateAllowsPageDocumentAt } from '~/shared/tenant-page-paths'
 import type { PublicTemplateDefinition } from '~/utils/template-registry'
 import { CLAIMED_PUBLIC_ROUTES } from '#claimed-public-routes'
+import { formatTenantLocalePath } from '~/utils/tenant-locale-path'
 
 export interface TenantPageEditorInput {
   id?: string
@@ -186,7 +187,7 @@ async function assertTenantPageSupport(env: CloudflareEnv, db: DbClient, organiz
 }
 
 function blocksAsInputs(blocks: TenantPageBlock[]): ContentBlockInput[] {
-  return blocks.map(block => ({ id: block.id, source_block_id: block.source_block_id, type: block.type, position: block.position, data: block.data }))
+  return blocks.map(block => ({ id: block.id, source_block_id: block.source_block_id, parent_block_id: block.parent_block_id, level: block.level, type: block.type, position: block.position, data: block.data }))
 }
 
 async function tenantPagePlacementQueries(
@@ -357,7 +358,7 @@ export async function assertTenantPagePathAvailable(
      WHERE site_id = ? AND locale = ? AND from_path = ?
        AND (? IS NULL OR owner_id IS NULL OR owner_id <> ?)
      LIMIT 1
-  `, [input.siteId, input.locale, path, input.allowOwnedRedirectVariantId ?? null, input.allowOwnedRedirectVariantId ?? null])
+  `, [input.siteId, input.locale, formatTenantLocalePath(path, input.locale), input.allowOwnedRedirectVariantId ?? null, input.allowOwnedRedirectVariantId ?? null])
   if (redirect) conflict('A tenant redirect already owns this path')
   return path
 }
@@ -371,7 +372,7 @@ async function assertTenantPageRedirectWritable(
       FROM site_redirects
      WHERE site_id = ? AND organization_id = ? AND locale = ? AND from_path = ?
      LIMIT 1
-  `, [input.siteId, input.organizationId, input.locale, input.fromPath])
+  `, [input.siteId, input.organizationId, input.locale, formatTenantLocalePath(input.fromPath, input.locale)])
   if (existing && (existing.owner_id !== input.variantId || existing.source !== 'tenant-pages')) {
     conflict('A manual tenant redirect already owns this path')
   }
@@ -407,12 +408,12 @@ async function prepareTenantPageRedirectFlatten(
       FROM site_redirects
      WHERE site_id = ? AND organization_id = ? AND locale = ? AND to_path = ?
        AND behavior = 'redirect'
-  `, [input.siteId, input.organizationId, input.locale, input.fromPath])
+  `, [input.siteId, input.organizationId, input.locale, formatTenantLocalePath(input.fromPath, input.locale)])
   if (!input.toPath) {
     if (incoming.length) conflict('Cannot archive a page while another redirect points to it')
     return []
   }
-  if (incoming.some(redirect => redirect.from_path === input.toPath)) {
+  if (incoming.some(redirect => redirect.from_path === formatTenantLocalePath(input.toPath!, input.locale))) {
     conflict('Changing this page path would create a redirect cycle')
   }
   if (incoming.some(redirect => redirect.source !== 'tenant-pages')) {
@@ -423,7 +424,7 @@ async function prepareTenantPageRedirectFlatten(
     query: `UPDATE site_redirects
        SET to_path = ?, updated_at = ?
      WHERE site_id = ? AND organization_id = ? AND locale = ? AND to_path = ? AND behavior = 'redirect'`,
-    params: [input.toPath, now, input.siteId, input.organizationId, input.locale, input.fromPath],
+    params: [formatTenantLocalePath(input.toPath, input.locale), now, input.siteId, input.organizationId, input.locale, formatTenantLocalePath(input.fromPath, input.locale)],
   }]
 }
 
@@ -784,16 +785,6 @@ export async function createTenantPage(db: DbClient, input: { organizationId: st
     SELECT is_source FROM site_locales WHERE site_id = ? AND locale = ? LIMIT 1
   `, [input.siteId, locale])
   if (!existingPage && !localeRow?.is_source) badRequest('Translated tenant-page variants must reference an existing source page')
-  const sourceVariant = existingPage
-    ? await queryFirst<{ path: string } | null>(db, `
-        SELECT v.path
-          FROM content_documents v
-          JOIN site_locales l ON l.site_id = v.site_id AND l.locale = v.locale AND l.is_source = 1
-         WHERE v.row_role IN ('root','representation') AND v.kind = 'page' AND COALESCE(v.root_id, v.id) = ? AND v.organization_id = ? AND v.site_id = ?
-         LIMIT 1
-      `, [existingPage.id, input.organizationId, input.siteId])
-    : null
-  if (existingPage && !sourceVariant) throw new HTTPError({ statusCode: 500, statusMessage: 'Tenant page source variant is missing' })
   // A translated variant's identity is its source page's. The caller may state
   // it, but only to agree with the source; it does not get to pick a different
   // one, and omitting it does not mean "choose for me".
@@ -810,12 +801,11 @@ export async function createTenantPage(db: DbClient, input: { organizationId: st
   }
   const existingSystemPage = existingPage?.page_type === 'system'
   if (effectiveData.pageType === 'system' && !input.trustedSystemPage && !existingSystemPage) badRequest('System pages are managed by the site template')
-  const requestedPath = existingPage ? sourceVariant!.path : input.data.path
   const { template } = await loadSiteTemplate(db, input.siteId)
   const path = await assertTenantPagePathAvailable(db, {
     siteId: input.siteId,
     locale,
-    path: requestedPath,
+    path: input.data.path,
     template,
   })
   const metadata = metadataForInput(effectiveData, locale, path)
@@ -918,7 +908,7 @@ export async function updateTenantPage(db: DbClient, variantId: string, input: {
         }, now),
         {
           query: "INSERT INTO site_redirects (id, organization_id, site_id, locale, owner_type, owner_id, from_path, to_path, status_code, behavior, reason, source, created_at, updated_at) VALUES (?, ?, ?, ?, 'content_document', ?, ?, ?, 301, 'redirect', 'tenant_page_path_change', 'tenant-pages', ?, ?) ON CONFLICT(site_id, locale, from_path) DO UPDATE SET owner_type = excluded.owner_type, owner_id = excluded.owner_id, to_path = excluded.to_path, status_code = excluded.status_code, behavior = excluded.behavior, reason = excluded.reason, source = excluded.source, updated_at = excluded.updated_at",
-          params: [crypto.randomUUID(), row.organization_id, row.site_id, row.locale, variantId, row.path, path, now, now],
+          params: [crypto.randomUUID(), row.organization_id, row.site_id, row.locale, variantId, formatTenantLocalePath(row.path, row.locale), formatTenantLocalePath(path, row.locale), now, now],
         },
       ]
     : []

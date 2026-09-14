@@ -75,6 +75,11 @@ yarn test:e2e:guest-journeys
 yarn test:e2e:mcp
 ```
 
+OAuth E2E requires `MCP_CIMD_CLIENT_URL` and `MCP_PRIVATE_CIMD_CLIENT_URL`
+to name reachable public HTTPS metadata documents, including when the tested
+Worker runs on localhost. Use the existing preview fixtures configured in
+`.github/workflows/ci.yml`; a localhost client ID is invalid under CIMD.
+
 Migration tooling changes also run `yarn test:migrations`. These integration
 tests invoke the real installed Drizzle CLI/API and migration guards against
 disposable schema fixtures. They prove no-change generation, detection of real

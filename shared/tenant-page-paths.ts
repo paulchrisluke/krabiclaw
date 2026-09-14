@@ -28,11 +28,12 @@ function patternMatchesPath(claim: ClaimedRoute, path: string): boolean {
     // `:name(pattern)` carries a constraint — the locale aliases are
     // `:locale(th)` — and honouring it keeps `/foo/about` unclaimed while
     // `/th/about` is claimed.
-    const param = /^:[^(]*\((.*)\)\*?$/.exec(segment)
-    if (!param) return segment.startsWith(':') || segment.toLowerCase() === value.toLowerCase()
-    const constraint = param[1]
-    if (!constraint) return true
-    return new RegExp(`^(?:${constraint})$`, 'i').test(value)
+    const param = /^:[\w-]+(?:\((.*)\))?([^()]*)$/.exec(segment)
+    if (!param) return segment.toLowerCase() === value.toLowerCase()
+    const constraint = param[1] || '.+'
+    // Nitro keeps static suffixes, e.g. :slug.md; those claim only .md paths.
+    const suffix = param[2]!.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    return new RegExp(`^(?:${constraint})${suffix}$`, 'i').test(value)
   })
 }
 

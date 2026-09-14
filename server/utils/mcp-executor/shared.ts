@@ -88,12 +88,6 @@ export function validateImageBuffer(
   bytes: Uint8Array,
   sourceLabel: string,
 ): string {
-  if (bytes.byteLength < 1024) {
-    throw new HTTPError({
-      statusCode: 400,
-      statusMessage: `Invalid image payload from ${sourceLabel}: payload too small.`,
-    });
-  }
   if (bytes.byteLength > MAX_IMAGE_BYTES) {
     throw new HTTPError({
       statusCode: 413,

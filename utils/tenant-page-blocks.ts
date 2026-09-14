@@ -1,3 +1,5 @@
+import { FAQ_BLOCK_SOURCES } from '../shared/faq-block'
+
 export const TENANT_PAGE_SCHEMA_VERSION = 1 as const
 
 export type TenantPageBlockType =
@@ -26,6 +28,8 @@ export type TenantPageType = 'custom' | 'recipe' | 'legal' | 'system'
 
 export interface TenantPageBlock {
   source_block_id?: string | null
+  parent_block_id?: string | null
+  level?: number | null
   id: string
   type: TenantPageBlockType
   position: number
@@ -86,7 +90,7 @@ export const TENANT_PAGE_RECIPE_REGISTRY = new Set<string>(ALL_RECIPES)
 export const TENANT_PAGE_TYPES: readonly TenantPageType[] = ['custom', 'recipe', 'legal', 'system']
 
 export const TENANT_PAGE_BLOCK_REGISTRY: Record<TenantPageBlockType, TenantPageBlockDefinition> = {
-  heading: blockDefinitionWithMetadata('heading', 'Heading', 'A semantic heading.', ALL_RECIPES, ['text', 'level'], { accessibility: 'required', seo: 'structured' }),
+  heading: blockDefinitionWithMetadata('heading', 'Heading', 'A semantic heading.', ALL_RECIPES, ['text'], { accessibility: 'required', seo: 'structured' }),
   markdown: blockDefinitionWithMetadata('markdown', 'Rich text', 'Markdown-safe prose.', ALL_RECIPES, ['markdown'], { accessibility: 'required', seo: 'inherited' }),
   image: blockDefinitionWithMetadata('image', 'Image', 'A tenant media placement.', ALL_RECIPES, ['caption']),
   gallery: blockDefinitionWithMetadata('gallery', 'Gallery', 'An ordered media placement.', ALL_RECIPES, ['caption']),
@@ -103,7 +107,7 @@ export const TENANT_PAGE_BLOCK_REGISTRY: Record<TenantPageBlockType, TenantPageB
   // `features` and `people` side by side under keys no writer declared, and
   // nothing could edit either of them.
   team_grid: blockDefinitionWithMetadata('team_grid', 'Team', 'The people behind the business.', ALL_RECIPES, ['title', 'description', 'items']),
-  testimonial_grid: blockDefinitionWithMetadata('testimonial_grid', 'Testimonials', 'A grid of customer testimonials.', ALL_RECIPES, ['title', 'items']),
+  testimonial_grid: blockDefinitionWithMetadata('testimonial_grid', 'Testimonials', 'A grid of customer testimonials.', ALL_RECIPES, ['title', 'description', 'source']),
   contact_cta: blockDefinitionWithMetadata('contact_cta', 'Contact CTA', 'A contact-focused call to action.', ALL_RECIPES, ['title', 'description', 'label', 'url']),
   booking_cta: blockDefinitionWithMetadata('booking_cta', 'Booking CTA', 'A booking-focused call to action.', ALL_RECIPES, ['title', 'description', 'label', 'url']),
   donation_choices: blockDefinitionWithMetadata('donation_choices', 'Donation choices', 'Structured donation options.', ['donate'], ['title', 'description', 'tiers', 'destination'], { allowedPageTypes: ['recipe'] }),
@@ -195,7 +199,7 @@ const STRING_FIELDS = new Set([
 ])
 const ARRAY_FIELDS = new Set(['page_ids', 'product_ids', 'location_ids'])
 
-function validateBlockData(type: TenantPageBlockType, data: Record<string, unknown>): Record<string, unknown> {
+export function validateContentBlockData(type: string, data: Record<string, unknown>): Record<string, unknown> {
   assertNoEmbeddedMediaFields(data, type)
   if (type === 'image' && 'url' in data) throw new Error('image.url must use the block media array.')
   for (const key of STRING_FIELDS) {
@@ -208,17 +212,18 @@ function validateBlockData(type: TenantPageBlockType, data: Record<string, unkno
       throw new Error(`${type}.${key} must be an array of strings.`)
     }
   }
-  if (data.level !== undefined && (!Number.isInteger(data.level) || Number(data.level) < 1 || Number(data.level) > 6)) {
-    throw new Error(`${type}.level must be an integer from 1 to 6.`)
-  }
   for (const key of ['items', 'buttons', 'tiers', 'steps']) {
     if (data[key] === undefined) continue
     if (!Array.isArray(data[key]) || data[key].some(item => !item || typeof item !== 'object' || Array.isArray(item))) {
       throw new Error(`${type}.${key} must be an array of objects.`)
     }
   }
-  // FAQ blocks render the page's Q&A records; they carry no questions of their own.
-  if (type === 'faq' && data.items !== undefined) throw new Error('faq.items is not stored; questions are Q&A records for this page.')
+  // These blocks select canonical read-only records; they never store copies.
+  if (type === 'faq' || type === 'testimonial_grid') {
+    if (data.items !== undefined) throw new Error(`${type}.items is not stored; Q&A and reviews are read-only records.`)
+    if (type === 'faq' && !FAQ_BLOCK_SOURCES.some(source => source === data.source)) throw new Error('faq.source must select page_qa or site_qa.')
+    if (type === 'testimonial_grid' && data.source !== 'site_reviews') throw new Error('testimonial_grid.source must select site_reviews.')
+  }
   if (type === 'how_to' && Array.isArray(data.steps)) {
     for (const [index, step] of data.steps.entries()) {
       const record = step as Record<string, unknown>
@@ -232,7 +237,7 @@ function validateBlockData(type: TenantPageBlockType, data: Record<string, unkno
 
 export function createTenantPageBlock(type: TenantPageBlockType, data: Record<string, unknown> = {}, position = 0): TenantPageBlock {
   if (!BLOCK_TYPES.has(type)) throw new Error('Unsupported tenant page block type: ' + type)
-  return { id: crypto.randomUUID(), type, position, data: { ...data }, media: [] }
+  return { id: crypto.randomUUID(), type, position, level: type === 'heading' ? 2 : null, data: { ...data }, media: [] }
 }
 
 const TRANSLATABLE_DATA_FIELDS = new Set([
@@ -354,6 +359,11 @@ export function normalizeTenantPageBlocks(value: unknown): TenantPageBlock[] {
     if (!BLOCK_TYPES.has(type)) throw new Error('blocks[' + index + '].type "' + type + '" is not registered.')
     const id = asString(block.id, 'blocks[' + index + '].id') || crypto.randomUUID()
     const sourceBlockId = block.source_block_id == null ? null : asString(block.source_block_id, 'blocks[' + index + '].source_block_id', true)
+    const parentBlockId = block.parent_block_id == null ? null : asString(block.parent_block_id, 'blocks[' + index + '].parent_block_id', true)
+    const position = block.position === undefined ? index : block.position
+    if (typeof position !== 'number' || !Number.isSafeInteger(position)) throw new Error(`blocks[${index}].position must be an integer.`)
+    const level = block.level ?? null
+    if (level !== null && (typeof level !== 'number' || !Number.isInteger(level) || level < 1 || level > 6)) throw new Error(`blocks[${index}].level must be null or an integer from 1 to 6.`)
     const data = asRecord(block.data ?? {}, 'blocks[' + index + '].data')
     const media = block.media === undefined ? [] : block.media
     if (!Array.isArray(media)) throw new Error('blocks[' + index + '].media must be an array.')
@@ -368,18 +378,13 @@ export function normalizeTenantPageBlocks(value: unknown): TenantPageBlock[] {
       throw new Error(`blocks[${index}].media must use the ${canonicalSlot} slot for ${type} blocks.`)
     }
     if (canonicalSlot) {
-      // Pre-migration image/gallery blocks stored the asset directly on `data`.
-      // Surface that as a specific, actionable error instead of the generic
-      // "requires at least one asset" message, which doesn't say why one is missing.
+      // Media references belong in the placement array, not block data.
       if (data.url !== undefined) throw new Error(`${type}.url must use the block media array.`)
       if (data.asset_id !== undefined) throw new Error(`${type}.asset_id must use the block media array.`)
     }
-    if ((type === 'image' || type === 'gallery') && normalizedMedia.length === 0) {
-      throw new Error(`blocks[${index}].media requires at least one asset for ${type} blocks.`)
-    }
     if (byteLength(data) > 32 * 1024) throw new Error('blocks[' + index + '] exceeds the 32KB payload limit.')
-    const normalized = validateBlockData(type, data)
-    return { id, source_block_id: sourceBlockId, type, position: index, data: normalized, media: normalizedMedia }
+    const normalized = validateContentBlockData(type, data)
+    return { id, source_block_id: sourceBlockId, parent_block_id: parentBlockId, level, type, position, data: normalized, media: normalizedMedia }
   })
 }
 

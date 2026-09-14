@@ -25,7 +25,10 @@ const TENANT_PAGE_BLOCKS_SCHEMA = {
     properties: {
       id: { type: 'string' },
       type: { type: 'string' },
-      position: { type: 'number' },
+      position: { type: 'integer', description: 'Retain the position from the last read unless reordering blocks.' },
+      source_block_id: { type: ['string', 'null'] },
+      parent_block_id: { type: ['string', 'null'] },
+      level: { type: ['integer', 'null'], minimum: 1, maximum: 6 },
       data: { type: 'object', description: describeContentBlockTextFields(CONTENT_BLOCK_TYPES) },
       media: {
         type: 'array',

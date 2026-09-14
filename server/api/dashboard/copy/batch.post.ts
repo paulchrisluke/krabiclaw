@@ -1,11 +1,10 @@
-// POST /api/dashboard/copy/batch — copy location-scoped content (products, media,
-// reviews, Q&A) from one location to another within the same site.
+// POST /api/dashboard/copy/batch — offer products and copy media between locations in one site.
 import { jsonResponse } from '~/server/utils/api-response'
 import { getDashboardContext } from '~/server/utils/dashboard-context'
 import { copyLocationBatch, type CopyBatchInput, type CopyEntityType } from '~/server/utils/copy-paste'
 
 const VALID_ENTITY_TYPES: CopyEntityType[] = [
-  'products', 'media_assets', 'reviews', 'location_qa', ]
+  'products', 'media_assets', ]
 
 export default defineHandler(async (event) => {
   const { env, db, organization, site, userId } = await getDashboardContext(event, { requireSite: true })

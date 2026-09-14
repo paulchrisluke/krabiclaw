@@ -42,7 +42,12 @@ authorized account (`--email` selects it). Remote targets also require an explic
 Only production runs the `social-card-backfill` task: preview and staging set
 `crons = []`, and it is bounded to a small number of owners per night.
 
-Local and preview use production snapshots. Existing bookings retain their
+Local and preview copy production through `db:pull:local` and `db:pull:preview`.
+One SQL read captures the tables and rows from the same database revision.
+D1 exports block concurrent application queries, so setup does not use that
+operation. Changed schema, incomplete results, oversized copies, or failed
+rebaseline integrity checks stop setup before it writes the target. Existing
+bookings retain their
 original dates; setup does not manufacture current activity. For date-sensitive
 Today or Calendar checks, create bookings through the guest flow in the local
 or preview environment.

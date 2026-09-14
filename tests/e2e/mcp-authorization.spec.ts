@@ -1,11 +1,11 @@
 import { expect, test } from '@playwright/test'
 import { loginAs } from './helpers/auth'
-import { mcpRequest, ensureSite, loginAsFreshMcpUser } from './helpers/mcp'
+import { mcpRequest, loginAsFreshMcpUser } from './helpers/mcp'
 
 // Split out of mcp.spec.ts (authorization/isolation tests) — see
 // helpers/mcp.ts for why. This group covers role-based tool visibility,
 // fail-closed behavior for inaccessible sites, cross-tenant isolation, and
-// owner/admin-only tool gating (e.g. review replies) through MCP.
+// access checks through MCP.
 
 test.describe('stateless MCP server', () => {
   test('site-scoped tool visibility follows current roles', async ({ request, baseURL }) => {
@@ -55,37 +55,4 @@ test.describe('stateless MCP server', () => {
     expect((await wrongSite.json()).result?.isError).toBe(true)
   })
 
-  test('owner reply to a missing review returns an error through MCP', async ({ request, baseURL }) => {
-    await loginAsFreshMcpUser(request, baseURL!, 'owner-reply')
-    const siteId = await ensureSite(request, baseURL!)
-
-    const ownerReply = await mcpRequest(request, baseURL!, {
-      method: 'tools/call',
-      toolName: 'reply_to_review',
-      args: { site_id: siteId, review_id: 'missing-review-id', reply: `MCP owner reply ${Date.now()}` },
-    })
-    expect(ownerReply.status()).toBe(200)
-    expect((await ownerReply.json()).result?.isError).toBe(true)
-  })
-
-  test('an editor cannot see or use reply_to_review through MCP', async ({ request, baseURL }) => {
-    await loginAs(request, baseURL!, 'user-e2e-pottery-editor')
-    const siteId = 'site-pottery-house'
-
-    const editorTools = await mcpRequest(request, baseURL!, {
-      method: 'tools/list',
-      siteId,
-    })
-    expect(editorTools.status()).toBe(200)
-    const editorToolsBody = await editorTools.json() as { result: { tools: Array<{ name: string }> } }
-    expect(editorToolsBody.result.tools.map(tool => tool.name)).not.toContain('reply_to_review')
-
-    const editorReply = await mcpRequest(request, baseURL!, {
-      method: 'tools/call',
-      toolName: 'reply_to_review',
-      args: { site_id: siteId, review_id: 'missing-review-id', reply: 'editor should fail' },
-    })
-    expect(editorReply.status()).toBe(200)
-    expect((await editorReply.json()).result?.isError).toBe(true)
-  })
 })

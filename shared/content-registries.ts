@@ -91,7 +91,7 @@ export const CONTENT_BLOCK_TEXT_FIELDS = {
     plain('items', '*', 'first_name'), plain('items', '*', 'last_name'),
     plain('items', '*', 'title'), plain('items', '*', 'bio'),
   ],
-  testimonial_grid: [plain('title'), plain('description'), plain('items', '*', 'title'), plain('items', '*', 'description')],
+  testimonial_grid: [plain('title'), plain('description')],
   contact_cta: [plain('title'), plain('description'), plain('label')],
   booking_cta: [plain('title'), plain('description'), plain('label')],
   donation_choices: [plain('tiers', '*', 'label')],

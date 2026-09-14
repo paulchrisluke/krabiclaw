@@ -40,6 +40,23 @@ test('document scopes, translations, block ownership and concurrent edits persis
     await assert.rejects(executeBatch(db, prepare('Stale').queries))
     assert.deepEqual(await db.prepare("SELECT title, summary FROM content_documents WHERE id = 'article'").first(), { title: 'Winner', summary: 'Winner' })
     assert.equal(JSON.parse((await listBlocksForDocument(db, document.id))[0]!.data_json).markdown, 'Winner')
+    const pageBlocks = [
+      { id: 'page-heading', type: 'heading', position: 1001, level: 2, data: { text: 'About' } },
+      { id: 'page-body', parent_block_id: 'page-heading', type: 'markdown', position: 1002, data: { markdown: 'Page copy', editor_mode: 'rich' } },
+    ]
+    const page = await createContentDocumentWithBlocks(db, {
+      id: 'roundtrip-page', organizationId: 'one', siteId: 'one', kind: 'page', rowRole: 'root', locale: 'en', title: 'About', path: '/about', metadata: { page_type: 'custom', recipe: null },
+    }, pageBlocks)
+    const beforePage = await listBlocksForDocument(db, page.document.id)
+    const { normalizeTenantPageBlocks } = await import('../../utils/tenant-page-blocks.ts')
+    const returnedBlocks = normalizeTenantPageBlocks(beforePage.map(block => ({ ...block, data: JSON.parse(block.data_json) })))
+    await updateContentDocument(db, page.document.id, {
+      expected_updated_at: page.document.updated_at, changes: { title: 'About us' }, blocks: returnedBlocks,
+    })
+    const afterPage = await listBlocksForDocument(db, page.document.id)
+    const content = (rows: typeof beforePage) => rows.map(({ updated_at, created_at, ...row }) => row)
+    assert.deepEqual(content(afterPage), content(beforePage), 'a full page read/save changing only its title preserves block content, position, level and parent')
+
     const translated = await createContentDocumentWithBlocks(db, { id: 'translation', organizationId: 'one', siteId: 'one',
       kind: 'article', rowRole: 'representation', rootId: document.id, locale: 'th', title: 'Translated', slug: 'translated' },
     [{ id: 'translated-body', type: 'markdown', data: { markdown: 'Translated', editor_mode: 'rich' } }])
