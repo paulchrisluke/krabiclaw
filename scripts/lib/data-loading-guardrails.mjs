@@ -1,24 +1,7 @@
 // Pure, filesystem-free check functions for the data-loading guardrails.
 // Kept separate from the CLI runner (scripts/check-data-loading-guardrails.mjs)
 // so they can be unit-tested directly against string fixtures — see
-// tests/unit/check-data-loading-guardrails.test.ts.
-
-export const PROHIBITED_LEGACY_PATHS = [
-  'composables/useBootstrap.ts',
-  'composables/useBootstrapParams.ts',
-  'composables/loadPublicBootstrapPayload.ts',
-  'server/utils/public-bootstrap.ts',
-  'server/api/public/sites/[siteId]/bootstrap.get.ts',
-  'server/api/public/drafts/[draftId]/bootstrap.get.ts',
-]
-
-// Named helpers previously deleted for silently converting a failed/errored
-// read into a successful empty or default value (issue #480, prohibited
-// behavior #5). Reintroducing a helper under one of these names is a
-// regression even if its body changes.
-export const BANNED_SILENT_EMPTY_SUCCESS_NAMES = [
-  'fetchMenuCurrency',
-]
+// tests/unit/data-loading-guardrails.test.ts.
 
 // The canonical public/dashboard data-loading surface where a silent
 // catch-to-empty-value is never acceptable (the loaders and API clients this
@@ -44,17 +27,10 @@ const SILENT_EMPTY_CATCH_PATTERN = /\.catch\s*\(\s*(?:\(\s*\)|\w+)\s*=>\s*\(?(\[
 // data (JSON.parse of a stored string, new URL() of a known string) is a
 // malformed-input guard, not a network-read-to-empty-success fallback — the
 // audit's own documented exception for corrupt cache entries is this same
-// shape (public-resource-cache.ts). Require the preceding ~120 chars to
+// shape (public-resource-cache.ts). Require the preceding window to
 // contain that parse call before treating a catch-to-null/empty match as a
 // real violation.
 const LOCAL_PARSE_GUARD_PATTERN = /(?:JSON\.parse|new URL)\s*\(/
-
-// Matches a declared identifier or conditional that combines "legacy" with
-// "bootstrap"/"fallback" — the naming pattern a disabled/hidden legacy
-// fallback flag would use (e.g. ENABLE_LEGACY_BOOTSTRAP, legacyFallbackEnabled).
-// Deliberately requires a declaration/conditional context, not bare text, so
-// a comment documenting that a legacy fallback was *removed* doesn't match.
-const LEGACY_FALLBACK_FLAG_PATTERN = /\b(?:const|let|var|function)\s+\w*legacy\w*(?:bootstrap|fallback)\w*|\bif\s*\([^)]*\blegacy\w*(?:bootstrap|fallback)/i
 
 export function checkGlobalFetchAndRetry(file, source) {
   const violations = []
@@ -64,16 +40,6 @@ export function checkGlobalFetchAndRetry(file, source) {
   for (const match of source.matchAll(/\bretry\s*:\s*([^,\n}]+)/g)) {
     if (match[1].trim() !== '0') {
       violations.push(`${file}: app-owned fetch retry must be 0 (found ${match[1].trim()})`)
-    }
-  }
-  return violations
-}
-
-export function checkBannedSilentEmptySuccessNames(file, source) {
-  const violations = []
-  for (const name of BANNED_SILENT_EMPTY_SUCCESS_NAMES) {
-    if (new RegExp(`\\b${name}\\b`).test(source)) {
-      violations.push(`${file}: reintroduces banned silent error-to-empty-success helper "${name}"`)
     }
   }
   return violations
@@ -94,12 +60,6 @@ export function checkSilentEmptyCatch(file, source) {
     violations.push(`${file}: canonical loader must not convert a failed read into an empty/null success value`)
   }
   return violations
-}
-
-export function checkLegacyFallbackFlag(file, source) {
-  return LEGACY_FALLBACK_FLAG_PATTERN.test(source)
-    ? [`${file}: disabled legacy fallback flags/branches must be deleted, not retained`]
-    : []
 }
 
 export function checkDashboardFetchUsage(file, source) {

@@ -31,8 +31,7 @@ test('healStaleCimdClient removes a known CIMD vendor row that predates clientDi
     // Same adapter factory server/utils/auth.ts wires into betterAuth() —
     // used directly here so the test goes through Better Auth's documented
     // model API (findOne/create/delete) instead of raw SQL against a
-    // Better-Auth-owned table, per the boundary guarded by
-    // scripts/check-better-auth-boundaries.mjs (issue #386).
+    // Better-Auth-owned table.
     const db = createDb(d1 as unknown as D1Database)
     // oauthClient is a plugin-owned model — getAuthTables (which
     // drizzleAdapter consults to resolve model names) only knows about it

@@ -18,11 +18,6 @@ test('replaces media URLs inside nested Markdown strings', () => {
   })
 })
 
-// Merged from the former tests/unit/site-links.test.ts to stay within the
-// unit-suite file budget in scripts/check-unit-test-quality.mjs (see
-// testing-strategy.md: "Adding a valuable test above them requires deleting
-// lower-value coverage in the same change" — this merge keeps the coverage
-// while freeing one file slot for tests/unit/blawby-client.test.ts).
 test('site link destinations validate URLs', () => {
   assert.equal(validateLinkDestination('/reservations'), '/reservations')
   assert.equal(validateLinkDestination('/contact?from=links'), '/contact?from=links')

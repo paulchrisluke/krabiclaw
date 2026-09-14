@@ -177,12 +177,6 @@ test('OAuth restart reconciles an existing EdDSA deployment to RS256', async () 
   }
 })
 
-// Merged from the former tests/unit/auth-trusted-origins.test.ts to stay within
-// the unit-suite file budget in scripts/check-unit-test-quality.mjs (see
-// testing-strategy.md: "Adding a valuable test above them requires deleting
-// lower-value coverage in the same change" — this merge is legitimate because
-// both files test exports of the same source module, server/utils/auth.ts,
-// unlike a merge across unrelated modules).
 test('accepts loopback HTTP origins on arbitrary development ports', () => {
   assert.equal(localDevelopmentOrigin('http://127.0.0.1:3001'), 'http://127.0.0.1:3001')
   assert.equal(localDevelopmentOrigin('http://localhost:4173/'), 'http://localhost:4173')

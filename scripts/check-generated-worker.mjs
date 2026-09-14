@@ -62,7 +62,7 @@ function scanDirectory(directory) {
 scanDirectory(serverRoot)
 
 if (matches.length > 0) {
-  throw new Error(`Generated Worker contains legacy framework imports:\n${matches.join('\n')}`)
+  throw new Error(`Generated Worker contains unsupported imports:\n${matches.join('\n')}`)
 }
 
-console.log(`Generated Worker contains no legacy framework imports: ${serverRoot}`)
+console.log(`Generated Worker contains no unsupported imports: ${serverRoot}`)
