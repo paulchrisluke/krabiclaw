@@ -1,6 +1,6 @@
 <template>
   <div class="platform-layout platform-theme min-h-screen flex flex-col font-sans selection:bg-stone-900 selection:text-white">
-    <DocsHeader section="docs" @toggle-nav="mobileNavOpen = true" />
+    <PlatformHeader section="docs" />
     <main class="grow">
       <div class="mx-auto max-w-450 px-4 sm:px-6 lg:px-10 py-10">
         <div class="lg:grid lg:grid-cols-[240px_minmax(0,1fr)] lg:gap-10 xl:grid-cols-[260px_minmax(0,1fr)]">
@@ -23,22 +23,17 @@
     </main>
     <LazyPlatformFooter />
     <PlatformCommandSearchModal surface="docs" />
-
-    <PlatformDrawer v-model="mobileNavOpen" title="Documentation">
-      <DocsSidebar @navigate="mobileNavOpen = false" />
-    </PlatformDrawer>
   </div>
 </template>
 
 <script setup>
-import DocsHeader from '~/components/platform/DocsHeader.vue'
-import PlatformDrawer from '~/components/platform/PlatformDrawer.vue'
+import PlatformHeader from '~/components/platform/PlatformHeader.vue'
 import PlatformCommandSearchModal from '~/components/platform/search/PlatformCommandSearchModal.vue'
 import '~/assets/css/platform-entry.css'
 
 const platformStylesheetHref = '/_nuxt/surfaces/platform.css'
 
-const mobileNavOpen = ref(false)
+usePlatformTheme().bootstrap()
 
 useHead({
   link: [{ rel: 'stylesheet', href: platformStylesheetHref }],

@@ -31,7 +31,9 @@
       </div>
     </details>
     <template v-else>
-      <NuxtLink to="/login" class="text-sm font-semibold no-underline">Sign in</NuxtLink>
+      <!-- Below 620px only the signed-out text link gives way; `Start free`
+           and the signed-in avatar stay at every width. -->
+      <NuxtLink to="/login" class="text-[15px] font-medium no-underline [@media(max-width:620px)]:hidden">Sign in</NuxtLink>
       <PlatformButton :to="to" size="sm">{{ label }}</PlatformButton>
     </template>
   </div>

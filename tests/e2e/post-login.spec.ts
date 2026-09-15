@@ -16,16 +16,22 @@ test('a verified user without an organization starts onboarding and can explicit
 
 // One journey, run once. The route matrix, the redirects and the SSR HTML do
 // not change with viewport width; only the header does, so the narrow pass is
-// two header checks rather than a second full traversal.
+// the header checks that actually differ rather than a second full traversal.
 test('public auth CTAs reflect the SSR session @smoke', async ({ page, baseURL }) => {
   test.setTimeout(120_000)
   await dismissPreviewToolbar(page)
 
+  // `Start free` is the action at every width. At 620px and below the header
+  // bar gives up its `Sign in` text link and the collapsed navigation carries
+  // it instead.
   await page.setViewportSize({ width: 390, height: 900 })
   await page.goto('/')
-  const narrowSignedOutHeader = page.locator('header').first()
-  await expect(narrowSignedOutHeader.getByRole('link', { name: 'Sign in', exact: true }).first()).toBeVisible()
-  await expect(narrowSignedOutHeader.getByRole('link', { name: 'Start free', exact: true }).first()).toBeVisible()
+  const narrowHeader = page.locator('header').first()
+  await expect(narrowHeader.getByRole('link', { name: 'Start free', exact: true }).first()).toBeVisible()
+  await expect(narrowHeader.getByRole('link', { name: 'Sign in', exact: true }).first()).toBeHidden()
+  await narrowHeader.getByRole('button', { name: 'Open menu' }).click()
+  await expect(narrowHeader.locator('#platform-mobile-nav').getByRole('link', { name: 'Sign in', exact: true })).toBeVisible()
+  await page.keyboard.press('Escape')
 
   await page.setViewportSize({ width: 1280, height: 900 })
   for (const path of ['/', '/docs']) {
