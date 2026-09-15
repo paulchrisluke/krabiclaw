@@ -246,7 +246,9 @@ const { data: todayData, pending, error: todayError, refresh: refreshToday } = a
     })
   }
   return await dashboardApi<TodayAgendaPayload>('/api/dashboard/today', { validate: isTodayResponse })
-})
+},
+  { lazy: import.meta.client },
+)
 
 const activeRange = ref<TodayRange>('today')
 // UTabs models `string | number`; the setter is where Upcoming is loaded on

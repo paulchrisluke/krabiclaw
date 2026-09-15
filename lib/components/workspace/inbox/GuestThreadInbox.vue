@@ -409,7 +409,9 @@ const {
     },
   )
   return { mode: 'list', threads: result.threads }
-})
+},
+  { lazy: import.meta.client },
+)
 
 watch([initialInboxData, initialInboxPending, initialInboxError], ([data, pending, error]) => {
   if (isDetailMode.value) {

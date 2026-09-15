@@ -256,6 +256,10 @@ const { data, pending, refresh } = await useAsyncData(
       { validate: isMembersResponse },
     )
   },
+  // Nuxt blocks navigation on useAsyncData by default; the client does not
+  // need to wait for this to paint the route, and `pending` already drives a
+  // loading state here.
+  { lazy: import.meta.client },
 )
 
 const members = computed(() => data.value?.members ?? [])
