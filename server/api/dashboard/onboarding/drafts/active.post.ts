@@ -214,13 +214,14 @@ export default defineHandler(async (event) => {
   // never behind the conversation. Currency and timezone are only written once
   // they have actually been answered.
   const answeredTimezone = payload.source.details.timezone
-  await applyOnboardingDraftToSite(env, db, {
+  const applied = await applyOnboardingDraftToSite(env, db, {
     userId: session.user.id,
     target: site.target,
     payload,
     defaultCurrency: payload.source.details.currency,
     timezone: isValidTimezone(answeredTimezone) ? answeredTimezone : null,
   })
+  if ('error' in applied) return jsonResponse({ error: applied.error }, { status: applied.status })
 
   const previewToken = await createPreviewToken(previewSecret, site.target.siteId, Date.now() + PREVIEW_TOKEN_TTL_MS)
 

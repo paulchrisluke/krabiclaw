@@ -87,10 +87,14 @@ const COPY = {
 const copy = computed(() => COPY[state.value.vertical as keyof typeof COPY] ?? COPY.restaurant)
 // Intl knows the symbol and the decimal places for the owner's currency, so
 // neither is a table we keep in step with it.
-const currencyFormat = computed(() => new Intl.NumberFormat('en', {
-  style: 'currency',
-  currency: state.value.details.currency,
-}))
+const currencyFormat = computed(() => {
+  // The currency step sits immediately before this one, so an unanswered
+  // currency here means the flow let the owner past it. Price these items in a
+  // guessed currency and they would be saved at those numbers.
+  const currency = state.value.details.currency
+  if (!currency) throw createError({ statusCode: 500, statusMessage: 'The currency step has not been answered' })
+  return new Intl.NumberFormat('en', { style: 'currency', currency })
+})
 const currencySymbol = computed(() => currencyFormat.value
   .formatToParts(0)
   .find(part => part.type === 'currency')?.value ?? '')

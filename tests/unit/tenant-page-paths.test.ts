@@ -104,11 +104,16 @@ test('a constrained param claims only what it matches', () => {
   assert.equal(allows('saya', '/fr/about'), true)
 })
 
-test('the platform template holds no tenant page at all', () => {
-  // pages/[...tenantPath].vue throws 404 for platform sites, so an unclaimed
-  // path is not writable there either.
+test('the platform template holds a page only where it declares one', () => {
+  // The marketing paths are declared so the content can be authored through the
+  // CMS and the MCP ahead of the release that renders it (#903). Everything
+  // else stays shut: pages/[...tenantPath].vue throws 404 for platform sites,
+  // so an unclaimed path is not writable there.
+  assert.equal(allows('platform', '/about'), true)
+  assert.equal(allows('platform', '/pricing'), true)
+  assert.equal(allows('platform', '/'), true)
   assert.equal(allows('platform', '/our-story'), false)
-  assert.equal(allows('platform', '/about'), false)
+  assert.equal(allows('platform', '/blog'), false)
 })
 
 test('claimed route matching follows case-insensitive literals and constraints', () => {

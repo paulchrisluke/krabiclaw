@@ -19,7 +19,9 @@ export interface SiteSettings {
   media: Array<{ asset_id: string; slot: string; public_url: string | null; thumbnail_url: string | null; kind: string }>
   contact_email: string | null
   brand_color: string
-  default_currency: CurrencyCode
+  // null until the owner has chosen one. Surfaces that quote a price refuse to
+  // render rather than showing an amount in a currency nobody picked.
+  default_currency: CurrencyCode | null
   google_analytics_measurement_id?: string
   google_site_verification?: string
   last_published_at: string | null

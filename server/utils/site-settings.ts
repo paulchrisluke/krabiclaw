@@ -182,7 +182,7 @@ export async function loadSettingsPayload(
     effective_features: effectiveFeatures,
     default_features: defaultFeatures,
     brand_color: siteConfig.brand_color || '',
-    default_currency: updatedSite.default_currency || 'USD',
+    default_currency: updatedSite.default_currency,
     press_email: siteConfig.press_email || '',
     partnerships_email: siteConfig.partnerships_email || '',
     catering_email: siteConfig.catering_email || '',

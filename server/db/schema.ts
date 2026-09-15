@@ -1786,7 +1786,7 @@ export const sites = sqliteTable("sites", {
 	brand_description: text(),
 	contact_email: text(),
 	contact_phone: text(),
-	default_currency: text().default("THB").notNull(),
+	default_currency: text(),
 	status: text().default("active").notNull(),
 	onboarding_status: text().default("pending").notNull(),
 	url_structure: text().default("location_subdirectories").notNull(),
