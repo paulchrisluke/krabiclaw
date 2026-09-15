@@ -11,7 +11,6 @@ import {
   assertSiteWideAccess,
   listAccessibleLocationIds,
 } from '~/server/utils/member-access'
-import { listSiteLocales } from '~/server/utils/site-locales'
 import { getMediaAsset, listMediaAssets } from '~/server/utils/media-asset-manager'
 import { getDashboardContext, getDashboardLocationContext } from '~/server/utils/dashboard-context'
 import { loadSettingsPayload } from '~/server/utils/site-settings'
@@ -19,7 +18,7 @@ import { getNotificationsSettings } from '~/server/utils/mcp-workflows'
 import { getFacebookPagesConnection } from '~/server/utils/facebook-pages'
 import { resolveLocationCapabilitySummary } from '~/server/utils/location-management'
 import { parseLocationPayload } from '~/server/utils/location-payload'
-import { getProduct, hydrateProductMedia, listLocationProducts, summarizeLocationProducts } from '~/server/utils/product-management'
+import { getProduct, hydrateProductMedia, summarizeLocationProducts } from '~/server/utils/product-management'
 import { listDashboardGuestThreadsForPrincipal } from '~/server/utils/dashboard-guest-threads'
 import { requireBlogAccess } from '~/server/utils/blog-access'
 import { requireTenantPageWriteAccess } from '~/server/utils/tenant-pages-api'
@@ -101,11 +100,6 @@ export async function loadDashboardEditorContext(event: H3Event, siteId: string)
   }
 }
 
-export async function loadDashboardSiteLocales(event: H3Event, siteId: string) {
-  const { db, site } = await requireSiteAccess(event, siteId)
-  return { success: true as const, ...await listSiteLocales(db, site.organization_id, siteId) }
-}
-
 export async function loadDashboardLocationQa(
   event: H3Event,
   siteId: string,
@@ -113,26 +107,6 @@ export async function loadDashboardLocationQa(
 ) {
   const { db } = await requireLocationAccess(event, siteId, locationId)
   return { qa: await listLocationQa(db, siteId, locationId) }
-}
-
-/**
- * The bookable products offered at one location.
- *
- * A booking config is what makes a product bookable, so this filters on that
- * relationship rather than on a discriminator column.
- */
-export async function loadDashboardLocationBookableProducts(
-  event: H3Event,
-  siteId: string,
-  locationId: string,
-) {
-  const { db, site } = await requireLocationAccess(event, siteId, locationId)
-  const products = await listLocationProducts(db, { organizationId: site.organization_id, locationId })
-  const bookable = await queryAll<{ product_id: string }>(db, `
-    SELECT product_id FROM product_booking_configs WHERE organization_id = ?
-  `, [site.organization_id])
-  const bookableIds = new Set(bookable.map(row => row.product_id))
-  return { products: products.filter(product => bookableIds.has(product.id)) }
 }
 
 export interface DashboardMediaFilters {
@@ -417,17 +391,6 @@ export async function loadDashboardProduct(
   // one product and listing them cannot disagree about its cover.
   const [hydrated] = await hydrateProductMedia(db, siteId, [product])
   return { success: true as const, product: hydrated! }
-}
-
-// Loads the location-owned Product collection directly for the editor's SSR render.
-export async function loadDashboardLocationProducts(
-  event: H3Event,
-  siteId: string,
-  locationId: string,
-) {
-  const { db, site } = await requireLocationAccess(event, siteId, locationId)
-  const products = await listLocationProducts(db, { organizationId: site.organization_id, locationId })
-  return { success: true as const, products }
 }
 
 export async function loadDashboardLocationPosts(
