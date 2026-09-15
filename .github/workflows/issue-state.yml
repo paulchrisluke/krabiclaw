@@ -1,0 +1,112 @@
+name: Issue state
+
+# Issue state lives in labels, because labels are the only state surface an LLM
+# can write over the REST API. Projects v2 is GraphQL-only, so a Status field
+# would need a PAT and would be unreachable to agents.
+#
+#   - issue opened                    -> needs-triage
+#   - PR references #N                -> #N gets in-progress, and the labels that
+#                                        in-progress supersedes are removed
+#   - PR references an unassigned #N  -> assign it to the PR author
+#
+# Closed is done; nothing needs to write that.
+#
+# The project board is a lens on this: one Auto-add rule plus a saved view per
+# label. Nothing in this workflow touches the board.
+#
+# pull_request_target (not pull_request) is used so pull requests from forks get
+# a token that can write labels. This workflow never checks out or executes pull
+# request code; it only reads the title and body as text, passed through env.
+
+on:
+  issues:
+    types: [opened]
+  pull_request_target:
+    types: [opened, reopened, edited, ready_for_review]
+
+permissions:
+  issues: write
+
+concurrency:
+  group: issue-state-${{ github.event.issue.number || github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  label:
+    name: Apply state labels
+    runs-on: ubuntu-latest
+    steps:
+      - name: Apply state labels
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          EVENT_NAME: ${{ github.event_name }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+        run: |
+          set -euo pipefail
+
+          # Labels that in-progress replaces: an issue being worked is no longer
+          # awaiting triage and no longer merely ready to start.
+          SUPERSEDED=(needs-triage ready-for-agent ready-for-human)
+
+          if [[ "$EVENT_NAME" == "issues" ]]; then
+            gh issue edit "$ISSUE_NUMBER" --repo "$REPO" --add-label needs-triage
+            echo "Issue #${ISSUE_NUMBER} -> needs-triage."
+            exit 0
+          fi
+
+          # Any #N in the PR title or body counts as a reference, closing keywords
+          # (Fixes/Closes/Resolves) included.
+          refs="$(printf '%s\n%s\n' "$PR_TITLE" "$PR_BODY" \
+            | grep -Eo '(^|[^A-Za-z0-9_])#[0-9]+' \
+            | grep -Eo '[0-9]+' | sort -u || true)"
+
+          if [[ -z "$refs" ]]; then
+            echo "PR #${PR_NUMBER} references no issues."
+            exit 0
+          fi
+
+          while IFS= read -r issue_number; do
+            [[ -z "$issue_number" ]] && continue
+            [[ "$issue_number" == "$PR_NUMBER" ]] && continue
+
+            # #N may be a pull request; those carry no issue state.
+            if ! issue_json="$(gh issue view "$issue_number" --repo "$REPO" \
+                 --json state,labels,assignees 2>/dev/null)"; then
+              echo "#${issue_number} is not an issue in ${REPO}; skipping."
+              continue
+            fi
+
+            # A closed issue is done; a PR event must not reopen its state.
+            if [[ "$(jq -r '.state' <<<"$issue_json")" == "CLOSED" ]]; then
+              echo "Issue #${issue_number} is closed; leaving its labels alone."
+              continue
+            fi
+
+            current="$(jq -r '.labels[].name' <<<"$issue_json")"
+
+            # Only remove labels that are actually present; gh errors otherwise.
+            label_args=(--add-label in-progress)
+            for label in "${SUPERSEDED[@]}"; do
+              if grep -qxF "$label" <<<"$current"; then
+                label_args+=(--remove-label "$label")
+              fi
+            done
+
+            gh issue edit "$issue_number" --repo "$REPO" "${label_args[@]}"
+            echo "Issue #${issue_number} -> in-progress."
+
+            # Separate call: assignees need repository access, and a PR author
+            # who lacks it must not cost the issue its label change.
+            if [[ "$(jq '.assignees | length' <<<"$issue_json")" -eq 0 ]]; then
+              if gh issue edit "$issue_number" --repo "$REPO" --add-assignee "$PR_AUTHOR"; then
+                echo "Assigned issue #${issue_number} to ${PR_AUTHOR}."
+              else
+                echo "::warning::Could not assign ${PR_AUTHOR} to issue #${issue_number}."
+              fi
+            fi
+          done <<< "$refs"
