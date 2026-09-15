@@ -26,7 +26,7 @@ export default defineHandler(async (event) => {
     event: 'unknown', offer: 'unknown', call_to_action: 'unknown', alert_type: 'nullable-string',
   })
 
-  const site = await loadMemberSiteRow(db, env, siteId, session.user.id)
+  const site = await loadMemberSiteRow(event, db, env, siteId, session.user.id)
   if (!site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
 
   const existingPost = await getPost(db, site.organization_id, siteId, postId)

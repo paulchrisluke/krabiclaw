@@ -26,7 +26,7 @@ export default defineHandler(async (event) => {
   })
   if (!body.body?.trim()) return jsonResponse({ error: 'Post body is required' }, { status: 400 })
 
-  const site = await loadMemberSiteRow(db, env, siteId, session.user.id)
+  const site = await loadMemberSiteRow(event, db, env, siteId, session.user.id)
   if (!site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
 
   const targetLocationId = typeof body.location_id === 'string' && body.location_id ? body.location_id : null

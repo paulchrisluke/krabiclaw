@@ -32,7 +32,7 @@ export default defineHandler(async (event) => {
   }
 
   try {
-    const site = await loadMemberSiteRow(db, env, siteId, session.user.id)
+    const site = await loadMemberSiteRow(event, db, env, siteId, session.user.id)
 
     if (!site) {
       return jsonResponse({

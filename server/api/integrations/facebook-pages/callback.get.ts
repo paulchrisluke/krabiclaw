@@ -57,7 +57,7 @@ export default defineHandler(async (event) => {
   try {
     const db = env.DB
     if (!db) throw new Error('Database not available')
-    const siteAccess = await loadMemberSiteRow(db, env, siteId, userId)
+    const siteAccess = await loadMemberSiteRow(event, db, env, siteId, userId)
     if (!siteAccess || siteAccess.organization_id !== organizationId) throw new Error('Access denied')
     await assertSiteWideAccess(db, {
       env,
