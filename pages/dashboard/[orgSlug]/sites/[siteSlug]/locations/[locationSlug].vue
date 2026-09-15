@@ -146,7 +146,7 @@ const settingsPath = computed(() => `${locationPath.value}/settings`)
 
 // Settings and Messages are their own screens rather than sections of this one, so
 // they leave the chain entirely rather than taking a column in it.
-const STANDALONE_SECTIONS = ['settings', 'inbox']
+const STANDALONE_SECTIONS = ['settings', 'messages']
 const sectionSegment = computed(() => frame.childSegment.value ?? '')
 const rendersStandalone = computed(() => STANDALONE_SECTIONS.includes(sectionSegment.value))
 const hasDetail = computed(() => frame.mode.value === 'pair')

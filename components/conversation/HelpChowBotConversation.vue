@@ -107,9 +107,9 @@
               color="primary"
               variant="solid"
               size="xs"
-              aria-label="Send message"
-              title="Send message"
-              :disabled="!input.trim()"
+              :aria-label="isLoading ? 'Stop generating' : 'Send message'"
+              :title="isLoading ? 'Stop generating' : 'Send message'"
+              :disabled="!isLoading && !input.trim()"
               @stop="handleStop"
             />
           </template>

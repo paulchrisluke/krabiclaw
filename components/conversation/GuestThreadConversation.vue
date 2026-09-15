@@ -37,12 +37,13 @@
 
           <template v-for="item in group.items" :key="item.entry.id">
             <!--
-              Something that happened to the record, not something anyone said.
-              No fill and no pill: the absence of a bubble is what says this is
+              Something that happened to the record, not something anyone said:
+              every kind but `message`, which is the only one carrying a body.
+              No fill and no pill — the absence of a bubble is what says this is
               not a person talking.
             -->
             <div
-              v-if="item.entry.kind === 'operation' || item.entry.kind === 'resolution' || item.entry.kind === 'submission'"
+              v-if="item.entry.kind !== 'message'"
               class="flex items-center justify-center gap-2 px-4 py-3 text-center text-xs text-muted"
             >
               <UIcon :name="systemEventIcon(item.entry)" class="size-3.5 shrink-0" />
@@ -285,7 +286,8 @@ const groupedEntries = computed(() => {
   let previousRunKey: string | null = null
 
   for (const entry of props.entries) {
-    const day = entry.occurredAt.slice(0, 10)
+    const occurred = new Date(entry.occurredAt)
+    const day = `${occurred.getFullYear()}-${occurred.getMonth()}-${occurred.getDate()}`
     if (day !== previousDay) {
       groups.push({ key: day, label: dayLabel(entry.occurredAt), items: [] })
       previousDay = day
@@ -377,7 +379,7 @@ function systemEventLabel(entry: GuestThreadEntryMessage) {
     return `${actor}reopened this thread`.trim()
   }
 
-  return entry.eventName ?? ''
+  return entry.eventName ?? 'Recorded on this conversation'
 }
 
 function deliveryFailureTitle(failure: GuestThreadDeliveryFailure) {
