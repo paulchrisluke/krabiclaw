@@ -309,6 +309,7 @@ async function attachTenantPageMedia(db: DbClient, siteId: string, blocks: Tenan
       thumbnail_url: item.thumbnail_url,
       kind: item.kind,
       alt_text: item.alt_text,
+      file_name: item.file_name,
     })),
   }))
 }

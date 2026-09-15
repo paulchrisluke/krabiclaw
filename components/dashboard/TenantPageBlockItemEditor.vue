@@ -126,7 +126,7 @@
                 <UTextarea :model-value="str('bio')" :rows="8" autoresize autofocus class="w-full" @update:model-value="set('bio', $event)" />
               </UFormField>
               <UFormField v-else-if="openLeaf === 'photo'" label="Photo">
-                <MediaPicker :site-id="siteId" :model-value="recordImage" accept="image" @update:model-value="setRecordImage($event)" />
+                <MediaPicker :site-id="siteId" :model-value="recordImage" :selected-summary="recordImageMedia" accept="image" @update:model-value="setRecordImage($event)" />
               </UFormField>
             </template>
 
@@ -151,7 +151,7 @@
                 <UInput :model-value="str('icon')" size="xl" autofocus class="w-full" @update:model-value="set('icon', $event)" />
               </UFormField>
               <UFormField v-else-if="openLeaf === 'image'" label="Image">
-                <MediaPicker :site-id="siteId" :model-value="recordImage" accept="image" @update:model-value="setRecordImage($event)" />
+                <MediaPicker :site-id="siteId" :model-value="recordImage" :selected-summary="recordImageMedia" accept="image" @update:model-value="setRecordImage($event)" />
               </UFormField>
               <template v-else-if="openLeaf === 'link'">
                 <UFormField label="Link label">
@@ -340,7 +340,11 @@ function set(key: string, value: unknown) {
 // Stored as a placement on the block at `items.<index>.image`, which is what the
 // public renderer reads for both grid items and people.
 const imageSlot = computed(() => `items.${recordIndex.value}.image`)
-const recordImage = computed(() => block.value?.media.find(item => item.slot === imageSlot.value)?.asset_id ?? null)
+// The placement itself, not just its id: the page response carries this record's
+// URL and alt text alongside the id, so the picker renders from it instead of
+// asking the server for an asset this block already describes.
+const recordImageMedia = computed(() => block.value?.media.find(item => item.slot === imageSlot.value) ?? null)
+const recordImage = computed(() => recordImageMedia.value?.asset_id ?? null)
 
 function setRecordImage(assetId: string | null | undefined) {
   const current = block.value
