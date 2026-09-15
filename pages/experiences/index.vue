@@ -1,37 +1,18 @@
 <template>
-  <ProductCollectionPage :products="experiences" :collections="collections" :locations="productLocations" :currency="currency" :presentation="presentation" :vertical="vertical" :title="collectionTitle" :brand-name="brandName" />
+  <NuxtLayout :name="isPlatform ? 'platform' : 'saya'">
+    <TenantPublicPage v-if="isPlatform" :path="documentPath" />
+    <LazySayaExperienceCatalog v-else />
+  </NuxtLayout>
 </template>
 
 <script setup lang="ts">
-import ProductCollectionPage from '~/components/products/ProductCollectionPage.vue'
-import { isCurrencyCode } from '~/shared/currencies'
-import { EXPERIENCE_PRESENTATION, isExperience, resolveProductPresentation } from '~/utils/product-presentation'
+definePageMeta({ layout: false })
 
-definePageMeta({ layout: 'saya' })
+// On KrabiClaw's own host /experiences sells the product and is a published
+// platform page document (#903). On a customer host it is that site's bookable
+// catalog, unchanged, in the Saya markup it has always used.
+const { isPlatform } = useTenantSite()
 const { isBlawby } = usePublicTemplate()
 if (isBlawby.value) throw createError({ statusCode: 404 })
-const { products, collections, locations, config, site, data: pagePayload } = await usePublicPageData({ lazy: false })
-const vertical = String(site.value?.vertical ?? '')
-// Every vertical that has a catalog can run experiences — a restaurant's
-// teppanyaki counter is one, and its menu is not where a guest books a seat.
-if (site.value && !resolveProductPresentation(vertical)) throw createError({ statusCode: 404 })
-const presentation = EXPERIENCE_PRESENTATION
-const rawCurrency = config.value.default_currency
-if (!isCurrencyCode(rawCurrency)) throw createError({ statusCode: 500, statusMessage: 'Unsupported site currency' })
-const currency = rawCurrency
-const brandName = String(site.value?.brand_name ?? '').trim()
-if (!brandName) throw createError({ statusCode: 500, statusMessage: 'Site brand is unavailable' })
-const { t } = useI18n()
-// The page shows what a guest can book. A product the merchant sells over the
-// counter is on the vertical's own surface, not here.
-const experiences = computed(() => products.value.filter(isExperience))
-// A site with nothing to book has no experiences page, rather than an
-// indexable empty one.
-// Only a loaded payload can say the catalog is empty. A navigation the router
-// has already left behind resolves with none at all, and answering that with
-// a 404 put an uncaught error on every guest who clicked twice quickly.
-if (pagePayload.value && experiences.value.length === 0) throw createError({ statusCode: 404 })
-const collectionTitle = computed(() => t('saya.experiences.collection_title', { site: brandName }))
-const productLocations = computed(() => locations.value.map(location => ({ id: String(location.id), slug: String(location.slug), title: String(location.title) })))
-useSocialMetadata(() => ({ path: presentation.collectionPath, title: collectionTitle.value, description: t('saya.experiences.meta_description', { site: brandName }), brand: { siteName: brandName } }))
+const documentPath = useTenantPageDocumentPath('/experiences', 'path')
 </script>

@@ -1,7 +1,6 @@
 <template>
   <NuxtLayout :name="isPlatform ? 'platform' : isBlawby ? 'blawby' : 'saya'">
-    <PlatformAboutPage v-if="isPlatform" />
-    <TenantPublicPage v-else :path="documentPath" />
+    <TenantPublicPage :path="documentPath" />
   </NuxtLayout>
 </template>
 
@@ -10,5 +9,6 @@ definePageMeta({ layout: false })
 
 const { isPlatform } = useTenantSite()
 const { isBlawby } = usePublicTemplate()
+// One About page for every site, KrabiClaw's own included (#903).
 const documentPath = useTenantPageDocumentPath('about')
 </script>

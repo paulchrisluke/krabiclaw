@@ -124,10 +124,13 @@
                 </div>
               </div>
               <p class="mt-2 text-3xl font-semibold text-highlighted">
-                {{ displayPrice(plan, annual) }}
-                <span v-if="plan.prices?.length" class="text-sm font-normal text-muted">
-                  /mo
-                </span>
+                <template v-if="displayPrice(plan, annual) !== null">
+                  {{ displayPrice(plan, annual) }}
+                  <span v-if="plan.prices?.length" class="text-sm font-normal text-muted">
+                    /mo
+                  </span>
+                </template>
+                <span v-else class="text-sm font-normal text-muted">Pricing is unavailable right now.</span>
               </p>
             </div>
 

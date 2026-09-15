@@ -230,6 +230,7 @@
 import MediaPicker from '~/lib/components/workspace/media/MediaPicker.vue'
 import RichTextEditor from '~/components/ui/RichTextEditor.vue'
 import { FAQ_SOURCE_OPTIONS, validateTenantPageBlock } from '~/utils/tenant-page-editor'
+import { isPlatformTemplate } from '~/utils/template-registry'
 import { FAQ_BLOCK_SOURCES, type FaqBlockSource } from '~/shared/faq-block'
 import { tenantPageBlockSource } from '~/utils/tenant-page-block-sections'
 import { isTenantPageListResponse, type TenantPageListRow } from '~/composables/useTenantPageDraft'
@@ -342,6 +343,7 @@ const markdownMode = computed<'rich' | 'source'>(() => (str('editor_mode') === '
 const faqSource = computed<FaqBlockSource | undefined>(() => FAQ_BLOCK_SOURCES.find(source => source === str('source')))
 
 // ── Grid sources ────────────────────────────────────────
+const isPlatformSite = computed(() => isPlatformTemplate({ themeId: dashboard.site.value?.theme_id }))
 const source = computed(() => tenantPageBlockSource(block.value))
 const sourceOptions = computed(() => {
   switch (block.value.type) {
@@ -349,6 +351,9 @@ const sourceOptions = computed(() => {
       { label: 'Items I write', value: 'manual' },
       { label: 'Published posts', value: 'site_posts' },
       { label: 'Pricing calculator', value: 'calculator' },
+      // KrabiClaw's own plans come from its Stripe catalog, so this source is
+      // offered on KrabiClaw's own site and nowhere else.
+      ...(isPlatformSite.value ? [{ label: 'KrabiClaw plans', value: 'billing_plans' }] : []),
     ]
     case 'testimonial_grid': return [
       { label: 'Items I write', value: 'manual' },

@@ -1,5 +1,5 @@
 <template>
-  <NuxtLayout :name="isBlawby ? 'blawby' : 'saya'">
+  <NuxtLayout :name="isPlatform ? 'platform' : isBlawby ? 'blawby' : 'saya'">
     <template v-if="localizedRoute && tenantPagePath === '/'">
       <LazyBlawbyHome v-if="isBlawby" />
       <LazySayaHomePage v-else />
@@ -20,9 +20,13 @@ import { resolveTenantLocalePath } from '~/utils/tenant-locale-path'
 definePageMeta({ layout: false })
 
 const route = useRoute()
-const { isPlatform, isTenant, siteId } = useTenantSite()
+const { isPlatform, siteId } = useTenantSite()
 const { isBlawby } = usePublicTemplate()
-if (isPlatform || !isTenant || !siteId) throw createError({ statusCode: 404, statusMessage: 'Page not found' })
+// An unclaimed path is a page document on whichever site resolved, KrabiClaw's
+// own included: its marketing pages are ordinary documents now, and this is the
+// route that serves the ones no named route owns (#903). A path with no
+// published document still 404s here — there is nothing to fall back to.
+if (!siteId) throw createError({ statusCode: 404, statusMessage: 'Page not found' })
 
 const segments = route.params.tenantPath
 const pagePath = computed(() => {

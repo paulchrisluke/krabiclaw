@@ -64,6 +64,14 @@ export default definePlugin((nitroApp) => {
       const platformSiteId = event.context.siteId as string
       entries.push(...PLATFORM_SITEMAP_ROUTES.map(loc => ({ loc })))
 
+      // KrabiClaw's marketing pages are page documents on its own site, listed
+      // from the same table and with the same noindex rule every customer
+      // site's pages use.
+      for (const page of await listPublishedTenantSitemapPages(db, platformSiteId)) {
+        if (!page.path || /noindex/i.test(page.robots || '')) continue
+        entries.push({ loc: page.path, lastmod: page.lastmod ?? undefined })
+      }
+
       const articles = await queryAll<ApiRecord>(
         db,
         `SELECT slug, (metadata_json ->> '$.collection') AS collection, (metadata_json ->> '$.category') AS category, updated_at
