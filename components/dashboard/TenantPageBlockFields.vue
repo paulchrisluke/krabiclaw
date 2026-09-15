@@ -12,7 +12,10 @@
 
     <!-- markdown -->
     <UFormField v-else-if="block.type === 'markdown'" label="Text">
-      <RichTextEditor
+      <!-- Lazy: the rich text editor pulls TipTap/ProseMirror, ~211 KB over the
+           wire. Only a markdown block opens it, so the editor route should not
+           pay for it to render a list of sections. -->
+      <LazyRichTextEditor
         :model-value="str('markdown')"
         :mode="markdownMode"
         placeholder="Start writing in Markdown…"
@@ -228,7 +231,6 @@
 
 <script setup lang="ts">
 import MediaPicker from '~/lib/components/workspace/media/MediaPicker.vue'
-import RichTextEditor from '~/components/ui/RichTextEditor.vue'
 import { FAQ_SOURCE_OPTIONS, validateTenantPageBlock } from '~/utils/tenant-page-editor'
 import { isPlatformTemplate } from '~/utils/template-registry'
 import { FAQ_BLOCK_SOURCES, type FaqBlockSource } from '~/shared/faq-block'
