@@ -35,7 +35,7 @@
         hide-detail-heading
       >
         <template #index>
-          <div v-if="pending" class="space-y-4">
+          <div v-if="overviewPending" class="space-y-4">
             <USkeleton class="h-40 w-full rounded-2xl" />
             <USkeleton v-for="index in 5" :key="index" class="h-20 rounded-2xl" />
           </div>
@@ -134,7 +134,7 @@ const capabilities = computed(() => resolveCmsCapabilities(vertical.value, templ
   site: parseCmsFeatureOverrideDelta(dashboard.site.value?.feature_overrides),
 }))
 
-const { data: overviewData, pending } = await useAsyncData(`dashboard-home-${siteId}`, async (_nuxtApp, { signal }) => {
+const { data: overviewData, pending, refresh } = await useAsyncData(`dashboard-home-${siteId}`, async (_nuxtApp, { signal }) => {
   if (import.meta.server) {
     if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Request context unavailable' })
     const organization = dashboard.organization.value
@@ -159,7 +159,24 @@ const { data: overviewData, pending } = await useAsyncData(`dashboard-home-${sit
       && Array.isArray(value.locations) && isRecord(value.settings)
       && Array.isArray(value.pages) && Array.isArray(value.media) && Array.isArray(value.links),
   })
+}, {
+  // While a child route owns the chrome — the page editor, the blog editor,
+  // media, settings, a location — this hub's body is not rendered at all
+  // (`rendersStandalone` above swaps the whole panel for <NuxtPage/>), so
+  // nothing on screen reads this. getDashboardHomeData is one of the heaviest
+  // reads in the dashboard: the site's locations, settings, pages, media,
+  // links and audit events.
+  immediate: !rendersStandalone.value,
 })
+
+// Landing directly on a child route and then navigating up to the hub: this
+// component stays mounted, so the read skipped above has to happen now.
+watch(rendersStandalone, (standalone) => {
+  if (!standalone && !overviewData.value) refresh()
+})
+
+// Pending, or not started yet because the hub was reached from a child route.
+const overviewPending = computed(() => pending.value || !overviewData.value)
 
 const settings = computed(() => overviewData.value?.settings ?? null)
 const locations = computed(() => overviewData.value?.locations ?? [])
