@@ -44,6 +44,11 @@ export interface DashboardOrganizationRow {
 // One loader for site-level social media, used by both the sites list and the
 // single-site context so the two cannot report different images for the same
 // site. Slots and resolution order match the public surfaces exactly.
+//
+// Site cards render the same image the public pages do. The dashboard used to
+// run its own query against the home page hero block's social_card — a
+// different owner from the one public reads — which is why it showed nothing
+// while the public site rendered fine.
 async function loadSiteSocialMedia(db: DbClient, organizationId: string) {
   const rows = await queryAll<{
     site_id: string
@@ -77,6 +82,13 @@ async function loadSiteSocialMedia(db: DbClient, organizationId: string) {
   return bySite
 }
 
+/**
+ * A site as authorization resolves it: identity, scope and settings, and nothing
+ * that exists only to render a card. The plan and the site-card media are an
+ * organization-wide read each, and every caller that only needs to know which
+ * site it is allowed to touch was paying for both. They are added by
+ * `decorateDashboardSiteCard` for the surfaces that actually draw cards.
+ */
 export interface DashboardSiteRow {
   id: string
   organization_id: string
@@ -96,12 +108,54 @@ export interface DashboardSiteRow {
   public_url: string | null
   status: string
   onboarding_status: string
-  effective_plan: string
-  media: Array<{ asset_id: string, slot: string, public_url: string, thumbnail_url: string | null, kind: string | null }>
-  social_image: { url: string, width?: number, height?: number, type?: string } | null
   default_currency: string | null
   feature_overrides: string | null
   theme_id: string
+}
+
+export type DashboardSiteMedia = Array<{ asset_id: string, slot: string, public_url: string, thumbnail_url: string | null, kind: string | null }>
+
+/** The presentation a site card needs, loaded once per organization per request. */
+export interface DashboardSiteCardEnrichment {
+  effectivePlan: string
+  mediaBySite: Map<string, DashboardSiteMedia>
+}
+
+export type DashboardSiteCardRow<Row> = Row & {
+  effective_plan: string
+  media: DashboardSiteMedia
+  social_image: { url: string, width?: number, height?: number, type?: string } | null
+}
+
+/**
+ * The organization plan and the site-card media, together, once. Both are
+ * organization-wide, so a request that decorates a selected site *and* the
+ * site list reads each of them a single time and shares the result rather than
+ * repeating the pair per surface.
+ */
+export async function loadDashboardSiteCardEnrichment(
+  env: CloudflareEnv,
+  db: DbClient,
+  organizationId: string,
+): Promise<DashboardSiteCardEnrichment> {
+  const [effectivePlan, mediaBySite] = await Promise.all([
+    getOrganizationPlan(env, organizationId),
+    loadSiteSocialMedia(db, organizationId),
+  ])
+  return { effectivePlan, mediaBySite }
+}
+
+export function decorateDashboardSiteCard<Row extends { id: string }>(
+  row: Row,
+  enrichment: DashboardSiteCardEnrichment,
+): DashboardSiteCardRow<Row> {
+  const media = enrichment.mediaBySite.get(row.id) ?? []
+  return {
+    ...row,
+    effective_plan: enrichment.effectivePlan,
+    media,
+    social_image: resolveSocialImageFromMedia(media),
+  }
 }
 
 export interface DashboardLocationRow {
@@ -330,8 +384,8 @@ export async function getDashboardContext(event: H3Event, options: DashboardCont
     throw new HTTPError({ statusCode: 400, message: 'Site slug is required. Use /dashboard/{orgSlug}/sites/{siteSlug} routes.' })
   }
 
-  const rawSite = siteId
-    ? await queryFirst<Omit<DashboardSiteRow, 'effective_plan'>>(db, `
+  const site = siteId
+    ? await queryFirst<DashboardSiteRow>(db, `
         SELECT s.id, s.organization_id, s.brand_name, s.vertical, s.subdomain, (SELECT domain FROM site_domains WHERE site_id = s.id AND role = 'canonical' AND status = 'active' AND type = 'custom') AS custom_domain, (SELECT 'https://' || domain FROM site_domains WHERE site_id = s.id AND role = 'canonical' AND status = 'active') AS public_url,
                s.status, s.onboarding_status, s.default_currency,
                s.feature_overrides, s.theme_id
@@ -340,7 +394,7 @@ export async function getDashboardContext(event: H3Event, options: DashboardCont
         LIMIT 1
       `, [organization.id, siteId])
     : siteSlug
-      ? await queryFirst<Omit<DashboardSiteRow, 'effective_plan'>>(db, `
+      ? await queryFirst<DashboardSiteRow>(db, `
         SELECT s.id, s.organization_id, s.brand_name, s.vertical, s.subdomain, (SELECT domain FROM site_domains WHERE site_id = s.id AND role = 'canonical' AND status = 'active' AND type = 'custom') AS custom_domain, (SELECT 'https://' || domain FROM site_domains WHERE site_id = s.id AND role = 'canonical' AND status = 'active') AS public_url,
                s.status, s.onboarding_status, s.default_currency,
                s.feature_overrides, s.theme_id
@@ -349,16 +403,6 @@ export async function getDashboardContext(event: H3Event, options: DashboardCont
         LIMIT 1
         `, [organization.id, siteSlug])
       : null
-
-  const siteSocialMedia = rawSite ? (await loadSiteSocialMedia(db, organization.id)).get(rawSite.id) ?? [] : []
-  const site = rawSite
-    ? {
-        ...rawSite,
-        effective_plan: await getOrganizationPlan(env, organization.id),
-        media: siteSocialMedia,
-        social_image: resolveSocialImageFromMedia(siteSocialMedia),
-      }
-    : null
 
   if (!site && options.requireSite !== false) {
     throw new HTTPError({ statusCode: 404, message: 'Site not found' })
@@ -392,12 +436,15 @@ export interface DashboardSiteSummaryRow {
   vertical: string | null
   status: string | null
   onboarding_status: string | null
-  effective_plan: string
-  media: Array<{ asset_id: string; slot: 'media'; public_url: string; thumbnail_url: string | null; kind: string | null }>
 }
 
+/**
+ * The sites this principal may see, as scope rows. Card presentation is not
+ * loaded here: a caller that draws cards loads the enrichment once with
+ * `loadDashboardSiteCardEnrichment` and applies it, and a caller that only
+ * needs names and ids pays for neither.
+ */
 export async function listOrganizationSites(
-  env: CloudflareEnv,
   db: DbClient,
   organizationId: string,
   principal?: { role: string; teamIds: string[] | null },
@@ -405,7 +452,7 @@ export async function listOrganizationSites(
   const scopedTeamIds = principal && !isOrganizationWideRole(principal.role) ? principal.teamIds ?? [] : null
   if (scopedTeamIds && scopedTeamIds.length === 0) return []
   const scopedTeamIdsJson = scopedTeamIds ? d1JsonStringSet(scopedTeamIds) : null
-  const rows = await queryAll<Omit<DashboardSiteSummaryRow, 'media' | 'effective_plan'>>(db, `
+  return queryAll<DashboardSiteSummaryRow>(db, `
     SELECT s.id, s.team_id, s.brand_name, s.subdomain, s.vertical, s.status,
            s.onboarding_status
     FROM sites s
@@ -413,23 +460,6 @@ export async function listOrganizationSites(
       ${scopedTeamIds ? `AND s.team_id IN (SELECT value FROM json_each(?))` : ''}
     ORDER BY s.created_at ASC, s.id ASC
   `, scopedTeamIdsJson ? [organizationId, scopedTeamIdsJson] : [organizationId])
-  const effectivePlan = await getOrganizationPlan(env, organizationId)
-
-  // Site cards render the same image the public pages do. This used to run its
-  // own query against the home page hero block's social_card — a different
-  // owner from the one public reads — which is why the dashboard showed nothing
-  // while the public site rendered fine.
-  const mediaBySite = await loadSiteSocialMedia(db, organizationId)
-
-  return rows.map(row => {
-    const media = mediaBySite.get(row.id) ?? []
-    return {
-      ...row,
-      effective_plan: effectivePlan,
-      media,
-      social_image: resolveSocialImageFromMedia(media),
-    }
-  })
 }
 
 export async function getDashboardSite(event: H3Event) {

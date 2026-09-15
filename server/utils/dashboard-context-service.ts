@@ -3,9 +3,11 @@ import { HTTPError } from 'nitro';
 import type { H3Event } from 'nitro'
 import { cloudflareEnv } from '~/server/utils/api-response'
 import {
+  decorateDashboardSiteCard,
   getDashboardContext,
   listOrganizationSites,
   listDashboardLocations,
+  loadDashboardSiteCardEnrichment,
 } from '~/server/utils/dashboard-context'
 import { isOrganizationWideRole, listUserOrganizationTeamIds, resolveDashboardSiteAccess } from '~/server/utils/member-access'
 import { recordRequestPhase } from '~/server/utils/request-metrics'
@@ -52,7 +54,18 @@ export async function loadDashboardContext(
     ? null
     : await listUserOrganizationTeamIds({ env: cloudflareEnv(event), organizationId: organization.id, userId })
   const principal = { env, memberId: organization.memberId, role: organization.role, teamIds }
-  const sites = await listOrganizationSites(env, db, organization.id, principal)
+
+  // This payload draws the site switcher and the selected site's card, so it is
+  // the one surface that needs the organization plan and the site-card media.
+  // Both are organization-wide, so both are read once here and shared by the
+  // list and the selected site. Loading them inside the context resolver and
+  // again inside the sites list is what made a selected-site bootstrap pay for
+  // each of them twice.
+  const [siteRows, enrichment] = await Promise.all([
+    listOrganizationSites(db, organization.id, principal),
+    loadDashboardSiteCardEnrichment(env, db, organization.id),
+  ])
+  const sites = siteRows.map(row => decorateDashboardSiteCard(row, enrichment))
   if (!site) {
     return {
       success: true as const,
@@ -63,6 +76,7 @@ export async function loadDashboardContext(
       siteAccess: null,
     }
   }
+  const selectedSite = decorateDashboardSiteCard(site, enrichment)
 
   const resourcesStartedAt = performance.now()
   const [locations, siteAccess] = await Promise.all([
@@ -77,7 +91,7 @@ export async function loadDashboardContext(
   return {
     success: true as const,
     organization,
-    site,
+    site: selectedSite,
     sites,
     locations,
     siteAccess,
