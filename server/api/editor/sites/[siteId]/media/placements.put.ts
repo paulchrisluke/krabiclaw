@@ -27,7 +27,7 @@ export default defineHandler(async (event) => {
       env,
       organizationId: site.organization_id,
       siteId,
-      memberId: site.member_id,
+      userId: site.user_id,
       role: site.member_role,
       placement,
       assetId: typeof body.asset_id === 'string' ? body.asset_id.trim() : null,

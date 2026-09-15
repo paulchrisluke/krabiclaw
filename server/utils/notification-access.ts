@@ -11,7 +11,6 @@ export interface NotificationVisibilityPrincipal {
   organization: {
     id: string
     role: string
-    memberId: string
   } | null
   siteWideSiteIds?: string[]
   locationIds?: string[]
@@ -71,7 +70,7 @@ export async function getNotificationAccess(event: H3Event) {
     await Promise.all(sites.map(async (site) => {
       const accessibleLocationIds = await listAccessibleLocationIds(context.db, {
         env: context.env,
-        memberId: context.organization!.memberId,
+        userId: context.userId,
         role: context.organization!.role,
         organizationId: context.organization!.id,
         siteId: site.id,

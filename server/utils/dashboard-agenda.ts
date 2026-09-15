@@ -36,7 +36,7 @@ export interface TodayAgendaPayload extends AgendaPayload {
 
 export interface AgendaPrincipal {
   env: CloudflareEnv
-  memberId: string
+  userId: string
   role: string
 }
 
@@ -173,7 +173,7 @@ export async function listAgenda(
     await Promise.all(allCapabilitySites.map(async (site) => {
       accessibleLocationsBySite.set(site.id, await listAccessibleLocationIds(db, {
         env: query.principal!.env,
-        memberId: query.principal!.memberId,
+        userId: query.principal!.userId,
         role: query.principal!.role,
         organizationId,
         siteId: site.id,

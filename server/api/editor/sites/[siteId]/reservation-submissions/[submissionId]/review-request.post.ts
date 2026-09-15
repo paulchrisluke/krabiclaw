@@ -20,7 +20,7 @@ export default defineHandler(async (event) => {
 
   await assertResourceAccess(db, {
     env,
-    memberId: site.member_id, role: site.member_role, organizationId: site.organization_id, siteId, resourceLocationId: submission.location_id, })
+    userId: site.user_id, role: site.member_role, organizationId: site.organization_id, siteId, resourceLocationId: submission.location_id, })
 
   const body = await readBody(event) as { kind?: string } | undefined
   const kind = body?.kind === 'reminder' ? 'reminder' : 'first'

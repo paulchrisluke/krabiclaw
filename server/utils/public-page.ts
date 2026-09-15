@@ -1,4 +1,5 @@
 import { parseOpeningHours, parseSpecialHours } from '~/shared/reservation-hours'
+import { oncePerRequest } from '~/server/utils/request-scope'
 import { parseGoogleReviewMetadata } from '~/shared/google-review'
 // Canonical route-capability-driven public page service.
 //   ?page=home|about|contact|location|reviews|photos|qa|...
@@ -115,8 +116,6 @@ interface ReviewRow {
 
 
 type ProductMediaRow = MediaAsset & { product_id: string; slot: 'image' | 'gallery'; sort_order: number };
-
-const publicPageReadsByRequest = new WeakMap<H3Event, Map<string, Promise<unknown>>>()
 
 interface PublicPageLoadOptions {
   mutateResponseHeaders?: boolean
@@ -958,28 +957,14 @@ export const loadPublicPage = (
     return loadPublicPageSource(event, siteId, query, options)
       .finally(() => recordRequestPhase(event, "page", startedAt));
   }
-  let requestReads = publicPageReadsByRequest.get(event);
-  if (!requestReads) {
-    requestReads = new Map();
-    publicPageReadsByRequest.set(event, requestReads);
-  }
   const queryKey = JSON.stringify(
     Object.entries(query)
       .filter(([, value]) => value !== undefined)
       .sort(([left], [right]) => left.localeCompare(right)),
   );
-  const key = `${siteId}:${queryKey}`;
-  const existing = requestReads.get(key);
-  if (existing) return existing;
-
-  const startedAt = performance.now();
-  const operation = loadPublicPageSource(event, siteId, query, options);
-  const pending = operation
-    .finally(() => recordRequestPhase(event, "page", startedAt))
-    .catch((error) => {
-      if (requestReads.get(key) === pending) requestReads.delete(key);
-      throw error;
-    });
-  requestReads.set(key, pending);
-  return pending;
+  return oncePerRequest(event, `public-page:${siteId}:${queryKey}`, () => {
+    const startedAt = performance.now();
+    return loadPublicPageSource(event, siteId, query, options)
+      .finally(() => recordRequestPhase(event, "page", startedAt));
+  });
 };

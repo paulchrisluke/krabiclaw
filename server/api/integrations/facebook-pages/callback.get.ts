@@ -57,11 +57,11 @@ export default defineHandler(async (event) => {
   try {
     const db = env.DB
     if (!db) throw new Error('Database not available')
-    const siteAccess = await loadMemberSiteRow(db, env, siteId, userId)
+    const siteAccess = await loadMemberSiteRow(event, db, env, siteId, userId)
     if (!siteAccess || siteAccess.organization_id !== organizationId) throw new Error('Access denied')
     await assertSiteWideAccess(db, {
       env,
-      memberId: siteAccess.member_id, role: siteAccess.member_role, organizationId, siteId, })
+      userId: siteAccess.user_id, role: siteAccess.member_role, organizationId, siteId, })
 
     // System-user access tokens from FLB never expire — no long-lived exchange needed
     const systemUserToken = await exchangeFacebookCode(env, code)

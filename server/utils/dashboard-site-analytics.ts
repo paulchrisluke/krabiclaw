@@ -17,11 +17,11 @@ export async function loadDashboardSiteAnalytics(
   if (!db) throw new HTTPError({ statusCode: 500, statusMessage: 'Database not available' })
   const session = await getAuthSession(event, env)
   if (!session?.user?.id) throw new HTTPError({ statusCode: 401, statusMessage: 'Authentication required' })
-  const site = await loadMemberSiteRow(db, env, siteId, session.user.id)
+  const site = await loadMemberSiteRow(event, db, env, siteId, session.user.id)
   if (!site) throw new HTTPError({ statusCode: 404, statusMessage: 'Site not found or access denied' })
   await assertSiteWideAccess(db, {
     env,
-    memberId: site.member_id,
+    userId: site.user_id,
     role: site.member_role,
     organizationId: site.organization_id,
     siteId,

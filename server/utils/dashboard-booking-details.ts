@@ -140,7 +140,7 @@ async function loadBookingRow(
 async function assertBookingAccess(context: BookingAccessContext, row: BookingRow) {
   await assertResourceAccess(context.db, {
     env: context.env,
-    memberId: context.organization.memberId,
+    userId: context.userId,
     role: context.organization.role,
     organizationId: context.organization.id,
     siteId: row.site_id,
@@ -195,7 +195,7 @@ export async function loadDashboardBookingDetails(
   if (!row) throw new HTTPError({ statusCode: 404, message: 'Booking not found' })
   await assertBookingAccess(context, row)
 
-  const allowedLocationIds = await listAccessibleLocationIds(context.db, { env: context.env, memberId: context.organization.memberId, role: context.organization.role, organizationId: context.organization.id, siteId: row.site_id })
+  const allowedLocationIds = await listAccessibleLocationIds(context.db, { env: context.env, userId: context.userId, role: context.organization.role, organizationId: context.organization.id, siteId: row.site_id })
   const locations = await queryAll<{ id: string; title: string }>(context.db, 'SELECT id, title FROM business_locations WHERE organization_id = ? AND site_id = ? ORDER BY title', [row.organization_id, row.site_id])
   const visibleLocations = locations.filter(location => (allowedLocationIds === null || allowedLocationIds.includes(location.id)) && (input.type === 'reservation' || location.id === row.location_id))
   const locationMedia = await loadPublicSocialMedia(context.db, row.site_id, 'business_location', visibleLocations.map(location => location.id))

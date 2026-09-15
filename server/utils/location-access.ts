@@ -3,6 +3,7 @@ import { HTTPError } from 'nitro';
 import { cloudflareEnv } from '~/server/utils/api-response'
 import { getAuthSession, type CloudflareEnv } from '~/server/utils/auth'
 import { queryFirst, type DbClient } from '~/server/db'
+import { oncePerRequest } from '~/server/utils/request-scope'
 import { assertLocationAccess, assertSiteContextAccess, assertSiteWideAccess, resolveOrganizationMembership } from '~/server/utils/member-access'
 import type { H3Event } from 'nitro';
 import { getDashboardContext } from '~/server/utils/dashboard-context'
@@ -20,7 +21,7 @@ export interface SiteAccessRow {
   vertical: string | null
   theme_id: string
   feature_overrides: string | null
-  member_id: string
+  user_id: string
   member_role: string
 }
 
@@ -28,14 +29,22 @@ interface LocationAccessRow {
   id: string
 }
 
-export async function loadMemberSiteRow(db: DbClient, env: CloudflareEnv, siteId: string, userId: string): Promise<SiteAccessRow | null> {
+export function loadMemberSiteRow(event: H3Event, db: DbClient, env: CloudflareEnv, siteId: string, userId: string): Promise<SiteAccessRow | null> {
+  // A dashboard render resolves the same site and membership three or four
+  // times: the editor context loader, the tenant-pages list and the page
+  // itself each call requireSiteAccess independently. Neither the site row nor
+  // the membership can change mid-request.
+  return oncePerRequest(event, `member-site-row:${siteId}:${userId}`, () => readMemberSiteRow(db, env, siteId, userId))
+}
+
+async function readMemberSiteRow(db: DbClient, env: CloudflareEnv, siteId: string, userId: string): Promise<SiteAccessRow | null> {
   // No role-name filter here on purpose: access is decided by the caller's
   // requested access class (site-wide / location / context) via
   // member-access.ts, not by which role names are allowed to reach this
   // route. An unrelated org member who isn't owner/admin/editor still fails
   // the scope check inside assertSiteWideAccess/assertLocationAccess/
   // assertSiteContextAccess (isScopedRole/isOrganizationWideRole both false).
-  const site = await queryFirst<Omit<SiteAccessRow, 'organization_slug' | 'organization_name' | 'member_id' | 'member_role'>>(db, `
+  const site = await queryFirst<Omit<SiteAccessRow, 'organization_slug' | 'organization_name' | 'user_id' | 'member_role'>>(db, `
     SELECT id, organization_id, brand_name, subdomain, (SELECT 'https://' || domain FROM site_domains WHERE site_id = sites.id AND role = 'canonical' AND status = 'active') AS public_url, status, onboarding_status,
            vertical, theme_id, feature_overrides
     FROM sites WHERE id = ? LIMIT 1
@@ -50,7 +59,7 @@ export async function loadMemberSiteRow(db: DbClient, env: CloudflareEnv, siteId
     ...site,
     organization_slug: membership.organizationSlug,
     organization_name: membership.organizationName,
-    member_id: membership.memberId,
+    user_id: userId,
     member_role: membership.role,
   }
 }
@@ -69,12 +78,12 @@ export async function requireLocationAccess(event: H3Event, siteId: string, loca
   const session = await getAuthSession(event, env)
   if (!session?.user?.id) throw new HTTPError({ statusCode: 401, message: 'Authentication required' })
 
-  const site = await loadMemberSiteRow(db, env, siteId, session.user.id)
+  const site = await loadMemberSiteRow(event, db, env, siteId, session.user.id)
   if (!site) throw new HTTPError({ statusCode: 404, message: 'Site not found or access denied' })
 
   await assertLocationAccess(db, {
     env,
-    memberId: site.member_id,
+    userId: site.user_id,
     role: site.member_role,
     organizationId: site.organization_id,
     siteId,
@@ -119,10 +128,10 @@ export async function requireSiteAccess(
   const session = await getAuthSession(event, env)
   if (!session?.user?.id) throw new HTTPError({ statusCode: 401, message: 'Authentication required' })
 
-  const site = await loadMemberSiteRow(db, env, siteId, session.user.id)
+  const site = await loadMemberSiteRow(event, db, env, siteId, session.user.id)
   if (!site) throw new HTTPError({ statusCode: 404, message: 'Site not found or access denied' })
 
-  const principal = { env, memberId: site.member_id, role: site.member_role, organizationId: site.organization_id, siteId }
+  const principal = { env, userId: site.user_id, role: site.member_role, organizationId: site.organization_id, siteId }
   if (accessClass === 'context') {
     await assertSiteContextAccess(db, principal)
   } else {
@@ -141,7 +150,7 @@ export async function requireRequestedSiteWideAccess(event: H3Event, explicitSit
   }
   await assertSiteWideAccess(context.db, {
     env: context.env,
-    memberId: context.organization.memberId,
+    userId: context.session.user.id,
     role: context.organization.role,
     organizationId: context.organization.id,
     siteId: context.site.id,
@@ -154,7 +163,7 @@ export async function requireRequestedSiteWideAccess(event: H3Event, explicitSit
       ...context.site,
       organization_slug: context.organization.slug,
       organization_name: context.organization.name,
-      member_id: context.organization.memberId,
+      user_id: context.session.user.id,
       member_role: context.organization.role,
     } satisfies SiteAccessRow,
   }
@@ -169,7 +178,7 @@ export async function requireRequestedLocationAccess(event: H3Event, locationId:
   }
   await assertLocationAccess(context.db, {
     env: context.env,
-    memberId: context.organization.memberId,
+    userId: context.session.user.id,
     role: context.organization.role,
     organizationId: context.organization.id,
     siteId: context.site.id,
@@ -190,7 +199,7 @@ export async function requireRequestedLocationAccess(event: H3Event, locationId:
       ...context.site,
       organization_slug: context.organization.slug,
       organization_name: context.organization.name,
-      member_id: context.organization.memberId,
+      user_id: context.session.user.id,
       member_role: context.organization.role,
     } satisfies SiteAccessRow,
     location,

@@ -14,7 +14,7 @@ export default defineHandler(async (event) => {
   const organizationWide = isOrganizationWideRole(organization.role)
   const resourceAccess = organizationWide
     ? []
-    : await listResourceTeamAccess(db, { env, memberId: organization.memberId })
+    : await listResourceTeamAccess(db, { env, userId, organizationId: organization.id })
   const allowedSiteIds = resourceAccess
     .filter(access => access.locationId === null)
     .map(access => access.siteId)

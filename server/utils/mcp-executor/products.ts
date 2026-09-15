@@ -40,7 +40,7 @@ import { NOT_HANDLED, objectArray, omit, requiredString, requiredStringArray } f
 async function authorizeLocation(ctx: McpExecutorContext, locationId: string) {
   await assertResourceAccess(ctx.site.db, {
     env: ctx.site.env,
-    memberId: ctx.site.memberId,
+    userId: ctx.site.userId,
     role: ctx.site.role,
     organizationId: ctx.site.organizationId,
     siteId: ctx.site.siteId,

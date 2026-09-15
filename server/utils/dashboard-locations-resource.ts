@@ -25,7 +25,7 @@ export async function listDashboardLocationsResource(
   event: H3Event,
   scope: { organizationSlug?: string; siteSlug?: string } = {},
 ) {
-  const { env, db, organization, site } = await getDashboardContext(event, {
+  const { env, db, organization, site, userId } = await getDashboardContext(event, {
     requireSite: true,
     organizationSlug: scope.organizationSlug,
     siteSlug: scope.siteSlug,
@@ -33,7 +33,7 @@ export async function listDashboardLocationsResource(
   if (!site) throw new HTTPError({ statusCode: 404, statusMessage: 'Site not found' })
   const accessibleLocationIds = await listAccessibleLocationIds(db, {
     env,
-    memberId: organization.memberId,
+    userId,
     role: organization.role,
     organizationId: organization.id,
     siteId: site.id,

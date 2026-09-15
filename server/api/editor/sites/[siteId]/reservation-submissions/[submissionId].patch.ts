@@ -26,7 +26,7 @@ export default defineHandler(async (event) => {
   const session = await getAuthSession(event, env)
   if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
-  const site = await loadMemberSiteRow(db, env, siteId, session.user.id)
+  const site = await loadMemberSiteRow(event, db, env, siteId, session.user.id)
   if (!site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
 
   // The table held is its own row: it carries the location and the status this
@@ -39,7 +39,7 @@ export default defineHandler(async (event) => {
 
   await assertResourceAccess(db, {
     env,
-    memberId: site.member_id, role: site.member_role, organizationId: site.organization_id, siteId, resourceLocationId: submission.location_id, })
+    userId: site.user_id, role: site.member_role, organizationId: site.organization_id, siteId, resourceLocationId: submission.location_id, })
 
   const body = await readBody(event) as { status?: unknown }
   const status = cleanString(body.status, 20)

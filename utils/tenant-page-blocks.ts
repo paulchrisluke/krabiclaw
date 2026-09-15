@@ -45,6 +45,10 @@ export interface TenantPageMedia {
   thumbnail_url?: string | null
   kind?: string | null
   alt_text?: string | null
+  // What names the asset when it has no alt text — the same label the media
+  // endpoint would have supplied, so a picker reading this summary shows what it
+  // would have shown after fetching.
+  file_name?: string | null
 }
 
 export interface TenantPageSnapshotMetadata {

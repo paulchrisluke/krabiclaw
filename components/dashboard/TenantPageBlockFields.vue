@@ -12,7 +12,10 @@
 
     <!-- markdown -->
     <UFormField v-else-if="block.type === 'markdown'" label="Text">
-      <RichTextEditor
+      <!-- Lazy: the rich text editor pulls TipTap/ProseMirror, ~211 KB over the
+           wire. Only a markdown block opens it, so the editor route should not
+           pay for it to render a list of sections. -->
+      <LazyRichTextEditor
         :model-value="str('markdown')"
         :mode="markdownMode"
         placeholder="Start writing in Markdown…"
@@ -24,7 +27,7 @@
     <!-- image -->
     <template v-else-if="block.type === 'image'">
       <UFormField label="Image" required>
-        <MediaPicker :site-id="siteId" :model-value="mediaAt('media', 0)?.asset_id" accept="image" @update:model-value="setMediaAt('media', 0, $event)" />
+        <MediaPicker :site-id="siteId" :model-value="mediaAt('media', 0)?.asset_id" :selected-summary="mediaAt('media', 0)" accept="image" @update:model-value="setMediaAt('media', 0, $event)" />
       </UFormField>
       <UFormField label="Caption">
         <UInput :model-value="str('caption')" size="xl" class="w-full" @update:model-value="setString('caption', $event)" />
@@ -39,7 +42,7 @@
       <div class="space-y-3">
         <div v-for="(media, index) in mediaForSlot('gallery')" :key="`${media.asset_id}-${index}`" class="flex items-center gap-3">
           <span class="w-6 shrink-0 text-center text-xs text-muted">{{ index + 1 }}</span>
-          <MediaPicker class="min-w-0 flex-1" :site-id="siteId" :model-value="media.asset_id" accept="image" :disabled="galleryBusy" @update:model-value="commitGalleryAsset(index, $event)" />
+          <MediaPicker class="min-w-0 flex-1" :site-id="siteId" :model-value="media.asset_id" :selected-summary="media" accept="image" :disabled="galleryBusy" @update:model-value="commitGalleryAsset(index, $event)" />
           <UButton icon="i-lucide-trash-2" color="error" variant="ghost" size="xs" square aria-label="Remove gallery image" :loading="galleryBusy" :disabled="galleryBusy" @click="commitGalleryAsset(index, null)" />
         </div>
         <div v-if="pendingNewGallerySlot" class="flex items-center gap-3">
@@ -177,7 +180,7 @@
 
     <!-- image (hero) -->
     <UFormField v-else-if="sectionKey === 'image'" label="Image">
-      <MediaPicker :site-id="siteId" :model-value="mediaAt('media', 0)?.asset_id" accept="image" @update:model-value="setMediaAt('media', 0, $event)" />
+      <MediaPicker :site-id="siteId" :model-value="mediaAt('media', 0)?.asset_id" :selected-summary="mediaAt('media', 0)" accept="image" @update:model-value="setMediaAt('media', 0, $event)" />
     </UFormField>
 
     <!-- button: a label and where it goes -->
@@ -228,7 +231,6 @@
 
 <script setup lang="ts">
 import MediaPicker from '~/lib/components/workspace/media/MediaPicker.vue'
-import RichTextEditor from '~/components/ui/RichTextEditor.vue'
 import { FAQ_SOURCE_OPTIONS, validateTenantPageBlock } from '~/utils/tenant-page-editor'
 import { isPlatformTemplate } from '~/utils/template-registry'
 import { FAQ_BLOCK_SOURCES, type FaqBlockSource } from '~/shared/faq-block'

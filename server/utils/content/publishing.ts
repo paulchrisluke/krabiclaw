@@ -2,9 +2,10 @@ import { HTTPError } from 'nitro';
 
 import { executeBatch, queryAll, queryFirst, type BatchQuery, type DbClient } from '~/server/db'
 import {
+  attachContentBlockMedia,
   createContentDocumentWithBlocks,
+  formatBlockOutline,
   prepareContentDocumentDeletion,
-  getContentEditorSnapshot,
   getContentBlocksForDocument,
   getContentOutline,
   getContentDocumentById,
@@ -13,6 +14,7 @@ import {
   type ContentDocumentChanges,
   renderContentBlocksToMarkdown,
   type ContentBlockInput,
+  type ContentDocumentRow,
 } from '~/server/utils/content/documents'
 import {
   loadExactPublicLocalizations,
@@ -601,6 +603,7 @@ export async function getBlogPost(db: DbClient, postIdOrSlug: string, siteId: st
        p.first_published_at, (p.metadata_json ->> '$.slug_manually_overridden') AS slug_manually_overridden,
        p.seo_title, p.seo_description, p.seo_keywords, p.canonical_url, p.robots,
        ${COVER_SELECT},
+       p.organization_id, p.site_id, p.kind, p.row_role, p.root_id, p.locale,
        p.published_at, p.created_at, p.updated_at
      FROM content_documents p
      ${coverJoinSql('p')}
@@ -608,13 +611,26 @@ export async function getBlogPost(db: DbClient, postIdOrSlug: string, siteId: st
     [postId],
   )
   if (!post) notFound('Post not found')
-  const contentDocument = await getContentEditorSnapshot(db, postId)
-  if (!contentDocument) throw new HTTPError({ statusCode: 500, statusMessage: 'Blog content document is missing' })
-  const rawBlocks = await listBlocksForDocument(db, contentDocument.document.id)
-  const slug = typeof post.slug === 'string' ? post.slug : ''
-  const category = typeof post.category === 'string' ? post.category : null
+  // The row above IS the article's content document, and the blocks are read
+  // once for both shapes the response needs: the outline the editor renders
+  // and the raw rows the markdown body is built from. This used to re-read the
+  // document and then the blocks a second time.
+  const { organization_id, site_id, kind, row_role, root_id, locale, ...postFields } = post
+  const document = {
+    id: String(post.id), organization_id: String(organization_id), site_id: String(site_id),
+    kind: String(kind), row_role: String(row_role),
+    root_id: root_id === null || root_id === undefined ? null : String(root_id),
+    locale: String(locale), created_at: String(post.created_at), updated_at: String(post.updated_at),
+  } as ContentDocumentRow
+  const rawBlocks = await listBlocksForDocument(db, document.id)
+  const contentDocument = {
+    document,
+    blocks: await attachContentBlockMedia(db, document.id, rawBlocks.map(formatBlockOutline)),
+  }
+  const slug = typeof postFields.slug === 'string' ? postFields.slug : ''
+  const category = typeof postFields.category === 'string' ? postFields.category : null
   const [context, site] = await Promise.all([resolveTenantContext(db, siteId, env), loadSiteTemplate(db, siteId)])
-  const publicPath = slug ? tenantBlogPostPath(site.template, slug, category, articleCollectionOf(post.collection)) : null
+  const publicPath = slug ? tenantBlogPostPath(site.template, slug, category, articleCollectionOf(postFields.collection)) : null
   const editorThemeTokenRow = await queryFirst<{ tokens_json: string | null } | null>(db, `
     SELECT json_extract(settings_json, ? || '.tokens') AS tokens_json FROM sites
      WHERE id = ? AND json_extract(settings_json, ? || '.status') = 'active'
@@ -622,8 +638,8 @@ export async function getBlogPost(db: DbClient, postIdOrSlug: string, siteId: st
   `, ['$.theme_by_template.' + site.template.slug, siteId, '$.theme_by_template.' + site.template.slug])
   const editorThemeTokens = parseBlogEditorThemeTokens(editorThemeTokenRow?.tokens_json)
   return {
-    ...await contentReviewUrls(attachCover(attachPublished(post, Boolean(post.published_at))), publicPath, siteId, context, env),
-    tags: parseStringArray(post.tags_metadata),
+    ...await contentReviewUrls(attachCover(attachPublished(postFields, Boolean(postFields.published_at))), publicPath, siteId, context, env),
+    tags: parseStringArray(postFields.tags_metadata),
     body: renderContentBlocksToMarkdown(rawBlocks),
     content_document: contentDocument,
     editor_template: site.template.slug,

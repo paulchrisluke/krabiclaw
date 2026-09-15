@@ -61,6 +61,10 @@ const { data, pending, error } = await useAsyncData(
       { validate: isTestimonialsResponse },
     )
   },
+  // Nuxt blocks navigation on useAsyncData by default; the client does not
+  // need to wait for this to paint the route, and `pending` already drives a
+  // loading state here.
+  { lazy: import.meta.client },
 )
 
 const testimonials = computed(() => data.value?.reviews ?? [])

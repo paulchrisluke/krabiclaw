@@ -78,12 +78,12 @@ export default defineHandler(async (event) => {
     return jsonResponse({ error: 'No site found. Complete onboarding first.' }, { status: 400 })
   }
 
-  const { site, organization } = dashboard
+  const { site, organization, userId } = dashboard
   const siteId = site.id as string
   const organizationId = organization?.id as string
   await assertSiteWideAccess(db, {
     env,
-    memberId: organization.memberId, role: organization.role, organizationId, siteId, })
+    userId, role: organization.role, organizationId, siteId, })
 
   const body = await readBody(event) as {
     mapsUrl?: unknown

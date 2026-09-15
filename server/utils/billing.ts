@@ -2,12 +2,11 @@ import type Stripe from 'stripe'
 import { HTTPError } from 'nitro';
 import { queryFirst } from '~/server/db'
 import type { DbClient } from '~/server/db'
-import type { Subscription } from '@better-auth/stripe'
 import { betterAuthTimestampToIso } from '~/server/utils/better-auth-timestamps'
 import { createAuth, type CloudflareEnv } from '~/server/utils/auth'
 import { getOrgAdapter, hasPermission } from 'better-auth/plugins'
 import { getPlanEntitlements, type EntitlementsMap } from '~/server/utils/billing-entitlements'
-import { getOrganizationEntitlements, getOrganizationPlan } from '~/server/utils/billing-access'
+import { getOrganizationEntitlements, planFromSubscriptions, readOrganizationSubscriptions } from '~/server/utils/billing-access'
 import { createStripeClient } from '~/server/utils/stripe-client'
 import { organizationAccessControl, organizationRoles } from '~/utils/organization-access'
 import { assertNewSalePlan } from '~/shared/billing-model'
@@ -62,20 +61,21 @@ export async function getOrganizationBillingStatus(
 ): Promise<SiteBillingStatus> {
   const authContext = await createAuth(env).$context
   const organizationAdapter = getOrgAdapter(authContext as Parameters<typeof getOrgAdapter>[0], {})
-  const [organization, subscriptions] = await Promise.all([
+  // One read of the subscription rows answers both questions asked of them
+  // here: which subscription this organization is billed on, and which plan it
+  // is entitled to. Those are different rules — a past_due row is the current
+  // subscription but grants nothing — so both are applied to the same rows
+  // rather than read twice.
+  const [organization, subscriptionsByOrganization] = await Promise.all([
     organizationAdapter.findOrganizationById(organizationId),
-    authContext.adapter.findMany<Subscription>({
-      model: 'subscription',
-      where: [{ field: 'referenceId', value: organizationId }],
-      limit: 100,
-    }),
+    readOrganizationSubscriptions(env, [organizationId]),
   ])
   if (!organization) throw new HTTPError({ statusCode: 404, statusMessage: 'Organization not found' })
-  if (subscriptions.length === 100) throw new Error('Organization subscription history exceeded its bound')
+  const subscriptions = subscriptionsByOrganization.get(organizationId) ?? []
   const current = subscriptions.filter(row => row.status !== 'canceled' && row.status !== 'incomplete_expired')
   if (current.length > 1) throw new Error('Organization has multiple current subscriptions')
   const subscription = current[0]
-  const plan = await getOrganizationPlan(env, organizationId)
+  const plan = planFromSubscriptions(organizationId, subscriptions)
   const customerId = 'stripeCustomerId' in organization && typeof organization.stripeCustomerId === 'string'
     ? organization.stripeCustomerId
     : undefined

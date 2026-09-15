@@ -29,7 +29,7 @@ interface PlacementAuthInput {
   organizationId: string
   siteId: string
   env: CloudflareEnv
-  memberId?: string
+  userId?: string
   role?: MemberAccessPrincipal['role']
   placement: MediaPlacementKey
 }
@@ -106,10 +106,10 @@ async function authorizePlacementWrite(db: DbClient, input: PlacementAuthInput):
       [input.placement.owner_id])
     if (document?.kind === 'qa') throw new HTTPError({ statusCode: 403, statusMessage: 'Q&A is read-only' })
   }
-  if (input.memberId && input.role) {
+  if (input.userId && input.role) {
     await assertResourceAccess(db, {
       env: input.env,
-      memberId: input.memberId,
+      userId: input.userId,
       role: input.role,
       organizationId: input.organizationId,
       siteId: input.siteId,
@@ -150,7 +150,7 @@ export async function setSingleMediaPlacement(db: DbClient, input: {
   organizationId: string
   siteId: string
   env: CloudflareEnv
-  memberId?: string
+  userId?: string
   role?: MemberAccessPrincipal['role']
   placement: MediaPlacementKey
   assetId: string | null
@@ -211,7 +211,7 @@ export async function attachMediaPlacement(db: DbClient, input: {
   organizationId: string
   siteId: string
   env: CloudflareEnv
-  memberId?: string
+  userId?: string
   role?: MemberAccessPrincipal['role']
   placement: MediaPlacementKey
   assetId: string
@@ -278,7 +278,7 @@ export async function removeMediaPlacement(db: DbClient, input: {
   organizationId: string
   siteId: string
   env: CloudflareEnv
-  memberId?: string
+  userId?: string
   role?: MemberAccessPrincipal['role']
   placement: MediaPlacementKey
   assetId: string
@@ -324,7 +324,7 @@ export async function reorderMediaPlacements(db: DbClient, input: {
   organizationId: string
   siteId: string
   env: CloudflareEnv
-  memberId?: string
+  userId?: string
   role?: MemberAccessPrincipal['role']
   placement: MediaPlacementKey
   moves: MediaPlacementMove[]

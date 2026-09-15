@@ -34,14 +34,19 @@ function subscriptionStateInvalid(organizationId: string, detail: string): never
   })
 }
 
-export async function getOrganizationPlans(
+/**
+ * Every subscription row these organizations have, as the table holds them.
+ *
+ * Exposed because a caller that needs both the plan and the subscription
+ * itself (billing status) must not read the same rows twice to get them.
+ */
+export async function readOrganizationSubscriptions(
   env: CloudflareEnv,
   organizationIds: string[],
-  now = new Date(),
-): Promise<Map<string, string>> {
+): Promise<Map<string, Subscription[]>> {
   const uniqueIds = Array.from(new Set(organizationIds.filter(id => id.trim())))
-  const plans = new Map<string, string>(uniqueIds.map(id => [id, FREE_PLAN]))
-  if (uniqueIds.length === 0) return plans
+  const byOrganization = new Map<string, Subscription[]>(uniqueIds.map(id => [id, []]))
+  if (uniqueIds.length === 0) return byOrganization
 
   const adapter = (await createAuth(env).$context).adapter
   for (let offset = 0; offset < uniqueIds.length; offset += ORGANIZATION_CHUNK) {
@@ -50,7 +55,6 @@ export async function getOrganizationPlans(
     // of 50 organizations can carry more subscription rows than that once
     // canceled ones accumulate. A truncated read would leave a paying
     // organization on free with no error, so read every page.
-    const rows: Subscription[] = []
     for (let page = 0; ; page += SUBSCRIPTION_PAGE) {
       const batch = await adapter.findMany<Subscription>({
         model: 'subscription',
@@ -59,23 +63,50 @@ export async function getOrganizationPlans(
         limit: SUBSCRIPTION_PAGE,
         offset: page,
       })
-      rows.push(...batch)
+      for (const row of batch) byOrganization.get(row.referenceId)?.push(row)
       if (batch.length < SUBSCRIPTION_PAGE) break
     }
-    const current = new Set<string>()
-    for (const row of rows) {
-      if (!plans.has(row.referenceId)) continue
-      if (row.status !== 'active' && row.status !== 'trialing') continue
-      if (row.periodEnd != null) {
-        const periodEnd = Date.parse(betterAuthTimestampToIso(row.periodEnd, 'subscription.periodEnd'))
-        if (periodEnd <= now.getTime()) continue
-      }
-      if (current.has(row.referenceId)) subscriptionStateInvalid(row.referenceId, 'has multiple current subscriptions')
-      current.add(row.referenceId)
-      const plan = row.plan?.trim().toLowerCase()
-      if (!plan) subscriptionStateInvalid(row.referenceId, `subscription ${row.id} has no plan`)
-      plans.set(row.referenceId, plan)
+  }
+  return byOrganization
+}
+
+/**
+ * The plan those rows name for one organization, by the rule at the top of
+ * this file. Pure, so the single read above can answer both the plan and the
+ * billing projection.
+ */
+export function planFromSubscriptions(
+  organizationId: string,
+  rows: Subscription[],
+  now = new Date(),
+): string {
+  let plan = FREE_PLAN
+  let found = false
+  for (const row of rows) {
+    if (row.referenceId !== organizationId) continue
+    if (row.status !== 'active' && row.status !== 'trialing') continue
+    if (row.periodEnd != null) {
+      const periodEnd = Date.parse(betterAuthTimestampToIso(row.periodEnd, 'subscription.periodEnd'))
+      if (periodEnd <= now.getTime()) continue
     }
+    if (found) subscriptionStateInvalid(organizationId, 'has multiple current subscriptions')
+    found = true
+    const named = row.plan?.trim().toLowerCase()
+    if (!named) subscriptionStateInvalid(organizationId, `subscription ${row.id} has no plan`)
+    plan = named
+  }
+  return plan
+}
+
+export async function getOrganizationPlans(
+  env: CloudflareEnv,
+  organizationIds: string[],
+  now = new Date(),
+): Promise<Map<string, string>> {
+  const rows = await readOrganizationSubscriptions(env, organizationIds)
+  const plans = new Map<string, string>()
+  for (const [organizationId, subscriptions] of rows) {
+    plans.set(organizationId, planFromSubscriptions(organizationId, subscriptions, now))
   }
   return plans
 }

@@ -385,6 +385,32 @@ export async function listLocationProducts(db: DbClient, input: {
   return hydrate(db, input.organizationId, rows.map(mapProductRow))
 }
 
+/**
+ * How many products a location carries, and whether every one of them is an
+ * experience — the two facts a location's hub renders ("313 dishes", or
+ * "12 experiences" when the catalogue is entirely bookable).
+ *
+ * The hub used to read the whole catalogue to count it and look at one nullable
+ * field per row. On a 365-item menu that is 665 KB and every variant, price,
+ * collection membership and media placement the location has.
+ */
+export async function summarizeLocationProducts(db: DbClient, input: {
+  organizationId: string; locationId: string
+}): Promise<{ total: number; allExperiences: boolean }> {
+  const row = await queryFirst<{ total: number; bookable: number }>(db, `
+    SELECT count(*) AS total,
+           count(bc.product_id) AS bookable
+      FROM products p
+      JOIN product_locations pl ON pl.product_id = p.id AND pl.organization_id = p.organization_id
+      LEFT JOIN product_booking_configs bc ON bc.product_id = p.id
+     WHERE p.organization_id = ? AND pl.location_id = ?
+  `, [input.organizationId, input.locationId])
+  const total = Number(row?.total ?? 0)
+  // Matches presentationForProducts: a catalogue reads as experiences only when
+  // it has items and every one of them is bookable.
+  return { total, allExperiences: total > 0 && Number(row?.bookable ?? 0) === total }
+}
+
 export async function listCollectionProducts(db: DbClient, input: {
   organizationId: string; collectionId: string
 }): Promise<Product[]> {

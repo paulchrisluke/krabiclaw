@@ -8,11 +8,9 @@ import { requireLocationAccess, requireSiteAccess } from '~/server/utils/locatio
 import {
   assertLocationAccess,
   assertResourceAccess,
-  assertSiteContextAccess,
   assertSiteWideAccess,
   listAccessibleLocationIds,
 } from '~/server/utils/member-access'
-import { listSiteLocales } from '~/server/utils/site-locales'
 import { getMediaAsset, listMediaAssets } from '~/server/utils/media-asset-manager'
 import { getDashboardContext, getDashboardLocationContext } from '~/server/utils/dashboard-context'
 import { loadSettingsPayload } from '~/server/utils/site-settings'
@@ -20,8 +18,8 @@ import { getNotificationsSettings } from '~/server/utils/mcp-workflows'
 import { getFacebookPagesConnection } from '~/server/utils/facebook-pages'
 import { resolveLocationCapabilitySummary } from '~/server/utils/location-management'
 import { parseLocationPayload } from '~/server/utils/location-payload'
-import { getProduct, listLocationProducts } from '~/server/utils/product-management'
-import { loadDashboardGuestThreads } from '~/server/utils/dashboard-guest-threads'
+import { getProduct, hydrateProductMedia, summarizeLocationProducts } from '~/server/utils/product-management'
+import { listDashboardGuestThreadsForPrincipal } from '~/server/utils/dashboard-guest-threads'
 import { requireBlogAccess } from '~/server/utils/blog-access'
 import { requireTenantPageWriteAccess } from '~/server/utils/tenant-pages-api'
 import { getTenantPageById, listTenantPages } from '~/server/utils/content/pages'
@@ -47,12 +45,14 @@ export async function loadDashboardEditorContext(event: H3Event, siteId: string)
 
   const principal = {
     env,
-    memberId: site.member_id,
+    userId: site.user_id,
     role: site.member_role,
     organizationId: site.organization_id,
     siteId,
   }
-  await assertSiteContextAccess(db, principal)
+  // requireSiteAccess(event, siteId, 'context') has already run
+  // assertSiteContextAccess with this exact principal (location-access.ts), so
+  // asserting it again here only bought a second read of the same member row.
   const accessibleLocationIds = await listAccessibleLocationIds(db, principal)
   const [locationRows, entitlements] = await Promise.all([
     queryAll<EditorLocationRow>(db, `
@@ -100,11 +100,6 @@ export async function loadDashboardEditorContext(event: H3Event, siteId: string)
   }
 }
 
-export async function loadDashboardSiteLocales(event: H3Event, siteId: string) {
-  const { db, site } = await requireSiteAccess(event, siteId)
-  return { success: true as const, ...await listSiteLocales(db, site.organization_id, siteId) }
-}
-
 export async function loadDashboardLocationQa(
   event: H3Event,
   siteId: string,
@@ -112,26 +107,6 @@ export async function loadDashboardLocationQa(
 ) {
   const { db } = await requireLocationAccess(event, siteId, locationId)
   return { qa: await listLocationQa(db, siteId, locationId) }
-}
-
-/**
- * The bookable products offered at one location.
- *
- * A booking config is what makes a product bookable, so this filters on that
- * relationship rather than on a discriminator column.
- */
-export async function loadDashboardLocationBookableProducts(
-  event: H3Event,
-  siteId: string,
-  locationId: string,
-) {
-  const { db, site } = await requireLocationAccess(event, siteId, locationId)
-  const products = await listLocationProducts(db, { organizationId: site.organization_id, locationId })
-  const bookable = await queryAll<{ product_id: string }>(db, `
-    SELECT product_id FROM product_booking_configs WHERE organization_id = ?
-  `, [site.organization_id])
-  const bookableIds = new Set(bookable.map(row => row.product_id))
-  return { products: products.filter(product => bookableIds.has(product.id)) }
 }
 
 export interface DashboardMediaFilters {
@@ -153,7 +128,7 @@ export async function loadDashboardMedia(
   const { env, db, site } = await requireSiteAccess(event, siteId, 'context')
   const principal = {
     env,
-    memberId: site.member_id,
+    userId: site.user_id,
     role: site.member_role,
     organizationId: site.organization_id,
     siteId,
@@ -192,7 +167,7 @@ export async function loadDashboardSettingsResource(
   event: H3Event,
   options: { includeFacebook: boolean; organizationSlug?: string; siteSlug?: string },
 ) {
-  const { env, db, organization, site } = await getDashboardContext(event, {
+  const { env, db, organization, site, userId } = await getDashboardContext(event, {
     requireSite: true,
     organizationSlug: options.organizationSlug,
     siteSlug: options.siteSlug,
@@ -200,7 +175,7 @@ export async function loadDashboardSettingsResource(
   if (!site) throw new HTTPError({ statusCode: 404, statusMessage: 'Site not found' })
   await assertSiteWideAccess(db, {
     env,
-    memberId: organization.memberId,
+    userId,
     role: organization.role,
     organizationId: organization.id,
     siteId: site.id,
@@ -281,19 +256,19 @@ export async function loadDashboardLocationOverview(
   locationId: string,
   options: { includeProducts: boolean },
 ) {
-  const { env, db, organization, location } = await getDashboardLocationContext(event, locationId)
+  const { env, db, organization, location, userId } = await getDashboardLocationContext(event, locationId)
   if (location.site_id !== siteId) {
     throw new HTTPError({ statusCode: 404, statusMessage: 'Location not found' })
   }
-  await assertLocationAccess(db, {
+  const principal = {
     env,
-    memberId: organization.memberId,
+    userId,
     role: organization.role,
     organizationId: organization.id,
     siteId,
-    locationId,
-  })
-  const [capabilities, products, threads, counts] = await Promise.all([
+  }
+  await assertLocationAccess(db, { ...principal, locationId })
+  const [capabilities, catalog, threads, counts] = await Promise.all([
     resolveLocationCapabilitySummary(
       db,
       organization.id,
@@ -301,9 +276,12 @@ export async function loadDashboardLocationOverview(
       location.feature_overrides as string | null ?? null,
     ),
     options.includeProducts
-      ? listLocationProducts(db, { organizationId: organization.id, locationId })
-      : Promise.resolve([]),
-    loadDashboardGuestThreads(event, siteId, { locationId }),
+      ? summarizeLocationProducts(db, { organizationId: organization.id, locationId })
+      : Promise.resolve({ total: 0, allExperiences: false }),
+    // The principal is resolved and assertLocationAccess has just run for this
+    // exact location. Handing the event over instead would re-read the session,
+    // the site row and the member row, and assert the same thing again.
+    listDashboardGuestThreadsForPrincipal(db, siteId, { principal, userId, query: { locationId } }),
     loadLocationContentCounts(db, siteId, locationId),
   ])
   return {
@@ -312,7 +290,7 @@ export async function loadDashboardLocationOverview(
       location: parseLocationPayload(location)!,
       ...capabilities,
     },
-    products: { success: true as const, products },
+    catalog,
     threads: { summary: threads.summary },
     counts,
   }
@@ -323,13 +301,13 @@ export async function loadDashboardLocationSettings(
   siteId: string,
   locationId: string,
 ) {
-  const { env, db, organization, location } = await getDashboardLocationContext(event, locationId)
+  const { env, db, organization, location, userId } = await getDashboardLocationContext(event, locationId)
   if (location.site_id !== siteId) {
     throw new HTTPError({ statusCode: 404, statusMessage: 'Location not found' })
   }
   await assertLocationAccess(db, {
     env,
-    memberId: organization.memberId,
+    userId,
     role: organization.role,
     organizationId: organization.id,
     siteId,
@@ -408,18 +386,11 @@ export async function loadDashboardProduct(
   if (!product.locations.some(entry => entry.location_id === locationId)) {
     throw new HTTPError({ statusCode: 404, statusMessage: 'Product not found at this location' })
   }
-  return { success: true as const, product }
-}
-
-// Loads the location-owned Product collection directly for the editor's SSR render.
-export async function loadDashboardLocationProducts(
-  event: H3Event,
-  siteId: string,
-  locationId: string,
-) {
-  const { db, site } = await requireLocationAccess(event, siteId, locationId)
-  const products = await listLocationProducts(db, { organizationId: site.organization_id, locationId })
-  return { success: true as const, products }
+  // Media placements are site-scoped, and the editor shows the photograph the
+  // public page shows — the same hydration the location list does, so opening
+  // one product and listing them cannot disagree about its cover.
+  const [hydrated] = await hydrateProductMedia(db, siteId, [product])
+  return { success: true as const, product: hydrated! }
 }
 
 export async function loadDashboardLocationPosts(

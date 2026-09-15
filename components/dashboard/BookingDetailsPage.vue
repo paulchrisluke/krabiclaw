@@ -376,7 +376,9 @@ const { data: resource, pending, error } = await useAsyncData<{ booking: Dashboa
   return await dashboardApi(`/api/dashboard/bookings/${props.bookingType}/${encodeURIComponent(props.bookingId)}`, {
     validate: isBookingResponse,
   })
-})
+},
+  { lazy: import.meta.client },
+)
 
 const booking = computed(() => resource.value?.booking ?? null)
 watchEffect(() => {

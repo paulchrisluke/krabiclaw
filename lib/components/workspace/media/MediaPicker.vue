@@ -87,6 +87,16 @@ const dashboardApi = useDashboardApi()
 const props = defineProps<{
   siteId: string
   modelValue?: string | null
+  /**
+   * What the caller already knows about `modelValue`'s asset. A page block owns
+   * its media placements and the page response carries their URLs and alt text
+   * with them, so a populated picker inside one has no reason to ask the server
+   * again — twenty gallery images used to mean twenty metadata requests on
+   * mount. When this describes `modelValue`, it is rendered as-is and nothing
+   * is fetched. A caller holding only an id omits it and keeps the single
+   * bounded load below.
+   */
+  selectedSummary?: MediaSummary | null
   accept?: 'image' | 'video' | 'any'
   locationId?: string | null
   title?: string
@@ -118,6 +128,23 @@ interface SelectedMediaAsset {
   alt_text: string
 }
 
+/** The fields the picker renders. Anything holding these can answer for an asset. */
+export interface MediaSummary {
+  asset_id: string
+  public_url?: string | null
+  thumbnail_url?: string | null
+  kind?: string | null
+  alt_text?: string | null
+  file_name?: string | null
+}
+
+/** What is on screen, and which asset it belongs to. */
+interface ResolvedSelection {
+  asset_id: string
+  url: string | null
+  alt: string
+}
+
 const isPickerMediaResponse = (value: unknown): value is { media: PickerMediaAsset[] } =>
   isRecord(value)
   && Array.isArray(value.media)
@@ -134,8 +161,13 @@ const isPickerMediaResponse = (value: unknown): value is { media: PickerMediaAss
 const isOpen = ref(false)
 const pendingAsset = ref<SelectedMediaAsset | null>(null)
 
-const selectedUrl = ref<string | null>(null)
-const selectedAlt = ref<string>('')
+// One record of what is displayed, tagged with the asset it describes. Tracking
+// the url and the alt text on their own could not say which asset they were
+// for, so a confirmed selection was indistinguishable from stale state and the
+// watcher re-fetched the asset the picker had just been handed.
+const resolved = ref<ResolvedSelection | null>(null)
+const selectedUrl = computed(() => resolved.value?.url ?? null)
+const selectedAlt = computed(() => resolved.value?.alt ?? '')
 const modelLoadController = ref<AbortController | null>(null)
 const modelLoadError = ref<string | null>(null)
 
@@ -148,14 +180,36 @@ function assetAlt(asset: Pick<PickerMediaAsset, 'alt_text' | 'file_name'> | Pick
   return 'file_name' in asset && typeof asset.file_name === 'string' ? asset.file_name : ''
 }
 
-watch(() => props.modelValue, async (id) => {
-  modelLoadController.value?.abort()
+function summaryFor(id: string): ResolvedSelection | null {
+  const summary = props.selectedSummary
+  if (!summary || summary.asset_id !== id) return null
+  return { asset_id: id, url: summary.thumbnail_url ?? summary.public_url ?? null, alt: assetAlt(summary) }
+}
 
+watch([() => props.modelValue, () => props.selectedSummary], async ([id]) => {
   if (!id) {
-    selectedUrl.value = null
-    selectedAlt.value = ''
+    modelLoadController.value?.abort()
+    resolved.value = null
+    modelLoadError.value = null
     return
   }
+
+  // Already showing this asset — from a summary, an earlier load, or the
+  // selection the owner just confirmed. Nothing to fetch.
+  if (resolved.value?.asset_id === id) return
+
+  const supplied = summaryFor(id)
+  if (supplied) {
+    modelLoadController.value?.abort()
+    resolved.value = supplied
+    modelLoadError.value = null
+    return
+  }
+
+  // An id nobody described. Drop what is on screen before loading it, so the
+  // previous asset's thumbnail is never shown against the new id.
+  modelLoadController.value?.abort()
+  resolved.value = null
 
   const controller = new AbortController()
   modelLoadController.value = controller
@@ -170,13 +224,9 @@ watch(() => props.modelValue, async (id) => {
     if (controller.signal.aborted) return
 
     const asset = (res.media ?? [])[0]
-    if (asset) {
-      selectedUrl.value = asset.thumbnail_url ?? asset.public_url ?? null
-      selectedAlt.value = assetAlt(asset)
-    } else {
-      selectedUrl.value = null
-      selectedAlt.value = ''
-    }
+    resolved.value = asset
+      ? { asset_id: id, url: asset.thumbnail_url ?? asset.public_url ?? null, alt: assetAlt(asset) }
+      : null
   } catch (err) {
     if (controller.signal.aborted || isAbortError(err)) return
     modelLoadError.value = getErrorMessage(err, 'Failed to load the selected media')
@@ -227,17 +277,25 @@ function onUploaded(asset: PickerMediaAsset) {
 }
 
 function confirm() {
-  if (!pendingAsset.value) return
-  selectedUrl.value = pendingAsset.value.thumbnail_url || pendingAsset.value.public_url
-  selectedAlt.value = assetAlt(pendingAsset.value)
-  emit('update:modelValue', pendingAsset.value.asset_id)
-  emit('change', pendingAsset.value)
+  const asset = pendingAsset.value
+  if (!asset) return
+  // The library already handed over this asset's metadata. Recording it against
+  // its id is what stops the modelValue change below from fetching the very
+  // asset the owner just picked.
+  resolved.value = {
+    asset_id: asset.asset_id,
+    url: asset.thumbnail_url || asset.public_url,
+    alt: assetAlt(asset),
+  }
+  modelLoadError.value = null
+  emit('update:modelValue', asset.asset_id)
+  emit('change', asset)
   isOpen.value = false
 }
 
 function clear() {
-  selectedUrl.value = null
-  selectedAlt.value = ''
+  resolved.value = null
+  modelLoadError.value = null
   pendingAsset.value = null
   emit('update:modelValue', null)
   emit('change', null)

@@ -77,11 +77,11 @@ export async function getDashboardHomeData(
   db: DbClient,
   organizationId: string,
   siteId: string,
-  principal: { env: CloudflareEnv; memberId: string; userId: string; role: string },
+  principal: { env: CloudflareEnv; userId: string; role: string },
 ): Promise<DashboardHomeData> {
   const accessibleLocationIds = await listAccessibleLocationIds(db, {
     env: principal.env,
-    memberId: principal.memberId,
+    userId: principal.userId,
     role: principal.role,
     organizationId,
     siteId,
@@ -141,7 +141,7 @@ export async function getDashboardHomeData(
 
     getGuestThreadOperationSummary(db, siteId, {
       principal: scoped && principal
-        ? { env: principal.env, memberId: principal.memberId, role: principal.role, organizationId, siteId }
+        ? { env: principal.env, userId: principal.userId, role: principal.role, organizationId, siteId }
         : null,
       userId: principal?.userId ?? '',
     }),

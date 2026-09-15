@@ -202,7 +202,7 @@ async function fetchAgenda(): Promise<AgendaPayload> {
     const context = await getDashboardContext(requestEvent, { requireSite: false, organizationSlug: orgSlug.value })
     return await listAgenda(context.db, context.organization.id, {
       ...query.value, organizationSlug: orgSlug.value,
-      principal: { env: context.env, memberId: context.organization.memberId, role: context.organization.role },
+      principal: { env: context.env, userId: context.userId, role: context.organization.role },
     })
   }
   return await dashboardApi<AgendaPayload>('/api/dashboard/agenda', {

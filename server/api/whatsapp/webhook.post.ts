@@ -187,7 +187,7 @@ async function listRecentGuestDeliveryCandidates(db: D1Database, env: ApiRecord,
     if (!membership) return null
     const locationIds = await listAccessibleLocationIds(db, {
       env: env as CloudflareEnv,
-      memberId: membership.memberId,
+      userId,
       role: membership.role,
       organizationId: row.organizationId,
       siteId: row.siteId,

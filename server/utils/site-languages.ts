@@ -83,11 +83,15 @@ export async function getSiteLanguageSettings(
   db: DbClient, env: CloudflareEnv,
   input: { organizationId: string; siteId: string },
 ) {
-  const projection = await getOrganizationBillingStatus(env, db, input.organizationId)
-  const languages = await queryAll(db, `
-    SELECT locale, label, is_source, status FROM site_locales
-     WHERE organization_id = ? AND site_id = ?
-  `, [input.organizationId, input.siteId])
+  // The plan and the site's languages are independent reads; running them in
+  // series made the slowest endpoint in production wait for both in turn.
+  const [projection, languages] = await Promise.all([
+    getOrganizationBillingStatus(env, db, input.organizationId),
+    queryAll(db, `
+      SELECT locale, label, is_source, status FROM site_locales
+       WHERE organization_id = ? AND site_id = ?
+    `, [input.organizationId, input.siteId]),
+  ])
   const availableCatalogs = PLATFORM_LOCALES.filter(catalog => catalog.locale !== 'en')
     .map(({ locale, label, direction }) => ({ locale, label, direction }))
   return { effective_plan: projection.plan, languages, available_catalogs: availableCatalogs }
