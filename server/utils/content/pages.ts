@@ -147,10 +147,24 @@ function metadataForInput(input: TenantPageEditorInput, locale: string, path: st
   }
 }
 
+/**
+ * May this site hold a custom page?
+ *
+ * A custom page is a subscription feature a customer buys. KrabiClaw's own site
+ * is the seller, not a subscriber: the platform organization holds no
+ * subscription and never will, so asking `custom_pages` of it refused every
+ * page KrabiClaw publishes about itself (#903).
+ */
+async function siteMayHoldCustomPages(env: CloudflareEnv, db: DbClient, siteId: string): Promise<boolean> {
+  const { template } = await loadSiteTemplate(db, siteId)
+  if (template.slug === 'platform') return true
+  return await hasSiteEntitlement(env, db, siteId, 'custom_pages')
+}
+
 async function assertTenantPageSupport(env: CloudflareEnv, db: DbClient, organizationId: string, siteId: string, input: TenantPageEditorInput, blocks: TenantPageBlock[], options: { checkCustomPageEntitlement?: boolean } = {}) {
   const pageType = input.pageType ?? 'custom'
   if (!TENANT_PAGE_TYPES.includes(pageType)) badRequest('pageType is invalid')
-  if (pageType === 'custom' && options.checkCustomPageEntitlement !== false && !(await hasSiteEntitlement(env, db, siteId, 'custom_pages'))) {
+  if (pageType === 'custom' && options.checkCustomPageEntitlement !== false && !(await siteMayHoldCustomPages(env, db, siteId))) {
     throw new HTTPError({ statusCode: 402, statusMessage: 'Custom tenant pages require the Growth plan or higher' })
   }
   const recipe = input.recipe?.trim() || null
