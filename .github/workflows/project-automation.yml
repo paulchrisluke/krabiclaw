@@ -4,8 +4,8 @@ name: Project automation
 # with issue activity:
 #
 #   - issue assigned                  -> Status = Ready
-#   - PR references #N                -> issue #N Status = In Progress
-#   - PR references an unassigned #N  -> assign it to the PR author, then In Progress
+#   - PR references #N                -> issue #N Status = In progress
+#   - PR references an unassigned #N  -> assign it to the PR author, then In progress
 #
 # Projects v2 is not writable by the default GITHUB_TOKEN, so every gh call in
 # this workflow runs under secrets.PROJECT_TOKEN.
@@ -71,9 +71,9 @@ jobs:
           }
 
           ready_id="$(status_option_id "Ready")"
-          in_progress_id="$(status_option_id "In Progress")"
+          in_progress_id="$(status_option_id "In progress")"
 
-          for pair in "Ready:$ready_id" "In Progress:$in_progress_id"; do
+          for pair in "Ready:$ready_id" "In progress:$in_progress_id"; do
             if [[ -z "${pair#*:}" || "${pair#*:}" == "null" ]]; then
               echo "::error::Status option '${pair%%:*}' not found in Project #${PROJECT_NUMBER}."
               exit 1
@@ -139,5 +139,5 @@ jobs:
               fi
             fi
 
-            set_status "$issue_number" "$in_progress_id" "In Progress"
+            set_status "$issue_number" "$in_progress_id" "In progress"
           done <<< "$refs"
