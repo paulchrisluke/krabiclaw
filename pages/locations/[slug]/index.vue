@@ -384,12 +384,16 @@ const heroBackgroundStyle = computed(() => {
   return { backgroundImage: `url("${safeHref}")` }
 })
 
+// Every other product surface refuses to render rather than quote a price in a
+// currency nobody set. This page used to degrade to null instead, which showed
+// the location with every price silently missing and no way to tell why.
 const rawCurrency = (site as ApiValue)?.default_currency
-const currency = isCurrencyCode(rawCurrency) ? rawCurrency : null
+if (!isCurrencyCode(rawCurrency)) throw createError({ statusCode: 500, statusMessage: 'Unsupported site currency' })
+const currency = rawCurrency
 
 /** The offer this location shows for a product, through the one contract. */
 function offerFor(product: Product): Price | null {
-  if (!currency || !location.value) return null
+  if (!location.value) return null
   const selection = { currency, location_id: String(location.value.id), at: new Date().toISOString() }
   const offers = product.variants.flatMap(variant => selectPrice(variant.prices, selection) ?? [])
   return offers.reduce<Price | null>((lowest, offer) => (!lowest || offer.unit_amount < lowest.unit_amount ? offer : lowest), null)

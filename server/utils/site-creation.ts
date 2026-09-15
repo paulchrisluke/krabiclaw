@@ -6,6 +6,7 @@ import { seedNewSite } from '~/server/utils/site-template'
 import { createSystemSubdomain, isSystemSubdomainSpent } from '~/server/utils/domains'
 import { execute, executeBatch, queryFirst } from '~/server/db'
 import { ALL_VERTICALS, type SiteVertical } from '~/utils/vertical-copy'
+import type { CurrencyCode } from '~/shared/currencies'
 import { resolvePublicTemplate } from '~/utils/template-registry'
 import { ensureSiteTeam, isOrganizationWideRole, organizationAdapter, type OrganizationAdapter } from '~/server/utils/member-access'
 import { createAuth, type CloudflareEnv } from '~/server/utils/auth'
@@ -73,9 +74,12 @@ export async function runSiteCreation(
   env: SetupEnv,
   db: D1Database,
   userId: string,
-  params: { organizationId: string; name: string; subdomain: string; vertical: SiteVertical; activate?: boolean },
+  // `defaultCurrency` is the owner's answer or null. A site that goes live on
+  // creation has to carry one; onboarding's first save has not asked yet, and
+  // stores null until the currency step answers it.
+  params: { organizationId: string; name: string; subdomain: string; vertical: SiteVertical; defaultCurrency: CurrencyCode | null; activate?: boolean },
 ): Promise<SiteCreationResult> {
-  const { organizationId, name, vertical } = params
+  const { organizationId, name, vertical, defaultCurrency } = params
   const normalizedSubdomain = params.subdomain.toLowerCase()
   let siteId = ''
 
@@ -119,9 +123,9 @@ export async function runSiteCreation(
           query: `
             INSERT INTO sites
               (id, organization_id, theme_id, vertical, slug, subdomain, brand_name, default_currency, status, onboarding_status, analytics_data_start_at, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, 'USD', 'active', 'pending', ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active', 'pending', ?, ?, ?)
           `,
-          params: [siteId, organizationId, themeId, vertical, normalizedSubdomain, normalizedSubdomain, name, now, now, now],
+          params: [siteId, organizationId, themeId, vertical, normalizedSubdomain, normalizedSubdomain, name, defaultCurrency, now, now, now],
         },
         {
           query: `

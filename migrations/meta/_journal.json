@@ -43,6 +43,13 @@
       "when": 1789367295470,
       "tag": "0005_majestic_scarlet_spider",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1789461396809,
+      "tag": "0006_site_currency_nullable",
+      "breakpoints": true
     }
   ]
 }
