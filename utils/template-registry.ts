@@ -126,11 +126,24 @@ export const publicTemplateRegistry: Record<PublicTemplateSlug, PublicTemplateDe
       dynamicPrefixes: ['/blog/', '/docs/'],
     },
     nonIndexableExactPaths: [],
-    // KrabiClaw's own site renders its marketing pages from components, and
-    // pages/[...tenantPath].vue throws 404 for platform sites. Nothing here
-    // reads a tenant page document, so nothing may be written as one. #903 is
-    // what changes that.
-    pageDocuments: { recipes: {}, paths: [], prefixes: [], catchAll: false },
+    // KrabiClaw's own site still renders its marketing pages from components:
+    // these paths are claimed by route files, and those route files draw the
+    // platform surface. What the list changes is the write guard —
+    // templateAllowsPageDocumentAt now permits a page document at each of them,
+    // so the marketing content can be authored through the CMS and the MCP
+    // before the release that renders it (#903).
+    //
+    // Nothing renders these documents yet. The route files claim the paths, and
+    // the only readers of this list are the editor's path guard, the Pages
+    // list's `removable`, and the delete guard — none of them a render path.
+    // Authoring first is what keeps the marketing site from being empty for the
+    // length of a deploy.
+    pageDocuments: {
+      recipes: {},
+      paths: ['/', '/about', '/experiences', '/features', '/legal', '/plugin', '/pricing', '/restaurants'],
+      prefixes: [],
+      catchAll: false,
+    },
   },
 }
 
