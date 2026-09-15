@@ -92,12 +92,7 @@ function copyProductionRows(path: string) {
   for (const table of tables) {
     const names = (JSON.parse(table.column_names) as string[]).map(identifier)
     const prefix = `INSERT INTO ${identifier(table.name)} (${names.join(',')}) VALUES (`
-    // quote() renders text up to its first NUL byte. A text value holding one
-    // is written as a hex literal cast back to text, so it survives the copy;
-    // every other value keeps quote()'s compact form.
-    const serialized = (name: string) =>
-      `CASE WHEN typeof(${name}) = 'text' AND instr(CAST(${name} AS BLOB), x'00') > 0 THEN 'CAST(X''' || hex(${name}) || ''' AS TEXT)' ELSE quote(${name}) END`
-    const expression = literal(prefix) + ' || ' + names.map(serialized).join(" || ',' || ") + " || ');'"
+    const expression = literal(prefix) + ' || ' + names.map(name => `quote(${name})`).join(" || ',' || ") + " || ');'"
     queries.push(`SELECT ${literal(table.name)}, 1, ${expression} FROM ${identifier(table.name)}`)
   }
   // One SELECT gives all tables the same SQLite read snapshot. Include the
