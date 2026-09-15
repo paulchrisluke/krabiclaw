@@ -37,6 +37,18 @@ test.describe('stateless MCP server', () => {
     expect(tools.status()).toBe(200)
     const toolsBody = await tools.json() as { result: { tools: Array<{ name: string, inputSchema?: { required?: string[], properties?: Record<string, unknown>, additionalProperties?: boolean }, outputSchema?: Record<string, unknown>, _meta?: Record<string, unknown> }> } }
     const uploadTool = toolsBody.result.tools.find(tool => tool.name === 'upload_user_media')
+    expect(toolsBody.result.tools.some(tool => tool.name === 'show_generated_images')).toBe(false)
+    const generatedFileTool = toolsBody.result.tools.find(tool => tool.name === 'save_generated_image_file')
+    expect(generatedFileTool?._meta?.['openai/fileParams']).toEqual(['attachment_id'])
+    const removedPicker = await mcpRequest(request, baseURL!, {
+      method: 'tools/call',
+      toolName: 'show_generated_images',
+      args: { images: [] },
+    })
+    expect(removedPicker.status()).toBe(200)
+    const removedPickerBody = await removedPicker.json() as { error?: { code?: number, message?: string } }
+    expect(removedPickerBody.error?.code).toBe(-32601)
+    expect(removedPickerBody.error?.message).toContain('Unknown tool')
     expect(uploadTool?.inputSchema?.required).toEqual(['file'])
     expect(uploadTool?.inputSchema?.properties?.file_id).toBeUndefined()
     expect(uploadTool?.inputSchema?.properties?.poster_file).toBeDefined()

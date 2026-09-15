@@ -77,6 +77,9 @@ const listItems = computed(() => (data.value?.pages ?? [])
     // document at cannot be removed, and a rule copied into the client drifts
     // from the one the endpoint enforces.
     removable: page.removable,
+    // The delete endpoint takes the timestamp the row was last seen at, so a
+    // page someone else changed in the meantime conflicts instead of going.
+    updatedAt: page.updated_at,
   })))
 
 function openNew() {
@@ -98,10 +101,14 @@ const toast = useToast()
  * template renders a document at -- so this reports what it said rather than
  * keeping a second copy of the rule that would drift from it.
  */
-async function remove(item: { id: string }) {
+async function remove(item: { id: string; updatedAt: string }) {
   removingId.value = item.id
   try {
-    await dashboardApi(`/api/editor/sites/${siteId}/pages/${item.id}`, { method: 'DELETE', validate: isRecord })
+    await dashboardApi(`/api/editor/sites/${siteId}/pages/${item.id}`, {
+      method: 'DELETE',
+      body: { expectedUpdatedAt: item.updatedAt },
+      validate: isRecord,
+    })
     await refresh()
   } catch (error) {
     toast.add({ description: getErrorMessage(error, 'Failed to remove the page'), color: 'error' })

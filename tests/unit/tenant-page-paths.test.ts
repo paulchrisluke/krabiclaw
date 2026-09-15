@@ -124,8 +124,10 @@ test('claimed route matching follows case-insensitive literals and constraints',
 })
 
 test('Nitro single-segment wildcards claim concrete paths, without claiming descendants', () => {
-  const claims = claimedRoutesFromHandlers([{ route: '/feed/*' }, { route: '/files/:name' }])
+  const claims = claimedRoutesFromHandlers([{ route: '/feed/*' }, { route: '/files/:name' }, { route: '/docs-md/:category/:slug.md' }])
   assert.equal(isClaimedPublicPath(claims, '/feed/news'), true)
   assert.equal(isClaimedPublicPath(claims, '/feed/news/archive'), false)
   assert.equal(isClaimedPublicPath(claims, '/files/report'), true)
+  assert.equal(isClaimedPublicPath(claims, '/docs-md/start/setup.md'), true)
+  assert.equal(isClaimedPublicPath(claims, '/docs-md/start/setup'), false)
 })

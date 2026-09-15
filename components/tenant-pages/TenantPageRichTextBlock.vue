@@ -1,10 +1,10 @@
 <template>
   <component
     :is="headingTag"
-    v-if="block.type === 'heading'"
+    v-if="block.type === 'heading' && text(block.data.text)"
     class="mt-12 text-3xl font-semibold tracking-tight"
   >
-    {{ text(block.data.text) || pageTitle }}
+    {{ text(block.data.text) }}
   </component>
   <TenantPageMarkdown
     v-else-if="block.type === 'markdown' && markdown"
@@ -22,16 +22,19 @@ import type { TenantPageBlock } from '~/utils/tenant-page-blocks'
  * `whitespace-pre-wrap` div, so `## Heading` and `**bold**` printed literally
  * on every page whose author had written any — and the `prose` classes styled
  * nothing, because there were no elements for them to style.
+ *
+ * TenantPageMarkdown owns that conversion and its sanitizing, here and for the
+ * blog and docs, so this component holds no sanitizer of its own.
  */
-const props = defineProps<{ block: TenantPageBlock; pageTitle: string }>()
+const props = defineProps<{ block: TenantPageBlock }>()
 
 function text(value: unknown): string {
   return typeof value === 'string' ? value.trim() : ''
 }
 
-const markdown = computed(() => text(props.block.data.markdown) || text(props.block.data.content))
+const markdown = computed(() => text(props.block.data.markdown))
 const headingTag = computed(() => {
-  const level = Number(props.block.data.level)
+  const level = Number(props.block.level)
   return `h${Number.isInteger(level) && level >= 1 && level <= 6 ? level : 2}`
 })
 </script>

@@ -14,7 +14,7 @@ import {
   type ClaimedRoute,
 } from './build/claimed-public-routes'
 
-// Filled by the pages:extend hook and read by nitro:config, which runs after it.
+// Filled by pages:extend and read by nitro:init after server routes are scanned.
 let claimedPageRoutes: ClaimedRoute[] = []
 const claimedRoutesModulePath = resolve(import.meta.dirname, '.nuxt-generated/claimed-public-routes.mjs')
 
@@ -225,12 +225,15 @@ export default defineNuxtConfig({
       nitroConfig.handlers = nitroConfig.handlers?.filter(
         handler => handler.route !== '/api/_nuxt_icon/:collection',
       )
+    },
+    'nitro:init'(nitro) {
+      // Nitro has now scanned both server/api and server/routes.
       // Written to a real file rather than a Nitro virtual module because the
       // page loader is reachable from the Vite SSR graph too (TenantPublicPage
       // imports it), and both builders have to resolve the same artifact.
       const claimed = mergeClaimedRoutes(
         claimedPageRoutes,
-        claimedRoutesFromHandlers(nitroConfig.handlers ?? []),
+        claimedRoutesFromHandlers([...nitro.options.handlers, ...nitro.scannedHandlers]),
         nonRouteClaimedRoutes(),
       )
       mkdirSync(dirname(claimedRoutesModulePath), { recursive: true })

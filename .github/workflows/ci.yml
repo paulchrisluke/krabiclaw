@@ -1,8 +1,7 @@
 name: CI
 
-# Launch hold and required work: https://github.com/paulchrisluke/krabiclaw/pull/864#issuecomment-5572050864
-# Drafts are implementation batches: they run Checks, and ready_for_review
-# starts the preview qualification.
+# Drafts run the static Checks; the preview qualification starts at
+# ready_for_review.
 
 on:
   pull_request:
@@ -21,10 +20,7 @@ concurrency:
 jobs:
   typecheck:
     name: Checks
-    # Drafts run Checks. Skipping every job for a draft push produced a second
-    # workflow run on the same head SHA with nothing in it, and a run that
-    # completes in zero seconds cannot be cancelled by the ready_for_review run
-    # that follows it. Only the preview qualification below waits for ready.
+    # Drafts run Checks; only the preview qualification below waits for ready.
     if: >-
       github.event_name == 'push'
       || !(github.base_ref == 'main' && github.head_ref == 'staging')
@@ -132,34 +128,17 @@ jobs:
       PLAYWRIGHT_WORKERS: "2"
     steps:
       # preview.krabiclaw.com is one deployment over one database, and this job
-      # resets that database before it tests. Two of these overlapping is not a
-      # slow queue, it is one run wiping D1 under another run's assertions.
-      #
-      # The queue orders on when each E2E job STARTED, never on run id. A
-      # re-run keeps its original run id, so an id-ordered queue reads a job
-      # started today as older than everything created since and waits for
-      # nobody: run 34715334165 was created 19:50 the previous evening, was
-      # re-run at 05:10:36, and ran `db:reset:preview` at 05:11:28 through the
-      # middle of another run's suite. Every test after that timestamp failed
-      # with one D1 statement and a 404.
-      #
-      # A job that has not started yet is not waited on: when it starts it sees
-      # this one in progress and waits here instead. Equal start times, which
-      # the API reports at second resolution, fall back to run id.
-      #
-      # The lock's identity is PREVIEW_HOLDER_PATTERN, not this job's display
-      # name. A run already in flight on the previous workflow still calls its
-      # preview job "E2E representative tests (preview only)"; if the queue
-      # matched only the current name, the two could not see each other and
-      # both would reset preview D1 at once. Renaming the job again means
-      # adding the new name to this pattern and keeping the old one until
-      # nothing is left running it.
+      # resets that database before it tests, so preview jobs serialize across
+      # workflow runs. The queue orders on when each job started, never on run
+      # id: a re-run keeps its original run id. A job that has not started yet
+      # is not waited on; when it starts it sees this one and waits here. Equal
+      # start times, which the API reports at second resolution, fall back to
+      # run id. Actions API results are paginated, so every read paginates.
       - name: Wait for the shared preview deployment
         env:
           GH_TOKEN: ${{ github.token }}
           RUN_ID: ${{ github.run_id }}
           JOB_NAME: Preview smoke
-          PREVIEW_HOLDER_PATTERN: "^(Preview smoke$|E2E representative tests)"
           # Each holder occupies preview for roughly six minutes. This covers a
           # deep queue and still leaves room inside the job's timeout-minutes
           # for the work itself, so the deadline below is reachable rather than
@@ -167,9 +146,7 @@ jobs:
           QUEUE_DEADLINE_MINUTES: "45"
         run: |
           set -euo pipefail
-          # --paginate or a busy repository silently truncates at 100 and the
-          # queue stops seeing the run it must wait for. jq runs per page, so
-          # every one of these takes the first line it produces.
+          # jq runs per page under --paginate, so each read takes its first line.
           mine=$(gh api --paginate "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/jobs?per_page=100" \
             --jq "[.jobs[] | select(.name == \"${JOB_NAME}\")] | .[0].started_at // empty" | head -n 1)
           if [ -z "$mine" ]; then
@@ -185,7 +162,7 @@ jobs:
                 --jq ".workflow_runs[] | select(.name == \"${GITHUB_WORKFLOW}\" and .id != ${RUN_ID}) | .id")
               for id in $others; do
                 ahead=$(gh api --paginate "repos/${GITHUB_REPOSITORY}/actions/runs/${id}/jobs?per_page=100" \
-                  --jq "[.jobs[] | select((.name | test(\"${PREVIEW_HOLDER_PATTERN}\")) and .status != \"completed\" and .started_at != null)]
+                  --jq "[.jobs[] | select(.name == \"${JOB_NAME}\" and .status != \"completed\" and .started_at != null)]
                         | map(select(.started_at < \"${mine}\" or (.started_at == \"${mine}\" and ${id} < ${RUN_ID})))
                         | if length == 0 then empty else .[0].started_at end" | head -n 1)
                 if [ -n "$ahead" ]; then
@@ -414,17 +391,24 @@ jobs:
           candidate=$(git rev-parse "HEAD^2" 2>/dev/null || git rev-parse HEAD)
           echo "Staging candidate: ${candidate}"
           runs=$(gh api --paginate "repos/${GITHUB_REPOSITORY}/commits/${candidate}/check-runs?per_page=100" \
-            --jq '.check_runs[] | "\(.name)=\(.conclusion // "pending")"' | sort -u)
+            --jq '.check_runs[] | "\(.id)\t\(.status)\t\(.conclusion // "pending")\t\(.name)"')
           echo "${runs}"
+          # A re-run adds a newer check run beside the old one; only the latest
+          # run of each required check counts, and it must have completed. The
+          # staging-to-main pull request attaches its own, skipped, check runs
+          # to the same commit: those are not runs of the check and are ignored.
           missing=""
           while IFS= read -r name; do
             [ -n "$name" ] || continue
-            if ! printf '%s\n' "${runs}" | grep -qxF "${name}=success"; then
-              missing="${missing} '${name}'"
+            latest=$(printf '%s\n' "${runs}" | awk -F'\t' -v name="${name}" '$4 == name && $3 != "skipped"' | sort -n | tail -n 1)
+            status=$(printf '%s' "${latest}" | cut -f2)
+            conclusion=$(printf '%s' "${latest}" | cut -f3)
+            if [ "${status}" != "completed" ] || [ "${conclusion}" != "success" ]; then
+              missing="${missing} '${name}'(${status:-absent}/${conclusion:-none})"
             fi
           done <<< "$REQUIRED"
           if [ -n "$missing" ]; then
-            echo "::error::Staging candidate ${candidate} has no successful:${missing}. Production deploys the exact commit staging qualified."
+            echo "::error::Staging candidate ${candidate} has no latest successful:${missing}. Production deploys the exact commit staging qualified."
             exit 1
           fi
           echo "Staging candidate ${candidate} is qualified."

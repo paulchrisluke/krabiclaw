@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { dismissPreviewToolbar } from './helpers'
+import { dismissPreviewToolbar, waitForNuxtHydration } from './helpers'
 import { loginAs } from './helpers/auth'
 
 test('a verified user without an organization starts onboarding and can explicitly visit their profile', async ({ request, baseURL }) => {
@@ -98,6 +98,7 @@ test('public auth CTAs reflect the SSR session @smoke', async ({ page, baseURL }
   // is the last thing the journey does.
   await page.goto('/oauth/login')
   await expect(page.getByRole('button', { name: /^Continue as / })).toBeVisible()
+  await waitForNuxtHydration(page)
   await page.getByRole('button', { name: 'Sign in with a different account', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Sign in to connect', exact: true })).toBeVisible()
   await expect(page).toHaveURL(/\/oauth\/login$/)
@@ -107,6 +108,7 @@ test('invitation account switching updates the reactive session without reloadin
   await loginAs(page.request, baseURL!, 'user-e2e-oauth-private-cimd')
   await dismissPreviewToolbar(page)
   await page.goto('/accept-invitation/nonexistent-invitation')
+  await waitForNuxtHydration(page)
   await page.getByRole('button', { name: 'Sign in with a different account', exact: true }).click()
   await expect(page.getByRole('link', { name: 'Sign in with email', exact: true })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Sign in with a different account', exact: true })).toHaveCount(0)

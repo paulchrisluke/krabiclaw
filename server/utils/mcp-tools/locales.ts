@@ -56,7 +56,7 @@ export const LOCALES_TOOLS: McpToolDefinition[] = [
   }),
   siteTool({
     name: 'put_resource_localization',
-    description: 'Fully replace one exact resource or content document representation. Resource values replace the exact localization; document fields and blocks update the exact representation with expected_updated_at.',
+    description: 'Fully replace one exact resource or content document representation. Q&A is read-only and cannot be changed. Resource values replace the exact localization; document fields and blocks update the exact representation with expected_updated_at.',
     domain: 'locales',
     minimumRole: 'editor',
     confirmRequired: true,
@@ -74,7 +74,7 @@ export const LOCALES_TOOLS: McpToolDefinition[] = [
   }),
   siteTool({
     name: 'delete_resource_localization',
-    description: 'Permanently delete one localized resource representation and its owned document and redirect state. This does not change billing.',
+    description: 'Permanently delete one localized resource representation and its owned document and redirect state. Q&A is read-only and cannot be deleted. This does not change billing.',
     domain: 'locales',
     minimumRole: 'editor',
     confirmRequired: true,

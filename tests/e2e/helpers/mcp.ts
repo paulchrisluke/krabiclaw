@@ -165,7 +165,9 @@ export async function ensureSite(request: APIRequestContext, baseURL: string) {
     organizationId = (await created.json() as { id: string }).id
   }
   const res = await request.post(`${baseURL}/api/sites`, {
-    data: { name: `MCP E2E ${suffix}`, subdomain: `e2e-mcp-${suffix}`, vertical: 'restaurant', organizationId },
+    // A site created here is live immediately, so it states the currency its
+    // prices are quoted in rather than inheriting one nobody chose.
+    data: { name: `MCP E2E ${suffix}`, subdomain: `e2e-mcp-${suffix}`, vertical: 'restaurant', organizationId, defaultCurrency: 'THB' },
   })
   expect(res.ok(), await res.text()).toBe(true)
   const { siteId } = await res.json() as { siteId: string }

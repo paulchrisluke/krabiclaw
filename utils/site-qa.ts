@@ -1,5 +1,4 @@
-// The site Q&A record, shared by the list and the record's own editor so
-// neither restates the other's shape.
+// The read-only site Q&A list response.
 
 export interface QaRow {
   id: string
@@ -23,19 +22,3 @@ export const isQaRow = (value: unknown): value is QaRow =>
 
 export const isQaResponse = (value: unknown): value is { qa: QaRow[] } =>
   isRecord(value) && Array.isArray(value.qa) && value.qa.every(isQaRow)
-
-// A created row is a QaRow, so it is checked as one: callers read `status` and
-// `answer` off the result, and a guard that never looked at them promised
-// fields the response might not carry.
-export const isQaCreated = (value: unknown): value is QaRow => isQaRow(value)
-
-export const isQaUpdated = (value: unknown): value is { updated: true; qa_id: string } =>
-  isRecord(value) && value.updated === true && typeof value.qa_id === 'string'
-
-export const isQaDeleted = (value: unknown): value is { qa_id: string; deleted: true } =>
-  isRecord(value) && typeof value.qa_id === 'string' && value.deleted === true
-
-/** The question is the only field the create endpoint will not accept empty. */
-export function qaCreateBlockers(form: { question: string }): Array<'question'> {
-  return form.question.trim() ? [] : ['question']
-}

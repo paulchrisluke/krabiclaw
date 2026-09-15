@@ -13,7 +13,7 @@ export const FAQ_SOURCE_OPTIONS = FAQ_BLOCK_SOURCES.map(value => ({ label: FAQ_B
 export function createTenantPageEditorData(type: TenantPageBlockType): EditorData {
   switch (type) {
     case 'heading':
-      return { text: '', level: 2 }
+      return { text: '' }
     case 'markdown':
       return { markdown: '', editor_mode: 'rich' }
     case 'image':
@@ -37,8 +37,9 @@ export function createTenantPageEditorData(type: TenantPageBlockType): EditorDat
     case 'button_group':
       return { buttons: [{ label: '', url: '' }] }
     case 'feature_grid':
-    case 'testimonial_grid':
       return { title: '', source: 'manual', items: [] }
+    case 'testimonial_grid':
+      return { title: '', description: '', source: 'site_reviews' }
     case 'team_grid':
       return { title: '', description: '', items: [{ first_name: '', last_name: '', title: '', bio: '' }] }
     case 'page_grid':
@@ -120,17 +121,10 @@ export function validateTenantPageBlock(block: TenantPageBlock): string[] {
       if (!text(data.markdown)) addError(errors, 'Rich text is empty.')
       break
     case 'image':
-      if (!block.media.some(item => item.slot === 'media')) addError(errors, 'Select a media asset.')
-      break
     case 'gallery':
-      if (!block.media.some(item => item.slot === 'gallery')) addError(errors, 'Add at least one gallery image.')
       break
     case 'faq':
-      if (FAQ_BLOCK_SOURCES.some(source => source === text(data.source))) break
-      objectArray(data, 'items').forEach((item, index) => {
-        if (!itemText(item, 'title', ['question'])) addError(errors, `FAQ item ${index + 1} needs a question.`)
-        if (!itemText(item, 'description', ['answer'])) addError(errors, `FAQ item ${index + 1} needs an answer.`)
-      })
+    case 'testimonial_grid':
       break
     case 'cta':
     case 'contact_cta':
@@ -147,7 +141,6 @@ export function validateTenantPageBlock(block: TenantPageBlock): string[] {
       validateButtons(errors, data, 'Button')
       break
     case 'feature_grid':
-    case 'testimonial_grid':
     case 'page_grid':
     case 'product_grid':
     case 'location_grid':

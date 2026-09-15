@@ -36,6 +36,7 @@ import { loadSiteTemplate } from '~/server/utils/content/publishing'
 import { templateAllowsPageDocumentAt, templateRendersPageDocumentAt } from '~/shared/tenant-page-paths'
 import type { PublicTemplateDefinition } from '~/utils/template-registry'
 import { CLAIMED_PUBLIC_ROUTES } from '#claimed-public-routes'
+import { formatTenantLocalePath } from '~/utils/tenant-locale-path'
 
 export interface TenantPageEditorInput {
   id?: string
@@ -200,7 +201,7 @@ async function assertTenantPageSupport(env: CloudflareEnv, db: DbClient, organiz
 }
 
 function blocksAsInputs(blocks: TenantPageBlock[]): ContentBlockInput[] {
-  return blocks.map(block => ({ id: block.id, source_block_id: block.source_block_id, type: block.type, position: block.position, data: block.data }))
+  return blocks.map(block => ({ id: block.id, source_block_id: block.source_block_id, parent_block_id: block.parent_block_id, level: block.level, type: block.type, position: block.position, data: block.data }))
 }
 
 async function tenantPagePlacementQueries(
@@ -371,7 +372,7 @@ export async function assertTenantPagePathAvailable(
      WHERE site_id = ? AND locale = ? AND from_path = ?
        AND (? IS NULL OR owner_id IS NULL OR owner_id <> ?)
      LIMIT 1
-  `, [input.siteId, input.locale, path, input.allowOwnedRedirectVariantId ?? null, input.allowOwnedRedirectVariantId ?? null])
+  `, [input.siteId, input.locale, formatTenantLocalePath(path, input.locale), input.allowOwnedRedirectVariantId ?? null, input.allowOwnedRedirectVariantId ?? null])
   if (redirect) conflict('A tenant redirect already owns this path')
   return path
 }
@@ -385,7 +386,7 @@ async function assertTenantPageRedirectWritable(
       FROM site_redirects
      WHERE site_id = ? AND organization_id = ? AND locale = ? AND from_path = ?
      LIMIT 1
-  `, [input.siteId, input.organizationId, input.locale, input.fromPath])
+  `, [input.siteId, input.organizationId, input.locale, formatTenantLocalePath(input.fromPath, input.locale)])
   if (existing && (existing.owner_id !== input.variantId || existing.source !== 'tenant-pages')) {
     conflict('A manual tenant redirect already owns this path')
   }
@@ -421,12 +422,12 @@ async function prepareTenantPageRedirectFlatten(
       FROM site_redirects
      WHERE site_id = ? AND organization_id = ? AND locale = ? AND to_path = ?
        AND behavior = 'redirect'
-  `, [input.siteId, input.organizationId, input.locale, input.fromPath])
+  `, [input.siteId, input.organizationId, input.locale, formatTenantLocalePath(input.fromPath, input.locale)])
   if (!input.toPath) {
     if (incoming.length) conflict('Cannot archive a page while another redirect points to it')
     return []
   }
-  if (incoming.some(redirect => redirect.from_path === input.toPath)) {
+  if (incoming.some(redirect => redirect.from_path === formatTenantLocalePath(input.toPath!, input.locale))) {
     conflict('Changing this page path would create a redirect cycle')
   }
   if (incoming.some(redirect => redirect.source !== 'tenant-pages')) {
@@ -437,7 +438,7 @@ async function prepareTenantPageRedirectFlatten(
     query: `UPDATE site_redirects
        SET to_path = ?, updated_at = ?
      WHERE site_id = ? AND organization_id = ? AND locale = ? AND to_path = ? AND behavior = 'redirect'`,
-    params: [input.toPath, now, input.siteId, input.organizationId, input.locale, input.fromPath],
+    params: [formatTenantLocalePath(input.toPath, input.locale), now, input.siteId, input.organizationId, input.locale, formatTenantLocalePath(input.fromPath, input.locale)],
   }]
 }
 
@@ -498,9 +499,7 @@ export async function listTenantPages(db: DbClient, siteId: string, opts: { loca
   ].join('\n'), [siteId, locale])
   // Whether each page may be removed is decided here, by the same rule
   // deleteTenantPage enforces, so the list and the endpoint cannot disagree and
-  // the dashboard never offers a remove control the server would refuse. The
-  // template guarantee binds the source row only: removing a translation leaves
-  // the page standing, so a template-rendered path still has its document.
+  // the dashboard never offers a remove control the server would refuse.
   const { template } = await loadSiteTemplate(db, siteId)
   return rows.map(row => ({
     id: row.id,
@@ -512,7 +511,7 @@ export async function listTenantPages(db: DbClient, siteId: string, opts: { loca
     recipe: row.recipe,
     sort_order: row.sort_order,
     updated_at: row.updated_at,
-    removable: row.id !== row.page_id || !templateRendersPageDocumentAt(template, row.path),
+    removable: !templateRendersPageDocumentAt(template, normalizeTenantPagePath(row.path)),
   }))
 }
 
@@ -805,16 +804,6 @@ export async function createTenantPage(db: DbClient, input: { organizationId: st
     SELECT is_source FROM site_locales WHERE site_id = ? AND locale = ? LIMIT 1
   `, [input.siteId, locale])
   if (!existingPage && !localeRow?.is_source) badRequest('Translated tenant-page variants must reference an existing source page')
-  const sourceVariant = existingPage
-    ? await queryFirst<{ path: string } | null>(db, `
-        SELECT v.path
-          FROM content_documents v
-          JOIN site_locales l ON l.site_id = v.site_id AND l.locale = v.locale AND l.is_source = 1
-         WHERE v.row_role IN ('root','representation') AND v.kind = 'page' AND COALESCE(v.root_id, v.id) = ? AND v.organization_id = ? AND v.site_id = ?
-         LIMIT 1
-      `, [existingPage.id, input.organizationId, input.siteId])
-    : null
-  if (existingPage && !sourceVariant) throw new HTTPError({ statusCode: 500, statusMessage: 'Tenant page source variant is missing' })
   // A translated variant's identity is its source page's. The caller may state
   // it, but only to agree with the source; it does not get to pick a different
   // one, and omitting it does not mean "choose for me".
@@ -831,12 +820,11 @@ export async function createTenantPage(db: DbClient, input: { organizationId: st
   }
   const existingSystemPage = existingPage?.page_type === 'system'
   if (effectiveData.pageType === 'system' && !input.trustedSystemPage && !existingSystemPage) badRequest('System pages are managed by the site template')
-  const requestedPath = existingPage ? sourceVariant!.path : input.data.path
   const { template } = await loadSiteTemplate(db, input.siteId)
   const path = await assertTenantPagePathAvailable(db, {
     siteId: input.siteId,
     locale,
-    path: requestedPath,
+    path: input.data.path,
     template,
   })
   const metadata = metadataForInput(effectiveData, locale, path)
@@ -868,6 +856,104 @@ export async function createTenantPage(db: DbClient, input: { organizationId: st
     await refreshSocialCard({ db, env: input.env, owner: { owner_type: 'content_document', owner_id: variantId }, actorId: input.userId })
   }
   return { page: await getTenantPageForEditor(db, variantId) }
+}
+
+/**
+ * Remove a tenant page, or one of its translations.
+ *
+ * Scope follows the row: deleting a translation removes that translation, and
+ * deleting the source removes the page and every translation with it — the
+ * content_documents_root_scope_fk cascade takes the representation rows, and
+ * prepareContentDocumentDeletion clears the placements and redirects that point
+ * at them by owner_id first, because those carry no foreign key of their own.
+ *
+ * A page the site's template renders is not the owner's to remove: deleting it
+ * would leave a route with nothing to show. That is the same declaration the
+ * writer checks before creating a page, not a second rule about page_type — a
+ * dead row the template no longer maps, like the /locations/main every site used
+ * to be seeded with, is deletable precisely because nothing renders it.
+ */
+export async function deleteTenantPage(db: DbClient, variantId: string, input: { scope: TenantPageScope; expectedUpdatedAt: string; env: CloudflareEnv }) {
+  const row = await getPageRepresentation(db, variantId, input.scope)
+  if (!row) notFound('Tenant page variant not found')
+  const document = await getContentDocumentById(db, row.id)
+  if (!document) throw new HTTPError({ statusCode: 500, statusMessage: 'Tenant page content document not found' })
+  if (document.updated_at !== input.expectedUpdatedAt) conflict('Tenant page content was updated by another writer')
+
+  const { template } = await loadSiteTemplate(db, row.site_id)
+  if (templateRendersPageDocumentAt(template, normalizeTenantPagePath(row.path))) {
+    conflict('This page is one the site template renders, so it cannot be deleted')
+  }
+
+  // A page another page links to cannot simply go. `page_grid` renders its
+  // cards from the referenced documents, and a reference to a page that is
+  // gone is a 500 on the referring page, by design — "the editor chose it and
+  // needs to know" (server/utils/public-tenant-pages.ts). The editor is told
+  // here, before the delete, which page would break. The deleted page's own
+  // translations are not referrers: they go with it.
+  const referrers = await queryAll<{ path: string }>(db, `
+    SELECT DISTINCT d.path
+      FROM content_blocks b
+      JOIN content_documents d ON d.id = b.document_id
+      JOIN json_each(b.data_json, '$.page_ids') ref
+     WHERE b.type = 'page_grid' AND d.site_id = ? AND COALESCE(d.root_id, d.id) <> ? AND ref.value = ?
+     ORDER BY d.path
+  `, [row.site_id, row.id, row.id])
+  if (referrers.length > 0) {
+    conflict(`${referrers.map(item => item.path).join(', ')} link${referrers.length === 1 ? 's' : ''} to this page; remove the link before deleting it`)
+  }
+
+  const translations = row.locale === 'en'
+    ? await queryAll<{ id: string; locale: string; path: string; updated_at: string }>(db, `
+        SELECT id, locale, path, updated_at FROM content_documents
+         WHERE root_id = ? AND row_role = 'representation' AND site_id = ? AND organization_id = ?
+         ORDER BY locale
+      `, [row.id, row.site_id, row.organization_id])
+    : []
+  const removedLocales = translations.map(translation => translation.locale)
+
+  // The same rule archiving applies: a redirect somebody else owns that lands
+  // on a removed variant would land on nothing. The page's own redirects go
+  // with it in the batch, so they are not counted.
+  const removed = [{ locale: row.locale, path: row.path }, ...translations]
+  const incoming = {
+    sql: `FROM site_redirects
+         WHERE site_id = ? AND organization_id = ? AND behavior = 'redirect'
+           AND NOT (owner_type = 'content_document' AND owner_id IN (
+             SELECT id FROM content_documents WHERE (id = ? OR root_id = ?) AND organization_id = ? AND site_id = ?))
+           AND (${removed.map(() => '(locale = ? AND to_path = ?)').join(' OR ')})`,
+    params: [
+      row.site_id, row.organization_id, row.id, row.id, row.organization_id, row.site_id,
+      ...removed.flatMap(variant => [variant.locale, formatTenantLocalePath(variant.path, variant.locale)]),
+    ],
+  }
+  const pointedAt = await queryFirst<{ count: number }>(db, `SELECT count(*) AS count ${incoming.sql}`, incoming.params)
+  if (pointedAt?.count) conflict('Cannot delete a page while another redirect points to it')
+
+  // The timestamps, the translation set and the redirect rule are checked
+  // again inside the batch. The reads above give the caller a clear conflict,
+  // but queries run between them and this write, and a page changed in that
+  // window must not be deleted on the strength of a snapshot taken before it.
+  const now = new Date().toISOString()
+  await executeBatch(db, [
+    {
+      query: `INSERT INTO content_blocks (id, document_id, parent_block_id, type, position, level, data_json, created_at, updated_at)
+        SELECT NULL, ?, NULL, 'markdown', 0, NULL, '{}', ?, ? WHERE EXISTS (SELECT 1 ${incoming.sql})`,
+      params: [row.id, now, now, ...incoming.params],
+    },
+    ...prepareContentDocumentDeletion({
+      documentId: row.id,
+      organizationId: row.organization_id,
+      siteId: row.site_id,
+      expectedUpdatedAt: input.expectedUpdatedAt,
+      expectedRepresentations: row.locale === 'en'
+        ? translations.map(translation => ({ id: translation.id, updatedAt: translation.updated_at }))
+        : undefined,
+    }),
+    publicResourceCacheInvalidationQuery(row.site_id, 'tenant-page-delete'),
+  ])
+
+  return { deleted: { id: row.id, path: row.path, locale: row.locale, removed_locales: removedLocales } }
 }
 
 export async function updateTenantPage(db: DbClient, variantId: string, input: { userId: string | null; data: TenantPageEditorInput; scope: TenantPageScope; env: CloudflareEnv }) {
@@ -939,7 +1025,7 @@ export async function updateTenantPage(db: DbClient, variantId: string, input: {
         }, now),
         {
           query: "INSERT INTO site_redirects (id, organization_id, site_id, locale, owner_type, owner_id, from_path, to_path, status_code, behavior, reason, source, created_at, updated_at) VALUES (?, ?, ?, ?, 'content_document', ?, ?, ?, 301, 'redirect', 'tenant_page_path_change', 'tenant-pages', ?, ?) ON CONFLICT(site_id, locale, from_path) DO UPDATE SET owner_type = excluded.owner_type, owner_id = excluded.owner_id, to_path = excluded.to_path, status_code = excluded.status_code, behavior = excluded.behavior, reason = excluded.reason, source = excluded.source, updated_at = excluded.updated_at",
-          params: [crypto.randomUUID(), row.organization_id, row.site_id, row.locale, variantId, row.path, path, now, now],
+          params: [crypto.randomUUID(), row.organization_id, row.site_id, row.locale, variantId, formatTenantLocalePath(row.path, row.locale), formatTenantLocalePath(path, row.locale), now, now],
         },
       ]
     : []
@@ -965,62 +1051,6 @@ export async function updateTenantPage(db: DbClient, variantId: string, input: {
     await refreshSocialCard({ db, env: input.env, owner: { owner_type: 'content_document', owner_id: variantId }, actorId: input.userId })
   }
   return { page: await getTenantPageForEditor(db, variantId, input.scope) }
-}
-
-/**
- * Remove a tenant page document and everything under it.
- *
- * Deleting the source-locale row removes the page: its translations, blocks,
- * media placements and redirects go with it, through the same
- * `prepareContentDocumentDeletion` every other content kind uses. Deleting a
- * translation removes only that locale and leaves the page standing.
- *
- * One rule decides whether a page may go, and it is the one the write path
- * already states: `templateRendersPageDocumentAt`. A path the template renders a
- * document at -- `/`, and every recipe the template names -- would be left with
- * a route and nothing to put in it, so the way to remove such a page is to stop
- * the template promising it. Everywhere else the page is the tenant's to remove.
- *
- * Not `page_type`. `system` marks a page the product wrote rather than one the
- * tenant typed, and every migrated page carries it: demo's `/about` is a system
- * page its owner edits daily. Refusing on `system` would have made most of a
- * site's pages permanent, and it is a second rule that drifts from the first.
- */
-export async function deleteTenantPage(db: DbClient, variantId: string, input: { scope: TenantPageScope }) {
-  const row = await getPageRepresentation(db, variantId, input.scope)
-  if (!row) notFound('Tenant page variant not found')
-  const isSourceLocale = row.id === row.page_id
-  if (isSourceLocale) {
-    const { template } = await loadSiteTemplate(db, row.site_id)
-    if (templateRendersPageDocumentAt(template, row.path)) {
-      badRequest(`The ${template.slug} template renders a page document at ${row.path}, so the route would have nothing to render`)
-    }
-    // A page another page links to cannot simply go. Its own translations are
-    // not other pages: they go with it, so a link from one of them is not a
-    // reason to refuse. `page_grid` renders its
-    // cards from the referenced documents, and a reference to a page that is
-    // gone is a 500 on the referring page, by design -- "the editor chose it
-    // and needs to know" (server/utils/public-tenant-pages.ts). So the editor
-    // is told here, before the delete, which page would break.
-    const referrers = await queryAll<{ path: string }>(db, `
-      SELECT DISTINCT d.path
-        FROM content_blocks b
-        JOIN content_documents d ON d.id = b.document_id
-        JOIN json_each(b.data_json, '$.page_ids') ref
-       WHERE b.type = 'page_grid' AND d.site_id = ? AND COALESCE(d.root_id, d.id) <> ? AND ref.value = ?
-       ORDER BY d.path
-    `, [row.site_id, row.id, row.id])
-    if (referrers.length > 0) {
-      badRequest(`${referrers.map(item => item.path).join(', ')} link${referrers.length === 1 ? 's' : ''} to this page; remove the link before deleting it`)
-    }
-  }
-  const results = await executeBatch(db, prepareContentDocumentDeletion({
-    documentId: row.id,
-    organizationId: row.organization_id,
-    siteId: row.site_id,
-  }))
-  if (Number(results.at(-1)?.meta.changes ?? 0) === 0) notFound('Tenant page variant not found')
-  return { deleted: { id: row.id, path: row.path, locale: row.locale, scope: isSourceLocale ? 'page' as const : 'locale' as const } }
 }
 
 export async function listPublishedTenantPagePaths(db: DbClient, siteId: string, locale?: string | null) {

@@ -30,7 +30,7 @@
             :alt="story.media.alt_text ?? ''"
             class="mt-10 aspect-4/3 w-full object-cover"
           >
-          <TenantPageRichTextBlock v-if="story.bodyBlock" :block="story.bodyBlock" :page-title="page.title" />
+          <TenantPageRichTextBlock v-if="story.bodyBlock" :block="story.bodyBlock" />
         </div>
       </template>
 
@@ -53,7 +53,7 @@
         </div>
       </template>
 
-      <TenantPageRichTextBlock v-else-if="block.type === 'heading' || block.type === 'markdown'" :block="block" :page-title="page.title" />
+      <TenantPageRichTextBlock v-else-if="block.type === 'heading' || block.type === 'markdown'" :block="block" />
 
       <template v-else-if="block.type === 'image'">
         <figure v-if="blockMedia(block, 'media')" class="my-12">

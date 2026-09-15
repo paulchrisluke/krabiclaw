@@ -25,7 +25,10 @@ const TENANT_PAGE_BLOCKS_SCHEMA = {
     properties: {
       id: { type: 'string' },
       type: { type: 'string' },
-      position: { type: 'number' },
+      position: { type: 'integer', description: 'Retain the position from the last read unless reordering blocks.' },
+      source_block_id: { type: ['string', 'null'] },
+      parent_block_id: { type: ['string', 'null'] },
+      level: { type: ['integer', 'null'], minimum: 1, maximum: 6 },
       data: { type: 'object', description: describeContentBlockTextFields(CONTENT_BLOCK_TYPES) },
       media: {
         type: 'array',
@@ -100,6 +103,32 @@ export const CONTENT_TOOLS: McpToolDefinition[] = [
       },
       required: ['variant_id', 'expected_updated_at', 'path', 'title', 'pageType', 'recipe', 'sortOrder', 'blocks'],
       outputSchema: TENANT_PAGE_LIFECYCLE_OUTPUT,
+    }),
+  siteTool({
+      name: 'delete_tenant_page',
+      description: 'Delete a canonical tenant page. Deleting a translation removes that translation; deleting the source locale removes the page and every translation with it, and the response names the locales that went. A page the site template renders cannot be deleted, because its route would then have nothing to show.',
+      domain: 'content',
+      minimumRole: 'editor',
+      confirmRequired: true,
+      inputSchema: {
+        variant_id: { type: 'string' },
+        expected_updated_at: { type: 'string', description: 'The document timestamp from the last read, so a page edited since is refused rather than silently removed.' },
+      },
+      required: ['variant_id', 'expected_updated_at'],
+      outputSchema: {
+        type: 'object',
+        properties: {
+          deleted: {
+            type: 'object',
+            properties: {
+              id: { type: 'string' }, path: { type: 'string' }, locale: { type: 'string' },
+              removed_locales: { type: 'array', items: { type: 'string' } },
+            },
+            required: ['id', 'path', 'locale', 'removed_locales'],
+          },
+        },
+        required: ['deleted'],
+      },
     }),
   siteTool({
       name: 'get_reservation_policy',

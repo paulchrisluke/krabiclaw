@@ -12,7 +12,7 @@ export type MediaPlacementOwnerType = keyof typeof MEDIA_PLACEMENT_SLOTS
 
 export const EDITABLE_MEDIA_PLACEMENT_OWNERS = [
   'site', 'business_location', 'product', 'content_document',
-  'content_block', 'review', 'review_request',
+  'content_block', 'review_request',
 ] as const satisfies readonly MediaPlacementOwnerType[]
 
 export type EditableMediaPlacementOwnerType = typeof EDITABLE_MEDIA_PLACEMENT_OWNERS[number]

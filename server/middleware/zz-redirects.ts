@@ -3,7 +3,6 @@ import {    redirect, setResponseHeader } from 'nitro/h3';
 import { queryFirst } from '~/server/db'
 import { cloudflareEnv } from '~/server/utils/api-response'
 import { TENANT_TYPES } from '~/utils/tenant-routing'
-import { resolveLocalizedRedirect } from '~/server/utils/localization'
 import { EXPERIENCE_PRESENTATION } from '~/utils/product-presentation'
 
 const redirects: Record<string, string> = {
@@ -91,20 +90,6 @@ async function resolveTenantRedirectForRequest(event: H3Event) {
      LIMIT 1
   `, [siteId, locale, tenantPagePath])
   if (exactPage) return null
-
-  if (localized) {
-    const site = await queryFirst<{ organization_id: string }>(db, 'SELECT organization_id FROM sites WHERE id = ? LIMIT 1', [siteId])
-    if (!site) return null
-    // A page miss under a locale prefix is not an entitlement check - if the
-    // language license lapsed or the catalog went unavailable after this
-    // locale was published, fall through to a normal 404 instead of leaking
-    // the billing/catalog error to every visitor hitting a stale link.
-    const resolved = await resolveLocalizedRedirect(env, db, site.organization_id, siteId, path).catch(error => {
-      if (error instanceof HTTPError) return null
-      throw error
-    })
-    return resolved ? { toPath: resolved.to_path, statusCode: resolved.status_code, behavior: resolved.behavior } : null
-  }
 
   const localeRedirect = await queryFirst<{
     toPath: string | null

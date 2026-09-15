@@ -96,7 +96,7 @@
 
           <div v-else-if="detailKey === 'currency'" class="space-y-6">
             <p class="text-base text-muted">The default currency used for site-wide prices and reporting.</p>
-            <USelect v-model="form.default_currency" :items="CURRENCY_OPTIONS" value-key="value" label-key="label" size="xl" class="w-full" />
+            <USelect :model-value="form.default_currency ?? undefined" :items="CURRENCY_OPTIONS" value-key="value" label-key="label" size="xl" class="w-full" placeholder="Select currency" @update:model-value="form.default_currency = $event ?? null" />
           </div>
 
           <div v-else-if="detailKey === 'delete'" class="space-y-6">
@@ -236,7 +236,7 @@ import DashboardResourceLocalization from '~/components/dashboard/DashboardResou
 import MediaPicker from '~/lib/components/workspace/media/MediaPicker.vue'
 import EditorPaneShell from '~/components/dashboard/EditorPaneShell.vue'
 import EditorNavigationList from '~/components/dashboard/EditorNavigationList.vue'
-import { CURRENCY_OPTIONS, DEFAULT_CURRENCY, isCurrencyCode, type CurrencyCode } from '~/shared/currencies'
+import { CURRENCY_OPTIONS, isCurrencyCode, type CurrencyCode } from '~/shared/currencies'
 
 const props = withDefaults(defineProps<{ surface?: 'brand' | 'settings' }>(), { surface: 'settings' })
 const surface = computed(() => props.surface)
@@ -427,7 +427,7 @@ interface SiteSettingsForm {
   socialShareAssetId: string | null
   contact_email: string
   brand_color: string
-  default_currency: CurrencyCode
+  default_currency: CurrencyCode | null
   google_analytics_measurement_id: string
   google_site_verification: string
   social_facebook_url: string
@@ -436,7 +436,7 @@ interface SiteSettingsForm {
 }
 const form = reactive<SiteSettingsForm>({
   brand_name: '', brand_description: '', logoAssetId: null, socialShareAssetId: null, contact_email: '', brand_color: '',
-  default_currency: DEFAULT_CURRENCY, google_analytics_measurement_id: '', google_site_verification: '',
+  default_currency: null, google_analytics_measurement_id: '', google_site_verification: '',
   social_facebook_url: '', social_instagram_url: '', social_tiktok_url: '',
 })
 const brandLocalizationFields = computed(() => [
@@ -568,7 +568,9 @@ function fillForm(settings: SiteSettingsResponse) {
   form.socialShareAssetId = settings.media?.find(item => item.slot === 'social_share')?.asset_id ?? null
   form.contact_email = settings.contact_email ?? ''
   form.brand_color = settings.brand_color ?? ''
-  form.default_currency = isCurrencyCode(settings.default_currency) ? settings.default_currency : DEFAULT_CURRENCY
+  // A stored value that is not a supported code is not this form's to reinterpret:
+  // showing it as USD invited the owner to save that over whatever is really there.
+  form.default_currency = isCurrencyCode(settings.default_currency) ? settings.default_currency : null
   form.google_analytics_measurement_id = settings.google_analytics_measurement_id ?? ''
   form.google_site_verification = settings.google_site_verification ?? ''
   form.social_facebook_url = settings.social_facebook_url ?? ''
@@ -642,7 +644,11 @@ async function saveCurrentEditor() {
       case 'color': await patchSettings({ brand_color: form.brand_color }, 'Brand color saved'); break
       case 'contact': await patchSettings({ contact_email: form.contact_email.trim() }, 'Contact details saved'); break
       case 'social': await patchSettings({ social_facebook_url: form.social_facebook_url.trim() || null, social_instagram_url: form.social_instagram_url.trim() || null, social_tiktok_url: form.social_tiktok_url.trim() || null }, 'Social profiles saved'); break
-      case 'currency': await patchSettings({ default_currency: form.default_currency }, 'Currency saved'); break
+      case 'currency': {
+        if (!form.default_currency) throw new Error('Choose the currency this site prices in.')
+        await patchSettings({ default_currency: form.default_currency }, 'Currency saved')
+        break
+      }
       case 'analytics': await patchSettings({ google_analytics_measurement_id: form.google_analytics_measurement_id.trim() }, 'Google Analytics saved'); break
       case 'verification': await patchSettings({ google_site_verification: form.google_site_verification.trim() }, 'Search verification saved'); break
       case 'visibility': await patchSettings({ robots: searchIndexed.value ? 'index,follow' : 'noindex,nofollow' }, 'Search visibility saved'); break

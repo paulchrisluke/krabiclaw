@@ -50,7 +50,7 @@
       <BlawbyPageHero :title="heroTitle" :description="heroDescription" :variant="legalVariant" />
       <BlawbyShieldDivider :variant="legalVariant" />
       <section v-if="bodyBlocks.length" class="blawby-container mx-auto max-w-4xl bg-white py-8 text-gray-900" data-parity-section="legal-body">
-        <TenantPageRichTextBlock v-for="bodyBlock in bodyBlocks" :key="bodyBlock.id" :block="bodyBlock" :page-title="page.title" />
+        <TenantPageRichTextBlock v-for="bodyBlock in bodyBlocks" :key="bodyBlock.id" :block="bodyBlock" />
       </section>
       <BlawbyFaqSection v-if="faqs.length" :items="faqs" :decoration-url="faqDecoration" />
       <BlawbyConsultationCta v-if="ctaBlock && ctaProps.title && ctaProps.label && ctaProps.destination" v-bind="ctaProps" />

@@ -33,7 +33,8 @@ function oauthMetadataBaseURL(baseURL: string) {
 test.describe('OAuth discovery endpoints', () => {
   test('the Kikuzuki publisher can exchange its loopback PKCE code for tenant access @smoke', async ({ request, baseURL }) => {
     await loginAs(request, baseURL!, 'user-e2e-kikuzuki-owner')
-    const clientId = `${baseURL}/oauth-clients/client-localization.json`
+    expect(process.env.MCP_CIMD_CLIENT_URL, 'MCP_CIMD_CLIENT_URL must name a public HTTPS metadata document').toBeTruthy()
+    const clientId = new URL('/oauth-clients/client-localization.json', process.env.MCP_CIMD_CLIENT_URL!).toString()
     const metadata = await request.get(clientId)
     expect(metadata.status()).toBe(200)
     expect(metadata.headers()['content-type']).toContain('application/json')
@@ -124,7 +125,8 @@ test.describe('OAuth discovery endpoints', () => {
   test('public CIMD exchanges codes once, rotates refresh grants and reuses remembered consent', async ({ request, baseURL }) => {
     await loginAs(request, baseURL!, 'user-e2e-oauth-cimd')
 
-    const cimdClientId = process.env.MCP_CIMD_CLIENT_URL || `${baseURL}/api/auth/oauth2/test-client-metadata?nonce=${Date.now()}`
+    const cimdClientId = process.env.MCP_CIMD_CLIENT_URL!
+    expect(cimdClientId, 'MCP_CIMD_CLIENT_URL must name a public HTTPS metadata document').toBeTruthy()
     const redirectUri = new URL('/oauth/test-callback', cimdClientId).toString()
     const verifier = 'krabiclaw-public-cimd-e2e-verifier-0123456789'
     const authorizeParams = {
@@ -251,7 +253,8 @@ test.describe('OAuth discovery endpoints', () => {
   test('requesting the email scope makes email and email_verified available through UserInfo', async ({ request, baseURL }) => {
     await loginAs(request, baseURL!, 'user-e2e-oauth-cimd')
 
-    const cimdClientId = `${baseURL}/api/auth/oauth2/test-client-metadata?nonce=${Date.now()}-email-scope`
+    const cimdClientId = process.env.MCP_CIMD_CLIENT_URL!
+    expect(cimdClientId, 'MCP_CIMD_CLIENT_URL must name a public HTTPS metadata document').toBeTruthy()
     const redirectUri = new URL('/oauth/test-callback', cimdClientId).toString()
     const verifier = 'krabiclaw-email-scope-e2e-verifier-0123456789'
     const authorizeParams = {
@@ -308,10 +311,10 @@ test.describe('OAuth discovery endpoints', () => {
   })
 
   test('CIMD uses its declared private_key_jwt method and rejects assertion replay', async ({ request, baseURL }) => {
-    test.skip(new URL(baseURL!).protocol !== 'https:', 'CIMD requires an HTTPS client metadata and JWKS URI')
     await loginAs(request, baseURL!, 'user-e2e-oauth-private-cimd')
 
-    const clientId = process.env.MCP_PRIVATE_CIMD_CLIENT_URL || `${baseURL}/api/auth/oauth2/test-private-client-metadata?nonce=${Date.now()}`
+    const clientId = process.env.MCP_PRIVATE_CIMD_CLIENT_URL!
+    expect(clientId, 'MCP_PRIVATE_CIMD_CLIENT_URL must name a public HTTPS metadata document').toBeTruthy()
     const redirectUri = new URL('/oauth/test-callback', clientId).toString()
     const verifier = 'krabiclaw-private-cimd-e2e-verifier-0123456789'
     const authorizeParams = {
