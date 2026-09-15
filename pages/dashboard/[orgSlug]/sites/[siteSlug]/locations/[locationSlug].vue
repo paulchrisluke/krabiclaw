@@ -94,8 +94,7 @@ import { parseCmsFeatureOverrideDelta, resolveCmsCapabilities, type ProductFeatu
 import { resolvePublicTemplate } from '~/utils/template-registry'
 import { getTodayHoursLabel, type OpeningHours } from '~/shared/reservation-hours'
 import { normalizeVertical, type SiteVertical } from '~/utils/vertical-copy'
-import { presentationForProducts } from '~/utils/product-presentation'
-import type { Product } from '~/server/types/products'
+import { presentationForCatalog } from '~/utils/product-presentation'
 
 definePageMeta({ layout: 'dashboard', ownsChrome: true })
 
@@ -122,7 +121,7 @@ interface LocationContentCounts {
 }
 interface LocationOverviewResource {
   location: { success: boolean; location: LocationOverview }
-  products: { success: boolean; products: ApiRecord[] }
+  catalog: { total: number; allExperiences: boolean }
   threads: { summary: InboxSummary }
   counts: LocationContentCounts
 }
@@ -157,7 +156,7 @@ const hasDetail = computed(() => frame.mode.value === 'pair')
 const activeSection = computed(() => sectionSegment.value || null)
 
 const location = ref<LocationOverview | null>(null)
-const products = ref<ApiRecord[]>([])
+const catalog = ref<{ total: number; allExperiences: boolean }>({ total: 0, allExperiences: false })
 const inboxSummary = ref<InboxSummary>({ openThreads: 0, unreadThreads: 0 })
 const counts = ref<LocationContentCounts>({ photos: 0, posts: 0, qa: 0, upcomingReservations: 0 })
 const error = ref<string | null>(null)
@@ -193,15 +192,15 @@ const currentOpeningState = computed(() => {
 
 // What this branch's catalogue is called: a studio's classes are experiences,
 // a restaurant's dishes are its menu. The count speaks the same word.
-const catalogWords = computed(() => presentationForProducts(
+const catalogWords = computed(() => presentationForCatalog(
   dashboard.site.value?.vertical,
-  products.value.map(row => ({ booking: (row.booking ?? null) as Product['booking'] })),
+  catalog.value.allExperiences,
 ))
 
 // Plurals are the presentation's own ("Dish" → "Dishes"); appending an "s" is
 // how "dishs" reaches a merchant's screen.
 const catalogSummary = computed(() => {
-  const total = products.value.length
+  const total = catalog.value.total
   const words = catalogWords.value
   if (!total) return `Add your first ${words.itemLabel.toLowerCase()}`
   return `${total} ${(total === 1 ? words.itemLabel : words.itemLabelPlural).toLowerCase()}`
@@ -214,7 +213,13 @@ function countSummary(total: number, noun: string, empty: string): string {
 
 const contentGroups = computed(() => {
   const items = [
-    { id: 'products', label: catalogWords.value.collectionLabel, summary: catalogSummary.value, to: `${locationPath.value}/products`, visible: hasFeature('products') },
+    // Built only when this site carries a catalogue at all. A vertical with no
+    // product presentation (a law firm's `service`) has no word for one, and
+    // asking for it threw — which is why every location of such a site rendered
+    // a 500 instead of its hub.
+    ...(hasFeature('products')
+      ? [{ id: 'products', label: catalogWords.value.collectionLabel, summary: catalogSummary.value, to: `${locationPath.value}/products`, visible: true }]
+      : []),
     { id: 'photos', label: 'Photos', summary: countSummary(counts.value.photos, 'photo', 'Add photos'), to: `${locationPath.value}/photos`, visible: hasFeature('photos') },
     { id: 'posts', label: 'Posts', summary: countSummary(counts.value.posts, 'published post', 'Write your first post'), to: `${locationPath.value}/posts`, visible: hasFeature('posts') },
     { id: 'qa', label: 'Q&A', summary: countSummary(counts.value.qa, 'question', 'Answer your first question'), to: `${locationPath.value}/qa`, visible: hasFeature('qa') },
@@ -240,7 +245,7 @@ const detailTitle = computed(() => {
 const isOverviewResponse = (value: unknown): value is LocationOverviewResource =>
   isRecord(value)
   && isRecord(value.location) && isRecord(value.location.location)
-  && isRecord(value.products) && Array.isArray(value.products.products)
+  && isRecord(value.catalog) && typeof value.catalog.total === 'number' && typeof value.catalog.allExperiences === 'boolean'
   && isRecord(value.threads) && isRecord(value.threads.summary)
   && isRecord(value.counts) && typeof value.counts.photos === 'number'
 
@@ -261,10 +266,10 @@ const { data: overview, pending: overviewPending, error: overviewError, refresh 
   )
 }, {
   lazy: import.meta.client,
-  // The location's own overview — its profile, its products, its inbox summary
-  // and its content counts — is what this panel draws. Opening the location's
-  // settings or inbox, or a level below that owns both columns, replaces the
-  // panel entirely, and on the largest site here the products alone are 665 KB.
+  // The location's own overview — its profile, its catalogue summary, its
+  // inbox summary and its content counts — is what this panel draws. Opening
+  // the location's settings or inbox, or a level below that owns both columns,
+  // replaces the panel entirely.
   immediate: !panelHidden.value,
 })
 
@@ -286,7 +291,7 @@ watch([overview, overviewError], ([resource, cause]) => {
   }
   if (!resource) return
   location.value = resource.location.location
-  products.value = resource.products.products
+  catalog.value = resource.catalog
   inboxSummary.value = resource.threads.summary
   counts.value = resource.counts
   error.value = null

@@ -19,7 +19,7 @@ import { getNotificationsSettings } from '~/server/utils/mcp-workflows'
 import { getFacebookPagesConnection } from '~/server/utils/facebook-pages'
 import { resolveLocationCapabilitySummary } from '~/server/utils/location-management'
 import { parseLocationPayload } from '~/server/utils/location-payload'
-import { getProduct, hydrateProductMedia, listLocationProducts } from '~/server/utils/product-management'
+import { getProduct, hydrateProductMedia, listLocationProducts, summarizeLocationProducts } from '~/server/utils/product-management'
 import { listDashboardGuestThreadsForPrincipal } from '~/server/utils/dashboard-guest-threads'
 import { requireBlogAccess } from '~/server/utils/blog-access'
 import { requireTenantPageWriteAccess } from '~/server/utils/tenant-pages-api'
@@ -294,7 +294,7 @@ export async function loadDashboardLocationOverview(
     siteId,
   }
   await assertLocationAccess(db, { ...principal, locationId })
-  const [capabilities, products, threads, counts] = await Promise.all([
+  const [capabilities, catalog, threads, counts] = await Promise.all([
     resolveLocationCapabilitySummary(
       db,
       organization.id,
@@ -302,8 +302,8 @@ export async function loadDashboardLocationOverview(
       location.feature_overrides as string | null ?? null,
     ),
     options.includeProducts
-      ? listLocationProducts(db, { organizationId: organization.id, locationId })
-      : Promise.resolve([]),
+      ? summarizeLocationProducts(db, { organizationId: organization.id, locationId })
+      : Promise.resolve({ total: 0, allExperiences: false }),
     // The principal is resolved and assertLocationAccess has just run for this
     // exact location. Handing the event over instead would re-read the session,
     // the site row and the member row, and assert the same thing again.
@@ -316,7 +316,7 @@ export async function loadDashboardLocationOverview(
       location: parseLocationPayload(location)!,
       ...capabilities,
     },
-    products: { success: true as const, products },
+    catalog,
     threads: { summary: threads.summary },
     counts,
   }
