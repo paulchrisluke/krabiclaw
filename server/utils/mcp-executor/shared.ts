@@ -15,8 +15,6 @@ import {
 import { sniffMediaMimeType, VIDEO_MIME_TYPES, MAX_VIDEO_BYTES, R2_IMAGE_MIME_TYPES } from "~/server/utils/media-mime";
 import { assertMarkdownSize, decodeMarkdownText, resolveMarkdownMimeType } from "~/server/utils/markdown-document";
 import { hasCloudflareImagesConfig } from "~/server/utils/cloudflare-images";
-import { parseMediaPlacementKey } from '~/server/utils/media-placement'
-import { isSingleMediaPlacement } from '~/shared/media-placement-contract'
 import { findOrganizationById } from '~/server/utils/member-access'
 
 /**
@@ -120,60 +118,6 @@ export async function requireActiveImageAsset(
     );
   }
   return asset;
-}
-
-export interface GeneratedImagePickerConfig {
-  title: string;
-  subtitle: string | null;
-  useLabel: string | null;
-  regenerateLabel: string | null;
-  assignTool: string | null;
-  assignArgs: Record<string, unknown> | null;
-  regenerateTool: string | null;
-  regenerateArgs: Record<string, unknown> | null;
-  successMessage: string | null;
-}
-
-export function pickerConfigFromShowGeneratedImages(
-  rawArguments: Record<string, unknown>,
-  siteName?: string | null,
-): GeneratedImagePickerConfig {
-  const title = optionalString(rawArguments, "title");
-  const subtitle = optionalString(rawArguments, "subtitle");
-  const useLabel = optionalString(rawArguments, "use_label");
-  const regenerateLabel = optionalString(rawArguments, "regenerate_label");
-  const successMessage = optionalString(rawArguments, "success_message");
-  if (!rawArguments.placement) {
-    return {
-      title: title ?? "Generated Images",
-      subtitle,
-      useLabel,
-      regenerateLabel,
-      assignTool: null,
-      assignArgs: null,
-      regenerateTool: null,
-      regenerateArgs: null,
-      successMessage,
-    };
-  }
-
-  const placement = parseMediaPlacementKey(rawArguments.placement)
-  const siteId = requiredString(rawArguments, 'site_id')
-  const forSite = siteName ? ` for ${siteName}` : ''
-  const single = isSingleMediaPlacement(placement)
-  return {
-    title: title ?? 'Generated Images',
-    subtitle,
-    useLabel: useLabel ?? `Use this image${forSite}`,
-    regenerateLabel,
-    assignTool: single ? 'set_media' : 'attach_media',
-    assignArgs: single
-      ? { site_id: siteId, placement, asset_id: null }
-      : { site_id: siteId, placement, asset_id: '' },
-    regenerateTool: null,
-    regenerateArgs: null,
-    successMessage: successMessage ?? `Media updated${forSite}.`,
-  };
 }
 
 export async function requireActiveVideoAsset(

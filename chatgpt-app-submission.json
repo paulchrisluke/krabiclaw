@@ -764,18 +764,6 @@
         "destructive_justification": "Overwrites the authenticated user selected workspace site or location. Existing state is deleted, replaced or overwritten rather than only appended."
       }
     },
-    "show_generated_images": {
-      "annotations": {
-        "readOnlyHint": true,
-        "openWorldHint": false,
-        "destructiveHint": false
-      },
-      "justifications": {
-        "read_only_justification": "Formats supplied image references for display without saving or generating images.",
-        "open_world_justification": "Formats supplied image references for display without saving or generating images. It does not publish content or write to an external service.",
-        "destructive_justification": "Formats supplied image references for display without saving or generating images. Existing content is not deleted or overwritten."
-      }
-    },
     "update_blog_metadata": {
       "annotations": {
         "readOnlyHint": false,
