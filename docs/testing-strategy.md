@@ -96,7 +96,14 @@ to preserve a number.
 
 Preview runs are serialized across workflow runs because preview is one mutable
 D1 environment and a run resets it. That serialization is infrastructure
-correctness, not test bookkeeping.
+correctness, not test bookkeeping — and its identity is a pattern that matches
+every job that has ever held the lock, not the current job's display name, so
+renaming the job cannot let two runs reset preview at once. Within one run the
+suite uses two workers; the lock is between runs.
+
+A push straight to `staging` runs the same smoke suite on the disposable
+preview before staging deploys, so a hotfix cannot reach staging without it.
+Production then re-reads that exact staging commit's checks before deploying.
 
 Staging and production remain read-only. After staging deploys, CI runs the
 read-only MCP smoke and tenant rendering/navigation against staging itself.

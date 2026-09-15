@@ -23,13 +23,22 @@ test.describe('stateless MCP server', () => {
     expect(toolNames).not.toContain('get_site_domains')
     expect(toolNames).not.toContain('reply_to_review')
 
+    // isError alone is not proof of a denial: the tool body answers "review not
+    // found" with isError too, so a regressed role guard that let the editor
+    // reach the implementation would still look green. requireMcpSite refuses
+    // below the tool's minimumRole with 403 'Insufficient permissions', and
+    // that is the string this contract is about.
     const editorReply = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
       toolName: 'reply_to_review',
       args: { site_id: siteId, review_id: 'missing-review-id', reply: 'editor should fail' },
     })
     expect(editorReply.status()).toBe(200)
-    expect((await editorReply.json()).result?.isError).toBe(true)
+    const editorReplyBody = await editorReply.json() as {
+      result?: { isError?: boolean; content?: Array<{ text?: string }> }
+    }
+    expect(editorReplyBody.result?.isError).toBe(true)
+    expect(editorReplyBody.result?.content?.[0]?.text).toBe('Insufficient permissions')
   })
 
   test('a site the principal cannot reach yields no tools and no writes', async ({ request, baseURL }) => {

@@ -1,12 +1,13 @@
 name: CI
 
 # Launch hold and required work: https://github.com/paulchrisluke/krabiclaw/pull/864#issuecomment-5572050864
-# Drafts are implementation batches; ready_for_review starts qualification.
+# Drafts are implementation batches: they run Checks, and ready_for_review
+# starts the preview qualification.
 
 on:
   pull_request:
     branches: [main, staging]
-    types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
+    types: [opened, synchronize, reopened, ready_for_review]
   push:
     branches: [main, staging]
 
@@ -20,10 +21,13 @@ concurrency:
 jobs:
   typecheck:
     name: Checks
+    # Drafts run Checks. Skipping every job for a draft push produced a second
+    # workflow run on the same head SHA with nothing in it, and a run that
+    # completes in zero seconds cannot be cancelled by the ready_for_review run
+    # that follows it. Only the preview qualification below waits for ready.
     if: >-
       github.event_name == 'push'
-      || (github.event.pull_request.draft == false
-          && !(github.base_ref == 'main' && github.head_ref == 'staging'))
+      || !(github.base_ref == 'main' && github.head_ref == 'staging')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -55,10 +59,11 @@ jobs:
   preview-build:
     name: Build preview Worker
     if: >-
-      github.event_name == 'pull_request'
-      && github.event.pull_request.draft == false
-      && github.event.pull_request.head.repo.full_name == github.repository
-      && !(github.base_ref == 'main' && github.head_ref == 'staging')
+      (github.event_name == 'pull_request'
+        && github.event.pull_request.draft == false
+        && github.event.pull_request.head.repo.full_name == github.repository
+        && !(github.base_ref == 'main' && github.head_ref == 'staging'))
+      || (github.event_name == 'push' && github.ref == 'refs/heads/staging')
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
@@ -96,10 +101,11 @@ jobs:
   e2e-preview-smoke:
     name: Preview smoke
     if: >-
-      github.event_name == 'pull_request'
-      && github.event.pull_request.draft == false
-      && github.event.pull_request.head.repo.full_name == github.repository
-      && !(github.base_ref == 'main' && github.head_ref == 'staging')
+      (github.event_name == 'pull_request'
+        && github.event.pull_request.draft == false
+        && github.event.pull_request.head.repo.full_name == github.repository
+        && !(github.base_ref == 'main' && github.head_ref == 'staging'))
+      || (github.event_name == 'push' && github.ref == 'refs/heads/staging')
     needs: [typecheck, preview-build]
     runs-on: ubuntu-latest
     timeout-minutes: 60
@@ -140,11 +146,25 @@ jobs:
       # A job that has not started yet is not waited on: when it starts it sees
       # this one in progress and waits here instead. Equal start times, which
       # the API reports at second resolution, fall back to run id.
+      #
+      # The lock's identity is PREVIEW_HOLDER_PATTERN, not this job's display
+      # name. A run already in flight on the previous workflow still calls its
+      # preview job "E2E representative tests (preview only)"; if the queue
+      # matched only the current name, the two could not see each other and
+      # both would reset preview D1 at once. Renaming the job again means
+      # adding the new name to this pattern and keeping the old one until
+      # nothing is left running it.
       - name: Wait for the shared preview deployment
         env:
           GH_TOKEN: ${{ github.token }}
           RUN_ID: ${{ github.run_id }}
           JOB_NAME: Preview smoke
+          PREVIEW_HOLDER_PATTERN: "^(Preview smoke$|E2E representative tests)"
+          # Each holder occupies preview for roughly six minutes. This covers a
+          # deep queue and still leaves room inside the job's timeout-minutes
+          # for the work itself, so the deadline below is reachable rather than
+          # being pre-empted by the runner.
+          QUEUE_DEADLINE_MINUTES: "45"
         run: |
           set -euo pipefail
           # --paginate or a busy repository silently truncates at 100 and the
@@ -157,7 +177,7 @@ jobs:
             exit 1
           fi
           echo "This job started at ${mine}."
-          deadline=$((SECONDS + 100 * 60))
+          deadline=$((SECONDS + QUEUE_DEADLINE_MINUTES * 60))
           while :; do
             busy=""
             for run_status in queued in_progress waiting pending requested; do
@@ -165,7 +185,7 @@ jobs:
                 --jq ".workflow_runs[] | select(.name == \"${GITHUB_WORKFLOW}\" and .id != ${RUN_ID}) | .id")
               for id in $others; do
                 ahead=$(gh api --paginate "repos/${GITHUB_REPOSITORY}/actions/runs/${id}/jobs?per_page=100" \
-                  --jq "[.jobs[] | select(.name == \"${JOB_NAME}\" and .status != \"completed\" and .started_at != null)]
+                  --jq "[.jobs[] | select((.name | test(\"${PREVIEW_HOLDER_PATTERN}\")) and .status != \"completed\" and .started_at != null)]
                         | map(select(.started_at < \"${mine}\" or (.started_at == \"${mine}\" and ${id} < ${RUN_ID})))
                         | if length == 0 then empty else .[0].started_at end" | head -n 1)
                 if [ -n "$ahead" ]; then
@@ -178,7 +198,7 @@ jobs:
               break
             fi
             if [ "$SECONDS" -ge "$deadline" ]; then
-              echo "::error::Gave up after 100 minutes waiting on runs ahead of this one:${busy}"
+              echo "::error::Gave up after ${QUEUE_DEADLINE_MINUTES} minutes waiting on runs ahead of this one:${busy}"
               exit 1
             fi
             echo "Waiting on runs ahead of this one:${busy}"
@@ -259,7 +279,10 @@ jobs:
   e2e-staging:
     name: Deploy and test staging
     if: github.event_name == 'push' && github.ref == 'refs/heads/staging'
-    needs: typecheck
+    # The same seven preview cases gate the exact staging SHA. A direct push to
+    # staging is the normal way a hotfix ships, and nothing else would have run
+    # them on that commit.
+    needs: [typecheck, e2e-preview-smoke]
     runs-on: ubuntu-latest
     timeout-minutes: 90
     environment: staging
@@ -356,10 +379,60 @@ jobs:
           retention-days: 14
           if-no-files-found: ignore
 
+  staging-qualified:
+    name: Staging candidate qualified
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      checks: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      # Nothing in this repository's settings requires staging to be green
+      # before main deploys: there is no branch protection and no ruleset. This
+      # job is that requirement, expressed as a dependency rather than as a
+      # setting nobody can see from the tree.
+      #
+      # One read of one commit's check runs. It does not wait for anything: by
+      # the time main has the commit, staging has either qualified it or not.
+      - name: Require the staging candidate's checks to be green
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REQUIRED: |
+            Checks
+            Preview smoke
+            Deploy and test staging
+        run: |
+          set -euo pipefail
+          # staging reaches main as a merge commit, so the candidate is the
+          # second parent. A fast-forward has one parent and is its own
+          # candidate.
+          candidate=$(git rev-parse "HEAD^2" 2>/dev/null || git rev-parse HEAD)
+          echo "Staging candidate: ${candidate}"
+          runs=$(gh api --paginate "repos/${GITHUB_REPOSITORY}/commits/${candidate}/check-runs?per_page=100" \
+            --jq '.check_runs[] | "\(.name)=\(.conclusion // "pending")"' | sort -u)
+          echo "${runs}"
+          missing=""
+          while IFS= read -r name; do
+            [ -n "$name" ] || continue
+            if ! printf '%s\n' "${runs}" | grep -qxF "${name}=success"; then
+              missing="${missing} '${name}'"
+            fi
+          done <<< "$REQUIRED"
+          if [ -n "$missing" ]; then
+            echo "::error::Staging candidate ${candidate} has no successful:${missing}. Production deploys the exact commit staging qualified."
+            exit 1
+          fi
+          echo "Staging candidate ${candidate} is qualified."
+
   deploy-production:
     name: Deploy production
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: typecheck
+    needs: [typecheck, staging-qualified]
     runs-on: ubuntu-latest
     timeout-minutes: 45
     environment: production

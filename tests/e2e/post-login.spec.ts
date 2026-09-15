@@ -85,16 +85,22 @@ test('public auth CTAs reflect the SSR session @smoke', async ({ page, baseURL }
     await page.goto(path)
     await expect(page).toHaveURL(/\/dashboard\/onboarding$/)
   }
+  // Narrow, while still signed in. Only the signed-out `Sign in` text link
+  // gives way below 620px; the account control stays at every width. This has
+  // to run before the switch-account flow below, which signs the session out.
+  await page.setViewportSize({ width: 390, height: 900 })
+  await page.goto('/docs')
+  await expect(page.locator('header').first().getByLabel(`Account: ${session.user.name}`).first()).toBeVisible()
+  await expect(page.locator('a[href^="/signup"]')).toHaveCount(0)
+  await page.setViewportSize({ width: 1280, height: 900 })
+
+  // "Sign in with a different account" signs the current session out, so this
+  // is the last thing the journey does.
   await page.goto('/oauth/login')
   await expect(page.getByRole('button', { name: /^Continue as / })).toBeVisible()
   await page.getByRole('button', { name: 'Sign in with a different account', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Sign in to connect', exact: true })).toBeVisible()
   await expect(page).toHaveURL(/\/oauth\/login$/)
-
-  await page.setViewportSize({ width: 390, height: 900 })
-  await page.goto('/docs')
-  await expect(page.locator('header').first().getByLabel(`Account: ${session.user.name}`).first()).toBeVisible()
-  await expect(page.locator('a[href^="/signup"]')).toHaveCount(0)
 })
 
 test('invitation account switching updates the reactive session without reloading', async ({ page, baseURL }) => {
