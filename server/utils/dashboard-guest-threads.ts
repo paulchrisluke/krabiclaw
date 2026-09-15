@@ -1,4 +1,5 @@
 import { getGuestRequest } from '~/server/domain/requests'
+import type { DbClient } from '~/server/db'
 import { HTTPError, type H3Event } from 'nitro'
 import { getGuestThreadDetail } from '~/server/domain/guest-threads/detail'
 import {
@@ -29,33 +30,25 @@ export interface OrganizationGuestThreadListQuery extends DashboardGuestThreadLi
   siteId?: string | null
 }
 
-export async function loadDashboardGuestThreads(
-  event: H3Event,
+/**
+ * The thread list for a caller whose access is already resolved.
+ *
+ * `loadDashboardGuestThreads` below is this with the resolution in front of it,
+ * for a request that arrives with nothing. A caller that has already resolved
+ * the principal and asserted the same scope — the location overview does both —
+ * uses this instead of handing over its event and paying for the whole chain a
+ * second time.
+ */
+export async function listDashboardGuestThreadsForPrincipal(
+  db: DbClient,
   siteId: string,
-  query: DashboardGuestThreadListQuery,
+  input: { principal: MemberAccessPrincipal; userId: string; query: DashboardGuestThreadListQuery },
 ) {
-  const { env, db, session, site } = await requireSiteAccess(event, siteId, 'context')
-  if (query.locationId) {
-    await assertMemberScope(db, {
-      env,
-      memberId: site.member_id,
-      role: site.member_role,
-      organizationId: site.organization_id,
-      siteId,
-      locationId: query.locationId,
-    })
-  }
-  const principal = {
-    env,
-    memberId: site.member_id,
-    role: site.member_role,
-    organizationId: site.organization_id,
-    siteId,
-  }
+  const { principal, userId, query } = input
   const options = {
     locationId: query.locationId ?? null,
     principal,
-    userId: session.user.id,
+    userId,
     search: query.search ?? null,
     type: query.type ?? null,
     conversationState: query.conversationState ?? null,
@@ -66,6 +59,25 @@ export async function loadDashboardGuestThreads(
     getGuestThreadOperationSummary(db, siteId, options),
   ])
   return { threads, summary }
+}
+
+export async function loadDashboardGuestThreads(
+  event: H3Event,
+  siteId: string,
+  query: DashboardGuestThreadListQuery,
+) {
+  const { env, db, session, site } = await requireSiteAccess(event, siteId, 'context')
+  const principal = {
+    env,
+    memberId: site.member_id,
+    role: site.member_role,
+    organizationId: site.organization_id,
+    siteId,
+  }
+  if (query.locationId) {
+    await assertMemberScope(db, { ...principal, locationId: query.locationId })
+  }
+  return listDashboardGuestThreadsForPrincipal(db, siteId, { principal, userId: session.user.id, query })
 }
 
 export async function loadDashboardGuestThread(

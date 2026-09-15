@@ -8,7 +8,6 @@ import { requireLocationAccess, requireSiteAccess } from '~/server/utils/locatio
 import {
   assertLocationAccess,
   assertResourceAccess,
-  assertSiteContextAccess,
   assertSiteWideAccess,
   listAccessibleLocationIds,
 } from '~/server/utils/member-access'
@@ -21,7 +20,7 @@ import { getFacebookPagesConnection } from '~/server/utils/facebook-pages'
 import { resolveLocationCapabilitySummary } from '~/server/utils/location-management'
 import { parseLocationPayload } from '~/server/utils/location-payload'
 import { getProduct, listLocationProducts } from '~/server/utils/product-management'
-import { loadDashboardGuestThreads } from '~/server/utils/dashboard-guest-threads'
+import { listDashboardGuestThreadsForPrincipal } from '~/server/utils/dashboard-guest-threads'
 import { requireBlogAccess } from '~/server/utils/blog-access'
 import { requireTenantPageWriteAccess } from '~/server/utils/tenant-pages-api'
 import { getTenantPageById, listTenantPages } from '~/server/utils/content/pages'
@@ -52,7 +51,9 @@ export async function loadDashboardEditorContext(event: H3Event, siteId: string)
     organizationId: site.organization_id,
     siteId,
   }
-  await assertSiteContextAccess(db, principal)
+  // requireSiteAccess(event, siteId, 'context') has already run
+  // assertSiteContextAccess with this exact principal (location-access.ts), so
+  // asserting it again here only bought a second read of the same member row.
   const accessibleLocationIds = await listAccessibleLocationIds(db, principal)
   const [locationRows, entitlements] = await Promise.all([
     queryAll<EditorLocationRow>(db, `
@@ -281,18 +282,18 @@ export async function loadDashboardLocationOverview(
   locationId: string,
   options: { includeProducts: boolean },
 ) {
-  const { env, db, organization, location } = await getDashboardLocationContext(event, locationId)
+  const { env, db, organization, location, userId } = await getDashboardLocationContext(event, locationId)
   if (location.site_id !== siteId) {
     throw new HTTPError({ statusCode: 404, statusMessage: 'Location not found' })
   }
-  await assertLocationAccess(db, {
+  const principal = {
     env,
     memberId: organization.memberId,
     role: organization.role,
     organizationId: organization.id,
     siteId,
-    locationId,
-  })
+  }
+  await assertLocationAccess(db, { ...principal, locationId })
   const [capabilities, products, threads, counts] = await Promise.all([
     resolveLocationCapabilitySummary(
       db,
@@ -303,7 +304,10 @@ export async function loadDashboardLocationOverview(
     options.includeProducts
       ? listLocationProducts(db, { organizationId: organization.id, locationId })
       : Promise.resolve([]),
-    loadDashboardGuestThreads(event, siteId, { locationId }),
+    // The principal is resolved and assertLocationAccess has just run for this
+    // exact location. Handing the event over instead would re-read the session,
+    // the site row and the member row, and assert the same thing again.
+    listDashboardGuestThreadsForPrincipal(db, siteId, { principal, userId, query: { locationId } }),
     loadLocationContentCounts(db, siteId, locationId),
   ])
   return {
