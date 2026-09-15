@@ -126,6 +126,13 @@ for (const page of source.pages) {
   // seed's rather than added to whatever a previous run left.
   const scope = `page_path=${encodeURIComponent(page.path)}`
   const existingQa = await call<{ qa?: Array<{ id: string }> }>('GET', `/api/editor/sites/${SITE_ID}/qa?${scope}`)
+  // A failed read cannot be treated as "no records": replacing against it would
+  // add the seed's questions on top of whatever is already there.
+  if (existingQa.status !== 200) {
+    console.error(`  qa list FAILED ${page.path} ${existingQa.status} ${JSON.stringify(existingQa.body)}`)
+    failed = true
+    continue
+  }
   for (const record of existingQa.body?.qa ?? []) {
     const removed = await call('DELETE', `/api/editor/sites/${SITE_ID}/qa/${record.id}?${scope}`)
     if (removed.status >= 300) { console.error(`  qa delete FAILED ${record.id} ${removed.status}`); failed = true }

@@ -498,7 +498,9 @@ export async function listTenantPages(db: DbClient, siteId: string, opts: { loca
   ].join('\n'), [siteId, locale])
   // Whether each page may be removed is decided here, by the same rule
   // deleteTenantPage enforces, so the list and the endpoint cannot disagree and
-  // the dashboard never offers a remove control the server would refuse.
+  // the dashboard never offers a remove control the server would refuse. The
+  // template guarantee binds the source row only: removing a translation leaves
+  // the page standing, so a template-rendered path still has its document.
   const { template } = await loadSiteTemplate(db, siteId)
   return rows.map(row => ({
     id: row.id,
@@ -510,7 +512,7 @@ export async function listTenantPages(db: DbClient, siteId: string, opts: { loca
     recipe: row.recipe,
     sort_order: row.sort_order,
     updated_at: row.updated_at,
-    removable: !templateRendersPageDocumentAt(template, row.path),
+    removable: row.id !== row.page_id || !templateRendersPageDocumentAt(template, row.path),
   }))
 }
 
@@ -993,7 +995,9 @@ export async function deleteTenantPage(db: DbClient, variantId: string, input: {
     if (templateRendersPageDocumentAt(template, row.path)) {
       badRequest(`The ${template.slug} template renders a page document at ${row.path}, so the route would have nothing to render`)
     }
-    // A page another page links to cannot simply go. `page_grid` renders its
+    // A page another page links to cannot simply go. Its own translations are
+    // not other pages: they go with it, so a link from one of them is not a
+    // reason to refuse. `page_grid` renders its
     // cards from the referenced documents, and a reference to a page that is
     // gone is a 500 on the referring page, by design -- "the editor chose it
     // and needs to know" (server/utils/public-tenant-pages.ts). So the editor
@@ -1003,7 +1007,7 @@ export async function deleteTenantPage(db: DbClient, variantId: string, input: {
         FROM content_blocks b
         JOIN content_documents d ON d.id = b.document_id
         JOIN json_each(b.data_json, '$.page_ids') ref
-       WHERE b.type = 'page_grid' AND d.site_id = ? AND d.id <> ? AND ref.value = ?
+       WHERE b.type = 'page_grid' AND d.site_id = ? AND COALESCE(d.root_id, d.id) <> ? AND ref.value = ?
        ORDER BY d.path
     `, [row.site_id, row.id, row.id])
     if (referrers.length > 0) {
