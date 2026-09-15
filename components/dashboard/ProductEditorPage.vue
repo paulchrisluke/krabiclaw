@@ -389,6 +389,11 @@ const isOne = (value: unknown): value is { success: true, product: Product } =>
 
 const collection = computed(() => collections.value.find(row => row.id === collectionId.value) ?? null)
 
+// What the last successful (or in-flight) load was for. locationId resolves
+// after mount on a cold navigation, so onMounted and the watcher below both
+// fire for the same product; this loads it once.
+let loadedKey = ''
+
 async function load() {
   const id = locationId.value
   if (!id || isNew.value) {
@@ -397,20 +402,22 @@ async function load() {
     definitions.value = (await dashboardApi(`/api/editor/sites/${siteId}/metafield-definitions`, { validate: isDefinitionList })).definitions
     return
   }
+  const key = `${id}:${productId.value}`
+  if (key === loadedKey) return
+  loadedKey = key
   loadError.value = null
   try {
     const [collectionResponse, productResponse, definitionResponse] = await Promise.all([
       dashboardApi(`/api/editor/sites/${siteId}/collections?location_id=${encodeURIComponent(id)}`, { validate: isCollectionList }),
-      dashboardApi(`/api/editor/sites/${siteId}/locations/${id}/products`, { validate: isProductList }),
+      dashboardApi(`/api/editor/sites/${siteId}/locations/${encodeURIComponent(id)}/products/${encodeURIComponent(productId.value)}`, { validate: isOne }),
       dashboardApi(`/api/editor/sites/${siteId}/metafield-definitions`, { validate: isDefinitionList }),
     ])
     collections.value = collectionResponse.collections
     definitions.value = definitionResponse.definitions
-    const found = productResponse.products.find(row => row.id === productId.value)
-    if (!found) return showError(createError({ statusCode: 404, statusMessage: `${presentation.value.itemLabel} not found` }))
-    product.value = found
-    loadForm(found)
+    product.value = productResponse.product
+    loadForm(productResponse.product)
   } catch (error) {
+    loadedKey = ''
     if (isNotFoundError(error)) return showError(createError({ statusCode: 404, statusMessage: `${presentation.value.itemLabel} not found` }))
     loadError.value = getErrorMessage(error, `Failed to load this ${presentation.value.itemLabel.toLowerCase()}`)
   }

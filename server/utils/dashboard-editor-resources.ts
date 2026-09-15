@@ -19,7 +19,7 @@ import { getNotificationsSettings } from '~/server/utils/mcp-workflows'
 import { getFacebookPagesConnection } from '~/server/utils/facebook-pages'
 import { resolveLocationCapabilitySummary } from '~/server/utils/location-management'
 import { parseLocationPayload } from '~/server/utils/location-payload'
-import { getProduct, listLocationProducts } from '~/server/utils/product-management'
+import { getProduct, hydrateProductMedia, listLocationProducts } from '~/server/utils/product-management'
 import { listDashboardGuestThreadsForPrincipal } from '~/server/utils/dashboard-guest-threads'
 import { requireBlogAccess } from '~/server/utils/blog-access'
 import { requireTenantPageWriteAccess } from '~/server/utils/tenant-pages-api'
@@ -412,7 +412,11 @@ export async function loadDashboardProduct(
   if (!product.locations.some(entry => entry.location_id === locationId)) {
     throw new HTTPError({ statusCode: 404, statusMessage: 'Product not found at this location' })
   }
-  return { success: true as const, product }
+  // Media placements are site-scoped, and the editor shows the photograph the
+  // public page shows — the same hydration the location list does, so opening
+  // one product and listing them cannot disagree about its cover.
+  const [hydrated] = await hydrateProductMedia(db, siteId, [product])
+  return { success: true as const, product: hydrated! }
 }
 
 // Loads the location-owned Product collection directly for the editor's SSR render.
