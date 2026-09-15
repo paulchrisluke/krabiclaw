@@ -28,13 +28,14 @@ export interface PublicTemplateDefinition {
    * deleted two commits earlier, /order and /reservations were reserved against
    * routes that do read a document, and /blog differs per template.
    *
-   * `recipes` is the lookup the Blawby route loader performs; a null recipe
-   * renders from shell data and holds no document. `paths` are the documents a
-   * route binds by path alone. `prefixes` are subtrees served as documents.
-   * `catchAll` says whether pages/[...tenantPath].vue renders unclaimed paths
-   * for this template — it throws 404 for platform sites, so the platform
-   * template holds no tenant page at all until its own renderer reads
-   * documents (#903).
+   * `recipes` names the pages a template guarantees: the lookup a route loader
+   * performs, and the set whose deletion the writer refuses. `paths` are the
+   * documents a route still binds by path alone — only needed where a route
+   * file claims the path, because a claimed path is one the catch-all cannot
+   * reach. `prefixes` are subtrees served as documents. `catchAll` says whether
+   * pages/[...tenantPath].vue renders unclaimed paths for this template; every
+   * template sets it, KrabiClaw's own included, because KrabiClaw is a site row
+   * like any other (#903).
    */
   pageDocuments: {
     recipes: Record<string, string>
@@ -68,7 +69,7 @@ export const publicTemplateRegistry: Record<PublicTemplateSlug, PublicTemplateDe
     // a document stored at one of them would never be shown.
     pageDocuments: {
       recipes: { home: '/', about: '/about', contact: '/contact', order: '/order', reservations: '/reservations' },
-      paths: ['/legal', '/restaurants'],
+      paths: [],
       prefixes: [],
       catchAll: true,
     },
@@ -101,7 +102,7 @@ export const publicTemplateRegistry: Record<PublicTemplateSlug, PublicTemplateDe
         privacy: '/policies/privacy', terms: '/policies/terms',
         'third-party-notices': '/third-party-notices',
       },
-      paths: ['/legal', '/restaurants'],
+      paths: [],
       prefixes: ['/services/'],
       catchAll: true,
     },
@@ -122,27 +123,29 @@ export const publicTemplateRegistry: Record<PublicTemplateSlug, PublicTemplateDe
       articlePathHasCategory: true,
     },
     sitemap: {
-      exactPaths: ['/', '/about', '/blog', '/docs', '/features', '/help', '/plugin', '/pricing', '/privacy', '/templates', '/templates/blawby', '/templates/saya', '/terms'],
+      // The editorial marketing routes are not listed here: they are published
+      // page documents now, and the platform sitemap reads them from
+      // content_documents (see server/plugins/sitemap.ts). What remains is the
+      // set of code-owned platform routes that hold no document.
+      exactPaths: ['/blog', '/docs', '/help', '/privacy', '/templates', '/templates/blawby', '/templates/saya', '/terms'],
       dynamicPrefixes: ['/blog/', '/docs/'],
     },
     nonIndexableExactPaths: [],
-    // KrabiClaw's own site still renders its marketing pages from components:
-    // these paths are claimed by route files, and those route files draw the
-    // platform surface. What the list changes is the write guard —
-    // templateAllowsPageDocumentAt now permits a page document at each of them,
-    // so the marketing content can be authored through the CMS and the MCP
-    // before the release that renders it (#903).
-    //
-    // Nothing renders these documents yet. The route files claim the paths, and
-    // the only readers of this list are the editor's path guard, the Pages
-    // list's `removable`, and the delete guard — none of them a render path.
-    // Authoring first is what keeps the marketing site from being empty for the
-    // length of a deploy.
+    // KrabiClaw's own marketing pages are ordinary page documents on the
+    // platform site, read by the same loader every customer site uses (#903).
+    // The routes that are not editorial — /blog, /docs, /help, /templates,
+    // /privacy, /terms — are absent on purpose: they render their own data or
+    // their own policy surface, and a document stored at one of them would
+    // never be shown.
     pageDocuments: {
-      recipes: {},
-      paths: ['/', '/about', '/experiences', '/features', '/legal', '/plugin', '/pricing', '/restaurants'],
+      recipes: { home: '/', about: '/about', pricing: '/pricing' },
+      // Only a path a route file still claims needs naming here. /experiences is
+      // the Saya catalog's route on a customer host and KrabiClaw's own page on
+      // this one. Everything else KrabiClaw publishes is an unclaimed path the
+      // catch-all serves, the same as any tenant's.
+      paths: ['/experiences'],
       prefixes: [],
-      catchAll: false,
+      catchAll: true,
     },
   },
 }

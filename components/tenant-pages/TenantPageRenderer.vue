@@ -1,7 +1,7 @@
 <template>
   <article
     data-tenant-page
-    :data-template="template"
+    data-template="saya"
     class="mx-auto max-w-7xl px-4 py-16 text-default sm:px-6 lg:px-8"
   >
     <section v-for="block in renderedBlocks" :key="block.id" :data-block-type="block.type" :data-parity-section="sectionKey(block)" class="tenant-page-block">
@@ -203,7 +203,7 @@ import type { PublicTenantPage } from '~/server/utils/public-tenant-pages'
 import type { TenantPageBlock } from '~/utils/tenant-page-blocks'
 import { getVerticalCopy } from '~/utils/vertical-copy'
 
-const props = defineProps<{ page: PublicTenantPage; template: 'saya' | 'platform' }>()
+const props = defineProps<{ page: PublicTenantPage }>()
 const sanitizer = useHtmlSanitizer()
 const { t, locale } = useI18n()
 const { site } = useTenantSite()

@@ -367,10 +367,6 @@ export default defineNuxtConfig({
       pathPrefix: false,
     },
     {
-      path: '~/lib/components/workspace/content',
-      pathPrefix: false,
-    },
-    {
       path: '~/lib/components/workspace/inbox',
       pathPrefix: false,
     },

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import { Miniflare } from 'miniflare'
-import { createPost, updatePost, publishPost, getPublishedPosts, getPublishedPostBySlug, listPosts, publishDuePosts } from '../../server/utils/post-management.ts'
+import { createPost, updatePost, publishPost, getPublishedPosts, getPublishedPost, listPosts, publishDuePosts } from '../../server/utils/post-management.ts'
 
 test('social drafts, unlisted publication and scheduled posts preserve lifecycle at the D1 boundary', async () => {
   const runtime = new Miniflare({ workers: [{ config: {
@@ -55,7 +55,7 @@ test('social drafts, unlisted publication and scheduled posts preserve lifecycle
     assert.equal(post.canonical_url, null)
     assert.equal(await db.prepare('SELECT first_published_at FROM content_documents WHERE id=?').bind(post.id).first('first_published_at'), null)
     assert.deepEqual((await listPosts(db, 'org-proof', 'site-proof', 'draft')).map(row => row.id), [post.id])
-    assert.equal(await getPublishedPostBySlug(db, 'site-proof', 'draft-first'), null)
+    assert.equal(await getPublishedPost(db, 'site-proof', { slug: 'draft-first' }), null)
     assert(!(await getPublishedPosts(db, 'site-proof')).some(row => row.id === post.id))
 
     await updatePost(db, 'org-proof', 'site-proof', post.id, { slug: 'draft-renamed', visibility: 'unlisted' }, 'user-proof', {})
@@ -68,7 +68,7 @@ test('social drafts, unlisted publication and scheduled posts preserve lifecycle
     const firstPublished = await db.prepare('SELECT first_published_at FROM content_documents WHERE id=?').bind(post.id).first('first_published_at')
     assert.equal(firstPublished, live.published_at)
     assert(firstPublished)
-    assert.equal((await getPublishedPostBySlug(db, 'site-proof', 'draft-renamed'))?.id, post.id)
+    assert.equal((await getPublishedPost(db, 'site-proof', { slug: 'draft-renamed' }))?.id, post.id)
     assert(!(await getPublishedPosts(db, 'site-proof')).some(row => row.id === post.id))
     await updatePost(db, 'org-proof', 'site-proof', post.id, { visibility: 'public' }, 'user-proof', {})
     assert((await getPublishedPosts(db, 'site-proof')).some(row => row.id === post.id))
@@ -82,7 +82,7 @@ test('social drafts, unlisted publication and scheduled posts preserve lifecycle
     assert.equal(await db.prepare('SELECT status FROM content_documents WHERE id=?').bind(queued.id).first('status'), 'scheduled')
     await assert.rejects(updatePost(db, 'org-proof', 'site-proof', queued.id, { scheduled_for: null }, 'user-proof', {}), /cannot be cleared/)
     assert(queued.slug)
-    assert.equal(await getPublishedPostBySlug(db, 'site-proof', queued.slug), null)
+    assert.equal(await getPublishedPost(db, 'site-proof', { slug: queued.slug }), null)
     assert.deepEqual(await publishDuePosts(db, new Date('2099-02-01T00:00:00.000Z')), { published: 1 })
     assert.equal(await db.prepare('SELECT first_published_at FROM content_documents WHERE id=?').bind(queued.id).first('first_published_at'), '2099-02-01T00:00:00.000Z')
     assert.deepEqual((await db.prepare('PRAGMA foreign_key_check').all()).results, [])

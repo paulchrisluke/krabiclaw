@@ -55,14 +55,22 @@ export const usePlans = () => {
     return (cents / 100).toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0, maximumFractionDigits: 0 })
   }
 
-  function displayPrice(plan: Plan, annual: boolean): string {
-    if (plan.prices.length === 0) return '$0'
-    if (annual) {
-      const cents = annualPrice(plan)
-      return cents !== null ? formatPrice(cents) : '$0'
-    }
-    const cents = monthlyPrice(plan)
-    return cents !== null ? formatPrice(cents) : '$0'
+  /**
+   * What this plan charges for the requested interval, as Stripe returned it —
+   * or null when Stripe returned no such price.
+   *
+   * A plan with no subscription prices at all is the canonical no-subscription
+   * plan and costs nothing; that is a fact about the plan, not a stand-in. A
+   * paid plan whose requested interval the provider did not return has no
+   * price to show, and answering that with '$0' offered a paid plan for free
+   * every time the Stripe catalog was incomplete. Annual is never inferred
+   * from monthly, nor monthly from annual: the caller renders the unavailable
+   * state instead.
+   */
+  function displayPrice(plan: Plan, annual: boolean): string | null {
+    if (plan.prices.length === 0) return formatPrice(0)
+    const cents = annual ? annualPrice(plan) : monthlyPrice(plan)
+    return cents === null ? null : formatPrice(cents)
   }
 
   return { plans, freePlan, growthPlan, monthlyPrice, annualPrice, formatPrice, displayPrice, status, error }
