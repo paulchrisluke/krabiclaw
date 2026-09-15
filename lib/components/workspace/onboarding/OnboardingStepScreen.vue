@@ -54,11 +54,15 @@
       :require-location-basics="true"
     />
 
+    <!-- One control and nothing else to confirm, so the selection is the answer
+         and the flow moves on — the same as the other single-choice steps. The
+         card emits submit when a currency is picked. -->
     <IntakeDetailsCard
       v-else-if="step.id === 'currency'"
       v-model:form="detailsForm"
       section="currency"
       :require-location-basics="true"
+      @submit="emit('advance')"
     />
 
     <LocationHoursCard v-else-if="step.id === 'hours'" v-model:form="state.hours" />
