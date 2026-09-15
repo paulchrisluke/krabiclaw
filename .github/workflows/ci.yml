@@ -394,11 +394,13 @@ jobs:
             --jq '.check_runs[] | "\(.id)\t\(.status)\t\(.conclusion // "pending")\t\(.name)"')
           echo "${runs}"
           # A re-run adds a newer check run beside the old one; only the latest
-          # run of each required check counts, and it must have completed.
+          # run of each required check counts, and it must have completed. The
+          # staging-to-main pull request attaches its own, skipped, check runs
+          # to the same commit: those are not runs of the check and are ignored.
           missing=""
           while IFS= read -r name; do
             [ -n "$name" ] || continue
-            latest=$(printf '%s\n' "${runs}" | awk -F'\t' -v name="${name}" '$4 == name' | sort -n | tail -n 1)
+            latest=$(printf '%s\n' "${runs}" | awk -F'\t' -v name="${name}" '$4 == name && $3 != "skipped"' | sort -n | tail -n 1)
             status=$(printf '%s' "${latest}" | cut -f2)
             conclusion=$(printf '%s' "${latest}" | cut -f3)
             if [ "${status}" != "completed" ] || [ "${conclusion}" != "success" ]; then
