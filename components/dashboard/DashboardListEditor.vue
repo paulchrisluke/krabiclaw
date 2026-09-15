@@ -94,8 +94,8 @@
 
         <!--
           A row the caller marks `removable: false` shows no remove control:
-          offering one that the server refuses puts an error toast behind a
-          click the reader had no way to know would fail.
+          offering one the server refuses puts an error toast behind a click the
+          reader had no way to know would fail.
         -->
         <UButton
           v-if="!readOnly && editing && !selectable && item.removable !== false"
@@ -208,8 +208,8 @@ export interface ListEditorItem {
   id: string
   /** Names the row in the remove, reorder and open controls' labels. */
   title: string
-  summary?: string | null
   /** Set false for a row that may not be removed; its remove control is omitted. */
   removable?: boolean
+  summary?: string | null
 }
 </script>

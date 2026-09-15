@@ -6,22 +6,30 @@
     </div>
 
   <DashboardListEditor
-    read-only
+    v-model:editing="editing"
     title="Q&A"
-    description="Questions and answers are read-only. Manage Google questions and answers in Google."
+    :description="locationId ? 'Add common guest questions, then answer them once.' : 'Manage general questions or questions tailored to a public page. Questions imported from Google are managed in Google.'"
     :items="listItems"
     :pending="pending"
     :error="qaError ? getErrorMessage(qaError, 'Q&A request failed') : null"
     :empty-title="locationId ? 'No Q&A yet' : 'No site Q&A yet'"
     empty-icon="i-lucide-circle-help"
+    add-label="Add a question"
+    reorderable
+    :removing-id="removingId"
+    @add="openNew"
+    @open="openExisting"
+    @remove="removeItem"
+    @move="move"
   >
     <template #item="{ item }">
       <div class="flex flex-wrap items-center gap-2">
         <UBadge :color="item.row.status === 'published' ? 'success' : 'neutral'" variant="soft">{{ item.row.status }}</UBadge>
+        <UBadge v-if="item.row.source === 'import'" color="neutral" variant="subtle">From Google</UBadge>
         <span v-if="item.row.upvote_count" class="text-xs text-muted">{{ item.row.upvote_count }} upvotes</span>
       </div>
       <p class="mt-2 text-sm font-medium text-highlighted">{{ item.title }}</p>
-      <p class="mt-1 text-sm text-muted" :class="item.row.answer ? '' : 'italic'">{{ item.row.answer || 'No answer yet.' }}</p>
+      <p class="mt-1 line-clamp-2 text-sm text-muted" :class="item.row.answer ? '' : 'italic'">{{ item.row.answer || 'No answer yet.' }}</p>
     </template>
   </DashboardListEditor>
   </div>
@@ -30,12 +38,14 @@
 <script setup lang="ts">
 import DashboardListEditor from '~/components/dashboard/DashboardListEditor.vue'
 import { getErrorMessage } from '~/utils/errors'
-import { isQaResponse, type QaRow } from '~/utils/site-qa'
+import { isQaDeleted, isQaResponse, type QaRow } from '~/utils/site-qa'
 /** Set when this list is a location's Q&A rather than the site's. */
 const props = defineProps<{ locationId?: string }>()
 
 const dashboardApi = useDashboardApi()
+const route = useRoute()
 const siteId = await useDashboardSiteId()
+const toast = useToast()
 const selectedPagePath = ref('general')
 
 const requestEvent = useRequestEvent()
@@ -130,7 +140,7 @@ const qaAsyncData = useAsyncData(
 const [
   { data: tenantPages },
   { data: existingQaScopes },
-  { data, pending, error: qaError },
+  { data, pending, refresh, error: qaError },
 ] = await Promise.all([tenantPagesAsyncData, existingQaScopesAsyncData, qaAsyncData])
 
 const pageScopes = computed(() => {
@@ -152,6 +162,65 @@ const pageScopes = computed(() => {
   return Array.from(scopes.entries()).map(([value, label]) => ({ label, value }))
 })
 const qaRows = computed(() => data.value?.qa ?? [])
-const listItems = computed(() => qaRows.value.map(row => ({ id: row.id, title: row.question, row })))
+// A Google question is Google's: the server refuses to change or remove one,
+// so the row shows no remove control rather than offering a click that fails.
+const listItems = computed(() => qaRows.value.map(row => ({
+  id: row.id,
+  title: row.question,
+  removable: row.source !== 'import',
+  row,
+})))
 
+const editing = ref(false)
+const removingId = ref<string | null>(null)
+
+const qaPath = computed(() => props.locationId
+  ? `/dashboard/${String(route.params.orgSlug)}/sites/${String(route.params.siteSlug)}/locations/${String(route.params.locationSlug)}/qa`
+  : `/dashboard/${String(route.params.orgSlug)}/sites/${String(route.params.siteSlug)}/qa`)
+
+// A question opens its own level rather than a sheet over the list, so the
+// record has a URL and adding and editing are the same screen. The page the
+// list is filtered to rides along as the new record's intended scope.
+function openNew() {
+  void navigateTo({ path: `${qaPath.value}/new`, query: pagePath.value ? { page_path: pagePath.value } : undefined })
+}
+
+function openExisting(item: { id: string }) {
+  void navigateTo(`${qaPath.value}/${item.id}`)
+}
+
+async function removeItem(item: { id: string }) {
+  removingId.value = item.id
+  try {
+    await dashboardApi(`${qaEndpoint.value}/${item.id}`, {
+      method: 'DELETE',
+      query: pagePath.value ? { page_path: pagePath.value } : undefined,
+      validate: isQaDeleted,
+    })
+    await refresh()
+  } catch (error) {
+    toast.add({ description: error instanceof Error ? error.message : 'Failed to remove question', color: 'error' })
+  } finally {
+    removingId.value = null
+  }
+}
+
+async function move(item: { id: string }, direction: -1 | 1) {
+  const index = qaRows.value.findIndex(row => row.id === item.id)
+  const current = qaRows.value[index]
+  const target = qaRows.value[index + direction]
+  if (!current || !target) return
+  await dashboardApi(`${qaEndpoint.value}/reorder`, {
+    method: 'POST',
+    body: { ...(props.locationId ? {} : { page_path: pagePath.value }), updates: [{ id: current.id, sort_order: target.sort_order }, { id: target.id, sort_order: current.sort_order }] },
+    validate: (value): value is { updated: number } =>
+      isRecord(value) && typeof value.updated === 'number',
+  })
+  await refresh()
+}
+
+// Switching scope shows a different list, so the edit state goes with it.
+watch(selectedPagePath, () => {
+  editing.value = false
+})
 </script>

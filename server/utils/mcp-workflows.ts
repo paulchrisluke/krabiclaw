@@ -5,8 +5,9 @@ import {
   setOrgWhatsAppPhone,
 } from "~/server/utils/whatsapp";
 import type { CloudflareEnv } from "~/server/utils/auth";
-import { queryAll, queryFirst } from "~/server/db";
+import { execute, queryAll, queryFirst } from "~/server/db";
 import { d1JsonStringSet } from '~/server/db/d1-limits'
+import { reorderQa, updateQa } from "~/server/utils/location-qa";
 import { listUserOrganizations, resolveOrganizationMembership } from '~/server/utils/member-access'
 import { localPartsAt } from '~/utils/timezone'
 
@@ -81,20 +82,37 @@ export async function getLocationForMcp(
   };
 }
 
-/**
- * The site's WhatsApp business number — the number guests and alerts go to.
- *
- * Which channels a *person* wants no longer lives here. That is per-account and
- * per-category in user_notification_preferences, edited at
- * /dashboard/account/profile/notifications, because a notification is delivered
- * to a person rather than to a site.
- */
 export async function getNotificationsSettings(
   db: D1Database,
   organizationId: string,
   siteId: string,
 ) {
-  return { whatsapp_phone: await getOrgWhatsAppPhone(db, organizationId, siteId) }
+  const [whatsappPhone, channelsRow] = await Promise.all([
+    getOrgWhatsAppPhone(db, organizationId, siteId),
+    queryFirst<{ value: string }>(
+      db,
+      `SELECT json_extract(settings_json, '$.config.owner_notification_channels') AS value FROM sites WHERE organization_id = ? AND id = ? LIMIT 1`,
+      [organizationId, siteId],
+    ),
+  ])
+  // Mirrors the send-time default in server/utils/notifications.ts getOwnerNotificationChannels:
+  // only default to whatsapp if a number is actually configured, otherwise email.
+  const defaultChannels = whatsappPhone ? ['whatsapp'] : ['email']
+  let channels: string[] = defaultChannels
+  if (channelsRow?.value) {
+    try {
+      const parsed = JSON.parse(channelsRow.value)
+      if (Array.isArray(parsed)) {
+        const validChannels = parsed.filter(c => c === 'whatsapp' || c === 'email')
+        // Drop whatsapp from channels if no whatsapp phone is configured
+        const availableChannels = whatsappPhone ? validChannels : validChannels.filter(c => c !== 'whatsapp')
+        channels = availableChannels.length ? availableChannels : defaultChannels
+      }
+    } catch {
+      channels = defaultChannels
+    }
+  }
+  return { whatsapp_phone: whatsappPhone, channels }
 }
 
 export async function updateNotificationsSettings(
@@ -102,11 +120,30 @@ export async function updateNotificationsSettings(
   organizationId: string,
   siteId: string,
   whatsappPhone?: string,
+  channels?: string[],
 ) {
+  const ops: Promise<unknown>[] = []
+  const trimmedPhone = whatsappPhone?.trim()
   // Explicit null or empty string means clear the phone
   if (whatsappPhone !== undefined) {
-    await setOrgWhatsAppPhone(db, organizationId, siteId, whatsappPhone.trim() || '')
+    ops.push(setOrgWhatsAppPhone(db, organizationId, siteId, trimmedPhone || ''))
   }
+  if (channels) {
+    const defaultPhone = trimmedPhone || await getOrgWhatsAppPhone(db, organizationId, siteId)
+    const validChannels = channels.filter(c => c === 'whatsapp' || c === 'email')
+    // Filter out whatsapp if no phone is available
+    const channelsToPersist = defaultPhone ? validChannels : validChannels.filter(c => c !== 'whatsapp')
+    const finalChannels = channelsToPersist.length ? channelsToPersist : ['email']
+    const value = JSON.stringify(finalChannels)
+    ops.push(
+      execute(
+        db,
+        `UPDATE sites SET settings_json = json_set(settings_json, '$.config.owner_notification_channels', json(?)) WHERE organization_id = ? AND id = ?`,
+        [value, organizationId, siteId],
+      )
+    )
+  }
+  await Promise.all(ops)
   return await getNotificationsSettings(db, organizationId, siteId)
 }
 
@@ -219,6 +256,27 @@ export async function getReservationSubmissionsByStatus(
     byStatus[row.status] = row.count
   }
   return byStatus
+}
+
+export async function updateLocationQa(
+  db: D1Database,
+  organizationId: string,
+  siteId: string,
+  locationId: string,
+  qaId: string,
+  updates: Record<string, unknown>,
+) {
+  return updateQa(db, { organizationId, siteId, locationId }, qaId, updates)
+}
+
+export async function reorderLocationQa(
+  db: D1Database,
+  organizationId: string,
+  siteId: string,
+  locationId: string,
+  updates: Array<{ id: string; sort_order: number }>,
+) {
+  return reorderQa(db, { organizationId, siteId, locationId }, updates)
 }
 
 export async function listLocationReviews(
