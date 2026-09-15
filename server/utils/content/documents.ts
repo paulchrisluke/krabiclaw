@@ -228,8 +228,12 @@ export function prepareContentDocumentDeletion(input: { organizationId: string; 
     { query: `DELETE FROM media_placements WHERE owner_type = 'content_block' AND owner_id IN (
       SELECT id FROM content_blocks WHERE document_id IN (${owned})
     )`, params },
-    { query: `DELETE FROM content_documents WHERE ${document ? 'id' : 'location_id'} = ? AND organization_id = ? AND site_id = ?`,
-      params: [id, input.organizationId, input.siteId] },
+    // The same reach as every statement above it. `WHERE id = ?` deleted the
+    // root and left its translations behind: content_documents has no foreign
+    // key on root_id, so nothing cascaded, and each representation became a row
+    // whose root no longer exists.
+    { query: `DELETE FROM content_documents WHERE ${document ? '(id = ? OR root_id = ?)' : '(location_id = ? OR root_id IN (SELECT id FROM content_documents WHERE location_id = ?))'} AND organization_id = ? AND site_id = ?`,
+      params: [id, id, input.organizationId, input.siteId] },
   ]
 }
 

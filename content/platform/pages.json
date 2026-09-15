@@ -1,0 +1,1203 @@
+{
+  "$comment": "KrabiClaw's own marketing pages, as page documents. Applied by scripts/seed-platform-pages.ts through the editor API. Every block's `section` is the key components/platform/PlatformCanonicalPage.vue selects it by; a block with an unknown section renders nothing. The FAQ block carries no items: the questions are the page's `qa` records, resolved onto it by the public page loader.",
+  "pages": [
+    {
+      "path": "/",
+      "title": "Home",
+      "pageType": "custom",
+      "summary": "Local business websites you create in the KrabiClaw CMS and edit through conversation.",
+      "seoTitle": "Local business websites you can edit through conversation",
+      "seoDescription": "KrabiClaw gives local businesses a fast, crawlable website with bookings, Google Places imports and analytics — editable in the CMS or through Claude and ChatGPT over the KrabiClaw MCP service.",
+      "blocks": [
+        {
+          "type": "hero",
+          "data": {
+            "section": "hero",
+            "eyebrow": "Now on Claude and ChatGPT",
+            "title": "Your local business,\nmanaged through\nconversation.",
+            "highlight": "managed through",
+            "subtitle": "Create your site and connect your domain in the KrabiClaw CMS, then edit menus, offerings, photos and posts by talking to Claude or ChatGPT through the KrabiClaw MCP service.",
+            "cta_label": "Start Free",
+            "cta_url": "/signup",
+            "secondary_label": "Connect an MCP client",
+            "secondary_url": "/plugin"
+          }
+        },
+        {
+          "type": "feature_grid",
+          "data": {
+            "section": "industries",
+            "eyebrow": "Tailored Operating Layers",
+            "title": "Built for your specific industry",
+            "description": "Every vertical gets the exact schema, customer journey, and conversational tools it needs.",
+            "items": [
+              {
+                "title": "Restaurants",
+                "icon": "utensils",
+                "url": "/restaurants",
+                "link_label": "Learn about Restaurants on Tap →",
+                "description": "Crawlable HTML menus, Google Places imports, and direct table reservations with no per-cover commissions."
+              },
+              {
+                "title": "Experiences & Studios",
+                "icon": "calendar",
+                "url": "/experiences",
+                "link_label": "Explore Experience Solutions →",
+                "description": "Time-slot scheduling, capacity safeguards, and direct booking for workshops, classes and tours without marketplace cuts."
+              },
+              {
+                "title": "Legal & Professional",
+                "icon": "briefcase",
+                "url": "/legal",
+                "link_label": "Explore Blawby for Practices →",
+                "description": "Practice area architecture, consultation intake, compliance notices, and schema.org LegalService graphs powered by Blawby."
+              }
+            ]
+          }
+        },
+        {
+          "type": "feature_grid",
+          "data": {
+            "section": "features",
+            "eyebrow": "Everything your business needs",
+            "title": "Everything your site needs.",
+            "title_muted": "Nothing you don't.",
+            "items": [
+              {
+                "title": "Edit through conversation",
+                "icon": "message-circle",
+                "description": "Update menus, offerings, photos, and news by talking to Claude or ChatGPT. Both are supported clients of the same KrabiClaw MCP service."
+              },
+              {
+                "title": "Conversational analytics",
+                "icon": "bar-chart",
+                "description": "Ask which pages and offerings visitors look at, and which days are busiest, in the dashboard or through an MCP client."
+              },
+              {
+                "title": "Google Places imports",
+                "icon": "globe",
+                "description": "Import hours, address, ratings and reviews from a Google Business Profile you select, and re-import whenever you want to refresh them."
+              },
+              {
+                "title": "Bookings and reservations",
+                "icon": "calendar",
+                "description": "Take table reservations and ticketed experience bookings with automated confirmations and no per-cover fees."
+              },
+              {
+                "title": "Social and blog publishing",
+                "icon": "sparkles",
+                "description": "Publish news, seasonal specials and long-form posts to your site and connected social channels."
+              },
+              {
+                "title": "Unified inbox",
+                "icon": "inbox",
+                "description": "Reservations, bookings and contact inquiries arrive in one inbox in your dashboard."
+              }
+            ]
+          }
+        },
+        {
+          "type": "feature_grid",
+          "data": {
+            "section": "plans",
+            "source": "billing_plans",
+            "eyebrow": "Simple, transparent pricing",
+            "title": "Start free. Grow when you're ready.",
+            "description": "Create your site on a KrabiClaw subdomain at no cost, then move up when you need a custom domain, messaging notifications and Google presence imports."
+          }
+        }
+      ]
+    },
+    {
+      "path": "/about",
+      "title": "About",
+      "pageType": "custom",
+      "summary": "Why KrabiClaw exists, and the three industries it is built for.",
+      "seoTitle": "About KrabiClaw",
+      "seoDescription": "KrabiClaw replaces agency retainers and aggregator commissions with a web operating layer independent businesses can run themselves.",
+      "blocks": [
+        {
+          "type": "hero",
+          "data": {
+            "section": "hero",
+            "eyebrow": "About KrabiClaw",
+            "title": "Websites that independent businesses can actually run.",
+            "subtitle": "KrabiClaw replaces complicated agency retainers and aggregator commissions with a web operating layer the owner controls."
+          }
+        },
+        {
+          "type": "markdown",
+          "data": {
+            "section": "prose",
+            "title": "The local business dilemma",
+            "editor_mode": "source",
+            "markdown": "Local business owners face a bad choice: pay an agency for a static website that grows outdated within weeks, or surrender their customers to aggregators and booking platforms that take a cut of every transaction.\n\nWhen an owner needs to update holiday hours, rotate a seasonal menu, or post a new workshop slot, they should not have to battle an intimidating dashboard or wait for an agency invoice. That is why KrabiClaw is built around a simple premise: **the day-to-day of your website should be a conversation.** You create the site and connect the domain in the CMS; after that, editing it is a message to Claude or ChatGPT."
+          }
+        },
+        {
+          "type": "feature_grid",
+          "data": {
+            "section": "verticals",
+            "eyebrow": "Focused Solutions",
+            "title": "Built for three canonical industries",
+            "items": [
+              {
+                "title": "Restaurants",
+                "icon": "utensils",
+                "description": "Running in production for **Kikuzuki** across two branches: crawlable HTML menus, Google Places imports, and zero-commission table reservations."
+              },
+              {
+                "title": "Experiences",
+                "icon": "calendar",
+                "description": "Running in production for **Pottery House Krabi**: time-slot scheduling, capacity limits, and direct booking without marketplace cuts."
+              },
+              {
+                "title": "Legal & Advisory",
+                "icon": "briefcase",
+                "description": "Running in production for **North Carolina Legal Services** on the Blawby template: structured practice areas, compliance notices, and consultation intake."
+              }
+            ]
+          }
+        },
+        {
+          "type": "cta",
+          "data": {
+            "section": "cta",
+            "title": "Ready to take control of your web presence?",
+            "description": "Start free on a KrabiClaw subdomain, then connect Claude or ChatGPT and run your site through conversation.",
+            "label": "Start Free",
+            "url": "/signup",
+            "secondary_label": "Explore Features",
+            "secondary_url": "/features"
+          }
+        }
+      ]
+    },
+    {
+      "path": "/pricing",
+      "title": "Pricing",
+      "pageType": "custom",
+      "summary": "KrabiClaw plans, priced from the live Stripe catalog.",
+      "seoTitle": "Pricing",
+      "seoDescription": "Start free on a KrabiClaw subdomain. Move up for a custom domain, messaging notifications and Google Places imports. No contracts.",
+      "blocks": [
+        {
+          "type": "hero",
+          "data": {
+            "section": "hero",
+            "eyebrow": "Simple, flexible plans",
+            "title": "Simple, transparent pricing.",
+            "subtitle": "Start free on a KrabiClaw subdomain. Move up when you are ready for your own domain, messaging notifications, and Google presence imports."
+          }
+        },
+        {
+          "type": "feature_grid",
+          "data": {
+            "section": "plans",
+            "source": "billing_plans",
+            "title": "Plans"
+          }
+        },
+        {
+          "type": "faq",
+          "data": {
+            "section": "faq",
+            "title": "Frequently asked questions",
+            "source": "page_qa"
+          }
+        }
+      ],
+      "qa": [
+        {
+          "question": "Do I need a credit card to start?",
+          "answer": "No. The Starter plan carries no subscription — no credit card required. You only need a card when you move to a paid plan."
+        },
+        {
+          "question": "What types of businesses does KrabiClaw support?",
+          "answer": "Three verticals: restaurants and dining, experiences and tours, and legal and professional practices on the Blawby template. Each one ships its own workflows, structured data, and booking or intake engine."
+        },
+        {
+          "question": "Can I connect my own custom domain?",
+          "answer": "A custom domain is a paid-plan feature. On a plan that includes it you connect your existing domain and KrabiClaw manages the certificate through Cloudflare; on Starter your site runs on a KrabiClaw subdomain."
+        },
+        {
+          "question": "How do Google Places imports work?",
+          "answer": "On a plan that includes them, you choose your Google Business Profile and KrabiClaw imports the public name, address, hours, ratings, and location details it exposes. You re-run the import when you want to refresh that data."
+        },
+        {
+          "question": "How do I cancel?",
+          "answer": "You can cancel your plan at any time from the billing settings in your dashboard."
+        },
+        {
+          "question": "What payment methods do you accept?",
+          "answer": "All major credit and debit cards, processed by Stripe."
+        }
+      ]
+    },
+    {
+      "path": "/features",
+      "title": "Features",
+      "pageType": "custom",
+      "summary": "What KrabiClaw gives a local business, and how each part is edited.",
+      "seoTitle": "Platform features",
+      "seoDescription": "Edit your local business site through Claude or ChatGPT, take bookings, import Google Places data, manage localized content, and read your own traffic.",
+      "blocks": [
+        {
+          "type": "hero",
+          "data": {
+            "section": "hero",
+            "eyebrow": "The Ultimate Platform",
+            "eyebrow_icon": "zap",
+            "title": "Everything your business needs.\nEdited through conversation.",
+            "highlight": "Edited through conversation.",
+            "subtitle": "Say goodbye to expensive agencies and clunky dashboards. KrabiClaw gives local businesses a high-converting site, direct bookings, and automated local SEO — managed through conversation with Claude or ChatGPT.",
+            "cta_label": "Start Free Today",
+            "cta_url": "/signup",
+            "secondary_label": "View Pricing",
+            "secondary_url": "/pricing"
+          }
+        },
+        {
+          "type": "feature_grid",
+          "data": {
+            "section": "feature-details",
+            "items": [
+              {
+                "title": "SEO & Custom Domains",
+                "icon": "globe",
+                "url": "/docs",
+                "description": "Ensure local searchers find your site instantly. Edge performance and clean HTML, optimised directly for search crawlers.",
+                "specs": [
+                  "Custom domains with managed certificates, on a paid plan",
+                  "Edge performance and clean HTML optimised for search crawlers",
+                  "Auto-generated XML sitemaps & JSON-LD markup",
+                  "Every site starts on a KrabiClaw subdomain"
+                ]
+              },
+              {
+                "title": "Edit Everything Through Conversation",
+                "icon": "message-circle",
+                "url": "/plugin",
+                "description": "Update menus, page content, photos, and posts by talking to Claude or ChatGPT. No CMS to learn — just describe what you want changed.",
+                "specs": [
+                  "Edit menus, hero content & photos through conversation",
+                  "Ask conversational questions about your live traffic analytics",
+                  "Publish posts to your site and Facebook simultaneously",
+                  "Attach a photo in chat and have it placed and optimised"
+                ]
+              },
+              {
+                "title": "Bookings & Experience Reservations",
+                "icon": "calendar",
+                "url": "/docs",
+                "description": "Accept table bookings and ticketed experience reservations 24/7. Automate confirmations so your team focuses on guests, not admin.",
+                "specs": [
+                  "Table reservations and ticketed experience bookings",
+                  "Capacity and time-slot control per experience",
+                  "Automated booking confirmations — email included, messaging on a paid plan",
+                  "No commissions or per-cover fees"
+                ]
+              },
+              {
+                "title": "Menus, Experiences & Practice Areas",
+                "icon": "file-text",
+                "url": "/docs",
+                "description": "Restaurants publish multi-section menus. Experience businesses list ticketed activities. Professional practices present structured practice areas — all on the same platform.",
+                "specs": [
+                  "Multi-section menus with allergen & dietary filters",
+                  "Ticketed experiences with capacity and time slots",
+                  "Dedicated practice area routes with schema.org LegalService graphs",
+                  "Fast, scannable navigation on any device"
+                ]
+              },
+              {
+                "title": "Unified Inbox",
+                "icon": "inbox",
+                "url": "/docs",
+                "description": "Manage all your reservations, bookings, and contact inquiries from a single, unified inbox in your dashboard.",
+                "specs": [
+                  "Manage reservations and bookings in one place",
+                  "Receive contact inquiries directly",
+                  "Respond to guests quickly and efficiently",
+                  "Keep track of all guest communications"
+                ]
+              },
+              {
+                "title": "Real-Time Insights",
+                "icon": "bar-chart",
+                "url": "/docs",
+                "description": "See exactly how your business is performing. Ask Claude or ChatGPT for a summary, or check the analytics tab directly.",
+                "specs": [
+                  "Visitor counts, top pages & busiest hours",
+                  "Google Review aggregation & reply tools",
+                  "Reservation and booking conversion tracking",
+                  "Ask \"how many visitors this month?\" in Claude or ChatGPT"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "type": "feature_grid",
+          "data": {
+            "section": "seo-band",
+            "pill": "Integrated Analytics & SEO",
+            "pill_icon": "bar-chart",
+            "title": "Own the search result instead of renting it",
+            "description": "Stop letting aggregators capture your organic search traffic and sell it back to you with hefty fees. Your menu, your offerings and your practice areas are **crawlable HTML on your own domain**, not a PDF behind a marketplace.",
+            "cta_label": "Read our Blog",
+            "cta_url": "/blog",
+            "secondary_label": "View Setup Documentation →",
+            "secondary_url": "/help",
+            "badge": "Example",
+            "items": [
+              {
+                "title": "Direct Conversions",
+                "description": "+42.8%"
+              },
+              {
+                "title": "Organic Clicks",
+                "description": "14.2k"
+              },
+              {
+                "title": "Google Ranking",
+                "description": "Page 1 (#2)"
+              }
+            ]
+          }
+        },
+        {
+          "type": "faq",
+          "data": {
+            "section": "faq",
+            "title": "Frequently Asked Features Questions",
+            "source": "page_qa"
+          }
+        }
+      ],
+      "qa": [
+        {
+          "question": "How do I edit my site through Claude or ChatGPT?",
+          "answer": "Create a KrabiClaw account, then add the KrabiClaw MCP service in your client and complete KrabiClaw OAuth. Once connected, describe the change you want — menus, content, photos, posts. Claude and ChatGPT are both supported clients of the same service."
+        },
+        {
+          "question": "What business verticals does KrabiClaw support?",
+          "answer": "Restaurants and hospitality (crawlable menus, dietary filters, table reservations), experience and activity businesses (ticketed sessions, time slots, capacity control), and professional services (practice areas and consultation scheduling on the Blawby template)."
+        },
+        {
+          "question": "Can I map a custom domain?",
+          "answer": "A custom domain is a paid-plan feature. On a plan that includes it, KrabiClaw manages the certificate and edge routing for you; on Starter your site runs on a KrabiClaw subdomain."
+        },
+        {
+          "question": "Are there any hidden booking fees?",
+          "answer": "None. Whether you take ten bookings or ten thousand, you pay your plan price — no per-cover or per-ticket commissions."
+        },
+        {
+          "question": "How do Google Places imports work?",
+          "answer": "You choose a Google Maps listing and KrabiClaw imports the public hours, address, ratings, reviews and location details available through Google Places. You re-run the import when you want to refresh that data."
+        },
+        {
+          "question": "Is there a contract or setup fee?",
+          "answer": "No contracts and no setup fees. Start free and move up month to month; cancel from the dashboard. Current rates are on the pricing page."
+        }
+      ]
+    },
+    {
+      "path": "/plugin",
+      "title": "KrabiClaw for Claude and ChatGPT",
+      "pageType": "custom",
+      "summary": "Connect an MCP client to KrabiClaw and manage your site through authenticated conversation.",
+      "seoTitle": "Connect KrabiClaw to Claude or ChatGPT",
+      "seoDescription": "Connect the KrabiClaw MCP service to Claude or ChatGPT and manage your website through authenticated conversation.",
+      "blocks": [
+        {
+          "type": "hero",
+          "data": {
+            "section": "hero",
+            "eyebrow": "Model Context Protocol",
+            "title": "KrabiClaw for Claude and ChatGPT",
+            "subtitle": "Manage your website through an authenticated MCP app in Claude or ChatGPT.",
+            "cta_label": "Create a KrabiClaw account",
+            "cta_url": "/signup"
+          }
+        },
+        {
+          "type": "feature_grid",
+          "data": {
+            "section": "capabilities",
+            "items": [
+              {
+                "title": "Work with live content",
+                "description": "Inspect pages, posts, articles, menus, services, locations, media, reviews, and analytics. Your assistant may request confirmation based on the action, permissions, and impact."
+              },
+              {
+                "title": "Conversational marketing & analytics",
+                "description": "Ask Claude or ChatGPT to summarize weekly visitor traffic, identify top-performing offerings, turn reviews into social posts, or attach photos directly in chat for instant placement and optimization."
+              },
+              {
+                "title": "Keep control",
+                "description": "OAuth limits access to sites you can manage. Publishing and destructive actions are identified in the app's tool metadata."
+              }
+            ]
+          }
+        },
+        {
+          "type": "how_to",
+          "data": {
+            "section": "connect",
+            "title": "Connect your assistant",
+            "description": "Availability of custom MCP servers depends on your client, plan, and workspace policy.",
+            "steps": [
+              {
+                "name": "Create a KrabiClaw account",
+                "text": "Sign up and create your site in the CMS. The MCP app works on the sites your account can already manage."
+              },
+              {
+                "name": "Add the custom MCP app",
+                "text": "In your client's connector or app settings, add a custom MCP server pointing at https://krabiclaw.com/api/mcp. In chats, select KrabiClaw from the tools or apps menu."
+              },
+              {
+                "name": "Authorize and test",
+                "text": "Start a new conversation, add KrabiClaw from the tools menu, and complete KrabiClaw OAuth when prompted. Begin with a read-only request before trying a write action."
+              }
+            ]
+          }
+        },
+        {
+          "type": "callout",
+          "data": {
+            "section": "first-request",
+            "title": "Try a safe first request",
+            "body": "“List my KrabiClaw sites. Then, for the site called `your site name`, summarize its homepage. Do not change anything.”\n\nName the site you mean rather than letting the client pick one: a request that says “the first one” leaves the choice to the model, and the wrong site is the one that gets edited."
+          }
+        }
+      ]
+    },
+    {
+      "path": "/restaurants",
+      "title": "Restaurants",
+      "pageType": "custom",
+      "summary": "Crawlable menus, Google Places imports and zero-commission table reservations.",
+      "seoTitle": "Restaurant websites with no booking commissions",
+      "seoDescription": "Restaurant websites with crawlable HTML menus, Google Places imports, and zero-commission table reservations, edited through Claude or ChatGPT.",
+      "blocks": [
+        {
+          "type": "hero",
+          "data": {
+            "section": "hero",
+            "eyebrow": "Restaurants on Tap",
+            "eyebrow_icon": "utensils",
+            "title": "Stop paying per-cover fees.\nA 5-star restaurant website, updated through conversation.",
+            "highlight": "A 5-star restaurant website, updated through conversation.",
+            "subtitle": "Crawlable HTML menus, Google Places imports, and direct table reservations with zero commissions — managed completely through conversation.",
+            "cta_label": "Start Free for Restaurants",
+            "cta_url": "/signup",
+            "secondary_label": "View Pricing",
+            "secondary_url": "/pricing"
+          }
+        },
+        {
+          "type": "feature_grid",
+          "data": {
+            "section": "comparison-against",
+            "pill": "The Aggregator & PDF Trap",
+            "pill_icon": "x",
+            "title": "Why traditional restaurant websites fail",
+            "items": [
+              {
+                "title": "Heavy commissions",
+                "description": "Booking platforms charge you for every seated diner, and delivery portals take a cut of every ticket."
+              },
+              {
+                "title": "Unsearchable PDF menus",
+                "description": "Crawlers can't index your dishes, and diners struggle to pinch-and-zoom on a phone."
+              },
+              {
+                "title": "Hours out of sync",
+                "description": "Holiday hours have to be changed separately on Google Maps, on social, and on the website."
+              },
+              {
+                "title": "Agency retainers",
+                "description": "A simple price change takes days and costs hundreds in developer invoices."
+              }
+            ]
+          }
+        },
+        {
+          "type": "feature_grid",
+          "data": {
+            "section": "comparison-for",
+            "pill": "The KrabiClaw Operating Layer",
+            "pill_icon": "check",
+            "title": "Direct diners. Zero per-cover fees.",
+            "items": [
+              {
+                "title": "No commission on bookings",
+                "description": "Whether you seat 50 diners or 5,000, your reservation fee stays zero."
+              },
+              {
+                "title": "Crawlable HTML menus",
+                "description": "Every dish, dietary tag and allergen filter is semantic HTML that search engines and answer engines can read."
+              },
+              {
+                "title": "Google Places imports",
+                "description": "Bring hours, address, star ratings and reviews across from the Google Business Profile you choose, and re-import when they change."
+              },
+              {
+                "title": "Edit by asking",
+                "description": "Tell Claude or ChatGPT \"add our autumn pumpkin soup to the dinner specials\" and that is the whole workflow."
+              }
+            ]
+          }
+        },
+        {
+          "type": "feature_grid",
+          "data": {
+            "section": "workflows",
+            "eyebrow": "Conversational Management",
+            "title": "What managing a restaurant through conversation looks like",
+            "description": "No passwords to remember, no complex CMS menus. Just ask.",
+            "items": [
+              {
+                "title": "Menu Updates",
+                "icon": "message-circle",
+                "value": "Add our grilled sea bass with lemon butter for 420 THB to the mains section, and tag it gluten-free.",
+                "description": "Your assistant verifies the section, adds the dish with schema markup, and updates your live menu immediately."
+              },
+              {
+                "title": "Live Analytics",
+                "icon": "bar-chart",
+                "value": "How many visitors looked at our dessert menu this week, and what was our busiest booking day?",
+                "description": "It reads your first-party analytics ledger and returns visit trends and conversion stats."
+              },
+              {
+                "title": "Social & Marketing",
+                "icon": "sparkles",
+                "value": "Take our 5-star reviews from last weekend and publish a thank-you post to our website and Facebook.",
+                "description": "Turns authentic diner feedback into a clean update and publishes it across channels at once."
+              }
+            ]
+          }
+        },
+        {
+          "type": "feature_grid",
+          "data": {
+            "section": "proof",
+            "pill": "Verified Production Showcase",
+            "pill_icon": "map-pin",
+            "title": "How Kikuzuki runs multi-location dining with KrabiClaw",
+            "description": "Kikuzuki operates two branches in **Ao Nang** and **Krabi Town**. Both share one editorial brand while keeping independent Google Places imports, location-specific menus, separate opening hours, and their own guest review feeds.",
+            "items": [
+              {
+                "value": "2",
+                "title": "Independent Branches"
+              },
+              {
+                "value": "0%",
+                "title": "Reservation Commissions"
+              },
+              {
+                "value": "100%",
+                "title": "Crawlable HTML Menu"
+              }
+            ]
+          }
+        },
+        {
+          "type": "feature_grid",
+          "data": {
+            "section": "proof-card",
+            "title": "Kikuzuki Japanese Dining",
+            "badge": "Saya Theme",
+            "cta_label": "Explore Saya Template →",
+            "cta_url": "/templates/saya",
+            "items": [
+              {
+                "title": "Ao Nang Branch",
+                "description": "Open • Closes 22:00"
+              },
+              {
+                "title": "Krabi Town Branch",
+                "description": "Open • Closes 21:30"
+              },
+              {
+                "title": "Google Reviews",
+                "description": "★ 4.8 (Imported)"
+              }
+            ]
+          }
+        },
+        {
+          "type": "feature_grid",
+          "data": {
+            "section": "features",
+            "eyebrow": "Complete Operational Suite",
+            "title": "Built for restaurants that take hospitality seriously",
+            "items": [
+              {
+                "title": "Crawlable HTML menus",
+                "icon": "list",
+                "description": "Categorised sections, item photos, dietary badges and prices in clean semantic HTML."
+              },
+              {
+                "title": "Google Places imports",
+                "icon": "globe",
+                "description": "Bring opening hours, street address, star ratings and reviews across from your Google Business Profile, and re-import to refresh them."
+              },
+              {
+                "title": "Zero-fee table reservations",
+                "icon": "calendar",
+                "description": "Direct guest booking with automated confirmations. No per-seat commissions and no reservation surcharge."
+              },
+              {
+                "title": "Unified guest inbox",
+                "icon": "inbox",
+                "description": "Contact inquiries, table requests and guest notes in one dashboard workspace."
+              },
+              {
+                "title": "Conversational analytics",
+                "icon": "bar-chart",
+                "description": "Ask which dishes get looked at and which days are busiest, then turn that into a seasonal promotion."
+              },
+              {
+                "title": "Multi-location support",
+                "icon": "map-pin",
+                "description": "Run several venues with their own location URLs, hours and location-scoped menu items under one organization."
+              }
+            ]
+          }
+        },
+        {
+          "type": "faq",
+          "data": {
+            "section": "faq",
+            "title": "Frequently Asked Restaurant Questions",
+            "source": "page_qa"
+          }
+        },
+        {
+          "type": "cta",
+          "data": {
+            "section": "cta",
+            "title": "Launch your restaurant site free today",
+            "description": "Create your site in minutes, connect KrabiClaw in Claude or ChatGPT, and start taking direct bookings with no per-cover fees.",
+            "label": "Start Free",
+            "url": "/signup",
+            "secondary_label": "View All Plans",
+            "secondary_url": "/pricing"
+          }
+        }
+      ],
+      "qa": [
+        {
+          "question": "Are there any per-cover or booking fees?",
+          "answer": "None. KrabiClaw charges no commission per reservation. Starter carries no subscription, and a paid plan is a flat monthly rate however many guests you seat — see the pricing page for current rates."
+        },
+        {
+          "question": "How does menu editing work through Claude or ChatGPT?",
+          "answer": "Connect the KrabiClaw MCP service in your client, then say what you want: \"Add our seafood paella to the specials section for $28\", or \"mark the tuna tartare as sold out today\"."
+        },
+        {
+          "question": "Can I connect my own custom domain?",
+          "answer": "A custom domain is a paid-plan feature, with the certificate and edge routing managed for you. On Starter your site runs on a KrabiClaw subdomain."
+        },
+        {
+          "question": "How do Google Places imports work?",
+          "answer": "Choose your Google Maps listing and KrabiClaw imports the verified hours, street address, photos and reviews it publishes. Re-import whenever they change."
+        },
+        {
+          "question": "Can I manage multiple restaurant branches?",
+          "answer": "Yes. Multi-location businesses run separate menus, hours and addresses under one brand — Kikuzuki runs two branches this way."
+        },
+        {
+          "question": "Do I have to discard my current website?",
+          "answer": "No. Build and preview your KrabiClaw site free on a subdomain, and point your production domain at it only when you are ready."
+        }
+      ]
+    },
+    {
+      "path": "/experiences",
+      "title": "Experiences",
+      "pageType": "custom",
+      "summary": "Direct booking and ticketing for workshops, classes, studios and tours.",
+      "seoTitle": "Booking websites for workshops, studios and tours",
+      "seoDescription": "Direct booking websites for pottery classes, tours, studios and workshops, with time-slot scheduling, capacity control and no booking commissions.",
+      "blocks": [
+        {
+          "type": "hero",
+          "data": {
+            "section": "hero",
+            "eyebrow": "Experiences & Activities",
+            "eyebrow_icon": "calendar",
+            "title": "Stop losing every booking to marketplaces.\nDirect bookings & ticketing, managed through conversation.",
+            "highlight": "Direct bookings & ticketing, managed through conversation.",
+            "subtitle": "High-converting booking pages for pottery workshops, tours, cooking classes, and studios. Time-slot scheduling, capacity control, and zero booking commissions.",
+            "cta_label": "Start Free",
+            "cta_url": "/signup",
+            "secondary_label": "View Pricing",
+            "secondary_url": "/pricing"
+          }
+        },
+        {
+          "type": "feature_grid",
+          "data": {
+            "section": "comparison-against",
+            "pill": "The OTA & Marketplace Trap",
+            "pill_icon": "x",
+            "title": "Why third-party ticketing platforms hurt studios",
+            "items": [
+              {
+                "title": "Commission cuts",
+                "description": "Marketplaces take a share of every booking they send you."
+              },
+              {
+                "title": "Held-hostage customer data",
+                "description": "Marketplaces hide guest emails and phone numbers, preventing repeat bookings or direct community marketing."
+              },
+              {
+                "title": "Clunky iframe widgets",
+                "description": "Embedding third-party widgets on generic websites breaks mobile layouts and slows page loads."
+              },
+              {
+                "title": "Manual DM coordination",
+                "description": "Handling capacity changes, group inquiries and schedule changes through Instagram DMs leads to overbooking."
+              }
+            ]
+          }
+        },
+        {
+          "type": "feature_grid",
+          "data": {
+            "section": "comparison-for",
+            "pill": "Direct Studio Ownership",
+            "pill_icon": "check",
+            "title": "Direct ticket sales. Zero commissions.",
+            "items": [
+              {
+                "title": "Keep the full ticket price",
+                "description": "Flat monthly pricing with no ticketing commissions or per-booking surcharges."
+              },
+              {
+                "title": "Automated capacity & time slots",
+                "description": "Set seat maximums, durations and session times that automatically prevent overbooking."
+              },
+              {
+                "title": "Own your guest relationships",
+                "description": "Direct email confirmations, and WhatsApp on a plan that includes messaging notifications, keep guests informed."
+              },
+              {
+                "title": "Edit by asking",
+                "description": "Tell Claude or ChatGPT \"add an afternoon wheel-throwing workshop on Saturdays for 8 people\" and it's live."
+              }
+            ]
+          }
+        },
+        {
+          "type": "feature_grid",
+          "data": {
+            "section": "workflows",
+            "eyebrow": "Conversational Studio Operations",
+            "title": "Manage sessions & bookings through conversation",
+            "description": "No passwords to remember, no complex CMS menus. Just ask.",
+            "items": [
+              {
+                "title": "Schedule & Capacity",
+                "icon": "calendar",
+                "value": "Add a 2-hour beginner ceramics session every Sunday at 10 AM, max 6 students, 1,200 THB.",
+                "description": "Your assistant configures duration, capacity controls and pricing, generating an SEO-rich booking page instantly."
+              },
+              {
+                "title": "Booking Analytics",
+                "icon": "bar-chart",
+                "value": "Which of our workshop sessions got the most booking inquiries this month, and what is our overall conversion rate?",
+                "description": "Inspects your conversion events and booking ledger to tell you which classes are in highest demand."
+              },
+              {
+                "title": "Group Inquiries",
+                "icon": "sparkles",
+                "value": "Show me pending private event inquiries and draft a confirmation email for a company team-building session.",
+                "description": "Review inquiries in your unified inbox and draft customised replies without leaving the conversation."
+              }
+            ]
+          }
+        },
+        {
+          "type": "feature_grid",
+          "data": {
+            "section": "proof",
+            "pill": "Verified Production Showcase",
+            "pill_icon": "sparkles",
+            "title": "How Pottery House Krabi powers hands-on workshops",
+            "description": "Pottery House Krabi offers daily wheel-throwing classes, hand-building workshops, and private group experiences across their **main studio** and **beachfront space**. Visitors book time slots directly from their phones with real-time capacity safeguards and automated confirmations.",
+            "items": [
+              {
+                "value": "0%",
+                "title": "Marketplace Fees"
+              },
+              {
+                "value": "2",
+                "title": "Studio Branches"
+              },
+              {
+                "value": "Real-Time",
+                "title": "Capacity Control"
+              }
+            ]
+          }
+        },
+        {
+          "type": "feature_grid",
+          "data": {
+            "section": "proof-card",
+            "title": "Pottery House Krabi",
+            "badge": "Saya Theme",
+            "cta_label": "Explore Experience Theme →",
+            "cta_url": "/templates/saya",
+            "items": [
+              {
+                "title": "Wheel Throwing (2h)",
+                "description": "Slots: 10:00, 14:00, 16:30"
+              },
+              {
+                "title": "Capacity per session",
+                "description": "Max 6 participants"
+              },
+              {
+                "title": "Private Groups",
+                "description": "Inquiry & custom quotes"
+              }
+            ]
+          }
+        },
+        {
+          "type": "feature_grid",
+          "data": {
+            "section": "features",
+            "eyebrow": "Tailored for Activities",
+            "title": "Everything you need to run ticketed classes and tours",
+            "items": [
+              {
+                "title": "Time-slot and capacity engine",
+                "icon": "calendar",
+                "description": "Define session start times, durations and participant limits. Slots close automatically once capacity is reached."
+              },
+              {
+                "title": "High-impact galleries",
+                "icon": "image",
+                "description": "Show past work, the studio space and guest photos, delivered from the edge."
+              },
+              {
+                "title": "Direct confirmations",
+                "icon": "message-circle",
+                "description": "Guests are confirmed by email, and by WhatsApp on a plan that includes messaging notifications."
+              },
+              {
+                "title": "Group and private event inquiries",
+                "icon": "inbox",
+                "description": "Capture inquiries for retreats, private parties and custom workshops that need a quote rather than a checkout."
+              },
+              {
+                "title": "Demand analytics",
+                "icon": "bar-chart",
+                "description": "Ask which time slot fills fastest and how many people looked at the weekend workshop."
+              },
+              {
+                "title": "Local SEO and structured data",
+                "icon": "globe",
+                "description": "Event and LocalBusiness markup so your activities can be read by search engines and answer engines."
+              }
+            ]
+          }
+        },
+        {
+          "type": "faq",
+          "data": {
+            "section": "faq",
+            "title": "Frequently Asked Experience Questions",
+            "source": "page_qa"
+          }
+        },
+        {
+          "type": "cta",
+          "data": {
+            "section": "cta",
+            "title": "Start selling workshop tickets directly",
+            "description": "Create your experience site in minutes, connect Claude or ChatGPT, and accept commission-free bookings today.",
+            "label": "Start Free",
+            "url": "/signup",
+            "secondary_label": "View All Plans",
+            "secondary_url": "/pricing"
+          }
+        }
+      ],
+      "qa": [
+        {
+          "question": "Do you charge booking or ticket commissions?",
+          "answer": "No. You keep the full ticket price. Starter carries no subscription and a paid plan is a flat rate; current rates are on the pricing page."
+        },
+        {
+          "question": "Can I set maximum group sizes per class?",
+          "answer": "Yes. Each experience has a capacity limit per time slot, and a session that fills up is marked unavailable automatically."
+        },
+        {
+          "question": "How do customers receive their confirmations?",
+          "answer": "By email on every plan, and by WhatsApp on a plan that includes messaging notifications."
+        },
+        {
+          "question": "Can I handle custom group pricing before booking?",
+          "answer": "Yes. An inquiry-only flow covers private events, school groups and corporate workshops that need a quote."
+        },
+        {
+          "question": "How do I add a new class or workshop?",
+          "answer": "In the dashboard, or by asking Claude or ChatGPT: \"Create a two-hour macrame class on Saturdays for 35 dollars with eight spots\"."
+        },
+        {
+          "question": "Can I bring across my Google Business Profile?",
+          "answer": "On a plan that includes Google Places imports, you select your listing and KrabiClaw imports the address, hours, ratings and reviews it publishes. Re-run the import to refresh them."
+        }
+      ]
+    },
+    {
+      "path": "/legal",
+      "title": "Legal and professional services",
+      "pageType": "custom",
+      "summary": "Practice-area pages, consultation intake and LegalService structured data on the Blawby template.",
+      "seoTitle": "Law practice and legal services websites",
+      "seoDescription": "Websites for law firms, solo practitioners and legal aid organizations, with dedicated practice areas, consultation intake, and schema.org LegalService markup.",
+      "blocks": [
+        {
+          "type": "hero",
+          "data": {
+            "section": "hero",
+            "eyebrow": "Blawby for Professional Services",
+            "eyebrow_icon": "briefcase",
+            "title": "Modern law practice websites.\nStructured practice areas, managed through conversation.",
+            "highlight": "Structured practice areas, managed through conversation.",
+            "subtitle": "Dedicated practice area URLs, consultation booking flows, regulatory compliance pages, and canonical LegalService structured data — without the agency retainer.",
+            "cta_label": "Start Free",
+            "cta_url": "/signup",
+            "secondary_label": "Explore Template",
+            "secondary_url": "/templates/blawby"
+          }
+        },
+        {
+          "type": "feature_grid",
+          "data": {
+            "section": "comparison-against",
+            "pill": "The Agency Retainer Trap",
+            "pill_icon": "x",
+            "title": "Why traditional legal websites fall behind",
+            "items": [
+              {
+                "title": "High ongoing costs",
+                "description": "Boutique agencies charge a large upfront build fee plus a monthly maintenance retainer, for static pages."
+              },
+              {
+                "title": "Unstructured practice areas",
+                "description": "Cramming practice expertise into generic blog posts hurts SEO authority and search crawler discovery."
+              },
+              {
+                "title": "Missing compliance & schema",
+                "description": "Missing bar admission details, nonprofit 501(c)(3) designations, or required legal disclaimers."
+              },
+              {
+                "title": "Friction-filled intake",
+                "description": "Clunky static contact forms that fail to route prospective clients to consultation calendars."
+              }
+            ]
+          }
+        },
+        {
+          "type": "feature_grid",
+          "data": {
+            "section": "comparison-for",
+            "pill": "The Blawby Template",
+            "pill_icon": "check",
+            "title": "Credible. Compliant. Fast.",
+            "items": [
+              {
+                "title": "Dedicated practice area architecture",
+                "description": "Canonical /services/[slug] routes optimised for local search authority."
+              },
+              {
+                "title": "Consultation scheduling handoffs",
+                "description": "Integrate Clio Grow, Calendly, or native contact intake flows."
+              },
+              {
+                "title": "Canonical LegalService schema",
+                "description": "Verified schema.org linked @graph supporting legal aid, nonprofit status, and bar service areas."
+              },
+              {
+                "title": "Update by asking",
+                "description": "Publish legal updates, firm announcements and practice area guides directly through conversation."
+              }
+            ]
+          }
+        },
+        {
+          "type": "feature_grid",
+          "data": {
+            "section": "workflows",
+            "eyebrow": "Practice Management",
+            "title": "Managing your legal presence through conversation",
+            "description": "No passwords to remember, no complex CMS menus. Just ask.",
+            "items": [
+              {
+                "title": "Practice Area Updates",
+                "icon": "briefcase",
+                "value": "Add an estate planning offering page outlining our trust administration and power-of-attorney services.",
+                "description": "Generates the dedicated page with legal structured data, clean headings, and a consultation CTA."
+              },
+              {
+                "title": "Thought Leadership",
+                "icon": "file-text",
+                "value": "Draft and publish a guidance article on recent statutory changes to state tenant eviction protections.",
+                "description": "Creates an editorial article under a canonical article route with automatic openGraph and author credentials."
+              },
+              {
+                "title": "Intake & Inquiries",
+                "icon": "inbox",
+                "value": "How many prospective clients submitted consultation inquiries this month, and what practice areas were requested?",
+                "description": "Inspects your first-party inquiry ledger to identify high-demand service areas without third-party tracking cookies."
+              }
+            ]
+          }
+        },
+        {
+          "type": "feature_grid",
+          "data": {
+            "section": "proof",
+            "pill": "Verified Production Showcase",
+            "pill_icon": "map-pin",
+            "title": "North Carolina Legal Services (NCLS)",
+            "description": "NCLS provides statewide legal aid and representation for families, consumers and homeowners across North Carolina. On the **Blawby** template it delivers clean practice area navigation, disaster relief legal guides, accessibility-compliant reading modes, and external consultation intake through Clio Grow.",
+            "items": [
+              {
+                "value": "Statewide",
+                "title": "Service Area Coverage"
+              },
+              {
+                "value": "501(c)(3)",
+                "title": "Verified Nonprofit Schema"
+              },
+              {
+                "value": "Clio Grow",
+                "title": "Consultation Intake Handoff"
+              }
+            ]
+          }
+        },
+        {
+          "type": "feature_grid",
+          "data": {
+            "section": "proof-card",
+            "title": "North Carolina Legal Services",
+            "badge": "Blawby Theme",
+            "cta_label": "Explore Blawby Template →",
+            "cta_url": "/templates/blawby",
+            "items": [
+              {
+                "title": "Practice Areas",
+                "description": "Family, Housing, Education, Consumer"
+              },
+              {
+                "title": "Legal Articles",
+                "description": "Eviction Defense, IEP Rights, Helene Relief"
+              },
+              {
+                "title": "Intake System",
+                "description": "Verified Online Intake"
+              }
+            ]
+          }
+        },
+        {
+          "type": "feature_grid",
+          "data": {
+            "section": "features",
+            "eyebrow": "Legal Practice Essentials",
+            "title": "Built for professional practices that demand credibility",
+            "items": [
+              {
+                "title": "Practice-area pages",
+                "icon": "briefcase",
+                "description": "A dedicated URL for every area of expertise, with structured headings, sub-offerings and inquiry routing."
+              },
+              {
+                "title": "Consultation intake routing",
+                "icon": "calendar",
+                "description": "Send prospective clients to Clio Grow, Calendly, or the native contact workflow with short-lived intake continuity."
+              },
+              {
+                "title": "Canonical article publishing",
+                "icon": "file-text",
+                "description": "Publish statutory updates and guidance under canonical article routes to build lasting search authority."
+              },
+              {
+                "title": "Compliance pages out of the box",
+                "icon": "shield-check",
+                "description": "Templates for attorney advertising disclaimers, state bar notices, privacy policies and terms of service."
+              },
+              {
+                "title": "LegalService structured data",
+                "icon": "globe",
+                "description": "Linked schema.org graphs specifying LegalService, nonprofit status and geographic service areas, without hand-written JSON-LD."
+              },
+              {
+                "title": "Private intake inbox",
+                "icon": "inbox",
+                "description": "Prospective client inquiries stay in your dashboard rather than going through a third-party lead aggregator."
+              }
+            ]
+          }
+        },
+        {
+          "type": "faq",
+          "data": {
+            "section": "faq",
+            "title": "Frequently Asked Legal Practice Questions",
+            "source": "page_qa"
+          }
+        },
+        {
+          "type": "cta",
+          "data": {
+            "section": "cta",
+            "title": "Build your professional practice site",
+            "description": "Launch a high-authority legal site on the Blawby template and manage updates through conversation.",
+            "label": "Start Free",
+            "url": "/signup",
+            "secondary_label": "View Pricing",
+            "secondary_url": "/pricing"
+          }
+        }
+      ],
+      "qa": [
+        {
+          "question": "Which plan includes the Blawby template?",
+          "answer": "Blawby is a paid-plan template, alongside a custom domain and the rest of the professional-service features. Current rates are on the pricing page."
+        },
+        {
+          "question": "Can I connect practice management software such as Clio?",
+          "answer": "Yes. Blawby routes consultations to external scheduling links such as Clio Grow or Calendly, or to native intake forms."
+        },
+        {
+          "question": "Do professional-service firms need a physical address?",
+          "answer": "No. Blawby supports statewide and remote service-area practices as well as physical offices, and address visibility is controlled in your compliance settings."
+        },
+        {
+          "question": "How does legal article publishing work?",
+          "answer": "Draft, schedule and publish long-form guidance under the template's canonical article routes, from the dashboard or through Claude or ChatGPT."
+        },
+        {
+          "question": "Is the site's structured data standards-compliant?",
+          "answer": "Yes. KrabiClaw emits a LegalService linked graph with canonical identifiers, nonprofit designations and service areas."
+        },
+        {
+          "question": "Can I map our existing firm domain?",
+          "answer": "Yes, on a plan that includes custom domains. KrabiClaw manages the certificate and edge distribution for it."
+        }
+      ]
+    }
+  ]
+}

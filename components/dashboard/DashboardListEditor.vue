@@ -91,8 +91,13 @@
           @update:model-value="toggleSelected(item.id)"
         />
 
+        <!--
+          A row the caller marks `removable: false` shows no remove control:
+          offering one that the server refuses puts an error toast behind a
+          click the reader had no way to know would fail.
+        -->
         <UButton
-          v-if="editing && !selectable"
+          v-if="editing && !selectable && item.removable !== false"
           icon="i-lucide-circle-minus"
           :aria-label="`Remove ${item.title}`"
           color="neutral"
@@ -202,5 +207,7 @@ export interface ListEditorItem {
   /** Names the row in the remove, reorder and open controls' labels. */
   title: string
   summary?: string | null
+  /** Set false for a row that may not be removed; its remove control is omitted. */
+  removable?: boolean
 }
 </script>

@@ -8,8 +8,10 @@
     add-label="Add a page"
     :pending="pending"
     :error="loadError"
+    :removing-id="removingId"
     @add="openNew"
     @open="open"
+    @remove="remove"
   >
     <template #item="{ item }">
       <button type="button" class="block w-full text-left" @click="open(item)">
@@ -23,6 +25,7 @@
 <script setup lang="ts">
 import DashboardListEditor from '~/components/dashboard/DashboardListEditor.vue'
 import { getErrorMessage } from '~/utils/errors'
+import { isRecord } from '~/utils/api-clients'
 import { isTenantPageListResponse, type TenantPageListRow } from '~/composables/useTenantPageDraft'
 
 const route = useRoute()
@@ -31,7 +34,7 @@ const siteId = await useDashboardSiteId()
 const pagesPath = computed(() => `/dashboard/${String(route.params.orgSlug)}/sites/${String(route.params.siteSlug)}/pages`)
 
 const requestEvent = useRequestEvent()
-const { data, pending, error } = await useAsyncData(
+const { data, pending, error, refresh } = await useAsyncData(
   `tenant-pages-${siteId}`,
   async () => {
     // On the server the list is read straight from D1; going back out over HTTP
@@ -70,6 +73,10 @@ const listItems = computed(() => (data.value?.pages ?? [])
     id: page.id,
     title: page.path === '/' ? 'Home' : page.title,
     summary: page.path === '/' ? 'Homepage' : page.path,
+    // Stated by the server, not recomputed here: a page the template renders a
+    // document at cannot be removed, and a rule copied into the client drifts
+    // from the one the endpoint enforces.
+    removable: page.removable,
   })))
 
 function openNew() {
@@ -78,5 +85,28 @@ function openNew() {
 
 function open(item: { id: string }) {
   void navigateTo(`${pagesPath.value}/${item.id}`)
+}
+
+const removingId = ref<string | null>(null)
+const toast = useToast()
+
+/**
+ * Remove a page and everything under it. The hub owns adding and removing a
+ * record; the leaf edits the one it was opened on (DESIGN.md).
+ *
+ * The server refuses the pages that may not go -- a system page, and a path the
+ * template renders a document at -- so this reports what it said rather than
+ * keeping a second copy of the rule that would drift from it.
+ */
+async function remove(item: { id: string }) {
+  removingId.value = item.id
+  try {
+    await dashboardApi(`/api/editor/sites/${siteId}/pages/${item.id}`, { method: 'DELETE', validate: isRecord })
+    await refresh()
+  } catch (error) {
+    toast.add({ description: getErrorMessage(error, 'Failed to remove the page'), color: 'error' })
+  } finally {
+    removingId.value = null
+  }
 }
 </script>

@@ -6,12 +6,12 @@ import {
   getContentDocumentById,
   getContentEditorSnapshot,
   getContentEditorSnapshotForDocument,
+  prepareContentDocumentDeletion,
   prepareContentDocumentUpdate,
   prepareContentDocumentWithBlocks,
   updateContentDocument,
   type ContentBlockInput,
-  type ContentDocumentInput,
-} from '~/server/utils/content/documents'
+  type ContentDocumentInput } from '~/server/utils/content/documents'
 import {
   normalizeTenantPageBlocks,
   normalizeTenantPagePath,
@@ -33,7 +33,7 @@ import { isSingleMediaPlacement } from '~/shared/media-placement-contract'
 import { parseRobotsIntent, ROBOTS_INTENTS, type RobotsIntent } from '~/shared/robots-directive'
 import { getMediaPlacements } from '~/server/utils/media-placement'
 import { loadSiteTemplate } from '~/server/utils/content/publishing'
-import { templateAllowsPageDocumentAt } from '~/shared/tenant-page-paths'
+import { templateAllowsPageDocumentAt, templateRendersPageDocumentAt } from '~/shared/tenant-page-paths'
 import type { PublicTemplateDefinition } from '~/utils/template-registry'
 import { CLAIMED_PUBLIC_ROUTES } from '#claimed-public-routes'
 
@@ -496,6 +496,10 @@ export async function listTenantPages(db: DbClient, siteId: string, opts: { loca
     `  FROM content_documents v JOIN content_documents p ON p.id = COALESCE(v.root_id, v.id) AND p.row_role = 'root' AND p.kind = 'page'`,
     ` WHERE v.row_role IN ('root','representation') AND v.kind = 'page' AND v.site_id = ? AND v.locale = ? ORDER BY p.sort_order ASC, v.title ASC`,
   ].join('\n'), [siteId, locale])
+  // Whether each page may be removed is decided here, by the same rule
+  // deleteTenantPage enforces, so the list and the endpoint cannot disagree and
+  // the dashboard never offers a remove control the server would refuse.
+  const { template } = await loadSiteTemplate(db, siteId)
   return rows.map(row => ({
     id: row.id,
     page_id: row.page_id,
@@ -506,6 +510,7 @@ export async function listTenantPages(db: DbClient, siteId: string, opts: { loca
     recipe: row.recipe,
     sort_order: row.sort_order,
     updated_at: row.updated_at,
+    removable: !templateRendersPageDocumentAt(template, row.path),
   }))
 }
 
@@ -958,6 +963,60 @@ export async function updateTenantPage(db: DbClient, variantId: string, input: {
     await refreshSocialCard({ db, env: input.env, owner: { owner_type: 'content_document', owner_id: variantId }, actorId: input.userId })
   }
   return { page: await getTenantPageForEditor(db, variantId, input.scope) }
+}
+
+/**
+ * Remove a tenant page document and everything under it.
+ *
+ * Deleting the source-locale row removes the page: its translations, blocks,
+ * media placements and redirects go with it, through the same
+ * `prepareContentDocumentDeletion` every other content kind uses. Deleting a
+ * translation removes only that locale and leaves the page standing.
+ *
+ * One rule decides whether a page may go, and it is the one the write path
+ * already states: `templateRendersPageDocumentAt`. A path the template renders a
+ * document at -- `/`, and every recipe the template names -- would be left with
+ * a route and nothing to put in it, so the way to remove such a page is to stop
+ * the template promising it. Everywhere else the page is the tenant's to remove.
+ *
+ * Not `page_type`. `system` marks a page the product wrote rather than one the
+ * tenant typed, and every migrated page carries it: demo's `/about` is a system
+ * page its owner edits daily. Refusing on `system` would have made most of a
+ * site's pages permanent, and it is a second rule that drifts from the first.
+ */
+export async function deleteTenantPage(db: DbClient, variantId: string, input: { scope: TenantPageScope }) {
+  const row = await getPageRepresentation(db, variantId, input.scope)
+  if (!row) notFound('Tenant page variant not found')
+  const isSourceLocale = row.id === row.page_id
+  if (isSourceLocale) {
+    const { template } = await loadSiteTemplate(db, row.site_id)
+    if (templateRendersPageDocumentAt(template, row.path)) {
+      badRequest(`The ${template.slug} template renders a page document at ${row.path}, so the route would have nothing to render`)
+    }
+    // A page another page links to cannot simply go. `page_grid` renders its
+    // cards from the referenced documents, and a reference to a page that is
+    // gone is a 500 on the referring page, by design -- "the editor chose it
+    // and needs to know" (server/utils/public-tenant-pages.ts). So the editor
+    // is told here, before the delete, which page would break.
+    const referrers = await queryAll<{ path: string }>(db, `
+      SELECT DISTINCT d.path
+        FROM content_blocks b
+        JOIN content_documents d ON d.id = b.document_id
+        JOIN json_each(b.data_json, '$.page_ids') ref
+       WHERE b.type = 'page_grid' AND d.site_id = ? AND d.id <> ? AND ref.value = ?
+       ORDER BY d.path
+    `, [row.site_id, row.id, row.id])
+    if (referrers.length > 0) {
+      badRequest(`${referrers.map(item => item.path).join(', ')} link${referrers.length === 1 ? 's' : ''} to this page; remove the link before deleting it`)
+    }
+  }
+  const results = await executeBatch(db, prepareContentDocumentDeletion({
+    documentId: row.id,
+    organizationId: row.organization_id,
+    siteId: row.site_id,
+  }))
+  if (Number(results.at(-1)?.meta.changes ?? 0) === 0) notFound('Tenant page variant not found')
+  return { deleted: { id: row.id, path: row.path, locale: row.locale, scope: isSourceLocale ? 'page' as const : 'locale' as const } }
 }
 
 export async function listPublishedTenantPagePaths(db: DbClient, siteId: string, locale?: string | null) {

@@ -62,6 +62,8 @@ export interface TenantPageListRow {
   recipe: string | null
   sort_order: number
   updated_at: string
+  /** False when the site's template renders a document at this path; see deleteTenantPage. */
+  removable: boolean
 }
 
 function isOptionalString(value: unknown): value is string | null {
@@ -82,7 +84,8 @@ export function isTenantPageResponse(value: unknown): value is { page: TenantPag
 export function isTenantPageListResponse(value: unknown): value is { pages: TenantPageListRow[] } {
   return isRecord(value) && Array.isArray(value.pages)
     && value.pages.every(page => isRecord(page) && typeof page.id === 'string'
-      && typeof page.page_id === 'string' && typeof page.title === 'string' && typeof page.path === 'string')
+      && typeof page.page_id === 'string' && typeof page.title === 'string' && typeof page.path === 'string'
+      && typeof page.removable === 'boolean')
 }
 
 function isEditorContextResponse(value: unknown): value is { context: { previewToken: string; site: { subdomain: string | null } } } {
