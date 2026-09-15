@@ -2,7 +2,7 @@
 import type { H3Event } from 'nitro'
 import type { HTTPEvent } from 'nitro/h3'
 import { useRuntimeConfig } from 'nitro/runtime-config'
-import { isNonProductionHost } from '~/server/utils/tenant-hosts'
+import { usesTenantHeader } from '~/server/utils/tenant-hosts'
 
 /**
  * Cached HTML references the `/_nuxt/` asset hashes of the build that rendered
@@ -27,9 +27,12 @@ export function buildHtmlCacheKey(event: H3Event | HTTPEvent): string | null {
   const buildId = useRuntimeConfig().app?.buildId
   if (!buildId) return null
   const hostname = host.split(':')[0] ?? host
-  // On hosts where multiple tenants share one hostname (workers.dev, preview.*, staging.*),
-  // include x-preview-tenant in the key so their cached HTML doesn't collide.
-  const previewTenant = isNonProductionHost(hostname)
+  // Only hosts that cannot express tenant identity in their hostname carry it in
+  // x-preview-tenant, and there it must be part of the key or two tenants share
+  // one entry. Asking isNonProductionHost instead put an untrusted header in the
+  // key on deployed staging aliases, which resolve their tenant from the
+  // hostname and would have fragmented on a header a client chose.
+  const previewTenant = usesTenantHeader(hostname)
     ? (cfRequest?.headers.get('x-preview-tenant')
       ?? request.headers.get('x-preview-tenant'))
     : null
