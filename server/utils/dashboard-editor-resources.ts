@@ -23,6 +23,8 @@ import { parseLocationPayload } from '~/server/utils/location-payload'
 import { getProduct, listLocationProducts } from '~/server/utils/product-management'
 import { loadDashboardGuestThreads } from '~/server/utils/dashboard-guest-threads'
 import { requireBlogAccess } from '~/server/utils/blog-access'
+import { requireTenantPageWriteAccess } from '~/server/utils/tenant-pages-api'
+import { getTenantPageById, listTenantPages } from '~/server/utils/content/pages'
 import { getBlogPost, listBlogPosts } from '~/server/utils/content/publishing'
 import { listPosts } from '~/server/utils/post-management'
 import { createPreviewToken, PREVIEW_TOKEN_TTL_MS } from '~/server/utils/preview-token'
@@ -371,6 +373,26 @@ export async function loadDashboardBlogPost(
   const post = await getBlogPost(db, postId, siteId, env)
   if (!post) throw new HTTPError({ statusCode: 404, statusMessage: 'Post not found' })
   return { post }
+}
+
+/**
+ * The Pages chain reads these on the server rather than calling its own
+ * endpoints over HTTP during render, the way the Blog chain does. Rendering the
+ * list and the open page server-side is what lets a section, a section's part
+ * or a record inside one survive a direct load or a refresh: every level's
+ * not-found guard reads the same loaded page, so a missing id answers 404 and a
+ * real one answers itself.
+ */
+export async function loadDashboardTenantPages(event: H3Event, siteId: string, locale?: string | null) {
+  const { db } = await requireTenantPageWriteAccess(event, siteId)
+  return { pages: await listTenantPages(db, siteId, { locale: locale ?? null }) }
+}
+
+export async function loadDashboardTenantPage(event: H3Event, siteId: string, variantId: string) {
+  const { db, site } = await requireTenantPageWriteAccess(event, siteId)
+  const page = await getTenantPageById(db, variantId, { siteId, organizationId: site.organization_id })
+  if (!page) throw new HTTPError({ statusCode: 404, statusMessage: 'Page not found' })
+  return { page }
 }
 
 export async function loadDashboardProduct(

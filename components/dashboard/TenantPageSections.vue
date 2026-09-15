@@ -101,7 +101,7 @@ const recordPath = computed(() => `/dashboard/${String(route.params.orgSlug)}/si
 const sectionsPath = computed(() => `${recordPath.value}/sections`)
 const frame = useEditorFrame(sectionsPath)
 
-const { draft, dirty, revert, commit } = useTenantPageDraft(props.siteId, props.pageId)
+const { draft, dirty, ready, revert, commit } = useTenantPageDraft(props.siteId, props.pageId)
 
 const editing = ref(false)
 const saving = ref(false)
@@ -111,8 +111,10 @@ const openBlockId = computed(() => frame.childSegment.value ?? '')
 const openBlock = computed(() => draft.value.blocks.find(block => block.id === openBlockId.value) ?? null)
 const isNewBlock = computed(() => openBlockId.value === 'new')
 
-// A section that is not there is not a page.
+// A section that is not there is not a page — once the page it would be in has
+// actually been read.
 watchEffect(() => {
+  if (!ready.value) return
   if (!openBlockId.value || isNewBlock.value) return
   if (!openBlock.value) throw createError({ statusCode: 404, statusMessage: 'Section not found' })
 })

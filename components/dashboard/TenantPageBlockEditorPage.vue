@@ -146,7 +146,7 @@ const blockId = computed(() => {
 const blockPath = computed(() => `${sectionsPath.value}/${blockId.value}`)
 const frame = useEditorFrame(blockPath)
 
-const { draft, dirty, revert, commit } = useTenantPageDraft(props.siteId, props.pageId)
+const { draft, dirty, ready, revert, commit } = useTenantPageDraft(props.siteId, props.pageId)
 const newBlock = useTenantPageNewBlock(props.siteId, props.pageId)
 
 const isNew = computed(() => blockId.value === 'new')
@@ -179,6 +179,7 @@ const openCollection = computed(() => {
 // An unsupported route 404s rather than quietly showing something else. A block
 // that is one section has no address for that section: the block is it.
 watchEffect(() => {
+  if (!ready.value && !isNew.value) return
   const segment = openSegment.value
   if (!segment) return
   if (openCollection.value) return
@@ -263,7 +264,7 @@ const { createActionLabel, saveLabel, saveDisabled: walkSaveDisabled, save: save
   isNew,
   openKey: openWalkKey,
   labels: walkLabels,
-  order: walkOrder.value,
+  order: walkOrder,
   missing: (key) => {
     if (key === 'type') return !newBlock.value
     // Only the first section blocks creating: the rest of what a block can hold

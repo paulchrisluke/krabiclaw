@@ -202,7 +202,7 @@ const blockPath = computed(() => `/dashboard/${String(route.params.orgSlug)}/sit
 const collectionPath = computed(() => `${blockPath.value}/${props.collection}`)
 const frame = useEditorFrame(collectionPath)
 
-const { draft, dirty, revert, commit } = useTenantPageDraft(props.siteId, props.pageId)
+const { draft, dirty, ready, revert, commit } = useTenantPageDraft(props.siteId, props.pageId)
 
 const editing = ref(false)
 const saving = ref(false)
@@ -238,6 +238,7 @@ const isPerson = computed(() => block.value?.type === 'team_grid' && props.colle
 // A record that is not there is not a page, and neither is a leaf a record does
 // not have.
 watchEffect(() => {
+  if (!ready.value) return
   const rest = frame.rest.value
   if (rest.length === 0) return
   if (!record.value) throw createError({ statusCode: 404, statusMessage: 'Page not found' })
