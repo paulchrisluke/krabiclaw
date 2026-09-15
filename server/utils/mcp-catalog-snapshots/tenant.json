@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:9c4307d40e7ed02eed15930c6d4f82623b617b26926fa4c19b89d08ffa3e9550",
+  "fingerprint": "sha256:fc2a9e835a2273a3b51b45f7e86bd69af1d351c5e1a86a0dbc53934e7caf50d0",
   "tools": [
     {
       "name": "attach_media",
@@ -3252,6 +3252,64 @@
           "resource_type",
           "resource_id",
           "locale"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "name": "delete_tenant_page",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "expected_updated_at": {
+            "description": "The document timestamp from the last read, so a page edited since is refused rather than silently removed.",
+            "type": "string"
+          },
+          "site_id": {
+            "description": "Internal KrabiClaw site ID from get_workspace_context or list_sites, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
+            "type": "string"
+          },
+          "variant_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "variant_id",
+          "expected_updated_at"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "properties": {
+          "deleted": {
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "locale": {
+                "type": "string"
+              },
+              "path": {
+                "type": "string"
+              },
+              "removed_locales": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "id",
+              "path",
+              "locale",
+              "removed_locales"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "deleted"
         ],
         "type": "object"
       }

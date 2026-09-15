@@ -25,6 +25,8 @@ export const CORE_ONLY_PATTERNS = [
   // Local-only sign-in convenience: no spec drives it, and it 404s wherever
   // dev routes are off. Other server/api/dev routes stay unclassified on purpose.
   'server/api/dev/login.get.ts', 'tests/unit/**',
+  // D1 integration tests are their own CI step; no browser spec exercises them.
+  'tests/integration/**',
 ]
 
 export const IMPACT_GROUPS = [
@@ -73,7 +75,7 @@ export const IMPACT_GROUPS = [
       'pages/schedule.vue', 'pages/services/**',
       'server/middleware/public-resource-provider.ts', 'server/utils/public-*.ts',
       'server/utils/public*.ts', 'server/utils/site-i18n.ts',
-      'server/utils/content/pages.ts',
+      'server/utils/content/pages.ts', 'server/api/editor/sites/**/pages/**', 'server/api/editor/sites/**/pages.*.ts',
       'server/utils/site-template.ts', 'utils/blawby-*.ts', 'utils/public-*.ts',
       'utils/tenant-page-blocks.ts', 'utils/vertical-copy.ts',
     ],
@@ -118,7 +120,7 @@ export const IMPACT_GROUPS = [
       'server/utils/mcp-*.ts', 'server/utils/mcp*.ts',
       'server/utils/mcp-executor/**', 'server/utils/mcp-tools/**',
       'server/utils/mcp-catalog-snapshots/**',
-      'server/utils/content/pages.ts',
+      'server/utils/content/pages.ts', 'server/api/editor/sites/**/pages/**', 'server/api/editor/sites/**/pages.*.ts',
       'server/utils/conversational-*.ts', 'scripts/test-mcp-oauth.mjs',
       'scripts/check-mcp-edit-flow.mjs',
     ],

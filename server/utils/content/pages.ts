@@ -6,6 +6,7 @@ import {
   getContentDocumentById,
   getContentEditorSnapshot,
   getContentEditorSnapshotForDocument,
+  prepareContentDocumentDeletion,
   prepareContentDocumentUpdate,
   prepareContentDocumentWithBlocks,
   updateContentDocument,
@@ -33,7 +34,7 @@ import { isSingleMediaPlacement } from '~/shared/media-placement-contract'
 import { parseRobotsIntent, ROBOTS_INTENTS, type RobotsIntent } from '~/shared/robots-directive'
 import { getMediaPlacements } from '~/server/utils/media-placement'
 import { loadSiteTemplate } from '~/server/utils/content/publishing'
-import { templateAllowsPageDocumentAt } from '~/shared/tenant-page-paths'
+import { templateAllowsPageDocumentAt, templateRendersPageDocumentAt } from '~/shared/tenant-page-paths'
 import type { PublicTemplateDefinition } from '~/utils/template-registry'
 import { CLAIMED_PUBLIC_ROUTES } from '#claimed-public-routes'
 import { formatTenantLocalePath } from '~/utils/tenant-locale-path'
@@ -837,6 +838,58 @@ export async function createTenantPage(db: DbClient, input: { organizationId: st
     await refreshSocialCard({ db, env: input.env, owner: { owner_type: 'content_document', owner_id: variantId }, actorId: input.userId })
   }
   return { page: await getTenantPageForEditor(db, variantId) }
+}
+
+/**
+ * Remove a tenant page, or one of its translations.
+ *
+ * Scope follows the row: deleting a translation removes that translation, and
+ * deleting the source removes the page and every translation with it — the
+ * content_documents_root_scope_fk cascade takes the representation rows, and
+ * prepareContentDocumentDeletion clears the placements and redirects that point
+ * at them by owner_id first, because those carry no foreign key of their own.
+ *
+ * A page the site's template renders is not the owner's to remove: deleting it
+ * would leave a route with nothing to show. That is the same declaration the
+ * writer checks before creating a page, not a second rule about page_type — a
+ * dead row the template no longer maps, like the /locations/main every site used
+ * to be seeded with, is deletable precisely because nothing renders it.
+ */
+export async function deleteTenantPage(db: DbClient, variantId: string, input: { scope: TenantPageScope; expectedUpdatedAt: string; env: CloudflareEnv }) {
+  const row = await getPageRepresentation(db, variantId, input.scope)
+  if (!row) notFound('Tenant page variant not found')
+  const document = await getContentDocumentById(db, row.id)
+  if (!document) throw new HTTPError({ statusCode: 500, statusMessage: 'Tenant page content document not found' })
+  if (document.updated_at !== input.expectedUpdatedAt) conflict('Tenant page content was updated by another writer')
+
+  const { template } = await loadSiteTemplate(db, row.site_id)
+  if (templateRendersPageDocumentAt(template, normalizeTenantPagePath(row.path))) {
+    conflict('This page is one the site template renders, so it cannot be deleted')
+  }
+
+  const removedLocales = row.locale === 'en'
+    ? (await queryAll<{ locale: string }>(db, `
+        SELECT locale FROM content_documents
+         WHERE root_id = ? AND row_role = 'representation' AND site_id = ? AND organization_id = ?
+         ORDER BY locale
+      `, [row.id, row.site_id, row.organization_id])).map(translation => translation.locale)
+    : []
+
+  // The timestamp is checked again inside the batch. The read above gives the
+  // caller a clear conflict, but two queries run between it and this write, and
+  // a page updated in that window must not be deleted on the strength of a
+  // snapshot taken before it.
+  await executeBatch(db, [
+    ...prepareContentDocumentDeletion({
+      documentId: row.id,
+      organizationId: row.organization_id,
+      siteId: row.site_id,
+      expectedUpdatedAt: input.expectedUpdatedAt,
+    }),
+    publicResourceCacheInvalidationQuery(row.site_id, 'tenant-page-delete'),
+  ])
+
+  return { deleted: { id: row.id, path: row.path, locale: row.locale, removed_locales: removedLocales } }
 }
 
 export async function updateTenantPage(db: DbClient, variantId: string, input: { userId: string | null; data: TenantPageEditorInput; scope: TenantPageScope; env: CloudflareEnv }) {
