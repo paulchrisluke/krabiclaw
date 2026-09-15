@@ -4,8 +4,15 @@ name: Project automation
 # with issue activity:
 #
 #   - issue assigned                  -> Status = Ready
-#   - PR references #N                -> issue #N Status = In progress
-#   - PR references an unassigned #N  -> assign it to the PR author, then In progress
+#   - draft PR references #N          -> issue #N Status = In progress
+#   - PR ready for review             -> referenced issues Status = In review
+#   - PR converted back to draft      -> referenced issues Status = In progress
+#   - PR references an unassigned #N  -> assign it to the PR author first
+#   - issue closed                    -> Status = Done
+#
+# A PR that closes its issue with a keyword (Fixes/Closes/Resolves) reaches Done
+# through the issues:closed event when it merges. A PR that only mentions #N
+# leaves that issue at In review until the issue is closed.
 #
 # Projects v2 is not writable by the default GITHUB_TOKEN, so every gh call in
 # this workflow runs under secrets.PROJECT_TOKEN.
@@ -16,9 +23,9 @@ name: Project automation
 
 on:
   issues:
-    types: [assigned]
+    types: [assigned, closed]
   pull_request_target:
-    types: [opened, reopened, edited]
+    types: [opened, reopened, edited, ready_for_review, converted_to_draft]
 
 permissions:
   contents: read
@@ -37,10 +44,12 @@ jobs:
           GH_TOKEN: ${{ secrets.PROJECT_TOKEN }}
           REPO: ${{ github.repository }}
           EVENT_NAME: ${{ github.event_name }}
+          ACTION: ${{ github.event.action }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           PR_TITLE: ${{ github.event.pull_request.title }}
           PR_BODY: ${{ github.event.pull_request.body }}
           PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          PR_DRAFT: ${{ github.event.pull_request.draft }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
         run: |
           set -euo pipefail
@@ -64,21 +73,25 @@ jobs:
             exit 1
           fi
 
+          # Option names must match the board exactly, including case.
           status_option_id() {
-            jq -r --arg name "$1" \
+            local id
+            id="$(jq -r --arg name "$1" \
               '.fields[] | select(.name == "Status") | .options[] | select(.name == $name) | .id' \
-              <<<"$fields_json"
+              <<<"$fields_json")"
+
+            if [[ -z "$id" || "$id" == "null" ]]; then
+              echo "::error::Status option '$1' not found in Project #${PROJECT_NUMBER}." >&2
+              exit 1
+            fi
+
+            printf '%s' "$id"
           }
 
           ready_id="$(status_option_id "Ready")"
           in_progress_id="$(status_option_id "In progress")"
-
-          for pair in "Ready:$ready_id" "In progress:$in_progress_id"; do
-            if [[ -z "${pair#*:}" || "${pair#*:}" == "null" ]]; then
-              echo "::error::Status option '${pair%%:*}' not found in Project #${PROJECT_NUMBER}."
-              exit 1
-            fi
-          done
+          in_review_id="$(status_option_id "In review")"
+          done_id="$(status_option_id "Done")"
 
           # Adds the issue to the project if it is not already an item (addProjectV2ItemById
           # is idempotent and returns the existing item), then sets its Status.
@@ -106,8 +119,21 @@ jobs:
           }
 
           if [[ "$EVENT_NAME" == "issues" ]]; then
-            set_status "$ISSUE_NUMBER" "$ready_id" "Ready"
+            case "$ACTION" in
+              assigned) set_status "$ISSUE_NUMBER" "$ready_id" "Ready" ;;
+              closed)   set_status "$ISSUE_NUMBER" "$done_id" "Done" ;;
+              *)        echo "Unhandled issues action: ${ACTION}" ;;
+            esac
             exit 0
+          fi
+
+          # A draft PR is still being written; anything open for review is In review.
+          if [[ "$PR_DRAFT" == "true" ]]; then
+            target_id="$in_progress_id"
+            target_name="In progress"
+          else
+            target_id="$in_review_id"
+            target_name="In review"
           fi
 
           # Any #N in the PR title or body counts as a reference, closing keywords
@@ -126,8 +152,14 @@ jobs:
             [[ "$issue_number" == "$PR_NUMBER" ]] && continue
 
             # #N may be a pull request; those have no place on the issue board.
-            if ! issue_json="$(gh issue view "$issue_number" --repo "$REPO" --json assignees 2>/dev/null)"; then
+            if ! issue_json="$(gh issue view "$issue_number" --repo "$REPO" --json assignees,state 2>/dev/null)"; then
               echo "#${issue_number} is not an issue in ${REPO}; skipping."
+              continue
+            fi
+
+            # A closed issue is Done; a PR event must not drag it backwards.
+            if [[ "$(jq -r '.state' <<<"$issue_json")" == "CLOSED" ]]; then
+              echo "Issue #${issue_number} is closed; leaving its status alone."
               continue
             fi
 
@@ -139,5 +171,5 @@ jobs:
               fi
             fi
 
-            set_status "$issue_number" "$in_progress_id" "In progress"
+            set_status "$issue_number" "$target_id" "$target_name"
           done <<< "$refs"
