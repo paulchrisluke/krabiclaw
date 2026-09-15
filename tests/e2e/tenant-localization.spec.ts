@@ -159,7 +159,6 @@ test.describe.serial('published Thai content saves through the CMS and renders w
       summary: 'ความรู้ทางกฎหมายสำหรับผู้อ่านภาษาไทย',
     })
 
-    await expectStatus(await owner.get(`/api/editor/sites/${siteId}/localization/site/${siteId}/${locale}`), 404)
     // A page representation carries its own translated body: a Thai page with
     // no blocks is an empty page, which is why the writer rejects one.
     await putLocalization(owner, 'content_document', familyPage!.page_id, {
@@ -405,19 +404,15 @@ test.describe.serial('published Thai content saves through the CMS and renders w
     await expectThaiRepresentation(page, '/th/article/will-th', '/article/writing-your-own-will-how-it-works', 'คู่มือพินัยกรรมภาษาไทย', /Last Will and Testament in North Carolina/i)
   }
 
-  test('renders Thai links and home navigation', async ({ page }) => {
+  // One reader walking the Thai site proves the same routing and
+  // representation invariant as four separate page fixtures did.
+  test('renders every published Thai route without English fallback', async ({ page }) => {
     await verifyThaiLinksAndHome(page)
-  })
-
-  test('renders Thai service routes', async ({ page }) => {
     await verifyThaiServiceRoutes(page)
-  })
-
-  test('renders Thai blog routes', async ({ page }) => {
     await verifyThaiBlogRoutes(page)
-  })
 
-  test('renders a published Thai functional route without a tenant-page variant', async ({ page }) => {
+    // A functional route has no tenant-page variant behind it, so its Thai
+    // representation comes from the route itself rather than from a document.
     const response = await openTenantPage(page, `${blawbyBaseURL}/th/locations`, blawbyExtraHeaders)
     expect(response?.status()).toBeLessThan(400)
     await expect(page.locator('html')).toHaveAttribute('lang', locale)

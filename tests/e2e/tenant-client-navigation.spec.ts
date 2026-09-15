@@ -25,7 +25,7 @@ async function clientJourney(page: Page, options: {
   expect(errors).toEqual([])
 }
 
-test('Pottery home → experiences → experience detail', async ({ page }) => {
+test('Pottery home → experiences → experience detail @smoke', async ({ page }) => {
   await clientJourney(page, {
     baseURL: potteryHouseBaseURL, headers: potteryHouseExtraHeaders,
     listPath: '/experiences', detailPath: '/experiences/pottery-wheel-class', detailText: /Pottery Wheel Class/i,
@@ -39,7 +39,7 @@ test('Kikuzuki home → menu → menu item', async ({ page }) => {
   })
 })
 
-test('NCLS home → services → service detail', async ({ page }) => {
+test('NCLS home → services → service detail @smoke', async ({ page }) => {
   await clientJourney(page, {
     baseURL: blawbyBaseURL, headers: blawbyExtraHeaders,
     listPath: '/services', detailPath: '/services/family', detailText: /Family Law/i,

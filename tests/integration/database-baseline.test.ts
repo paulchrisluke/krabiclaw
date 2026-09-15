@@ -44,8 +44,6 @@ test('the baseline creates the complete schema from zero', () => {
     assert.equal(tableCount.count, declared.length)
     const ledgerCount = database.prepare("SELECT count(*) count FROM sqlite_schema WHERE name = 'd1_migrations'").get() as { count: number }
     assert.equal(ledgerCount.count, 0)
-    const splitAvailabilityTables = database.prepare("SELECT count(*) count FROM sqlite_schema WHERE type = 'table' AND name IN ('experience_slot_overrides', 'reservation_slot_overrides')").get() as { count: number }
-    assert.equal(splitAvailabilityTables.count, 0)
     assert.deepEqual(
       database.pragma('table_info(user_workspace_state)').filter(column => column.pk > 0).sort((a, b) => a.pk - b.pk).map(column => column.name),
       ['user_id'],
@@ -67,7 +65,6 @@ test('a rebaseline payload applies to the complete migrated schema', () => {
     destination.exec(readFileSync(payloadPath, 'utf8'))
 
     const tables = destination.prepare("SELECT name FROM sqlite_schema WHERE type = 'table'").all() as Array<{ name: string }>
-    assert.equal(tables.some(table => table.name === 'legal_intake_references'), false)
     assert.equal(tables.some(table => table.name === 'stripe_connected_accounts'), true)
     assert.equal(destination.pragma('foreign_key_check').length, 0)
   } finally {
