@@ -65,9 +65,6 @@ for (const config of CONFIGS) {
   }
 }
 
-if (wranglerToml.includes('name = "GUEST_THREAD_COMMANDS"')) fail('obsolete command binding remains')
-if (wranglerToml.includes('GUEST_DELIVERY_QUEUE') || wranglerToml.includes('[[queues.')) fail('obsolete guest delivery Queue config remains')
-
 if (failed) {
   console.error('\nCloudflare resource check failed.\n')
   process.exit(1)

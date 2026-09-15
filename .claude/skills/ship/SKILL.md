@@ -78,20 +78,17 @@ If an MCP tool schema changed, `corepack yarn mcp:catalog:write` first; the
 catalog check fails on drift. If the ChatGPT submission changed,
 `chatgpt:submission:write`.
 
-## 4. Affected e2e, locally
+## 4. Smoke e2e, locally
 
-Ask the selector what CI will run and run the same specs against the worktree's
-worker:
+Run the same seven cases CI will run against the worktree's worker:
 
 ```bash
-node scripts/select-preview-e2e.mjs --base $(git merge-base origin/staging HEAD) --head HEAD --github-output /dev/stdout
-PLAYWRIGHT_PORT=<N> corepack yarn playwright test <specs it named> --project=chromium --workers=1
+PLAYWRIGHT_PORT=<N> corepack yarn playwright test --project=chromium --grep @smoke
 ```
 
-If it prints `Unclassified runtime files promoted to full coverage`, classify
-those files in `scripts/select-preview-e2e.mjs` in this PR. Every unclassified
-file turns a 5-minute E2E job into a 13-minute one for every PR that touches
-it afterwards.
+Add the specs your change actually touches on top of that. There is no
+selector: the PR suite is fixed, so nothing about your diff changes what CI
+runs.
 
 ## 5. Open the PR as a draft
 

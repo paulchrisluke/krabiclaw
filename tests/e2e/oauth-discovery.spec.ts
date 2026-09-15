@@ -31,7 +31,7 @@ function oauthMetadataBaseURL(baseURL: string) {
 }
 
 test.describe('OAuth discovery endpoints', () => {
-  test('the Kikuzuki publisher can exchange its loopback PKCE code for tenant access', async ({ request, baseURL }) => {
+  test('the Kikuzuki publisher can exchange its loopback PKCE code for tenant access @smoke', async ({ request, baseURL }) => {
     await loginAs(request, baseURL!, 'user-e2e-kikuzuki-owner')
     const clientId = `${baseURL}/oauth-clients/client-localization.json`
     const metadata = await request.get(clientId)
@@ -83,45 +83,42 @@ test.describe('OAuth discovery endpoints', () => {
     expect(result.result.structuredContent.sites.some(site => site.id === 'site-kikuzuki')).toBe(true)
   })
 
-  test('/.well-known/oauth-protected-resource returns valid document', async ({ request, baseURL }) => {
-    const res = await request.get(`${baseURL}/.well-known/oauth-protected-resource`)
-    expect(res.status()).toBe(200)
-    const body = await res.json() as Record<string, unknown>
-    expect(body.resource).toBe(`${oauthMetadataBaseURL(baseURL!)}/api/mcp`)
-    expect(Array.isArray(body.authorization_servers)).toBe(true)
-    expect((body.authorization_servers as string[]).length).toBeGreaterThan(0)
-    expect(Array.isArray(body.bearer_methods_supported)).toBe(true)
-    expect((body.bearer_methods_supported as string[])).toContain('header')
-  })
+  // One discovery pass: a client reads all three documents back to back, and
+  // splitting them into three tests only repeats the fixture.
+  test('the three OAuth discovery documents describe this resource server', async ({ request, baseURL }) => {
+    const metadataBase = oauthMetadataBaseURL(baseURL!)
 
-  test('/.well-known/openid-configuration returns valid document', async ({ request, baseURL }) => {
-    const res = await request.get(`${baseURL}/.well-known/openid-configuration`)
-    expect(res.status()).toBe(200)
-    const body = await res.json() as Record<string, unknown>
-    expect(typeof body.issuer).toBe('string')
-    expect(typeof body.authorization_endpoint).toBe('string')
-    expect(typeof body.token_endpoint).toBe('string')
-    expect(typeof body.jwks_uri).toBe('string')
-    expect(Array.isArray(body.id_token_signing_alg_values_supported)).toBe(true)
+    const protectedResource = await request.get(`${baseURL}/.well-known/oauth-protected-resource`)
+    expect(protectedResource.status()).toBe(200)
+    const resourceBody = await protectedResource.json() as Record<string, unknown>
+    expect(resourceBody.resource).toBe(`${metadataBase}/api/mcp`)
+    expect(Array.isArray(resourceBody.authorization_servers)).toBe(true)
+    expect((resourceBody.authorization_servers as string[]).length).toBeGreaterThan(0)
+    expect(resourceBody.bearer_methods_supported as string[]).toContain('header')
+
+    const openid = await request.get(`${baseURL}/.well-known/openid-configuration`)
+    expect(openid.status()).toBe(200)
+    const openidBody = await openid.json() as Record<string, unknown>
+    expect(typeof openidBody.issuer).toBe('string')
+    expect(typeof openidBody.authorization_endpoint).toBe('string')
+    expect(typeof openidBody.token_endpoint).toBe('string')
+    expect(typeof openidBody.jwks_uri).toBe('string')
     // OpenID Connect Discovery requires RS256 support. ChatGPT validates the
     // ID token after code exchange and will abort before MCP initialize when
     // the provider advertises only Better Auth's EdDSA default.
-    expect(body.id_token_signing_alg_values_supported as string[]).toContain('RS256')
-    expect(body.registration_endpoint).toBeUndefined()
-    expect(body.client_id_metadata_document_supported).toBe(true)
-  })
+    expect(openidBody.id_token_signing_alg_values_supported as string[]).toContain('RS256')
+    expect(openidBody.registration_endpoint).toBeUndefined()
+    expect(openidBody.client_id_metadata_document_supported).toBe(true)
 
-  test('/.well-known/oauth-authorization-server returns valid RFC 8414 document', async ({ request, baseURL }) => {
-    const res = await request.get(`${baseURL}/.well-known/oauth-authorization-server`)
-    expect(res.status()).toBe(200)
-    const body = await res.json() as Record<string, unknown>
-    expect(typeof body.issuer).toBe('string')
-    expect(typeof body.authorization_endpoint).toBe('string')
-    expect(typeof body.token_endpoint).toBe('string')
-    expect(body.registration_endpoint).toBeUndefined()
-    expect(body.client_id_metadata_document_supported).toBe(true)
-    expect(Array.isArray(body.code_challenge_methods_supported)).toBe(true)
-    expect((body.code_challenge_methods_supported as string[])).toContain('S256')
+    const authorizationServer = await request.get(`${baseURL}/.well-known/oauth-authorization-server`)
+    expect(authorizationServer.status()).toBe(200)
+    const authorizationServerBody = await authorizationServer.json() as Record<string, unknown>
+    expect(typeof authorizationServerBody.issuer).toBe('string')
+    expect(typeof authorizationServerBody.authorization_endpoint).toBe('string')
+    expect(typeof authorizationServerBody.token_endpoint).toBe('string')
+    expect(authorizationServerBody.registration_endpoint).toBeUndefined()
+    expect(authorizationServerBody.client_id_metadata_document_supported).toBe(true)
+    expect(authorizationServerBody.code_challenge_methods_supported as string[]).toContain('S256')
   })
 
   test('public CIMD exchanges codes once, rotates refresh grants and reuses remembered consent', async ({ request, baseURL }) => {

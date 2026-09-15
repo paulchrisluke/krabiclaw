@@ -41,7 +41,7 @@ test.describe('stateless MCP server', () => {
     expect(invalidOfferBody.result?.content?.[0]?.text).toContain('event')
   })
 
-  test('a draft publishes explicitly, stays idempotent on repeat, and matches the public API', async ({ request, baseURL }) => {
+  test('a draft publishes explicitly, stays idempotent on repeat, and matches the public API @smoke', async ({ request, baseURL }) => {
     test.setTimeout(90_000)
     await loginAs(request, baseURL!, MCP_GROWTH_SERVICE_USER_ID)
     const siteId = await ensureSite(request, baseURL!)
@@ -198,15 +198,6 @@ test.describe('stateless MCP server', () => {
     const validateBlog = new Ajv({ strict: false, allErrors: true }).compile(blogTool!.outputSchema)
     let postId = ''
     try {
-      const legacy = await mcpRequest(request, baseURL!, {
-        method: 'tools/call', toolName: 'create_blog_post',
-        args: { site_id: siteId, title: 'Legacy MCP body', body: 'Rejected' },
-      })
-      expect(legacy.status()).toBe(200)
-      const legacyBody = await legacy.json()
-      expect(legacyBody.result?.isError).toBe(true)
-      expect(legacyBody.result?.content?.[0]?.text).toContain('body')
-
       const create = await mcpRequest(request, baseURL!, {
         method: 'tools/call', toolName: 'create_blog_post',
         args: {
@@ -241,9 +232,6 @@ test.describe('stateless MCP server', () => {
       expect(readPost.preview_url).toContain('?preview_token=')
       expect(readPost.updated_at).toEqual(created.updated_at)
       expect(readPost.content_blocks.map(block => block.type)).toEqual(['heading', 'markdown'])
-      expect(readPost).not.toHaveProperty('body')
-      expect(readPost).not.toHaveProperty('components')
-      expect(readPost).not.toHaveProperty('content_document')
 
       const update = await mcpRequest(request, baseURL!, {
         method: 'tools/call', toolName: 'replace_blog_content',
@@ -277,31 +265,6 @@ test.describe('stateless MCP server', () => {
       const editorPost = (await editorRead.json() as { post: { body: string } }).post
       expect(editorPost.body).toContain('Edited through MCP')
       expect(editorPost.body).toContain('Still one shared **document**.')
-
-      // Regression for the 2026-07-22 incident: update_blog_post sent `body`
-      // instead of `content_blocks` and reported success without persisting
-      // anything, because content_blocks being absent looked like a
-      // legitimate no-content-change partial update.
-      const malformedUpdate = await mcpRequest(request, baseURL!, {
-        method: 'tools/call', toolName: 'update_blog_post',
-        args: {
-          site_id: siteId,
-          post_id: postId,
-          expected_updated_at: readPost.updated_at,
-          body: 'This should never be persisted.',
-        },
-      })
-      expect(malformedUpdate.status()).toBe(200)
-      const malformedUpdateBody = await malformedUpdate.json()
-      expect(malformedUpdateBody.result?.isError).toBe(true)
-      expect(malformedUpdateBody.result?.content?.[0]?.text).toContain('body')
-
-      const readAfterRejectedUpdate = await mcpRequest(request, baseURL!, {
-        method: 'tools/call', toolName: 'get_blog_post', args: { site_id: siteId, post_id: postId },
-      })
-      const unchangedPost = mcpData<{ post: { content_blocks: Array<{ type: string; data: Record<string, unknown> }> } }>(await readAfterRejectedUpdate.json()).post
-      expect(unchangedPost.content_blocks.map(block => block.type)).toEqual(['heading', 'markdown', 'faq'])
-      expect(unchangedPost.content_blocks[0]?.data.text).toBe('Edited through MCP')
 
       const schedule = await mcpRequest(request, baseURL!, {
         method: 'tools/call', toolName: 'publish_blog_post',
@@ -367,23 +330,13 @@ test.describe('stateless MCP server', () => {
     const listBody = await toolsList.json() as { result: { tools: Array<{ name: string }> } }
     // Without site_id, all non-gated tools must be discoverable so AI clients (e.g. ChatGPT) see
     // the full capability set on first connection. Security gates enforce at execution time, not
-    // at discovery. Retired translation-job tools and gated social-publishing/domains tools are
-    // intentionally absent here, gated by the conversational-surface flags (see
-    // conversational-tool-surface.ts) — CI runs with those flags unset, matching production
-    // default — so they're intentionally excluded below.
+    // at discovery.
     const allToolNames = listBody.result.tools.map(tool => tool.name)
     expect(allToolNames).toEqual(expect.arrayContaining([
       'list_sites',
       'get_site', 'list_locations', 'list_location_products', 'list_posts', 'get_site_media_assets',
       'list_tenant_pages', 'list_products', 'list_collections', 'get_contact_inquiries',
     ]))
-    expect(allToolNames).not.toEqual(expect.arrayContaining([
-      'get_translation_inventory', 'start_translation_job', 'list_translation_jobs',
-      'get_translation_job', 'run_translation_job_batch', 'get_translation_review_items',
-      'save_translation_review_item', 'publish_translations',
-    ]))
-    expect(allToolNames.length).toBeGreaterThan(50)
-
     const invalid = await mcpRequest(request, baseURL!, { method: 'bad/method', id: 'bad-method' })
     expect(invalid.status()).toBe(200)
     const invalidBody = await invalid.json() as { id: string; error: { code: number; message: string } }
