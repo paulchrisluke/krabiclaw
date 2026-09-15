@@ -422,25 +422,6 @@ export async function resolveLocalizedPublicRoute(
   }
 }
 
-export async function resolveLocalizedRedirect(
-  env: CloudflareEnv,
-  db: DbClient,
-  organizationId: string,
-  siteId: string,
-  routePathInput: unknown,
-) {
-  if (typeof routePathInput !== 'string' || !routePathInput.startsWith('/')) return null
-  const routePath = routePathInput.length > 1 ? routePathInput.replace(/\/+$/, '') : routePathInput
-  const locale = assertExactCanonicalLocale(routePath.split('/')[1])
-  await assertSiteLanguageEntitlement(env, db, organizationId, siteId, locale)
-  return await queryFirst<{ behavior: 'redirect' | 'gone' | 'noindex'; status_code: number; to_path: string | null }>(db, `
-    SELECT behavior, status_code, to_path
-      FROM site_redirects
-     WHERE organization_id = ? AND site_id = ? AND locale = ? AND from_path = ?
-     LIMIT 1
-  `, [organizationId, siteId, locale, routePath])
-}
-
 export async function putResourceLocalization(
   env: CloudflareEnv,
   db: DbClient,
@@ -532,6 +513,7 @@ export async function putLocalizationForAuthoring(env: CloudflareEnv, db: D1Data
   if (source) localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', 'English source content is edited through its document')
   const root = await getContentDocumentById(db, input.resourceId)
   if (!root || root.row_role !== 'root' || root.organization_id !== input.organizationId || root.site_id !== input.siteId) localizationError(404, 'LOCALIZATION_NOT_FOUND', 'Source document was not found')
+  if (root.kind === 'qa') localizationError(403, 'LOCALIZATION_READ_ONLY', 'Q&A is read-only')
   if (!input.values || typeof input.values !== 'object' || Array.isArray(input.values)) localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', 'values must be an object')
   const copy = input.values as Record<string, unknown>
   const textFields = ['title', 'summary', 'slug', 'seo_title', 'seo_description', 'seo_keywords'] as const
@@ -557,13 +539,9 @@ export async function putLocalizationForAuthoring(env: CloudflareEnv, db: D1Data
     }
     changes.metadata = { ...changes.metadata, ...metadata }
   }
-  if (root.kind === 'qa') {
-    if (input.routePath !== undefined && input.routePath !== null) localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', 'Q&A has no independent route')
-  } else {
-    if (typeof input.routePath !== 'string' || !input.routePath.startsWith('/' + locale + '/') || /[?#]/.test(input.routePath) || input.routePath.includes('//')) localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', 'route_path must be a canonical localized path')
-    changes.path = input.routePath.slice(locale.length + 1)
-    if (root.kind !== 'page') changes.slug = input.routePath.split('/').at(-1)!
-  }
+  if (typeof input.routePath !== 'string' || !input.routePath.startsWith('/' + locale + '/') || /[?#]/.test(input.routePath) || input.routePath.includes('//')) localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', 'route_path must be a canonical localized path')
+  changes.path = input.routePath.slice(locale.length + 1)
+  if (root.kind !== 'page') changes.slug = input.routePath.split('/').at(-1)!
   const existing = await getContentRepresentation(db, { rootId: root.id, locale })
   const blocks = input.contentBlocks
   if (blocks !== undefined && !Array.isArray(blocks)) localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', 'content_blocks must be an array')
@@ -615,6 +593,7 @@ export async function deleteLocalization(
     if (source) localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', 'English source content cannot be deleted through localization')
     const document = await getContentRepresentation(db, { rootId: input.resourceId, locale })
     if (!document || document.organization_id !== input.organizationId || document.site_id !== input.siteId) localizationError(404, 'LOCALIZATION_NOT_FOUND', 'Document representation was not found')
+    if (document.kind === 'qa') localizationError(403, 'LOCALIZATION_READ_ONLY', 'Q&A is read-only')
     await executeBatch(db, [...prepareContentDocumentDeletion({ documentId: document.id, organizationId: input.organizationId, siteId: input.siteId }), publicResourceCacheInvalidationQuery(input.siteId, 'document-localization-delete')])
     return { deleted: true, resource_type: 'content_document', resource_id: input.resourceId, locale }
   }

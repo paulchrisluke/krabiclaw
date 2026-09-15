@@ -20,25 +20,25 @@ test.describe('stateless MCP server', () => {
     const toolNames = ((await listForSite.json()) as { result: { tools: Array<{ name: string }> } })
       .result.tools.map(tool => tool.name)
     expect(toolNames).toContain('update_tenant_page')
-    expect(toolNames).not.toContain('get_site_domains')
-    expect(toolNames).not.toContain('reply_to_review')
+    expect(toolNames).not.toContain('set_default_currency')
 
-    // isError alone is not proof of a denial: the tool body answers "review not
-    // found" with isError too, so a regressed role guard that let the editor
-    // reach the implementation would still look green. requireMcpSite refuses
-    // below the tool's minimumRole with 403 'Insufficient permissions', and
-    // that is the string this contract is about.
-    const editorReply = await mcpRequest(request, baseURL!, {
+    // isError alone is not proof of a denial: a tool body can answer with
+    // isError for its own reasons, so a regressed role guard that let the
+    // editor reach the implementation would still look green. requireMcpSite
+    // refuses below the tool's minimumRole with 403 'Insufficient permissions',
+    // and that is the string this contract is about. set_default_currency is
+    // admin-only; the reviews surface is read-only and has no reply tool.
+    const editorWrite = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
-      toolName: 'reply_to_review',
-      args: { site_id: siteId, review_id: 'missing-review-id', reply: 'editor should fail' },
+      toolName: 'set_default_currency',
+      args: { site_id: siteId, currency: 'USD' },
     })
-    expect(editorReply.status()).toBe(200)
-    const editorReplyBody = await editorReply.json() as {
+    expect(editorWrite.status()).toBe(200)
+    const editorWriteBody = await editorWrite.json() as {
       result?: { isError?: boolean; content?: Array<{ text?: string }> }
     }
-    expect(editorReplyBody.result?.isError).toBe(true)
-    expect(editorReplyBody.result?.content?.[0]?.text).toBe('Insufficient permissions')
+    expect(editorWriteBody.result?.isError).toBe(true)
+    expect(editorWriteBody.result?.content?.[0]?.text).toBe('Insufficient permissions')
   })
 
   test('a site the principal cannot reach yields no tools and no writes', async ({ request, baseURL }) => {

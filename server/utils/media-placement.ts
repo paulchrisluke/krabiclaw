@@ -98,6 +98,14 @@ async function requirePostMediaAllowed(db: DbClient, input: PlacementAuthInput):
 
 async function authorizePlacementWrite(db: DbClient, input: PlacementAuthInput): Promise<void> {
   const locationId = await requirePlacementOwner(db, input)
+  if (input.placement.owner_type === 'content_document' || input.placement.owner_type === 'content_block') {
+    const document = await queryFirst<{ kind: string }>(db,
+      input.placement.owner_type === 'content_document'
+        ? 'SELECT kind FROM content_documents WHERE id = ?'
+        : 'SELECT d.kind FROM content_blocks b JOIN content_documents d ON d.id = b.document_id WHERE b.id = ?',
+      [input.placement.owner_id])
+    if (document?.kind === 'qa') throw new HTTPError({ statusCode: 403, statusMessage: 'Q&A is read-only' })
+  }
   if (input.memberId && input.role) {
     await assertResourceAccess(db, {
       env: input.env,

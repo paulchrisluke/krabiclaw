@@ -7,7 +7,6 @@ import {
 import type { CloudflareEnv } from "~/server/utils/auth";
 import { queryAll, queryFirst } from "~/server/db";
 import { d1JsonStringSet } from '~/server/db/d1-limits'
-import { reorderQa, updateQa } from "~/server/utils/location-qa";
 import { listUserOrganizations, resolveOrganizationMembership } from '~/server/utils/member-access'
 import { localPartsAt } from '~/utils/timezone'
 
@@ -220,27 +219,6 @@ export async function getReservationSubmissionsByStatus(
     byStatus[row.status] = row.count
   }
   return byStatus
-}
-
-export async function updateLocationQa(
-  db: D1Database,
-  organizationId: string,
-  siteId: string,
-  locationId: string,
-  qaId: string,
-  updates: Record<string, unknown>,
-) {
-  return updateQa(db, { organizationId, siteId, locationId }, qaId, updates)
-}
-
-export async function reorderLocationQa(
-  db: D1Database,
-  organizationId: string,
-  siteId: string,
-  locationId: string,
-  updates: Array<{ id: string; sort_order: number }>,
-) {
-  return reorderQa(db, { organizationId, siteId, locationId }, updates)
 }
 
 export async function listLocationReviews(

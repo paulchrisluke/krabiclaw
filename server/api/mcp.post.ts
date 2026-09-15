@@ -71,11 +71,11 @@ Whenever an image is needed (hero, logo, post thumbnail, Product photo, experien
 1. Prepare an image prompt tailored to the business.
 2. Call image_generation natively with model gpt-image-1 or gpt-image-2 and the prepared prompt.
 3. Immediately call save_generated_image_file({ site_id, attachment_id: <file reference from image_generation_call>, prompt }). Pass the file reference — never extract or forward the base64 from image_generation_call.result, that will be blocked by safety checks.
-4. Call show_generated_images with the asset_id and public_url returned by save_generated_image_file.
-5. After the user approves, assign with set_media using placement { owner_type, owner_id, slot } and the exact owner id returned by a read tool.
+4. Show the generated image directly in the conversation for review; use the returned public_url when needed.
+5. After the user approves, use the returned asset_id with set_media for a single image or attach_media for an ordered gallery. Use placement { owner_type, owner_id, slot } and the exact owner id returned by a read tool.
 6. If the user wants changes, revise the prompt and repeat from step 2.
 
-For multi-item requests, repeat the complete flow once per item. Generate one standalone image for each target and never substitute a collage, contact sheet, website screenshot, or UI mockup. For Products, each show_generated_images and set_media call must include that Product's exact id; use slot image for the explicit primary and gallery for the ordered detail gallery. Finish every requested item before reporting completion.
+For multi-item requests, repeat the complete flow once per item. Generate one standalone image for each target and never substitute a collage, contact sheet, website screenshot, or UI mockup. For Products, each set_media or attach_media call must include that Product's exact id; use slot image for the explicit primary and gallery for the ordered detail gallery. Finish every requested item before reporting completion.
 
 This entire flow runs within the current conversation — do not tell the user to leave the app or use a different context.
 
@@ -122,15 +122,11 @@ Before calling any mutating tool, the active site must be confirmed for this con
 A site is confirmed when the user explicitly selects it from get_workspace_context or list_sites in this conversation. If no site exists, direct the user to the CMS for setup before making mutations.
 
 Tool categories:
-- **Read-only** (list_*, get_*, show_*) — safe to call once list_sites returns
-- **Preview/generate** (generate_*, show_generated_images) — require a confirmed site
+- **Read-only** (list_*, get_*) — safe to call once list_sites returns
 - **Mutating** (set_*, update_*, create_*, delete_*, publish_*) — require a confirmed site
 
 If the user asks you to mutate content before a site is confirmed, call list_sites first, confirm the active site, then proceed.
 
-When calling show_generated_images after native image_generation, always include the active site name in the labels:
-- use_label: "Use as homepage hero for [site name]"  (or the appropriate placement)
-- subtitle: can reference the site name to make the target obvious
 After applying, always confirm: "[Placement] updated for [site name]." — never leave the target ambiguous.
 
 When a public-facing tool result includes \`view_url\` or \`public_url\`, include that URL in your reply so the user can open the live page immediately. Prefer \`view_url\` when both are present.
@@ -139,7 +135,7 @@ All other tools require a site_id obtained from get_workspace_context or list_si
 
 For every paginated read, keep calling the same tool with page_info.next_cursor (or the resource-specific next_cursor field) until has_more is false before claiming the collection is complete. batch_create_products and reconcile_products are atomic: read every list_location_products page, then send one complete intended create or reconciliation call with an explicit location_id. Never split one logical Product replacement across multiple mutation calls. A Product belongs to the organization: set_product_publication says which sites carry it, set_product_location says where it is offered, and what a customer buys is a variant, so prices belong to variants. Grouping is a collection — read list_collections, create missing ones with create_collection, and send the complete intended membership and order with set_collection_products; reorder_collections takes every collection ID at the site exactly once. Collection names are localized separately through put_resource_localization with resource_type collection and values { name }.
 
-Common workflows: manage a site's Products and the collections that group them, create and publish site posts, triage contact, reservation and booking submissions, update page content directly, upload media, reply to reviews, and generate or replace images for any content section. Manual locale management is available through the locale tools. Domain setup and Google Places lookup are CMS-only. Social publishing is available only when explicitly enabled; otherwise direct the user to the dashboard.`;
+Common workflows: manage a site's Products and the collections that group them, create and publish site posts, triage contact, reservation and booking submissions, update page content directly, upload media, list reviews (replies are managed in Google, not here), and generate or replace images for any content section. Manual locale management is available through the locale tools. Domain setup and Google Places lookup are CMS-only. Social publishing is available only when explicitly enabled; otherwise direct the user to the dashboard.`;
 
 // Everything a per-request Server factory needs, threaded through
 // `AuthInfo.extra` since `McpServerFactory` only receives an `McpRequestContext`.

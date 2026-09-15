@@ -8,10 +8,7 @@ export default defineHandler(async (event) => {
   const { db } = await requireSiteAccess(event, siteId)
   const query = getQuery(event)
   const pagePath = typeof query.page_path === 'string' ? String(query.page_path) : null
-  // `id` addresses one record whatever page it was filed under, which is what a
-  // record's own URL needs; without it this is the scoped list it always was.
-  const qaId = typeof query.id === 'string' && query.id ? String(query.id) : null
-  return jsonResponse({ qa: await listQa(db, siteId, null, false, pagePath, 'en', qaId) })
+  return jsonResponse({ qa: await listQa(db, siteId, null, false, pagePath) })
 })
 import { defineHandler } from 'nitro';
 import { getQuery, getRouterParam  } from 'nitro/h3';

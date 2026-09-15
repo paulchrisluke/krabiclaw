@@ -11,6 +11,7 @@ import {
 import { buildTenantPageReplacementConfirmationToken } from '~/server/utils/mcp-workflows'
 import {
   createTenantPage,
+  deleteTenantPage,
   getTenantPageById,
   listTenantPages,
   updateTenantPage,
@@ -127,7 +128,10 @@ export async function handleContentTools(ctx: McpExecutorContext): Promise<unkno
             seoDescription: nullableStringArg(args, "seoDescription", null),
             canonicalUrl: nullableStringArg(args, "canonicalUrl", null),
             robots: nullableStringArg(args, "robots", null),
-            pageType: optionalString(args, "pageType") as "custom" | "recipe" | "legal" | "system" | undefined,
+            // Omitted is omitted: a translation takes its identity from the
+            // source page, and a null here would be read as stating a
+            // different one.
+            pageType: (optionalString(args, "pageType") ?? undefined) as "custom" | "recipe" | "legal" | "system" | undefined,
             recipe: nullableStringArg(args, "recipe", null),
             sortOrder: typeof args.sortOrder === 'number' ? args.sortOrder : null,
             blocks: args.blocks,
@@ -166,6 +170,17 @@ export async function handleContentTools(ctx: McpExecutorContext): Promise<unkno
           env: site.env,
         });
         return tenantPageLifecycleResponse("Updated", updated);
+      } catch (error) {
+        return rethrowAsInvalidParams(error);
+      }
+    case "delete_tenant_page":
+      try {
+        const deleted = await deleteTenantPage(site.db, requiredString(args, "variant_id"), {
+          scope: { siteId: site.siteId, organizationId: site.organizationId },
+          expectedUpdatedAt: requiredString(args, "expected_updated_at"),
+          env: site.env,
+        });
+        return tenantPageLifecycleResponse("Deleted", deleted);
       } catch (error) {
         return rethrowAsInvalidParams(error);
       }
