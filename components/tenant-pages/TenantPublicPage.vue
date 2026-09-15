@@ -6,7 +6,7 @@
   -->
   <template v-if="page">
     <BlawbyCanonicalPage v-if="isBlawby" :page="page" />
-    <TenantPageRenderer v-else :page="page" template="saya" />
+    <TenantPageRenderer v-else :page="page" :template="isPlatform ? 'platform' : 'saya'" />
   </template>
 </template>
 
@@ -18,10 +18,13 @@ import type { PublicBlawbyIdentity, PublicCompliance } from '~/types/blawby'
 import { normalizeRobotsIntent } from '~/shared/robots-directive'
 
 const props = defineProps<{ path: string; locale?: string | null }>()
-const { siteId, isTenant, previewAuthorized, site } = useTenantSite()
+const { siteId, isPlatform, previewAuthorized, site } = useTenantSite()
 const { isBlawby } = usePublicTemplate()
 const { locale: i18nLocale } = useI18n()
-if (!isTenant || !siteId) throw createError({ statusCode: 404, statusMessage: 'Tenant site context is unavailable' })
+// Page ownership is a resolved site, not a tenant type. KrabiClaw's own site is
+// a site row with page documents like any other, and requiring `isTenant` here
+// is what forced its marketing pages to be hardcoded components (#903).
+if (!siteId) throw createError({ statusCode: 404, statusMessage: 'Site context is unavailable' })
 
 // Preview authorization belongs to the site, resolved once from the preview
 // cookie by tenant resolution; the client's API call carries the same cookie.
@@ -148,9 +151,9 @@ useSocialMetadata(() => page.value && ({
   title: page.value.seo_title || `${page.value.title} | ${site?.brand_name || ''}`,
   description: page.value.seo_description || page.value.summary || '',
   robots: normalizeRobotsIntent(page.value.robots),
-  brand: {
-    siteName: site?.brand_name || '',
-  },
+  // KrabiClaw's own brand name is the platform name, which useSocialMetadata
+  // already states once for every platform surface; a tenant states its own.
+  ...(isPlatform ? {} : { brand: { siteName: site?.brand_name || '' } }),
   socialImage: page.value.social_image,
 }))
 </script>

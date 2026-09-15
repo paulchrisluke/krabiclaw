@@ -122,15 +122,26 @@ export const publicTemplateRegistry: Record<PublicTemplateSlug, PublicTemplateDe
       articlePathHasCategory: true,
     },
     sitemap: {
-      exactPaths: ['/', '/about', '/blog', '/docs', '/features', '/help', '/plugin', '/pricing', '/privacy', '/templates', '/templates/blawby', '/templates/saya', '/terms'],
+      // The editorial marketing routes are not listed here: they are published
+      // page documents now, and the platform sitemap reads them from
+      // content_documents (see server/plugins/sitemap.ts). What remains is the
+      // set of code-owned platform routes that hold no document.
+      exactPaths: ['/blog', '/docs', '/help', '/privacy', '/templates', '/templates/blawby', '/templates/saya', '/terms'],
       dynamicPrefixes: ['/blog/', '/docs/'],
     },
     nonIndexableExactPaths: [],
-    // KrabiClaw's own site renders its marketing pages from components, and
-    // pages/[...tenantPath].vue throws 404 for platform sites. Nothing here
-    // reads a tenant page document, so nothing may be written as one. #903 is
-    // what changes that.
-    pageDocuments: { recipes: {}, paths: [], prefixes: [], catchAll: false },
+    // KrabiClaw's own marketing pages are ordinary page documents on the
+    // platform site, read by the same loader every customer site uses (#903).
+    // The routes that are not editorial — /blog, /docs, /help, /templates,
+    // /privacy, /terms — are absent on purpose: they render their own data or
+    // their own policy surface, and a document stored at one of them would
+    // never be shown.
+    pageDocuments: {
+      recipes: { home: '/', about: '/about', pricing: '/pricing' },
+      paths: ['/experiences', '/features', '/legal', '/plugin', '/restaurants'],
+      prefixes: [],
+      catchAll: true,
+    },
   },
 }
 
