@@ -10,7 +10,7 @@
     parent. Rendering the rail anyway is what put a third column beside a
     grandchild's own pair.
   -->
-  <NuxtPage v-if="rendersStandalone || frame.mode.value === 'yield'" />
+  <NuxtPage v-if="panelHidden" />
 
   <UDashboardPanel v-else id="location-hub">
     <template #header>
@@ -149,6 +149,10 @@ const settingsPath = computed(() => `${locationPath.value}/settings`)
 const STANDALONE_SECTIONS = ['settings', 'inbox']
 const sectionSegment = computed(() => frame.childSegment.value ?? '')
 const rendersStandalone = computed(() => STANDALONE_SECTIONS.includes(sectionSegment.value))
+// Whether this hub's own panel is on screen at all: a standalone section
+// (settings, inbox) replaces it, and so does a deeper level that owns both
+// columns. Nothing this page loads is rendered while it is true.
+const panelHidden = computed(() => rendersStandalone.value || frame.mode.value === 'yield')
 const hasDetail = computed(() => frame.mode.value === 'pair')
 const activeSection = computed(() => sectionSegment.value || null)
 
@@ -156,7 +160,6 @@ const location = ref<LocationOverview | null>(null)
 const products = ref<ApiRecord[]>([])
 const inboxSummary = ref<InboxSummary>({ openThreads: 0, unreadThreads: 0 })
 const counts = ref<LocationContentCounts>({ photos: 0, posts: 0, qa: 0, upcomingReservations: 0 })
-const loading = ref(true)
 const error = ref<string | null>(null)
 
 const dashboardLocationRow = computed(() => dashboard.locations.value.find(candidate => candidate.id === locationId.value) ?? null)
@@ -243,7 +246,7 @@ const isOverviewResponse = (value: unknown): value is LocationOverviewResource =
 
 const requestEvent = useRequestEvent()
 const overviewKey = computed(() => `dashboard-location-overview:${siteId}:${locationId.value}:${includeProducts.value ? 'products' : 'no-products'}`)
-const { data: overview, pending: overviewPending, error: overviewError } = await useAsyncData<LocationOverviewResource>(overviewKey, async () => {
+const { data: overview, pending: overviewPending, error: overviewError, refresh } = await useAsyncData<LocationOverviewResource>(overviewKey, async () => {
   const requestedLocationId = locationId.value
   if (!requestedLocationId) throw createError({ statusCode: 404, statusMessage: 'Location not found' })
   const shouldIncludeProducts = includeProducts.value
@@ -256,10 +259,27 @@ const { data: overview, pending: overviewPending, error: overviewError } = await
     `/api/dashboard/sites/${siteId}/locations/${requestedLocationId}/overview`,
     { query: { includeProducts: String(shouldIncludeProducts) }, validate: isOverviewResponse },
   )
-}, { lazy: import.meta.client })
+}, {
+  lazy: import.meta.client,
+  // The location's own overview — its profile, its products, its inbox summary
+  // and its content counts — is what this panel draws. Opening the location's
+  // settings or inbox, or a level below that owns both columns, replaces the
+  // panel entirely, and on the largest site here the products alone are 665 KB.
+  immediate: !panelHidden.value,
+})
 
-watch([overview, overviewPending, overviewError], ([resource, pending, cause]) => {
-  loading.value = pending
+// Coming back up to this hub from a level that hid it: the component stayed
+// mounted, so the read skipped above has to start now. Synchronous flush so
+// `loading` is already true on the render that first shows the panel.
+watch(panelHidden, (hidden) => {
+  if (!hidden && !overview.value && !overviewError.value) refresh()
+}, { flush: 'sync' })
+
+// Loading, or not started because this panel was not on screen yet.
+const loading = computed(() =>
+  overviewPending.value || (!panelHidden.value && !overview.value && !overviewError.value))
+
+watch([overview, overviewError], ([resource, cause]) => {
   if (cause) {
     error.value = cause instanceof Error ? cause.message : 'Failed to load location overview'
     return
