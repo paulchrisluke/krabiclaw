@@ -54,6 +54,13 @@
       :require-location-basics="true"
     />
 
+    <IntakeDetailsCard
+      v-else-if="step.id === 'currency'"
+      v-model:form="detailsForm"
+      section="currency"
+      :require-location-basics="true"
+    />
+
     <LocationHoursCard v-else-if="step.id === 'hours'" v-model:form="state.hours" />
 
     <OnboardingProductsCard v-else-if="step.id === 'products'" />
@@ -73,6 +80,7 @@ import OnboardingChoiceRows from '~/lib/components/workspace/onboarding/Onboardi
 import OnboardingProductsCard from '~/lib/components/workspace/onboarding/OnboardingProductsCard.vue'
 import OnboardingReviewCard from '~/lib/components/workspace/onboarding/OnboardingReviewCard.vue'
 import { useOnboardingState, type OnboardingStep } from '~/composables/useOnboardingFlow'
+import { currencyForCountry } from '~/shared/currencies'
 import { singleTimezoneForCountry } from '~/utils/timezone'
 import type { SiteVertical } from '~/utils/vertical-copy'
 
@@ -123,5 +131,13 @@ watch(() => props.step.id, (id) => {
   if (id !== 'hours' || state.value.hours.timezone) return
   const zone = singleTimezoneForCountry(state.value.details.country)
   if (zone) state.value.hours.timezone = zone
+}, { immediate: true })
+
+// Same shape for the currency: the country proposes it, the owner confirms it on
+// this step, and an answer already given is never overwritten. A country this
+// platform has no supported currency for proposes nothing and the owner picks.
+watch(() => props.step.id, (id) => {
+  if (id !== 'currency' || state.value.details.currency) return
+  state.value.details.currency = currencyForCountry(state.value.details.country)
 }, { immediate: true })
 </script>

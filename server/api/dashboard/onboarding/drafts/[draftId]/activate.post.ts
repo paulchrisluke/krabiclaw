@@ -109,13 +109,20 @@ export default defineHandler(async (event) => {
   let committed = false
 
   try {
-    const { locationSlug } = await applyOnboardingDraftToSite(env, db, {
+    const applied = await applyOnboardingDraftToSite(env, db, {
       userId: session.user.id,
       target: site.target,
       payload,
       defaultCurrency,
       timezone,
     })
+    // The site is not live yet. A refused answer reopens the draft so the owner
+    // can correct it, rather than leaving them on a draft they cannot advance.
+    if ('error' in applied) {
+      await reopenDraft()
+      return jsonResponse({ error: applied.error }, { status: applied.status })
+    }
+    const { locationSlug } = applied
     await activateSite(db, siteId)
 
     const now = new Date().toISOString()

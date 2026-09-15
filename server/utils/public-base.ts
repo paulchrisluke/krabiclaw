@@ -12,7 +12,7 @@ export interface PublicBase {
   site: {
     id: string
     organization_id: string
-    default_currency: CurrencyCode
+    default_currency: CurrencyCode | null
     contact_email: string | null
     contact_phone: string | null
     brand_name: string | null

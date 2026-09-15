@@ -22,7 +22,7 @@ interface DashboardSite {
   status: string
   onboarding_status: string
   effective_plan: string
-  default_currency: string
+  default_currency: string | null
   feature_overrides: string | null
 }
 
@@ -82,7 +82,7 @@ const isDashboardSite = (value: unknown): value is DashboardSite =>
   && (value.public_url === null || typeof value.public_url === 'string')
   && typeof value.status === 'string'
   && typeof value.onboarding_status === 'string'
-  && typeof value.default_currency === 'string'
+  && (value.default_currency === null || typeof value.default_currency === 'string')
   && isSocialImage(value.social_image)
 
 const isDashboardLocation = (value: unknown): value is DashboardLocation =>
