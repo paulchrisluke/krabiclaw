@@ -564,14 +564,13 @@ async function commitGalleryAsset(index: number | 'new', assetId: string | null 
       validate: isMediaMutationResponse,
     })
     applyCanonicalGalleryMedia(attachResult.media)
-    const removeResult = await dashboardApi(`/api/editor/sites/${props.siteId}/media/placements/remove`, {
-      method: 'POST',
-      body: { placement: galleryPlacement.value, asset_id: existing.asset_id },
-      validate: isMediaMutationResponse,
-    })
-    applyCanonicalGalleryMedia(removeResult.media)
+    // The replacement is put in place before the image it replaces is taken
+    // out. Removing first meant a failed reorder left the gallery a picture
+    // short, with the new one appended at the end: the editor had lost an
+    // image and gained a misplaced one. This order fails towards two images in
+    // the right order, which the editor can finish by hand.
     const anchor = current[index + 1]
-    const result = await dashboardApi(`/api/editor/sites/${props.siteId}/media/placements/reorder`, {
+    const reordered = await dashboardApi(`/api/editor/sites/${props.siteId}/media/placements/reorder`, {
       method: 'POST',
       body: {
         placement: galleryPlacement.value,
@@ -579,7 +578,13 @@ async function commitGalleryAsset(index: number | 'new', assetId: string | null 
       },
       validate: isMediaMutationResponse,
     })
-    applyCanonicalGalleryMedia(result.media)
+    applyCanonicalGalleryMedia(reordered.media)
+    const removeResult = await dashboardApi(`/api/editor/sites/${props.siteId}/media/placements/remove`, {
+      method: 'POST',
+      body: { placement: galleryPlacement.value, asset_id: existing.asset_id },
+      validate: isMediaMutationResponse,
+    })
+    applyCanonicalGalleryMedia(removeResult.media)
   } catch (error) {
     toast.add({ description: error instanceof Error ? error.message : 'Failed to update gallery image', color: 'error' })
   } finally {
