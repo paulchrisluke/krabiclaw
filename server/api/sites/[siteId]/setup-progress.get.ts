@@ -52,7 +52,7 @@ export default defineHandler(async (event) => {
 
     await assertSiteWideAccess(db, {
       env,
-      memberId: siteAccess.member_id, role: siteAccess.member_role, organizationId: siteAccess.organization_id, siteId, })
+      userId: siteAccess.user_id, role: siteAccess.member_role, organizationId: siteAccess.organization_id, siteId, })
 
     const site = await queryFirst<{
       id: string

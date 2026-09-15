@@ -150,8 +150,8 @@ const { data: overviewData, pending } = await useAsyncData(`dashboard-home-${sit
     if (!db) throw createError({ statusCode: 500, statusMessage: 'Database not available' })
     const session = await getAuthSession(requestEvent, environment)
     if (!session?.user?.id) throw createError({ statusCode: 401, statusMessage: 'Authentication required' })
-    await assertSiteWideAccess(db, { env: environment, memberId: organization.memberId, role: organization.role, organizationId: organization.id, siteId })
-    return await getDashboardHomeData(db, organization.id, siteId, { env: environment, memberId: organization.memberId, userId: session.user.id, role: organization.role })
+    await assertSiteWideAccess(db, { env: environment, userId: session.user.id, role: organization.role, organizationId: organization.id, siteId })
+    return await getDashboardHomeData(db, organization.id, siteId, { env: environment, userId: session.user.id, role: organization.role })
   }
   return await dashboardApi<DashboardHomeData>('/api/dashboard/home', {
     signal,

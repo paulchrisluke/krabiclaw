@@ -37,7 +37,7 @@ export default defineHandler(async (event) => {
   try {
     await assertResourceAccess(db, {
       env,
-      memberId: site.member_id, role: site.member_role, organizationId: site.organization_id, siteId, resourceLocationId: null, })
+      userId: site.user_id, role: site.member_role, organizationId: site.organization_id, siteId, resourceLocationId: null, })
 
     await deleteMediaAsset(db, env, assetId, siteId, session.user.id)
     return jsonResponse({ deleted: true })

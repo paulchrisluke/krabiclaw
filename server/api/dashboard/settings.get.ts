@@ -6,11 +6,11 @@ import { assertSiteWideAccess } from '~/server/utils/member-access'
 import { loadSettingsPayload } from '~/server/utils/site-settings'
 
 export default defineHandler(async (event) => {
-  const { env, db, organization, site: dashboardSite } = await getDashboardContext(event, { requireSite: true })
+  const { env, db, organization, userId, site: dashboardSite } = await getDashboardContext(event, { requireSite: true })
   if (!dashboardSite) return jsonResponse({ error: 'Site not found' }, { status: 404 })
   await assertSiteWideAccess(db, {
     env,
-    memberId: organization.memberId, role: organization.role, organizationId: organization.id, siteId: dashboardSite.id, })
+    userId, role: organization.role, organizationId: organization.id, siteId: dashboardSite.id, })
 
   const settings = await loadSettingsPayload(db, organization.id, dashboardSite.id)
 

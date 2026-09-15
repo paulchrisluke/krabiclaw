@@ -36,7 +36,7 @@ export default defineHandler(async (event) => {
     if (!asset) return jsonResponse({ error: 'Asset not found' }, { status: 404 })
     if (asset.site_id !== siteId) return jsonResponse({ error: 'Forbidden' }, { status: 403 })
 
-    const principal = { env, memberId: site.member_id, role: site.member_role, organizationId: site.organization_id, siteId }
+    const principal = { env, userId: site.user_id, role: site.member_role, organizationId: site.organization_id, siteId }
     await assertResourceAccess(db, { ...principal, resourceLocationId: null })
 
     const body = await readBody(event)

@@ -35,7 +35,6 @@ export interface DashboardOrganizationRow {
   slug: string
   logo: string | null
   role: string
-  memberId: string
   // Set while a deletion is pending: the sites keep serving until the
   // deletion-sweep task runs, and an owner can cancel until then.
   deletionScheduledAt: string | null
@@ -411,7 +410,7 @@ export async function getDashboardContext(event: H3Event, options: DashboardCont
   if (site) {
     await assertMemberSiteAccess(db, {
       env,
-      memberId: organization.memberId,
+      userId: session.user.id,
       role: organization.role,
       organizationId: organization.id,
       siteId: site.id,

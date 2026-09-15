@@ -23,7 +23,11 @@ export interface ResourceScope {
 
 export interface MemberAccessPrincipal {
   env: CloudflareEnv
-  memberId: string
+  // The authenticated user, not the member row id. Membership is resolved once
+  // per request against this organization (resolveOrganizationMembership /
+  // resolveUserOrganization), and `role` below is that member's role — so the
+  // scope checks here never need to read the member row back.
+  userId: string
   role: string
   organizationId: string
   siteId: string
@@ -433,46 +437,50 @@ export function assertDashboardPathPermission(role: string, pathname: string): v
   }
 }
 
+const NO_TEAMS: ReadonlySet<string> = new Set<string>()
+
+/**
+ * The caller's role and the teams that role is scoped by.
+ *
+ * `role` comes straight from the principal: it was read from the member row
+ * that resolveOrganizationMembership/resolveUserOrganization looked up by
+ * (organizationId, userId) for this request, so re-reading the member here
+ * would return the same value at the cost of two more D1 round trips (Better
+ * Auth's findMemberById reads the member and then its user).
+ *
+ * Only a scoped role needs anything from the database, and only its teams.
+ */
 async function canonicalMemberAccess(input: MemberAccessPrincipal): Promise<{
   role: string
-  userId: string
-  teamIds: Set<string>
+  teamIds: ReadonlySet<string>
 }> {
+  const role = input.role
+  if (!isScopedRole(role)) return { role, teamIds: NO_TEAMS }
   const adapter = await organizationAdapter(input.env)
-  const member = await adapter.findMemberById(input.memberId)
-  if (!member || member.organizationId !== input.organizationId) {
-    throw new HTTPError({ statusCode: 403, message: 'Access denied' })
-  }
-  const role = String(member.role)
-  const teams = isScopedRole(role)
-    ? await adapter.listTeamsByUser({ userId: member.userId })
-    : []
+  const teams = await adapter.listTeamsByUser({ userId: input.userId })
   return {
     role,
-    userId: member.userId,
     teamIds: new Set(teams.filter(team => team.organizationId === input.organizationId).map(team => team.id)),
   }
 }
 
 export async function listResourceTeamAccess(
   db: DbClient,
-  input: { env: CloudflareEnv; memberId: string },
+  input: { env: CloudflareEnv; userId: string; organizationId: string },
 ): Promise<ResourceTeamAccess[]> {
   const adapter = await organizationAdapter(input.env)
-  const member = await adapter.findMemberById(input.memberId)
-  if (!member) return []
-  const teams = await adapter.listTeamsByUser({ userId: member.userId })
-  const teamIds = new Set(teams.filter(team => team.organizationId === member.organizationId).map(team => team.id))
+  const teams = await adapter.listTeamsByUser({ userId: input.userId })
+  const teamIds = new Set(teams.filter(team => team.organizationId === input.organizationId).map(team => team.id))
   if (teamIds.size === 0) return []
   const [sites, locations] = await Promise.all([
     queryAll<ResourceTeamAccess & { team_id: string | null }>(db, `
       SELECT organization_id AS organizationId, id AS siteId, NULL AS locationId, team_id
       FROM sites WHERE organization_id = ?
-    `, [member.organizationId]),
+    `, [input.organizationId]),
     queryAll<ResourceTeamAccess & { team_id: string | null }>(db, `
       SELECT organization_id AS organizationId, site_id AS siteId, id AS locationId, team_id
       FROM business_locations WHERE organization_id = ?
-    `, [member.organizationId]),
+    `, [input.organizationId]),
   ])
   return [...sites, ...locations]
     .filter(row => row.team_id && teamIds.has(row.team_id))
@@ -599,7 +607,7 @@ export async function resolveAuthorizedWhatsAppRecipient(
   if (isOrganizationWideRole(membership.role)) return recipient
   const locationIds = await listAccessibleLocationIds(db, {
     env: input.env,
-    memberId: membership.memberId,
+    userId: user.id,
     role: membership.role,
     organizationId: input.organizationId,
     siteId: input.siteId,

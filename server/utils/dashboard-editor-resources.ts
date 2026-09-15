@@ -46,7 +46,7 @@ export async function loadDashboardEditorContext(event: H3Event, siteId: string)
 
   const principal = {
     env,
-    memberId: site.member_id,
+    userId: site.user_id,
     role: site.member_role,
     organizationId: site.organization_id,
     siteId,
@@ -154,7 +154,7 @@ export async function loadDashboardMedia(
   const { env, db, site } = await requireSiteAccess(event, siteId, 'context')
   const principal = {
     env,
-    memberId: site.member_id,
+    userId: site.user_id,
     role: site.member_role,
     organizationId: site.organization_id,
     siteId,
@@ -193,7 +193,7 @@ export async function loadDashboardSettingsResource(
   event: H3Event,
   options: { includeFacebook: boolean; organizationSlug?: string; siteSlug?: string },
 ) {
-  const { env, db, organization, site } = await getDashboardContext(event, {
+  const { env, db, organization, site, userId } = await getDashboardContext(event, {
     requireSite: true,
     organizationSlug: options.organizationSlug,
     siteSlug: options.siteSlug,
@@ -201,7 +201,7 @@ export async function loadDashboardSettingsResource(
   if (!site) throw new HTTPError({ statusCode: 404, statusMessage: 'Site not found' })
   await assertSiteWideAccess(db, {
     env,
-    memberId: organization.memberId,
+    userId,
     role: organization.role,
     organizationId: organization.id,
     siteId: site.id,
@@ -288,7 +288,7 @@ export async function loadDashboardLocationOverview(
   }
   const principal = {
     env,
-    memberId: organization.memberId,
+    userId,
     role: organization.role,
     organizationId: organization.id,
     siteId,
@@ -327,13 +327,13 @@ export async function loadDashboardLocationSettings(
   siteId: string,
   locationId: string,
 ) {
-  const { env, db, organization, location } = await getDashboardLocationContext(event, locationId)
+  const { env, db, organization, location, userId } = await getDashboardLocationContext(event, locationId)
   if (location.site_id !== siteId) {
     throw new HTTPError({ statusCode: 404, statusMessage: 'Location not found' })
   }
   await assertLocationAccess(db, {
     env,
-    memberId: organization.memberId,
+    userId,
     role: organization.role,
     organizationId: organization.id,
     siteId,

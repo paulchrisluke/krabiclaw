@@ -2,7 +2,7 @@ import type { GuestRequest } from '~/server/domain/requests'
 import type { MemberAccessPrincipal } from '~/server/utils/member-access'
 
 export interface OrganizationMemberAccessPrincipal {
-  memberId: string
+  userId: string
   role: string
   organizationId: string
   teamIds: string[] | null

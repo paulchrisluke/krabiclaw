@@ -13,12 +13,12 @@ export default defineHandler(async (event) => {
   const locationId = getRouterParam(event, 'id')
   if (!locationId) return jsonResponse({ error: 'Location ID required' }, { status: 400 })
 
-  const { env, db, session, organization, location: locationContext } = await getDashboardLocationContext(event, locationId)
+  const { env, db, session, organization, userId, location: locationContext } = await getDashboardLocationContext(event, locationId)
   const organizationId = organization.id
   const siteId = locationContext.site_id
   await assertMemberScope(db, {
     env,
-    memberId: organization.memberId, role: organization.role, organizationId, siteId, locationId, })
+    userId, role: organization.role, organizationId, siteId, locationId, })
 
   const body = await readBody<Record<string, unknown>>(event)
   if (typeof body !== 'object' || body === null) {

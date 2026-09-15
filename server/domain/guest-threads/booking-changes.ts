@@ -262,7 +262,7 @@ export async function requestBookingChange(db: DbClient, env: CloudflareEnv, thr
   // branch editor cannot move a guest into a branch they do not manage.
   const locations = new Set([before.locationId, after.kind === 'reservation' ? after.locationId : null].filter((value): value is string => Boolean(value)))
   for (const locationId of locations) {
-    await assertResourceAccess(db, { env, memberId: membership.memberId, role: membership.role, organizationId: thread.organization_id, siteId: thread.site_id, resourceLocationId: locationId })
+    await assertResourceAccess(db, { env, userId: actorUserId, role: membership.role, organizationId: thread.organization_id, siteId: thread.site_id, resourceLocationId: locationId })
   }
   const externalId = `booking-change-request:${thread.id}:${idempotencyKey}`
   let entry = await findEntryByDedupeKey(db, externalId)

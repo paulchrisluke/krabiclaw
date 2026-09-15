@@ -24,7 +24,7 @@ export default defineHandler(async (event) => {
 
   await assertResourceAccess(db, {
     env,
-    memberId: site.member_id, role: site.member_role, organizationId: site.organization_id, siteId, resourceLocationId: post.location_id ?? null, })
+    userId: site.user_id, role: site.member_role, organizationId: site.organization_id, siteId, resourceLocationId: post.location_id ?? null, })
 
   return jsonResponse({ success: true, post })
 })

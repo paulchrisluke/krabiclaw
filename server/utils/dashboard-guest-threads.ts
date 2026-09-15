@@ -69,7 +69,7 @@ export async function loadDashboardGuestThreads(
   const { env, db, session, site } = await requireSiteAccess(event, siteId, 'context')
   const principal = {
     env,
-    memberId: site.member_id,
+    userId: site.user_id,
     role: site.member_role,
     organizationId: site.organization_id,
     siteId,
@@ -92,7 +92,7 @@ export async function loadDashboardGuestThread(
   }
   await assertMemberScope(db, {
     env,
-    memberId: site.member_id,
+    userId: site.user_id,
     role: site.member_role,
     organizationId: site.organization_id,
     siteId,
@@ -134,7 +134,7 @@ export async function loadOrganizationGuestThreads(
   }
 
   const principal = {
-    memberId: organization.memberId,
+    userId,
     role: organization.role,
     organizationId: organization.id,
     teamIds: isOrganizationWideRole(organization.role)

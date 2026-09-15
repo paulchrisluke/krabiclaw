@@ -53,7 +53,7 @@ export async function loadDashboardContext(
   const teamIds = isOrganizationWideRole(organization.role)
     ? null
     : await listUserOrganizationTeamIds({ env: cloudflareEnv(event), organizationId: organization.id, userId })
-  const principal = { env, memberId: organization.memberId, role: organization.role, teamIds }
+  const principal = { env, userId, role: organization.role, teamIds }
 
   // This payload draws the site switcher and the selected site's card, so it is
   // the one surface that needs the organization plan and the site-card media.

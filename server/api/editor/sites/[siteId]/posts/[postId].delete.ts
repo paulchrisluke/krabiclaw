@@ -31,7 +31,7 @@ export default defineHandler(async (event) => {
   if (!post) return jsonResponse({ error: 'Post not found' }, { status: 404 })
   await assertResourceAccess(db, {
     env,
-    memberId: site.member_id, role: site.member_role, organizationId: site.organization_id, siteId, resourceLocationId: post.location_id, })
+    userId: site.user_id, role: site.member_role, organizationId: site.organization_id, siteId, resourceLocationId: post.location_id, })
 
   await deletePost(db, site.organization_id, siteId, postId)
   return jsonResponse({ success: true })

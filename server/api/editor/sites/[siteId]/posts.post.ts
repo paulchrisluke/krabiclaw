@@ -32,7 +32,7 @@ export default defineHandler(async (event) => {
   const targetLocationId = typeof body.location_id === 'string' && body.location_id ? body.location_id : null
   await assertResourceAccess(db, {
     env,
-    memberId: site.member_id, role: site.member_role, organizationId: site.organization_id, siteId, resourceLocationId: targetLocationId, })
+    userId: site.user_id, role: site.member_role, organizationId: site.organization_id, siteId, resourceLocationId: targetLocationId, })
 
   let post
   try {

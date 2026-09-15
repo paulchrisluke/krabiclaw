@@ -20,7 +20,7 @@ export interface SiteAccessRow {
   vertical: string | null
   theme_id: string
   feature_overrides: string | null
-  member_id: string
+  user_id: string
   member_role: string
 }
 
@@ -35,7 +35,7 @@ export async function loadMemberSiteRow(db: DbClient, env: CloudflareEnv, siteId
   // route. An unrelated org member who isn't owner/admin/editor still fails
   // the scope check inside assertSiteWideAccess/assertLocationAccess/
   // assertSiteContextAccess (isScopedRole/isOrganizationWideRole both false).
-  const site = await queryFirst<Omit<SiteAccessRow, 'organization_slug' | 'organization_name' | 'member_id' | 'member_role'>>(db, `
+  const site = await queryFirst<Omit<SiteAccessRow, 'organization_slug' | 'organization_name' | 'user_id' | 'member_role'>>(db, `
     SELECT id, organization_id, brand_name, subdomain, (SELECT 'https://' || domain FROM site_domains WHERE site_id = sites.id AND role = 'canonical' AND status = 'active') AS public_url, status, onboarding_status,
            vertical, theme_id, feature_overrides
     FROM sites WHERE id = ? LIMIT 1
@@ -50,7 +50,7 @@ export async function loadMemberSiteRow(db: DbClient, env: CloudflareEnv, siteId
     ...site,
     organization_slug: membership.organizationSlug,
     organization_name: membership.organizationName,
-    member_id: membership.memberId,
+    user_id: userId,
     member_role: membership.role,
   }
 }
@@ -74,7 +74,7 @@ export async function requireLocationAccess(event: H3Event, siteId: string, loca
 
   await assertLocationAccess(db, {
     env,
-    memberId: site.member_id,
+    userId: site.user_id,
     role: site.member_role,
     organizationId: site.organization_id,
     siteId,
@@ -122,7 +122,7 @@ export async function requireSiteAccess(
   const site = await loadMemberSiteRow(db, env, siteId, session.user.id)
   if (!site) throw new HTTPError({ statusCode: 404, message: 'Site not found or access denied' })
 
-  const principal = { env, memberId: site.member_id, role: site.member_role, organizationId: site.organization_id, siteId }
+  const principal = { env, userId: site.user_id, role: site.member_role, organizationId: site.organization_id, siteId }
   if (accessClass === 'context') {
     await assertSiteContextAccess(db, principal)
   } else {
@@ -141,7 +141,7 @@ export async function requireRequestedSiteWideAccess(event: H3Event, explicitSit
   }
   await assertSiteWideAccess(context.db, {
     env: context.env,
-    memberId: context.organization.memberId,
+    userId: context.session.user.id,
     role: context.organization.role,
     organizationId: context.organization.id,
     siteId: context.site.id,
@@ -154,7 +154,7 @@ export async function requireRequestedSiteWideAccess(event: H3Event, explicitSit
       ...context.site,
       organization_slug: context.organization.slug,
       organization_name: context.organization.name,
-      member_id: context.organization.memberId,
+      user_id: context.session.user.id,
       member_role: context.organization.role,
     } satisfies SiteAccessRow,
   }
@@ -169,7 +169,7 @@ export async function requireRequestedLocationAccess(event: H3Event, locationId:
   }
   await assertLocationAccess(context.db, {
     env: context.env,
-    memberId: context.organization.memberId,
+    userId: context.session.user.id,
     role: context.organization.role,
     organizationId: context.organization.id,
     siteId: context.site.id,
@@ -190,7 +190,7 @@ export async function requireRequestedLocationAccess(event: H3Event, locationId:
       ...context.site,
       organization_slug: context.organization.slug,
       organization_name: context.organization.name,
-      member_id: context.organization.memberId,
+      user_id: context.session.user.id,
       member_role: context.organization.role,
     } satisfies SiteAccessRow,
     location,

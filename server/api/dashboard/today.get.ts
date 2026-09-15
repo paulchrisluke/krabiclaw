@@ -5,10 +5,10 @@ import { getDashboardContext } from '~/server/utils/dashboard-context'
 import { finalizeRequestMetrics } from '~/server/utils/request-metrics'
 
 export default defineHandler(async (event) => {
-  const { env, db, organization } = await getDashboardContext(event, { requireSite: false })
+  const { env, db, organization, userId } = await getDashboardContext(event, { requireSite: false })
   const today = await listTodayAgenda(db, organization.id, {
     organizationSlug: organization.slug,
-    principal: { env, memberId: organization.memberId, role: organization.role },
+    principal: { env, userId, role: organization.role },
   })
   return jsonResponse(finalizeRequestMetrics(event, 'dashboard-today', today))
 })

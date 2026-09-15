@@ -58,7 +58,7 @@ export default defineHandler(async (event) => {
     if (!env.DB) throw new Error('Database unavailable')
     const access = await loadMemberSiteRow(env.DB, env, siteId, userId)
     if (!access || access.organization_id !== organizationId) throw new Error('Access denied')
-    await assertSiteWideAccess(env.DB, { env, memberId: access.member_id, role: access.member_role, organizationId, siteId })
+    await assertSiteWideAccess(env.DB, { env, userId: access.user_id, role: access.member_role, organizationId, siteId })
     const tokenData = await exchangeGoogleAnalyticsCode(env, code)
 
     const userInfoResponse = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {

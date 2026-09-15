@@ -242,7 +242,7 @@ const { data: todayData, pending, error: todayError, refresh: refreshToday } = a
     const context = await getDashboardContext(requestEvent, { requireSite: false, organizationSlug: orgSlug.value })
     return await listTodayAgenda(context.db, context.organization.id, {
       organizationSlug: orgSlug.value,
-      principal: { env: context.env, memberId: context.organization.memberId, role: context.organization.role },
+      principal: { env: context.env, userId: context.userId, role: context.organization.role },
     })
   }
   return await dashboardApi<TodayAgendaPayload>('/api/dashboard/today', { validate: isTodayResponse })

@@ -35,7 +35,6 @@ export interface McpUserContext {
 export interface McpSiteContext extends McpUserContext {
   siteId: string
   organizationId: string
-  memberId: string
   organizationSlug?: string
   subdomain?: string | null
   customDomain?: string | null
@@ -378,7 +377,7 @@ export async function requireMcpSite(
   if (!isOrganizationWideRole(role)) {
     await assertSiteWideAccess(user.db, {
       env: user.env,
-      memberId: membership.memberId,
+      userId: user.userId,
       role,
       organizationId: site.organization_id,
       siteId: site.id,
@@ -389,7 +388,6 @@ export async function requireMcpSite(
     ...user,
     siteId: site.id,
     organizationId: site.organization_id,
-    memberId: membership.memberId,
     organizationSlug: membership.organizationSlug || undefined,
     subdomain: site.subdomain ?? null,
     customDomain: site.custom_domain ?? null,

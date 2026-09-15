@@ -10,7 +10,7 @@ export default defineHandler(async (event) => {
 
   await assertSiteWideAccess(db, {
     env,
-    memberId: organization.memberId,
+    userId,
     role: organization.role,
     organizationId: organization.id,
     siteId: site.id,
@@ -18,7 +18,6 @@ export default defineHandler(async (event) => {
 
   return jsonResponse(await getDashboardHomeData(db, organization.id, site.id, {
     env,
-    memberId: organization.memberId,
     userId,
     role: organization.role,
   }))
