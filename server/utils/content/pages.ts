@@ -11,8 +11,7 @@ import {
   prepareContentDocumentWithBlocks,
   updateContentDocument,
   type ContentBlockInput,
-  type ContentDocumentInput,
-} from '~/server/utils/content/documents'
+  type ContentDocumentInput } from '~/server/utils/content/documents'
 import {
   normalizeTenantPageBlocks,
   normalizeTenantPagePath,
@@ -498,6 +497,10 @@ export async function listTenantPages(db: DbClient, siteId: string, opts: { loca
     `  FROM content_documents v JOIN content_documents p ON p.id = COALESCE(v.root_id, v.id) AND p.row_role = 'root' AND p.kind = 'page'`,
     ` WHERE v.row_role IN ('root','representation') AND v.kind = 'page' AND v.site_id = ? AND v.locale = ? ORDER BY p.sort_order ASC, v.title ASC`,
   ].join('\n'), [siteId, locale])
+  // Whether each page may be removed is decided here, by the same rule
+  // deleteTenantPage enforces, so the list and the endpoint cannot disagree and
+  // the dashboard never offers a remove control the server would refuse.
+  const { template } = await loadSiteTemplate(db, siteId)
   return rows.map(row => ({
     id: row.id,
     page_id: row.page_id,
@@ -508,6 +511,7 @@ export async function listTenantPages(db: DbClient, siteId: string, opts: { loca
     recipe: row.recipe,
     sort_order: row.sort_order,
     updated_at: row.updated_at,
+    removable: !templateRendersPageDocumentAt(template, normalizeTenantPagePath(row.path)),
   }))
 }
 
@@ -879,6 +883,24 @@ export async function deleteTenantPage(db: DbClient, variantId: string, input: {
   const { template } = await loadSiteTemplate(db, row.site_id)
   if (templateRendersPageDocumentAt(template, normalizeTenantPagePath(row.path))) {
     conflict('This page is one the site template renders, so it cannot be deleted')
+  }
+
+  // A page another page links to cannot simply go. `page_grid` renders its
+  // cards from the referenced documents, and a reference to a page that is
+  // gone is a 500 on the referring page, by design — "the editor chose it and
+  // needs to know" (server/utils/public-tenant-pages.ts). The editor is told
+  // here, before the delete, which page would break. The deleted page's own
+  // translations are not referrers: they go with it.
+  const referrers = await queryAll<{ path: string }>(db, `
+    SELECT DISTINCT d.path
+      FROM content_blocks b
+      JOIN content_documents d ON d.id = b.document_id
+      JOIN json_each(b.data_json, '$.page_ids') ref
+     WHERE b.type = 'page_grid' AND d.site_id = ? AND COALESCE(d.root_id, d.id) <> ? AND ref.value = ?
+     ORDER BY d.path
+  `, [row.site_id, row.id, row.id])
+  if (referrers.length > 0) {
+    conflict(`${referrers.map(item => item.path).join(', ')} link${referrers.length === 1 ? 's' : ''} to this page; remove the link before deleting it`)
   }
 
   const translations = row.locale === 'en'

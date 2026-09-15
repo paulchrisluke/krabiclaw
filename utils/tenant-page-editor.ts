@@ -99,6 +99,8 @@ function validateGridItems(errors: string[], data: EditorData, label = 'Item') {
   })
 }
 
+const DYNAMIC_GRID_SOURCES = new Set(['site_posts', 'site_reviews', 'calculator', 'billing_plans'])
+
 export function validateTenantPageBlock(block: TenantPageBlock): string[] {
   const errors: string[] = []
   const definition = TENANT_PAGE_BLOCK_REGISTRY[block.type]
@@ -142,7 +144,9 @@ export function validateTenantPageBlock(block: TenantPageBlock): string[] {
     case 'page_grid':
     case 'product_grid':
     case 'location_grid':
-      if (text(data.source) !== 'site_posts' && text(data.source) !== 'site_reviews' && text(data.source) !== 'calculator') {
+      // A grid that names a source renders what that source returns; only a
+      // grid that authors its own rows has rows to validate.
+      if (!DYNAMIC_GRID_SOURCES.has(text(data.source))) {
         validateGridItems(errors, data, 'Grid item')
       }
       // A reference grid names what it shows. There is no "everything on the

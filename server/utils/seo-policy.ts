@@ -2,18 +2,17 @@ import { TENANT_TYPES, type TenantType } from '../../utils/tenant-routing.ts'
 import { TENANT_NON_INDEXABLE_EXACT_PATHS } from '../../utils/template-registry.ts'
 import { isEnvironmentTenantAliasHost } from './tenant-hosts.ts'
 
+/**
+ * The platform routes that hold no page document: each renders its own data or
+ * its own policy surface. KrabiClaw's editorial marketing pages are not here —
+ * they are published page documents, and the sitemap reads them from
+ * content_documents so there is one inventory rather than two (#903).
+ */
 export const PLATFORM_SITEMAP_ROUTES = [
-  '/',
-  '/about',
   '/blog',
   '/docs',
-  '/features',
   '/help',
-  '/legal',
-  '/plugin',
-  '/pricing',
   '/privacy',
-  '/restaurants',
   '/templates',
   '/templates/blawby',
   '/templates/saya',
@@ -41,10 +40,13 @@ export const PRIVATE_EXACT_ROUTES = new Set([
   '/tenant-setup-pending',
 ])
 
+// Paths that only a customer site answers. `/experiences` is not among them:
+// on KrabiClaw's own host it is the published marketing page that sells the
+// booking product (#903). Its subtree stays tenant-only — an individual
+// experience belongs to a customer's catalog.
 export const TENANT_ONLY_EXACT_ROUTES = new Set([
   '/contact',
   '/locations',
-  '/experiences',
   '/menu',
   '/order',
   '/photos',

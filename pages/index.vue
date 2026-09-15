@@ -1,6 +1,6 @@
 <template>
   <NuxtLayout :name="isPlatform ? 'platform' : isBlawbyPage ? 'blawby' : 'saya'">
-    <LazyPlatformHomePage v-if="isPlatform" />
+    <TenantPublicPage v-if="isPlatform" :path="platformHomePath" />
     <LazyBlawbyHome v-else-if="isBlawbyPage" />
     <LazySayaHomePage v-else />
   </NuxtLayout>
@@ -11,6 +11,9 @@ definePageMeta({ layout: false })
 
 const { isPlatform, siteId } = useTenantSite()
 const { isBlawby: isBlawbyPage } = usePublicTemplate()
+// KrabiClaw's own homepage is an ordinary published page document on the
+// platform site now, read by the same loader every customer site uses (#903).
+const platformHomePath = useTenantPageDocumentPath('home')
 
 if (!isPlatform && !siteId) {
   throw createError({

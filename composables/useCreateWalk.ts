@@ -1,4 +1,4 @@
-import type { Ref } from 'vue'
+import type { MaybeRefOrGetter, Ref } from 'vue'
 
 /**
  * Creating a record walks the sections its endpoint will not accept empty, in
@@ -12,7 +12,13 @@ export function useCreateWalk<K extends string>(options: {
   isNew: Ref<boolean>
   openKey: Ref<K>
   labels: Record<K, string> | Ref<Record<K, string>>
-  order: readonly K[]
+  /**
+   * Read on every evaluation, because a record whose type is chosen inside the
+   * walk does not know its own sections until then: a page section's order is
+   * `type` alone until a type is picked, and the sections that type requires
+   * afterwards.
+   */
+  order: MaybeRefOrGetter<readonly K[]>
   /** Whether this section still blocks creating. */
   missing: (key: K) => boolean
   /** Names the record in `Create <noun>`. */
@@ -23,7 +29,7 @@ export function useCreateWalk<K extends string>(options: {
   commit: () => Promise<void>
 }) {
   const label = (key: K) => toValue(options.labels)[key]
-  const outstanding = computed(() => options.order.filter(key => options.missing(key)))
+  const outstanding = computed(() => toValue(options.order).filter(key => options.missing(key)))
   const nextOutstanding = computed(() => outstanding.value.find(key => key !== options.openKey.value) ?? null)
   const openSectionIncomplete = computed(() => outstanding.value.includes(options.openKey.value))
 
