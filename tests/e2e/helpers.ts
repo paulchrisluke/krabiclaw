@@ -215,6 +215,20 @@ export async function expectHealthyPage(page: Page, errors: string[], allowedErr
 }
 
 // Cloudflare's injected preview toolbar can leave an empty overlay over app controls.
+/**
+ * A platform page is server-rendered with its buttons already in the HTML, so a
+ * click that lands before Nuxt finishes hydrating is a click on a button with no
+ * handler yet. Wait for the app to report hydration complete before interacting.
+ */
+export async function waitForNuxtHydration(page: Page) {
+  await page.waitForFunction(() => {
+    const root = document.querySelector('#__nuxt') as (Element & {
+      __vue_app__?: { $nuxt?: { isHydrating: boolean } }
+    }) | null
+    return root?.__vue_app__?.$nuxt?.isHydrating === false
+  })
+}
+
 export async function dismissPreviewToolbar(page: Page) {
   await page.addInitScript(() => {
     const removePreviewModal = () => document.querySelectorAll('.cf_modal_container').forEach(element => element.remove())

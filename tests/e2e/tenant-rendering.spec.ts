@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
 import {
   blawbyBaseURL, blawbyExtraHeaders, collectPageErrors,
-  openTenantPage, potteryHouseBaseURL, potteryHouseExtraHeaders,
+  openTenantPage, potteryHouseBaseURL, potteryHouseExtraHeaders, waitForNuxtHydration,
 } from './helpers'
 import { kikuzukiTestBaseUrl, kikuzukiTestExtraHeaders, testBaseUrl } from './test-env'
 
@@ -88,12 +88,7 @@ test('KrabiClaw home retains its billing plans after hydration', async ({ page }
   const failures = collectFirstPartyFailures(page, baseURL)
   const response = await openTenantPage(page, `${baseURL}/`, {})
   expect(response?.status()).toBe(200)
-  await page.waitForFunction(() => {
-    const root = document.querySelector('#__nuxt') as (Element & {
-      __vue_app__?: { $nuxt?: { isHydrating: boolean } }
-    }) | null
-    return root?.__vue_app__?.$nuxt?.isHydrating === false
-  })
+  await waitForNuxtHydration(page)
   await expect(page.getByRole('heading', { name: 'Starter', exact: true })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Growth', exact: true })).toBeVisible()
   await expect(page.getByRole('link', { name: 'Get Growth', exact: true })).toHaveAttribute('href', '/signup?plan=growth')
