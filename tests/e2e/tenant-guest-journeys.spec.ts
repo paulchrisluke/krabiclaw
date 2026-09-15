@@ -79,7 +79,7 @@ test.describe('tenant guest journeys (disposable local/preview data only)', () =
     await expect(page).toHaveURL(/\/bookings\/confirmed/)
     await expect(page.locator('main')).toContainText(/booking|received|confirmed/i)
     const state = await waitForNotifications(request, potteryHouseBaseURL, 'site-pottery-house', since, state =>
-      state.notifications.some(row => row.template === 'new_reservation')
+      state.notifications.some(row => row.template === 'new_booking')
       && state.deliveries.some(row => row.purpose === 'owner_alert' && row.channel === 'whatsapp' && row.status === 'sent')
       && state.deliveries.some(row => row.purpose === 'guest_acknowledgement' && row.channel === 'email' && row.status === 'sent'),
     )

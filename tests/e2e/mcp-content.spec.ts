@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test'
 import Ajv from 'ajv'
 import { loginAs } from './helpers/auth'
 import { MCP_GROWTH_USER_ID, MCP_GROWTH_SERVICE_USER_ID } from './helpers/plan-fixtures'
-import { MCP_VERSION, mcpRequest, mcpData, ensureSite } from './helpers/mcp'
+import { mcpRequest, mcpData, ensureSite } from './helpers/mcp'
 
 // Split out of mcp.spec.ts (content/publishing tool tests) — see
 // helpers/mcp.ts for why. This group covers post publishing, tenant blog
@@ -349,14 +349,18 @@ test.describe('stateless MCP server', () => {
 
     await loginAs(request, baseURL!)
 
-    const discover1 = await mcpRequest(request, baseURL!, { method: 'server/discover', id: 'discover-1' })
-    expect(discover1.status()).toBe(200)
-    const discoverBody1 = await discover1.json() as { result: { supportedVersions: string[]; capabilities: { tools: object } } }
-    expect(discoverBody1.result.supportedVersions).toContain(MCP_VERSION)
-    expect(discoverBody1.result.capabilities.tools).toBeDefined()
-
-    const discover2 = await mcpRequest(request, baseURL!, { method: 'server/discover', id: 'discover-2' })
-    expect(discover2.status()).toBe(200)
+    // server/discover is a pre-handshake shortcut some clients use before the
+    // spec's own initialize -> version-mismatch -> retry negotiation.
+    // @modelcontextprotocol/server only wires it up for servers that speak
+    // the modern (2026-07-28+) protocol era; this server intentionally only
+    // serves the legacy eras (see server/api/mcp.post.ts), so it falls
+    // through to the same -32601 fallback as any other unregistered method
+    // rather than answering a bespoke, partial handshake.
+    const discover = await mcpRequest(request, baseURL!, { method: 'server/discover', id: 'discover-1' })
+    expect(discover.status()).toBe(200)
+    const discoverBody = await discover.json() as { id: string; error: { code: number } }
+    expect(discoverBody.id).toBe('discover-1')
+    expect(discoverBody.error.code).toBe(-32601)
 
     const toolsList = await mcpRequest(request, baseURL!, { method: 'tools/list', id: 'list-no-site' })
     expect(toolsList.status()).toBe(200)
@@ -385,7 +389,7 @@ test.describe('stateless MCP server', () => {
     const invalidBody = await invalid.json() as { id: string; error: { code: number; message: string } }
     expect(invalidBody.id).toBe('bad-method')
     expect(invalidBody.error.code).toBe(-32601)
-    expect(invalidBody.error.message).toContain('Unsupported MCP method')
+    expect(invalidBody.error.message).toContain('Method not found')
   })
 
 })

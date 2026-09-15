@@ -22,8 +22,19 @@ for (const width of [390, 1280]) {
     for (const path of ['/', '/docs']) {
       await page.goto(path)
       const header = page.locator('header').first()
-      await expect(header.getByRole('link', { name: 'Sign in', exact: true }).first()).toBeVisible()
+      // `Start free` is the action at every width. At 620px and below the
+      // header bar gives up its `Sign in` text link and the collapsed
+      // navigation carries it instead.
       await expect(header.getByRole('link', { name: 'Start free', exact: true }).first()).toBeVisible()
+      const barSignIn = header.getByRole('link', { name: 'Sign in', exact: true }).first()
+      if (width > 620) {
+        await expect(barSignIn).toBeVisible()
+      } else {
+        await expect(barSignIn).toBeHidden()
+        await header.getByRole('button', { name: 'Open menu' }).click()
+        await expect(header.locator('#platform-mobile-nav').getByRole('link', { name: 'Sign in', exact: true })).toBeVisible()
+        await page.keyboard.press('Escape')
+      }
     }
     for (const path of ['/login', '/signup']) {
       await page.goto(path)

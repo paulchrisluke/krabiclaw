@@ -115,8 +115,13 @@
           </div>
 
           <div v-if="agendaData.items.length === 0" class="py-20 text-center">
-            <UIcon name="i-lucide-calendar-days" class="mx-auto mb-3 size-9 text-muted" />
-            <p class="font-medium text-highlighted">Nothing scheduled this month</p>
+            <img
+              src="https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/bb1d388b-61f1-4027-5457-0909965c8300/thumbnail"
+              alt=""
+              aria-hidden="true"
+              class="mx-auto size-28 object-contain"
+            >
+            <p class="mt-6 text-base font-semibold text-highlighted">Nothing scheduled this month</p>
             <p class="mt-1 text-sm text-muted">Try another month or adjust the filters.</p>
           </div>
           </template>

@@ -61,8 +61,19 @@ export type PageSocialMetadataInput = Omit<SocialPageMetadataInput, 'template' |
 const PLATFORM_NAME = 'KrabiClaw'
 const PLATFORM_DESCRIPTION = 'The AI-powered website builder for local businesses. Build your web presence through conversation with ChatGPT.'
 
-/** The single metadata entry point for every public page. */
-export function useSocialMetadata(input: MaybeRefOrGetter<PageSocialMetadataInput>) {
+function requireMetadata<T>(resolved: T | null): T {
+  if (!resolved) throw new Error('useSocialMetadata: no page metadata to read')
+  return resolved
+}
+
+/**
+ * The single metadata entry point for every public page.
+ *
+ * `null` means there is no page to describe yet — a tenant page whose request
+ * is still in flight, or one whose instance the router has already left. The
+ * head stays untouched until there is, rather than describing a placeholder.
+ */
+export function useSocialMetadata(input: MaybeRefOrGetter<PageSocialMetadataInput | null>) {
   const config = useRuntimeConfig()
   const requestURL = useRequestURL()
   const tenant = useTenantSite()
@@ -71,6 +82,7 @@ export function useSocialMetadata(input: MaybeRefOrGetter<PageSocialMetadataInpu
 
   const normalized = computed(() => {
     const value = toValue(input)
+    if (!value) return null
     const template = value.template ?? resolvePublicTemplate({ themeId: tenant.themeId }).slug
     const origin = template === 'platform'
       ? config.public.siteUrl || requestURL.origin
@@ -102,37 +114,39 @@ export function useSocialMetadata(input: MaybeRefOrGetter<PageSocialMetadataInpu
   })
 
   useHead(() => {
+    const resolved = normalized.value
+    if (!resolved) return {}
     const alternateLinks: Array<{ rel: 'alternate'; hreflang: string; href: string }> = localeRepresentations.value.map(representation => ({
       rel: 'alternate',
       hreflang: representation.locale,
-      href: resolveSeoUrl(representation.route_path, normalized.value.origin),
+      href: resolveSeoUrl(representation.route_path, resolved.origin),
     }))
     const canonicalLink: { rel: 'canonical'; href: string } = {
       rel: 'canonical',
-      href: normalized.value.tags.canonicalUrl,
+      href: resolved.tags.canonicalUrl,
     }
     return {
-      title: normalized.value.tags.title,
+      title: resolved.tags.title,
       meta: [
-      { name: 'description', content: normalized.value.tags.description },
-      { property: 'og:title', content: normalized.value.tags.ogTitle },
-      { property: 'og:description', content: normalized.value.tags.ogDescription },
-      { property: 'og:type', content: normalized.value.tags.ogType },
-      { property: 'og:url', content: normalized.value.tags.ogUrl },
-      ...(normalized.value.tags.ogSiteName ? [{ property: 'og:site_name', content: normalized.value.tags.ogSiteName }] : []),
-      { property: 'og:image', content: normalized.value.tags.ogImage },
-      { property: 'og:image:width', content: normalized.value.tags.ogImageWidth },
-      { property: 'og:image:height', content: normalized.value.tags.ogImageHeight },
-      { property: 'og:image:type', content: normalized.value.tags.ogImageType },
-      { property: 'og:image:alt', content: normalized.value.tags.ogImageAlt },
-      { name: 'twitter:card', content: normalized.value.tags.twitterCard },
-      { name: 'twitter:title', content: normalized.value.tags.twitterTitle },
-      { name: 'twitter:description', content: normalized.value.tags.twitterDescription },
-      { name: 'twitter:image', content: normalized.value.tags.twitterImage },
-      { name: 'twitter:image:alt', content: normalized.value.tags.twitterImageAlt },
-      { property: 'article:author', content: normalized.value.tags.articleAuthor },
-      { property: 'article:published_time', content: normalized.value.tags.articlePublishedTime },
-      { name: 'robots', content: normalized.value.tags.robots },
+      { name: 'description', content: resolved.tags.description },
+      { property: 'og:title', content: resolved.tags.ogTitle },
+      { property: 'og:description', content: resolved.tags.ogDescription },
+      { property: 'og:type', content: resolved.tags.ogType },
+      { property: 'og:url', content: resolved.tags.ogUrl },
+      ...(resolved.tags.ogSiteName ? [{ property: 'og:site_name', content: resolved.tags.ogSiteName }] : []),
+      { property: 'og:image', content: resolved.tags.ogImage },
+      { property: 'og:image:width', content: resolved.tags.ogImageWidth },
+      { property: 'og:image:height', content: resolved.tags.ogImageHeight },
+      { property: 'og:image:type', content: resolved.tags.ogImageType },
+      { property: 'og:image:alt', content: resolved.tags.ogImageAlt },
+      { name: 'twitter:card', content: resolved.tags.twitterCard },
+      { name: 'twitter:title', content: resolved.tags.twitterTitle },
+      { name: 'twitter:description', content: resolved.tags.twitterDescription },
+      { name: 'twitter:image', content: resolved.tags.twitterImage },
+      { name: 'twitter:image:alt', content: resolved.tags.twitterImageAlt },
+      { property: 'article:author', content: resolved.tags.articleAuthor },
+      { property: 'article:published_time', content: resolved.tags.articlePublishedTime },
+      { name: 'robots', content: resolved.tags.robots },
       ].filter(item => item.content !== undefined),
       link: [
         canonicalLink,
@@ -142,6 +156,7 @@ export function useSocialMetadata(input: MaybeRefOrGetter<PageSocialMetadataInpu
   })
 
   useSchemaOrg(computed(() => {
+    if (!normalized.value) return null
     const { value, origin, template, tags } = normalized.value
     if (template !== 'platform' || value.schema === false) return null
     const siteRoot = resolveSeoUrl('/', origin).replace(/\/$/, '')
@@ -224,7 +239,9 @@ export function useSocialMetadata(input: MaybeRefOrGetter<PageSocialMetadataInpu
   }))
 
   return {
-    canonicalUrl: computed(() => normalized.value.tags.canonicalUrl),
-    ogImageUrl: computed(() => normalized.value.tags.ogImage),
+    // Only a caller that passed a page has metadata to read back. Reading
+    // these without one is a bug in the caller, not an absent value.
+    canonicalUrl: computed(() => requireMetadata(normalized.value).tags.canonicalUrl),
+    ogImageUrl: computed(() => requireMetadata(normalized.value).tags.ogImage),
   }
 }

@@ -1,11 +1,14 @@
-import { renderEmail } from '~/server/emails/vue-email'
+import { renderNotificationEmail } from '~/server/emails/render'
+import { domainUpdateMessage } from '~/server/notifications/events'
+import { toWhatsAppVars } from '~/server/notifications/whatsapp-mapping'
 import type { DbClient } from '~/server/db'
 import type { CloudflareEnv } from '~/server/utils/auth'
 import { sendEmail } from '~/server/utils/email-delivery'
-import { getOrganizationOwnerEmail } from '~/server/utils/member-access'
+import { getOrganizationOwnerRecipient, resolveAuthorizedWhatsAppRecipient } from '~/server/utils/member-access'
+import { wantsNotification } from '~/server/domain/notification-preferences'
+import { buildUnsubscribeUrls } from '~/server/utils/unsubscribe'
 import { createCanonicalNotification } from '~/server/utils/notification-center'
 import { getOrgWhatsAppPhone, sendWhatsAppNotification } from '~/server/utils/whatsapp'
-import DomainUpdate from '~/server/emails/templates/DomainUpdate'
 
 interface DomainNotificationEnv extends CloudflareEnv {
   PLATFORM_OWNER_EMAILS?: string
@@ -62,35 +65,68 @@ export async function notifyDomainLifecycle(
   const configuredPlatformDomain = env.NUXT_PUBLIC_PLATFORM_DOMAIN?.trim()
   if (!configuredPlatformDomain) throw new Error('NUXT_PUBLIC_PLATFORM_DOMAIN is required')
   const platformDomain = configuredPlatformDomain.replace(/^https?:\/\//, '').replace(/\/$/, '')
-  const rendered = await renderEmail(DomainUpdate, {
-    title: opts.title,
+  const message = domainUpdateMessage({
+    headline: opts.title,
     message: opts.message,
     domain: opts.domain,
     status: opts.status,
     dashboardUrl,
-    platformDomain,
   })
-  const ownerEmail = await getOrganizationOwnerEmail(env, opts.organizationId)
-  const recipients = [...new Set([ownerEmail, ...supportEmails(env)].filter(Boolean))] as string[]
-  const emailResults = await Promise.all(recipients.map(to => sendEmail(env, {
-    to,
+  // The owner is asked whether they want site-and-billing mail; the platform
+  // support addresses are operational routing, not a person's preference, so
+  // they are always copied and carry no unsubscribe link.
+  const owner = await getOrganizationOwnerRecipient(env, opts.organizationId)
+  const ownerWantsEmail = owner ? await wantsNotification(db, owner.userId, 'site_and_billing', 'email') : false
+  const ownerUnsubscribe = owner && ownerWantsEmail
+    ? await buildUnsubscribeUrls(env, { userId: owner.userId, category: 'site_and_billing' })
+    : null
+  const recipients: Array<{ to: string; unsubscribeUrl: string | null; unsubscribeOneClickUrl: string | null }> = [
+    ...(owner && ownerWantsEmail ? [{ to: owner.email, unsubscribeUrl: ownerUnsubscribe?.pageUrl ?? null, unsubscribeOneClickUrl: ownerUnsubscribe?.oneClickUrl ?? null }] : []),
+    ...[...new Set(supportEmails(env))]
+      .filter(address => address !== owner?.email)
+      .map(to => ({ to, unsubscribeUrl: null, unsubscribeOneClickUrl: null })),
+  ]
+  const emailResults = await Promise.all(recipients.map(async recipient => sendEmail(env, {
+    to: recipient.to,
     subject: opts.title,
-    html: rendered.html,
-    text: rendered.text,
+    ...(await renderNotificationEmail(message, {
+      platformDomain,
+      preferencesUrl: `https://${platformDomain}/dashboard/account/profile/notifications`,
+      unsubscribeUrl: recipient.unsubscribeUrl,
+    })),
+    unsubscribeOneClickUrl: recipient.unsubscribeOneClickUrl,
   })))
   emailResults.forEach((result) => {
     if (result.status !== 'sent') console.error('domain_notification_email_send_failed', { siteId: opts.siteId, error: result.error })
   })
 
+  // Gated like every other owner alert. This send used to go straight to the
+  // site's number: it asked neither whether the account behind it wants
+  // site-and-billing mail nor whether that number is allowed to receive
+  // anything for this organization, so a tenant who switched the category off
+  // still got the WhatsApp.
   const phone = await getOrgWhatsAppPhone(db, opts.organizationId, opts.siteId)
   if (phone) {
-    const result = await sendWhatsAppNotification(env, {
+    const recipient = await resolveAuthorizedWhatsAppRecipient(db, {
+      env,
+      phone,
       organizationId: opts.organizationId,
       siteId: opts.siteId,
-      toPhone: phone,
-      template: 'domain_update',
-      vars: { domain: opts.domain, status: opts.status, dashboard_url: dashboardUrl },
+      locationId: null,
+      requireSiteWide: true,
     })
-    if (!result.success) console.error('domain_notification_whatsapp_send_failed', { siteId: opts.siteId, error: result.error })
+    const wanted = recipient ? await wantsNotification(db, recipient.userId, 'site_and_billing', 'whatsapp') : false
+    if (!recipient) {
+      console.error('whatsapp_delivery_blocked', { siteId: opts.siteId, reason: 'recipient_access_pending' })
+    } else if (wanted) {
+      const result = await sendWhatsAppNotification(env, {
+        organizationId: opts.organizationId,
+        siteId: opts.siteId,
+        toPhone: phone,
+        template: 'domain_update',
+        vars: toWhatsAppVars(message, 'domain_update').vars,
+      })
+      if (!result.success) console.error('domain_notification_whatsapp_send_failed', { siteId: opts.siteId, error: result.error })
+    }
   }
 }

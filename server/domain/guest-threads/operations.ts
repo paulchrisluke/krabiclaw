@@ -5,6 +5,9 @@ import { getGuestRequest, getThreadOperationalRecord, requestActions, requestSum
 import { deliverGuestThreadEmail, getDeliveryById, getDeliveryClaimEligibility, getDeliveryRetryEligibility, isDeliveryClaimInFlight } from './deliveries'
 import { findEntryByDedupeKey, getEntryById } from './entries'
 import { updateThreadProjectionIfLatestEntry } from './repository'
+import { renderNotificationEmail } from '~/server/emails/render'
+import { guestThreadReplyMessage, guestThreadStatusMessage } from '~/server/notifications/guest-events'
+import { getPlatformDomain } from '~/server/utils/dashboard-notification-links'
 import type {
   GuestThreadDeliveryProvider,
   GuestThreadDeliveryRow,
@@ -270,6 +273,19 @@ function replySubject(submissionType: GuestThreadSubmissionType, fromName: strin
   return `Re: your booking at ${fromName}`
 }
 
+/**
+ * Guest-facing inbox mail renders through the shared shell like every other
+ * outbound message. A member's reply leads with their own words; a status
+ * update leads with what changed.
+ */
+function renderMemberReply(env: ReplyEmailEnv, siteName: string, body: string) {
+  return renderNotificationEmail(guestThreadReplyMessage({ siteName, body }), { platformDomain: getPlatformDomain(env) })
+}
+
+function renderStatusUpdate(env: ReplyEmailEnv, siteName: string, heading: string, body: string) {
+  return renderNotificationEmail(guestThreadStatusMessage({ siteName, heading, body }), { platformDomain: getPlatformDomain(env) })
+}
+
 function recordedEmailSubject(entry: GuestThreadEntryRow): string | null {
   if (!entry.payload_json) return null
   const payload: unknown = JSON.parse(entry.payload_json)
@@ -302,7 +318,7 @@ async function sendStatusUpdate(
     to: summary.guestEmail,
     fromName,
     subject,
-    body: entry.body,
+    email: await renderStatusUpdate(input.env, fromName, subject, entry.body),
     submissionType: context.thread.kind,
     submissionId: context.thread.id,
   })
@@ -474,7 +490,7 @@ async function executeReply(
     to: summary.guestEmail,
     fromName,
     subject: replySubject(context.thread.kind, fromName),
-    body,
+    email: await renderMemberReply(input.env, fromName, body),
     submissionType: context.thread.kind,
     submissionId: context.thread.id,
   })
@@ -523,7 +539,7 @@ async function retryDelivery(
         to: summary.guestEmail,
         fromName,
         subject: replySubject(context.thread.kind, fromName),
-        body: entry.body,
+        email: await renderMemberReply(input.env, fromName, entry.body),
         submissionType: context.thread.kind,
         submissionId: context.thread.id,
       })

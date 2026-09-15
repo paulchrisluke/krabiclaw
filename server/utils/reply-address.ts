@@ -23,7 +23,7 @@ function expandUuid(value: string): string {
   return `${value.slice(0, 8)}-${value.slice(8, 12)}-${value.slice(12, 16)}-${value.slice(16, 20)}-${value.slice(20)}`
 }
 
-async function hmacHex(secret: string, message: string, bytes: number): Promise<string> {
+export async function hmacHex(secret: string, message: string, bytes: number): Promise<string> {
   const key = await crypto.subtle.importKey(
     'raw',
     new TextEncoder().encode(secret),
@@ -38,7 +38,7 @@ async function hmacHex(secret: string, message: string, bytes: number): Promise<
     .slice(0, bytes * 2)
 }
 
-function timingSafeEqual(leftValue: string, rightValue: string): boolean {
+export function timingSafeEqual(leftValue: string, rightValue: string): boolean {
   const textEncoder = new TextEncoder()
   const left = textEncoder.encode(leftValue)
   const right = textEncoder.encode(rightValue)

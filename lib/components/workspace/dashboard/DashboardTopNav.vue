@@ -44,7 +44,7 @@
           :key="action.key"
           :icon="action.icon"
           :aria-label="action.ariaLabel"
-          :class="action.class"
+          :class="[action.class, 'rounded-full']"
           color="neutral"
           variant="soft"
           square
@@ -55,8 +55,9 @@
       <UButton
         v-if="items.length"
         color="neutral"
-        variant="ghost"
+        variant="soft"
         square
+        class="rounded-full"
         icon="i-lucide-menu"
         aria-label="Open menu"
         data-testid="dashboard-top-nav-menu-button"

@@ -210,17 +210,23 @@ const resultTypeMeta: Record<PublicSearchResult['type'], { badge: string, group:
 
 const surfaceLabel = computed(() => {
   if (props.surface === 'tenant_blog') return t('saya.footer.blog')
+  if (props.surface === 'public') return 'KrabiClaw'
   if (props.surface === 'docs') return 'Documentation'
   if (props.surface === 'blog') return 'Blog'
   return 'Dashboard'
 })
 
+// KrabiClaw is a proper noun; the other surfaces read as ordinary nouns mid-sentence.
+const surfacePhrase = computed(() => props.surface === 'public'
+  ? surfaceLabel.value
+  : surfaceLabel.value.toLowerCase())
+
 const dialogTitle = computed(() => props.surface === 'tenant_blog'
   ? t('saya.search.dialog_title', { surface: surfaceLabel.value })
-  : `Search ${surfaceLabel.value.toLowerCase()}`)
+  : `Search ${surfacePhrase.value}`)
 const searchingLabel = computed(() => props.surface === 'tenant_blog'
   ? t('saya.search.searching', { surface: surfaceLabel.value })
-  : `Searching ${surfaceLabel.value.toLowerCase()}...`)
+  : `Searching ${surfacePhrase.value}...`)
 const noResultsLabel = computed(() => props.surface === 'tenant_blog'
   ? t('saya.search.no_results')
   : 'No results found')

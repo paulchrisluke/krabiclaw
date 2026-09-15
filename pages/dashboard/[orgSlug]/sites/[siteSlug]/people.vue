@@ -75,7 +75,7 @@ async function loadUsers() {
     })
     if (result.error) throw new Error(result.error.message)
     if (requestId !== requestSequence) return
-    users.value = result.data.users.map(user => ({ id: user.id, name: user.name ?? null, email: user.email, role: user.role ?? null, banned: user.banned ?? null }))
+    users.value = result.data.users.map((user: { id: string, name?: string | null, email: string, role?: string | null, banned?: boolean | null }) => ({ id: user.id, name: user.name ?? null, email: user.email, role: user.role ?? null, banned: user.banned ?? null }))
     total.value = result.data.total
   } catch (error) {
     if (requestId !== requestSequence) return

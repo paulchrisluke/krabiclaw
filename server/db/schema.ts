@@ -3,6 +3,7 @@ import { sql } from "drizzle-orm"
 import { sqliteTable, integer, text, real, unique, uniqueIndex, index, check, foreignKey, primaryKey } from "drizzle-orm/sqlite-core"
 import type { AnySQLiteColumn } from "drizzle-orm/sqlite-core"
 import type { CONTENT_DOCUMENT_KINDS } from "../../shared/content-registries"
+import { NOTIFICATION_CATEGORIES, type NotificationCategory } from "../../shared/notification-categories"
 import { NONPROFIT_STATUS_CANONICAL } from "../../utils/professional-service-schema"
 
 export const account = sqliteTable("account", {
@@ -1826,6 +1827,12 @@ export const sites = sqliteTable("sites", {
 	check("sites_config_google_site_verification_check", sql`json_type(settings_json, '$.config.google_site_verification') IS NULL OR json_type(settings_json, '$.config.google_site_verification') IS 'text'`),
 	check("sites_config_default_timezone_check", sql`json_type(settings_json, '$.config.default_timezone') IS 'text' AND length(json_extract(settings_json, '$.config.default_timezone')) > 0`),
 	check("sites_config_whatsapp_phone_check", sql`json_type(settings_json, '$.config.whatsapp_phone') IS NULL OR json_type(settings_json, '$.config.whatsapp_phone') IS 'text'`),
+	// Retained deliberately. Nothing reads or writes $.config.owner_notification_channels
+	// any more — per-person, per-category preference lives in
+	// user_notification_preferences — but dropping a CHECK from `sites` forces
+	// SQLite's rebuild-and-rename, and D1 cascades a DROP TABLE to every child of
+	// `sites` even with defer_foreign_keys. The constraint is inert: it only types a
+	// JSON key nothing sets. Removing it belongs to a rebaseline, not to this change.
 	check("sites_config_notifications_check", sql`json_type(settings_json, '$.config.owner_notification_channels') IS NULL OR json_type(settings_json, '$.config.owner_notification_channels') IS 'array'`),
 	check("sites_consultation_metadata_check", sql`json_type(settings_json, '$.consultation.metadata_json') IS NULL OR json_type(settings_json, '$.consultation.metadata_json') IN ('null', 'object')`),
 	check("sites_compliance_metadata_check", sql`json_type(settings_json, '$.compliance.metadata_json') IS NULL OR json_type(settings_json, '$.compliance.metadata_json') IN ('null', 'object')`),
@@ -2222,4 +2229,61 @@ export const analytics_summaries = sqliteTable("analytics_summaries", {
   index("analytics_summaries_session_started_idx").on(table.site_id, sql`(payload_json ->> '$.started_at')`).where(sql`kind = 'session'`),
   index("analytics_summaries_session_seen_idx").on(table.site_id, sql`(payload_json ->> '$.last_seen_at')`).where(sql`kind = 'session'`),
   index("analytics_summaries_session_visitor_idx").on(table.site_id, sql`(payload_json ->> '$.visitor_id')`, sql`(payload_json ->> '$.started_at')`).where(sql`kind = 'session'`),
+]);
+
+
+// Which categories of notification a person wants, and over which channel.
+//
+// Row meaning: this user wants this category on these channels. A user with no
+// row for a category takes NOTIFICATION_CATEGORY_DEFAULTS in
+// shared/notification-categories.ts, which is the only source of that value —
+// there is no backfill, so nothing can drift out of step with it.
+//
+// Preference is not authorization. A `whatsapp_enabled` row says the person
+// wants WhatsApp; isAuthorizedWhatsAppRecipient still decides whether that
+// number may receive the message at all.
+//
+// account_security email is not stored here as a switchable value: the API
+// refuses to disable it, because losing a password reset locks a person out of
+// their own account.
+export const user_notification_preferences = sqliteTable("user_notification_preferences", {
+	user_id: text().notNull().references(() => user.id, { onDelete: "cascade" }),
+	category: text().$type<NotificationCategory>().notNull(),
+	email_enabled: integer({ mode: "boolean" }).notNull(),
+	whatsapp_enabled: integer({ mode: "boolean" }).notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+}, (table) => [
+	primaryKey({ columns: [table.user_id, table.category] }),
+	check("user_notification_preferences_category_check", sql`category IN (${sql.raw([...NOTIFICATION_CATEGORIES].map(value => `'${value}'`).join(', '))})`),
+	check("user_notification_preferences_updated_at_check", sql`strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at`),
+	check("user_notification_preferences_account_security_check", sql`category != 'account_security' OR email_enabled = 1`),
+]);
+
+// One article, one broadcast, forever. The unique content_document_id is what
+// makes republishing an article not mail everyone a second time.
+export const broadcasts = sqliteTable("broadcasts", {
+	id: text().primaryKey(),
+	content_document_id: text().notNull().unique().references(() => content_documents.id, { onDelete: "cascade" }),
+	category: text().$type<NotificationCategory>().notNull(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+}, () => [
+	check("broadcasts_category_check", sql`category IN (${sql.raw([...NOTIFICATION_CATEGORIES].map(value => `'${value}'`).join(', '))})`),
+	check("broadcasts_created_at_check", sql`strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at`),
+]);
+
+// One row per recipient per broadcast, written after the send resolves. The
+// composite primary key is what makes a run that dies halfway resumable: the
+// next tick skips whoever already has a row, the same way
+// guest_thread_deliveries claims a thread delivery.
+export const broadcast_deliveries = sqliteTable("broadcast_deliveries", {
+	broadcast_id: text().notNull().references(() => broadcasts.id, { onDelete: "cascade" }),
+	user_id: text().notNull().references(() => user.id, { onDelete: "cascade" }),
+	status: text().$type<'sent' | 'failed'>().notNull(),
+	provider_message_id: text(),
+	error: text(),
+	sent_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+}, (table) => [
+	primaryKey({ columns: [table.broadcast_id, table.user_id] }),
+	check("broadcast_deliveries_status_check", sql`status IN ('sent', 'failed')`),
+	check("broadcast_deliveries_sent_at_check", sql`strftime('%Y-%m-%dT%H:%M:%fZ', sent_at, '+0 days') IS sent_at`),
 ]);
