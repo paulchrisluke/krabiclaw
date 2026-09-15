@@ -868,25 +868,51 @@ export async function deleteTenantPage(db: DbClient, variantId: string, input: {
   }
 
   const translations = row.locale === 'en'
-    ? await queryAll<{ id: string; locale: string; updated_at: string }>(db, `
-        SELECT id, locale, updated_at FROM content_documents
+    ? await queryAll<{ id: string; locale: string; path: string; updated_at: string }>(db, `
+        SELECT id, locale, path, updated_at FROM content_documents
          WHERE root_id = ? AND row_role = 'representation' AND site_id = ? AND organization_id = ?
          ORDER BY locale
       `, [row.id, row.site_id, row.organization_id])
     : []
   const removedLocales = translations.map(translation => translation.locale)
 
-  // The timestamps are checked again inside the batch. The read above gives
-  // the caller a clear conflict, but two queries run between it and this write,
-  // and a page or translation updated in that window must not be deleted on the
-  // strength of a snapshot taken before it.
+  // The same rule archiving applies: a redirect somebody else owns that lands
+  // on a removed variant would land on nothing. The page's own redirects go
+  // with it in the batch, so they are not counted.
+  const removed = [{ locale: row.locale, path: row.path }, ...translations]
+  const incoming = {
+    sql: `FROM site_redirects
+         WHERE site_id = ? AND organization_id = ? AND behavior = 'redirect'
+           AND NOT (owner_type = 'content_document' AND owner_id IN (
+             SELECT id FROM content_documents WHERE (id = ? OR root_id = ?) AND organization_id = ? AND site_id = ?))
+           AND (${removed.map(() => '(locale = ? AND to_path = ?)').join(' OR ')})`,
+    params: [
+      row.site_id, row.organization_id, row.id, row.id, row.organization_id, row.site_id,
+      ...removed.flatMap(variant => [variant.locale, formatTenantLocalePath(variant.path, variant.locale)]),
+    ],
+  }
+  const pointedAt = await queryFirst<{ count: number }>(db, `SELECT count(*) AS count ${incoming.sql}`, incoming.params)
+  if (pointedAt?.count) conflict('Cannot delete a page while another redirect points to it')
+
+  // The timestamps, the translation set and the redirect rule are checked
+  // again inside the batch. The reads above give the caller a clear conflict,
+  // but queries run between them and this write, and a page changed in that
+  // window must not be deleted on the strength of a snapshot taken before it.
+  const now = new Date().toISOString()
   await executeBatch(db, [
+    {
+      query: `INSERT INTO content_blocks (id, document_id, parent_block_id, type, position, level, data_json, created_at, updated_at)
+        SELECT NULL, ?, NULL, 'markdown', 0, NULL, '{}', ?, ? WHERE EXISTS (SELECT 1 ${incoming.sql})`,
+      params: [row.id, now, now, ...incoming.params],
+    },
     ...prepareContentDocumentDeletion({
       documentId: row.id,
       organizationId: row.organization_id,
       siteId: row.site_id,
       expectedUpdatedAt: input.expectedUpdatedAt,
-      expectedRepresentations: translations.map(translation => ({ id: translation.id, updatedAt: translation.updated_at })),
+      expectedRepresentations: row.locale === 'en'
+        ? translations.map(translation => ({ id: translation.id, updatedAt: translation.updated_at }))
+        : undefined,
     }),
     publicResourceCacheInvalidationQuery(row.site_id, 'tenant-page-delete'),
   ])

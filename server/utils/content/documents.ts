@@ -236,9 +236,14 @@ export function prepareContentDocumentDeletion(input: { organizationId: string; 
     // A root takes its representations with it through the cascade, so each
     // one the caller saw is asserted too: a translation edited between the
     // locale read and this batch aborts the delete instead of vanishing.
-    ...(document
-      ? (input.expectedRepresentations ?? []).map(representation =>
-          assertDocumentSnapshotQuery(representation.id, new Date().toISOString(), representation.updatedAt))
+    ...(document && input.expectedRepresentations !== undefined
+      ? [
+          ...input.expectedRepresentations.map(representation =>
+            assertDocumentSnapshotQuery(representation.id, new Date().toISOString(), representation.updatedAt)),
+          // And none the caller did not see: a translation created after the
+          // locale read would otherwise go through the cascade unasserted.
+          assertRepresentationCountQuery(input.documentId, new Date().toISOString(), input.expectedRepresentations.length),
+        ]
       : []),
     // Deleting a location removes every document scoped to it, so one
     // document's timestamp says nothing about the set; the union above is what
@@ -261,6 +266,15 @@ export async function getContentDocumentById(db: DbClient, documentId: string) {
     SELECT id, organization_id, site_id, kind, row_role, root_id, locale, created_at, updated_at
     FROM content_documents WHERE id = ? AND row_role IN ('root', 'representation')
   `, [documentId])
+}
+
+function assertRepresentationCountQuery(rootId: string, now: string, expectedCount: number): BatchQuery {
+  return {
+    query: `INSERT INTO content_blocks (id, document_id, parent_block_id, type, position, level, data_json, created_at, updated_at)
+      SELECT NULL, ?, NULL, 'markdown', 0, NULL, '{}', ?, ?
+       WHERE (SELECT count(*) FROM content_documents WHERE root_id = ? AND row_role = 'representation') != ?`,
+    params: [rootId, now, now, rootId, expectedCount],
+  }
 }
 
 function assertDocumentSnapshotQuery(documentId: string, now: string, expectedUpdatedAt?: string): BatchQuery {

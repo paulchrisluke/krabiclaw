@@ -128,7 +128,10 @@ export async function handleContentTools(ctx: McpExecutorContext): Promise<unkno
             seoDescription: nullableStringArg(args, "seoDescription", null),
             canonicalUrl: nullableStringArg(args, "canonicalUrl", null),
             robots: nullableStringArg(args, "robots", null),
-            pageType: optionalString(args, "pageType") as "custom" | "recipe" | "legal" | "system" | undefined,
+            // Omitted is omitted: a translation takes its identity from the
+            // source page, and a null here would be read as stating a
+            // different one.
+            pageType: (optionalString(args, "pageType") ?? undefined) as "custom" | "recipe" | "legal" | "system" | undefined,
             recipe: nullableStringArg(args, "recipe", null),
             sortOrder: typeof args.sortOrder === 'number' ? args.sortOrder : null,
             blocks: args.blocks,

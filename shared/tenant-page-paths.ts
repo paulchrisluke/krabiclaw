@@ -17,26 +17,29 @@ import type { PublicTemplateDefinition } from '../utils/template-registry'
  * `/blog/:slug()` therefore says nothing about `/blog/a/b`.
  */
 function patternMatchesPath(claim: ClaimedRoute, path: string): boolean {
-  const claimSegments = claim.pattern.split('/').filter(Boolean)
+  const claimSegments = claim.pattern.split('/').filter(Boolean).map(parseClaimSegment)
   const pathSegments = path.split('/').filter(Boolean)
+  // A trailing `?` or `*` segment may be absent from the path it claims.
+  while (claimSegments.length > pathSegments.length && claimSegments[claimSegments.length - 1]!.optional) claimSegments.pop()
   if (claim.subtree ? pathSegments.length < claimSegments.length : pathSegments.length !== claimSegments.length) {
     return false
   }
-  return claimSegments.every((segment, index) => {
-    const value = pathSegments[index]
-    if (value === undefined) return false
-    // `:name(pattern)` carries a constraint — the locale aliases are
-    // `:locale(th)` — and honouring it keeps `/foo/about` unclaimed while
-    // `/th/about` is claimed.
-    // A trailing `*`, `+` or `?` is vue-router's repeat modifier, not part of
-    // the segment; how many segments a claim covers is `claim.subtree`'s job.
-    const param = /^:[\w-]+(?:\((.*)\))?[*+?]?([^()]*)$/.exec(segment)
-    if (!param) return segment.toLowerCase() === value.toLowerCase()
-    const constraint = param[1] || '.+'
-    // Nitro keeps static suffixes, e.g. :slug.md; those claim only .md paths.
-    const suffix = param[2]!.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-    return new RegExp(`^(?:${constraint})${suffix}$`, 'i').test(value)
-  })
+  return claimSegments.every((segment, index) => segment.matches(pathSegments[index]!))
+}
+
+function parseClaimSegment(segment: string): { optional: boolean; matches: (value: string) => boolean } {
+  // `:name(pattern)` carries a constraint — the locale aliases are
+  // `:locale(th)` — and honouring it keeps `/foo/about` unclaimed while
+  // `/th/about` is claimed. A trailing `*`, `+` or `?` is vue-router's repeat
+  // modifier; how many segments a claim covers is `claim.subtree`'s job, and
+  // `?` and `*` additionally allow the segment to be absent.
+  const param = /^:[\w-]+(?:\((.*)\))?([*+?])?([^()]*)$/.exec(segment)
+  if (!param) return { optional: false, matches: value => segment.toLowerCase() === value.toLowerCase() }
+  const constraint = param[1] || '.+'
+  // Nitro keeps static suffixes, e.g. :slug.md; those claim only .md paths.
+  const suffix = param[3]!.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const matcher = new RegExp(`^(?:${constraint})${suffix}$`, 'i')
+  return { optional: param[2] === '?' || param[2] === '*', matches: value => matcher.test(value) }
 }
 
 export function isClaimedPublicPath(claims: readonly ClaimedRoute[], path: string): boolean {
