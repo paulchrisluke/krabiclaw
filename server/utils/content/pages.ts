@@ -3,9 +3,10 @@ import { executeBatch, queryAll, queryFirst, type BatchQuery, type DbClient } fr
 import { d1JsonStringSet } from '~/server/db/d1-limits'
 import {
   createContentDocumentWithBlocks,
+  formatBlockOutline,
   getContentDocumentById,
-  getContentEditorSnapshot,
   getContentEditorSnapshotForDocument,
+  listBlocksForDocument,
   prepareContentDocumentDeletion,
   prepareContentDocumentUpdate,
   prepareContentDocumentWithBlocks,
@@ -516,14 +517,23 @@ export async function listTenantPages(db: DbClient, siteId: string, opts: { loca
   }))
 }
 
+// The representation row this page is built from IS its content document row,
+// and TenantPageDocument is only {id, updated_at} — both already on the row.
+function documentOf(row: PageRepresentationRow): TenantPageDocument {
+  return { id: row.id, updated_at: row.updated_at }
+}
+
+// Blocks with the media shape the tenant page surfaces use (it carries
+// file_name, which the block editors show as the picker's label).
+async function tenantPageBlocks(db: DbClient, siteId: string, documentId: string): Promise<TenantPageBlock[]> {
+  const blocks = await listBlocksForDocument(db, documentId)
+  return await attachTenantPageMedia(db, siteId, blocks.map(formatBlockOutline) as unknown as TenantPageBlock[])
+}
+
 export async function getTenantPageForEditor(db: DbClient, variantId: string, scope?: TenantPageScope): Promise<TenantPageDto> {
   const row = await getPageRepresentation(db, variantId, scope)
   if (!row) notFound('Tenant page variant not found')
-  const document = await getContentDocumentById(db, row.id)
-  if (!document) throw new HTTPError({ statusCode: 500, statusMessage: 'Tenant page content document not found' })
-  const snapshot = await getContentEditorSnapshot(db, variantId)
-  const blocks = await attachTenantPageMedia(db, row.site_id, (snapshot?.blocks ?? []).map(block => ({ ...block, media: [] })) as TenantPageBlock[])
-  return pageDto(row, document, blocks)
+  return pageDto(row, documentOf(row), await tenantPageBlocks(db, row.site_id, row.id))
 }
 
 export async function getPublishedTenantPage(db: DbClient, siteId: string, path: string, locale?: string | null): Promise<TenantPageDto | null> {
@@ -538,12 +548,7 @@ export async function getPublishedTenantPage(db: DbClient, siteId: string, path:
   ].join('\n'), [siteId, candidateLocale, normalizedPath])
   const row = await selectPublished(resolvedLocale)
   if (!row) return null
-  const document = await getContentDocumentById(db, row.id)
-  if (!document) throw new HTTPError({ statusCode: 500, statusMessage: 'Published tenant page content is unavailable' })
-  const snapshot = await getContentEditorSnapshotForDocument(db, document)
-  if (!snapshot) throw new HTTPError({ statusCode: 500, statusMessage: 'Published tenant page content is unavailable' })
-  const blocks = await attachTenantPageMedia(db, siteId, snapshot.blocks.map(block => ({ ...block, media: [] })) as TenantPageBlock[])
-  return pageDto(row, document, blocks)
+  return pageDto(row, documentOf(row), await tenantPageBlocks(db, siteId, row.id))
 }
 
 export async function resolvePublishedTenantPageIdentity(
