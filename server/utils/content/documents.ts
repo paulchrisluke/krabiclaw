@@ -221,7 +221,7 @@ export async function getContentRepresentation(db: DbClient, input: { rootId: st
  * so a stale delete aborts before a placement, a redirect or a document is
  * touched.
  */
-export function prepareContentDocumentDeletion(input: { organizationId: string; siteId: string } & ({ documentId: string; expectedUpdatedAt?: string } | { locationId: string })): BatchQuery[] {
+export function prepareContentDocumentDeletion(input: { organizationId: string; siteId: string } & ({ documentId: string; expectedUpdatedAt?: string; expectedRepresentations?: Array<{ id: string; updatedAt: string }> } | { locationId: string })): BatchQuery[] {
   const document = 'documentId' in input
   const owned = document
     ? 'SELECT id FROM content_documents WHERE (id = ? OR root_id = ?) AND organization_id = ? AND site_id = ?'
@@ -232,6 +232,13 @@ export function prepareContentDocumentDeletion(input: { organizationId: string; 
   return [
     ...(document && input.expectedUpdatedAt !== undefined
       ? [assertDocumentSnapshotQuery(input.documentId, new Date().toISOString(), input.expectedUpdatedAt)]
+      : []),
+    // A root takes its representations with it through the cascade, so each
+    // one the caller saw is asserted too: a translation edited between the
+    // locale read and this batch aborts the delete instead of vanishing.
+    ...(document
+      ? (input.expectedRepresentations ?? []).map(representation =>
+          assertDocumentSnapshotQuery(representation.id, new Date().toISOString(), representation.updatedAt))
       : []),
     // Deleting a location removes every document scoped to it, so one
     // document's timestamp says nothing about the set; the union above is what

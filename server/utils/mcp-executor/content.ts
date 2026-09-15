@@ -177,7 +177,7 @@ export async function handleContentTools(ctx: McpExecutorContext): Promise<unkno
           expectedUpdatedAt: requiredString(args, "expected_updated_at"),
           env: site.env,
         });
-        return renderStructuredResponse(deleted, "Deleted tenant page.", { tenant_page: deleted });
+        return tenantPageLifecycleResponse("Deleted", deleted);
       } catch (error) {
         return rethrowAsInvalidParams(error);
       }

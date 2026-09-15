@@ -28,7 +28,9 @@ function patternMatchesPath(claim: ClaimedRoute, path: string): boolean {
     // `:name(pattern)` carries a constraint — the locale aliases are
     // `:locale(th)` — and honouring it keeps `/foo/about` unclaimed while
     // `/th/about` is claimed.
-    const param = /^:[\w-]+(?:\((.*)\))?([^()]*)$/.exec(segment)
+    // A trailing `*`, `+` or `?` is vue-router's repeat modifier, not part of
+    // the segment; how many segments a claim covers is `claim.subtree`'s job.
+    const param = /^:[\w-]+(?:\((.*)\))?[*+?]?([^()]*)$/.exec(segment)
     if (!param) return segment.toLowerCase() === value.toLowerCase()
     const constraint = param[1] || '.+'
     // Nitro keeps static suffixes, e.g. :slug.md; those claim only .md paths.

@@ -867,24 +867,26 @@ export async function deleteTenantPage(db: DbClient, variantId: string, input: {
     conflict('This page is one the site template renders, so it cannot be deleted')
   }
 
-  const removedLocales = row.locale === 'en'
-    ? (await queryAll<{ locale: string }>(db, `
-        SELECT locale FROM content_documents
+  const translations = row.locale === 'en'
+    ? await queryAll<{ id: string; locale: string; updated_at: string }>(db, `
+        SELECT id, locale, updated_at FROM content_documents
          WHERE root_id = ? AND row_role = 'representation' AND site_id = ? AND organization_id = ?
          ORDER BY locale
-      `, [row.id, row.site_id, row.organization_id])).map(translation => translation.locale)
+      `, [row.id, row.site_id, row.organization_id])
     : []
+  const removedLocales = translations.map(translation => translation.locale)
 
-  // The timestamp is checked again inside the batch. The read above gives the
-  // caller a clear conflict, but two queries run between it and this write, and
-  // a page updated in that window must not be deleted on the strength of a
-  // snapshot taken before it.
+  // The timestamps are checked again inside the batch. The read above gives
+  // the caller a clear conflict, but two queries run between it and this write,
+  // and a page or translation updated in that window must not be deleted on the
+  // strength of a snapshot taken before it.
   await executeBatch(db, [
     ...prepareContentDocumentDeletion({
       documentId: row.id,
       organizationId: row.organization_id,
       siteId: row.site_id,
       expectedUpdatedAt: input.expectedUpdatedAt,
+      expectedRepresentations: translations.map(translation => ({ id: translation.id, updatedAt: translation.updated_at })),
     }),
     publicResourceCacheInvalidationQuery(row.site_id, 'tenant-page-delete'),
   ])
