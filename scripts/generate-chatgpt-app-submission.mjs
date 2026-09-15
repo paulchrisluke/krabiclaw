@@ -15,6 +15,7 @@ const OUTPUT_PATH = 'chatgpt-app-submission.json'
 const effects = {
   attach_media: 'Adds an existing asset to a public content collection without replacing its existing placements.',
   batch_create_products: 'Creates products from the supplied catalog entries and records product events.',
+  delete_tenant_page: 'Deletes a tenant page; deleting its source locale removes every translation with it.',
   create_blog_post: 'Creates a tenant blog article and its content document, with publication governed by its supplied status and schedule.',
   create_collection: 'Creates an empty collection for the selected site; products are added to it separately.',
   create_metafield_definition: 'Defines a typed product attribute for the organization, which is what makes that attribute storable at all.',
@@ -76,7 +77,6 @@ const effects = {
   set_product_location: 'Creates or overwrites the selected product’s location availability and publication settings.',
   set_product_publication: 'Creates or overwrites the selected product’s site publication setting, including removing it from public display.',
   set_workspace_context: 'Overwrites the authenticated user selected workspace site or location.',
-  show_generated_images: 'Formats supplied image references for display without saving or generating images.',
   update_blog_metadata: 'Overwrites selected blog metadata, including public navigation and search settings.',
   update_blog_post: 'Overwrites supplied fields of an existing tenant blog article.',
   update_collection: 'Overwrites the selected collection name, description or placement.',

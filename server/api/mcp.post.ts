@@ -1,13 +1,24 @@
-import { HTTPError, defineHandler  } from 'nitro';
-import { readBody, setResponseHeader } from 'nitro/h3';
+import { HTTPError, defineHandler } from 'nitro';
+import { readBody } from 'nitro/h3';
 import type { H3Event } from "nitro";
-import { asMcpError, mcpSuccess, MCP_ERROR, negotiatedMcpProtocolVersion, parseMcpToolCallArguments, readMcpRequest, } from "~/server/utils/mcp-protocol";
+import {
+  createMcpHandler,
+  McpServer,
+  ProtocolError,
+  hostHeaderValidationResponse,
+  originValidationResponse,
+  localhostAllowedHostnames,
+  localhostAllowedOrigins,
+  type AuthInfo,
+  type ListToolsResult,
+  type McpRequestContext,
+} from "@modelcontextprotocol/server";
+import { asMcpError, mcpSuccess, mcpFailure, MCP_ERROR, type JsonRpcId } from "~/server/utils/mcp-protocol";
 import { catalogFingerprint, catalogMeta } from "~/server/utils/mcp-catalog";
-import { mcpHttpStatusForError } from "~/server/utils/mcp-http-response";
 import { executeMcpToolCall } from "~/server/utils/mcp-executor";
 import { isMcpRenderResponse } from "~/server/utils/mcp-render";
 import {
-  getActiveEntitlements, getVisibleSiteContext, requireMcpUser, roleSatisfies, } from "~/server/utils/mcp-auth";
+  getActiveEntitlements, getVisibleSiteContext, requireMcpUser, roleSatisfies, type McpUserContext, } from "~/server/utils/mcp-auth";
 import { MCP_PUBLIC_TOOLS, MCP_TOOLS } from "~/server/utils/mcp-tools";
 import { MCP_PROMPTS, renderMcpPrompt } from "~/server/utils/mcp-prompts";
 import { cloudflareEnv } from "~/server/utils/api-response";
@@ -17,12 +28,13 @@ import { purgePublicResourceCacheSafe } from "~/server/utils/public-resource-cac
 import { schedulePlatformKnowledgeIndexRebuild } from "~/server/utils/platform-search-rebuild";
 import {
   visibleConversationalMcpTools, } from "~/server/utils/conversational-tool-surface";
+import { resolveMissingMcpCredential, type McpToolMeta } from "~/server/utils/mcp-runtime";
 import {
-  dispatchStandardMcpMethod, respondToMcpError, resolveMissingMcpCredential, unsupportedMcpMethodError, type McpToolMeta, } from "~/server/utils/mcp-runtime";
-import { getCloudflareWaitUntil, isMcpMutatingTool } from "~/server/utils/mcp-route-helpers";
+  buildMcpAuthChallengeForError, describeMcpAuthTelemetryError, getCloudflareWaitUntil, isMcpMutatingTool, mcpAuthRequiredResult, mcpToolErrorResult, setMcpAuthChallenge, } from "~/server/utils/mcp-route-helpers";
 import { logMcpToolCallEvent } from "~/server/utils/mcp-telemetry";
 import { describeErrorForTelemetry, errorChainForTelemetry } from "~/server/utils/error-telemetry";
 import { getRequestDataMetrics, recordRequestPhase } from "~/server/utils/request-metrics";
+
 const TENANT_CATALOG_FINGERPRINT = catalogFingerprint(MCP_PUBLIC_TOOLS);
 
 // Fires a telemetry write without ever blocking or failing the MCP response.
@@ -50,80 +62,7 @@ function resolveTenantToolMeta(toolName: string | null): McpToolMeta {
   return { domain: tool?.domain ?? null, isMutating: isMcpMutatingTool(tool) };
 }
 
-function safeMcpEnvelopeDetails(event: H3Event, body: unknown) {
-  const record = body && typeof body === "object" && !Array.isArray(body)
-    ? body as Record<string, unknown>
-    : null;
-  const params = record?.params && typeof record.params === "object" && !Array.isArray(record.params)
-    ? record.params as Record<string, unknown>
-    : null;
-  const meta = record?._meta && typeof record._meta === "object" && !Array.isArray(record._meta)
-    ? record._meta as Record<string, unknown>
-    : null;
-  return {
-    ray_id: (event.req.headers.get("cf-ray")) ?? null, user_agent: (event.req.headers.get("user-agent")) ?? null, content_type: (event.req.headers.get("content-type")) ?? null, content_length: (event.req.headers.get("content-length")) ?? null, body_kind: body === null ? "null" : Array.isArray(body) ? "array" : typeof body, envelope_keys: record ? Object.keys(record).sort() : [], params_keys: params ? Object.keys(params).sort() : [], meta_keys: meta ? Object.keys(meta).sort() : [], has_id: Boolean(record && Object.hasOwn(record, "id")), jsonrpc_type: typeof record?.jsonrpc, method_type: typeof record?.method, header_method: (event.req.headers.get("mcp-method")) ?? null, has_header_version: Boolean((event.req.headers.get("mcp-protocol-version"))), has_header_name: Boolean((event.req.headers.get("mcp-name"))), };
-}
-
-export default defineHandler(async (event) => {
-  const requestStartedAt = Date.now();
-  let requestId: string | number | null | undefined;
-  let requestMethod: string | undefined;
-  let requestToolName: string | undefined;
-  let requestToolArgs: Record<string, unknown> | undefined;
-  let requestEnvelope: ReturnType<typeof safeMcpEnvelopeDetails> | null = null;
-  const cfEnv = cloudflareEnv(event);
-  const baseUrl = cfEnv.BETTER_AUTH_URL?.replace(/\/$/, "");
-  if (!baseUrl) throw new HTTPError({ statusCode: 500, statusMessage: "BETTER_AUTH_URL is required" });
-  const tenantAuthOptions = {
-    audiences: [`${baseUrl}/api/mcp`], requiredScopes: ["tenant"], };
-  const runtimeDeps = {
-    authOptions: tenantAuthOptions, resourceMetadataUrl, authDescription: TENANT_AUTH_DESCRIPTION, authRequiredText: TENANT_AUTH_REQUIRED_TEXT, logEvent: (evt: typeof event, fields: Record<string, unknown>) =>
-      logMcpEventDetached(evt, cfEnv.DB, fields as unknown as Parameters<typeof logMcpToolCallEvent>[1]), resolveToolMeta: resolveTenantToolMeta, };
-  try {
-    // Return 401 with WWW-Authenticate before any protocol parsing so OAuth
-    // clients (e.g. ChatGPT) can discover the authorization server on first touch.
-    // Session-cookie requests (dashboard, E2E tests) have a Cookie header and skip this.
-    const missingCredential = await resolveMissingMcpCredential(event, runtimeDeps, baseUrl);
-    if (missingCredential.handled) {
-      requestId = missingCredential.requestId;
-      requestMethod = missingCredential.requestMethod;
-      requestToolName = missingCredential.requestToolName;
-      console.warn("[MCP_AUTH]", JSON.stringify({
-        event: "credential_missing", ray_id: (event.req.headers.get("cf-ray")) ?? null, user_agent: (event.req.headers.get("user-agent")) ?? null, mcp_method: requestMethod ?? null, tool_name: requestToolName ?? null, }));
-      return missingCredential.response;
-    }
-
-    const body = await readBody(event);
-    requestEnvelope = safeMcpEnvelopeDetails(event, body);
-    if (isRecord(body)) {
-      const rawId = body.id;
-      if (typeof rawId === 'string' || typeof rawId === 'number' || rawId === null) requestId = rawId;
-    }
-
-    const request = readMcpRequest(event, body);
-    requestId = request.id;
-    requestMethod = request.method;
-    requestToolName = request.method === "tools/call"
-      && typeof request.params?.name === "string"
-      ? request.params.name
-      : undefined;
-
-    console.info('[MCP_REQUEST]', JSON.stringify({
-      event: 'mcp_request_started', request_id: getRequestDataMetrics(event).requestId,
-      rpc_id: requestId ?? null, method: requestMethod, tool: requestToolName ?? null,
-      ray_id: event.req.headers.get('cf-ray'),
-    }));
-
-    // MCP protocol handshake — required before any tools/list or tools/call
-    if (request.method === "initialize") {
-      const user = await requireMcpUser(event, tenantAuthOptions);
-      const protocolVersion = negotiatedMcpProtocolVersion(request);
-      const sessionId = crypto.randomUUID();
-      setResponseHeader(event, "Mcp-Session-Id", sessionId);
-      logMcpEventDetached(event, cfEnv.DB, {
-        userId: user.userId, requestId: request.id, method: request.method, status: "success", httpStatus: 200, protocolVersion, sessionId, oauthClientId: user.oauthClientId ?? null, });
-      return mcpSuccess(request.id, {
-        protocolVersion, capabilities: { tools: {}, resources: {}, prompts: {} }, serverInfo: { name: "krabiclaw-mcp", version: "phase-5" }, _meta: catalogMeta(MCP_PUBLIC_TOOLS), instructions: `KrabiClaw — manage your restaurant or business website through this connection.
+const MCP_INSTRUCTIONS = `KrabiClaw — manage your restaurant or business website through this connection.
 
 ## Image work — applies at any point in the conversation
 Whenever an image is needed (hero, logo, post thumbnail, Product photo, experience cover, story image, or any content section):
@@ -132,11 +71,11 @@ Whenever an image is needed (hero, logo, post thumbnail, Product photo, experien
 1. Prepare an image prompt tailored to the business.
 2. Call image_generation natively with model gpt-image-1 or gpt-image-2 and the prepared prompt.
 3. Immediately call save_generated_image_file({ site_id, attachment_id: <file reference from image_generation_call>, prompt }). Pass the file reference — never extract or forward the base64 from image_generation_call.result, that will be blocked by safety checks.
-4. Call show_generated_images with the asset_id and public_url returned by save_generated_image_file.
-5. After the user approves, assign with set_media using placement { owner_type, owner_id, slot } and the exact owner id returned by a read tool.
+4. Show the generated image directly in the conversation for review; use the returned public_url when needed.
+5. After the user approves, use the returned asset_id with set_media for a single image or attach_media for an ordered gallery. Use placement { owner_type, owner_id, slot } and the exact owner id returned by a read tool.
 6. If the user wants changes, revise the prompt and repeat from step 2.
 
-For multi-item requests, repeat the complete flow once per item. Generate one standalone image for each target and never substitute a collage, contact sheet, website screenshot, or UI mockup. For Products, each show_generated_images and set_media call must include that Product's exact id; use slot image for the explicit primary and gallery for the ordered detail gallery. Finish every requested item before reporting completion.
+For multi-item requests, repeat the complete flow once per item. Generate one standalone image for each target and never substitute a collage, contact sheet, website screenshot, or UI mockup. For Products, each set_media or attach_media call must include that Product's exact id; use slot image for the explicit primary and gallery for the ordered detail gallery. Finish every requested item before reporting completion.
 
 This entire flow runs within the current conversation — do not tell the user to leave the app or use a different context.
 
@@ -183,15 +122,11 @@ Before calling any mutating tool, the active site must be confirmed for this con
 A site is confirmed when the user explicitly selects it from get_workspace_context or list_sites in this conversation. If no site exists, direct the user to the CMS for setup before making mutations.
 
 Tool categories:
-- **Read-only** (list_*, get_*, show_*) — safe to call once list_sites returns
-- **Preview/generate** (generate_*, show_generated_images) — require a confirmed site
+- **Read-only** (list_*, get_*) — safe to call once list_sites returns
 - **Mutating** (set_*, update_*, create_*, delete_*, publish_*) — require a confirmed site
 
 If the user asks you to mutate content before a site is confirmed, call list_sites first, confirm the active site, then proceed.
 
-When calling show_generated_images after native image_generation, always include the active site name in the labels:
-- use_label: "Use as homepage hero for [site name]"  (or the appropriate placement)
-- subtitle: can reference the site name to make the target obvious
 After applying, always confirm: "[Placement] updated for [site name]." — never leave the target ambiguous.
 
 When a public-facing tool result includes \`view_url\` or \`public_url\`, include that URL in your reply so the user can open the live page immediately. Prefer \`view_url\` when both are present.
@@ -200,235 +135,397 @@ All other tools require a site_id obtained from get_workspace_context or list_si
 
 For every paginated read, keep calling the same tool with page_info.next_cursor (or the resource-specific next_cursor field) until has_more is false before claiming the collection is complete. batch_create_products and reconcile_products are atomic: read every list_location_products page, then send one complete intended create or reconciliation call with an explicit location_id. Never split one logical Product replacement across multiple mutation calls. A Product belongs to the organization: set_product_publication says which sites carry it, set_product_location says where it is offered, and what a customer buys is a variant, so prices belong to variants. Grouping is a collection — read list_collections, create missing ones with create_collection, and send the complete intended membership and order with set_collection_products; reorder_collections takes every collection ID at the site exactly once. Collection names are localized separately through put_resource_localization with resource_type collection and values { name }.
 
-Common workflows: manage a site's Products and the collections that group them, create and publish site posts, triage contact, reservation and booking submissions, update page content directly, upload media, reply to reviews, and generate or replace images for any content section. Manual locale management is available through the locale tools. Domain setup and Google Places lookup are CMS-only. Social publishing is available only when explicitly enabled; otherwise direct the user to the dashboard.`, });
-    }
+Common workflows: manage a site's Products and the collections that group them, create and publish site posts, triage contact, reservation and booking submissions, update page content directly, upload media, list reviews (replies are managed in Google, not here), and generate or replace images for any content section. Manual locale management is available through the locale tools. Domain setup and Google Places lookup are CMS-only. Social publishing is available only when explicitly enabled; otherwise direct the user to the dashboard.`;
 
-    const standardResponse = await dispatchStandardMcpMethod(event, request, runtimeDeps, {
-      resources: {
-        list: [], read: (uri: string) => {
-          throw mcpProtocolError(MCP_ERROR.invalidParams, `Unknown MCP app resource: ${uri}`);
-        }, }, prompts: { list: MCP_PROMPTS, render: renderMcpPrompt }, discover: {
-        serverName: "krabiclaw-mcp", serverVersion: "phase-5", instructions:
-          "KrabiClaw MCP. Call get_workspace_context at the start of every conversation. site_id must be an internal id from get_workspace_context/list_sites, never a URL/domain/subdomain/name. Native ChatGPT attachments upload only through upload_user_media. If no active site is set yet, call list_sites, let the user choose, then persist it with set_workspace_context before mutating tools.", }, });
-    if (standardResponse !== undefined) return standardResponse;
+// Everything a per-request Server factory needs, threaded through
+// `AuthInfo.extra` since `McpServerFactory` only receives an `McpRequestContext`.
+interface McpFactoryContext {
+  event: H3Event;
+  mcpUser: McpUserContext | undefined;
+  cfEnv: ReturnType<typeof cloudflareEnv>;
+}
 
-    if (request.method === "tools/list") {
-      const user = await requireMcpUser(event, tenantAuthOptions);
-      const hasSiteIdParam = Object.prototype.hasOwnProperty.call(
-        request.params ?? {}, "site_id", );
-      const siteId =
-        typeof request.params?.site_id === "string"
-          ? request.params.site_id.trim()
-          : null;
-      const siteCtx = siteId
-        ? await getVisibleSiteContext(event, siteId)
-        : null;
+function factoryContextFrom(ctx: McpRequestContext): McpFactoryContext {
+  const extra = ctx.authInfo?.extra as McpFactoryContext | undefined;
+  if (!extra) throw new ProtocolError(MCP_ERROR.internal, "Missing authenticated MCP request context.");
+  return extra;
+}
 
-      const visibleSurfaceTools = visibleConversationalMcpTools(MCP_PUBLIC_TOOLS, cfEnv);
+// Builds one `McpServer` per HTTP exchange (createMcpHandler's contract).
+// `initialize`, `ping`, and protocol/version negotiation are the SDK's own —
+// only the KrabiClaw-specific catalog (tools/list, tools/call) and the two
+// vestigial prompt methods are ours. Registered directly on the underlying
+// `Server` (McpServer's own escape hatch for advanced use cases) rather than
+// through `registerTool()`, since our tool catalog is filtered per-request
+// by site/role/entitlement rather than a static per-tool registry.
+function createTenantMcpServer(ctx: McpRequestContext): McpServer {
+  const mcpServer = new McpServer(
+    { name: "krabiclaw-mcp", version: "phase-5" },
+    { capabilities: { tools: {}, resources: {}, prompts: {} }, instructions: MCP_INSTRUCTIONS },
+  );
+  const server = mcpServer.server;
 
-      const entitlementKeys = siteCtx
-        ? [
-            ...new Set(
-              visibleSurfaceTools.map((t) => t.requiredEntitlement).filter(
-                Boolean, ) as string[], ), ]
-        : [];
-      const activeEntitlements = siteCtx
-        ? await getActiveEntitlements(
-            cfEnv, siteCtx.organizationId, entitlementKeys, siteCtx.siteId, )
-        : new Set<string>();
+  // The app has never populated MCP resources — this preserves the existing
+  // empty-catalog / not-found-on-read behavior rather than dropping the
+  // capability (clients that already probe resources/list expect a list, not
+  // a method-not-found error).
+  server.setRequestHandler("resources/list", async () => ({ resources: [] }));
+  server.setRequestHandler("resources/templates/list", async () => ({ resourceTemplates: [] }));
+  server.setRequestHandler("resources/read", async (request) => {
+    const uri = typeof request.params?.uri === "string" ? request.params.uri : "";
+    throw new ProtocolError(MCP_ERROR.invalidParams, `Unknown MCP app resource: ${uri}`);
+  });
 
-      const tools = visibleSurfaceTools.filter((tool) => {
-        // Without a site_id, return all tools so AI clients (e.g. ChatGPT) can discover
-        // the full capability set on first connection. A supplied but inaccessible
-        // site must fail closed instead of receiving the unscoped catalog.
-        if (!hasSiteIdParam) return true;
-        if (!siteId) return false;
-        if (!siteCtx) return false;
-        if (!roleSatisfies(siteCtx.role, tool.minimumRole)) return false;
-        if (
-          tool.requiredEntitlement &&
-          !activeEntitlements.has(tool.requiredEntitlement)
-        )
-          return false;
-        return true;
-      }).map((tool) => {
-        const baseTool = {
-          name: tool.name, description: tool.description, inputSchema: tool.inputSchema, _meta: {
-            securitySchemes: tool.securitySchemes, "krabiclaw/toolInfo": {
-              domain: tool.domain, minimumRole: tool.minimumRole, confirmRequired: tool.confirmRequired, }, ...(tool.fileParams?.length
-              ? { "openai/fileParams": tool.fileParams }
-              : {}), }, }
+  // server/discover is a pre-handshake optimization some clients use to skip
+  // the spec's own initialize-retry version negotiation. @modelcontextprotocol/
+  // server@2.0.0 only wires it up for servers that speak the modern
+  // (2026-07-28+) protocol era — see _ondiscover in the SDK's Server
+  // constructor, gated on modernProtocolVersions(...).length > 0. This server
+  // only serves the legacy eras, so an unregistered server/discover correctly
+  // falls through to -32601 Method not found; clients fall back to the
+  // spec-mandated initialize → version-mismatch → retry path instead. This is
+  // the deliberate replacement for issue #922/#923's old hand-rolled,
+  // partial server/discover shim — bolting a bespoke discover handler onto a
+  // legacy-only server is exactly the one-off-per-client pattern that caused
+  // those incidents.
 
-        return {
-          ...baseTool, outputSchema: tool.outputSchema, annotations: tool.annotations, securitySchemes: tool.securitySchemes, }
-      });
+  server.setRequestHandler("prompts/list", async () => ({ prompts: MCP_PROMPTS }));
 
-      const domains = [...new Set(tools.map((tool) => tool._meta["krabiclaw/toolInfo"].domain))]
-      logMcpEventDetached(event, cfEnv.DB, {
-        organizationId: siteCtx?.organizationId ?? null, siteId: siteCtx?.siteId ?? null, userId: user.userId, requestId: request.id, method: request.method, result: { count: tools.length, domains }, status: "success", httpStatus: 200, oauthClientId: user.oauthClientId ?? null, });
-
-      return mcpSuccess(request.id, { tools, _meta: catalogMeta(MCP_PUBLIC_TOOLS) });
-    }
-
-    if (request.method === "tools/call") {
-      const toolName =
-        typeof request.params?.name === "string" ? request.params.name : "";
-      const rawArgs = parseMcpToolCallArguments(request.params);
-      requestToolArgs = rawArgs;
-
-      const toolDef = MCP_TOOLS.find((t) => t.name === toolName);
-      const toolStartedAt = Date.now();
-
-      const authStartedAt = performance.now();
-      const mcpUser = await requireMcpUser(event, tenantAuthOptions);
-      recordRequestPhase(event, 'mcp_auth', authStartedAt);
-      const executionStartedAt = performance.now();
-
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      let result: any;
-      try {
-        result = await executeMcpToolCall(event, toolName, rawArgs, mcpUser);
-      } catch (toolError) {
-        recordRequestPhase(event, 'mcp_execute', executionStartedAt);
-        console.error({
-          event: "mcp_tool_failed", tool: toolName, request_id: request.id,
-          ray_id: event.req.headers.get("cf-ray"), duration_ms: Date.now() - toolStartedAt,
-          errors: errorChainForTelemetry(toolError),
-        });
-        const mcpErr = asMcpError(toolError);
-        if (mcpErr.kind === "protocol") {
-          const telemetryErrorMessage = describeErrorForTelemetry(toolError);
-          logMcpEventDetached(event, cfEnv.DB, {
-            userId: mcpUser.userId, organizationId: mcpUser.activeOrganizationId ?? null, siteId: null, requestId: request.id, method: request.method, toolName, toolDomain: toolDef?.domain ?? null, isMutating: false, arguments: rawArgs, status: "error", errorCode: mcpErr.code, errorMessage: telemetryErrorMessage, httpStatus: 200, jsonrpcErrorCode: mcpErr.code, jsonrpcErrorMessage: telemetryErrorMessage, unknownToolName: toolName || null, oauthClientId: mcpUser.oauthClientId ?? null, durationMs: Date.now() - toolStartedAt, });
-          return sendMcpErrorResponse(event, { id: request.id, error: mcpErr });
-        }
-        logMcpEventDetached(event, cfEnv.DB, {
-          userId: mcpUser.userId, organizationId: mcpUser.activeOrganizationId ?? null, siteId: null, requestId: request.id, method: request.method, toolName, toolDomain: toolDef?.domain ?? null, isMutating: isMcpMutatingTool(toolDef), arguments: rawArgs, status: "error", errorCode: mcpErr.code, errorMessage: describeErrorForTelemetry(toolError), httpStatus: 200, oauthClientId: mcpUser.oauthClientId ?? null, durationMs: Date.now() - toolStartedAt, });
-        // Any other tool-execution failure (including a plain `throw new
-        // Error(...)` from a business-rule guard, which asMcpError falls
-        // back to classifying as kind:'transport') must still resolve as a
-        // graceful isError:true 200, not a raw HTTP 500 — MCP clients can't
-        // act on a transport-level error mid-tool-call any more than they
-        // can act on a raw 401 (see resolveMissingMcpCredential). Confirmed
-        // Tool business-rule failures must stay inside the MCP error envelope.
-        return mcpSuccess(request.id, {
-          isError: true, content: [{ type: "text", text: mcpErr.message }], });
+  server.setRequestHandler("prompts/get", async (request) => {
+    const name = typeof request.params?.name === "string" ? request.params.name : "";
+    const rawArgs = request.params?.arguments;
+    const promptArgs: Record<string, string> = {};
+    if (rawArgs && typeof rawArgs === "object" && !Array.isArray(rawArgs)) {
+      for (const [key, value] of Object.entries(rawArgs as Record<string, unknown>)) {
+        if (typeof value === "string") promptArgs[key] = value;
       }
+    }
+    const rendered = renderMcpPrompt(name, promptArgs);
+    return {
+      description: rendered.description,
+      messages: [{ role: "user" as const, content: { type: "text" as const, text: rendered.text } }],
+    };
+  });
 
-      recordRequestPhase(event, 'mcp_execute', executionStartedAt);
-      const isRender = isMcpRenderResponse(result);
-      const structuredContent = isRender ? result.structuredContent : result;
-      const modelText = isRender && result.modelText
-        ? result.modelText
-        : JSON.stringify(structuredContent, null, 2);
+  server.setRequestHandler("tools/list", async () => {
+    const { event, mcpUser, cfEnv } = factoryContextFrom(ctx);
+    if (!mcpUser) throw new ProtocolError(MCP_ERROR.internal, "Missing authenticated MCP request context.");
+    // site_id is a KrabiClaw-specific extension for site-scoped tool
+    // discovery — not part of the MCP spec's ListToolsRequestParams (only
+    // cursor/_meta). @modelcontextprotocol/server validates tools/list
+    // params against the spec's schema and silently drops unrecognized
+    // properties, so a client-supplied params.site_id never reaches this
+    // handler (confirmed empirically: request.params arrives as {}). It has
+    // to travel outside the validated params object — a request header,
+    // which the SDK doesn't touch — instead.
+    const siteIdHeader = event.req.headers.get("x-krabiclaw-site-id");
+    const hasSiteIdParam = siteIdHeader !== null;
+    const siteId = siteIdHeader?.trim() || null;
+    const siteCtx = siteId ? await getVisibleSiteContext(event, siteId) : null;
 
-      // Resolved once and reused for both telemetry and the cache-purge below.
-      const structuredContextSiteId = structuredContent && typeof structuredContent === 'object' && 'context' in structuredContent
-        ? (structuredContent.context as Record<string, unknown>)?.site_id
-        : null;
-      const metaContextSiteId = isRender && result.privateMeta?.context && typeof result.privateMeta.context === 'object'
-        ? (result.privateMeta.context as Record<string, unknown>)?.site_id
-        : null;
-      const ctxSiteId = typeof structuredContextSiteId === 'string'
-        ? structuredContextSiteId
-        : metaContextSiteId;
-      const resolvedSiteId = typeof ctxSiteId === "string"
-        ? ctxSiteId.trim()
-        : typeof rawArgs.site_id === "string"
-          ? rawArgs.site_id.trim()
-          : null;
+    const visibleSurfaceTools = visibleConversationalMcpTools(MCP_PUBLIC_TOOLS, cfEnv);
 
+    const entitlementKeys = siteCtx
+      ? [...new Set(visibleSurfaceTools.map((t) => t.requiredEntitlement).filter(Boolean) as string[])]
+      : [];
+    const activeEntitlements = siteCtx
+      ? await getActiveEntitlements(cfEnv, siteCtx.organizationId, entitlementKeys, siteCtx.siteId)
+      : new Set<string>();
+
+    const tools = visibleSurfaceTools.filter((tool) => {
+      // Without a site_id, return all tools so AI clients (e.g. ChatGPT) can discover
+      // the full capability set on first connection. A supplied but inaccessible
+      // site must fail closed instead of receiving the unscoped catalog.
+      if (!hasSiteIdParam) return true;
+      if (!siteId) return false;
+      if (!siteCtx) return false;
+      if (!roleSatisfies(siteCtx.role, tool.minimumRole)) return false;
+      if (tool.requiredEntitlement && !activeEntitlements.has(tool.requiredEntitlement)) return false;
+      return true;
+    }).map((tool) => {
+      const baseTool = {
+        name: tool.name, description: tool.description, inputSchema: tool.inputSchema, _meta: {
+          securitySchemes: tool.securitySchemes, "krabiclaw/toolInfo": {
+            domain: tool.domain, minimumRole: tool.minimumRole, confirmRequired: tool.confirmRequired, }, ...(tool.fileParams?.length ? { "openai/fileParams": tool.fileParams } : {}), }, };
+      return { ...baseTool, outputSchema: tool.outputSchema, annotations: tool.annotations, securitySchemes: tool.securitySchemes };
+    });
+
+    const domains = [...new Set(tools.map((tool) => tool._meta["krabiclaw/toolInfo"].domain))];
+    logMcpEventDetached(event, cfEnv.DB, {
+      organizationId: siteCtx?.organizationId ?? null, siteId: siteCtx?.siteId ?? null, userId: mcpUser.userId, requestId: null, method: "tools/list", result: { count: tools.length, domains }, status: "success", httpStatus: 200, oauthClientId: mcpUser.oauthClientId ?? null, });
+
+    // Our own McpToolDefinition types inputSchema/outputSchema as a loose
+    // Record<string, unknown>; every entry in mcp-tools/*.ts is a real JSON
+    // Schema object (validated by yarn mcp:catalog), just not provably so to
+    // TS against the SDK's stricter Tool type.
+    return { tools, _meta: catalogMeta(MCP_PUBLIC_TOOLS) } as unknown as ListToolsResult;
+  });
+
+  server.setRequestHandler("tools/call", async (request) => {
+    const { event, mcpUser, cfEnv } = factoryContextFrom(ctx);
+    if (!mcpUser) throw new ProtocolError(MCP_ERROR.internal, "Missing authenticated MCP request context.");
+    const toolName = typeof request.params?.name === "string" ? request.params.name : "";
+    const rawArgsValue = (request.params as { arguments?: unknown } | undefined)?.arguments;
+    const rawArgs = (rawArgsValue && typeof rawArgsValue === "object" && !Array.isArray(rawArgsValue)
+      ? rawArgsValue as Record<string, unknown>
+      : {});
+
+    const toolDef = MCP_TOOLS.find((t) => t.name === toolName);
+    const toolStartedAt = Date.now();
+
+    const authStartedAt = performance.now();
+    // requireMcpUser already ran once up front in the route handler (this is
+    // that same resolved user, not a second auth check).
+    recordRequestPhase(event, "mcp_auth", authStartedAt);
+    const executionStartedAt = performance.now();
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let result: any;
+    try {
+      result = await executeMcpToolCall(event, toolName, rawArgs, mcpUser);
+    } catch (toolError) {
+      recordRequestPhase(event, "mcp_execute", executionStartedAt);
+      console.error({
+        event: "mcp_tool_failed", tool: toolName, request_id: null,
+        ray_id: event.req.headers.get("cf-ray"), duration_ms: Date.now() - toolStartedAt,
+        errors: errorChainForTelemetry(toolError),
+      });
+      const mcpErr = asMcpError(toolError);
+      if (mcpErr.kind === "protocol") {
+        // Unknown-tool and similar protocol-level failures become a real
+        // JSON-RPC error, not a tool result. `toolError` carries our own
+        // `.mcp`-tagged shape, which the SDK doesn't read — throw its own
+        // ProtocolError so createMcpHandler maps the code/data correctly
+        // instead of falling back to a generic internal error.
+        const telemetryErrorMessage = describeErrorForTelemetry(toolError);
+        logMcpEventDetached(event, cfEnv.DB, {
+          userId: mcpUser.userId, organizationId: mcpUser.activeOrganizationId ?? null, siteId: null, requestId: null, method: "tools/call", toolName, toolDomain: toolDef?.domain ?? null, isMutating: false, arguments: rawArgs, status: "error", errorCode: mcpErr.code, errorMessage: telemetryErrorMessage, httpStatus: 200, jsonrpcErrorCode: mcpErr.code, jsonrpcErrorMessage: telemetryErrorMessage, unknownToolName: toolName || null, oauthClientId: mcpUser.oauthClientId ?? null, durationMs: Date.now() - toolStartedAt, });
+        throw new ProtocolError(mcpErr.code, mcpErr.message, mcpErr.data);
+      }
       logMcpEventDetached(event, cfEnv.DB, {
-        userId: mcpUser.userId, organizationId: mcpUser.activeOrganizationId ?? null, siteId: resolvedSiteId, requestId: request.id, method: request.method, toolName, toolDomain: toolDef?.domain ?? null, isMutating: isMcpMutatingTool(toolDef), arguments: rawArgs, result: structuredContent, status: "success", httpStatus: 200, oauthClientId: mcpUser.oauthClientId ?? null, durationMs: Date.now() - toolStartedAt, });
+        userId: mcpUser.userId, organizationId: mcpUser.activeOrganizationId ?? null, siteId: null, requestId: null, method: "tools/call", toolName, toolDomain: toolDef?.domain ?? null, isMutating: isMcpMutatingTool(toolDef), arguments: rawArgs, status: "error", errorCode: mcpErr.code, errorMessage: describeErrorForTelemetry(toolError), httpStatus: 200, oauthClientId: mcpUser.oauthClientId ?? null, durationMs: Date.now() - toolStartedAt, });
+      // Any other tool-execution failure (including a plain `throw new
+      // Error(...)` from a business-rule guard, which asMcpError falls back
+      // to classifying as kind:'transport') must still resolve as a
+      // graceful isError:true CallToolResult, not a JSON-RPC error — MCP
+      // clients can't act on a transport-level error mid-tool-call.
+      return { isError: true, content: [{ type: "text", text: mcpErr.message }] };
+    }
 
-      // After any mutating tool call, purge KV HTML cache for the site so the
-      // next browser load gets fresh SSR HTML with the correct /_nuxt/ asset hashes.
-      // Fire-and-forget — never block the MCP response on cache ops.
-      if (isMcpMutatingTool(toolDef)) {
-        const siteId = resolvedSiteId;
-        if (siteId) {
-          const env = cloudflareEnv(event);
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const kv = (env as any).SITE_CACHE as KVNamespace | undefined;
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const db = (env as any).DB as D1Database | undefined;
-          if (kv) {
-            // Public resource cache is keyed by siteId directly (not hostname), so no
-            // domain lookup is needed here — unlike the HTML purge below.
-            // Awaited inline (not waitUntil) so the MCP response never returns
-            // before the stale public resource entry is cleared — otherwise a client
-            // that reads public resources immediately after this mutation could still
-            // see stale data.
-            const cacheStartedAt = performance.now();
-            try {
-              await purgePublicResourceCacheSafe({
-                DB: env.db,
-                SITE_CACHE: kv,
-                NUXT_PUBLIC_FREE_SITE_DOMAIN: env.NUXT_PUBLIC_FREE_SITE_DOMAIN,
-              }, siteId)
-            } catch (err: unknown) {
-              console.warn("[mcp-cache-purge] public resource purge failed:", String(err))
-            } finally {
-              recordRequestPhase(event, 'mcp_cache_purge', cacheStartedAt);
-            }
+    recordRequestPhase(event, "mcp_execute", executionStartedAt);
+    const isRender = isMcpRenderResponse(result);
+    const structuredContent = isRender ? result.structuredContent : result;
+    const modelText = isRender && result.modelText ? result.modelText : JSON.stringify(structuredContent, null, 2);
+
+    // Resolved once and reused for both telemetry and the cache-purge below.
+    const structuredContextSiteId = structuredContent && typeof structuredContent === "object" && "context" in structuredContent
+      ? (structuredContent.context as Record<string, unknown>)?.site_id
+      : null;
+    const metaContextSiteId = isRender && result.privateMeta?.context && typeof result.privateMeta.context === "object"
+      ? (result.privateMeta.context as Record<string, unknown>)?.site_id
+      : null;
+    const ctxSiteId = typeof structuredContextSiteId === "string" ? structuredContextSiteId : metaContextSiteId;
+    const resolvedSiteId = typeof ctxSiteId === "string"
+      ? ctxSiteId.trim()
+      : typeof rawArgs.site_id === "string" ? rawArgs.site_id.trim() : null;
+
+    logMcpEventDetached(event, cfEnv.DB, {
+      userId: mcpUser.userId, organizationId: mcpUser.activeOrganizationId ?? null, siteId: resolvedSiteId, requestId: null, method: "tools/call", toolName, toolDomain: toolDef?.domain ?? null, isMutating: isMcpMutatingTool(toolDef), arguments: rawArgs, result: structuredContent, status: "success", httpStatus: 200, oauthClientId: mcpUser.oauthClientId ?? null, durationMs: Date.now() - toolStartedAt, });
+
+    // After any mutating tool call, purge KV HTML cache for the site so the
+    // next browser load gets fresh SSR HTML with the correct /_nuxt/ asset hashes.
+    // Fire-and-forget — never block the MCP response on cache ops.
+    if (isMcpMutatingTool(toolDef)) {
+      const siteId = resolvedSiteId;
+      if (siteId) {
+        const env = cloudflareEnv(event);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const kv = (env as any).SITE_CACHE as KVNamespace | undefined;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const db = (env as any).DB as D1Database | undefined;
+        if (kv) {
+          // Public resource cache is keyed by siteId directly (not hostname), so no
+          // domain lookup is needed here — unlike the HTML purge below.
+          // Awaited inline (not waitUntil) so the MCP response never returns
+          // before the stale public resource entry is cleared — otherwise a client
+          // that reads public resources immediately after this mutation could still
+          // see stale data.
+          const cacheStartedAt = performance.now();
+          try {
+            await purgePublicResourceCacheSafe({
+              DB: env.db,
+              SITE_CACHE: kv,
+              NUXT_PUBLIC_FREE_SITE_DOMAIN: env.NUXT_PUBLIC_FREE_SITE_DOMAIN,
+            }, siteId);
+          } catch (err: unknown) {
+            console.warn("[mcp-cache-purge] public resource purge failed:", String(err));
+          } finally {
+            recordRequestPhase(event, "mcp_cache_purge", cacheStartedAt);
           }
-          if (kv && db) {
-            // Look up all active hostnames for this site (subdomain + custom domains)
-            const purgeAsync = queryAll<{ domain: string }>(
-              db, `SELECT domain FROM site_domains
+        }
+        if (kv && db) {
+          // Look up all active hostnames for this site (subdomain + custom domains)
+          const purgeAsync = queryAll<{ domain: string }>(
+            db, `SELECT domain FROM site_domains
                  WHERE site_id = ? AND status = 'active'
                  LIMIT 20`, [siteId], )
-              .then((results) => {
-                const hostnames = (results ?? []).map((r) => r.domain)
-                if (hostnames.length > 0) {
-                  return purgeSiteKvCache(kv, hostnames)
-                }
-              })
-              .catch((err: unknown) => {
-                console.warn("[mcp-cache-purge] failed:", String(err))
-              })
-            // Use Cloudflare's waitUntil when available so the purge
-            // can outlive the response; fall back to a detached promise.
-            const waitUntil = getCloudflareWaitUntil(event)
-            if (waitUntil) {
-              waitUntil(purgeAsync)
-            }
-            // purgeAsync already runs detached whether or not waitUntil is available
-          }
+            .then((results) => {
+              const hostnames = (results ?? []).map((r) => r.domain);
+              if (hostnames.length > 0) return purgeSiteKvCache(kv, hostnames);
+            })
+            .catch((err: unknown) => {
+              console.warn("[mcp-cache-purge] failed:", String(err));
+            });
+          // Use Cloudflare's waitUntil when available so the purge
+          // can outlive the response; fall back to a detached promise.
+          const waitUntil = getCloudflareWaitUntil(event);
+          if (waitUntil) waitUntil(purgeAsync);
+          // purgeAsync already runs detached whether or not waitUntil is available
         }
       }
-      if (toolDef?.domain === "blog" && isMcpMutatingTool(toolDef)) {
-        const env = cloudflareEnv(event);
-        schedulePlatformKnowledgeIndexRebuild(event, env, `tenant MCP ${toolName}`);
-      }
-
-      return mcpSuccess(request.id, {
-        isError: false, structuredContent, content: [
-          { type: "text", text: modelText }, ], ...(isRender && result.privateMeta
-          ? {
-              _meta: result.privateMeta, }
-          : {}), });
+    }
+    if (toolDef?.domain === "blog" && isMcpMutatingTool(toolDef)) {
+      const env = cloudflareEnv(event);
+      schedulePlatformKnowledgeIndexRebuild(event, env, `tenant MCP ${toolName}`);
     }
 
-    throw unsupportedMcpMethodError(request.method);
-  } catch (error) {
-    const mcpError = asMcpError(error);
-    const toolCallPermissionError = requestMethod === "tools/call" && mcpError.kind === "forbidden";
-    const mappedStatus = toolCallPermissionError ? 200 : mcpHttpStatusForError(mcpError);
-    // A malformed or stale client request is the client's fault, not ours;
-    // logging it at error severity buries real faults, so 4xx goes to warn,
-    // as the auth handler already does.
-    const clientFault = mappedStatus < 500
-    const logMcpError = clientFault ? console.warn : console.error
-    logMcpError("[MCP_ERROR]", JSON.stringify({
-      status: mappedStatus, code: mcpError.code, message: mcpError.message, method: requestMethod ?? null, tool: requestToolName ?? null, request_id: requestId ?? null, ...(mcpError.code === MCP_ERROR.invalidRequest || mcpError.code === MCP_ERROR.invalidParams ? { envelope: requestEnvelope ?? safeMcpEnvelopeDetails(event, undefined) } : {}), }));
-    if (mappedStatus >= 500 && error instanceof Error) console.error(error.stack ?? error.message);
-    return respondToMcpError(event, error, {
-      requestId, requestMethod, requestToolName, requestToolArgs, baseUrl, ...runtimeDeps, });
+    return {
+      isError: false, structuredContent, content: [{ type: "text", text: modelText }],
+      ...(isRender && result.privateMeta ? { _meta: result.privateMeta } : {}),
+    };
+  });
+
+  return mcpServer;
+}
+
+// responseMode: 'json' — this server is fully stateless and never emits a
+// progress/logging notification before a result, so there's nothing for the
+// SDK's default 'auto' mode to ever upgrade to SSE for; forcing 'json' keeps
+// every response a flat JSON body instead of leaving that upgrade decision
+// implicit to callers that don't expect it.
+const mcpHandler = createMcpHandler(createTenantMcpServer, { responseMode: "json" });
+
+// Best-effort peek at the JSON-RPC method for logging and for the two methods
+// (ping, notifications/initialized) that intentionally skip full token
+// verification — mirrors the precedence createMcpHandler itself uses
+// (body.method, then the Mcp-Method header) so this peek never disagrees
+// with how the SDK actually routes the same parsed body.
+function peekMcpMethod(event: H3Event, body: unknown): string | undefined {
+  if (body && typeof body === "object" && !Array.isArray(body) && typeof (body as Record<string, unknown>).method === "string") {
+    return (body as Record<string, unknown>).method as string;
+  }
+  return event.req.headers.get("mcp-method") ?? undefined;
+}
+
+function peekMcpId(body: unknown): JsonRpcId | undefined {
+  if (body && typeof body === "object" && !Array.isArray(body)) {
+    const rawId = (body as Record<string, unknown>).id;
+    if (typeof rawId === "string" || typeof rawId === "number" || rawId === null) return rawId;
+  }
+  return undefined;
+}
+
+export default defineHandler(async (event) => {
+  const requestStartedAt = Date.now();
+  const cfEnv = cloudflareEnv(event);
+  const baseUrl = cfEnv.BETTER_AUTH_URL?.replace(/\/$/, "");
+  if (!baseUrl) throw new HTTPError({ status: 500, statusText: "BETTER_AUTH_URL is required" });
+
+  const allowedHostnames = [new URL(baseUrl).hostname, ...localhostAllowedHostnames()];
+  const allowedOriginHostnames = [new URL(baseUrl).hostname, ...localhostAllowedOrigins()];
+  // Nitro's TypedServerRequest structurally differs from the Workers-typed
+  // Request these SDK helpers expect (an optional vs. required `cache`
+  // field) despite both being the same object at runtime.
+  const webRequest = event.req as unknown as Request;
+  const rejectedHost = hostHeaderValidationResponse(webRequest, allowedHostnames);
+  if (rejectedHost) return rejectedHost;
+  const rejectedOrigin = originValidationResponse(webRequest, allowedOriginHostnames);
+  if (rejectedOrigin) return rejectedOrigin;
+
+  const tenantAuthOptions = { audiences: [`${baseUrl}/api/mcp`], requiredScopes: ["tenant"] };
+  const runtimeDeps = {
+    authOptions: tenantAuthOptions, resourceMetadataUrl, authDescription: TENANT_AUTH_DESCRIPTION, authRequiredText: TENANT_AUTH_REQUIRED_TEXT, logEvent: (evt: typeof event, fields: Record<string, unknown>) =>
+      logMcpEventDetached(evt, cfEnv.DB, fields as unknown as Parameters<typeof logMcpToolCallEvent>[1]), resolveToolMeta: resolveTenantToolMeta, };
+
+  let requestId: JsonRpcId | undefined;
+  let requestMethod: string | undefined;
+
+  try {
+    // Return 401 with WWW-Authenticate before any protocol parsing so OAuth
+    // clients (e.g. ChatGPT) can discover the authorization server on first touch.
+    // Session-cookie requests (dashboard, E2E tests) have a Cookie header and skip this.
+    const missingCredential = await resolveMissingMcpCredential(event, runtimeDeps, baseUrl);
+    if (missingCredential.handled) {
+      requestMethod = missingCredential.requestMethod;
+      console.warn("[MCP_AUTH]", JSON.stringify({
+        event: "credential_missing", ray_id: (event.req.headers.get("cf-ray")) ?? null, user_agent: (event.req.headers.get("user-agent")) ?? null, mcp_method: requestMethod ?? null, tool_name: missingCredential.requestToolName ?? null, }));
+      return missingCredential.response;
+    }
+
+    const body = await readBody(event);
+    requestMethod = peekMcpMethod(event, body);
+    requestId = peekMcpId(body);
+
+    console.info('[MCP_REQUEST]', JSON.stringify({
+      event: 'mcp_request_started', request_id: getRequestDataMetrics(event).requestId,
+      rpc_id: requestId ?? null, method: requestMethod ?? null,
+      ray_id: event.req.headers.get('cf-ray'),
+    }));
+
+    // `ping` and `notifications/initialized` are intentionally unauthenticated
+    // beyond the credential-presence check above: MCP clients use `ping` as a
+    // liveness check before the OAuth handshake completes, and
+    // `notifications/initialized` carries no business context to authorize.
+    const skipTokenVerification = requestMethod === "ping" || requestMethod === "notifications/initialized";
+    let mcpUser: McpUserContext | undefined;
+    if (!skipTokenVerification) {
+      try {
+        mcpUser = await requireMcpUser(event, tenantAuthOptions);
+      } catch (error) {
+        const mcpError = asMcpError(error);
+        const isToolCall = requestMethod === "tools/call";
+        if (mcpError.kind === "auth") {
+          const authChallenge = buildMcpAuthChallengeForError(error, {
+            resourceMetadataUrl: resourceMetadataUrl(baseUrl), defaultDescription: TENANT_AUTH_DESCRIPTION, });
+          logMcpEventDetached(event, cfEnv.DB, {
+            requestId: null, method: requestMethod ?? "unknown", status: "auth_required", errorCode: mcpError.code, errorMessage: describeMcpAuthTelemetryError(error), httpStatus: isToolCall ? 200 : 401, });
+          if (isToolCall) return mcpSuccess(requestId, mcpAuthRequiredResult({ challenge: authChallenge, message: TENANT_AUTH_REQUIRED_TEXT }));
+          event.res.status = 401;
+          setMcpAuthChallenge(event, authChallenge);
+          return mcpFailure(requestId, mcpError);
+        }
+        if (mcpError.kind === "forbidden" && isToolCall) {
+          return mcpSuccess(requestId, mcpToolErrorResult(mcpError.message));
+        }
+        const status = mcpError.kind === "forbidden" ? 403 : 500;
+        if (status >= 500) console.error(error instanceof Error ? error.stack ?? error.message : error);
+        event.res.status = status;
+        return mcpFailure(requestId, mcpError);
+      }
+    }
+
+    const factoryContext: McpFactoryContext = { event, mcpUser, cfEnv };
+    const authInfo: AuthInfo = {
+      token: "resolved", clientId: mcpUser?.oauthClientId ?? "session", scopes: mcpUser?.scopes ?? [],
+      extra: factoryContext as unknown as Record<string, unknown>,
+    };
+
+    const response = await mcpHandler.fetch(webRequest, { authInfo, parsedBody: body });
+    // MCP clients (e.g. ChatGPT) read Mcp-Session-Id off the initialize
+    // response and echo it on later calls. The server is fully stateless —
+    // nothing here actually keys off this id — but issuing one preserves the
+    // existing client-observable contract instead of breaking clients that
+    // expect it to be present.
+    if (requestMethod === "initialize" && response.ok && !response.headers.has("Mcp-Session-Id")) {
+      const headers = new Headers(response.headers);
+      headers.set("Mcp-Session-Id", crypto.randomUUID());
+      return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
+    }
+    return response;
   } finally {
     console.info('[MCP_REQUEST]', JSON.stringify({
       event: 'mcp_request_finished', request_id: getRequestDataMetrics(event).requestId,
-      rpc_id: requestId ?? null, method: requestMethod ?? null, tool: requestToolName ?? null,
+      rpc_id: requestId ?? null, method: requestMethod ?? null,
       ray_id: event.req.headers.get('cf-ray'), duration_ms: Date.now() - requestStartedAt,
     }));
   }

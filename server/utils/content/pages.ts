@@ -6,6 +6,7 @@ import {
   getContentDocumentById,
   getContentEditorSnapshot,
   getContentEditorSnapshotForDocument,
+  prepareContentDocumentDeletion,
   prepareContentDocumentUpdate,
   prepareContentDocumentWithBlocks,
   updateContentDocument,
@@ -33,7 +34,7 @@ import { isSingleMediaPlacement } from '~/shared/media-placement-contract'
 import { parseRobotsIntent, ROBOTS_INTENTS, type RobotsIntent } from '~/shared/robots-directive'
 import { getMediaPlacements } from '~/server/utils/media-placement'
 import { loadSiteTemplate } from '~/server/utils/content/publishing'
-import { templateAllowsPageDocumentAt } from '~/shared/tenant-page-paths'
+import { templateAllowsPageDocumentAt, templateRendersPageDocumentAt } from '~/shared/tenant-page-paths'
 import type { PublicTemplateDefinition } from '~/utils/template-registry'
 import { CLAIMED_PUBLIC_ROUTES } from '#claimed-public-routes'
 import { formatTenantLocalePath } from '~/utils/tenant-locale-path'
@@ -837,6 +838,86 @@ export async function createTenantPage(db: DbClient, input: { organizationId: st
     await refreshSocialCard({ db, env: input.env, owner: { owner_type: 'content_document', owner_id: variantId }, actorId: input.userId })
   }
   return { page: await getTenantPageForEditor(db, variantId) }
+}
+
+/**
+ * Remove a tenant page, or one of its translations.
+ *
+ * Scope follows the row: deleting a translation removes that translation, and
+ * deleting the source removes the page and every translation with it — the
+ * content_documents_root_scope_fk cascade takes the representation rows, and
+ * prepareContentDocumentDeletion clears the placements and redirects that point
+ * at them by owner_id first, because those carry no foreign key of their own.
+ *
+ * A page the site's template renders is not the owner's to remove: deleting it
+ * would leave a route with nothing to show. That is the same declaration the
+ * writer checks before creating a page, not a second rule about page_type — a
+ * dead row the template no longer maps, like the /locations/main every site used
+ * to be seeded with, is deletable precisely because nothing renders it.
+ */
+export async function deleteTenantPage(db: DbClient, variantId: string, input: { scope: TenantPageScope; expectedUpdatedAt: string; env: CloudflareEnv }) {
+  const row = await getPageRepresentation(db, variantId, input.scope)
+  if (!row) notFound('Tenant page variant not found')
+  const document = await getContentDocumentById(db, row.id)
+  if (!document) throw new HTTPError({ statusCode: 500, statusMessage: 'Tenant page content document not found' })
+  if (document.updated_at !== input.expectedUpdatedAt) conflict('Tenant page content was updated by another writer')
+
+  const { template } = await loadSiteTemplate(db, row.site_id)
+  if (templateRendersPageDocumentAt(template, normalizeTenantPagePath(row.path))) {
+    conflict('This page is one the site template renders, so it cannot be deleted')
+  }
+
+  const translations = row.locale === 'en'
+    ? await queryAll<{ id: string; locale: string; path: string; updated_at: string }>(db, `
+        SELECT id, locale, path, updated_at FROM content_documents
+         WHERE root_id = ? AND row_role = 'representation' AND site_id = ? AND organization_id = ?
+         ORDER BY locale
+      `, [row.id, row.site_id, row.organization_id])
+    : []
+  const removedLocales = translations.map(translation => translation.locale)
+
+  // The same rule archiving applies: a redirect somebody else owns that lands
+  // on a removed variant would land on nothing. The page's own redirects go
+  // with it in the batch, so they are not counted.
+  const removed = [{ locale: row.locale, path: row.path }, ...translations]
+  const incoming = {
+    sql: `FROM site_redirects
+         WHERE site_id = ? AND organization_id = ? AND behavior = 'redirect'
+           AND NOT (owner_type = 'content_document' AND owner_id IN (
+             SELECT id FROM content_documents WHERE (id = ? OR root_id = ?) AND organization_id = ? AND site_id = ?))
+           AND (${removed.map(() => '(locale = ? AND to_path = ?)').join(' OR ')})`,
+    params: [
+      row.site_id, row.organization_id, row.id, row.id, row.organization_id, row.site_id,
+      ...removed.flatMap(variant => [variant.locale, formatTenantLocalePath(variant.path, variant.locale)]),
+    ],
+  }
+  const pointedAt = await queryFirst<{ count: number }>(db, `SELECT count(*) AS count ${incoming.sql}`, incoming.params)
+  if (pointedAt?.count) conflict('Cannot delete a page while another redirect points to it')
+
+  // The timestamps, the translation set and the redirect rule are checked
+  // again inside the batch. The reads above give the caller a clear conflict,
+  // but queries run between them and this write, and a page changed in that
+  // window must not be deleted on the strength of a snapshot taken before it.
+  const now = new Date().toISOString()
+  await executeBatch(db, [
+    {
+      query: `INSERT INTO content_blocks (id, document_id, parent_block_id, type, position, level, data_json, created_at, updated_at)
+        SELECT NULL, ?, NULL, 'markdown', 0, NULL, '{}', ?, ? WHERE EXISTS (SELECT 1 ${incoming.sql})`,
+      params: [row.id, now, now, ...incoming.params],
+    },
+    ...prepareContentDocumentDeletion({
+      documentId: row.id,
+      organizationId: row.organization_id,
+      siteId: row.site_id,
+      expectedUpdatedAt: input.expectedUpdatedAt,
+      expectedRepresentations: row.locale === 'en'
+        ? translations.map(translation => ({ id: translation.id, updatedAt: translation.updated_at }))
+        : undefined,
+    }),
+    publicResourceCacheInvalidationQuery(row.site_id, 'tenant-page-delete'),
+  ])
+
+  return { deleted: { id: row.id, path: row.path, locale: row.locale, removed_locales: removedLocales } }
 }
 
 export async function updateTenantPage(db: DbClient, variantId: string, input: { userId: string | null; data: TenantPageEditorInput; scope: TenantPageScope; env: CloudflareEnv }) {

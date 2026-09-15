@@ -206,7 +206,7 @@ Both Saya and Blawby support a blog: Saya's is the shared `posts` primitive rend
 - Notification delivery is channel-agnostic — `notifications.channel` column means email/push can be added with no schema change
 - WhatsApp and Instagram both go through the same Facebook app — single OAuth covers both
 - ChowBot is the owner of AI conversations; dashboard and WhatsApp are interfaces over the same D1-backed backend
-- Image generation: ChatGPT generates natively → `save_generated_image_file` persists via Cloudflare Images → `show_generated_images` renders the widget. Never pass raw base64 to MCP tools.
+- Image generation: ChatGPT generates natively → `save_generated_image_file` persists via Cloudflare Images → chat displays the image for review → `set_media` assigns a single image or `attach_media` adds it to a gallery. Never pass raw base64 to MCP tools.
 
 ---
 

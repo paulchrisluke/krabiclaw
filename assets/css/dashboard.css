@@ -37,8 +37,8 @@
  * height here keeps the panel viewport in step automatically.
  */
 .platform-theme {
-  --kc-dashboard-top-nav: 4rem;
-  --kc-dashboard-bottom-nav: calc(4rem + env(safe-area-inset-bottom));
+  --kc-dashboard-top-nav: 4.5rem;
+  --kc-dashboard-bottom-nav: calc(4.5rem + env(safe-area-inset-bottom));
   /* Shared by the top nav and every panel navbar. One gutter, one alignment. */
   --kc-nav-gutter: 1rem;
 }

@@ -724,33 +724,6 @@ export const siteIdSchema = {
   site_id: { type: 'string', description: 'Internal KrabiClaw site ID from get_workspace_context or list_sites, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.' },
 }
 
-export const generatedImagePickerOutputSchema = {
-  type: 'object',
-  properties: {
-    title: { type: 'string' },
-    subtitle: { type: ['string', 'null'] },
-    images: {
-      type: 'array',
-      items: {
-        type: 'object',
-        properties: {
-          asset_id: { type: 'string' },
-          public_url: { type: 'string' },
-        },
-        required: ['asset_id', 'public_url'],
-      },
-    },
-    useLabel: { type: ['string', 'null'] },
-    regenerateLabel: { type: ['string', 'null'] },
-    assignTool: { type: ['string', 'null'] },
-    assignArgs: { type: ['object', 'null'] },
-    regenerateTool: { type: ['string', 'null'] },
-    regenerateArgs: { type: ['object', 'null'] },
-    successMessage: { type: ['string', 'null'] },
-  },
-  required: ['images'],
-} as const
-
 export function siteTool(definition: Omit<RawMcpToolDefinition, 'inputSchema' | 'outputSchema'> & {
   inputSchema?: Record<string, unknown>
   required?: string[]
@@ -879,7 +852,6 @@ export const EXPECTED_TOOL_ANNOTATIONS = {
   set_default_currency: D,
   set_media: D,
   set_workspace_context: BD,
-  show_generated_images: R,
   reconcile_products: D,
   update_blog_metadata: D,
   update_blog_post: D,
@@ -889,6 +861,7 @@ export const EXPECTED_TOOL_ANNOTATIONS = {
   update_product: D,
   update_site_settings: D,
   update_tenant_page: D,
+  delete_tenant_page: D,
   upload_user_media: W,
   list_products: R,
   set_product_publication: D,

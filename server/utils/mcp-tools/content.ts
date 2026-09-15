@@ -105,6 +105,32 @@ export const CONTENT_TOOLS: McpToolDefinition[] = [
       outputSchema: TENANT_PAGE_LIFECYCLE_OUTPUT,
     }),
   siteTool({
+      name: 'delete_tenant_page',
+      description: 'Delete a canonical tenant page. Deleting a translation removes that translation; deleting the source locale removes the page and every translation with it, and the response names the locales that went. A page the site template renders cannot be deleted, because its route would then have nothing to show.',
+      domain: 'content',
+      minimumRole: 'editor',
+      confirmRequired: true,
+      inputSchema: {
+        variant_id: { type: 'string' },
+        expected_updated_at: { type: 'string', description: 'The document timestamp from the last read, so a page edited since is refused rather than silently removed.' },
+      },
+      required: ['variant_id', 'expected_updated_at'],
+      outputSchema: {
+        type: 'object',
+        properties: {
+          deleted: {
+            type: 'object',
+            properties: {
+              id: { type: 'string' }, path: { type: 'string' }, locale: { type: 'string' },
+              removed_locales: { type: 'array', items: { type: 'string' } },
+            },
+            required: ['id', 'path', 'locale', 'removed_locales'],
+          },
+        },
+        required: ['deleted'],
+      },
+    }),
+  siteTool({
       name: 'get_reservation_policy',
       description: 'Get the reservation policy for one location. A null policy means the location does not take reservations; there is no site-level policy underneath it.',
       domain: 'content',

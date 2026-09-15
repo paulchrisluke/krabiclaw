@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:6457a5da60e1c255f8561dd606595715f33b676ae1c1208f8722a1144a84a089",
+  "fingerprint": "sha256:fc2a9e835a2273a3b51b45f7e86bd69af1d351c5e1a86a0dbc53934e7caf50d0",
   "tools": [
     {
       "name": "attach_media",
@@ -3252,6 +3252,64 @@
           "resource_type",
           "resource_id",
           "locale"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "name": "delete_tenant_page",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "expected_updated_at": {
+            "description": "The document timestamp from the last read, so a page edited since is refused rather than silently removed.",
+            "type": "string"
+          },
+          "site_id": {
+            "description": "Internal KrabiClaw site ID from get_workspace_context or list_sites, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
+            "type": "string"
+          },
+          "variant_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "variant_id",
+          "expected_updated_at"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "properties": {
+          "deleted": {
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "locale": {
+                "type": "string"
+              },
+              "path": {
+                "type": "string"
+              },
+              "removed_locales": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "id",
+              "path",
+              "locale",
+              "removed_locales"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "deleted"
         ],
         "type": "object"
       }
@@ -13369,160 +13427,6 @@
           "organizations",
           "sites",
           "locations"
-        ],
-        "type": "object"
-      }
-    },
-    {
-      "name": "show_generated_images",
-      "inputSchema": {
-        "additionalProperties": false,
-        "dependentRequired": {
-          "placement": [
-            "site_id"
-          ]
-        },
-        "properties": {
-          "images": {
-            "description": "Array of { asset_id, public_url } returned by save_generated_image or save_generated_image_file.",
-            "items": {
-              "additionalProperties": false,
-              "properties": {
-                "asset_id": {
-                  "type": "string"
-                },
-                "public_url": {
-                  "type": "string"
-                }
-              },
-              "required": [
-                "asset_id",
-                "public_url"
-              ],
-              "type": "object"
-            },
-            "type": "array"
-          },
-          "placement": {
-            "additionalProperties": false,
-            "properties": {
-              "owner_id": {
-                "type": "string"
-              },
-              "owner_type": {
-                "type": "string"
-              },
-              "slot": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "owner_type",
-              "owner_id",
-              "slot"
-            ],
-            "type": "object"
-          },
-          "regenerate_label": {
-            "description": "Optional label for the secondary button.",
-            "type": "string"
-          },
-          "site_id": {
-            "description": "Required with placement.",
-            "type": "string"
-          },
-          "subtitle": {
-            "description": "Optional subtitle override.",
-            "type": "string"
-          },
-          "title": {
-            "description": "Optional title override.",
-            "type": "string"
-          },
-          "use_label": {
-            "description": "Optional label for the primary button.",
-            "type": "string"
-          }
-        },
-        "required": [
-          "images"
-        ],
-        "type": "object"
-      },
-      "outputSchema": {
-        "properties": {
-          "assignArgs": {
-            "type": [
-              "object",
-              "null"
-            ]
-          },
-          "assignTool": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "images": {
-            "items": {
-              "properties": {
-                "asset_id": {
-                  "type": "string"
-                },
-                "public_url": {
-                  "type": "string"
-                }
-              },
-              "required": [
-                "asset_id",
-                "public_url"
-              ],
-              "type": "object"
-            },
-            "type": "array"
-          },
-          "regenerateArgs": {
-            "type": [
-              "object",
-              "null"
-            ]
-          },
-          "regenerateLabel": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "regenerateTool": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "subtitle": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "successMessage": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "title": {
-            "type": "string"
-          },
-          "useLabel": {
-            "type": [
-              "string",
-              "null"
-            ]
-          }
-        },
-        "required": [
-          "images"
         ],
         "type": "object"
       }

@@ -1,12 +1,12 @@
 name: CI
 
-# Launch hold and required work: https://github.com/paulchrisluke/krabiclaw/pull/864#issuecomment-5572050864
-# Drafts are implementation batches; ready_for_review starts qualification.
+# Drafts run the static Checks; the preview qualification starts at
+# ready_for_review.
 
 on:
   pull_request:
     branches: [main, staging]
-    types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
+    types: [opened, synchronize, reopened, ready_for_review]
   push:
     branches: [main, staging]
 
@@ -20,10 +20,10 @@ concurrency:
 jobs:
   typecheck:
     name: Checks
+    # Drafts run Checks; only the preview qualification below waits for ready.
     if: >-
       github.event_name == 'push'
-      || (github.event.pull_request.draft == false
-          && !(github.base_ref == 'main' && github.head_ref == 'staging'))
+      || !(github.base_ref == 'main' && github.head_ref == 'staging')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -52,39 +52,14 @@ jobs:
       - run: yarn lint:schema-drift
       - run: yarn test:migrations
 
-  e2e-plan:
-    name: Plan affected browser coverage
-    if: >-
-      github.event_name == 'pull_request'
-      && github.event.pull_request.draft == false
-      && !(github.base_ref == 'main' && github.head_ref == 'staging')
-    runs-on: ubuntu-latest
-    outputs:
-      run_preview: ${{ steps.plan.outputs.run_preview }}
-      scope: ${{ steps.plan.outputs.scope }}
-      groups: ${{ steps.plan.outputs.groups }}
-      specs: ${{ steps.plan.outputs.specs }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          persist-credentials: false
-          fetch-depth: 0
-      - name: Select coverage from changed files
-        id: plan
-        env:
-          E2E_BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
-          E2E_HEAD_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
-        run: node scripts/select-preview-e2e.mjs --github-output "$GITHUB_OUTPUT"
-
   preview-build:
     name: Build preview Worker
     if: >-
-      github.event_name == 'pull_request'
-      && github.event.pull_request.draft == false
-      && github.event.pull_request.head.repo.full_name == github.repository
-      && !(github.base_ref == 'main' && github.head_ref == 'staging')
-      && needs.e2e-plan.outputs.run_preview == 'true'
-    needs: e2e-plan
+      (github.event_name == 'pull_request'
+        && github.event.pull_request.draft == false
+        && github.event.pull_request.head.repo.full_name == github.repository
+        && !(github.base_ref == 'main' && github.head_ref == 'staging'))
+      || (github.event_name == 'push' && github.ref == 'refs/heads/staging')
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
@@ -119,17 +94,17 @@ jobs:
           include-hidden-files: true
           retention-days: 2
 
-  e2e-representative:
-    name: E2E representative tests (preview only)
+  e2e-preview-smoke:
+    name: Preview smoke
     if: >-
-      github.event_name == 'pull_request'
-      && github.event.pull_request.draft == false
-      && github.event.pull_request.head.repo.full_name == github.repository
-      && !(github.base_ref == 'main' && github.head_ref == 'staging')
-      && needs.e2e-plan.outputs.run_preview == 'true'
-    needs: [typecheck, e2e-plan, preview-build]
+      (github.event_name == 'pull_request'
+        && github.event.pull_request.draft == false
+        && github.event.pull_request.head.repo.full_name == github.repository
+        && !(github.base_ref == 'main' && github.head_ref == 'staging'))
+      || (github.event_name == 'push' && github.ref == 'refs/heads/staging')
+    needs: [typecheck, preview-build]
     runs-on: ubuntu-latest
-    timeout-minutes: 180
+    timeout-minutes: 60
     permissions:
       contents: read
       actions: read
@@ -150,35 +125,28 @@ jobs:
       MCP_CIMD_CLIENT_URL: https://preview.krabiclaw.com/api/auth/oauth2/test-client-metadata
       MCP_PRIVATE_CIMD_CLIENT_URL: https://preview.krabiclaw.com/api/auth/oauth2/test-private-client-metadata
       PLAYWRIGHT_PREVIEW_URL: https://preview.krabiclaw.com
-      PLAYWRIGHT_WORKERS: "1"
-      E2E_SELECTION_SCOPE: ${{ needs.e2e-plan.outputs.scope }}
-      E2E_SELECTED_SPECS: ${{ needs.e2e-plan.outputs.specs }}
+      PLAYWRIGHT_WORKERS: "2"
     steps:
       # preview.krabiclaw.com is one deployment over one database, and this job
-      # resets that database before it tests. Two of these overlapping is not a
-      # slow queue, it is one run wiping D1 under another run's assertions.
-      #
-      # The queue orders on when each E2E job STARTED, never on run id. A
-      # re-run keeps its original run id, so an id-ordered queue reads a job
-      # started today as older than everything created since and waits for
-      # nobody: run 34715334165 was created 19:50 the previous evening, was
-      # re-run at 05:10:36, and ran `db:reset:preview` at 05:11:28 through the
-      # middle of another run's suite. Every test after that timestamp failed
-      # with one D1 statement and a 404.
-      #
-      # A job that has not started yet is not waited on: when it starts it sees
-      # this one in progress and waits here instead. Equal start times, which
-      # the API reports at second resolution, fall back to run id.
+      # resets that database before it tests, so preview jobs serialize across
+      # workflow runs. The queue orders on when each job started, never on run
+      # id: a re-run keeps its original run id. A job that has not started yet
+      # is not waited on; when it starts it sees this one and waits here. Equal
+      # start times, which the API reports at second resolution, fall back to
+      # run id. Actions API results are paginated, so every read paginates.
       - name: Wait for the shared preview deployment
         env:
           GH_TOKEN: ${{ github.token }}
           RUN_ID: ${{ github.run_id }}
-          JOB_NAME: E2E representative tests (preview only)
+          JOB_NAME: Preview smoke
+          # Each holder occupies preview for roughly six minutes. This covers a
+          # deep queue and still leaves room inside the job's timeout-minutes
+          # for the work itself, so the deadline below is reachable rather than
+          # being pre-empted by the runner.
+          QUEUE_DEADLINE_MINUTES: "45"
         run: |
           set -euo pipefail
-          # --paginate or a busy repository silently truncates at 100 and the
-          # queue stops seeing the run it must wait for. jq runs per page, so
-          # every one of these takes the first line it produces.
+          # jq runs per page under --paginate, so each read takes its first line.
           mine=$(gh api --paginate "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/jobs?per_page=100" \
             --jq "[.jobs[] | select(.name == \"${JOB_NAME}\")] | .[0].started_at // empty" | head -n 1)
           if [ -z "$mine" ]; then
@@ -186,7 +154,7 @@ jobs:
             exit 1
           fi
           echo "This job started at ${mine}."
-          deadline=$((SECONDS + 100 * 60))
+          deadline=$((SECONDS + QUEUE_DEADLINE_MINUTES * 60))
           while :; do
             busy=""
             for run_status in queued in_progress waiting pending requested; do
@@ -207,7 +175,7 @@ jobs:
               break
             fi
             if [ "$SECONDS" -ge "$deadline" ]; then
-              echo "::error::Gave up after 100 minutes waiting on runs ahead of this one:${busy}"
+              echo "::error::Gave up after ${QUEUE_DEADLINE_MINUTES} minutes waiting on runs ahead of this one:${busy}"
               exit 1
             fi
             echo "Waiting on runs ahead of this one:${busy}"
@@ -282,13 +250,16 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: yarn fixtures:verify:preview
-      - name: Run tenant public and affected preview coverage
-        run: yarn test:e2e:preview:selected
+      - name: Run the preview smoke suite
+        run: yarn test:e2e:preview:smoke
 
   e2e-staging:
     name: Deploy and test staging
     if: github.event_name == 'push' && github.ref == 'refs/heads/staging'
-    needs: typecheck
+    # The same seven preview cases gate the exact staging SHA. A direct push to
+    # staging is the normal way a hotfix ships, and nothing else would have run
+    # them on that commit.
+    needs: [typecheck, e2e-preview-smoke]
     runs-on: ubuntu-latest
     timeout-minutes: 90
     environment: staging
@@ -385,10 +356,65 @@ jobs:
           retention-days: 14
           if-no-files-found: ignore
 
+  staging-qualified:
+    name: Staging candidate qualified
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      checks: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      # Nothing in this repository's settings requires staging to be green
+      # before main deploys: there is no branch protection and no ruleset. This
+      # job is that requirement, expressed as a dependency rather than as a
+      # setting nobody can see from the tree.
+      #
+      # One read of one commit's check runs. It does not wait for anything: by
+      # the time main has the commit, staging has either qualified it or not.
+      - name: Require the staging candidate's checks to be green
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REQUIRED: |
+            Checks
+            Preview smoke
+            Deploy and test staging
+        run: |
+          set -euo pipefail
+          # staging reaches main as a merge commit, so the candidate is the
+          # second parent. A fast-forward has one parent and is its own
+          # candidate.
+          candidate=$(git rev-parse "HEAD^2" 2>/dev/null || git rev-parse HEAD)
+          echo "Staging candidate: ${candidate}"
+          runs=$(gh api --paginate "repos/${GITHUB_REPOSITORY}/commits/${candidate}/check-runs?per_page=100" \
+            --jq '.check_runs[] | "\(.id)\t\(.status)\t\(.conclusion // "pending")\t\(.name)"')
+          echo "${runs}"
+          # A re-run adds a newer check run beside the old one; only the latest
+          # run of each required check counts, and it must have completed.
+          missing=""
+          while IFS= read -r name; do
+            [ -n "$name" ] || continue
+            latest=$(printf '%s\n' "${runs}" | awk -F'\t' -v name="${name}" '$4 == name' | sort -n | tail -n 1)
+            status=$(printf '%s' "${latest}" | cut -f2)
+            conclusion=$(printf '%s' "${latest}" | cut -f3)
+            if [ "${status}" != "completed" ] || [ "${conclusion}" != "success" ]; then
+              missing="${missing} '${name}'(${status:-absent}/${conclusion:-none})"
+            fi
+          done <<< "$REQUIRED"
+          if [ -n "$missing" ]; then
+            echo "::error::Staging candidate ${candidate} has no latest successful:${missing}. Production deploys the exact commit staging qualified."
+            exit 1
+          fi
+          echo "Staging candidate ${candidate} is qualified."
+
   deploy-production:
     name: Deploy production
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: typecheck
+    needs: [typecheck, staging-qualified]
     runs-on: ubuntu-latest
     timeout-minutes: 45
     environment: production

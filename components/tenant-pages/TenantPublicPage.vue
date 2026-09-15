@@ -4,8 +4,10 @@
     the practice areas were the only ones an allowlist of seven paths left out,
     so they rendered in the Saya markup on a Blawby site.
   -->
-  <BlawbyCanonicalPage v-if="isBlawby" :page="page" />
-  <TenantPageRenderer v-else :page="page" template="saya" />
+  <template v-if="page">
+    <BlawbyCanonicalPage v-if="isBlawby" :page="page" />
+    <TenantPageRenderer v-else :page="page" template="saya" />
+  </template>
 </template>
 
 <script setup lang="ts">
@@ -69,17 +71,33 @@ const { data, error, status, execute } = await useAsyncData(key, async () => {
 // still hydrating. Await that same request before requiring its document.
 if (status.value === 'idle' || status.value === 'pending') await execute({ dedupe: 'defer' })
 if (error.value) throw error.value
-if (!data.value?.page) throw createError({ statusCode: 500, statusMessage: 'Tenant page data was not returned' })
-
-const page = computed(() => data.value!.page)
-if (!page.value.localeRepresentations) {
-  throw createError({ statusCode: 500, statusMessage: 'Tenant page locale representations were not returned' })
+// A client navigation can tear this instance down while its request is still in
+// flight: Nuxt drops the async data and the awaited call returns empty with no
+// error. That is not a page that failed to load, it is a page nobody is looking
+// at any more, and turning it into a 500 put an uncaught error on every visitor
+// who clicked twice quickly. Only a settled request with no page is a failure.
+if (!data.value?.page && status.value === 'success') {
+  throw createError({ statusCode: 500, statusMessage: 'Tenant page data was not returned' })
 }
-useState<PublicLocaleRepresentation[]>('public-locale-representations', () => []).value = page.value.localeRepresentations
+
+const page = computed(() => data.value?.page ?? null)
+
+// Page-derived state stays reactive: the request can still be in flight, and
+// the locale can change under this instance, so these must follow `page`
+// rather than freeze whatever it held when setup ran.
+watchEffect(() => {
+  if (!page.value) return
+  if (!page.value.localeRepresentations) {
+    throw createError({ statusCode: 500, statusMessage: 'Tenant page locale representations were not returned' })
+  }
+  useState<PublicLocaleRepresentation[]>('public-locale-representations', () => []).value = page.value.localeRepresentations
+})
+
 const schemaContext = inject<{ identity: ComputedRef<PublicBlawbyIdentity>; compliance: ComputedRef<PublicCompliance | null> } | null>('blawby-schema-context', null)
 const schemaOrg = useBlawbyOrgIdentity(() => schemaContext?.identity.value, () => schemaContext?.compliance.value)
 const supportedSchemaRecipes = new Set(['home', 'about', 'contact', 'pricing', 'donate', 'schedule'])
 const schemaRecipe = computed<'home' | 'about' | 'contact' | 'pricing' | 'donate' | 'schedule' | 'tenant-page'>(() => {
+  if (!page.value) return 'tenant-page'
   if (page.value.recipe && supportedSchemaRecipes.has(page.value.recipe)) return page.value.recipe as 'home' | 'about' | 'contact' | 'pricing' | 'donate' | 'schedule'
   const pathRecipes = new Map([
     ['/', 'home'],
@@ -93,7 +111,7 @@ const schemaRecipe = computed<'home' | 'about' | 'contact' | 'pricing' | 'donate
 })
 
 useProfessionalServiceSchema(() => {
-  if (!isBlawby.value || !schemaContext) return null
+  if (!page.value || !isBlawby.value || !schemaContext) return null
   const faqBlock = page.value.blocks.find(block => block.type === 'faq')
   // The services this page lists are pages, and the page renders them from its
   // page_grid. Reading a product_grid here described a block these pages do not
@@ -128,7 +146,7 @@ useProfessionalServiceSchema(() => {
     donationUrl,
   }
 })
-useSocialMetadata(() => ({
+useSocialMetadata(() => page.value && ({
   path: page.value.canonical_url || page.value.path,
   title: page.value.seo_title || `${page.value.title} | ${site?.brand_name || ''}`,
   description: page.value.seo_description || page.value.summary || '',

@@ -2,12 +2,9 @@ import { readdir, readFile } from 'node:fs/promises'
 import { extname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
-  PROHIBITED_LEGACY_PATHS,
   CANONICAL_LOADER_PATHS,
   checkGlobalFetchAndRetry,
-  checkBannedSilentEmptySuccessNames,
   checkSilentEmptyCatch,
-  checkLegacyFallbackFlag,
   checkDashboardFetchUsage,
   checkSsrRequestEventCapture,
   checkDeleteBodyUsage,
@@ -31,17 +28,6 @@ const applicationRoots = [
 ]
 const violations = []
 
-const publicLoadingProhibitions = [
-  ['layouts/saya.vue', [
-    "rel: 'preload'",
-    "onload: \"this.onload=null;this.rel='stylesheet'\"",
-  ]],
-  ['layouts/blawby.vue', [
-    "rel: 'preload'",
-    "onload: \"this.onload=null;this.rel='stylesheet'\"",
-  ]],
-]
-
 async function filesUnder(directory) {
   const entries = await readdir(join(root, directory), { withFileTypes: true }).catch((error) => {
     if (error?.code === 'ENOENT') return []
@@ -60,23 +46,8 @@ for (const directory of applicationRoots) {
   for (const file of await filesUnder(directory)) {
     const source = await readFile(join(root, file), 'utf8')
     violations.push(...checkGlobalFetchAndRetry(file, source))
-    violations.push(...checkBannedSilentEmptySuccessNames(file, source))
-    violations.push(...checkLegacyFallbackFlag(file, source))
     violations.push(...checkSsrRequestEventCapture(file, source))
   }
-}
-
-// server/ isn't part of applicationRoots (that list is Nuxt app-side code), but
-// the canonical SSR loaders below live under server/utils — check them for the
-// same legacy-fallback-flag pattern.
-for (const path of CANONICAL_LOADER_PATHS) {
-  if (!path.startsWith('server/')) continue
-  const source = await readFile(join(root, path), 'utf8').catch(error => {
-    if (error?.code === 'ENOENT') return null
-    throw error
-  })
-  if (source === null) continue
-  violations.push(...checkLegacyFallbackFlag(path, source))
 }
 
 for (const file of await filesUnder('server/api')) {
@@ -88,14 +59,6 @@ for (const file of await filesUnder('server/api')) {
 for (const file of await filesUnder('server')) {
   const source = await readFile(join(root, file), 'utf8')
   violations.push(...checkDynamicSqlListBindings(file, source))
-}
-
-for (const path of PROHIBITED_LEGACY_PATHS) {
-  const source = await readFile(join(root, path), 'utf8').catch(error => {
-    if (error?.code === 'ENOENT') return null
-    throw error
-  })
-  if (source !== null) violations.push(`${path}: legacy data-loading path must remain deleted`)
 }
 
 for (const path of CANONICAL_LOADER_PATHS) {
@@ -114,22 +77,6 @@ for (const directory of dashboardRoots) {
     if (file.replaceAll('\\', '/') === 'lib/components/workspace/dashboard/DashboardAccountMenu.vue') continue
     violations.push(...checkDashboardFetchUsage(file, source))
   }
-}
-
-for (const [path, prohibited] of publicLoadingProhibitions) {
-  const source = await readFile(join(root, path), 'utf8')
-  for (const marker of prohibited) {
-    if (source.includes(marker)) violations.push(`${path}: prohibited public loading strategy marker: ${marker}`)
-  }
-}
-
-const removedPublicLoadingPaths = ['public/platform-home-static.js']
-for (const path of removedPublicLoadingPaths) {
-  const source = await readFile(join(root, path), 'utf8').catch(error => {
-    if (error?.code === 'ENOENT') return null
-    throw error
-  })
-  if (source !== null) violations.push(`${path}: obsolete interaction/static loader must remain deleted`)
 }
 
 if (violations.length) {

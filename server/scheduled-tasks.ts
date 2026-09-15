@@ -21,12 +21,13 @@ export type ScheduledTaskName =
   | 'sessions-materialize'
   | 'deletion-sweep'
   | 'stripe-webhook-retry'
+  | 'article-broadcast-send'
 
 type TaskLoader = () => Promise<{ default: ScheduledTaskDefinition }>
 
 /** The single source of truth for cron-to-task dispatch in Nitro's scheduled hook. */
 export const SCHEDULED_TASKS: Readonly<Record<string, readonly ScheduledTaskName[]>> = {
-  '*/5 * * * *': ['blog-scheduled-publish', 'post-scheduled-publish', 'social-card-backfill', 'sessions-materialize'],
+  '*/5 * * * *': ['blog-scheduled-publish', 'post-scheduled-publish', 'social-card-backfill', 'sessions-materialize', 'article-broadcast-send'],
   '*/2 * * * *': ['public-resource-cache-invalidation'],
   '*/10 * * * *': ['domain-reconciliation', 'zaraz-analytics-reconciliation'],
   '0 3 * * *': ['domain-reconciliation-daily', 'analytics-aggregate-daily', 'deletion-sweep'],
@@ -49,6 +50,7 @@ const TASK_LOADERS: Readonly<Record<ScheduledTaskName, TaskLoader>> = {
   'instagram-sync-process': async () => import('./tasks/instagram-sync-process'),
   'review-request-automation': async () => import('./tasks/review-request-automation'),
   'stripe-webhook-retry': async () => import('./tasks/stripe-webhook-retry'),
+  'article-broadcast-send': async () => import('./tasks/article-broadcast-send'),
 }
 
 export function getScheduledTaskNames(cron: string): readonly ScheduledTaskName[] {
