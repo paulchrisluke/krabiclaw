@@ -1,7 +1,7 @@
 <template>
   <article
     data-tenant-page
-    :data-template="template"
+    data-template="saya"
     class="mx-auto max-w-7xl px-4 py-16 text-default sm:px-6 lg:px-8"
   >
     <section v-for="block in renderedBlocks" :key="block.id" :data-block-type="block.type" :data-parity-section="sectionKey(block)" class="tenant-page-block">
@@ -138,16 +138,6 @@
         </div>
       </template>
 
-      <!--
-        A feature grid sourced from `billing_plans` publishes KrabiClaw's own
-        plans, and they belong to Stripe. The block names the source; the
-        adapter reads the provider-backed billing response. No amount, interval
-        or price id is stored in the document.
-      -->
-      <template v-else-if="isBillingPlansBlock(block)">
-        <TenantPageBillingPlans :title="text(block.data.title) || null" />
-      </template>
-
       <template v-else-if="block.type === 'feature_grid' && calculatorRows(block).length">
         <TenantPagePricingCalculator :rows="calculatorRows(block)" :note="calculatorNote(block)" />
       </template>
@@ -213,15 +203,7 @@ import type { PublicTenantPage } from '~/server/utils/public-tenant-pages'
 import type { TenantPageBlock } from '~/utils/tenant-page-blocks'
 import { getVerticalCopy } from '~/utils/vertical-copy'
 
-const props = defineProps<{ page: PublicTenantPage; template: 'saya' | 'platform' }>()
-
-/**
- * KrabiClaw's own plans, published on KrabiClaw's own site. The source names
- * the platform's Stripe catalog, so only the platform template renders it.
- */
-function isBillingPlansBlock(block: TenantPageBlock): boolean {
-  return props.template === 'platform' && block.type === 'feature_grid' && text(block.data.source) === 'billing_plans'
-}
+const props = defineProps<{ page: PublicTenantPage }>()
 const sanitizer = useHtmlSanitizer()
 const { t, locale } = useI18n()
 const { site } = useTenantSite()

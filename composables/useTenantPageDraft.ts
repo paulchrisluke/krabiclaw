@@ -64,9 +64,19 @@ export interface TenantPageListRow {
   updated_at: string
 }
 
+function isOptionalString(value: unknown): value is string | null {
+  return value === null || value === undefined || typeof value === 'string'
+}
+
 export function isTenantPageResponse(value: unknown): value is { page: TenantPageResponse } {
-  return isRecord(value) && isRecord(value.page) && typeof value.page.id === 'string'
-    && isRecord(value.page.document) && Array.isArray(value.page.blocks)
+  if (!isRecord(value) || !isRecord(value.page)) return false
+  const page = value.page
+  return ['id', 'page_id', 'site_id', 'organization_id', 'locale', 'path', 'title', 'page_type', 'updated_at']
+    .every(field => typeof page[field] === 'string')
+    && ['summary', 'seo_title', 'seo_description', 'canonical_url', 'robots', 'recipe'].every(field => isOptionalString(page[field]))
+    && typeof page.sort_order === 'number'
+    && Array.isArray(page.blocks)
+    && isRecord(page.document) && typeof page.document.updated_at === 'string'
 }
 
 export function isTenantPageListResponse(value: unknown): value is { pages: TenantPageListRow[] } {
@@ -169,7 +179,11 @@ export function useTenantPageDraft(siteId: string, pageId: string) {
   /** Which loaded document the draft was seeded from, so a re-read does not discard an edit. */
   const seededFrom = useState<string>(`${key}-seeded-from`, () => '')
 
+  /** The page the draft was last seeded from — what `revert`, `savedBlockIds` and the preview read. */
+  const accepted = useState<TenantPageResponse | null>(`${key}-accepted`, () => null)
+
   function seed(page: TenantPageResponse | null) {
+    accepted.value = page
     draft.value = page ? toDraft(page) : emptyDraft()
     baseline.value = JSON.stringify(draft.value)
     seededFrom.value = page?.document.updated_at ?? 'new'
@@ -185,7 +199,12 @@ export function useTenantPageDraft(siteId: string, pageId: string) {
     // put the editor back a step: a section created a moment ago was gone from
     // the draft while its row existed in D1, and the route that had just been
     // sent to it answered "not found".
-    if (stamp !== 'new' && seededFrom.value && seededFrom.value !== 'new' && stamp < seededFrom.value) return
+    if (stamp !== 'new' && seededFrom.value && seededFrom.value !== 'new' && stamp < seededFrom.value) {
+      // And it does not get to sit in `data` either, or revert, the saved-block
+      // set and the preview would read the page as it was before the write.
+      data.value = { ...value, page: accepted.value }
+      return
+    }
     seed(value.page)
     // `flush: 'sync'`, because a queued watcher never runs during the server
     // render: the read above resolves after this composable's setup, and a

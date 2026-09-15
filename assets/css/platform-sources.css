@@ -23,3 +23,11 @@
 @source "../../components/ui/AppBreadcrumb.vue";
 @source "../../components/ui/AppSection.vue";
 @source "../../components/ui/UImage.vue";
+
+/*
+  Nuxt UI's own theme is not a source here, so a utility only its theme names is
+  emitted only if some scanned file happens to spell it. UCard's border is
+  `ring`, and the platform surface had it only because a deleted homepage
+  comment said "Glow ring" — safelist the one utility the component stands on.
+*/
+@source inline("ring");

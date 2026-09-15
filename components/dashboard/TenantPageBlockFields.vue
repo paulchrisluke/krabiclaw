@@ -416,12 +416,14 @@ const locationOptions = computed(() => dashboard.locations.value.map(location =>
  * editor offers one question with two answers instead of two boxes that can
  * contradict each other.
  */
-const productMode = computed<'collection' | 'products'>({
-  get: () => (strList('product_ids').length ? 'products' : 'collection'),
-  set: (value) => {
-    if (value === 'collection') block.value.data.product_ids = []
-    else block.value.data.collection_id = ''
-  },
+const productMode = ref<'collection' | 'products'>(strList('product_ids').length ? 'products' : 'collection')
+// Choosing "Products I choose" empties the collection; choosing a collection
+// empties the products. The mode itself is the tenant's answer, held here —
+// deriving it from `product_ids` meant an empty product list read as
+// "collection" and the product picker could never be reached.
+watch(productMode, (value) => {
+  if (value === 'collection') block.value.data.product_ids = []
+  else block.value.data.collection_id = ''
 })
 
 function setCollection(value: unknown) {

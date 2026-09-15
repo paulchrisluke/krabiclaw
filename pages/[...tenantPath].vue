@@ -1,6 +1,6 @@
 <template>
   <NuxtLayout :name="isPlatform ? 'platform' : isBlawby ? 'blawby' : 'saya'">
-    <template v-if="localizedRoute && tenantPagePath === '/'">
+    <template v-if="!isPlatform && localizedRoute && tenantPagePath === '/'">
       <LazyBlawbyHome v-if="isBlawby" />
       <LazySayaHomePage v-else />
     </template>

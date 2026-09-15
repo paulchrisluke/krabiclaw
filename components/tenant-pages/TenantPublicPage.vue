@@ -2,11 +2,14 @@
   <!--
     One renderer per template, chosen here. Every Blawby page is a Blawby page:
     the practice areas were the only ones an allowlist of seven paths left out,
-    so they rendered in the Saya markup on a Blawby site.
+    so they rendered in the Saya markup on a Blawby site. KrabiClaw's own pages
+    are KrabiClaw pages for the same reason — rendered through the Saya block
+    loop they lost every section the marketing site had (#903).
   -->
   <template v-if="page">
     <BlawbyCanonicalPage v-if="isBlawby" :page="page" />
-    <TenantPageRenderer v-else :page="page" :template="isPlatform ? 'platform' : 'saya'" />
+    <PlatformCanonicalPage v-else-if="isPlatform" :page="page" />
+    <TenantPageRenderer v-else :page="page" />
   </template>
 </template>
 
