@@ -78,9 +78,11 @@ async function expectTenantDocument(page: Page, tenant: Tenant) {
   ].join(', ')).first()
   await expect(media).toBeVisible()
   await media.scrollIntoViewIfNeeded()
-  await expect.poll(() => media.evaluate(element =>
-    !(element instanceof HTMLImageElement) || (element.complete && element.naturalWidth > 0),
-  )).toBe(true)
+  await expect.poll(() => media.evaluate((element) => {
+    if (element instanceof HTMLImageElement) return element.complete && element.naturalWidth > 0
+    if (element instanceof HTMLVideoElement) return element.error === null && element.readyState >= HTMLMediaElement.HAVE_METADATA
+    return false
+  })).toBe(true)
   for (const text of tenant.forbidden) await expect(page.locator('body')).not.toContainText(text)
   const canonical = page.locator('link[rel="canonical"]')
   await expect(canonical).toHaveCount(1)
