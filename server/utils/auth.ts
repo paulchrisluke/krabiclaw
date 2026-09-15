@@ -449,6 +449,14 @@ export function createAuth(env: CloudflareEnv) {
     plugins: [
       lastLoginMethod({ customResolveMethod: ctx => loginMethodForPath(ctx.path) }),
       jwt({
+        // The plugin's default after-hook mints a fresh JWT on every
+        // /get-session — reading the jwks row, decrypting the private key and
+        // signing — purely to return a `set-auth-jwt` response header. Nothing
+        // in this codebase reads that header; MCP and the OAuth provider get
+        // their tokens from /api/auth/token and the oauthProvider plugin, which
+        // are unaffected. Measured on a tenant-page editor render: 9 jwks reads
+        // and 9 signatures for a header no caller consumes.
+        disableSettingJwtHeader: true,
         jwks: {
           keyPairConfig: { alg: OAUTH_SIGNING_POLICY.algorithm },
         },
