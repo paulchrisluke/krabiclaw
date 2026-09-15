@@ -190,15 +190,18 @@ test('D1 claims fence concurrent sends and bound ambiguous provider retries', as
     assert.deepEqual({ ok: replay.ok, status: replay.status }, { ok: true, status: 200 })
     assert.equal((await db.prepare('SELECT conversation_state FROM requests WHERE id = ?').bind('contact-proof').first<{ conversation_state: string }>())?.conversation_state, 'waiting_on_guest')
 
-    const resolved = await executeGuestThreadOperation(db, {
+    // A thread reaches 'resolved' through its record's own lifecycle, which
+    // writes the state alongside the entry that caused it. Both halves matter
+    // here: the projection only follows the LATEST entry, so what keeps the
+    // replay below from dragging the state back is that a newer entry exists.
+    const resolvingEntry = await appendEntry(db, {
       threadId: 'contact-proof',
-      siteId: 'site-proof',
-      action: 'resolve',
-      actorUserId: 'user-proof',
-      idempotencyKey: 'resolve-after-reply-proof',
-      env: { EMAIL_DELIVERY_MODE: 'provider', NUXT_PUBLIC_PLATFORM_DOMAIN: 'proof.example' },
+      kind: 'operation',
+      actorKind: 'system',
+      eventName: 'thread.completed',
+      dedupeKey: 'lifecycle-resolve-proof',
     })
-    assert.deepEqual({ ok: resolved.ok, status: resolved.status }, { ok: true, status: 200 })
+    await updateThreadProjectionIfLatestEntry(db, 'contact-proof', resolvingEntry.id, { conversationState: 'resolved' })
 
     const replayAfterResolve = await executeGuestThreadOperation(db, {
       threadId: 'contact-proof',
@@ -280,15 +283,14 @@ test('D1 claims fence concurrent sends and bound ambiguous provider retries', as
     assert.equal(retryClaim.claimed, true)
     await recordDeliveryOutcome(db, { claim: retryClaim, status: 'failed', error: 'provider rejected request' })
 
-    const resolvedAfterFailure = await executeGuestThreadOperation(db, {
+    const secondResolvingEntry = await appendEntry(db, {
       threadId: 'contact-proof',
-      siteId: 'site-proof',
-      action: 'resolve',
-      actorUserId: 'user-proof',
-      idempotencyKey: 'resolve-after-failed-reply-proof',
-      env: { EMAIL_DELIVERY_MODE: 'provider', NUXT_PUBLIC_PLATFORM_DOMAIN: 'proof.example' },
+      kind: 'operation',
+      actorKind: 'system',
+      eventName: 'thread.completed',
+      dedupeKey: 'lifecycle-resolve-after-failure-proof',
     })
-    assert.deepEqual({ ok: resolvedAfterFailure.ok, status: resolvedAfterFailure.status }, { ok: true, status: 200 })
+    await updateThreadProjectionIfLatestEntry(db, 'contact-proof', secondResolvingEntry.id, { conversationState: 'resolved' })
 
     const retriedAfterResolve = await executeGuestThreadOperation(db, {
       threadId: 'contact-proof',

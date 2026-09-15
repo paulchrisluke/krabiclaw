@@ -1,10 +1,10 @@
 <template>
   <!-- The three capability cards under the plugin header. -->
   <div v-if="variant === 'capabilities'" class="mt-16 grid gap-6 md:grid-cols-3" data-parity-section="capabilities">
-    <UCard v-for="item in items" :key="item.title">
-      <template #header><h2 class="text-lg font-bold">{{ item.title }}</h2></template>
-      <p class="text-sm leading-relaxed text-muted">{{ item.description }}</p>
-    </UCard>
+    <div v-for="item in items" :key="item.title" class="rounded-2xl border border-default bg-elevated p-6">
+      <h2 class="text-lg font-bold">{{ item.title }}</h2>
+      <p class="mt-3 text-sm leading-relaxed text-muted">{{ item.description }}</p>
+    </div>
   </div>
 
   <!-- The numbered connection steps, the MCP URL with its copy button inside step two. -->

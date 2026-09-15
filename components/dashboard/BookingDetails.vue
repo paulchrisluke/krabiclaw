@@ -1,14 +1,11 @@
 <template>
-  <UDashboardPanel id="booking-details" :ui="{ body: 'min-h-0 gap-0! overflow-hidden! p-0! sm:p-0!' }">
-    <template #header>
-      <UDashboardNavbar :title="isChangeMode && noun ? `Change ${noun}` : pageTitle" :toggle="false">
-        <template #leading>
-          <DashboardNavbarLeading :to="isChangeMode ? bookingPath : todayPath" :label="isChangeMode && noun ? capitalize(noun) : 'Today'" />
-        </template>
-      </UDashboardNavbar>
-    </template>
-
-    <template #body>
+  <!--
+    One record, two places it is opened from: its own screen under Today, and
+    the detail column of the guest thread it belongs to. Neither chrome belongs
+    here — the route that mounted this drew it — so this is the record body and
+    the editor chain that hangs off `basePath`.
+  -->
+  <div class="flex min-h-0 flex-1 flex-col">
       <div v-if="pending && !booking" class="space-y-4 p-5 sm:p-8">
         <USkeleton v-for="index in 4" :key="index" class="h-40 rounded-2xl" />
       </div>
@@ -232,8 +229,7 @@
           </template>
         </template>
       </EditorPaneShell>
-    </template>
-  </UDashboardPanel>
+  </div>
 
   <DashboardListItemDialog v-model:open="policyOpen" :title="booking?.policy?.heading || 'Cancellation policy'" :show-actions="false">
     <div v-if="booking" class="space-y-4">
@@ -318,30 +314,27 @@
 </template>
 
 <script setup lang="ts">
-import { localDateAt, formatCalendarDate, formatTime, formatTimestamp } from '~/utils/timezone'
+import { formatCalendarDate, formatTime, formatTimestamp } from '~/utils/timezone'
 import DashboardListItemDialog from '~/components/dashboard/DashboardListItemDialog.vue'
 import EditorPaneShell from '~/components/dashboard/EditorPaneShell.vue'
 import { bookingNeedsResponse } from '~/utils/booking-lifecycle'
-import { resolveBookingPresentation } from '~/utils/booking-presentation'
 import { getErrorMessage } from '~/utils/errors'
 import type { DashboardBookingDetails, DashboardBookingType } from '~/server/utils/dashboard-booking-details'
 
 const props = defineProps<{
   bookingType: DashboardBookingType
   bookingId: string
+  /** Where this record lives in the URL. Its editor chain hangs off it. */
+  basePath: string
 }>()
 
 type ActionColor = 'success' | 'error' | 'neutral'
 
-const route = useRoute()
 const router = useRouter()
 const dashboardApi = useDashboardApi()
 const realtime = useDashboardInvalidations()
-const requestEvent = useRequestEvent()
 const toast = useToast()
-const orgSlug = computed(() => String(route.params.orgSlug || ''))
-const todayPath = computed(() => `/dashboard/${orgSlug.value}`)
-const bookingPath = computed(() => `${todayPath.value}/bookings/${props.bookingType}/${encodeURIComponent(props.bookingId)}`)
+const bookingPath = computed(() => props.basePath)
 // `useEditorFrame` provides and injects, so it runs before any `await`, and it
 // owns the split of the route below this booking. The `route.params.editor`
 // derivation this replaces was a second copy of the composable's `rest`.
@@ -353,32 +346,8 @@ const isChangeMode = computed(() => editorKey.value === 'change')
 const selectedNote = computed(() => booking.value?.notes.find(note => note.id === editorField.value))
 const detailTitle = computed(() => editorKey.value === 'notes' ? editorField.value ? 'Edit note' : 'Add a note' : editorKey.value === 'guest' ? 'Guest details' : isChangeMode.value && editorField.value ? `Change ${editorField.value}` : undefined)
 
-const isBookingResponse = (value: unknown): value is { booking: DashboardBookingDetails } =>
-  isRecord(value)
-  && isRecord(value.booking)
-  && typeof value.booking.id === 'string'
-  && typeof value.booking.siteId === 'string'
-  && typeof value.booking.guestName === 'string'
-  && Array.isArray(value.booking.notes)
-  && isRecord(value.booking.policy)
-
+const { resource, booking, pending, error, presentation, noun, orgSlug, refresh: refreshDetails } = await useBookingDetails(props.bookingType, props.bookingId)
 const detailsKey = computed(() => `dashboard-booking:${orgSlug.value}:${props.bookingType}:${props.bookingId}`)
-const { data: resource, pending, error } = await useAsyncData<{ booking: DashboardBookingDetails }>(detailsKey, async () => {
-  if (import.meta.server) {
-    if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Dashboard request context unavailable' })
-    const { loadDashboardBookingDetails } = await import('~/server/utils/dashboard-booking-details')
-    return { booking: await loadDashboardBookingDetails(requestEvent, {
-      type: props.bookingType,
-      bookingId: props.bookingId,
-      organizationSlug: orgSlug.value,
-    }) }
-  }
-  return await dashboardApi(`/api/dashboard/bookings/${props.bookingType}/${encodeURIComponent(props.bookingId)}`, {
-    validate: isBookingResponse,
-  })
-})
-
-const booking = computed(() => resource.value?.booking ?? null)
 watchEffect(() => {
   const valid = editorSegments.value.length <= 2 && (!editorKey.value
     || (editorKey.value === 'guest' && !editorField.value)
@@ -387,21 +356,6 @@ watchEffect(() => {
   if (!valid && booking.value) throw createError({ statusCode: 404, statusMessage: 'Editor not found' })
 })
 
-// The one vocabulary. `resolveBookingPresentation` refuses a missing vertical
-// rather than guessing, so it is only asked once the booking has loaded.
-const presentation = computed(() => booking.value
-  ? resolveBookingPresentation(booking.value.type, booking.value.vertical)
-  : null)
-const noun = computed(() => presentation.value?.noun ?? '')
-
-const referenceDay = computed(() => booking.value ? localDateAt(new Date(), booking.value.timeZone) : '')
-const pageTitle = computed(() => {
-  if (!booking.value) return 'Booking details'
-  if (booking.value.status === 'cancelled') return 'Cancelled'
-  if (booking.value.bookingDate === referenceDay.value) return 'Currently hosting'
-  if (booking.value.bookingDate > referenceDay.value) return 'Coming up'
-  return `Past ${noun.value}`
-})
 const formattedDate = computed(() => booking.value ? formatCalendarDate(booking.value.bookingDate, 'en') : '')
 const formattedTime = computed(() => {
   if (!booking.value) return ''
@@ -416,7 +370,7 @@ const cancellationSummary = computed(() => booking.value?.policy?.items.find(ite
   ?? 'No cancellation terms have been configured.')
 const messageTo = computed(() => {
   if (!booking.value?.threadId) return null
-  return `/dashboard/${orgSlug.value}/sites/${booking.value.siteSlug}/locations/${booking.value.locationSlug}/inbox/${booking.value.threadId}`
+  return `/dashboard/${orgSlug.value}/sites/${booking.value.siteSlug}/locations/${booking.value.locationSlug}/messages/${booking.value.threadId}`
 })
 const callTo = computed(() => booking.value?.guestPhone ? `tel:${booking.value.guestPhone}` : null)
 
@@ -557,14 +511,6 @@ function openCancel() {
   cancelOpen.value = true
 }
 
-async function refreshDetails() {
-  const response = await dashboardApi<{ booking: DashboardBookingDetails }>(
-    `/api/dashboard/bookings/${props.bookingType}/${encodeURIComponent(props.bookingId)}`,
-    { validate: isBookingResponse },
-  )
-  resource.value = response
-}
-
 function retryRealtime() {
   realtime.connect()
   void refreshDetails()
@@ -591,7 +537,7 @@ async function saveNote() {
       {
         method: 'POST',
         body: { note: noteDraft.value, idempotencyKey: noteAttemptKey.value, noteId: selectedNote.value?.id, revisionId: noteRevisionId.value },
-        validate: isBookingResponse,
+        validate: isBookingDetailsResponse,
       },
     )
     resource.value = response
@@ -630,7 +576,7 @@ async function sendChangeRequest() {
       {
         method: 'POST',
         body: { ...proposal, expectedUpdatedAt: booking.value?.updatedAt, idempotencyKey: changeAttemptKey.value },
-        validate: isBookingResponse,
+        validate: isBookingDetailsResponse,
       },
     )
     resource.value = response

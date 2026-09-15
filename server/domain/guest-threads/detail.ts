@@ -3,7 +3,6 @@ import { getGuestRequest, getThreadOperationalRecord, requestSummary, requestAct
 import { formatOperationalStatusLabel } from './status-labels'
 import { listThreadEntries, parseEntryPayload } from './entries'
 import { getDeliveryRetryEligibility, isVisibleDeliveryFailure, listThreadDeliveries } from './deliveries'
-import { CONVERSATION_STATE_LABELS } from './types'
 import type { GuestThreadDetailViewModel, GuestThreadEntryDeliveryViewModel, GuestThreadEntryViewModel } from './types'
 
 /** Builds the full canonical thread detail view model — the sole source for the detail API. */
@@ -60,7 +59,6 @@ export async function getGuestThreadDetail(
     contextLabel: summary.contextLabel,
     locationLabel: summary.locationTitle,
     conversationState: thread.conversation_state,
-    conversationStateLabel: CONVERSATION_STATE_LABELS[thread.conversation_state],
     // The occurrence comes from the booking or reservation, rendered in that
     // record's own timezone. A thread with no record reports no occurrence
     // rather than a fabricated one.
