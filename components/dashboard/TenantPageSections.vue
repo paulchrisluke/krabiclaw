@@ -89,7 +89,7 @@
 import EditorPaneShell from '~/components/dashboard/EditorPaneShell.vue'
 import DashboardListEditor from '~/components/dashboard/DashboardListEditor.vue'
 import TenantPageBlockEditorPage from '~/components/dashboard/TenantPageBlockEditorPage.vue'
-import { getErrorMessage } from '~/utils/errors'
+import { getErrorMessage, showNotFound } from '~/utils/errors'
 import { tenantPageBlockSummary, validateTenantPageBlock } from '~/utils/tenant-page-editor'
 import { tenantPageBlockIsHub, tenantPageBlockLabel } from '~/utils/tenant-page-block-sections'
 
@@ -116,7 +116,7 @@ const isNewBlock = computed(() => openBlockId.value === 'new')
 watchEffect(() => {
   if (!ready.value) return
   if (!openBlockId.value || isNewBlock.value) return
-  if (!openBlock.value) throw createError({ statusCode: 404, statusMessage: 'Section not found' })
+  if (!openBlock.value) showNotFound('Section not found')
 })
 
 const openTitle = computed(() => {

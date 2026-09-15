@@ -125,7 +125,7 @@ import EditorPaneShell from '~/components/dashboard/EditorPaneShell.vue'
 import EditorNavigationList, { type EditorNavigationGroup } from '~/components/dashboard/EditorNavigationList.vue'
 import DashboardResourceLocalization from '~/components/dashboard/DashboardResourceLocalization.vue'
 import TenantPageSections from '~/components/dashboard/TenantPageSections.vue'
-import { getErrorMessage, isNotFoundError } from '~/utils/errors'
+import { getErrorMessage, isNotFoundError, showNotFound } from '~/utils/errors'
 import { ROBOTS_INTENTS, ROBOTS_INTENT_LABELS } from '~/shared/robots-directive'
 import { previewHrefForTenantPage } from '~/utils/tenant-page-editor-safety'
 import { tenantPageBlockLabel } from '~/utils/tenant-page-block-sections'
@@ -156,7 +156,13 @@ const siteId = await useDashboardSiteId()
 const toast = useToast()
 const dashboardApi = useDashboardApi()
 
-const { data, error, pending, draft, dirty, revert, commit, isNew, previewUrl } = useTenantPageDraft(siteId, pageId.value)
+const { load, data, error, pending, draft, dirty, revert, commit, isNew, previewUrl } = useTenantPageDraft(siteId, pageId.value)
+
+// The page has to have been read before this renders, or a missing id answers
+// HTTP 200 with the error page painted after hydration: `showError` during the
+// render pass only reaches the payload. The Blog chain awaits its own load for
+// the same reason.
+if (import.meta.server) await load
 
 // A page that is not there is not a page. A request that failed is a state this
 // surface shows, because the page may well still exist.
@@ -185,9 +191,9 @@ const openLabel = computed(() => SECTION_LABELS[openKey.value])
 // watcher, not a setup-time check: moving between leaves reuses this component.
 watchEffect(() => {
   const open = frame.childSegment.value
-  if (open && !(open in SECTION_LABELS)) throw createError({ statusCode: 404, statusMessage: 'Page not found' })
+  if (open && !(open in SECTION_LABELS)) return showNotFound()
   // Only Sections has anything beneath it; the rest are leaves.
-  if (frame.rest.value.length > 1 && open !== 'sections') throw createError({ statusCode: 404, statusMessage: 'Page not found' })
+  if (frame.rest.value.length > 1 && open !== 'sections') showNotFound()
 })
 
 const ROBOTS_OPTIONS = ROBOTS_INTENTS.map(value => ({ label: ROBOTS_INTENT_LABELS[value], value }))

@@ -24,8 +24,13 @@
       </div>
     </template>
 
+    <!--
+      A divider is the one block with nothing to edit. `block` has to be there
+      to say so: without it this branch described whatever the route pointed at
+      as a divider, including a section id that does not exist.
+    -->
     <UAlert
-      v-else-if="!sections.length"
+      v-else-if="block && !sections.length"
       color="neutral"
       variant="soft"
       icon="i-lucide-minus"
@@ -115,7 +120,7 @@ import EditorPaneShell from '~/components/dashboard/EditorPaneShell.vue'
 import EditorNavigationList, { type EditorNavigationGroup } from '~/components/dashboard/EditorNavigationList.vue'
 import TenantPageBlockFields from '~/components/dashboard/TenantPageBlockFields.vue'
 import TenantPageBlockItemEditor from '~/components/dashboard/TenantPageBlockItemEditor.vue'
-import { getErrorMessage } from '~/utils/errors'
+import { getErrorMessage, showNotFound } from '~/utils/errors'
 import { createTenantPageEditorData, tenantPageBlockSummary, validateTenantPageBlock } from '~/utils/tenant-page-editor'
 import {
   TENANT_PAGE_BLOCK_REGISTRY,
@@ -177,16 +182,17 @@ const openCollection = computed(() => {
 })
 
 // An unsupported route 404s rather than quietly showing something else. A block
-// that is one section has no address for that section: the block is it.
+// that is one section has no address for that section: the block is it — except
+// while it is being created, when that address is the step the walk sends the
+// author to, because the block's own level is still asking for a type.
 watchEffect(() => {
   if (!ready.value && !isNew.value) return
   const segment = openSegment.value
   if (!segment) return
   if (openCollection.value) return
-  if (singleSection.value || !openSection.value) {
-    throw createError({ statusCode: 404, statusMessage: 'Page not found' })
-  }
-  if (frame.rest.value.length > 1) throw createError({ statusCode: 404, statusMessage: 'Page not found' })
+  if (!openSection.value) return showNotFound()
+  if (singleSection.value && !isNew.value) return showNotFound()
+  if (frame.rest.value.length > 1) showNotFound()
 })
 
 const typeOptions = computed(() => Object.values(TENANT_PAGE_BLOCK_REGISTRY)

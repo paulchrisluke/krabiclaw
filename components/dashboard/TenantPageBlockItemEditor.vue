@@ -174,7 +174,7 @@ import EditorPaneShell from '~/components/dashboard/EditorPaneShell.vue'
 import EditorNavigationList, { type EditorNavigationGroup } from '~/components/dashboard/EditorNavigationList.vue'
 import DashboardListEditor from '~/components/dashboard/DashboardListEditor.vue'
 import MediaPicker from '~/lib/components/workspace/media/MediaPicker.vue'
-import { getErrorMessage } from '~/utils/errors'
+import { getErrorMessage, showNotFound } from '~/utils/errors'
 import {
   TENANT_PAGE_RECORD_NOUNS,
   tenantPageRecordSections,
@@ -208,7 +208,17 @@ const editing = ref(false)
 const saving = ref(false)
 const errorMessage = ref('')
 
-const block = computed(() => draft.value.blocks.find(candidate => candidate.id === props.blockId) ?? null)
+const newBlock = useTenantPageNewBlock(props.siteId, props.pageId)
+
+/**
+ * The block these records belong to. A section being created is not in the page
+ * draft yet — it is held beside it until Create — and reading only the draft is
+ * how a Team under construction reported "No items yet" over a person it was
+ * refusing to be created without, and Add walked to record `-1`.
+ */
+const block = computed(() => (props.blockId === 'new'
+  ? newBlock.value
+  : draft.value.blocks.find(candidate => candidate.id === props.blockId) ?? null))
 const records = computed<Array<Record<string, unknown>>>(() => {
   const value = block.value?.data[props.collection]
   return Array.isArray(value)
@@ -241,12 +251,12 @@ watchEffect(() => {
   if (!ready.value) return
   const rest = frame.rest.value
   if (rest.length === 0) return
-  if (!record.value) throw createError({ statusCode: 404, statusMessage: 'Page not found' })
-  if (rest.length > 2) throw createError({ statusCode: 404, statusMessage: 'Page not found' })
+  if (!record.value) return showNotFound()
+  if (rest.length > 2) return showNotFound()
   if (rest.length === 2) {
     const leaf = rest[1]!
     if (!recordSections.value.some(section => section.key === leaf)) {
-      throw createError({ statusCode: 404, statusMessage: 'Page not found' })
+      showNotFound()
     }
   }
 })

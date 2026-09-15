@@ -133,7 +133,7 @@ export function useTenantPageDraft(siteId: string, pageId: string) {
   // still empty during the first render is a page that answers "not found" to a
   // direct load or a refresh of its own URL.
   const requestEvent = useRequestEvent()
-  const { data, error, pending, refresh } = useAsyncData(
+  const load = useAsyncData(
     key,
     async () => {
       if (import.meta.server) {
@@ -161,6 +161,7 @@ export function useTenantPageDraft(siteId: string, pageId: string) {
     },
     { lazy: import.meta.client },
   )
+  const { data, error, pending, refresh } = load
 
   const draft = useState<TenantPageDraft>(`${key}-draft`, emptyDraft)
   /** The draft as it was last seeded or committed, so Save knows there is something to save. */
@@ -178,8 +179,20 @@ export function useTenantPageDraft(siteId: string, pageId: string) {
     if (!value) return
     const stamp = value.page?.document.updated_at ?? 'new'
     if (seededFrom.value === stamp) return
+    // Every level that opens re-reads this key, so a read can still be in
+    // flight when the level above it writes. Landing afterwards, that read is
+    // not an update — it is the page as it was before the write, and seeding it
+    // put the editor back a step: a section created a moment ago was gone from
+    // the draft while its row existed in D1, and the route that had just been
+    // sent to it answered "not found".
+    if (stamp !== 'new' && seededFrom.value && seededFrom.value !== 'new' && stamp < seededFrom.value) return
     seed(value.page)
-  }, { immediate: true })
+    // `flush: 'sync'`, because a queued watcher never runs during the server
+    // render: the read above resolves after this composable's setup, and a
+    // deferred seed left every level rendering the empty draft server-side —
+    // hydration mismatches, and controls that came back disabled because the
+    // page they describe was not there yet when the markup was made.
+  }, { immediate: true, flush: 'sync' })
 
   const dirty = computed(() => JSON.stringify(draft.value) !== baseline.value)
 
@@ -254,7 +267,10 @@ export function useTenantPageDraft(siteId: string, pageId: string) {
       blocks,
       // Optimistic concurrency: a page another writer changed under us comes
       // back 409, which stays on screen as an error the tenant can retry.
-      expectedUpdatedAt: draft.value.id ? data.value?.page?.document.updated_at : undefined,
+      // The stamp the draft was seeded from, not whatever the last read left
+      // in `data`: those are the same page except when a straggler read is
+      // ignored above, and then only this one describes what is being edited.
+      expectedUpdatedAt: draft.value.id ? seededFrom.value : undefined,
     }
     const response = draft.value.id
       ? await dashboardApi<{ page: TenantPageResponse }>(`/api/editor/sites/${siteId}/pages/${draft.value.id}`, { method: 'PATCH', body, validate: isTenantPageResponse })
@@ -264,7 +280,7 @@ export function useTenantPageDraft(siteId: string, pageId: string) {
     return response.page
   }
 
-  return { data, error, pending, refresh, draft, dirty, ready, revert, commit, isNew, savedBlockIds, previewUrl }
+  return { load, data, error, pending, refresh, draft, dirty, ready, revert, commit, isNew, savedBlockIds, previewUrl }
 }
 
 /**
