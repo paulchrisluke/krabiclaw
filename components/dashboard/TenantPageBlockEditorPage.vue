@@ -67,7 +67,7 @@
     :collection="openCollection!"
   />
 
-  <UDashboardPanel v-else id="site-page-block" :ui="{ body: 'min-h-0 gap-0! overflow-hidden! p-0! sm:p-0!' }">
+  <UDashboardPanel v-else id="site-page-block">
     <template #header>
       <UDashboardNavbar :title="blockLabel" :toggle="false">
         <template #leading>

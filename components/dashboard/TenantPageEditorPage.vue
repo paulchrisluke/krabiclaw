@@ -54,7 +54,7 @@
   -->
   <TenantPageSections v-else-if="frame.mode.value === 'yield'" :site-id="siteId" :page-id="pageId" />
 
-  <UDashboardPanel v-else id="site-page" :ui="{ body: 'min-h-0 gap-0! overflow-hidden! p-0! sm:p-0!' }">
+  <UDashboardPanel v-else id="site-page">
     <template #header>
       <UDashboardNavbar :title="isNew ? 'New page' : draft.title || 'Page'" :toggle="false">
         <template #leading>

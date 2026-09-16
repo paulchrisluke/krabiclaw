@@ -5,7 +5,7 @@
     The category's own level: creating one at `new`, or its Name leaf. Both are
     the category record, so this page owns the chrome and the field.
   -->
-  <UDashboardPanel v-else-if="isNew || openLeaf" id="location-product-category" :ui="{ body: 'min-h-0 gap-0! overflow-hidden! p-0! sm:p-0!' }">
+  <UDashboardPanel v-else-if="isNew || openLeaf" id="location-product-category">
     <template #header>
       <UDashboardNavbar :title="isNew ? `New ${presentation.collectionGroupLabel.toLowerCase()}` : collectionName" :toggle="false">
         <template #leading>

@@ -1,5 +1,5 @@
 <template>
-  <UDashboardPanel id="booking-details" :ui="{ body: 'min-h-0 gap-0! overflow-hidden! p-0! sm:p-0!' }">
+  <UDashboardPanel id="booking-details">
     <template #header>
       <UDashboardNavbar :title="isChangeMode && noun ? `Change ${noun}` : pageTitle" :toggle="false">
         <template #leading>
