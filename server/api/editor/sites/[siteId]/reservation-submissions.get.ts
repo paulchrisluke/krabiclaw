@@ -3,7 +3,7 @@ import { jsonResponse } from '~/server/utils/api-response'
 import { listReservationSubmissions } from '~/server/utils/mcp-workflows'
 import { queryFirst } from '~/server/db'
 import { requireSiteAccess } from '~/server/utils/location-access'
-import { assertResourceAccess } from '~/server/utils/member-access'
+import { assertResourceAccess, memberAccessPrincipal } from '~/server/utils/member-access'
 
 export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
@@ -20,14 +20,7 @@ export default defineHandler(async (event) => {
       db, `SELECT id FROM business_locations WHERE id = ? AND site_id = ? LIMIT 1`, [locationId, siteId], )
     if (!location) return jsonResponse({ error: 'location_id must reference a location on this site' }, { status: 400 })
   }
-  await assertResourceAccess(db, {
-    env,
-    userId: site.user_id,
-    role: site.member_role,
-    organizationId: site.organization_id,
-    siteId,
-    resourceLocationId: locationId,
-  })
+  await assertResourceAccess(db, { ...memberAccessPrincipal(site.membership, { env, siteId }), resourceLocationId: locationId })
 
   const submissions = await listReservationSubmissions(db, siteId, { locationId })
   return jsonResponse({ submissions })

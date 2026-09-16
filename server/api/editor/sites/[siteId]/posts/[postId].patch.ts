@@ -2,7 +2,7 @@ import type { PostMutation } from '~/shared/posts'
 import { cloudflareEnv, jsonResponse, readStrictBody } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { PostValidationError, getPost, updatePost } from '~/server/utils/post-management'
-import { assertResourceAccess } from '~/server/utils/member-access'
+import { assertResourceAccess, memberAccessPrincipal } from '~/server/utils/member-access'
 import { loadMemberSiteRow } from '~/server/utils/location-access'
 
 
@@ -32,7 +32,7 @@ export default defineHandler(async (event) => {
   const existingPost = await getPost(db, site.organization_id, siteId, postId)
   if (!existingPost) return jsonResponse({ error: 'Post not found' }, { status: 404 })
 
-  const principal = { env, userId: site.user_id, role: site.member_role, organizationId: site.organization_id, siteId }
+  const principal = memberAccessPrincipal(site.membership, { env, siteId })
   await assertResourceAccess(db, { ...principal, resourceLocationId: existingPost.location_id ?? null })
   // Moving the post to a different location is itself checked against the
   // target scope, not just the post's current one.

@@ -1,7 +1,6 @@
 import { queryAll, type DbClient } from '~/server/db'
 import { d1JsonStringSet } from '~/server/db/d1-limits'
-import { listAccessibleLocationIds } from '~/server/utils/member-access'
-import type { CloudflareEnv } from '~/server/utils/auth'
+import { listAccessibleLocationIds, type MemberAccessPrincipal } from '~/server/utils/member-access'
 import { getGuestThreadOperationSummary } from '~/server/domain/guest-threads/repository'
 import { calculateMapEmbedUrl } from '~/server/utils/google-places'
 import { loadSettingsPayload } from '~/server/utils/site-settings'
@@ -77,15 +76,9 @@ export async function getDashboardHomeData(
   db: DbClient,
   organizationId: string,
   siteId: string,
-  principal: { env: CloudflareEnv; userId: string; role: string },
+  principal: MemberAccessPrincipal,
 ): Promise<DashboardHomeData> {
-  const accessibleLocationIds = await listAccessibleLocationIds(db, {
-    env: principal.env,
-    userId: principal.userId,
-    role: principal.role,
-    organizationId,
-    siteId,
-  })
+  const accessibleLocationIds = await listAccessibleLocationIds(db, principal)
   const scoped = accessibleLocationIds !== null
   const locationScopeClause = scoped
     ? accessibleLocationIds.length > 0 ? `AND bl.id IN (SELECT value FROM json_each(?))` : 'AND 0'
@@ -140,10 +133,8 @@ export async function getDashboardHomeData(
     `, [organizationId, siteId, ...scopedParams]),
 
     getGuestThreadOperationSummary(db, siteId, {
-      principal: scoped && principal
-        ? { env: principal.env, userId: principal.userId, role: principal.role, organizationId, siteId }
-        : null,
-      userId: principal?.userId ?? '',
+      principal: scoped ? principal : null,
+      userId: principal.userId,
     }),
     loadSettingsPayload(db, organizationId, siteId),
     listTenantPages(db, siteId),

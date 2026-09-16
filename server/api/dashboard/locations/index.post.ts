@@ -11,7 +11,7 @@ import { purgePublicResourceCacheSafe } from '~/server/utils/public-resource-cac
 import { executeBatch, queryFirst, type DbClient } from '~/server/db'
 import { parsePhone } from '~/utils/phone'
 import { composePostalAddress } from '~/utils/postal-address'
-import { assertSiteWideAccess } from '~/server/utils/member-access'
+import { assertSiteWideAccess, memberAccessPrincipal } from '~/server/utils/member-access'
 
 type SetupEnv = Parameters<typeof createLocation>[0]
 
@@ -78,12 +78,10 @@ export default defineHandler(async (event) => {
     return jsonResponse({ error: 'No site found. Complete onboarding first.' }, { status: 400 })
   }
 
-  const { site, organization, userId } = dashboard
+  const { site, organization } = dashboard
   const siteId = site.id as string
   const organizationId = organization?.id as string
-  await assertSiteWideAccess(db, {
-    env,
-    userId, role: organization.role, organizationId, siteId, })
+  await assertSiteWideAccess(db, memberAccessPrincipal(organization, { env, siteId }))
 
   const body = await readBody(event) as {
     mapsUrl?: unknown

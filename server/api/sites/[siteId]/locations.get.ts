@@ -1,7 +1,7 @@
 // Get business locations for a site
 import { cloudflareEnv, jsonResponse, rethrowHttpError } from '../../../utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
-import { assertSiteWideAccess } from '~/server/utils/member-access'
+import { assertSiteWideAccess, memberAccessPrincipal } from '~/server/utils/member-access'
 import { loadMemberSiteRow } from '~/server/utils/location-access'
 import { queryAll } from '~/server/db'
 
@@ -40,7 +40,7 @@ export default defineHandler(async (event) => {
       }, { status: 404 })
     }
 
-    await assertSiteWideAccess(db, { env, userId: site.user_id, role: site.member_role, organizationId: site.organization_id, siteId })
+    await assertSiteWideAccess(db, memberAccessPrincipal(site.membership, { env, siteId }))
 
     const locations = await queryAll<ApiValue>(db, `
       SELECT bl.id, bl.team_id, bl.slug, bl.title, bl.address, bl.city, bl.phone, bl.notification_phone, bl.website_url, bl.maps_url, bl.latitude, bl.longitude, bl.opening_hours, bl.description, bl.short_description, bl.email, bl.price_level, bl.facebook_url, bl.instagram_url, bl.tiktok_url, bl.google_place_id, bl.grab_url, bl.uber_eats_url, bl.foodpanda_url, bl.rating, bl.review_count, bl.status, bl.last_synced_at, ma.id AS asset_id, ma.public_url AS media_public_url, ma.thumbnail_url AS media_thumbnail_url, ma.kind AS media_kind

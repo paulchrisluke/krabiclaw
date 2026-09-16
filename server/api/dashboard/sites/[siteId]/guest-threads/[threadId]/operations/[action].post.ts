@@ -8,7 +8,7 @@ import { getRouterParam, readBody } from 'nitro/h3'
 // directly.
 import { jsonResponse } from '~/server/utils/api-response'
 import { requireSiteAccess } from '~/server/utils/location-access'
-import { assertMemberScope } from '~/server/utils/member-access'
+import { assertMemberScope, memberAccessPrincipal } from '~/server/utils/member-access'
 import { getCloudflareWaitUntil } from '~/server/utils/mcp-route-helpers'
 import { getGuestThreadDetail } from '~/server/domain/guest-threads/detail'
 import { executeGuestThreadOperation, GUEST_THREAD_ACTIONS } from '~/server/domain/guest-threads/operations'
@@ -25,7 +25,7 @@ export default defineHandler(async (event) => {
 
   const thread = await getGuestRequest(db, threadId, siteId)
   if (!thread) return jsonResponse({ error: 'Thread not found' }, { status: 404 })
-  await assertMemberScope(db, { env, userId: site.user_id, role: site.member_role, organizationId: site.organization_id, siteId, locationId: thread.location_id })
+  await assertMemberScope(db, { ...memberAccessPrincipal(site.membership, { env, siteId }), locationId: thread.location_id })
 
   const body = await readBody<unknown>(event).catch(() => null)
   const replyBody = body && typeof body === 'object' && 'body' in body && typeof body.body === 'string' ? body.body : undefined

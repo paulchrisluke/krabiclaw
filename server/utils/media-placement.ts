@@ -29,8 +29,9 @@ interface PlacementAuthInput {
   organizationId: string
   siteId: string
   env: CloudflareEnv
-  userId?: string
-  role?: MemberAccessPrincipal['role']
+  // Optional: the internal seeding paths have no caller to authorize. When it
+  // is present it is a resolved principal, never loose role/organization fields.
+  principal?: MemberAccessPrincipal
   placement: MediaPlacementKey
 }
 
@@ -106,15 +107,8 @@ async function authorizePlacementWrite(db: DbClient, input: PlacementAuthInput):
       [input.placement.owner_id])
     if (document?.kind === 'qa') throw new HTTPError({ statusCode: 403, statusMessage: 'Q&A is read-only' })
   }
-  if (input.userId && input.role) {
-    await assertResourceAccess(db, {
-      env: input.env,
-      userId: input.userId,
-      role: input.role,
-      organizationId: input.organizationId,
-      siteId: input.siteId,
-      resourceLocationId: locationId,
-    })
+  if (input.principal) {
+    await assertResourceAccess(db, { ...input.principal, resourceLocationId: locationId })
   }
 }
 
@@ -150,8 +144,9 @@ export async function setSingleMediaPlacement(db: DbClient, input: {
   organizationId: string
   siteId: string
   env: CloudflareEnv
-  userId?: string
-  role?: MemberAccessPrincipal['role']
+  // Optional: the internal seeding paths have no caller to authorize. When it
+  // is present it is a resolved principal, never loose role/organization fields.
+  principal?: MemberAccessPrincipal
   placement: MediaPlacementKey
   assetId: string | null
 }) {
@@ -211,8 +206,9 @@ export async function attachMediaPlacement(db: DbClient, input: {
   organizationId: string
   siteId: string
   env: CloudflareEnv
-  userId?: string
-  role?: MemberAccessPrincipal['role']
+  // Optional: the internal seeding paths have no caller to authorize. When it
+  // is present it is a resolved principal, never loose role/organization fields.
+  principal?: MemberAccessPrincipal
   placement: MediaPlacementKey
   assetId: string
 }) {
@@ -278,8 +274,9 @@ export async function removeMediaPlacement(db: DbClient, input: {
   organizationId: string
   siteId: string
   env: CloudflareEnv
-  userId?: string
-  role?: MemberAccessPrincipal['role']
+  // Optional: the internal seeding paths have no caller to authorize. When it
+  // is present it is a resolved principal, never loose role/organization fields.
+  principal?: MemberAccessPrincipal
   placement: MediaPlacementKey
   assetId: string
 }) {
@@ -324,8 +321,9 @@ export async function reorderMediaPlacements(db: DbClient, input: {
   organizationId: string
   siteId: string
   env: CloudflareEnv
-  userId?: string
-  role?: MemberAccessPrincipal['role']
+  // Optional: the internal seeding paths have no caller to authorize. When it
+  // is present it is a resolved principal, never loose role/organization fields.
+  principal?: MemberAccessPrincipal
   placement: MediaPlacementKey
   moves: MediaPlacementMove[]
 }) {

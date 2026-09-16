@@ -1,6 +1,6 @@
 import type { H3Event } from 'nitro'
 import { getDashboardContext } from '~/server/utils/dashboard-context'
-import { isOrganizationWideRole, listAccessibleLocationIds } from '~/server/utils/member-access'
+import { isOrganizationWideRole, listAccessibleLocationIds, memberAccessPrincipal } from '~/server/utils/member-access'
 import { hasPlatformEventPermission } from '~/server/utils/platform-admin-users'
 import { queryAll } from '~/server/db'
 import { d1JsonStringSet } from '~/server/db/d1-limits'
@@ -68,13 +68,7 @@ export async function getNotificationAccess(event: H3Event) {
       SELECT id FROM sites WHERE organization_id = ?
     `, [context.organization.id])
     await Promise.all(sites.map(async (site) => {
-      const accessibleLocationIds = await listAccessibleLocationIds(context.db, {
-        env: context.env,
-        userId: context.userId,
-        role: context.organization!.role,
-        organizationId: context.organization!.id,
-        siteId: site.id,
-      })
+      const accessibleLocationIds = await listAccessibleLocationIds(context.db, memberAccessPrincipal(context.organization!, { env: context.env, siteId: site.id }))
       if (accessibleLocationIds === null) siteWideSiteIds.push(site.id)
       else locationIds.push(...accessibleLocationIds)
     }))

@@ -2,7 +2,7 @@ import type { PostMutation } from '~/shared/posts'
 import { cloudflareEnv, jsonResponse, readStrictBody } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { createPost, PostValidationError } from '~/server/utils/post-management'
-import { assertResourceAccess } from '~/server/utils/member-access'
+import { assertResourceAccess, memberAccessPrincipal } from '~/server/utils/member-access'
 import { loadMemberSiteRow } from '~/server/utils/location-access'
 
 
@@ -30,9 +30,7 @@ export default defineHandler(async (event) => {
   if (!site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
 
   const targetLocationId = typeof body.location_id === 'string' && body.location_id ? body.location_id : null
-  await assertResourceAccess(db, {
-    env,
-    userId: site.user_id, role: site.member_role, organizationId: site.organization_id, siteId, resourceLocationId: targetLocationId, })
+  await assertResourceAccess(db, { ...memberAccessPrincipal(site.membership, { env, siteId }), resourceLocationId: targetLocationId })
 
   let post
   try {

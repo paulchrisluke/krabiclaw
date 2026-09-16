@@ -6,7 +6,7 @@ import { publishPost, type PostPublishChannel, type PostSocialPublish } from '~/
 import { getFacebookPagesConnection } from '~/server/utils/facebook-pages'
 import { queryFirst } from '~/server/db'
 import { loadMemberSiteRow } from '~/server/utils/location-access'
-import { assertResourceAccess } from '~/server/utils/member-access'
+import { assertResourceAccess, memberAccessPrincipal } from '~/server/utils/member-access'
 
 export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
@@ -32,14 +32,7 @@ export default defineHandler(async (event) => {
      LIMIT 1
   `, [postId, site.organization_id, siteId])
   if (!postScope) return jsonResponse({ error: 'Post not found' }, { status: 404 })
-  await assertResourceAccess(db, {
-    env,
-    userId: site.user_id,
-    role: site.member_role,
-    organizationId: site.organization_id,
-    siteId,
-    resourceLocationId: postScope.location_id,
-  })
+  await assertResourceAccess(db, { ...memberAccessPrincipal(site.membership, { env, siteId }), resourceLocationId: postScope.location_id })
 
   const wantsSocial = channels.includes('facebook') || channels.includes('instagram')
   let socialPublish: PostSocialPublish | null = null

@@ -8,7 +8,7 @@ import { cloudflareEnv } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { queryAll, queryFirst, type DbClient } from '~/server/db'
 import { d1JsonStringSet } from '~/server/db/d1-limits'
-import { assertDashboardPathPermission, assertMemberSiteAccess, isOrganizationWideRole, resolveUserOrganization } from '~/server/utils/member-access'
+import { assertDashboardPathPermission, assertMemberSiteAccess, isOrganizationWideRole, memberAccessPrincipal, resolveUserOrganization, type ResolvedMembership } from '~/server/utils/member-access'
 import { getOrganizationPlan } from '~/server/utils/billing-access'
 
 function safeJsonParse(value: string): unknown {
@@ -29,12 +29,11 @@ function parseLocationAddress(value: string | null): { addressLines: string[] } 
   return { addressLines }
 }
 
-export interface DashboardOrganizationRow {
+export interface DashboardOrganizationRow extends ResolvedMembership {
   id: string
   name: string
   slug: string
   logo: string | null
-  role: string
   // Set while a deletion is pending: the sites keep serving until the
   // deletion-sweep task runs, and an owner can cancel until then.
   deletionScheduledAt: string | null
@@ -408,13 +407,7 @@ export async function getDashboardContext(event: H3Event, options: DashboardCont
   }
 
   if (site) {
-    await assertMemberSiteAccess(db, {
-      env,
-      userId: session.user.id,
-      role: organization.role,
-      organizationId: organization.id,
-      siteId: site.id,
-    })
+    await assertMemberSiteAccess(db, memberAccessPrincipal(organization, { env, siteId: site.id }))
   }
 
   return {

@@ -1,7 +1,7 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { listPosts } from '~/server/utils/post-management'
-import { assertResourceAccess } from '~/server/utils/member-access'
+import { assertResourceAccess, memberAccessPrincipal } from '~/server/utils/member-access'
 import { loadMemberSiteRow } from '~/server/utils/location-access'
 
 export default defineHandler(async (event) => {
@@ -26,9 +26,7 @@ export default defineHandler(async (event) => {
   // No location_id filter means "every post across the whole site" — only a
   // site-wide-scoped member may see that; a location-scoped editor must
   // filter to their own location.
-  await assertResourceAccess(db, {
-    env,
-    userId: site.user_id, role: site.member_role, organizationId: site.organization_id, siteId, resourceLocationId: locationId ?? null, })
+  await assertResourceAccess(db, { ...memberAccessPrincipal(site.membership, { env, siteId }), resourceLocationId: locationId ?? null })
   const posts = await listPosts(db, site.organization_id, siteId, status, locationId)
   return jsonResponse({ success: true, posts })
 })

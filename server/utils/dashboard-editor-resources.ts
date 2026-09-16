@@ -10,6 +10,7 @@ import {
   assertResourceAccess,
   assertSiteWideAccess,
   listAccessibleLocationIds,
+  memberAccessPrincipal,
 } from '~/server/utils/member-access'
 import { getMediaAsset, listMediaAssets } from '~/server/utils/media-asset-manager'
 import { getDashboardContext, getDashboardLocationContext } from '~/server/utils/dashboard-context'
@@ -43,13 +44,7 @@ export async function loadDashboardEditorContext(event: H3Event, siteId: string)
   const { env, db, site } = await requireSiteAccess(event, siteId, 'context')
   if (!site.vertical) throw new HTTPError({ statusCode: 500, statusMessage: 'Site vertical is not configured' })
 
-  const principal = {
-    env,
-    userId: site.user_id,
-    role: site.member_role,
-    organizationId: site.organization_id,
-    siteId,
-  }
+  const principal = memberAccessPrincipal(site.membership, { env, siteId })
   // requireSiteAccess(event, siteId, 'context') has already run
   // assertSiteContextAccess with this exact principal (location-access.ts), so
   // asserting it again here only bought a second read of the same member row.
@@ -126,13 +121,7 @@ export async function loadDashboardMedia(
   filters: DashboardMediaFilters = {},
 ) {
   const { env, db, site } = await requireSiteAccess(event, siteId, 'context')
-  const principal = {
-    env,
-    userId: site.user_id,
-    role: site.member_role,
-    organizationId: site.organization_id,
-    siteId,
-  }
+  const principal = memberAccessPrincipal(site.membership, { env, siteId })
   if (filters.id) {
     const asset = await getMediaAsset(db, filters.id, siteId)
     if (asset) {
@@ -167,19 +156,13 @@ export async function loadDashboardSettingsResource(
   event: H3Event,
   options: { includeFacebook: boolean; organizationSlug?: string; siteSlug?: string },
 ) {
-  const { env, db, organization, site, userId } = await getDashboardContext(event, {
+  const { env, db, organization, site } = await getDashboardContext(event, {
     requireSite: true,
     organizationSlug: options.organizationSlug,
     siteSlug: options.siteSlug,
   })
   if (!site) throw new HTTPError({ statusCode: 404, statusMessage: 'Site not found' })
-  await assertSiteWideAccess(db, {
-    env,
-    userId,
-    role: organization.role,
-    organizationId: organization.id,
-    siteId: site.id,
-  })
+  await assertSiteWideAccess(db, memberAccessPrincipal(organization, { env, siteId: site.id }))
   const [settings, notifications, facebookConnection] = await Promise.all([
     loadSettingsPayload(db, organization.id, site.id),
     getNotificationsSettings(db, organization.id, site.id),
@@ -260,13 +243,7 @@ export async function loadDashboardLocationOverview(
   if (location.site_id !== siteId) {
     throw new HTTPError({ statusCode: 404, statusMessage: 'Location not found' })
   }
-  const principal = {
-    env,
-    userId,
-    role: organization.role,
-    organizationId: organization.id,
-    siteId,
-  }
+  const principal = memberAccessPrincipal(organization, { env, siteId })
   await assertLocationAccess(db, { ...principal, locationId })
   const [capabilities, catalog, threads, counts] = await Promise.all([
     resolveLocationCapabilitySummary(
@@ -301,18 +278,11 @@ export async function loadDashboardLocationSettings(
   siteId: string,
   locationId: string,
 ) {
-  const { env, db, organization, location, userId } = await getDashboardLocationContext(event, locationId)
+  const { env, db, organization, location } = await getDashboardLocationContext(event, locationId)
   if (location.site_id !== siteId) {
     throw new HTTPError({ statusCode: 404, statusMessage: 'Location not found' })
   }
-  await assertLocationAccess(db, {
-    env,
-    userId,
-    role: organization.role,
-    organizationId: organization.id,
-    siteId,
-    locationId,
-  })
+  await assertLocationAccess(db, { ...memberAccessPrincipal(organization, { env, siteId }), locationId })
   const capabilities = await resolveLocationCapabilitySummary(
     db,
     organization.id,

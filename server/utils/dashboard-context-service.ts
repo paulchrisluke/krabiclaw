@@ -9,7 +9,7 @@ import {
   listDashboardLocations,
   loadDashboardSiteCardEnrichment,
 } from '~/server/utils/dashboard-context'
-import { isOrganizationWideRole, listUserOrganizationTeamIds, resolveDashboardSiteAccess } from '~/server/utils/member-access'
+import { isOrganizationWideRole, listUserOrganizationTeamIds, resolveDashboardSiteAccess, memberAccessPrincipal } from '~/server/utils/member-access'
 import { recordRequestPhase } from '~/server/utils/request-metrics'
 
 export async function loadDashboardContext(
@@ -81,11 +81,7 @@ export async function loadDashboardContext(
   const resourcesStartedAt = performance.now()
   const [locations, siteAccess] = await Promise.all([
     listDashboardLocations(db, organization.id, site.id, principal),
-    resolveDashboardSiteAccess(db, {
-      ...principal,
-      organizationId: organization.id,
-      siteId: site.id,
-    }),
+    resolveDashboardSiteAccess(db, memberAccessPrincipal(organization, { env, siteId: site.id })),
   ])
   recordRequestPhase(event, 'resources', resourcesStartedAt)
   return {

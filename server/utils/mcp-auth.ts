@@ -6,7 +6,7 @@ import type { JSONWebKeySet, JWTPayload } from 'jose'
 import { createAuth, getAuthSession, type CloudflareEnv } from '~/server/utils/auth'
 import { hasPlatformEventPermission } from '~/server/utils/platform-admin-users'
 import { queryFirst } from '~/server/db'
-import { assertSiteWideAccess, isOrganizationWideRole, resolveOrganizationMembership } from '~/server/utils/member-access'
+import { assertSiteWideAccess, isOrganizationWideRole, resolveOrganizationMembership, memberAccessPrincipal, type ResolvedMembership } from '~/server/utils/member-access'
 import { getOrganizationEntitlements } from '~/server/utils/billing-access'
 import { cloudflareEnv } from '~/server/utils/api-response'
 
@@ -40,6 +40,10 @@ export interface McpSiteContext extends McpUserContext {
   customDomain?: string | null
   publicUrl?: string | null
   role: McpToolRole
+  // The membership this call resolved for (organizationId, userId). Tool
+  // executors authorize from it rather than pairing role with an organization
+  // id from elsewhere.
+  membership: ResolvedMembership
   sessionId?: string | null
 }
 
@@ -375,13 +379,7 @@ export async function requireMcpSite(
   // loses access — only the never-actually-reachable case is now enforced
   // explicitly instead of accidentally.
   if (!isOrganizationWideRole(role)) {
-    await assertSiteWideAccess(user.db, {
-      env: user.env,
-      userId: user.userId,
-      role,
-      organizationId: site.organization_id,
-      siteId: site.id,
-    })
+    await assertSiteWideAccess(user.db, memberAccessPrincipal(membership, { env: user.env, siteId: site.id }))
   }
 
   return {
@@ -393,6 +391,9 @@ export async function requireMcpSite(
     customDomain: site.custom_domain ?? null,
     publicUrl: site.public_url ?? null,
     role,
+    // Kept so the tool executors authorize from the membership this call
+    // resolved rather than reassembling one out of role and organizationId.
+    membership,
   }
 }
 

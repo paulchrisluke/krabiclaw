@@ -5,7 +5,7 @@ import { cloudflareEnv, jsonResponse, rethrowHttpError } from '~/server/utils/ap
 import { getAuthSession } from '~/server/utils/auth'
 import { buildImageUrl, hasCloudflareImagesConfig } from '~/server/utils/cloudflare-images'
 import { activateMediaAsset, getMediaAsset } from '~/server/utils/media-asset-manager'
-import { assertResourceAccess } from '~/server/utils/member-access'
+import { assertResourceAccess, memberAccessPrincipal } from '~/server/utils/member-access'
 import { loadMemberSiteRow } from '~/server/utils/location-access'
 
 export default defineHandler(async (event) => {
@@ -27,9 +27,7 @@ export default defineHandler(async (event) => {
   if (!asset) return jsonResponse({ error: 'Asset not found' }, { status: 404 })
 
   try {
-    await assertResourceAccess(db, {
-      env,
-      userId: site.user_id, role: site.member_role, organizationId: site.organization_id, siteId, resourceLocationId: null, })
+    await assertResourceAccess(db, { ...memberAccessPrincipal(site.membership, { env, siteId }), resourceLocationId: null })
   } catch (error) {
     rethrowHttpError(error)
     throw error

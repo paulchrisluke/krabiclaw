@@ -1,7 +1,7 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { getPost } from '~/server/utils/post-management'
-import { assertResourceAccess } from '~/server/utils/member-access'
+import { assertResourceAccess, memberAccessPrincipal } from '~/server/utils/member-access'
 import { loadMemberSiteRow } from '~/server/utils/location-access'
 
 export default defineHandler(async (event) => {
@@ -22,9 +22,7 @@ export default defineHandler(async (event) => {
   const post = await getPost(db, site.organization_id, siteId, postId)
   if (!post) return jsonResponse({ error: 'Post not found' }, { status: 404 })
 
-  await assertResourceAccess(db, {
-    env,
-    userId: site.user_id, role: site.member_role, organizationId: site.organization_id, siteId, resourceLocationId: post.location_id ?? null, })
+  await assertResourceAccess(db, { ...memberAccessPrincipal(site.membership, { env, siteId }), resourceLocationId: post.location_id ?? null })
 
   return jsonResponse({ success: true, post })
 })

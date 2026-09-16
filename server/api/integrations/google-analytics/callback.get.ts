@@ -1,5 +1,5 @@
 import { loadMemberSiteRow } from '~/server/utils/location-access'
-import { assertSiteWideAccess } from '~/server/utils/member-access'
+import { assertSiteWideAccess, memberAccessPrincipal } from '~/server/utils/member-access'
 import type { IntegrationOAuthState } from '~/shared/site-settings'
 import { defineHandler } from 'nitro';
 import { cloudflareEnv } from '~/server/utils/api-response'
@@ -56,9 +56,12 @@ export default defineHandler(async (event) => {
 
   try {
     if (!env.DB) throw new Error('Database unavailable')
+    // `organizationId` arrives in the OAuth state, so it names an organization
+    // rather than proving membership in one. The site row's own membership is
+    // what authorizes: the state only has to agree with it.
     const access = await loadMemberSiteRow(event, env.DB, env, siteId, userId)
     if (!access || access.organization_id !== organizationId) throw new Error('Access denied')
-    await assertSiteWideAccess(env.DB, { env, userId: access.user_id, role: access.member_role, organizationId, siteId })
+    await assertSiteWideAccess(env.DB, memberAccessPrincipal(access.membership, { env, siteId }))
     const tokenData = await exchangeGoogleAnalyticsCode(env, code)
 
     const userInfoResponse = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {

@@ -4,7 +4,7 @@ import { cloudflareEnv } from '~/server/utils/api-response'
 import { getAuthSession, type CloudflareEnv } from '~/server/utils/auth'
 import { queryFirst, type DbClient } from '~/server/db'
 import { oncePerRequest } from '~/server/utils/request-scope'
-import { assertLocationAccess, assertSiteContextAccess, assertSiteWideAccess, resolveOrganizationMembership } from '~/server/utils/member-access'
+import { assertLocationAccess, assertSiteContextAccess, assertSiteWideAccess, memberAccessPrincipal, resolveOrganizationMembership, type ResolvedMembership } from '~/server/utils/member-access'
 import type { H3Event } from 'nitro';
 import { getDashboardContext } from '~/server/utils/dashboard-context'
 
@@ -23,6 +23,11 @@ export interface SiteAccessRow {
   feature_overrides: string | null
   user_id: string
   member_role: string
+  // The membership this row's access was resolved from, keyed by
+  // (organization_id, user_id). Pass it to memberAccessPrincipal rather than
+  // reassembling a principal out of user_id/member_role and a site id from
+  // somewhere else — that is the pairing nothing else can check.
+  membership: ResolvedMembership
 }
 
 interface LocationAccessRow {
@@ -44,7 +49,7 @@ async function readMemberSiteRow(db: DbClient, env: CloudflareEnv, siteId: strin
   // route. An unrelated org member who isn't owner/admin/editor still fails
   // the scope check inside assertSiteWideAccess/assertLocationAccess/
   // assertSiteContextAccess (isScopedRole/isOrganizationWideRole both false).
-  const site = await queryFirst<Omit<SiteAccessRow, 'organization_slug' | 'organization_name' | 'user_id' | 'member_role'>>(db, `
+  const site = await queryFirst<Omit<SiteAccessRow, 'organization_slug' | 'organization_name' | 'user_id' | 'member_role' | 'membership'>>(db, `
     SELECT id, organization_id, brand_name, subdomain, (SELECT 'https://' || domain FROM site_domains WHERE site_id = sites.id AND role = 'canonical' AND status = 'active') AS public_url, status, onboarding_status,
            vertical, theme_id, feature_overrides
     FROM sites WHERE id = ? LIMIT 1
@@ -61,6 +66,7 @@ async function readMemberSiteRow(db: DbClient, env: CloudflareEnv, siteId: strin
     organization_name: membership.organizationName,
     user_id: userId,
     member_role: membership.role,
+    membership,
   }
 }
 
@@ -81,14 +87,7 @@ export async function requireLocationAccess(event: H3Event, siteId: string, loca
   const site = await loadMemberSiteRow(event, db, env, siteId, session.user.id)
   if (!site) throw new HTTPError({ statusCode: 404, message: 'Site not found or access denied' })
 
-  await assertLocationAccess(db, {
-    env,
-    userId: site.user_id,
-    role: site.member_role,
-    organizationId: site.organization_id,
-    siteId,
-    locationId,
-  })
+  await assertLocationAccess(db, { ...memberAccessPrincipal(site.membership, { env, siteId }), locationId })
 
   const location = await queryFirst<LocationAccessRow>(db, `
     SELECT id
@@ -131,7 +130,7 @@ export async function requireSiteAccess(
   const site = await loadMemberSiteRow(event, db, env, siteId, session.user.id)
   if (!site) throw new HTTPError({ statusCode: 404, message: 'Site not found or access denied' })
 
-  const principal = { env, userId: site.user_id, role: site.member_role, organizationId: site.organization_id, siteId }
+  const principal = memberAccessPrincipal(site.membership, { env, siteId })
   if (accessClass === 'context') {
     await assertSiteContextAccess(db, principal)
   } else {
@@ -148,13 +147,7 @@ export async function requireRequestedSiteWideAccess(event: H3Event, explicitSit
   if (!context.organization || !context.site) {
     throw new HTTPError({ statusCode: 404, message: 'Site not found or access denied' })
   }
-  await assertSiteWideAccess(context.db, {
-    env: context.env,
-    userId: context.session.user.id,
-    role: context.organization.role,
-    organizationId: context.organization.id,
-    siteId: context.site.id,
-  })
+  await assertSiteWideAccess(context.db, memberAccessPrincipal(context.organization, { env: context.env, siteId: context.site.id }))
   return {
     env: context.env,
     db: context.db,
@@ -165,6 +158,7 @@ export async function requireRequestedSiteWideAccess(event: H3Event, explicitSit
       organization_name: context.organization.name,
       user_id: context.session.user.id,
       member_role: context.organization.role,
+      membership: context.organization,
     } satisfies SiteAccessRow,
   }
 }
@@ -177,11 +171,7 @@ export async function requireRequestedLocationAccess(event: H3Event, locationId:
     throw new HTTPError({ statusCode: 404, message: 'Site not found or access denied' })
   }
   await assertLocationAccess(context.db, {
-    env: context.env,
-    userId: context.session.user.id,
-    role: context.organization.role,
-    organizationId: context.organization.id,
-    siteId: context.site.id,
+    ...memberAccessPrincipal(context.organization, { env: context.env, siteId: context.site.id }),
     locationId,
   })
   const location = await queryFirst<LocationAccessRow>(context.db, `
@@ -201,6 +191,7 @@ export async function requireRequestedLocationAccess(event: H3Event, locationId:
       organization_name: context.organization.name,
       user_id: context.session.user.id,
       member_role: context.organization.role,
+      membership: context.organization,
     } satisfies SiteAccessRow,
     location,
   }

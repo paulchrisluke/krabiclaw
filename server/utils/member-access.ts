@@ -21,16 +21,57 @@ export interface ResourceScope {
   locationId?: string | null
 }
 
+/**
+ * A membership this request actually resolved: one lookup keyed by
+ * (organizationId, userId) that produced all three of these fields together.
+ *
+ * The brand is what makes that a fact rather than a convention. Only the
+ * resolvers in this module mint one, so `organizationId` and `role` cannot
+ * come from different places — which is precisely the mistake the scope checks
+ * below can no longer catch now that they trust `role` instead of re-reading
+ * the member row.
+ */
+declare const resolvedMembership: unique symbol
+export interface ResolvedMembership {
+  readonly [resolvedMembership]: true
+  readonly userId: string
+  readonly organizationId: string
+  readonly role: string
+}
+
+/** The one place a ResolvedMembership is made. Not exported. */
+function resolvedMembershipOf<T extends { userId: string; organizationId: string; role: string }>(fields: T): T & ResolvedMembership {
+  return fields as T & ResolvedMembership
+}
+
+/**
+ * Who is asking, about which site.
+ *
+ * `userId`, `role` and `organizationId` are not writable by the caller: they
+ * are read off a ResolvedMembership, so the scope checks can trust that `role`
+ * belongs to `organizationId` without reading the member row back.
+ */
 export interface MemberAccessPrincipal {
-  env: CloudflareEnv
-  // The authenticated user, not the member row id. Membership is resolved once
-  // per request against this organization (resolveOrganizationMembership /
-  // resolveUserOrganization), and `role` below is that member's role — so the
-  // scope checks here never need to read the member row back.
-  userId: string
-  role: string
-  organizationId: string
-  siteId: string
+  readonly [resolvedMembership]: true
+  readonly env: CloudflareEnv
+  // The authenticated user, not the member row id.
+  readonly userId: string
+  readonly role: string
+  readonly organizationId: string
+  readonly siteId: string
+}
+
+export function memberAccessPrincipal(
+  membership: ResolvedMembership,
+  input: { env: CloudflareEnv; siteId: string },
+): MemberAccessPrincipal {
+  return {
+    env: input.env,
+    userId: membership.userId,
+    role: membership.role,
+    organizationId: membership.organizationId,
+    siteId: input.siteId,
+  } as MemberAccessPrincipal
 }
 
 export type DashboardSiteAccess = 'organization' | 'site' | 'location'
@@ -110,34 +151,58 @@ export async function organizationAdapter(env: CloudflareEnv): Promise<Organizat
 export async function resolveOrganizationMembership(
   env: CloudflareEnv,
   input: { organizationId: string; userId: string },
-): Promise<{ memberId: string; role: string; organizationSlug: string; organizationName: string; organizationLogo: string | null } | null> {
+): Promise<(ResolvedMembership & { memberId: string; organizationSlug: string; organizationName: string; organizationLogo: string | null }) | null> {
   const adapter = await organizationAdapter(env)
   const [member, organization] = await Promise.all([
     adapter.findMemberByOrgId(input),
     adapter.findOrganizationById(input.organizationId),
   ])
   if (!member || !organization) return null
-  return {
-    memberId: member.id,
+  return resolvedMembershipOf({
+    userId: input.userId,
+    organizationId: input.organizationId,
     role: String(member.role),
+    memberId: member.id,
     organizationSlug: organization.slug,
     organizationName: organization.name,
     organizationLogo: organization.logo ?? null,
-  }
+  })
+}
+
+/**
+ * The membership alone, for a caller that already has an organization id but no
+ * proof the asker belongs to it — an SSR data loader reading the id off the
+ * rendered payload, an OAuth callback reading it out of its own state.
+ *
+ * One read. resolveOrganizationMembership and resolveUserOrganization also
+ * fetch the organization row for its name and slug; a caller that only needs to
+ * authorize does not.
+ */
+export async function resolveMembership(
+  env: CloudflareEnv,
+  input: { organizationId: string; userId: string },
+): Promise<ResolvedMembership | null> {
+  const adapter = await organizationAdapter(env)
+  const member = await adapter.findMemberByOrgId(input)
+  if (!member) return null
+  return resolvedMembershipOf({
+    userId: input.userId,
+    organizationId: input.organizationId,
+    role: String(member.role),
+  })
 }
 
 export async function resolveUserOrganization(
   env: CloudflareEnv,
   input: { userId: string; organizationId?: string | null; organizationSlug?: string | null },
-): Promise<{
+): Promise<(ResolvedMembership & {
   id: string
   name: string
   slug: string
   logo: string | null
-  role: string
   memberId: string
   deletionScheduledAt: string | null
-} | null> {
+}) | null> {
   const adapter = await organizationAdapter(env)
   const organization = input.organizationId
     ? await adapter.findOrganizationById(input.organizationId)
@@ -150,7 +215,9 @@ export async function resolveUserOrganization(
     organizationId: organization.id,
   })
   if (!member) return null
-  return {
+  return resolvedMembershipOf({
+    userId: input.userId,
+    organizationId: organization.id,
     id: organization.id,
     name: organization.name,
     slug: organization.slug,
@@ -158,7 +225,7 @@ export async function resolveUserOrganization(
     role: String(member.role),
     memberId: member.id,
     deletionScheduledAt: organization.deletionScheduledAt ? new Date(organization.deletionScheduledAt).toISOString() : null,
-  }
+  })
 }
 
 // adapter.listMembers pages at 100 by default — every caller that needs the
@@ -605,13 +672,7 @@ export async function resolveAuthorizedWhatsAppRecipient(
   if (!membership || !isOperationalRole(membership.role)) return null
   const recipient = { userId: user.id }
   if (isOrganizationWideRole(membership.role)) return recipient
-  const locationIds = await listAccessibleLocationIds(db, {
-    env: input.env,
-    userId: user.id,
-    role: membership.role,
-    organizationId: input.organizationId,
-    siteId: input.siteId,
-  })
+  const locationIds = await listAccessibleLocationIds(db, memberAccessPrincipal(membership, { env: input.env, siteId: input.siteId }))
   if (input.requireSiteWide || !input.locationId) return locationIds === null ? recipient : null
   return locationIds === null || locationIds.includes(input.locationId) ? recipient : null
 }

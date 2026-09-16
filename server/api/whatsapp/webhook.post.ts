@@ -12,7 +12,7 @@ import { nextConversationState } from '~/server/domain/guest-threads/state-machi
 import { publishGuestInboxThreadEvent } from '~/server/cloudflare/guest-inbox-events'
 import { notifyGuestThreadReply } from '~/server/utils/notifications'
 import { findSubmissionByPhone } from '~/server/utils/submission-messages'
-import { isAuthorizedWhatsAppRecipient, listAccessibleLocationIds, resolveMemberId, resolveOrganizationMembership } from '~/server/utils/member-access'
+import { isAuthorizedWhatsAppRecipient, listAccessibleLocationIds, resolveMemberId, resolveOrganizationMembership, memberAccessPrincipal } from '~/server/utils/member-access'
 import { findVerifiedAuthUserByPhone } from '~/server/utils/auth'
 import {
   PROMPT_QUOTE_NOTIFICATION_MESSAGE, REPLY_SENT_CONFIRMATION, buildCollectReplyPrompt, buildConfirmSendPrompt, buildDisambiguationPrompt, buildReplyFailedMessage, decideWhatsAppReplyRouting, maskEmailForDisplay, type DisambiguationCandidate, type PendingWhatsAppReplyState, } from '~/server/utils/whatsapp-reply-routing'
@@ -185,13 +185,7 @@ async function listRecentGuestDeliveryCandidates(db: D1Database, env: ApiRecord,
       userId,
     })
     if (!membership) return null
-    const locationIds = await listAccessibleLocationIds(db, {
-      env: env as CloudflareEnv,
-      userId,
-      role: membership.role,
-      organizationId: row.organizationId,
-      siteId: row.siteId,
-    })
+    const locationIds = await listAccessibleLocationIds(db, memberAccessPrincipal(membership, { env: env as CloudflareEnv, siteId: row.siteId }))
     return locationIds === null || Boolean(row.locationId && locationIds.includes(row.locationId)) ? row : null
   }))).filter((row): row is NonNullable<typeof row> => Boolean(row)).slice(0, 5)
   return authorizedRows.map((r) => ({

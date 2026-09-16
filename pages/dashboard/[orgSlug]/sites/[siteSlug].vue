@@ -139,7 +139,7 @@ const { data: overviewData, pending, refresh } = await useAsyncData(`dashboard-h
     if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Request context unavailable' })
     const organization = dashboard.organization.value
     if (!organization) throw createError({ statusCode: 403, statusMessage: 'Dashboard organization unavailable' })
-    const [{ cloudflareEnv }, { getDashboardHomeData }, { assertSiteWideAccess }, { getAuthSession }] = await Promise.all([
+    const [{ cloudflareEnv }, { getDashboardHomeData }, { assertSiteWideAccess, memberAccessPrincipal, resolveMembership }, { getAuthSession }] = await Promise.all([
       import('~/server/utils/api-response'),
       import('~/server/utils/dashboard-home'),
       import('~/server/utils/member-access'),
@@ -150,8 +150,15 @@ const { data: overviewData, pending, refresh } = await useAsyncData(`dashboard-h
     if (!db) throw createError({ statusCode: 500, statusMessage: 'Database not available' })
     const session = await getAuthSession(requestEvent, environment)
     if (!session?.user?.id) throw createError({ statusCode: 401, statusMessage: 'Authentication required' })
-    await assertSiteWideAccess(db, { env: environment, userId: session.user.id, role: organization.role, organizationId: organization.id, siteId })
-    return await getDashboardHomeData(db, organization.id, siteId, { env: environment, userId: session.user.id, role: organization.role })
+    // `organization` here is the rendered payload's organization, not a
+    // membership this request resolved: its id reached the server through the
+    // route. Resolve the membership for (that id, this session) before it
+    // authorizes anything.
+    const membership = await resolveMembership(environment, { userId: session.user.id, organizationId: organization.id })
+    if (!membership) throw createError({ statusCode: 403, statusMessage: 'Dashboard organization unavailable' })
+    const principal = memberAccessPrincipal(membership, { env: environment, siteId })
+    await assertSiteWideAccess(db, principal)
+    return await getDashboardHomeData(db, membership.organizationId, siteId, principal)
   }
   return await dashboardApi<DashboardHomeData>('/api/dashboard/home', {
     signal,

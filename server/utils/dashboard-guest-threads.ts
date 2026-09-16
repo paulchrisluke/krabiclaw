@@ -12,7 +12,7 @@ import type {
   GuestThreadSubmissionType,
 } from '~/server/domain/guest-threads/types'
 import { requireSiteAccess } from '~/server/utils/location-access'
-import { assertMemberScope, isOrganizationWideRole, listUserOrganizationTeamIds } from '~/server/utils/member-access'
+import { assertMemberScope, isOrganizationWideRole, listUserOrganizationTeamIds, memberAccessPrincipal } from '~/server/utils/member-access'
 import { publishNotificationInvalidation } from '~/server/cloudflare/guest-inbox-events'
 import { getDashboardContext } from '~/server/utils/dashboard-context'
 import { acknowledgeThreadNotifications } from '~/server/utils/notification-acknowledgement'
@@ -67,13 +67,7 @@ export async function loadDashboardGuestThreads(
   query: DashboardGuestThreadListQuery,
 ) {
   const { env, db, session, site } = await requireSiteAccess(event, siteId, 'context')
-  const principal = {
-    env,
-    userId: site.user_id,
-    role: site.member_role,
-    organizationId: site.organization_id,
-    siteId,
-  }
+  const principal = memberAccessPrincipal(site.membership, { env, siteId })
   if (query.locationId) {
     await assertMemberScope(db, { ...principal, locationId: query.locationId })
   }
@@ -90,14 +84,7 @@ export async function loadDashboardGuestThread(
   if (!thread) {
     throw new HTTPError({ statusCode: 404, statusMessage: 'Thread not found' })
   }
-  await assertMemberScope(db, {
-    env,
-    userId: site.user_id,
-    role: site.member_role,
-    organizationId: site.organization_id,
-    siteId,
-    locationId: thread.location_id,
-  })
+  await assertMemberScope(db, { ...memberAccessPrincipal(site.membership, { env, siteId }), locationId: thread.location_id })
 
   const detail = await getGuestThreadDetail(db, threadId, siteId)
   if (!detail) {
