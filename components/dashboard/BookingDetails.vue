@@ -45,28 +45,42 @@
             their own — a per-field commit bar would promise a write that never
             happens.
           -->
-          <div v-if="booking && isChangeMode" class="space-y-8">
-            <header>
-              <h1 class="text-2xl font-semibold text-highlighted">What do you want to change?</h1>
-              <p class="mt-4 text-base text-muted">After making your desired changes, you can send a request to your guest, {{ firstName(booking.guestName) }}, to confirm the alterations to your {{ noun }}.</p>
-            </header>
-            <UCard variant="subtle" class="rounded-2xl">
-              <div class="flex items-center gap-4">
-                <img v-if="changeLocation?.imageUrl" :src="changeLocation.imageUrl" alt="" class="size-16 rounded-xl object-cover">
-                <p class="min-w-0 flex-1 font-semibold text-highlighted">{{ changeLocation?.title }}</p>
-                <UButton v-if="props.bookingType === 'reservation'" :to="`${bookingPath}/change/location`" icon="i-lucide-pencil" aria-label="Change location" color="neutral" variant="soft" square />
-              </div>
-            </UCard>
-            <section>
-              <h2 class="text-xl font-semibold text-highlighted">{{ capitalize(noun) }} details</h2>
-              <div v-for="field in changeFields" :key="field.key" class="flex items-center justify-between gap-4 border-b border-default py-6">
-                <div class="min-w-0">
-                  <h3 class="font-semibold text-highlighted">{{ field.label }}</h3>
-                  <p class="mt-1 text-base text-muted">{{ field.summary }}</p>
-                </div>
-                <UButton :to="`${bookingPath}/change/${field.key}`" label="Change" :aria-label="`Change ${field.label.toLowerCase()}`" color="neutral" variant="soft" />
-              </div>
-            </section>
+          <div v-if="booking && isChangeMode" class="mx-auto w-full max-w-md">
+            <h1 class="text-[32px] font-semibold leading-tight text-highlighted">What do you want to change?</h1>
+            <p class="mt-2 text-base text-muted">
+              {{ firstName(booking.guestName) }} confirms the change before anything moves.
+            </p>
+
+            <div class="mt-6 flex items-center gap-4 border-t border-default pt-6">
+              <img v-if="changeLocation?.imageUrl" :src="changeLocation.imageUrl" alt="" class="size-14 shrink-0 rounded-xl object-cover">
+              <p class="min-w-0 flex-1 text-base font-medium text-highlighted">{{ changeLocation?.title }}</p>
+              <UButton
+                v-if="props.bookingType === 'reservation'"
+                :to="`${bookingPath}/change/location`"
+                icon="i-lucide-pencil"
+                aria-label="Change location"
+                color="neutral"
+                variant="soft"
+                square
+                class="shrink-0 rounded-full"
+              />
+            </div>
+
+            <div class="mt-2 border-t border-default">
+              <NuxtLink
+                v-for="field in changeFields"
+                :key="field.key"
+                :to="`${bookingPath}/change/${field.key}`"
+                class="flex items-center gap-4 border-b border-default py-4"
+                :aria-label="`Change ${field.label.toLowerCase()}`"
+              >
+                <span class="min-w-0 flex-1">
+                  <span class="block text-base font-medium text-highlighted">{{ field.label }}</span>
+                  <span class="block text-sm text-muted">{{ field.summary }}</span>
+                </span>
+                <UIcon name="i-lucide-chevron-right" class="size-5 shrink-0 text-muted" />
+              </NuxtLink>
+            </div>
           </div>
           <!--
             Measured on Airbnb's reservation panel, which has no cards at all:
@@ -199,13 +213,13 @@
 
         <template #detail>
           <template v-if="booking">
-            <div v-if="editorKey === 'notes'" class="space-y-6">
+            <div v-if="editorKey === 'notes'" class="mx-auto w-full max-w-md space-y-6">
               <p class="text-base text-muted">Only your team can see these notes.</p>
               <UFormField label="Note">
                 <UTextarea v-model="noteDraft" :rows="10" maxlength="2000" autofocus class="w-full" placeholder="Add a note to yourself" />
               </UFormField>
             </div>
-            <div v-else-if="isChangeMode" class="space-y-6">
+            <div v-else-if="isChangeMode" class="mx-auto w-full max-w-md space-y-6">
               <UFormField v-if="editorField === 'date'" label="Date">
                 <UInput v-model="changeDraft.bookingDate" type="date" size="xl" autofocus class="w-full" />
               </UFormField>
@@ -225,8 +239,8 @@
               them in UFormField emitted a <label> pointing at no control, which
               reads as an editable field that ignores you.
             -->
-            <div v-else-if="editorKey === 'guest'" class="space-y-6">
-              <h3 class="text-xl font-semibold text-highlighted">{{ booking.guestName }}</h3>
+            <div v-else-if="editorKey === 'guest'" class="mx-auto w-full max-w-md space-y-6">
+              <h3 class="text-[32px] font-semibold leading-tight text-highlighted">{{ booking.guestName }}</h3>
               <dl class="space-y-4">
                 <div>
                   <dt class="text-sm text-muted">Email</dt>

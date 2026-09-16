@@ -443,12 +443,23 @@ watch([initialThreads, initialThreadsPending, initialThreadsError], ([data, pend
 }, { immediate: true })
 
 /*
-  The list never sits beside an empty column. Airbnb's own /hosting/messages
-  redirects to its newest thread, so arriving at the list with nothing open
-  opens the first row — and only then, never over a thread the member chose.
+  The list never sits beside an EMPTY column — but only where there is a column
+  beside it. Airbnb's /hosting/messages opens its newest thread on a wide
+  screen; below `lg` the list is the whole screen and the thread is somewhere
+  you go, so opening one on arrival would bounce the member straight back out
+  of the list they just closed a thread to reach.
 */
-watch([threads, openThreadId], ([rows, open]) => {
-  if (open || isOrganizationScope.value || props.embedded) return
+const pairedColumns = ref(false)
+onMounted(() => {
+  const query = window.matchMedia('(min-width: 64rem)')
+  pairedColumns.value = query.matches
+  const sync = (event: MediaQueryListEvent) => { pairedColumns.value = event.matches }
+  query.addEventListener('change', sync)
+  onBeforeUnmount(() => query.removeEventListener('change', sync))
+})
+
+watch([threads, openThreadId, pairedColumns], ([rows, open, paired]) => {
+  if (!paired || open || isOrganizationScope.value || props.embedded) return
   const first = rows[0]
   if (!first) return
   void router.replace({ path: threadRoute(first), query: route.query })
