@@ -39,7 +39,7 @@ interface DashboardSiteSummary {
   social_image: { url: string; width?: number; height?: number; type?: string } | null
 }
 
-interface DashboardLocation {
+export interface DashboardLocation {
   id: string
   slug: string
   title: string
@@ -49,6 +49,9 @@ interface DashboardLocation {
   media: Array<{ asset_id: string; slot: string; public_url: string; thumbnail_url: string | null; kind: string | null }>
   social_image: { url: string; width?: number; height?: number; type?: string } | null
   feature_overrides: string | null
+  parent_site_id?: string
+  parent_site_name?: string
+  parent_site_slug?: string
 }
 
 interface DashboardContextResponse {
@@ -101,6 +104,9 @@ const isDashboardLocation = (value: unknown): value is DashboardLocation =>
     && (item.thumbnail_url === null || typeof item.thumbnail_url === 'string')
     && (item.kind === null || typeof item.kind === 'string')
   )
+  && (value.parent_site_id === undefined || typeof value.parent_site_id === 'string')
+  && (value.parent_site_name === undefined || typeof value.parent_site_name === 'string')
+  && (value.parent_site_slug === undefined || typeof value.parent_site_slug === 'string')
 
 const isDashboardContextResponse = (value: unknown): value is DashboardContextResponse =>
   isRecord(value)
@@ -243,7 +249,7 @@ export function useDashboardSite() {
     sites,
     locations,
     siteAccess,
-    refresh
+    refresh,
   }
 }
 

@@ -115,6 +115,10 @@ export interface DashboardLocationRow {
   // Same contract as DashboardSiteRow.feature_overrides, one scope down — the delta is applied
   // on top of the parent site's effective feature set (never the vertical defaults directly).
   feature_overrides: string | null
+  // NEW fields for organization-scoped mode
+  parent_site_id?: string
+  parent_site_name?: string
+  parent_site_slug?: string
 }
 
 export interface DashboardLocationContextRow {
@@ -495,12 +499,15 @@ export async function getDashboardLocationContext(event: H3Event, locationId: st
 export async function listDashboardLocations(
   db: DbClient,
   organizationId: string,
-  siteId: string,
+  siteId: string | null,
   principal?: { role: string; teamIds: string[] | null },
+  organizationScoped?: boolean,
 ) {
   const scopedTeamIds = principal && !isOrganizationWideRole(principal.role) ? principal.teamIds ?? [] : null
   if (scopedTeamIds && scopedTeamIds.length === 0) return []
   const scopedTeamIdsJson = scopedTeamIds ? d1JsonStringSet(scopedTeamIds) : null
+  const isOrgWide = principal && isOrganizationWideRole(principal.role)
+
   const locations = await queryAll<Omit<DashboardLocationRow, 'media'> & {
     hero_asset_id: string | null
     hero_kind: string | null
@@ -510,10 +517,14 @@ export async function listDashboardLocations(
     social_kind: string | null
     social_public_url: string | null
     social_thumbnail_url: string | null
+    parent_site_id?: string
+    parent_site_name?: string
+    parent_site_slug?: string
   }>(db, `
     SELECT business_locations.id, business_locations.slug, business_locations.title,
            business_locations.status,
            business_locations.city, business_locations.address, business_locations.feature_overrides,
+           ${organizationScoped ? `sites.id AS parent_site_id, sites.brand_name AS parent_site_name, sites.subdomain AS parent_site_slug,` : ''}
            ma_hero.id AS hero_asset_id,
            ma_hero.kind AS hero_kind,
            ma_hero.public_url AS hero_media_public_url,
@@ -530,14 +541,24 @@ export async function listDashboardLocations(
     LEFT JOIN media_placements mp_social ON mp_social.owner_type = 'business_location' AND mp_social.owner_id = business_locations.id AND mp_social.slot = 'social_card' AND mp_social.sort_order = 0 AND mp_social.status = 'active'
     LEFT JOIN media_assets ma_social ON ma_social.id = mp_social.asset_id
       AND ma_social.organization_id = business_locations.organization_id AND ma_social.site_id = business_locations.site_id AND ma_social.status = 'active'
-    WHERE business_locations.organization_id = ? AND business_locations.site_id = ? AND business_locations.status = 'active'
-      ${scopedTeamIds ? `AND (sites.team_id IN (SELECT value FROM json_each(?)) OR business_locations.team_id IN (SELECT value FROM json_each(?)))` : ''}
+    WHERE business_locations.organization_id = ?
+      ${organizationScoped ? '' : 'AND business_locations.site_id = ?'}
+      AND business_locations.status = 'active'
+      ${!isOrgWide && scopedTeamIds ? `
+        AND (
+          sites.team_id IN (SELECT value FROM json_each(?))
+          OR business_locations.team_id IN (SELECT value FROM json_each(?))
+        )
+      ` : ''}
     ORDER BY title ASC
-  `, scopedTeamIdsJson ? [organizationId, siteId, scopedTeamIdsJson, scopedTeamIdsJson] : [organizationId, siteId])
+  `, organizationScoped
+    ? (isOrgWide ? [organizationId] : [organizationId, scopedTeamIdsJson, scopedTeamIdsJson])
+    : (scopedTeamIdsJson ? [organizationId, siteId!, scopedTeamIdsJson, scopedTeamIdsJson] : [organizationId, siteId!]))
 
   return locations.map((location) => {
     const { hero_asset_id, hero_kind, hero_media_public_url, hero_media_thumbnail_url,
-      social_asset_id, social_kind, social_public_url, social_thumbnail_url, ...fields } = location
+      social_asset_id, social_kind, social_public_url, social_thumbnail_url,
+      parent_site_id, parent_site_name, parent_site_slug, ...fields } = location
     const ownerMedia = [
       ...(social_asset_id && social_public_url
         ? [{ asset_id: social_asset_id, slot: 'social_card' as const, public_url: social_public_url, thumbnail_url: social_thumbnail_url, kind: social_kind }]
@@ -557,6 +578,14 @@ export async function listDashboardLocations(
       feature_overrides: location.feature_overrides,
       media: ownerMedia,
       social_image: resolveSocialImageFromMedia(ownerMedia),
+      ...(organizationScoped
+        && typeof parent_site_id === 'string' && parent_site_id.length > 0
+        && typeof parent_site_name === 'string' && parent_site_name.length > 0
+        && typeof parent_site_slug === 'string' && parent_site_slug.length > 0 ? {
+        parent_site_id,
+        parent_site_name,
+        parent_site_slug,
+      } : {}),
     }
   })
 }

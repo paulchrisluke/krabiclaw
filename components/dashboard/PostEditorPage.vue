@@ -60,6 +60,7 @@
         :save-label="saveLabel"
         :detail-title="sectionLabels[editorKey]"
         :dismiss-to="postPath"
+        :error="editor.error.value"
         @cancel="cancelEditor"
         @save="saveCurrentEditor"
       >
@@ -211,6 +212,7 @@
     :saving="editor.publishing.value"
     :save-disabled="!editor.selectedChannels.value.length"
     :save-label="editor.selectedChannels.value.length > 1 ? `Publish to ${editor.selectedChannels.value.length} channels` : 'Publish'"
+    :error="editor.error.value"
     @save="onPublish"
   >
     <label

@@ -100,7 +100,6 @@ import { isQaResponse, isQaCreated, isQaUpdated, qaCreateBlockers, type QaRow } 
 const props = defineProps<{ locationId?: string }>()
 
 const route = useRoute()
-const toast = useToast()
 const dashboardApi = useDashboardApi()
 
 const qaId = computed(() => String(route.params.qaId ?? ''))
@@ -219,13 +218,11 @@ async function commit() {
     if (isNew.value) {
       const created = await dashboardApi(qaEndpoint.value, { method: 'POST', body, validate: isQaCreated })
       Object.assign(form, emptyDraft())
-      toast.add({ description: 'Question created', color: 'success' })
       await navigateTo(`${qaPath.value}/${created.id}`)
       return
     }
     await dashboardApi(`${qaEndpoint.value}/${qaId.value}`, { method: 'PATCH', body, validate: isQaUpdated })
     await refresh()
-    toast.add({ description: `${SECTION_LABELS[openKey.value]} saved`, color: 'success' })
     await navigateTo(recordPath.value)
   } catch (error) {
     errorMessage.value = getErrorMessage(error, 'Failed to save question')

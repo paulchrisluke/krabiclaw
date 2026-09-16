@@ -94,6 +94,14 @@
               >
                 {{ detailTitle }}
               </h2>
+              <UAlert
+                v-if="error"
+                color="error"
+                variant="soft"
+                icon="i-lucide-circle-alert"
+                :description="error"
+                class="mb-6"
+              />
               <slot name="detail" />
             </div>
           </div>
@@ -121,6 +129,7 @@ defineProps<{
   saving?: boolean
   saveDisabled?: boolean
   saveLabel?: string
+  error?: string | null
   wideDetail?: boolean
   /** Names the open node. Centred in the sheet's bar, a heading in the pane. */
   detailTitle?: string

@@ -145,6 +145,15 @@
     </div>
 
     <div class="shrink-0 px-4 pb-4 pt-2 sm:px-6">
+      <UAlert
+        v-if="error"
+        color="error"
+        variant="soft"
+        icon="i-lucide-circle-alert"
+        :description="error"
+        class="mb-3"
+      />
+
       <div v-if="deliveryFailures.length" class="mb-3 space-y-2" aria-live="polite">
         <UAlert
           v-for="failure in deliveryFailures"
@@ -277,6 +286,7 @@ const props = withDefaults(defineProps<{
   retryingDeliveryId?: string | null
   emptyTitle?: string
   emptyDescription?: string
+  error?: string | null
 }>(), {
   recordTo: null,
   openingMessage: null,
@@ -290,6 +300,7 @@ const props = withDefaults(defineProps<{
   emptyTitle: 'No messages yet',
   emptyDescription: 'Guest replies will appear here.',
   deliveryFailures: () => [],
+  error: null,
 })
 
 defineEmits<{

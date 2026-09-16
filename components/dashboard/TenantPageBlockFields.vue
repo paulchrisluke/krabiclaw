@@ -49,6 +49,7 @@
         </div>
         <UButton icon="i-lucide-plus" color="neutral" variant="soft" size="sm" :disabled="pendingNewGallerySlot || galleryBusy" @click="pendingNewGallerySlot = true">Add image</UButton>
       </div>
+      <UAlert v-if="galleryError" color="error" variant="soft" icon="i-lucide-circle-alert" :description="galleryError" />
     </template>
 
     <!-- faq -->
@@ -254,7 +255,6 @@ const props = defineProps<{
 defineEmits<{ splitInsert: [payload: { after: string; blockType: 'image' | 'faq' | 'how_to'; editorMode: 'rich' | 'source' }] }>()
 
 const dashboardApi = useDashboardApi()
-const toast = useToast()
 const dashboard = useDashboardSite()
 
 const { draft, savedBlockIds } = useTenantPageDraft(props.siteId, props.pageId)
@@ -485,6 +485,7 @@ function removeCalculatorRow(index: number) {
 // local until the first save creates the row.
 const pendingNewGallerySlot = ref(false)
 const galleryBusy = ref(false)
+const galleryError = ref<string | null>(null)
 const galleryPlacement = computed(() => ({ owner_type: 'content_block', owner_id: block.value.id, slot: 'gallery' }))
 
 interface GalleryMediaItem {
@@ -527,6 +528,7 @@ async function commitGalleryAsset(index: number | 'new', assetId: string | null 
 
   const current = mediaForSlot('gallery')
   galleryBusy.value = true
+  galleryError.value = null
   try {
     if (index === 'new') {
       if (!assetId) { pendingNewGallerySlot.value = false; return }
@@ -586,7 +588,7 @@ async function commitGalleryAsset(index: number | 'new', assetId: string | null 
     })
     applyCanonicalGalleryMedia(removeResult.media)
   } catch (error) {
-    toast.add({ description: error instanceof Error ? error.message : 'Failed to update gallery image', color: 'error' })
+    galleryError.value = error instanceof Error ? error.message : 'Failed to update gallery image'
   } finally {
     galleryBusy.value = false
   }

@@ -344,7 +344,6 @@ interface AnalyticsResponse {
   period: { startDate: string; endDate: string; timezone: string; analyticsDataStartAt: string | null }
 }
 
-const toast = useToast()
 const route = useRoute()
 const { orgPaths } = useDashboardSiteLinks()
 
@@ -568,7 +567,6 @@ async function loadAnalytics() {
   } catch (error) {
     if (requestId !== latestManualRequestId) return
     loadError.value = error instanceof Error ? error.message : 'Failed to load insights'
-    toast.add({ description: error instanceof Error ? error.message : 'Failed to load insights', color: 'error' })
   } finally {
     if (requestId === latestManualRequestId) loading.value = false
   }

@@ -1,6 +1,7 @@
 <template>
   <div class="space-y-8">
     <p class="text-base text-muted">The ownership boundary for sites, members, billing, and connected services.</p>
+    <UAlert v-if="errorMessage" color="error" variant="soft" :description="errorMessage" icon="i-lucide-circle-alert" />
     <UFormField label="Organization name">
       <UInput v-model="name" :disabled="!canManage" size="xl" autofocus class="w-full" />
     </UFormField>
@@ -20,7 +21,6 @@ import { authClient } from '~/lib/auth-client'
 
 const route = useRoute()
 const router = useRouter()
-const toast = useToast()
 const dashboard = useDashboardSite()
 if (!dashboard.state.value) await dashboard.refresh()
 const organization = dashboard.organization
@@ -29,6 +29,7 @@ if (!['owner', 'admin'].includes(organization.value?.role ?? '')) {
 }
 const name = ref(organization.value?.name ?? '')
 const saving = ref(false)
+const errorMessage = ref('')
 const canManage = computed(() => organization.value?.role === 'owner' || organization.value?.role === 'admin')
 const dirty = computed(() => Boolean(name.value.trim()) && name.value.trim() !== organization.value?.name)
 
@@ -43,19 +44,20 @@ watch(() => route.params.orgSlug, async (nextOrgSlug, previousOrgSlug) => {
     return
   }
   name.value = organization.value?.name ?? ''
+  errorMessage.value = ''
 })
 
 async function save() {
   if (!organization.value || !dirty.value) return
   saving.value = true
+  errorMessage.value = ''
   try {
     const { error } = await authClient.organization.update({ organizationId: organization.value.id, data: { name: name.value.trim() } })
     if (error) throw new Error(error.message || 'Failed to update organization')
     await dashboard.refresh()
     name.value = dashboard.organization.value?.name ?? name.value.trim()
-    toast.add({ description: 'Organization updated', color: 'success' })
   } catch (error) {
-    toast.add({ description: error instanceof Error ? error.message : 'Failed to update organization', color: 'error' })
+    errorMessage.value = error instanceof Error ? error.message : 'Failed to update organization'
   } finally {
     saving.value = false
   }
@@ -63,6 +65,7 @@ async function save() {
 
 function cancel() {
   name.value = organization.value?.name ?? ''
+  errorMessage.value = ''
 }
 
 useSeoMeta({ title: 'Organization Settings | KrabiClaw', robots: 'noindex, nofollow' })

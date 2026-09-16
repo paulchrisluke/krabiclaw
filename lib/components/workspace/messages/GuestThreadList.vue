@@ -228,7 +228,6 @@ const dashboard = useDashboardSite()
 const dashboardLocation = useDashboardLocation()
 const { formatRelativeTime } = useHumanTime()
 
-const toast = useToast()
 const route = useRoute()
 const router = useRouter()
 
@@ -525,7 +524,6 @@ async function loadThreads() {
   } catch (error) {
     if (requestToken !== threadsRequestToken) return
     threadsError.value = error
-    toast.add({ description: error instanceof Error ? error.message : 'Failed to load conversations', color: 'error' })
   } finally {
     if (requestToken === threadsRequestToken) loadingThreads.value = false
   }
