@@ -363,22 +363,30 @@ watch(() => sites.value.some(site => site.onboarding_status !== 'active'), async
   }
 }, { immediate: true })
 
+let locationsRequestToken = 0
+
 async function loadLocations() {
-  if (!orgSlug.value) return
+  const currentSlug = orgSlug.value
+  if (!currentSlug) return
+  const token = ++locationsRequestToken
   organizationLocationsPending.value = true
   organizationLocationsError.value = null
   try {
-    const scope = { orgSlug: orgSlug.value }
+    const scope = { orgSlug: currentSlug }
     const response = await dashboardFetch<{ success: true; locations: DashboardLocation[] }>('/api/dashboard/locations', scope, {
       query: { organization: 'true' },
       validate: (value): value is { success: true; locations: DashboardLocation[] } =>
         typeof value === 'object' && value !== null && 'success' in value && (value as { success: unknown }).success === true && 'locations' in value && Array.isArray((value as { locations: unknown }).locations),
     })
+    if (token !== locationsRequestToken || orgSlug.value !== currentSlug) return
     organizationLocations.value = response.locations
   } catch (error) {
+    if (token !== locationsRequestToken || orgSlug.value !== currentSlug) return
     organizationLocationsError.value = error instanceof Error ? error.message : 'Failed to load locations'
   } finally {
-    organizationLocationsPending.value = false
+    if (token === locationsRequestToken) {
+      organizationLocationsPending.value = false
+    }
   }
 }
 

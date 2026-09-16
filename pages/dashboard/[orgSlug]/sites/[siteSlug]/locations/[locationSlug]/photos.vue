@@ -233,7 +233,7 @@ async function detachOpenPhoto() {
   const before = filteredAssets.value.length
   await detachMany([asset.id])
   // Stay open if the photo is still attached: the detach failed, and closing
-  // would leave the grid contradicting the toast.
+  // would leave the grid contradicting the error alert.
   if (filteredAssets.value.length < before) photoOpen.value = false
 }
 
@@ -293,7 +293,10 @@ async function uploadSelectedFile(file: File, existingOptions?: { category?: str
     })
     if (!result) return
 
-    await attachPhotoById(result.asset_id)
+    const attached = await attachPhotoById(result.asset_id)
+    if (!attached && !uploadError.value) {
+      uploadError.value = attachError.value || 'Failed to attach photo to gallery'
+    }
   } catch (error) {
     if (!uploadError.value) {
       uploadError.value = error instanceof Error ? error.message : 'Failed to upload file'

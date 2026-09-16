@@ -387,6 +387,7 @@ function toggleGroup(groupId: string) {
 }
 
 async function copy(value: string) {
+  actionError.value = null
   try {
     await navigator.clipboard.writeText(value)
     copiedValue.value = value

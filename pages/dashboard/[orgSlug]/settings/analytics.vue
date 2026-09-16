@@ -184,6 +184,7 @@ async function loadConnection() {
   selectedSearchConsoleSite.value = undefined
   ga4Error.value = null
   searchConsoleError.value = null
+  pageError.value = null
   if (!requestedSiteId) {
     loading.value = false
     return
