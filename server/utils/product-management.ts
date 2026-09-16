@@ -402,7 +402,7 @@ export async function summarizeLocationProducts(db: DbClient, input: {
            count(bc.product_id) AS bookable
       FROM products p
       JOIN product_locations pl ON pl.product_id = p.id AND pl.organization_id = p.organization_id
-      LEFT JOIN product_booking_configs bc ON bc.product_id = p.id
+      LEFT JOIN product_booking_configs bc ON bc.product_id = p.id AND bc.organization_id = p.organization_id
      WHERE p.organization_id = ? AND pl.location_id = ?
   `, [input.organizationId, input.locationId])
   const total = Number(row?.total ?? 0)

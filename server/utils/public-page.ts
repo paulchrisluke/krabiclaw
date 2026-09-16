@@ -962,7 +962,12 @@ export const loadPublicPage = (
       .filter(([, value]) => value !== undefined)
       .sort(([left], [right]) => left.localeCompare(right)),
   );
-  return oncePerRequest(event, `public-page:${siteId}:${queryKey}`, () => {
+  // The flag is part of the key because it changes what the call does to the
+  // response, not just what it returns: a memo shared across two callers that
+  // disagree about it would let the first one's header behaviour stand for both,
+  // including the `private, no-store` a preview-authorized response needs.
+  const headerKey = options?.mutateResponseHeaders === false ? 'no-headers' : 'headers'
+  return oncePerRequest(event, `public-page:${siteId}:${headerKey}:${queryKey}`, () => {
     const startedAt = performance.now();
     return loadPublicPageSource(event, siteId, query, options)
       .finally(() => recordRequestPhase(event, "page", startedAt));

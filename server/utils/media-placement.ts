@@ -108,6 +108,16 @@ async function authorizePlacementWrite(db: DbClient, input: PlacementAuthInput):
     if (document?.kind === 'qa') throw new HTTPError({ statusCode: 403, statusMessage: 'Q&A is read-only' })
   }
   if (input.principal) {
+    // The principal carries its own organization and site, and the write targets
+    // the ones on `input`. They are the same at every call site today, and this
+    // is what keeps it that way: authorizing one scope while writing to another
+    // is the whole failure this check exists to prevent.
+    if (
+      input.principal.organizationId !== input.organizationId
+      || input.principal.siteId !== input.siteId
+    ) {
+      throw new HTTPError({ statusCode: 403, statusMessage: 'Access denied' })
+    }
     await assertResourceAccess(db, { ...input.principal, resourceLocationId: locationId })
   }
 }

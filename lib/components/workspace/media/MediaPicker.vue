@@ -183,7 +183,12 @@ function assetAlt(asset: Pick<PickerMediaAsset, 'alt_text' | 'file_name'> | Pick
 function summaryFor(id: string): ResolvedSelection | null {
   const summary = props.selectedSummary
   if (!summary || summary.asset_id !== id) return null
-  return { asset_id: id, url: summary.thumbnail_url ?? summary.public_url ?? null, alt: assetAlt(summary) }
+  const url = summary.thumbnail_url ?? summary.public_url ?? null
+  // A summary with no URL does not describe the asset, so it cannot stand in
+  // for loading it. Accepting one left the picker on its placeholder icon
+  // forever, because taking this branch is what stops the fetch below.
+  if (!url) return null
+  return { asset_id: id, url, alt: assetAlt(summary) }
 }
 
 watch([() => props.modelValue, () => props.selectedSummary], async ([id]) => {

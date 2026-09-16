@@ -40,6 +40,16 @@
             <USkeleton v-for="index in 5" :key="index" class="h-20 rounded-2xl" />
           </div>
 
+          <UAlert
+            v-else-if="overviewErrorMessage"
+            color="error"
+            variant="soft"
+            icon="i-lucide-triangle-alert"
+            title="This site could not be loaded"
+            :description="overviewErrorMessage"
+            :actions="[{ label: 'Try again', color: 'neutral', variant: 'subtle', onClick: () => refresh() }]"
+          />
+
           <div v-else class="space-y-6">
             <!--
               A problem with the site comes first and only when there is one,
@@ -84,6 +94,7 @@ import { resolvePublicTemplate } from '~/utils/template-registry'
 import { hasPlatformAdminPermission } from '~/utils/platform-admin-access'
 import { normalizeVertical, type SiteVertical } from '~/utils/vertical-copy'
 import type { DashboardHomeData } from '~/server/utils/dashboard-home'
+import { getErrorMessage } from '~/utils/errors'
 
 definePageMeta({ layout: 'dashboard' })
 
@@ -134,7 +145,7 @@ const capabilities = computed(() => resolveCmsCapabilities(vertical.value, templ
   site: parseCmsFeatureOverrideDelta(dashboard.site.value?.feature_overrides),
 }))
 
-const { data: overviewData, pending, refresh } = await useAsyncData(`dashboard-home-${siteId}`, async (_nuxtApp, { signal }) => {
+const { data: overviewData, pending, error: overviewError, refresh } = await useAsyncData(`dashboard-home-${siteId}`, async (_nuxtApp, { signal }) => {
   if (import.meta.server) {
     if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Request context unavailable' })
     const organization = dashboard.organization.value
@@ -183,7 +194,12 @@ watch(rendersStandalone, (standalone) => {
 })
 
 // Pending, or not started yet because the hub was reached from a child route.
-const overviewPending = computed(() => pending.value || !overviewData.value)
+// A failed read is neither: reporting it as pending left the skeletons up for
+// good, with nothing on screen saying what had happened.
+const overviewPending = computed(() =>
+  !overviewError.value && (pending.value || !overviewData.value))
+const overviewErrorMessage = computed(() =>
+  overviewError.value ? getErrorMessage(overviewError.value, 'Failed to load this site') : null)
 
 const settings = computed(() => overviewData.value?.settings ?? null)
 const locations = computed(() => overviewData.value?.locations ?? [])

@@ -81,7 +81,8 @@ interface BrokenRow {
 const broken = d1<BrokenRow>(`
   SELECT p.id, p.site_id, p.locale, p.title, p.summary AS body,
          (SELECT t.slug FROM content_documents t
-           WHERE t.root_id = p.id AND t.kind = 'social_post' AND t.slug IS NOT NULL
+           WHERE t.root_id = p.id AND t.kind = 'social_post'
+             AND t.slug IS NOT NULL AND trim(t.slug) <> ''
            ORDER BY t.locale LIMIT 1) AS translation_slug
     FROM content_documents p
    WHERE p.kind = 'social_post' AND p.row_role = 'root'
