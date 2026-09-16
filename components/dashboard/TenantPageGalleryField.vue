@@ -67,8 +67,20 @@ interface GalleryMediaItem {
   alt_text?: string | null
 }
 
+/**
+ * The placement API's answer, checked row by row. `Array.isArray` alone let a
+ * row with no `asset_id` through, and the gallery then rendered a picture with
+ * no asset behind it — an editor showing something the server does not hold.
+ */
+const isGalleryMediaItem = (value: unknown): value is GalleryMediaItem =>
+  isRecord(value)
+  && typeof value.asset_id === 'string' && value.asset_id !== ''
+  && (value.sort_order === undefined || typeof value.sort_order === 'number')
+  && (['public_url', 'thumbnail_url', 'kind', 'alt_text'] as const)
+    .every(key => value[key] === undefined || value[key] === null || typeof value[key] === 'string')
+
 const isMediaMutationResponse = (value: unknown): value is { media: GalleryMediaItem[] } =>
-  isRecord(value) && Array.isArray(value.media)
+  isRecord(value) && Array.isArray(value.media) && value.media.every(isGalleryMediaItem)
 
 function applyCanonicalGalleryMedia(media: GalleryMediaItem[]) {
   block.value.media = [
