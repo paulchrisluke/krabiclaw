@@ -150,6 +150,11 @@ const CTA_FIELDS = {
 const GRID_ITEM_FIELDS = {
   title: text('Title', { required: true }),
   description: prose('Description'),
+  // A card whose words are a list of links — a firm's contact methods — needs
+  // rich text, not a paragraph. It was stored as `cardsContent` on a block
+  // calling itself a contact CTA, which is why one page held two of those and
+  // nothing could tell them apart.
+  body: { kind: 'markdown', label: 'Rich text', section: 'copy' } as TenantPageField,
   // Declared because the item editor writes them. They were in no field list,
   // so a feature row's headline number and icon could never be translated or
   // validated.
@@ -711,17 +716,6 @@ export function blockDefinition(type: TenantPageBlockType): TenantPageBlockDefin
   return TENANT_PAGE_BLOCK_REGISTRY[type]
 }
 
-/**
- * A hero block's `section`: which slot on its page the block fills. The home
- * page's hero is the full-bleed one; every other page's is the compact page
- * hero. A template that places several blocks of one type on a page resolves
- * them by this key — components/blawby/BlawbyHome.vue picks its hero with
- * `data.section === 'hero'` — so whoever writes the block has to set it, and
- * it is derived here rather than in each producer.
- */
-export function heroBlockSection(path: string): 'hero' | 'page-hero' {
-  return normalizeTenantPagePath(path) === '/' ? 'hero' : 'page-hero'
-}
 
 export function findTenantPageBlock(
   blocks: TenantPageBlock[],

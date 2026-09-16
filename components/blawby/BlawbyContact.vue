@@ -67,8 +67,18 @@ const org = useBlawbyOrgIdentity(identity, compliance)
 const heroBlock = computed(() => page.value ? findTenantPageBlock(page.value.blocks, 'hero') : null)
 const contactBlocks = computed(() => {
   if (!page.value) return []
-  return page.value.blocks.flatMap(block => block.type === 'contact_cta' && Array.isArray(block.data.cardsContent)
-    ? [{ id: block.id, data: block.data, cards: block.data.cardsContent.map(String) }]
+  // Cards of contact methods: a feature grid whose items carry rich text. They
+  // were stored on a block calling itself a contact CTA, under a `cardsContent`
+  // key no field list declared, which is why this page held two blocks of one
+  // type and nothing could tell them apart.
+  return page.value.blocks.flatMap(block => block.type === 'feature_grid'
+    ? [{
+        id: block.id,
+        data: block.data,
+        cards: (Array.isArray(block.data.items) ? block.data.items : [])
+          .map(item => (item && typeof item === 'object' ? String((item as Record<string, unknown>).body ?? '') : ''))
+          .filter(Boolean),
+      }]
     : [])
 })
 const heroTitle = computed(() => String(heroBlock.value?.title ?? ''))
@@ -129,14 +139,16 @@ useProfessionalServiceSchema(() => ({
     .filter(item => item.question && item.answer),
 }))
 
-/** The block itself, for the sections that read their own block. */
-function rawBlock(canonicalType: string, section: string) {
-  const blocks = page.value?.blocks ?? []
-  return blocks.find(candidate => candidate.type === canonicalType && candidate.data.section === section)
-    ?? blocks.find(candidate => candidate.type === canonicalType) ?? null
+/**
+ * The block itself, by type. Each of these appears once on this page, which is
+ * what naming the content properly bought: the lookup no longer needs a
+ * `section` string in the document to tell two blocks of one type apart.
+ */
+function rawBlock(canonicalType: string) {
+  return page.value?.blocks.find(candidate => candidate.type === canonicalType) ?? null
 }
-const qaBlockRaw = computed(() => rawBlock('faq', 'qa'))
-const reviewsBlockRaw = computed(() => rawBlock('testimonial_grid', 'reviews'))
-const ctaBlockRaw = computed(() => rawBlock('contact_cta', 'consultation'))
-const heroBlockRaw = computed(() => rawBlock('hero', 'page-hero'))
+const qaBlockRaw = computed(() => rawBlock('faq'))
+const reviewsBlockRaw = computed(() => rawBlock('testimonial_grid'))
+const ctaBlockRaw = computed(() => rawBlock('contact_cta'))
+const heroBlockRaw = computed(() => rawBlock('hero'))
 </script>

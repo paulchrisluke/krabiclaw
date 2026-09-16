@@ -112,12 +112,14 @@ useProfessionalServiceSchema(() => ({
   consultationUrl: scheduleHeroDestination.value,
 }))
 
-/** The block itself, for the sections that read their own block. */
-function rawBlock(canonicalType: string, section: string) {
-  const blocks = page.value?.blocks ?? []
-  return blocks.find(candidate => candidate.type === canonicalType && candidate.data.section === section)
-    ?? blocks.find(candidate => candidate.type === canonicalType) ?? null
+/**
+ * The block itself, by type. Each of these appears once on this page, which is
+ * what naming the content properly bought: the lookup no longer needs a
+ * `section` string in the document to tell two blocks of one type apart.
+ */
+function rawBlock(canonicalType: string) {
+  return page.value?.blocks.find(candidate => candidate.type === canonicalType) ?? null
 }
-const qaBlockRaw = computed(() => rawBlock('faq', 'qa'))
-const reviewsBlockRaw = computed(() => rawBlock('testimonial_grid', 'reviews'))
+const qaBlockRaw = computed(() => rawBlock('faq'))
+const reviewsBlockRaw = computed(() => rawBlock('testimonial_grid'))
 </script>

@@ -282,8 +282,13 @@ function sanitize(value: string): string {
   return sanitizer.sanitize(value)
 }
 
-function sectionKey(block: TenantPageBlock): string | undefined {
-  return text(block.data.section) || undefined
+/**
+ * The name this band carries for tests and parity checks: the block's type.
+ * It used to read `data.section`, so a band was named by a key the document
+ * held only because two hand-written renderers needed it to tell blocks apart.
+ */
+function sectionKey(block: TenantPageBlock): string {
+  return block.type
 }
 
 function galleryImages(block: TenantPageBlock): Array<{ id?: string; url: string; alt?: string; caption?: string; kind?: string | null; thumbnailUrl?: string | null }> {

@@ -41,7 +41,8 @@
             <img :src="feature.media[0].public_url!" :alt="feature.title" width="64" height="64" loading="lazy" class="size-16 rounded object-cover">
           </div>
           <h3 class="mt-4 blawby-display text-xl font-bold uppercase text-[var(--blawby-primary)]">{{ feature.title }}</h3>
-          <p v-if="feature.description" class="mt-4 text-sm text-[var(--blawby-primary)]">{{ feature.description }}</p>
+          <BlawbyRichText v-if="feature.body" unstyled class="mt-4 text-sm text-[var(--blawby-primary)]" :content="feature.body" />
+          <p v-else-if="feature.description" class="mt-4 text-sm text-[var(--blawby-primary)]">{{ feature.description }}</p>
         </article>
       </div>
     </div>
@@ -121,6 +122,7 @@ const posts = computed<PublicBlogSummary[]>(() => blockRecords(props.block.data.
 const features = computed(() => blockRecords(props.block.data.items).map((item, index) => ({
   title: blockText(item.title),
   description: blockText(item.description),
+  body: blockText(item.body),
   media: itemMedia(index),
-})).filter(feature => feature.title))
+})).filter(feature => feature.title || feature.body))
 </script>
