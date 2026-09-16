@@ -217,6 +217,7 @@ import type { TenantPageBlock } from '~/utils/tenant-page-blocks'
 import type { Component } from 'vue'
 import type { PublicTemplateSlug } from '~/utils/template-registry'
 import { tenantPageBlockPresentation } from '~/utils/tenant-page-presentation'
+import { resolveSocialImageUrl } from '~/utils/social-metadata'
 
 const props = withDefaults(defineProps<{ page: PublicTenantPage; template?: PublicTemplateSlug }>(), {
   template: undefined,
@@ -324,7 +325,7 @@ function itemLabel(item: GridItem): string {
 function gridItemImage(item: GridItem): { url: string; alt: string } | null {
   const asset = (item.media ?? [])[0]
   if (!asset) return null
-  const url = asset.kind === 'video' ? asset.thumbnail_url : asset.public_url
+  const url = resolveSocialImageUrl(asset)
   return url ? { url, alt: asset.alt_text ?? '' } : null
 }
 

@@ -380,7 +380,14 @@ async function hydrateBlocks(
           ? undefined
           : formatMinorAmount(product.compare_at_unit_amount, product.currency as CurrencyCode),
         labelKey: 'saya.posts.cta_default',
-        media: product.media,
+        // A grid item carries the one image it is drawn with, which for a
+        // product is its `image` placement — the same cover `hydrateProductMedia`
+        // resolves for every other product surface. It carried the product's
+        // whole placement list instead, and the reader took the head of it;
+        // placements are read slot-ordered, so a product with a `gallery` asset
+        // handed the card that asset rather than its cover, and a gallery video
+        // put an .mp4 in the card's <img src>.
+        media: product.media.filter(item => item.slot === 'image'),
       }))
     }
     if (block.type === 'location_grid' && Array.isArray(data.location_ids)) {

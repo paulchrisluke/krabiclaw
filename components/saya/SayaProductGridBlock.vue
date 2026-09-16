@@ -8,6 +8,7 @@ import type { PublicTenantPage } from '~/server/utils/public-tenant-pages'
 import type { TenantPageBlock } from '~/utils/tenant-page-blocks'
 import { blockText, blockRecords } from '~/utils/tenant-page-block-data'
 import { resolveProductPresentation } from '~/utils/product-presentation'
+import { resolveSocialImageUrl } from '~/utils/social-metadata'
 
 // Saya's catalogue preview. The block names the products — a collection, or a
 // hand-picked set — and the loader resolves each card's price and its route,
@@ -31,7 +32,13 @@ const items = computed(() => blockRecords(props.block.data.items).map((item) => 
     description: blockText(item.description),
     price: blockText(item.value) || null,
     compareAtPrice: blockText(item.compare_at) || null,
-    image: blockText(media?.public_url) || null,
+    // A card draws a still. A video cover is shown as its own poster frame —
+    // the same asset — because an <img> cannot render an .mp4.
+    image: resolveSocialImageUrl(media && {
+      kind: blockText(media.kind) || null,
+      public_url: blockText(media.public_url) || null,
+      thumbnail_url: blockText(media.thumbnail_url) || null,
+    }),
     alt: blockText(media?.alt_text) || blockText(item.title),
     // A product published at more than one location has no single page, so its
     // card is shown without a link rather than sent to a location the merchant
