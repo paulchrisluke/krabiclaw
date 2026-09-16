@@ -7,7 +7,7 @@
   <GuestThreadDetail :thread-id="threadId" :thread-path="threadPath" />
 
   <USlideover
-    :open="frame.mode.value === 'pair'"
+    :open="frame.mode.value !== 'index'"
     :title="recordTitle"
     :ui="{ content: 'sm:max-w-md', body: 'p-0 sm:p-0 overflow-y-auto' }"
     @update:open="onDrawerToggle"

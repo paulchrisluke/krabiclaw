@@ -173,7 +173,6 @@ type HelpMessage = {
   id: string
   role: 'user' | 'assistant'
   content: string
-  citations?: HelpCitation[]
   suggestedLinks?: HelpCitation[]
   followUpPrompts?: string[]
   escalation?: HelpEscalation | null
@@ -274,7 +273,6 @@ async function submitMessage(message: string) {
   try {
     const response = await $fetch<{
       reply: string
-      citations?: HelpCitation[]
       suggestedLinks?: HelpCitation[]
       followUpPrompts?: string[]
       escalation?: HelpEscalation | null
@@ -287,7 +285,6 @@ async function submitMessage(message: string) {
     messages.value = [
       ...messages.value,
       createMessage('assistant', response.reply, {
-        citations: response.citations ?? [],
         suggestedLinks: response.suggestedLinks ?? [],
         followUpPrompts: response.followUpPrompts ?? [],
         escalation: response.escalation ?? null,

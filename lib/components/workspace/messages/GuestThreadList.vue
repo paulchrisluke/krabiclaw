@@ -50,6 +50,7 @@
       -->
       <div class="mt-3 flex items-center gap-2">
         <UDropdownMenu
+          v-if="typeOptions.length"
           :items="typeMenuItems"
           :content="{ align: 'start' }"
           :ui="{
@@ -139,11 +140,20 @@
         </div>
 
         <div class="min-w-0 flex-1">
-          <div class="flex items-baseline justify-between gap-3 text-xs text-muted">
+          <!--
+            A thread with a booking leads with when it is, the way Airbnb's row
+            leads with its date range. One with no booking has nothing to put
+            there, so the name moves up rather than leaving an empty line for
+            the picture to align against.
+          -->
+          <div v-if="occurrenceLine(thread)" class="flex items-baseline justify-between gap-3 text-xs text-muted">
             <span class="truncate">{{ occurrenceLine(thread) }}</span>
             <span class="shrink-0">{{ formatRelativeTime(thread.lastActivityAt) }}</span>
           </div>
-          <p class="mt-0.5 truncate text-sm font-medium text-highlighted">{{ thread.guestName }}</p>
+          <div class="flex items-baseline justify-between gap-3">
+            <p class="min-w-0 truncate text-sm font-medium text-highlighted">{{ thread.guestName }}</p>
+            <span v-if="!occurrenceLine(thread)" class="shrink-0 text-xs text-muted">{{ formatRelativeTime(thread.lastActivityAt) }}</span>
+          </div>
           <p class="mt-0.5 line-clamp-2 text-sm leading-snug text-muted">{{ thread.preview?.text || 'New conversation' }}</p>
         </div>
 
@@ -372,6 +382,7 @@ const listQuery = computed(() => ({
 
 const initialThreadsKey = computed(() => [
   'dashboard-guest-threads',
+  String(route.params.orgSlug ?? ''),
   siteId.value ?? 'org',
   props.scope,
   isLocationScope.value ? selectedLocationId.value ?? 'pending-location' : isOrganizationScope.value ? 'org' : 'site',

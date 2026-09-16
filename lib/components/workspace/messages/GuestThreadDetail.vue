@@ -120,7 +120,6 @@ watch([initialDetail, initialDetailPending, initialDetailError], ([data, pending
   loadingDetail.value = pending
   detailError.value = error
   detail.value = data?.thread ?? null
-  if (data?.thread) replyDraft.value = ''
 }, { immediate: true })
 
 // The tenant's own word for the record, and the route it is read at. A contact
@@ -199,7 +198,18 @@ function clearAttemptMapKey(keys: Ref<Record<string, string>>, name: string) {
   keys.value = remaining
 }
 
-async function loadThreadDetail() {
+/**
+ * Reload the thread.
+ *
+ * `clearDraft` is only true after the member's own send: every other caller is
+ * a refresh they did not ask for — a realtime event, a reconnect — and wiping a
+ * half-typed reply because someone else did something is not acceptable.
+ *
+ * The result is written back into the shared `useGuestThread` entry, not just
+ * into this component, or the conversation and the record beside it would be
+ * reading two different versions of the same thread.
+ */
+async function loadThreadDetail(options: { clearDraft?: boolean } = {}) {
   if (!dashboardScope.value || !siteId.value) return
   const requestToken = ++detailRequestToken
   loadingDetail.value = true
@@ -210,8 +220,9 @@ async function loadThreadDetail() {
       { validate: isThreadDetailResponse },
     )
     if (requestToken !== detailRequestToken) return
+    initialDetail.value = res
     detail.value = res.thread
-    replyDraft.value = ''
+    if (options.clearDraft) replyDraft.value = ''
   } catch (error) {
     if (requestToken !== detailRequestToken) return
     detailError.value = error
@@ -244,7 +255,7 @@ async function sendReply() {
     replyAttemptKey.value = null
     replyAttemptDraft.value = null
     toast.add({ description: accepted ? 'Reply delivery is in progress' : 'Reply sent', color: accepted ? 'info' : 'success' })
-    await loadThreadDetail()
+    await loadThreadDetail({ clearDraft: true })
   } catch (error) {
     toast.add({ description: error instanceof Error ? error.message : 'Failed to send reply', color: 'error' })
   } finally {

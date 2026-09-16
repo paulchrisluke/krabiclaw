@@ -176,7 +176,7 @@
         :disabled="disabled"
         :rows="3"
         :maxrows="8"
-        :ui="{ root: 'rounded-2xl' }"
+        :ui="{ root: 'rounded-2xl', trailing: 'items-end' }"
         @submit="$emit('submit')"
       >
         <template #trailing>
@@ -312,7 +312,14 @@ function scrollToLatestEntry(behavior: ScrollBehavior) {
 onMounted(() => scrollToLatestEntry('auto'))
 
 watch(() => props.entries.length, async () => {
+  // Someone reading back through the thread when a new message lands should
+  // stay where they were reading. Following the conversation is only right
+  // when they are already at the end of it.
+  const container = scrollContainer.value
+  const wasAtEnd = !container
+    || container.scrollHeight - container.scrollTop - container.clientHeight < 80
   await nextTick()
+  if (!wasAtEnd) return
   const reducedMotion = import.meta.client && window.matchMedia('(prefers-reduced-motion: reduce)').matches
   scrollToLatestEntry(reducedMotion ? 'auto' : 'smooth')
 })
