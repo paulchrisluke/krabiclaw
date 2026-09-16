@@ -78,6 +78,7 @@ const props = defineProps<{
 }>()
 
 const dashboard = useDashboardSite()
+const route = useRoute()
 const toast = useToast()
 
 const siteId = computed(() => dashboard.siteId.value)
@@ -125,9 +126,17 @@ watch([initialDetail, initialDetailPending, initialDetailError], ([data, pending
 const recordNoun = computed(() => detail.value
   ? threadRecordTitle(detail.value.submissionType, dashboard.site.value?.vertical ?? null).toLowerCase()
   : 'details')
+// Opening the record keeps the list it was reached through, the same way
+// closing it does; dropping the query here sent the member back to the current
+// list when they closed the drawer from the archive.
 const recordTo = computed(() => {
   if (!detail.value || detail.value.submissionType === 'contact') return null
-  return `${props.threadPath}/details`
+  const query = new URLSearchParams()
+  for (const [key, value] of Object.entries(route.query)) {
+    if (typeof value === 'string' && value) query.set(key, value)
+  }
+  const search = query.toString()
+  return search ? `${props.threadPath}/details?${search}` : `${props.threadPath}/details`
 })
 const subline = computed(() => {
   if (!detail.value) return null

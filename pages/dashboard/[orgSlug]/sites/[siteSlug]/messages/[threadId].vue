@@ -38,9 +38,10 @@ const recordTitle = computed(() => thread.value
   ? threadRecordTitle(thread.value.submissionType, dashboard.site.value?.vertical ?? null)
   : 'Details')
 
-// Closing is a navigation, not local state: the record has its own URL.
+// Closing is a navigation, not local state: the record has its own URL. The
+// conversation keeps whichever list it was opened from.
 function onDrawerToggle(open: boolean) {
-  if (!open) void router.push(threadPath.value)
+  if (!open) void router.push({ path: threadPath.value, query: route.query })
 }
 
 useSeoMeta({ title: 'Conversation | KrabiClaw Dashboard', robots: 'noindex, nofollow' })

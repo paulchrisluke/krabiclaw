@@ -120,7 +120,7 @@
       <NuxtLink
         v-for="thread in threads"
         :key="thread.id"
-        :to="threadRoute(thread)"
+        :to="{ path: threadRoute(thread), query: route.query }"
         class="mx-3 flex items-start gap-3 rounded-xl px-3 py-3 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
         :class="thread.id === openThreadId ? 'bg-elevated' : 'hover:bg-elevated/60'"
       >
@@ -458,8 +458,8 @@ onMounted(() => {
   onBeforeUnmount(() => query.removeEventListener('change', sync))
 })
 
-watch([threads, openThreadId, pairedColumns, pastOnly], ([rows, open, paired]) => {
-  if (!paired || open || pastOnly.value || isOrganizationScope.value || props.embedded) return
+watch([threads, openThreadId, pairedColumns], ([rows, open, paired]) => {
+  if (!paired || open || isOrganizationScope.value || props.embedded) return
   const first = rows[0]
   if (!first) return
   void router.replace({ path: threadRoute(first), query: route.query })
