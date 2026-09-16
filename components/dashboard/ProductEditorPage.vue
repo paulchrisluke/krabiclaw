@@ -380,6 +380,11 @@ const saveError = ref<string | null>(null)
 const photoError = ref<string | null>(null)
 const saving = ref(false)
 
+watch(editorKey, () => {
+  saveError.value = null
+  photoError.value = null
+})
+
 const isCollectionList = (value: unknown): value is { collections: Collection[] } =>
   isRecord(value) && Array.isArray(value.collections)
 const isDefinitionList = (value: unknown): value is { definitions: MetafieldDefinition[] } =>

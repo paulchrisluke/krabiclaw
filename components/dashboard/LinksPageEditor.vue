@@ -641,6 +641,7 @@ const {
 // ── Save / cancel ───────────────────────────────────────
 async function copyPublicUrl() {
   if (!publicLinksUrl.value) return
+  errorMessage.value = ''
   try {
     await navigator.clipboard.writeText(publicLinksUrl.value)
     copiedUrl.value = true
@@ -649,7 +650,7 @@ async function copyPublicUrl() {
       copiedUrl.value = false
     }, 1500)
   } catch {
-    // Clipboard permission failure; leave uncopied
+    errorMessage.value = 'Failed to copy to clipboard'
   }
 }
 

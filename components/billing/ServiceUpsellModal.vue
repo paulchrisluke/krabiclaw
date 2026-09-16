@@ -103,6 +103,11 @@ const { isOpen, type, close } = useServiceUpsell()
 const { startOrganizationCheckout } = useOrganizationSubscription()
 const error = ref<string | null>(null)
 const loading = ref(false)
+
+watch(isOpen, (open) => {
+  if (!open) error.value = null
+})
+
 const dashboard = useDashboardSite()
 const isExperience = computed(() => dashboard.site.value?.vertical === 'experience')
 

@@ -16,6 +16,15 @@
   </div>
 
     <UAlert
+      v-if="locationsError"
+      color="error"
+      variant="soft"
+      icon="i-lucide-circle-alert"
+      :description="locationsError"
+      class="mb-4"
+    />
+
+    <UAlert
       v-if="eventsError"
       color="error"
       variant="soft"
@@ -127,7 +136,9 @@ const actorOptions = computed(() => [
 
 interface Location { id: string; title: string }
 const locationsForSite = ref<Location[]>([])
+const locationsError = ref<string | null>(null)
 watch(() => filters.siteId, async (siteId) => {
+  locationsError.value = null
   filters.locationId = FILTER_ALL
   locationsForSite.value = []
   if (siteId === FILTER_ALL) return
@@ -151,6 +162,8 @@ watch(() => filters.siteId, async (siteId) => {
     if (filters.siteId !== siteId) return
     locationsForSite.value = res.locations
   } catch (err) {
+    if (filters.siteId !== siteId) return
+    locationsError.value = 'Failed to load locations for this site'
     if (import.meta.dev) console.error('Failed to load locations:', err)
   }
 })

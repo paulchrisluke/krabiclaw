@@ -234,6 +234,10 @@ export function useLocationPostEditor(siteId: string, locationId: Ref<string | n
       originalMedia = form.media.map(item => ({ ...item }))
       savedSnapshot.value = snapshot()
       trackPostPublished(String(id), siteId)
+      if (isRecord(res.socialErrors) && Object.keys(res.socialErrors).length > 0) {
+        const errorMessages = Object.entries(res.socialErrors).map(([ch, err]) => `${ch}: ${err}`).join(', ')
+        error.value = `Published, but social channel delivery failed: ${errorMessages}`
+      }
       return res.post as ApiRecord
     } catch (err) {
       error.value = getErrorMessage(err, 'Failed to publish')

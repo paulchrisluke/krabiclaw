@@ -317,6 +317,7 @@ function fillLocationFeatures(summary: LocationCapabilitySummary) {
 async function saveLocationFeatures() {
   const requestedLocationId = locationId.value
   savingLocationFeatures.value = true
+  editorError.value = null
   try {
     // Delta against the SITE's effective set, not this location's prior state (see
     // siteEffectiveFeatures' doc comment) — collapses to `null` when the checked set exactly

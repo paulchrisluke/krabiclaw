@@ -220,7 +220,10 @@ const moveTargetId = ref('')
 const moving = ref(false)
 
 watch(moveDialogOpen, (open) => {
-  if (open) moveTargetId.value = ''
+  if (open) {
+    moveTargetId.value = ''
+    moveError.value = null
+  }
 })
 
 async function moveSelected() {

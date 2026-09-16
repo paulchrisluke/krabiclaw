@@ -578,7 +578,10 @@ export async function listDashboardLocations(
       feature_overrides: location.feature_overrides,
       media: ownerMedia,
       social_image: resolveSocialImageFromMedia(ownerMedia),
-      ...(organizationScoped && parent_site_id ? {
+      ...(organizationScoped
+        && typeof parent_site_id === 'string' && parent_site_id.length > 0
+        && typeof parent_site_name === 'string' && parent_site_name.length > 0
+        && typeof parent_site_slug === 'string' && parent_site_slug.length > 0 ? {
         parent_site_id,
         parent_site_name,
         parent_site_slug,
