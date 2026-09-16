@@ -286,6 +286,7 @@ import { isCurrencyCode } from '~/shared/currencies'
 import type { Product } from '~/server/types/products'
 import { normalizeRobotsIntent } from '~/shared/robots-directive'
 
+const DOMPurify = useHtmlSanitizer()
 
 const { resolveMedia } = useMedia()
 definePageMeta({ layout: 'saya' })
@@ -466,8 +467,8 @@ const heroSubtitle = computed(() => contentHero.value.subtitle || null)
 
 const parkingInfo = computed(() => getContentField('parking.info', '') ?? '')
 const extraNotes = computed(() => getContentField('extra.notes', '') ?? '')
-const sanitizedParkingInfo = computed(() => sanitizeHtml(parkingInfo.value))
-const sanitizedExtraNotes = computed(() => sanitizeHtml(extraNotes.value))
+const sanitizedParkingInfo = computed(() => DOMPurify.sanitize(parkingInfo.value))
+const sanitizedExtraNotes = computed(() => DOMPurify.sanitize(extraNotes.value))
 
 // Derived location data
 const canonicalFormattedAddress = computed(() => {

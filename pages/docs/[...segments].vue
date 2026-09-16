@@ -83,12 +83,13 @@
 <script setup lang="ts">
 import { shallowRef } from 'vue'
 import BlogArticleRenderer from '~/components/blog/BlogArticleRenderer.vue'
-import { renderMarkdownToHtml } from '~/utils/markdown'
+import { renderMarkdownToHtml, sanitizeHtmlForSsr } from '~/utils/markdown'
 import type { BlogEditorBlock } from '~/lib/components/workspace/blog/types'
 import { useContentPageSchema } from '~/composables/useContentPageSchema'
 import { articleCategoryFromSlug } from '~/utils/article-collections'
 import { structuredComponentsFromBlocks } from '~/utils/blog-editor'
 import { isRecord, publicApiRequest } from '~/utils/api-clients'
+import { loadDomPurify } from '~/utils/dom-purify-loader'
 import { normalizeRobotsIntent } from '~/shared/robots-directive'
 
 interface DocsArticleDetail {
@@ -110,6 +111,7 @@ interface DocsArticleDetail {
 // docs layout. /docs/{category} is the category's landing article when one exists.
 definePageMeta({ layout: 'docs' })
 
+const DOMPurify = import.meta.client ? await loadDomPurify() : { sanitize: sanitizeHtmlForSsr }
 
 const route = useRoute()
 const requestEvent = useRequestEvent()
@@ -174,7 +176,7 @@ const { data: article, pending, error } = await useAsyncData(`docs-article-${pat
 if (error.value) throw error.value
 
 function renderMarkdown(markdown: string) {
-  return sanitizeHtml(renderMarkdownToHtml(markdown || ''))
+  return DOMPurify.sanitize(renderMarkdownToHtml(markdown || ''))
 }
 
 const blocks = computed(() => (article.value?.content_blocks ?? []) as BlogEditorBlock[])
@@ -182,7 +184,7 @@ const blocks = computed(() => (article.value?.content_blocks ?? []) as BlogEdito
 const tocHtml = computed(() => blocks.value
   .filter(block => block.type === 'heading' || block.type === 'markdown')
   .map(block => block.type === 'heading'
-    ? `<h${Math.max(2, Math.min(6, block.level || 2))}>${sanitizeHtml(String(block.data.text || ''))}</h${Math.max(2, Math.min(6, block.level || 2))}>`
+    ? `<h${Math.max(2, Math.min(6, block.level || 2))}>${DOMPurify.sanitize(String(block.data.text || ''))}</h${Math.max(2, Math.min(6, block.level || 2))}>`
     : renderMarkdown(String(block.data.markdown || '')))
   .join('\n'))
 

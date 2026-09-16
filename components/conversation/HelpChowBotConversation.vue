@@ -28,7 +28,7 @@
 
           <template #content="{ message }">
             <div class="space-y-2">
-              <!-- Sanitized by sanitizeHtml in renderMarkdown before it reaches here. -->
+              <!-- Sanitized by DOMPurify in renderMarkdown before it reaches here. -->
               <!-- eslint-disable vue/no-v-html -->
               <div
                 v-if="message.role === 'assistant'"
@@ -143,7 +143,10 @@
 <script setup lang="ts">
 import { $fetch } from 'ofetch'
 import { marked } from 'marked'
+import { sanitizeHtmlForSsr } from '~/utils/markdown'
+import { loadDomPurify } from '~/utils/dom-purify-loader'
 
+const DOMPurify = import.meta.client ? await loadDomPurify() : { sanitize: sanitizeHtmlForSsr }
 
 const renderer = new marked.Renderer()
 renderer.link = function ({ href, title, tokens }) {
@@ -248,7 +251,7 @@ function openEscalation(id: string) {
 
 function renderMarkdown(text: string): string {
   const html = marked.parse(text) as string
-  return sanitizeHtml(html)
+  return DOMPurify.sanitize(html)
 }
 
 function createMessage(role: HelpMessage['role'], content: string, extra: Partial<HelpMessage> = {}): HelpMessage {

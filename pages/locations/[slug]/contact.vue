@@ -172,6 +172,7 @@
 import { formatOpeningHours, getIsOpenNow } from '~/utils/formatters'
 import { formatLocationAddress, type LocationAddressInput } from '~/utils/location-address'
 import { getTodayHoursLabel } from '~/shared/reservation-hours'
+const DOMPurify = useHtmlSanitizer()
 
 definePageMeta({ layout: 'saya' })
 
@@ -207,8 +208,8 @@ const mapEmbedSrc = computed(() => (location.value as ApiValue)?.map_embed_url |
 
 const parkingInfo = computed(() => getContentField('parking.info', '') ?? '')
 const extraNotes = computed(() => getContentField('extra.notes', '') ?? '')
-const sanitizedParkingInfo = computed(() => sanitizeHtml(parkingInfo.value))
-const sanitizedExtraNotes = computed(() => sanitizeHtml(extraNotes.value))
+const sanitizedParkingInfo = computed(() => DOMPurify.sanitize(parkingInfo.value))
+const sanitizedExtraNotes = computed(() => DOMPurify.sanitize(extraNotes.value))
 
 const siteName = computed(() => String((site as ApiValue)?.brand_name ?? '').trim())
 

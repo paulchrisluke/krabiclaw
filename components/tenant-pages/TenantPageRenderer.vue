@@ -204,6 +204,7 @@ import type { TenantPageBlock } from '~/utils/tenant-page-blocks'
 import { getVerticalCopy } from '~/utils/vertical-copy'
 
 const props = defineProps<{ page: PublicTenantPage }>()
+const sanitizer = useHtmlSanitizer()
 const { t, locale } = useI18n()
 const { site } = useTenantSite()
 const storyKicker = computed(() => getVerticalCopy(site?.vertical, locale.value).ourStoryKicker)
@@ -252,7 +253,7 @@ function text(value: unknown): string {
 }
 
 function sanitize(value: string): string {
-  return sanitizeHtml(value)
+  return sanitizer.sanitize(value)
 }
 
 function sectionKey(block: TenantPageBlock): string | undefined {

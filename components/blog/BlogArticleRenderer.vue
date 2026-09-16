@@ -150,8 +150,9 @@
 <script setup lang="ts">
 import type { BlogEditorBlock } from '~/lib/components/workspace/blog/types'
 import ContentAiAssistanceSection from '~/components/content/ContentAiAssistanceSection.vue'
-import { renderMarkdownToHtml } from '~/utils/markdown'
+import { renderMarkdownToHtml, sanitizeHtmlForSsr } from '~/utils/markdown'
 import { sanitizeUrl } from '~/utils/sanitize'
+import { loadDomPurify } from '~/utils/dom-purify-loader'
 
 const props = withDefaults(defineProps<{ title: string; blocks: BlogEditorBlock[]; editable?: boolean; template?: string; showTitle?: boolean }>(), {
   editable: false,
@@ -219,7 +220,8 @@ function isBlockEmpty(block: BlogEditorBlock) {
   }
   return false
 }
-function renderMarkdown(value: string) { return sanitizeHtml(renderMarkdownToHtml(value)) }
+const DOMPurify = import.meta.client ? await loadDomPurify() : { sanitize: sanitizeHtmlForSsr }
+function renderMarkdown(value: string) { return DOMPurify.sanitize(renderMarkdownToHtml(value)) }
 function textValue(block: BlogEditorBlock) { return String(block.data[block.type === 'heading' ? 'text' : 'markdown'] || '') }
 function updateText(index: number, block: BlogEditorBlock, event: Event) {
   const key = block.type === 'heading' ? 'text' : 'markdown'
