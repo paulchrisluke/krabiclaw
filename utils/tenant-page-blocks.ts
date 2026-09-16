@@ -24,6 +24,10 @@ export type TenantPageBlockType =
   | 'product_grid'
   | 'location_grid'
   | 'ai_assistance'
+  | 'comparison'
+  | 'stat_grid'
+  | 'workflow_grid'
+  | 'video_feature'
 
 export type TenantPageType = 'custom' | 'recipe' | 'legal' | 'system'
 
@@ -231,6 +235,10 @@ export const TENANT_PAGE_BLOCK_REGISTRY: Record<TenantPageBlockType, TenantPageB
     media: { kind: 'media', label: 'Image or video', translatable: false, section: 'image', slot: 'media' },
     cta_label: text('Button label', { section: 'button', pairedWith: 'cta_url' }),
     cta_url: link('Button URL', { pairedWith: 'cta_label' }),
+    // A second button, which eight platform heroes already carry and no list
+    // declared, so it could be written and never translated or validated.
+    secondary_label: text('Second button label', { section: 'second_button', pairedWith: 'secondary_url' }),
+    secondary_url: link('Second button URL', { section: 'second_button', pairedWith: 'secondary_label' }),
   }, { accessibility: 'required', seo: 'structured' }),
 
   button_group: blockDefinitionWithMetadata('button_group', 'Buttons', 'A row of links.', ALL_RECIPES, {
@@ -251,6 +259,68 @@ export const TENANT_PAGE_BLOCK_REGISTRY: Record<TenantPageBlockType, TenantPageB
     },
     items: { kind: 'list', label: 'Items', section: 'items', of: GRID_ITEM_FIELDS, availableWhen: { field: 'source', equals: ['manual'] } },
     calculator: { kind: 'calculator', label: 'Calculator', translatable: false, section: 'calculator', availableWhen: { field: 'source', equals: ['calculator'] } },
+  }),
+
+  // A comparison is one editorial thing — this without us, this with us — held
+  // in one block. It was two feature_grids that only a `section` of
+  // "comparison-against" and "comparison-for" told apart, so the document was
+  // naming the component that drew it.
+  comparison: blockDefinitionWithMetadata('comparison', 'Comparison', 'Two sides, set against each other.', ALL_RECIPES, {
+    title: text('Section title', { section: 'settings' }),
+    description: prose('Description', { section: 'settings' }),
+    problem_title: text('Without heading', { section: 'without' }),
+    problem_label: text('Without label', { section: 'without' }),
+    problem_items: {
+      kind: 'list', label: 'Without', section: 'problem_items',
+      of: { title: text('Title', { required: true }), description: prose('Description') },
+    },
+    solution_title: text('With heading', { section: 'with' }),
+    solution_label: text('With label', { section: 'with' }),
+    solution_items: {
+      kind: 'list', label: 'With', section: 'solution_items',
+      of: { title: text('Title', { required: true }), description: prose('Description') },
+    },
+  }),
+
+  // Numbers with what they count. Items are a value and its label, which is a
+  // different thing from a feature's title and its prose.
+  stat_grid: blockDefinitionWithMetadata('stat_grid', 'Stats', 'Figures and what they measure.', ALL_RECIPES, {
+    title: text('Section title', { section: 'settings' }),
+    description: prose('Description', { section: 'settings' }),
+    label: text('Label', { section: 'settings' }),
+    items: {
+      kind: 'list', label: 'Stats', section: 'items',
+      of: { value: text('Figure', { required: true }), title: text('What it measures', { required: true }) },
+    },
+  }),
+
+  // Something the reader can ask an assistant to do, and what happens when they
+  // do. The prompt is the content; a feature grid has nothing like it.
+  workflow_grid: blockDefinitionWithMetadata('workflow_grid', 'Workflows', 'Things to ask for, and what they do.', ALL_RECIPES, {
+    title: text('Section title', { section: 'settings' }),
+    description: prose('Description', { section: 'settings' }),
+    label: text('Label', { section: 'settings' }),
+    items: {
+      kind: 'list', label: 'Workflows', section: 'items',
+      of: {
+        title: text('Title', { required: true }),
+        prompt: prose('What to ask'),
+        description: prose('What happens'),
+        icon: { kind: 'enum', label: 'Icon', translatable: false, section: 'icon' },
+      },
+    },
+  }),
+
+  // A video with the points it makes.
+  video_feature: blockDefinitionWithMetadata('video_feature', 'Video', 'A video and what it shows.', ALL_RECIPES, {
+    title: text('Section title', { section: 'settings' }),
+    description: prose('Description', { section: 'settings' }),
+    video_title: text('Video title', { section: 'video' }),
+    video_url: link('Video URL', { section: 'video' }),
+    items: {
+      kind: 'list', label: 'Points', section: 'items',
+      of: { title: text('Title', { required: true }), description: prose('Description') },
+    },
   }),
 
   team_grid: blockDefinitionWithMetadata('team_grid', 'Team', 'The people behind the business.', ALL_RECIPES, {
