@@ -3,10 +3,9 @@ import { TENANT_PAGE_BLOCK_REGISTRY, type TenantPageBlock, type TenantPageBlockT
 /**
  * Where a block's controls live in the editor chain.
  *
- * This is route grouping and nothing else. `TENANT_PAGE_BLOCK_REGISTRY`,
- * `createTenantPageEditorData` and `validateTenantPageBlock` remain the content
- * contract — no field here restates a payload key's meaning, an allowed value or
- * a validation rule, and adding a section never changes what the page stores.
+ * Derived from the block's declared fields, so this restates nothing. It was a
+ * second hand-written table beside the registry, which is how a block could
+ * grow a field that no screen ever showed.
  *
  * It exists because `DESIGN.md` measures a leaf by its controls: a block with
  * one concern is a leaf, and a block with several is a hub whose concerns each
@@ -33,65 +32,50 @@ export interface TenantPageBlockSection {
   sources?: readonly string[]
 }
 
-const CTA_SECTIONS: readonly TenantPageBlockSection[] = [
-  { key: 'copy', label: 'Copy', kind: 'leaf' },
-  { key: 'button', label: 'Button', kind: 'leaf' },
-]
-
-const BLOCK_SECTIONS: Record<TenantPageBlockType, readonly TenantPageBlockSection[]> = {
-  // One concern, so the block itself is the leaf and there is no extra segment.
-  heading: [{ key: 'content', label: 'Heading', kind: 'leaf' }],
-  markdown: [{ key: 'content', label: 'Text', kind: 'leaf' }],
-  image: [{ key: 'content', label: 'Image', kind: 'leaf' }],
-  gallery: [{ key: 'content', label: 'Gallery', kind: 'leaf' }],
-  faq: [{ key: 'content', label: 'Questions', kind: 'leaf' }],
-  page_grid: [{ key: 'content', label: 'Pages', kind: 'leaf' }],
-  product_grid: [{ key: 'content', label: 'Products', kind: 'leaf' }],
-  // A divider has nothing to edit. It is still a row in Sections, where it is
-  // reordered and removed like any other.
-  divider: [],
-  button_group: [{ key: 'buttons', label: 'Buttons', kind: 'list', collection: 'buttons' }],
-
-  how_to: [
-    { key: 'title', label: 'Title', kind: 'leaf' },
-    { key: 'steps', label: 'Steps', kind: 'list', collection: 'steps' },
-  ],
-  cta: CTA_SECTIONS,
-  contact_cta: CTA_SECTIONS,
-  booking_cta: CTA_SECTIONS,
-  callout: [
-    { key: 'message', label: 'Message', kind: 'leaf' },
-    { key: 'buttons', label: 'Buttons', kind: 'list', collection: 'buttons' },
-  ],
-  hero: [
-    { key: 'copy', label: 'Copy', kind: 'leaf' },
-    { key: 'image', label: 'Image', kind: 'leaf' },
-    { key: 'button', label: 'Button', kind: 'leaf' },
-  ],
-  feature_grid: [
-    { key: 'settings', label: 'Settings', kind: 'leaf' },
-    { key: 'items', label: 'Items', kind: 'list', collection: 'items', sources: ['manual'] },
-    { key: 'calculator', label: 'Calculator', kind: 'leaf', sources: ['calculator'] },
-  ],
-  testimonial_grid: [
-    { key: 'settings', label: 'Settings', kind: 'leaf' },
-    { key: 'items', label: 'Items', kind: 'list', collection: 'items', sources: ['manual'] },
-  ],
-  team_grid: [
-    { key: 'copy', label: 'Copy', kind: 'leaf' },
-    { key: 'items', label: 'People', kind: 'list', collection: 'items' },
-  ],
-  location_grid: [
-    { key: 'settings', label: 'Settings', kind: 'leaf' },
-    { key: 'locations', label: 'Locations', kind: 'leaf' },
-    { key: 'items', label: 'Items', kind: 'list', collection: 'items', sources: ['manual'] },
-  ],
-  donation_choices: [
-    { key: 'copy', label: 'Copy', kind: 'leaf' },
-    { key: 'destination', label: 'Destination', kind: 'leaf' },
-    { key: 'tiers', label: 'Tiers', kind: 'list', collection: 'tiers' },
-  ],
+const SECTION_LABELS: Record<string, string> = {
+  content: 'Content', copy: 'Copy', button: 'Button', buttons: 'Buttons',
+  settings: 'Settings', items: 'Items', steps: 'Steps', tiers: 'Amounts',
+  destination: 'Destination', calculator: 'Calculator', image: 'Image',
+  icon: 'Icon', link: 'Link',
 }
+
+const COLLECTIONS = new Set<TenantPageBlockCollection>(['items', 'buttons', 'steps', 'tiers'])
+
+/**
+ * A block's sections are the distinct `section` values its fields declare, in
+ * declaration order. They used to be a second hand-written table beside the
+ * registry, which is how a block could grow a field the editor never showed.
+ */
+function blockSections(type: TenantPageBlockType): readonly TenantPageBlockSection[] {
+  const fields = TENANT_PAGE_BLOCK_REGISTRY[type]?.fields ?? {}
+  const sections: TenantPageBlockSection[] = []
+  for (const [key, field] of Object.entries(fields)) {
+    const sectionKey = field.section ?? 'content'
+    const existing = sections.find(section => section.key === sectionKey)
+    const isList = field.kind === 'list' && COLLECTIONS.has(key as TenantPageBlockCollection)
+    if (existing) {
+      // A section browses a collection when any field in it is one.
+      if (isList && !existing.collection) {
+        existing.kind = 'list'
+        existing.collection = key as TenantPageBlockCollection
+        existing.label = SECTION_LABELS[key] ?? field.label
+      }
+      continue
+    }
+    sections.push({
+      key: isList ? key : sectionKey,
+      label: SECTION_LABELS[isList ? key : sectionKey] ?? field.label,
+      kind: isList ? 'list' : 'leaf',
+      ...(isList ? { collection: key as TenantPageBlockCollection } : {}),
+      ...(field.availableWhen?.field === 'source' ? { sources: field.availableWhen.equals } : {}),
+    })
+  }
+  return sections
+}
+
+const BLOCK_SECTIONS: Record<TenantPageBlockType, readonly TenantPageBlockSection[]> = Object.fromEntries(
+  (Object.keys(TENANT_PAGE_BLOCK_REGISTRY) as TenantPageBlockType[]).map(type => [type, blockSections(type)]),
+) as Record<TenantPageBlockType, readonly TenantPageBlockSection[]>
 
 /** An unset `source` means the block authors its own rows. */
 export function tenantPageBlockSource(block: TenantPageBlock): string {

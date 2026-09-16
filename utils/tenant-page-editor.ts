@@ -10,47 +10,26 @@ type EditorData = Record<string, unknown>
 
 export const FAQ_SOURCE_OPTIONS = FAQ_BLOCK_SOURCES.map(value => ({ label: FAQ_BLOCK_SOURCE_LABELS[value], value }))
 
+/**
+ * A new block's starting data, derived from what its fields declare.
+ *
+ * This was a hand-written switch over every type — a fourth copy of the field
+ * list, which is how `location_grid` came to seed a `source` key the registry
+ * never declared.
+ */
 export function createTenantPageEditorData(type: TenantPageBlockType): EditorData {
-  switch (type) {
-    case 'heading':
-      return { text: '' }
-    case 'markdown':
-      return { markdown: '', editor_mode: 'rich' }
-    case 'image':
-      return { caption: '' }
-    case 'gallery':
-      return {}
-    case 'faq':
-      return { title: '', source: 'page_qa' }
-    case 'how_to':
-      return { title: '', steps: [{ name: '', text: '' }] }
-    case 'divider':
-      return {}
-    case 'cta':
-    case 'contact_cta':
-    case 'booking_cta':
-      return { title: '', description: '', label: '', url: '' }
-    case 'callout':
-      return { title: '', body: '', tone: 'neutral', buttons: [] }
-    case 'hero':
-      return { eyebrow: '', title: '', subtitle: '', cta_label: '', cta_url: '' }
-    case 'button_group':
-      return { buttons: [{ label: '', url: '' }] }
-    case 'feature_grid':
-      return { title: '', source: 'manual', items: [] }
-    case 'testimonial_grid':
-      return { title: '', description: '', source: 'site_reviews' }
-    case 'team_grid':
-      return { title: '', description: '', items: [{ first_name: '', last_name: '', title: '', bio: '' }] }
-    case 'page_grid':
-      return { title: '', page_ids: [] }
-    case 'product_grid':
-      return { title: '', collection_id: '', product_ids: [] }
-    case 'location_grid':
-      return { title: '', source: 'manual', items: [] }
-    case 'donation_choices':
-      return { title: '', description: '', destination: '', tiers: [{ amount: '', title: '', description: '' }] }
+  const fields = TENANT_PAGE_BLOCK_REGISTRY[type]?.fields ?? {}
+  const data: EditorData = {}
+  for (const [key, field] of Object.entries(fields)) {
+    // A block's own column and its media placements are not its data.
+    if (field.store === 'level' || field.kind === 'media' || field.kind === 'calculator') continue
+    if (field.kind === 'list') data[key] = []
+    else if (field.kind === 'reference') data[key] = key.endsWith('_ids') ? [] : ''
+    else if (field.default !== undefined) data[key] = field.default
+    else if (field.kind === 'enum') continue
+    else data[key] = ''
   }
+  return data
 }
 
 function text(value: unknown): string {

@@ -1,3 +1,5 @@
+import { TENANT_PAGE_BLOCK_REGISTRY, type TenantPageBlockType, type TenantPageField } from '../utils/tenant-page-blocks'
+
 export const CONTENT_DOCUMENT_KINDS = [
   'page',
   'article',
@@ -44,9 +46,6 @@ export interface ContentBlockTextField {
   readonly format: ContentTextFormat
 }
 
-const plain = (...path: LocalizedContentFieldSegment[]): ContentBlockTextField => ({ path, format: 'plain' })
-const markdown = (...path: LocalizedContentFieldSegment[]): ContentBlockTextField => ({ path, format: 'markdown' })
-
 /**
  * The text a tenant authors, per block type, and how each field is rendered.
  *
@@ -60,45 +59,40 @@ const markdown = (...path: LocalizedContentFieldSegment[]): ContentBlockTextFiel
  * namings for a hero's call to action. Those are reconciled by the epoch
  * backfill, not by widening this declaration to match them.
  */
-export const CONTENT_BLOCK_TEXT_FIELDS = {
-  heading: [plain('text')],
-  markdown: [markdown('markdown')],
-  image: [plain('caption')],
-  gallery: [plain('caption')],
-  faq: [plain('title')],
-  how_to: [
-    plain('label'), plain('estimated_time'), plain('tool_items', '*'), plain('supply_items', '*'),
-    plain('steps', '*', 'name'), plain('steps', '*', 'text'),
-  ],
-  divider: [],
-  ai_assistance: [
-    plain('label'), plain('intro'), plain('prompts', '*', 'title'), plain('prompts', '*', 'prompt'),
-    plain('prompts', '*', 'description'), plain('prompts', '*', 'copy_label'),
-  ],
-  cta: [plain('title'), plain('description'), plain('label')],
-  // `body` is what callouts actually store. The blog renderer read
-  // `data.markdown || data.text`, and no stored callout has either key, so every
-  // callout rendered empty there.
-  callout: [plain('title'), plain('body')],
-  hero: [plain('eyebrow'), plain('title'), plain('subtitle'), plain('cta_label')],
-  button_group: [plain('buttons', '*', 'label')],
-  feature_grid: [plain('title'), plain('description'), plain('items', '*', 'title'), plain('items', '*', 'description')],
-  // A person's own words: the role they hold and how they describe themselves.
-  // Their name is translatable too — a Japanese or Thai site writes it in its
-  // own script rather than transliterating at read time.
-  team_grid: [
-    plain('title'), plain('description'),
-    plain('items', '*', 'first_name'), plain('items', '*', 'last_name'),
-    plain('items', '*', 'title'), plain('items', '*', 'bio'),
-  ],
-  testimonial_grid: [plain('title'), plain('description')],
-  contact_cta: [plain('title'), plain('description'), plain('label')],
-  booking_cta: [plain('title'), plain('description'), plain('label')],
-  donation_choices: [plain('tiers', '*', 'label')],
-  page_grid: [plain('title'), plain('description')],
-  product_grid: [plain('title'), plain('description')],
-  location_grid: [plain('title'), plain('description')],
-} as const satisfies Record<ContentBlockType, readonly ContentBlockTextField[]>
+/**
+ * The text a tenant authors, per block type, and how each field is rendered —
+ * derived from the block registry's declared fields.
+ *
+ * It used to be written out by hand here, which made it the third of five
+ * lists describing the same fields. They disagreed. `donation_choices` was
+ * declared at `tiers.*.label`, a key the editor never writes, so no donation
+ * tier's words were ever translatable; a feature row's `value` and `icon` were
+ * absent for the same reason. Deriving it means a field the editor can write is
+ * a field localization can see, necessarily.
+ *
+ * Structural values stay out by declaring `translatable: false` — urls, enums,
+ * icons, references — so this remains the tenant-authored text contract.
+ */
+function blockTextFields(fields: Readonly<Record<string, TenantPageField>>, prefix: LocalizedContentFieldSegment[] = []): ContentBlockTextField[] {
+  const collected: ContentBlockTextField[] = []
+  for (const [key, field] of Object.entries(fields)) {
+    if (field.kind === 'list') {
+      // A list of records describes its item's fields; a list of plain strings
+      // is itself the text — how_to's tools and supplies are the latter.
+      if (field.of) collected.push(...blockTextFields(field.of, [...prefix, key, '*']))
+      else if (field.translatable !== false) collected.push({ path: [...prefix, key, '*'], format: 'plain' })
+      continue
+    }
+    if (field.kind !== 'text' && field.kind !== 'markdown') continue
+    if (field.translatable === false) continue
+    collected.push({ path: [...prefix, key], format: field.kind === 'markdown' ? 'markdown' : 'plain' })
+  }
+  return collected
+}
+
+export const CONTENT_BLOCK_TEXT_FIELDS = Object.fromEntries(
+  Object.entries(TENANT_PAGE_BLOCK_REGISTRY).map(([type, definition]) => [type, blockTextFields(definition.fields)]),
+) as unknown as Record<ContentBlockType, readonly ContentBlockTextField[]>
 
 // This is the publication block contract for tenant-authored text. Structural
 // fields, URLs, flags, and media references are intentionally absent.
@@ -106,22 +100,15 @@ export const PUBLICATION_CONTENT_BLOCK_LOCALIZED_FIELDS = Object.fromEntries(
   PUBLICATION_CONTENT_BLOCK_TYPES.map(type => [type, CONTENT_BLOCK_TEXT_FIELDS[type].map(field => field.path)]),
 ) as unknown as Record<PublicationContentBlockType, ReadonlyArray<readonly LocalizedContentFieldSegment[]>>
 
-export const CONTENT_BLOCK_TYPES = [
-  ...PUBLICATION_CONTENT_BLOCK_TYPES,
-  'hero',
-  'button_group',
-  'feature_grid',
-  'team_grid',
-  'testimonial_grid',
-  'contact_cta',
-  'booking_cta',
-  'donation_choices',
-  'page_grid',
-  'product_grid',
-  'location_grid',
-] as const
+/**
+ * Every block type there is. Derived, because a second list is how
+ * `ai_assistance` came to be writable here and unregistered there: a page
+ * carrying one threw "not registered" when it was read, rather than being
+ * refused when it was written.
+ */
+export const CONTENT_BLOCK_TYPES = Object.keys(TENANT_PAGE_BLOCK_REGISTRY) as readonly TenantPageBlockType[]
 
-export type ContentBlockType = typeof CONTENT_BLOCK_TYPES[number]
+export type ContentBlockType = TenantPageBlockType
 
 export const LOCALIZED_RESOURCE_TYPES = [
   'site', 'business_location', 'product', 'collection', 'media_asset',
