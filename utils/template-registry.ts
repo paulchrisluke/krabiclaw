@@ -11,8 +11,6 @@ export interface PublicTemplateDefinition {
     offeringDetailPrefix: string | null
     articleIndex: string | null
     articleDetailPrefix: string
-    /** Whether an article's public path carries its category between the prefix and the slug. */
-    articlePathHasCategory: boolean
   }
   sitemap: {
     exactPaths: string[]
@@ -56,7 +54,6 @@ export const publicTemplateRegistry: Record<PublicTemplateSlug, PublicTemplateDe
       offeringDetailPrefix: null,
       articleIndex: '/blog',
       articleDetailPrefix: '/blog',
-      articlePathHasCategory: false,
     },
     sitemap: {
       exactPaths: ['/', '/menu', '/products', '/experiences', '/contact', '/blog', '/locations', '/reservations', '/posts', '/photos', '/qa', '/reviews'],
@@ -84,7 +81,6 @@ export const publicTemplateRegistry: Record<PublicTemplateSlug, PublicTemplateDe
       offeringDetailPrefix: '/services',
       articleIndex: '/blog',
       articleDetailPrefix: '/article',
-      articlePathHasCategory: false,
     },
     sitemap: {
       exactPaths: ['/', '/about', '/services', '/pricing', '/donate', '/schedule', '/contact', '/blog', '/policies/privacy', '/policies/terms', '/third-party-notices'],
@@ -120,7 +116,6 @@ export const publicTemplateRegistry: Record<PublicTemplateSlug, PublicTemplateDe
       offeringDetailPrefix: null,
       articleIndex: '/blog',
       articleDetailPrefix: '/blog',
-      articlePathHasCategory: true,
     },
     sitemap: {
       // The editorial marketing routes are not listed here: they are published

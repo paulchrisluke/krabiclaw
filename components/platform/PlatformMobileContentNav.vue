@@ -19,7 +19,8 @@
 </template>
 
 <script setup lang="ts">
-import { getBlogPostPath } from '~/utils/blog-categories'
+import { tenantBlogPostPath } from '~/utils/tenant-blog-route'
+import { PLATFORM_TEMPLATE } from '~/utils/template-registry'
 
 /**
  * The Docs and Blog disclosures in the shared collapsed navigation. Their
@@ -43,11 +44,10 @@ const docsItems = computed(() => [
 
 const blogItems = computed(() => [
   { label: 'All posts', to: '/blog' },
-  ...blogCategories.value.flatMap(({ posts }) => posts.reduce<Array<{ label: string, to: string }>>((items, post) => {
-    const to = getBlogPostPath(post.category, post.slug)
-    if (to) items.push({ label: post.label, to })
-    return items
-  }, [])),
+  ...blogCategories.value.flatMap(({ posts }) => posts.map(post => ({
+    label: post.label,
+    to: tenantBlogPostPath(PLATFORM_TEMPLATE, post.slug),
+  }))),
 ])
 
 const groups = computed(() => [

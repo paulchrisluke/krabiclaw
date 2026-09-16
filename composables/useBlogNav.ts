@@ -1,4 +1,3 @@
-import { BLOG_CATEGORY_SLUGS } from '~/utils/blog-categories'
 import { publicApiRequest } from '~/utils/api-clients'
 import { validateApiShape } from '~/utils/api-validation'
 
@@ -46,11 +45,12 @@ export function useBlogNav() {
 
   const posts = computed<PublicBlogPost[]>(() => data.value?.posts ?? [])
 
-  // Grouped by category in the taxonomy's own order; posts keep the list's date order.
-  const categories = computed<BlogNavCategory[]>(() => Object.entries(BLOG_CATEGORY_SLUGS).flatMap(([category, categorySlug]) => {
-    const group = posts.value.filter(post => post.category === category).map(post => ({ ...post, label: post.title }))
-    return group.length ? [{ category, categorySlug, posts: group }] : []
-  }))
+  // Grouped by the category each article carries, the same way every other
+  // site's blog groups: KrabiClaw's used to read a fixed list of six labels,
+  // so an article filed under anything else was listed nowhere.
+  const labelled = computed(() => posts.value.map(post => ({ ...post, label: post.title })))
+  const { categories: grouped } = useTenantBlogNav(labelled)
+  const categories = computed<BlogNavCategory[]>(() => grouped.value)
 
   return { posts, categories, pending, error }
 }

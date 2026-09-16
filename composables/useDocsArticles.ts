@@ -62,7 +62,7 @@ export async function useDocsArticles() {
   await asyncData
   const { data, pending, error } = asyncData
 
-  const categoryOrder = Object.values(ARTICLE_COLLECTIONS.docs.categorySlugs)
+  const categoryOrder = Object.values(ARTICLE_COLLECTIONS.docs.categorySlugs ?? {})
   const articles = computed<DocsArticle[]>(() => (data.value?.posts ?? [])
     .map(toDocsArticle)
     .filter((article): article is DocsArticle => article !== null)

@@ -2,10 +2,13 @@ import { cloudflareEnv, textResponse } from '~/server/utils/api-response'
 import {
   getPublishedTenantBlogPostBySlug, renderTenantBlogMarkdown, resolvePublicOrigin, } from '~/server/utils/platform-llm'
 
+/**
+ * The markdown mirror of one blog article, for any site including KrabiClaw's.
+ * KrabiClaw's used to answer at /blog-md/{category}/{slug}.md, because its
+ * article path carried the category.
+ */
 export default defineHandler(async (event) => {
-  if (event.context.tenantType !== 'tenant' || !event.context.siteId) {
-    return textResponse('Post not found\n', { status: 404 })
-  }
+  if (!event.context.siteId) return textResponse('Post not found\n', { status: 404 })
 
   const slugParam = getRouterParam(event, 'slug')
   const pathMatch = event.path?.match(/^\/blog-md\/(.+)\.md$/)
@@ -21,7 +24,7 @@ export default defineHandler(async (event) => {
   const db = env.db
   if (!db) return textResponse('Database not available\n', { status: 500 })
 
-  const post = await getPublishedTenantBlogPostBySlug(db, String(event.context.siteId), slug)
+  const post = await getPublishedTenantBlogPostBySlug(db, String(event.context.siteId), slug, 'blog')
   if (!post) return textResponse('Post not found\n', { status: 404 })
 
   return textResponse(renderTenantBlogMarkdown(post, resolvePublicOrigin(event), { themeId: String(event.context.themeId ?? '') }), {}, 'text/markdown; charset=utf-8')

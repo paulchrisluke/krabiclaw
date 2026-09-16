@@ -2,10 +2,10 @@ import { resolvePublicTemplate } from '~/utils/template-registry'
 import { collectionArticlePath, type ArticleCollection } from '~/utils/article-collections'
 
 /**
- * The public path of an article on a site. Customer templates publish one blog
- * at a fixed prefix (/blog or /article). The platform template publishes
- * collections whose URLs carry the category: /blog/{category}/{slug} and
- * /docs/{category}/{slug}.
+ * The public path of an article on a site. A blog article lives at the
+ * template's own prefix — /blog or /article — with nothing between it and the
+ * slug, on every site including KrabiClaw's. Documentation, which only
+ * KrabiClaw publishes, carries its category as a navigation segment.
  */
 export function tenantBlogPostPath(
   template: Parameters<typeof resolvePublicTemplate>[0],
@@ -14,6 +14,6 @@ export function tenantBlogPostPath(
   collection: ArticleCollection = 'blog',
 ) {
   const routes = resolvePublicTemplate(template).serviceRoutes
-  if (!routes.articlePathHasCategory) return `${routes.articleDetailPrefix}/${encodeURIComponent(slug)}`
+  if (collection === 'blog') return `${routes.articleDetailPrefix}/${encodeURIComponent(slug)}`
   return collectionArticlePath(collection, category, slug)
 }

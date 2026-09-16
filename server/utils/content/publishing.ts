@@ -237,9 +237,14 @@ function normalizeRobotsField(input: { robots?: string | null }) {
   input.robots = parsed.intent
 }
 
-/** KrabiClaw's own collections file every article under a fixed category that shapes its URL. */
+/**
+ * A collection whose URL carries the category files every article under one of
+ * a fixed set; that is documentation only. A blog's category is the author's
+ * own word, and may be absent.
+ */
 function assertValidArticleCategory(collection: ArticleCollection, value: string | null | undefined) {
   const categories = articleCollectionCategories(collection)
+  if (!categories) return
   if (value == null || value === '' || !categories.includes(value)) {
     badRequest(`category must be one of: ${categories.join(', ')}`)
   }
@@ -482,7 +487,12 @@ async function resolveTenantContext(db: DbClient, siteId: string, env?: Cloudfla
  * request, which was causing the page to 404 on posts the API itself
  * served fine.
  */
-export async function getPublishedBlogPost(db: DbClient, category: string, slug: string, env: CloudflareEnv, previewAuthorized = false, collection: ArticleCollection = 'blog') {
+/**
+ * One published KrabiClaw article, by slug within its collection. A blog
+ * article is identified by its slug alone; documentation also carries the
+ * category that its URL puts in front of the slug.
+ */
+export async function getPublishedBlogPost(db: DbClient, category: string | null, slug: string, env: CloudflareEnv, previewAuthorized = false, collection: ArticleCollection = 'blog') {
   const platformSite = await getPlatformSite(db)
   const platformSiteId = platformSite.id
   const post = await queryFirst<ApiRecord>(db, `
@@ -494,9 +504,10 @@ export async function getPublishedBlogPost(db: DbClient, category: string, slug:
       ${COVER_SELECT}
     FROM content_documents p
     ${coverJoinSql('p')}
-    WHERE p.kind = 'article' AND p.row_role = 'root' AND p.slug = ? AND (p.metadata_json ->> '$.collection') = ? AND (p.metadata_json ->> '$.category') = ? AND p.site_id = ?
+    WHERE p.kind = 'article' AND p.row_role = 'root' AND p.slug = ? AND (p.metadata_json ->> '$.collection') = ? AND p.site_id = ?
+      ${category === null ? '' : "AND (p.metadata_json ->> '$.category') = ?"}
       ${previewAuthorized ? "AND p.status IN ('draft', 'scheduled', 'published')" : "AND p.status = 'published'"}
-  `, [slug, collection, category, platformSiteId])
+  `, category === null ? [slug, collection, platformSiteId] : [slug, collection, platformSiteId, category])
 
   if (!post) return null
 
@@ -567,7 +578,13 @@ export async function listPublicPlatformBlogPosts(db: DbClient, collection: Arti
   `
 
   const results = await queryAll<ApiRecord>(db, sql, [platformSiteId, collection])
-  return results.filter(post => articleCategoryToSlug(collection, post.category as string | null)).map(attachCover)
+  // Documentation is addressed through its category, so an article filed under
+  // one the collection does not declare has no URL to list. A blog article is
+  // addressed by its slug, and its category is only a label to group under.
+  return results
+    .filter(post => articleCollectionCategories(collection) === null
+      || articleCategoryToSlug(collection, post.category as string | null))
+    .map(attachCover)
 }
 
 export async function listBlogPosts(db: DbClient, siteId: string, status?: string | null, env?: CloudflareEnv) {
@@ -757,11 +774,10 @@ export async function createBlogPost(
   const siteId = scope.site_id
   if (!siteId) badRequest('site_id is required')
   const site = await loadSiteTemplate(db, siteId)
-  // KrabiClaw's own blog files every post under a fixed category that shapes its URL.
   const isTenant = !site.isPlatform
   validateBlogCommon(input, isTenant, 'create')
   const collection = articleCollectionOf(input.collection)
-  if (!isTenant) assertValidArticleCategory(collection, input.category)
+  assertValidArticleCategory(collection, input.category)
   const organizationId = scope.organization_id ?? site.organization_id
   const placementScope = mediaPlacementScope(siteId, organizationId)
   const id = crypto.randomUUID()
@@ -872,7 +888,7 @@ export async function updateBlogPost(
   if (input.content_blocks !== undefined && !input.expected_updated_at) badRequest('expected_updated_at is required with content_blocks')
   const effectiveCollection = articleCollectionOf(input.collection === undefined ? current.collection : input.collection)
   const effectiveCategory = input.category === undefined ? current.category : input.category
-  if (!isTenant) assertValidArticleCategory(effectiveCollection, effectiveCategory)
+  assertValidArticleCategory(effectiveCollection, effectiveCategory)
   const placementScope = mediaPlacementScope(siteId, current.organization_id)
   const normalizedBlocks = input.content_blocks === undefined ? undefined : await normalizeEditorContentBlocks(db, input.content_blocks, placementScope)
   const metadata: Record<string, unknown> = {}
