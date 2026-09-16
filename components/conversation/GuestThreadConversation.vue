@@ -239,6 +239,8 @@ const props = withDefaults(defineProps<{
   recordNoun: string
   /** Where that record is read. Null for a thread that has none. */
   recordTo?: string | null
+  /** What the guest wrote when they opened the thread, if anything. */
+  openingMessage?: string | null
   subline?: string | null
   placeholder?: string
   loading?: boolean
@@ -249,6 +251,7 @@ const props = withDefaults(defineProps<{
   emptyDescription?: string
 }>(), {
   recordTo: null,
+  openingMessage: null,
   subline: null,
   placeholder: 'Write your reply…',
   loading: false,
@@ -294,7 +297,14 @@ const groupedEntries = computed(() => {
   let previousDay: string | null = null
   let previousRunKey: string | null = null
 
-  for (const entry of props.entries) {
+  for (const raw of props.entries) {
+    // The submission IS the guest's first message when they wrote one. Airbnb
+    // shows the opening words in the stream; ours only had them in the list
+    // preview, so the conversation opened on "started this conversation" and
+    // nothing the guest actually said.
+    const entry = raw.kind === 'submission' && props.openingMessage
+      ? { ...raw, kind: 'message' as const, actorKind: 'guest' as const, body: props.openingMessage }
+      : raw
     const occurred = new Date(entry.occurredAt)
     const day = `${occurred.getFullYear()}-${occurred.getMonth()}-${occurred.getDate()}`
     if (day !== previousDay) {

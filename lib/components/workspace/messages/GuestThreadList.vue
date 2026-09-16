@@ -160,7 +160,7 @@
       -->
       <NuxtLink
         v-if="!loadingThreads && !pastOnly && threads.length > 0"
-        :to="{ path: listRoute, query: { ...route.query, past: '1' } }"
+        :to="{ path: listRoute, query: { ...route.query, archived: '' } }"
         class="mt-2 flex items-center justify-between gap-3 border-t border-default px-4 py-4 text-sm font-medium text-default transition hover:bg-elevated/60"
       >
         <span>Past conversations</span>
@@ -244,7 +244,7 @@ const openThreadId = computed(() => {
 })
 
 // Filter, search and corpus live in the URL, so a filtered list is a link.
-const pastOnly = computed(() => route.query.past === '1')
+const pastOnly = computed(() => route.query.archived !== undefined)
 const activeType = computed<SubmissionType | null>(() => {
   if (props.submissionTypeFilter) return props.submissionTypeFilter
   const value = route.query.filter
@@ -460,9 +460,13 @@ onMounted(() => {
 
 watch([threads, openThreadId, pairedColumns], ([rows, open, paired]) => {
   if (!paired || open || isOrganizationScope.value || props.embedded) return
+  // Only when the route actually is this list. Without it the watcher could
+  // fire while the router still held the previous route and carry that route's
+  // query into the replace, which is how a bare /messages landed in ?archived.
+  if (route.path !== listRoute.value) return
   const first = rows[0]
   if (!first) return
-  void router.replace({ path: threadRoute(first), query: route.query })
+  void router.replace({ path: threadRoute(first), query: { ...route.query } })
 }, { immediate: true })
 
 // A thread belongs to a site, and every read and mutation for one is

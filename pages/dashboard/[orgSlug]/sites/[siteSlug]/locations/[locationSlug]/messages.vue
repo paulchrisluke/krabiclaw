@@ -52,7 +52,7 @@ const frame = useEditorFrame(messagesPath)
 // One back control, the navbar's. Past conversations is the list becoming the
 // other corpus, so the chrome names it and goes back to the list — a second
 // arrow inside the panel would be two controls for one navigation.
-const pastOnly = computed(() => route.query.past === '1')
+const pastOnly = computed(() => route.query.archived !== undefined)
 
 // Closing a thread returns to the list it was opened from, filters and corpus
 // intact. Dropping the query here sent a member reading the archive back to
@@ -61,7 +61,7 @@ function listUrl(drop: string[] = []) {
   const query = new URLSearchParams()
   for (const [key, value] of Object.entries(route.query)) {
     if (drop.includes(key)) continue
-    if (typeof value === 'string' && value) query.set(key, value)
+    if (typeof value === 'string') query.set(key, value)
   }
   const search = query.toString()
   return search ? `${messagesPath.value}?${search}` : messagesPath.value
@@ -70,7 +70,7 @@ function listUrl(drop: string[] = []) {
 /** Closing a thread returns to the list it was opened from, corpus intact. */
 const listWithFilters = computed(() => listUrl())
 /** Leaving the archive is a level up, so back drops it and keeps the filters. */
-const currentList = computed(() => listUrl(['past']))
+const currentList = computed(() => listUrl(['archived']))
 const navbarTitle = computed(() => pastOnly.value ? 'Past conversations' : locationName.value)
 const navbarBackTo = computed(() => pastOnly.value ? currentList.value : locationPath.value)
 const navbarBackLabel = computed(() => pastOnly.value ? 'Messages' : 'Location')

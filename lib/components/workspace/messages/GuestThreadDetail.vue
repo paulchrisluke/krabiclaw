@@ -29,6 +29,7 @@
         :guest-name="detail.guestName"
         :record-noun="recordNoun"
         :record-to="recordTo"
+        :opening-message="openingMessage"
         :subline="subline"
         :loading="replySaving"
         :disabled="replySaving || !detail.guestEmail"
@@ -138,6 +139,15 @@ const recordTo = computed(() => {
   const search = query.toString()
   return search ? `${props.threadPath}/details?${search}` : `${props.threadPath}/details`
 })
+// A contact thread's words are its `message`; a reservation or booking carries
+// them as `notes`. Either way they are what the guest typed to start this.
+const openingMessage = computed(() => {
+  const fields = detail.value?.source.fields
+  if (!fields) return null
+  const text = fields.message ?? fields.notes
+  return typeof text === 'string' && text.trim() ? text : null
+})
+
 const subline = computed(() => {
   if (!detail.value) return null
   return [detail.value.locationLabel, detail.value.guestEmail].filter(Boolean).join(' · ') || null
