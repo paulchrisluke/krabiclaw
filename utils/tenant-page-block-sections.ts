@@ -51,13 +51,6 @@ function blockSections(type: TenantPageBlockType): readonly TenantPageBlockSecti
   const fields = TENANT_PAGE_BLOCK_REGISTRY[type]?.fields ?? {}
   const sections: TenantPageBlockSection[] = []
   for (const [key, field] of Object.entries(fields)) {
-    // `preset` never earns a level of its own: a heading with one concern is a
-    // leaf, and routing to a screen holding one dropdown says nothing. It
-    // renders in the block's first section instead — see
-    // tenantPageBlockFieldsForSection.
-    // Fields that describe the block rather than its content sit on the block's
-    // own screen; they are not a level of the chain.
-    if ((field.section ?? 'content') === 'block') continue
     const sectionKey = field.section ?? 'content'
     const existing = sections.find(section => section.key === sectionKey)
     const isList = field.kind === 'list' && COLLECTIONS.has(key as TenantPageBlockCollection)
@@ -186,8 +179,8 @@ export function tenantPageRecordTitle(
  * The controls one leaf shows: the fields declaring that section, in
  * declaration order, minus the lists (a list section browses records instead).
  *
- * `preset` joins the first section rather than owning one, so a block's depth
- * is decided by its content and not by a field every block carries.
+ * A section is one concern of the block, and its fields are the controls that
+ * answer it.
  */
 export function tenantPageBlockFieldsForSection(
   block: TenantPageBlock,
@@ -197,7 +190,6 @@ export function tenantPageBlockFieldsForSection(
   const source = tenantPageBlockSource(block)
   const entries = Object.entries(fields)
     .filter(([key, field]) => {
-      if ((field.section ?? 'content') === 'block') return sectionKey === 'block'
       if (field.kind === 'list' && COLLECTIONS.has(key as TenantPageBlockCollection)) return false
       if ((field.section ?? 'content') !== sectionKey) return false
       return !field.availableWhen || field.availableWhen.equals.includes(String(block.data[field.availableWhen.field] ?? source))

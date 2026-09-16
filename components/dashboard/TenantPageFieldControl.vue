@@ -1,5 +1,6 @@
 <template>
-  <UFormField :label="field.label" :required="field.required" :description="description">
+  <!-- A choice with nothing to choose is not a control. -->
+  <UFormField v-if="!isEmptyChoice" :label="field.label" :required="field.required" :description="description">
     <!-- A list of plain strings — how_to's tools and supplies. -->
     <UInputTags
       v-if="field.kind === 'list'"
@@ -103,8 +104,7 @@ import MediaPicker from '~/lib/components/workspace/media/MediaPicker.vue'
 import RichTextEditor from '~/components/ui/RichTextEditor.vue'
 import TenantPageGalleryField from '~/components/dashboard/TenantPageGalleryField.vue'
 import TenantPageCalculatorField from '~/components/dashboard/TenantPageCalculatorField.vue'
-import { isPlatformTemplate, resolvePublicTemplate } from '~/utils/template-registry'
-import { tenantPageBlockPresets } from '~/utils/tenant-page-presentation'
+import { isPlatformTemplate } from '~/utils/template-registry'
 import type { TenantPageField } from '~/utils/tenant-page-blocks'
 
 /**
@@ -132,11 +132,6 @@ defineEmits<{ splitInsert: [{ after: string; blockType: 'image' | 'faq' | 'how_t
 const block = useTenantPageBlock(props.siteId, props.pageId, () => props.blockId)
 const dashboard = useDashboardSite()
 
-/** The template this site publishes with, which decides its presets. */
-const templateSlug = computed(() => resolvePublicTemplate({
-  themeId: dashboard.site.value?.theme_id,
-  vertical: dashboard.site.value?.vertical,
-}).slug)
 
 const stringValue = computed(() => {
   const value = block.value.data[props.fieldKey]
@@ -150,26 +145,15 @@ const stringList = computed(() => {
 
 const multipleReference = computed(() => props.fieldKey.endsWith('_ids'))
 
-/**
- * A preset's choices are the presentations this template actually has. The
- * editor therefore cannot offer one no renderer can draw — the failure that
- * made every CMS-authored block invisible on a Blawby or platform page.
- */
 const options = computed(() => {
-  if (props.fieldKey === 'preset') {
-    return tenantPageBlockPresets(templateSlug.value, block.value.type)
-      .map(value => ({ value, label: presetLabel(value) }))
-  }
   const platform = isPlatformTemplate({ themeId: dashboard.site.value?.theme_id })
   return (props.field.options ?? []).filter(option => !option.platformOnly || platform)
 })
 
-function presetLabel(value: string): string {
-  return value.replace(/[-_]/g, ' ').replace(/^\w/, character => character.toUpperCase())
-}
+
+const isEmptyChoice = computed(() => props.field.kind === 'enum' && options.value.length === 0)
 
 const description = computed(() => {
-  if (props.fieldKey === 'preset') return 'How this template draws this section.'
   if (props.field.pairedWith) return 'Set this together with its pair, or leave both empty.'
   return undefined
 })

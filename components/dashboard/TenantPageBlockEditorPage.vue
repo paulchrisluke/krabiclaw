@@ -57,21 +57,6 @@
 
     <EditorNavigationList v-else :groups="navigationGroups" />
 
-    <!--
-      What this block is drawn as describes the block, the way its type does, so
-      it sits here beside Section type rather than inside a content leaf — where
-      it would have pushed leaves that were already at DESIGN.md's three controls
-      to four.
-    -->
-    <TenantPageFieldControl
-      v-for="entry in blockFields"
-      :key="entry.key"
-      :site-id="siteId"
-      :page-id="pageId"
-      :block-id="blockId"
-      :field-key="entry.key"
-      :field="entry.field"
-    />
   </div>
 
   <!-- Deeper than my own child: the record below owns both columns. -->
@@ -135,8 +120,6 @@
 import EditorPaneShell from '~/components/dashboard/EditorPaneShell.vue'
 import EditorNavigationList, { type EditorNavigationGroup } from '~/components/dashboard/EditorNavigationList.vue'
 import TenantPageBlockFields from '~/components/dashboard/TenantPageBlockFields.vue'
-import TenantPageFieldControl from '~/components/dashboard/TenantPageFieldControl.vue'
-import { tenantPageBlockFieldsForSection } from '~/utils/tenant-page-block-sections'
 import TenantPageBlockItemEditor from '~/components/dashboard/TenantPageBlockItemEditor.vue'
 import { getErrorMessage, showNotFound } from '~/utils/errors'
 import { createTenantPageEditorData, tenantPageBlockSummary, validateTenantPageBlock } from '~/utils/tenant-page-editor'
@@ -185,8 +168,6 @@ const sections = computed<readonly TenantPageBlockSection[]>(() => (block.value 
 /** A block with one section is that section; there is no row to open it with. */
 const singleSection = computed(() => (sections.value.length === 1 ? sections.value[0]! : null))
 
-/** Fields that describe the block rather than its content — currently the preset. */
-const blockFields = computed(() => (block.value ? tenantPageBlockFieldsForSection(block.value, 'block') : []))
 
 const openSegment = computed(() => frame.childSegment.value)
 const openSection = computed(() => sections.value.find(section => section.key === openSegment.value) ?? null)

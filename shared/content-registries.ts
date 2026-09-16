@@ -164,10 +164,35 @@ export function readContentFieldValue(data: Record<string, unknown>, path: Conte
  * description from the registry makes that disagreement structurally
  * impossible: there is one declaration, and the schemas are a view of it.
  */
+/**
+ * The fields that are not prose: references, enums, urls and flags.
+ *
+ * They were described nowhere. The MCP's block description was generated from
+ * the translatable-text list alone, so a tool could be told a `page_grid` holds
+ * a title and a description and never that it holds `page_ids` — the one field
+ * that makes it list anything. `preset` had the same hole under its old name
+ * `section`, which is why a block an assistant wrote rendered nothing on a
+ * Blawby or platform page.
+ */
+function describeStructuralFields(type: ContentBlockType): string {
+  const fields = TENANT_PAGE_BLOCK_REGISTRY[type]?.fields ?? {}
+  const described = Object.entries(fields)
+    .filter(([, field]) => field.kind === 'url' || field.kind === 'enum' || field.kind === 'reference')
+    .map(([key, field]) => {
+      if (field.kind === 'enum' && field.options?.length) {
+        return `${key} (one of ${field.options.map(option => option.value).join(', ')})`
+      }
+      if (field.kind === 'enum') return `${key} (see the site's template)`
+      if (field.kind === 'reference') return `${key} (${field.reference} ids)`
+      return `${key} (url)`
+    })
+  return described.length ? ` Also ${described.join(', ')}.` : ''
+}
+
 export function describeContentBlockTextFields(types: readonly ContentBlockType[]): string {
   const perType = types.map((type) => {
     const fields = CONTENT_BLOCK_TEXT_FIELDS[type]
-    if (fields.length === 0) return `${type} block: no text fields.`
+    if (fields.length === 0) return `${type} block: no text fields.${describeStructuralFields(type)}`
     const named = (format: ContentTextFormat) => fields
       .filter(field => field.format === format)
       .map(field => field.path.join('.'))
@@ -176,7 +201,7 @@ export function describeContentBlockTextFields(types: readonly ContentBlockType[
     const parts: string[] = []
     if (plainFields.length > 0) parts.push(`literal — ${plainFields.join(', ')}`)
     if (markdownFields.length > 0) parts.push(`parsed as markdown — ${markdownFields.join(', ')}`)
-    return `${type} block: ${parts.join('; ')}.`
+    return `${type} block: ${parts.join('; ')}.${describeStructuralFields(type)}`
   })
   return [
     'Typed block payload.',

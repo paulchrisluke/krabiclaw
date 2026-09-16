@@ -223,7 +223,7 @@ const { template: resolvedTemplate } = usePublicTemplate()
 const template = computed<PublicTemplateSlug>(() => props.template ?? resolvedTemplate.value.slug)
 
 function presentationOf(block: TenantPageBlock): string | null {
-  return tenantPageBlockPresentation(template.value, block.type, text(block.data.preset))
+  return tenantPageBlockPresentation(template.value, block.type)
 }
 const sanitizer = useHtmlSanitizer()
 const { t, locale } = useI18n()

@@ -392,16 +392,7 @@ function blockDefinitionWithMetadata(
     schemaVersion: TENANT_PAGE_SCHEMA_VERSION,
     allowedRecipes,
     allowedPageTypes: options.allowedPageTypes ?? TENANT_PAGE_TYPES,
-    // Which presentation a template draws this block with. Declared on every
-    // type because every type may be drawn a template's own way; the values
-    // come from utils/tenant-page-presentation.ts, so the editor can only offer
-    // a preset some renderer actually has.
-    //
-    // `section: 'block'` keeps it off every leaf. It describes the block the way
-    // its type does, so it sits on the block's own screen beside Section type —
-    // and a leaf that was already at DESIGN.md's three controls does not become
-    // four because every block gained a field.
-    fields: { preset: { kind: 'enum', label: 'Presentation', translatable: false, section: 'block' }, ...fields },
+    fields,
     accessibility: options.accessibility ?? 'required',
     seo: options.seo ?? 'inherited',
   }
