@@ -7,8 +7,7 @@
     loop they lost every section the marketing site had (#903).
   -->
   <template v-if="page">
-    <BlawbyCanonicalPage v-if="isBlawby" :page="page" />
-    <TenantPageRenderer v-else :page="page" />
+    <TenantPageRenderer :page="page" />
   </template>
 </template>
 

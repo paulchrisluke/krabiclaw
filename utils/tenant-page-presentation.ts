@@ -28,6 +28,17 @@ import PlatformPluginSections from '~/components/platform/marketing/PlatformPlug
 import PlatformProseCard from '~/components/platform/marketing/PlatformProseCard.vue'
 import PlatformFaqAccordion from '~/components/platform/marketing/PlatformFaqAccordion.vue'
 import PlatformBottomCta from '~/components/platform/marketing/PlatformBottomCta.vue'
+import BlawbyPageHero from '~/components/blawby/BlawbyPageHero.vue'
+import BlawbyFeatureCards from '~/components/blawby/BlawbyFeatureCards.vue'
+import BlawbyTeamSection from '~/components/blawby/BlawbyTeamSection.vue'
+import BlawbyImpactSection from '~/components/blawby/BlawbyImpactSection.vue'
+import BlawbyServicesSection from '~/components/blawby/BlawbyServicesSection.vue'
+import BlawbyFaqSection from '~/components/blawby/BlawbyFaqSection.vue'
+import BlawbyReviewsSection from '~/components/blawby/BlawbyReviewsSection.vue'
+import BlawbyConsultationCta from '~/components/blawby/BlawbyConsultationCta.vue'
+import BlawbyShieldDivider from '~/components/blawby/BlawbyShieldDivider.vue'
+import BlawbyDonationChoices from '~/components/blawby/BlawbyDonationChoices.vue'
+import BlawbyVideoFeature from '~/components/blawby/BlawbyVideoFeature.vue'
 
 // The components themselves, not their names: `<component :is>` resolves a
 // string only against what the calling file imported, so a name here rendered
@@ -48,6 +59,19 @@ const PRESENTATIONS: Readonly<Record<string, Component>> = {
   'platform:markdown': PlatformProseCard,
   'platform:faq': PlatformFaqAccordion,
   'platform:cta': PlatformBottomCta,
+
+  // The Blawby template, for professional-services sites.
+  'blawby:hero': BlawbyPageHero,
+  'blawby:feature_grid': BlawbyFeatureCards,
+  'blawby:team_grid': BlawbyTeamSection,
+  'blawby:stat_grid': BlawbyImpactSection,
+  'blawby:page_grid': BlawbyServicesSection,
+  'blawby:faq': BlawbyFaqSection,
+  'blawby:testimonial_grid': BlawbyReviewsSection,
+  'blawby:contact_cta': BlawbyConsultationCta,
+  'blawby:divider': BlawbyShieldDivider,
+  'blawby:donation_choices': BlawbyDonationChoices,
+  'blawby:video_feature': BlawbyVideoFeature,
 }
 
 /** The component this template draws this block with, or null for the default. */

@@ -27,8 +27,8 @@
       </div>
     </section>
 
-    <BlawbyFaqSection :items="scheduleQa" :decoration-url="mediaUrl(qaBlock, 'decoration')" />
-    <BlawbyReviewsSection :reviews="routeData.reviews" />
+    <BlawbyFaqSection v-if="qaBlockRaw" :block="qaBlockRaw" :page="page!" />
+    <BlawbyReviewsSection v-if="reviewsBlockRaw" :block="reviewsBlockRaw" :page="page!" />
     <BlawbyScheduleRedirect
       v-if="scheduleCta"
       :title="String(scheduleCta.title || '')"
@@ -79,7 +79,6 @@ const guidanceMarkdown = computed(() => optionalString(guidanceBlock.value?.mark
 const guidanceDecoration = computed(() => mediaUrl(guidanceBlock.value, 'decoration'))
 const scheduleCta = computed(() => findTenantPageBlock(page.value.blocks, 'booking_cta'))
 const scheduleCtaDestination = computed(() => consultation.value.external_url || String(scheduleCta.value?.buttonUrl || consultation.value.schedule_path))
-const qaBlock = computed(() => findTenantPageBlock(page.value.blocks, 'faq'))
 const scheduleQa = computed<PublicSiteQa[]>(() => {
   return routeData.value.qa
 })
@@ -112,4 +111,13 @@ useProfessionalServiceSchema(() => ({
   faqs: scheduleQa.value.map(item => ({ question: item.question, answer: item.answer })),
   consultationUrl: scheduleHeroDestination.value,
 }))
+
+/** The block itself, for the sections that read their own block. */
+function rawBlock(canonicalType: string, section: string) {
+  const blocks = page.value?.blocks ?? []
+  return blocks.find(candidate => candidate.type === canonicalType && candidate.data.section === section)
+    ?? blocks.find(candidate => candidate.type === canonicalType) ?? null
+}
+const qaBlockRaw = computed(() => rawBlock('faq', 'qa'))
+const reviewsBlockRaw = computed(() => rawBlock('testimonial_grid', 'reviews'))
 </script>

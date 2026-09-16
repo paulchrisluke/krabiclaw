@@ -26,27 +26,37 @@
 </template>
 
 <script setup lang="ts">
+import type { PublicTenantPage } from '~/server/utils/public-tenant-pages'
+import type { TenantPageBlock } from '~/utils/tenant-page-blocks'
+import { blockText, blockTextOrNull } from '~/utils/tenant-page-block-data'
 import type { BlawbyShieldVariant } from '~/types/blawby'
 
-const props = withDefaults(defineProps<{
-  title: string
-  description?: string | string[] | null
-  eyebrow?: string | null
-  variant: BlawbyShieldVariant
-}>(), {
-  description: null,
-  eyebrow: null,
-})
+const props = defineProps<{ block: TenantPageBlock; page: PublicTenantPage }>()
+
+const title = computed(() => blockText(props.block.data.title))
+const description = computed(() => blockTextOrNull(props.block.data.subtitle))
+const eyebrow = computed(() => blockTextOrNull(props.block.data.eyebrow))
+
+/**
+ * Which shield this page opens under. The page says, because the page is what
+ * differs; it was a prop a dispatcher derived from the same path.
+ */
+const SHIELDS: Record<string, BlawbyShieldVariant> = {
+  '/about': 'about', '/contact': 'contact', '/schedule': 'schedule', '/donate': 'donate', '/pricing': 'pricing',
+  '/blog': 'blog', '/policies/privacy': 'privacy', '/policies/terms': 'terms',
+  '/third-party-notices': 'third-party-notices',
+}
+const variant = computed<BlawbyShieldVariant>(() => SHIELDS[props.page.path] ?? 'about')
 
 const backgroundClass = computed(() => {
-  if (props.variant === 'schedule') return 'bg-[var(--blawby-primary-800)] [&_h1]:text-white [&_p]:text-gray-200'
-  if (props.variant === 'about' || props.variant === 'contact') return 'bg-[var(--blawby-accent-200)]'
+  if (variant.value === 'schedule') return 'bg-[var(--blawby-primary-800)] [&_h1]:text-white [&_p]:text-gray-200'
+  if (variant.value === 'about' || variant.value === 'contact') return 'bg-[var(--blawby-accent-200)]'
   return 'bg-[var(--blawby-primary-100)]'
 })
-const titleWords = computed(() => props.title.trim().split(/\s+/).filter(Boolean))
-const descriptionParts = computed(() => Array.isArray(props.description)
-  ? props.description.filter(Boolean)
-  : String(props.description || '').split(/\n\s*\n/).map(part => part.trim()).filter(Boolean))
+const titleWords = computed(() => title.value.trim().split(/\s+/).filter(Boolean))
+const descriptionParts = computed(() => Array.isArray(description.value)
+  ? description.value.filter(Boolean)
+  : String(description.value || '').split(/\n\s*\n/).map(part => part.trim()).filter(Boolean))
 </script>
 
 <style>

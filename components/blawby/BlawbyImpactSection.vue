@@ -19,15 +19,17 @@
 </template>
 
 <script setup lang="ts">
-withDefaults(defineProps<{
-  title: string
-  description?: string | null
-  additionalDescription?: string | null
-  statistics: Array<{ value: string; label: string }>
-  paritySection?: string | null
-  compact?: boolean
-}>(), {
-  paritySection: 'impact',
-  compact: false,
-})
+import type { PublicTenantPage } from '~/server/utils/public-tenant-pages'
+import type { TenantPageBlock } from '~/utils/tenant-page-blocks'
+import { blockText, blockTextOrNull, blockRecords } from '~/utils/tenant-page-block-data'
+const props = defineProps<{ block: TenantPageBlock; page: PublicTenantPage }>()
+
+const title = computed(() => blockText(props.block.data.title))
+const description = computed(() => blockTextOrNull(props.block.data.description))
+const additionalDescription = computed(() => blockTextOrNull(props.block.data.additionalDescription))
+const statistics = computed(() => blockRecords(props.block.data.items)
+  .map(item => ({ value: blockText(item.value), label: blockText(item.title) }))
+  .filter(stat => stat.value && stat.label))
+const paritySection = computed(() => 'impact')
+const compact = computed(() => false)
 </script>

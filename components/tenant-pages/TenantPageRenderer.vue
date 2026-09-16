@@ -4,7 +4,11 @@
     :data-template="template"
     :class="template === 'saya' ? 'mx-auto max-w-7xl px-4 py-16 text-default sm:px-6 lg:px-8' : 'text-default'"
   >
-    <section v-for="block in renderedBlocks" :key="block.id" :data-block-type="block.type" :data-parity-section="sectionKey(block)" class="tenant-page-block">
+    <!--
+      A template's own component names its band; the wrapper only names one for
+      the markup below, or both would appear on the same section.
+    -->
+    <section v-for="block in renderedBlocks" :key="block.id" :data-block-type="block.type" :data-parity-section="presentationOf(block) ? undefined : sectionKey(block)" class="tenant-page-block">
       <!--
         A template that draws this block its own way draws it; otherwise the
         markup below is the presentation. See utils/tenant-page-presentation.ts.

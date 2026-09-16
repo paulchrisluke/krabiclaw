@@ -47,16 +47,19 @@
 </template>
 
 <script setup lang="ts">
-defineProps<{
-  tiers: Array<{
-    amount: number
-    title: string
-    description: string
-    featured: boolean
-    icon: string
-  }>
-  destination?: string | null
-}>()
+import type { PublicTenantPage } from '~/server/utils/public-tenant-pages'
+import type { TenantPageBlock } from '~/utils/tenant-page-blocks'
+import { blockText, blockTextOrNull, blockRecords } from '~/utils/tenant-page-block-data'
+const props = defineProps<{ block: TenantPageBlock; page: PublicTenantPage }>()
+
+const tiers = computed(() => blockRecords(props.block.data.tiers).map(tier => ({
+  amount: Number(tier.amount) || 0,
+  title: blockText(tier.title),
+  description: blockText(tier.description),
+  featured: tier.featured === true,
+  icon: blockText(tier.icon),
+})).filter(tier => tier.amount > 0 && tier.title && tier.icon))
+const destination = computed(() => blockTextOrNull(props.block.data.destination))
 
 defineEmits<{ click: [choice: { label: string; amount: number | null }] }>()
 </script>

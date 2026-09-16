@@ -50,18 +50,10 @@
       <img v-if="servicesDecorationSrc" :src="servicesDecorationSrc || undefined" alt="" width="1920" height="400" loading="lazy" class="absolute inset-x-0 bottom-0 w-full object-contain">
     </section>
 
-    <BlawbyVideoFeature
-      v-if="videoFeature"
-      :title="String(videoFeature.title || '')"
-      :accent="asOptionalString(videoFeature.accent)"
-      :video-url="asOptionalString(videoFeature.video_url)"
-      :video-title="asOptionalString(videoFeature.video_title)"
-      :features="videoFeatures"
-      :images="videoImages"
-    />
+    <BlawbyVideoFeature v-if="videoBlockRaw" :block="videoBlockRaw" :page="criticalPage" />
 
-    <BlawbyFaqSection :items="routeData.qa" :decoration-url="qaDecorationSrc" />
-    <BlawbyReviewsSection :reviews="routeData.reviews" :description="reviewsDescription" />
+    <BlawbyFaqSection v-if="qaBlockRaw" :block="qaBlockRaw" :page="criticalPage" />
+    <BlawbyReviewsSection v-if="reviewsBlockRaw" :block="reviewsBlockRaw" :page="criticalPage" />
 
     <div v-if="routeData.posts.length" class="mx-auto my-8 max-w-7xl px-6 lg:px-8" data-parity-section="articles">
       <BlawbySectionHeading title="From the" accent="Blog" centered />
@@ -71,16 +63,7 @@
       <BlawbyButton :to="localePath('/blog')">See All</BlawbyButton>
     </div>
 
-    <BlawbyConsultationCta
-      v-if="ctaBlock && ctaBlock.title && ctaBlock.label && ctaBlock.url"
-      :title="String(ctaBlock.title || '')"
-      :description="asOptionalString(ctaBlock.description)"
-      :label="String(ctaBlock.label || '')"
-      :destination="String(ctaBlock.url || '')"
-      :background-url="ctaBackgroundSrc"
-      :featured-url="ctaFeaturedSrc"
-      @click="trackConsultation('cta_section', String(ctaBlock.url || ''))"
-    />
+    <BlawbyConsultationCta v-if="ctaBlockRaw" :block="ctaBlockRaw" :page="criticalPage" />
   </div>
 </template>
 
@@ -97,6 +80,11 @@ const compliance = computed(() => data.value!.shell.compliance)
 const org = useBlawbyOrgIdentity(identity, compliance)
 const criticalPage = computed(() => data.value!.route.page!)
 const routeData = computed(() => data.value!.route)
+
+/** The block itself, for the sections that read their own block. */
+function rawBlock(canonicalType: string, section: string) {
+  return criticalPage.value.blocks.find(candidate => candidate.type === canonicalType && candidate.data.section === section) ?? null
+}
 
 function block(type: string): ApiRecord | null {
   const canonicalType = {
@@ -127,9 +115,6 @@ function block(type: string): ApiRecord | null {
   return { ...data, media: pageBlock.media }
 }
 
-function asOptionalString(value: unknown) {
-  return typeof value === 'string' && value ? value : null
-}
 
 function mediaUrl(value: ApiRecord | null | undefined, slot: string) {
   const media = value?.media
@@ -168,17 +153,14 @@ const serviceItems = computed<ServiceGridItem[]>(() => {
     }]
   })
 })
-const videoFeature = computed(() => block('video_feature'))
-const reviewsBlock = computed(() => block('reviews'))
-const qaBlock = computed(() => block('qa'))
-const ctaBlock = computed(() => block('consultation_cta'))
+const videoBlockRaw = computed(() => rawBlock('video_feature', 'approach'))
+const qaBlockRaw = computed(() => rawBlock('faq', 'qa'))
+const reviewsBlockRaw = computed(() => rawBlock('testimonial_grid', 'reviews'))
+const ctaBlockRaw = computed(() => rawBlock('contact_cta', 'consultation'))
 const heroBackground = computed(() => mediaUrl(hero.value, 'media'))
 const heroBackgroundSrc = heroBackground
 const servicesDecoration = computed(() => mediaUrl(services.value, 'decoration'))
 const servicesDecorationSrc = servicesDecoration
-const qaDecorationSrc = computed(() => mediaUrl(qaBlock.value, 'decoration'))
-const ctaBackgroundSrc = computed(() => mediaUrl(ctaBlock.value, 'background'))
-const ctaFeaturedSrc = computed(() => mediaUrl(ctaBlock.value, 'featured'))
 const heroDestination = computed(() => String(hero.value.url || ''))
 const heroTitle = computed(() => {
   const title = String(hero.value.title || '')
@@ -188,24 +170,6 @@ const heroTitle = computed(() => {
     ? { before: title.slice(0, index), accent, after: title.slice(index + accent.length) }
     : { before: title, accent: '', after: '' }
 })
-const videoFeatures = computed(() => {
-  const items = videoFeature.value?.items
-  return Array.isArray(items)
-    ? items.map((item: ApiRecord) => ({
-        name: String(item.title ?? ''),
-        desc: String(item.description ?? ''),
-      }))
-    : []
-})
-const videoImages = computed(() => {
-  const mediaList = Array.isArray(videoFeature.value?.media) ? videoFeature.value.media : []
-  return mediaList
-    .filter((item: unknown): item is ApiRecord => Boolean(item && typeof item === 'object' && String((item as ApiRecord).slot).startsWith('images.')))
-    .sort((a: ApiRecord, b: ApiRecord) => String(a.slot).localeCompare(String(b.slot), undefined, { numeric: true }))
-    .map((item: ApiRecord) => ({ url: typeof item.public_url === 'string' ? item.public_url : '', alt: asOptionalString(item.alt_text) }))
-    .filter((item: { url: string }) => item.url)
-})
-const reviewsDescription = computed(() => String(reviewsBlock.value?.description || ''))
 
 const { trackConsultationClick } = useSiteConversionTracking(consultation)
 function trackConsultation(pageType: string, destination: string) {

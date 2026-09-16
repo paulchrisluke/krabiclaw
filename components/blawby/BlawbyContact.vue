@@ -1,6 +1,6 @@
 <template>
   <div data-parity-root>
-    <BlawbyPageHero v-if="heroTitle || heroDescription" :title="heroTitle" :description="heroDescription" variant="contact" />
+    <BlawbyPageHero v-if="heroBlockRaw" :block="heroBlockRaw" :page="page!" />
     <BlawbyShieldDivider variant="contact" />
 
     <section v-if="contactBlocks.length" class="bg-white py-24 sm:py-32" data-parity-section="contact">
@@ -42,18 +42,9 @@
       </form>
     </section>
 
-    <BlawbyFaqSection :items="routeData.qa" :decoration-url="mediaUrl(qaBlock, 'decoration')" />
-    <BlawbyReviewsSection :reviews="routeData.reviews" />
-    <BlawbyConsultationCta
-      v-if="ctaBlock && ctaBlock.title && ctaBlock.label && ctaBlock.url"
-      :title="String(ctaBlock.title || '')"
-      :description="optionalString(ctaBlock.description)"
-      :label="String(ctaBlock.label || '')"
-      :destination="String(ctaBlock.url || '')"
-      :background-url="mediaUrl(ctaBlock, 'background')"
-      :featured-url="mediaUrl(ctaBlock, 'featured')"
-      @click="trackConsultation"
-    />
+    <BlawbyFaqSection v-if="qaBlockRaw" :block="qaBlockRaw" :page="page!" />
+    <BlawbyReviewsSection v-if="reviewsBlockRaw" :block="reviewsBlockRaw" :page="page!" />
+    <BlawbyConsultationCta v-if="ctaBlockRaw" :block="ctaBlockRaw" :page="page!" />
   </div>
 </template>
 
@@ -72,14 +63,6 @@ const consultation = computed(() => shell.value.consultation)
 const compliance = computed(() => shell.value.compliance)
 const org = useBlawbyOrgIdentity(identity, compliance)
 
-function optionalString(value: unknown) {
-  return typeof value === 'string' && value ? value : null
-}
-function mediaUrl(value: ApiRecord | null | undefined, slot: string) {
-  const media = value?.media
-  const item = media?.find((candidate: unknown) => candidate && typeof candidate === 'object' && (candidate as ApiRecord).slot === slot) as ApiRecord | undefined
-  return typeof item?.public_url === 'string' ? item.public_url : null
-}
 
 const heroBlock = computed(() => page.value ? findTenantPageBlock(page.value.blocks, 'hero') : null)
 const contactBlocks = computed(() => {
@@ -88,14 +71,11 @@ const contactBlocks = computed(() => {
     ? [{ id: block.id, data: block.data, cards: block.data.cardsContent.map(String) }]
     : [])
 })
-const ctaBlock = computed(() => page.value ? findTenantPageBlock(page.value.blocks.filter(block => block.data.section === 'consultation'), 'contact_cta') : null)
-const qaBlock = computed(() => page.value ? findTenantPageBlock(page.value.blocks, 'faq') : null)
 const heroTitle = computed(() => String(heroBlock.value?.title ?? ''))
-const heroDescription = computed(() => Array.isArray(heroBlock.value?.subtitle) ? heroBlock.value.subtitle.join('\n\n') : String(heroBlock.value?.subtitle ?? ''))
 const submitting = ref(false)
 const submitMessage = ref('')
 const form = reactive({ name: '', email: '', subject: 'general', message: '', consent: false })
-const { trackConsultationClick, mirrorSubmission } = useSiteConversionTracking(consultation)
+const { mirrorSubmission } = useSiteConversionTracking(consultation)
 
 async function submitContact() {
   if (!siteId || submitting.value) return
@@ -123,9 +103,6 @@ async function submitContact() {
   }
 }
 
-function trackConsultation() {
-  trackConsultationClick('contact', '/contact', optionalString(ctaBlock.value?.url) || consultation.value.schedule_path)
-}
 
 const { canonicalUrl } = useSocialMetadata(() => ({
   path: '/contact',
@@ -151,4 +128,15 @@ useProfessionalServiceSchema(() => ({
     .map(item => ({ question: item.question.trim(), answer: item.answer?.trim() ?? '' }))
     .filter(item => item.question && item.answer),
 }))
+
+/** The block itself, for the sections that read their own block. */
+function rawBlock(canonicalType: string, section: string) {
+  const blocks = page.value?.blocks ?? []
+  return blocks.find(candidate => candidate.type === canonicalType && candidate.data.section === section)
+    ?? blocks.find(candidate => candidate.type === canonicalType) ?? null
+}
+const qaBlockRaw = computed(() => rawBlock('faq', 'qa'))
+const reviewsBlockRaw = computed(() => rawBlock('testimonial_grid', 'reviews'))
+const ctaBlockRaw = computed(() => rawBlock('contact_cta', 'consultation'))
+const heroBlockRaw = computed(() => rawBlock('hero', 'page-hero'))
 </script>

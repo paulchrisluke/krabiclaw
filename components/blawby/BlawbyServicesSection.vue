@@ -14,19 +14,32 @@
 </template>
 
 <script setup lang="ts">
-/** The pages this section shows, resolved by the page's own page_grid block. */
-interface PageGridItem { id: string; title: string; description?: string; url: string; media?: Array<{ slot: string; public_url: string }> }
+import type { PublicTenantPage } from '~/server/utils/public-tenant-pages'
+import type { TenantPageBlock } from '~/utils/tenant-page-blocks'
+import { blockText, blockRecords, blockMedia } from '~/utils/tenant-page-block-data'
+const props = defineProps<{ block: TenantPageBlock; page: PublicTenantPage }>()
 
-withDefaults(defineProps<{
-  items: PageGridItem[]
-  title: string
-  accent: string
-  description?: string
-  decorationUrl?: string | null
-  paritySection?: string
-}>(), {
-  description: '',
-  decorationUrl: null,
-  paritySection: 'services',
-})
+/** A decoration the block carries, which is the page's own art, not content. */
+const decorationUrl = computed(() => blockMedia(props.block, 'decoration')[0]?.public_url ?? null)
+
+/**
+ * The pages this section links to, exactly as the block resolved them. No
+ * reshaping: the block already carries each page's title, summary, route and
+ * media, and re-deriving a slug from the route was how a card came to point at
+ * a path nobody published.
+ */
+const items = computed(() => blockRecords(props.block.data.items).map(item => ({
+  id: blockText(item.id),
+  title: blockText(item.title),
+  description: blockText(item.description) || undefined,
+  url: blockText(item.url),
+  media: (Array.isArray(item.media) ? item.media : []).map(media => ({
+    slot: blockText((media as Record<string, unknown>).slot),
+    public_url: blockText((media as Record<string, unknown>).public_url),
+  })).filter(media => media.slot && media.public_url),
+})).filter(item => item.id && item.title && item.url))
+const title = computed(() => blockText(props.block.data.title))
+const accent = computed(() => blockText(props.block.data.accent))
+const description = computed(() => blockText(props.block.data.description))
+const paritySection = computed(() => 'services')
 </script>
