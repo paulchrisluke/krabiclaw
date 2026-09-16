@@ -6,6 +6,10 @@ import { getIcons } from '@iconify/utils'
 import { visualizer } from 'rollup-plugin-visualizer'
 import { ROBOTS_DISABLED_DIRECTIVE, ROBOTS_ENABLED_DIRECTIVE } from './shared/robots-directive'
 import { localizedPublicRouteAliases } from './build/localized-public-routes'
+// One source for the entry -> public path map; patch.cjs rewrites the built
+// manifest from the same file, so a surface cannot be registered in one place
+// and missed in the other.
+import publicSurfaceCssPaths from './build/public-surface-css.json'
 import {
   claimedRoutesFromHandlers,
   claimedRoutesFromPages,
@@ -43,11 +47,6 @@ const analyzeBundle = process.env.PERF_BUNDLE_ANALYZE === 'true'
 const publicPerfTestPage = process.env.PERF_PUBLIC_TEST_PAGE !== 'false'
 const workerWasmExternal = /(?:index_bg|yoga|webp_dec|squoosh_png_bg)\.wasm$/
 
-const publicSurfaceCssPaths = {
-  'platform-entry': 'surfaces/platform.css',
-  'saya': 'surfaces/saya.css',
-  'blawby': 'surfaces/blawby.css',
-} as const
 
 function escapeRegExp(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -367,7 +366,7 @@ export default defineNuxtConfig({
       pathPrefix: false,
     },
     {
-      path: '~/lib/components/workspace/inbox',
+      path: '~/lib/components/workspace/messages',
       pathPrefix: false,
     },
     {

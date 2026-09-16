@@ -4,11 +4,11 @@ import assert from 'node:assert/strict'
 import { buildWhatsAppTemplatePayload, compareWhatsAppDeliveryStatus, toDashboardButtonPath } from '../../server/utils/whatsapp.ts'
 
 test('dashboard WhatsApp button paths preserve full guest-thread routes', () => {
-  const fullUrl = 'https://staging.krabiclaw.com/dashboard/krabi-team/sites/sunset-cafe/locations/ao-nang/inbox/thread%2Fwith%20spaces'
+  const fullUrl = 'https://staging.krabiclaw.com/dashboard/krabi-team/sites/sunset-cafe/locations/ao-nang/messages/thread%2Fwith%20spaces'
 
   assert.equal(
     toDashboardButtonPath(fullUrl),
-    'krabi-team/sites/sunset-cafe/locations/ao-nang/inbox/thread%2Fwith%20spaces',
+    'krabi-team/sites/sunset-cafe/locations/ao-nang/messages/thread%2Fwith%20spaces',
   )
 
   const payload = buildWhatsAppTemplatePayload('new_reservation', {
@@ -24,7 +24,7 @@ test('dashboard WhatsApp button paths preserve full guest-thread routes', () => 
   })
 
   const button = payload.components.find(component => component.type === 'button')
-  assert.equal(button?.parameters[0]?.text, 'krabi-team/sites/sunset-cafe/locations/ao-nang/inbox/thread%2Fwith%20spaces')
+  assert.equal(button?.parameters[0]?.text, 'krabi-team/sites/sunset-cafe/locations/ao-nang/messages/thread%2Fwith%20spaces')
   assert.doesNotMatch(button?.parameters[0]?.text ?? '', /\?thread=/)
 })
 

@@ -414,8 +414,8 @@ function isActivePath(path?: string, exact = false) {
 
 /**
  * Only the most specific matching item is active. Nav paths nest — a location's
- * Inbox lives under the Locations path — so plain prefix matching lit up both
- * Inbox and Locations at once. The longest matching path is the one the route
+ * Messages lives under the Locations path — so plain prefix matching lit up both
+ * Messages and Locations at once. The longest matching path is the one the route
  * actually belongs to.
  */
 function withActiveItem<T extends { to?: string; exact?: boolean }>(items: T[]): Array<T & { active: boolean }> {
@@ -436,16 +436,16 @@ const mobileNavItems = computed<DashboardMobileNavItem[]>(() => {
     : null
   const isOrganization = scope.value === 'organization'
   const childrenTo = isOrganization ? `${routeOrgBase}/sites` : locationsNavTarget.value
-  const inboxTo = isOrganization
-    ? `${routeOrgBase}/inbox`
+  const messagesTo = isOrganization
+    ? `${routeOrgBase}/messages`
     : scope.value === 'location' && routeLocationBase
-      ? `${routeLocationBase}/inbox`
-      : routeSiteBase ? `${routeSiteBase}/inbox` : undefined
+      ? `${routeLocationBase}/messages`
+      : routeSiteBase ? `${routeSiteBase}/messages` : undefined
   const items: DashboardMobileNavItem[] = [
     { key: 'today', label: 'Today', icon: 'i-lucide-bookmark', to: routeOrgBase, exact: true },
     { key: 'calendar', label: 'Calendar', icon: 'i-lucide-calendar-days', to: `${routeOrgBase}/calendar` },
     { key: 'children', label: isOrganization ? 'Sites' : locationsNavLabel.value, icon: isOrganization ? 'i-lucide-globe' : 'i-lucide-map-pin', to: childrenTo ?? undefined },
-    { key: 'inbox', label: 'Inbox', icon: 'i-lucide-inbox', to: inboxTo },
+    { key: 'messages', label: 'Messages', icon: 'i-lucide-message-square', to: messagesTo },
   ]
   return withActiveItem(items)
 })
@@ -460,7 +460,7 @@ const { menuPageTo } = useDashboardMenu()
 const primaryNavItems = computed(() => mobileNavItems.value)
 // A signed-in owner always gets the header: the wordmark and the account menu
 // are user-scoped and need no organization. Only the nav links and the bottom
-// bar wait for an organization, because Today, Calendar, Sites and Inbox do not
+// bar wait for an organization, because Today, Calendar, Sites and Messages do not
 // exist until there is one. Gating both together is what left an owner who
 // abandoned onboarding with no way to reach account settings or log out.
 const showNavChrome = computed(() => primaryNavItems.value.length > 0 && !isAccountRoute.value)
