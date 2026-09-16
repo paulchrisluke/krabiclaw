@@ -3,6 +3,8 @@ import { HTTPError } from 'nitro';
 import { execute, queryAll, queryFirst, type DbClient } from '~/server/db'
 import { getOrgAdapter, hasPermission } from 'better-auth/plugins'
 import { parsePhoneOrThrow } from '~/utils/phone'
+import { oncePerRequest } from '~/server/utils/request-scope'
+import type { H3Event } from 'nitro'
 import type { CloudflareEnv, organizationOptions } from '~/server/utils/auth'
 import type { OrganizationPermissions } from '~/utils/organization-access'
 
@@ -60,11 +62,14 @@ export interface MemberAccessPrincipal {
   readonly role: string
   readonly organizationId: string
   readonly siteId: string
+  // The request this principal was minted for, when there is one. Only used to
+  // memoize the team read the scope checks share; absent for scheduled work.
+  readonly event?: H3Event
 }
 
 export function memberAccessPrincipal(
   membership: ResolvedMembership,
-  input: { env: CloudflareEnv; siteId: string },
+  input: { env: CloudflareEnv; siteId: string; event?: H3Event },
 ): MemberAccessPrincipal {
   return {
     env: input.env,
@@ -72,6 +77,7 @@ export function memberAccessPrincipal(
     role: membership.role,
     organizationId: membership.organizationId,
     siteId: input.siteId,
+    event: input.event,
   } as MemberAccessPrincipal
 }
 
@@ -184,14 +190,39 @@ export async function organizationAdapter(env: CloudflareEnv): Promise<Organizat
   return getOrgAdapter(context as Parameters<typeof getOrgAdapter>[0], options)
 }
 
+/**
+ * The two Better Auth reads every membership resolution is made of, memoized
+ * for the life of one request.
+ *
+ * A dashboard render resolves the same membership twice: getDashboardContext
+ * looks the organization up by slug, loadMemberSiteRow looks it up by id, and
+ * each then reads the same member row for the same user. Neither can change
+ * mid-request. Pass the event and the second resolution is free; without one
+ * (scheduled jobs, tenant deletion) they read as before.
+ */
+function organizationById(env: CloudflareEnv, id: string, event?: H3Event) {
+  const read = async () => (await organizationAdapter(env)).findOrganizationById(id)
+  return event ? oncePerRequest(event, `organization:${id}`, read) : read()
+}
+
+function organizationBySlug(env: CloudflareEnv, slug: string, event?: H3Event) {
+  const read = async () => (await organizationAdapter(env)).findOrganizationBySlug(slug)
+  return event ? oncePerRequest(event, `organization-slug:${slug}`, read) : read()
+}
+
+function membershipRow(env: CloudflareEnv, input: { organizationId: string; userId: string }, event?: H3Event) {
+  const read = async () => (await organizationAdapter(env)).findMemberByOrgId(input)
+  return event ? oncePerRequest(event, `membership:${input.organizationId}:${input.userId}`, read) : read()
+}
+
 export async function resolveOrganizationMembership(
   env: CloudflareEnv,
   input: { organizationId: string; userId: string },
+  event?: H3Event,
 ): Promise<(ResolvedMembership & { memberId: string; organizationSlug: string; organizationName: string; organizationLogo: string | null }) | null> {
-  const adapter = await organizationAdapter(env)
   const [member, organization] = await Promise.all([
-    adapter.findMemberByOrgId(input),
-    adapter.findOrganizationById(input.organizationId),
+    membershipRow(env, input, event),
+    organizationById(env, input.organizationId, event),
   ])
   if (!member || !organization) return null
   return resolvedMembershipOf({
@@ -231,6 +262,7 @@ export async function resolveMembership(
 export async function resolveUserOrganization(
   env: CloudflareEnv,
   input: { userId: string; organizationId?: string | null; organizationSlug?: string | null },
+  event?: H3Event,
 ): Promise<(ResolvedMembership & {
   id: string
   name: string
@@ -239,17 +271,13 @@ export async function resolveUserOrganization(
   memberId: string
   deletionScheduledAt: string | null
 }) | null> {
-  const adapter = await organizationAdapter(env)
   const organization = input.organizationId
-    ? await adapter.findOrganizationById(input.organizationId)
+    ? await organizationById(env, input.organizationId, event)
     : input.organizationSlug
-      ? await adapter.findOrganizationBySlug(input.organizationSlug)
+      ? await organizationBySlug(env, input.organizationSlug, event)
       : null
   if (!organization) return null
-  const member = await adapter.findMemberByOrgId({
-    userId: input.userId,
-    organizationId: organization.id,
-  })
+  const member = await membershipRow(env, { userId: input.userId, organizationId: organization.id }, event)
   if (!member) return null
   return resolvedMembershipOf({
     userId: input.userId,
@@ -302,13 +330,27 @@ export async function getOrganizationOwnerRecipient(
   return owner ? { userId: owner.user.id, email: owner.user.email } : null
 }
 
+/**
+ * The caller's Better Auth teams, memoized for the life of one request.
+ *
+ * Every scope check for a scoped role reads this same list, and a dashboard
+ * render makes several, so without the memo an editor paid one read per
+ * assertion. Keyed on the user alone because that is what the adapter query
+ * takes; callers filter by organization themselves. Not used by the mutation
+ * sweep below, which must see the rows it is deleting.
+ */
+function teamsByUser(env: CloudflareEnv, userId: string, event?: H3Event) {
+  const read = async () => (await organizationAdapter(env)).listTeamsByUser({ userId })
+  return event ? oncePerRequest(event, `teams:${userId}`, read) : read()
+}
+
 export async function listUserOrganizationTeamIds(input: {
   env: CloudflareEnv
   organizationId: string
   userId: string
+  event?: H3Event
 }): Promise<string[]> {
-  const adapter = await organizationAdapter(input.env)
-  const teams = await adapter.listTeamsByUser({ userId: input.userId })
+  const teams = await teamsByUser(input.env, input.userId, input.event)
   return teams.filter(team => team.organizationId === input.organizationId).map(team => team.id)
 }
 
@@ -536,8 +578,7 @@ async function canonicalMemberAccess(input: MemberAccessPrincipal): Promise<{
 }> {
   const role = input.role
   if (!isScopedRole(role)) return { role, teamIds: NO_TEAMS }
-  const adapter = await organizationAdapter(input.env)
-  const teams = await adapter.listTeamsByUser({ userId: input.userId })
+  const teams = await teamsByUser(input.env, input.userId, input.event)
   return {
     role,
     teamIds: new Set(teams.filter(team => team.organizationId === input.organizationId).map(team => team.id)),
@@ -546,10 +587,9 @@ async function canonicalMemberAccess(input: MemberAccessPrincipal): Promise<{
 
 export async function listResourceTeamAccess(
   db: DbClient,
-  input: { env: CloudflareEnv; userId: string; organizationId: string },
+  input: { env: CloudflareEnv; userId: string; organizationId: string; event?: H3Event },
 ): Promise<ResourceTeamAccess[]> {
-  const adapter = await organizationAdapter(input.env)
-  const teams = await adapter.listTeamsByUser({ userId: input.userId })
+  const teams = await teamsByUser(input.env, input.userId, input.event)
   const teamIds = new Set(teams.filter(team => team.organizationId === input.organizationId).map(team => team.id))
   if (teamIds.size === 0) return []
   const [sites, locations] = await Promise.all([

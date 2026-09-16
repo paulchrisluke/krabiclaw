@@ -81,7 +81,7 @@ export default defineHandler(async (event) => {
   const { site, organization } = dashboard
   const siteId = site.id as string
   const organizationId = organization?.id as string
-  await assertSiteWideAccess(db, memberAccessPrincipal(organization, { env, siteId }))
+  await assertSiteWideAccess(db, memberAccessPrincipal(organization, { env, siteId, event }))
 
   const body = await readBody(event) as {
     mapsUrl?: unknown

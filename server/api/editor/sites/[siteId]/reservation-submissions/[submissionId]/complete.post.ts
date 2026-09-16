@@ -19,7 +19,7 @@ export default defineHandler(async (event) => {
   `, [submissionId, siteId])
   if (!submission) return jsonResponse({ error: 'Reservation not found or access denied' }, { status: 404 })
 
-  await assertResourceAccess(db, { ...memberAccessPrincipal(site.membership, { env, siteId }), resourceLocationId: submission.location_id })
+  await assertResourceAccess(db, { ...memberAccessPrincipal(site.membership, { env, siteId, event }), resourceLocationId: submission.location_id })
 
   const outcome = await executeGuestThreadOperation(db, { threadId: submissionId, siteId, action: 'complete', actorUserId: session.user.id, env, idempotencyKey: `manual-complete:${submissionId}` })
   if (!outcome.ok) return jsonResponse({ error: 'message' in outcome ? outcome.message : outcome.reason }, { status: outcome.status })

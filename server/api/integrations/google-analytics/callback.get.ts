@@ -61,7 +61,7 @@ export default defineHandler(async (event) => {
     // what authorizes: the state only has to agree with it.
     const access = await loadMemberSiteRow(event, env.DB, env, siteId, userId)
     if (!access || access.organization_id !== organizationId) throw new Error('Access denied')
-    await assertSiteWideAccess(env.DB, memberAccessPrincipal(access.membership, { env, siteId }))
+    await assertSiteWideAccess(env.DB, memberAccessPrincipal(access.membership, { env, siteId, event }))
     const tokenData = await exchangeGoogleAnalyticsCode(env, code)
 
     const userInfoResponse = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {

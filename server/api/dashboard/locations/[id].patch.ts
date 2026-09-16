@@ -16,7 +16,7 @@ export default defineHandler(async (event) => {
   const { env, db, session, organization, location: locationContext } = await getDashboardLocationContext(event, locationId)
   const organizationId = organization.id
   const siteId = locationContext.site_id
-  await assertMemberScope(db, { ...memberAccessPrincipal(organization, { env, siteId }), locationId })
+  await assertMemberScope(db, { ...memberAccessPrincipal(organization, { env, siteId, event }), locationId })
 
   const body = await readBody<Record<string, unknown>>(event)
   if (typeof body !== 'object' || body === null) {

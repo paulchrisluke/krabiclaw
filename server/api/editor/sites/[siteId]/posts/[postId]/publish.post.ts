@@ -32,7 +32,7 @@ export default defineHandler(async (event) => {
      LIMIT 1
   `, [postId, site.organization_id, siteId])
   if (!postScope) return jsonResponse({ error: 'Post not found' }, { status: 404 })
-  await assertResourceAccess(db, { ...memberAccessPrincipal(site.membership, { env, siteId }), resourceLocationId: postScope.location_id })
+  await assertResourceAccess(db, { ...memberAccessPrincipal(site.membership, { env, siteId, event }), resourceLocationId: postScope.location_id })
 
   const wantsSocial = channels.includes('facebook') || channels.includes('instagram')
   let socialPublish: PostSocialPublish | null = null

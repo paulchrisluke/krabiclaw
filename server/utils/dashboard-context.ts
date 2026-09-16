@@ -254,7 +254,7 @@ export async function resolveRequestedOrganization(
   const env = cloudflareEnv(event)
 
   const headerOrg = organizationSlug
-    ? await resolveUserOrganization(env, { userId, organizationSlug })
+    ? await resolveUserOrganization(env, { userId, organizationSlug }, event)
     : null
 
   if (explicitOrganizationId) {
@@ -266,7 +266,7 @@ export async function resolveRequestedOrganization(
     }
     if (headerOrg) return headerOrg
 
-    return await resolveUserOrganization(env, { userId, organizationId: explicitOrganizationId })
+    return await resolveUserOrganization(env, { userId, organizationId: explicitOrganizationId }, event)
   }
 
   if (headerOrg) return headerOrg
@@ -274,7 +274,7 @@ export async function resolveRequestedOrganization(
   const activeOrganizationId = options.activeOrganizationId ?? null
   if (!activeOrganizationId) return null
 
-  return await resolveUserOrganization(env, { userId, organizationId: activeOrganizationId })
+  return await resolveUserOrganization(env, { userId, organizationId: activeOrganizationId }, event)
 }
 
 export async function getDashboardContext(
@@ -396,7 +396,7 @@ export async function getDashboardContext(event: H3Event, options: DashboardCont
   }
 
   if (site) {
-    await assertMemberSiteAccess(db, memberAccessPrincipal(organization, { env, siteId: site.id }))
+    await assertMemberSiteAccess(db, memberAccessPrincipal(organization, { env, siteId: site.id, event }))
   }
 
   return {
@@ -488,7 +488,7 @@ export async function getDashboardLocationContext(event: H3Event, locationId: st
   const organization = await resolveUserOrganization(env, {
     userId: session.user.id,
     organizationId: row.organization_id,
-  })
+  }, event)
   if (!organization) throw new HTTPError({ statusCode: 404, message: 'Location not found' })
 
   return {

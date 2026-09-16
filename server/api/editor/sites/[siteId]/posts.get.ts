@@ -26,7 +26,7 @@ export default defineHandler(async (event) => {
   // No location_id filter means "every post across the whole site" — only a
   // site-wide-scoped member may see that; a location-scoped editor must
   // filter to their own location.
-  await assertResourceAccess(db, { ...memberAccessPrincipal(site.membership, { env, siteId }), resourceLocationId: locationId ?? null })
+  await assertResourceAccess(db, { ...memberAccessPrincipal(site.membership, { env, siteId, event }), resourceLocationId: locationId ?? null })
   const posts = await listPosts(db, site.organization_id, siteId, status, locationId)
   return jsonResponse({ success: true, posts })
 })

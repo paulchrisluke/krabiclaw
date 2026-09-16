@@ -37,7 +37,7 @@ export default defineHandler(async (event) => {
      WHERE r.kind = 'reservation' AND r.id = ? AND r.site_id = ? LIMIT 1`, [submissionId, siteId])
   if (!submission) return jsonResponse({ error: 'Reservation not found' }, { status: 404 })
 
-  await assertResourceAccess(db, { ...memberAccessPrincipal(site.membership, { env, siteId }), resourceLocationId: submission.location_id })
+  await assertResourceAccess(db, { ...memberAccessPrincipal(site.membership, { env, siteId, event }), resourceLocationId: submission.location_id })
 
   const body = await readBody(event) as { status?: unknown }
   const status = cleanString(body.status, 20)

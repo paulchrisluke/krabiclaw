@@ -31,7 +31,7 @@ export async function listDashboardLocationsResource(
     siteSlug: scope.siteSlug,
   })
   if (!site) throw new HTTPError({ statusCode: 404, statusMessage: 'Site not found' })
-  const accessibleLocationIds = await listAccessibleLocationIds(db, memberAccessPrincipal(organization, { env, siteId: site.id }))
+  const accessibleLocationIds = await listAccessibleLocationIds(db, memberAccessPrincipal(organization, { env, siteId: site.id, event }))
   if (accessibleLocationIds?.length === 0) return { success: true as const, locations: [] }
   const locationFilter = accessibleLocationIds
     ? `AND id IN (SELECT value FROM json_each(?))`

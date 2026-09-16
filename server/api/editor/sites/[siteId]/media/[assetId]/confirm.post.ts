@@ -27,7 +27,7 @@ export default defineHandler(async (event) => {
   if (!asset) return jsonResponse({ error: 'Asset not found' }, { status: 404 })
 
   try {
-    await assertResourceAccess(db, { ...memberAccessPrincipal(site.membership, { env, siteId }), resourceLocationId: null })
+    await assertResourceAccess(db, { ...memberAccessPrincipal(site.membership, { env, siteId, event }), resourceLocationId: null })
   } catch (error) {
     rethrowHttpError(error)
     throw error

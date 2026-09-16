@@ -32,7 +32,7 @@ export default defineHandler(async (event) => {
   const existingPost = await getPost(db, site.organization_id, siteId, postId)
   if (!existingPost) return jsonResponse({ error: 'Post not found' }, { status: 404 })
 
-  const principal = memberAccessPrincipal(site.membership, { env, siteId })
+  const principal = memberAccessPrincipal(site.membership, { env, siteId, event })
   await assertResourceAccess(db, { ...principal, resourceLocationId: existingPost.location_id ?? null })
   // Moving the post to a different location is itself checked against the
   // target scope, not just the post's current one.

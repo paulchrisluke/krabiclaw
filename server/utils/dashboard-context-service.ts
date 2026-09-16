@@ -80,7 +80,7 @@ export async function loadDashboardContext(
   const resourcesStartedAt = performance.now()
   const [locations, siteAccess] = await Promise.all([
     listDashboardLocations(db, organization.id, site.id, principal),
-    resolveDashboardSiteAccess(db, memberAccessPrincipal(organization, { env, siteId: site.id })),
+    resolveDashboardSiteAccess(db, memberAccessPrincipal(organization, { env, siteId: site.id, event })),
   ])
   recordRequestPhase(event, 'resources', resourcesStartedAt)
   return {

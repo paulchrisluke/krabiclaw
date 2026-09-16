@@ -18,7 +18,7 @@ export default defineHandler(async (event) => {
   `, [submissionId, siteId])
   if (!submission) return jsonResponse({ error: 'Reservation not found or access denied' }, { status: 404 })
 
-  await assertResourceAccess(db, { ...memberAccessPrincipal(site.membership, { env, siteId }), resourceLocationId: submission.location_id })
+  await assertResourceAccess(db, { ...memberAccessPrincipal(site.membership, { env, siteId, event }), resourceLocationId: submission.location_id })
 
   const body = await readBody(event) as { kind?: string } | undefined
   const kind = body?.kind === 'reminder' ? 'reminder' : 'first'

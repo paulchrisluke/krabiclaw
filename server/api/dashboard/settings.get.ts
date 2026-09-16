@@ -8,7 +8,7 @@ import { loadSettingsPayload } from '~/server/utils/site-settings'
 export default defineHandler(async (event) => {
   const { env, db, organization, site: dashboardSite } = await getDashboardContext(event, { requireSite: true })
   if (!dashboardSite) return jsonResponse({ error: 'Site not found' }, { status: 404 })
-  await assertSiteWideAccess(db, memberAccessPrincipal(organization, { env, siteId: dashboardSite.id }))
+  await assertSiteWideAccess(db, memberAccessPrincipal(organization, { env, siteId: dashboardSite.id, event }))
 
   const settings = await loadSettingsPayload(db, organization.id, dashboardSite.id)
 

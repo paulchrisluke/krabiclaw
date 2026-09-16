@@ -39,10 +39,10 @@ export function loadMemberSiteRow(event: H3Event, db: DbClient, env: CloudflareE
   // times: the editor context loader, the tenant-pages list and the page
   // itself each call requireSiteAccess independently. Neither the site row nor
   // the membership can change mid-request.
-  return oncePerRequest(event, `member-site-row:${siteId}:${userId}`, () => readMemberSiteRow(db, env, siteId, userId))
+  return oncePerRequest(event, `member-site-row:${siteId}:${userId}`, () => readMemberSiteRow(db, env, siteId, userId, event))
 }
 
-async function readMemberSiteRow(db: DbClient, env: CloudflareEnv, siteId: string, userId: string): Promise<SiteAccessRow | null> {
+async function readMemberSiteRow(db: DbClient, env: CloudflareEnv, siteId: string, userId: string, event: H3Event): Promise<SiteAccessRow | null> {
   // No role-name filter here on purpose: access is decided by the caller's
   // requested access class (site-wide / location / context) via
   // member-access.ts, not by which role names are allowed to reach this
@@ -58,7 +58,7 @@ async function readMemberSiteRow(db: DbClient, env: CloudflareEnv, siteId: strin
   const membership = await resolveOrganizationMembership(env, {
     organizationId: site.organization_id,
     userId,
-  })
+  }, event)
   if (!membership) return null
   return {
     ...site,
@@ -87,7 +87,7 @@ export async function requireLocationAccess(event: H3Event, siteId: string, loca
   const site = await loadMemberSiteRow(event, db, env, siteId, session.user.id)
   if (!site) throw new HTTPError({ statusCode: 404, message: 'Site not found or access denied' })
 
-  await assertLocationAccess(db, { ...memberAccessPrincipal(site.membership, { env, siteId }), locationId })
+  await assertLocationAccess(db, { ...memberAccessPrincipal(site.membership, { env, siteId, event }), locationId })
 
   const location = await queryFirst<LocationAccessRow>(db, `
     SELECT id
@@ -130,7 +130,7 @@ export async function requireSiteAccess(
   const site = await loadMemberSiteRow(event, db, env, siteId, session.user.id)
   if (!site) throw new HTTPError({ statusCode: 404, message: 'Site not found or access denied' })
 
-  const principal = memberAccessPrincipal(site.membership, { env, siteId })
+  const principal = memberAccessPrincipal(site.membership, { env, siteId, event })
   if (accessClass === 'context') {
     await assertSiteContextAccess(db, principal)
   } else {

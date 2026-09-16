@@ -44,7 +44,7 @@ export async function loadDashboardEditorContext(event: H3Event, siteId: string)
   const { env, db, site } = await requireSiteAccess(event, siteId, 'context')
   if (!site.vertical) throw new HTTPError({ statusCode: 500, statusMessage: 'Site vertical is not configured' })
 
-  const principal = memberAccessPrincipal(site.membership, { env, siteId })
+  const principal = memberAccessPrincipal(site.membership, { env, siteId, event })
   // requireSiteAccess(event, siteId, 'context') has already run
   // assertSiteContextAccess with this exact principal (location-access.ts), so
   // asserting it again here only bought a second read of the same member row.
@@ -121,7 +121,7 @@ export async function loadDashboardMedia(
   filters: DashboardMediaFilters = {},
 ) {
   const { env, db, site } = await requireSiteAccess(event, siteId, 'context')
-  const principal = memberAccessPrincipal(site.membership, { env, siteId })
+  const principal = memberAccessPrincipal(site.membership, { env, siteId, event })
   if (filters.id) {
     const asset = await getMediaAsset(db, filters.id, siteId)
     if (asset) {
@@ -162,7 +162,7 @@ export async function loadDashboardSettingsResource(
     siteSlug: options.siteSlug,
   })
   if (!site) throw new HTTPError({ statusCode: 404, statusMessage: 'Site not found' })
-  await assertSiteWideAccess(db, memberAccessPrincipal(organization, { env, siteId: site.id }))
+  await assertSiteWideAccess(db, memberAccessPrincipal(organization, { env, siteId: site.id, event }))
   const [settings, notifications, facebookConnection] = await Promise.all([
     loadSettingsPayload(db, organization.id, site.id),
     getNotificationsSettings(db, organization.id, site.id),
@@ -243,7 +243,7 @@ export async function loadDashboardLocationOverview(
   if (location.site_id !== siteId) {
     throw new HTTPError({ statusCode: 404, statusMessage: 'Location not found' })
   }
-  const principal = memberAccessPrincipal(organization, { env, siteId })
+  const principal = memberAccessPrincipal(organization, { env, siteId, event })
   await assertLocationAccess(db, { ...principal, locationId })
   const [capabilities, catalog, threads, counts] = await Promise.all([
     resolveLocationCapabilitySummary(
@@ -282,7 +282,7 @@ export async function loadDashboardLocationSettings(
   if (location.site_id !== siteId) {
     throw new HTTPError({ statusCode: 404, statusMessage: 'Location not found' })
   }
-  await assertLocationAccess(db, { ...memberAccessPrincipal(organization, { env, siteId }), locationId })
+  await assertLocationAccess(db, { ...memberAccessPrincipal(organization, { env, siteId, event }), locationId })
   const capabilities = await resolveLocationCapabilitySummary(
     db,
     organization.id,

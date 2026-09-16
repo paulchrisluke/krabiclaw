@@ -29,7 +29,7 @@ export default defineHandler(async (event) => {
     LIMIT 1
   `, [postId, site.organization_id, siteId])
   if (!post) return jsonResponse({ error: 'Post not found' }, { status: 404 })
-  await assertResourceAccess(db, { ...memberAccessPrincipal(site.membership, { env, siteId }), resourceLocationId: post.location_id })
+  await assertResourceAccess(db, { ...memberAccessPrincipal(site.membership, { env, siteId, event }), resourceLocationId: post.location_id })
 
   await deletePost(db, site.organization_id, siteId, postId)
   return jsonResponse({ success: true })

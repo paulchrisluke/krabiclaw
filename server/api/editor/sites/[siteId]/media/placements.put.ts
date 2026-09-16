@@ -28,7 +28,7 @@ export default defineHandler(async (event) => {
       env,
       organizationId: site.organization_id,
       siteId,
-      principal: memberAccessPrincipal(site.membership, { env, siteId }),
+      principal: memberAccessPrincipal(site.membership, { env, siteId, event }),
       placement,
       assetId: typeof body.asset_id === 'string' ? body.asset_id.trim() : null,
     })

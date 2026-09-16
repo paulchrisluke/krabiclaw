@@ -20,7 +20,7 @@ export default defineHandler(async (event) => {
       db, `SELECT id FROM business_locations WHERE id = ? AND site_id = ? LIMIT 1`, [locationId, siteId], )
     if (!location) return jsonResponse({ error: 'location_id must reference a location on this site' }, { status: 400 })
   }
-  await assertResourceAccess(db, { ...memberAccessPrincipal(site.membership, { env, siteId }), resourceLocationId: locationId })
+  await assertResourceAccess(db, { ...memberAccessPrincipal(site.membership, { env, siteId, event }), resourceLocationId: locationId })
 
   const submissions = await listReservationSubmissions(db, siteId, { locationId })
   return jsonResponse({ submissions })

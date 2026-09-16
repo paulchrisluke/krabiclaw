@@ -40,7 +40,7 @@ export default defineHandler(async (event) => {
       return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
     }
 
-    await assertSiteWideAccess(db, memberAccessPrincipal(siteAccess.membership, { env, siteId }))
+    await assertSiteWideAccess(db, memberAccessPrincipal(siteAccess.membership, { env, siteId, event }))
 
     const site = await queryFirst<ApiRecord>(db, `
       SELECT s.id, s.organization_id, s.subdomain, s.theme_id, s.status, (SELECT 'https://' || domain FROM site_domains WHERE site_id = s.id AND role = 'canonical' AND status = 'active') AS public_url, COALESCE((SELECT status FROM site_domains WHERE site_id = s.id AND type = 'custom' AND status NOT IN ('deleted', 'disabled') ORDER BY role = 'canonical' DESC, created_at, id LIMIT 1), 'none') AS custom_domain_status, s.default_currency, s.brand_name, s.brand_description,
