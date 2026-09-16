@@ -197,7 +197,6 @@ const props = defineProps<{
 }>()
 
 const route = useRoute()
-const toast = useToast()
 const blockPath = computed(() => `/dashboard/${String(route.params.orgSlug)}/sites/${String(route.params.siteSlug)}/pages/${props.pageId}/sections/${props.blockId}`)
 const collectionPath = computed(() => `${blockPath.value}/${props.collection}`)
 const frame = useEditorFrame(collectionPath)
@@ -414,7 +413,6 @@ async function save() {
   errorMessage.value = ''
   try {
     await commit()
-    toast.add({ description: `${noun.value.one} saved`, color: 'success' })
     await navigateTo(recordSections.value.length && openLeaf.value ? recordPath.value : collectionPath.value)
   } catch (cause) {
     errorMessage.value = getErrorMessage(cause, 'Failed to save this page')

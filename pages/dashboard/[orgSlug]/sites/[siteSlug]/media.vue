@@ -97,6 +97,7 @@
     :removable="false"
     :saving="editSaving"
     :save-disabled="!altTextChanged"
+    :error="editError"
     @save="saveAltText"
   >
     <template v-if="editingAsset" #default>
@@ -123,7 +124,6 @@
           class="w-full"
         />
       </UFormField>
-      <p v-if="editError" class="text-sm text-error">{{ editError }}</p>
     </template>
     <template v-if="editingAsset" #actions>
       <DashboardResourceLocalization
@@ -137,9 +137,12 @@
     </template>
   </DashboardListItemDialog>
 
+  <UAlert v-if="deleteError" color="error" variant="soft" :description="deleteError" icon="i-lucide-circle-alert" class="mt-4" />
+
   <!-- Load more -->
-  <div v-if="hasMore" class="mt-6 text-center">
+  <div v-if="hasMore" class="mt-6 text-center space-y-3">
     <UButton color="neutral" variant="ghost" :loading="loadingMore" @click="loadMore">Load more</UButton>
+    <UAlert v-if="loadMoreError" color="error" variant="soft" :description="loadMoreError" icon="i-lucide-circle-alert" />
   </div>
   </div>
 </template>
@@ -158,7 +161,6 @@ import { getErrorMessage } from '~/utils/errors'
 
 const siteId = await useDashboardSiteId()
 const siteApiBase = `/api/editor/sites/${siteId}`
-const toast = useToast()
 
 interface MediaAsset {
   id: string
@@ -187,6 +189,8 @@ interface MediaAsset {
 const assets = ref<MediaAsset[]>([])
 const loading = ref(false)
 const loadError = ref<string | null>(null)
+const loadMoreError = ref<string | null>(null)
+const deleteError = ref<string | null>(null)
 const loadingMore = ref(false)
 const deleting = ref(false)
 const isDragging = ref(false)
@@ -256,7 +260,6 @@ async function load() {
     if (import.meta.dev) console.error('Failed to load media:', err)
     loadError.value = getErrorMessage(err, 'Failed to load media')
     hasMore.value = false
-    toast.add({ title: loadError.value, color: 'error' })
   } finally {
     if (requestToken === mediaRequestToken) loading.value = false
   }
@@ -266,6 +269,7 @@ async function loadMore() {
   if (loadingMore.value) return
   const requestToken = mediaRequestToken
   loadingMore.value = true
+  loadMoreError.value = null
   const requestOffset = offset.value + LIMIT
   try {
     const params = new URLSearchParams({ limit: String(LIMIT), offset: String(requestOffset) })
@@ -282,7 +286,7 @@ async function loadMore() {
   } catch (err) {
     if (requestToken !== mediaRequestToken) return
     if (import.meta.dev) console.error('Failed to load more media:', err)
-    toast.add({ title: getErrorMessage(err, 'Failed to load more media'), color: 'error' })
+    loadMoreError.value = getErrorMessage(err, 'Failed to load more media')
   } finally {
     if (requestToken === mediaRequestToken) loadingMore.value = false
   }
@@ -299,6 +303,7 @@ function openEditById(item: { id: string }) {
 async function deleteMany(ids: string[]) {
   if (!ids.length) return
   deleting.value = true
+  deleteError.value = null
   try {
     // allSettled, not all: `all` rejects on the first failure and skips the
     // filter below, so a batch where nine of ten deletions succeeded left all ten
@@ -317,12 +322,10 @@ async function deleteMany(ids: string[]) {
 
     const failed = ids.length - deleted.size
     if (failed) {
-      toast.add({ title: `${deleted.size} of ${ids.length} deleted, ${failed} failed`, color: 'error' })
-    } else {
-      toast.add({ title: `${ids.length} item(s) deleted`, icon: 'i-lucide-circle-check', color: 'success' })
+      deleteError.value = `${deleted.size} of ${ids.length} deleted, ${failed} failed`
     }
   } catch (error) {
-    toast.add({ title: getErrorMessage(error, 'Failed to delete media'), color: 'error' })
+    deleteError.value = getErrorMessage(error, 'Failed to delete media')
   } finally { deleting.value = false }
 }
 
@@ -372,7 +375,6 @@ async function uploadFile(file: File) {
   try {
     const result = await upload(file)
     if (!result) return
-    toast.add({ title: 'File uploaded', icon: 'i-lucide-circle-check', color: 'success' })
     await load()
   } catch (err) {
     uploadError.value = getErrorMessage(err, 'Upload failed.')
@@ -465,7 +467,6 @@ async function saveAltText() {
     editingAsset.value.alt_text = updated
     const target = assets.value.find(item => item.id === editingAsset.value?.id)
     if (target) target.alt_text = updated
-    toast.add({ description: 'Alt text saved', color: 'success' })
     // Committing closes the sheet, the same as every other item sheet.
     editOpen.value = false
   } catch (cause) {

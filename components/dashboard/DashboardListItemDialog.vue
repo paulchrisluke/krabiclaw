@@ -40,6 +40,13 @@
 
     <template #body>
       <div class="space-y-5">
+        <UAlert
+          v-if="error"
+          color="error"
+          variant="soft"
+          icon="i-lucide-circle-alert"
+          :description="error"
+        />
         <slot />
       </div>
     </template>
@@ -82,6 +89,8 @@ withDefaults(defineProps<{
   saving?: boolean
   removing?: boolean
   saveDisabled?: boolean
+  /** Error message to display inline within the dialog body. */
+  error?: string | null
   /** Read-only details and action menus use the same chrome without a commit bar. */
   showActions?: boolean
   /** Names the commit for a sheet that does something other than save an edit. */

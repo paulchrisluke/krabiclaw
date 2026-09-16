@@ -130,7 +130,7 @@ export async function loadOrganizationGuestThreads(
     organizationId: organization.id,
     teamIds: isOrganizationWideRole(organization.role)
       ? null
-      : await listUserOrganizationTeamIds({ env, organizationId: organization.id, userId }),
+      : await listUserOrganizationTeamIds({ env, organizationId: organization.id, userId, event }),
   }
   const options = {
     organizationId: organization.id,

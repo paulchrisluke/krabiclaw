@@ -23,6 +23,7 @@
         :saving="saving"
         :save-disabled="saveDisabled"
         :save-label="saveLabel"
+        :error="errorMessage"
         @cancel="closeLeaf"
         @save="saveLeaf"
       >
@@ -96,7 +97,6 @@ import { requireProductPresentation } from '~/utils/product-presentation'
 definePageMeta({ layout: 'dashboard', cmsCapabilityKey: 'location.products' })
 
 const route = useRoute()
-const toast = useToast()
 const dashboardApi = useDashboardApi()
 const collectionId = computed(() => String(route.params.collectionId ?? ''))
 // The path comes from the route this screen is mounted on, not from the
@@ -182,24 +182,22 @@ async function commit() {
       const created = await dashboardApi(endpoint, { method: 'POST', body: { name: form.name.trim(), location_id: location }, validate: isCollectionCreated })
       form.name = ''
       await catalog.refresh()
-      toast.add({ description: `${presentation.collectionGroupLabel} created`, color: 'success' })
       await navigateTo(`${productsPath.value}/${created.collection.id}`)
       return
     }
     await dashboardApi(`${endpoint}/${collectionId.value}`, { method: 'PATCH', body: { name: form.name.trim() }, validate: isRecord })
     await catalog.refresh()
-    toast.add({ description: 'Name saved', color: 'success' })
     await navigateTo(collectionPath.value)
   } catch (error) {
     // The index column, where the alert lives, is under the detail sheet on narrow screens.
     errorMessage.value = getErrorMessage(error, `Failed to save ${presentation.collectionGroupLabel.toLowerCase()}`)
-    toast.add({ description: errorMessage.value, color: 'error' })
   } finally {
     saving.value = false
   }
 }
 
 function closeLeaf() {
+  errorMessage.value = ''
   if (collection.value) form.name = collection.value.name
   void navigateTo(collectionPath.value)
 }

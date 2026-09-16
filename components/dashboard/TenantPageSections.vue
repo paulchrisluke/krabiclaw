@@ -96,7 +96,6 @@ import { tenantPageBlockIsHub, tenantPageBlockLabel } from '~/utils/tenant-page-
 const props = defineProps<{ siteId: string; pageId: string }>()
 
 const route = useRoute()
-const toast = useToast()
 const recordPath = computed(() => `/dashboard/${String(route.params.orgSlug)}/sites/${String(route.params.siteSlug)}/pages/${props.pageId}`)
 const sectionsPath = computed(() => `${recordPath.value}/sections`)
 const frame = useEditorFrame(sectionsPath)
@@ -178,7 +177,6 @@ async function save() {
   errorMessage.value = ''
   try {
     await commit()
-    toast.add({ description: 'Section saved', color: 'success' })
     await navigateTo(sectionsPath.value)
   } catch (cause) {
     errorMessage.value = getErrorMessage(cause, 'Failed to save this page')

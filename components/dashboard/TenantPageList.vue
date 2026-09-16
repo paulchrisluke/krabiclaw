@@ -1,4 +1,5 @@
 <template>
+  <div class="space-y-4">
   <DashboardListEditor
     title="Pages"
     description="The pages of your site that you write yourself."
@@ -20,6 +21,8 @@
       </button>
     </template>
   </DashboardListEditor>
+  <UAlert v-if="deleteError" color="error" variant="soft" icon="i-lucide-circle-alert" :description="deleteError" />
+  </div>
 </template>
 
 <script setup lang="ts">
@@ -91,7 +94,7 @@ function open(item: { id: string }) {
 }
 
 const removingId = ref<string | null>(null)
-const toast = useToast()
+const deleteError = ref<string | null>(null)
 
 /**
  * Remove a page and everything under it. The hub owns adding and removing a
@@ -103,6 +106,7 @@ const toast = useToast()
  */
 async function remove(item: { id: string; updatedAt: string }) {
   removingId.value = item.id
+  deleteError.value = null
   try {
     await dashboardApi(`/api/editor/sites/${siteId}/pages/${item.id}`, {
       method: 'DELETE',
@@ -111,7 +115,7 @@ async function remove(item: { id: string; updatedAt: string }) {
     })
     await refresh()
   } catch (error) {
-    toast.add({ description: getErrorMessage(error, 'Failed to remove the page'), color: 'error' })
+    deleteError.value = getErrorMessage(error, 'Failed to remove the page')
   } finally {
     removingId.value = null
   }

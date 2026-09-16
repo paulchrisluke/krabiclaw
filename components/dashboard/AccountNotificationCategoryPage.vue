@@ -25,7 +25,6 @@ import { isMandatoryEmailCategory, isNotificationCategory, type NotificationCate
 // route renders this leaf for the first category with no segment of its own.
 const props = defineProps<{ category: NotificationCategory }>()
 
-const toast = useToast()
 const { sessionData } = await useAuthSession()
 const { preferences, save } = useNotificationPreferences(() => sessionData.value?.user?.id)
 
@@ -63,7 +62,6 @@ async function commit() {
   failure.value = ''
   try {
     await save(props.category, { email: draft.email, whatsapp: draft.whatsapp })
-    toast.add({ title: 'Saved', icon: 'i-lucide-circle-check', color: 'success' })
   } catch (cause) {
     failure.value = cause instanceof Error ? cause.message : 'Saving failed. Please try again.'
   } finally {

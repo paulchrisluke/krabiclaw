@@ -32,6 +32,7 @@
       <p class="mt-1 line-clamp-2 text-sm text-muted" :class="item.row.answer ? '' : 'italic'">{{ item.row.answer || 'No answer yet.' }}</p>
     </template>
   </DashboardListEditor>
+  <UAlert v-if="deleteError" color="error" variant="soft" icon="i-lucide-circle-alert" :description="deleteError" />
   </div>
 </template>
 
@@ -45,7 +46,6 @@ const props = defineProps<{ locationId?: string }>()
 const dashboardApi = useDashboardApi()
 const route = useRoute()
 const siteId = await useDashboardSiteId()
-const toast = useToast()
 const selectedPagePath = ref('general')
 
 const requestEvent = useRequestEvent()
@@ -173,6 +173,7 @@ const listItems = computed(() => qaRows.value.map(row => ({
 
 const editing = ref(false)
 const removingId = ref<string | null>(null)
+const deleteError = ref<string | null>(null)
 
 const qaPath = computed(() => props.locationId
   ? `/dashboard/${String(route.params.orgSlug)}/sites/${String(route.params.siteSlug)}/locations/${String(route.params.locationSlug)}/qa`
@@ -191,6 +192,7 @@ function openExisting(item: { id: string }) {
 
 async function removeItem(item: { id: string }) {
   removingId.value = item.id
+  deleteError.value = null
   try {
     await dashboardApi(`${qaEndpoint.value}/${item.id}`, {
       method: 'DELETE',
@@ -199,7 +201,7 @@ async function removeItem(item: { id: string }) {
     })
     await refresh()
   } catch (error) {
-    toast.add({ description: error instanceof Error ? error.message : 'Failed to remove question', color: 'error' })
+    deleteError.value = error instanceof Error ? error.message : 'Failed to remove question'
   } finally {
     removingId.value = null
   }

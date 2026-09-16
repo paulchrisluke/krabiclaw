@@ -51,7 +51,7 @@ export async function loadDashboardContext(
 
   const teamIds = isOrganizationWideRole(organization.role)
     ? null
-    : await listUserOrganizationTeamIds({ env: cloudflareEnv(event), organizationId: organization.id, userId })
+    : await listUserOrganizationTeamIds({ env: cloudflareEnv(event), organizationId: organization.id, userId, event })
   const principal = { env, userId, role: organization.role, teamIds }
 
   // This payload draws the site switcher and the selected site's card, so it is
@@ -79,7 +79,7 @@ export async function loadDashboardContext(
 
   const resourcesStartedAt = performance.now()
   const [locations, siteAccess] = await Promise.all([
-    listDashboardLocations(db, organization.id, site.id, principal),
+    listDashboardLocations(db, organization.id, site.id, principal, false),
     resolveDashboardSiteAccess(db, memberAccessPrincipal(organization, { env, siteId: site.id, event })),
   ])
   recordRequestPhase(event, 'resources', resourcesStartedAt)
@@ -92,3 +92,4 @@ export async function loadDashboardContext(
     siteAccess,
   }
 }
+

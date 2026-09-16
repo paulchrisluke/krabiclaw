@@ -36,6 +36,7 @@
         :disabled="replySaving || !detail.guestEmail"
         :disabled-reason="!detail.guestEmail ? 'This guest has no email on file, so a reply cannot be sent.' : null"
         :retrying-delivery-id="retryingDeliveryId"
+        :error="actionError"
         empty-title="No replies yet"
         empty-description="Guest replies will appear here."
         @submit="sendReply"
@@ -81,7 +82,7 @@ const props = defineProps<{
 
 const dashboard = useDashboardSite()
 const route = useRoute()
-const toast = useToast()
+const actionError = ref<string | null>(null)
 
 const siteId = computed(() => dashboard.siteId.value)
 
@@ -226,7 +227,6 @@ async function loadThreadDetail(options: { clearDraft?: boolean } = {}) {
   } catch (error) {
     if (requestToken !== detailRequestToken) return
     detailError.value = error
-    toast.add({ description: error instanceof Error ? error.message : 'Failed to load conversation', color: 'error' })
   } finally {
     if (requestToken === detailRequestToken) loadingDetail.value = false
   }
@@ -241,23 +241,21 @@ async function sendReply() {
   if (!dashboardScope.value || !replyDraft.value.trim()) return
   const idempotencyKey = activeReplyAttemptKey()
   replySaving.value = true
+  actionError.value = null
   try {
-    let accepted = false
     await dashboardApi<{ thread: ThreadDetail }>(
       `/api/dashboard/sites/${siteId.value}/guest-threads/${props.threadId}/operations/reply`,
       {
         method: 'POST',
         body: { body: replyDraft.value, idempotencyKey },
         validate: isThreadDetailResponse,
-        onResponse: ({ response }) => { accepted = response.status === 202 },
       },
     )
     replyAttemptKey.value = null
     replyAttemptDraft.value = null
-    toast.add({ description: accepted ? 'Reply delivery is in progress' : 'Reply sent', color: accepted ? 'info' : 'success' })
     await loadThreadDetail({ clearDraft: true })
   } catch (error) {
-    toast.add({ description: error instanceof Error ? error.message : 'Failed to send reply', color: 'error' })
+    actionError.value = error instanceof Error ? error.message : 'Failed to send reply'
   } finally {
     replySaving.value = false
   }
@@ -268,25 +266,23 @@ async function retryDelivery(deliveryId: string) {
   const attemptName = `${props.threadId}:${deliveryId}`
   const idempotencyKey = activeAttemptMapKey(retryAttemptKeys, attemptName)
   retryingDeliveryId.value = deliveryId
+  actionError.value = null
   try {
-    let accepted = false
     await dashboardApi<{ thread: ThreadDetail }>(
       `/api/dashboard/sites/${siteId.value}/guest-threads/${props.threadId}/operations/retry_delivery`,
       {
         method: 'POST',
         body: { deliveryId, idempotencyKey },
         validate: isThreadDetailResponse,
-        onResponse: ({ response }) => { accepted = response.status === 202 },
       },
     )
     clearAttemptMapKey(retryAttemptKeys, attemptName)
-    toast.add({ description: accepted ? 'Delivery retry is in progress' : 'Delivery retried', color: accepted ? 'info' : 'success' })
+    await loadThreadDetail()
   } catch (error) {
-    toast.add({ description: error instanceof Error ? error.message : 'Retry failed', color: 'error' })
+    actionError.value = error instanceof Error ? error.message : 'Retry failed'
   } finally {
     retryingDeliveryId.value = null
   }
-  await loadThreadDetail()
 }
 
 watch(realtime.event, (event) => {
