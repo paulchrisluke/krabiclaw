@@ -9,6 +9,7 @@ import {
 } from '~/server/utils/dashboard-context'
 import { isOrganizationWideRole, listUserOrganizationTeamIds, resolveDashboardSiteAccess } from '~/server/utils/member-access'
 import { recordRequestPhase } from '~/server/utils/request-metrics'
+import { getQuery } from 'nitro/h3'
 
 export async function loadDashboardContext(
   event: H3Event,
@@ -66,7 +67,7 @@ export async function loadDashboardContext(
 
   const resourcesStartedAt = performance.now()
   const [locations, siteAccess] = await Promise.all([
-    listDashboardLocations(db, organization.id, site.id, principal),
+    listDashboardLocations(db, organization.id, site.id, principal, false),
     resolveDashboardSiteAccess(db, {
       ...principal,
       organizationId: organization.id,
@@ -81,5 +82,33 @@ export async function loadDashboardContext(
     sites,
     locations,
     siteAccess,
+  }
+}
+
+export async function listOrganizationLocationsForDashboard(event: H3Event) {
+  const { env, db, organization, userId } = await getDashboardContext(event, {
+    requireSite: false,
+    requireOrganization: true,
+  })
+  if (!organization) {
+    throw new HTTPError({ statusCode: 404, statusMessage: 'Organization not found' })
+  }
+
+  const teamIds = isOrganizationWideRole(organization.role)
+    ? null
+    : await listUserOrganizationTeamIds({ env: cloudflareEnv(event), organizationId: organization.id, userId })
+  const principal = { env, memberId: organization.memberId, role: organization.role, teamIds }
+  
+  const locations = await listDashboardLocations(
+    db,
+    organization.id,
+    null, // No siteId for organization-scoped
+    principal,
+    true, // organizationScoped = true
+  )
+
+  return {
+    success: true as const,
+    locations,
   }
 }

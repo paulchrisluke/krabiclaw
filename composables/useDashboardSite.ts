@@ -1,4 +1,6 @@
 import type { DashboardRequestScope } from '~/composables/dashboardFetch'
+import { dashboardFetch } from '~/composables/dashboardFetch'
+import { $fetch } from 'ofetch'
 
 interface DashboardOrganization {
   id: string
@@ -49,6 +51,9 @@ interface DashboardLocation {
   media: Array<{ asset_id: string; slot: string; public_url: string; thumbnail_url: string | null; kind: string | null }>
   social_image: { url: string; width?: number; height?: number; type?: string } | null
   feature_overrides: string | null
+  parent_site_id?: string
+  parent_site_name?: string
+  parent_site_slug?: string
 }
 
 interface DashboardContextResponse {
@@ -58,6 +63,11 @@ interface DashboardContextResponse {
   sites: DashboardSiteSummary[]
   locations: DashboardLocation[]
   siteAccess: 'organization' | 'site' | 'location' | null
+}
+
+interface OrganizationLocationsResponse {
+  success: boolean
+  locations: DashboardLocation[]
 }
 
 const isDashboardOrganization = (value: unknown): value is DashboardOrganization =>
@@ -101,6 +111,9 @@ const isDashboardLocation = (value: unknown): value is DashboardLocation =>
     && (item.thumbnail_url === null || typeof item.thumbnail_url === 'string')
     && (item.kind === null || typeof item.kind === 'string')
   )
+  && (value.parent_site_id === undefined || typeof value.parent_site_id === 'string')
+  && (value.parent_site_name === undefined || typeof value.parent_site_name === 'string')
+  && (value.parent_site_slug === undefined || typeof value.parent_site_slug === 'string')
 
 const isDashboardContextResponse = (value: unknown): value is DashboardContextResponse =>
   isRecord(value)
@@ -132,6 +145,12 @@ const isDashboardContextResponse = (value: unknown): value is DashboardContextRe
     || value.siteAccess === 'site'
     || value.siteAccess === 'location'
   )
+
+const isOrganizationLocationsResponse = (value: unknown): value is OrganizationLocationsResponse =>
+  isRecord(value)
+  && value.success === true
+  && Array.isArray(value.locations)
+  && value.locations.every(isDashboardLocation)
 
 let clientDashboardContextReads: Map<string, Promise<DashboardContextResponse>> | undefined
 
@@ -169,9 +188,16 @@ export function useDashboardSite() {
   const scope = useDashboardRouteScope()
   const contextByScope = useState<Record<string, DashboardContextResponse | null>>('dashboard:contexts', () => ({}))
   const pendingByScope = useState<Record<string, boolean>>('dashboard:context-pending', () => ({}))
+  const orgLocationsByScope = useState<Record<string, OrganizationLocationsResponse | null>>('dashboard:org-locations', () => ({}))
+  const orgLocationsPendingByScope = useState<Record<string, boolean>>('dashboard:org-locations-pending', () => ({}))
+  const orgLocationsErrorByScope = useState<Record<string, string | null>>('dashboard:org-locations-error', () => ({}))
   const contextKey = computed(() => {
     const current = scope.value
     return current ? `${current.orgSlug}:${current.siteSlug ?? ''}` : ''
+  })
+  const orgContextKey = computed(() => {
+    const current = scope.value
+    return current ? `${current.orgSlug}:org-locations` : ''
   })
   const state = computed<DashboardContextResponse | null>({
     get: () => contextKey.value ? contextByScope.value[contextKey.value] ?? null : null,
@@ -181,6 +207,15 @@ export function useDashboardSite() {
     },
   })
   const pending = computed(() => contextKey.value ? pendingByScope.value[contextKey.value] ?? false : false)
+  const orgLocationsState = computed<OrganizationLocationsResponse | null>({
+    get: () => orgContextKey.value ? orgLocationsByScope.value[orgContextKey.value] ?? null : null,
+    set: (value) => {
+      if (!orgContextKey.value) return
+      orgLocationsByScope.value = { ...orgLocationsByScope.value, [orgContextKey.value]: value }
+    },
+  })
+  const orgLocationsPending = computed(() => orgContextKey.value ? orgLocationsPendingByScope.value[orgContextKey.value] ?? false : false)
+  const orgLocationsError = computed(() => orgContextKey.value ? orgLocationsErrorByScope.value[orgContextKey.value] ?? null : null)
 
   async function refresh(signal?: AbortSignal) {
     const requestScope = scope.value
@@ -225,12 +260,54 @@ export function useDashboardSite() {
     return await pendingRead
   }
 
+  async function loadOrganizationLocations(signal?: AbortSignal) {
+    const requestScope = scope.value
+    const requestKey = orgContextKey.value
+    if (!requestScope || !requestKey) {
+      orgLocationsState.value = null
+      return null
+    }
+    orgLocationsPendingByScope.value = { ...orgLocationsPendingByScope.value, [requestKey]: true }
+    orgLocationsErrorByScope.value = { ...orgLocationsErrorByScope.value, [requestKey]: null }
+    
+    const headers = buildDashboardRequestHeaders()
+    const baseURL = useRequestURL().origin
+    const query = { ...buildDashboardRequestQuery(requestScope), organization: 'true' } as Record<string, string>
+    
+    const pendingRead = $fetch<unknown>('/api/dashboard/locations', {
+      baseURL,
+      headers,
+      query,
+      retry: 0,
+      signal,
+    })
+    .then((response) => {
+      if (!isOrganizationLocationsResponse(response)) {
+        throw new ApiClientError('Organization locations response did not match its contract', 502, 'INVALID_API_RESPONSE', null)
+      }
+      orgLocationsByScope.value = { ...orgLocationsByScope.value, [requestKey]: response }
+      return response
+    })
+    .catch((error) => {
+      orgLocationsErrorByScope.value = { ...orgLocationsErrorByScope.value, [requestKey]: error instanceof Error ? error.message : 'Failed to load locations' }
+      throw error
+    })
+    .finally(() => {
+      orgLocationsPendingByScope.value = { ...orgLocationsPendingByScope.value, [requestKey]: false }
+    })
+    
+    return pendingRead
+  }
+
   const organization = computed(() => state.value?.organization ?? null)
   const site = computed(() => state.value?.site ?? null)
   const siteId = computed(() => site.value?.id ?? null)
   const sites = computed(() => state.value?.sites ?? [])
   const locations = computed(() => state.value?.locations ?? [])
   const siteAccess = computed(() => state.value?.siteAccess ?? null)
+  const organizationLocations = computed(() => orgLocationsState.value?.locations ?? [])
+  const organizationLocationsPending = orgLocationsPending
+  const organizationLocationsError = orgLocationsError
 
   return {
     state,
@@ -243,7 +320,11 @@ export function useDashboardSite() {
     sites,
     locations,
     siteAccess,
-    refresh
+    organizationLocations,
+    organizationLocationsPending,
+    organizationLocationsError,
+    refresh,
+    loadOrganizationLocations,
   }
 }
 
