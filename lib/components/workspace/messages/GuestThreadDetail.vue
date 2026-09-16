@@ -30,6 +30,7 @@
         :record-noun="recordNoun"
         :record-to="recordTo"
         :opening-message="openingMessage"
+        :announcement="announcement"
         :subline="subline"
         :loading="replySaving"
         :disabled="replySaving || !detail.guestEmail"
@@ -147,6 +148,35 @@ const openingMessage = computed(() => {
   const text = fields.message ?? fields.notes
   return typeof text === 'string' && text.trim() ? text : null
 })
+
+/*
+  What the platform says when a booking arrives: every fact the record carries
+  except the guest's own note, which is their message and reads as one.
+*/
+const announcement = computed(() => {
+  const thread = detail.value
+  if (!thread || thread.submissionType === 'contact') return null
+  const fields = thread.source.fields
+  // `guests` is the party size alone ("6", or "6+" when it is a minimum), so it
+  // needs its noun the way the list row's preview gives it one.
+  const size = typeof fields.guests === 'string' && fields.guests.trim()
+    ? `${fields.guests} ${fields.guests === '1' ? 'guest' : 'guests'}`
+    : null
+  const rows = [
+    { label: 'When', value: fields.whenLabel },
+    { label: 'Guests', value: size },
+    { label: capitalize(recordNoun.value), value: fields.productTitle },
+    { label: 'Location', value: fields.locationTitle ?? thread.locationLabel },
+    { label: 'Email', value: thread.guestEmail },
+    { label: 'Phone', value: thread.guestPhone },
+  ].filter((row): row is { label: string, value: string } => typeof row.value === 'string' && row.value.trim().length > 0)
+
+  return { title: `New ${recordNoun.value}`, rows }
+})
+
+function capitalize(value: string) {
+  return value ? value.charAt(0).toUpperCase() + value.slice(1) : ''
+}
 
 const subline = computed(() => {
   if (!detail.value) return null

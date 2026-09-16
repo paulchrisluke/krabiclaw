@@ -71,6 +71,7 @@
               <div class="flex max-w-[78%] items-end gap-2" :class="item.entry.actorKind === 'member' ? 'flex-row-reverse' : ''">
                 <UAvatar
                   v-if="item.entry.actorKind !== 'member'"
+                  :src="item.entry.platform ? '/krabi-claw-logo-96.webp' : undefined"
                   :alt="actorLabel(item.entry)"
                   size="md"
                   class="mb-1 shrink-0"
@@ -84,22 +85,44 @@
                     class="flex flex-wrap items-center gap-2 pb-0.5 text-xs font-medium text-muted"
                     :class="item.entry.actorKind === 'member' ? 'justify-end' : ''"
                   >
+                    <!-- Who and when. Which pipe it travelled down is not part
+                         of the conversation; a reply's own receipt says that. -->
                     <span class="text-highlighted">{{ actorLabel(item.entry) }}</span>
-                    <span>{{ channelLabel(item.entry.channel) }}</span>
                     <span>{{ formatRelativeTime(item.entry.occurredAt) }}</span>
                   </div>
 
                   <div
-                    class="rounded-2xl px-4 py-3 text-base leading-normal whitespace-pre-wrap"
+                    class="rounded-2xl px-4 py-3 text-base leading-normal"
                     :class="item.entry.actorKind === 'member'
                       ? 'rounded-br-[2px] bg-primary text-(--primary-foreground,#fff)'
                       : 'rounded-bl-[2px] bg-elevated text-default'"
                   >
-                    {{ item.entry.body }}
+                    <!--
+                      One bubble, one text size. A message is a message: the
+                      facts read as lines of it, with the label carried by
+                      colour rather than by a smaller type scale.
+                    -->
+                    <template v-if="item.entry.platform && announcement">
+                      <p class="font-medium">{{ announcement.title }}</p>
+                      <p v-for="row in announcement.rows" :key="row.label" class="mt-1">
+                        <span class="font-semibold text-highlighted">{{ row.label }}</span>
+                        <span class="ms-2 break-words">{{ row.value }}</span>
+                      </p>
+                      <!-- The way into the record sits in the message that
+                           announced it, so the booking is one click away. -->
+                      <NuxtLink
+                        v-if="recordTo"
+                        :to="recordTo"
+                        class="mt-3 block font-semibold text-primary"
+                      >
+                        Show {{ recordNoun }}
+                      </NuxtLink>
+                    </template>
+                    <span v-else class="whitespace-pre-wrap">{{ item.entry.body }}</span>
                   </div>
 
                   <div
-                    v-if="item.entry.deliveries.length"
+                    v-if="item.entry.deliveries.length && !item.entry.platform"
                     class="flex flex-wrap items-center gap-x-3 gap-y-1"
                     :class="item.entry.actorKind === 'member' ? 'justify-end' : ''"
                   >
@@ -210,6 +233,9 @@ export interface GuestThreadEntryMessage {
   deliveries: GuestThreadEntryDelivery[]
 }
 
+/** An entry as this stream renders it: `platform` marks KrabiClaw's own message. */
+type StreamEntry = GuestThreadEntryMessage & { platform?: boolean }
+
 const DELIVERY_PURPOSE_LABELS = {
   owner_alert: 'owner alert',
   guest_acknowledgement: 'guest acknowledgement',
@@ -241,6 +267,8 @@ const props = withDefaults(defineProps<{
   recordTo?: string | null
   /** What the guest wrote when they opened the thread, if anything. */
   openingMessage?: string | null
+  /** What the platform announced when the record arrived: a title and its facts. */
+  announcement?: { title: string, rows: Array<{ label: string, value: string }> } | null
   subline?: string | null
   placeholder?: string
   loading?: boolean
@@ -252,6 +280,7 @@ const props = withDefaults(defineProps<{
 }>(), {
   recordTo: null,
   openingMessage: null,
+  announcement: null,
   subline: null,
   placeholder: 'Write your reply…',
   loading: false,
@@ -293,18 +322,28 @@ watch(() => props.entries.length, async () => {
  * run of consecutive messages from the same side carrying one meta line.
  */
 const groupedEntries = computed(() => {
-  const groups: Array<{ key: string; label: string; items: Array<{ entry: GuestThreadEntryMessage; startsRun: boolean }> }> = []
+  const groups: Array<{ key: string; label: string; items: Array<{ entry: StreamEntry; startsRun: boolean }> }> = []
   let previousDay: string | null = null
   let previousRunKey: string | null = null
 
+  /*
+    A submission is not an event about the conversation, it is how the
+    conversation starts: the platform saying a booking came in, and the guest's
+    own words. Both read as messages, so both are messages.
+  */
+  const expanded: StreamEntry[] = []
   for (const raw of props.entries) {
-    // The submission IS the guest's first message when they wrote one. Airbnb
-    // shows the opening words in the stream; ours only had them in the list
-    // preview, so the conversation opened on "started this conversation" and
-    // nothing the guest actually said.
-    const entry = raw.kind === 'submission' && props.openingMessage
-      ? { ...raw, kind: 'message' as const, actorKind: 'guest' as const, body: props.openingMessage }
-      : raw
+    if (raw.kind !== 'submission') { expanded.push(raw); continue }
+    if (props.announcement) {
+      expanded.push({ ...raw, id: `${raw.id}:announcement`, kind: 'message', actorKind: 'system', body: null, platform: true })
+    }
+    if (props.openingMessage) {
+      expanded.push({ ...raw, kind: 'message', actorKind: 'guest', body: props.openingMessage })
+    }
+    if (!props.announcement && !props.openingMessage) expanded.push(raw)
+  }
+
+  for (const entry of expanded) {
     const occurred = new Date(entry.occurredAt)
     const day = `${occurred.getFullYear()}-${occurred.getMonth()}-${occurred.getDate()}`
     if (day !== previousDay) {
@@ -312,7 +351,7 @@ const groupedEntries = computed(() => {
       previousDay = day
       previousRunKey = null
     }
-    const runKey = entry.kind === 'message' ? `${entry.actorKind}:${entry.actorLabel ?? ''}` : null
+    const runKey = entry.kind === 'message' ? `${entry.actorKind}:${entry.actorLabel ?? ''}:${entry.platform ? 'platform' : ''}` : null
     const startsRun = runKey === null || runKey !== previousRunKey
     previousRunKey = runKey
     groups[groups.length - 1]!.items.push({ entry, startsRun })
@@ -336,7 +375,8 @@ function dayLabel(iso: string) {
   }).format(date)
 }
 
-function actorLabel(entry: GuestThreadEntryMessage) {
+function actorLabel(entry: StreamEntry) {
+  if (entry.platform) return 'KrabiClaw'
   if (entry.actorKind === 'guest') return props.guestName
   if (entry.actorKind === 'member') return entry.actorLabel || 'Owner'
   return 'System'
@@ -360,14 +400,7 @@ function deliveryIcon(delivery: GuestThreadEntryDelivery) {
   return 'i-lucide-clock'
 }
 
-function channelLabel(channel: Channel | null) {
-  if (channel === 'email') return 'Email'
-  if (channel === 'whatsapp') return 'WhatsApp'
-  if (channel === 'web') return 'Website'
-  return 'System'
-}
-
-function systemEventIcon(entry: GuestThreadEntryMessage) {
+function systemEventIcon(entry: StreamEntry) {
   if (entry.kind === 'submission') return 'i-lucide-sparkles'
   if (entry.kind === 'resolution') {
     return entry.eventName === 'thread.resolved' ? 'i-lucide-check-check' : 'i-lucide-rotate-ccw'
@@ -375,7 +408,7 @@ function systemEventIcon(entry: GuestThreadEntryMessage) {
   return 'i-lucide-circle-check'
 }
 
-function systemEventLabel(entry: GuestThreadEntryMessage) {
+function systemEventLabel(entry: StreamEntry) {
   const payload = entry.payload ?? {}
   const actor = entry.actorLabel ? `${entry.actorLabel} ` : ''
   const noun = props.recordNoun.toLowerCase()
