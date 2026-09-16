@@ -723,7 +723,13 @@ export async function getPublishedPosts(
 ): Promise<PublishedPostSummary[]> {
   let query = `
     SELECT p.id, p.site_id, root.location_id, bl.title AS location_title, bl.slug AS location_slug, bl.phone AS location_phone,
-           p.slug, (root.metadata_json ->> '$.post_type') AS post_type, p.title, p.summary AS body,
+           -- A translation's address is its own path column; only the source
+           -- row carries a slug. Reading p.slug alone returned NULL for every
+           -- representation, and the formatter below refuses a published post
+           -- with no slug, so any locale but the source 500'd the moment a
+           -- surface listed its posts.
+           COALESCE(p.slug, ltrim(replace(p.path, '/posts/', ''), '/')) AS slug,
+           (root.metadata_json ->> '$.post_type') AS post_type, p.title, p.summary AS body,
            p.seo_title, p.seo_description,
            json_extract(root.metadata_json, '$.call_to_action') AS call_to_action, CASE WHEN (root.metadata_json ->> '$.event') IS NULL THEN NULL ELSE json_patch(json_extract(root.metadata_json, '$.event'), COALESCE(json_extract(p.metadata_json, '$.event'), '{}')) END AS event, CASE WHEN (root.metadata_json ->> '$.offer') IS NULL THEN NULL ELSE json_patch(json_extract(root.metadata_json, '$.offer'), COALESCE(json_extract(p.metadata_json, '$.offer'), '{}')) END AS offer, (root.metadata_json ->> '$.alert_type') AS alert_type, root.published_at, p.created_at, p.updated_at
     FROM content_documents root JOIN content_documents p ON COALESCE(p.root_id,p.id) = root.id AND p.locale = ?
