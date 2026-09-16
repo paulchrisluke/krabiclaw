@@ -11,8 +11,17 @@
     class="relative overflow-hidden"
     data-parity-section="hero"
   >
+    <!-- A hero declares that it takes an image or a video, so it draws both. -->
+    <video
+      v-if="background?.kind === 'video'"
+      :src="background.public_url!"
+      :poster="background.thumbnail_url ?? undefined"
+      autoplay muted loop playsinline
+      aria-hidden="true"
+      class="absolute inset-0 size-full object-cover object-center"
+    />
     <img
-      v-if="backgroundSrc"
+      v-else-if="backgroundSrc"
       :src="backgroundSrc"
       alt=""
       width="1920"
@@ -126,7 +135,8 @@ const gallery = computed(() => props.page.media
 const activeMedia = ref(0)
 
 const isHome = computed(() => props.page.path === '/')
-const backgroundSrc = computed(() => blockMedia(props.block, 'media')[0]?.public_url ?? null)
+const background = computed(() => blockMedia(props.block, 'media')[0] ?? null)
+const backgroundSrc = computed(() => background.value?.public_url ?? null)
 const ctaLabel = computed(() => blockTextOrNull(props.block.data.cta_label) ?? blockTextOrNull(props.block.data.label))
 // An internal route is localized, so a Thai page's button stays on the Thai
 // site; an absolute URL belongs to someone else and is left exactly as written.

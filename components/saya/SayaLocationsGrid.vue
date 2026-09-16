@@ -108,6 +108,9 @@ onMounted(() => {
   // renders different cards, and watching the count alone left those cards
   // unobserved, so their videos never started.
   watch(() => items.value.map(item => item.id).join('|'), () => {
+    // The set is keyed by index, so a different list of cards must not inherit
+    // the old one's visibility.
+    visibleLocCards.value = new Set()
     observer.disconnect()
     nextTick(() => locCardRefs.forEach(el => el && observer.observe(el)))
   }, { immediate: true })
