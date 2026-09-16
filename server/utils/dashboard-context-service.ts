@@ -84,30 +84,3 @@ export async function loadDashboardContext(
   }
 }
 
-export async function listOrganizationLocationsForDashboard(event: H3Event) {
-  const { env, db, organization, userId } = await getDashboardContext(event, {
-    requireSite: false,
-    requireOrganization: true,
-  })
-  if (!organization) {
-    throw new HTTPError({ statusCode: 404, statusMessage: 'Organization not found' })
-  }
-
-  const teamIds = isOrganizationWideRole(organization.role)
-    ? null
-    : await listUserOrganizationTeamIds({ env: cloudflareEnv(event), organizationId: organization.id, userId })
-  const principal = { env, memberId: organization.memberId, role: organization.role, teamIds }
-  
-  const locations = await listDashboardLocations(
-    db,
-    organization.id,
-    null, // No siteId for organization-scoped
-    principal,
-    true, // organizationScoped = true
-  )
-
-  return {
-    success: true as const,
-    locations,
-  }
-}

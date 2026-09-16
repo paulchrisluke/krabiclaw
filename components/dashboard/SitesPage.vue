@@ -156,7 +156,8 @@
 import type { DropdownMenuItem } from '@nuxt/ui'
 import DashboardSiteLocationSelector, { type SiteLocationSelectorItem } from '~/components/dashboard/SiteLocationSelector.vue'
 import { useOnboardingDraft } from '~/composables/useOnboardingDraft'
-import { dashboardFetchWithQuery } from '~/composables/dashboardFetch'
+import { dashboardFetch } from '~/composables/dashboardFetch'
+import type { DashboardLocation } from '~/composables/useDashboardSite'
 import { tenantSiteOrigin } from '~/utils/tenant-site-origin'
 import { onMounted, ref } from 'vue'
 
@@ -170,7 +171,7 @@ const draft = useOnboardingDraft()
 const pending = dashboard.pending
 
 const sites = computed(() => dashboard.sites.value)
-const organizationLocations = ref<typeof dashboard.locations.value>([])
+const organizationLocations = ref<DashboardLocation[]>([])
 const organizationLocationsPending = ref(false)
 const organizationLocationsError = ref<string | null>(null)
 type Site = (typeof sites.value)[number]
@@ -362,23 +363,30 @@ watch(() => sites.value.some(site => site.onboarding_status !== 'active'), async
   }
 }, { immediate: true })
 
-// Load organization locations on mount
-onMounted(async () => {
-  if (import.meta.client) {
-    organizationLocationsPending.value = true
-    organizationLocationsError.value = null
-    try {
-      const scope = { orgSlug: orgSlug.value }
-      const response = await dashboardFetchWithQuery<{ success: true; locations: typeof organizationLocations.value }>('/api/dashboard/locations', scope, {
-        validate: (value): value is { success: true; locations: typeof organizationLocations.value } => 
-          typeof value === 'object' && value !== null && 'success' in value && value.success === true && 'locations' in value && Array.isArray(value.locations),
-      }, { organization: 'true' })
-      organizationLocations.value = response.locations
-    } catch (error) {
-      organizationLocationsError.value = error instanceof Error ? error.message : 'Failed to load locations'
-    } finally {
-      organizationLocationsPending.value = false
-    }
+async function loadLocations() {
+  if (!orgSlug.value) return
+  organizationLocationsPending.value = true
+  organizationLocationsError.value = null
+  try {
+    const scope = { orgSlug: orgSlug.value }
+    const response = await dashboardFetch<{ success: true; locations: DashboardLocation[] }>('/api/dashboard/locations', scope, {
+      query: { organization: 'true' },
+      validate: (value): value is { success: true; locations: DashboardLocation[] } =>
+        typeof value === 'object' && value !== null && 'success' in value && (value as { success: unknown }).success === true && 'locations' in value && Array.isArray((value as { locations: unknown }).locations),
+    })
+    organizationLocations.value = response.locations
+  } catch (error) {
+    organizationLocationsError.value = error instanceof Error ? error.message : 'Failed to load locations'
+  } finally {
+    organizationLocationsPending.value = false
   }
+}
+
+onMounted(() => {
+  void loadLocations()
+})
+
+watch(orgSlug, () => {
+  void loadLocations()
 })
 </script>
