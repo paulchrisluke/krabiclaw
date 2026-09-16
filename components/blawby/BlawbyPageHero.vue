@@ -1,5 +1,26 @@
 <template>
-  <section :class="backgroundClass" class="relative overflow-hidden" data-parity-section="page-hero">
+  <!--
+    A page that carries its own picture opens with it, beside the title.
+    `cover` and `gallery` are the document's own media slots — the same ones the
+    social card is drawn from — so the picture is a property of the page, like
+    its title, and the template renders it rather than the document holding a
+    block that repeats it.
+  -->
+  <section
+    v-if="gallery.length"
+    class="mx-auto mb-8 max-w-7xl border-b border-slate-200 pt-8 sm:px-6 md:flex lg:px-8"
+    data-parity-section="service-overview"
+  >
+    <BlawbyMediaGallery v-model="activeMedia" :media="gallery" :fallback-alt="page.title" />
+    <div class="flex-1">
+      <div class="blawby-container pb-8 pt-8">
+        <h1 v-if="title" class="mx-auto max-w-4xl blawby-display text-3xl font-bold text-[var(--blawby-primary)] sm:text-4xl md:mt-2">{{ title }}</h1>
+        <p v-if="description" class="mx-auto mt-6 max-w-2xl text-left text-lg text-[var(--blawby-primary)]">{{ description }}</p>
+      </div>
+    </div>
+  </section>
+
+  <section v-else :class="backgroundClass" class="relative overflow-hidden" data-parity-section="page-hero">
     <div class="blawby-container relative">
       <div class="px-6 pb-4 pt-16 lg:px-8">
         <div class="mx-auto max-w-4xl text-center">
@@ -47,6 +68,18 @@ const SHIELDS: Record<string, BlawbyShieldVariant> = {
   '/third-party-notices': 'third-party-notices',
 }
 const variant = computed<BlawbyShieldVariant>(() => SHIELDS[props.page.path] ?? 'about')
+
+/** The page's own pictures, in the order the page carries them. */
+const gallery = computed(() => props.page.media
+  .filter(item => item.kind === 'image' && (item.slot === 'cover' || item.slot === 'gallery'))
+  .map(item => ({
+    asset_id: item.asset_id,
+    public_url: item.public_url,
+    alt_text: item.alt_text,
+    width: item.width,
+    height: item.height,
+  })))
+const activeMedia = ref(0)
 
 const backgroundClass = computed(() => {
   if (variant.value === 'schedule') return 'bg-[var(--blawby-primary-800)] [&_h1]:text-white [&_p]:text-gray-200'
