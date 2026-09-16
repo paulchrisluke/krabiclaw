@@ -172,7 +172,10 @@ async function hydrateBlocks(
   const collectionIds = new Set<string>()
   const locationIds = new Set<string>()
   const qaSources = new Set(blocks.map(faqBlockSource).filter((source): source is FaqBlockSource => source !== null))
-  const hasReviewSource = blocks.some(block => block.type === 'testimonial_grid' && block.data.source === 'site_reviews')
+  // A reviews grid has no source to choose — reviews are the site's reviews.
+  // The gate outlived the `source` field it read, so a grid authored in the
+  // CMS, which never writes that key, listed nothing.
+  const hasReviewSource = blocks.some(block => block.type === 'testimonial_grid')
   const hasPostSource = blocks.some(block => block.type === 'feature_grid' && block.data.source === 'site_posts')
   // The site's social posts — Google Business updates and anything published
   // beside them. They are `social_post` documents, a different record from the
@@ -380,7 +383,7 @@ async function hydrateBlocks(
     }
     const faqSource = faqBlockSource(block)
     if (faqSource) data.items = qaItemsBySource.get(faqSource)
-    if (block.type === 'testimonial_grid' && data.source === 'site_reviews') data.items = reviewItems
+    if (block.type === 'testimonial_grid') data.items = reviewItems
     if (block.type === 'feature_grid' && (data.source === 'site_posts' || data.source === 'site_updates')) {
       const items = data.source === 'site_posts' ? postItems : updateItems
       const limit = typeof data.limit === 'number' && Number.isInteger(data.limit) && data.limit > 0 ? data.limit : items.length

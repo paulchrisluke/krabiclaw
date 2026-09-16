@@ -13,7 +13,7 @@
         <NuxtLink
           v-for="(item, index) in items"
           :key="item.id"
-          :to="localePath(item.url)"
+          :to="route(item.url)"
           class="group block overflow-hidden bg-default text-default no-underline transition hover:opacity-90"
           :class="index === 0 ? 'sm:col-span-2' : ''"
         >
@@ -63,7 +63,7 @@
       <NuxtLink
         v-for="item in items"
         :key="item.id"
-        :to="localePath(item.url)"
+        :to="route(item.url)"
         class="group block overflow-hidden rounded-xl border border-inverted/10 bg-inverted/5 no-underline transition hover:-translate-y-0.5 hover:border-inverted/20"
       >
         <div v-if="item.image" class="aspect-4/3 overflow-hidden bg-inverted/10">
@@ -98,7 +98,7 @@
 import AppSection from '~/components/ui/AppSection.vue'
 import type { PublicTenantPage } from '~/server/utils/public-tenant-pages'
 import type { TenantPageBlock } from '~/utils/tenant-page-blocks'
-import { blockText, blockRecords } from '~/utils/tenant-page-block-data'
+import { blockText, blockRecords, isInternalRoute } from '~/utils/tenant-page-block-data'
 
 // One grid, three sets of rows: the site's social posts, its published
 // articles, or rows the owner wrote. Which it is, is a field the owner picks —
@@ -157,4 +157,9 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => observer?.disconnect())
+
+/** An internal route takes the visitor's locale; an absolute URL is left alone. */
+function route(url: string) {
+  return isInternalRoute(url) ? localePath(url) : url
+}
 </script>

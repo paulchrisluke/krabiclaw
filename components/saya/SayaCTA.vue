@@ -15,7 +15,7 @@
         </NuxtLink>
         <NuxtLink
           v-if="url && label"
-          :to="localePath(url)"
+          :to="route(url)"
           class="inline-flex items-center justify-center rounded-full px-6 py-3 text-base font-medium no-underline transition"
           :class="orderUrl ? 'ring-1 ring-inset ring-(--brand-color) text-(--brand-color) hover:bg-(--brand-color)/10' : 'bg-(--brand-color) text-(--brand-color-foreground) hover:opacity-90'"
         >
@@ -30,7 +30,7 @@
 import AppSection from '~/components/ui/AppSection.vue'
 import type { PublicTenantPage } from '~/server/utils/public-tenant-pages'
 import type { TenantPageBlock } from '~/utils/tenant-page-blocks'
-import { blockText } from '~/utils/tenant-page-block-data'
+import { blockText, isInternalRoute } from '~/utils/tenant-page-block-data'
 
 // Saya's call to action. The words and the button are the block's — they used
 // to be substituted at render time from the vertical's copy table, so the
@@ -50,4 +50,9 @@ const { locations } = useSiteShellState()
 const orderUrl = computed(() => (locations.value ?? []).some(location => location.grab_url || location.uber_eats_url || location.foodpanda_url)
   ? '/order'
   : null)
+
+/** An internal route takes the visitor's locale; an absolute URL is left alone. */
+function route(url: string) {
+  return isInternalRoute(url) ? localePath(url) : url
+}
 </script>

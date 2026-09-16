@@ -34,6 +34,15 @@ export function blockStrings(value: unknown): string[] {
     : []
 }
 
+/**
+ * Whether a link belongs to this site, and so takes the visitor's locale. An
+ * absolute URL belongs to someone else and is left exactly as it was written —
+ * running it through `localePath` produced `/th/https://example.com`.
+ */
+export function isInternalRoute(url: string): boolean {
+  return url.startsWith('/')
+}
+
 /** A block's media placement in a slot, in the order it was arranged. */
 export function blockMedia(block: TenantPageBlock, slot: string) {
   return block.media
