@@ -33,12 +33,19 @@
 </template>
 
 <script setup lang="ts">
+import type { PublicTenantPage } from '~/server/utils/public-tenant-pages'
+import type { TenantPageBlock } from '~/utils/tenant-page-blocks'
+import { blockText, blockTextOrNull, blockRecords } from '~/utils/tenant-page-block-data'
 /** The Pricing page's accordion: one question open at a time, the chevron turning. */
-defineProps<{
-  eyebrow?: string | null
-  title: string
-  items: Array<{ question: string; answer: string }>
-}>()
+const props = defineProps<{ block: TenantPageBlock; page: PublicTenantPage }>()
+
+// The questions are the page's own Q&A records, resolved onto the block by the
+// public page loader.
+const eyebrow = computed(() => blockTextOrNull(props.block.data.label))
+const title = computed(() => blockText(props.block.data.title))
+const items = computed(() => blockRecords(props.block.data.items)
+  .map(item => ({ question: blockText(item.title) || blockText(item.question), answer: blockText(item.description) || blockText(item.answer) }))
+  .filter(item => item.question && item.answer))
 
 // Which row is open, by position. Keyed by the question text, two pages with
 // the same question opened together and closed each other.

@@ -28,6 +28,9 @@
 </template>
 
 <script setup lang="ts">
+import type { PublicTenantPage } from '~/server/utils/public-tenant-pages'
+import type { TenantPageBlock } from '~/utils/tenant-page-blocks'
+import { blockText, blockTextOrNull, blockRecords } from '~/utils/tenant-page-block-data'
 import type { PlatformIconName } from '~/components/platform/PlatformIcon.vue'
 
 export interface PlatformWorkflow {
@@ -42,27 +45,37 @@ export interface PlatformWorkflow {
  * type, and what happens. Each card's label colour follows the vertical's own
  * sequence, which is why the accent order is a prop rather than a constant.
  */
-const props = defineProps<{
-  accent: 'primary' | 'teal' | 'navy'
-  eyebrow?: string | null
-  title: string
-  description?: string | null
-  items: PlatformWorkflow[]
-}>()
+const props = defineProps<{ block: TenantPageBlock; page: PublicTenantPage }>()
 
-const EYEBROW: Record<typeof props.accent, string> = {
+/** KrabiClaw's verticals each carry their own accent; the page says which. */
+const accent = computed<'primary' | 'teal' | 'navy'>(() => (
+  props.page.path === '/experiences' ? 'teal' : props.page.path === '/legal' ? 'navy' : 'primary'))
+
+const eyebrow = computed(() => blockTextOrNull(props.block.data.label))
+const title = computed(() => blockText(props.block.data.title))
+const description = computed(() => blockTextOrNull(props.block.data.description))
+const items = computed<PlatformWorkflow[]>(() => blockRecords(props.block.data.items).map(item => ({
+  title: blockText(item.title),
+  icon: (blockTextOrNull(item.icon) ?? 'sparkles') as PlatformIconName,
+  // The prompt is a declared field now; it used to ride in `value`, a key the
+  // feature grid meant for a statistic.
+  prompt: blockText(item.prompt),
+  description: blockText(item.description),
+})).filter(item => item.title))
+
+const EYEBROW: Record<typeof accent.value, string> = {
   primary: 'text-primary',
   teal: 'text-(--kc-teal-600)',
   navy: 'text-primary',
 }
-const LABELS: Record<typeof props.accent, readonly string[]> = {
+const LABELS: Record<typeof accent.value, readonly string[]> = {
   primary: ['text-(--kc-coral)', 'text-(--kc-teal)', 'text-primary'],
   teal: ['text-(--kc-teal)', 'text-primary', 'text-(--kc-coral)'],
   navy: ['text-primary', 'text-(--kc-teal)', 'text-(--kc-coral)'],
 }
-const eyebrowClass = computed(() => EYEBROW[props.accent])
+const eyebrowClass = computed(() => EYEBROW[accent.value])
 function labelClass(index: number) {
-  const sequence = LABELS[props.accent]
+  const sequence = LABELS[accent.value]
   return sequence[index % sequence.length]
 }
 </script>

@@ -63,12 +63,12 @@
           </li>
         </ul>
       </div>
-      <div v-if="item.url" class="pt-4 border-t border-default/50">
+      <div v-if="item.url && item.linkLabel" class="pt-4 border-t border-default/50">
         <NuxtLink
           :to="item.url"
           class="inline-flex items-center gap-1 text-[13px] font-semibold text-primary hover:text-primary/80 transition-colors no-underline group/link"
         >
-          Learn how to set this up
+          {{ item.linkLabel }}
           <PlatformIcon name="arrow-right" class="size-3.5 transition-transform group-hover/link:translate-x-1" />
         </NuxtLink>
       </div>
@@ -100,6 +100,9 @@
 </template>
 
 <script setup lang="ts">
+import type { PublicTenantPage } from '~/server/utils/public-tenant-pages'
+import type { TenantPageBlock } from '~/utils/tenant-page-blocks'
+import { blockText, blockTextOrNull, blockRecords, blockStrings } from '~/utils/tenant-page-block-data'
 import type { PlatformIconName } from '~/components/platform/PlatformIcon.vue'
 
 export interface PlatformFeatureCard {
@@ -108,6 +111,8 @@ export interface PlatformFeatureCard {
   icon: PlatformIconName
   specs?: string[]
   url?: string | null
+  /** The link's words. A card that carries a route carries what to call it. */
+  linkLabel?: string | null
 }
 
 /**
@@ -115,11 +120,27 @@ export interface PlatformFeatureCard {
  * homepage band, the Features page's detailed cards, and the vertical pages'
  * plain grid.
  */
-defineProps<{
-  variant: 'home' | 'detailed' | 'vertical'
-  eyebrow?: string | null
-  title?: string | null
-  titleMuted?: string | null
-  items: PlatformFeatureCard[]
-}>()
+const props = defineProps<{ block: TenantPageBlock; page: PublicTenantPage }>()
+
+const eyebrow = computed(() => blockTextOrNull(props.block.data.eyebrow))
+const title = computed(() => blockTextOrNull(props.block.data.title))
+const titleMuted = computed(() => blockTextOrNull(props.block.data.title_muted))
+const items = computed<PlatformFeatureCard[]>(() => blockRecords(props.block.data.items).map(item => ({
+  title: blockText(item.title),
+  description: blockText(item.description),
+  icon: (blockTextOrNull(item.icon) ?? 'sparkles') as PlatformIconName,
+  specs: blockStrings(item.specs),
+  url: blockTextOrNull(item.url),
+  linkLabel: blockTextOrNull(item.label),
+})).filter(item => item.title))
+
+/**
+ * A card list with specifications reads as a detail page; one on a vertical
+ * landing page reads as that vertical's. Both are this component's own reading
+ * of its content and its page, which is what a template is for.
+ */
+const variant = computed<'home' | 'detailed' | 'vertical'>(() => {
+  if (items.value.some(item => (item.specs ?? []).length)) return 'detailed'
+  return ['/restaurants', '/experiences', '/legal'].includes(props.page.path) ? 'vertical' : 'home'
+})
 </script>

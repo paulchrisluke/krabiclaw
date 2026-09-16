@@ -25,14 +25,31 @@
 </template>
 
 <script setup lang="ts">
-defineProps<{
-  title: string
-  description?: string | null
-  label: string
-  destination: string
-  backgroundUrl?: string | null
-  featuredUrl?: string | null
+import type { PublicTenantPage } from '~/server/utils/public-tenant-pages'
+import type { TenantPageBlock } from '~/utils/tenant-page-blocks'
+import { blockText, blockTextOrNull, blockMedia } from '~/utils/tenant-page-block-data'
+const props = defineProps<{
+  block: TenantPageBlock
+  page: PublicTenantPage
+  /**
+   * Where the button goes when the site, not the page, decides — a firm that
+   * books consultations on an external scheduler. It is a site setting rather
+   * than block content, so it overrides the block's own url.
+   */
+  destinationOverride?: string | null
 }>()
+
+const { localePath } = useI18n()
+const title = computed(() => blockText(props.block.data.title))
+const description = computed(() => blockTextOrNull(props.block.data.description))
+const label = computed(() => blockText(props.block.data.label))
+const destination = computed(() => {
+  if (props.destinationOverride) return props.destinationOverride
+  const url = blockText(props.block.data.url)
+  return url ? localePath(url) : ''
+})
+const backgroundUrl = computed(() => blockMedia(props.block, 'background')[0]?.public_url ?? null)
+const featuredUrl = computed(() => blockMedia(props.block, 'featured')[0]?.public_url ?? null)
 
 defineEmits<{ click: [] }>()
 </script>

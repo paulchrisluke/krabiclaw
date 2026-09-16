@@ -21,6 +21,9 @@
 </template>
 
 <script setup lang="ts">
+import type { PublicTenantPage } from '~/server/utils/public-tenant-pages'
+import type { TenantPageBlock } from '~/utils/tenant-page-blocks'
+import { blockTextOrNull } from '~/utils/tenant-page-block-data'
 import { useSchemaOrg } from '~/composables/useSchemaOrg'
 import type { Plan } from '~/composables/usePlans'
 
@@ -36,16 +39,13 @@ import type { Plan } from '~/composables/usePlans'
  * subscription price is offered at zero because that is what it costs; a paid
  * plan whose monthly price Stripe did not return has no offer.
  */
-const props = withDefaults(defineProps<{
-  variant: 'home' | 'pricing'
-  eyebrow?: string | null
-  title?: string | null
-  description?: string | null
-}>(), {
-  eyebrow: null,
-  title: null,
-  description: null,
-})
+const props = defineProps<{ block: TenantPageBlock; page: PublicTenantPage }>()
+
+const eyebrow = computed(() => blockTextOrNull(props.block.data.eyebrow))
+const title = computed(() => blockTextOrNull(props.block.data.title))
+const description = computed(() => blockTextOrNull(props.block.data.description))
+/** The Pricing page leads with plans; the home page mentions them. */
+const variant = computed<'home' | 'pricing'>(() => (props.page.path === '/pricing' ? 'pricing' : 'home'))
 
 const { plans, monthlyPrice } = usePlans()
 const config = useRuntimeConfig()
@@ -76,7 +76,7 @@ function offerFor(plan: Plan) {
 // The catalog is stated once, from the pricing page; the homepage repeats the
 // table but not the structured data.
 useSchemaOrg(() => {
-  if (props.variant !== 'pricing') return null
+  if (variant.value !== 'pricing') return null
   const available = plans.value
   if (!available) return null
   const offers = available.map(offerFor).filter((offer): offer is NonNullable<ReturnType<typeof offerFor>> => offer !== null)

@@ -3,7 +3,6 @@
 // All records use source='template' so ChowBot can identify and reference them.
 
 import { getVerticalCopy, type SiteVertical } from "~/utils/vertical-copy";
-import { heroBlockSection } from "~/utils/tenant-page-blocks";
 import { executeBatch, queryFirst, type BatchQuery, type DbClient } from "~/server/db";
 import { createTenantPagesBatch } from "~/server/utils/content/pages";
 
@@ -106,7 +105,6 @@ export async function seedNewSite(
         // `section` is not copy: it says which hero slot on the page this block
         // fills, and the Blawby template resolves its home hero by it.
         data: {
-          section: heroBlockSection(definition.path),
           title: definition.path === '/' ? null : definition.title,
           subtitle: null,
         },

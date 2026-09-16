@@ -56,6 +56,7 @@
     />
 
     <EditorNavigationList v-else :groups="navigationGroups" />
+
   </div>
 
   <!-- Deeper than my own child: the record below owns both columns. -->
@@ -165,6 +166,7 @@ const blockLabel = computed(() => (isNew.value ? 'New section' : block.value ? t
 const sections = computed<readonly TenantPageBlockSection[]>(() => (block.value ? tenantPageBlockSections(block.value) : []))
 /** A block with one section is that section; there is no row to open it with. */
 const singleSection = computed(() => (sections.value.length === 1 ? sections.value[0]! : null))
+
 
 const openSegment = computed(() => frame.childSegment.value)
 const openSection = computed(() => sections.value.find(section => section.key === openSegment.value) ?? null)

@@ -5,10 +5,6 @@
 
     <div class="relative z-10 grid lg:grid-cols-12 gap-8 items-center">
       <div class="lg:col-span-7 space-y-6">
-        <span v-if="pill" class="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider bg-white/10 text-white/90 border border-white/20">
-          <PlatformIcon v-if="pillIcon" :name="pillIcon" class="size-3.5" />
-          {{ pill }}
-        </span>
         <h2 class="text-3xl sm:text-4xl font-extrabold tracking-tight text-white m-0">{{ title }}</h2>
         <TenantPageMarkdown v-if="description" :content="description" class="text-white/80 text-[15px] sm:text-base leading-relaxed max-w-2xl m-0" />
         <div v-if="ctaLabel || secondaryLabel" class="flex flex-wrap gap-4 pt-2">
@@ -28,11 +24,8 @@
       <div class="lg:col-span-5 flex justify-center">
         <div class="bg-white/5 border border-white/10 rounded-2xl p-6 backdrop-blur-md shadow-2xl max-w-sm w-full space-y-4">
           <div class="flex items-center justify-between border-b border-white/10 pb-4">
-            <div class="flex items-center gap-2.5">
-              <div class="w-8 h-8 rounded-lg bg-(--kc-coral) flex items-center justify-center">
-                <PlatformIcon name="bar-chart" class="size-4 text-white" />
-              </div>
-              <span class="font-semibold text-sm">{{ cardTitle }}</span>
+            <div class="w-8 h-8 rounded-lg bg-(--kc-coral) flex items-center justify-center">
+              <PlatformIcon name="bar-chart" class="size-4 text-white" />
             </div>
             <span v-if="cardBadge" class="text-xs bg-(--kc-teal)/20 text-(--kc-teal) px-2.5 py-0.5 rounded-full font-medium">{{ cardBadge }}</span>
           </div>
@@ -58,34 +51,39 @@
 </template>
 
 <script setup lang="ts">
-import type { PlatformIconName } from '~/components/platform/PlatformIcon.vue'
+import type { PublicTenantPage } from '~/server/utils/public-tenant-pages'
+import type { TenantPageBlock } from '~/utils/tenant-page-blocks'
+import { blockText, blockTextOrNull, blockRecords } from '~/utils/tenant-page-block-data'
 
 /**
  * The Features page's navy analytics band with the mock dashboard card. The
  * card's rows are content: two stat tiles and a labelled bar. What they say
  * comes from the document, so the band cannot carry a number nobody measured.
  */
-withDefaults(defineProps<{
-  pill?: string | null
-  pillIcon?: PlatformIconName | null
-  title: string
-  description?: string | null
-  ctaLabel?: string | null
-  ctaUrl?: string | null
-  secondaryLabel?: string | null
-  secondaryUrl?: string | null
-  cardTitle?: string
-  cardBadge?: string | null
-  rows: Array<{ label: string; value: string }>
-}>(), {
-  pill: null,
-  pillIcon: null,
-  description: null,
-  ctaLabel: null,
-  ctaUrl: null,
-  secondaryLabel: null,
-  secondaryUrl: null,
-  cardTitle: 'Direct Storefront Stats',
-  cardBadge: null,
-})
+const props = defineProps<{ block: TenantPageBlock; page: PublicTenantPage }>()
+
+/**
+ * A callout: a note, optionally with supporting rows and a button.
+ *
+ * It absorbed two more blocks that were feature grids in name only — a proof
+ * card and an SEO band — because all three are a heading, some rows and a
+ * call to action.
+ */
+const title = computed(() => blockText(props.block.data.title))
+const description = computed(() => blockTextOrNull(props.block.data.body))
+// Both buttons come from the one declared list, in the order the block holds
+// them. They were read off `label`/`url` and `secondary_*`, keys a callout
+// never declared — and `label` was also the pill's, so the badge above the
+// heading and the words on the button could never differ.
+const buttons = computed(() => blockRecords(props.block.data.buttons)
+  .map(button => ({ label: blockText(button.label), url: blockText(button.url) }))
+  .filter(button => button.label && button.url))
+const ctaLabel = computed(() => buttons.value[0]?.label ?? null)
+const ctaUrl = computed(() => buttons.value[0]?.url ?? null)
+const secondaryLabel = computed(() => buttons.value[1]?.label ?? null)
+const secondaryUrl = computed(() => buttons.value[1]?.url ?? null)
+const cardBadge = computed(() => blockTextOrNull(props.block.data.badge))
+const rows = computed(() => blockRecords(props.block.data.items)
+  .map(item => ({ label: blockText(item.title), value: blockText(item.description) }))
+  .filter(row => row.label))
 </script>

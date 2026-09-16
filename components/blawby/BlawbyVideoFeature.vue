@@ -45,22 +45,29 @@
 </template>
 
 <script setup lang="ts">
+import type { PublicTenantPage } from '~/server/utils/public-tenant-pages'
+import type { TenantPageBlock } from '~/utils/tenant-page-blocks'
+import { blockText, blockTextOrNull, blockRecords, blockMedia } from '~/utils/tenant-page-block-data'
 import { shallowRef } from 'vue'
-const props = defineProps<{
-  title: string
-  accent?: string | null
-  videoUrl?: string | null
-  videoTitle?: string | null
-  features: Array<{ name: string; desc: string }>
-  images: Array<{ url: string; alt?: string | null }>
-}>()
+const props = defineProps<{ block: TenantPageBlock; page: PublicTenantPage }>()
+
+const title = computed(() => blockText(props.block.data.title))
+const accent = computed(() => blockTextOrNull(props.block.data.accent))
+const videoUrl = computed(() => blockTextOrNull(props.block.data.video_url))
+const videoTitle = computed(() => blockTextOrNull(props.block.data.video_title))
+const features = computed(() => blockRecords(props.block.data.items)
+  .map(item => ({ name: blockText(item.title), desc: blockText(item.description) }))
+  .filter(feature => feature.name))
+const images = computed(() => blockMedia(props.block, 'gallery')
+  .map(item => ({ url: item.public_url ?? '', alt: item.alt_text ?? null }))
+  .filter(image => image.url))
 
 const videoFrame = shallowRef<Element | null>(null)
 const showVideo = ref(false)
 let videoObserver: IntersectionObserver | null = null
 
 onMounted(() => {
-  if (!props.videoUrl || !videoFrame.value) return
+  if (!videoUrl.value || !videoFrame.value) return
   videoObserver = new IntersectionObserver((entries) => {
     if (!entries.some(entry => entry.isIntersecting)) return
     showVideo.value = true

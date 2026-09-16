@@ -40,6 +40,9 @@
 </template>
 
 <script setup lang="ts">
+import type { PublicTenantPage } from '~/server/utils/public-tenant-pages'
+import type { TenantPageBlock } from '~/utils/tenant-page-blocks'
+import { blockText, blockTextOrNull, blockRecords } from '~/utils/tenant-page-block-data'
 import type { PlatformIconName } from '~/components/platform/PlatformIcon.vue'
 
 export interface PlatformProofStat { value: string; label: string }
@@ -58,39 +61,41 @@ export interface PlatformProofCard {
  * tint are the vertical's — restaurants and legal light the top-right in
  * coral, experiences the bottom-left in teal.
  */
-const props = withDefaults(defineProps<{
-  accent: 'primary' | 'teal' | 'navy'
-  pill?: string | null
-  pillIcon?: PlatformIconName | null
-  title: string
-  description?: string | null
-  stats: PlatformProofStat[]
-  card?: PlatformProofCard | null
-}>(), {
-  pill: null,
-  pillIcon: null,
-  description: null,
-  card: null,
-})
+const props = defineProps<{ block: TenantPageBlock; page: PublicTenantPage }>()
 
-const orbClass = computed(() => (props.accent === 'teal'
+/** KrabiClaw's verticals each carry their own accent; the page says which. */
+const accent = computed<'primary' | 'teal' | 'navy'>(() => (
+  props.page.path === '/experiences' ? 'teal' : props.page.path === '/legal' ? 'navy' : 'primary'))
+
+const pill = computed(() => blockTextOrNull(props.block.data.label))
+const pillIcon = computed<PlatformIconName | null>(() => null)
+const title = computed(() => blockText(props.block.data.title))
+const description = computed(() => blockTextOrNull(props.block.data.description))
+const stats = computed<PlatformProofStat[]>(() => blockRecords(props.block.data.items)
+  .map(item => ({ value: blockText(item.value), label: blockText(item.title) }))
+  .filter(stat => stat.value && stat.label))
+// The card beside the figures was a second block pretending to be a stat grid.
+// It is a callout now, and draws itself.
+const card = computed<PlatformProofCard | null>(() => null)
+
+const orbClass = computed(() => (accent.value === 'teal'
   ? '-bottom-32 -left-32 bg-(--kc-teal)/20'
   : '-top-32 -right-32 bg-primary/20'))
-const pillIconClass = computed(() => (props.accent === 'teal' ? 'text-(--kc-coral)' : 'text-(--kc-teal)'))
-const badgeClass = computed(() => (props.accent === 'teal' ? 'bg-primary/20 text-primary' : 'bg-(--kc-teal)/20 text-(--kc-teal)'))
+const pillIconClass = computed(() => (accent.value === 'teal' ? 'text-(--kc-coral)' : 'text-(--kc-teal)'))
+const badgeClass = computed(() => (accent.value === 'teal' ? 'bg-primary/20 text-primary' : 'bg-(--kc-teal)/20 text-(--kc-teal)'))
 
-const STAT_CLASSES: Record<typeof props.accent, readonly string[]> = {
+const STAT_CLASSES: Record<typeof accent.value, readonly string[]> = {
   primary: ['text-white', 'text-(--kc-teal)', 'text-(--kc-coral)'],
   teal: ['text-(--kc-teal)', 'text-white', 'text-(--kc-coral)'],
   navy: ['text-white', 'text-(--kc-teal)', 'text-(--kc-coral)'],
 }
 function statClass(index: number) {
-  const sequence = STAT_CLASSES[props.accent]
+  const sequence = STAT_CLASSES[accent.value]
   return sequence[index % sequence.length]
 }
 
 // Restaurants and legal end the mock card on a highlighted row (a review score,
 // an intake system); experiences does not.
-const highlightLastRow = computed(() => props.accent !== 'teal')
-const lastRowClass = computed(() => (props.accent === 'primary' ? 'text-(--kc-coral) font-semibold' : 'text-(--kc-teal) font-semibold'))
+const highlightLastRow = computed(() => accent.value !== 'teal')
+const lastRowClass = computed(() => (accent.value === 'primary' ? 'text-(--kc-coral) font-semibold' : 'text-(--kc-teal) font-semibold'))
 </script>
