@@ -437,7 +437,6 @@ const noteAttemptKey = ref<string | null>(null)
 const noteAttemptDraft = ref<string | null>(null)
 const noteError = ref<string | null>(null)
 const changeError = ref<string | null>(null)
-const actionError = ref<string | null>(null)
 
 watch([detailsKey, () => selectedNote.value?.id, editorKey, editorField], () => {
   noteDraft.value = selectedNote.value?.body ?? ''

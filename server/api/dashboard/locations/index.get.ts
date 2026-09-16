@@ -1,4 +1,5 @@
-import { defineHandler, getQuery, HTTPError } from 'nitro'
+import { defineHandler, HTTPError } from 'nitro'
+import { getQuery } from 'nitro/h3'
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getDashboardContext, listDashboardLocations } from '~/server/utils/dashboard-context'
 import { listDashboardLocationsResource } from '~/server/utils/dashboard-locations-resource'
