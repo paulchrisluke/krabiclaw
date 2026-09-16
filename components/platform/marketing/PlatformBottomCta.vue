@@ -30,6 +30,10 @@ const label = computed(() => blockTextOrNull(props.block.data.label))
 const url = computed(() => blockTextOrNull(props.block.data.url))
 const secondaryLabel = computed(() => blockTextOrNull(props.block.data.secondary_label))
 const secondaryUrl = computed(() => blockTextOrNull(props.block.data.secondary_url))
-/** A closing prompt sits large; one inside a page reads at its own size. */
-const size = computed<'md' | 'lg'>(() => (props.page.path === '/' ? 'lg' : 'md'))
+/**
+ * A page whose whole job is to sell one vertical closes large; a prompt inside
+ * a page that is about something else reads at the size of its other cards.
+ */
+const LARGE_PAGES = new Set(['/', '/restaurants', '/experiences', '/legal'])
+const size = computed<'md' | 'lg'>(() => (LARGE_PAGES.has(props.page.path) ? 'lg' : 'md'))
 </script>

@@ -1,32 +1,11 @@
 <template>
   <!--
-    A page that carries its own picture opens with it, beside the title.
-    `cover` and `gallery` are the document's own media slots — the same ones the
-    social card is drawn from — so the picture is a property of the page, like
-    its title, and the template renders it rather than the document holding a
-    block that repeats it.
+    The homepage opens full-bleed, its own picture behind, the heading split so
+    an accent phrase can carry colour. It comes first because the home is the
+    home whatever media its document also carries.
   -->
   <section
-    v-if="gallery.length"
-    class="mx-auto mb-8 max-w-7xl border-b border-slate-200 pt-8 sm:px-6 md:flex lg:px-8"
-    data-parity-section="service-overview"
-  >
-    <BlawbyMediaGallery v-model="activeMedia" :media="gallery" :fallback-alt="page.title" />
-    <div class="flex-1">
-      <div class="blawby-container pb-8 pt-8">
-        <h1 v-if="title" class="mx-auto max-w-4xl blawby-display text-3xl font-bold text-[var(--blawby-primary)] sm:text-4xl md:mt-2">{{ title }}</h1>
-        <p v-if="description" class="mx-auto mt-6 max-w-2xl text-left text-lg text-[var(--blawby-primary)]">{{ description }}</p>
-      </div>
-    </div>
-  </section>
-
-  <!--
-    The homepage opens differently: full-bleed, its own picture behind, the
-    heading split so an accent phrase can carry colour. The page says which,
-    because the page is what differs.
-  -->
-  <section
-    v-else-if="isHome"
+    v-if="isHome"
     data-blawby-critical-hero
     :data-has-background="backgroundSrc ? 'true' : undefined"
     class="relative overflow-hidden"
@@ -59,6 +38,27 @@
             </BlawbyButton>
           </div>
         </div>
+      </div>
+    </div>
+  </section>
+
+  <!--
+    Any other page that carries its own picture opens with it, beside the title.
+    `cover` and `gallery` are the document's own media slots — the same ones the
+    social card is drawn from — so the picture is a property of the page, like
+    its title, and the template renders it rather than the document holding a
+    block that repeats it.
+  -->
+  <section
+    v-else-if="gallery.length"
+    class="mx-auto mb-8 max-w-7xl border-b border-slate-200 pt-8 sm:px-6 md:flex lg:px-8"
+    data-parity-section="service-overview"
+  >
+    <BlawbyMediaGallery v-model="activeMedia" :media="gallery" :fallback-alt="page.title" />
+    <div class="flex-1">
+      <div class="blawby-container pb-8 pt-8">
+        <h1 v-if="title" class="mx-auto max-w-4xl blawby-display text-3xl font-bold text-[var(--blawby-primary)] sm:text-4xl md:mt-2">{{ title }}</h1>
+        <p v-if="description" class="mx-auto mt-6 max-w-2xl text-left text-lg text-[var(--blawby-primary)]">{{ description }}</p>
       </div>
     </div>
   </section>
@@ -96,6 +96,7 @@ import { blockText, blockTextOrNull, blockMedia } from '~/utils/tenant-page-bloc
 import type { BlawbyShieldVariant } from '~/types/blawby'
 
 const props = defineProps<{ block: TenantPageBlock; page: PublicTenantPage }>()
+const { localePath } = useI18n()
 
 const title = computed(() => blockText(props.block.data.title))
 const description = computed(() => blockTextOrNull(props.block.data.subtitle))
@@ -127,7 +128,12 @@ const activeMedia = ref(0)
 const isHome = computed(() => props.page.path === '/')
 const backgroundSrc = computed(() => blockMedia(props.block, 'media')[0]?.public_url ?? null)
 const ctaLabel = computed(() => blockTextOrNull(props.block.data.cta_label) ?? blockTextOrNull(props.block.data.label))
-const ctaUrl = computed(() => blockTextOrNull(props.block.data.cta_url) ?? blockTextOrNull(props.block.data.url))
+// An internal route is localized, so a Thai page's button stays on the Thai
+// site; an absolute URL belongs to someone else and is left exactly as written.
+const ctaUrl = computed(() => {
+  const url = blockTextOrNull(props.block.data.cta_url) ?? blockTextOrNull(props.block.data.url)
+  return url && url.startsWith('/') ? localePath(url) : url
+})
 
 /**
  * The heading with its accent phrase cut out, so the phrase can carry colour.

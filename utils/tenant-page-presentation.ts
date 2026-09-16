@@ -40,6 +40,7 @@ import BlawbyShieldDivider from '~/components/blawby/BlawbyShieldDivider.vue'
 import BlawbyDonationChoices from '~/components/blawby/BlawbyDonationChoices.vue'
 import BlawbyVideoFeature from '~/components/blawby/BlawbyVideoFeature.vue'
 import BlawbyButtonRow from '~/components/blawby/BlawbyButtonRow.vue'
+import BlawbyContactForm from '~/components/blawby/BlawbyContactForm.vue'
 import SayaHeroBlock from '~/components/saya/SayaHeroBlock.vue'
 import SayaProductGridBlock from '~/components/saya/SayaProductGridBlock.vue'
 import SayaLocationsGrid from '~/components/saya/SayaLocationsGrid.vue'
@@ -81,6 +82,7 @@ const PRESENTATIONS: Readonly<Record<string, Component>> = {
   'blawby:donation_choices': BlawbyDonationChoices,
   'blawby:video_feature': BlawbyVideoFeature,
   'blawby:button_group': BlawbyButtonRow,
+  'blawby:contact_form': BlawbyContactForm,
 
   // Saya, for restaurants and experience businesses. Its home was a 577-line
   // component that read no blocks at all and composed a fixed list of

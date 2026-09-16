@@ -29,6 +29,7 @@ export type TenantPageBlockType =
   | 'workflow_grid'
   | 'video_feature'
   | 'media_text'
+  | 'contact_form'
 
 export type TenantPageType = 'custom' | 'recipe' | 'legal' | 'system'
 
@@ -363,6 +364,12 @@ export const TENANT_PAGE_BLOCK_REGISTRY: Record<TenantPageBlockType, TenantPageB
     label: text('Link label', { section: 'link', pairedWith: 'url' }),
     url: link('Link URL', { section: 'link', pairedWith: 'label' }),
   }),
+
+  // The form a visitor writes in. It has no fields of its own — what it asks
+  // for is the site's contact form — but it is a block so that a page says
+  // where on it the form sits, which was fixed in the markup before.
+  contact_form: blockDefinitionWithMetadata('contact_form', 'Contact form', 'A form a visitor writes in.', ['contact', 'custom'], {},
+    { accessibility: 'inherited', seo: 'none' }),
 
   team_grid: blockDefinitionWithMetadata('team_grid', 'Team', 'The people behind the business.', ALL_RECIPES, {
     title: text('Section title', { section: 'settings' }),

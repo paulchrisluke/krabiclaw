@@ -266,6 +266,9 @@ async function hydrateBlocks(
     title: typeof row.author_name === 'string' ? row.author_name : '',
     description: typeof row.content === 'string' ? row.content : undefined,
     value: row.rating == null ? undefined : String(row.rating),
+    // The reviewer's picture, which the review record owns. It was dropped on
+    // the way into the item, so a template drawing portraits drew none.
+    media: Array.isArray(row.media) ? row.media : [],
   }))
   const postItems = postRows.map((post) => {
     const { cover, ...row } = attachCoverMedia(post)

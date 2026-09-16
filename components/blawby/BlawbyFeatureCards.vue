@@ -82,7 +82,7 @@ const calculator = computed(() => {
   const value = props.block.data.calculator
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
 })
-const isPricing = computed(() => plans.value.length > 0 || Array.isArray(calculator.value.rows))
+const isPricing = computed(() => plans.value.length > 0 || tableRows.value.length > 0)
 const individualPlans = computed(() => plans.value.slice(0, 4))
 const businessPlans = computed(() => plans.value.slice(4))
 const table = computed(() => (calculator.value.table && typeof calculator.value.table === 'object'

@@ -50,7 +50,14 @@ const description = computed(() => blockText(props.block.data.description) || un
 const reviews = computed(() => blockRecords(props.block.data.items).map(item => ({
   id: blockText(item.id),
   author_name: blockText(item.title),
-  media: [],
+  media: blockRecords(item.media).map(asset => ({
+    asset_id: blockText(asset.asset_id),
+    slot: blockText(asset.slot),
+    public_url: blockText(asset.public_url),
+    thumbnail_url: blockText(asset.thumbnail_url) || null,
+    kind: blockText(asset.kind),
+    alt_text: blockText(asset.alt_text) || null,
+  })),
   rating: Number(item.value) || 5,
   title: null,
   content: blockText(item.description),

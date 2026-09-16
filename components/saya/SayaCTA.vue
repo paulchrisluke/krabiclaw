@@ -1,5 +1,5 @@
 <template>
-  <AppSection v-if="title || description || (url && label)" bg="default" padding="lg">
+  <AppSection v-if="title || description || (url && label) || orderUrl" bg="default" padding="lg">
     <div class="flex flex-col gap-8 md:flex-row md:items-center md:justify-between">
       <div class="max-w-3xl">
         <h2 v-if="title" class="saya-display saya-italic text-5xl leading-none text-default">{{ title }}</h2>
