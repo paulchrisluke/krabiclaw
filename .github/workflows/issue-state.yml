@@ -74,15 +74,25 @@ jobs:
             [[ -z "$issue_number" ]] && continue
             [[ "$issue_number" == "$PR_NUMBER" ]] && continue
 
-            # #N may be a pull request; those carry no issue state.
-            if ! issue_json="$(gh issue view "$issue_number" --repo "$REPO" \
-                 --json state,labels,assignees 2>/dev/null)"; then
+            # Read through the REST issues endpoint rather than `gh issue view`,
+            # which resolves a pull request number just as happily as an issue
+            # and so could never tell them apart. `.pull_request` is present
+            # only on a pull request, and labelling one needs
+            # `pull-requests: write` this workflow deliberately does not hold —
+            # a PR number in the body (a release PR listing the PRs it ships)
+            # failed the whole job on `addLabelsToLabelable`.
+            if ! issue_json="$(gh api "repos/${REPO}/issues/${issue_number}" 2>/dev/null)"; then
               echo "#${issue_number} is not an issue in ${REPO}; skipping."
               continue
             fi
 
+            if [[ "$(jq -r 'has("pull_request")' <<<"$issue_json")" == "true" ]]; then
+              echo "#${issue_number} is a pull request; it carries no issue state."
+              continue
+            fi
+
             # A closed issue is done; a PR event must not reopen its state.
-            if [[ "$(jq -r '.state' <<<"$issue_json")" == "CLOSED" ]]; then
+            if [[ "$(jq -r '.state' <<<"$issue_json")" == "closed" ]]; then
               echo "Issue #${issue_number} is closed; leaving its labels alone."
               continue
             fi

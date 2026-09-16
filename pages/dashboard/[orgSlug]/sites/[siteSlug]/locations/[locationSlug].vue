@@ -1,6 +1,6 @@
 <template>
   <!--
-    Settings and Inbox are their own screens with their own shells, the way the
+    Settings and Messages are their own screens with their own shells, the way the
     listing editor's cog opens a separate preferences screen rather than a pane
     beside the rail. Everything else is a section of this location.
   -->
@@ -112,7 +112,7 @@ interface LocationOverview {
   opening_hours?: OpeningHours
 }
 
-interface InboxSummary { openThreads: number; unreadThreads: number }
+interface MessagesSummary { openThreads: number; unreadThreads: number }
 interface LocationContentCounts {
   photos: number
   posts: number
@@ -122,7 +122,7 @@ interface LocationContentCounts {
 interface LocationOverviewResource {
   location: { success: boolean; location: LocationOverview }
   catalog: { total: number; allExperiences: boolean }
-  threads: { summary: InboxSummary }
+  threads: { summary: MessagesSummary }
   counts: LocationContentCounts
 }
 
@@ -143,9 +143,9 @@ const siteId = await useDashboardSiteId()
 const locationId = computed(() => dashboardLocation.currentLocationId.value)
 const settingsPath = computed(() => `${locationPath.value}/settings`)
 
-// Settings and Inbox are their own screens rather than sections of this one, so
+// Settings and Messages are their own screens rather than sections of this one, so
 // they leave the chain entirely rather than taking a column in it.
-const STANDALONE_SECTIONS = ['settings', 'inbox']
+const STANDALONE_SECTIONS = ['settings', 'messages']
 const sectionSegment = computed(() => frame.childSegment.value ?? '')
 const rendersStandalone = computed(() => STANDALONE_SECTIONS.includes(sectionSegment.value))
 // Whether this hub's own panel is on screen at all: a standalone section
@@ -157,7 +157,7 @@ const activeSection = computed(() => sectionSegment.value || null)
 
 const location = ref<LocationOverview | null>(null)
 const catalog = ref<{ total: number; allExperiences: boolean }>({ total: 0, allExperiences: false })
-const inboxSummary = ref<InboxSummary>({ openThreads: 0, unreadThreads: 0 })
+const messagesSummary = ref<MessagesSummary>({ openThreads: 0, unreadThreads: 0 })
 const counts = ref<LocationContentCounts>({ photos: 0, posts: 0, qa: 0, upcomingReservations: 0 })
 const error = ref<string | null>(null)
 
@@ -227,7 +227,7 @@ const contentGroups = computed(() => {
 
   const operations = [
     { id: 'reservations', label: 'Reservations', summary: countSummary(counts.value.upcomingReservations, 'upcoming booking', 'No upcoming bookings'), to: `${locationPath.value}/reservations`, visible: hasFeature('reservations') },
-    { id: 'inbox', label: 'Guest activity', summary: inboxSummary.value.unreadThreads ? `${inboxSummary.value.unreadThreads} unread · ${inboxSummary.value.openThreads} open` : countSummary(inboxSummary.value.openThreads, 'open request', 'Nothing waiting'), to: `${locationPath.value}/inbox`, visible: true },
+    { id: 'messages', label: 'Messages', summary: messagesSummary.value.unreadThreads ? `${messagesSummary.value.unreadThreads} unread · ${messagesSummary.value.openThreads} open` : countSummary(messagesSummary.value.openThreads, 'open request', 'Nothing waiting'), to: `${locationPath.value}/messages`, visible: true },
   ].filter(item => item.visible !== false)
 
   return [{ id: 'public-content', items }, { id: 'operations', label: 'Manage', items: operations }]
@@ -292,7 +292,7 @@ watch([overview, overviewError], ([resource, cause]) => {
   if (!resource) return
   location.value = resource.location.location
   catalog.value = resource.catalog
-  inboxSummary.value = resource.threads.summary
+  messagesSummary.value = resource.threads.summary
   counts.value = resource.counts
   error.value = null
 }, { immediate: true })

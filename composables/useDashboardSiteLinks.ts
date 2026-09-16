@@ -31,7 +31,7 @@ export function useDashboardSiteLinks() {
       site,
       pages: `${site}/pages`,
       qa: `${site}/qa`,
-      inbox: `${site}/inbox`,
+      inbox: `${site}/messages`,
       order: `${site}/orders`,
       media: `${site}/media`,
       locations: `${site}/locations`,
@@ -54,7 +54,7 @@ export function useDashboardSiteLinks() {
       posts: `${location}/posts`,
       photos: `${location}/photos`,
       qa: `${location}/qa`,
-      inbox: `${location}/inbox`,
+      inbox: `${location}/messages`,
       reservations: `${location}/reservations`,
       settings: `${location}/settings`,
     }

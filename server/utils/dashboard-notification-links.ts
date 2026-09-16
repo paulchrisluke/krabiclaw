@@ -54,7 +54,7 @@ export function composeOwnerThreadInboxUrl(
   threadId: string,
 ): string {
   const base = `https://${getPlatformDomain(env)}/dashboard/${slugs.orgSlug}/sites/${slugs.siteSlug}`
-  const inboxPath = slugs.locationSlug ? `/locations/${slugs.locationSlug}/inbox` : '/inbox'
+  const inboxPath = slugs.locationSlug ? `/locations/${slugs.locationSlug}/messages` : '/messages'
   return `${base}${inboxPath}/${encodeURIComponent(threadId)}`
 }
 

@@ -8,7 +8,6 @@ import { updateThreadProjectionIfLatestEntry } from '~/server/domain/guest-threa
 import { getGuestRequest, requestSummary } from '~/server/domain/requests'
 import { executeGuestThreadOperation } from '~/server/domain/guest-threads/operations'
 import { appendEntry, findEntryByDedupeKey } from '~/server/domain/guest-threads/entries'
-import { nextConversationState } from '~/server/domain/guest-threads/state-machine'
 import { publishGuestInboxThreadEvent } from '~/server/cloudflare/guest-inbox-events'
 import { notifyGuestThreadReply } from '~/server/utils/notifications'
 import { findSubmissionByPhone } from '~/server/utils/submission-messages'
@@ -524,8 +523,7 @@ async function handleMessage(db: D1Database, env: ApiRecord, message: WhatsAppMe
             body: text,
             dedupeKey: `whatsapp:${message.id}`,
           })
-          const conversationState = nextConversationState(thread.conversation_state, { type: 'inbound_guest_message' })
-          await updateThreadProjectionIfLatestEntry(db, thread.id, entry.id, { conversationState })
+          await updateThreadProjectionIfLatestEntry(db, thread.id, entry.id, { conversationState: 'needs_attention' })
 
           const source = thread
           if (source) {

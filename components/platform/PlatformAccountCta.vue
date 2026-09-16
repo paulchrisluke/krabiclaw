@@ -9,11 +9,35 @@
         class="flex cursor-pointer list-none items-center rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 [&::-webkit-details-marker]:hidden"
         :aria-label="`Account: ${user.name}`"
       >
-        <UAvatar :src="user.image ?? undefined" :alt="user.name" size="sm" />
+        <img
+          v-if="user.image"
+          :src="user.image"
+          :alt="user.name"
+          class="size-8 shrink-0 rounded-full object-cover"
+          width="32"
+          height="32"
+        >
+        <span
+          v-else
+          aria-hidden="true"
+          class="flex size-8 shrink-0 items-center justify-center rounded-full bg-elevated text-[13px] font-semibold text-default"
+        >{{ userInitials }}</span>
       </summary>
       <div class="absolute right-0 top-full z-50 mt-2 w-60 rounded-2xl border border-default bg-default p-1.5 shadow-xl">
         <div class="flex items-center gap-2.5 rounded-xl px-3 py-2">
-          <UAvatar :src="user.image ?? undefined" :alt="user.name" size="sm" />
+          <img
+            v-if="user.image"
+            :src="user.image"
+            :alt="user.name"
+            class="size-8 shrink-0 rounded-full object-cover"
+            width="32"
+            height="32"
+          >
+          <span
+            v-else
+            aria-hidden="true"
+            class="flex size-8 shrink-0 items-center justify-center rounded-full bg-elevated text-[13px] font-semibold text-default"
+          >{{ userInitials }}</span>
           <div class="min-w-0">
             <div class="truncate text-[13px] font-semibold text-default">{{ user.name }}</div>
             <div class="truncate text-[11px] text-muted">{{ user.email }}</div>
@@ -54,6 +78,15 @@ const props = withDefaults(defineProps<{ account?: boolean, to?: string, label?:
 })
 // The canonical Better Auth session is shared and hydrated from the Nuxt payload.
 const { user, sessionError } = await useAuthSession()
+// The marketing stylesheet carries no Nuxt UI, so the avatar is the surface's
+// own markup: the photo when there is one, the owner's initials when there is
+// not, in the same footprint either way.
+const userInitials = computed(() => (user.value?.name ?? '')
+  .split(/\s+/)
+  .filter(Boolean)
+  .slice(0, 2)
+  .map(part => part[0]?.toUpperCase() ?? '')
+  .join('') || '?')
 const selectedPlan = computed(() => new URL(props.to, 'https://krabiclaw.internal').searchParams.get('plan'))
 const postLoginUrl = computed(() => buildPostLoginUrl({ plan: selectedPlan.value ?? undefined }))
 
