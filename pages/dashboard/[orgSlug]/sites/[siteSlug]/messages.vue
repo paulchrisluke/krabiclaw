@@ -60,16 +60,22 @@ const pastOnly = computed(() => route.query.past === '1')
 // Closing a thread returns to the list it was opened from, filters and corpus
 // intact. Dropping the query here sent a member reading the archive back to
 // the current list.
-const listWithFilters = computed(() => {
+function listUrl(drop: string[] = []) {
   const query = new URLSearchParams()
   for (const [key, value] of Object.entries(route.query)) {
+    if (drop.includes(key)) continue
     if (typeof value === 'string' && value) query.set(key, value)
   }
   const search = query.toString()
   return search ? `${messagesPath.value}?${search}` : messagesPath.value
-})
+}
+
+/** Closing a thread returns to the list it was opened from, corpus intact. */
+const listWithFilters = computed(() => listUrl())
+/** Leaving the archive is a level up, so back drops it and keeps the filters. */
+const currentList = computed(() => listUrl(['past']))
 const navbarTitle = computed(() => pastOnly.value ? 'Past conversations' : siteName.value)
-const navbarBackTo = computed(() => pastOnly.value ? listWithFilters.value : sitePath.value)
+const navbarBackTo = computed(() => pastOnly.value ? currentList.value : sitePath.value)
 const navbarBackLabel = computed(() => pastOnly.value ? 'Messages' : 'Site')
 
 // The chrome names the place; the panel names itself. Stacking a navbar
