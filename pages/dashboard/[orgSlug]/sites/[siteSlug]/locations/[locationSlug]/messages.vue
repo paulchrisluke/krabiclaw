@@ -9,9 +9,9 @@
   -->
   <UDashboardPanel v-else id="location-messages">
     <template #header>
-      <UDashboardNavbar :title="locationName" :toggle="false">
+      <UDashboardNavbar :title="navbarTitle" :toggle="false">
         <template #leading>
-          <DashboardNavbarLeading :to="locationPath" label="Location" />
+          <DashboardNavbarLeading :to="navbarBackTo" :label="navbarBackLabel" />
         </template>
       </UDashboardNavbar>
     </template>
@@ -48,6 +48,14 @@ const route = useRoute()
 const locationPath = computed(() => `/dashboard/${String(route.params.orgSlug)}/sites/${String(route.params.siteSlug)}/locations/${String(route.params.locationSlug)}`)
 const messagesPath = computed(() => `${locationPath.value}/messages`)
 const frame = useEditorFrame(messagesPath)
+
+// One back control, the navbar's. Past conversations is the list becoming the
+// other corpus, so the chrome names it and goes back to the list — a second
+// arrow inside the panel would be two controls for one navigation.
+const pastOnly = computed(() => route.query.past === '1')
+const navbarTitle = computed(() => pastOnly.value ? 'Past conversations' : locationName.value)
+const navbarBackTo = computed(() => pastOnly.value ? messagesPath.value : locationPath.value)
+const navbarBackLabel = computed(() => pastOnly.value ? 'Messages' : 'Location')
 
 // The chrome names the place; the panel names itself.
 const dashboard = useDashboardSite()

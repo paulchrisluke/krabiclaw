@@ -20,22 +20,10 @@
           autofocus
           class="flex-1"
         />
-        <div v-else class="flex min-w-0 flex-1 items-center gap-1">
-          <UButton
-            v-if="pastOnly"
-            color="neutral"
-            variant="ghost"
-            icon="i-lucide-arrow-left"
-            size="sm"
-            aria-label="Back to messages"
-            class="-ms-2 shrink-0"
-            @click="setQuery({ past: undefined })"
-          />
-          <!-- 22px/500, measured on Airbnb's own panel heading. -->
-          <h1 class="truncate text-[22px] font-medium text-highlighted">
-            {{ pastOnly ? 'Past conversations' : 'Messages' }}
-          </h1>
-        </div>
+        <!-- 22px/500, measured on Airbnb's own panel heading. -->
+        <h1 class="min-w-0 flex-1 truncate text-[22px] font-medium text-highlighted">
+          {{ pastOnly ? 'Past conversations' : 'Messages' }}
+        </h1>
 
         <UButton
           v-if="searchOpen"
@@ -60,19 +48,34 @@
         selected, and Unread sits beside it as a toggle. Both are 40px pills.
       -->
       <div class="mt-3 flex items-center gap-2">
-        <UDropdownMenu :items="typeMenuItems" :content="{ align: 'start' }">
+        <UDropdownMenu
+          :items="typeMenuItems"
+          :content="{ align: 'start' }"
+          :ui="{
+            content: 'min-w-72 p-2',
+            item: 'px-3 py-3 text-base gap-4',
+            itemLeadingIcon: 'size-6',
+          }"
+        >
+          <!--
+            The trigger names the control, not the selection. Measured on
+            Airbnb: text "All", aria-label "All, filter by message type",
+            71x40 at 32px radius, 14px/400 — it reads "All" whichever option
+            is checked, and the menu carries the tick.
+          -->
           <UButton
             color="neutral"
             :variant="activeType ? 'solid' : 'outline'"
-            class="h-10 rounded-full px-4"
+            class="h-10 rounded-full px-4 text-sm font-normal"
             trailing-icon="i-lucide-chevron-down"
+            aria-label="All, filter by message type"
           >
-            {{ activeTypeLabel }}
+            All
           </UButton>
         </UDropdownMenu>
 
         <UButton
-          class="h-10 rounded-full px-4"
+          class="h-10 rounded-full px-4 text-sm font-normal"
           color="neutral"
           :variant="unreadOnly ? 'solid' : 'outline'"
           :aria-pressed="unreadOnly"
@@ -157,7 +160,7 @@
       -->
       <NuxtLink
         v-if="!loadingThreads && !pastOnly && threads.length > 0"
-        :to="{ path: route.path, query: { ...route.query, past: '1' } }"
+        :to="{ path: listRoute, query: { ...route.query, past: '1' } }"
         class="mt-2 flex items-center justify-between gap-3 border-t border-default px-4 py-4 text-sm font-medium text-default transition hover:bg-elevated/60"
       >
         <span>Past conversations</span>
@@ -268,16 +271,13 @@ function clearFilters() {
   searchOpen.value = false
 }
 
-const activeTypeLabel = computed(() => {
-  const match = typeOptions.value.find(option => option.value === activeType.value)
-  return match?.label ?? 'All'
-})
 const typeMenuItems = computed(() => [typeOptions.value.map(option => ({
   label: option.label,
   icon: option.icon,
   type: 'checkbox' as const,
   checked: activeType.value === option.value,
   onSelect: () => setQuery({ filter: option.value ?? undefined }),
+  ui: { itemLabel: 'text-base' },
 }))])
 
 const filtersApplied = computed(() => Boolean(route.query.query || route.query.filter || route.query.unread))
@@ -458,8 +458,8 @@ onMounted(() => {
   onBeforeUnmount(() => query.removeEventListener('change', sync))
 })
 
-watch([threads, openThreadId, pairedColumns], ([rows, open, paired]) => {
-  if (!paired || open || isOrganizationScope.value || props.embedded) return
+watch([threads, openThreadId, pairedColumns, pastOnly], ([rows, open, paired]) => {
+  if (!paired || open || pastOnly.value || isOrganizationScope.value || props.embedded) return
   const first = rows[0]
   if (!first) return
   void router.replace({ path: threadRoute(first), query: route.query })
