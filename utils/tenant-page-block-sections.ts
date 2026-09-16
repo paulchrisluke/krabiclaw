@@ -1,4 +1,4 @@
-import { TENANT_PAGE_BLOCK_REGISTRY, type TenantPageBlock, type TenantPageBlockType } from '~/utils/tenant-page-blocks'
+import { TENANT_PAGE_BLOCK_REGISTRY, type TenantPageBlock, type TenantPageBlockType, type TenantPageField } from '~/utils/tenant-page-blocks'
 
 /**
  * Where a block's controls live in the editor chain.
@@ -35,6 +35,7 @@ export interface TenantPageBlockSection {
 const SECTION_LABELS: Record<string, string> = {
   content: 'Content', copy: 'Copy', button: 'Button', buttons: 'Buttons',
   settings: 'Settings', items: 'Items', steps: 'Steps', tiers: 'Amounts',
+  pages: 'Pages', locations: 'Locations', products: 'Products', materials: 'Tools and supplies',
   destination: 'Destination', calculator: 'Calculator', image: 'Image',
   icon: 'Icon', link: 'Link',
 }
@@ -50,6 +51,13 @@ function blockSections(type: TenantPageBlockType): readonly TenantPageBlockSecti
   const fields = TENANT_PAGE_BLOCK_REGISTRY[type]?.fields ?? {}
   const sections: TenantPageBlockSection[] = []
   for (const [key, field] of Object.entries(fields)) {
+    // `preset` never earns a level of its own: a heading with one concern is a
+    // leaf, and routing to a screen holding one dropdown says nothing. It
+    // renders in the block's first section instead — see
+    // tenantPageBlockFieldsForSection.
+    // Fields that describe the block rather than its content sit on the block's
+    // own screen; they are not a level of the chain.
+    if ((field.section ?? 'content') === 'block') continue
     const sectionKey = field.section ?? 'content'
     const existing = sections.find(section => section.key === sectionKey)
     const isList = field.kind === 'list' && COLLECTIONS.has(key as TenantPageBlockCollection)
@@ -172,4 +180,28 @@ export function tenantPageRecordTitle(
     return [text(record.first_name), text(record.last_name)].filter(Boolean).join(' ') || fallback
   }
   return text(record.title) || text(record.name) || fallback
+}
+
+/**
+ * The controls one leaf shows: the fields declaring that section, in
+ * declaration order, minus the lists (a list section browses records instead).
+ *
+ * `preset` joins the first section rather than owning one, so a block's depth
+ * is decided by its content and not by a field every block carries.
+ */
+export function tenantPageBlockFieldsForSection(
+  block: TenantPageBlock,
+  sectionKey: string,
+): Array<{ key: string; field: TenantPageField }> {
+  const fields = TENANT_PAGE_BLOCK_REGISTRY[block.type]?.fields ?? {}
+  const source = tenantPageBlockSource(block)
+  const entries = Object.entries(fields)
+    .filter(([key, field]) => {
+      if ((field.section ?? 'content') === 'block') return sectionKey === 'block'
+      if (field.kind === 'list' && COLLECTIONS.has(key as TenantPageBlockCollection)) return false
+      if ((field.section ?? 'content') !== sectionKey) return false
+      return !field.availableWhen || field.availableWhen.equals.includes(String(block.data[field.availableWhen.field] ?? source))
+    })
+    .map(([key, field]) => ({ key, field }))
+  return entries
 }

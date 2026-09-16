@@ -197,8 +197,10 @@ export const TENANT_PAGE_BLOCK_REGISTRY: Record<TenantPageBlockType, TenantPageB
     title: text('Title', { section: 'settings' }),
     label: text('Label', { section: 'settings' }),
     estimated_time: text('Estimated time', { section: 'settings' }),
-    tool_items: { kind: 'list', label: 'Tools', section: 'settings' },
-    supply_items: { kind: 'list', label: 'Supplies', section: 'settings' },
+    // Their own leaf: settings held five controls, and DESIGN.md's answer to a
+    // form that grows is another level, never a tighter one.
+    tool_items: { kind: 'list', label: 'Tools', section: 'materials' },
+    supply_items: { kind: 'list', label: 'Supplies', section: 'materials' },
     steps: {
       kind: 'list', label: 'Steps', section: 'steps',
       of: { name: text('Name', { required: true }), text: prose('Text') },
@@ -271,10 +273,6 @@ export const TENANT_PAGE_BLOCK_REGISTRY: Record<TenantPageBlockType, TenantPageB
   testimonial_grid: blockDefinitionWithMetadata('testimonial_grid', 'Reviews', "The site's published reviews.", ALL_RECIPES, {
     title: text('Section title', { section: 'settings' }),
     description: prose('Description', { section: 'settings' }),
-    source: {
-      kind: 'enum', label: 'Reviews', required: true, translatable: false, section: 'settings', default: 'site_reviews',
-      options: [{ value: 'site_reviews', label: "The site's reviews" }],
-    },
   }),
 
   donation_choices: blockDefinitionWithMetadata('donation_choices', 'Donation amounts', 'The amounts a donor may choose.', ['donate'], {
@@ -296,20 +294,20 @@ export const TENANT_PAGE_BLOCK_REGISTRY: Record<TenantPageBlockType, TenantPageB
   page_grid: blockDefinitionWithMetadata('page_grid', 'Pages', 'Cards linking to other pages.', ['home', 'about', 'pricing', 'custom', 'services'], {
     title: text('Section title', { section: 'settings' }),
     description: prose('Description', { section: 'settings' }),
-    page_ids: { kind: 'reference', label: 'Pages', translatable: false, section: 'settings', reference: 'page' },
+    page_ids: { kind: 'reference', label: 'Pages', translatable: false, section: 'pages', reference: 'page' },
   }, { allowedPageTypes: ['custom', 'recipe', 'system'] }),
 
   product_grid: blockDefinitionWithMetadata('product_grid', 'Products', 'Cards linking to products.', ['home', 'about', 'pricing', 'custom', 'services', 'menu', 'order', 'products'], {
     title: text('Section title', { section: 'settings' }),
     description: prose('Description', { section: 'settings' }),
-    collection_id: { kind: 'reference', label: 'Collection', translatable: false, section: 'settings', reference: 'collection' },
-    product_ids: { kind: 'reference', label: 'Products', translatable: false, section: 'settings', reference: 'product' },
+    collection_id: { kind: 'reference', label: 'Collection', translatable: false, section: 'products', reference: 'collection' },
+    product_ids: { kind: 'reference', label: 'Products', translatable: false, section: 'products', reference: 'product' },
   }, { allowedPageTypes: ['custom', 'recipe', 'system'] }),
 
   location_grid: blockDefinitionWithMetadata('location_grid', 'Locations', 'Cards linking to locations.', ['home', 'about', 'contact', 'custom'], {
     title: text('Section title', { section: 'settings' }),
     description: prose('Description', { section: 'settings' }),
-    location_ids: { kind: 'reference', label: 'Locations', translatable: false, section: 'settings', reference: 'location' },
+    location_ids: { kind: 'reference', label: 'Locations', translatable: false, section: 'locations', reference: 'location' },
   }, { allowedPageTypes: ['custom', 'recipe', 'system'] }),
 
   // An article block, not a page block: it is registered so that one list of
@@ -398,7 +396,12 @@ function blockDefinitionWithMetadata(
     // type because every type may be drawn a template's own way; the values
     // come from utils/tenant-page-presentation.ts, so the editor can only offer
     // a preset some renderer actually has.
-    fields: { preset: { kind: 'enum', label: 'Presentation', translatable: false, section: 'settings' }, ...fields },
+    //
+    // `section: 'block'` keeps it off every leaf. It describes the block the way
+    // its type does, so it sits on the block's own screen beside Section type —
+    // and a leaf that was already at DESIGN.md's three controls does not become
+    // four because every block gained a field.
+    fields: { preset: { kind: 'enum', label: 'Presentation', translatable: false, section: 'block' }, ...fields },
     accessibility: options.accessibility ?? 'required',
     seo: options.seo ?? 'inherited',
   }
@@ -432,10 +435,12 @@ export function validateContentBlockData(type: string, data: Record<string, unkn
     }
   }
   // These blocks select canonical read-only records; they never store copies.
+  // A testimonial grid has no source to choose — reviews are the site's reviews —
+  // so it declares no `source` field. The editor used to offer "Items I write"
+  // for it, which the writer refused: an editing surface for data it rejected.
   if (type === 'faq' || type === 'testimonial_grid') {
     if (data.items !== undefined) throw new Error(`${type}.items is not stored; Q&A and reviews are read-only records.`)
     if (type === 'faq' && !FAQ_BLOCK_SOURCES.some(source => source === data.source)) throw new Error('faq.source must select page_qa or site_qa.')
-    if (type === 'testimonial_grid' && data.source !== 'site_reviews') throw new Error('testimonial_grid.source must select site_reviews.')
   }
   if (type === 'how_to' && Array.isArray(data.steps)) {
     for (const [index, step] of data.steps.entries()) {
