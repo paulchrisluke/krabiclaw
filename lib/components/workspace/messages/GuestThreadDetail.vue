@@ -1,5 +1,5 @@
 <template>
-  <div class="flex h-full min-h-0 w-full flex-1 flex-col">
+  <div class="flex h-full min-h-0 w-full min-w-0 flex-1 flex-col">
     <UAlert
       v-if="realtimeFailed"
       color="warning"
@@ -7,7 +7,7 @@
       icon="i-lucide-wifi-off"
       title="Live updates are unavailable"
       description="This conversation may be out of date until the dashboard reconnects."
-      class="mb-4"
+      class="m-3"
     >
       <template #actions>
         <UButton color="warning" variant="soft" size="xs" :loading="loadingDetail" @click="refreshThreadState">
@@ -16,15 +16,12 @@
       </template>
     </UAlert>
 
-    <div v-if="loadingDetail" class="flex min-h-0 flex-1 flex-col gap-3">
-      <USkeleton class="h-32 rounded-lg" />
+    <div v-if="loadingDetail" class="flex min-h-0 flex-1 flex-col gap-3 p-4">
+      <USkeleton class="h-20 rounded-lg" />
       <USkeleton class="min-h-0 flex-1 rounded-lg" />
     </div>
 
-    <section
-      v-else-if="detail"
-      class="flex min-h-0 flex-1 overflow-hidden border border-default bg-default shadow-sm sm:rounded-lg"
-    >
+    <section v-else-if="detail" class="flex min-h-0 w-full min-w-0 flex-1 overflow-hidden">
       <GuestThreadConversation
         v-model:input="replyDraft"
         :entries="detail.entries"
@@ -48,6 +45,7 @@
          still be there. A record that is not there 404s in the page instead. -->
     <UAlert
       v-else
+      class="m-3"
       color="error"
       variant="soft"
       title="Conversation could not be loaded"

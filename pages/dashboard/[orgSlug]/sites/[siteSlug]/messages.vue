@@ -1,10 +1,16 @@
 <template>
   <NuxtPage v-if="frame.mode.value === 'yield'" />
 
-  <!-- A thread is open: the list is the index column, the conversation the detail. -->
-  <UDashboardPanel v-else-if="frame.mode.value === 'pair'" id="site-messages">
+  <!--
+    Messages is a screen, not a section of the site hub: the list is the left
+    column and the conversation is the right one, the way every mail client and
+    Airbnb's own inbox reads. The right column is there whether or not a thread
+    is open — an empty conversation pane says "pick one", where a full-width
+    list followed by a jump to a full-width conversation says nothing.
+  -->
+  <UDashboardPanel v-else id="site-messages">
     <template #header>
-      <UDashboardNavbar title="Messages" :toggle="false">
+      <UDashboardNavbar :title="siteName" :toggle="false">
         <template #leading>
           <DashboardNavbarLeading :to="sitePath" label="Site" />
         </template>
@@ -13,30 +19,30 @@
 
     <template #body>
       <EditorPaneShell
-        has-detail
+        :has-detail="frame.mode.value === 'pair'"
+        show-desktop-detail
+        flush-index
+        flush-detail
         :dismiss-to="messagesPath"
         detail-title="Conversation"
-        wide-detail
         hide-detail-heading
       >
         <template #index>
           <GuestThreadList scope="site" />
         </template>
         <template #detail>
-          <NuxtPage />
+          <NuxtPage v-if="frame.mode.value === 'pair'" />
         </template>
       </EditorPaneShell>
     </template>
   </UDashboardPanel>
-
-  <GuestThreadList v-else scope="site" />
 </template>
 
 <script setup lang="ts">
 import EditorPaneShell from '~/components/dashboard/EditorPaneShell.vue'
 import GuestThreadList from '~/lib/components/workspace/messages/GuestThreadList.vue'
 
-definePageMeta({ layout: 'dashboard' })
+definePageMeta({ layout: 'dashboard', ownsChrome: true })
 
 const route = useRoute()
 
@@ -45,6 +51,12 @@ const route = useRoute()
 const sitePath = computed(() => `/dashboard/${String(route.params.orgSlug)}/sites/${String(route.params.siteSlug)}`)
 const messagesPath = computed(() => `${sitePath.value}/messages`)
 const frame = useEditorFrame(messagesPath)
+
+// The chrome names the place; the panel names itself. Stacking a navbar
+// "Messages" on top of the list's own heading is the dashboard repeating what
+// the panel already says.
+const dashboard = useDashboardSite()
+const siteName = computed(() => dashboard.site.value?.brand_name ?? 'Messages')
 
 useSeoMeta({ title: 'Messages | KrabiClaw Dashboard', robots: 'noindex, nofollow' })
 </script>

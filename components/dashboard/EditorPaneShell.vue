@@ -17,7 +17,16 @@
           class="h-full min-h-0 flex-1 flex-col overflow-hidden border-default lg:flex lg:border-r"
           :class="hasDetail || showDesktopDetail ? 'flex' : 'flex lg:col-span-2 lg:border-r-0'"
         >
-          <div class="min-h-0 flex-1 overflow-y-auto px-5 pb-24 pt-6 sm:px-8 sm:pt-8">
+          <!--
+            An editor's index is a column of fields and reads best measured and
+            inset. A list panel is not: its rows run to the edge of the pane and
+            its header stays put while they scroll, so `flushIndex` hands the
+            whole section over and lets the list own its own spacing.
+          -->
+          <div v-if="flushIndex" class="flex min-h-0 flex-1 flex-col overflow-hidden">
+            <slot name="index" />
+          </div>
+          <div v-else class="min-h-0 flex-1 overflow-y-auto px-5 pb-24 pt-6 sm:px-8 sm:pt-8">
             <div class="mx-auto w-full" :class="hasDetail || showDesktopDetail ? 'max-w-xl' : 'max-w-3xl'">
               <slot name="index" />
             </div>
@@ -74,7 +83,10 @@
             <span class="size-8" />
           </header>
 
-          <div class="min-h-0 flex-1 overflow-y-auto px-5 py-8 sm:px-8 lg:px-10 lg:py-10">
+          <div v-if="flushDetail" class="flex min-h-0 flex-1 flex-col overflow-hidden">
+            <slot name="detail" />
+          </div>
+          <div v-else class="min-h-0 flex-1 overflow-y-auto px-5 py-8 sm:px-8 lg:px-10 lg:py-10">
             <div class="mx-auto w-full" :class="wideDetail ? 'max-w-5xl' : 'max-w-2xl'">
               <h2
                 v-if="detailTitle && !hideDetailHeading"
@@ -120,6 +132,10 @@ defineProps<{
    * the detail covers the index and nothing else names what is open.
    */
   hideDetailHeading?: boolean
+  /** The index is a list panel, not a form: it owns the whole column and its own padding. */
+  flushIndex?: boolean
+  /** Same for the detail: a conversation fills its column rather than sitting in it. */
+  flushDetail?: boolean
 }>()
 
 defineEmits<{

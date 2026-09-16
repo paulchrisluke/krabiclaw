@@ -1,5 +1,5 @@
 <template>
-  <GuestThreadList scope="location" submission-type-filter="reservation" />
+  <GuestThreadList scope="location" submission-type-filter="reservation" embedded />
 </template>
 
 <script setup lang="ts">

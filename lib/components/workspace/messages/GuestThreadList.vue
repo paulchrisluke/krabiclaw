@@ -1,110 +1,125 @@
 <template>
   <div
-    class="mx-auto flex w-full max-w-5xl flex-1 flex-col"
+    class="flex min-h-0 w-full min-w-0 flex-1 flex-col"
     :data-guest-thread-list-hydrated="listHydrated ? 'true' : 'false'"
   >
-    <UAlert
-      v-if="realtimeFailed"
-      color="warning"
-      variant="soft"
-      icon="i-lucide-wifi-off"
-      title="Live updates are unavailable"
-      description="This list may be out of date until the dashboard reconnects."
-      class="mb-4"
-    >
-      <template #actions>
-        <UButton color="warning" variant="soft" size="xs" :loading="loadingThreads" @click="refreshThreads">
-          Refresh
+    <!--
+      The panel's own header. It holds still while the rows scroll under it,
+      the way a mail list does: the title row, then search in place of it, then
+      one row of filters that scrolls sideways rather than wrapping.
+    -->
+    <header class="shrink-0 border-b border-default px-4 pb-3 pt-4">
+      <div class="flex items-center gap-2">
+        <UInput
+          v-if="searchOpen"
+          v-model="search"
+          type="search"
+          icon="i-lucide-search"
+          aria-label="Search"
+          placeholder="Search all messages"
+          autofocus
+          class="flex-1"
+        />
+        <div v-else class="flex min-w-0 flex-1 items-center gap-1">
+          <UButton
+            v-if="pastOnly"
+            color="neutral"
+            variant="ghost"
+            icon="i-lucide-arrow-left"
+            size="sm"
+            aria-label="Back to messages"
+            class="-ms-2 shrink-0"
+            @click="setQuery({ past: undefined })"
+          />
+          <!-- 22px/500, measured on Airbnb's own panel heading. -->
+          <h1 class="truncate text-[22px] font-medium text-highlighted">
+            {{ pastOnly ? 'Past conversations' : 'Messages' }}
+          </h1>
+        </div>
+
+        <UButton
+          v-if="searchOpen"
+          color="neutral"
+          variant="ghost"
+          size="sm"
+          label="Cancel"
+          @click="closeSearch"
+        />
+        <UButton
+          v-else
+          color="neutral"
+          variant="ghost"
+          icon="i-lucide-search"
+          aria-label="Search"
+          @click="searchOpen = true"
+        />
+      </div>
+
+      <!--
+        Airbnb's own control: the kind is a dropdown labelled by what is
+        selected, and Unread sits beside it as a toggle. Both are 40px pills.
+      -->
+      <div class="mt-3 flex items-center gap-2">
+        <UDropdownMenu :items="typeMenuItems" :content="{ align: 'start' }">
+          <UButton
+            color="neutral"
+            :variant="activeType ? 'solid' : 'outline'"
+            class="h-10 rounded-full px-4"
+            trailing-icon="i-lucide-chevron-down"
+          >
+            {{ activeTypeLabel }}
+          </UButton>
+        </UDropdownMenu>
+
+        <UButton
+          class="h-10 rounded-full px-4"
+          color="neutral"
+          :variant="unreadOnly ? 'solid' : 'outline'"
+          :aria-pressed="unreadOnly"
+          @click="setQuery({ unread: unreadOnly ? undefined : '1' })"
+        >
+          Unread
         </UButton>
-      </template>
-    </UAlert>
+      </div>
+    </header>
 
-    <!--
-      Search opens in place and keeps the filters visible, so what is being
-      searched stays legible. Every part of it is in the query string, so a
-      filtered list is a link someone can send.
-    -->
-    <div class="mb-3 flex items-center gap-2">
-      <UInput
-        v-if="searchOpen"
-        ref="searchInput"
-        v-model="search"
-        type="search"
-        icon="i-lucide-search"
-        aria-label="Search"
-        placeholder="Search all messages"
-        autofocus
-        class="flex-1"
-      />
-      <h1 v-else class="flex-1 text-xl font-semibold text-highlighted">{{ pastOnly ? 'Past conversations' : 'Messages' }}</h1>
-
-      <UButton
-        v-if="searchOpen"
-        color="neutral"
-        variant="ghost"
-        label="Cancel"
-        @click="closeSearch"
-      />
-      <UButton
-        v-else
-        color="neutral"
-        variant="ghost"
-        icon="i-lucide-search"
-        aria-label="Search"
-        @click="searchOpen = true"
-      />
-    </div>
-
-    <!--
-      Two corpora, named the same way the URL names them. Airbnb hides its past
-      conversations behind the last row of the list and has to repeat the link
-      in two other places to make it findable; this says it once, here.
-    -->
-    <div class="mb-3 flex flex-wrap items-center gap-2">
-      <UButton
-        v-for="option in occurrenceOptions"
-        :key="option.value"
-        size="sm"
-        class="rounded-full"
-        :color="pastOnly === option.past ? 'primary' : 'neutral'"
-        :variant="pastOnly === option.past ? 'solid' : 'outline'"
-        :aria-pressed="pastOnly === option.past"
-        @click="setQuery({ past: option.past ? '1' : undefined })"
+    <div class="min-h-0 flex-1 overflow-y-auto">
+      <UAlert
+        v-if="realtimeFailed"
+        color="warning"
+        variant="soft"
+        icon="i-lucide-wifi-off"
+        title="Live updates are unavailable"
+        description="This list may be out of date until the dashboard reconnects."
+        class="m-3"
       >
-        {{ option.label }}
-      </UButton>
+        <template #actions>
+          <UButton color="warning" variant="soft" size="xs" :loading="loadingThreads" @click="refreshThreads">
+            Refresh
+          </UButton>
+        </template>
+      </UAlert>
 
-      <USeparator v-if="typeOptions.length > 1" orientation="vertical" class="mx-1 h-5" />
-
-      <UButton
-        v-for="option in typeOptions"
-        :key="option.value ?? 'all'"
-        size="sm"
-        class="rounded-full"
-        :color="activeType === option.value ? 'primary' : 'neutral'"
-        :variant="activeType === option.value ? 'solid' : 'outline'"
-        :aria-pressed="activeType === option.value"
-        @click="setQuery({ filter: option.value ?? undefined })"
-      >
-        {{ option.label }}
-      </UButton>
-    </div>
-
-    <div class="overflow-hidden rounded-lg border border-default bg-default shadow-sm">
       <UAlert
         v-if="threadsError"
         color="error"
         variant="soft"
+        class="m-3"
         title="Messages could not be loaded"
         :description="getErrorMessage(threadsError, 'Guest thread request failed')"
       />
 
+      <!--
+        Rows run to the edge of the panel. A bordered card around the list put
+        32px of gutter between the picture and the pane and made every row
+        narrower than the text it holds.
+      -->
       <NuxtLink
         v-for="thread in threads"
         :key="thread.id"
         :to="threadRoute(thread)"
-        class="flex items-start gap-3 px-3 py-3 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-        :class="thread.id === openThreadId ? 'bg-elevated' : 'hover:bg-muted/50'"
+        class="mx-3 flex items-start gap-3 rounded-xl px-3 py-3 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+        :class="thread.id === openThreadId ? 'bg-elevated' : 'hover:bg-elevated/60'"
       >
         <!-- The picture leads. A thread whose location has no hero keeps the
              same footprint so the rows do not reflow between them. -->
@@ -112,10 +127,10 @@
           v-if="thread.imageUrl"
           :src="thread.imageUrl"
           alt=""
-          class="size-15 shrink-0 rounded-xl object-cover"
+          class="size-14 shrink-0 rounded-xl object-cover"
           loading="lazy"
         >
-        <div v-else class="flex size-15 shrink-0 items-center justify-center rounded-xl bg-elevated">
+        <div v-else class="flex size-14 shrink-0 items-center justify-center rounded-xl bg-elevated">
           <UIcon name="i-lucide-image" class="size-5 text-dimmed" />
         </div>
 
@@ -125,7 +140,7 @@
             <span class="shrink-0">{{ formatRelativeTime(thread.lastActivityAt) }}</span>
           </div>
           <p class="mt-0.5 truncate text-sm font-medium text-highlighted">{{ thread.guestName }}</p>
-          <p class="mt-0.5 line-clamp-2 text-sm text-muted">{{ thread.preview?.text || 'New conversation' }}</p>
+          <p class="mt-0.5 line-clamp-2 text-sm leading-snug text-muted">{{ thread.preview?.text || 'New conversation' }}</p>
         </div>
 
         <span
@@ -135,8 +150,22 @@
         />
       </NuxtLink>
 
-      <div v-if="loadingThreads" class="space-y-2 p-4">
-        <USkeleton v-for="i in 5" :key="i" class="h-16 rounded-lg" />
+      <!--
+        Airbnb's own: a 50px full-bleed row at the foot of the list, not a tab
+        beside it. Past conversations are a different place you go to, not a
+        lens on the one you are in.
+      -->
+      <NuxtLink
+        v-if="!loadingThreads && !pastOnly && threads.length > 0"
+        :to="{ path: route.path, query: { ...route.query, past: '1' } }"
+        class="mt-2 flex items-center justify-between gap-3 border-t border-default px-4 py-4 text-sm font-medium text-default transition hover:bg-elevated/60"
+      >
+        <span>Past conversations</span>
+        <UIcon name="i-lucide-chevron-right" class="size-4 shrink-0 text-muted" />
+      </NuxtLink>
+
+      <div v-if="loadingThreads" class="space-y-3 p-4">
+        <USkeleton v-for="i in 5" :key="i" class="h-14 rounded-xl" />
       </div>
 
       <div v-else-if="!threadsError && threads.length === 0" class="px-6 py-14 text-center">
@@ -154,7 +183,6 @@
     </div>
   </div>
 </template>
-
 <script setup lang="ts">
 import { getErrorMessage } from '~/utils/errors'
 import {
@@ -178,6 +206,8 @@ const props = defineProps<{
   scope: 'organization' | 'site' | 'location'
   /** Locks the list to one kind, for a surface that is only ever about that kind. */
   submissionTypeFilter?: SubmissionType
+  /** Rendered somewhere other than the messages screen: it opens nothing on its own. */
+  embedded?: boolean
 }>()
 
 const dashboard = useDashboardSite()
@@ -217,6 +247,7 @@ const activeType = computed<SubmissionType | null>(() => {
   const value = route.query.filter
   return value === 'contact' || value === 'reservation' || value === 'booking' ? value : null
 })
+const unreadOnly = computed(() => route.query.unread === '1')
 const search = computed({
   get: () => typeof route.query.query === 'string' ? route.query.query : '',
   set: value => setQuery({ query: value || undefined }),
@@ -237,12 +268,19 @@ function clearFilters() {
   searchOpen.value = false
 }
 
-const filtersApplied = computed(() => Boolean(route.query.query || route.query.filter || route.query.past))
+const activeTypeLabel = computed(() => {
+  const match = typeOptions.value.find(option => option.value === activeType.value)
+  return match?.label ?? 'All'
+})
+const typeMenuItems = computed(() => [typeOptions.value.map(option => ({
+  label: option.label,
+  icon: option.icon,
+  type: 'checkbox' as const,
+  checked: activeType.value === option.value,
+  onSelect: () => setQuery({ filter: option.value ?? undefined }),
+}))])
 
-const occurrenceOptions = [
-  { value: 'upcoming', label: 'Current', past: false },
-  { value: 'past', label: 'Past', past: true },
-] as const
+const filtersApplied = computed(() => Boolean(route.query.query || route.query.filter || route.query.unread))
 
 const loadingThreads = ref(false)
 const listHydrated = ref(false)
@@ -296,9 +334,13 @@ const typeOptions = computed(() => {
   if (effectiveFeatureSet.value.has('products')) kinds.push('booking')
   if (kinds.length === 0) return []
   return [
-    { value: null, label: 'All' },
-    ...kinds.map(kind => ({ value: kind, label: threadFilterLabel(kind, vertical.value) })),
-    { value: 'contact' as const, label: threadFilterLabel('contact', vertical.value) },
+    { value: null, label: 'All', icon: 'i-lucide-message-square' },
+    ...kinds.map(kind => ({
+      value: kind,
+      label: threadFilterLabel(kind, vertical.value),
+      icon: kind === 'reservation' ? 'i-lucide-utensils' : 'i-lucide-ticket',
+    })),
+    { value: 'contact' as const, label: threadFilterLabel('contact', vertical.value), icon: 'i-lucide-mail' },
   ]
 })
 
@@ -324,6 +366,7 @@ const listQuery = computed(() => ({
   search: typeof route.query.query === 'string' && route.query.query ? route.query.query : undefined,
   type: activeType.value ?? undefined,
   occurrence: pastOnly.value ? 'past' as const : 'upcoming' as const,
+  unread: unreadOnly.value ? '1' as const : undefined,
 }))
 
 const initialThreadsKey = computed(() => [
@@ -333,6 +376,7 @@ const initialThreadsKey = computed(() => [
   isLocationScope.value ? selectedLocationId.value ?? 'pending-location' : isOrganizationScope.value ? 'org' : 'site',
   activeType.value ?? 'all',
   pastOnly.value ? 'past' : 'current',
+  unreadOnly.value ? 'unread' : 'any',
 ].join(':'))
 
 const {
@@ -357,6 +401,7 @@ const {
       const result = await loadOrganizationGuestThreads(requestEvent, {
         type: activeType.value,
         occurrence: listQuery.value.occurrence,
+        unreadOnly: unreadOnly.value,
       }, {
         orgSlug: dashboardScope.value.orgSlug,
       })
@@ -369,6 +414,7 @@ const {
       locationId: isLocationScope.value ? selectedLocationId.value : null,
       type: activeType.value,
       occurrence: listQuery.value.occurrence,
+      unreadOnly: unreadOnly.value,
     })
     return { threads: result.threads as ThreadListItem[] }
   }
@@ -394,6 +440,18 @@ watch([initialThreads, initialThreadsPending, initialThreadsError], ([data, pend
   loadingThreads.value = pending
   threadsError.value = error
   threads.value = data?.threads ?? []
+}, { immediate: true })
+
+/*
+  The list never sits beside an empty column. Airbnb's own /hosting/messages
+  redirects to its newest thread, so arriving at the list with nothing open
+  opens the first row — and only then, never over a thread the member chose.
+*/
+watch([threads, openThreadId], ([rows, open]) => {
+  if (open || isOrganizationScope.value || props.embedded) return
+  const first = rows[0]
+  if (!first) return
+  void router.replace({ path: threadRoute(first), query: route.query })
 }, { immediate: true })
 
 // A thread belongs to a site, and every read and mutation for one is
@@ -458,7 +516,7 @@ watch(() => route.query.query, () => {
   }, 250)
 })
 
-watch([activeType, pastOnly], () => {
+watch([activeType, pastOnly, unreadOnly], () => {
   void loadThreads()
 })
 

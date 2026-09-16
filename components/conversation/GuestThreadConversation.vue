@@ -1,24 +1,31 @@
 <template>
-  <div class="flex min-h-0 flex-1 flex-col">
+  <div class="flex min-h-0 w-full min-w-0 flex-1 flex-col">
     <!--
       Who this is with, and the way to the record behind it. The reservation is
       not a card in the stream: the stream holds what people said, and every
       fact about the booking lives one control away, at its own URL.
     -->
-    <header class="flex shrink-0 items-center gap-3 border-b border-default px-4 py-3">
+    <!--
+      Measured on Airbnb: a 40px avatar in the left gutter, a 22px/500 title,
+      a 12px subline, and a fully-rounded 40px grey pill trailing. Not a small
+      ringed rectangle, which is what this was.
+    -->
+    <header class="flex shrink-0 items-center gap-3 border-b border-default px-4 py-4 sm:px-6">
+      <UAvatar :alt="guestName" size="lg" class="shrink-0" />
       <div class="min-w-0 flex-1">
-        <p class="truncate text-base font-semibold text-highlighted">{{ guestName }}</p>
+        <p class="truncate text-[22px] font-medium leading-tight text-highlighted">{{ guestName }}</p>
         <p v-if="subline" class="truncate text-xs text-muted">{{ subline }}</p>
       </div>
       <UButton
         v-if="recordTo"
         :to="recordTo"
         color="neutral"
-        variant="subtle"
-        size="sm"
-        class="shrink-0"
+        variant="soft"
+        class="h-10 shrink-0 rounded-full px-4"
+        :aria-label="`Show ${recordNoun}`"
       >
-        Show {{ recordNoun }}
+        <span class="hidden sm:inline">Show {{ recordNoun }}</span>
+        <span class="sm:hidden">Details</span>
       </UButton>
     </header>
 
@@ -55,7 +62,7 @@
                  not have to hover to discover. -->
             <div
               v-else
-              class="flex px-4"
+              class="flex px-4 sm:px-6"
               :class="[
                 item.entry.actorKind === 'member' ? 'justify-end' : 'justify-start',
                 item.startsRun ? 'pt-2' : 'pt-0.5',
@@ -65,7 +72,7 @@
                 <UAvatar
                   v-if="item.entry.actorKind !== 'member'"
                   :alt="actorLabel(item.entry)"
-                  size="sm"
+                  size="md"
                   class="mb-1 shrink-0"
                 />
 
@@ -74,16 +81,16 @@
                        repeating the same name and minute is noise. -->
                   <div
                     v-if="item.startsRun"
-                    class="flex flex-wrap items-center gap-2 pb-0.5 text-[11px] text-muted"
+                    class="flex flex-wrap items-center gap-2 pb-0.5 text-xs font-medium text-muted"
                     :class="item.entry.actorKind === 'member' ? 'justify-end' : ''"
                   >
-                    <span class="font-semibold text-highlighted">{{ actorLabel(item.entry) }}</span>
+                    <span class="text-highlighted">{{ actorLabel(item.entry) }}</span>
                     <span>{{ channelLabel(item.entry.channel) }}</span>
                     <span>{{ formatRelativeTime(item.entry.occurredAt) }}</span>
                   </div>
 
                   <div
-                    class="rounded-[20px] px-4 py-2.5 text-sm leading-relaxed whitespace-pre-wrap"
+                    class="rounded-2xl px-4 py-3 text-base leading-normal whitespace-pre-wrap"
                     :class="item.entry.actorKind === 'member'
                       ? 'rounded-br-[2px] bg-primary text-(--primary-foreground,#fff)'
                       : 'rounded-bl-[2px] bg-elevated text-default'"
@@ -114,7 +121,7 @@
       </div>
     </div>
 
-    <div class="shrink-0 border-t border-default p-3">
+    <div class="shrink-0 px-4 pb-4 pt-2 sm:px-6">
       <div v-if="deliveryFailures.length" class="mb-3 space-y-2" aria-live="polite">
         <UAlert
           v-for="failure in deliveryFailures"
@@ -144,7 +151,9 @@
         v-model="draft"
         :placeholder="placeholder"
         :disabled="disabled"
-        :maxrows="6"
+        :rows="3"
+        :maxrows="8"
+        :ui="{ root: 'rounded-2xl' }"
         @submit="$emit('submit')"
       >
         <template #trailing>
