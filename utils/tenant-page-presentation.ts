@@ -39,6 +39,7 @@ import BlawbyConsultationCta from '~/components/blawby/BlawbyConsultationCta.vue
 import BlawbyShieldDivider from '~/components/blawby/BlawbyShieldDivider.vue'
 import BlawbyDonationChoices from '~/components/blawby/BlawbyDonationChoices.vue'
 import BlawbyVideoFeature from '~/components/blawby/BlawbyVideoFeature.vue'
+import BlawbyButtonRow from '~/components/blawby/BlawbyButtonRow.vue'
 
 // The components themselves, not their names: `<component :is>` resolves a
 // string only against what the calling file imported, so a name here rendered
@@ -72,6 +73,7 @@ const PRESENTATIONS: Readonly<Record<string, Component>> = {
   'blawby:divider': BlawbyShieldDivider,
   'blawby:donation_choices': BlawbyDonationChoices,
   'blawby:video_feature': BlawbyVideoFeature,
+  'blawby:button_group': BlawbyButtonRow,
 }
 
 /** The component this template draws this block with, or null for the default. */

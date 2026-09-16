@@ -34,7 +34,7 @@ export interface TenantPageBlockSection {
 
 const SECTION_LABELS: Record<string, string> = {
   content: 'Content', copy: 'Copy', button: 'Button', buttons: 'Buttons',
-  settings: 'Settings', items: 'Items', steps: 'Steps', tiers: 'Amounts',
+  settings: 'Settings', items: 'Items', steps: 'Steps', tiers: 'Amounts', headline: 'Headline',
   pages: 'Pages', locations: 'Locations', products: 'Products', materials: 'Tools and supplies',
   destination: 'Destination', calculator: 'Calculator', image: 'Image',
   icon: 'Icon', link: 'Link',

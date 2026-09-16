@@ -24,6 +24,15 @@
     </div>
   </section>
 
+  <!--
+    A grid reading the site's published posts is the blog set. Its items are
+    the posts, resolved onto the block by the page loader.
+  -->
+  <div v-else-if="isArticles && posts.length" class="mx-auto my-8 max-w-7xl px-6 lg:px-8" data-parity-section="articles">
+    <BlawbySectionHeading v-if="heading" :title="heading" accent="" centered />
+    <BlawbyArticleGrid :posts="posts" class="mx-auto my-16 max-w-2xl sm:mt-20 lg:mx-0 lg:max-w-none" />
+  </div>
+
   <section v-else-if="features.length" class="relative bg-[var(--blawby-accent-200)] pb-16 pt-4 sm:pb-16 sm:pt-4 lg:pb-16" data-parity-section="features">
     <div class="blawby-container">
       <div class="relative z-20 mt-4 grid gap-10 sm:grid-cols-2 lg:grid-cols-3">
@@ -42,7 +51,8 @@
 <script setup lang="ts">
 import type { PublicTenantPage } from '~/server/utils/public-tenant-pages'
 import type { TenantPageBlock } from '~/utils/tenant-page-blocks'
-import { blockText, blockRecords } from '~/utils/tenant-page-block-data'
+import type { PublicBlogSummary } from '~/types/blawby'
+import { blockText, blockTextOrNull, blockRecords } from '~/utils/tenant-page-block-data'
 // The cards a Blawby page shows for a feature_grid: what the firm does, on the
 // About page and on each practice area. One markup, because it is one thing —
 // the practice-area version was deleted with the offering model and its
@@ -79,6 +89,34 @@ const table = computed(() => (calculator.value.table && typeof calculator.value.
   : { rows: Array.isArray(calculator.value.rows) ? calculator.value.rows : [], notice: '' }))
 const tableColumns = computed(() => (Array.isArray(table.value.columns) ? table.value.columns.map(String) : []))
 const tableRows = computed(() => (Array.isArray(table.value.rows) ? table.value.rows.filter(Array.isArray) as unknown[][] : []))
+
+const isArticles = computed(() => blockText(props.block.data.source) === 'site_posts')
+const heading = computed(() => blockText(props.block.data.title))
+const posts = computed<PublicBlogSummary[]>(() => blockRecords(props.block.data.items).map((item) => {
+  const media = Array.isArray(item.media) ? item.media[0] as Record<string, unknown> | undefined : undefined
+  return {
+    id: blockText(item.id),
+    title: blockText(item.title),
+    slug: blockText(item.url).split('/').pop() ?? '',
+    excerpt: blockText(item.description) || null,
+    category: null,
+    tags: [],
+    published_at: null,
+    canonical_url: blockText(item.url),
+    cover: media
+      ? {
+          asset_id: blockText(media.asset_id),
+          public_url: blockTextOrNull(media.public_url),
+          thumbnail_url: blockTextOrNull(media.thumbnail_url),
+          kind: blockTextOrNull(media.kind),
+          alt_text: blockTextOrNull(media.alt_text),
+          width: null,
+          height: null,
+        }
+      : null,
+    social_image: null,
+  }
+}).filter(post => post.title))
 
 const features = computed(() => blockRecords(props.block.data.items).map((item, index) => ({
   title: blockText(item.title),

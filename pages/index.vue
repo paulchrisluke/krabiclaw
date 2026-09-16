@@ -1,7 +1,12 @@
 <template>
   <NuxtLayout :name="isPlatform ? 'platform' : isBlawbyPage ? 'blawby' : 'saya'">
+    <!--
+      A Blawby home is its page document, drawn block by block like every other
+      page on the site. It was a component that found each block by a `section`
+      string and composed a fixed list, so reordering the page changed nothing.
+    -->
     <TenantPublicPage v-if="isPlatform" :path="platformHomePath" />
-    <LazyBlawbyHome v-else-if="isBlawbyPage" />
+    <TenantPublicPage v-else-if="isBlawbyPage" path="/" />
     <LazySayaHomePage v-else />
   </NuxtLayout>
 </template>

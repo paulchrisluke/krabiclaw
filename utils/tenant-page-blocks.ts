@@ -141,6 +141,7 @@ const link = (label: string, extra: Partial<TenantPageField> = {}): TenantPageFi
 /** A call to action is one prompt and one button, and the button needs both halves. */
 const CTA_FIELDS = {
   title: text('Title'),
+  accent: text('Emphasised phrase'),
   description: prose('Description'),
   label: text('Button label', { section: 'button', pairedWith: 'url' }),
   url: link('Button URL', { pairedWith: 'label' }),
@@ -229,8 +230,12 @@ export const TENANT_PAGE_BLOCK_REGISTRY: Record<TenantPageBlockType, TenantPageB
   }),
 
   hero: blockDefinitionWithMetadata('hero', 'Hero', 'The opening of a page.', ALL_RECIPES, {
+    // The headline and the phrase inside it that carries emphasis; the rest of
+    // the opening words are their own concern, because four controls is not a
+    // leaf (DESIGN.md).
+    title: text('Headline', { required: true, section: 'headline' }),
+    accent: text('Emphasised phrase', { section: 'headline' }),
     eyebrow: text('Eyebrow'),
-    title: text('Headline', { required: true }),
     subtitle: prose('Subheading'),
     media: { kind: 'media', label: 'Image or video', translatable: false, section: 'image', slot: 'media' },
     cta_label: text('Button label', { section: 'button', pairedWith: 'cta_url' }),
@@ -363,6 +368,7 @@ export const TENANT_PAGE_BLOCK_REGISTRY: Record<TenantPageBlockType, TenantPageB
 
   page_grid: blockDefinitionWithMetadata('page_grid', 'Pages', 'Cards linking to other pages.', ['home', 'about', 'pricing', 'custom', 'services'], {
     title: text('Section title', { section: 'settings' }),
+    accent: text('Emphasised phrase', { section: 'settings' }),
     description: prose('Description', { section: 'settings' }),
     page_ids: { kind: 'reference', label: 'Pages', translatable: false, section: 'pages', reference: 'page' },
   }, { allowedPageTypes: ['custom', 'recipe', 'system'] }),
