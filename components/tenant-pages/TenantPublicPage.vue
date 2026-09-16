@@ -8,7 +8,6 @@
   -->
   <template v-if="page">
     <BlawbyCanonicalPage v-if="isBlawby" :page="page" />
-    <PlatformCanonicalPage v-else-if="isPlatform" :page="page" />
     <TenantPageRenderer v-else :page="page" />
   </template>
 </template>

@@ -206,6 +206,7 @@
 <script setup lang="ts">
 import type { PublicTenantPage } from '~/server/utils/public-tenant-pages'
 import type { TenantPageBlock } from '~/utils/tenant-page-blocks'
+import type { Component } from 'vue'
 import type { PublicTemplateSlug } from '~/utils/template-registry'
 import { tenantPageBlockPresentation } from '~/utils/tenant-page-presentation'
 import { getVerticalCopy } from '~/utils/vertical-copy'
@@ -222,7 +223,7 @@ const props = withDefaults(defineProps<{ page: PublicTenantPage; template?: Publ
 const { template: resolvedTemplate } = usePublicTemplate()
 const template = computed<PublicTemplateSlug>(() => props.template ?? resolvedTemplate.value.slug)
 
-function presentationOf(block: TenantPageBlock): string | null {
+function presentationOf(block: TenantPageBlock): Component | null {
   return tenantPageBlockPresentation(template.value, block.type)
 }
 const sanitizer = useHtmlSanitizer()

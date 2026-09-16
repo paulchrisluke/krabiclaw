@@ -58,34 +58,35 @@
 </template>
 
 <script setup lang="ts">
-import type { PlatformIconName } from '~/components/platform/PlatformIcon.vue'
+import type { PublicTenantPage } from '~/server/utils/public-tenant-pages'
+import type { TenantPageBlock } from '~/utils/tenant-page-blocks'
+import { blockText, blockTextOrNull, blockRecords } from '~/utils/tenant-page-block-data'
 
 /**
  * The Features page's navy analytics band with the mock dashboard card. The
  * card's rows are content: two stat tiles and a labelled bar. What they say
  * comes from the document, so the band cannot carry a number nobody measured.
  */
-withDefaults(defineProps<{
-  pill?: string | null
-  pillIcon?: PlatformIconName | null
-  title: string
-  description?: string | null
-  ctaLabel?: string | null
-  ctaUrl?: string | null
-  secondaryLabel?: string | null
-  secondaryUrl?: string | null
-  cardTitle?: string
-  cardBadge?: string | null
-  rows: Array<{ label: string; value: string }>
-}>(), {
-  pill: null,
-  pillIcon: null,
-  description: null,
-  ctaLabel: null,
-  ctaUrl: null,
-  secondaryLabel: null,
-  secondaryUrl: null,
-  cardTitle: 'Direct Storefront Stats',
-  cardBadge: null,
-})
+const props = defineProps<{ block: TenantPageBlock; page: PublicTenantPage }>()
+
+/**
+ * A callout: a note, optionally with supporting rows and a button.
+ *
+ * It absorbed two more blocks that were feature grids in name only — a proof
+ * card and an SEO band — because all three are a heading, some rows and a
+ * call to action.
+ */
+const pill = computed(() => blockTextOrNull(props.block.data.label))
+const pillIcon = computed(() => null)
+const title = computed(() => blockText(props.block.data.title))
+const description = computed(() => blockTextOrNull(props.block.data.body) ?? blockTextOrNull(props.block.data.description))
+const ctaLabel = computed(() => blockTextOrNull(props.block.data.label))
+const ctaUrl = computed(() => blockTextOrNull(props.block.data.url))
+const secondaryLabel = computed(() => blockTextOrNull(props.block.data.secondary_label))
+const secondaryUrl = computed(() => blockTextOrNull(props.block.data.secondary_url))
+const cardTitle = computed(() => blockText(props.block.data.title))
+const cardBadge = computed(() => blockTextOrNull(props.block.data.badge))
+const rows = computed(() => blockRecords(props.block.data.items)
+  .map(item => ({ label: blockText(item.title), value: blockText(item.description) }))
+  .filter(row => row.label))
 </script>

@@ -15,17 +15,45 @@
 //
 // Absence of an entry means the renderer's own markup, which is Saya's.
 
+import type { Component } from 'vue'
 import type { TenantPageBlockType } from '~/utils/tenant-page-blocks'
 import type { PublicTemplateSlug } from '~/utils/template-registry'
+import PlatformMarketingHero from '~/components/platform/marketing/PlatformMarketingHero.vue'
+import PlatformFeatureCards from '~/components/platform/marketing/PlatformFeatureCards.vue'
+import PlatformComparison from '~/components/platform/marketing/PlatformComparison.vue'
+import PlatformProofBand from '~/components/platform/marketing/PlatformProofBand.vue'
+import PlatformWorkflows from '~/components/platform/marketing/PlatformWorkflows.vue'
+import PlatformSeoBand from '~/components/platform/marketing/PlatformSeoBand.vue'
+import PlatformPluginSections from '~/components/platform/marketing/PlatformPluginSections.vue'
+import PlatformProseCard from '~/components/platform/marketing/PlatformProseCard.vue'
+import PlatformFaqAccordion from '~/components/platform/marketing/PlatformFaqAccordion.vue'
+import PlatformBottomCta from '~/components/platform/marketing/PlatformBottomCta.vue'
 
-const PRESENTATIONS: Readonly<Record<string, string>> = {
-  // Populated per template as each template's components are folded in.
+// The components themselves, not their names: `<component :is>` resolves a
+// string only against what the calling file imported, so a name here rendered
+// as a literal `<PlatformMarketingHero>` element with nothing inside it. They
+// are imported rather than loaded on demand, because an async component whose
+// import fails renders nothing at all and says nothing about why.
+const PRESENTATIONS: Readonly<Record<string, Component>> = {
+  // KrabiClaw's own marketing template. One component per block type, and the
+  // component reads its block — no dispatcher, and nothing in the document
+  // choosing between them.
+  'platform:hero': PlatformMarketingHero,
+  'platform:feature_grid': PlatformFeatureCards,
+  'platform:comparison': PlatformComparison,
+  'platform:stat_grid': PlatformProofBand,
+  'platform:workflow_grid': PlatformWorkflows,
+  'platform:callout': PlatformSeoBand,
+  'platform:how_to': PlatformPluginSections,
+  'platform:markdown': PlatformProseCard,
+  'platform:faq': PlatformFaqAccordion,
+  'platform:cta': PlatformBottomCta,
 }
 
 /** The component this template draws this block with, or null for the default. */
 export function tenantPageBlockPresentation(
   template: PublicTemplateSlug,
   type: TenantPageBlockType,
-): string | null {
+): Component | null {
   return PRESENTATIONS[`${template}:${type}`] ?? null
 }

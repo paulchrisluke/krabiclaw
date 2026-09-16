@@ -6,6 +6,12 @@
 </template>
 
 <script setup lang="ts">
+import type { PublicTenantPage } from '~/server/utils/public-tenant-pages'
+import type { TenantPageBlock } from '~/utils/tenant-page-blocks'
+import { blockText, blockTextOrNull } from '~/utils/tenant-page-block-data'
 /** A heading and a few paragraphs in a glass card — the About page's "dilemma" section. */
-defineProps<{ title?: string | null; content: string }>()
+const props = defineProps<{ block: TenantPageBlock; page: PublicTenantPage }>()
+
+const title = computed(() => blockTextOrNull(props.block.data.title))
+const content = computed(() => blockText(props.block.data.markdown))
 </script>
