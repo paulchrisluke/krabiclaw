@@ -37,7 +37,7 @@ export const isPostResponse = (value: unknown): value is ApiRecord =>
 
 export function useLocationPostEditor(siteId: string, locationId: Ref<string | null>) {
   const dashboardApi = useDashboardApi()
-  const toast = useToast()
+  const error = ref<string | null>(null)
   const { trackPostCreated, trackPostPublished } = useAnalytics()
 
   const form = reactive({
@@ -180,6 +180,7 @@ export function useLocationPostEditor(siteId: string, locationId: Ref<string | n
   async function save(postId: string | null): Promise<ApiRecord | null> {
     const ownerLocationId = locationId.value
     if (!form.body.trim() || !ownerLocationId) return null
+    error.value = null
     saving.value = true
     try {
       if (postId) {
@@ -190,7 +191,6 @@ export function useLocationPostEditor(siteId: string, locationId: Ref<string | n
         if (form.topic.post_type !== 'alert') await syncMedia(postId)
         originalMedia = form.media.map(item => ({ ...item }))
         savedSnapshot.value = snapshot()
-        toast.add({ description: 'Saved', color: 'success' })
         return res.post as ApiRecord
       }
       const res = await dashboardApi<ApiRecord>(`/api/editor/sites/${siteId}/posts`, {
@@ -200,10 +200,9 @@ export function useLocationPostEditor(siteId: string, locationId: Ref<string | n
       originalMedia = form.media.map(item => ({ ...item }))
       savedSnapshot.value = snapshot()
       if (created.id) trackPostCreated(String(created.id), siteId)
-      toast.add({ description: 'Saved', color: 'success' })
       return created
-    } catch (error) {
-      toast.add({ description: getErrorMessage(error, 'Failed to save'), color: 'error' })
+    } catch (err) {
+      error.value = getErrorMessage(err, 'Failed to save')
       return null
     } finally {
       saving.value = false
@@ -213,6 +212,7 @@ export function useLocationPostEditor(siteId: string, locationId: Ref<string | n
   async function publish(postId: string | null): Promise<ApiRecord | null> {
     const ownerLocationId = locationId.value
     if (!form.body.trim() || !ownerLocationId) return null
+    error.value = null
     publishing.value = true
     try {
       let id = postId
@@ -234,16 +234,9 @@ export function useLocationPostEditor(siteId: string, locationId: Ref<string | n
       originalMedia = form.media.map(item => ({ ...item }))
       savedSnapshot.value = snapshot()
       trackPostPublished(String(id), siteId)
-      const socialErrors = res.socialErrors as Record<string, string> | undefined
-      if (socialErrors && Object.keys(socialErrors).length > 0) {
-        const lines = Object.entries(socialErrors).map(([channel, message]) => `${channel}: ${message}`).join(' · ')
-        toast.add({ title: 'Published to site', description: `Social channels had issues — ${lines}`, color: 'warning' })
-      } else {
-        toast.add({ description: 'Published!', color: 'success' })
-      }
       return res.post as ApiRecord
-    } catch (error) {
-      toast.add({ description: getErrorMessage(error, 'Failed to publish'), color: 'error' })
+    } catch (err) {
+      error.value = getErrorMessage(err, 'Failed to publish')
       return null
     } finally {
       publishing.value = false
@@ -251,18 +244,18 @@ export function useLocationPostEditor(siteId: string, locationId: Ref<string | n
   }
 
   async function remove(postId: string): Promise<boolean> {
+    error.value = null
     try {
       await dashboardApi(`/api/editor/sites/${siteId}/posts/${postId}`, {
         method: 'DELETE',
         validate: (value): value is { success: true } => isRecord(value) && value.success === true,
       })
-      toast.add({ description: 'Post deleted', color: 'neutral' })
       return true
-    } catch (error) {
-      toast.add({ description: getErrorMessage(error, 'Failed to delete'), color: 'error' })
+    } catch (err) {
+      error.value = getErrorMessage(err, 'Failed to delete')
       return false
     }
   }
 
-  return { form, selectedChannels, saving, publishing, isDirty, reset, loadFrom, save, publish, remove }
+  return { form, selectedChannels, saving, publishing, isDirty, error, reset, loadFrom, save, publish, remove }
 }

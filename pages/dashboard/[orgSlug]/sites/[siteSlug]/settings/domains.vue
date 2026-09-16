@@ -15,6 +15,14 @@
       <div class="mx-auto max-w-5xl space-y-4">
         <UCard>
           <UAlert
+            v-if="actionError"
+            color="error"
+            variant="soft"
+            icon="i-lucide-circle-alert"
+            :description="actionError"
+            class="mb-4"
+          />
+          <UAlert
             v-if="loadError"
             color="error"
             variant="soft"
@@ -95,8 +103,14 @@
                       <code class="block max-w-full break-all text-xs text-muted">{{ row.original.value }}</code>
                     </template>
                     <template #actions-cell="{ row }">
-                      <UTooltip text="Copy value">
-                        <UButton icon="i-lucide-copy" color="neutral" variant="ghost" size="xs" @click="copy(row.original.value)" />
+                      <UTooltip :text="copiedValue === row.original.value ? 'Copied' : 'Copy value'">
+                        <UButton
+                          :icon="copiedValue === row.original.value ? 'i-lucide-check' : 'i-lucide-copy'"
+                          :color="copiedValue === row.original.value ? 'success' : 'neutral'"
+                          variant="ghost"
+                          size="xs"
+                          @click="copy(row.original.value)"
+                        />
                       </UTooltip>
                     </template>
                   </UTable>
@@ -237,7 +251,8 @@ const isDomainsResponse = (value: unknown): value is DomainsResponse =>
   && Array.isArray(value.domain_groups)
   && value.domain_groups.every(isDomainGroup)
 
-const toast = useToast()
+const copiedValue = ref<string | null>(null)
+const actionError = ref<string | null>(null)
 const dashboard = useDashboardSite()
 
 const siteId = computed(() => dashboard.site.value?.id ?? null)
@@ -288,7 +303,6 @@ async function loadDomains({ background = false }: { background?: boolean } = {}
     domainGroups.value = response.domain_groups
   } catch (error) {
     loadError.value = getErrorMessage(error, 'Failed to load domains')
-    if (!background) toast.add({ description: loadError.value, color: 'error' })
   } finally {
     if (!background) loading.value = false
   }
@@ -345,7 +359,6 @@ async function addDomain() {
     const newGroup = response.domain_groups?.[0]
     if (newGroup) expandedGroups.value[newGroup.id] = true
     trackDomainConnected(addForm.domain.trim(), siteId.value)
-    toast.add({ description: 'Domain added', color: 'success' })
     closeAddModal()
   } catch (error) {
     const data = error instanceof ApiClientError && isRecord(error.data) ? error.data : {}
@@ -376,9 +389,12 @@ function toggleGroup(groupId: string) {
 async function copy(value: string) {
   try {
     await navigator.clipboard.writeText(value)
-    toast.add({ description: 'Copied', color: 'success' })
+    copiedValue.value = value
+    setTimeout(() => {
+      if (copiedValue.value === value) copiedValue.value = null
+    }, 1500)
   } catch {
-    toast.add({ description: 'Failed to copy', color: 'error' })
+    actionError.value = 'Failed to copy to clipboard'
   }
 }
 
@@ -431,6 +447,7 @@ async function runPrimaryAction(group: DomainGroup) {
 async function syncGroup(group: DomainGroup) {
   if (!siteId.value || !group.primary_domain_id) return
   syncingGroupId.value = group.id
+  actionError.value = null
   try {
     await dashboardApi(`/api/sites/${siteId.value}/domains/${group.primary_domain_id}/sync`, {
       method: 'POST',
@@ -438,9 +455,8 @@ async function syncGroup(group: DomainGroup) {
         isRecord(value) && value.success === true && isRecord(value.domain),
     })
     await loadDomains({ background: true })
-    toast.add({ description: 'Domain checked', color: 'success' })
   } catch {
-    toast.add({ description: 'Domain check failed', color: 'error' })
+    actionError.value = 'Domain check failed'
   } finally {
     syncingGroupId.value = null
   }
@@ -449,6 +465,7 @@ async function syncGroup(group: DomainGroup) {
 async function makePrimary(group: DomainGroup) {
   if (!siteId.value || !group.primary_domain_id) return
   promotingGroupId.value = group.id
+  actionError.value = null
   try {
     await dashboardApi(`/api/sites/${siteId.value}/domains/${group.primary_domain_id}`, {
       method: 'PATCH',
@@ -457,9 +474,8 @@ async function makePrimary(group: DomainGroup) {
         isRecord(value) && value.success === true && isRecord(value.domain),
     })
     await loadDomains({ background: true })
-    toast.add({ description: 'Primary domain updated', color: 'success' })
   } catch {
-    toast.add({ description: 'Failed to update primary domain', color: 'error' })
+    actionError.value = 'Failed to update primary domain'
   } finally {
     promotingGroupId.value = null
   }
@@ -469,6 +485,7 @@ async function deleteGroup(group: DomainGroup) {
   if (!siteId.value || !group.primary_domain_id || deletingGroupId.value) return
   if (!confirm(`Remove ${group.domain} from this site?`)) return
   deletingGroupId.value = group.id
+  actionError.value = null
   try {
     for (const domain of group.domains.filter((domain) => domain.type === 'custom')) {
       await dashboardApi(`/api/sites/${siteId.value}/domains/${domain.id}`, {
@@ -478,10 +495,9 @@ async function deleteGroup(group: DomainGroup) {
       })
     }
     domainGroups.value = domainGroups.value.filter((candidate) => candidate.id !== group.id)
-    toast.add({ description: 'Domain removed', color: 'success' })
   } catch {
     await loadDomains({ background: true })
-    toast.add({ description: 'Failed to remove domain', color: 'error' })
+    actionError.value = 'Failed to remove domain'
   } finally {
     deletingGroupId.value = null
   }
@@ -490,7 +506,7 @@ async function deleteGroup(group: DomainGroup) {
 function domainMenuItems(group: DomainGroup) {
   return [[
     { label: 'Visit', icon: 'i-lucide-external-link', to: `https://${group.domain}`, target: '_blank' },
-    { label: 'Copy domain', icon: 'i-lucide-copy', onSelect: () => copy(group.domain) },
+    { label: copiedValue.value === group.domain ? 'Copied' : 'Copy domain', icon: copiedValue.value === group.domain ? 'i-lucide-check' : 'i-lucide-copy', onSelect: () => copy(group.domain) },
     { label: 'Delete', icon: 'i-lucide-trash-2', color: 'error' as const, onSelect: () => deleteGroup(group) },
   ]]
 }

@@ -25,6 +25,15 @@
           <h2 class="font-semibold text-highlighted">Google Analytics & Search Console</h2>
         </template>
 
+        <UAlert
+          v-if="pageError"
+          color="error"
+          variant="soft"
+          icon="i-lucide-circle-alert"
+          :description="pageError"
+          class="mb-4"
+        />
+
         <div v-if="loading" class="space-y-3">
           <USkeleton class="h-10 rounded-lg" />
           <USkeleton class="h-10 rounded-lg" />
@@ -136,7 +145,7 @@ const isAuthUrlResponse = (value: unknown): value is { success: boolean; authUrl
 const isSuccessResponse = (value: unknown): value is { success: true } =>
   isRecord(value) && value.success === true
 
-const toast = useToast()
+const pageError = ref<string | null>(null)
 const { siteOptions, selectedSiteSlug, selectedSiteId: siteId } = useOrganizationSettingsSite()
 const route = useRoute()
 const router = useRouter()
@@ -203,7 +212,7 @@ async function loadConnection() {
     selectedSearchConsoleSite.value = res.connection?.search_console_site_url ?? undefined
   } catch {
     if (generation === connectionLoadGeneration && siteId.value === requestedSiteId) {
-      toast.add({ description: 'Failed to load Google Analytics connection', color: 'error' })
+      pageError.value = 'Failed to load Google Analytics connection'
     }
   } finally {
     if (generation === connectionLoadGeneration) loading.value = false
@@ -214,6 +223,7 @@ async function connectGoogle() {
   const requestedSiteId = siteId.value
   if (!requestedSiteId) return
   connecting.value = true
+  pageError.value = null
   try {
     const res = await dashboardApi<{ success: boolean; authUrl: string }>(
       `/api/sites/${requestedSiteId}/integrations/google-analytics/auth`,
@@ -233,7 +243,7 @@ async function connectGoogle() {
       throw new Error('Failed to start Google connection')
     }
   } catch (err) {
-    toast.add({ description: getErrorMessage(err, 'Failed to start Google connection'), color: 'error' })
+    pageError.value = getErrorMessage(err, 'Failed to start Google connection')
     connecting.value = false
   }
 }
@@ -242,6 +252,7 @@ async function disconnectGoogle() {
   const requestedSiteId = siteId.value
   if (!requestedSiteId || connectionSiteId.value !== requestedSiteId) return
   disconnecting.value = true
+  pageError.value = null
   try {
     await dashboardApi(`/api/sites/${requestedSiteId}/integrations/google-analytics/disconnect`, {
       method: 'POST',
@@ -253,9 +264,8 @@ async function disconnectGoogle() {
     searchConsoleSites.value = []
     selectedGa4Property.value = undefined
     selectedSearchConsoleSite.value = undefined
-    toast.add({ description: 'Google account disconnected', color: 'success' })
   } catch {
-    toast.add({ description: 'Failed to disconnect', color: 'error' })
+    pageError.value = 'Failed to disconnect'
   } finally {
     disconnecting.value = false
   }
@@ -265,6 +275,7 @@ async function saveSelection() {
   const requestedSiteId = siteId.value
   if (!requestedSiteId || connectionSiteId.value !== requestedSiteId) return
   saving.value = true
+  pageError.value = null
   try {
     const property = ga4Properties.value.find((p) => p.propertyId === selectedGa4Property.value)
     await dashboardApi(`/api/sites/${requestedSiteId}/integrations/google-analytics/select`, {
@@ -277,10 +288,9 @@ async function saveSelection() {
       validate: isSuccessResponse,
     })
     if (siteId.value !== requestedSiteId) return
-    toast.add({ description: 'Saved', color: 'success' })
     await loadConnection()
   } catch (err) {
-    toast.add({ description: getErrorMessage(err, 'Failed to save selection'), color: 'error' })
+    pageError.value = getErrorMessage(err, 'Failed to save selection')
   } finally {
     saving.value = false
   }
@@ -289,10 +299,10 @@ async function saveSelection() {
 onMounted(() => {
   const status = route.query.ga
   if (status === 'connected') {
-    toast.add({ description: 'Google account connected', color: 'success' })
+    pageError.value = null
     router.replace({ query: { ...route.query, ga: undefined } })
   } else if (status === 'error' || status === 'expired') {
-    toast.add({ description: 'Google connection failed. Please try again.', color: 'error' })
+    pageError.value = 'Google connection failed. Please try again.'
     router.replace({ query: { ...route.query, ga: undefined } })
   }
 })

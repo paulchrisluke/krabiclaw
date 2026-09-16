@@ -21,11 +21,11 @@
           <UButton
             color="neutral"
             variant="ghost"
-            icon="i-lucide-copy"
+            :icon="copiedUrl ? 'i-lucide-check' : 'i-lucide-copy'"
             :disabled="!publicLinksUrl"
             @click="copyPublicUrl"
           >
-            Copy URL
+            {{ copiedUrl ? 'Copied' : 'Copy URL' }}
           </UButton>
           <UButton
             color="neutral"
@@ -296,7 +296,8 @@ const frame = useEditorFrame(linksPath)
 
 const siteId = await useDashboardSiteId()
 const dashboard = useDashboardSite()
-const toast = useToast()
+const copiedUrl = ref(false)
+let copyTimer: ReturnType<typeof setTimeout> | undefined
 const saving = ref(false)
 const errorMessage = ref('')
 
@@ -642,9 +643,13 @@ async function copyPublicUrl() {
   if (!publicLinksUrl.value) return
   try {
     await navigator.clipboard.writeText(publicLinksUrl.value)
-    toast.add({ description: 'Links page URL copied', color: 'success' })
+    copiedUrl.value = true
+    if (copyTimer) clearTimeout(copyTimer)
+    copyTimer = setTimeout(() => {
+      copiedUrl.value = false
+    }, 1500)
   } catch {
-    toast.add({ description: 'Unable to copy the links page URL', color: 'error' })
+    // Clipboard permission failure; leave uncopied
   }
 }
 
@@ -682,13 +687,11 @@ async function save() {
   errorMessage.value = ''
   try {
     await persist(items.value)
-    toast.add({ description: 'Links page saved', color: 'success' })
     await navigateTo(linksPath.value)
   } catch (error) {
     errorMessage.value = error instanceof ApiClientError
       ? error.message
       : error instanceof Error ? error.message : 'Unable to save links page'
-    toast.add({ description: errorMessage.value, color: 'error' })
   } finally {
     saving.value = false
   }
@@ -713,11 +716,9 @@ async function commitItem() {
       const [createdId] = response.created_item_ids
       if (!createdId) throw new Error('The link was not created.')
       clearItemDraft()
-      toast.add({ description: 'Link created', color: 'success' })
       await navigateTo(`${itemsPath.value}/${createdId}`)
       return
     }
-    toast.add({ description: `${ITEM_SECTION_LABELS[openItemKey.value]} saved`, color: 'success' })
     await navigateTo(itemPath.value)
   } catch (error) {
     errorMessage.value = error instanceof ApiClientError

@@ -153,7 +153,6 @@ const recordPath = computed(() => `${pagesPath.value}/${pageId.value}`)
 const frame = useEditorFrame(recordPath)
 
 const siteId = await useDashboardSiteId()
-const toast = useToast()
 const dashboardApi = useDashboardApi()
 
 const { load, data, error, pending, draft, dirty, revert, commit, isNew, previewUrl } = useTenantPageDraft(siteId, pageId.value)
@@ -299,7 +298,6 @@ async function save() {
   try {
     const created = isNew.value
     const page = await commit()
-    toast.add({ description: created ? 'Page created' : `${openLabel.value} saved`, color: 'success' })
     await navigateTo(created ? `${pagesPath.value}/${page.id}` : recordPath.value)
   } catch (cause) {
     errorMessage.value = getErrorMessage(cause, 'Failed to save this page')

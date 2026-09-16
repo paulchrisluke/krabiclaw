@@ -94,7 +94,6 @@ definePageMeta({ layout: 'dashboard', skipDashboardContext: true })
 const route = useRoute()
 const router = useRouter()
 const config = useRuntimeConfig()
-const toast = useToast()
 const state = startOnboardingFlow('new-site')
 const draft = useOnboardingDraft()
 const { indexOf, nextOf, previousOf, resumeStep } = useOnboardingSteps()
@@ -287,7 +286,8 @@ onMounted(() => {
   stopViewportListener = () => query.removeEventListener('change', update)
 
   if (route.query.payment === 'cancelled') {
-    toast.add({ title: 'Payment cancelled', description: 'Your subscription was not completed.', color: 'warning' })
+    draft.error.value = 'Payment cancelled. Your subscription was not completed.'
+    void router.replace({ query: { ...route.query, payment: undefined } })
   }
 })
 

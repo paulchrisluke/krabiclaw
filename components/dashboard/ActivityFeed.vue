@@ -51,6 +51,7 @@
 
       <div v-if="nextCursor" class="text-center">
         <UButton label="Load more" color="neutral" variant="soft" :loading="loadingMore" @click="loadMore" />
+        <UAlert v-if="loadMoreError" color="error" variant="soft" :description="loadMoreError" class="mt-2" />
       </div>
     </div>
   </div>
@@ -65,7 +66,7 @@ const route = useRoute()
 const { eventLabel } = useSiteEventLabels()
 const { formatRelativeTime: timeAgo } = useHumanTime()
 const dashboard = useDashboardSite()
-const toast = useToast()
+const loadMoreError = ref<string | null>(null)
 
 type SiteEvent = import('~/server/utils/dashboard-events').DashboardEvent
 
@@ -150,7 +151,7 @@ watch(() => filters.siteId, async (siteId) => {
     if (filters.siteId !== siteId) return
     locationsForSite.value = res.locations
   } catch (err) {
-    toast.add({ title: 'Failed to load locations', description: err instanceof Error ? err.message : 'Please try again.', color: 'error' })
+    if (import.meta.dev) console.error('Failed to load locations:', err)
   }
 })
 const locationOptions = computed(() => [
@@ -228,13 +229,14 @@ async function loadMore() {
   const requestedKey = eventsKey.value
   const cursor = nextCursor.value
   loadingMore.value = true
+  loadMoreError.value = null
   try {
     const res = await fetchEvents(cursor)
     if (requestedKey !== eventsKey.value) return
     events.value = [...events.value, ...res.events]
     nextCursor.value = res.nextCursor
   } catch (err) {
-    toast.add({ title: 'Failed to load more activity', description: err instanceof Error ? err.message : 'Please try again.', color: 'error' })
+    loadMoreError.value = err instanceof Error ? err.message : 'Failed to load more activity'
   } finally {
     loadingMore.value = false
   }

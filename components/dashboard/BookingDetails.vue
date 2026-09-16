@@ -18,13 +18,22 @@
         :detail-title="detailTitle"
         :dismiss-to="isChangeMode ? `${bookingPath}/change` : bookingPath"
         :show-actions="editorKey === 'notes' || Boolean(isChangeMode && editorField)"
-        :saving="noteSaving"
+        :saving="noteSaving || changeSaving"
         :save-label="isChangeMode && editorField ? 'Done' : undefined"
         :save-disabled="editorKey === 'notes' && (!noteDraft.trim() || noteDraft === selectedNote?.body)"
+        :error="editorKey === 'notes' ? noteError : changeError"
         @cancel="cancelEditor"
         @save="commitEditor"
       >
         <template #index>
+          <UAlert
+            v-if="actionError"
+            class="mb-5"
+            color="error"
+            variant="soft"
+            icon="i-lucide-circle-alert"
+            :description="actionError"
+          />
           <UAlert
             v-if="realtime.status.value === 'failed'"
             class="mb-5"
@@ -277,7 +286,6 @@
       </div>
     </div>
   </DashboardListItemDialog>
-
   <!--
     Cancelling gets a screen that states the consequence and lets the tenant say
     why, rather than a native confirm() stacked on top of the sheet that opened
@@ -287,6 +295,7 @@
     v-model:open="cancelOpen"
     :title="`Cancel ${noun}`"
     :show-actions="false"
+    :error="actionError"
   >
     <div v-if="booking" class="space-y-5">
       <p class="text-sm leading-relaxed text-muted">{{ cancellationSummary }}</p>
@@ -324,7 +333,7 @@ type ActionColor = 'success' | 'error' | 'neutral'
 const router = useRouter()
 const dashboardApi = useDashboardApi()
 const realtime = useDashboardInvalidations()
-const toast = useToast()
+const actionError = ref<string | null>(null)
 const bookingPath = computed(() => props.basePath)
 // `useEditorFrame` provides and injects, so it runs before any `await`, and it
 // owns the split of the route below this booking. The `route.params.editor`
@@ -426,6 +435,9 @@ const noteRevisionId = ref<string>()
 const noteSaving = ref(false)
 const noteAttemptKey = ref<string | null>(null)
 const noteAttemptDraft = ref<string | null>(null)
+const noteError = ref<string | null>(null)
+const changeError = ref<string | null>(null)
+const actionError = ref<string | null>(null)
 
 watch([detailsKey, () => selectedNote.value?.id, editorKey, editorField], () => {
   noteDraft.value = selectedNote.value?.body ?? ''
@@ -495,6 +507,8 @@ function closeEditor() {
 }
 
 function cancelEditor() {
+  noteError.value = null
+  changeError.value = null
   if (isChangeMode.value && isChangeField(editorField.value) && changeFieldOriginal.value !== null) {
     const key = draftKey(editorField.value)
     if (key === 'partySize') changeDraft.value.partySize = Number(changeFieldOriginal.value)
@@ -509,6 +523,7 @@ function commitEditor() {
 
 function openCancel() {
   cancelNote.value = ''
+  actionError.value = null
   cancelOpen.value = true
 }
 
@@ -532,6 +547,7 @@ async function saveNote() {
     noteAttemptDraft.value = noteDraft.value
   }
   noteSaving.value = true
+  noteError.value = null
   try {
     const response = await dashboardApi<{ booking: DashboardBookingDetails }>(
       `/api/dashboard/bookings/${props.bookingType}/${encodeURIComponent(props.bookingId)}/notes`,
@@ -543,9 +559,8 @@ async function saveNote() {
     )
     resource.value = response
     await closeEditor()
-    toast.add({ description: 'Note saved', color: 'success' })
   } catch (cause) {
-    toast.add({ description: getErrorMessage(cause, 'Note could not be saved'), color: 'error' })
+    noteError.value = getErrorMessage(cause, 'Note could not be saved')
   } finally {
     noteSaving.value = false
   }
@@ -559,6 +574,7 @@ async function sendChangeRequest() {
     changeAttemptDraft.value = draft
   }
   changeSaving.value = true
+  changeError.value = null
   try {
     // The writer takes one shape per kind and refuses anything else, so the
     // screen says which it is sending rather than posting a reservation-shaped
@@ -583,9 +599,8 @@ async function sendChangeRequest() {
     resource.value = response
     resetChangeDraft()
     await closeEditor()
-    toast.add({ description: `Change request sent by email. Your ${noun.value} stays unchanged until the guest accepts.`, color: 'success' })
   } catch (cause) {
-    toast.add({ description: getErrorMessage(cause, 'Change request could not be sent'), color: 'error' })
+    changeError.value = getErrorMessage(cause, 'Change request could not be sent')
   } finally {
     changeSaving.value = false
   }
@@ -597,6 +612,7 @@ async function runAction(action: string) {
   const draft = JSON.stringify([booking.value.threadId, action, note])
   if (actionAttempt.value?.draft !== draft) actionAttempt.value = { draft, key: crypto.randomUUID() }
   pendingAction.value = action
+  actionError.value = null
   try {
     await dashboardApi(`/api/dashboard/sites/${booking.value.siteId}/guest-threads/${booking.value.threadId}/operations/${action}`, {
       method: 'POST',
@@ -605,18 +621,11 @@ async function runAction(action: string) {
     })
     await refreshDetails()
     actionAttempt.value = null
-      cancelOpen.value = false
-    toast.add({ description: `${statusActionLabel(action)} applied`, color: 'success' })
+    cancelOpen.value = false
   } catch (cause) {
-    toast.add({ description: getErrorMessage(cause, 'Booking could not be updated'), color: 'error' })
+    actionError.value = getErrorMessage(cause, 'Booking could not be updated')
   } finally {
     pendingAction.value = null
   }
-}
-
-function statusActionLabel(action: string) {
-  if (action === 'confirm') return 'Confirmation'
-  if (action === 'complete') return 'Completion'
-  return 'Cancellation'
 }
 </script>

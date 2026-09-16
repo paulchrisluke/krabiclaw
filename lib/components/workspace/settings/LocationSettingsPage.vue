@@ -37,6 +37,7 @@
         :show-actions="hasDetail"
         :saving="saving"
         :save-disabled="saveDisabled"
+        :error="editorError"
         :detail-title="detailTitles[editorKey]"
         :dismiss-to="settingsPath"
         @cancel="cancelEditor"
@@ -207,7 +208,7 @@ interface BusinessLocation {
 
 const route = useRoute()
 const router = useRouter()
-const toast = useToast()
+const editorError = ref<string | null>(null)
 const dashboard = useDashboardSite()
 const dashboardLocation = useDashboardLocation()
 const sitePath = computed(() => `/dashboard/${String(route.params.orgSlug)}/sites/${String(route.params.siteSlug)}`)
@@ -337,9 +338,8 @@ async function saveLocationFeatures() {
     location.value = response.location
     fillLocationFeatures(response)
     originalSignature.value = editorSignature(editorKey.value)
-    toast.add({ description: 'Availability saved', color: 'success' })
   } catch (error) {
-    toast.add({ description: getErrorMessage(error, 'Failed to save availability'), color: 'error' })
+    editorError.value = getErrorMessage(error, 'Failed to save availability')
   } finally {
     savingLocationFeatures.value = false
   }
@@ -535,6 +535,7 @@ const saveDisabled = computed(() => {
 
 
 function resetDraft() {
+  editorError.value = null
   if (!location.value) return
   fillDetailsForm(location.value)
   reservationForm.value = reservationPatchFrom(reservationConfig.value)
@@ -554,9 +555,10 @@ watch(() => route.path, (next, previous) => {
   if (previous && previous !== next) resetDraft()
 })
 
-async function patchLocation(body: Record<string, unknown>, successMessage: string) {
+async function patchLocation(body: Record<string, unknown>) {
   const requestedLocationId = locationId.value
   detailsSaving.value = true
+  editorError.value = null
   try {
     const response = await dashboardApi<{ success: true; location: BusinessLocation } & LocationCapabilitySummary>(
       `/api/dashboard/locations/${requestedLocationId}`,
@@ -568,14 +570,13 @@ async function patchLocation(body: Record<string, unknown>, successMessage: stri
     fillLocationFeatures(response)
     fillDetailsForm(response.location)
     originalSignature.value = editorSignature(editorKey.value)
-    toast.add({ description: successMessage, color: 'success' })
     if (response.location.slug !== previousSlug) {
       await dashboard.refresh()
       const detailSuffix = detailKey.value ? `/${detailKey.value}` : ''
       await router.replace(`/dashboard/${String(route.params.orgSlug)}/sites/${String(route.params.siteSlug)}/locations/${response.location.slug}/settings${detailSuffix}`)
     }
   } catch (error) {
-    toast.add({ description: getErrorMessage(error, 'Failed to save location'), color: 'error' })
+    editorError.value = getErrorMessage(error, 'Failed to save location')
   } finally {
     detailsSaving.value = false
   }
@@ -584,6 +585,7 @@ async function patchLocation(body: Record<string, unknown>, successMessage: stri
 async function saveReservationPolicy() {
   const requestedLocationId = locationId.value
   reservationSaving.value = true
+  editorError.value = null
   try {
     const response = await dashboardApi<{ success: true; config: LocationReservationConfig | null }>(
       `/api/editor/sites/${siteId}/locations/${requestedLocationId}/reservation-config`,
@@ -593,9 +595,8 @@ async function saveReservationPolicy() {
     reservationConfig.value = response.config
     reservationForm.value = reservationPatchFrom(response.config)
     originalSignature.value = editorSignature(editorKey.value)
-    toast.add({ description: 'Reservation policy saved', color: 'success' })
   } catch (error) {
-    toast.add({ description: getErrorMessage(error, 'Failed to save the reservation policy'), color: 'error' })
+    editorError.value = getErrorMessage(error, 'Failed to save the reservation policy')
   } finally {
     reservationSaving.value = false
   }
@@ -604,6 +605,7 @@ async function saveReservationPolicy() {
 async function closeReservations() {
   const requestedLocationId = locationId.value
   closingReservations.value = true
+  editorError.value = null
   try {
     await dashboardApi<{ success: true }>(
       `/api/editor/sites/${siteId}/locations/${requestedLocationId}/reservation-config`,
@@ -613,9 +615,8 @@ async function closeReservations() {
     reservationConfig.value = null
     reservationForm.value = {}
     originalSignature.value = editorSignature(editorKey.value)
-    toast.add({ description: 'This location no longer takes reservations', color: 'success' })
   } catch (error) {
-    toast.add({ description: getErrorMessage(error, 'Failed to close reservations'), color: 'error' })
+    editorError.value = getErrorMessage(error, 'Failed to close reservations')
   } finally {
     closingReservations.value = false
   }
@@ -632,11 +633,11 @@ async function saveCurrentEditor() {
     return
   }
   if (editorKey.value === 'name') {
-    await patchLocation({ title: detailsForm.title.trim() }, 'Name saved')
+    await patchLocation({ title: detailsForm.title.trim() })
     return
   }
   if (editorKey.value === 'slug') {
-    await patchLocation({ slug: detailsForm.slug.trim() }, 'Slug saved')
+    await patchLocation({ slug: detailsForm.slug.trim() })
     return
   }
   if (editorKey.value === 'address') {
@@ -646,7 +647,7 @@ async function saveCurrentEditor() {
         : null,
       city: detailsForm.city.trim() || null,
       neighborhood: detailsForm.neighborhood.trim() || null,
-    }, 'Address saved')
+    })
     return
   }
   if (editorKey.value === 'contact') {
@@ -654,15 +655,15 @@ async function saveCurrentEditor() {
       phone: detailsForm.phone.trim() || null,
       email: detailsForm.email.trim() || null,
       website_url: detailsForm.website_url.trim() || null,
-    }, 'Contact saved')
+    })
     return
   }
   if (editorKey.value === 'status') {
-    await patchLocation({ status: detailsForm.status }, 'Status saved')
+    await patchLocation({ status: detailsForm.status })
     return
   }
   if (editorKey.value === 'hours') {
-    await patchLocation({ opening_hours: parseOpeningHours(hoursForm.value.hours), special_hours: parseSpecialHours(hoursForm.value.specialHours), timezone: hoursForm.value.timezone }, 'Hours saved')
+    await patchLocation({ opening_hours: parseOpeningHours(hoursForm.value.hours), special_hours: parseSpecialHours(hoursForm.value.specialHours), timezone: hoursForm.value.timezone })
     return
   }
   if (editorKey.value === 'content') {
@@ -670,7 +671,7 @@ async function saveCurrentEditor() {
       short_description: detailsForm.short_description.trim() || null,
       description: detailsForm.description.trim() || null,
       price_level: detailsForm.price_level.trim() || null,
-    }, 'Public content saved')
+    })
     return
   }
   if (editorKey.value === 'discovery') {
@@ -678,7 +679,7 @@ async function saveCurrentEditor() {
       google_place_id: detailsForm.google_place_id.trim() || null,
       maps_url: detailsForm.maps_url.trim() || null,
       google_review_url: detailsForm.google_review_url.trim() || null,
-    }, 'Discovery settings saved')
+    })
     return
   }
   // The timezone belongs to Hours, which requires it. Editing it here as well
@@ -686,13 +687,14 @@ async function saveCurrentEditor() {
   // the location's opening times are read in that zone.
   await patchLocation({
     notification_phone: detailsForm.notification_phone.trim() || null,
-  }, 'Notifications saved')
+  })
 }
 
 async function syncGooglePlace() {
   if (!location.value?.google_place_id) return
   const requestedLocationId = locationId.value
   syncingPlace.value = true
+  editorError.value = null
   try {
     const res = await dashboardApi<{ success: boolean; reviewsUpserted: number; place: { rating: number | null; ratingCount: number | null } }>(
       '/api/integrations/google-places/sync',
@@ -713,10 +715,9 @@ async function syncGooglePlace() {
     if (res.reviewsUpserted > 0) parts.push(`${res.reviewsUpserted} new review${res.reviewsUpserted > 1 ? 's' : ''}`)
     if (res.place.rating) parts.push(`${res.place.rating} stars (${res.place.ratingCount?.toLocaleString()} reviews)`)
     placeSyncResult.value = parts.join(', ')
-    toast.add({ title: 'Synced', description: placeSyncResult.value, color: 'success' })
     await loadLocationWorkspace()
   } catch (err) {
-    toast.add({ description: getErrorMessage(err, 'Google Places sync failed'), color: 'error' })
+    editorError.value = getErrorMessage(err, 'Google Places sync failed')
   } finally {
     syncingPlace.value = false
   }

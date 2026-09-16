@@ -52,6 +52,7 @@
         :saving="moving"
         :save-disabled="!moveTargetId"
         save-label="Move"
+        :error="moveError"
         @save="moveSelected"
       >
         <UFormField :label="`Choose a ${presentation.collectionGroupLabel.toLowerCase()}`">
@@ -71,6 +72,7 @@
           </div>
         </UFormField>
       </DashboardListItemDialog>
+      <UAlert v-if="orderError" color="error" variant="soft" icon="i-lucide-circle-alert" :description="orderError" class="mt-4" />
     </template>
   </UDashboardPanel>
 </template>
@@ -90,7 +92,6 @@ import { presentationForProducts } from '~/utils/product-presentation'
 
 const route = useRoute()
 const dashboardApi = useDashboardApi()
-const toast = useToast()
 const siteId = await useDashboardSiteId()
 const dashboard = useDashboardSite()
 const dashboardLocation = useDashboardLocation()
@@ -136,6 +137,8 @@ const products = computed(() => {
 const editing = ref(false)
 const selected = ref<string[]>([])
 const orderDirty = ref(false)
+const orderError = ref<string | null>(null)
+const moveError = ref<string | null>(null)
 
 const collection = computed(() => collections.value.find(row => row.id === collectionId.value) ?? null)
 // A collection of classes is read as experiences, a collection of dishes as
@@ -192,6 +195,7 @@ async function commitOrder(): Promise<string[] | null> {
   if (!id || !orderDirty.value) return order
   orderDirty.value = false
   localOrder.value = null
+  orderError.value = null
   try {
     // The complete intended membership and order for this collection.
     await dashboardApi(`/api/editor/sites/${siteId}/collections/${collectionId.value}/products`, {
@@ -200,7 +204,7 @@ async function commitOrder(): Promise<string[] | null> {
       validate: isRecord,
     })
   } catch (error) {
-    toast.add({ description: getErrorMessage(error, 'Failed to save the new order'), color: 'error' })
+    orderError.value = getErrorMessage(error, 'Failed to save the new order')
     await load()
     return null
   }
@@ -223,6 +227,7 @@ async function moveSelected() {
   const id = locationId.value
   if (!id || !moveTargetId.value || !selected.value.length) return
   moving.value = true
+  moveError.value = null
   try {
     // Commit any pending reorder first. Closing the edit state below would
     // otherwise fire commitOrder with the pre-move list, sending IDs that no
@@ -251,7 +256,7 @@ async function moveSelected() {
     editing.value = false
     await load()
   } catch (error) {
-    toast.add({ description: getErrorMessage(error, `Failed to move ${presentation.value.itemLabelPlural.toLowerCase()}`), color: 'error' })
+    moveError.value = getErrorMessage(error, `Failed to move ${presentation.value.itemLabelPlural.toLowerCase()}`)
   } finally {
     moving.value = false
   }

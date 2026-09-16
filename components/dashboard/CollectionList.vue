@@ -31,6 +31,8 @@
       </NuxtLink>
     </template>
   </DashboardListEditor>
+  <UAlert v-if="deleteError" color="error" variant="soft" icon="i-lucide-circle-alert" :description="deleteError" />
+  <UAlert v-if="orderError" color="error" variant="soft" icon="i-lucide-circle-alert" :description="orderError" />
 
   </div>
 </template>
@@ -48,7 +50,6 @@ import { presentationForProducts } from '~/utils/product-presentation'
 
 const dashboardApi = useDashboardApi()
 const route = useRoute()
-const toast = useToast()
 const siteId = await useDashboardSiteId()
 const dashboard = useDashboardSite()
 const dashboardLocation = useDashboardLocation()
@@ -106,6 +107,8 @@ const localOrder = ref<CollectionRow[] | null>(null)
 const collections = computed<CollectionRow[]>(() => localOrder.value ?? catalogRows.value)
 const editing = ref(false)
 const removingId = ref<string | null>(null)
+const deleteError = ref<string | null>(null)
+const orderError = ref<string | null>(null)
 
 const listItems = computed(() => collections.value.map(row => ({ id: row.id, title: row.name, row })))
 
@@ -131,11 +134,12 @@ async function removeCollection(item: { row: CollectionRow }) {
     : `Delete "${item.row.name}"?`
   if (!confirm(warning)) return
   removingId.value = item.row.id
+  deleteError.value = null
   try {
     await dashboardApi(`/api/editor/sites/${siteId}/collections/${item.row.id}`, { method: 'DELETE', validate: isRecord })
     await load()
   } catch (error) {
-    toast.add({ description: getErrorMessage(error, `Failed to delete ${presentation.value.collectionGroupLabel.toLowerCase()}`), color: 'error' })
+    deleteError.value = getErrorMessage(error, `Failed to delete ${presentation.value.collectionGroupLabel.toLowerCase()}`)
   } finally {
     removingId.value = null
   }
@@ -165,6 +169,7 @@ async function commitOrder() {
   orderDirty.value = false
   const order = collections.value.map(row => row.id)
   localOrder.value = null
+  orderError.value = null
   try {
     await dashboardApi(`/api/editor/sites/${siteId}/collections/order`, {
       method: 'PUT',
@@ -172,7 +177,7 @@ async function commitOrder() {
       validate: isRecord,
     })
   } catch (error) {
-    toast.add({ description: getErrorMessage(error, 'Failed to save the new order'), color: 'error' })
+    orderError.value = getErrorMessage(error, 'Failed to save the new order')
     await load()
   }
 }

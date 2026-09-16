@@ -139,7 +139,6 @@ import {
 const props = defineProps<{ siteId: string; pageId: string }>()
 
 const route = useRoute()
-const toast = useToast()
 const sectionsPath = computed(() => `/dashboard/${String(route.params.orgSlug)}/sites/${String(route.params.siteSlug)}/pages/${props.pageId}/sections`)
 /** The path segment naming this block — its id, or `new` while it is being added. */
 const blockId = computed(() => {
@@ -302,7 +301,6 @@ async function create() {
     const created = page.blocks.find(candidate => candidate.id === pending.id)
     if (!created) throw new Error('The section was not created.')
     newBlock.value = null
-    toast.add({ description: 'Section created', color: 'success' })
     await navigateTo(`${sectionsPath.value}/${created.id}`)
   } catch (cause) {
     // The page was not written, so the draft must not keep pretending it was.
@@ -318,7 +316,6 @@ async function save() {
   errorMessage.value = ''
   try {
     await commit()
-    toast.add({ description: `${openSection.value?.label ?? 'Section'} saved`, color: 'success' })
     await navigateTo(blockPath.value)
   } catch (cause) {
     errorMessage.value = getErrorMessage(cause, 'Failed to save this page')

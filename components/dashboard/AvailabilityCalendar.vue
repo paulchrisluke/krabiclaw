@@ -180,7 +180,6 @@ type MonthBlock =
   | { kind: 'error'; key: string; cause: unknown }
 
 const dashboardApi = useDashboardApi()
-const toast = useToast()
 const monthBlocks = ref<MonthBlock[]>([])
 const requestGeneration = ref(0)
 const mounted = ref(false)
@@ -449,7 +448,6 @@ async function saveSelection(): Promise<void> {
     const changedMonths = [...new Set(changes.map(change => change.override_date.slice(0, 7)))]
     await Promise.all(changedMonths.map(key => loadMonth(key)))
     panelOpen.value = false
-    toast.add({ description: 'Availability updated.', color: 'success' })
   } catch (cause) {
     saveError.value = getErrorMessage(cause, 'Availability update failed')
   } finally {

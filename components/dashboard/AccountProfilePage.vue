@@ -20,6 +20,7 @@
         :saving="saving"
         :save-disabled="saveDisabled"
         :save-label="saveLabel"
+        :error="detailError"
         @cancel="closeDetail"
         @save="saveDetail"
       >
@@ -142,7 +143,6 @@ import { authClient } from '~/lib/auth-client'
 import { dashboardOrganizationParentKey } from '~/lib/components/workspace/dashboard/dashboardScopeHeaderContext'
 
 
-const toast = useToast()
 const route = useRoute()
 
 // The frame comes first, and before any `await`: `useEditorFrame` provides and
@@ -205,7 +205,6 @@ async function pickPhoto(event: Event) {
       validate: (value): value is { image: string } => isRecord(value) && typeof value.image === 'string',
     })
     photoPreview.value = result.image
-    toast.add({ title: 'Photo updated', icon: 'i-lucide-circle-check', color: 'success' })
   } catch (cause) {
     photoError.value = cause instanceof Error ? cause.message : 'Upload failed. Please try again.'
     return
@@ -319,6 +318,16 @@ async function saveDetail() {
   if (openKey.value === 'delete') return void await (deletionScheduledAt.value ? keepAccount() : confirmDeleteAccount())
 }
 
+const nameError = ref<string | null>(null)
+const phoneError = ref<string | null>(null)
+
+const detailError = computed(() => {
+  if (openKey.value === 'name') return nameError.value
+  if (openKey.value === 'phone') return phoneError.value
+  if (openKey.value === 'delete') return deleteError.value
+  return null
+})
+
 function closeDetail() {
   cancelEdit()
   void navigateTo(profilePath.value)
@@ -329,6 +338,8 @@ function cancelEdit() {
   phoneInput.value = sessionData.value?.user?.phoneNumber || ''
   nameTouched.value = false
   phoneTouched.value = false
+  nameError.value = null
+  phoneError.value = null
   deleteConfirmText.value = ''
   deleteError.value = ''
 }
@@ -336,14 +347,14 @@ function cancelEdit() {
 async function saveName() {
   if (!nameDirty.value) return false
   nameSaving.value = true
+  nameError.value = null
   try {
     await authClient.updateUser({ name: nameInput.value.trim() })
     await refreshSession()
-    toast.add({ title: 'Name updated', icon: 'i-lucide-circle-check', color: 'success' })
     return true
   } catch (_err) {
     const msg = _err instanceof Error ? _err.message : String(_err)
-    toast.add({ title: 'Update failed', description: msg, color: 'error' })
+    nameError.value = msg
     return false
   } finally {
     nameSaving.value = false
@@ -378,6 +389,7 @@ const verifyError = ref('')
 async function requestPhoneVerify() {
   if (phoneSaving.value || !phoneDirty.value || !phoneInput.value.trim()) return
   phoneSaving.value = true
+  phoneError.value = null
   try {
     const res = await authClient.phoneNumber.sendOtp({ phoneNumber: phoneInput.value.trim() })
     if (res.error) throw new Error(res.error.message || 'Failed to send OTP')
@@ -387,7 +399,7 @@ async function requestPhoneVerify() {
     verifyModalOpen.value = true
   } catch (_err) {
     const msg = _err instanceof Error ? _err.message : String(_err)
-    toast.add({ title: 'Verification failed', description: msg, color: 'error' })
+    phoneError.value = msg
   } finally {
     phoneSaving.value = false
   }
@@ -407,7 +419,6 @@ async function verifyPhone() {
     await refreshSession()
     verifyModalOpen.value = false
     await navigateTo(profilePath.value)
-    toast.add({ title: 'Phone verified', icon: 'i-lucide-circle-check', color: 'success' })
   } catch (_err) {
     verifyError.value = _err instanceof Error ? _err.message : String(_err)
   } finally {
@@ -478,14 +489,6 @@ async function confirmDeleteAccount() {
       if (typeof res.grace_days === 'number') graceDays.value = res.grace_days
       await refreshSession()
       deleteConfirmText.value = ''
-      toast.add({
-        title: 'Deletion scheduled',
-        description: res.scheduled_at
-          ? `Everything is deleted on ${new Date(res.scheduled_at).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}. Cancel here any time before then.`
-          : undefined,
-        icon: 'i-lucide-clock',
-        color: 'warning',
-      })
     } else {
       deleteError.value = 'Scheduling the deletion failed. Please try again.'
     }
@@ -512,7 +515,6 @@ async function keepAccount() {
     })
     if (res?.success !== true) throw new Error('Cancelling the deletion failed. Please try again.')
     await refreshSession()
-    toast.add({ title: 'Deletion cancelled', icon: 'i-lucide-circle-check', color: 'success' })
   } catch (_err) {
     const body = getDeleteErrorBody(_err instanceof Error ? _err : new Error(String(_err)))
     deleteError.value = body?.message ?? 'Cancelling the deletion failed. Please try again.'

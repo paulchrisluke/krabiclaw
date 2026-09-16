@@ -9,7 +9,6 @@ import {
 } from '~/server/utils/dashboard-context'
 import { isOrganizationWideRole, listUserOrganizationTeamIds, resolveDashboardSiteAccess } from '~/server/utils/member-access'
 import { recordRequestPhase } from '~/server/utils/request-metrics'
-import { getQuery } from 'nitro/h3'
 
 export async function loadDashboardContext(
   event: H3Event,

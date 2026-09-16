@@ -112,9 +112,6 @@ import type { DashboardScopeHeaderModel } from '~/lib/components/workspace/dashb
 import { dashboardOrganizationParentKey, dashboardScopeHeaderModelKey } from '~/lib/components/workspace/dashboard/dashboardScopeHeaderContext'
 import { authClient } from '~/lib/auth-client'
 import { useAnalytics } from '~/composables/useAnalytics'
-import { parseCmsFeatureOverrideDelta, resolveCmsCapabilities } from '~/config/cms-registry'
-import { resolvePublicTemplate } from '~/utils/template-registry'
-import { normalizeVertical, type SiteVertical } from '~/utils/vertical-copy'
 import '~/assets/css/dashboard.css'
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -238,7 +235,6 @@ const site = dashboard.site
 const sites = dashboard.sites
 const activeSiteId = dashboard.siteId
 const canManageOrganization = computed(() => ['owner', 'admin'].includes(organization.value?.role ?? ''))
-const dashboardLocation = useDashboardLocation()
 
 const organizations = computed<readonly AuthOrganization[]>(() => unref(organizationsState)?.data ?? [])
 const activeOrganizationId = computed(() => {
@@ -283,30 +279,6 @@ const isAccountRoute = computed(() => routeName.value.startsWith('dashboard-acco
 // the onboarding wizard, which loads its own via a dedicated endpoint. Same meaning
 // as in layouts/editor.vue.
 const skipDashboardContext = computed(() => route.meta.skipDashboardContext === true)
-
-const vertical = computed(() => {
-  const raw = site.value?.vertical
-  if (!raw) return null
-  return normalizeVertical(raw) as SiteVertical
-})
-const templateSlug = computed(() => vertical.value ? resolvePublicTemplate({ themeId: site.value?.theme_id, vertical: vertical.value }).slug : null)
-// The composable already resolves the route's slug to its record; this was the
-// same find written out a second time.
-const currentLocationRow = dashboardLocation.currentLocation
-// The resolved definition always reflects BOTH the site's own override and, once drilled into a
-// location, that location's override too — a single resolveCmsCapabilities call feeds nav at
-// every scope rather than each scope re-deriving its own partial capability view.
-const capabilities = computed(() => {
-  if (!vertical.value || !templateSlug.value) return null
-  try {
-    return resolveCmsCapabilities(vertical.value, templateSlug.value, {
-      site: parseCmsFeatureOverrideDelta(site.value?.feature_overrides),
-      location: routeLocationSlug.value ? parseCmsFeatureOverrideDelta(currentLocationRow.value?.feature_overrides) : undefined,
-    })
-  } catch {
-    return null
-  }
-})
 
 const organizationLabel = computed(() => organization.value?.name ?? 'Organization')
 
