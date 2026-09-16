@@ -11,6 +11,7 @@
       <UButton icon="i-lucide-x" color="neutral" variant="ghost" size="xs" square aria-label="Cancel adding image" :disabled="galleryBusy" @click="pendingNewGallerySlot = false" />
     </div>
     <UButton icon="i-lucide-plus" color="neutral" variant="soft" size="sm" :disabled="pendingNewGallerySlot || galleryBusy" @click="pendingNewGallerySlot = true">Add image</UButton>
+    <UAlert v-if="galleryError" color="error" variant="soft" icon="i-lucide-circle-alert" :description="galleryError" />
   </div>
 </template>
 
@@ -31,7 +32,6 @@ import { useTenantPageDraft, useTenantPageBlock } from '~/composables/useTenantP
 const props = defineProps<{ siteId: string; pageId: string; blockId: string }>()
 
 const dashboardApi = useDashboardApi()
-const toast = useToast()
 const { savedBlockIds } = useTenantPageDraft(props.siteId, props.pageId)
 
 const block = useTenantPageBlock(props.siteId, props.pageId, () => props.blockId)
@@ -54,6 +54,8 @@ function setMediaAt(slot: string, index: number, assetId: string | null | undefi
 
 const pendingNewGallerySlot = ref(false)
 const galleryBusy = ref(false)
+/** A failed placement write says so here, beside the images it did not change. */
+const galleryError = ref<string | null>(null)
 const galleryPlacement = computed(() => ({ owner_type: 'content_block', owner_id: block.value.id, slot: 'gallery' }))
 
 interface GalleryMediaItem {
@@ -96,6 +98,7 @@ async function commitGalleryAsset(index: number | 'new', assetId: string | null 
 
   const current = mediaForSlot('gallery')
   galleryBusy.value = true
+  galleryError.value = null
   try {
     if (index === 'new') {
       if (!assetId) { pendingNewGallerySlot.value = false; return }
@@ -155,7 +158,7 @@ async function commitGalleryAsset(index: number | 'new', assetId: string | null 
     })
     applyCanonicalGalleryMedia(removeResult.media)
   } catch (error) {
-    toast.add({ description: error instanceof Error ? error.message : 'Failed to update gallery image', color: 'error' })
+    galleryError.value = error instanceof Error ? error.message : 'Failed to update gallery image'
   } finally {
     galleryBusy.value = false
   }

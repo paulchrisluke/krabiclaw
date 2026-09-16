@@ -1,0 +1,17 @@
+/*
+  The platform's application routes: sign-in, sign-up, password reset, unsubscribe
+  and /help. They render real Nuxt UI components — UAlert, UButton, UInput,
+  UFormField, UCard, USeparator, UAvatar, and the chat primitives — so this sheet
+  feeds Nuxt UI's own theme to Tailwind's scanner the way assets/css/dashboard.css
+  does.
+
+  Marketing, docs and blog keep assets/css/platform-entry.css, which scans app
+  files only. That split is the point: `source(none)` in base.css exists so the
+  public cold path ships the utilities a surface actually uses, and importing all
+  of Nuxt UI onto the marketing sheet would spend exactly that budget. A surface
+  that renders Nuxt UI imports this one; a surface that does not, does not.
+*/
+@import "./platform-entry.css";
+@source "../../components/auth";
+@source "../../components/conversation";
+@import "@nuxt/ui";

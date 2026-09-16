@@ -2,7 +2,6 @@ import { publishGuestInboxThreadEvent } from '~/server/cloudflare/guest-inbox-ev
 import { getGuestRequest, requestSummary } from '~/server/domain/requests'
 import { appendEntry } from '~/server/domain/guest-threads/entries'
 import { updateThreadProjectionIfLatestEntry } from '~/server/domain/guest-threads/repository'
-import { nextConversationState } from '~/server/domain/guest-threads/state-machine'
 import type { CloudflareEnv } from '~/server/utils/auth'
 import { notifyGuestThreadReply } from '~/server/utils/notifications'
 import { getSubmissionOrgSite, verifyReplyToken, type SubmissionType } from '~/server/utils/submission-messages'
@@ -39,11 +38,7 @@ export async function receiveGuestEmail(env: CloudflareEnv, email: InboundGuestE
     dedupeKey: `email:${email.messageId}`,
   })
 
-  const conversationState = nextConversationState(
-    thread.conversation_state,
-    { type: 'inbound_guest_message' },
-  )
-  await updateThreadProjectionIfLatestEntry(db, thread.id, entry.id, { conversationState })
+  await updateThreadProjectionIfLatestEntry(db, thread.id, entry.id, { conversationState: 'needs_attention' })
 
   try {
     const source = thread

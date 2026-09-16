@@ -145,7 +145,6 @@ const props = defineProps<{
 const emit = defineEmits<{ saved: [locale: string] }>()
 const dashboardApi = useDashboardApi()
 const route = useRoute()
-const toast = useToast()
 const open = defineModel<boolean>('open', { default: false })
 const locale = ref('')
 const sourceLocale = ref('')
@@ -335,7 +334,6 @@ async function save(): Promise<void> {
         },
       )
     }
-    toast.add({ description: 'Translation saved', color: 'success' })
     emit('saved', requestedLocale)
     markDraftClean()
     open.value = false

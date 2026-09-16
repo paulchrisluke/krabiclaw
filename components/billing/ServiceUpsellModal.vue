@@ -57,6 +57,14 @@
 
         <!-- CTAs -->
         <div class="flex flex-col gap-2">
+          <UAlert
+            v-if="error"
+            color="error"
+            variant="soft"
+            icon="i-lucide-circle-alert"
+            :description="error"
+            class="mb-2"
+          />
           <UButton
             color="primary"
             block
@@ -93,8 +101,13 @@ const JULIA_PHOTO_URL = 'https://res.cloudinary.com/pcl-labs/image/upload/v17147
 
 const { isOpen, type, close } = useServiceUpsell()
 const { startOrganizationCheckout } = useOrganizationSubscription()
-const toast = useToast()
+const error = ref<string | null>(null)
 const loading = ref(false)
+
+watch(isOpen, (open) => {
+  if (!open) error.value = null
+})
+
 const dashboard = useDashboardSite()
 const isExperience = computed(() => dashboard.site.value?.vertical === 'experience')
 
@@ -134,16 +147,17 @@ const content = computed<UpsellContent>(() => buildContentMap(isExperience.value
 
 async function handleCta() {
   if (!type.value) return
+  error.value = null
   loading.value = true
   try {
     if (type.value !== NEW_SALE_PLAN_ID) return
     const siteId = dashboard.siteId.value
     if (!siteId) throw new Error('Choose a site before starting checkout')
-    close()
     await startOrganizationCheckout(siteId, type.value)
+    close()
   } catch (err) {
     console.error('Checkout error:', err)
-    toast.add({ title: 'Something went wrong', description: 'Please visit our help page instead.', color: 'error' })
+    error.value = 'Something went wrong. Please visit our help page.'
   } finally {
     loading.value = false
   }

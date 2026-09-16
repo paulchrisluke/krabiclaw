@@ -66,7 +66,7 @@ export async function loadDashboardContext(
 
   const resourcesStartedAt = performance.now()
   const [locations, siteAccess] = await Promise.all([
-    listDashboardLocations(db, organization.id, site.id, principal),
+    listDashboardLocations(db, organization.id, site.id, principal, false),
     resolveDashboardSiteAccess(db, {
       ...principal,
       organizationId: organization.id,
@@ -83,3 +83,4 @@ export async function loadDashboardContext(
     siteAccess,
   }
 }
+

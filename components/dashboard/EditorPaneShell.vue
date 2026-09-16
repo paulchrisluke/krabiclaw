@@ -17,12 +17,21 @@
           class="h-full min-h-0 flex-1 flex-col overflow-hidden border-default lg:flex lg:border-r"
           :class="hasDetail || showDesktopDetail ? 'flex' : 'flex lg:col-span-2 lg:border-r-0'"
         >
-          <div class="min-h-0 flex-1 overflow-y-auto px-5 pb-24 pt-6 sm:px-8 sm:pt-8">
+          <!--
+            An editor's index is a column of fields and reads best measured and
+            inset. A list panel is not: its rows run to the edge of the pane and
+            its header stays put while they scroll, so `flushIndex` hands the
+            whole section over and lets the list own its own spacing.
+          -->
+          <div v-if="flushIndex" class="flex min-h-0 flex-1 flex-col overflow-hidden">
+            <slot name="index" />
+          </div>
+          <div v-else class="min-h-0 flex-1 overflow-y-auto">
             <div class="mx-auto w-full" :class="hasDetail || showDesktopDetail ? 'max-w-xl' : 'max-w-3xl'">
               <slot name="index" />
             </div>
           </div>
-          <footer v-if="$slots['index-footer']" class="shrink-0 border-t border-default bg-default px-5 py-4 sm:px-8">
+          <footer v-if="$slots['index-footer']" class="shrink-0 border-t border-default bg-default">
             <div class="mx-auto flex w-full items-center justify-between gap-4" :class="hasDetail ? 'max-w-xl' : 'max-w-3xl'">
               <slot name="index-footer" />
             </div>
@@ -74,7 +83,10 @@
             <span class="size-8" />
           </header>
 
-          <div class="min-h-0 flex-1 overflow-y-auto px-5 py-8 sm:px-8 lg:px-10 lg:py-10">
+          <div v-if="flushDetail" class="flex min-h-0 flex-1 flex-col overflow-hidden">
+            <slot name="detail" />
+          </div>
+          <div v-else class="min-h-0 flex-1 overflow-y-auto">
             <div class="mx-auto w-full" :class="wideDetail ? 'max-w-5xl' : 'max-w-2xl'">
               <h2
                 v-if="detailTitle && !hideDetailHeading"
@@ -82,13 +94,21 @@
               >
                 {{ detailTitle }}
               </h2>
+              <UAlert
+                v-if="error"
+                color="error"
+                variant="soft"
+                icon="i-lucide-circle-alert"
+                :description="error"
+                class="mb-6"
+              />
               <slot name="detail" />
             </div>
           </div>
 
           <footer
             v-if="showActions"
-            class="shrink-0 border-t border-default bg-default px-5 pb-4 pt-4 sm:px-8 lg:px-10"
+            class="shrink-0 border-t border-default bg-default"
           >
             <div class="mx-auto flex w-full items-center justify-between gap-4" :class="wideDetail ? 'max-w-5xl' : 'max-w-2xl'">
               <UButton color="neutral" variant="ghost" label="Cancel" @click="$emit('cancel')" />
@@ -109,6 +129,7 @@ defineProps<{
   saving?: boolean
   saveDisabled?: boolean
   saveLabel?: string
+  error?: string | null
   wideDetail?: boolean
   /** Names the open node. Centred in the sheet's bar, a heading in the pane. */
   detailTitle?: string
@@ -120,6 +141,10 @@ defineProps<{
    * the detail covers the index and nothing else names what is open.
    */
   hideDetailHeading?: boolean
+  /** The index is a list panel, not a form: it owns the whole column and its own padding. */
+  flushIndex?: boolean
+  /** Same for the detail: a conversation fills its column rather than sitting in it. */
+  flushDetail?: boolean
 }>()
 
 defineEmits<{

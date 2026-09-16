@@ -1,14 +1,11 @@
 <template>
-  <UDashboardPanel id="booking-details" :ui="{ body: 'min-h-0 gap-0! overflow-hidden! p-0! sm:p-0!' }">
-    <template #header>
-      <UDashboardNavbar :title="isChangeMode && noun ? `Change ${noun}` : pageTitle" :toggle="false">
-        <template #leading>
-          <DashboardNavbarLeading :to="isChangeMode ? bookingPath : todayPath" :label="isChangeMode && noun ? capitalize(noun) : 'Today'" />
-        </template>
-      </UDashboardNavbar>
-    </template>
-
-    <template #body>
+  <!--
+    One record, two places it is opened from: its own screen under Today, and
+    the detail column of the guest thread it belongs to. Neither chrome belongs
+    here — the route that mounted this drew it — so this is the record body and
+    the editor chain that hangs off `basePath`.
+  -->
+  <div class="flex min-h-0 flex-1 flex-col">
       <div v-if="pending && !booking" class="space-y-4 p-5 sm:p-8">
         <USkeleton v-for="index in 4" :key="index" class="h-40 rounded-2xl" />
       </div>
@@ -21,13 +18,22 @@
         :detail-title="detailTitle"
         :dismiss-to="isChangeMode ? `${bookingPath}/change` : bookingPath"
         :show-actions="editorKey === 'notes' || Boolean(isChangeMode && editorField)"
-        :saving="noteSaving"
+        :saving="noteSaving || changeSaving"
         :save-label="isChangeMode && editorField ? 'Done' : undefined"
         :save-disabled="editorKey === 'notes' && (!noteDraft.trim() || noteDraft === selectedNote?.body)"
+        :error="editorKey === 'notes' ? noteError : changeError"
         @cancel="cancelEditor"
         @save="commitEditor"
       >
         <template #index>
+          <UAlert
+            v-if="actionError"
+            class="mb-5"
+            color="error"
+            variant="soft"
+            icon="i-lucide-circle-alert"
+            :description="actionError"
+          />
           <UAlert
             v-if="realtime.status.value === 'failed'"
             class="mb-5"
@@ -48,151 +54,181 @@
             their own — a per-field commit bar would promise a write that never
             happens.
           -->
-          <div v-if="booking && isChangeMode" class="space-y-8">
-            <header>
-              <h1 class="text-2xl font-semibold text-highlighted">What do you want to change?</h1>
-              <p class="mt-4 text-base text-muted">After making your desired changes, you can send a request to your guest, {{ firstName(booking.guestName) }}, to confirm the alterations to your {{ noun }}.</p>
-            </header>
-            <UCard variant="subtle" class="rounded-2xl">
-              <div class="flex items-center gap-4">
-                <img v-if="changeLocation?.imageUrl" :src="changeLocation.imageUrl" alt="" class="size-16 rounded-xl object-cover">
-                <p class="min-w-0 flex-1 font-semibold text-highlighted">{{ changeLocation?.title }}</p>
-                <UButton v-if="props.bookingType === 'reservation'" :to="`${bookingPath}/change/location`" icon="i-lucide-pencil" aria-label="Change location" color="neutral" variant="soft" square />
-              </div>
-            </UCard>
-            <section>
-              <h2 class="text-xl font-semibold text-highlighted">{{ capitalize(noun) }} details</h2>
-              <div v-for="field in changeFields" :key="field.key" class="flex items-center justify-between gap-4 border-b border-default py-6">
-                <div class="min-w-0">
-                  <h3 class="font-semibold text-highlighted">{{ field.label }}</h3>
-                  <p class="mt-1 text-base text-muted">{{ field.summary }}</p>
-                </div>
-                <UButton :to="`${bookingPath}/change/${field.key}`" label="Change" :aria-label="`Change ${field.label.toLowerCase()}`" color="neutral" variant="soft" />
-              </div>
-            </section>
-          </div>
-          <template v-else-if="booking">
-            <section class="mb-6 flex flex-col items-center text-center">
-              <UAvatar
-                :src="booking.guestImageUrl || undefined"
-                :alt="booking.guestName"
-                class="size-20"
-                :ui="{ icon: 'size-10' }"
+          <div v-if="booking && isChangeMode" class="mx-auto w-full max-w-md">
+            <h1 class="text-[32px] font-semibold leading-tight text-highlighted">What do you want to change?</h1>
+            <p class="mt-2 text-base text-muted">
+              {{ firstName(booking.guestName) }} confirms the change before anything moves.
+            </p>
+
+            <div class="mt-6 flex items-center gap-4 border-t border-default pt-6">
+              <img v-if="changeLocation?.imageUrl" :src="changeLocation.imageUrl" alt="" class="size-14 shrink-0 rounded-xl object-cover">
+              <p class="min-w-0 flex-1 text-base font-medium text-highlighted">{{ changeLocation?.title }}</p>
+              <UButton
+                v-if="props.bookingType === 'reservation'"
+                :to="`${bookingPath}/change/location`"
+                icon="i-lucide-pencil"
+                aria-label="Change location"
+                color="neutral"
+                variant="soft"
+                square
+                class="shrink-0 rounded-full"
               />
-              <h1 class="mt-5 text-2xl font-semibold text-highlighted">{{ booking.guestName }}</h1>
-              <p class="mt-2 text-base text-muted">
-                {{ formattedDate }} <span aria-hidden="true">·</span> {{ guestCountLabel }}
-              </p>
-              <p class="mt-1 text-base text-muted">{{ booking.resourceTitle }}</p>
-            </section>
+            </div>
 
-            <div class="space-y-4">
-              <UCard variant="subtle" class="rounded-2xl">
-                <div class="grid grid-cols-2 divide-x divide-default">
-                  <div class="pr-5">
-                    <p class="font-semibold text-highlighted">Date</p>
-                    <p class="mt-1 text-sm text-muted">{{ formattedDate }}</p>
-                  </div>
-                  <div class="pl-5 text-right">
-                    <p class="font-semibold text-highlighted">Time</p>
-                    <p class="mt-1 text-sm text-muted">{{ formattedTime }}</p>
-                  </div>
-                </div>
-                <div class="mt-6 flex items-center gap-4 border-t border-default pt-5">
-                  <div class="flex size-12 shrink-0 items-center justify-center rounded-xl bg-muted">
-                    <UIcon name="i-lucide-calendar-check" class="size-5 text-muted" />
-                  </div>
-                  <div class="min-w-0">
-                    <p class="font-medium text-highlighted">{{ statusLabel }}</p>
-                  </div>
-                </div>
-              </UCard>
-
-              <UCard variant="subtle" class="rounded-2xl">
-                <h2 class="font-semibold text-highlighted">Your notes</h2>
-                <p class="mt-1 text-sm text-muted">Only your team can see these notes.</p>
-                <div v-if="booking.notes.length" class="mt-4 divide-y divide-default">
-                  <NuxtLink v-for="note in booking.notes" :key="note.id" :to="`${bookingPath}/notes/${note.id}`" class="block py-3" :aria-label="`Edit note: ${note.body}`">
-                    <p class="whitespace-pre-wrap text-sm text-highlighted">{{ note.body }}</p>
-                    <p class="mt-1 text-xs text-dimmed">{{ formatCreatedAt(note.createdAt) }}</p>
-                  </NuxtLink>
-                </div>
-                <!--
-                  A row that reads like the field it opens. The heading-plus-icon
-                  it replaced put the only affordance in a corner, which is a
-                  small target and a weak invitation for the empty state.
-                -->
-                <NuxtLink :to="`${bookingPath}/notes`" class="mt-4 flex items-center gap-3 py-1 text-muted hover:text-highlighted">
-                  <span class="flex size-9 shrink-0 items-center justify-center rounded-full bg-elevated">
-                    <UIcon name="i-lucide-plus" class="size-4" />
-                  </span>
-                  <span class="text-sm">Add a note to yourself</span>
-                </NuxtLink>
-              </UCard>
-
-              <UCard variant="subtle" class="rounded-2xl">
-                <h2 class="font-semibold text-highlighted">Guests</h2>
-                <NuxtLink :to="`${bookingPath}/guest`" class="mt-5 flex items-center gap-4">
-                  <UAvatar :src="booking.guestImageUrl || undefined" alt="" size="3xl" />
-                  <div class="min-w-0">
-                    <p class="font-medium text-highlighted">{{ booking.guestName }}</p>
-                    <p v-if="booking.partySize > 1" class="mt-0.5 text-sm text-muted">Plus {{ booking.partySize - 1 }} more</p>
-                  </div>
-                  <UIcon name="i-lucide-chevron-right" class="ml-auto size-5 shrink-0 text-muted" />
-                </NuxtLink>
-                <div v-if="booking.requests" class="mt-5 border-t border-default pt-5">
-                  <h3 class="font-semibold text-highlighted">Guest requests</h3>
-                  <p class="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-muted">{{ booking.requests }}</p>
-                </div>
-              </UCard>
-
-              <UButton color="neutral" variant="subtle" block class="justify-start text-left" trailing-icon="i-lucide-chevron-right" :ui="{ trailingIcon: 'ms-auto shrink-0' }" @click="policyOpen = true">
-                <span class="min-w-0 py-2">
-                  <span class="block font-semibold">Cancellation policy</span>
-                  <span class="mt-1 block text-sm font-normal text-muted">{{ cancellationSummary }}</span>
+            <div class="mt-2 border-t border-default">
+              <NuxtLink
+                v-for="field in changeFields"
+                :key="field.key"
+                :to="`${bookingPath}/change/${field.key}`"
+                class="flex items-center gap-4 border-b border-default py-4"
+                :aria-label="`Change ${field.label.toLowerCase()}`"
+              >
+                <span class="min-w-0 flex-1">
+                  <span class="block text-base font-medium text-highlighted">{{ field.label }}</span>
+                  <span class="block text-sm text-muted">{{ field.summary }}</span>
                 </span>
-              </UButton>
+                <UIcon name="i-lucide-chevron-right" class="size-5 shrink-0 text-muted" />
+              </NuxtLink>
+            </div>
+          </div>
+          <!--
+            Measured on Airbnb's reservation panel, which has no cards at all:
+            one picture, a 32px/600 title, full-width 48px actions at 12px
+            radius, a two-column label grid, then 74px disclosure rows. The
+            ringed rounded-2xl panels this replaces were ours, not theirs.
+          -->
+          <!--
+            One measure wherever it is mounted. Airbnb's reservation panel is a
+            375px column; letting this run to a full-width screen turned the
+            picture into a billboard and pushed the actions below the fold.
+          -->
+          <template v-else-if="booking">
+            <div class="mx-auto w-full max-w-md">
+            <img
+              v-if="bookingImageUrl"
+              :src="bookingImageUrl"
+              alt=""
+              class="mb-6 aspect-[4/3] w-full rounded-xl object-cover"
+            >
 
-              <UButton :label="`Manage ${noun}`" icon="i-lucide-pencil" trailing-icon="i-lucide-chevron-right" color="neutral" variant="subtle" size="lg" block class="justify-start" :ui="{ trailingIcon: 'ms-auto' }" @click="manageOpen = true" />
+            <h1 class="text-[32px] font-semibold leading-tight text-highlighted">{{ partyTitle }}</h1>
+            <p class="mt-1 text-base text-muted">{{ formattedDate }} <span aria-hidden="true">·</span> {{ booking.resourceTitle }}</p>
 
-              <UCard variant="subtle" class="rounded-2xl">
-                <div class="flex items-start gap-4">
-                  <UIcon name="i-lucide-calendar-days" class="mt-0.5 size-5 shrink-0 text-muted" />
-                  <div>
-                    <p class="font-medium text-highlighted">{{ capitalize(noun) }} made</p>
-                    <p class="mt-1 text-sm text-muted">{{ formatCreatedAt(booking.createdAt) }}</p>
-                  </div>
-                </div>
-              </UCard>
+            <div class="mt-6 space-y-2">
+              <UButton
+                :label="`Change ${noun}`"
+                color="neutral"
+                variant="soft"
+                block
+                class="h-12 justify-center rounded-xl text-base font-medium"
+                :to="`${bookingPath}/change`"
+                @click="beginChange"
+              />
+              <UButton
+                v-if="messageTo"
+                label="Message guest"
+                color="neutral"
+                variant="soft"
+                block
+                class="h-12 justify-center rounded-xl text-base font-medium"
+                :to="messageTo"
+              />
+            </div>
+
+            <div class="mt-8 grid grid-cols-2 gap-4 border-t border-default pt-6">
+              <div>
+                <p class="text-base font-semibold text-highlighted">Date</p>
+                <p class="mt-1 text-base text-muted">{{ formattedDate }}</p>
+              </div>
+              <div>
+                <p class="text-base font-semibold text-highlighted">Time</p>
+                <p class="mt-1 text-base text-muted">{{ formattedTime }}</p>
+              </div>
+            </div>
+
+            <div class="mt-6 border-t border-default pt-2">
+              <NuxtLink :to="`${bookingPath}/guest`" class="flex items-center gap-4 py-4">
+                <UAvatar :src="booking.guestImageUrl || undefined" :alt="booking.guestName" size="md" class="shrink-0" />
+                <span class="min-w-0 flex-1">
+                  <span class="block text-base font-medium text-highlighted">{{ booking.guestName }}</span>
+                  <span class="block text-sm text-muted">{{ guestCountLabel }}</span>
+                </span>
+                <UIcon name="i-lucide-chevron-right" class="size-5 shrink-0 text-muted" />
+              </NuxtLink>
+
+              <div v-if="booking.requests" class="border-t border-default py-4">
+                <p class="text-base font-medium text-highlighted">Guest requests</p>
+                <p class="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-muted">{{ booking.requests }}</p>
+              </div>
+
+              <button type="button" class="flex w-full items-center gap-4 border-t border-default py-4 text-left" @click="policyOpen = true">
+                <span class="min-w-0 flex-1">
+                  <span class="block text-base font-medium text-highlighted">Cancellation policy</span>
+                  <span class="block text-sm text-muted">{{ cancellationSummary }}</span>
+                </span>
+                <UIcon name="i-lucide-chevron-right" class="size-5 shrink-0 text-muted" />
+              </button>
+
+              <NuxtLink :to="`${bookingPath}/notes`" class="flex items-center gap-4 border-t border-default py-4">
+                <span class="min-w-0 flex-1">
+                  <span class="block text-base font-medium text-highlighted">Your notes</span>
+                  <span class="block text-sm text-muted">{{ notesSummary }}</span>
+                </span>
+                <UIcon name="i-lucide-chevron-right" class="size-5 shrink-0 text-muted" />
+              </NuxtLink>
+
+              <div v-if="booking.notes.length" class="border-t border-default py-2">
+                <NuxtLink
+                  v-for="note in booking.notes"
+                  :key="note.id"
+                  :to="`${bookingPath}/notes/${note.id}`"
+                  class="block py-2"
+                  :aria-label="`Edit note: ${note.body}`"
+                >
+                  <span class="block whitespace-pre-wrap text-sm text-highlighted">{{ note.body }}</span>
+                  <span class="block text-xs text-dimmed">{{ formatCreatedAt(note.createdAt) }}</span>
+                </NuxtLink>
+              </div>
+
+              <div class="flex items-center gap-4 border-t border-default py-4">
+                <span class="min-w-0 flex-1">
+                  <span class="block text-base font-medium text-highlighted">{{ capitalize(noun) }} made</span>
+                  <span class="block text-sm text-muted">{{ formatCreatedAt(booking.createdAt) }}</span>
+                </span>
+              </div>
+
+              <div v-if="availableActions.length" class="border-t border-default pt-4">
+                <UButton
+                  v-for="action in availableActions"
+                  :key="action.value"
+                  :label="action.label"
+                  :color="action.color"
+                  variant="ghost"
+                  block
+                  class="h-12 justify-start rounded-xl text-base font-medium"
+                  :loading="pendingAction === action.value"
+                  @click="action.value === 'cancel' ? openCancel() : runAction(action.value)"
+                />
+              </div>
+            </div>
             </div>
           </template>
         </template>
 
-        <template v-if="booking" #index-footer>
-          <!--
-            Contacting the guest is the most common thing to do from this screen,
-            so it stays reachable instead of scrolling away with the header.
-            In change mode the same bar carries that mode's single commit.
-          -->
-          <template v-if="isChangeMode">
-            <UButton label="Cancel" color="neutral" variant="ghost" :to="bookingPath" @click="resetChangeDraft" />
-            <UButton label="Send request" :loading="changeSaving" :disabled="Boolean(editorField) || !changeValid || !changeDirty" @click="sendChangeRequest" />
-          </template>
-          <div v-else class="flex flex-1 items-center justify-center gap-3">
-            <UButton :to="messageTo || undefined" label="Message" icon="i-lucide-message-circle" color="neutral" variant="soft" :disabled="!messageTo" />
-            <UButton :to="callTo || undefined" label="Call" icon="i-lucide-phone" color="neutral" variant="soft" :disabled="!callTo" />
-          </div>
+        <template v-if="booking && isChangeMode" #index-footer>
+          <UButton label="Cancel" color="neutral" variant="ghost" :to="bookingPath" @click="resetChangeDraft" />
+          <UButton label="Send request" :loading="changeSaving" :disabled="Boolean(editorField) || !changeValid || !changeDirty" @click="sendChangeRequest" />
         </template>
 
         <template #detail>
           <template v-if="booking">
-            <div v-if="editorKey === 'notes'" class="space-y-6">
+            <div v-if="editorKey === 'notes'" class="mx-auto w-full max-w-md space-y-6">
               <p class="text-base text-muted">Only your team can see these notes.</p>
               <UFormField label="Note">
                 <UTextarea v-model="noteDraft" :rows="10" maxlength="2000" autofocus class="w-full" placeholder="Add a note to yourself" />
               </UFormField>
             </div>
-            <div v-else-if="isChangeMode" class="space-y-6">
+            <div v-else-if="isChangeMode" class="mx-auto w-full max-w-md space-y-6">
               <UFormField v-if="editorField === 'date'" label="Date">
                 <UInput v-model="changeDraft.bookingDate" type="date" size="xl" autofocus class="w-full" />
               </UFormField>
@@ -212,8 +248,8 @@
               them in UFormField emitted a <label> pointing at no control, which
               reads as an editable field that ignores you.
             -->
-            <div v-else-if="editorKey === 'guest'" class="space-y-6">
-              <h3 class="text-xl font-semibold text-highlighted">{{ booking.guestName }}</h3>
+            <div v-else-if="editorKey === 'guest'" class="mx-auto w-full max-w-md space-y-6">
+              <h3 class="text-[32px] font-semibold leading-tight text-highlighted">{{ booking.guestName }}</h3>
               <dl class="space-y-4">
                 <div>
                   <dt class="text-sm text-muted">Email</dt>
@@ -232,8 +268,7 @@
           </template>
         </template>
       </EditorPaneShell>
-    </template>
-  </UDashboardPanel>
+  </div>
 
   <DashboardListItemDialog v-model:open="policyOpen" :title="booking?.policy?.heading || 'Cancellation policy'" :show-actions="false">
     <div v-if="booking" class="space-y-4">
@@ -251,46 +286,6 @@
       </div>
     </div>
   </DashboardListItemDialog>
-
-  <DashboardListItemDialog
-    v-model:open="manageOpen"
-    :title="`Manage ${noun}`"
-    :show-actions="false"
-  >
-    <div v-if="booking" class="space-y-2">
-      <UButton
-        v-if="callTo"
-        :to="callTo"
-        icon="i-lucide-phone"
-        color="neutral"
-        variant="ghost"
-        size="xl"
-        block
-        class="justify-start"
-      >
-        <span class="text-left">
-          <span class="block">{{ firstName(booking.guestName) }}'s phone number</span>
-          <span class="mt-0.5 block text-sm font-normal text-muted">{{ booking.guestPhone }}</span>
-        </span>
-      </UButton>
-      <USeparator class="my-4" />
-      <UButton :label="`Change ${noun}`" icon="i-lucide-pencil" color="neutral" variant="ghost" size="xl" block class="justify-start" :to="`${bookingPath}/change`" @click="beginChange" />
-      <UButton
-        v-for="action in availableActions"
-        :key="action.value"
-        :label="action.label"
-        :icon="action.icon"
-        :color="action.color"
-        variant="ghost"
-        size="xl"
-        block
-        class="justify-start"
-        :loading="pendingAction === action.value"
-        @click="action.value === 'cancel' ? openCancel() : runAction(action.value)"
-      />
-    </div>
-  </DashboardListItemDialog>
-
   <!--
     Cancelling gets a screen that states the consequence and lets the tenant say
     why, rather than a native confirm() stacked on top of the sheet that opened
@@ -300,6 +295,7 @@
     v-model:open="cancelOpen"
     :title="`Cancel ${noun}`"
     :show-actions="false"
+    :error="actionError"
   >
     <div v-if="booking" class="space-y-5">
       <p class="text-sm leading-relaxed text-muted">{{ cancellationSummary }}</p>
@@ -318,30 +314,27 @@
 </template>
 
 <script setup lang="ts">
-import { localDateAt, formatCalendarDate, formatTime, formatTimestamp } from '~/utils/timezone'
+import { formatCalendarDate, formatTime, formatTimestamp } from '~/utils/timezone'
 import DashboardListItemDialog from '~/components/dashboard/DashboardListItemDialog.vue'
 import EditorPaneShell from '~/components/dashboard/EditorPaneShell.vue'
 import { bookingNeedsResponse } from '~/utils/booking-lifecycle'
-import { resolveBookingPresentation } from '~/utils/booking-presentation'
 import { getErrorMessage } from '~/utils/errors'
 import type { DashboardBookingDetails, DashboardBookingType } from '~/server/utils/dashboard-booking-details'
 
 const props = defineProps<{
   bookingType: DashboardBookingType
   bookingId: string
+  /** Where this record lives in the URL. Its editor chain hangs off it. */
+  basePath: string
 }>()
 
 type ActionColor = 'success' | 'error' | 'neutral'
 
-const route = useRoute()
 const router = useRouter()
 const dashboardApi = useDashboardApi()
 const realtime = useDashboardInvalidations()
-const requestEvent = useRequestEvent()
-const toast = useToast()
-const orgSlug = computed(() => String(route.params.orgSlug || ''))
-const todayPath = computed(() => `/dashboard/${orgSlug.value}`)
-const bookingPath = computed(() => `${todayPath.value}/bookings/${props.bookingType}/${encodeURIComponent(props.bookingId)}`)
+const actionError = ref<string | null>(null)
+const bookingPath = computed(() => props.basePath)
 // `useEditorFrame` provides and injects, so it runs before any `await`, and it
 // owns the split of the route below this booking. The `route.params.editor`
 // derivation this replaces was a second copy of the composable's `rest`.
@@ -353,32 +346,8 @@ const isChangeMode = computed(() => editorKey.value === 'change')
 const selectedNote = computed(() => booking.value?.notes.find(note => note.id === editorField.value))
 const detailTitle = computed(() => editorKey.value === 'notes' ? editorField.value ? 'Edit note' : 'Add a note' : editorKey.value === 'guest' ? 'Guest details' : isChangeMode.value && editorField.value ? `Change ${editorField.value}` : undefined)
 
-const isBookingResponse = (value: unknown): value is { booking: DashboardBookingDetails } =>
-  isRecord(value)
-  && isRecord(value.booking)
-  && typeof value.booking.id === 'string'
-  && typeof value.booking.siteId === 'string'
-  && typeof value.booking.guestName === 'string'
-  && Array.isArray(value.booking.notes)
-  && isRecord(value.booking.policy)
-
+const { resource, booking, pending, error, presentation, noun, orgSlug, refresh: refreshDetails } = await useBookingDetails(props.bookingType, props.bookingId)
 const detailsKey = computed(() => `dashboard-booking:${orgSlug.value}:${props.bookingType}:${props.bookingId}`)
-const { data: resource, pending, error } = await useAsyncData<{ booking: DashboardBookingDetails }>(detailsKey, async () => {
-  if (import.meta.server) {
-    if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Dashboard request context unavailable' })
-    const { loadDashboardBookingDetails } = await import('~/server/utils/dashboard-booking-details')
-    return { booking: await loadDashboardBookingDetails(requestEvent, {
-      type: props.bookingType,
-      bookingId: props.bookingId,
-      organizationSlug: orgSlug.value,
-    }) }
-  }
-  return await dashboardApi(`/api/dashboard/bookings/${props.bookingType}/${encodeURIComponent(props.bookingId)}`, {
-    validate: isBookingResponse,
-  })
-})
-
-const booking = computed(() => resource.value?.booking ?? null)
 watchEffect(() => {
   const valid = editorSegments.value.length <= 2 && (!editorKey.value
     || (editorKey.value === 'guest' && !editorField.value)
@@ -387,41 +356,38 @@ watchEffect(() => {
   if (!valid && booking.value) throw createError({ statusCode: 404, statusMessage: 'Editor not found' })
 })
 
-// The one vocabulary. `resolveBookingPresentation` refuses a missing vertical
-// rather than guessing, so it is only asked once the booking has loaded.
-const presentation = computed(() => booking.value
-  ? resolveBookingPresentation(booking.value.type, booking.value.vertical)
-  : null)
-const noun = computed(() => presentation.value?.noun ?? '')
-
-const referenceDay = computed(() => booking.value ? localDateAt(new Date(), booking.value.timeZone) : '')
-const pageTitle = computed(() => {
-  if (!booking.value) return 'Booking details'
-  if (booking.value.status === 'cancelled') return 'Cancelled'
-  if (booking.value.bookingDate === referenceDay.value) return 'Currently hosting'
-  if (booking.value.bookingDate > referenceDay.value) return 'Coming up'
-  return `Past ${noun.value}`
-})
 const formattedDate = computed(() => booking.value ? formatCalendarDate(booking.value.bookingDate, 'en') : '')
 const formattedTime = computed(() => {
   if (!booking.value) return ''
   return formatTime(booking.value.bookingTime, 'en')
 })
-const guestCountLabel = computed(() => `${booking.value?.partySize ?? 0} ${(booking.value?.partySize ?? 0) === 1 ? 'guest' : 'guests'}`)
-const statusLabel = computed(() => {
-  const status = booking.value?.status || ''
-  return status ? status.charAt(0).toUpperCase() + status.slice(1) : ''
+// The picture the panel leads with: the hero of the location this was booked at.
+const bookingImageUrl = computed(() => booking.value
+  ? booking.value.locations.find(location => location.id === booking.value!.locationId)?.imageUrl ?? null
+  : null)
+// Airbnb's host-side stay page titles the party, not the listing: "Chris's
+// group of 2". A single guest is just their name.
+const partyTitle = computed(() => {
+  if (!booking.value) return ''
+  const size = booking.value.partySize
+  return size > 1 ? `${booking.value.guestName}'s group of ${size}` : booking.value.guestName
 })
+const notesSummary = computed(() => {
+  const count = booking.value?.notes.length ?? 0
+  if (count === 0) return 'Only your team can see these notes'
+  return count === 1 ? '1 note' : `${count} notes`
+})
+
+const guestCountLabel = computed(() => `${booking.value?.partySize ?? 0} ${(booking.value?.partySize ?? 0) === 1 ? 'guest' : 'guests'}`)
 const cancellationSummary = computed(() => booking.value?.policy?.items.find(item => item.id === 'cancellation')?.text
   ?? 'No cancellation terms have been configured.')
 const messageTo = computed(() => {
   if (!booking.value?.threadId) return null
-  return `/dashboard/${orgSlug.value}/sites/${booking.value.siteSlug}/locations/${booking.value.locationSlug}/inbox/${booking.value.threadId}`
+  return `/dashboard/${orgSlug.value}/sites/${booking.value.siteSlug}/locations/${booking.value.locationSlug}/messages/${booking.value.threadId}`
 })
 const callTo = computed(() => booking.value?.guestPhone ? `tel:${booking.value.guestPhone}` : null)
 
 const policyOpen = ref(false)
-const manageOpen = ref(false)
 const cancelOpen = ref(false)
 const cancelNote = ref('')
 const changeSaving = ref(false)
@@ -469,6 +435,8 @@ const noteRevisionId = ref<string>()
 const noteSaving = ref(false)
 const noteAttemptKey = ref<string | null>(null)
 const noteAttemptDraft = ref<string | null>(null)
+const noteError = ref<string | null>(null)
+const changeError = ref<string | null>(null)
 
 watch([detailsKey, () => selectedNote.value?.id, editorKey, editorField], () => {
   noteDraft.value = selectedNote.value?.body ?? ''
@@ -505,7 +473,6 @@ function resetChangeDraft() {
 }
 
 function beginChange() {
-  manageOpen.value = false
   resetChangeDraft()
 }
 
@@ -539,6 +506,8 @@ function closeEditor() {
 }
 
 function cancelEditor() {
+  noteError.value = null
+  changeError.value = null
   if (isChangeMode.value && isChangeField(editorField.value) && changeFieldOriginal.value !== null) {
     const key = draftKey(editorField.value)
     if (key === 'partySize') changeDraft.value.partySize = Number(changeFieldOriginal.value)
@@ -552,17 +521,9 @@ function commitEditor() {
 }
 
 function openCancel() {
-  manageOpen.value = false
   cancelNote.value = ''
+  actionError.value = null
   cancelOpen.value = true
-}
-
-async function refreshDetails() {
-  const response = await dashboardApi<{ booking: DashboardBookingDetails }>(
-    `/api/dashboard/bookings/${props.bookingType}/${encodeURIComponent(props.bookingId)}`,
-    { validate: isBookingResponse },
-  )
-  resource.value = response
 }
 
 function retryRealtime() {
@@ -585,20 +546,20 @@ async function saveNote() {
     noteAttemptDraft.value = noteDraft.value
   }
   noteSaving.value = true
+  noteError.value = null
   try {
     const response = await dashboardApi<{ booking: DashboardBookingDetails }>(
       `/api/dashboard/bookings/${props.bookingType}/${encodeURIComponent(props.bookingId)}/notes`,
       {
         method: 'POST',
         body: { note: noteDraft.value, idempotencyKey: noteAttemptKey.value, noteId: selectedNote.value?.id, revisionId: noteRevisionId.value },
-        validate: isBookingResponse,
+        validate: isBookingDetailsResponse,
       },
     )
     resource.value = response
     await closeEditor()
-    toast.add({ description: 'Note saved', color: 'success' })
   } catch (cause) {
-    toast.add({ description: getErrorMessage(cause, 'Note could not be saved'), color: 'error' })
+    noteError.value = getErrorMessage(cause, 'Note could not be saved')
   } finally {
     noteSaving.value = false
   }
@@ -612,6 +573,7 @@ async function sendChangeRequest() {
     changeAttemptDraft.value = draft
   }
   changeSaving.value = true
+  changeError.value = null
   try {
     // The writer takes one shape per kind and refuses anything else, so the
     // screen says which it is sending rather than posting a reservation-shaped
@@ -630,15 +592,14 @@ async function sendChangeRequest() {
       {
         method: 'POST',
         body: { ...proposal, expectedUpdatedAt: booking.value?.updatedAt, idempotencyKey: changeAttemptKey.value },
-        validate: isBookingResponse,
+        validate: isBookingDetailsResponse,
       },
     )
     resource.value = response
     resetChangeDraft()
     await closeEditor()
-    toast.add({ description: `Change request sent by email. Your ${noun.value} stays unchanged until the guest accepts.`, color: 'success' })
   } catch (cause) {
-    toast.add({ description: getErrorMessage(cause, 'Change request could not be sent'), color: 'error' })
+    changeError.value = getErrorMessage(cause, 'Change request could not be sent')
   } finally {
     changeSaving.value = false
   }
@@ -650,6 +611,7 @@ async function runAction(action: string) {
   const draft = JSON.stringify([booking.value.threadId, action, note])
   if (actionAttempt.value?.draft !== draft) actionAttempt.value = { draft, key: crypto.randomUUID() }
   pendingAction.value = action
+  actionError.value = null
   try {
     await dashboardApi(`/api/dashboard/sites/${booking.value.siteId}/guest-threads/${booking.value.threadId}/operations/${action}`, {
       method: 'POST',
@@ -658,19 +620,11 @@ async function runAction(action: string) {
     })
     await refreshDetails()
     actionAttempt.value = null
-    manageOpen.value = false
     cancelOpen.value = false
-    toast.add({ description: `${statusActionLabel(action)} applied`, color: 'success' })
   } catch (cause) {
-    toast.add({ description: getErrorMessage(cause, 'Booking could not be updated'), color: 'error' })
+    actionError.value = getErrorMessage(cause, 'Booking could not be updated')
   } finally {
     pendingAction.value = null
   }
-}
-
-function statusActionLabel(action: string) {
-  if (action === 'confirm') return 'Confirmation'
-  if (action === 'complete') return 'Completion'
-  return 'Cancellation'
 }
 </script>

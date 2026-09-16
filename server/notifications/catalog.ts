@@ -48,7 +48,7 @@ export interface CatalogEntry {
 
 const restaurant = 'Ember & Slice'
 const studio = 'Pottery House Krabi'
-const inbox = 'https://demo.krabiclaw.com/dashboard/ember-slice/sites/ember-slice/inbox/preview-1'
+const inbox = 'https://demo.krabiclaw.com/dashboard/ember-slice/sites/ember-slice/messages/preview-1'
 
 const reservation = {
   guestName: 'Alex Carter',
