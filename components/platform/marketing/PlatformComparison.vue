@@ -38,6 +38,9 @@
 </template>
 
 <script setup lang="ts">
+import type { PublicTenantPage } from '~/server/utils/public-tenant-pages'
+import type { TenantPageBlock } from '~/utils/tenant-page-blocks'
+import { blockText, blockRecords } from '~/utils/tenant-page-block-data'
 import type { PlatformIconName } from '~/components/platform/PlatformIcon.vue'
 
 export interface PlatformComparisonColumn {
@@ -53,11 +56,27 @@ export interface PlatformComparisonColumn {
  * vertical's accent — coral for restaurants, teal for experiences, navy for
  * legal.
  */
-const props = defineProps<{
-  accent: 'primary' | 'teal' | 'navy'
-  against: PlatformComparisonColumn
-  forCard: PlatformComparisonColumn
-}>()
+const props = defineProps<{ block: TenantPageBlock; page: PublicTenantPage }>()
+
+/** KrabiClaw's verticals each carry their own accent; the page says which. */
+const accent = computed<'primary' | 'teal' | 'navy'>(() => (
+  props.page.path === '/experiences' ? 'teal' : props.page.path === '/legal' ? 'navy' : 'primary'))
+
+function column(titleKey: string, labelKey: string, itemsKey: string): PlatformComparisonColumn {
+  return {
+    pill: blockText(props.block.data[labelKey]),
+    pillIcon: (itemsKey === 'problem_items' ? 'x' : 'check'),
+    title: blockText(props.block.data[titleKey]),
+    items: blockRecords(props.block.data[itemsKey])
+      .map(item => ({ title: blockText(item.title), description: blockText(item.description) }))
+      .filter(item => item.title),
+  }
+}
+
+// One block holds both sides, so the component reads both rather than being
+// handed two blocks a dispatcher decided were a pair.
+const against = computed(() => column('problem_title', 'problem_label', 'problem_items'))
+const forCard = computed(() => column('solution_title', 'solution_label', 'solution_items'))
 
 const ACCENTS = {
   primary: {
@@ -77,5 +96,5 @@ const ACCENTS = {
   },
 } as const
 
-const accentClasses = computed(() => ACCENTS[props.accent])
+const accentClasses = computed(() => ACCENTS[accent.value])
 </script>

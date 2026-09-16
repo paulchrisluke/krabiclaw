@@ -7,9 +7,7 @@
     loop they lost every section the marketing site had (#903).
   -->
   <template v-if="page">
-    <BlawbyCanonicalPage v-if="isBlawby" :page="page" />
-    <PlatformCanonicalPage v-else-if="isPlatform" :page="page" />
-    <TenantPageRenderer v-else :page="page" />
+    <TenantPageRenderer :page="page" />
   </template>
 </template>
 
@@ -148,7 +146,7 @@ useProfessionalServiceSchema(() => {
   // The services this page lists are pages, and the page renders them from its
   // page_grid. Reading a product_grid here described a block these pages do not
   // carry, so the schema listed no services at all.
-  const servicesBlock = page.value.blocks.find(block => block.type === 'page_grid' && block.data.section === 'services')
+  const servicesBlock = page.value.blocks.find(block => block.type === 'page_grid')
   const donationBlock = page.value.blocks.find(block => block.type === 'donation_choices')
   const faqItems = Array.isArray(faqBlock?.data.items)
     ? faqBlock.data.items.filter(item => item && typeof item === 'object' && !Array.isArray(item)).map(item => {

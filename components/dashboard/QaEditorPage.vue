@@ -27,7 +27,7 @@
     <EditorNavigationList :groups="navigationGroups" />
   </div>
 
-  <UDashboardPanel v-else id="site-qa-record" :ui="{ body: 'min-h-0 gap-0! overflow-hidden! p-0! sm:p-0!' }">
+  <UDashboardPanel v-else id="site-qa-record">
     <template #header>
       <UDashboardNavbar :title="isNew ? 'New question' : form.question || 'Question'" :toggle="false">
         <template #leading>

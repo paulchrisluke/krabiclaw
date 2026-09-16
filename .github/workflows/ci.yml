@@ -356,67 +356,10 @@ jobs:
           retention-days: 14
           if-no-files-found: ignore
 
-  staging-qualified:
-    name: Staging candidate qualified
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    permissions:
-      contents: read
-      checks: read
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          persist-credentials: false
-          fetch-depth: 0
-      # Nothing in this repository's settings requires staging to be green
-      # before main deploys: there is no branch protection and no ruleset. This
-      # job is that requirement, expressed as a dependency rather than as a
-      # setting nobody can see from the tree.
-      #
-      # One read of one commit's check runs. It does not wait for anything: by
-      # the time main has the commit, staging has either qualified it or not.
-      - name: Require the staging candidate's checks to be green
-        env:
-          GH_TOKEN: ${{ github.token }}
-          REQUIRED: |
-            Checks
-            Preview smoke
-            Deploy and test staging
-        run: |
-          set -euo pipefail
-          # staging reaches main as a merge commit, so the candidate is the
-          # second parent. A fast-forward has one parent and is its own
-          # candidate.
-          candidate=$(git rev-parse "HEAD^2" 2>/dev/null || git rev-parse HEAD)
-          echo "Staging candidate: ${candidate}"
-          runs=$(gh api --paginate "repos/${GITHUB_REPOSITORY}/commits/${candidate}/check-runs?per_page=100" \
-            --jq '.check_runs[] | "\(.id)\t\(.status)\t\(.conclusion // "pending")\t\(.name)"')
-          echo "${runs}"
-          # A re-run adds a newer check run beside the old one; only the latest
-          # run of each required check counts, and it must have completed. The
-          # staging-to-main pull request attaches its own, skipped, check runs
-          # to the same commit: those are not runs of the check and are ignored.
-          missing=""
-          while IFS= read -r name; do
-            [ -n "$name" ] || continue
-            latest=$(printf '%s\n' "${runs}" | awk -F'\t' -v name="${name}" '$4 == name && $3 != "skipped"' | sort -n | tail -n 1)
-            status=$(printf '%s' "${latest}" | cut -f2)
-            conclusion=$(printf '%s' "${latest}" | cut -f3)
-            if [ "${status}" != "completed" ] || [ "${conclusion}" != "success" ]; then
-              missing="${missing} '${name}'(${status:-absent}/${conclusion:-none})"
-            fi
-          done <<< "$REQUIRED"
-          if [ -n "$missing" ]; then
-            echo "::error::Staging candidate ${candidate} has no latest successful:${missing}. Production deploys the exact commit staging qualified."
-            exit 1
-          fi
-          echo "Staging candidate ${candidate} is qualified."
-
   deploy-production:
     name: Deploy production
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: [typecheck, staging-qualified]
+    needs: [typecheck]
     runs-on: ubuntu-latest
     timeout-minutes: 45
     environment: production

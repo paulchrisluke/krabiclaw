@@ -26,12 +26,12 @@
           <div v-if="flushIndex" class="flex min-h-0 flex-1 flex-col overflow-hidden">
             <slot name="index" />
           </div>
-          <div v-else class="min-h-0 flex-1 overflow-y-auto px-5 pb-24 pt-6 sm:px-8 sm:pt-8">
+          <div v-else class="min-h-0 flex-1 overflow-y-auto">
             <div class="mx-auto w-full" :class="hasDetail || showDesktopDetail ? 'max-w-xl' : 'max-w-3xl'">
               <slot name="index" />
             </div>
           </div>
-          <footer v-if="$slots['index-footer']" class="shrink-0 border-t border-default bg-default px-5 py-4 sm:px-8">
+          <footer v-if="$slots['index-footer']" class="shrink-0 border-t border-default bg-default">
             <div class="mx-auto flex w-full items-center justify-between gap-4" :class="hasDetail ? 'max-w-xl' : 'max-w-3xl'">
               <slot name="index-footer" />
             </div>
@@ -86,7 +86,7 @@
           <div v-if="flushDetail" class="flex min-h-0 flex-1 flex-col overflow-hidden">
             <slot name="detail" />
           </div>
-          <div v-else class="min-h-0 flex-1 overflow-y-auto px-5 py-8 sm:px-8 lg:px-10 lg:py-10">
+          <div v-else class="min-h-0 flex-1 overflow-y-auto">
             <div class="mx-auto w-full" :class="wideDetail ? 'max-w-5xl' : 'max-w-2xl'">
               <h2
                 v-if="detailTitle && !hideDetailHeading"
@@ -108,7 +108,7 @@
 
           <footer
             v-if="showActions"
-            class="shrink-0 border-t border-default bg-default px-5 pb-4 pt-4 sm:px-8 lg:px-10"
+            class="shrink-0 border-t border-default bg-default"
           >
             <div class="mx-auto flex w-full items-center justify-between gap-4" :class="wideDetail ? 'max-w-5xl' : 'max-w-2xl'">
               <UButton color="neutral" variant="ghost" label="Cancel" @click="$emit('cancel')" />

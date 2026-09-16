@@ -127,6 +127,9 @@
 
 <script setup lang="ts">
 import type { PlatformIconName } from '~/components/platform/PlatformIcon.vue'
+import type { PublicTenantPage } from '~/server/utils/public-tenant-pages'
+import type { TenantPageBlock } from '~/utils/tenant-page-blocks'
+import { blockText, blockTextOrNull } from '~/utils/tenant-page-block-data'
 
 /**
  * The hero of one of KrabiClaw's own marketing pages.
@@ -141,47 +144,51 @@ import type { PlatformIconName } from '~/components/platform/PlatformIcon.vue'
  * `highlight` names the part of it rendered in the gradient. The vertical
  * accent decides which gradient that is.
  */
-const props = withDefaults(defineProps<{
-  variant: 'home' | 'about' | 'pricing' | 'plugin' | 'features' | 'restaurants' | 'experiences' | 'legal'
-  eyebrow?: string | null
-  eyebrowIcon?: PlatformIconName | null
-  title: string
-  highlight?: string | null
-  subtitle?: string | null
-  ctaLabel?: string | null
-  ctaUrl?: string | null
-  secondaryLabel?: string | null
-  secondaryUrl?: string | null
-}>(), {
-  eyebrow: null,
-  eyebrowIcon: null,
-  highlight: null,
-  subtitle: null,
-  ctaLabel: null,
-  ctaUrl: null,
-  secondaryLabel: null,
-  secondaryUrl: null,
+const props = defineProps<{ block: TenantPageBlock; page: PublicTenantPage }>()
+
+/**
+ * Which of KrabiClaw's marketing shapes this hero takes.
+ *
+ * The page decides, because the page is what differs — a vertical landing page
+ * opens differently from Pricing. It was a prop a dispatcher computed from the
+ * same path, one step further from the thing it describes.
+ */
+const VARIANTS = ['home', 'about', 'pricing', 'plugin', 'features', 'restaurants', 'experiences', 'legal'] as const
+type Variant = typeof VARIANTS[number]
+const variant = computed<Variant>(() => {
+  const segment = props.page.path.replace(/^\//, '') || 'home'
+  return (VARIANTS as readonly string[]).includes(segment) ? segment as Variant : 'home'
 })
+
+const eyebrow = computed(() => blockTextOrNull(props.block.data.eyebrow))
+const eyebrowIcon = computed(() => blockTextOrNull(props.block.data.eyebrow_icon) as PlatformIconName | null)
+const title = computed(() => blockText(props.block.data.title))
+const highlight = computed(() => blockTextOrNull(props.block.data.highlight))
+const subtitle = computed(() => blockTextOrNull(props.block.data.subtitle))
+const ctaLabel = computed(() => blockTextOrNull(props.block.data.cta_label))
+const ctaUrl = computed(() => blockTextOrNull(props.block.data.cta_url))
+const secondaryLabel = computed(() => blockTextOrNull(props.block.data.secondary_label))
+const secondaryUrl = computed(() => blockTextOrNull(props.block.data.secondary_url))
 
 interface TitlePart { text: string; highlighted: boolean }
 
 /** One entry per forced line; a line is highlighted when it is the highlight. */
-const titleLines = computed<TitlePart[]>(() => props.title.split('\n').map(line => line.trim()).filter(Boolean).map(line => ({
+const titleLines = computed<TitlePart[]>(() => title.value.split('\n').map(line => line.trim()).filter(Boolean).map(line => ({
   text: line,
-  highlighted: Boolean(props.highlight) && line === props.highlight!.trim(),
+  highlighted: Boolean(highlight.value) && line === highlight.value!.trim(),
 })))
 
 /** The title as one line with the highlight cut out of it, for the Pricing shape. */
 const inlineParts = computed<TitlePart[]>(() => {
-  const highlight = props.highlight?.trim()
-  const title = props.title.replace(/\n/g, ' ')
-  if (!highlight) return [{ text: title, highlighted: false }]
-  const index = title.indexOf(highlight)
-  if (index < 0) return [{ text: title, highlighted: false }]
+  const marked = highlight.value?.trim()
+  const oneLine = title.value.replace(/\n/g, ' ')
+  if (!marked) return [{ text: oneLine, highlighted: false }]
+  const index = oneLine.indexOf(marked)
+  if (index < 0) return [{ text: oneLine, highlighted: false }]
   return [
-    { text: title.slice(0, index), highlighted: false },
-    { text: highlight, highlighted: true },
-    { text: title.slice(index + highlight.length), highlighted: false },
+    { text: oneLine.slice(0, index), highlighted: false },
+    { text: marked, highlighted: true },
+    { text: oneLine.slice(index + marked.length), highlighted: false },
   ].filter(part => part.text)
 })
 
@@ -191,8 +198,8 @@ const PILL_CLASS: Record<string, string> = {
   experiences: 'inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold uppercase tracking-wider bg-(--kc-teal)/10 text-(--kc-teal-600) border border-(--kc-teal)/20',
   legal: 'inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold uppercase tracking-wider bg-(--kc-navy)/10 text-default border border-default/30',
 }
-const pillClass = computed(() => PILL_CLASS[props.variant] ?? PILL_CLASS.restaurants)
-const pillIconClass = computed(() => (props.variant === 'legal' ? 'size-3.5 text-primary' : 'size-3.5'))
+const pillClass = computed(() => PILL_CLASS[variant.value] ?? PILL_CLASS.restaurants)
+const pillIconClass = computed(() => (variant.value === 'legal' ? 'size-3.5 text-primary' : 'size-3.5'))
 
 const GRADIENT_CLASS: Record<string, string> = {
   features: 'bg-gradient-to-r from-primary via-(--kc-coral) to-(--kc-teal) bg-clip-text text-transparent',
@@ -200,5 +207,5 @@ const GRADIENT_CLASS: Record<string, string> = {
   experiences: 'bg-gradient-to-r from-(--kc-teal) via-(--kc-coral) to-primary bg-clip-text text-transparent',
   legal: 'bg-gradient-to-r from-primary via-(--kc-navy-700) to-(--kc-teal) bg-clip-text text-transparent',
 }
-const gradientClass = computed(() => GRADIENT_CLASS[props.variant] ?? GRADIENT_CLASS.restaurants)
+const gradientClass = computed(() => GRADIENT_CLASS[variant.value] ?? GRADIENT_CLASS.restaurants)
 </script>

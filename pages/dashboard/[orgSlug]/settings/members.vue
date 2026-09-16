@@ -6,7 +6,7 @@
   -->
   <OrganizationMembersList v-if="frame.mode.value === 'index'" />
 
-  <UDashboardPanel v-else id="organization-members" :ui="{ body: 'min-h-0 gap-0! overflow-hidden! p-0! sm:p-0!' }">
+  <UDashboardPanel v-else id="organization-members">
     <template #header>
       <UDashboardNavbar title="Members" :toggle="false">
         <template #leading>

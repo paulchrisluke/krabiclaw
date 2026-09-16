@@ -1,7 +1,6 @@
 <template>
   <UDashboardPanel
     :id="surface === 'brand' ? 'site-brand' : 'site-settings'"
-    :ui="{ body: 'min-h-0 !gap-0 !overflow-hidden !p-0 sm:!p-0' }"
   >
     <template #header>
       <UDashboardNavbar :title="navbarTitle" :toggle="false">

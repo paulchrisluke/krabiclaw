@@ -1,36 +1,49 @@
 <template>
   <article
     data-tenant-page
-    data-template="saya"
-    class="mx-auto max-w-7xl px-4 py-16 text-default sm:px-6 lg:px-8"
+    :data-template="template"
+    class="text-default"
+    :class="readingColumn ? 'py-16' : undefined"
   >
-    <section v-for="block in renderedBlocks" :key="block.id" :data-block-type="block.type" :data-parity-section="sectionKey(block)" class="tenant-page-block">
+    <!--
+      A template's own component names its band; the wrapper only names one for
+      the markup below, or both would appear on the same section.
+    -->
+    <section v-for="block in renderedBlocks" :key="block.id" :data-block-type="block.type" :data-parity-section="presentationOf(block) ? undefined : sectionKey(block)"
+      class="tenant-page-block"
+      :class="!presentationOf(block) && template === 'saya' ? 'mx-auto max-w-7xl px-4 sm:px-6 lg:px-8' : undefined"
+    >
       <!--
-        The story is one thing — a headline, a photograph and the words — and it
-        reads headline, photograph, words. Its three fields arrived as three
-        unrelated blocks whose positions the content migration wrote in
-        alphabetical order of field name, which is why the photograph came last
-        and, on a page carrying story.title, why the headline came after it.
-        The story renders here as one section, at the first of those blocks.
+        A template that draws this block its own way draws it; otherwise the
+        markup below is the presentation. See utils/tenant-page-presentation.ts.
       -->
-      <template v-if="isStoryBlock(block)">
-        <div data-story class="my-16 max-w-4xl">
-          <p class="saya-kicker mb-6">{{ storyKicker }}</p>
-          <h2 v-if="story.title" class="saya-display-md text-default">{{ story.title }}</h2>
+      <component :is="presentationOf(block)" v-if="presentationOf(block)" :block="block" :page="page" />
+      <!--
+        A picture and the words beside it. It is one block; it used to be three
+        (`story.title`, `story.image`, `story.body`) that this renderer
+        re-assembled at display time, in the alphabetical order of the field
+        names the migration wrote.
+      -->
+      <template v-else-if="block.type === 'media_text'">
+        <div class="my-16 grid max-w-5xl gap-10 md:grid-cols-2 md:items-center">
           <video
-            v-if="story.media?.kind === 'video'"
-            :src="story.media.public_url!"
-            :poster="story.media.thumbnail_url ?? undefined"
+            v-if="blockMedia(block, 'media')?.kind === 'video'"
+            :src="blockMedia(block, 'media')!.public_url!"
+            :poster="blockMedia(block, 'media')!.thumbnail_url ?? undefined"
             autoplay muted loop playsinline
-            class="mt-10 aspect-4/3 w-full object-cover"
+            class="aspect-4/3 w-full object-cover"
           />
           <img
-            v-else-if="story.media"
-            :src="story.media.public_url!"
-            :alt="story.media.alt_text ?? ''"
-            class="mt-10 aspect-4/3 w-full object-cover"
+            v-else-if="blockMedia(block, 'media')"
+            :src="blockMedia(block, 'media')!.public_url!"
+            :alt="blockMedia(block, 'media')!.alt_text ?? ''"
+            class="aspect-4/3 w-full object-cover"
           >
-          <TenantPageRichTextBlock v-if="story.bodyBlock" :block="story.bodyBlock" />
+          <div>
+            <h2 v-if="text(block.data.title)" class="text-3xl font-semibold tracking-tight">{{ text(block.data.title) }}</h2>
+            <p v-if="text(block.data.body)" class="mt-6 whitespace-pre-line leading-8 text-muted">{{ text(block.data.body) }}</p>
+            <TenantPageButton v-if="text(block.data.label) && text(block.data.url)" class="mt-8" :label="text(block.data.label)" :url="text(block.data.url)" />
+          </div>
         </div>
       </template>
 
@@ -201,50 +214,36 @@
 <script setup lang="ts">
 import type { PublicTenantPage } from '~/server/utils/public-tenant-pages'
 import type { TenantPageBlock } from '~/utils/tenant-page-blocks'
-import { getVerticalCopy } from '~/utils/vertical-copy'
+import type { Component } from 'vue'
+import type { PublicTemplateSlug } from '~/utils/template-registry'
+import { tenantPageBlockPresentation } from '~/utils/tenant-page-presentation'
 
-const props = defineProps<{ page: PublicTenantPage }>()
-const sanitizer = useHtmlSanitizer()
-const { t, locale } = useI18n()
-const { site } = useTenantSite()
-const storyKicker = computed(() => getVerticalCopy(site?.vertical, locale.value).ourStoryKicker)
+const props = withDefaults(defineProps<{ page: PublicTenantPage; template?: PublicTemplateSlug }>(), {
+  template: undefined,
+})
 
-const STORY_FIELDS = ['story.title', 'story.image', 'story.body'] as const
+/**
+ * Which template's presentations apply. The prop wins so a route may render a
+ * page for a template other than the host's — pages/contact/index.vue renders a
+ * Saya section on a Blawby host — and the resolved template is the default.
+ */
+const { template: resolvedTemplate } = usePublicTemplate()
+const template = computed<PublicTemplateSlug>(() => props.template ?? resolvedTemplate.value.slug)
 
-function isStoryBlock(block: TenantPageBlock): boolean {
-  return (STORY_FIELDS as readonly string[]).includes(text(block.data.field))
+function presentationOf(block: TenantPageBlock): Component | null {
+  return tenantPageBlockPresentation(template.value, block.type)
 }
-
-const storyBlocks = computed(() => props.page.blocks.filter(isStoryBlock))
-
-/**
- * The story's blocks collapse into the first of them, which renders the whole
- * section; the rest leave the list so the page holds no empty sections where
- * they used to be.
- */
-const renderedBlocks = computed(() => {
-  const anchorId = storyBlocks.value[0]?.id ?? null
-  return props.page.blocks.filter(block => !isStoryBlock(block) || block.id === anchorId)
-})
+const sanitizer = useHtmlSanitizer()
+const { t } = useI18n()
+/** The page's blocks, in the order the page carries them. */
+const renderedBlocks = computed(() => props.page.blocks)
 
 /**
- * The story's three fields, each read from the block that carries it. A field
- * no block carries is absent from the story, not filled in from elsewhere.
- *
- * The words keep the block they arrived in and the renderer every other
- * markdown block on this page uses, so the story reads the same as the rest of
- * it — sanitized, and with the paragraph breaks the author wrote.
+ * A page this renderer draws by itself reads as one column of prose and needs
+ * the space around it. A page whose template draws bands does not: each band
+ * carries its own, and the outer padding left a gap above the first one.
  */
-const story = computed(() => {
-  const blockFor = (field: string) => storyBlocks.value.find(block => text(block.data.field) === field) ?? null
-  const titleBlock = blockFor('story.title')
-  const imageBlock = blockFor('story.image')
-  return {
-    title: titleBlock ? text(titleBlock.data.text) : '',
-    bodyBlock: blockFor('story.body'),
-    media: imageBlock ? blockMedia(imageBlock, 'media') : null,
-  }
-})
+const readingColumn = computed(() => template.value === 'saya' && !renderedBlocks.value.some(presentationOf))
 
 type GridItem = { id?: string; title?: string; description?: string; value?: string; media?: Array<{ slot?: string; public_url?: string | null; thumbnail_url?: string | null; alt_text?: string | null; kind?: string | null }>; label?: string; labelKey?: string; url?: string; amount?: string }
 
@@ -256,8 +255,13 @@ function sanitize(value: string): string {
   return sanitizer.sanitize(value)
 }
 
-function sectionKey(block: TenantPageBlock): string | undefined {
-  return text(block.data.section) || undefined
+/**
+ * The name this band carries for tests and parity checks: the block's type.
+ * It used to read `data.section`, so a band was named by a key the document
+ * held only because two hand-written renderers needed it to tell blocks apart.
+ */
+function sectionKey(block: TenantPageBlock): string {
+  return block.type
 }
 
 function galleryImages(block: TenantPageBlock): Array<{ id?: string; url: string; alt?: string; caption?: string; kind?: string | null; thumbnailUrl?: string | null }> {

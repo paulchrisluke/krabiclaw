@@ -33,7 +33,7 @@
     :page-id="pageId"
   />
 
-  <UDashboardPanel v-else id="site-page-sections" :ui="{ body: 'min-h-0 gap-0! overflow-hidden! p-0! sm:p-0!' }">
+  <UDashboardPanel v-else id="site-page-sections">
     <template #header>
       <UDashboardNavbar :title="openTitle" :toggle="false">
         <template #leading>

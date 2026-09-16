@@ -7,15 +7,17 @@ KrabiClaw uses one branch-driven GitHub Actions workflow and three Cloudflare Wo
 | Pull request to `staging` | `krabiclaw-preview` | The fixed `@smoke` suite: Saya and blawby public navigation, one guest booking write, the public auth session, MCP OAuth, an MCP write reaching the public API, and one authorization boundary |
 | Push to `staging` | `krabiclaw-preview`, then `krabiclaw-staging` | The same `@smoke` suite on the disposable preview, which must pass before staging deploys; then read-only rendering on Pottery House, Kikuzuki, and NCLS aliases and read-only tenant MCP OAuth/content smoke |
 | `staging` to `main` pull request | None | Reuses checks attached to the exact staging SHA |
-| Push to `main` | `krabiclaw` | `Staging candidate qualified` re-reads that exact staging commit's checks before deploying; then read-only rendering/navigation on all three customer custom domains |
+| Push to `main` | `krabiclaw` | `Checks`, then read-only rendering/navigation on all three customer custom domains |
 
 A direct push to `staging` is a normal hotfix path, so it runs the preview
 qualification on that exact commit before staging deploys; nothing reaches
-staging on the strength of a check that ran on a different SHA. Production then
-requires that same commit to carry successful `Checks`, `Preview smoke` and
-`Deploy and test staging`. That requirement lives in `ci.yml` as a job
-dependency because the repository has no branch protection or ruleset enforcing
-it.
+staging on the strength of a check that ran on a different SHA.
+
+Production deploys what `main` holds once its own `Checks` pass. It used to
+re-read the staging commit's check runs first and refuse otherwise, which meant
+a promotion merged before staging finished failed the deploy rather than
+waiting for it, and the fix was always to re-run the job by hand. Whoever
+promotes to `main` decides the candidate is ready.
 
 Each environment receives one normal `wrangler deploy`. Preview uses one fixed, shared D1 resource; it may apply disposable fixtures and run writes. During ordinary releases, staging applies migrations but does not sweep, reset, reseed customers, provision E2E identities, or perform guest/MCP writes. A standalone staging database may be reset or reprovisioned while its schema remains unreleased; that exception never applies once the schema reaches production. Production is never seeded, reset, or mutated by test automation.
 

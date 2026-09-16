@@ -23,6 +23,13 @@ export type TenantPageBlockType =
   | 'page_grid'
   | 'product_grid'
   | 'location_grid'
+  | 'ai_assistance'
+  | 'comparison'
+  | 'stat_grid'
+  | 'workflow_grid'
+  | 'video_feature'
+  | 'media_text'
+  | 'contact_form'
 
 export type TenantPageType = 'custom' | 'recipe' | 'legal' | 'system'
 
@@ -70,6 +77,50 @@ export interface TenantPageSnapshot {
   blocks: TenantPageBlock[]
 }
 
+/**
+ * One field a block stores, described well enough that every surface can be
+ * derived from it rather than repeating it.
+ *
+ * `fields` used to be a list of bare names that nothing read, while the editor's
+ * controls, the writer's allow-list, the MCP description and the translatable
+ * paths were four more hand-written lists of the same thing. They disagreed:
+ * donation tiers were declared at a key nothing writes, so a tier's words could
+ * never be translated, and a feature row's Value and Icon were invisible to
+ * localization for the same reason. Describing a field once fixes all of them at
+ * once, and makes the disagreement unrepresentable.
+ */
+export interface TenantPageField {
+  kind: 'text' | 'markdown' | 'url' | 'enum' | 'media' | 'reference' | 'list' | 'calculator'
+  label: string
+  required?: boolean
+  /** Long-form prose; a single-line control is wrong for it. */
+  multiline?: boolean
+  /** Text is translated unless it is a machine value — a url, an icon, an enum. */
+  translatable?: boolean
+  options?: readonly { value: string; label: string; platformOnly?: boolean }[]
+  /** A list's item shape. Absent means a list of plain strings. */
+  of?: Readonly<Record<string, TenantPageField>>
+  /** Which canonical record a reference selects. */
+  reference?: 'page' | 'product' | 'collection' | 'location'
+  /** The media placement slot this field's asset occupies. */
+  slot?: string
+  /** What the picker offers for a media field. Images unless the field says otherwise. */
+  accept?: 'image' | 'video' | 'any'
+  /**
+   * `level` writes the block's own column, not its data. The heading level
+   * control wrote `data.level`, which the writer deletes and no renderer reads,
+   * so choosing a level did nothing at all.
+   */
+  store?: 'data' | 'level'
+  /** Which editor leaf shows this field. */
+  section?: string
+  /** A field that is meaningless without its partner — a label with no url. */
+  pairedWith?: string
+  /** Shown only when another field holds one of these values. */
+  availableWhen?: { field: string; equals: readonly string[] }
+  default?: string
+}
+
 export interface TenantPageBlockDefinition {
   type: TenantPageBlockType
   label: string
@@ -77,9 +128,7 @@ export interface TenantPageBlockDefinition {
   schemaVersion: typeof TENANT_PAGE_SCHEMA_VERSION
   allowedRecipes: readonly string[]
   allowedPageTypes: readonly TenantPageType[]
-  fields: readonly string[]
-  editor: 'typed-fields'
-  renderer: { saya: 'tenant-page'; blawby: 'tenant-page' }
+  fields: Readonly<Record<string, TenantPageField>>
   accessibility: 'required' | 'inherited'
   seo: 'structured' | 'inherited' | 'none'
 }
@@ -93,37 +142,322 @@ const ALL_RECIPES = [
 export const TENANT_PAGE_RECIPE_REGISTRY = new Set<string>(ALL_RECIPES)
 export const TENANT_PAGE_TYPES: readonly TenantPageType[] = ['custom', 'recipe', 'legal', 'system']
 
+const text = (label: string, extra: Partial<TenantPageField> = {}): TenantPageField => ({ kind: 'text', label, section: 'copy', ...extra })
+const prose = (label: string, extra: Partial<TenantPageField> = {}): TenantPageField => ({ kind: 'text', label, multiline: true, section: 'copy', ...extra })
+const link = (label: string, extra: Partial<TenantPageField> = {}): TenantPageField => ({ kind: 'url', label, translatable: false, section: 'button', ...extra })
+
+/** A call to action is one prompt and one button, and the button needs both halves. */
+const CTA_FIELDS = {
+  title: text('Title'),
+  accent: text('Emphasised phrase'),
+  description: prose('Description'),
+  label: text('Button label', { section: 'button', pairedWith: 'url' }),
+  url: link('Button URL', { pairedWith: 'label' }),
+  // A second button, which four platform prompts already carry and no list
+  // declared, so it could be written and never translated or validated.
+  secondary_label: text('Second button label', { section: 'second_button', pairedWith: 'secondary_url' }),
+  secondary_url: link('Second button URL', { section: 'second_button', pairedWith: 'secondary_label' }),
+} as const
+
+const GRID_ITEM_FIELDS = {
+  title: text('Title', { required: true }),
+  description: prose('Description'),
+  // A card whose words are a list of links — a firm's contact methods — needs
+  // rich text, not a paragraph. It was stored as `cardsContent` on a block
+  // calling itself a contact CTA, which is why one page held two of those and
+  // nothing could tell them apart.
+  body: { kind: 'markdown', label: 'Rich text', section: 'copy' } as TenantPageField,
+  // Declared because the item editor writes them. They were in no field list,
+  // so a feature row's headline number and icon could never be translated or
+  // validated.
+  value: text('Value'),
+  icon: { kind: 'enum', label: 'Icon', translatable: false, section: 'icon' } as TenantPageField,
+  media: { kind: 'media', label: 'Image', translatable: false, section: 'image', slot: 'image' } as TenantPageField,
+  label: text('Link label', { section: 'link', pairedWith: 'url' }),
+  url: link('Link URL', { section: 'link', pairedWith: 'label' }),
+} as const
+
 export const TENANT_PAGE_BLOCK_REGISTRY: Record<TenantPageBlockType, TenantPageBlockDefinition> = {
-  heading: blockDefinitionWithMetadata('heading', 'Heading', 'A semantic heading.', ALL_RECIPES, ['text'], { accessibility: 'required', seo: 'structured' }),
-  markdown: blockDefinitionWithMetadata('markdown', 'Rich text', 'Markdown-safe prose.', ALL_RECIPES, ['markdown'], { accessibility: 'required', seo: 'inherited' }),
-  image: blockDefinitionWithMetadata('image', 'Image', 'A tenant media placement.', ALL_RECIPES, ['caption']),
-  gallery: blockDefinitionWithMetadata('gallery', 'Gallery', 'An ordered media placement.', ALL_RECIPES, ['caption']),
-  faq: blockDefinitionWithMetadata('faq', 'FAQ', 'The page\'s published questions and answers.', ALL_RECIPES, ['source'], { accessibility: 'required', seo: 'structured' }),
-  how_to: blockDefinitionWithMetadata('how_to', 'How-To', 'Ordered steps.', ALL_RECIPES, ['steps'], { accessibility: 'required', seo: 'structured' }),
-  divider: blockDefinitionWithMetadata('divider', 'Divider', 'A visual section divider.', ALL_RECIPES, [], { accessibility: 'inherited', seo: 'none' }),
-  cta: blockDefinitionWithMetadata('cta', 'Call to action', 'A typed call-to-action.', ALL_RECIPES, ['title', 'description', 'label', 'url']),
-  callout: blockDefinitionWithMetadata('callout', 'Callout', 'A highlighted message.', ALL_RECIPES, ['title', 'body', 'tone']),
-  hero: blockDefinitionWithMetadata('hero', 'Hero', 'A page hero section.', ALL_RECIPES, ['eyebrow', 'title', 'subtitle', 'cta_label', 'cta_url'], { accessibility: 'required', seo: 'structured' }),
-  button_group: blockDefinitionWithMetadata('button_group', 'Button group', 'A group of typed links.', ALL_RECIPES, ['buttons']),
-  feature_grid: blockDefinitionWithMetadata('feature_grid', 'Feature grid', 'A grid of structured features or a configured source.', ALL_RECIPES, ['title', 'items', 'source', 'calculator']),
-  // The people a business puts its name to. Separate from feature_grid because
-  // a person is not a feature: the two used to share one block, one holding
-  // `features` and `people` side by side under keys no writer declared, and
-  // nothing could edit either of them.
-  team_grid: blockDefinitionWithMetadata('team_grid', 'Team', 'The people behind the business.', ALL_RECIPES, ['title', 'description', 'items']),
-  testimonial_grid: blockDefinitionWithMetadata('testimonial_grid', 'Testimonials', 'A grid of customer testimonials.', ALL_RECIPES, ['title', 'description', 'source']),
-  contact_cta: blockDefinitionWithMetadata('contact_cta', 'Contact CTA', 'A contact-focused call to action.', ALL_RECIPES, ['title', 'description', 'label', 'url']),
-  booking_cta: blockDefinitionWithMetadata('booking_cta', 'Booking CTA', 'A booking-focused call to action.', ALL_RECIPES, ['title', 'description', 'label', 'url']),
-  donation_choices: blockDefinitionWithMetadata('donation_choices', 'Donation choices', 'Structured donation options.', ['donate'], ['title', 'description', 'tiers', 'destination'], { allowedPageTypes: ['recipe'] }),
-  // References other pages by id. Practice areas and service pages are
-  // documents like any other, so a grid of them is a grid of pages — there is
-  // no separate offering record for it to point at.
-  page_grid: blockDefinitionWithMetadata('page_grid', 'Page grid', 'References other pages on this site.', ['home', 'about', 'pricing', 'custom', 'services'], ['title', 'page_ids'], { allowedPageTypes: ['custom', 'recipe', 'system'] }),
-  // References the canonical catalog: a collection, or explicit products. It
-  // carries no prices or names of its own — those are read through the
-  // product, so a grid can never show a stale price.
-  product_grid: blockDefinitionWithMetadata('product_grid', 'Product grid', 'References a collection or explicit products.', ['home', 'about', 'pricing', 'custom', 'services', 'menu', 'order', 'products'], ['title', 'collection_id', 'product_ids'], { allowedPageTypes: ['custom', 'recipe', 'system'] }),
-  location_grid: blockDefinitionWithMetadata('location_grid', 'Location grid', 'References canonical locations.', ['home', 'about', 'contact', 'custom'], ['title', 'location_ids'], { allowedPageTypes: ['custom', 'recipe', 'system'] }),
+  heading: blockDefinitionWithMetadata('heading', 'Heading', 'A heading a visitor reads.', ALL_RECIPES, {
+    text: text('Heading text', { required: true, section: 'content' }),
+    // Writes the block's own column. See TenantPageField.store.
+    level: {
+      kind: 'enum', label: 'Level', translatable: false, section: 'content', store: 'level', default: '2',
+      options: [1, 2, 3, 4, 5, 6].map(n => ({ value: String(n), label: `H${n}` })),
+    },
+  }, { accessibility: 'required', seo: 'structured' }),
+
+  markdown: blockDefinitionWithMetadata('markdown', 'Text', 'Paragraphs, lists and links.', ALL_RECIPES, {
+    markdown: { kind: 'markdown', label: 'Text', required: true, section: 'content' },
+    // The writer requires this; it was declared nowhere, so nothing could tell
+    // an author or an assistant that a text block must name its editor mode.
+    editor_mode: {
+      kind: 'enum', label: 'Editor', translatable: false, section: 'content', default: 'rich',
+      options: [{ value: 'rich', label: 'Rich text' }, { value: 'source', label: 'Markdown source' }],
+    },
+  }, { accessibility: 'required', seo: 'inherited' }),
+
+  image: blockDefinitionWithMetadata('image', 'Image', 'One picture.', ALL_RECIPES, {
+    media: { kind: 'media', label: 'Image', translatable: false, section: 'content', slot: 'media' },
+    caption: text('Caption', { section: 'content' }),
+  }),
+
+  gallery: blockDefinitionWithMetadata('gallery', 'Gallery', 'Pictures in an order you choose.', ALL_RECIPES, {
+    media: { kind: 'media', label: 'Images', translatable: false, section: 'content', slot: 'gallery' },
+    caption: text('Caption', { section: 'content' }),
+  }),
+
+  faq: blockDefinitionWithMetadata('faq', 'Questions & answers', 'The questions published for this page or site.', ALL_RECIPES, {
+    title: text('Title', { section: 'settings' }),
+    source: {
+      kind: 'enum', label: 'Questions', required: true, translatable: false, section: 'settings', default: 'page_qa',
+      options: [{ value: 'page_qa', label: "This page's questions" }, { value: 'site_qa', label: "The site's questions" }],
+    },
+  }, { accessibility: 'required', seo: 'structured' }),
+
+  how_to: blockDefinitionWithMetadata('how_to', 'How-to', 'Steps in order.', ALL_RECIPES, {
+    title: text('Title', { section: 'settings' }),
+    label: text('Label', { section: 'settings' }),
+    estimated_time: text('Estimated time', { section: 'settings' }),
+    // Their own leaf: settings held five controls, and DESIGN.md's answer to a
+    // form that grows is another level, never a tighter one.
+    tool_items: { kind: 'list', label: 'Tools', section: 'materials' },
+    supply_items: { kind: 'list', label: 'Supplies', section: 'materials' },
+    steps: {
+      kind: 'list', label: 'Steps', section: 'steps',
+      of: { name: text('Name', { required: true }), text: prose('Text') },
+    },
+  }, { accessibility: 'required', seo: 'structured' }),
+
+  divider: blockDefinitionWithMetadata('divider', 'Divider', 'A break between sections.', ALL_RECIPES, {},
+    { accessibility: 'inherited', seo: 'none' }),
+
+  cta: blockDefinitionWithMetadata('cta', 'Call to action', 'A prompt with one button.', ALL_RECIPES, CTA_FIELDS),
+  contact_cta: blockDefinitionWithMetadata('contact_cta', 'Contact prompt', 'A prompt to get in touch.', ALL_RECIPES, CTA_FIELDS),
+  // A booking prompt says what it costs and what the visitor is agreeing to.
+  // Both were stored and read as `priceLine` and `notice`, which no list
+  // declared, so neither could be translated — and the button was a second
+  // naming of the one every other prompt uses.
+  booking_cta: blockDefinitionWithMetadata('booking_cta', 'Booking prompt', 'A prompt to book.', ALL_RECIPES, {
+    ...CTA_FIELDS,
+    price_line: text('Price line', { section: 'settings' }),
+    notice: prose('Small print', { section: 'settings' }),
+  }),
+
+  callout: blockDefinitionWithMetadata('callout', 'Callout', 'A highlighted message.', ALL_RECIPES, {
+    title: text('Title'),
+    body: prose('Message'),
+    tone: {
+      kind: 'enum', label: 'Tone', translatable: false, section: 'copy', default: 'neutral',
+      options: ['neutral', 'info', 'success', 'warning', 'danger'].map(value => ({ value, label: value.replace(/^\w/, c => c.toUpperCase()) })),
+    },
+    // The word on the panel a callout draws beside its message — "Example",
+    // "Saya Theme". Five platform callouts already carried it and no list
+    // declared it, so it could be written and never translated.
+    badge: text('Badge', { section: 'settings' }),
+    buttons: { kind: 'list', label: 'Buttons', section: 'buttons', of: { label: text('Label', { required: true }), url: link('URL') } },
+  }),
+
+  hero: blockDefinitionWithMetadata('hero', 'Hero', 'The opening of a page.', ALL_RECIPES, {
+    // The headline and the phrase inside it that carries emphasis; the rest of
+    // the opening words are their own concern, because four controls is not a
+    // leaf (DESIGN.md).
+    title: text('Headline', { required: true, section: 'headline' }),
+    accent: text('Emphasised phrase', { section: 'headline' }),
+    eyebrow: text('Eyebrow'),
+    subtitle: prose('Subheading'),
+    media: { kind: 'media', label: 'Image or video', translatable: false, section: 'image', slot: 'media', accept: 'any' },
+    cta_label: text('Button label', { section: 'button', pairedWith: 'cta_url' }),
+    cta_url: link('Button URL', { pairedWith: 'cta_label' }),
+    // A second button, which eight platform heroes already carry and no list
+    // declared, so it could be written and never translated or validated.
+    secondary_label: text('Second button label', { section: 'second_button', pairedWith: 'secondary_url' }),
+    secondary_url: link('Second button URL', { section: 'second_button', pairedWith: 'secondary_label' }),
+  }, { accessibility: 'required', seo: 'structured' }),
+
+  button_group: blockDefinitionWithMetadata('button_group', 'Buttons', 'A row of links.', ALL_RECIPES, {
+    buttons: { kind: 'list', label: 'Buttons', section: 'buttons', of: { label: text('Label', { required: true }), url: link('URL') } },
+  }),
+
+  feature_grid: blockDefinitionWithMetadata('feature_grid', 'Features', 'A grid you write, or rows read from your site.', ALL_RECIPES, {
+    title: text('Section title', { section: 'settings' }),
+    description: prose('Description', { section: 'settings' }),
+    source: {
+      kind: 'enum', label: 'Rows', translatable: false, section: 'settings', default: 'manual',
+      options: [
+        { value: 'manual', label: 'Items I write' },
+        { value: 'site_posts', label: 'Published articles' },
+        { value: 'site_updates', label: 'Social posts' },
+        { value: 'calculator', label: 'Pricing calculator' },
+        { value: 'billing_plans', label: 'KrabiClaw plans', platformOnly: true },
+      ],
+    },
+    items: { kind: 'list', label: 'Items', section: 'items', of: GRID_ITEM_FIELDS, availableWhen: { field: 'source', equals: ['manual'] } },
+    calculator: { kind: 'calculator', label: 'Calculator', translatable: false, section: 'calculator', availableWhen: { field: 'source', equals: ['calculator'] } },
+  }),
+
+  // A comparison is one editorial thing — this without us, this with us — held
+  // in one block. It was two feature_grids that only a `section` of
+  // "comparison-against" and "comparison-for" told apart, so the document was
+  // naming the component that drew it.
+  comparison: blockDefinitionWithMetadata('comparison', 'Comparison', 'Two sides, set against each other.', ALL_RECIPES, {
+    title: text('Section title', { section: 'settings' }),
+    description: prose('Description', { section: 'settings' }),
+    problem_title: text('Without heading', { section: 'without' }),
+    problem_label: text('Without label', { section: 'without' }),
+    problem_items: {
+      kind: 'list', label: 'Without', section: 'problem_items',
+      of: { title: text('Title', { required: true }), description: prose('Description') },
+    },
+    solution_title: text('With heading', { section: 'with' }),
+    solution_label: text('With label', { section: 'with' }),
+    solution_items: {
+      kind: 'list', label: 'With', section: 'solution_items',
+      of: { title: text('Title', { required: true }), description: prose('Description') },
+    },
+  }),
+
+  // Numbers with what they count. Items are a value and its label, which is a
+  // different thing from a feature's title and its prose.
+  stat_grid: blockDefinitionWithMetadata('stat_grid', 'Stats', 'Figures and what they measure.', ALL_RECIPES, {
+    title: text('Section title', { section: 'settings' }),
+    description: prose('Description', { section: 'settings' }),
+    label: text('Label', { section: 'settings' }),
+    items: {
+      kind: 'list', label: 'Stats', section: 'items',
+      of: { value: text('Figure', { required: true }), title: text('What it measures', { required: true }) },
+    },
+  }),
+
+  // Something the reader can ask an assistant to do, and what happens when they
+  // do. The prompt is the content; a feature grid has nothing like it.
+  workflow_grid: blockDefinitionWithMetadata('workflow_grid', 'Workflows', 'Things to ask for, and what they do.', ALL_RECIPES, {
+    title: text('Section title', { section: 'settings' }),
+    description: prose('Description', { section: 'settings' }),
+    label: text('Label', { section: 'settings' }),
+    items: {
+      kind: 'list', label: 'Workflows', section: 'items',
+      of: {
+        title: text('Title', { required: true }),
+        prompt: prose('What to ask'),
+        description: prose('What happens'),
+        icon: { kind: 'enum', label: 'Icon', translatable: false, section: 'icon' },
+      },
+    },
+  }),
+
+  // A video with the points it makes.
+  video_feature: blockDefinitionWithMetadata('video_feature', 'Video', 'A video and what it shows.', ALL_RECIPES, {
+    title: text('Section title', { section: 'settings' }),
+    description: prose('Description', { section: 'settings' }),
+    video_title: text('Video title', { section: 'video' }),
+    video_url: link('Video URL', { section: 'video' }),
+    items: {
+      kind: 'list', label: 'Points', section: 'items',
+      of: { title: text('Title', { required: true }), description: prose('Description') },
+    },
+  }),
+
+  // A picture and the words beside it — "Media & Text" in WordPress, "Image
+  // with text" in Shopify. It exists because a brand story is one editorial
+  // thing and was stored as three unrelated blocks (`story.title`,
+  // `story.image`, `story.body`) that the renderer re-assembled at display
+  // time, in the alphabetical order the migration wrote them.
+  media_text: blockDefinitionWithMetadata('media_text', 'Image with text', 'A picture and the words beside it.', ALL_RECIPES, {
+    title: text('Title'),
+    body: prose('Text'),
+    media: { kind: 'media', label: 'Image or video', translatable: false, section: 'image', slot: 'media', accept: 'any' },
+    label: text('Link label', { section: 'link', pairedWith: 'url' }),
+    url: link('Link URL', { section: 'link', pairedWith: 'label' }),
+  }),
+
+  // The form a visitor writes in. It has no fields of its own — what it asks
+  // for is the site's contact form — but it is a block so that a page says
+  // where on it the form sits, which was fixed in the markup before.
+  contact_form: blockDefinitionWithMetadata('contact_form', 'Contact form', 'A form a visitor writes in.', ['contact', 'custom'], {},
+    { accessibility: 'inherited', seo: 'none' }),
+
+  team_grid: blockDefinitionWithMetadata('team_grid', 'Team', 'The people behind the business.', ALL_RECIPES, {
+    title: text('Section title', { section: 'settings' }),
+    description: prose('Description', { section: 'settings' }),
+    items: {
+      kind: 'list', label: 'People', section: 'items',
+      of: {
+        // A person's own name is translated too: a Japanese or Thai site writes
+        // it in its own script rather than transliterating at read time.
+        first_name: text('First name', { required: true }),
+        last_name: text('Last name'),
+        title: text('Role'),
+        bio: prose('Bio'),
+        media: { kind: 'media', label: 'Photo', translatable: false, section: 'image', slot: 'image' },
+      },
+    },
+  }),
+
+  testimonial_grid: blockDefinitionWithMetadata('testimonial_grid', 'Reviews', "The site's published reviews.", ALL_RECIPES, {
+    title: text('Section title', { section: 'settings' }),
+    description: prose('Description', { section: 'settings' }),
+  }),
+
+  donation_choices: blockDefinitionWithMetadata('donation_choices', 'Donation amounts', 'The amounts a donor may choose.', ['donate'], {
+    title: text('Title'),
+    description: prose('Description'),
+    destination: link('Destination', { section: 'destination' }),
+    tiers: {
+      kind: 'list', label: 'Amounts', section: 'tiers',
+      // The editor writes amount/title/description. The old declaration named a
+      // `label` key that nothing writes, so no tier was ever translatable.
+      of: {
+        amount: { kind: 'text', label: 'Amount', translatable: false, section: 'copy' },
+        title: text('Title', { required: true }),
+        description: prose('Description'),
+      },
+    },
+    // A donate page is a recipe the template guarantees, and NCLS's is stored
+    // as a `system` page like every other recipe page on that site. Restricting
+    // this block to `recipe` pages made that page unsaveable: the writer
+    // validates every block on write, so the whole document was refused. The
+    // recipe list above is the gate that matters.
+  }, { allowedPageTypes: ['custom', 'recipe', 'system'] }),
+
+  page_grid: blockDefinitionWithMetadata('page_grid', 'Pages', 'Cards linking to other pages.', ['home', 'about', 'pricing', 'custom', 'services'], {
+    title: text('Section title', { section: 'settings' }),
+    accent: text('Emphasised phrase', { section: 'settings' }),
+    description: prose('Description', { section: 'settings' }),
+    page_ids: { kind: 'reference', label: 'Pages', translatable: false, section: 'pages', reference: 'page' },
+  }, { allowedPageTypes: ['custom', 'recipe', 'system'] }),
+
+  product_grid: blockDefinitionWithMetadata('product_grid', 'Products', 'Cards linking to products.', ['home', 'about', 'pricing', 'custom', 'services', 'menu', 'order', 'products'], {
+    title: text('Section title', { section: 'settings' }),
+    description: prose('Description', { section: 'settings' }),
+    collection_id: { kind: 'reference', label: 'Collection', translatable: false, section: 'products', reference: 'collection' },
+    product_ids: { kind: 'reference', label: 'Products', translatable: false, section: 'products', reference: 'product' },
+  }, { allowedPageTypes: ['custom', 'recipe', 'system'] }),
+
+  location_grid: blockDefinitionWithMetadata('location_grid', 'Locations', 'Cards linking to locations.', ['home', 'about', 'contact', 'custom'], {
+    title: text('Section title', { section: 'settings' }),
+    description: prose('Description', { section: 'settings' }),
+    location_ids: { kind: 'reference', label: 'Locations', translatable: false, section: 'locations', reference: 'location' },
+  }, { allowedPageTypes: ['custom', 'recipe', 'system'] }),
+
+  // An article block, not a page block: it is registered so that one list of
+  // block types is the only list, and refused on every page by holding no
+  // recipe and no page type. Before this it existed only in the server's own
+  // type list, so a page carrying one threw "not registered" on read instead of
+  // being refused on write.
+  ai_assistance: blockDefinitionWithMetadata('ai_assistance', 'Ask AI', 'Suggested prompts for an assistant.', [], {
+    label: text('Label', { section: 'settings' }),
+    intro: prose('Intro', { section: 'settings' }),
+    prompts: {
+      kind: 'list', label: 'Prompts', section: 'items',
+      of: {
+        title: text('Title', { required: true }),
+        prompt: prose('Prompt'),
+        description: prose('Description'),
+        copy_label: text('Copy button label'),
+      },
+    },
+  }, { allowedPageTypes: [] }),
 }
 
 const BLOCK_TYPES = new Set(Object.keys(TENANT_PAGE_BLOCK_REGISTRY))
@@ -178,7 +512,7 @@ function blockDefinitionWithMetadata(
   label: string,
   description: string,
   allowedRecipes: readonly string[],
-  fields: readonly string[],
+  fields: Readonly<Record<string, TenantPageField>>,
   options: Partial<Pick<TenantPageBlockDefinition, 'accessibility' | 'seo' | 'allowedPageTypes'>> = {},
 ): TenantPageBlockDefinition {
   return {
@@ -189,12 +523,11 @@ function blockDefinitionWithMetadata(
     allowedRecipes,
     allowedPageTypes: options.allowedPageTypes ?? TENANT_PAGE_TYPES,
     fields,
-    editor: 'typed-fields',
-    renderer: { saya: 'tenant-page', blawby: 'tenant-page' },
     accessibility: options.accessibility ?? 'required',
     seo: options.seo ?? 'inherited',
   }
 }
+
 
 const STRING_FIELDS = new Set([
   'eyebrow', 'title', 'subtitle', 'text', 'markdown', 'caption', 'description',
@@ -223,10 +556,12 @@ export function validateContentBlockData(type: string, data: Record<string, unkn
     }
   }
   // These blocks select canonical read-only records; they never store copies.
+  // A testimonial grid has no source to choose — reviews are the site's reviews —
+  // so it declares no `source` field. The editor used to offer "Items I write"
+  // for it, which the writer refused: an editing surface for data it rejected.
   if (type === 'faq' || type === 'testimonial_grid') {
     if (data.items !== undefined) throw new Error(`${type}.items is not stored; Q&A and reviews are read-only records.`)
     if (type === 'faq' && !FAQ_BLOCK_SOURCES.some(source => source === data.source)) throw new Error('faq.source must select page_qa or site_qa.')
-    if (type === 'testimonial_grid' && data.source !== 'site_reviews') throw new Error('testimonial_grid.source must select site_reviews.')
   }
   if (type === 'how_to' && Array.isArray(data.steps)) {
     for (const [index, step] of data.steps.entries()) {
@@ -430,17 +765,6 @@ export function blockDefinition(type: TenantPageBlockType): TenantPageBlockDefin
   return TENANT_PAGE_BLOCK_REGISTRY[type]
 }
 
-/**
- * A hero block's `section`: which slot on its page the block fills. The home
- * page's hero is the full-bleed one; every other page's is the compact page
- * hero. A template that places several blocks of one type on a page resolves
- * them by this key — components/blawby/BlawbyHome.vue picks its hero with
- * `data.section === 'hero'` — so whoever writes the block has to set it, and
- * it is derived here rather than in each producer.
- */
-export function heroBlockSection(path: string): 'hero' | 'page-hero' {
-  return normalizeTenantPagePath(path) === '/' ? 'hero' : 'page-hero'
-}
 
 export function findTenantPageBlock(
   blocks: TenantPageBlock[],

@@ -1,43 +1,33 @@
 <template>
-  <AppSection padding="xl">
+  <AppSection v-if="items.length" padding="xl">
     <div class="mb-16 max-w-2xl">
-      <p class="saya-kicker mb-6">{{ findUsKicker }}</p>
-      <h2 class="saya-display-md text-default">
-        {{ heading }}
-      </h2>
+      <p class="saya-kicker mb-6">{{ kicker }}</p>
+      <h2 class="saya-display-md text-default">{{ heading }}</h2>
     </div>
-    <!-- Real locations -->
-    <div v-if="locations.length > 0" :class="['grid gap-8', locations.length > 1 ? 'md:grid-cols-2' : '']">
+    <div :class="['grid gap-8', items.length > 1 ? 'md:grid-cols-2' : '']">
       <NuxtLink
-        v-for="(loc, locIdx) in locations"
-        :key="loc.id"
-        :ref="(el: Element | { $el?: Element } | null) => { const node = el && ('$el' in el ? el.$el : el); if (node) locCardRefs[locIdx] = node as HTMLElement; else locCardRefs[locIdx] = null; }"
-        :to="localePath(`/locations/${loc.slug}`)"
+        v-for="(item, index) in items"
+        :key="item.id"
+        :ref="(el: Element | { $el?: Element } | null) => { const node = el && ('$el' in el ? el.$el : el); locCardRefs[index] = (node as HTMLElement) ?? null }"
+        :to="localePath(item.url)"
         class="group block overflow-hidden border border-default text-default no-underline transition hover:border-muted"
       >
         <div class="aspect-video overflow-hidden bg-muted">
-          <!-- Poster image when location media is available. Video swaps in when the card scrolls into view. -->
-          <template v-if="locationMedia(loc)?.kind === 'video' && locationMedia(loc)?.public_url && visibleLocCards.has(locIdx)">
+          <!-- Poster image always ships in the SSR HTML; the video swaps in when the card scrolls into view. -->
+          <template v-if="item.media?.kind === 'video' && item.media.public_url && visibleLocCards.has(index)">
             <ClientOnly>
               <video
-                :src="locationMedia(loc)?.public_url ?? undefined"
-                :poster="locationMedia(loc)?.thumbnail_url || undefined"
+                :src="item.media.public_url ?? undefined"
+                :poster="item.media.thumbnail_url || undefined"
                 autoplay muted loop playsinline preload="none"
                 class="aspect-video w-full object-contain"
               />
             </ClientOnly>
           </template>
           <UImage
-            v-else-if="locationMedia(loc)?.thumbnail_url"
-            :src="locationMedia(loc)?.thumbnail_url"
-            :alt="loc.title"
-            loading="lazy"
-            class="aspect-video w-full object-contain transition-transform duration-500 group-hover:scale-105"
-          />
-          <UImage
-            v-else-if="locationMedia(loc)?.kind !== 'video' && locationMedia(loc)?.public_url"
-            :src="locationMedia(loc)?.public_url"
-            :alt="loc.title"
+            v-else-if="item.media?.thumbnail_url || (item.media?.kind !== 'video' && item.media?.public_url)"
+            :src="item.media.thumbnail_url || item.media.public_url"
+            :alt="item.media.alt_text || item.title"
             loading="lazy"
             class="aspect-video w-full object-contain transition-transform duration-500 group-hover:scale-105"
           />
@@ -46,20 +36,15 @@
           </div>
         </div>
         <div class="p-8 pb-9">
-          <div v-if="loc.city" class="saya-eyebrow mb-5 flex items-center gap-2 text-muted">
+          <div v-if="item.city" class="saya-eyebrow mb-5 flex items-center gap-2 text-muted">
             <span class="size-1.5 rounded-full bg-zinc-300" />
-            {{ loc.city }}
+            {{ item.city }}
           </div>
-          <div class="saya-display saya-italic text-4xl text-default leading-none">{{ loc.title }}</div>
+          <div class="saya-display saya-italic text-4xl text-default leading-none">{{ item.title }}</div>
           <div class="mt-6 border-t border-default pt-5">
             <span class="saya-eyebrow text-muted">{{ visitLocationCta }}</span>
           </div>
         </div>
-      </NuxtLink>
-    </div>
-    <div v-else-if="isAuthenticated" class="pt-8">
-      <NuxtLink to="/dashboard" class="inline-flex items-center justify-center rounded-full border border-default px-3 py-1.5 text-sm font-medium text-default no-underline transition hover:bg-muted">
-        {{ connectGoogleCta }}
       </NuxtLink>
     </div>
   </AppSection>
@@ -67,52 +52,68 @@
 
 <script setup lang="ts">
 import AppSection from '~/components/ui/AppSection.vue'
+import type { PublicTenantPage } from '~/server/utils/public-tenant-pages'
+import type { TenantPageBlock } from '~/utils/tenant-page-blocks'
+import { blockText, blockRecords } from '~/utils/tenant-page-block-data'
 
-interface Props {
-  data?: {
-    locations?: Array<{
-      id: string
-      slug: string
-      title: string
-      city?: string
-      media?: Array<{ slot: string; public_url?: string | null; thumbnail_url?: string | null; kind?: string | null }>
-    }>
-    heading?: string
-    isAuthenticated?: boolean
-    findUsKicker?: string
-    visitLocationCta?: string
-    connectGoogleCta?: string
+// Saya's locations grid. The block names the locations and the loader resolves
+// each one's title, town, route and picture, so the card shows what the block
+// selected rather than every location the site happens to have.
+const props = defineProps<{ block: TenantPageBlock; page: PublicTenantPage }>()
+const { localePath, locale, t } = useI18n()
+const { site } = useTenantSite()
+
+const homeCopy = computed(() => getVerticalCopy(site?.vertical, locale.value))
+const items = computed(() => blockRecords(props.block.data.items).map((item) => {
+  const media = blockRecords(item.media)[0] ?? null
+  return {
+    id: blockText(item.id),
+    title: blockText(item.title),
+    city: blockText(item.city),
+    url: blockText(item.url),
+    media: media
+      ? {
+          public_url: blockText(media.public_url) || null,
+          thumbnail_url: blockText(media.thumbnail_url) || null,
+          kind: blockText(media.kind) || null,
+          alt_text: blockText(media.alt_text) || null,
+        }
+      : null,
   }
-}
+}).filter(item => item.id && item.title && item.url))
 
-const props = withDefaults(defineProps<Props>(), {
-  data: () => ({})
-})
-const { localePath, t } = useI18n()
+// The block's own title wins; the vertical's phrasing is the fallback, because
+// it counts the locations ("Two places to find us").
+const heading = computed(() => blockText(props.block.data.title) || homeCopy.value.locationGroupLine(items.value.length) || t('saya.home.locations_heading'))
+const kicker = computed(() => blockText(props.block.data.description) || homeCopy.value.findUsKicker)
+const visitLocationCta = computed(() => homeCopy.value.visitLocationCta)
 
-type Location = NonNullable<NonNullable<Props['data']>['locations']>[number]
-const locations = computed(() => props.data?.locations || [])
-const locationMedia = (location: Location) => location.media?.find(item => item.slot === 'hero') ?? null
-const heading = computed(() => props.data?.heading || t('saya.home.locations_heading'))
-
-// Load location card videos via IntersectionObserver when they scroll into
-// view instead of eagerly — the poster/thumbnail image is always in SSR HTML.
+// Location card videos load when they scroll into view; the poster is in the
+// SSR HTML from the first byte.
 const locCardRefs: (HTMLElement | null)[] = []
 const visibleLocCards = ref(new Set<number>())
 onMounted(() => {
   if (!('IntersectionObserver' in window)) return
-  const obs = new IntersectionObserver((entries) => {
-    entries.forEach((entry) => {
-      if (!entry.isIntersecting) return
-      const i = locCardRefs.indexOf(entry.target as HTMLElement)
-      if (i >= 0) { visibleLocCards.value = new Set([...visibleLocCards.value, i]); obs.unobserve(entry.target) }
-    })
+  const observer = new IntersectionObserver((entries) => {
+    for (const entry of entries) {
+      if (!entry.isIntersecting) continue
+      const index = locCardRefs.indexOf(entry.target as HTMLElement)
+      if (index >= 0) {
+        visibleLocCards.value = new Set([...visibleLocCards.value, index])
+        observer.unobserve(entry.target)
+      }
+    }
   }, { rootMargin: '200px' })
-  watch(() => locations.value.length, () => { nextTick(() => locCardRefs.forEach((el) => el && obs.observe(el))) }, { immediate: true })
-  onUnmounted(() => obs.disconnect())
+  // Keyed on the items themselves: a reorder or a same-length replacement
+  // renders different cards, and watching the count alone left those cards
+  // unobserved, so their videos never started.
+  watch(() => items.value.map(item => item.id).join('|'), () => {
+    // The set is keyed by index, so a different list of cards must not inherit
+    // the old one's visibility.
+    visibleLocCards.value = new Set()
+    observer.disconnect()
+    nextTick(() => locCardRefs.forEach(el => el && observer.observe(el)))
+  }, { immediate: true })
+  onUnmounted(() => observer.disconnect())
 })
-const isAuthenticated = computed(() => props.data?.isAuthenticated || false)
-const findUsKicker = computed(() => props.data?.findUsKicker || t('saya.location.find_us'))
-const visitLocationCta = computed(() => props.data?.visitLocationCta || t('saya.home.visit_location'))
-const connectGoogleCta = computed(() => props.data?.connectGoogleCta || t('saya.home.import_google_maps'))
 </script>
