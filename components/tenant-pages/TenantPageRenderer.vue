@@ -1,10 +1,15 @@
 <template>
   <article
     data-tenant-page
-    data-template="saya"
-    class="mx-auto max-w-7xl px-4 py-16 text-default sm:px-6 lg:px-8"
+    :data-template="template"
+    :class="template === 'saya' ? 'mx-auto max-w-7xl px-4 py-16 text-default sm:px-6 lg:px-8' : 'text-default'"
   >
     <section v-for="block in renderedBlocks" :key="block.id" :data-block-type="block.type" :data-parity-section="sectionKey(block)" class="tenant-page-block">
+      <!--
+        A template that draws this block its own way draws it; otherwise the
+        markup below is the presentation. See utils/tenant-page-presentation.ts.
+      -->
+      <component :is="presentationOf(block)" v-if="presentationOf(block)" :block="block" :page="page" />
       <!--
         The story is one thing — a headline, a photograph and the words — and it
         reads headline, photograph, words. Its three fields arrived as three
@@ -13,7 +18,7 @@
         and, on a page carrying story.title, why the headline came after it.
         The story renders here as one section, at the first of those blocks.
       -->
-      <template v-if="isStoryBlock(block)">
+      <template v-else-if="isStoryBlock(block)">
         <div data-story class="my-16 max-w-4xl">
           <p class="saya-kicker mb-6">{{ storyKicker }}</p>
           <h2 v-if="story.title" class="saya-display-md text-default">{{ story.title }}</h2>
@@ -201,9 +206,25 @@
 <script setup lang="ts">
 import type { PublicTenantPage } from '~/server/utils/public-tenant-pages'
 import type { TenantPageBlock } from '~/utils/tenant-page-blocks'
+import type { PublicTemplateSlug } from '~/utils/template-registry'
+import { tenantPageBlockPresentation } from '~/utils/tenant-page-presentation'
 import { getVerticalCopy } from '~/utils/vertical-copy'
 
-const props = defineProps<{ page: PublicTenantPage }>()
+const props = withDefaults(defineProps<{ page: PublicTenantPage; template?: PublicTemplateSlug }>(), {
+  template: undefined,
+})
+
+/**
+ * Which template's presentations apply. The prop wins so a route may render a
+ * page for a template other than the host's — pages/contact/index.vue renders a
+ * Saya section on a Blawby host — and the resolved template is the default.
+ */
+const { template: resolvedTemplate } = usePublicTemplate()
+const template = computed<PublicTemplateSlug>(() => props.template ?? resolvedTemplate.value.slug)
+
+function presentationOf(block: TenantPageBlock): string | null {
+  return tenantPageBlockPresentation(template.value, block.type, text(block.data.preset))
+}
 const sanitizer = useHtmlSanitizer()
 const { t, locale } = useI18n()
 const { site } = useTenantSite()
