@@ -409,7 +409,12 @@ export const TENANT_PAGE_BLOCK_REGISTRY: Record<TenantPageBlockType, TenantPageB
         description: prose('Description'),
       },
     },
-  }, { allowedPageTypes: ['recipe'] }),
+    // A donate page is a recipe the template guarantees, and NCLS's is stored
+    // as a `system` page like every other recipe page on that site. Restricting
+    // this block to `recipe` pages made that page unsaveable: the writer
+    // validates every block on write, so the whole document was refused. The
+    // recipe list above is the gate that matters.
+  }, { allowedPageTypes: ['custom', 'recipe', 'system'] }),
 
   page_grid: blockDefinitionWithMetadata('page_grid', 'Pages', 'Cards linking to other pages.', ['home', 'about', 'pricing', 'custom', 'services'], {
     title: text('Section title', { section: 'settings' }),
