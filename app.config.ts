@@ -44,7 +44,7 @@ export default defineAppConfig({
       slots: {
         // Both variants: Nuxt UI's base is `px-4 sm:px-6`, and an unprefixed
         // override does not outrank a `sm:` one in tailwind-merge.
-        root: 'px-(--kc-nav-gutter) sm:px-(--kc-nav-gutter)',
+        root: 'px-(--kc-nav-gutter) sm:px-(--kc-nav-gutter) border-b-0',
         toggle: 'hidden'
       }
     },
