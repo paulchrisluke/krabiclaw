@@ -1,9 +1,17 @@
 <template>
   <!--
+    A grid whose rows are KrabiClaw's plans is the plans section. `source` is a
+    declared field on this block and the component reads it, the same way a
+    Saya grid reads its own: the map keys presentation on the template and the
+    block type, and what the block says about its own rows stays the block's.
+  -->
+  <PlatformPlansSection v-if="isPlans" :block="block" :page="page" />
+
+  <!--
     The homepage feature band: a gradient wash, hairlines top and bottom, and
     cards with navy gradient icon tiles that lift on hover.
   -->
-  <section v-if="variant === 'home'" id="features" class="relative py-24 overflow-hidden" data-parity-section="features">
+  <section v-else-if="variant === 'home'" id="features" class="relative py-24 overflow-hidden" data-parity-section="features">
     <div class="absolute inset-0 -z-10" style="background: linear-gradient(180deg, var(--ui-bg-elevated) 0%, var(--ui-bg) 100%);"></div>
     <div class="absolute top-0 inset-x-0 h-px" style="background: linear-gradient(90deg, transparent 0%, var(--kc-border) 50%, transparent 100%);"></div>
     <div class="absolute bottom-0 inset-x-0 h-px" style="background: linear-gradient(90deg, transparent 0%, var(--kc-border) 50%, transparent 100%);"></div>
@@ -122,6 +130,10 @@ export interface PlatformFeatureCard {
  */
 const props = defineProps<{ block: TenantPageBlock; page: PublicTenantPage }>()
 
+import PlatformPlansSection from '~/components/platform/marketing/PlatformPlansSection.vue'
+
+/** KrabiClaw's own plans, read from billing rather than written into a page. */
+const isPlans = computed(() => blockText(props.block.data.source) === 'billing_plans')
 const eyebrow = computed(() => blockTextOrNull(props.block.data.eyebrow))
 const title = computed(() => blockTextOrNull(props.block.data.title))
 const titleMuted = computed(() => blockTextOrNull(props.block.data.title_muted))
