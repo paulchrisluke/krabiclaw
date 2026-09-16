@@ -1,6 +1,6 @@
 <template>
   <!--
-    Settings, Brand, Inbox and Locations are their own screens with their own
+    Settings, Brand, Messages and Locations are their own screens with their own
     shells. A location in particular is a different object with its own editor,
     the way choosing a listing leaves the listings index for that listing.
   -->

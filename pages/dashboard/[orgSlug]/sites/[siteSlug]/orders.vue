@@ -58,6 +58,7 @@
         </div>
         <UButton :loading="savingId === location.id" :disabled="!canSaveLocation(location)" icon="i-lucide-check" @click="saveLocation(location)">Save links</UButton>
       </div>
+      <UAlert v-if="saveErrors[location.id]" color="error" variant="soft" :description="saveErrors[location.id]" class="mt-3" />
     </UCard>
   </div>
   </div>
@@ -87,7 +88,7 @@ interface OrderForm {
 }
 
 const route = useRoute()
-const toast = useToast()
+const saveErrors = reactive<Record<string, string | undefined>>({})
 const locations = ref<Array<LocationRow & { addressText: string; form: OrderForm }>>([])
 const loading = ref(true)
 const loadError = ref<string | null>(null)
@@ -170,6 +171,7 @@ async function loadOrder() {
 async function saveLocation(location: LocationRow & { form: OrderForm }) {
   if (!canSaveLocation(location)) return
   savingId.value = location.id
+  saveErrors[location.id] = undefined
   try {
     await dashboardApi(`/api/dashboard/locations/${location.id}`, {
       method: 'PATCH',
@@ -181,9 +183,8 @@ async function saveLocation(location: LocationRow & { form: OrderForm }) {
       validate: (value): value is { success: true; location: ApiRecord } =>
         isRecord(value) && value.success === true && isRecord(value.location),
     })
-    toast.add({ description: 'Ordering links saved', color: 'success' })
   } catch (error) {
-    toast.add({ description: error instanceof Error ? error.message : 'Failed to save ordering links', color: 'error' })
+    saveErrors[location.id] = error instanceof Error ? error.message : 'Failed to save ordering links'
   } finally {
     savingId.value = null
   }

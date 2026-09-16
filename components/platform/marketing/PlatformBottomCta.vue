@@ -14,25 +14,26 @@
 </template>
 
 <script setup lang="ts">
+import type { PublicTenantPage } from '~/server/utils/public-tenant-pages'
+import type { TenantPageBlock } from '~/utils/tenant-page-blocks'
+import { blockText, blockTextOrNull } from '~/utils/tenant-page-block-data'
 /**
  * The closing call to action: a title, a line, the account button and an
  * outline button. The vertical pages draw it large; About draws it at the
  * size of its other cards.
  */
-withDefaults(defineProps<{
-  size?: 'md' | 'lg'
-  title: string
-  description?: string | null
-  label?: string | null
-  url?: string | null
-  secondaryLabel?: string | null
-  secondaryUrl?: string | null
-}>(), {
-  size: 'lg',
-  description: null,
-  label: null,
-  url: null,
-  secondaryLabel: null,
-  secondaryUrl: null,
-})
+const props = defineProps<{ block: TenantPageBlock; page: PublicTenantPage }>()
+
+const title = computed(() => blockText(props.block.data.title))
+const description = computed(() => blockTextOrNull(props.block.data.description))
+const label = computed(() => blockTextOrNull(props.block.data.label))
+const url = computed(() => blockTextOrNull(props.block.data.url))
+const secondaryLabel = computed(() => blockTextOrNull(props.block.data.secondary_label))
+const secondaryUrl = computed(() => blockTextOrNull(props.block.data.secondary_url))
+/**
+ * A page whose whole job is to sell one vertical closes large; a prompt inside
+ * a page that is about something else reads at the size of its other cards.
+ */
+const LARGE_PAGES = new Set(['/', '/restaurants', '/experiences', '/legal'])
+const size = computed<'md' | 'lg'>(() => (LARGE_PAGES.has(props.page.path) ? 'lg' : 'md'))
 </script>

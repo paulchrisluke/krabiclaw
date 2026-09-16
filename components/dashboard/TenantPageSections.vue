@@ -33,7 +33,7 @@
     :page-id="pageId"
   />
 
-  <UDashboardPanel v-else id="site-page-sections" :ui="{ body: 'min-h-0 gap-0! overflow-hidden! p-0! sm:p-0!' }">
+  <UDashboardPanel v-else id="site-page-sections">
     <template #header>
       <UDashboardNavbar :title="openTitle" :toggle="false">
         <template #leading>
@@ -96,7 +96,6 @@ import { tenantPageBlockIsHub, tenantPageBlockLabel } from '~/utils/tenant-page-
 const props = defineProps<{ siteId: string; pageId: string }>()
 
 const route = useRoute()
-const toast = useToast()
 const recordPath = computed(() => `/dashboard/${String(route.params.orgSlug)}/sites/${String(route.params.siteSlug)}/pages/${props.pageId}`)
 const sectionsPath = computed(() => `${recordPath.value}/sections`)
 const frame = useEditorFrame(sectionsPath)
@@ -178,7 +177,6 @@ async function save() {
   errorMessage.value = ''
   try {
     await commit()
-    toast.add({ description: 'Section saved', color: 'success' })
     await navigateTo(sectionsPath.value)
   } catch (cause) {
     errorMessage.value = getErrorMessage(cause, 'Failed to save this page')

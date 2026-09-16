@@ -1,7 +1,6 @@
 <template>
   <UDashboardPanel
     :id="surface === 'brand' ? 'site-brand' : 'site-settings'"
-    :ui="{ body: 'min-h-0 !gap-0 !overflow-hidden !p-0 sm:!p-0' }"
   >
     <template #header>
       <UDashboardNavbar :title="navbarTitle" :toggle="false">
@@ -34,6 +33,7 @@
         :show-actions="showActions"
         :saving="saving"
         :save-disabled="saveDisabled"
+        :error="editorError"
         :detail-title="detailTitle"
         :dismiss-to="dismissTo"
         @cancel="cancelEditor"
@@ -222,6 +222,7 @@
                 <UButton icon="i-simple-icons-facebook" :loading="connectingFacebook" @click="startFacebookConnect">{{ facebookConnection?.connected ? 'Reconnect' : 'Connect' }}</UButton>
               </div>
             </UCard>
+            <UAlert v-if="facebookError" color="error" variant="soft" icon="i-lucide-circle-alert" :description="facebookError" class="mt-4" />
           </div>
 
           <UAlert v-if="validationMessage" class="mt-6" color="error" variant="soft" :description="validationMessage" />
@@ -243,7 +244,8 @@ const surface = computed(() => props.surface)
 const dashboardApi = useDashboardApi()
 const route = useRoute()
 const router = useRouter()
-const toast = useToast()
+const editorError = ref<string | null>(null)
+const facebookError = ref('')
 const dashboard = useDashboardSite()
 const siteDashboardPath = computed(() => `/dashboard/${String(route.params.orgSlug)}/sites/${String(route.params.siteSlug)}`)
 const brandPath = computed(() => `${siteDashboardPath.value}/brand`)
@@ -298,9 +300,8 @@ async function scheduleWorkspaceDeletion() {
   // owner schedules it twice, or believes their workspace is safe.
   try {
     await dashboard.refresh()
-    toast.add({ title: 'Deletion scheduled', description: `Everything is deleted on ${deletionDateLabel.value}. Cancel here any time before then.`, icon: 'i-lucide-clock', color: 'warning' })
   } catch {
-    toast.add({ title: 'Deletion scheduled', description: 'Reload this page to see the date it happens on.', icon: 'i-lucide-clock', color: 'warning' })
+    // Ignore refresh error; deletion has already scheduled
   } finally {
     deletionSaving.value = false
   }
@@ -324,7 +325,6 @@ async function keepWorkspace() {
   try {
     await dashboard.refresh()
   } finally {
-    toast.add({ title: 'Deletion cancelled', icon: 'i-lucide-circle-check', color: 'success' })
     deletionSaving.value = false
   }
 }
@@ -583,6 +583,8 @@ function fillNotifications(notifications: { whatsapp_phone: string | null }) {
   whatsappPhone.value = notifications.whatsapp_phone ?? ''
 }
 function resetDraft() {
+  editorError.value = null
+  facebookError.value = ''
   if (loadedSettings.value) fillForm(loadedSettings.value)
   if (loadedNotifications.value) fillNotifications(loadedNotifications.value)
   newLocale.value = ''
@@ -625,38 +627,37 @@ function cancelEditor() {
   const destination = surface.value === 'brand' ? brandPath.value : firstSegment.value === 'search' && secondSegment.value ? `${settingsPath.value}/search` : settingsPath.value
   router.push(destination)
 }
-async function patchSettings(body: Record<string, unknown>, successMessage: string) {
+async function patchSettings(body: Record<string, unknown>) {
   const response = await dashboardApi<{ success: boolean; settings: SiteSettingsResponse }>('/api/dashboard/settings', { method: 'PATCH', body, validate: isSettingsResponse })
   fillForm(response.settings)
   originalSignature.value = editorSignature(detailKey.value)
-  toast.add({ description: successMessage, color: 'success' })
   await dashboard.refresh()
 }
 async function saveCurrentEditor() {
   if (saveDisabled.value || !detailKey.value) return
   saving.value = true
+  editorError.value = null
   try {
     switch (detailKey.value) {
-      case 'name': await patchSettings({ brand_name: form.brand_name.trim() }, 'Brand name saved'); break
-      case 'logo': await patchSettings({ media: [{ asset_id: form.logoAssetId, slot: 'logo' }] }, 'Logo saved'); break
-      case 'sharing-image': await patchSettings({ media: [{ asset_id: form.socialShareAssetId, slot: 'social_share' }] }, 'Social sharing image saved'); break
-      case 'description': await patchSettings({ brand_description: form.brand_description }, 'Description saved'); break
-      case 'color': await patchSettings({ brand_color: form.brand_color }, 'Brand color saved'); break
-      case 'contact': await patchSettings({ contact_email: form.contact_email.trim() }, 'Contact details saved'); break
-      case 'social': await patchSettings({ social_facebook_url: form.social_facebook_url.trim() || null, social_instagram_url: form.social_instagram_url.trim() || null, social_tiktok_url: form.social_tiktok_url.trim() || null }, 'Social profiles saved'); break
+      case 'name': await patchSettings({ brand_name: form.brand_name.trim() }); break
+      case 'logo': await patchSettings({ media: [{ asset_id: form.logoAssetId, slot: 'logo' }] }); break
+      case 'sharing-image': await patchSettings({ media: [{ asset_id: form.socialShareAssetId, slot: 'social_share' }] }); break
+      case 'description': await patchSettings({ brand_description: form.brand_description }); break
+      case 'color': await patchSettings({ brand_color: form.brand_color }); break
+      case 'contact': await patchSettings({ contact_email: form.contact_email.trim() }); break
+      case 'social': await patchSettings({ social_facebook_url: form.social_facebook_url.trim() || null, social_instagram_url: form.social_instagram_url.trim() || null, social_tiktok_url: form.social_tiktok_url.trim() || null }); break
       case 'currency': {
         if (!form.default_currency) throw new Error('Choose the currency this site prices in.')
-        await patchSettings({ default_currency: form.default_currency }, 'Currency saved')
+        await patchSettings({ default_currency: form.default_currency })
         break
       }
-      case 'analytics': await patchSettings({ google_analytics_measurement_id: form.google_analytics_measurement_id.trim() }, 'Google Analytics saved'); break
-      case 'verification': await patchSettings({ google_site_verification: form.google_site_verification.trim() }, 'Search verification saved'); break
-      case 'visibility': await patchSettings({ robots: searchIndexed.value ? 'index,follow' : 'noindex,nofollow' }, 'Search visibility saved'); break
+      case 'analytics': await patchSettings({ google_analytics_measurement_id: form.google_analytics_measurement_id.trim() }); break
+      case 'verification': await patchSettings({ google_site_verification: form.google_site_verification.trim() }); break
+      case 'visibility': await patchSettings({ robots: searchIndexed.value ? 'index,follow' : 'noindex,nofollow' }); break
       case 'notifications': {
         const response = await dashboardApi<{ notifications: { whatsapp_phone: string | null } }>(`/api/editor/sites/${siteId}/notifications`, { method: 'PATCH', body: { whatsapp_phone: whatsappPhone.value.trim() }, validate: isNotificationsResponse })
         fillNotifications(response.notifications)
         originalSignature.value = editorSignature(detailKey.value)
-        toast.add({ description: 'Notifications saved', color: 'success' })
         break
       }
       case 'localization': {
@@ -665,15 +666,16 @@ async function saveCurrentEditor() {
         break
       }
     }
-  } catch (error) { toast.add({ description: errorMessage(error, 'Failed to save this setting'), color: 'error' }) } finally { saving.value = false }
+  } catch (error) { editorError.value = errorMessage(error, 'Failed to save this setting') } finally { saving.value = false }
 }
 async function startFacebookConnect() {
   connectingFacebook.value = true
+  facebookError.value = ''
   try {
     const response = await dashboardApi<{ authUrl?: string; error?: string }>('/api/integrations/facebook-pages/auth', { method: 'POST', validate: (value): value is { authUrl?: string; error?: string } => isRecord(value) && (value.authUrl === undefined || typeof value.authUrl === 'string') && (value.error === undefined || typeof value.error === 'string') })
     if (!response.authUrl) throw new Error(response.error || 'No authorization URL returned')
     await navigateTo(response.authUrl, { external: true })
-  } catch (error) { toast.add({ description: errorMessage(error, 'Failed to connect Facebook'), color: 'error' }); connectingFacebook.value = false }
+  } catch (error) { facebookError.value = errorMessage(error, 'Failed to connect Facebook'); connectingFacebook.value = false }
 }
 const isLocalizationSettings = (value: unknown): value is LocalizationSettings =>
   isRecord(value) && Array.isArray(value.languages) && Array.isArray(value.available_catalogs)
@@ -711,7 +713,7 @@ async function mutateLocalization(path: string, method: 'POST' | 'DELETE', body?
     await loadLocalizationSettings()
     return true
   } catch (error) {
-    toast.add({ description: errorMessage(error, 'Localization request failed'), color: 'error' })
+    localizationError.value = errorMessage(error, 'Localization request failed')
     return false
   } finally {
     localizationBusy.value = false

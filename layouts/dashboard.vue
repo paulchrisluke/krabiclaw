@@ -10,6 +10,7 @@
         <span class="min-w-0 truncate text-sm font-medium text-highlighted">
           Impersonating <span class="font-semibold">{{ sessionData?.user?.email }}</span>
         </span>
+        <span v-if="impersonationError" class="text-xs text-error font-medium">{{ impersonationError }}</span>
         <UButton size="xs" color="warning" variant="soft" :loading="stoppingImpersonation" @click="stopImpersonating">
           Stop impersonating
         </UButton>
@@ -111,9 +112,6 @@ import type { DashboardScopeHeaderModel } from '~/lib/components/workspace/dashb
 import { dashboardOrganizationParentKey, dashboardScopeHeaderModelKey } from '~/lib/components/workspace/dashboard/dashboardScopeHeaderContext'
 import { authClient } from '~/lib/auth-client'
 import { useAnalytics } from '~/composables/useAnalytics'
-import { parseCmsFeatureOverrideDelta, resolveCmsCapabilities } from '~/config/cms-registry'
-import { resolvePublicTemplate } from '~/utils/template-registry'
-import { normalizeVertical, type SiteVertical } from '~/utils/vertical-copy'
 import '~/assets/css/dashboard.css'
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -149,7 +147,7 @@ const route = useRoute()
 const router = useRouter()
 const { sessionData, refresh: refreshSession } = await useAuthSession()
 const { trackDashboardVisited, setUserId } = useAnalytics()
-const toast = useToast()
+const impersonationError = ref<string | null>(null)
 const stoppingImpersonation = ref(false)
 const { searchTerm: dashboardSearchTerm, loading: dashboardSearchLoading, groups: dashboardSearchGroups } = useDashboardSearch()
 const dashboard = useDashboardSite()
@@ -237,7 +235,6 @@ const site = dashboard.site
 const sites = dashboard.sites
 const activeSiteId = dashboard.siteId
 const canManageOrganization = computed(() => ['owner', 'admin'].includes(organization.value?.role ?? ''))
-const dashboardLocation = useDashboardLocation()
 
 const organizations = computed<readonly AuthOrganization[]>(() => unref(organizationsState)?.data ?? [])
 const activeOrganizationId = computed(() => {
@@ -274,45 +271,14 @@ const siteSlugFromRoute = computed(() => {
 // once that state has been populated from an earlier page in the same session.
 const activeSiteSlug = computed(() => siteSlugFromRoute.value)
 const siteBase = computed(() => orgBase.value && activeSiteSlug.value ? `${orgBase.value}/sites/${activeSiteSlug.value}` : null)
-// locationsBase is the dedicated site locations index and the prefix for a
-// specific location's own routes.
-const locationsBase = computed(() => siteBase.value ? `${siteBase.value}/locations` : null)
-// Read straight off the route, the way mobileNavItems below already does for the
-// same value. This was aliasing the composable's `routeLocationSlug` to the name
-// of a *different* export, `currentLocationSlug`, which resolves a record before
-// answering — a lookup this has no use for, since the prefix it builds is a URL.
+// Read straight off the route for navigation and routing purposes
 const routeLocationSlug = computed(() => typeof route.params.locationSlug === 'string' ? route.params.locationSlug : null)
-const locationBase = computed(() => locationsBase.value && routeLocationSlug.value ? `${locationsBase.value}/${routeLocationSlug.value}` : null)
 const routeName = computed(() => typeof route.name === 'string' ? route.name : '')
 const isAccountRoute = computed(() => routeName.value.startsWith('dashboard-account'))
 // Set by routes that own their context and have no org/site scope of their own —
 // the onboarding wizard, which loads its own via a dedicated endpoint. Same meaning
 // as in layouts/editor.vue.
 const skipDashboardContext = computed(() => route.meta.skipDashboardContext === true)
-
-const vertical = computed(() => {
-  const raw = site.value?.vertical
-  if (!raw) return null
-  return normalizeVertical(raw) as SiteVertical
-})
-const templateSlug = computed(() => vertical.value ? resolvePublicTemplate({ themeId: site.value?.theme_id, vertical: vertical.value }).slug : null)
-// The composable already resolves the route's slug to its record; this was the
-// same find written out a second time.
-const currentLocationRow = dashboardLocation.currentLocation
-// The resolved definition always reflects BOTH the site's own override and, once drilled into a
-// location, that location's override too — a single resolveCmsCapabilities call feeds nav at
-// every scope rather than each scope re-deriving its own partial capability view.
-const capabilities = computed(() => {
-  if (!vertical.value || !templateSlug.value) return null
-  try {
-    return resolveCmsCapabilities(vertical.value, templateSlug.value, {
-      site: parseCmsFeatureOverrideDelta(site.value?.feature_overrides),
-      location: routeLocationSlug.value ? parseCmsFeatureOverrideDelta(currentLocationRow.value?.feature_overrides) : undefined,
-    })
-  } catch {
-    return null
-  }
-})
 
 const organizationLabel = computed(() => organization.value?.name ?? 'Organization')
 
@@ -380,17 +346,7 @@ const scopeHeaderModel = computed<DashboardScopeHeaderModel>(() => {
   }
 })
 
-// The children label comes from the resolved capabilities (locationVocabulary), not a
-// hardcoded string, so a service site correctly reads "Offices / Service
-// Areas" instead of "Locations".
-const locationsNavLabel = computed(() => capabilities.value?.locationVocabulary === 'office/service area' ? 'Offices / Service Areas' : 'Locations')
-// Nav goes to the list, never into a location the user did not choose. Picking
-// `locations[0]` here meant a multi-location tenant had the app decide which one
-// they meant, and no screen anywhere showed them all.
-const locationsNavTarget = computed(() => {
-  if (!locationsBase.value) return null
-  return scope.value === 'location' ? locationBase.value : locationsBase.value
-})
+
 
 provide(dashboardScopeHeaderModelKey, scopeHeaderModel)
 provide(dashboardOrganizationParentKey, computed(() => {
@@ -414,8 +370,8 @@ function isActivePath(path?: string, exact = false) {
 
 /**
  * Only the most specific matching item is active. Nav paths nest — a location's
- * Inbox lives under the Locations path — so plain prefix matching lit up both
- * Inbox and Locations at once. The longest matching path is the one the route
+ * Messages lives under the Locations path — so plain prefix matching lit up both
+ * Messages and Locations at once. The longest matching path is the one the route
  * actually belongs to.
  */
 function withActiveItem<T extends { to?: string; exact?: boolean }>(items: T[]): Array<T & { active: boolean }> {
@@ -434,18 +390,14 @@ const mobileNavItems = computed<DashboardMobileNavItem[]>(() => {
   const routeLocationBase = routeSiteBase && routeLocationSlug
     ? `${routeSiteBase}/locations/${encodeURIComponent(routeLocationSlug)}`
     : null
-  const isOrganization = scope.value === 'organization'
-  const childrenTo = isOrganization ? `${routeOrgBase}/sites` : locationsNavTarget.value
-  const inboxTo = isOrganization
-    ? `${routeOrgBase}/inbox`
-    : scope.value === 'location' && routeLocationBase
-      ? `${routeLocationBase}/inbox`
-      : routeSiteBase ? `${routeSiteBase}/inbox` : undefined
+  const messagesTo = scope.value === 'location' && routeLocationBase
+    ? `${routeLocationBase}/messages`
+    : routeSiteBase ? `${routeSiteBase}/messages` : `${routeOrgBase}/messages`
   const items: DashboardMobileNavItem[] = [
     { key: 'today', label: 'Today', icon: 'i-lucide-bookmark', to: routeOrgBase, exact: true },
     { key: 'calendar', label: 'Calendar', icon: 'i-lucide-calendar-days', to: `${routeOrgBase}/calendar` },
-    { key: 'children', label: isOrganization ? 'Sites' : locationsNavLabel.value, icon: isOrganization ? 'i-lucide-globe' : 'i-lucide-map-pin', to: childrenTo ?? undefined },
-    { key: 'inbox', label: 'Inbox', icon: 'i-lucide-inbox', to: inboxTo },
+    { key: 'children', label: 'Sites', icon: 'i-lucide-globe', to: `${routeOrgBase}/sites` },
+    { key: 'messages', label: 'Messages', icon: 'i-lucide-message-square', to: messagesTo },
   ]
   return withActiveItem(items)
 })
@@ -460,7 +412,7 @@ const { menuPageTo } = useDashboardMenu()
 const primaryNavItems = computed(() => mobileNavItems.value)
 // A signed-in owner always gets the header: the wordmark and the account menu
 // are user-scoped and need no organization. Only the nav links and the bottom
-// bar wait for an organization, because Today, Calendar, Sites and Inbox do not
+// bar wait for an organization, because Today, Calendar, Sites and Messages do not
 // exist until there is one. Gating both together is what left an owner who
 // abandoned onboarding with no way to reach account settings or log out.
 const showNavChrome = computed(() => primaryNavItems.value.length > 0 && !isAccountRoute.value)
@@ -544,6 +496,7 @@ onBeforeUnmount(() => {
 })
 
 async function stopImpersonating() {
+  impersonationError.value = null
   stoppingImpersonation.value = true
   try {
     const result = await authClient.admin.stopImpersonating()
@@ -552,11 +505,7 @@ async function stopImpersonating() {
     await navigateTo('/dashboard')
   } catch (error) {
     console.error('Failed to stop impersonation:', error)
-    toast.add({
-      title: 'Error',
-      description: 'Failed to stop impersonation',
-      color: 'error'
-    })
+    impersonationError.value = 'Failed to stop impersonation'
   } finally {
     stoppingImpersonation.value = false
   }

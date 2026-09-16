@@ -1,10 +1,10 @@
 <template>
   <!-- The three capability cards under the plugin header. -->
   <div v-if="variant === 'capabilities'" class="mt-16 grid gap-6 md:grid-cols-3" data-parity-section="capabilities">
-    <UCard v-for="item in items" :key="item.title">
-      <template #header><h2 class="text-lg font-bold">{{ item.title }}</h2></template>
-      <p class="text-sm leading-relaxed text-muted">{{ item.description }}</p>
-    </UCard>
+    <div v-for="item in items" :key="item.title" class="rounded-2xl border border-default bg-elevated p-6">
+      <h2 class="text-lg font-bold">{{ item.title }}</h2>
+      <p class="mt-3 text-sm leading-relaxed text-muted">{{ item.description }}</p>
+    </div>
   </div>
 
   <!-- The numbered connection steps, the MCP URL with its copy button inside step two. -->
@@ -36,25 +36,27 @@
 </template>
 
 <script setup lang="ts">
+import type { PublicTenantPage } from '~/server/utils/public-tenant-pages'
+import type { TenantPageBlock } from '~/utils/tenant-page-blocks'
+import { blockText, blockTextOrNull, blockRecords } from '~/utils/tenant-page-block-data'
 /**
  * The plugin page's three sections after its header. The MCP endpoint is
  * whatever URL a step's text names — the page states it once, in the step
  * that tells you where to paste it — and the copy button copies that.
  */
-const props = withDefaults(defineProps<{
-  variant: 'capabilities' | 'steps' | 'callout'
-  title?: string | null
-  description?: string | null
-  body?: string | null
-  items?: Array<{ title: string; description: string }>
-  steps?: Array<{ name: string; text: string }>
-}>(), {
-  title: null,
-  description: null,
-  body: null,
-  items: () => [],
-  steps: () => [],
-})
+const props = defineProps<{ block: TenantPageBlock; page: PublicTenantPage }>()
+
+const title = computed(() => blockTextOrNull(props.block.data.title))
+const description = computed(() => blockTextOrNull(props.block.data.description))
+const body = computed(() => blockTextOrNull(props.block.data.body))
+const items = computed(() => blockRecords(props.block.data.items)
+  .map(item => ({ title: blockText(item.title), description: blockText(item.description) }))
+  .filter(item => item.title))
+const steps = computed(() => blockRecords(props.block.data.steps)
+  .map(step => ({ name: blockText(step.name), text: blockText(step.text) }))
+  .filter(step => step.name))
+/** This block is the connection walkthrough; the other looks it had are their own types now. */
+const variant = computed<'capabilities' | 'steps' | 'callout'>(() => 'steps')
 
 const STEP_TILES = ['bg-(--kc-navy)', 'bg-(--kc-teal)', 'bg-(--kc-coral)'] as const
 

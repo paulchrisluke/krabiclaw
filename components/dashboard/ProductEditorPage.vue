@@ -59,6 +59,7 @@
         :saving="saving"
         :save-disabled="saveDisabled"
         :save-label="saveLabel"
+        :error="saveError || photoError"
         :detail-title="sectionLabels[editorKey]"
         :dismiss-to="itemPath"
         @cancel="cancelEditor"
@@ -317,7 +318,6 @@ import { getErrorMessage, isNotFoundError } from '~/utils/errors'
 
 const route = useRoute()
 const dashboardApi = useDashboardApi()
-const toast = useToast()
 const collectionId = computed(() => String(route.params.collectionId ?? route.params.categoryId ?? ''))
 const productId = computed(() => String(route.params.productId ?? ''))
 const locationPath = computed(() => `/dashboard/${String(route.params.orgSlug)}/sites/${String(route.params.siteSlug)}/locations/${String(route.params.locationSlug)}`)
@@ -376,7 +376,14 @@ const collections = ref<Collection[]>([])
 const definitions = ref<MetafieldDefinition[]>([])
 const product = ref<Product | null>(null)
 const loadError = ref<string | null>(null)
+const saveError = ref<string | null>(null)
+const photoError = ref<string | null>(null)
 const saving = ref(false)
+
+watch(editorKey, () => {
+  saveError.value = null
+  photoError.value = null
+})
 
 const isCollectionList = (value: unknown): value is { collections: Collection[] } =>
   isRecord(value) && Array.isArray(value.collections)
@@ -823,6 +830,7 @@ async function commit() {
   const id = locationId.value
   if (!id) return
   saving.value = true
+  saveError.value = null
   try {
     if (isNew.value) {
       const created = await dashboardApi(`/api/editor/sites/${siteId}/products`, {
@@ -848,7 +856,7 @@ async function commit() {
     await load()
     await navigateTo(itemPath.value)
   } catch (error) {
-    toast.add({ description: getErrorMessage(error, `Failed to save ${presentation.value.itemLabel.toLowerCase()}`), color: 'error' })
+    saveError.value = getErrorMessage(error, `Failed to save ${presentation.value.itemLabel.toLowerCase()}`)
   } finally {
     saving.value = false
   }
@@ -971,6 +979,8 @@ async function saveSchedule() {
 }
 
 async function cancelEditor() {
+  saveError.value = null
+  photoError.value = null
   if (product.value) loadForm(product.value)
   // The schedule draft goes with the form: reopening Bookings reloads the saved rules.
   scheduleLoadedFor.value = null
@@ -978,6 +988,7 @@ async function cancelEditor() {
 }
 
 async function setPrimaryImage(assetId: string | null) {
+  photoError.value = null
   try {
     await dashboardApi(`/api/editor/sites/${siteId}/media/placements`, {
       method: 'PUT',
@@ -987,7 +998,7 @@ async function setPrimaryImage(assetId: string | null) {
     form.image_asset_id = assetId
     await load()
   } catch (error) {
-    toast.add({ description: getErrorMessage(error, 'Failed to update the photo'), color: 'error' })
+    photoError.value = getErrorMessage(error, 'Failed to update the photo')
   }
 }
 

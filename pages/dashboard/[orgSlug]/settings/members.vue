@@ -6,7 +6,7 @@
   -->
   <OrganizationMembersList v-if="frame.mode.value === 'index'" />
 
-  <UDashboardPanel v-else id="organization-members" :ui="{ body: 'min-h-0 gap-0! overflow-hidden! p-0! sm:p-0!' }">
+  <UDashboardPanel v-else id="organization-members">
     <template #header>
       <UDashboardNavbar title="Members" :toggle="false">
         <template #leading>
@@ -64,7 +64,6 @@ import { organizationMembersKey } from '~/utils/organization-members'
 definePageMeta({ layout: 'dashboard' })
 
 const route = useRoute()
-const toast = useToast()
 const { orgPaths } = useDashboardSiteLinks()
 const settingsPath = computed(() => orgPaths.value.settings)
 const membersPath = computed(() => `${settingsPath.value}/members`)
@@ -132,7 +131,6 @@ async function sendInvite() {
     })
     if (result.error) throw new Error(result.error.message || 'Failed to send invite.')
     resetInvite()
-    toast.add({ description: 'Invitation sent.', color: 'success' })
     await refreshNuxtData(organizationMembersKey(String(route.params.orgSlug ?? '')))
     await navigateTo(membersPath.value)
   } catch (error) {

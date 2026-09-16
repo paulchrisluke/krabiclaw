@@ -17,9 +17,10 @@ export default defineHandler(async (event) => {
     ? query.conversation_state as ConversationState
     : null
   const unreadOnly = query.unread === '1' || query.unread === 'true'
+  const occurrence = query.occurrence === 'past' || query.occurrence === 'upcoming' ? query.occurrence : null
 
   const payload = await loadDashboardGuestThreads(event, siteId, {
-    locationId, search, type, conversationState, unreadOnly, })
+    locationId, search, type, conversationState, unreadOnly, occurrence, })
   return jsonResponse(finalizeRequestMetrics(event, 'dashboard-guest-threads', payload))
 })
 import { defineHandler } from 'nitro';

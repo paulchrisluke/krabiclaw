@@ -315,3 +315,23 @@ export function useTenantPageDraft(siteId: string, pageId: string) {
 export function useTenantPageNewBlock(siteId: string, pageId: string) {
   return useState<TenantPageBlock | null>(`tenant-page-new-block-${siteId}-${pageId}`, () => null)
 }
+
+/**
+ * The block a route points at: the page draft's own object, or the pending new
+ * one. Every screen that edits a block resolves it here, so a control writes
+ * the draft rather than a copy handed down as a prop.
+ */
+export function useTenantPageBlock(siteId: string, pageId: string, blockId: MaybeRefOrGetter<string>) {
+  const { draft } = useTenantPageDraft(siteId, pageId)
+  const newBlock = useTenantPageNewBlock(siteId, pageId)
+  return computed<TenantPageBlock>(() => {
+    const id = toValue(blockId)
+    const existing = draft.value.blocks.find(item => item.id === id)
+    if (existing) return existing
+    // The pending block answers to the route that creates it and to its own
+    // id, and to nothing else: returning it for any unknown id meant a stale
+    // link edited the new block instead of saying the section was gone.
+    if (newBlock.value && (id === 'new' || id === newBlock.value.id)) return newBlock.value
+    throw createError({ statusCode: 404, statusMessage: 'Section not found' })
+  })
+}

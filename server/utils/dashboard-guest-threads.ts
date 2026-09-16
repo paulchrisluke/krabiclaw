@@ -23,6 +23,7 @@ export interface DashboardGuestThreadListQuery {
   type?: GuestThreadSubmissionType | null
   conversationState?: ConversationState | null
   unreadOnly?: boolean
+  occurrence?: 'upcoming' | 'past' | null
 }
 
 export interface OrganizationGuestThreadListQuery extends DashboardGuestThreadListQuery {
@@ -59,6 +60,7 @@ export async function loadDashboardGuestThreads(
     search: query.search ?? null,
     type: query.type ?? null,
     conversationState: query.conversationState ?? null,
+    occurrence: query.occurrence ?? null,
     unreadOnly: query.unreadOnly ?? false,
   }
   const [threads, summary] = await Promise.all([
@@ -138,6 +140,7 @@ export async function loadOrganizationGuestThreads(
     search: query.search ?? null,
     type: query.type ?? null,
     conversationState: query.conversationState ?? null,
+    occurrence: query.occurrence ?? null,
     unreadOnly: query.unreadOnly ?? false,
   }
   const [threads, summary] = await Promise.all([

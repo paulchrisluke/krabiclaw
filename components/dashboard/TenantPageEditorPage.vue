@@ -54,7 +54,7 @@
   -->
   <TenantPageSections v-else-if="frame.mode.value === 'yield'" :site-id="siteId" :page-id="pageId" />
 
-  <UDashboardPanel v-else id="site-page" :ui="{ body: 'min-h-0 gap-0! overflow-hidden! p-0! sm:p-0!' }">
+  <UDashboardPanel v-else id="site-page">
     <template #header>
       <UDashboardNavbar :title="isNew ? 'New page' : draft.title || 'Page'" :toggle="false">
         <template #leading>
@@ -153,7 +153,6 @@ const recordPath = computed(() => `${pagesPath.value}/${pageId.value}`)
 const frame = useEditorFrame(recordPath)
 
 const siteId = await useDashboardSiteId()
-const toast = useToast()
 const dashboardApi = useDashboardApi()
 
 const { load, data, error, pending, draft, dirty, revert, commit, isNew, previewUrl } = useTenantPageDraft(siteId, pageId.value)
@@ -299,7 +298,6 @@ async function save() {
   try {
     const created = isNew.value
     const page = await commit()
-    toast.add({ description: created ? 'Page created' : `${openLabel.value} saved`, color: 'success' })
     await navigateTo(created ? `${pagesPath.value}/${page.id}` : recordPath.value)
   } catch (cause) {
     errorMessage.value = getErrorMessage(cause, 'Failed to save this page')

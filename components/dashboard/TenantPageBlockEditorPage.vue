@@ -56,6 +56,7 @@
     />
 
     <EditorNavigationList v-else :groups="navigationGroups" />
+
   </div>
 
   <!-- Deeper than my own child: the record below owns both columns. -->
@@ -67,7 +68,7 @@
     :collection="openCollection!"
   />
 
-  <UDashboardPanel v-else id="site-page-block" :ui="{ body: 'min-h-0 gap-0! overflow-hidden! p-0! sm:p-0!' }">
+  <UDashboardPanel v-else id="site-page-block">
     <template #header>
       <UDashboardNavbar :title="blockLabel" :toggle="false">
         <template #leading>
@@ -139,7 +140,6 @@ import {
 const props = defineProps<{ siteId: string; pageId: string }>()
 
 const route = useRoute()
-const toast = useToast()
 const sectionsPath = computed(() => `/dashboard/${String(route.params.orgSlug)}/sites/${String(route.params.siteSlug)}/pages/${props.pageId}/sections`)
 /** The path segment naming this block — its id, or `new` while it is being added. */
 const blockId = computed(() => {
@@ -166,6 +166,7 @@ const blockLabel = computed(() => (isNew.value ? 'New section' : block.value ? t
 const sections = computed<readonly TenantPageBlockSection[]>(() => (block.value ? tenantPageBlockSections(block.value) : []))
 /** A block with one section is that section; there is no row to open it with. */
 const singleSection = computed(() => (sections.value.length === 1 ? sections.value[0]! : null))
+
 
 const openSegment = computed(() => frame.childSegment.value)
 const openSection = computed(() => sections.value.find(section => section.key === openSegment.value) ?? null)
@@ -302,7 +303,6 @@ async function create() {
     const created = page.blocks.find(candidate => candidate.id === pending.id)
     if (!created) throw new Error('The section was not created.')
     newBlock.value = null
-    toast.add({ description: 'Section created', color: 'success' })
     await navigateTo(`${sectionsPath.value}/${created.id}`)
   } catch (cause) {
     // The page was not written, so the draft must not keep pretending it was.
@@ -318,7 +318,6 @@ async function save() {
   errorMessage.value = ''
   try {
     await commit()
-    toast.add({ description: `${openSection.value?.label ?? 'Section'} saved`, color: 'success' })
     await navigateTo(blockPath.value)
   } catch (cause) {
     errorMessage.value = getErrorMessage(cause, 'Failed to save this page')

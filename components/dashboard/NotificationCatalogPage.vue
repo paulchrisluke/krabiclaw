@@ -1,7 +1,7 @@
 <template>
   <NuxtPage v-if="frame.mode.value === 'yield'" />
 
-  <UDashboardPanel v-else id="notification-catalog" :ui="{ body: 'min-h-0 gap-0! overflow-hidden! p-0! sm:p-0!' }">
+  <UDashboardPanel v-else id="notification-catalog">
     <template #header>
       <UDashboardNavbar title="Messages" :toggle="false" />
     </template>

@@ -46,7 +46,6 @@ async function organizationSubscriptionId(
 }
 
 export const useOrganizationSubscription = () => {
-  const toast = useToast()
   const dashboard = useDashboardSite()
   const dashboardApi = useDashboardApi()
   const { trackSubscriptionUpgrade, trackSubscriptionDowngrade } = useAnalytics()
@@ -56,40 +55,35 @@ export const useOrganizationSubscription = () => {
   // metadata on the upgrade request and receives derived entitlements after
   // Better Auth confirms the subscription through Stripe.
   async function startOrganizationCheckout(siteId: string, plan: string) {
-    try {
-      const organizationId = dashboard.organization.value?.id
-      if (!organizationId) throw new Error('Organization context is unavailable')
-      const subscription = await organizationSubscriptionId(dashboardApi, organizationId)
-      const { returnUrl } = checkoutReturnUrls()
-      if (subscription.status === 'past_due') {
-        const portal = await authClient.subscription.billingPortal({
-          referenceId: organizationId,
-          customerType: 'organization',
-          returnUrl,
-          disableRedirect: true,
-        })
-        if (portal.error) throw new Error(portal.error.message ?? 'Unable to open billing portal')
-        const portalUrl = portal.data && 'url' in portal.data ? portal.data.url : null
-        if (!portalUrl) throw new Error('Missing billing portal URL')
-        await navigateTo(portalUrl, { external: true })
-        return
-      }
-      const currentPlan = subscription.plan
-      await startSubscriptionCheckout({
-        organizationId,
-        siteId,
-        plan,
-        currentPlan,
-        subscriptionId: subscription.id,
-        onAction: action => {
-          if (action === 'upgrade') trackSubscriptionUpgrade(plan)
-          if (action === 'downgrade' && plan !== 'free') trackSubscriptionDowngrade(plan)
-        },
+    const organizationId = dashboard.organization.value?.id
+    if (!organizationId) throw new Error('Organization context is unavailable')
+    const subscription = await organizationSubscriptionId(dashboardApi, organizationId)
+    const { returnUrl } = checkoutReturnUrls()
+    if (subscription.status === 'past_due') {
+      const portal = await authClient.subscription.billingPortal({
+        referenceId: organizationId,
+        customerType: 'organization',
+        returnUrl,
+        disableRedirect: true,
       })
-    } catch (err) {
-      console.error('Checkout error:', err)
-      toast.add({ title: 'Unable to start checkout — please try again', color: 'error' })
+      if (portal.error) throw new Error(portal.error.message ?? 'Unable to open billing portal')
+      const portalUrl = portal.data && 'url' in portal.data ? portal.data.url : null
+      if (!portalUrl) throw new Error('Missing billing portal URL')
+      await navigateTo(portalUrl, { external: true })
+      return
     }
+    const currentPlan = subscription.plan
+    await startSubscriptionCheckout({
+      organizationId,
+      siteId,
+      plan,
+      currentPlan,
+      subscriptionId: subscription.id,
+      onAction: action => {
+        if (action === 'upgrade') trackSubscriptionUpgrade(plan)
+        if (action === 'downgrade' && plan !== 'free') trackSubscriptionDowngrade(plan)
+      },
+    })
   }
 
   return { startOrganizationCheckout }

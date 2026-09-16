@@ -8,12 +8,12 @@
             {{ scheduleTitle.before }}<span v-if="scheduleTitle.accent" class="text-[var(--blawby-accent)]">{{ scheduleTitle.accent }}</span>{{ scheduleTitle.after }}
           </h1>
           <p v-if="scheduleHero?.subtitle" class="mt-6 text-lg leading-8 text-gray-300 sm:text-xl min-[1920px]:text-2xl">{{ scheduleHero.subtitle }}</p>
-          <p v-if="scheduleHero?.priceLine" class="mt-6 text-lg font-bold text-[var(--blawby-accent)] sm:text-xl min-[1920px]:text-2xl">{{ scheduleHero.priceLine }}</p>
+          <p v-if="priceLine" class="mt-6 text-lg font-bold text-[var(--blawby-accent)] sm:text-xl min-[1920px]:text-2xl">{{ priceLine }}</p>
           <BlawbyButton :to="scheduleHeroDestination" class="mt-10 w-full px-8 py-4 text-lg min-[1920px]:px-4 min-[1920px]:py-4 min-[1920px]:text-base min-[2560px]:px-5 min-[2560px]:py-5 min-[2560px]:text-lg" @click="trackConsultation('schedule_hero', scheduleHeroDestination)">
             <svg class="-ml-0.5 mr-2 size-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M8 2v4m8-4v4M3 10h18" /><rect x="3" y="4" width="18" height="18" rx="2" /></svg>
-            {{ scheduleHero?.buttonText || consultation.cta_label }}
+            {{ scheduleHero?.cta_label || consultation.cta_label }}
           </BlawbyButton>
-          <p v-if="scheduleHero?.notice" class="mt-6 text-sm leading-6 text-gray-300">{{ scheduleHero.notice }}</p>
+          <p v-if="notice" class="mt-6 text-sm leading-6 text-gray-300">{{ notice }}</p>
         </div>
       </div>
     </section>
@@ -27,15 +27,15 @@
       </div>
     </section>
 
-    <BlawbyFaqSection :items="scheduleQa" :decoration-url="mediaUrl(qaBlock, 'decoration')" />
-    <BlawbyReviewsSection :reviews="routeData.reviews" />
+    <BlawbyFaqSection v-if="qaBlockRaw" :block="qaBlockRaw" :page="page!" />
+    <BlawbyReviewsSection v-if="reviewsBlockRaw" :block="reviewsBlockRaw" :page="page!" />
     <BlawbyScheduleRedirect
       v-if="scheduleCta"
       :title="String(scheduleCta.title || '')"
       :description="String(scheduleCta.description || '')"
-      :price-line="optionalString(scheduleCta.priceLine)"
-      :notice="optionalString(scheduleCta.notice)"
-      :label="String(scheduleCta.buttonText || consultation.cta_label)"
+      :price-line="priceLine"
+      :notice="notice"
+      :label="String(scheduleCta.label || consultation.cta_label)"
       :destination="scheduleCtaDestination"
       :background-url="mediaUrl(scheduleCta, 'background')"
       @click="trackConsultation('schedule_cta', scheduleCtaDestination)"
@@ -67,7 +67,7 @@ function mediaUrl(value: ApiRecord | null | undefined, slot: string) {
 }
 
 const scheduleHero = computed(() => findTenantPageBlock(page.value.blocks, 'hero'))
-const scheduleHeroDestination = computed(() => consultation.value.external_url || String(scheduleHero.value?.buttonUrl || consultation.value.schedule_path))
+const scheduleHeroDestination = computed(() => consultation.value.external_url || String(scheduleHero.value?.cta_url || consultation.value.schedule_path))
 const scheduleTitle = computed(() => {
   const title = String(scheduleHero.value?.title ?? '')
   const accent = 'Legal Consultation'
@@ -78,8 +78,15 @@ const guidanceBlock = computed(() => findTenantPageBlock(page.value.blocks, 'mar
 const guidanceMarkdown = computed(() => optionalString(guidanceBlock.value?.markdown))
 const guidanceDecoration = computed(() => mediaUrl(guidanceBlock.value, 'decoration'))
 const scheduleCta = computed(() => findTenantPageBlock(page.value.blocks, 'booking_cta'))
-const scheduleCtaDestination = computed(() => consultation.value.external_url || String(scheduleCta.value?.buttonUrl || consultation.value.schedule_path))
-const qaBlock = computed(() => findTenantPageBlock(page.value.blocks, 'faq'))
+const scheduleCtaDestination = computed(() => consultation.value.external_url || String(scheduleCta.value?.url || consultation.value.schedule_path))
+/**
+ * What a consultation costs and what booking one does not create. Both belong
+ * to the booking prompt, which is the block that declares them; they were read
+ * off the hero as `priceLine` and `notice`, keys no list declared, so the page
+ * said them twice from two different places and neither could be translated.
+ */
+const priceLine = computed(() => optionalString(scheduleCta.value?.price_line))
+const notice = computed(() => optionalString(scheduleCta.value?.notice))
 const scheduleQa = computed<PublicSiteQa[]>(() => {
   return routeData.value.qa
 })
@@ -112,4 +119,15 @@ useProfessionalServiceSchema(() => ({
   faqs: scheduleQa.value.map(item => ({ question: item.question, answer: item.answer })),
   consultationUrl: scheduleHeroDestination.value,
 }))
+
+/**
+ * The block itself, by type. Each of these appears once on this page, which is
+ * what naming the content properly bought: the lookup no longer needs a
+ * `section` string in the document to tell two blocks of one type apart.
+ */
+function rawBlock(canonicalType: string) {
+  return page.value?.blocks.find(candidate => candidate.type === canonicalType) ?? null
+}
+const qaBlockRaw = computed(() => rawBlock('faq'))
+const reviewsBlockRaw = computed(() => rawBlock('testimonial_grid'))
 </script>
