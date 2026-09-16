@@ -20,8 +20,9 @@
           autofocus
           class="flex-1"
         />
-        <!-- 22px/500, measured on Airbnb's own panel heading. -->
-        <h1 class="min-w-0 flex-1 truncate text-[22px] font-medium text-highlighted">
+        <!-- 22px/500, measured on Airbnb's own panel heading. Search replaces
+             it rather than sitting beside it, the way theirs does. -->
+        <h1 v-else class="min-w-0 flex-1 truncate text-[22px] font-medium text-highlighted">
           {{ pastOnly ? 'Past conversations' : 'Messages' }}
         </h1>
 
@@ -531,9 +532,6 @@ watch(() => route.query.query, () => {
   }, 250)
 })
 
-watch([activeType, pastOnly, unreadOnly], () => {
-  void loadThreads()
-})
 
 watch(realtime.event, (event) => {
   if (!event || !('threadId' in event)) return
