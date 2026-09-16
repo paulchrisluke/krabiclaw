@@ -258,7 +258,8 @@
                   "Edge performance and clean HTML optimised for search crawlers",
                   "Auto-generated XML sitemaps & JSON-LD markup",
                   "Every site starts on a KrabiClaw subdomain"
-                ]
+                ],
+                "label": "Read the documentation →"
               },
               {
                 "title": "Edit Everything Through Conversation",
@@ -270,7 +271,8 @@
                   "Ask conversational questions about your live traffic analytics",
                   "Publish posts to your site and Facebook simultaneously",
                   "Attach a photo in chat and have it placed and optimised"
-                ]
+                ],
+                "label": "Set up the plugin →"
               },
               {
                 "title": "Bookings & Experience Reservations",
@@ -282,7 +284,8 @@
                   "Capacity and time-slot control per experience",
                   "Automated booking confirmations — email included, messaging on a paid plan",
                   "No commissions or per-cover fees"
-                ]
+                ],
+                "label": "Read the documentation →"
               },
               {
                 "title": "Menus, Experiences & Practice Areas",
@@ -294,7 +297,8 @@
                   "Ticketed experiences with capacity and time slots",
                   "Dedicated practice area routes with schema.org LegalService graphs",
                   "Fast, scannable navigation on any device"
-                ]
+                ],
+                "label": "Read the documentation →"
               },
               {
                 "title": "Unified Inbox",
@@ -306,7 +310,8 @@
                   "Receive contact inquiries directly",
                   "Respond to guests quickly and efficiently",
                   "Keep track of all guest communications"
-                ]
+                ],
+                "label": "Read the documentation →"
               },
               {
                 "title": "Real-Time Insights",
@@ -318,7 +323,8 @@
                   "Google Review aggregation & reply tools",
                   "Reservation and booking conversion tracking",
                   "Ask \"how many visitors this month?\" in Claude or ChatGPT"
-                ]
+                ],
+                "label": "Read the documentation →"
               }
             ]
           }
@@ -327,8 +333,6 @@
           "type": "callout",
           "data": {
             "title": "Own the search result instead of renting it",
-            "secondary_label": "View Setup Documentation →",
-            "secondary_url": "/help",
             "badge": "Example",
             "items": [
               {
@@ -345,8 +349,16 @@
               }
             ],
             "body": "Stop letting aggregators capture your organic search traffic and sell it back to you with hefty fees. Your menu, your offerings and your practice areas are **crawlable HTML on your own domain**, not a PDF behind a marketplace.",
-            "label": "Read our Blog",
-            "url": "/blog"
+            "buttons": [
+              {
+                "label": "Read our Blog",
+                "url": "/blog"
+              },
+              {
+                "label": "View Setup Documentation →",
+                "url": "/help"
+              }
+            ]
           }
         },
         {
@@ -446,9 +458,7 @@
           "type": "callout",
           "data": {
             "title": "Try a safe first request",
-            "body": "“List my KrabiClaw sites. Then, for the site called `your site name`, summarize its homepage. Do not change anything.”\n\nName the site you mean rather than letting the client pick one: a request that says “the first one” leaves the choice to the model, and the wrong site is the one that gets edited.",
-            "label": "",
-            "url": ""
+            "body": "“List my KrabiClaw sites. Then, for the site called `your site name`, summarize its homepage. Do not change anything.”\n\nName the site you mean rather than letting the client pick one: a request that says “the first one” leaves the choice to the model, and the wrong site is the one that gets edited."
           }
         }
       ]
@@ -589,8 +599,12 @@
                 "description": "★ 4.8 (Imported)"
               }
             ],
-            "label": "Explore Saya Template →",
-            "url": "/templates/saya"
+            "buttons": [
+              {
+                "label": "Explore Saya Template →",
+                "url": "/templates/saya"
+              }
+            ]
           }
         },
         {
@@ -814,8 +828,12 @@
                 "description": "Inquiry & custom quotes"
               }
             ],
-            "label": "Explore Experience Theme →",
-            "url": "/templates/saya"
+            "buttons": [
+              {
+                "label": "Explore Experience Theme →",
+                "url": "/templates/saya"
+              }
+            ]
           }
         },
         {
@@ -1039,8 +1057,12 @@
                 "description": "Verified Online Intake"
               }
             ],
-            "label": "Explore Blawby Template →",
-            "url": "/templates/blawby"
+            "buttons": [
+              {
+                "label": "Explore Blawby Template →",
+                "url": "/templates/blawby"
+              }
+            ]
           }
         },
         {

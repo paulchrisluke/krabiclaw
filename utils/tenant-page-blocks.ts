@@ -146,6 +146,10 @@ const CTA_FIELDS = {
   description: prose('Description'),
   label: text('Button label', { section: 'button', pairedWith: 'url' }),
   url: link('Button URL', { pairedWith: 'label' }),
+  // A second button, which four platform prompts already carry and no list
+  // declared, so it could be written and never translated or validated.
+  secondary_label: text('Second button label', { section: 'second_button', pairedWith: 'secondary_url' }),
+  secondary_url: link('Second button URL', { section: 'second_button', pairedWith: 'secondary_label' }),
 } as const
 
 const GRID_ITEM_FIELDS = {
@@ -223,7 +227,15 @@ export const TENANT_PAGE_BLOCK_REGISTRY: Record<TenantPageBlockType, TenantPageB
 
   cta: blockDefinitionWithMetadata('cta', 'Call to action', 'A prompt with one button.', ALL_RECIPES, CTA_FIELDS),
   contact_cta: blockDefinitionWithMetadata('contact_cta', 'Contact prompt', 'A prompt to get in touch.', ALL_RECIPES, CTA_FIELDS),
-  booking_cta: blockDefinitionWithMetadata('booking_cta', 'Booking prompt', 'A prompt to book.', ALL_RECIPES, CTA_FIELDS),
+  // A booking prompt says what it costs and what the visitor is agreeing to.
+  // Both were stored and read as `priceLine` and `notice`, which no list
+  // declared, so neither could be translated — and the button was a second
+  // naming of the one every other prompt uses.
+  booking_cta: blockDefinitionWithMetadata('booking_cta', 'Booking prompt', 'A prompt to book.', ALL_RECIPES, {
+    ...CTA_FIELDS,
+    price_line: text('Price line', { section: 'settings' }),
+    notice: prose('Small print', { section: 'settings' }),
+  }),
 
   callout: blockDefinitionWithMetadata('callout', 'Callout', 'A highlighted message.', ALL_RECIPES, {
     title: text('Title'),
@@ -232,6 +244,10 @@ export const TENANT_PAGE_BLOCK_REGISTRY: Record<TenantPageBlockType, TenantPageB
       kind: 'enum', label: 'Tone', translatable: false, section: 'copy', default: 'neutral',
       options: ['neutral', 'info', 'success', 'warning', 'danger'].map(value => ({ value, label: value.replace(/^\w/, c => c.toUpperCase()) })),
     },
+    // The word on the panel a callout draws beside its message — "Example",
+    // "Saya Theme". Five platform callouts already carried it and no list
+    // declared it, so it could be written and never translated.
+    badge: text('Badge', { section: 'settings' }),
     buttons: { kind: 'list', label: 'Buttons', section: 'buttons', of: { label: text('Label', { required: true }), url: link('URL') } },
   }),
 
