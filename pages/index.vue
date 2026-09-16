@@ -1,13 +1,12 @@
 <template>
-  <NuxtLayout :name="isPlatform ? 'platform' : isBlawbyPage ? 'blawby' : 'saya'">
+  <NuxtLayout :name="layout">
     <!--
-      A Blawby home is its page document, drawn block by block like every other
-      page on the site. It was a component that found each block by a `section`
-      string and composed a fixed list, so reordering the page changed nothing.
+      Every home is its page document, drawn block by block like every other
+      page on the site. Each template used to have its own home component that
+      composed a fixed list of sections — Saya's read no blocks at all — so the
+      one page every visitor lands on was the one page its owner could not edit.
     -->
-    <TenantPublicPage v-if="isPlatform" :path="platformHomePath" />
-    <TenantPublicPage v-else-if="isBlawbyPage" path="/" />
-    <LazySayaHomePage v-else />
+    <TenantPublicPage :path="homePath" />
   </NuxtLayout>
 </template>
 
@@ -15,16 +14,15 @@
 definePageMeta({ layout: false })
 
 const { isPlatform, siteId } = useTenantSite()
-const { isBlawby: isBlawbyPage } = usePublicTemplate()
-// KrabiClaw's own homepage is an ordinary published page document on the
-// platform site now, read by the same loader every customer site uses (#903).
-const platformHomePath = useTenantPageDocumentPath('home')
+const { template } = usePublicTemplate()
+// Where this template keeps its home document. KrabiClaw's own homepage is an
+// ordinary published page on the platform site, read by the same loader every
+// customer site uses (#903).
+const homePath = useTenantPageDocumentPath('home')
+const layout = computed(() => template.value!.layout as 'saya' | 'blawby' | 'platform')
 
 if (!isPlatform && !siteId) {
-  throw createError({
-    statusCode: 404,
-    statusMessage: 'Site not found'
-  })
+  throw createError({ statusCode: 404, statusMessage: 'Site not found' })
 }
 
 // A signed-in owner has no use for the platform's own sales pitch, and showing

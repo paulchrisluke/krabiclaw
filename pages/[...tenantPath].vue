@@ -1,11 +1,11 @@
 <template>
   <NuxtLayout :name="isPlatform ? 'platform' : isBlawby ? 'blawby' : 'saya'">
-    <template v-if="!isPlatform && localizedRoute && tenantPagePath === '/'">
-      <LazyBlawbyHome v-if="isBlawby" />
-      <LazySayaHomePage v-else />
-    </template>
+    <!--
+      A localized home is its page document too: the `/` branch here rendered a
+      template's own home component instead, which is how /th/ reached a
+      component that read no blocks.
+    -->
     <TenantPublicPage
-      v-else
       :path="tenantPagePath"
       :locale="localizedRoute?.locale"
     />

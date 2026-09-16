@@ -28,6 +28,7 @@ export type TenantPageBlockType =
   | 'stat_grid'
   | 'workflow_grid'
   | 'video_feature'
+  | 'media_text'
 
 export type TenantPageType = 'custom' | 'recipe' | 'legal' | 'system'
 
@@ -262,7 +263,8 @@ export const TENANT_PAGE_BLOCK_REGISTRY: Record<TenantPageBlockType, TenantPageB
       kind: 'enum', label: 'Rows', translatable: false, section: 'settings', default: 'manual',
       options: [
         { value: 'manual', label: 'Items I write' },
-        { value: 'site_posts', label: 'Published posts' },
+        { value: 'site_posts', label: 'Published articles' },
+        { value: 'site_updates', label: 'Social posts' },
         { value: 'calculator', label: 'Pricing calculator' },
         { value: 'billing_plans', label: 'KrabiClaw plans', platformOnly: true },
       ],
@@ -331,6 +333,19 @@ export const TENANT_PAGE_BLOCK_REGISTRY: Record<TenantPageBlockType, TenantPageB
       kind: 'list', label: 'Points', section: 'items',
       of: { title: text('Title', { required: true }), description: prose('Description') },
     },
+  }),
+
+  // A picture and the words beside it — "Media & Text" in WordPress, "Image
+  // with text" in Shopify. It exists because a brand story is one editorial
+  // thing and was stored as three unrelated blocks (`story.title`,
+  // `story.image`, `story.body`) that the renderer re-assembled at display
+  // time, in the alphabetical order the migration wrote them.
+  media_text: blockDefinitionWithMetadata('media_text', 'Image with text', 'A picture and the words beside it.', ALL_RECIPES, {
+    title: text('Title'),
+    body: prose('Text'),
+    media: { kind: 'media', label: 'Image or video', translatable: false, section: 'image', slot: 'media' },
+    label: text('Link label', { section: 'link', pairedWith: 'url' }),
+    url: link('Link URL', { section: 'link', pairedWith: 'label' }),
   }),
 
   team_grid: blockDefinitionWithMetadata('team_grid', 'Team', 'The people behind the business.', ALL_RECIPES, {

@@ -1,27 +1,25 @@
 <template>
-  <AppSection v-if="title || description || hasOrderLinks || (ctaRoute && reserveCta)" :bg="bg" :padding="padding">
-    <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-8">
+  <AppSection v-if="title || description || (url && label)" bg="default" padding="lg">
+    <div class="flex flex-col gap-8 md:flex-row md:items-center md:justify-between">
       <div class="max-w-3xl">
-        <h3 v-if="title" data-field="cta.title" class="saya-display saya-italic text-5xl text-default leading-none">
-          {{ title }}
-        </h3>
-        <div
-          v-if="description"
-          data-field="cta.description"
-          class="mt-5 max-w-2xl text-sm leading-7 text-muted"
-        >
-          {{ description }}
-        </div>
+        <h2 v-if="title" class="saya-display saya-italic text-5xl leading-none text-default">{{ title }}</h2>
+        <div v-if="description" class="mt-5 max-w-2xl text-sm leading-7 text-muted">{{ description }}</div>
       </div>
       <div class="flex flex-wrap gap-4">
-        <NuxtLink v-if="hasOrderLinks" :to="localePath('/order')" class="inline-flex items-center justify-center rounded-full bg-(--brand-color) px-6 py-3 text-base font-medium text-(--brand-color-foreground) no-underline transition hover:opacity-90">{{ t('saya.cta.order_now') }}</NuxtLink>
         <NuxtLink
-          v-if="ctaRoute && reserveCta"
-          :to="localePath(ctaRoute)"
-          class="inline-flex items-center justify-center rounded-full px-6 py-3 text-base font-medium no-underline transition"
-          :class="hasOrderLinks ? 'ring-1 ring-inset ring-(--brand-color) text-(--brand-color) hover:bg-(--brand-color)/10' : 'bg-(--brand-color) text-(--brand-color-foreground) hover:opacity-90'"
+          v-if="orderUrl"
+          :to="localePath(orderUrl)"
+          class="inline-flex items-center justify-center rounded-full bg-(--brand-color) px-6 py-3 text-base font-medium text-(--brand-color-foreground) no-underline transition hover:opacity-90"
         >
-          {{ reserveCta }}
+          {{ t('saya.cta.order_now') }}
+        </NuxtLink>
+        <NuxtLink
+          v-if="url && label"
+          :to="localePath(url)"
+          class="inline-flex items-center justify-center rounded-full px-6 py-3 text-base font-medium no-underline transition"
+          :class="orderUrl ? 'ring-1 ring-inset ring-(--brand-color) text-(--brand-color) hover:bg-(--brand-color)/10' : 'bg-(--brand-color) text-(--brand-color-foreground) hover:opacity-90'"
+        >
+          {{ label }}
         </NuxtLink>
       </div>
     </div>
@@ -29,15 +27,27 @@
 </template>
 
 <script setup lang="ts">
+import AppSection from '~/components/ui/AppSection.vue'
+import type { PublicTenantPage } from '~/server/utils/public-tenant-pages'
+import type { TenantPageBlock } from '~/utils/tenant-page-blocks'
+import { blockText } from '~/utils/tenant-page-block-data'
+
+// Saya's call to action. The words and the button are the block's — they used
+// to be substituted at render time from the vertical's copy table, so the
+// button the visitor clicked was not anything the owner had written or could
+// change.
+const props = defineProps<{ block: TenantPageBlock; page: PublicTenantPage }>()
 const { localePath, t } = useI18n()
 
-defineProps({
-  title: String,
-  description: String,
-  ctaRoute: String,
-  reserveCta: String,
-  hasOrderLinks: { type: Boolean, default: false },
-  bg: { type: String, default: 'white' },
-  padding: { type: String, default: 'lg' }
-})
+const title = computed(() => blockText(props.block.data.title))
+const description = computed(() => blockText(props.block.data.description))
+const label = computed(() => blockText(props.block.data.label))
+const url = computed(() => blockText(props.block.data.url))
+
+// Ordering is a site affordance, not a sentence on this page: it exists when a
+// location has a delivery link, and it is the same button wherever it appears.
+const { locations } = useSiteShellState()
+const orderUrl = computed(() => (locations.value ?? []).some(location => location.grab_url || location.uber_eats_url || location.foodpanda_url)
+  ? '/order'
+  : null)
 </script>

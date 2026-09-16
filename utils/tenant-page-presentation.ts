@@ -40,6 +40,13 @@ import BlawbyShieldDivider from '~/components/blawby/BlawbyShieldDivider.vue'
 import BlawbyDonationChoices from '~/components/blawby/BlawbyDonationChoices.vue'
 import BlawbyVideoFeature from '~/components/blawby/BlawbyVideoFeature.vue'
 import BlawbyButtonRow from '~/components/blawby/BlawbyButtonRow.vue'
+import SayaHeroBlock from '~/components/saya/SayaHeroBlock.vue'
+import SayaProductGridBlock from '~/components/saya/SayaProductGridBlock.vue'
+import SayaLocationsGrid from '~/components/saya/SayaLocationsGrid.vue'
+import SayaFeatureGridBlock from '~/components/saya/SayaFeatureGridBlock.vue'
+import SayaBrandStory from '~/components/saya/SayaBrandStory.vue'
+import SayaReviewsBlock from '~/components/saya/SayaReviewsBlock.vue'
+import SayaCTA from '~/components/saya/SayaCTA.vue'
 
 // The components themselves, not their names: `<component :is>` resolves a
 // string only against what the calling file imported, so a name here rendered
@@ -74,6 +81,18 @@ const PRESENTATIONS: Readonly<Record<string, Component>> = {
   'blawby:donation_choices': BlawbyDonationChoices,
   'blawby:video_feature': BlawbyVideoFeature,
   'blawby:button_group': BlawbyButtonRow,
+
+  // Saya, for restaurants and experience businesses. Its home was a 577-line
+  // component that read no blocks at all and composed a fixed list of
+  // sections, so the one page every visitor lands on was the one page its
+  // owner could not edit.
+  'saya:hero': SayaHeroBlock,
+  'saya:product_grid': SayaProductGridBlock,
+  'saya:location_grid': SayaLocationsGrid,
+  'saya:feature_grid': SayaFeatureGridBlock,
+  'saya:media_text': SayaBrandStory,
+  'saya:testimonial_grid': SayaReviewsBlock,
+  'saya:cta': SayaCTA,
 }
 
 /** The component this template draws this block with, or null for the default. */
