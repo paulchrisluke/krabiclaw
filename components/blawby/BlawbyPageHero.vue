@@ -154,9 +154,10 @@ const backgroundClass = computed(() => {
   return 'bg-[var(--blawby-primary-100)]'
 })
 const titleWords = computed(() => title.value.trim().split(/\s+/).filter(Boolean))
-const descriptionParts = computed(() => Array.isArray(description.value)
-  ? description.value.filter(Boolean)
-  : String(description.value || '').split(/\n\s*\n/).map(part => part.trim()).filter(Boolean))
+const descriptionParts = computed(() => (description.value ?? '')
+  .split(/\n\s*\n/)
+  .map(part => part.trim())
+  .filter(Boolean))
 </script>
 
 <style>

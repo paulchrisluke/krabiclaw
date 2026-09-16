@@ -136,7 +136,7 @@ export async function listPublicTenantPageProductRows(
            EXISTS (SELECT 1 FROM product_booking_configs bc WHERE bc.product_id = p.id AND bc.organization_id = p.organization_id) AS is_bookable,
            (SELECT CASE WHEN count(*) = 1 THEN min(bl.slug) END FROM product_locations pl
               JOIN business_locations bl ON bl.id = pl.location_id AND bl.site_id = ? AND bl.status = 'active'
-             WHERE pl.product_id = p.id AND pl.organization_id = p.organization_id AND pl.published = 1) AS location_slug,
+             WHERE pl.product_id = p.id AND pl.organization_id = p.organization_id AND pl.published = 1 AND pl.active = 1) AS location_slug,
            offer.unit_amount, offer.compare_at_unit_amount, offer.currency
       FROM products p
       JOIN product_publications pub ON pub.product_id = p.id AND pub.organization_id = p.organization_id

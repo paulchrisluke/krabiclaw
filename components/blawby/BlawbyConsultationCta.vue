@@ -27,7 +27,7 @@
 <script setup lang="ts">
 import type { PublicTenantPage } from '~/server/utils/public-tenant-pages'
 import type { TenantPageBlock } from '~/utils/tenant-page-blocks'
-import { blockText, blockTextOrNull, blockMedia } from '~/utils/tenant-page-block-data'
+import { blockText, blockTextOrNull, blockMedia, isInternalRoute } from '~/utils/tenant-page-block-data'
 const props = defineProps<{
   block: TenantPageBlock
   page: PublicTenantPage
@@ -46,7 +46,7 @@ const label = computed(() => blockText(props.block.data.label))
 const destination = computed(() => {
   if (props.destinationOverride) return props.destinationOverride
   const url = blockText(props.block.data.url)
-  return url ? localePath(url) : ''
+  return url ? (isInternalRoute(url) ? localePath(url) : url) : ''
 })
 const backgroundUrl = computed(() => blockMedia(props.block, 'background')[0]?.public_url ?? null)
 const featuredUrl = computed(() => blockMedia(props.block, 'featured')[0]?.public_url ?? null)

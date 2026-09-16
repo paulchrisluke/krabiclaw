@@ -58,8 +58,11 @@ const { locations, googleBusiness } = useSiteShellState()
 interface ShellReview { id: string; author_name: string | null; content: string | null; rating: number | null; location_title: string | null }
 const profile = computed(() => {
   const record = googleBusiness.value as { reviews?: unknown; business?: { reviewSummary?: { averageRating?: unknown; totalReviewCount?: number } | null } } | null
+  // Each row is checked before it is trusted: the band reads `author_name` off
+  // every entry, so one null in the shell's list took the page down.
+  const rows = Array.isArray(record?.reviews) ? record.reviews : []
   return {
-    reviews: (Array.isArray(record?.reviews) ? record.reviews : []) as ShellReview[],
+    reviews: rows.filter((row): row is ShellReview => Boolean(row) && typeof row === 'object' && 'id' in row),
     summary: record?.business?.reviewSummary ?? null,
   }
 })

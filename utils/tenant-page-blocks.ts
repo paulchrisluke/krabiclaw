@@ -100,6 +100,8 @@ export interface TenantPageField {
   reference?: 'page' | 'product' | 'collection' | 'location'
   /** The media placement slot this field's asset occupies. */
   slot?: string
+  /** What the picker offers for a media field. Images unless the field says otherwise. */
+  accept?: 'image' | 'video' | 'any'
   /**
    * `level` writes the block's own column, not its data. The heading level
    * control wrote `data.level`, which the writer deletes and no renderer reads,
@@ -260,7 +262,7 @@ export const TENANT_PAGE_BLOCK_REGISTRY: Record<TenantPageBlockType, TenantPageB
     accent: text('Emphasised phrase', { section: 'headline' }),
     eyebrow: text('Eyebrow'),
     subtitle: prose('Subheading'),
-    media: { kind: 'media', label: 'Image or video', translatable: false, section: 'image', slot: 'media' },
+    media: { kind: 'media', label: 'Image or video', translatable: false, section: 'image', slot: 'media', accept: 'any' },
     cta_label: text('Button label', { section: 'button', pairedWith: 'cta_url' }),
     cta_url: link('Button URL', { pairedWith: 'cta_label' }),
     // A second button, which eight platform heroes already carry and no list
@@ -360,7 +362,7 @@ export const TENANT_PAGE_BLOCK_REGISTRY: Record<TenantPageBlockType, TenantPageB
   media_text: blockDefinitionWithMetadata('media_text', 'Image with text', 'A picture and the words beside it.', ALL_RECIPES, {
     title: text('Title'),
     body: prose('Text'),
-    media: { kind: 'media', label: 'Image or video', translatable: false, section: 'image', slot: 'media' },
+    media: { kind: 'media', label: 'Image or video', translatable: false, section: 'image', slot: 'media', accept: 'any' },
     label: text('Link label', { section: 'link', pairedWith: 'url' }),
     url: link('Link URL', { section: 'link', pairedWith: 'label' }),
   }),

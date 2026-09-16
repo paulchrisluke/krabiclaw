@@ -328,7 +328,10 @@ export function useTenantPageBlock(siteId: string, pageId: string, blockId: Mayb
     const id = toValue(blockId)
     const existing = draft.value.blocks.find(item => item.id === id)
     if (existing) return existing
-    if (newBlock.value) return newBlock.value
+    // The pending block answers to the route that creates it and to its own
+    // id, and to nothing else: returning it for any unknown id meant a stale
+    // link edited the new block instead of saying the section was gone.
+    if (newBlock.value && (id === 'new' || id === newBlock.value.id)) return newBlock.value
     throw createError({ statusCode: 404, statusMessage: 'Section not found' })
   })
 }

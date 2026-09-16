@@ -104,7 +104,13 @@ onMounted(() => {
       }
     }
   }, { rootMargin: '200px' })
-  watch(() => items.value.length, () => { nextTick(() => locCardRefs.forEach(el => el && observer.observe(el))) }, { immediate: true })
+  // Keyed on the items themselves: a reorder or a same-length replacement
+  // renders different cards, and watching the count alone left those cards
+  // unobserved, so their videos never started.
+  watch(() => items.value.map(item => item.id).join('|'), () => {
+    observer.disconnect()
+    nextTick(() => locCardRefs.forEach(el => el && observer.observe(el)))
+  }, { immediate: true })
   onUnmounted(() => observer.disconnect())
 })
 </script>

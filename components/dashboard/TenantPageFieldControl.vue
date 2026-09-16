@@ -48,7 +48,7 @@
       v-else-if="field.kind === 'media'"
       :site-id="siteId"
       :model-value="mediaAsset"
-      accept="image"
+      :accept="field.accept ?? 'image'"
       @update:model-value="writeMedia($event)"
     />
 
