@@ -59,6 +59,7 @@
                  between the two unconditionally, so a card with one line does not
                  render a leading dot. -->
             <p class="mt-1 text-sm text-muted">
+              <template v-if="item.parentSiteName">{{ item.parentSiteName }}<span aria-hidden="true"> · </span></template>
               <template v-if="item.eyebrow">{{ item.eyebrow }}<span aria-hidden="true"> · </span></template>{{ item.summary }}
             </p>
           </div>
@@ -113,6 +114,8 @@ export interface SiteLocationSelectorItem {
   status?: { label: string; color: BadgeProps['color'] }
   /** The tile's overflow menu. Omitted when the viewer has no action on the record. */
   actions?: DropdownMenuItem[]
+  /** Parent site name for organization-scoped location display */
+  parentSiteName?: string
 }
 
 withDefaults(defineProps<{

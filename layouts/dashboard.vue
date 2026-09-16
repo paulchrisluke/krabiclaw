@@ -10,6 +10,7 @@
         <span class="min-w-0 truncate text-sm font-medium text-highlighted">
           Impersonating <span class="font-semibold">{{ sessionData?.user?.email }}</span>
         </span>
+        <span v-if="impersonationError" class="text-xs text-error font-medium">{{ impersonationError }}</span>
         <UButton size="xs" color="warning" variant="soft" :loading="stoppingImpersonation" @click="stopImpersonating">
           Stop impersonating
         </UButton>
@@ -149,7 +150,7 @@ const route = useRoute()
 const router = useRouter()
 const { sessionData, refresh: refreshSession } = await useAuthSession()
 const { trackDashboardVisited, setUserId } = useAnalytics()
-const toast = useToast()
+const impersonationError = ref<string | null>(null)
 const stoppingImpersonation = ref(false)
 const { searchTerm: dashboardSearchTerm, loading: dashboardSearchLoading, groups: dashboardSearchGroups } = useDashboardSearch()
 const dashboard = useDashboardSite()
@@ -274,15 +275,8 @@ const siteSlugFromRoute = computed(() => {
 // once that state has been populated from an earlier page in the same session.
 const activeSiteSlug = computed(() => siteSlugFromRoute.value)
 const siteBase = computed(() => orgBase.value && activeSiteSlug.value ? `${orgBase.value}/sites/${activeSiteSlug.value}` : null)
-// locationsBase is the dedicated site locations index and the prefix for a
-// specific location's own routes.
-const locationsBase = computed(() => siteBase.value ? `${siteBase.value}/locations` : null)
-// Read straight off the route, the way mobileNavItems below already does for the
-// same value. This was aliasing the composable's `routeLocationSlug` to the name
-// of a *different* export, `currentLocationSlug`, which resolves a record before
-// answering — a lookup this has no use for, since the prefix it builds is a URL.
+// Read straight off the route for navigation and routing purposes
 const routeLocationSlug = computed(() => typeof route.params.locationSlug === 'string' ? route.params.locationSlug : null)
-const locationBase = computed(() => locationsBase.value && routeLocationSlug.value ? `${locationsBase.value}/${routeLocationSlug.value}` : null)
 const routeName = computed(() => typeof route.name === 'string' ? route.name : '')
 const isAccountRoute = computed(() => routeName.value.startsWith('dashboard-account'))
 // Set by routes that own their context and have no org/site scope of their own —
@@ -380,17 +374,7 @@ const scopeHeaderModel = computed<DashboardScopeHeaderModel>(() => {
   }
 })
 
-// The children label comes from the resolved capabilities (locationVocabulary), not a
-// hardcoded string, so a service site correctly reads "Offices / Service
-// Areas" instead of "Locations".
-const locationsNavLabel = computed(() => capabilities.value?.locationVocabulary === 'office/service area' ? 'Offices / Service Areas' : 'Locations')
-// Nav goes to the list, never into a location the user did not choose. Picking
-// `locations[0]` here meant a multi-location tenant had the app decide which one
-// they meant, and no screen anywhere showed them all.
-const locationsNavTarget = computed(() => {
-  if (!locationsBase.value) return null
-  return scope.value === 'location' ? locationBase.value : locationsBase.value
-})
+
 
 provide(dashboardScopeHeaderModelKey, scopeHeaderModel)
 provide(dashboardOrganizationParentKey, computed(() => {
@@ -434,17 +418,13 @@ const mobileNavItems = computed<DashboardMobileNavItem[]>(() => {
   const routeLocationBase = routeSiteBase && routeLocationSlug
     ? `${routeSiteBase}/locations/${encodeURIComponent(routeLocationSlug)}`
     : null
-  const isOrganization = scope.value === 'organization'
-  const childrenTo = isOrganization ? `${routeOrgBase}/sites` : locationsNavTarget.value
-  const messagesTo = isOrganization
-    ? `${routeOrgBase}/messages`
-    : scope.value === 'location' && routeLocationBase
-      ? `${routeLocationBase}/messages`
-      : routeSiteBase ? `${routeSiteBase}/messages` : undefined
+  const messagesTo = scope.value === 'location' && routeLocationBase
+    ? `${routeLocationBase}/messages`
+    : routeSiteBase ? `${routeSiteBase}/messages` : `${routeOrgBase}/messages`
   const items: DashboardMobileNavItem[] = [
     { key: 'today', label: 'Today', icon: 'i-lucide-bookmark', to: routeOrgBase, exact: true },
     { key: 'calendar', label: 'Calendar', icon: 'i-lucide-calendar-days', to: `${routeOrgBase}/calendar` },
-    { key: 'children', label: isOrganization ? 'Sites' : locationsNavLabel.value, icon: isOrganization ? 'i-lucide-globe' : 'i-lucide-map-pin', to: childrenTo ?? undefined },
+    { key: 'children', label: 'Sites', icon: 'i-lucide-globe', to: `${routeOrgBase}/sites` },
     { key: 'messages', label: 'Messages', icon: 'i-lucide-message-square', to: messagesTo },
   ]
   return withActiveItem(items)
@@ -544,6 +524,7 @@ onBeforeUnmount(() => {
 })
 
 async function stopImpersonating() {
+  impersonationError.value = null
   stoppingImpersonation.value = true
   try {
     const result = await authClient.admin.stopImpersonating()
@@ -552,11 +533,7 @@ async function stopImpersonating() {
     await navigateTo('/dashboard')
   } catch (error) {
     console.error('Failed to stop impersonation:', error)
-    toast.add({
-      title: 'Error',
-      description: 'Failed to stop impersonation',
-      color: 'error'
-    })
+    impersonationError.value = 'Failed to stop impersonation'
   } finally {
     stoppingImpersonation.value = false
   }
