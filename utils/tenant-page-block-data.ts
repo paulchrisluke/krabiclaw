@@ -40,7 +40,10 @@ export function blockStrings(value: unknown): string[] {
  * running it through `localePath` produced `/th/https://example.com`.
  */
 export function isInternalRoute(url: string): boolean {
-  return url.startsWith('/')
+  // `//example.com` is an absolute URL wearing a leading slash: the browser
+  // reads it as a host, so localizing it would send the visitor to
+  // `/th//example.com` and, unlocalized, straight off the site.
+  return url.startsWith('/') && !url.startsWith('//')
 }
 
 /** A block's media placement in a slot, in the order it was arranged. */
