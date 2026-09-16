@@ -1,4 +1,5 @@
 import { parseOpeningHours, parseSpecialHours } from '~/shared/reservation-hours'
+import { oncePerRequest } from '~/server/utils/request-scope'
 import { parseGoogleReviewMetadata } from '~/shared/google-review'
 // Canonical route-capability-driven public page service.
 //   ?page=home|about|contact|location|reviews|photos|qa|...
@@ -115,8 +116,6 @@ interface ReviewRow {
 
 
 type ProductMediaRow = MediaAsset & { product_id: string; slot: 'image' | 'gallery'; sort_order: number };
-
-const publicPageReadsByRequest = new WeakMap<H3Event, Map<string, Promise<unknown>>>()
 
 interface PublicPageLoadOptions {
   mutateResponseHeaders?: boolean
@@ -934,28 +933,19 @@ export const loadPublicPage = (
     return loadPublicPageSource(event, siteId, query, options)
       .finally(() => recordRequestPhase(event, "page", startedAt));
   }
-  let requestReads = publicPageReadsByRequest.get(event);
-  if (!requestReads) {
-    requestReads = new Map();
-    publicPageReadsByRequest.set(event, requestReads);
-  }
   const queryKey = JSON.stringify(
     Object.entries(query)
       .filter(([, value]) => value !== undefined)
       .sort(([left], [right]) => left.localeCompare(right)),
   );
-  const key = `${siteId}:${queryKey}`;
-  const existing = requestReads.get(key);
-  if (existing) return existing;
-
-  const startedAt = performance.now();
-  const operation = loadPublicPageSource(event, siteId, query, options);
-  const pending = operation
-    .finally(() => recordRequestPhase(event, "page", startedAt))
-    .catch((error) => {
-      if (requestReads.get(key) === pending) requestReads.delete(key);
-      throw error;
-    });
-  requestReads.set(key, pending);
-  return pending;
+  // The flag is part of the key because it changes what the call does to the
+  // response, not just what it returns: a memo shared across two callers that
+  // disagree about it would let the first one's header behaviour stand for both,
+  // including the `private, no-store` a preview-authorized response needs.
+  const headerKey = options?.mutateResponseHeaders === false ? 'no-headers' : 'headers'
+  return oncePerRequest(event, `public-page:${siteId}:${headerKey}:${queryKey}`, () => {
+    const startedAt = performance.now();
+    return loadPublicPageSource(event, siteId, query, options)
+      .finally(() => recordRequestPhase(event, "page", startedAt));
+  });
 };

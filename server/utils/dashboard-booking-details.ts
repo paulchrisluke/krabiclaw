@@ -3,7 +3,7 @@ import type { H3Event } from 'nitro'
 import { HTTPError } from 'nitro'
 import { queryAll, queryFirst, type DbClient } from '~/server/db'
 import { getDashboardContext } from '~/server/utils/dashboard-context'
-import { assertResourceAccess, listAccessibleLocationIds } from '~/server/utils/member-access'
+import { assertResourceAccess, listAccessibleLocationIds, memberAccessPrincipal } from '~/server/utils/member-access'
 import { getLocationReservationConfig, reservationPolicySummarySource, renderBookingPolicySummary, type RenderedBookingPolicySummary } from '~/server/utils/reservations'
 import { loadPublicSocialMedia, type PublicSocialMedia } from '~/server/utils/public-social-image'
 import { localPartsAt } from '~/utils/timezone'
@@ -99,7 +99,6 @@ async function bookingContext(event: H3Event, organizationSlug?: string | null):
   const context = await getDashboardContext(event, {
     requireSite: false,
     organizationSlug,
-    pathname: '/api/dashboard/bookings/detail',
   })
   if (!context.organization) throw new HTTPError({ statusCode: 404, message: 'Organization not found' })
   return {
@@ -139,11 +138,7 @@ async function loadBookingRow(
 
 async function assertBookingAccess(context: BookingAccessContext, row: BookingRow) {
   await assertResourceAccess(context.db, {
-    env: context.env,
-    memberId: context.organization.memberId,
-    role: context.organization.role,
-    organizationId: context.organization.id,
-    siteId: row.site_id,
+    ...memberAccessPrincipal(context.organization, { env: context.env, siteId: row.site_id }),
     resourceLocationId: row.location_id,
   })
 }
@@ -195,7 +190,7 @@ export async function loadDashboardBookingDetails(
   if (!row) throw new HTTPError({ statusCode: 404, message: 'Booking not found' })
   await assertBookingAccess(context, row)
 
-  const allowedLocationIds = await listAccessibleLocationIds(context.db, { env: context.env, memberId: context.organization.memberId, role: context.organization.role, organizationId: context.organization.id, siteId: row.site_id })
+  const allowedLocationIds = await listAccessibleLocationIds(context.db, memberAccessPrincipal(context.organization, { env: context.env, siteId: row.site_id }))
   const locations = await queryAll<{ id: string; title: string }>(context.db, 'SELECT id, title FROM business_locations WHERE organization_id = ? AND site_id = ? ORDER BY title', [row.organization_id, row.site_id])
   const visibleLocations = locations.filter(location => (allowedLocationIds === null || allowedLocationIds.includes(location.id)) && (input.type === 'reservation' || location.id === row.location_id))
   const locationMedia = await loadPublicSocialMedia(context.db, row.site_id, 'business_location', visibleLocations.map(location => location.id))

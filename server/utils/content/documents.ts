@@ -501,7 +501,7 @@ export async function createContentDocumentWithBlocks(
   return { document, body_markdown: prepared.body_markdown, blocks: prepared.blocks }
 }
 
-function formatBlockOutline(block: ContentBlockRow) {
+export function formatBlockOutline(block: ContentBlockRow) {
   return {
     source_block_id: block.source_block_id,
     id: block.id,
@@ -514,7 +514,7 @@ function formatBlockOutline(block: ContentBlockRow) {
   }
 }
 
-async function attachContentBlockMedia(db: DbClient, documentId: string, blocks: ReturnType<typeof formatBlockOutline>[]) {
+export async function attachContentBlockMedia(db: DbClient, documentId: string, blocks: ReturnType<typeof formatBlockOutline>[]) {
   const media = await queryAll<ContentBlockMedia & { owner_id: string }>(
     db,
     `SELECT mp.owner_id, mp.asset_id, mp.slot, mp.sort_order,
@@ -690,12 +690,6 @@ export async function deleteContentBlock(
 export async function renderContentPreview(db: DbClient, documentId: string) {
   const blocks = await listBlocksForDocument(db, documentId)
   return { body_markdown: renderContentBlocksToMarkdown(blocks), blocks: await attachContentBlockMedia(db, documentId, blocks.map(formatBlockOutline)) }
-}
-
-export async function getContentEditorSnapshot(db: DbClient, documentId: string) {
-  const document = await getContentDocumentById(db, documentId)
-  if (!document) return null
-  return await getContentEditorSnapshotForDocument(db, document)
 }
 
 export async function getContentEditorSnapshotForDocument(db: DbClient, document: ContentDocumentRow) {

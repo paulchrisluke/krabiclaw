@@ -40,7 +40,12 @@ export async function useBookingDetails(bookingType: DashboardBookingType, booki
     return await dashboardApi(`/api/dashboard/bookings/${bookingType}/${encodeURIComponent(bookingId)}`, {
       validate: isBookingDetailsResponse,
     })
-  })
+  },
+  // Awaiting this on the client blocks the navigation into the booking, and
+  // every surface that reads it already renders `pending`. On the server it
+  // stays immediate, so the booking is in the SSR payload.
+  { lazy: import.meta.client },
+  )
 
   const booking = computed(() => resource.value?.booking ?? null)
 

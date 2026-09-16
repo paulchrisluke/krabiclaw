@@ -314,7 +314,7 @@ export async function listOrganizationGuestThreads(
   opts: Omit<ListGuestThreadsOptions, 'principal'> & {
     organizationId: string
     principal: {
-      memberId: string
+      userId: string
       role: string
       organizationId: string
       teamIds: string[] | null

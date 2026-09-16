@@ -1,6 +1,6 @@
 import { defineHandler, HTTPError } from 'nitro'
 import { getQuery } from 'nitro/h3'
-import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
+import { jsonResponse } from '~/server/utils/api-response'
 import { getDashboardContext, listDashboardLocations } from '~/server/utils/dashboard-context'
 import { listDashboardLocationsResource } from '~/server/utils/dashboard-locations-resource'
 import { isOrganizationWideRole, listUserOrganizationTeamIds } from '~/server/utils/member-access'
@@ -20,8 +20,9 @@ export default defineHandler(async (event) => {
 
     const teamIds = isOrganizationWideRole(organization.role)
       ? null
-      : await listUserOrganizationTeamIds({ env: cloudflareEnv(event), organizationId: organization.id, userId })
-    const principal = { env, memberId: organization.memberId, role: organization.role, teamIds }
+      : await listUserOrganizationTeamIds({ env, organizationId: organization.id, userId, event })
+    // listDashboardLocations scopes on role and teamIds; nothing else here is read.
+    const principal = { role: organization.role, teamIds }
 
     const locations = await listDashboardLocations(db, organization.id, null, principal, true)
     return jsonResponse({ success: true as const, locations })

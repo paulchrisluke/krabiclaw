@@ -8,7 +8,7 @@ import { cloudflareEnv } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { queryAll, queryFirst, type DbClient } from '~/server/db'
 import { d1JsonStringSet } from '~/server/db/d1-limits'
-import { assertDashboardPathPermission, assertMemberSiteAccess, isOrganizationWideRole, resolveUserOrganization } from '~/server/utils/member-access'
+import { assertMemberSiteAccess, isOrganizationWideRole, memberAccessPrincipal, resolveUserOrganization, type ResolvedMembership } from '~/server/utils/member-access'
 import { getOrganizationPlan } from '~/server/utils/billing-access'
 
 function safeJsonParse(value: string): unknown {
@@ -29,13 +29,11 @@ function parseLocationAddress(value: string | null): { addressLines: string[] } 
   return { addressLines }
 }
 
-export interface DashboardOrganizationRow {
+export interface DashboardOrganizationRow extends ResolvedMembership {
   id: string
   name: string
   slug: string
   logo: string | null
-  role: string
-  memberId: string
   // Set while a deletion is pending: the sites keep serving until the
   // deletion-sweep task runs, and an owner can cancel until then.
   deletionScheduledAt: string | null
@@ -44,6 +42,11 @@ export interface DashboardOrganizationRow {
 // One loader for site-level social media, used by both the sites list and the
 // single-site context so the two cannot report different images for the same
 // site. Slots and resolution order match the public surfaces exactly.
+//
+// Site cards render the same image the public pages do. The dashboard used to
+// run its own query against the home page hero block's social_card — a
+// different owner from the one public reads — which is why it showed nothing
+// while the public site rendered fine.
 async function loadSiteSocialMedia(db: DbClient, organizationId: string) {
   const rows = await queryAll<{
     site_id: string
@@ -77,6 +80,13 @@ async function loadSiteSocialMedia(db: DbClient, organizationId: string) {
   return bySite
 }
 
+/**
+ * A site as authorization resolves it: identity, scope and settings, and nothing
+ * that exists only to render a card. The plan and the site-card media are an
+ * organization-wide read each, and every caller that only needs to know which
+ * site it is allowed to touch was paying for both. They are added by
+ * `decorateDashboardSiteCard` for the surfaces that actually draw cards.
+ */
 export interface DashboardSiteRow {
   id: string
   organization_id: string
@@ -96,12 +106,54 @@ export interface DashboardSiteRow {
   public_url: string | null
   status: string
   onboarding_status: string
-  effective_plan: string
-  media: Array<{ asset_id: string, slot: string, public_url: string, thumbnail_url: string | null, kind: string | null }>
-  social_image: { url: string, width?: number, height?: number, type?: string } | null
   default_currency: string | null
   feature_overrides: string | null
   theme_id: string
+}
+
+export type DashboardSiteMedia = Array<{ asset_id: string, slot: string, public_url: string, thumbnail_url: string | null, kind: string | null }>
+
+/** The presentation a site card needs, loaded once per organization per request. */
+export interface DashboardSiteCardEnrichment {
+  effectivePlan: string
+  mediaBySite: Map<string, DashboardSiteMedia>
+}
+
+export type DashboardSiteCardRow<Row> = Row & {
+  effective_plan: string
+  media: DashboardSiteMedia
+  social_image: { url: string, width?: number, height?: number, type?: string } | null
+}
+
+/**
+ * The organization plan and the site-card media, together, once. Both are
+ * organization-wide, so a request that decorates a selected site *and* the
+ * site list reads each of them a single time and shares the result rather than
+ * repeating the pair per surface.
+ */
+export async function loadDashboardSiteCardEnrichment(
+  env: CloudflareEnv,
+  db: DbClient,
+  organizationId: string,
+): Promise<DashboardSiteCardEnrichment> {
+  const [effectivePlan, mediaBySite] = await Promise.all([
+    getOrganizationPlan(env, organizationId),
+    loadSiteSocialMedia(db, organizationId),
+  ])
+  return { effectivePlan, mediaBySite }
+}
+
+export function decorateDashboardSiteCard<Row extends { id: string }>(
+  row: Row,
+  enrichment: DashboardSiteCardEnrichment,
+): DashboardSiteCardRow<Row> {
+  const media = enrichment.mediaBySite.get(row.id) ?? []
+  return {
+    ...row,
+    effective_plan: enrichment.effectivePlan,
+    media,
+    social_image: resolveSocialImageFromMedia(media),
+  }
 }
 
 export interface DashboardLocationRow {
@@ -159,16 +211,6 @@ export interface DashboardContextOptions {
   // canonical site query and assertMemberSiteAccess call below.
   siteId?: string | null
   siteSlug?: string | null
-  // The scoped-role path allowlist (SCOPED_ROLE_DASHBOARD_ROUTES) only lists
-  // /api/dashboard/* patterns. event.path is correct when a real API route
-  // handler calls this directly, but SSR callers that bypass the self-fetch
-  // (see docs/performance/data-loading-architecture.md) invoke this with the
-  // *page's* own event to preserve Cloudflare bindings — event.path there is a
-  // /dashboard/... page path, which never matches the allowlist and would 403
-  // every scoped-role page load regardless of whether that page is actually
-  // restricted. Those callers must pass the /api/dashboard/* path they're
-  // logically emulating.
-  pathname?: string
 }
 
 export interface ResolveOrganizationOptions {
@@ -216,7 +258,7 @@ export async function resolveRequestedOrganization(
   const env = cloudflareEnv(event)
 
   const headerOrg = organizationSlug
-    ? await resolveUserOrganization(env, { userId, organizationSlug })
+    ? await resolveUserOrganization(env, { userId, organizationSlug }, event)
     : null
 
   if (explicitOrganizationId) {
@@ -228,7 +270,7 @@ export async function resolveRequestedOrganization(
     }
     if (headerOrg) return headerOrg
 
-    return await resolveUserOrganization(env, { userId, organizationId: explicitOrganizationId })
+    return await resolveUserOrganization(env, { userId, organizationId: explicitOrganizationId }, event)
   }
 
   if (headerOrg) return headerOrg
@@ -236,7 +278,7 @@ export async function resolveRequestedOrganization(
   const activeOrganizationId = options.activeOrganizationId ?? null
   if (!activeOrganizationId) return null
 
-  return await resolveUserOrganization(env, { userId, organizationId: activeOrganizationId })
+  return await resolveUserOrganization(env, { userId, organizationId: activeOrganizationId }, event)
 }
 
 export async function getDashboardContext(
@@ -316,7 +358,6 @@ export async function getDashboardContext(event: H3Event, options: DashboardCont
         : 'Organization context is required. Use /dashboard/{orgSlug} routes.',
     })
   }
-  assertDashboardPathPermission(organization.role, options.pathname ?? event.path)
 
   // The organization and active site are resolved explicitly from the route segments,
   // sent on every /api/dashboard/* request as `org`/`site` query params (see
@@ -334,8 +375,8 @@ export async function getDashboardContext(event: H3Event, options: DashboardCont
     throw new HTTPError({ statusCode: 400, message: 'Site slug is required. Use /dashboard/{orgSlug}/sites/{siteSlug} routes.' })
   }
 
-  const rawSite = siteId
-    ? await queryFirst<Omit<DashboardSiteRow, 'effective_plan'>>(db, `
+  const site = siteId
+    ? await queryFirst<DashboardSiteRow>(db, `
         SELECT s.id, s.organization_id, s.brand_name, s.vertical, s.subdomain, (SELECT domain FROM site_domains WHERE site_id = s.id AND role = 'canonical' AND status = 'active' AND type = 'custom') AS custom_domain, (SELECT 'https://' || domain FROM site_domains WHERE site_id = s.id AND role = 'canonical' AND status = 'active') AS public_url,
                s.status, s.onboarding_status, s.default_currency,
                s.feature_overrides, s.theme_id
@@ -344,7 +385,7 @@ export async function getDashboardContext(event: H3Event, options: DashboardCont
         LIMIT 1
       `, [organization.id, siteId])
     : siteSlug
-      ? await queryFirst<Omit<DashboardSiteRow, 'effective_plan'>>(db, `
+      ? await queryFirst<DashboardSiteRow>(db, `
         SELECT s.id, s.organization_id, s.brand_name, s.vertical, s.subdomain, (SELECT domain FROM site_domains WHERE site_id = s.id AND role = 'canonical' AND status = 'active' AND type = 'custom') AS custom_domain, (SELECT 'https://' || domain FROM site_domains WHERE site_id = s.id AND role = 'canonical' AND status = 'active') AS public_url,
                s.status, s.onboarding_status, s.default_currency,
                s.feature_overrides, s.theme_id
@@ -354,28 +395,12 @@ export async function getDashboardContext(event: H3Event, options: DashboardCont
         `, [organization.id, siteSlug])
       : null
 
-  const siteSocialMedia = rawSite ? (await loadSiteSocialMedia(db, organization.id)).get(rawSite.id) ?? [] : []
-  const site = rawSite
-    ? {
-        ...rawSite,
-        effective_plan: await getOrganizationPlan(env, organization.id),
-        media: siteSocialMedia,
-        social_image: resolveSocialImageFromMedia(siteSocialMedia),
-      }
-    : null
-
   if (!site && options.requireSite !== false) {
     throw new HTTPError({ statusCode: 404, message: 'Site not found' })
   }
 
   if (site) {
-    await assertMemberSiteAccess(db, {
-      env,
-      memberId: organization.memberId,
-      role: organization.role,
-      organizationId: organization.id,
-      siteId: site.id,
-    })
+    await assertMemberSiteAccess(db, memberAccessPrincipal(organization, { env, siteId: site.id, event }))
   }
 
   return {
@@ -396,12 +421,15 @@ export interface DashboardSiteSummaryRow {
   vertical: string | null
   status: string | null
   onboarding_status: string | null
-  effective_plan: string
-  media: Array<{ asset_id: string; slot: 'media'; public_url: string; thumbnail_url: string | null; kind: string | null }>
 }
 
+/**
+ * The sites this principal may see, as scope rows. Card presentation is not
+ * loaded here: a caller that draws cards loads the enrichment once with
+ * `loadDashboardSiteCardEnrichment` and applies it, and a caller that only
+ * needs names and ids pays for neither.
+ */
 export async function listOrganizationSites(
-  env: CloudflareEnv,
   db: DbClient,
   organizationId: string,
   principal?: { role: string; teamIds: string[] | null },
@@ -409,7 +437,7 @@ export async function listOrganizationSites(
   const scopedTeamIds = principal && !isOrganizationWideRole(principal.role) ? principal.teamIds ?? [] : null
   if (scopedTeamIds && scopedTeamIds.length === 0) return []
   const scopedTeamIdsJson = scopedTeamIds ? d1JsonStringSet(scopedTeamIds) : null
-  const rows = await queryAll<Omit<DashboardSiteSummaryRow, 'media' | 'effective_plan'>>(db, `
+  return queryAll<DashboardSiteSummaryRow>(db, `
     SELECT s.id, s.team_id, s.brand_name, s.subdomain, s.vertical, s.status,
            s.onboarding_status
     FROM sites s
@@ -417,23 +445,6 @@ export async function listOrganizationSites(
       ${scopedTeamIds ? `AND s.team_id IN (SELECT value FROM json_each(?))` : ''}
     ORDER BY s.created_at ASC, s.id ASC
   `, scopedTeamIdsJson ? [organizationId, scopedTeamIdsJson] : [organizationId])
-  const effectivePlan = await getOrganizationPlan(env, organizationId)
-
-  // Site cards render the same image the public pages do. This used to run its
-  // own query against the home page hero block's social_card — a different
-  // owner from the one public reads — which is why the dashboard showed nothing
-  // while the public site rendered fine.
-  const mediaBySite = await loadSiteSocialMedia(db, organizationId)
-
-  return rows.map(row => {
-    const media = mediaBySite.get(row.id) ?? []
-    return {
-      ...row,
-      effective_plan: effectivePlan,
-      media,
-      social_image: resolveSocialImageFromMedia(media),
-    }
-  })
 }
 
 export async function getDashboardSite(event: H3Event) {
@@ -481,10 +492,8 @@ export async function getDashboardLocationContext(event: H3Event, locationId: st
   const organization = await resolveUserOrganization(env, {
     userId: session.user.id,
     organizationId: row.organization_id,
-  })
+  }, event)
   if (!organization) throw new HTTPError({ statusCode: 404, message: 'Location not found' })
-
-  assertDashboardPathPermission(organization.role, event.path)
 
   return {
     env,

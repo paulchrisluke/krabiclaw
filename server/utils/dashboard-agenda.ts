@@ -2,7 +2,7 @@ import { assertCalendarDate, isValidTimezone, instantDate, localDateAt, addLocal
 import { queryAll, type DbClient } from '~/server/db'
 import { d1JsonStringSet } from '~/server/db/d1-limits'
 import { resolveSiteCmsCapabilities } from '~/server/utils/cms-capabilities'
-import { isOrganizationWideRole, listAccessibleLocationIds } from '~/server/utils/member-access'
+import { isOrganizationWideRole, listAccessibleLocationIds, memberAccessPrincipal, type ResolvedMembership } from '~/server/utils/member-access'
 import type { CloudflareEnv } from '~/server/utils/auth'
 import { CAPACITY_CONSUMING_SQL } from '~/shared/bookings'
 
@@ -36,8 +36,9 @@ export interface TodayAgendaPayload extends AgendaPayload {
 
 export interface AgendaPrincipal {
   env: CloudflareEnv
-  memberId: string
-  role: string
+  // The membership this request resolved, not loose fields: the scope reads
+  // below authorize with it.
+  membership: ResolvedMembership
 }
 
 export interface AgendaQuery {
@@ -161,7 +162,7 @@ export async function listAgenda(
   assertCalendarDate(query.to)
   if (query.from > query.to) throw new Error('from must not be after to')
 
-  const scoped = Boolean(query.principal && !isOrganizationWideRole(query.principal.role))
+  const scoped = Boolean(query.principal && !isOrganizationWideRole(query.principal.membership.role))
   const allCapabilitySites = await queryAll<CapabilitySiteRow>(db, `
     SELECT s.id, s.brand_name, s.subdomain, s.vertical, s.theme_id, s.feature_overrides
     FROM sites s
@@ -171,13 +172,10 @@ export async function listAgenda(
   const accessibleLocationsBySite = new Map<string, string[] | null>()
   if (scoped && query.principal) {
     await Promise.all(allCapabilitySites.map(async (site) => {
-      accessibleLocationsBySite.set(site.id, await listAccessibleLocationIds(db, {
-        env: query.principal!.env,
-        memberId: query.principal!.memberId,
-        role: query.principal!.role,
-        organizationId,
-        siteId: site.id,
-      }))
+      accessibleLocationsBySite.set(site.id, await listAccessibleLocationIds(
+        db,
+        memberAccessPrincipal(query.principal!.membership, { env: query.principal!.env, siteId: site.id }),
+      ))
     }))
   }
   const capabilitySites = allCapabilitySites.filter(site =>

@@ -396,7 +396,17 @@ const isOne = (value: unknown): value is { success: true, product: Product } =>
 
 const collection = computed(() => collections.value.find(row => row.id === collectionId.value) ?? null)
 
-async function load() {
+// What the last successful (or in-flight) load was for. locationId resolves
+// after mount on a cold navigation, so onMounted and the watcher below both
+// fire for the same product; this loads it once.
+//
+// `force` is for the writers. A save or a photo change has just made this row
+// different from what was loaded, so the key matching is exactly the wrong
+// answer there: it left `product` stale, and the photo preview and every hub
+// summary read `product`, not the form.
+let loadedKey = ''
+
+async function load(options: { force?: boolean } = {}) {
   const id = locationId.value
   if (!id || isNew.value) {
     if (!isNew.value) return
@@ -404,27 +414,31 @@ async function load() {
     definitions.value = (await dashboardApi(`/api/editor/sites/${siteId}/metafield-definitions`, { validate: isDefinitionList })).definitions
     return
   }
+  const key = `${id}:${productId.value}`
+  if (key === loadedKey && !options.force) return
+  loadedKey = key
   loadError.value = null
   try {
     const [collectionResponse, productResponse, definitionResponse] = await Promise.all([
       dashboardApi(`/api/editor/sites/${siteId}/collections?location_id=${encodeURIComponent(id)}`, { validate: isCollectionList }),
-      dashboardApi(`/api/editor/sites/${siteId}/locations/${id}/products`, { validate: isProductList }),
+      dashboardApi(`/api/editor/sites/${siteId}/locations/${encodeURIComponent(id)}/products/${encodeURIComponent(productId.value)}`, { validate: isOne }),
       dashboardApi(`/api/editor/sites/${siteId}/metafield-definitions`, { validate: isDefinitionList }),
     ])
     collections.value = collectionResponse.collections
     definitions.value = definitionResponse.definitions
-    const found = productResponse.products.find(row => row.id === productId.value)
-    if (!found) return showError(createError({ statusCode: 404, statusMessage: `${presentation.value.itemLabel} not found` }))
-    product.value = found
-    loadForm(found)
+    product.value = productResponse.product
+    loadForm(productResponse.product)
   } catch (error) {
+    loadedKey = ''
     if (isNotFoundError(error)) return showError(createError({ statusCode: 404, statusMessage: `${presentation.value.itemLabel} not found` }))
     loadError.value = getErrorMessage(error, `Failed to load this ${presentation.value.itemLabel.toLowerCase()}`)
   }
 }
 
-onMounted(load)
-watch(locationId, load)
+// Called with no arguments on purpose: `watch` hands its listener
+// (value, oldValue, onCleanup), which would land in `options`.
+onMounted(() => { void load() })
+watch(locationId, () => { void load() })
 
 // ── The form ────────────────────────────────────────────
 interface OptionValueDraft { id: string | null; value: string }
@@ -853,7 +867,7 @@ async function commit() {
     })
     if (editorKey.value === 'publication') await savePublication(id)
     if (editorKey.value === 'booking') await saveBooking()
-    await load()
+    await load({ force: true })
     await navigateTo(itemPath.value)
   } catch (error) {
     saveError.value = getErrorMessage(error, `Failed to save ${presentation.value.itemLabel.toLowerCase()}`)
@@ -996,7 +1010,7 @@ async function setPrimaryImage(assetId: string | null) {
       validate: isRecord,
     })
     form.image_asset_id = assetId
-    await load()
+    await load({ force: true })
   } catch (error) {
     photoError.value = getErrorMessage(error, 'Failed to update the photo')
   }

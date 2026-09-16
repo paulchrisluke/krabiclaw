@@ -1,3 +1,4 @@
+import { memberAccessPrincipal } from '~/server/utils/member-access'
 import type { McpExecutorContext } from './shared'
 import { deleteMediaAsset, listMediaAssets, updateMediaAssetMetadata } from '~/server/utils/media-asset-manager'
 import { hasCloudflareImagesConfig } from '~/server/utils/cloudflare-images'
@@ -36,8 +37,7 @@ export async function handleMediaTools(ctx: McpExecutorContext): Promise<unknown
         env: site.env,
         organizationId: site.organizationId,
         siteId: site.siteId,
-        memberId: site.memberId,
-        role: site.role,
+        principal: memberAccessPrincipal(site.membership, { env: site.env, siteId: site.siteId }),
         placement,
         assetId: typeof args.asset_id === 'string' ? args.asset_id.trim() : null,
       });
@@ -57,8 +57,7 @@ export async function handleMediaTools(ctx: McpExecutorContext): Promise<unknown
         env: site.env,
         organizationId: site.organizationId,
         siteId: site.siteId,
-        memberId: site.memberId,
-        role: site.role,
+        principal: memberAccessPrincipal(site.membership, { env: site.env, siteId: site.siteId }),
         placement,
         assetId,
       });
@@ -74,8 +73,7 @@ export async function handleMediaTools(ctx: McpExecutorContext): Promise<unknown
         env: site.env,
         organizationId: site.organizationId,
         siteId: site.siteId,
-        memberId: site.memberId,
-        role: site.role,
+        principal: memberAccessPrincipal(site.membership, { env: site.env, siteId: site.siteId }),
         placement,
         assetId,
       });
@@ -91,8 +89,7 @@ export async function handleMediaTools(ctx: McpExecutorContext): Promise<unknown
         env: site.env,
         organizationId: site.organizationId,
         siteId: site.siteId,
-        memberId: site.memberId,
-        role: site.role,
+        principal: memberAccessPrincipal(site.membership, { env: site.env, siteId: site.siteId }),
         placement,
         moves,
       });

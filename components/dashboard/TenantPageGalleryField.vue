@@ -2,7 +2,7 @@
   <div class="space-y-3">
     <div v-for="(media, index) in slotMedia" :key="`${media.asset_id}-${index}`" class="flex items-center gap-3">
       <span class="w-6 shrink-0 text-center text-xs text-muted">{{ index + 1 }}</span>
-      <MediaPicker class="min-w-0 flex-1" :site-id="siteId" :model-value="media.asset_id" accept="image" :disabled="galleryBusy" @update:model-value="commitGalleryAsset(index, $event)" />
+      <MediaPicker class="min-w-0 flex-1" :site-id="siteId" :model-value="media.asset_id" :selected-summary="media" accept="image" :disabled="galleryBusy" @update:model-value="commitGalleryAsset(index, $event)" />
       <UButton icon="i-lucide-trash-2" color="error" variant="ghost" size="xs" square aria-label="Remove gallery image" :loading="galleryBusy" :disabled="galleryBusy" @click="commitGalleryAsset(index, null)" />
     </div>
     <div v-if="pendingNewGallerySlot" class="flex items-center gap-3">

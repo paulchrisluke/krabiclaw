@@ -84,7 +84,13 @@ export default defineConfig({
     command: localPrepared
       ? localWorkerCommand
       : `${localWorkerEnvironment} corepack yarn e2e:local:prepare && ${localWorkerCommand}`,
-    url: `http://localhost:${port}/`,
+    // Not `/`. On the platform host that is a tenant page, and a `db:pull:local`
+    // snapshot carries no page documents for the platform site, so `/` answers
+    // 404 and the suite never starts — which is how a test broken by #1001 sat
+    // failing while only the @smoke subset ran in CI. /api/health needs no
+    // content and no session, and pings D1, so readiness means the Worker and
+    // its binding are both up.
+    url: `http://localhost:${port}/api/health`,
     reuseExistingServer: false,
     timeout: localPrepared ? 180_000 : 600_000,
     stdout: captureServerLogs ? 'pipe' : 'ignore',

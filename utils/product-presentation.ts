@@ -52,8 +52,17 @@ export function presentationForProduct(vertical: string | null | undefined, prod
  * vertical's own goods and keeps its words. An empty list has no products to
  * be experiences, so it reads as the vertical's surface.
  */
+/**
+ * A catalogue reads as experiences only when it has items and every one of them
+ * is bookable. `allExperiences` is that fact, however the caller learned it —
+ * from the rows themselves, or from a count the server did in SQL.
+ */
+export function presentationForCatalog(vertical: string | null | undefined, allExperiences: boolean): ProductPresentation {
+  return allExperiences ? EXPERIENCE_PRESENTATION : requireProductPresentation(vertical)
+}
+
 export function presentationForProducts(vertical: string | null | undefined, products: ReadonlyArray<Pick<Product, 'booking'>>): ProductPresentation {
-  return products.length > 0 && products.every(isExperience) ? EXPERIENCE_PRESENTATION : requireProductPresentation(vertical)
+  return presentationForCatalog(vertical, products.length > 0 && products.every(isExperience))
 }
 
 export function presentationForSurface(vertical: string | null | undefined, surface: ProductSurface): ProductPresentation {

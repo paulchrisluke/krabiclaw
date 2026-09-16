@@ -293,6 +293,22 @@ export function createAuth(env: CloudflareEnv) {
     basePath: '/api/auth',
     secret: env.BETTER_AUTH_SECRET,
     trustedOrigins: trustedOriginsForAuth(env),
+    // Better Auth reads the session from the database on every getSession call,
+    // and a dashboard render makes several: the route middleware, the capability
+    // check, the SSR context loader and the page's own loader each ask
+    // independently. Measured on a tenant-page editor render: 63 auth queries,
+    // 68 D1 round trips in total.
+    //
+    // This is Better Auth's own answer, from its performance guide: the session
+    // travels in a short-lived signed cookie, so validity is read from the cookie
+    // instead of the database. Documented trade: "revoked sessions may remain
+    // active on other devices until the cookie cache expires (maxAge)."
+    session: {
+      cookieCache: {
+        enabled: true,
+        maxAge: 5 * 60, // Cache duration in seconds
+      },
+    },
     user: {
       // Account deletion is scheduled through /api/user/delete-account and
       // performed by the deletion-sweep task (server/utils/tenant-deletion.ts),
@@ -433,6 +449,14 @@ export function createAuth(env: CloudflareEnv) {
     plugins: [
       lastLoginMethod({ customResolveMethod: ctx => loginMethodForPath(ctx.path) }),
       jwt({
+        // The plugin's default after-hook mints a fresh JWT on every
+        // /get-session — reading the jwks row, decrypting the private key and
+        // signing — purely to return a `set-auth-jwt` response header. Nothing
+        // in this codebase reads that header; MCP and the OAuth provider get
+        // their tokens from /api/auth/token and the oauthProvider plugin, which
+        // are unaffected. Measured on a tenant-page editor render: 9 jwks reads
+        // and 9 signatures for a header no caller consumes.
+        disableSettingJwtHeader: true,
         jwks: {
           keyPairConfig: { alg: OAUTH_SIGNING_POLICY.algorithm },
         },

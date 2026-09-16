@@ -67,7 +67,10 @@ export type ResolvedMediaAsset = ResolvedMediaAssetBase & (
   | { kind: 'file'; thumbnail_url: null }
 )
 
-export type StoredMediaPlacementItem = ResolvedMediaAsset & Pick<MediaAsset, 'source' | 'generation_key' | 'updated_at'> & {
+// `file_name` rides along because it is what names an asset that has no alt
+// text. A surface holding a placement can label it exactly as the media
+// endpoint would, instead of asking for the same asset again to learn its name.
+export type StoredMediaPlacementItem = ResolvedMediaAsset & Pick<MediaAsset, 'source' | 'generation_key' | 'updated_at' | 'file_name'> & {
   placement_id: string
   owner_type: MediaPlacementOwnerType
   owner_id: string
@@ -340,6 +343,7 @@ export async function readMediaPlacements(db: DbClient, input: {
       source: row.source,
       generation_key: row.generation_key,
       updated_at: row.updated_at,
+      file_name: row.file_name,
       placement_id: row.placement_id,
       owner_type: row.owner_type,
       owner_id: row.owner_id,

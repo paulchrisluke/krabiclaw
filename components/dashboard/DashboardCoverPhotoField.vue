@@ -3,6 +3,7 @@
     :site-id="siteId"
     :location-id="locationId"
     :model-value="modelValue"
+    :selected-summary="selectedSummary"
     :accept="accept"
     :title="title"
     @update:model-value="emit('update:modelValue', $event)"
@@ -50,6 +51,7 @@
 
 <script setup lang="ts">
 import MediaPicker from '~/lib/components/workspace/media/MediaPicker.vue'
+import type { MediaSummary } from '~/lib/components/workspace/media/MediaPicker.vue'
 
 export interface CoverPhotoAsset {
   asset_id: string
@@ -59,7 +61,7 @@ export interface CoverPhotoAsset {
   alt_text?: string
 }
 
-withDefaults(defineProps<{
+const props = withDefaults(defineProps<{
   siteId: string
   modelValue: string | null
   /** Rendered large, so this is the full asset URL rather than a thumbnail. */
@@ -84,6 +86,18 @@ const emit = defineEmits<{
   'update:modelValue': [assetId: string | null]
   change: [asset: CoverPhotoAsset | null]
 }>()
+
+/**
+ * This field draws the asset itself, from `previewUrl` — the picker's own
+ * trigger is replaced by the slot below and never shows what it loads. Handing
+ * the picker what it is looking at stops it fetching metadata that nothing on
+ * screen would have used.
+ */
+const selectedSummary = computed<MediaSummary | null>(() => (
+  props.modelValue && props.previewUrl
+    ? { asset_id: props.modelValue, public_url: props.previewUrl, alt_text: props.previewAlt || null }
+    : null
+))
 
 function clear() {
   emit('update:modelValue', null)

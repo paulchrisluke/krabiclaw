@@ -5,7 +5,7 @@ import { executeBatch, queryFirst, type BatchQuery, type DbClient } from '~/serv
 import { listSessions, sessionClaimQuery } from '~/server/utils/availability'
 import { localDateTimeToInstant } from '~/utils/timezone'
 import { RESERVATION_CAPACITY_CONSUMING_SQL } from '~/shared/bookings'
-import { assertResourceAccess, resolveOrganizationMembership } from '~/server/utils/member-access'
+import { assertResourceAccess, resolveOrganizationMembership, memberAccessPrincipal } from '~/server/utils/member-access'
 import { resolveBookingPresentation, type BookingKind } from '~/utils/booking-presentation'
 import type { CloudflareEnv } from '~/server/utils/auth'
 import { notifyBookingChangeOwner } from '~/server/utils/notifications'
@@ -262,7 +262,7 @@ export async function requestBookingChange(db: DbClient, env: CloudflareEnv, thr
   // branch editor cannot move a guest into a branch they do not manage.
   const locations = new Set([before.locationId, after.kind === 'reservation' ? after.locationId : null].filter((value): value is string => Boolean(value)))
   for (const locationId of locations) {
-    await assertResourceAccess(db, { env, memberId: membership.memberId, role: membership.role, organizationId: thread.organization_id, siteId: thread.site_id, resourceLocationId: locationId })
+    await assertResourceAccess(db, { ...memberAccessPrincipal(membership, { env, siteId: thread.site_id }), resourceLocationId: locationId })
   }
   const externalId = `booking-change-request:${thread.id}:${idempotencyKey}`
   let entry = await findEntryByDedupeKey(db, externalId)
