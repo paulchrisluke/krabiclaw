@@ -41,15 +41,13 @@
 
 <script setup lang="ts">
 import { $fetch } from 'ofetch'
-import { renderMarkdownToHtml, sanitizeHtmlForSsr } from '~/utils/markdown'
+import { renderMarkdownToHtml } from '~/utils/markdown'
 import { useContentPageSchema } from '~/composables/useContentPageSchema'
 import { blogCategoryToSlug, getBlogPostPath, slugToBlogCategory } from '~/utils/blog-categories'
 import { structuredComponentsFromBlocks } from '~/utils/blog-editor'
 import { resolveSocialImageUrl } from '~/utils/social-metadata'
 import type { ContentComponent } from '~/utils/content-blocks'
-import { loadDomPurify } from '~/utils/dom-purify-loader'
 
-const DOMPurify = import.meta.client ? await loadDomPurify() : { sanitize: sanitizeHtmlForSsr }
 
 
 definePageMeta({ layout: 'blog' })
@@ -150,7 +148,7 @@ const authorImage = computed(() => post.value?.author?.image ?? null)
 
 const tocHtml = computed(() => (post.value?.content_blocks ?? [])
   .filter(block => block.type === 'markdown')
-  .map(block => DOMPurify.sanitize(renderMarkdownToHtml(String(block.data.markdown || ''))))
+  .map(block => sanitizeHtml(renderMarkdownToHtml(String(block.data.markdown || ''))))
   .join('\n'))
 
 const renderableComponents = computed(() =>

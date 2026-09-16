@@ -8,32 +8,14 @@
 </template>
 
 <script setup lang="ts">
-import { renderMarkdownToHtml, sanitizeHtmlForSsr } from '~/utils/markdown'
-import { loadDomPurify } from '~/utils/dom-purify-loader'
+import { renderMarkdownToHtml } from '~/utils/markdown'
 
 const props = defineProps<{
   content?: string | null
   unstyled?: boolean
 }>()
 
-type HtmlSanitizer = { sanitize: (_html: string) => string }
-const clientSanitizer = shallowRef<HtmlSanitizer | null>(null)
-
-function normalizeTextEntities(html: string) {
-  return html.replace(/(^|>)([^<]*)/g, (_, boundary: string, text: string) =>
-    boundary + text.replace(/&#39;/g, "'"))
-}
-
-const sanitizeContent = (content?: string | null) => {
-  const rendered = normalizeTextEntities(renderMarkdownToHtml(content || ''))
-  return (clientSanitizer.value || { sanitize: sanitizeHtmlForSsr }).sanitize(rendered)
-}
-
-const html = ref(sanitizeContent(props.content))
-watch(() => props.content, content => { html.value = sanitizeContent(content) })
-
-onMounted(async () => {
-  clientSanitizer.value = await loadDomPurify()
-  html.value = sanitizeContent(props.content)
-})
+// `marked` escapes apostrophes and quotes into `&#39;`/`&quot;`; the sanitizer's
+// parser decodes them back on the way out, the same on both runtimes.
+const html = computed(() => sanitizeHtml(renderMarkdownToHtml(props.content || '')))
 </script>

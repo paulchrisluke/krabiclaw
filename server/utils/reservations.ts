@@ -99,11 +99,10 @@ export async function requireLocationReservationConfig(
 const ALLOWED_NOTES_TAGS = new Set(['p', 'br', 'ul', 'ol', 'li', 'strong', 'b', 'em', 'i', 'a'])
 const ALLOWED_NOTES_ATTRS: Record<string, Set<string>> = { a: new Set(['href', 'target', 'rel']) }
 
-// Uses the Workers runtime's native HTMLRewriter rather than a DOM-based sanitizer
-// (e.g. DOMPurify/jsdom) — those depend on Node's `vm`/native bindings and crash the
-// whole Worker at module load if imported anywhere in the server bundle, since jsdom
-// has no Workers-compatible build. See utils/sanitize.ts's server-side fallback for
-// the same constraint on the client/shared sanitize path.
+// A guest note is a narrower thing than a page body, so it gets a narrower
+// allowlist than `~/utils/html-sanitizer`'s, and disallowed tags are unwrapped
+// rather than dropped so a stray wrapper never swallows the note's text. Written
+// against the Workers runtime's own HTMLRewriter, which is already here.
 async function sanitizeAdditionalNotesHtml(value: string | null): Promise<string | null> {
   if (!value) return null
   const rewriter = new HTMLRewriter().on('*', {
