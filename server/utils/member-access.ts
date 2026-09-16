@@ -1,9 +1,10 @@
 import { HTTPError } from 'nitro';
 
 import { execute, queryAll, queryFirst, type DbClient } from '~/server/db'
-import { getOrgAdapter } from 'better-auth/plugins'
+import { getOrgAdapter, hasPermission } from 'better-auth/plugins'
 import { parsePhoneOrThrow } from '~/utils/phone'
 import type { CloudflareEnv, organizationOptions } from '~/server/utils/auth'
+import type { OrganizationPermissions } from '~/utils/organization-access'
 
 // Tenant-scoped authorization is Better Auth organization role plus Better
 // Auth Teams membership. Owner/admin are organization-wide. Editors are scoped
@@ -121,10 +122,45 @@ export function isOperationalRole(role: string): boolean {
   return isOrganizationWideRole(role) || isScopedRole(role)
 }
 
-export function assertOrganizationAccess(role: string): void {
-  if (!isOrganizationWideRole(role)) {
-    throw new HTTPError({ statusCode: 403, message: 'Organization-level access required' })
-  }
+/**
+ * What a role may do, answered by Better Auth.
+ *
+ * `utils/organization-access.ts` declares the statements and the four roles,
+ * and the plugin is configured with them (`organizationOptions.ac/roles`), so
+ * this is the repository's one description of what each role can reach. It used
+ * to be reached only by billing; everything else re-decided the same question
+ * by hand — `role === 'owner' || role === 'admin'`, an MCP rank ladder, and a
+ * list of dashboard route strings, three answers that could drift from the
+ * matrix and from each other.
+ *
+ * `hasPermission` evaluates the role's statements in memory. It reads the
+ * database only under `dynamicAccessControl`, which is off here, so this costs
+ * no round trip.
+ *
+ * This answers "may this role do X at all". It does not answer "which sites and
+ * locations" — that is team membership against `sites.team_id` /
+ * `business_locations.team_id`, which Better Auth does not model, and which
+ * assertSiteWideAccess/assertLocationAccess below own.
+ */
+export type { OrganizationPermissions }
+
+export async function roleAllows(
+  input: { organizationId: string; role: string; permissions: OrganizationPermissions },
+): Promise<boolean> {
+  const { organizationOptions: options } = await import('~/server/utils/auth')
+  return await hasPermission({
+    organizationId: input.organizationId,
+    role: input.role,
+    options,
+    permissions: input.permissions,
+  }, undefined as never)
+}
+
+export async function assertRoleAllows(
+  input: { organizationId: string; role: string; permissions: OrganizationPermissions; message?: string },
+): Promise<void> {
+  if (await roleAllows(input)) return
+  throw new HTTPError({ statusCode: 403, message: input.message ?? 'Access denied' })
 }
 
 export function siteTeamId(siteId: string): string {
@@ -481,29 +517,6 @@ export async function memberHasTeamAccess(_db: DbClient, input: { env: Cloudflar
 // query. Site-scoped editor and AI actions use their explicit canonical
 // /api/editor/sites/[siteId]/** and /api/ai/[siteId]/** routes instead of
 // hiding the site through /api/dashboard aliases.
-const SCOPED_ROLE_DASHBOARD_ROUTES = [
-  /^\/api\/dashboard\/context$/,
-  /^\/api\/dashboard\/home$/,
-  /^\/api\/dashboard\/(?:agenda|today)$/,
-  /^\/dashboard\/[^/]+\/(?:today|calendar)$/,
-  /^\/api\/dashboard\/settings$/,
-  /^\/api\/dashboard\/locations(?:\/add|\/[^/]+)?$/,
-  /^\/api\/dashboard\/sites\/[^/]+\/guest-threads(?:\/[^/]+(?:\/reply)?)?$/,
-  /^\/api\/dashboard\/notifications(?:\/unread-count|\/read-all|\/[^/]+\/read)?$/,
-  /^\/api\/dashboard\/guest-inbox\/socket$/,
-]
-
-export function canScopedRoleUseDashboardPath(pathname: string): boolean {
-  const normalizedPath = pathname.split('?', 1)[0] ?? pathname
-  return SCOPED_ROLE_DASHBOARD_ROUTES.some(pattern => pattern.test(normalizedPath))
-}
-
-export function assertDashboardPathPermission(role: string, pathname: string): void {
-  if (isScopedRole(role) && !canScopedRoleUseDashboardPath(pathname)) {
-    throw new HTTPError({ statusCode: 403, message: 'This role cannot perform that dashboard action' })
-  }
-}
-
 const NO_TEAMS: ReadonlySet<string> = new Set<string>()
 
 /**

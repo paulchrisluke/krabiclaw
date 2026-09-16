@@ -8,7 +8,7 @@ import { cloudflareEnv } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { queryAll, queryFirst, type DbClient } from '~/server/db'
 import { d1JsonStringSet } from '~/server/db/d1-limits'
-import { assertDashboardPathPermission, assertMemberSiteAccess, isOrganizationWideRole, memberAccessPrincipal, resolveUserOrganization, type ResolvedMembership } from '~/server/utils/member-access'
+import { assertMemberSiteAccess, isOrganizationWideRole, memberAccessPrincipal, resolveUserOrganization, type ResolvedMembership } from '~/server/utils/member-access'
 import { getOrganizationPlan } from '~/server/utils/billing-access'
 
 function safeJsonParse(value: string): unknown {
@@ -207,16 +207,6 @@ export interface DashboardContextOptions {
   // canonical site query and assertMemberSiteAccess call below.
   siteId?: string | null
   siteSlug?: string | null
-  // The scoped-role path allowlist (SCOPED_ROLE_DASHBOARD_ROUTES) only lists
-  // /api/dashboard/* patterns. event.path is correct when a real API route
-  // handler calls this directly, but SSR callers that bypass the self-fetch
-  // (see docs/performance/data-loading-architecture.md) invoke this with the
-  // *page's* own event to preserve Cloudflare bindings — event.path there is a
-  // /dashboard/... page path, which never matches the allowlist and would 403
-  // every scoped-role page load regardless of whether that page is actually
-  // restricted. Those callers must pass the /api/dashboard/* path they're
-  // logically emulating.
-  pathname?: string
 }
 
 export interface ResolveOrganizationOptions {
@@ -364,7 +354,6 @@ export async function getDashboardContext(event: H3Event, options: DashboardCont
         : 'Organization context is required. Use /dashboard/{orgSlug} routes.',
     })
   }
-  assertDashboardPathPermission(organization.role, options.pathname ?? event.path)
 
   // The organization and active site are resolved explicitly from the route segments,
   // sent on every /api/dashboard/* request as `org`/`site` query params (see
@@ -501,8 +490,6 @@ export async function getDashboardLocationContext(event: H3Event, locationId: st
     organizationId: row.organization_id,
   })
   if (!organization) throw new HTTPError({ statusCode: 404, message: 'Location not found' })
-
-  assertDashboardPathPermission(organization.role, event.path)
 
   return {
     env,

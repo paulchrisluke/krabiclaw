@@ -1,6 +1,6 @@
 import { defineHandler, HTTPError } from 'nitro'
 import { getDashboardContext } from '~/server/utils/dashboard-context'
-import { assertOrganizationAccess } from '~/server/utils/member-access'
+import { assertRoleAllows } from '~/server/utils/member-access'
 import { jsonResponse, readStrictBody } from '~/server/utils/api-response'
 import { createStripeClient } from '~/server/utils/stripe-client'
 import {
@@ -14,7 +14,9 @@ import {
 
 export default defineHandler(async (event) => {
   const { env, db, session, organization } = await getDashboardContext(event, { requireSite: false })
-  assertOrganizationAccess(organization.role)
+  // Connecting the organization's Stripe account is an integration change:
+  // owner and admin, per utils/organization-access.ts.
+  await assertRoleAllows({ organizationId: organization.id, role: organization.role, permissions: { integrations: ['update'] } })
   if (!env.STRIPE_SECRET_KEY || !env.NUXT_PUBLIC_PLATFORM_DOMAIN) {
     throw new HTTPError({ statusCode: 503, statusMessage: 'Stripe Connect is not configured' })
   }

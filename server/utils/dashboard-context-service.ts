@@ -30,7 +30,6 @@ export async function loadDashboardContext(
     // own event (see the pathname doc on DashboardContextOptions). Pinning
     // the logical path here keeps the scoped-role allowlist check correct
     // for both callers instead of only the former.
-    pathname: '/api/dashboard/context',
   })
   recordRequestPhase(event, 'context', contextStartedAt)
 

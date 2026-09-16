@@ -12,7 +12,7 @@ import type {
   GuestThreadSubmissionType,
 } from '~/server/domain/guest-threads/types'
 import { requireSiteAccess } from '~/server/utils/location-access'
-import { assertMemberScope, isOrganizationWideRole, listUserOrganizationTeamIds, memberAccessPrincipal } from '~/server/utils/member-access'
+import { assertMemberScope, isOrganizationWideRole, listUserOrganizationTeamIds, memberAccessPrincipal, assertRoleAllows } from '~/server/utils/member-access'
 import { publishNotificationInvalidation } from '~/server/cloudflare/guest-inbox-events'
 import { getDashboardContext } from '~/server/utils/dashboard-context'
 import { acknowledgeThreadNotifications } from '~/server/utils/notification-acknowledgement'
@@ -116,11 +116,13 @@ export async function loadOrganizationGuestThreads(
     requireOrganization: true,
     requireSite: false,
     organizationSlug: scope?.orgSlug,
-    pathname: '/api/dashboard/guest-threads',
   })
   if (!organization) {
     throw new HTTPError({ statusCode: 404, statusMessage: 'Organization not found' })
   }
+  // The rows are filtered by team below, so this only asks whether the role
+  // takes part in guest operations at all.
+  await assertRoleAllows({ organizationId: organization.id, role: organization.role, permissions: { operations: ['read'] } })
 
   const principal = {
     userId,

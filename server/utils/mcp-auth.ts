@@ -6,16 +6,26 @@ import type { JSONWebKeySet, JWTPayload } from 'jose'
 import { createAuth, getAuthSession, type CloudflareEnv } from '~/server/utils/auth'
 import { hasPlatformEventPermission } from '~/server/utils/platform-admin-users'
 import { queryFirst } from '~/server/db'
-import { assertSiteWideAccess, isOrganizationWideRole, resolveOrganizationMembership, memberAccessPrincipal, type ResolvedMembership } from '~/server/utils/member-access'
+import { assertSiteWideAccess, isOrganizationWideRole, resolveOrganizationMembership, memberAccessPrincipal, type ResolvedMembership, roleAllows, type OrganizationPermissions } from '~/server/utils/member-access'
 import { getOrganizationEntitlements } from '~/server/utils/billing-access'
 import { cloudflareEnv } from '~/server/utils/api-response'
 
 export type McpToolRole = 'owner' | 'admin' | 'editor'
 
-const ROLE_RANK: Record<McpToolRole, number> = {
-  editor: 1,
-  admin: 2,
-  owner: 3,
+/**
+ * The role floor each tool declares, as a permission.
+ *
+ * `minimumRole` stays on the tool definition because it is published to MCP
+ * clients in `_meta`, but the decision it drives comes from the same matrix as
+ * every other authorization in the repository (utils/organization-access.ts)
+ * rather than from a rank ladder that could disagree with it. `editor` is
+ * "takes part in tenant content at all"; `admin` is the site-settings floor the
+ * three configuration tools need.
+ */
+const TOOL_ROLE_PERMISSIONS: Record<McpToolRole, OrganizationPermissions> = {
+  editor: { sites: ['read'] },
+  admin: { settings: ['update'] },
+  owner: { organization: ['delete'] },
 }
 
 const MCP_AUTH_JWKS_CACHE_KEY = {}
@@ -365,7 +375,7 @@ export async function requireMcpSite(
   if (!membership) throw new HTTPError({ statusCode: 404, statusMessage: 'Site not found or access denied' })
 
   const role = normalizeRole(membership.role)
-  if (!role || ROLE_RANK[role] < ROLE_RANK[minimumRole]) {
+  if (!role || !await roleSatisfies(site.organization_id, membership.role, minimumRole)) {
     throw new HTTPError({ statusCode: 403, statusMessage: 'Insufficient permissions' })
   }
 
@@ -423,8 +433,8 @@ export async function getActiveEntitlements(env: CloudflareEnv, organizationId: 
   return new Set(keys.filter(key => entitlements[key] === true))
 }
 
-export function roleSatisfies(actual: McpToolRole, minimum: McpToolRole) {
-  return ROLE_RANK[actual] >= ROLE_RANK[minimum]
+export async function roleSatisfies(organizationId: string, actual: string, minimum: McpToolRole): Promise<boolean> {
+  return await roleAllows({ organizationId, role: actual, permissions: TOOL_ROLE_PERMISSIONS[minimum] })
 }
 
 export function normalizeRole(role: string | null | undefined): McpToolRole | null {
