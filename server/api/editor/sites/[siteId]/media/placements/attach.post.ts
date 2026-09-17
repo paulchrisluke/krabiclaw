@@ -1,3 +1,4 @@
+import { memberAccessPrincipal } from '~/server/utils/member-access'
 import { jsonResponse, readRequiredBody, rethrowHttpError } from '~/server/utils/api-response'
 import { requireSiteAccess } from '~/server/utils/location-access'
 import { attachMediaPlacement, parseMediaPlacementKey } from '~/server/utils/media-placement'
@@ -18,8 +19,7 @@ export default defineHandler(async (event) => {
       env,
       organizationId: site.organization_id,
       siteId,
-      memberId: site.member_id,
-      role: site.member_role,
+      principal: memberAccessPrincipal(site.membership, { env, siteId, event }),
       placement: parseMediaPlacementKey(body.placement),
       assetId: body.asset_id,
     })

@@ -2,9 +2,10 @@ import { HTTPError } from 'nitro';
 
 import { executeBatch, queryAll, queryFirst, type BatchQuery, type DbClient } from '~/server/db'
 import {
+  attachContentBlockMedia,
   createContentDocumentWithBlocks,
+  formatBlockOutline,
   prepareContentDocumentDeletion,
-  getContentEditorSnapshot,
   getContentBlocksForDocument,
   getContentOutline,
   getContentDocumentById,
@@ -13,6 +14,7 @@ import {
   type ContentDocumentChanges,
   renderContentBlocksToMarkdown,
   type ContentBlockInput,
+  type ContentDocumentRow,
 } from '~/server/utils/content/documents'
 import {
   loadExactPublicLocalizations,
@@ -235,9 +237,14 @@ function normalizeRobotsField(input: { robots?: string | null }) {
   input.robots = parsed.intent
 }
 
-/** KrabiClaw's own collections file every article under a fixed category that shapes its URL. */
+/**
+ * A collection whose URL carries the category files every article under one of
+ * a fixed set; that is documentation only. A blog's category is the author's
+ * own word, and may be absent.
+ */
 function assertValidArticleCategory(collection: ArticleCollection, value: string | null | undefined) {
   const categories = articleCollectionCategories(collection)
+  if (!categories) return
   if (value == null || value === '' || !categories.includes(value)) {
     badRequest(`category must be one of: ${categories.join(', ')}`)
   }
@@ -480,7 +487,12 @@ async function resolveTenantContext(db: DbClient, siteId: string, env?: Cloudfla
  * request, which was causing the page to 404 on posts the API itself
  * served fine.
  */
-export async function getPublishedBlogPost(db: DbClient, category: string, slug: string, env: CloudflareEnv, previewAuthorized = false, collection: ArticleCollection = 'blog') {
+/**
+ * One published KrabiClaw article, by slug within its collection. A blog
+ * article is identified by its slug alone; documentation also carries the
+ * category that its URL puts in front of the slug.
+ */
+export async function getPublishedBlogPost(db: DbClient, category: string | null, slug: string, env: CloudflareEnv, previewAuthorized = false, collection: ArticleCollection = 'blog') {
   const platformSite = await getPlatformSite(db)
   const platformSiteId = platformSite.id
   const post = await queryFirst<ApiRecord>(db, `
@@ -492,9 +504,10 @@ export async function getPublishedBlogPost(db: DbClient, category: string, slug:
       ${COVER_SELECT}
     FROM content_documents p
     ${coverJoinSql('p')}
-    WHERE p.kind = 'article' AND p.row_role = 'root' AND p.slug = ? AND (p.metadata_json ->> '$.collection') = ? AND (p.metadata_json ->> '$.category') = ? AND p.site_id = ?
+    WHERE p.kind = 'article' AND p.row_role = 'root' AND p.slug = ? AND (p.metadata_json ->> '$.collection') = ? AND p.site_id = ?
+      ${category === null ? '' : "AND (p.metadata_json ->> '$.category') = ?"}
       ${previewAuthorized ? "AND p.status IN ('draft', 'scheduled', 'published')" : "AND p.status = 'published'"}
-  `, [slug, collection, category, platformSiteId])
+  `, category === null ? [slug, collection, platformSiteId] : [slug, collection, platformSiteId, category])
 
   if (!post) return null
 
@@ -565,7 +578,13 @@ export async function listPublicPlatformBlogPosts(db: DbClient, collection: Arti
   `
 
   const results = await queryAll<ApiRecord>(db, sql, [platformSiteId, collection])
-  return results.filter(post => articleCategoryToSlug(collection, post.category as string | null)).map(attachCover)
+  // Documentation is addressed through its category, so an article filed under
+  // one the collection does not declare has no URL to list. A blog article is
+  // addressed by its slug, and its category is only a label to group under.
+  return results
+    .filter(post => articleCollectionCategories(collection) === null
+      || articleCategoryToSlug(collection, post.category as string | null))
+    .map(attachCover)
 }
 
 export async function listBlogPosts(db: DbClient, siteId: string, status?: string | null, env?: CloudflareEnv) {
@@ -601,6 +620,7 @@ export async function getBlogPost(db: DbClient, postIdOrSlug: string, siteId: st
        p.first_published_at, (p.metadata_json ->> '$.slug_manually_overridden') AS slug_manually_overridden,
        p.seo_title, p.seo_description, p.seo_keywords, p.canonical_url, p.robots,
        ${COVER_SELECT},
+       p.organization_id, p.site_id, p.kind, p.row_role, p.root_id, p.locale,
        p.published_at, p.created_at, p.updated_at
      FROM content_documents p
      ${coverJoinSql('p')}
@@ -608,13 +628,26 @@ export async function getBlogPost(db: DbClient, postIdOrSlug: string, siteId: st
     [postId],
   )
   if (!post) notFound('Post not found')
-  const contentDocument = await getContentEditorSnapshot(db, postId)
-  if (!contentDocument) throw new HTTPError({ statusCode: 500, statusMessage: 'Blog content document is missing' })
-  const rawBlocks = await listBlocksForDocument(db, contentDocument.document.id)
-  const slug = typeof post.slug === 'string' ? post.slug : ''
-  const category = typeof post.category === 'string' ? post.category : null
+  // The row above IS the article's content document, and the blocks are read
+  // once for both shapes the response needs: the outline the editor renders
+  // and the raw rows the markdown body is built from. This used to re-read the
+  // document and then the blocks a second time.
+  const { organization_id, site_id, kind, row_role, root_id, locale, ...postFields } = post
+  const document = {
+    id: String(post.id), organization_id: String(organization_id), site_id: String(site_id),
+    kind: String(kind), row_role: String(row_role),
+    root_id: root_id === null || root_id === undefined ? null : String(root_id),
+    locale: String(locale), created_at: String(post.created_at), updated_at: String(post.updated_at),
+  } as ContentDocumentRow
+  const rawBlocks = await listBlocksForDocument(db, document.id)
+  const contentDocument = {
+    document,
+    blocks: await attachContentBlockMedia(db, document.id, rawBlocks.map(formatBlockOutline)),
+  }
+  const slug = typeof postFields.slug === 'string' ? postFields.slug : ''
+  const category = typeof postFields.category === 'string' ? postFields.category : null
   const [context, site] = await Promise.all([resolveTenantContext(db, siteId, env), loadSiteTemplate(db, siteId)])
-  const publicPath = slug ? tenantBlogPostPath(site.template, slug, category, articleCollectionOf(post.collection)) : null
+  const publicPath = slug ? tenantBlogPostPath(site.template, slug, category, articleCollectionOf(postFields.collection)) : null
   const editorThemeTokenRow = await queryFirst<{ tokens_json: string | null } | null>(db, `
     SELECT json_extract(settings_json, ? || '.tokens') AS tokens_json FROM sites
      WHERE id = ? AND json_extract(settings_json, ? || '.status') = 'active'
@@ -622,8 +655,8 @@ export async function getBlogPost(db: DbClient, postIdOrSlug: string, siteId: st
   `, ['$.theme_by_template.' + site.template.slug, siteId, '$.theme_by_template.' + site.template.slug])
   const editorThemeTokens = parseBlogEditorThemeTokens(editorThemeTokenRow?.tokens_json)
   return {
-    ...await contentReviewUrls(attachCover(attachPublished(post, Boolean(post.published_at))), publicPath, siteId, context, env),
-    tags: parseStringArray(post.tags_metadata),
+    ...await contentReviewUrls(attachCover(attachPublished(postFields, Boolean(postFields.published_at))), publicPath, siteId, context, env),
+    tags: parseStringArray(postFields.tags_metadata),
     body: renderContentBlocksToMarkdown(rawBlocks),
     content_document: contentDocument,
     editor_template: site.template.slug,
@@ -741,11 +774,10 @@ export async function createBlogPost(
   const siteId = scope.site_id
   if (!siteId) badRequest('site_id is required')
   const site = await loadSiteTemplate(db, siteId)
-  // KrabiClaw's own blog files every post under a fixed category that shapes its URL.
   const isTenant = !site.isPlatform
   validateBlogCommon(input, isTenant, 'create')
   const collection = articleCollectionOf(input.collection)
-  if (!isTenant) assertValidArticleCategory(collection, input.category)
+  assertValidArticleCategory(collection, input.category)
   const organizationId = scope.organization_id ?? site.organization_id
   const placementScope = mediaPlacementScope(siteId, organizationId)
   const id = crypto.randomUUID()
@@ -856,7 +888,7 @@ export async function updateBlogPost(
   if (input.content_blocks !== undefined && !input.expected_updated_at) badRequest('expected_updated_at is required with content_blocks')
   const effectiveCollection = articleCollectionOf(input.collection === undefined ? current.collection : input.collection)
   const effectiveCategory = input.category === undefined ? current.category : input.category
-  if (!isTenant) assertValidArticleCategory(effectiveCollection, effectiveCategory)
+  assertValidArticleCategory(effectiveCollection, effectiveCategory)
   const placementScope = mediaPlacementScope(siteId, current.organization_id)
   const normalizedBlocks = input.content_blocks === undefined ? undefined : await normalizeEditorContentBlocks(db, input.content_blocks, placementScope)
   const metadata: Record<string, unknown> = {}

@@ -1,4 +1,5 @@
 import { HTTPError } from 'nitro';
+import { oncePerRequest } from '~/server/utils/request-scope'
 
 import type { H3Event } from 'nitro';
 import {  setHeader } from 'nitro/h3';
@@ -24,8 +25,6 @@ export interface PublicShellLoadOptions {
   mutateResponseHeaders?: boolean
   signal?: AbortSignal
 }
-
-const readsByRequest = new WeakMap<H3Event, Map<string, Promise<unknown>>>()
 
 export async function loadPublicShellSource(
   event: H3Event,
@@ -163,22 +162,9 @@ export function loadPublicShell(
     return loadPublicShellSource(event, siteId, query, options)
       .finally(() => recordRequestPhase(event, 'shell', startedAt))
   }
-  let reads = readsByRequest.get(event)
-  if (!reads) {
-    reads = new Map()
-    readsByRequest.set(event, reads)
-  }
-  const key = `${siteId}:${query.locale ?? ''}`
-  const existing = reads.get(key)
-  if (existing) return existing
-  const startedAt = performance.now()
-  const operation = loadPublicShellSource(event, siteId, query, options)
-  const pending = operation
-    .finally(() => recordRequestPhase(event, 'shell', startedAt))
-    .catch(error => {
-      if (reads.get(key) === pending) reads.delete(key)
-      throw error
-    })
-  reads.set(key, pending)
-  return pending
+  return oncePerRequest(event, `public-shell:${siteId}:${query.locale ?? ''}`, () => {
+    const startedAt = performance.now()
+    return loadPublicShellSource(event, siteId, query, options)
+      .finally(() => recordRequestPhase(event, 'shell', startedAt))
+  })
 }

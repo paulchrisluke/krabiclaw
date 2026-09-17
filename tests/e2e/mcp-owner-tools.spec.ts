@@ -260,7 +260,7 @@ test.describe('stateless MCP server', () => {
     }
   })
 
-  test('Q&A and reviews are readable but not writable through tenant MCP or CMS', async ({ request, baseURL }) => {
+  test('Q&A and reviews are read-only through tenant MCP, and only Q&A is writable through the CMS', async ({ request, baseURL }) => {
     await loginAs(request, baseURL!, MCP_GROWTH_USER_ID)
     const siteId = MCP_GROWTH_SITE_ID
     for (const [toolName, key] of [['list_site_qa', 'items'], ['list_site_reviews', 'reviews']]) {
@@ -275,10 +275,14 @@ test.describe('stateless MCP server', () => {
     const reviewTools = tools.filter(tool => /(?:_qa|_review|_reviews)$/.test(tool.name))
     expect(reviewTools.map(tool => tool.name).sort()).toEqual(['list_location_qa', 'list_location_reviews', 'list_site_qa', 'list_site_reviews'])
     expect(reviewTools.every(tool => tool.annotations.readOnlyHint)).toBe(true)
-    for (const resource of ['qa', 'reviews']) {
-      const response = await request.post(`${baseURL}/api/editor/sites/${siteId}/${resource}`, { data: {} })
-      expect([404, 405]).toContain(response.status())
-    }
+    // #1001 gave a site the ability to edit the Q&A it wrote, so the CMS does
+    // have a Q&A write route — it validates its body like any other, and a 404
+    // here would mean that feature had been lost. A review is a guest's words,
+    // so it stays unwritable everywhere.
+    const qaWrite = await request.post(`${baseURL}/api/editor/sites/${siteId}/qa`, { data: {} })
+    expect(qaWrite.status(), await qaWrite.text()).toBe(400)
+    const reviewWrite = await request.post(`${baseURL}/api/editor/sites/${siteId}/reviews`, { data: {} })
+    expect([404, 405]).toContain(reviewWrite.status())
   })
 
   test.describe('owner management workflows', () => {

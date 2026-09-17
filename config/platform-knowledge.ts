@@ -1,4 +1,3 @@
-import { getBlogPostPath } from '~/utils/blog-categories'
 
 export type PlatformKnowledgeResultType =
   | 'doc'
@@ -509,10 +508,6 @@ export const PLATFORM_DASHBOARD_ROUTE_ENTRIES: PlatformDashboardRouteEntry[] = [
     surfaces: ['dashboard'],
   },
 ]
-
-export function getPlatformBlogPath(category: string | null | undefined, slug: string | null | undefined): string | null {
-  return getBlogPostPath(category, slug)
-}
 
 export function resolveDashboardPath(pathTemplate: string, context: DashboardRouteContext = {}) {
   const replacements: Record<string, string | null | undefined> = {

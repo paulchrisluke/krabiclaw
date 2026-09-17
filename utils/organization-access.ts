@@ -28,6 +28,16 @@ const statements = {
 } as const
 
 export const organizationAccessControl = createAccessControl(statements)
+
+/**
+ * A permission request against the statements above: `{ locations: ['read'] }`.
+ *
+ * Typed from `statements` so a resource or action this matrix does not declare
+ * is a compile error rather than a check that silently answers false.
+ */
+export type OrganizationPermissions = {
+  [Resource in keyof typeof statements]?: Array<(typeof statements)[Resource][number]>
+}
 const tenantEditorStatements = {
   ...memberAc.statements,
   sites: ['read'],

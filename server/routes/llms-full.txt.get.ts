@@ -2,8 +2,8 @@ import { HTTPError, defineHandler  } from 'nitro';
 
 import { cloudflareEnv, textResponse } from '~/server/utils/api-response'
 import {
-  buildLlmsFullTxt, getPublishedTenantBlogPostBySlug, listPublishedTenantBlogPostsForLlm, getPublishedBlogPostBySlug, getPublishedPlatformDocBySlug, listPublishedPlatformBlogPostsForLlm, listPublishedPlatformDocsForLlm, renderTenantBlogMarkdown, resolvePublicOrigin, } from '~/server/utils/platform-llm'
-import { blogCategoryToSlug } from '~/utils/blog-categories'
+  buildLlmsFullTxt, getPublishedTenantBlogPostBySlug, listPublishedTenantBlogPostsForLlm, getPublishedPlatformDocBySlug, listPublishedPlatformBlogPostsForLlm, listPublishedPlatformDocsForLlm, renderTenantBlogMarkdown, resolvePublicOrigin, } from '~/server/utils/platform-llm'
+import { getPlatformSite } from '~/server/utils/platform-site'
 import { articleCategoryToSlug } from '~/utils/article-collections'
 
 export default defineHandler(async (event) => {
@@ -35,12 +35,10 @@ export default defineHandler(async (event) => {
   })))
     .filter((doc): doc is NonNullable<typeof doc> => Boolean(doc))
 
+  const platformSiteId = (await getPlatformSite(db)).id
   const posts = (await Promise.all(
-    (postSummaries ?? []).flatMap((post) => {
-      const categorySlug = blogCategoryToSlug(post.category)
-      if (!categorySlug) return []
-      return [getPublishedBlogPostBySlug(db, categorySlug, post.slug)]
-    }), )).filter((post): post is NonNullable<typeof post> => Boolean(post))
+    (postSummaries ?? []).map(post => getPublishedTenantBlogPostBySlug(db, platformSiteId, post.slug, 'blog')),
+  )).filter((post): post is NonNullable<typeof post> => Boolean(post))
 
   return textResponse(buildLlmsFullTxt(origin, docs, posts))
 })

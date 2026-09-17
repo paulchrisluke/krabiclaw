@@ -10,7 +10,10 @@
       @update:model-value="writeStringList($event)"
     />
 
-    <RichTextEditor
+    <!-- Lazy: the rich text editor pulls TipTap/ProseMirror, ~211 KB over the
+         wire. Only a markdown field opens it, so rendering a list of sections
+         should not pay for it. -->
+    <LazyRichTextEditor
       v-else-if="field.kind === 'markdown'"
       :model-value="stringValue"
       :mode="markdownMode"
@@ -47,7 +50,8 @@
     <MediaPicker
       v-else-if="field.kind === 'media'"
       :site-id="siteId"
-      :model-value="mediaAsset"
+      :model-value="mediaAsset?.asset_id"
+      :selected-summary="mediaAsset"
       :accept="field.accept ?? 'image'"
       @update:model-value="writeMedia($event)"
     />
@@ -101,7 +105,6 @@
 
 <script setup lang="ts">
 import MediaPicker from '~/lib/components/workspace/media/MediaPicker.vue'
-import RichTextEditor from '~/components/ui/RichTextEditor.vue'
 import TenantPageGalleryField from '~/components/dashboard/TenantPageGalleryField.vue'
 import TenantPageCalculatorField from '~/components/dashboard/TenantPageCalculatorField.vue'
 import { isPlatformTemplate } from '~/utils/template-registry'
@@ -169,9 +172,12 @@ const enumValue = computed(() => (props.field.store === 'level'
 
 const markdownMode = computed<'rich' | 'source'>(() => (String(block.value.data.editor_mode) === 'source' ? 'source' : 'rich'))
 
+// The whole placement, not just its id: it already carries the URLs the picker
+// renders, which is what stops a populated picker fetching the asset it was
+// handed.
 const mediaAsset = computed(() => block.value.media
   .filter(item => item.slot === (props.field.slot ?? 'media'))
-  .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))[0]?.asset_id)
+  .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))[0])
 
 function write(value: unknown) {
   block.value.data[props.fieldKey] = value == null ? '' : String(value)

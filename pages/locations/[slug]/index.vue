@@ -285,6 +285,7 @@ import { selectPrice, type Price } from '~/shared/prices'
 import { isCurrencyCode } from '~/shared/currencies'
 import type { Product } from '~/server/types/products'
 import { normalizeRobotsIntent } from '~/shared/robots-directive'
+import { resolveSocialImageUrl } from '~/utils/social-metadata'
 
 const DOMPurify = useHtmlSanitizer()
 
@@ -447,7 +448,8 @@ const collectionProductItems = computed(() => {
         compareAtPrice: offer?.compare_at_unit_amount
           ? formatProductMoney({ ...offer, unit_amount: offer.compare_at_unit_amount, compare_at_unit_amount: null })
           : null,
-        image: product.image?.public_url || null,
+        // A card draws a still, so a video cover is shown as its own poster.
+        image: resolveSocialImageUrl(product.image),
         alt: product.image?.alt_text || product.name,
         href: localePath(presentation.productPath(slug.value, product.slug)),
         unavailable: !product.active || offer === null,

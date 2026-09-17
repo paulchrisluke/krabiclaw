@@ -232,6 +232,15 @@ function createTenantMcpServer(ctx: McpRequestContext): McpServer {
       ? await getActiveEntitlements(cfEnv, siteCtx.organizationId, entitlementKeys, siteCtx.siteId)
       : new Set<string>();
 
+    // The role gate is the permission matrix now, so resolve it once per tool
+    // before filtering rather than awaiting inside a sync predicate.
+    const roleAllowsTool = new Map<string, boolean>()
+    if (hasSiteIdParam && siteId && siteCtx) {
+      await Promise.all(visibleSurfaceTools.map(async (tool) => {
+        roleAllowsTool.set(tool.name, await roleSatisfies(siteCtx.organizationId, siteCtx.role, tool.minimumRole))
+      }))
+    }
+
     const tools = visibleSurfaceTools.filter((tool) => {
       // Without a site_id, return all tools so AI clients (e.g. ChatGPT) can discover
       // the full capability set on first connection. A supplied but inaccessible
@@ -239,7 +248,7 @@ function createTenantMcpServer(ctx: McpRequestContext): McpServer {
       if (!hasSiteIdParam) return true;
       if (!siteId) return false;
       if (!siteCtx) return false;
-      if (!roleSatisfies(siteCtx.role, tool.minimumRole)) return false;
+      if (!roleAllowsTool.get(tool.name)) return false;
       if (tool.requiredEntitlement && !activeEntitlements.has(tool.requiredEntitlement)) return false;
       return true;
     }).map((tool) => {

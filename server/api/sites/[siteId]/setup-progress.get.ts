@@ -2,7 +2,7 @@
 // Returns the ordered 10-step setup journey for the site overview card.
 import { cloudflareEnv, jsonResponse, rethrowHttpError } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
-import { assertSiteWideAccess } from '~/server/utils/member-access'
+import { assertSiteWideAccess, memberAccessPrincipal } from '~/server/utils/member-access'
 import { loadMemberSiteRow } from '~/server/utils/location-access'
 import { queryFirst } from '~/server/db'
 
@@ -45,14 +45,12 @@ export default defineHandler(async (event) => {
   }
 
   try {
-    const siteAccess = await loadMemberSiteRow(db, env, siteId, session.user.id)
+    const siteAccess = await loadMemberSiteRow(event, db, env, siteId, session.user.id)
     if (!siteAccess) {
       return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
     }
 
-    await assertSiteWideAccess(db, {
-      env,
-      memberId: siteAccess.member_id, role: siteAccess.member_role, organizationId: siteAccess.organization_id, siteId, })
+    await assertSiteWideAccess(db, memberAccessPrincipal(siteAccess.membership, { env, siteId, event }))
 
     const site = await queryFirst<{
       id: string

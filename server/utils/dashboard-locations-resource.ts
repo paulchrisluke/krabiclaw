@@ -4,7 +4,7 @@ import type { H3Event } from 'nitro'
 import { queryAll } from '~/server/db'
 import { d1JsonStringSet } from '~/server/db/d1-limits'
 import { getDashboardContext } from '~/server/utils/dashboard-context'
-import { listAccessibleLocationIds } from '~/server/utils/member-access'
+import { listAccessibleLocationIds, memberAccessPrincipal } from '~/server/utils/member-access'
 
 export interface DashboardLocationResource {
   id: string
@@ -31,13 +31,7 @@ export async function listDashboardLocationsResource(
     siteSlug: scope.siteSlug,
   })
   if (!site) throw new HTTPError({ statusCode: 404, statusMessage: 'Site not found' })
-  const accessibleLocationIds = await listAccessibleLocationIds(db, {
-    env,
-    memberId: organization.memberId,
-    role: organization.role,
-    organizationId: organization.id,
-    siteId: site.id,
-  })
+  const accessibleLocationIds = await listAccessibleLocationIds(db, memberAccessPrincipal(organization, { env, siteId: site.id, event }))
   if (accessibleLocationIds?.length === 0) return { success: true as const, locations: [] }
   const locationFilter = accessibleLocationIds
     ? `AND id IN (SELECT value FROM json_each(?))`

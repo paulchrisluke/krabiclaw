@@ -105,12 +105,16 @@
 
         <template #detail>
           <template v-if="section === 'category'">
-            <!-- KrabiClaw's own site publishes two collections; each files articles under a fixed category set that shapes the URL. -->
+            <!--
+              KrabiClaw's own site publishes two collections. Documentation is
+              addressed through its category, so that one is a fixed list; a
+              blog's category is the author's own word on every site.
+            -->
             <UFormField v-if="isPlatformTemplate" label="Collection" class="mb-4">
               <USelect v-model="form.collection" :items="collectionOptions" value-key="value" class="w-full" @update:model-value="form.category = ''" />
             </UFormField>
             <UFormField label="Category">
-              <USelect v-if="isPlatformTemplate" v-model="form.category" :items="collectionCategories" class="w-full" />
+              <USelect v-if="collectionCategories" v-model="form.category" :items="collectionCategories" class="w-full" />
               <UInput v-else v-model="form.category" autofocus class="w-full" />
             </UFormField>
           </template>
@@ -592,7 +596,9 @@ async function publish() {
   actionError.value = ''
   publishing.value = true
   try {
-    if (!isArticleValid()) throw new Error('Complete the title, article body, and category before publishing.')
+    if (!isArticleValid()) throw new Error(collectionCategories.value
+        ? 'Complete the title, article body, and category before publishing.'
+        : 'Complete the title and article body before publishing.')
     if (!post.value) {
       const created = await props.repository.create({
         title: form.title,
@@ -632,7 +638,7 @@ async function publish() {
     publishing.value = false
   }
 }
-function isArticleValid() { return Boolean(form.title.trim() && serializeBody().trim() && (!isPlatformTemplate.value || form.category.trim())) }
+function isArticleValid() { return Boolean(form.title.trim() && serializeBody().trim() && (!collectionCategories.value || form.category.trim())) }
 function serializeBody() { return blocks.value.map(block => block.type === 'heading' ? `${'#'.repeat(Math.max(2, Math.min(6, block.level || 2)))} ${String(block.data.text || '')}` : block.type === 'markdown' ? String(block.data.markdown || '') : block.type === 'divider' ? '---' : `{{component type="${block.type}"}}`).filter(Boolean).join('\n\n') }
 function updateBlock(index: number, block: BlogEditorBlock) { blocks.value[index] = block }
 function setBlockData(index: number, key: string, value: unknown) { blocks.value[index] = { ...blocks.value[index]!, data: { ...blocks.value[index]!.data, [key]: value } } }

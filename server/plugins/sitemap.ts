@@ -92,14 +92,16 @@ export default definePlugin((nitroApp) => {
       for (const article of articles ?? []) {
         const slug = typeof article.slug === 'string' ? article.slug : ''
         if (!slug || !isArticleCollection(article.collection)) continue
-        const categorySlug = articleCategoryToSlug(article.collection, article.category as string | null)
-        if (!categorySlug) continue
         const lastmod = article.updated_at as string | undefined
+        const categorySlug = articleCategoryToSlug(article.collection, article.category as string | null)
+        // Documentation is addressed through its category, so an article filed
+        // under none has no URL. A blog article is addressed by its slug.
+        if (article.collection === 'docs' && !categorySlug) continue
         entries.push({
           loc: collectionArticlePath(article.collection, article.category as string | null, slug),
           lastmod,
         })
-        if (article.collection !== 'docs') continue
+        if (article.collection !== 'docs' || !categorySlug) continue
         const known = docsCategoryLastmod.get(categorySlug)
         if (!known || (lastmod && lastmod > known)) docsCategoryLastmod.set(categorySlug, lastmod)
       }

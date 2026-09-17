@@ -1,5 +1,6 @@
 import { collectionArticlePath, articleCategoryFromSlug } from '~/utils/article-collections'
 import { tenantBlogPostPath } from '~/utils/tenant-blog-route'
+import { PLATFORM_TEMPLATE } from '~/utils/template-registry'
 import { sha256 } from '@noble/hashes/sha2.js'
 import { bytesToHex } from '@noble/hashes/utils.js'
 import { queryAll, type DbClient } from '~/server/db'
@@ -10,7 +11,6 @@ import {
   PLATFORM_KNOWLEDGE_FAQ_ENTRIES,
   PLATFORM_KNOWLEDGE_PAGE_ENTRIES,
   PLATFORM_KNOWLEDGE_ROUTE_ENTRIES,
-  getPlatformBlogPath,
   resolveDashboardPath,
   type DashboardRouteContext,
   type PlatformDashboardRouteEntry,
@@ -517,8 +517,7 @@ export async function buildPlatformKnowledgeDocuments(db: DbClient): Promise<Pla
   })
 
   const blogRecords: PlatformKnowledgeDocument[] = (posts ?? []).flatMap((post) => {
-    const path = getPlatformBlogPath(post.category, post.slug)
-    if (!path) return []
+    const path = tenantBlogPostPath(PLATFORM_TEMPLATE, post.slug)
     const canonicalBody = contentBodies.get(post.id) ?? ''
     const snippet = truncateSnippet(post.excerpt || post.seo_description || canonicalBody || post.title)
     const body = [

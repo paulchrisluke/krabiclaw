@@ -104,7 +104,11 @@ const eventTypeOptions = computed(() => [
 interface Member { userId: string; name: string }
 const requestEvent = useRequestEvent()
 const membersKey = computed(() => `dashboard-activity-members-${String(route.params.orgSlug ?? '')}`)
-const { data: membersData } = await useAsyncData<{ members: Member[] }>(membersKey, async () => {
+// Not awaited: the events read below does not depend on it (eventQuery is built
+// from the filters, not from members), and its only consumer is the reactive
+// actorOptions computed. Awaiting it here made the feed's two independent reads
+// into two serial round trips before anything could render.
+const { data: membersData } = useAsyncData<{ members: Member[] }>(membersKey, async () => {
   if (import.meta.server) {
     if (!requestEvent || !dashboard.organization.value?.id) {
       throw createError({ statusCode: 500, statusMessage: 'Dashboard member context unavailable' })
@@ -128,7 +132,9 @@ const { data: membersData } = await useAsyncData<{ members: Member[] }>(membersK
         && typeof member.name === 'string',
       ),
   })
-})
+},
+  { lazy: import.meta.client },
+)
 const actorOptions = computed(() => [
   { label: 'Everyone', value: FILTER_ALL },
   ...(membersData.value?.members ?? []).map(m => ({ label: m.name, value: m.userId })),
@@ -214,7 +220,10 @@ const { data: eventsData, pending, error: eventsError } = await useAsyncData(
       { query: eventQuery.value, validate: isEventsResponse },
     )
   },
-  { watch: [eventQuery] },
+  // Nuxt blocks navigation on useAsyncData by default; the client does not
+  // need to wait for this to paint the route, and `pending` already drives a
+  // loading state here.
+  { watch: [eventQuery], lazy: import.meta.client },
 )
 const events = ref<SiteEvent[]>([])
 const nextCursor = ref<string | null>(null)

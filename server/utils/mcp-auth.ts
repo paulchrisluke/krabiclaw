@@ -6,16 +6,26 @@ import type { JSONWebKeySet, JWTPayload } from 'jose'
 import { createAuth, getAuthSession, type CloudflareEnv } from '~/server/utils/auth'
 import { hasPlatformEventPermission } from '~/server/utils/platform-admin-users'
 import { queryFirst } from '~/server/db'
-import { assertSiteWideAccess, isOrganizationWideRole, resolveOrganizationMembership } from '~/server/utils/member-access'
+import { assertSiteWideAccess, isOrganizationWideRole, resolveOrganizationMembership, memberAccessPrincipal, type ResolvedMembership, roleAllows, type OrganizationPermissions } from '~/server/utils/member-access'
 import { getOrganizationEntitlements } from '~/server/utils/billing-access'
 import { cloudflareEnv } from '~/server/utils/api-response'
 
 export type McpToolRole = 'owner' | 'admin' | 'editor'
 
-const ROLE_RANK: Record<McpToolRole, number> = {
-  editor: 1,
-  admin: 2,
-  owner: 3,
+/**
+ * The role floor each tool declares, as a permission.
+ *
+ * `minimumRole` stays on the tool definition because it is published to MCP
+ * clients in `_meta`, but the decision it drives comes from the same matrix as
+ * every other authorization in the repository (utils/organization-access.ts)
+ * rather than from a rank ladder that could disagree with it. `editor` is
+ * "takes part in tenant content at all"; `admin` is the site-settings floor the
+ * three configuration tools need.
+ */
+const TOOL_ROLE_PERMISSIONS: Record<McpToolRole, OrganizationPermissions> = {
+  editor: { sites: ['read'] },
+  admin: { settings: ['update'] },
+  owner: { organization: ['delete'] },
 }
 
 const MCP_AUTH_JWKS_CACHE_KEY = {}
@@ -35,12 +45,15 @@ export interface McpUserContext {
 export interface McpSiteContext extends McpUserContext {
   siteId: string
   organizationId: string
-  memberId: string
   organizationSlug?: string
   subdomain?: string | null
   customDomain?: string | null
   publicUrl?: string | null
   role: McpToolRole
+  // The membership this call resolved for (organizationId, userId). Tool
+  // executors authorize from it rather than pairing role with an organization
+  // id from elsewhere.
+  membership: ResolvedMembership
   sessionId?: string | null
 }
 
@@ -362,7 +375,7 @@ export async function requireMcpSite(
   if (!membership) throw new HTTPError({ statusCode: 404, statusMessage: 'Site not found or access denied' })
 
   const role = normalizeRole(membership.role)
-  if (!role || ROLE_RANK[role] < ROLE_RANK[minimumRole]) {
+  if (!role || !await roleSatisfies(site.organization_id, membership.role, minimumRole)) {
     throw new HTTPError({ statusCode: 403, statusMessage: 'Insufficient permissions' })
   }
 
@@ -376,25 +389,21 @@ export async function requireMcpSite(
   // loses access — only the never-actually-reachable case is now enforced
   // explicitly instead of accidentally.
   if (!isOrganizationWideRole(role)) {
-    await assertSiteWideAccess(user.db, {
-      env: user.env,
-      memberId: membership.memberId,
-      role,
-      organizationId: site.organization_id,
-      siteId: site.id,
-    })
+    await assertSiteWideAccess(user.db, memberAccessPrincipal(membership, { env: user.env, siteId: site.id }))
   }
 
   return {
     ...user,
     siteId: site.id,
     organizationId: site.organization_id,
-    memberId: membership.memberId,
     organizationSlug: membership.organizationSlug || undefined,
     subdomain: site.subdomain ?? null,
     customDomain: site.custom_domain ?? null,
     publicUrl: site.public_url ?? null,
     role,
+    // Kept so the tool executors authorize from the membership this call
+    // resolved rather than reassembling one out of role and organizationId.
+    membership,
   }
 }
 
@@ -424,8 +433,8 @@ export async function getActiveEntitlements(env: CloudflareEnv, organizationId: 
   return new Set(keys.filter(key => entitlements[key] === true))
 }
 
-export function roleSatisfies(actual: McpToolRole, minimum: McpToolRole) {
-  return ROLE_RANK[actual] >= ROLE_RANK[minimum]
+export async function roleSatisfies(organizationId: string, actual: string, minimum: McpToolRole): Promise<boolean> {
+  return await roleAllows({ organizationId, role: actual, permissions: TOOL_ROLE_PERMISSIONS[minimum] })
 }
 
 export function normalizeRole(role: string | null | undefined): McpToolRole | null {

@@ -3,7 +3,7 @@ import { resolvePublicTemplate } from '~/utils/template-registry'
 import { cloudflareEnv, jsonResponse, rethrowHttpError } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { getConfig } from '~/server/utils/site-config'
-import { assertSiteWideAccess } from '~/server/utils/member-access'
+import { assertSiteWideAccess, memberAccessPrincipal } from '~/server/utils/member-access'
 import { loadMemberSiteRow } from '~/server/utils/location-access'
 import { queryFirst } from '~/server/db'
 import { getMediaPlacements } from '~/server/utils/media-placement'
@@ -35,14 +35,12 @@ export default defineHandler(async (event) => {
   }
 
   try {
-    const siteAccess = await loadMemberSiteRow(db, env, siteId, session.user.id)
+    const siteAccess = await loadMemberSiteRow(event, db, env, siteId, session.user.id)
     if (!siteAccess) {
       return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
     }
 
-    await assertSiteWideAccess(db, {
-      env,
-      memberId: siteAccess.member_id, role: siteAccess.member_role, organizationId: siteAccess.organization_id, siteId, })
+    await assertSiteWideAccess(db, memberAccessPrincipal(siteAccess.membership, { env, siteId, event }))
 
     const site = await queryFirst<ApiRecord>(db, `
       SELECT s.id, s.organization_id, s.subdomain, s.theme_id, s.status, (SELECT 'https://' || domain FROM site_domains WHERE site_id = s.id AND role = 'canonical' AND status = 'active') AS public_url, COALESCE((SELECT status FROM site_domains WHERE site_id = s.id AND type = 'custom' AND status NOT IN ('deleted', 'disabled') ORDER BY role = 'canonical' DESC, created_at, id LIMIT 1), 'none') AS custom_domain_status, s.default_currency, s.brand_name, s.brand_description,

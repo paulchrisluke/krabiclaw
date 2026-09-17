@@ -131,19 +131,44 @@ export async function listPublicTenantPageProductRows(
   // page showed cards with no price and a link to /products/<slug> — a route
   // no Saya site serves.
   const now = new Date().toISOString()
+  // A collection belongs to a branch, so a grid that names one is that
+  // branch's counter: the dish is routed, priced and labelled as the branch
+  // whose section it is being read in — the same rule the menu page applies
+  // (`ProductCollectionPage.vue` productLocationId). Without it a dish served
+  // at two branches had no single route, so its card was not a link at all,
+  // and its price was the cheapest branch's rather than this one's.
+  const collectionLocationId = selection.collectionId
+    ? (await queryFirst<{ location_id: string | null }>(
+        db,
+        'SELECT location_id FROM collections WHERE id = ? AND site_id = ? LIMIT 1',
+        [selection.collectionId, siteId],
+      ))?.location_id ?? null
+    : null
   const rows = await queryAll<Omit<PublicTenantPageProductRow, 'media'>>(db, `
     SELECT p.id, p.name, p.slug, p.description,
            EXISTS (SELECT 1 FROM product_booking_configs bc WHERE bc.product_id = p.id AND bc.organization_id = p.organization_id) AS is_bookable,
-           (SELECT CASE WHEN count(*) = 1 THEN min(bl.slug) END FROM product_locations pl
-              JOIN business_locations bl ON bl.id = pl.location_id AND bl.site_id = ? AND bl.status = 'active'
-             WHERE pl.product_id = p.id AND pl.organization_id = p.organization_id AND pl.published = 1 AND pl.active = 1) AS location_slug,
+           COALESCE(
+             (SELECT bl.slug FROM product_locations pl
+                JOIN business_locations bl ON bl.id = pl.location_id AND bl.site_id = ? AND bl.status = 'active'
+               WHERE pl.product_id = p.id AND pl.organization_id = p.organization_id AND pl.published = 1 AND pl.active = 1
+                 AND pl.location_id = ?),
+             (SELECT CASE WHEN count(*) = 1 THEN min(bl.slug) END FROM product_locations pl
+                JOIN business_locations bl ON bl.id = pl.location_id AND bl.site_id = ? AND bl.status = 'active'
+               WHERE pl.product_id = p.id AND pl.organization_id = p.organization_id AND pl.published = 1 AND pl.active = 1)
+           ) AS location_slug,
            offer.unit_amount, offer.compare_at_unit_amount, offer.currency
       FROM products p
       JOIN product_publications pub ON pub.product_id = p.id AND pub.organization_id = p.organization_id
       LEFT JOIN collection_products cp ON cp.product_id = p.id AND cp.collection_id = ?
       LEFT JOIN (
         SELECT pv.product_id, pr.unit_amount, pr.compare_at_unit_amount, pr.currency,
-               row_number() OVER (PARTITION BY pv.product_id ORDER BY pr.unit_amount ASC) AS rank
+               row_number() OVER (
+                 PARTITION BY pv.product_id
+                 -- This branch's own price first, then the price that applies
+                 -- everywhere, and only then the cheapest of the rest.
+                 ORDER BY CASE WHEN pr.location_id IS ? THEN 0 WHEN pr.location_id IS NULL THEN 1 ELSE 2 END ASC,
+                          pr.unit_amount ASC
+               ) AS rank
           FROM prices pr
           JOIN product_variants pv ON pv.id = pr.product_variant_id AND pv.organization_id = pr.organization_id AND pv.active = 1
          WHERE pr.active = 1 AND pr.type = 'one_time' AND pr.currency = ?
@@ -153,7 +178,7 @@ export async function listPublicTenantPageProductRows(
      WHERE pub.site_id = ? AND pub.published = 1 AND p.active = 1
        AND (cp.product_id IS NOT NULL OR p.id IN (SELECT value FROM json_each(?)))
      ORDER BY cp.sort_order ASC, p.name ASC
-  `, [siteId, selection.collectionId ?? null, currency, now, now, siteId, d1JsonStringSet(productIds)])
+  `, [siteId, collectionLocationId, siteId, selection.collectionId ?? null, collectionLocationId, currency, now, now, siteId, d1JsonStringSet(productIds)])
   const placements = await loadPublicSocialMedia(db, siteId, 'product', rows.map(row => row.id))
   return rows.map(row => ({ ...row, media: placements.get(row.id)?.media ?? [] }))
 }
@@ -355,7 +380,14 @@ async function hydrateBlocks(
           ? undefined
           : formatMinorAmount(product.compare_at_unit_amount, product.currency as CurrencyCode),
         labelKey: 'saya.posts.cta_default',
-        media: product.media,
+        // A grid item carries the one image it is drawn with, which for a
+        // product is its `image` placement — the same cover `hydrateProductMedia`
+        // resolves for every other product surface. It carried the product's
+        // whole placement list instead, and the reader took the head of it;
+        // placements are read slot-ordered, so a product with a `gallery` asset
+        // handed the card that asset rather than its cover, and a gallery video
+        // put an .mp4 in the card's <img src>.
+        media: product.media.filter(item => item.slot === 'image'),
       }))
     }
     if (block.type === 'location_grid' && Array.isArray(data.location_ids)) {

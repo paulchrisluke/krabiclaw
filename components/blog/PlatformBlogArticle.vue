@@ -43,7 +43,8 @@
 import { $fetch } from 'ofetch'
 import { renderMarkdownToHtml, sanitizeHtmlForSsr } from '~/utils/markdown'
 import { useContentPageSchema } from '~/composables/useContentPageSchema'
-import { blogCategoryToSlug, getBlogPostPath, slugToBlogCategory } from '~/utils/blog-categories'
+import { tenantBlogPostPath } from '~/utils/tenant-blog-route'
+import { PLATFORM_TEMPLATE } from '~/utils/template-registry'
 import { structuredComponentsFromBlocks } from '~/utils/blog-editor'
 import { resolveSocialImageUrl } from '~/utils/social-metadata'
 import type { ContentComponent } from '~/utils/content-blocks'
@@ -51,8 +52,6 @@ import { loadDomPurify } from '~/utils/dom-purify-loader'
 
 const DOMPurify = import.meta.client ? await loadDomPurify() : { sanitize: sanitizeHtmlForSsr }
 
-
-definePageMeta({ layout: 'blog' })
 
 interface BlogPost {
   id: string
@@ -82,7 +81,7 @@ const requestEvent = useRequestEvent()
 // Preview authorization is the site's, resolved once by tenant resolution
 // from the preview cookie; the client's API call carries the same cookie.
 const previewAuthorized = computed(() => Boolean(requestEvent?.context.previewAuthorized))
-const postEndpoint = computed(() => `/api/public/blog/${String(route.params.category)}/${String(route.params.slug)}`)
+const postEndpoint = computed(() => `/api/public/blog/${String(route.params.slug)}`)
 
 const { data, pending, error } = await useAsyncData(
   () => `blog-post-${postEndpoint.value}`,
@@ -95,9 +94,6 @@ const { data, pending, error } = await useAsyncData(
     // route-param/binding resolution as a real external request, which was
     // causing this page to 404 on posts the API itself served correctly.
     if (import.meta.server) {
-      const category = slugToBlogCategory(String(route.params.category))
-      if (!category) throw createError({ statusCode: 404, statusMessage: 'Article not found' })
-
       if (!requestEvent) throw createError({ statusCode: 404, statusMessage: 'Article not found' })
 
       const [{ cloudflareEnv }, { getPublishedBlogPost }] = await Promise.all([
@@ -108,7 +104,7 @@ const { data, pending, error } = await useAsyncData(
       const db = env.db
       if (!db) throw createError({ statusCode: 500, statusMessage: 'Database not available' })
 
-      post = await getPublishedBlogPost(db, category, String(route.params.slug), env, previewAuthorized.value) as BlogPost | null
+      post = await getPublishedBlogPost(db, null, String(route.params.slug), env, previewAuthorized.value) as BlogPost | null
     } else {
       let payload: { post?: BlogPost }
       try {
@@ -181,11 +177,11 @@ const wasUpdated = computed(() => {
 const selectedPostImage = computed(() => post.value?.cover ?? null)
 const postImageUrl = computed(() => resolveSocialImageUrl(selectedPostImage.value))
 
-const categorySlug = computed(() => blogCategoryToSlug(post.value?.category) || String(route.params.category))
-const postPath = computed(() => getBlogPostPath(post.value?.category, post.value?.slug) || '/blog')
+const postPath = computed(() => (post.value ? tenantBlogPostPath(PLATFORM_TEMPLATE, post.value.slug) : '/blog'))
+// The category is a label the author chose, not a place: the index filters by
+// it rather than serving a page for it, so the trail goes Blog -> this article.
 const breadcrumbs = computed(() => [
   { name: 'Blog', url: '/blog' },
-  ...(post.value?.category ? [{ name: post.value.category, url: `/blog#${categorySlug.value}` }] : []),
   ...(post.value ? [{ name: post.value.title, url: postPath.value }] : []),
 ])
 
