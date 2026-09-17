@@ -1,11 +1,11 @@
-import { ARTICLE_COLLECTIONS, articleCategoryToSlug, collectionArticlePath } from '~/utils/article-collections'
+import { collectionArticlePath } from '~/utils/article-collections'
 import { isRecord, publicApiRequest } from '~/utils/api-clients'
 
 /**
- * Documentation is KrabiClaw's `docs` article collection. The category is the
- * first path segment after /docs; an article whose slug equals its category
- * segment is that category's landing page. Order within a category is the
- * article's editorial sort order.
+ * Documentation is KrabiClaw's `docs` article collection, one article per slug.
+ * The category groups the sidebar and the index; it is the author's own word,
+ * slugified for an anchor, not a path segment and not a fixed list. Order
+ * within a category is the article's editorial sort order.
  */
 export interface DocsArticle {
   id: string
@@ -16,7 +16,6 @@ export interface DocsArticle {
   sortOrder: number
   category: string
   categorySlug: string
-  isCategoryIndex: boolean
 }
 
 export interface DocsCategory {
@@ -32,12 +31,17 @@ const isArticleRow = (value: unknown): value is ArticleRow =>
   && (value.excerpt === null || value.excerpt === undefined || typeof value.excerpt === 'string')
   && (value.category === null || typeof value.category === 'string') && typeof value.sort_order === 'number'
 
-function toDocsArticle(row: ArticleRow): DocsArticle | null {
-  const categorySlug = articleCategoryToSlug('docs', row.category)
-  if (!categorySlug || !row.category) return null
+const UNCATEGORIZED = 'Uncategorized'
+
+function slugifyCategory(value: string) {
+  return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'uncategorized'
+}
+
+function toDocsArticle(row: ArticleRow): DocsArticle {
+  const category = row.category?.trim() || UNCATEGORIZED
   return {
-    id: row.id, slug: row.slug, path: collectionArticlePath('docs', row.category, row.slug), title: row.title, excerpt: row.excerpt ?? null,
-    sortOrder: row.sort_order, category: row.category, categorySlug, isCategoryIndex: row.slug === categorySlug,
+    id: row.id, slug: row.slug, path: collectionArticlePath('docs', row.slug), title: row.title, excerpt: row.excerpt ?? null,
+    sortOrder: row.sort_order, category, categorySlug: slugifyCategory(category),
   }
 }
 
@@ -62,19 +66,22 @@ export async function useDocsArticles() {
   await asyncData
   const { data, pending, error } = asyncData
 
-  const categoryOrder = Object.values(ARTICLE_COLLECTIONS.docs.categorySlugs ?? {})
-  const articles = computed<DocsArticle[]>(() => (data.value?.posts ?? [])
-    .map(toDocsArticle)
-    .filter((article): article is DocsArticle => article !== null)
-    .sort((a, b) => categoryOrder.indexOf(a.categorySlug) - categoryOrder.indexOf(b.categorySlug)
-      || Number(b.isCategoryIndex) - Number(a.isCategoryIndex)
-      || a.sortOrder - b.sortOrder
-      || a.title.localeCompare(b.title)))
+  // Categories order by the editorial rank of their earliest article, so the
+  // sidebar still reads in the order the author arranged, without a list of
+  // names written in code that an author cannot add to.
+  const mapped = computed<DocsArticle[]>(() => (data.value?.posts ?? []).map(toDocsArticle))
+  const categories = computed<DocsCategory[]>(() => {
+    const groups = new Map<string, DocsCategory>()
+    for (const article of [...mapped.value].sort((a, b) => a.sortOrder - b.sortOrder || a.title.localeCompare(b.title))) {
+      const group = groups.get(article.categorySlug)
+        ?? { category: article.category, categorySlug: article.categorySlug, articles: [] }
+      group.articles.push(article)
+      groups.set(article.categorySlug, group)
+    }
+    return [...groups.values()]
+  })
 
-  const categories = computed<DocsCategory[]>(() => categoryOrder.flatMap((categorySlug) => {
-    const group = articles.value.filter(article => article.categorySlug === categorySlug)
-    return group.length ? [{ category: group[0]!.category, categorySlug, articles: group }] : []
-  }))
+  const articles = computed<DocsArticle[]>(() => categories.value.flatMap(group => group.articles))
 
   return { articles, categories, pending, error }
 }

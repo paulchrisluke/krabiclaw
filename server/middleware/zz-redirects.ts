@@ -6,14 +6,36 @@ import { TENANT_TYPES } from '~/utils/tenant-routing'
 import { EXPERIENCE_PRESENTATION } from '~/utils/product-presentation'
 
 const redirects: Record<string, string> = {
-  '/docs/mcp-setup': '/docs/integrations/mcp-setup',
   '/privacy-policy': '/privacy',
   '/terms-and-conditions': '/terms',
   // Preserve older guessed/short docs URLs while keeping the published article
   // slug as the canonical destination.
-  '/docs/getting-started/getting-started-with-krabiclaw-in-chatgpt': '/docs/getting-started/getting-started',
-  '/docs/getting-started/getting-started-with-krabiclaw': '/docs/getting-started/getting-started',
-  '/docs/getting-started/connect-krabiclaw-to-chatgpt': '/docs/integrations/mcp-setup',
+  '/docs/getting-started/getting-started-with-krabiclaw-in-chatgpt': '/docs/getting-started',
+  '/docs/getting-started/getting-started-with-krabiclaw': '/docs/getting-started',
+  '/docs/getting-started/connect-krabiclaw-to-chatgpt': '/docs/mcp-setup',
+  // A documentation category was never a page of its own: /docs/{category}
+  // answered only when some article's slug happened to equal the category
+  // slug. The index is where that reader was going.
+  '/docs/integrations': '/docs',
+  '/docs/menu-management': '/docs',
+  '/docs/theme-customization': '/docs',
+  '/docs/seo-marketing': '/docs',
+  '/docs/advanced': '/docs',
+}
+
+/**
+ * KrabiClaw's own articles used to carry their category between the prefix and
+ * the slug — /blog/{category}/{slug}, /docs/{category}/{slug}, and the same
+ * shape for both markdown mirrors. They are addressed by slug now, so any URL
+ * published under the old shape keeps working by dropping the segment that
+ * stopped meaning anything. Listing the moved articles instead would go stale
+ * the first time one is renamed.
+ */
+const ARTICLE_CATEGORY_PATH = /^\/(blog|docs|blog-md|docs-md)\/[^/]+\/([^/]+)$/
+
+function articlePathWithoutCategory(pathname: string): string | null {
+  const match = ARTICLE_CATEGORY_PATH.exec(pathname)
+  return match ? `/${match[1]}/${match[2]}` : null
 }
 
 // Platform-domain-only (krabiclaw.com bare host) paths Google Search Console
@@ -120,7 +142,7 @@ export default defineHandler(async (event) => {
     event.req.method === 'GET' &&
     ((event.req.headers.get('accept')) ?? '').includes('text/html')
   ) {
-    return redirect('/docs/integrations/mcp-setup', 302)
+    return redirect('/docs/mcp-setup', 302)
   }
 
   if (event.context.tenantType === TENANT_TYPES.PLATFORM && PLATFORM_GONE_PATHS.has(normalizedPathname)) {
@@ -128,6 +150,7 @@ export default defineHandler(async (event) => {
   }
 
   const target = redirects[normalizedPathname]
+    ?? (event.context.tenantType === TENANT_TYPES.PLATFORM ? articlePathWithoutCategory(normalizedPathname) : null)
   if (target) {
     const targetWithParams = `${target}${url.search}${url.hash}`
     // Permanent redirect for SEO

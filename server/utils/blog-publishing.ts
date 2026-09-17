@@ -39,8 +39,8 @@ export async function createBlogRedirect(db: D1Database, postId: string, siteId:
      WHERE p.kind = 'article' AND p.row_role = 'root' AND p.id = ? AND p.site_id = ? LIMIT 1
   `, [postId, siteId])
   if (!post) throw new HTTPError({ statusCode: 400, statusMessage: 'Blog redirect scope must match its post' })
-  const oldPath = tenantBlogPostPath({ themeId: post.theme_id }, oldSlug, post.category)
-  const newPath = tenantBlogPostPath({ themeId: post.theme_id }, post.slug, post.category)
+  const oldPath = tenantBlogPostPath({ themeId: post.theme_id }, oldSlug)
+  const newPath = tenantBlogPostPath({ themeId: post.theme_id }, post.slug)
   const result = await execute(db, `INSERT INTO site_redirects
     (id, organization_id, site_id, locale, owner_type, owner_id, from_path, to_path, status_code, behavior, reason, source, created_at, updated_at)
     VALUES (?, ?, ?, 'en', ?, ?, ?, ?, 301, 'redirect', ?, ?, ?, ?)

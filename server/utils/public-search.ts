@@ -1,4 +1,4 @@
-import { collectionArticlePath, articleCategoryFromSlug } from '~/utils/article-collections'
+import { collectionArticlePath } from '~/utils/article-collections'
 import { tenantBlogPostPath } from '~/utils/tenant-blog-route'
 import { PLATFORM_TEMPLATE } from '~/utils/template-registry'
 import { sha256 } from '@noble/hashes/sha2.js'
@@ -458,7 +458,7 @@ export async function buildTenantBlogDocuments(db: DbClient, platformSiteId?: st
       type: 'blog' as const,
       title: post.title,
       // Each template decides its article prefix (/blog or /article).
-      path: tenantBlogPostPath({ themeId: post.theme_id, vertical: post.vertical }, post.slug, post.category),
+      path: tenantBlogPostPath({ themeId: post.theme_id, vertical: post.vertical }, post.slug),
       snippet,
       section: post.category || 'Blog',
       icon: 'newspaper',
@@ -491,7 +491,7 @@ export async function buildPlatformKnowledgeDocuments(db: DbClient): Promise<Pla
   ])
 
   const docRecords: PlatformKnowledgeDocument[] = (docs ?? []).flatMap((doc) => {
-    const path = collectionArticlePath('docs', doc.category, doc.slug)
+    const path = collectionArticlePath('docs', doc.slug)
     const canonicalBody = contentBodies.get(doc.id) ?? ''
     const snippet = truncateSnippet(doc.excerpt || doc.seo_description || canonicalBody || doc.title)
     const body = [
@@ -509,7 +509,7 @@ export async function buildPlatformKnowledgeDocuments(db: DbClient): Promise<Pla
       title: doc.title,
       path,
       snippet,
-      section: articleCategoryFromSlug('docs', path.split('/')[2] ?? null) ?? 'Docs',
+      section: (typeof doc.category === 'string' && doc.category.trim()) || 'Docs',
       icon: 'book',
       body,
       surfaces: ['public', 'docs', 'blog', 'help', 'chowbot', 'dashboard'],

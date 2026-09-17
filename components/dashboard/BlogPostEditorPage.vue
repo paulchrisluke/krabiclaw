@@ -189,7 +189,7 @@ async function saveBlogLocalization(locale: string, submitted: Record<string, un
   if (!post?.slug) throw new Error('Save the source post with a URL before localizing it.')
   const template: unknown = post.editor_template
   if (template !== 'saya' && template !== 'blawby' && template !== 'platform') throw new Error('Article template is missing or invalid.')
-  const sourcePath = tenantBlogPostPath({ themeId: publicTemplateRegistry[template].themeId }, post.slug, post.category, post.collection ?? 'blog')
+  const sourcePath = tenantBlogPostPath({ themeId: publicTemplateRegistry[template].themeId }, post.slug, post.collection ?? 'blog')
   const response = await dashboardApi<BlogTranslationResponse>(
     `/api/editor/sites/${siteId}/localization/content_document/${postId}/${encodeURIComponent(locale)}`,
     {

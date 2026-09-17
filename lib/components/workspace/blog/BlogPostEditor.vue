@@ -105,17 +105,12 @@
 
         <template #detail>
           <template v-if="section === 'category'">
-            <!--
-              KrabiClaw's own site publishes two collections. Documentation is
-              addressed through its category, so that one is a fixed list; a
-              blog's category is the author's own word on every site.
-            -->
+            <!-- KrabiClaw's own site publishes two collections; a category is the author's own word in both. -->
             <UFormField v-if="isPlatformTemplate" label="Collection" class="mb-4">
-              <USelect v-model="form.collection" :items="collectionOptions" value-key="value" class="w-full" @update:model-value="form.category = ''" />
+              <USelect v-model="form.collection" :items="collectionOptions" value-key="value" class="w-full" />
             </UFormField>
             <UFormField label="Category">
-              <USelect v-if="collectionCategories" v-model="form.category" :items="collectionCategories" class="w-full" />
-              <UInput v-else v-model="form.category" autofocus class="w-full" />
+              <UInput v-model="form.category" autofocus class="w-full" />
             </UFormField>
           </template>
 
@@ -201,7 +196,7 @@ import type { Component } from 'vue'
 import BlogArticleView from '~/components/blog/BlogArticleView.vue'
 import EditorNavigationList, { type EditorNavigationGroup } from '~/components/dashboard/EditorNavigationList.vue'
 import EditorPaneShell from '~/components/dashboard/EditorPaneShell.vue'
-import { ARTICLE_COLLECTIONS, ARTICLE_COLLECTION_SLUGS, articleCollectionCategories, type ArticleCollection } from '~/utils/article-collections'
+import { ARTICLE_COLLECTIONS, ARTICLE_COLLECTION_SLUGS, type ArticleCollection } from '~/utils/article-collections'
 import { tenantBlogPostPath } from '~/utils/tenant-blog-route'
 import { publicTemplateRegistry } from '~/utils/template-registry'
 import type { BlogLifecycleState, BlogPostRepository, BlogPost, BlogEditorBlock, BlogPostUpdateInput } from './types'
@@ -251,7 +246,6 @@ const publishTiming = ref<'Now' | 'Scheduled'>('Now')
 const templateName = computed(() => post.value?.editor_template || 'saya')
 const isPlatformTemplate = computed(() => templateName.value === 'platform')
 const collectionOptions = ARTICLE_COLLECTION_SLUGS.map(slug => ({ label: ARTICLE_COLLECTIONS[slug].label, value: slug }))
-const collectionCategories = computed(() => articleCollectionCategories(form.collection))
 const editorCanvasStyle = computed(() => {
   const tokens = post.value?.editor_theme_tokens ?? {}
   if (templateName.value === 'saya') {
@@ -291,7 +285,7 @@ const generatedSlug = computed(() => normalizeBlogSlug(form.title))
 const resolvedExcerpt = computed(() => generatedExcerpt(blocks.value))
 const resolvedSiteName = computed(() => post.value?.editor_site_name || '')
 const readMinutes = computed(() => Math.max(1, Math.ceil(serializeBody().trim().split(/\s+/).filter(Boolean).length / 200)))
-const publicPath = computed(() => tenantBlogPostPath({ themeId: publicTemplateRegistry[templateName.value].themeId }, slugResetRequested.value ? generatedSlug.value : form.slug || generatedSlug.value, form.category, form.collection))
+const publicPath = computed(() => tenantBlogPostPath({ themeId: publicTemplateRegistry[templateName.value].themeId }, slugResetRequested.value ? generatedSlug.value : form.slug || generatedSlug.value, form.collection))
 const resolvedSeo = computed(() => resolveBlogSeo({ title: form.title, seoTitle: form.seo_title, excerpt: form.excerpt || resolvedExcerpt.value, seoDescription: form.seo_description, slug: form.slug || generatedSlug.value, canonicalUrl: form.canonical_url, baseUrl: windowOrigin(), publicPath: publicPath.value, siteName: resolvedSiteName.value, robots: form.robots }))
 /**
  * The post's cover is its leading image block and nothing else. The post's
@@ -596,9 +590,7 @@ async function publish() {
   actionError.value = ''
   publishing.value = true
   try {
-    if (!isArticleValid()) throw new Error(collectionCategories.value
-        ? 'Complete the title, article body, and category before publishing.'
-        : 'Complete the title and article body before publishing.')
+    if (!isArticleValid()) throw new Error('Complete the title and article body before publishing.')
     if (!post.value) {
       const created = await props.repository.create({
         title: form.title,
@@ -638,7 +630,7 @@ async function publish() {
     publishing.value = false
   }
 }
-function isArticleValid() { return Boolean(form.title.trim() && serializeBody().trim() && (!collectionCategories.value || form.category.trim())) }
+function isArticleValid() { return Boolean(form.title.trim() && serializeBody().trim()) }
 function serializeBody() { return blocks.value.map(block => block.type === 'heading' ? `${'#'.repeat(Math.max(2, Math.min(6, block.level || 2)))} ${String(block.data.text || '')}` : block.type === 'markdown' ? String(block.data.markdown || '') : block.type === 'divider' ? '---' : `{{component type="${block.type}"}}`).filter(Boolean).join('\n\n') }
 function updateBlock(index: number, block: BlogEditorBlock) { blocks.value[index] = block }
 function setBlockData(index: number, key: string, value: unknown) { blocks.value[index] = { ...blocks.value[index]!, data: { ...blocks.value[index]!.data, [key]: value } } }

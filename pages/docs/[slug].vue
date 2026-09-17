@@ -4,23 +4,6 @@
       <p class="text-muted">Loading...</p>
     </div>
 
-    <div v-else-if="isCategoryIndexOnly">
-      <h1 class="mb-6 text-4xl font-bold text-default">{{ categoryName }}</h1>
-      <p class="text-muted">{{ seoDescription }}</p>
-
-      <div class="mt-14 grid gap-6 sm:grid-cols-2">
-        <NuxtLink
-          v-for="item in siblings"
-          :key="item.path"
-          :to="item.path"
-          class="rounded-2xl border border-default p-6 no-underline transition hover:border-muted hover:bg-elevated"
-        >
-          <p class="text-lg font-semibold text-default">{{ item.title }}</p>
-          <p v-if="item.excerpt" class="mt-2 text-sm text-muted">{{ item.excerpt }}</p>
-        </NuxtLink>
-      </div>
-    </div>
-
     <div v-else-if="error || !article" class="rounded-lg border border-red-200 bg-red-50 p-6">
       <p class="text-red-600">{{ error?.message || 'Documentation not found' }}</p>
     </div>
@@ -33,19 +16,7 @@
           <BlogArticleRenderer :title="article.title" :blocks="blocks" template="platform" :show-title="false" class="docs-page-body max-w-none! px-0! py-0!" />
         </div>
 
-        <div v-if="current?.isCategoryIndex && siblings.length" class="mt-14 grid gap-6 sm:grid-cols-2">
-          <NuxtLink
-            v-for="item in siblings"
-            :key="item.path"
-            :to="item.path"
-            class="rounded-2xl border border-default p-6 no-underline transition hover:border-muted hover:bg-elevated"
-          >
-            <p class="text-lg font-semibold text-default">{{ item.title }}</p>
-            <p v-if="item.excerpt" class="mt-2 text-sm text-muted">{{ item.excerpt }}</p>
-          </NuxtLink>
-        </div>
-
-        <nav v-if="!current?.isCategoryIndex && (previousArticle || nextArticle)" class="mt-16 flex items-start justify-between gap-6">
+        <nav v-if="previousArticle || nextArticle" class="mt-16 flex items-start justify-between gap-6">
           <NuxtLink
             v-if="previousArticle"
             :to="previousArticle.path"
@@ -86,7 +57,6 @@ import BlogArticleRenderer from '~/components/blog/BlogArticleRenderer.vue'
 import { renderMarkdownToHtml, sanitizeHtmlForSsr } from '~/utils/markdown'
 import type { BlogEditorBlock } from '~/lib/components/workspace/blog/types'
 import { useContentPageSchema } from '~/composables/useContentPageSchema'
-import { articleCategoryFromSlug } from '~/utils/article-collections'
 import { structuredComponentsFromBlocks } from '~/utils/blog-editor'
 import { isRecord, publicApiRequest } from '~/utils/api-clients'
 import { loadDomPurify } from '~/utils/dom-purify-loader'
@@ -108,44 +78,23 @@ interface DocsArticleDetail {
 }
 
 // Documentation is the site's `docs` article collection, rendered inside the
-// docs layout. /docs/{category} is the category's landing article when one exists.
+// docs layout, one article per slug. The path used to carry the article's
+// category as well, and /docs/{category} answered only when some article's
+// slug happened to equal the category's slug.
 definePageMeta({ layout: 'docs' })
 
 const DOMPurify = import.meta.client ? await loadDomPurify() : { sanitize: sanitizeHtmlForSsr }
 
 const route = useRoute()
 const requestEvent = useRequestEvent()
-const segments = computed(() => {
-  const raw = route.params.segments
-  const parts = Array.isArray(raw) ? raw : typeof raw === 'string' ? raw.split('/') : []
-  return parts.map(part => part.trim()).filter(Boolean)
-})
+const slug = computed(() => String(route.params.slug || '').trim())
+if (!slug.value) throw createError({ statusCode: 404, statusMessage: 'Documentation not found' })
 
-const categorySlug = computed(() => segments.value[0] ?? '')
-const category = computed(() => articleCategoryFromSlug('docs', categorySlug.value))
-if (segments.value.length < 1 || segments.value.length > 2 || !category.value) {
-  throw createError({ statusCode: 404, statusMessage: 'Documentation not found' })
-}
-
-const path = computed(() => `/docs/${segments.value.join('/')}`)
+const path = computed(() => `/docs/${slug.value}`)
 const { articles, error: articlesError } = await useDocsArticles()
 if (articlesError.value) throw createError({ statusCode: 500, statusMessage: 'Failed to load documentation index' })
 
 const current = computed(() => articles.value.find(item => item.path === path.value) ?? null)
-const categoryArticles = computed(() => articles.value.filter(item => item.categorySlug === categorySlug.value))
-
-// Every category with published articles answers at /docs/{category}. When one
-// of them is the category's landing article that article is the page; otherwise
-// the page is the category's index, listing what the category contains. It is
-// the same URL either way, so the sitemap can name it without knowing which
-// shape a category happens to have today.
-const isCategoryIndexOnly = computed(() => segments.value.length === 1 && !current.value)
-if (isCategoryIndexOnly.value && !categoryArticles.value.length) {
-  throw createError({ statusCode: 404, statusMessage: 'Documentation category not found' })
-}
-
-// The landing article's slug is its category segment.
-const slug = computed(() => segments.value[1] ?? categorySlug.value)
 
 const isArticleResponse = (value: unknown): value is { post: DocsArticleDetail } =>
   isRecord(value) && isRecord(value.post) && typeof value.post.title === 'string' && Array.isArray(value.post.content_blocks)
@@ -161,17 +110,17 @@ const { data: article, pending, error } = await useAsyncData(`docs-article-${pat
     ])
     const env = cloudflareEnv(requestEvent)
     if (!env.db) throw createError({ statusCode: 503, statusMessage: 'Documentation is temporarily unavailable' })
-    loaded = await getPublishedBlogPost(env.db, category.value!, slug.value, env, undefined, 'docs') as DocsArticleDetail | null
+    loaded = await getPublishedBlogPost(env.db, slug.value, env, undefined, 'docs') as DocsArticleDetail | null
   } else {
     const response = await publicApiRequest<{ post: DocsArticleDetail }>(
-      `/api/public/blog/${encodeURIComponent(categorySlug.value)}/${encodeURIComponent(slug.value)}?collection=docs`,
+      `/api/public/blog/${encodeURIComponent(slug.value)}?collection=docs`,
       { validate: isArticleResponse },
     )
     loaded = response.post
   }
   if (!loaded) throw createError({ statusCode: 404, statusMessage: 'Documentation not found' })
   return loaded
-}, { immediate: !isCategoryIndexOnly.value })
+})
 
 if (error.value) throw error.value
 
@@ -192,25 +141,20 @@ const articleBodyRef = shallowRef<Element | null>(null)
 useCopyableCodeBlocks(articleBodyRef, blocks)
 const renderedComponents = computed(() => structuredComponentsFromBlocks(blocks.value))
 
-const siblings = computed(() => categoryArticles.value.filter(item => item.path !== current.value?.path))
-
 // Previous/Next walks the sidebar's order across every category.
 const currentIndex = computed(() => articles.value.findIndex(item => item.path === path.value))
 const previousArticle = computed(() => currentIndex.value > 0 ? articles.value[currentIndex.value - 1] : null)
 const nextArticle = computed(() => currentIndex.value >= 0 && currentIndex.value < articles.value.length - 1 ? articles.value[currentIndex.value + 1] : null)
 
-const categoryName = computed(() => current.value?.category ?? category.value!)
-const seoTitle = computed(() => isCategoryIndexOnly.value
-  ? `${categoryName.value} documentation`
-  : article.value?.seo_title || article.value?.title || 'Documentation')
-const seoDescription = computed(() => isCategoryIndexOnly.value
-  ? `${categoryName.value} guides in the KrabiClaw documentation.`
-  : article.value?.seo_description || article.value?.excerpt || `Learn about ${article.value?.title || 'this topic'} in KrabiClaw documentation.`)
+const seoTitle = computed(() => article.value?.seo_title || article.value?.title || 'Documentation')
+const seoDescription = computed(() => article.value?.seo_description || article.value?.excerpt
+  || `Learn about ${article.value?.title || 'this topic'} in KrabiClaw documentation.`)
 
+// The category groups the index; it is not a place, so the trail is Docs ->
+// this article.
 const breadcrumbs = computed(() => [
   { name: 'Docs', url: '/docs' },
-  { name: categoryName.value, url: `/docs/${categorySlug.value}` },
-  ...(current.value && !current.value.isCategoryIndex ? [{ name: current.value.title, url: current.value.path }] : []),
+  ...(current.value ? [{ name: current.value.title, url: current.value.path }] : []),
 ])
 
 const runtimeConfig = useRuntimeConfig()
@@ -226,14 +170,10 @@ const { canonicalUrl } = useSocialMetadata(() => ({
   // site's social card the way /features and /pricing do. An article carries
   // its own generated card and nothing else — omitting the key would reach for
   // the site's card and hide a missing article card.
-  ...(isCategoryIndexOnly.value
-    ? { pageType: 'website' as const, path: path.value }
-    : {
-        pageType: 'article' as const,
-        path: resolveSeoUrl(article.value?.canonical_url || path.value, platformOrigin.value),
-        socialImage: article.value?.social_image ?? null,
-        robots: normalizeRobotsIntent(article.value?.robots),
-      }),
+  pageType: 'article' as const,
+  path: resolveSeoUrl(article.value?.canonical_url || path.value, platformOrigin.value),
+  socialImage: article.value?.social_image ?? null,
+  robots: normalizeRobotsIntent(article.value?.robots),
 }))
 
 useContentPageSchema(computed(() => {

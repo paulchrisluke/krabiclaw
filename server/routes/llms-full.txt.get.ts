@@ -4,7 +4,6 @@ import { cloudflareEnv, textResponse } from '~/server/utils/api-response'
 import {
   buildLlmsFullTxt, getPublishedTenantBlogPostBySlug, listPublishedTenantBlogPostsForLlm, getPublishedPlatformDocBySlug, listPublishedPlatformBlogPostsForLlm, listPublishedPlatformDocsForLlm, renderTenantBlogMarkdown, resolvePublicOrigin, } from '~/server/utils/platform-llm'
 import { getPlatformSite } from '~/server/utils/platform-site'
-import { articleCategoryToSlug } from '~/utils/article-collections'
 
 export default defineHandler(async (event) => {
   const env = cloudflareEnv(event)
@@ -29,11 +28,9 @@ export default defineHandler(async (event) => {
   const [docSummaries, postSummaries] = await Promise.all([
     listPublishedPlatformDocsForLlm(db), listPublishedPlatformBlogPostsForLlm(db, env), ])
 
-  const docs = (await Promise.all((docSummaries ?? []).flatMap((doc) => {
-    const categorySlug = articleCategoryToSlug('docs', doc.category)
-    return categorySlug ? [getPublishedPlatformDocBySlug(db, categorySlug, doc.slug)] : []
-  })))
-    .filter((doc): doc is NonNullable<typeof doc> => Boolean(doc))
+  const docs = (await Promise.all(
+    (docSummaries ?? []).map(doc => getPublishedPlatformDocBySlug(db, doc.slug)),
+  )).filter((doc): doc is NonNullable<typeof doc> => Boolean(doc))
 
   const platformSiteId = (await getPlatformSite(db)).id
   const posts = (await Promise.all(
