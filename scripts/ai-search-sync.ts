@@ -23,7 +23,6 @@ if (changedSince) {
     'server/utils/platform-llm.ts',
     'server/utils/content/documents.ts',
     'server/utils/platform-site.ts',
-    'utils/docs-categories.ts',
   ])
   const changedInputs = changedFiles.filter(file => indexInputs.has(file))
   if (changedInputs.length === 0) {

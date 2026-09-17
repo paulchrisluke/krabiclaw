@@ -5,7 +5,7 @@ import { definePlugin, HTTPError } from 'nitro'
 import { queryAll, queryFirst, type DbClient } from '~/server/db'
 import { cloudflareEnv } from '~/server/utils/api-response'
 import { isNonIndexableHost, PLATFORM_SITEMAP_ROUTES } from '~/server/utils/seo-policy'
-import { ARTICLE_COLLECTIONS, articleCategoryToSlug, collectionArticlePath, isArticleCollection } from '~/utils/article-collections'
+import { collectionArticlePath, isArticleCollection } from '~/utils/article-collections'
 import { TENANT_TYPES } from '~/utils/tenant-routing'
 import { resolvePublicTemplate } from '~/utils/template-registry'
 import { presentationForSurface, resolveProductPresentation } from '~/utils/product-presentation'
@@ -83,30 +83,18 @@ export default definePlugin((nitroApp) => {
         [platformSiteId],
       )
 
-      // Blog posts and documentation are both article collections; each shapes its own URL.
-      // A documentation category also answers at /docs/{category} — as its landing
-      // article when one exists, otherwise as the category's index (see
-      // pages/docs/[...segments].vue) — so every category holding a published
-      // article contributes that URL too. Duplicates collapse in addUniqueEntries.
-      const docsCategoryLastmod = new Map<string, string | undefined>()
+      // Blog posts and documentation are both article collections, each at its
+      // own prefix and addressed by slug. Documentation used to contribute a
+      // /docs/{category} entry per category as well; that URL only ever
+      // resolved when some article's slug happened to equal the category slug,
+      // and 404'd for every category where none did.
       for (const article of articles ?? []) {
         const slug = typeof article.slug === 'string' ? article.slug : ''
         if (!slug || !isArticleCollection(article.collection)) continue
-        const lastmod = article.updated_at as string | undefined
-        const categorySlug = articleCategoryToSlug(article.collection, article.category as string | null)
-        // Documentation is addressed through its category, so an article filed
-        // under none has no URL. A blog article is addressed by its slug.
-        if (article.collection === 'docs' && !categorySlug) continue
         entries.push({
-          loc: collectionArticlePath(article.collection, article.category as string | null, slug),
-          lastmod,
+          loc: collectionArticlePath(article.collection, slug),
+          lastmod: article.updated_at as string | undefined,
         })
-        if (article.collection !== 'docs' || !categorySlug) continue
-        const known = docsCategoryLastmod.get(categorySlug)
-        if (!known || (lastmod && lastmod > known)) docsCategoryLastmod.set(categorySlug, lastmod)
-      }
-      for (const [categorySlug, lastmod] of docsCategoryLastmod) {
-        entries.push({ loc: `${ARTICLE_COLLECTIONS.docs.pathPrefix}/${categorySlug}`, lastmod })
       }
 
       ctx.urls.length = 0

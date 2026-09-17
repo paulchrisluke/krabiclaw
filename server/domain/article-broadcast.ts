@@ -210,7 +210,7 @@ export async function runArticleBroadcast(db: DbClient, env: BroadcastEnv, now =
   }
 
   const platformDomain = getPlatformDomain(env)
-  const articleUrl = `https://${platformDomain}${collectionArticlePath('blog', article.category, article.slug)}`
+  const articleUrl = `https://${platformDomain}${collectionArticlePath('blog', article.slug)}`
 
   let sent = 0
   let failed = 0
