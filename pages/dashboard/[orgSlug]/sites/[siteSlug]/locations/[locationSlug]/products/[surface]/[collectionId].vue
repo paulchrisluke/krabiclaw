@@ -9,7 +9,7 @@
     <template #header>
       <UDashboardNavbar :title="isNew ? `New ${presentation.collectionGroupLabel.toLowerCase()}` : collectionName" :toggle="false">
         <template #leading>
-          <DashboardNavbarLeading :to="productsPath" :label="presentation.collectionLabel" />
+          <DashboardNavbarLeading :to="surfacePath" :label="presentation.collectionLabel" />
         </template>
       </UDashboardNavbar>
     </template>
@@ -61,7 +61,7 @@
     <template #header>
       <UDashboardNavbar :title="collectionName" :toggle="false">
         <template #leading>
-          <DashboardNavbarLeading :to="productsPath" :label="presentation.collectionLabel" />
+          <DashboardNavbarLeading :to="surfacePath" :label="presentation.collectionLabel" />
         </template>
       </UDashboardNavbar>
     </template>
@@ -92,35 +92,43 @@ import EditorNavigationList, { type EditorNavigationGroup } from '~/components/d
 import DashboardResourceLocalization from '~/components/dashboard/DashboardResourceLocalization.vue'
 import CollectionProductList from '~/components/dashboard/CollectionProductList.vue'
 import { getErrorMessage } from '~/utils/errors'
-import { requireProductPresentation } from '~/utils/product-presentation'
+import { isCatalogSurface, presentationForSurface } from '~/utils/product-presentation'
 
 definePageMeta({ layout: 'dashboard', cmsCapabilityKey: 'location.products' })
 
 const route = useRoute()
 const dashboardApi = useDashboardApi()
+const dashboard = useDashboardSite()
+const dashboardLocation = useDashboardLocation()
 const collectionId = computed(() => String(route.params.collectionId ?? ''))
+
+const vertical = dashboard.site.value?.vertical
+if (!vertical) throw createError({ statusCode: 500, statusMessage: 'Site vertical is not configured' })
+// A segment that names no surface of this vertical is not a page, and neither
+// is a collection reached through one.
+const segment = String(route.params.surface ?? '')
+if (!isCatalogSurface(vertical, segment)) throw createError({ statusCode: 404, statusMessage: 'Page not found' })
+const surface = segment
+// The surface owns the words at this level: a collection of bookable products
+// is a Collection of Experiences, a section of a menu holds dishes.
+const presentation = presentationForSurface(vertical, surface)
+
 // The path comes from the route this screen is mounted on, not from the
 // location selector: an unresolved selector left it empty, and an empty path is
 // a link to nowhere and, where it roots the editor frame, a frame rooted at ''.
 const locationPath = computed(() => `/dashboard/${String(route.params.orgSlug)}/sites/${String(route.params.siteSlug)}/locations/${String(route.params.locationSlug)}`)
-const productsPath = computed(() => `${locationPath.value}/products`)
-const collectionPath = computed(() => `${productsPath.value}/${collectionId.value}`)
+const surfacePath = computed(() => `${locationPath.value}/products/${surface}`)
+const collectionPath = computed(() => `${surfacePath.value}/${collectionId.value}`)
 const frame = useEditorFrame(collectionPath)
 
 const siteId = await useDashboardSiteId()
-const dashboard = useDashboardSite()
-const dashboardLocation = useDashboardLocation()
-
-const vertical = dashboard.site.value?.vertical
-if (!vertical) throw createError({ statusCode: 500, statusMessage: 'Site vertical is not configured' })
-const presentation = requireProductPresentation(vertical)
 
 const locationId = computed(() => dashboardLocation.currentLocation.value?.id ?? null)
 
 // The same catalog the two lists read, so titling this column costs no request.
 const catalog = useLocationProductCatalog(siteId, locationId)
 const collection = computed(() => catalog.collections.value.find(row => row.id === collectionId.value) ?? null)
-const collectionName = computed(() => collection.value?.name ?? presentation.collectionLabel)
+const collectionName = computed(() => collection.value?.name ?? presentation.collectionGroupLabel)
 
 // ── The collection record ───────────────────────────────
 const isNew = computed(() => collectionId.value === 'new')
@@ -182,7 +190,7 @@ async function commit() {
       const created = await dashboardApi(endpoint, { method: 'POST', body: { name: form.name.trim(), location_id: location }, validate: isCollectionCreated })
       form.name = ''
       await catalog.refresh()
-      await navigateTo(`${productsPath.value}/${created.collection.id}`)
+      await navigateTo(`${surfacePath.value}/${created.collection.id}`)
       return
     }
     await dashboardApi(`${endpoint}/${collectionId.value}`, { method: 'PATCH', body: { name: form.name.trim() }, validate: isRecord })

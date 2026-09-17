@@ -5,12 +5,12 @@
   -->
   <NuxtPage v-if="frame.mode.value === 'yield'" />
 
-  <!-- A surface is open: I am the index column, it is the detail. -->
-  <UDashboardPanel v-else-if="frame.mode.value === 'pair'" id="location-catalog">
+  <!-- A collection is open: I am the index column, it is the detail. -->
+  <UDashboardPanel v-else-if="frame.mode.value === 'pair'" id="location-products">
     <template #header>
-      <UDashboardNavbar :title="catalogTitle" :toggle="false">
+      <UDashboardNavbar :title="presentation.collectionLabel" :toggle="false">
         <template #leading>
-          <DashboardNavbarLeading :to="locationPath" label="Location" />
+          <DashboardNavbarLeading :to="productsPath" :label="catalogTitle" />
         </template>
       </UDashboardNavbar>
     </template>
@@ -18,13 +18,13 @@
     <template #body>
       <EditorPaneShell
         has-detail
-        :dismiss-to="productsPath"
-        :detail-title="detailTitle"
+        :dismiss-to="surfacePath"
+        :detail-title="presentation.collectionGroupLabel"
         wide-detail
         hide-detail-heading
       >
         <template #index>
-          <CatalogSurfaceList />
+          <CollectionList :surface="surface" />
         </template>
         <template #detail>
           <NuxtPage />
@@ -34,12 +34,12 @@
   </UDashboardPanel>
 
   <!-- Nothing below me is open, so I am my parent's detail column. -->
-  <CatalogSurfaceList v-else />
+  <CollectionList v-else :surface="surface" />
 </template>
 
 <script setup lang="ts">
 import EditorPaneShell from '~/components/dashboard/EditorPaneShell.vue'
-import CatalogSurfaceList from '~/components/dashboard/CatalogSurfaceList.vue'
+import CollectionList from '~/components/dashboard/CollectionList.vue'
 import { catalogLabel, countCatalog, isCatalogSurface, presentationForSurface } from '~/utils/product-presentation'
 
 definePageMeta({ layout: 'dashboard', cmsCapabilityKey: 'location.products' })
@@ -51,23 +51,26 @@ const dashboardLocation = useDashboardLocation()
 const vertical = dashboard.site.value?.vertical
 if (!vertical) throw createError({ statusCode: 500, statusMessage: 'Site vertical is not configured' })
 
+// A segment that names no surface of this vertical is not a page. A location
+// sells its own goods and, where it takes bookings, experiences; anything else
+// in this slot is a URL nobody can reach from the catalog.
+const segment = String(route.params.surface ?? '')
+if (!isCatalogSurface(vertical, segment)) throw createError({ statusCode: 404, statusMessage: 'Page not found' })
+const surface = segment
+const presentation = presentationForSurface(vertical, surface)
+
 // The path comes from the route this screen is mounted on, not from the
 // location selector: an unresolved selector left it empty, and an empty path is
 // a link to nowhere and, where it roots the editor frame, a frame rooted at ''.
 const locationPath = computed(() => `/dashboard/${String(route.params.orgSlug)}/sites/${String(route.params.siteSlug)}/locations/${String(route.params.locationSlug)}`)
 const productsPath = computed(() => `${locationPath.value}/products`)
-const frame = useEditorFrame(productsPath)
+const surfacePath = computed(() => `${productsPath.value}/${surface}`)
+const frame = useEditorFrame(surfacePath)
 
 const siteId = await useDashboardSiteId()
 const locationId = computed(() => dashboardLocation.currentLocation.value?.id ?? null)
-// The same catalog the surfaces below read, so titling this column costs no request.
+// The same catalog the list below reads, so titling this column costs no request.
 const catalog = useLocationProductCatalog(siteId, locationId)
-// This level is the catalog, not one of its surfaces: a restaurant that also
-// takes bookings holds a Menu and Experiences, and neither names the other.
+// The level above is the whole catalog, which one surface's word cannot name.
 const catalogTitle = computed(() => catalogLabel(vertical, countCatalog(catalog.products.value)))
-// The detail column holds one surface, named the way that surface is named.
-const detailTitle = computed(() => {
-  const segment = frame.childSegment.value ?? ''
-  return isCatalogSurface(vertical, segment) ? presentationForSurface(vertical, segment).collectionLabel : catalogTitle.value
-})
 </script>
