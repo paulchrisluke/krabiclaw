@@ -37,7 +37,6 @@
     "test:e2e:tenant-localization": "playwright test tests/e2e/tenant-localization.spec.ts tests/e2e/kikuzuki-localization.spec.ts --project=chromium --workers=1",
     "test:e2e:guest-journeys": "playwright test tests/e2e/tenant-guest-journeys.spec.ts --project=chromium --workers=1",
     "test:e2e:mcp": "playwright test tests/e2e/mcp-media.spec.ts tests/e2e/mcp-content.spec.ts tests/e2e/mcp-owner-tools.spec.ts tests/e2e/mcp-authorization.spec.ts tests/e2e/oauth-discovery.spec.ts",
-    "test:e2e:preview:smoke": "playwright test --project=chromium --grep @smoke",
     "test:e2e:ui": "playwright test --ui",
     "cloudflare:resources": "node scripts/check-cloudflare-resources.mjs",
     "dev": "nuxt dev",
@@ -52,7 +51,6 @@
     "schema:local": "wrangler d1 migrations apply DB --local",
     "drizzle:check": "drizzle-kit check",
     "db:generate": "drizzle-kit generate",
-    "db:reset:preview": "node scripts/reset-d1.mjs --env preview",
     "db:reset": "node scripts/reset-d1.mjs",
     "client:replay": "node scripts/client-replay.mjs",
     "client:import": "node scripts/client-import.mjs",
@@ -81,7 +79,6 @@
     "stripe:catalog:plan": "node scripts/seed-stripe.mjs --dry-run",
     "stripe:catalog:apply": "node scripts/seed-stripe.mjs --apply",
     "perf:lighthouse": "node scripts/lighthouse-check.mjs",
-    "db:pull:preview": "node --experimental-strip-types scripts/pull-production-snapshot.ts --preview",
     "db:pull:local": "node --experimental-strip-types scripts/pull-production-snapshot.ts --local",
     "lint:email-previews": "node --experimental-strip-types --import ./tests/unit/support/register-aliases.mjs scripts/check-email-previews.ts",
     "lint:notification-parity": "node --experimental-strip-types --import ./tests/unit/support/register-aliases.mjs scripts/check-notification-parity.ts"

@@ -41,7 +41,7 @@ test.describe('stateless MCP server', () => {
     expect(invalidOfferBody.result?.content?.[0]?.text).toContain('event')
   })
 
-  test('a draft publishes explicitly, stays idempotent on repeat, and matches the public API @smoke', async ({ request, baseURL }) => {
+  test('a draft publishes explicitly, stays idempotent on repeat, and matches the public API', async ({ request, baseURL }) => {
     test.setTimeout(90_000)
     await loginAs(request, baseURL!, MCP_GROWTH_SERVICE_USER_ID)
     const siteId = await ensureSite(request, baseURL!)

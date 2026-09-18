@@ -144,8 +144,10 @@ watchEffect(() => {
   }
 })
 
-// Keyed to the record so the draft survives the remount between sections.
-const form = useState(`collection-draft-${siteId}-${collectionId.value}`, () => ({ name: '' })).value
+// One draft, so it survives the remount between this collection's sections. The
+// key cannot carry the collection id — it is read once at setup while Nuxt
+// reuses this page across collections — so the watch below re-seeds it instead.
+const form = useState(`collection-draft-${siteId}`, () => ({ name: '' })).value
 watch(collection, (row) => { if (row) form.name = row.name }, { immediate: true })
 // Nuxt reuses this page across collections; a record that has not arrived leaves nothing behind.
 watch(collectionId, () => { form.name = collection.value?.name ?? '' })

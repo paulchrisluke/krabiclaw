@@ -139,30 +139,36 @@ const products = computed(() => {
     .filter(product => positions.has(product.id))
     .sort((left, right) => (positions.get(left.id)! - positions.get(right.id)!) || left.name.localeCompare(right.name))
 })
-const editing = ref(false)
-const selected = ref<string[]>([])
-const orderDirty = ref(false)
-const orderError = ref<string | null>(null)
-const moveError = ref<string | null>(null)
-
-const collection = computed(() => collections.value.find(row => row.id === collectionId.value) ?? null)
-const loadError = computed(() => (catalog.error.value ? getErrorMessage(catalog.error.value, `Failed to load ${presentation.itemLabelPlural.toLowerCase()}`) : null))
-const listItems = computed(() => products.value.map(row => ({ id: row.id, title: row.name, row })))
-// Somewhere else on this surface: moving a dish into a collection of bookable
-// experiences would file it where customers never read dishes.
-const moveTargets = computed(() => {
+/** Each collection with the products that are in it, which is what a surface is read from. */
+const collectionsWithProducts = computed(() => {
   const members = new Map<string, Product[]>()
   for (const product of catalog.products.value) {
     for (const membership of product.collections) {
       members.set(membership.collection_id, [...(members.get(membership.collection_id) ?? []), product])
     }
   }
-  return collectionsOnSurface(
-    vertical,
-    collections.value.map(row => ({ ...row, products: members.get(row.id) ?? [] })),
-    segment,
-  ).filter(row => row.id !== collectionId.value)
+  return collections.value.map(row => ({ ...row, products: members.get(row.id) ?? [] }))
 })
+
+const editing = ref(false)
+const selected = ref<string[]>([])
+const orderDirty = ref(false)
+const orderError = ref<string | null>(null)
+const moveError = ref<string | null>(null)
+
+// Reached through this surface, so it has to be one of this surface's. A
+// collection of bookable experiences opened under /menu would read as a menu
+// section and offer menu targets to move its products into. An empty
+// collection is on every surface until its first product settles it.
+const collection = computed(() =>
+  collectionsOnSurface(vertical, collectionsWithProducts.value, segment).find(row => row.id === collectionId.value) ?? null)
+const loadError = computed(() => (catalog.error.value ? getErrorMessage(catalog.error.value, `Failed to load ${presentation.itemLabelPlural.toLowerCase()}`) : null))
+const listItems = computed(() => products.value.map(row => ({ id: row.id, title: row.name, row })))
+// Somewhere else on this surface: moving a dish into a collection of bookable
+// experiences would file it where customers never read dishes.
+const moveTargets = computed(() =>
+  collectionsOnSurface(vertical, collectionsWithProducts.value, segment)
+    .filter(row => row.id !== collectionId.value))
 
 useSeoMeta({ title: () => `${collection.value?.name ?? presentation.collectionLabel} | KrabiClaw Dashboard`, robots: 'noindex, nofollow' })
 
