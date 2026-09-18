@@ -1350,20 +1350,6 @@
           "notNull": false,
           "autoincrement": false
         },
-        "city": {
-          "name": "city",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "neighborhood": {
-          "name": "neighborhood",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
         "phone": {
           "name": "phone",
           "type": "text",
@@ -1713,7 +1699,7 @@
         },
         "business_locations_address_check": {
           "name": "business_locations_address_check",
-          "value": "address IS NULL OR (json_valid(address) AND json_type(address) IS 'object')"
+          "value": "address IS NULL OR (json_valid(address) AND json_type(address) IS 'object' AND json_type(address, '$.regionCode') IS 'text' AND json_type(address, '$.addressLines') IS 'array' AND (json_type(address, '$.languageCode') IS NULL OR json_type(address, '$.languageCode') IS 'text') AND (json_type(address, '$.locality') IS NULL OR json_type(address, '$.locality') IS 'text') AND (json_type(address, '$.sublocality') IS NULL OR json_type(address, '$.sublocality') IS 'text') AND (json_type(address, '$.administrativeArea') IS NULL OR json_type(address, '$.administrativeArea') IS 'text') AND (json_type(address, '$.postalCode') IS NULL OR json_type(address, '$.postalCode') IS 'text'))"
         },
         "business_locations_categories_check": {
           "name": "business_locations_categories_check",

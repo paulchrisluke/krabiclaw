@@ -163,6 +163,7 @@ import { getTodayHoursLabel, isOpenNow } from '~/shared/reservation-hours'
 import { formatTime, localDateTimeToInstant } from '~/utils/timezone'
 import { setBookingConfirmation } from '~/composables/useBookingHandoff'
 import { requireProductPresentation } from '~/utils/product-presentation'
+import { formatPostalAddress, type PostalAddress } from '~/utils/postal-address'
 
 function formatTitleItalics(text: string | null | undefined): string {
   if (!text) return ''
@@ -224,24 +225,11 @@ const reservationTimezone = computed(() => {
   return timezone
 })
 
-function bookingLocationAddress(location: ApiRecord): unknown {
-  if (locale.value === 'en') return location.address
-  return typeof location.address_translated === 'string' ? location.address_translated : null
-}
-
 const bookingLocations = computed(() => locations.value.map(location => ({
   ...location,
-  address: bookingLocationAddress(location),
   todayHours: getTodayHoursLabel(location.opening_hours, resCopy.value.closedLabel, location.timezone, new Date(), location.special_hours, locale.value),
 })))
 
-function formatLocationAddress(address: unknown): string | null {
-  if (!address) return null
-  if (typeof address === 'string') return address
-  const addr = address as { addressLines?: string[]; locality?: string; administrativeArea?: string }
-  const parts = [...(addr.addressLines ?? []), addr.locality, addr.administrativeArea].filter(Boolean)
-  return parts.length ? parts.join(', ') : null
-}
 
 function getLocationLabel(location: ApiRecord): string | null {
   return typeof location.city === 'string' && location.city.trim() ? location.city : null
@@ -413,7 +401,7 @@ async function handleReservation() {
       policySummary: res.policy_summary ?? null,
       locationId: selectedLocation.value?.id ? String(selectedLocation.value.id) : null,
       locationName: selectedLocation.value?.title ?? null,
-      locationAddress: selectedLocation.value ? formatLocationAddress(bookingLocationAddress(selectedLocation.value)) : null,
+      locationAddress: formatPostalAddress((selectedLocation.value?.address ?? null) as PostalAddress | null) || null,
       locationSlug: typeof selectedLocation.value?.slug === 'string' ? selectedLocation.value.slug : null,
     })
     mirrorSubmission('reservation_submit', selectedLocation.value?.id ? String(selectedLocation.value.id) : null)

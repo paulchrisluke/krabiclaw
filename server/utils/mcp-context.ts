@@ -36,7 +36,8 @@ export interface McpLocationSummary {
   id: string
   slug: string
   title: string
-  city: string | null
+  /** The neighbourhood the address names, or its town. Derived, never stored. */
+  place_name: string | null
   status: string
 }
 
@@ -114,10 +115,10 @@ export async function listLocationsForMcp(
     id: string
     slug: string
     title: string
-    city: string | null
+    place_name: string | null
     status: string
   }>(db, `
-    SELECT id, slug, title, city, status
+    SELECT id, slug, title, COALESCE(address ->> '$.sublocality', address ->> '$.locality') AS place_name, status
     FROM business_locations
     WHERE organization_id = ? AND site_id = ?
     ORDER BY title ASC

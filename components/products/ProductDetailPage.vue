@@ -369,7 +369,7 @@ import type { ProductCollectionSibling } from '~/utils/product-seo'
 import type { MetafieldDefinition, MetafieldValue } from '~/shared/metafields'
 import { EXPERIENCE_ATTRIBUTE_HANDLES, metafieldHandle, PRICING_NOTE_HANDLE } from '~/shared/metafields'
 import type { PublicProductBooking, PublicProductLocationPayload, PublicProductReview } from '~/server/utils/public-products'
-import { formatLocationAddress } from '~/utils/location-address'
+import { formatPostalAddress } from '~/utils/postal-address'
 import SayaReviewCard from '~/components/saya/SayaReviewCard.vue'
 import BookingModal from '~/components/booking/BookingModal.vue'
 import BookingRecap from '~/components/booking/BookingRecap.vue'
@@ -716,7 +716,7 @@ const thingsToKnow = computed(() => visibleDetails.value.filter((detail) => {
   return !definition || !PLACED_ATTRIBUTE_HANDLES.has(metafieldHandle(definition))
 }))
 
-const addressLine = computed(() => formatLocationAddress(props.location.address))
+const addressLine = computed(() => formatPostalAddress(props.location.address))
 // A map from the coordinates the branch already has; no key, no second source.
 const mapEmbedUrl = computed(() => (props.location.latitude !== null && props.location.longitude !== null
   ? `https://www.google.com/maps?q=${props.location.latitude},${props.location.longitude}&output=embed`

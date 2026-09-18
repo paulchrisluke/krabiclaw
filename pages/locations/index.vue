@@ -102,7 +102,7 @@
 
 <script setup lang="ts">
 import { getTodayHoursLabel } from '~/shared/reservation-hours'
-import { formatLocationAddress, type LocationAddressInput } from '~/utils/location-address'
+import { formatPostalAddress, type PostalAddress } from '~/utils/postal-address'
 
 definePageMeta({ layout: 'saya' })
 
@@ -122,8 +122,7 @@ const locationMedia = (location: ApiRecord) => Array.isArray(location.media)
   : null
 
 function locationAddress(location: ApiRecord): string {
-  if (locale.value === 'en') return formatLocationAddress(location.address as LocationAddressInput)
-  return typeof location.address_translated === 'string' ? location.address_translated : ''
+  return formatPostalAddress(location.address as PostalAddress | null)
 }
 
 function todayHours(location: ApiRecord): string {

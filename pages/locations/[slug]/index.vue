@@ -47,7 +47,7 @@
             <NuxtLink :to="localePath('/locations')" class="saya-kicker mb-8 inline-block text-white/60 no-underline hover:text-white">
               ← {{ t('saya.footer.all_locations') }}
             </NuxtLink>
-            <p class="saya-eyebrow mb-5 text-white/80">{{ location.neighborhood || location.city }}</p>
+            <p class="saya-eyebrow mb-5 text-white/80">{{ addressPlaceName(location.address as PostalAddress | null) }}</p>
             <h1 class="saya-display-lg text-white">
               <em class="saya-italic">{{ heroTitle || location.title }}</em>
             </h1>
@@ -237,7 +237,7 @@
                 >
               </div>
               <div class="p-7">
-                <p class="saya-eyebrow mb-3 text-inverted/50">{{ loc.neighborhood || loc.city }}</p>
+                <p class="saya-eyebrow mb-3 text-inverted/50">{{ addressPlaceName(loc.address as PostalAddress | null) }}</p>
                 <div class="saya-display saya-italic text-3xl text-inverted leading-none">{{ loc.title }}</div>
                 <p class="mt-4 text-xs uppercase tracking-widest text-inverted/50">{{ t('saya.footer.visit_page') }}</p>
               </div>
@@ -277,7 +277,6 @@
 
 <script setup lang="ts">
 import { formatOpeningHours, getIsOpenNow, getActiveSpecialClosure, formatClosureMessage } from '~/utils/formatters'
-import { formatLocationAddress, type LocationAddressInput } from '~/utils/location-address'
 import { getTodayHoursLabel } from '~/shared/reservation-hours'
 import { formatProductMoney } from '~/utils/product-money'
 import { productLocationCollectionPath, resolveProductPresentation } from '~/utils/product-presentation'
@@ -286,6 +285,7 @@ import { isCurrencyCode } from '~/shared/currencies'
 import type { Product } from '~/server/types/products'
 import { normalizeRobotsIntent } from '~/shared/robots-directive'
 import { resolveSocialImageUrl } from '~/utils/social-metadata'
+import { addressPlaceName, formatPostalAddress, schemaPostalAddress, type PostalAddress } from '~/utils/postal-address'
 
 const DOMPurify = useHtmlSanitizer()
 
@@ -473,14 +473,7 @@ const sanitizedParkingInfo = computed(() => DOMPurify.sanitize(parkingInfo.value
 const sanitizedExtraNotes = computed(() => DOMPurify.sanitize(extraNotes.value))
 
 // Derived location data
-const canonicalFormattedAddress = computed(() => {
-  const loc = location.value
-  if (!loc) return ''
-  return formatLocationAddress(loc.address as LocationAddressInput) || loc.city || ''
-})
-const formattedAddress = computed(() => locale.value === 'en'
-  ? canonicalFormattedAddress.value
-  : location.value?.address_translated ?? '')
+const formattedAddress = computed(() => formatPostalAddress((location.value?.address ?? null) as PostalAddress | null))
 
 const weekHours = computed(() => formatOpeningHours(location.value?.opening_hours ?? null, locale.value, t('saya.location.closed'), location.value?.timezone))
 const todayHours = computed(() => getTodayHoursLabel(location.value?.opening_hours ?? null, t('saya.location.closed'), location.value?.timezone, new Date(), location.value?.special_hours ?? null, locale.value))
@@ -515,8 +508,8 @@ useSchemaOrg([
     return {
       '@type': getBusinessSchemaTypes((site as ApiValue)?.vertical),
       name: `${siteName.value} — ${loc.title}`,
-      description: canonicalFormattedAddress.value,
-      address: { '@type': 'PostalAddress', streetAddress: canonicalFormattedAddress.value },
+      description: formattedAddress.value,
+      address: schemaPostalAddress((location.value?.address ?? null) as PostalAddress | null),
       telephone: loc.phone,
       url: `${tenantOrigin}${localePath(`/locations/${loc.slug}`)}`,
       ...(loc.latitude && loc.longitude ? { geo: { '@type': 'GeoCoordinates', latitude: loc.latitude, longitude: loc.longitude } } : {}),

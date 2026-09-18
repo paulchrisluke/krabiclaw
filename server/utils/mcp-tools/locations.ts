@@ -1,5 +1,5 @@
 import type { McpToolDefinition } from './shared'
-import { locationListItemObject, locationMutationSummaryObject, locationObject, openingHoursInputSchema, pageInfoObject, paginationInputSchema, seoOverrideFieldsSchema, siteTool, specialHoursInputSchema } from './shared'
+import { locationListItemObject, locationMutationSummaryObject, locationObject, openingHoursInputSchema, pageInfoObject, paginationInputSchema, postalAddressSchema, seoOverrideFieldsSchema, siteTool, specialHoursInputSchema } from './shared'
 
 export const LOCATIONS_TOOLS: McpToolDefinition[] = [
   siteTool({
@@ -40,7 +40,7 @@ export const LOCATIONS_TOOLS: McpToolDefinition[] = [
       confirmRequired: false,
       inputSchema: {
         location_id: { type: 'string', description: 'Location id or slug.' },
-        city: { type: ['string', 'null'] },
+        address: postalAddressSchema,
         phone: { type: 'string', description: 'Public phone number shown to guests on the website and in booking/reservation confirmation emails.' },
         email: { type: ['string', 'null'], description: 'Public email shown to guests on the website and in booking/reservation confirmation emails. Pass null to clear it.' },
         notification_phone: locationObject.properties.notification_phone,

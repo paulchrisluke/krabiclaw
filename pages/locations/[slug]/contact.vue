@@ -61,7 +61,7 @@
         <!-- ADDRESS + MAP CARD -->
         <section class="border border-default bg-default p-9">
           <p class="saya-eyebrow mb-4 text-muted">{{ t('saya.location.find_us') }}</p>
-          <h2 class="saya-display saya-italic text-3xl text-default leading-none">{{ location.neighborhood || location.city || location.title }}</h2>
+          <h2 class="saya-display saya-italic text-3xl text-default leading-none">{{ addressPlaceName(location.address as PostalAddress | null) || location.title }}</h2>
 
           <!-- Map embed (16/10) -->
           <div class="mt-7 aspect-[16/10] overflow-hidden border border-default bg-muted">
@@ -170,8 +170,8 @@
 
 <script setup lang="ts">
 import { formatOpeningHours, getIsOpenNow } from '~/utils/formatters'
-import { formatLocationAddress, type LocationAddressInput } from '~/utils/location-address'
 import { getTodayHoursLabel } from '~/shared/reservation-hours'
+import { addressPlaceName, formatPostalAddress, schemaPostalAddress, type PostalAddress } from '~/utils/postal-address'
 const DOMPurify = useHtmlSanitizer()
 
 definePageMeta({ layout: 'saya' })
@@ -193,12 +193,7 @@ const { location, getField: getContentField, pending } = await usePublicPageData
 if (!location.value) throw createError({ statusCode: 404, statusMessage: 'Location not found' })
 
 
-const formattedAddress = computed(() => {
-  const loc = location.value
-  if (!loc) return ''
-  if (locale.value !== 'en') return typeof loc.address_translated === 'string' ? loc.address_translated : ''
-  return formatLocationAddress(loc.address as LocationAddressInput) || loc.city || ''
-})
+const formattedAddress = computed(() => formatPostalAddress((location.value?.address ?? null) as PostalAddress | null))
 
 const weekHours = computed(() => formatOpeningHours(location.value?.opening_hours ?? null, locale.value, t('saya.location.closed'), location.value?.timezone))
 const todayHours = computed(() => getTodayHoursLabel(location.value?.opening_hours ?? null, t('saya.location.closed'), location.value?.timezone, new Date(), location.value?.special_hours ?? null, locale.value))
@@ -240,7 +235,7 @@ useSchemaOrg([
     return {
       '@type': getBusinessSchemaTypes((site as ApiValue)?.vertical),
       name: `${siteName.value} — ${loc.title}`,
-      address: { '@type': 'PostalAddress', streetAddress: formattedAddress.value },
+      address: schemaPostalAddress((location.value?.address ?? null) as PostalAddress | null),
       telephone: loc.phone,
       email: loc.email,
       hasMap: loc.maps_url,

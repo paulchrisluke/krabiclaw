@@ -59,7 +59,7 @@ export default defineHandler(async (event) => {
 
   return jsonResponse({
     success: true, preview: {
-      placeId: place.placeId, name: place.name, address: place.formattedAddress, city: place.city, phone: place.phone, mapsUrl: place.mapsUrl, websiteUrl: place.websiteUrl, rating: place.rating, ratingCount: place.ratingCount, openingHours: place.openingHours, timezone: place.timezone, }, })
+      placeId: place.placeId, name: place.name, address: place.address, phone: place.phone, mapsUrl: place.mapsUrl, websiteUrl: place.websiteUrl, rating: place.rating, ratingCount: place.ratingCount, openingHours: place.openingHours, timezone: place.timezone, }, })
 })
 import { defineHandler } from 'nitro';
 import { readBody } from 'nitro/h3';

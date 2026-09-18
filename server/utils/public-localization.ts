@@ -50,9 +50,6 @@ export async function loadExactPublicLocalizations(
 }
 
 const PROJECTED_FIELD_NAMES: Partial<Record<LocalizedResourceType, Readonly<Record<string, string>>>> = {
-  business_location: {
-    address: 'address_translated',
-  },
   product: {
     tags: 'tags',
   },

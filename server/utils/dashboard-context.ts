@@ -11,23 +11,8 @@ import { d1JsonStringSet } from '~/server/db/d1-limits'
 import { assertMemberSiteAccess, isOrganizationWideRole, memberAccessPrincipal, resolveUserOrganization, type ResolvedMembership } from '~/server/utils/member-access'
 import { getOrganizationPlan } from '~/server/utils/billing-access'
 
-function safeJsonParse(value: string): unknown {
-  return JSON.parse(value)
-}
+import { parsePostalAddress } from '~/utils/postal-address'
 
-// business_locations.address is written exclusively as { addressLines: string[] }
-// (see normalizeAddressLines in location-management.ts) — this guards against
-// malformed/legacy rows that predate that normalization rather than trusting an
-// unchecked cast, which would otherwise silently hand callers a shape that
-// doesn't match what they expect from the address contract.
-function parseLocationAddress(value: string | null): { addressLines: string[] } | null {
-  if (!value) return null
-  const parsed = safeJsonParse(value)
-  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('Stored location address is invalid')
-  const addressLines = (parsed as Record<string, unknown>).addressLines
-  if (!Array.isArray(addressLines) || !addressLines.every(line => typeof line === 'string')) throw new Error('Stored location address lines are invalid')
-  return { addressLines }
-}
 
 export interface DashboardOrganizationRow extends ResolvedMembership {
   id: string
@@ -161,7 +146,6 @@ export interface DashboardLocationRow {
   slug: string
   title: string
   status: string
-  city: string | null
   address: string | null
   media: Array<{ asset_id: string; slot: 'hero'; public_url: string; thumbnail_url: string | null; kind: string | null }>
   // Same contract as DashboardSiteRow.feature_overrides, one scope down — the delta is applied
@@ -180,8 +164,6 @@ export interface DashboardLocationContextRow {
   slug: string
   title: string
   address: string | null
-  city: string | null
-  neighborhood: string | null
   phone: string | null
   email: string | null
   website_url: string | null
@@ -532,7 +514,7 @@ export async function listDashboardLocations(
   }>(db, `
     SELECT business_locations.id, business_locations.slug, business_locations.title,
            business_locations.status,
-           business_locations.city, business_locations.address, business_locations.feature_overrides,
+           business_locations.address, business_locations.feature_overrides,
            ${organizationScoped ? `sites.id AS parent_site_id, sites.brand_name AS parent_site_name, sites.subdomain AS parent_site_slug,` : ''}
            ma_hero.id AS hero_asset_id,
            ma_hero.kind AS hero_kind,
@@ -582,8 +564,7 @@ export async function listDashboardLocations(
       slug: location.slug,
       title: location.title,
       status: location.status,
-      city: location.city,
-      address: parseLocationAddress(location.address),
+      address: parsePostalAddress(location.address),
       feature_overrides: location.feature_overrides,
       media: ownerMedia,
       social_image: resolveSocialImageFromMedia(ownerMedia),
