@@ -31,8 +31,12 @@ function sections(source, name) {
   return ranges
 }
 
-function hasInSection(source, name, text) {
-  return sections(source, name).some(section => typeof text === 'string' ? section.includes(text) : text.test(section))
+// A TOML key is only declared if a whole line assigns it. Substring matching
+// reads a commented-out or longer key as the real thing.
+function declares(source, name, key, value) {
+  const literal = value.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`)
+  const assignment = new RegExp(String.raw`^[ \t]*${key}[ \t]*=[ \t]*${literal}[ \t]*(?:#.*)?$`, 'm')
+  return sections(source, name).some(section => assignment.test(section))
 }
 
 const wranglerToml = await readFile(path.resolve(import.meta.dirname, '..', 'wrangler.toml'), 'utf8')
@@ -42,21 +46,21 @@ for (const config of CONFIGS) {
   const bindingSection = `${config.prefix}durable_objects.bindings`
   const migrationSection = `${config.prefix}migrations`
 
-  if (hasInSection(wranglerToml, bindingSection, 'class_name = "GuestInboxHubObject"')) {
+  if (declares(wranglerToml, bindingSection, 'class_name', '"GuestInboxHubObject"')) {
     pass(`${config.label} hub binding`)
   }
   else {
     fail(`${config.label} hub binding missing`)
   }
 
-  if (hasInSection(wranglerToml, migrationSection, 'new_sqlite_classes = ["GuestThreadCommandObject", "GuestInboxHubObject"]')) {
+  if (declares(wranglerToml, migrationSection, 'new_sqlite_classes', '["GuestThreadCommandObject", "GuestInboxHubObject"]')) {
     pass(`${config.label} historical migration`)
   }
   else {
     fail(`${config.label} historical migration changed`)
   }
 
-  if (hasInSection(wranglerToml, migrationSection, /^[ \t]*deleted_classes[ \t]*=[ \t]*\["GuestThreadCommandObject"\][ \t]*(?:#.*)?$/m)) {
+  if (declares(wranglerToml, migrationSection, 'deleted_classes', '["GuestThreadCommandObject"]')) {
     pass(`${config.label} command namespace lifecycle`)
   }
   else {
