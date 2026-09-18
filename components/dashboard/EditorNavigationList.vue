@@ -13,14 +13,13 @@
       -->
       <div v-if="variant === 'cards'" class="space-y-3">
         <component
-          :is="item.to ? NuxtLink : 'button'"
+          :is="item.to ? NuxtLink : 'div'"
           v-for="item in group.items"
           :key="item.id"
-          v-bind="item.to ? { to: item.to } : { type: 'button' }"
+          v-bind="item.to ? { to: item.to } : {}"
           class="block w-full rounded-2xl bg-elevated p-5 text-left transition-colors hover:bg-accented focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
           :class="item.id === activeItem ? 'ring-2 ring-primary' : ''"
           :aria-current="item.id === activeItem ? 'page' : undefined"
-          @click="item.to ? undefined : $emit('select', item.id)"
         >
           <span class="block text-[15px] font-semibold text-highlighted">{{ item.label }}</span>
           <span v-if="item.summary" class="mt-1 line-clamp-2 block text-sm text-muted">{{ item.summary }}</span>
@@ -50,17 +49,17 @@
         :ui="{ body: 'p-0! sm:p-0!' }"
       >
         <component
-          :is="item.to ? NuxtLink : 'button'"
+          :is="item.to ? NuxtLink : 'div'"
           v-for="(item, index) in group.items"
           :key="item.id"
-          v-bind="item.to ? { to: item.to } : { type: 'button' }"
-          class="group flex min-h-20 w-full items-center gap-4 text-left px-5 py-4 transition-colors hover:bg-elevated focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-primary"
+          v-bind="item.to ? { to: item.to } : {}"
+          class="group flex min-h-20 w-full items-center gap-4 text-left px-5 py-4 transition-colors focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-primary"
           :class="[
             index > 0 ? 'border-t border-default' : '',
             item.id === activeItem ? 'bg-elevated' : '',
+            item.to ? 'hover:bg-elevated' : '',
           ]"
           :aria-current="item.id === activeItem ? 'page' : undefined"
-          @click="item.to ? undefined : $emit('select', item.id)"
         >
           <span class="min-w-0 flex-1">
             <span class="block font-semibold text-highlighted">{{ item.label }}</span>
@@ -69,6 +68,7 @@
               class="mt-1 line-clamp-2 block text-sm"
               :class="item.placeholder ? 'italic text-dimmed' : 'text-muted'"
             >{{ item.summary }}</span>
+
 
             <!--
               The share card's own proportions, so the crop the tenant is
@@ -94,7 +94,18 @@
               </span>
             </span>
           </span>
-          <UIcon name="i-lucide-chevron-right" class="size-5 shrink-0 text-muted transition-transform group-hover:translate-x-0.5" />
+          <!--
+            A row that opens a level gets the chevron; a row that acts carries
+            the control that performs the action instead.
+          -->
+          <UButton
+            v-if="item.action"
+            variant="link"
+            color="neutral"
+            class="shrink-0"
+            @click="$emit('act', item.id)"
+          >{{ item.action.label }}</UButton>
+          <UIcon v-else-if="item.to" name="i-lucide-chevron-right" class="size-5 shrink-0 text-muted transition-transform group-hover:translate-x-0.5" />
         </component>
       </UCard>
     </section>
@@ -110,9 +121,9 @@ export interface EditorNavigationItem {
   summary?: string
   icon?: string
   /**
-   * Where the row goes. Omitted where the row opens a sheet in place — a Move
-   * flow changes which parent a record belongs to rather than pushing into a
-   * deeper editor.
+   * Where the row goes. A row with no `to` and no `action` states a value and
+   * does nothing — the Google connection is read-only here — so it renders
+   * inert rather than as a control that looks clickable and is not.
    */
   to?: string
   /** Renders the summary as absent rather than as a value. */
@@ -126,6 +137,13 @@ export interface EditorNavigationItem {
    * value exists; the card tells them how it crops and what it sits next to.
    */
   card?: { image: string | null; title: string; description: string | null; empty: string }
+  /**
+   * A row that acts on the session rather than opening anything — Log out. It
+   * is not a level of the chain, so it takes no chevron and carries its own
+   * control, and the id is emitted through `act`. A row that goes somewhere
+   * uses `to` and gets the chevron like any other.
+   */
+  action?: { label: string }
 }
 
 export interface EditorNavigationGroup {
@@ -142,7 +160,7 @@ withDefaults(defineProps<{
 }>(), { variant: 'rows' })
 
 defineEmits<{
-  /** Emitted by a row with no `to`, carrying the item id. */
-  select: [id: string]
+  /** Emitted by a session action row's control, carrying the item id. */
+  act: [id: string]
 }>()
 </script>

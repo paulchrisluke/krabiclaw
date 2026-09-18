@@ -51,7 +51,13 @@ function runWrangler(args, { json = false } = {}) {
     stdio: json ? ['ignore', 'pipe', 'inherit'] : 'inherit',
   })
   if (result.error) throw result.error
-  if (result.status !== 0) throw new Error(`Wrangler failed (${args.join(' ')})`)
+  if (result.status !== 0) {
+    // With --json wrangler writes its error to stdout, which is piped here;
+    // without the text a failed reset in CI reads as "Wrangler failed" and
+    // nothing else (three E2E runs on 2026-09-13).
+    const detail = json && result.stdout ? `\n${result.stdout.trim()}` : ''
+    throw new Error(`Wrangler failed (${args.join(' ')})${detail}`)
+  }
   if (!json) return undefined
   try {
     return JSON.parse(result.stdout)

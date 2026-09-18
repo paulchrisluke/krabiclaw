@@ -7,7 +7,6 @@ import { parsePhoneOrThrow } from '~/utils/phone'
 import { getGuestRequest, requestSummary } from '~/server/domain/requests'
 import { updateThreadProjectionIfLatestEntry } from '~/server/domain/guest-threads/repository'
 import { appendEntry } from '~/server/domain/guest-threads/entries'
-import { nextConversationState } from '~/server/domain/guest-threads/state-machine'
 import { publishGuestInboxThreadEvent } from '~/server/cloudflare/guest-inbox-events'
 import { notifyGuestThreadReply } from '~/server/utils/notifications'
 
@@ -42,8 +41,7 @@ export default defineHandler(async (event) => {
   if (!thread) throw new Error('Submission not found')
   const entry = await appendEntry(db, {
     threadId: thread.id, kind: 'message', actorKind: 'guest', channel: 'whatsapp', body: text, dedupeKey: `whatsapp:${messageId}`, })
-  const conversationState = nextConversationState(thread.conversation_state, { type: 'inbound_guest_message' })
-  await updateThreadProjectionIfLatestEntry(db, thread.id, entry.id, { conversationState })
+  await updateThreadProjectionIfLatestEntry(db, thread.id, entry.id, { conversationState: 'needs_attention' })
 
   const source = thread
   if (source) {

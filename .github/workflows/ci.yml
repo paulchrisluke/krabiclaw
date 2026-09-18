@@ -1,12 +1,12 @@
 name: CI
 
-# Launch hold and required work: https://github.com/paulchrisluke/krabiclaw/pull/864#issuecomment-5572050864
-# Drafts are implementation batches; ready_for_review starts qualification.
+# Drafts run the static Checks; the preview qualification starts at
+# ready_for_review.
 
 on:
   pull_request:
     branches: [main, staging]
-    types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
+    types: [opened, synchronize, reopened, ready_for_review]
   push:
     branches: [main, staging]
 
@@ -20,10 +20,10 @@ concurrency:
 jobs:
   typecheck:
     name: Checks
+    # Drafts run Checks; only the preview qualification below waits for ready.
     if: >-
       github.event_name == 'push'
-      || (github.event.pull_request.draft == false
-          && !(github.base_ref == 'main' && github.head_ref == 'staging'))
+      || !(github.base_ref == 'main' && github.head_ref == 'staging')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -52,216 +52,13 @@ jobs:
       - run: yarn lint:schema-drift
       - run: yarn test:migrations
 
-  e2e-plan:
-    name: Plan affected browser coverage
-    if: >-
-      github.event_name == 'pull_request'
-      && github.event.pull_request.draft == false
-      && !(github.base_ref == 'main' && github.head_ref == 'staging')
-    runs-on: ubuntu-latest
-    outputs:
-      run_preview: ${{ steps.plan.outputs.run_preview }}
-      scope: ${{ steps.plan.outputs.scope }}
-      groups: ${{ steps.plan.outputs.groups }}
-      specs: ${{ steps.plan.outputs.specs }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          persist-credentials: false
-          fetch-depth: 0
-      - name: Select coverage from changed files
-        id: plan
-        env:
-          E2E_BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
-          E2E_HEAD_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
-        run: node scripts/select-preview-e2e.mjs --github-output "$GITHUB_OUTPUT"
-
-  preview-build:
-    name: Build preview Worker
-    if: >-
-      github.event_name == 'pull_request'
-      && github.event.pull_request.draft == false
-      && github.event.pull_request.head.repo.full_name == github.repository
-      && !(github.base_ref == 'main' && github.head_ref == 'staging')
-      && needs.e2e-plan.outputs.run_preview == 'true'
-    needs: e2e-plan
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    env:
-      NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${{ secrets.NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY }}
-      NUXT_PUBLIC_PLATFORM_DOMAIN: https://preview.krabiclaw.com
-      NUXT_PUBLIC_FREE_SITE_DOMAIN: https://krabiclaw.com
-      NUXT_PUBLIC_APP_NAME: KrabiClaw
-      NUXT_PUBLIC_SITE_URL: https://preview.krabiclaw.com
-      NUXT_PUBLIC_HELP_URL: https://preview.krabiclaw.com/help
-      NUXT_PUBLIC_WHATSAPP_NUMBER: "16197200000"
-      BETTER_AUTH_URL: https://preview.krabiclaw.com
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
-        with:
-          node-version: "24.18.1"
-      - run: corepack enable
-      - name: Restore Yarn package cache
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
-        with:
-          path: ~/.yarn/berry/cache
-          key: yarn-${{ runner.os }}-${{ hashFiles('yarn.lock') }}
-          restore-keys: yarn-${{ runner.os }}-
-      - run: corepack yarn install --immutable
-      - run: yarn build
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
-        with:
-          name: preview-worker-${{ github.sha }}
-          path: .output
-          include-hidden-files: true
-          retention-days: 2
-
-  e2e-representative:
-    name: E2E representative tests (preview only)
-    if: >-
-      github.event_name == 'pull_request'
-      && github.event.pull_request.draft == false
-      && github.event.pull_request.head.repo.full_name == github.repository
-      && !(github.base_ref == 'main' && github.head_ref == 'staging')
-      && needs.e2e-plan.outputs.run_preview == 'true'
-    needs: [typecheck, e2e-plan, preview-build]
-    runs-on: ubuntu-latest
-    timeout-minutes: 180
-    permissions:
-      contents: read
-      actions: read
-    env:
-      STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY_TEST }}
-      STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET_TEST }}
-      NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${{ secrets.NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY }}
-      NUXT_PUBLIC_PLATFORM_DOMAIN: https://preview.krabiclaw.com
-      NUXT_PUBLIC_FREE_SITE_DOMAIN: https://krabiclaw.com
-      NUXT_PUBLIC_APP_NAME: KrabiClaw
-      NUXT_PUBLIC_SITE_URL: https://preview.krabiclaw.com
-      NUXT_PUBLIC_HELP_URL: https://preview.krabiclaw.com/help
-      NUXT_PUBLIC_WHATSAPP_NUMBER: "16197200000"
-      BETTER_AUTH_URL: https://preview.krabiclaw.com
-      E2E_ALLOW_DEV_ROUTES: "true"
-      E2E_DEV_ROUTE_SECRET: ${{ secrets.E2E_DEV_ROUTE_SECRET_PREVIEW }}
-      MCP_CREDENTIAL_LOGIN: "1"
-      MCP_CIMD_CLIENT_URL: https://preview.krabiclaw.com/api/auth/oauth2/test-client-metadata
-      MCP_PRIVATE_CIMD_CLIENT_URL: https://preview.krabiclaw.com/api/auth/oauth2/test-private-client-metadata
-      PLAYWRIGHT_PREVIEW_URL: https://preview.krabiclaw.com
-      PLAYWRIGHT_WORKERS: "1"
-      E2E_SELECTION_SCOPE: ${{ needs.e2e-plan.outputs.scope }}
-      E2E_SELECTED_SPECS: ${{ needs.e2e-plan.outputs.specs }}
-    steps:
-      # preview.krabiclaw.com is one deployment, so E2E runs serialize on it.
-      # A GitHub concurrency group holds one running and one pending job and
-      # cancels the pending one when a third arrives, which evicted E2E every
-      # time three PRs pushed inside a window. This queue is FIFO by run id and
-      # unbounded: wait while any older CI run still has its E2E job unfinished.
-      - name: Wait for the shared preview deployment
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RUN_ID: ${{ github.run_id }}
-          JOB_NAME: E2E representative tests (preview only)
-        run: |
-          set -euo pipefail
-          deadline=$((SECONDS + 100 * 60))
-          while :; do
-            busy=""
-            for run_status in queued in_progress waiting pending requested; do
-              older=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs?status=${run_status}&per_page=100" \
-                --jq ".workflow_runs[] | select(.name == \"${GITHUB_WORKFLOW}\" and .id < ${RUN_ID}) | .id")
-              for id in $older; do
-                state=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${id}/jobs?per_page=100" \
-                  --jq "[.jobs[] | select(.name == \"${JOB_NAME}\")] | if length == 0 then \"absent\" else .[0].status end")
-                if [ "$state" != "completed" ]; then
-                  busy="${busy} ${id}(${state})"
-                fi
-              done
-            done
-            if [ -z "$busy" ]; then
-              echo "Preview is free."
-              break
-            fi
-            if [ "$SECONDS" -ge "$deadline" ]; then
-              echo "::error::Gave up after 100 minutes waiting on older runs:${busy}"
-              exit 1
-            fi
-            echo "Waiting on older runs:${busy}"
-            sleep 30
-          done
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
-        with:
-          node-version: "24.18.1"
-      - run: corepack enable
-      - name: Restore Yarn package cache
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
-        with:
-          path: ~/.yarn/berry/cache
-          key: yarn-${{ runner.os }}-${{ hashFiles('yarn.lock') }}
-          restore-keys: yarn-${{ runner.os }}-
-      - run: corepack yarn install --immutable
-      - run: corepack yarn playwright install chromium
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
-        with:
-          name: preview-worker-${{ github.sha }}
-          path: .output
-      - name: Generate ephemeral test credentials
-        shell: bash
-        run: |
-          auth_secret="$(openssl rand -base64 32)"
-          password="$(openssl rand -hex 32)Aa1!"
-          echo "::add-mask::$auth_secret"
-          echo "::add-mask::$password"
-          {
-            echo "BETTER_AUTH_SECRET=$auth_secret"
-            echo "E2E_TEST_PASSWORD=$password"
-          } >> "$GITHUB_ENV"
-      - name: Check pre-provisioned preview secrets
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: |
-          corepack yarn wrangler secret list --env preview --format json > "$RUNNER_TEMP/preview-secrets.json"
-          for secret_name in STRIPE_SECRET_KEY STRIPE_WEBHOOK_SECRET PREVIEW_SECRET E2E_DEV_ROUTE_SECRET EMAIL_REPLY_SECRET; do
-            jq -e --arg name "$secret_name" '.. | objects | select((.name? // .key?) == $name)' "$RUNNER_TEMP/preview-secrets.json" >/dev/null
-          done
-      - name: Reset and migrate preview database
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: yarn db:reset:preview --apply --confirm-configured-preview
-      - name: Deploy preview Worker
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: corepack yarn wrangler deploy --env preview --strict
-      - name: Restore preview from a production snapshot
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: yarn db:pull:preview
-      - name: Provision preview Better Auth fixtures
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: node --experimental-strip-types scripts/provision-development-auth.ts --preview
-      - name: Verify preview fixtures
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: yarn fixtures:verify:preview
-      - name: Run tenant public and affected preview coverage
-        run: yarn test:e2e:preview:selected
-
   e2e-staging:
     name: Deploy and test staging
     if: github.event_name == 'push' && github.ref == 'refs/heads/staging'
-    needs: typecheck
+    # Staging is the first deployed validation: a pull request runs Checks and
+    # nothing else. A direct push to staging is the normal way a hotfix ships,
+    # so Checks gates this exact SHA before the deploy.
+    needs: [typecheck]
     runs-on: ubuntu-latest
     timeout-minutes: 90
     environment: staging
@@ -302,6 +99,11 @@ jobs:
       - run: corepack yarn playwright install --with-deps chromium
       - name: Build staging Worker
         run: yarn build
+      - name: Capture Nuxt build ID
+        id: nuxt_build
+        run: |
+          build_id="$(node -p 'JSON.parse(require("node:fs").readFileSync(".output/public/_nuxt/builds/latest.json", "utf8")).id')"
+          printf 'id=%s\n' "$build_id" >> "$GITHUB_OUTPUT"
       # Migrations run before the deploy. A migration is backward compatible with the
       # Worker already running -- contractions ship a release after the code that
       # stopped reading the column -- so the old Worker keeps serving against the new
@@ -328,6 +130,18 @@ jobs:
         run: curl --fail-with-body --retry 5 --retry-all-errors --retry-delay 5 "https://staging.krabiclaw.com/api/public/search?q=booking&type=all&surface=public"
       - name: Run read-only tenant MCP discovery smoke
         run: yarn test:mcp
+      # A Worker version reaches colos gradually. Until every colo serves the new
+      # version, one colo renders the page while another serves the assets, and the
+      # old build's chunks 404. Production already waits for this; staging did not,
+      # and its first run after a deploy failed on exactly that.
+      - name: Wait for staging assets to converge
+        env:
+          EXPECTED_NUXT_BUILD_ID: ${{ steps.nuxt_build.outputs.id }}
+        run: >-
+          node scripts/wait-for-nuxt-deployment.mjs
+          https://pottery-house-staging.krabiclaw.com
+          https://kikuzuki-krabi-thailand-staging.krabiclaw.com
+          https://ncls-staging.krabiclaw.com
       - name: Run read-only tenant rendering
         run: yarn test:e2e:tenant-rendering
       - name: Upload staging Playwright report
@@ -344,7 +158,7 @@ jobs:
   deploy-production:
     name: Deploy production
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: typecheck
+    needs: [typecheck]
     runs-on: ubuntu-latest
     timeout-minutes: 45
     environment: production

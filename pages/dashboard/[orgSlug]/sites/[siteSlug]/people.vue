@@ -7,6 +7,8 @@
 
     <UInput v-model="search" icon="i-lucide-search" placeholder="Search by email" class="w-full max-w-md" />
 
+    <UAlert v-if="impersonateError" color="error" variant="soft" icon="i-lucide-circle-alert" :description="impersonateError" />
+
     <UAlert v-if="loadError" color="error" variant="soft" title="Could not load accounts" :description="loadError" />
 
     <div v-else-if="loading" class="space-y-2">
@@ -46,7 +48,7 @@ useSeoMeta({ title: 'People | KrabiClaw Dashboard', robots: 'noindex, nofollow' 
 
 interface PlatformUser { id: string; name: string | null; email: string; role?: string | null; banned?: boolean | null }
 
-const toast = useToast()
+const impersonateError = ref<string | null>(null)
 const { user: currentUser, refresh: refreshSession } = await useAuthSession()
 const currentUserId = computed(() => currentUser.value?.id ?? null)
 
@@ -75,7 +77,7 @@ async function loadUsers() {
     })
     if (result.error) throw new Error(result.error.message)
     if (requestId !== requestSequence) return
-    users.value = result.data.users.map(user => ({ id: user.id, name: user.name ?? null, email: user.email, role: user.role ?? null, banned: user.banned ?? null }))
+    users.value = result.data.users.map((user: { id: string, name?: string | null, email: string, role?: string | null, banned?: boolean | null }) => ({ id: user.id, name: user.name ?? null, email: user.email, role: user.role ?? null, banned: user.banned ?? null }))
     total.value = result.data.total
   } catch (error) {
     if (requestId !== requestSequence) return
@@ -87,13 +89,14 @@ async function loadUsers() {
 
 async function impersonate(userId: string) {
   impersonatingUserId.value = userId
+  impersonateError.value = null
   try {
     const result = await authClient.admin.impersonateUser({ userId })
     if (result.error) throw new Error(result.error.message)
     await refreshSession()
     await navigateTo('/dashboard')
   } catch (error) {
-    toast.add({ title: 'Failed to impersonate', description: error instanceof Error ? error.message : undefined, color: 'error' })
+    impersonateError.value = error instanceof Error ? error.message : 'Failed to impersonate'
   } finally {
     impersonatingUserId.value = null
   }

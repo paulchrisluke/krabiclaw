@@ -1,0 +1,6 @@
+{
+  "platform-app-entry": "surfaces/platform-app.css",
+  "platform-entry": "surfaces/platform.css",
+  "saya": "surfaces/saya.css",
+  "blawby": "surfaces/blawby.css"
+}

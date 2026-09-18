@@ -8,7 +8,7 @@ export default defineHandler(async (event) => {
   const { env, db, organization } = await getDashboardContext(event, { requireSite: false })
   const today = await listTodayAgenda(db, organization.id, {
     organizationSlug: organization.slug,
-    principal: { env, memberId: organization.memberId, role: organization.role },
+    principal: { env, membership: organization },
   })
   return jsonResponse(finalizeRequestMetrics(event, 'dashboard-today', today))
 })

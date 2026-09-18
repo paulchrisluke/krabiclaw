@@ -1,7 +1,7 @@
 <template>
-  <main v-if="post" class="min-h-screen bg-default text-default">
+  <div v-if="post" class="min-h-screen bg-default text-default">
     <SayaPostDetail :post="post" :brand="postBrand" />
-  </main>
+  </div>
 </template>
 
 <script setup lang="ts">
@@ -79,7 +79,7 @@ const { data, error } = await useAsyncData(
       const env = cloudflareEnv(requestEvent)
       const db = env.DB
       if (!db) throw createError({ statusCode: 500, statusMessage: 'Database not available' })
-      post = await getPublishedPostByPublicRoute(db, siteId, slug.value, locale.value) as PublicPost | null
+      post = await getPublishedPostByPublicRoute(env, db, siteId, slug.value, locale.value) as PublicPost | null
     } else {
       const payload = await publicApiRequest<{ post: PublicPost }>(
         `/api/public/sites/${siteId}/posts/${encodeURIComponent(slug.value)}`,

@@ -4,7 +4,7 @@ import { cloudflareEnv, jsonResponse, rethrowHttpError } from '~/server/utils/ap
 import { getAuthSession } from '~/server/utils/auth'
 import { deleteMediaAsset } from '~/server/utils/media-asset-manager'
 import { anonymizeId } from '~/server/utils/platform-telemetry'
-import { assertResourceAccess } from '~/server/utils/member-access'
+import { assertResourceAccess, memberAccessPrincipal } from '~/server/utils/member-access'
 import { loadMemberSiteRow } from '~/server/utils/location-access'
 import { queryFirst } from '~/server/db'
 
@@ -26,7 +26,7 @@ export default defineHandler(async (event) => {
   const session = await getAuthSession(event, env)
   if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
-  const site = await loadMemberSiteRow(db, env, siteId, session.user.id)
+  const site = await loadMemberSiteRow(event, db, env, siteId, session.user.id)
   if (!site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
 
   const asset = await queryFirst<MediaAssetSiteRow>(db, `SELECT id, site_id, organization_id FROM media_assets WHERE id = ? LIMIT 1`, [assetId]
@@ -35,9 +35,7 @@ export default defineHandler(async (event) => {
   if (asset.site_id !== siteId) return jsonResponse({ error: 'Forbidden' }, { status: 403 })
 
   try {
-    await assertResourceAccess(db, {
-      env,
-      memberId: site.member_id, role: site.member_role, organizationId: site.organization_id, siteId, resourceLocationId: null, })
+    await assertResourceAccess(db, { ...memberAccessPrincipal(site.membership, { env, siteId, event }), resourceLocationId: null })
 
     await deleteMediaAsset(db, env, assetId, siteId, session.user.id)
     return jsonResponse({ deleted: true })

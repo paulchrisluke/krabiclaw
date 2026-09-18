@@ -10,46 +10,26 @@ type EditorData = Record<string, unknown>
 
 export const FAQ_SOURCE_OPTIONS = FAQ_BLOCK_SOURCES.map(value => ({ label: FAQ_BLOCK_SOURCE_LABELS[value], value }))
 
+/**
+ * A new block's starting data, derived from what its fields declare.
+ *
+ * This was a hand-written switch over every type — a fourth copy of the field
+ * list, which is how `location_grid` came to seed a `source` key the registry
+ * never declared.
+ */
 export function createTenantPageEditorData(type: TenantPageBlockType): EditorData {
-  switch (type) {
-    case 'heading':
-      return { text: '', level: 2 }
-    case 'markdown':
-      return { markdown: '', editor_mode: 'rich' }
-    case 'image':
-      return { caption: '' }
-    case 'gallery':
-      return {}
-    case 'faq':
-      return { title: '', source: 'page_qa' }
-    case 'how_to':
-      return { title: '', steps: [{ name: '', text: '' }] }
-    case 'divider':
-      return {}
-    case 'cta':
-    case 'contact_cta':
-    case 'booking_cta':
-      return { title: '', description: '', label: '', url: '' }
-    case 'callout':
-      return { title: '', body: '', tone: 'neutral', buttons: [] }
-    case 'hero':
-      return { eyebrow: '', title: '', subtitle: '', cta_label: '', cta_url: '' }
-    case 'button_group':
-      return { buttons: [{ label: '', url: '' }] }
-    case 'feature_grid':
-    case 'testimonial_grid':
-      return { title: '', source: 'manual', items: [] }
-    case 'team_grid':
-      return { title: '', description: '', items: [{ first_name: '', last_name: '', title: '', bio: '' }] }
-    case 'page_grid':
-      return { title: '', page_ids: [] }
-    case 'product_grid':
-      return { title: '', collection_id: '', product_ids: [] }
-    case 'location_grid':
-      return { title: '', source: 'manual', items: [] }
-    case 'donation_choices':
-      return { title: '', description: '', destination: '', tiers: [{ amount: '', title: '', description: '' }] }
+  const fields = TENANT_PAGE_BLOCK_REGISTRY[type]?.fields ?? {}
+  const data: EditorData = {}
+  for (const [key, field] of Object.entries(fields)) {
+    // A block's own column and its media placements are not its data.
+    if (field.store === 'level' || field.kind === 'media' || field.kind === 'calculator') continue
+    if (field.kind === 'list') data[key] = []
+    else if (field.kind === 'reference') data[key] = key.endsWith('_ids') ? [] : ''
+    else if (field.default !== undefined) data[key] = field.default
+    else if (field.kind === 'enum') continue
+    else data[key] = ''
   }
+  return data
 }
 
 function text(value: unknown): string {
@@ -98,6 +78,8 @@ function validateGridItems(errors: string[], data: EditorData, label = 'Item') {
   })
 }
 
+const DYNAMIC_GRID_SOURCES = new Set(['site_posts', 'site_reviews', 'calculator', 'billing_plans'])
+
 export function validateTenantPageBlock(block: TenantPageBlock): string[] {
   const errors: string[] = []
   const definition = TENANT_PAGE_BLOCK_REGISTRY[block.type]
@@ -118,17 +100,10 @@ export function validateTenantPageBlock(block: TenantPageBlock): string[] {
       if (!text(data.markdown)) addError(errors, 'Rich text is empty.')
       break
     case 'image':
-      if (!block.media.some(item => item.slot === 'media')) addError(errors, 'Select a media asset.')
-      break
     case 'gallery':
-      if (!block.media.some(item => item.slot === 'gallery')) addError(errors, 'Add at least one gallery image.')
       break
     case 'faq':
-      if (FAQ_BLOCK_SOURCES.some(source => source === text(data.source))) break
-      objectArray(data, 'items').forEach((item, index) => {
-        if (!itemText(item, 'title', ['question'])) addError(errors, `FAQ item ${index + 1} needs a question.`)
-        if (!itemText(item, 'description', ['answer'])) addError(errors, `FAQ item ${index + 1} needs an answer.`)
-      })
+    case 'testimonial_grid':
       break
     case 'cta':
     case 'contact_cta':
@@ -145,11 +120,12 @@ export function validateTenantPageBlock(block: TenantPageBlock): string[] {
       validateButtons(errors, data, 'Button')
       break
     case 'feature_grid':
-    case 'testimonial_grid':
     case 'page_grid':
     case 'product_grid':
     case 'location_grid':
-      if (text(data.source) !== 'site_posts' && text(data.source) !== 'site_reviews' && text(data.source) !== 'calculator') {
+      // A grid that names a source renders what that source returns; only a
+      // grid that authors its own rows has rows to validate.
+      if (!DYNAMIC_GRID_SOURCES.has(text(data.source))) {
         validateGridItems(errors, data, 'Grid item')
       }
       // A reference grid names what it shows. There is no "everything on the

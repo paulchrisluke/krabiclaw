@@ -43,11 +43,14 @@
         />
 
         <div v-if="sites.length === 0" class="rounded-2xl border border-default bg-elevated px-6 py-20 text-center">
-          <div class="mx-auto flex size-14 items-center justify-center rounded-full bg-muted">
-            <UIcon name="i-lucide-globe" class="size-6 text-muted" />
-          </div>
-          <h2 class="mt-5 text-base font-semibold text-highlighted">No sites available</h2>
-          <p class="mt-2 text-sm text-muted">Your organization’s sites will appear here.</p>
+          <img
+            src="https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/de8b203b-a120-43c9-7ff2-5ebe40b66800/thumbnail"
+            alt=""
+            aria-hidden="true"
+            class="mx-auto size-28 object-contain"
+          >
+          <h2 class="mt-6 text-base font-semibold text-highlighted">No sites available</h2>
+          <p class="mt-1 text-sm text-muted">Your organization’s sites will appear here.</p>
           <UButton
             v-if="canManageOrganization"
             label="Add your first site"
@@ -66,6 +69,41 @@
           missing-image-label="No logo"
           missing-image-hint="Add a logo in site settings."
         />
+
+        <!-- Locations Section -->
+        <div class="space-y-6">
+          <h3 class="text-lg font-semibold text-highlighted">Locations</h3>
+          
+          <div v-if="organizationLocationsPending" class="grid grid-cols-[repeat(auto-fill,minmax(min(100%,18rem),1fr))] gap-6">
+            <USkeleton v-for="i in 2" :key="i" class="aspect-[20/19] rounded-2xl" />
+          </div>
+
+          <UAlert
+            v-else-if="organizationLocationsError"
+            color="error"
+            variant="soft"
+            title="Could not load locations"
+            :description="organizationLocationsError"
+          />
+
+          <div
+            v-else-if="organizationLocations.length === 0"
+            class="rounded-2xl border border-default bg-elevated px-6 py-20 text-center"
+          >
+            <div class="mx-auto flex size-14 items-center justify-center rounded-full bg-muted">
+              <UIcon name="i-lucide-map-pin" class="size-6 text-muted" />
+            </div>
+            <h2 class="mt-5 text-base font-semibold text-highlighted">No locations available</h2>
+            <p class="mt-1 text-sm text-muted">Your organization's locations will appear here.</p>
+          </div>
+
+          <DashboardSiteLocationSelector
+            v-else
+            :items="locationSelectorItems"
+            missing-image-label="No hero photo"
+            missing-image-hint="Add one under this location's photos."
+          />
+        </div>
       </div>
     </template>
   </UDashboardPanel>
@@ -118,7 +156,10 @@
 import type { DropdownMenuItem } from '@nuxt/ui'
 import DashboardSiteLocationSelector, { type SiteLocationSelectorItem } from '~/components/dashboard/SiteLocationSelector.vue'
 import { useOnboardingDraft } from '~/composables/useOnboardingDraft'
+import { dashboardFetch } from '~/composables/dashboardFetch'
+import type { DashboardLocation } from '~/composables/useDashboardSite'
 import { tenantSiteOrigin } from '~/utils/tenant-site-origin'
+import { onMounted, ref } from 'vue'
 
 useSeoMeta({ title: 'Your sites | KrabiClaw', robots: 'noindex, nofollow' })
 
@@ -130,6 +171,9 @@ const draft = useOnboardingDraft()
 const pending = dashboard.pending
 
 const sites = computed(() => dashboard.sites.value)
+const organizationLocations = ref<DashboardLocation[]>([])
+const organizationLocationsPending = ref(false)
+const organizationLocationsError = ref<string | null>(null)
 type Site = (typeof sites.value)[number]
 const canManageOrganization = computed(() => ['owner', 'admin'].includes(dashboard.organization.value?.role ?? ''))
 
@@ -173,6 +217,38 @@ const selectorItems = computed<SiteLocationSelectorItem[]>(() => sites.value.map
  */
 function siteLabel(site: Site) {
   return site.brand_name ?? 'Unnamed site'
+}
+
+/**
+ * Location selector items for the organization directory with parent site context
+ */
+const locationSelectorItems = computed<SiteLocationSelectorItem[]>(() => organizationLocations.value.map(location => ({
+  id: location.id,
+  label: location.title,
+  imageUrl: heroUrl(location),
+  imageFit: 'cover' as const,
+  eyebrow: '',
+  summary: locationAddressSummary(location),
+  parentSiteName: location.parent_site_name ?? undefined,
+  to: locationDashboardPath(location),
+})))
+
+function heroUrl(location: typeof organizationLocations.value[number]): string | null {
+  const hero = location.media.find(item => item.slot === 'hero')
+  if (!hero) return null
+  return hero.kind === 'video' ? hero.thumbnail_url : hero.public_url
+}
+
+function locationAddressSummary(location: typeof organizationLocations.value[number]): string {
+  const lines = location.address?.addressLines?.filter(line => line.trim()) ?? []
+  return lines.length ? lines.join(', ') : 'Address not set'
+}
+
+function locationDashboardPath(location: typeof organizationLocations.value[number]): string {
+  if (!location.parent_site_slug) {
+    throw createError({ statusCode: 500, statusMessage: `Location ${location.id} has no parent site slug` })
+  }
+  return `/dashboard/${orgSlug.value}/sites/${location.parent_site_slug}/locations/${location.slug}`
 }
 
 function verticalLabel(vertical: Site['vertical']) {
@@ -286,4 +362,39 @@ watch(() => sites.value.some(site => site.onboarding_status !== 'active'), async
     draftLookupError.value = cause instanceof Error ? cause.message : 'Something went wrong. Please try again.'
   }
 }, { immediate: true })
+
+let locationsRequestToken = 0
+
+async function loadLocations() {
+  const currentSlug = orgSlug.value
+  if (!currentSlug) return
+  const token = ++locationsRequestToken
+  organizationLocationsPending.value = true
+  organizationLocationsError.value = null
+  try {
+    const scope = { orgSlug: currentSlug }
+    const response = await dashboardFetch<{ success: true; locations: DashboardLocation[] }>('/api/dashboard/locations', scope, {
+      query: { organization: 'true' },
+      validate: (value): value is { success: true; locations: DashboardLocation[] } =>
+        typeof value === 'object' && value !== null && 'success' in value && (value as { success: unknown }).success === true && 'locations' in value && Array.isArray((value as { locations: unknown }).locations),
+    })
+    if (token !== locationsRequestToken || orgSlug.value !== currentSlug) return
+    organizationLocations.value = response.locations
+  } catch (error) {
+    if (token !== locationsRequestToken || orgSlug.value !== currentSlug) return
+    organizationLocationsError.value = error instanceof Error ? error.message : 'Failed to load locations'
+  } finally {
+    if (token === locationsRequestToken) {
+      organizationLocationsPending.value = false
+    }
+  }
+}
+
+onMounted(() => {
+  void loadLocations()
+})
+
+watch(orgSlug, () => {
+  void loadLocations()
+})
 </script>

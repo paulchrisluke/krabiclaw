@@ -10,14 +10,17 @@ import { isExperience, requireProductPresentation } from '~/utils/product-presen
 definePageMeta({ layout: 'saya' })
 const { isBlawby } = usePublicTemplate()
 if (isBlawby.value) throw createError({ statusCode: 404 })
-const { products, collections, locations, location, config, site } = await usePublicPageData({ lazy: false })
+const { products, collections, locations, location, config, site, data: pagePayload } = await usePublicPageData({ lazy: false })
 // What the merchant sells over the counter. Anything a guest books a seat on
 // is an Experience and has its own surface, so it is not listed twice.
 const goods = computed(() => products.value.filter(product => !isExperience(product)))
 // A surface with nothing on it is not a page: a studio that sells no
 // merchandise has no /products, rather than an indexable empty one. The
 // navigation hides it for the same reason.
-if (goods.value.length === 0) throw createError({ statusCode: 404 })
+// Only a loaded payload can say the catalog is empty. A navigation the router
+// has already left behind resolves with none at all, and answering that with
+// a 404 put an uncaught error on every guest who clicked twice quickly.
+if (pagePayload.value && goods.value.length === 0) throw createError({ statusCode: 404 })
 const currentLocation = location.value
 if (!currentLocation) throw createError({ statusCode: 404 })
 const brandName = site.value?.brand_name

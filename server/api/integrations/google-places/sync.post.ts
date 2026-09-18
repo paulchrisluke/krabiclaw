@@ -12,7 +12,7 @@ export default defineHandler(async (event) => {
 
   const { env, db, site } = await requireRequestedLocationAccess(event, locationId, body?.siteId)
 
-  if (!await hasSiteEntitlement(db, site.id, 'google_places')) {
+  if (!await hasSiteEntitlement(env, db, site.id, 'google_places')) {
     return jsonResponse({ error: 'Google Places sync requires a Growth plan or higher.' }, { status: 403 })
   }
 

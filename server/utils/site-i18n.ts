@@ -1,4 +1,5 @@
 import type { DbClient } from '~/server/db'
+import type { CloudflareEnv } from '~/server/utils/auth'
 import {
   assertExactCanonicalLocale,
   assertSiteLanguageEntitlement,
@@ -32,6 +33,7 @@ export async function getConfiguredSourceLocale(
 }
 
 export async function resolveSiteLocale(
+  env: CloudflareEnv,
   db: DbClient,
   site: { id: string; organization_id: string },
   requestedLocale: unknown,
@@ -40,7 +42,7 @@ export async function resolveSiteLocale(
   const requested = requestedLocale === undefined || requestedLocale === null || requestedLocale === ''
     ? sourceLocale
     : assertExactCanonicalLocale(requestedLocale)
-  const entitlement = await assertSiteLanguageEntitlement(db, site.organization_id, site.id, requested)
+  const entitlement = await assertSiteLanguageEntitlement(env, db, site.organization_id, site.id, requested)
   return {
     requestedLocale: requested,
     sourceLocale,

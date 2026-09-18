@@ -51,7 +51,13 @@
               <UIcon :name="item.icon" class="size-4" />
             </button>
           </div>
-        <RichTextEditor
+        <!--
+          Lazy: this is the only path from a public article to the rich-text
+          editor, and `editable` is false there. As a static import it still
+          shipped the whole TipTap graph — ~684 KB, roughly doubling the JS on
+          /blog, /docs and /article — to render nothing.
+        -->
+        <LazyRichTextEditor
           v-if="editable && block.type === 'markdown'"
           :model-value="textValue(block)"
           :mode="block.data.editor_mode === 'source' ? 'source' : 'rich'"

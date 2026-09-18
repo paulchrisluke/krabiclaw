@@ -29,8 +29,9 @@ interface PlacementAuthInput {
   organizationId: string
   siteId: string
   env: CloudflareEnv
-  memberId?: string
-  role?: MemberAccessPrincipal['role']
+  // Optional: the internal seeding paths have no caller to authorize. When it
+  // is present it is a resolved principal, never loose role/organization fields.
+  principal?: MemberAccessPrincipal
   placement: MediaPlacementKey
 }
 
@@ -98,15 +99,26 @@ async function requirePostMediaAllowed(db: DbClient, input: PlacementAuthInput):
 
 async function authorizePlacementWrite(db: DbClient, input: PlacementAuthInput): Promise<void> {
   const locationId = await requirePlacementOwner(db, input)
-  if (input.memberId && input.role) {
-    await assertResourceAccess(db, {
-      env: input.env,
-      memberId: input.memberId,
-      role: input.role,
-      organizationId: input.organizationId,
-      siteId: input.siteId,
-      resourceLocationId: locationId,
-    })
+  if (input.placement.owner_type === 'content_document' || input.placement.owner_type === 'content_block') {
+    const document = await queryFirst<{ kind: string }>(db,
+      input.placement.owner_type === 'content_document'
+        ? 'SELECT kind FROM content_documents WHERE id = ?'
+        : 'SELECT d.kind FROM content_blocks b JOIN content_documents d ON d.id = b.document_id WHERE b.id = ?',
+      [input.placement.owner_id])
+    if (document?.kind === 'qa') throw new HTTPError({ statusCode: 403, statusMessage: 'Q&A is read-only' })
+  }
+  if (input.principal) {
+    // The principal carries its own organization and site, and the write targets
+    // the ones on `input`. They are the same at every call site today, and this
+    // is what keeps it that way: authorizing one scope while writing to another
+    // is the whole failure this check exists to prevent.
+    if (
+      input.principal.organizationId !== input.organizationId
+      || input.principal.siteId !== input.siteId
+    ) {
+      throw new HTTPError({ statusCode: 403, statusMessage: 'Access denied' })
+    }
+    await assertResourceAccess(db, { ...input.principal, resourceLocationId: locationId })
   }
 }
 
@@ -142,8 +154,9 @@ export async function setSingleMediaPlacement(db: DbClient, input: {
   organizationId: string
   siteId: string
   env: CloudflareEnv
-  memberId?: string
-  role?: MemberAccessPrincipal['role']
+  // Optional: the internal seeding paths have no caller to authorize. When it
+  // is present it is a resolved principal, never loose role/organization fields.
+  principal?: MemberAccessPrincipal
   placement: MediaPlacementKey
   assetId: string | null
 }) {
@@ -203,8 +216,9 @@ export async function attachMediaPlacement(db: DbClient, input: {
   organizationId: string
   siteId: string
   env: CloudflareEnv
-  memberId?: string
-  role?: MemberAccessPrincipal['role']
+  // Optional: the internal seeding paths have no caller to authorize. When it
+  // is present it is a resolved principal, never loose role/organization fields.
+  principal?: MemberAccessPrincipal
   placement: MediaPlacementKey
   assetId: string
 }) {
@@ -270,8 +284,9 @@ export async function removeMediaPlacement(db: DbClient, input: {
   organizationId: string
   siteId: string
   env: CloudflareEnv
-  memberId?: string
-  role?: MemberAccessPrincipal['role']
+  // Optional: the internal seeding paths have no caller to authorize. When it
+  // is present it is a resolved principal, never loose role/organization fields.
+  principal?: MemberAccessPrincipal
   placement: MediaPlacementKey
   assetId: string
 }) {
@@ -316,8 +331,9 @@ export async function reorderMediaPlacements(db: DbClient, input: {
   organizationId: string
   siteId: string
   env: CloudflareEnv
-  memberId?: string
-  role?: MemberAccessPrincipal['role']
+  // Optional: the internal seeding paths have no caller to authorize. When it
+  // is present it is a resolved principal, never loose role/organization fields.
+  principal?: MemberAccessPrincipal
   placement: MediaPlacementKey
   moves: MediaPlacementMove[]
 }) {

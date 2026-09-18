@@ -11,11 +11,12 @@ export default defineHandler(async (event) => {
   if (!siteId || typeof path !== 'string') {
     throw createError({ statusCode: 400, statusMessage: 'Site ID and localized path are required' })
   }
-  const db = cloudflareEnv(event).db
+  const env = cloudflareEnv(event)
+  const db = env.db
   if (!db) throw createError({ statusCode: 503, statusMessage: 'Database unavailable' })
   const site = await queryFirst<{ organization_id: string }>(db, `
     SELECT organization_id FROM sites WHERE id = ? AND status = 'active' LIMIT 1
   `, [siteId])
   if (!site) throw createError({ statusCode: 404, statusMessage: 'Site not found' })
-  return { route: await resolveLocalizedPublicRoute(db, site.organization_id, siteId, path) }
+  return { route: await resolveLocalizedPublicRoute(env, db, site.organization_id, siteId, path) }
 })

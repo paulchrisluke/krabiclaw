@@ -1,7 +1,13 @@
 import { inject, onBeforeUnmount, onMounted, provide, ref, shallowRef, watch, type InjectionKey, type Ref } from 'vue'
 import { isDashboardInvalidation, type DashboardInvalidation } from '~/shared/dashboard-invalidations'
 
-export type DashboardInvalidationStatus = 'closed' | 'connecting' | 'open' | 'failed'
+/**
+ * `unsupported` is the local worker: the guest-inbox Durable Object is not bound
+ * there, so the socket can never open. Reporting that as `failed` put a warning
+ * banner on every dashboard screen in development, every time, for a condition
+ * nobody can act on.
+ */
+export type DashboardInvalidationStatus = 'closed' | 'connecting' | 'open' | 'failed' | 'unsupported'
 
 export interface DashboardInvalidationConnection {
   status: Ref<DashboardInvalidationStatus>
@@ -68,6 +74,10 @@ export function provideDashboardInvalidations(organizationSlug: Readonly<Ref<str
 
   function connect() {
     if (!import.meta.client || stopped || !organizationSlug.value) return
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+      status.value = 'unsupported'
+      return
+    }
     if (socket?.readyState === WebSocket.OPEN || socket?.readyState === WebSocket.CONNECTING) return
 
     clearReconnectTimer()

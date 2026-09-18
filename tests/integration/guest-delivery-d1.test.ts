@@ -6,7 +6,7 @@ import { threadPayloadForGuest, requestInsertQueries, getGuestRequest } from '..
 import { upsertLocationReservationConfig } from '../../server/utils/reservations.ts'
 import test from 'node:test'
 import { Miniflare } from 'miniflare'
-import { claimDelivery, createDeliveryReceipt, getDeliveryById, getDeliveryRetryEligibility, listDeliveryFailures, recordDeliveryOutcome } from '../../server/domain/guest-threads/deliveries.ts'
+import { claimDelivery, createDeliveryReceipt, getDeliveryById, getDeliveryRetryEligibility, isVisibleDeliveryFailure, listThreadDeliveries, recordDeliveryOutcome } from '../../server/domain/guest-threads/deliveries.ts'
 import { appendEntry } from '../../server/domain/guest-threads/entries.ts'
 import { executeGuestThreadOperation } from '../../server/domain/guest-threads/operations.ts'
 import { listGuestThreads, updateThreadProjectionIfLatestEntry } from '../../server/domain/guest-threads/repository.ts'
@@ -14,8 +14,8 @@ import { requestBookingChange, respondToBookingChange } from '../../server/domai
 import { notifyContactSubmitted } from '../../server/utils/notifications.ts'
 import { getReviewBookingContext } from '../../server/utils/review-requests.ts'
 import { sendReviewRequestForBooking } from '../../server/utils/review-request-delivery.ts'
-import { renderEmail } from '../../server/emails/vue-email.ts'
-import BookingThankYouReviewRequest from '../../server/emails/templates/BookingThankYouReviewRequest.ts'
+import { renderNotificationEmail } from '../../server/emails/render.ts'
+import { reviewRequestMessage } from '../../server/notifications/guest-events.ts'
 import { formatTimestamp } from '../../utils/timezone.ts'
 import type { CloudflareEnv } from '../../server/utils/auth.ts'
 
@@ -149,7 +149,11 @@ test('D1 claims fence concurrent sends and bound ambiguous provider retries', as
     })
     const heldClaim = await claimDelivery(db, heldReceipt.id)
     assert.equal(heldClaim.claimed, true)
-    assert.equal((await listDeliveryFailures(db, 'contact-proof')).some(delivery => delivery.id === deliveryId), false)
+    const heldDeliveries = await listThreadDeliveries(db, 'contact-proof')
+    assert.equal(heldDeliveries.filter(delivery => isVisibleDeliveryFailure(delivery)).some(delivery => delivery.id === deliveryId), false,
+      'a claim still in flight is not surfaced as a failure')
+    assert.equal(heldDeliveries.some(delivery => delivery.id === heldReceipt.id), true,
+      'but the thread still knows the send exists, and on which channel')
 
     const accepted = await executeGuestThreadOperation(db, {
       threadId: 'contact-proof',
@@ -158,7 +162,7 @@ test('D1 claims fence concurrent sends and bound ambiguous provider retries', as
       actorUserId: 'user-proof',
       body: 'A held reply',
       idempotencyKey: operationKey,
-      env: { EMAIL_DELIVERY_MODE: 'provider' },
+      env: { EMAIL_DELIVERY_MODE: 'provider', NUXT_PUBLIC_PLATFORM_DOMAIN: 'proof.example' },
     })
     assert.deepEqual({ ok: accepted.ok, status: accepted.status }, { ok: true, status: 202 })
 
@@ -169,7 +173,7 @@ test('D1 claims fence concurrent sends and bound ambiguous provider retries', as
       actorUserId: 'user-proof',
       deliveryId,
       idempotencyKey: 'held-retry-proof',
-      env: { EMAIL_DELIVERY_MODE: 'provider' },
+      env: { EMAIL_DELIVERY_MODE: 'provider', NUXT_PUBLIC_PLATFORM_DOMAIN: 'proof.example' },
     })
     assert.deepEqual({ ok: acceptedRetry.ok, status: acceptedRetry.status }, { ok: true, status: 202 })
 
@@ -181,20 +185,23 @@ test('D1 claims fence concurrent sends and bound ambiguous provider retries', as
       actorUserId: 'user-proof',
       body: 'A held reply',
       idempotencyKey: operationKey,
-      env: { EMAIL_DELIVERY_MODE: 'provider' },
+      env: { EMAIL_DELIVERY_MODE: 'provider', NUXT_PUBLIC_PLATFORM_DOMAIN: 'proof.example' },
     })
     assert.deepEqual({ ok: replay.ok, status: replay.status }, { ok: true, status: 200 })
     assert.equal((await db.prepare('SELECT conversation_state FROM requests WHERE id = ?').bind('contact-proof').first<{ conversation_state: string }>())?.conversation_state, 'waiting_on_guest')
 
-    const resolved = await executeGuestThreadOperation(db, {
+    // A thread reaches 'resolved' through its record's own lifecycle, which
+    // writes the state alongside the entry that caused it. Both halves matter
+    // here: the projection only follows the LATEST entry, so what keeps the
+    // replay below from dragging the state back is that a newer entry exists.
+    const resolvingEntry = await appendEntry(db, {
       threadId: 'contact-proof',
-      siteId: 'site-proof',
-      action: 'resolve',
-      actorUserId: 'user-proof',
-      idempotencyKey: 'resolve-after-reply-proof',
-      env: { EMAIL_DELIVERY_MODE: 'provider' },
+      kind: 'operation',
+      actorKind: 'system',
+      eventName: 'thread.completed',
+      dedupeKey: 'lifecycle-resolve-proof',
     })
-    assert.deepEqual({ ok: resolved.ok, status: resolved.status }, { ok: true, status: 200 })
+    await updateThreadProjectionIfLatestEntry(db, 'contact-proof', resolvingEntry.id, { conversationState: 'resolved' })
 
     const replayAfterResolve = await executeGuestThreadOperation(db, {
       threadId: 'contact-proof',
@@ -203,7 +210,7 @@ test('D1 claims fence concurrent sends and bound ambiguous provider retries', as
       actorUserId: 'user-proof',
       body: 'A held reply',
       idempotencyKey: operationKey,
-      env: { EMAIL_DELIVERY_MODE: 'provider' },
+      env: { EMAIL_DELIVERY_MODE: 'provider', NUXT_PUBLIC_PLATFORM_DOMAIN: 'proof.example' },
     })
     assert.deepEqual({ ok: replayAfterResolve.ok, status: replayAfterResolve.status }, { ok: true, status: 200 })
     assert.equal((await db.prepare('SELECT conversation_state FROM requests WHERE id = ?').bind('contact-proof').first<{ conversation_state: string }>())?.conversation_state, 'resolved')
@@ -249,7 +256,7 @@ test('D1 claims fence concurrent sends and bound ambiguous provider retries', as
       actorUserId: 'user-proof',
       body: 'A delayed reply',
       idempotencyKey: delayedOperationKey,
-      env: { EMAIL_DELIVERY_MODE: 'provider' },
+      env: { EMAIL_DELIVERY_MODE: 'provider', NUXT_PUBLIC_PLATFORM_DOMAIN: 'proof.example' },
     })
     assert.deepEqual({ ok: delayedCompletion.ok, status: delayedCompletion.status }, { ok: true, status: 200 })
     assert.equal((await db.prepare('SELECT conversation_state FROM requests WHERE id = ?').bind('contact-proof').first<{ conversation_state: string }>())?.conversation_state, 'needs_attention')
@@ -276,15 +283,14 @@ test('D1 claims fence concurrent sends and bound ambiguous provider retries', as
     assert.equal(retryClaim.claimed, true)
     await recordDeliveryOutcome(db, { claim: retryClaim, status: 'failed', error: 'provider rejected request' })
 
-    const resolvedAfterFailure = await executeGuestThreadOperation(db, {
+    const secondResolvingEntry = await appendEntry(db, {
       threadId: 'contact-proof',
-      siteId: 'site-proof',
-      action: 'resolve',
-      actorUserId: 'user-proof',
-      idempotencyKey: 'resolve-after-failed-reply-proof',
-      env: { EMAIL_DELIVERY_MODE: 'provider' },
+      kind: 'operation',
+      actorKind: 'system',
+      eventName: 'thread.completed',
+      dedupeKey: 'lifecycle-resolve-after-failure-proof',
     })
-    assert.deepEqual({ ok: resolvedAfterFailure.ok, status: resolvedAfterFailure.status }, { ok: true, status: 200 })
+    await updateThreadProjectionIfLatestEntry(db, 'contact-proof', secondResolvingEntry.id, { conversationState: 'resolved' })
 
     const retriedAfterResolve = await executeGuestThreadOperation(db, {
       threadId: 'contact-proof',
@@ -293,7 +299,7 @@ test('D1 claims fence concurrent sends and bound ambiguous provider retries', as
       actorUserId: 'user-proof',
       deliveryId: retryReceipt.id,
       idempotencyKey: 'retry-after-resolve-proof',
-      env: {},
+      env: { NUXT_PUBLIC_PLATFORM_DOMAIN: 'proof.example' },
     })
     assert.deepEqual({ ok: retriedAfterResolve.ok, status: retriedAfterResolve.status }, { ok: true, status: 200 })
     assert.equal((await db.prepare('SELECT conversation_state FROM requests WHERE id = ?').bind('contact-proof').first<{ conversation_state: string }>())?.conversation_state, 'resolved')
@@ -310,7 +316,7 @@ test('D1 status-email retries preserve recorded content and reject superseded bo
     manifest: { mainModule: 'index.mjs', modules: { 'index.mjs': { type: 'esm', contents: 'export default { fetch() { return new Response("ok") } }' } } },
     env: { DB: { type: 'd1' } },
   } }] })
-  const requests: { subject: string; text: string }[] = []
+  const requests: { subject: string; text: string; html: string }[] = []
   let reject = true
   t.mock.method(globalThis, 'fetch', async (url: string, init: RequestInit) => {
     assert.equal(url, 'https://api.resend.com/emails')
@@ -336,7 +342,7 @@ test('D1 status-email retries preserve recorded content and reject superseded bo
 
     const input = {
       threadId: 'booking-status', siteId: 'site-status', actorUserId: 'user-status',
-      env: { EMAIL_DELIVERY_MODE: 'provider', RESEND_API_KEY: 'controlled-provider-only' },
+      env: { EMAIL_DELIVERY_MODE: 'provider', RESEND_API_KEY: 'controlled-provider-only', NUXT_PUBLIC_PLATFORM_DOMAIN: 'proof.example' },
     }
     const confirm = { ...input, action: 'confirm', idempotencyKey: 'confirm-status' }
     assert.equal((await executeGuestThreadOperation(db, confirm)).ok, true)
@@ -344,7 +350,10 @@ test('D1 status-email retries preserve recorded content and reject superseded bo
     const deliveryId = 'guest-thread-email:booking-status:confirm-status'
     assert.equal((await getDeliveryById(db, deliveryId))!.status, 'failed')
     const original = requests[0]!
-    assert.equal(original.text, 'Your reservation is confirmed: Oct 1, 2026, 6:00 PM for 2 guests.')
+    // The recorded body is now rendered inside the shared email shell, so the
+    // sent copy contains it rather than being it.
+    assert.ok(original.text.includes('Your reservation is confirmed: Oct 1, 2026, 6:00 PM for 2 guests.'))
+    assert.ok(original.html.includes('Your reservation is confirmed: Oct 1, 2026, 6:00 PM for 2 guests.'))
     assert.equal((await executeGuestThreadOperation(db, { ...input, action: 'retry_delivery', deliveryId, idempotencyKey: 'retry-unchanged' })).status, 502)
     assert.deepEqual(requests[1], original)
 
@@ -367,7 +376,7 @@ test('D1 status-email retries preserve recorded content and reject superseded bo
     assert.equal((await getDeliveryById(db, deliveryId))!.status, 'failed')
     const entry = await db.prepare('SELECT body, payload_json FROM activity_entries WHERE id = ?')
       .bind((await getDeliveryById(db, deliveryId))!.entry_id).first<{ body: string; payload_json: string }>()
-    assert.equal(entry!.body, original.text)
+    assert.ok(original.text.includes(entry!.body))
     assert.equal(JSON.parse(entry!.payload_json).subject, original.subject)
   } finally {
     await runtime.dispose()
@@ -462,7 +471,8 @@ test('a review request reads the visit from the record that holds it', async () 
       "INSERT INTO site_domains (id, organization_id, site_id, domain, role, status, type) VALUES ('domain-review','org-review','site-review','review.example','canonical','active','custom')",
       "INSERT INTO business_locations (id,organization_id,site_id,slug,title,timezone,max_capacity) VALUES ('loc-review','org-review','site-review','main','Main Room','Asia/Bangkok',40)",
       "INSERT INTO customers (id, organization_id, site_id, name, email, source) VALUES ('cust-review','org-review','site-review','Sivan','sivan@proof.example','reservation')",
-      "INSERT INTO organization_billing (organization_id, payment_status, access_plan, paid_through, access_expires_at) VALUES ('org-review','paid','growth','2099-01-01T00:00:00.000Z','2099-01-01T00:00:00.000Z')",
+      // Better Auth's subscription table is the only store of plan entitlement.
+      "INSERT INTO subscription (id, plan, referenceId, status, periodEnd) VALUES ('sub-review','growth','org-review','active',4102444800)",
     ]) await db.prepare(statement).run()
     const thread = requestInsertQueries({ id: 'reservation-review', kind: 'reservation', organization_id: 'org-review', site_id: 'site-review', location_id: 'loc-review',
       customer_id: 'cust-review', review_id: null, conversation_state: 'resolved', resolved_at: now,
@@ -484,12 +494,14 @@ test('a review request reads the visit from the record that holds it', async () 
     const result = await sendReviewRequestForBooking(env, db, 'reservation', 'reservation-review', 'first')
     assert.deepEqual({ sent: result.sent, error: result.error }, { sent: true, error: undefined })
     // The email states the visit. A row that reads "your reservation" is the
-    // headline fragment leaking into a value, which is what this guards.
-    const { html } = await renderEmail(BookingThankYouReviewRequest, {
-      guestName: 'Sivan', siteName: 'Kikuzuki', locationName: 'Main Room', bookingPhrase: 'your reservation',
+    // headline fragment leaking into a value, which is what this guards — the
+    // message carries no such phrase at all now, so the check is that the real
+    // visit is what the facts show.
+    const { html } = await renderNotificationEmail(reviewRequestMessage({
+      guestName: 'Sivan', siteName: 'Kikuzuki', locationName: 'Main Room',
       visitAt: formatTimestamp(context.visit_starts_at, 'en', context.visit_timezone), partySize: '6 guests',
-      reviewUrl: 'https://review.example/r', optOutUrl: 'https://review.example/r?optOut=1', platformDomain: 'proof.example',
-    })
+      reviewUrl: 'https://review.example/r', optOutUrl: 'https://review.example/r?optOut=1', reminder: false,
+    }), { platformDomain: 'proof.example' })
     assert.match(html, /Sep 11, 2026, 8:00\s?PM/, 'the visit renders in the reservation timezone')
     assert.match(html, /6 guests/)
     assert.doesNotMatch(html, />\s*your reservation\s*</, 'the headline phrase is never rendered as a detail value')

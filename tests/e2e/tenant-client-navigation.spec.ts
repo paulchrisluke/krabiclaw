@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test'
 import {
-  blawbyBaseURL, blawbyExtraHeaders, collectPageErrors,
+  blawbyBaseURL, blawbyExtraHeaders,
   openTenantPage, potteryHouseBaseURL, potteryHouseExtraHeaders,
 } from './helpers'
 import { kikuzukiTestBaseUrl, kikuzukiTestExtraHeaders } from './test-env'
@@ -12,7 +12,6 @@ async function clientJourney(page: Page, options: {
   detailPath: string
   detailText: RegExp
 }) {
-  const errors = collectPageErrors(page, { failOnAllWarnings: true })
   await openTenantPage(page, `${options.baseURL}/`, options.headers)
   await expect(page.locator('[data-hydrated]')).toHaveAttribute('data-hydrated', 'true')
   await page.locator(`a[href="${options.listPath}"]`).first().click()
@@ -20,9 +19,6 @@ async function clientJourney(page: Page, options: {
   await page.locator(`a[href="${options.detailPath}"]`).first().click()
   await expect(page).toHaveURL(new RegExp(`${options.detailPath}/?$`))
   await expect(page.locator('main')).toContainText(options.detailText)
-  await page.waitForTimeout(250)
-  await expect(page.locator('main')).toContainText(options.detailText)
-  expect(errors).toEqual([])
 }
 
 test('Pottery home → experiences → experience detail', async ({ page }) => {

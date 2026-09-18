@@ -43,12 +43,13 @@ import PlatformCommandSearchTrigger from '~/components/platform/search/PlatformC
 const emit = defineEmits<{ navigate: [] }>()
 
 const route = useRoute()
-const { categories } = await useDocsArticles()
+const { articles, categories } = await useDocsArticles()
 
-const drilledCategory = computed(() => {
-  const [, root, categorySlug] = route.path.split('/')
-  return root === 'docs' && categorySlug ? categorySlug : null
-})
+// Reading an article narrows the sidebar to that article's own category. The
+// category used to be the path's second segment; it is the article's own field
+// now, so the section is found from the article the path names.
+const drilledCategory = computed(() =>
+  articles.value.find(article => article.path === route.path)?.categorySlug ?? null)
 
 const sections = computed(() => drilledCategory.value
   ? categories.value.filter(section => section.categorySlug === drilledCategory.value)

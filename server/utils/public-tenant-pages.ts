@@ -17,6 +17,11 @@ import {
   type ExactPublicLocalization,
 } from '~/server/utils/public-localization'
 import { listPublicLocaleRepresentations, resolvePublicDocumentSourcePath } from '~/server/utils/public-locale-representations'
+import { getPublishedPosts } from '~/server/utils/post-management'
+import { resolvePublicTemplate } from '~/utils/template-registry'
+import { EXPERIENCE_PRESENTATION, resolveProductPresentation } from '~/utils/product-presentation'
+import { formatMinorAmount } from '~/shared/prices'
+import type { CurrencyCode } from '~/shared/currencies'
 import type { PublicLocaleRepresentation } from '~/utils/public-resource-contracts'
 
 export interface PublicTenantPage {
@@ -56,6 +61,18 @@ export interface PublicTenantPageProductRow {
   name: string
   slug: string
   description: string
+  /** Non-zero exactly when the product takes bookings — an experience. */
+  is_bookable: number
+  /**
+   * The one location publishing this product, or null when several do. A
+   * product offered in two places has no single route, so its card links
+   * nowhere rather than to a location the merchant did not name.
+   */
+  location_slug: string | null
+  /** The lowest current offer in the site's currency, in minor units. */
+  unit_amount: number | null
+  compare_at_unit_amount: number | null
+  currency: string | null
   media: MediaPlacementItem[]
 }
 
@@ -104,18 +121,64 @@ export async function listPublicTenantPageProductRows(
   db: DbClient,
   siteId: string,
   selection: { collectionId?: string | null; productIds?: readonly string[] },
+  currency: string,
 ): Promise<PublicTenantPageProductRow[]> {
   const productIds = selection.productIds ?? []
   if (!selection.collectionId && productIds.length === 0) return []
+  // The card's price and its route come from the same read as its name. They
+  // were resolved in the homepage component instead, over a separate catalogue
+  // payload the route had to request, which is why a product grid on any other
+  // page showed cards with no price and a link to /products/<slug> — a route
+  // no Saya site serves.
+  const now = new Date().toISOString()
+  // A collection belongs to a branch, so a grid that names one is that
+  // branch's counter: the dish is routed, priced and labelled as the branch
+  // whose section it is being read in — the same rule the menu page applies
+  // (`ProductCollectionPage.vue` productLocationId). Without it a dish served
+  // at two branches had no single route, so its card was not a link at all,
+  // and its price was the cheapest branch's rather than this one's.
+  const collectionLocationId = selection.collectionId
+    ? (await queryFirst<{ location_id: string | null }>(
+        db,
+        'SELECT location_id FROM collections WHERE id = ? AND site_id = ? LIMIT 1',
+        [selection.collectionId, siteId],
+      ))?.location_id ?? null
+    : null
   const rows = await queryAll<Omit<PublicTenantPageProductRow, 'media'>>(db, `
-    SELECT p.id, p.name, p.slug, p.description
+    SELECT p.id, p.name, p.slug, p.description,
+           EXISTS (SELECT 1 FROM product_booking_configs bc WHERE bc.product_id = p.id AND bc.organization_id = p.organization_id) AS is_bookable,
+           COALESCE(
+             (SELECT bl.slug FROM product_locations pl
+                JOIN business_locations bl ON bl.id = pl.location_id AND bl.site_id = ? AND bl.status = 'active'
+               WHERE pl.product_id = p.id AND pl.organization_id = p.organization_id AND pl.published = 1 AND pl.active = 1
+                 AND pl.location_id = ?),
+             (SELECT CASE WHEN count(*) = 1 THEN min(bl.slug) END FROM product_locations pl
+                JOIN business_locations bl ON bl.id = pl.location_id AND bl.site_id = ? AND bl.status = 'active'
+               WHERE pl.product_id = p.id AND pl.organization_id = p.organization_id AND pl.published = 1 AND pl.active = 1)
+           ) AS location_slug,
+           offer.unit_amount, offer.compare_at_unit_amount, offer.currency
       FROM products p
       JOIN product_publications pub ON pub.product_id = p.id AND pub.organization_id = p.organization_id
       LEFT JOIN collection_products cp ON cp.product_id = p.id AND cp.collection_id = ?
+      LEFT JOIN (
+        SELECT pv.product_id, pr.unit_amount, pr.compare_at_unit_amount, pr.currency,
+               row_number() OVER (
+                 PARTITION BY pv.product_id
+                 -- This branch's own price first, then the price that applies
+                 -- everywhere, and only then the cheapest of the rest.
+                 ORDER BY CASE WHEN pr.location_id IS ? THEN 0 WHEN pr.location_id IS NULL THEN 1 ELSE 2 END ASC,
+                          pr.unit_amount ASC
+               ) AS rank
+          FROM prices pr
+          JOIN product_variants pv ON pv.id = pr.product_variant_id AND pv.organization_id = pr.organization_id AND pv.active = 1
+         WHERE pr.active = 1 AND pr.type = 'one_time' AND pr.currency = ?
+           AND (pr.valid_from_at IS NULL OR pr.valid_from_at <= ?)
+           AND (pr.valid_until_at IS NULL OR pr.valid_until_at > ?)
+      ) offer ON offer.product_id = p.id AND offer.rank = 1
      WHERE pub.site_id = ? AND pub.published = 1 AND p.active = 1
        AND (cp.product_id IS NOT NULL OR p.id IN (SELECT value FROM json_each(?)))
      ORDER BY cp.sort_order ASC, p.name ASC
-  `, [selection.collectionId ?? null, siteId, d1JsonStringSet(productIds)])
+  `, [siteId, collectionLocationId, siteId, selection.collectionId ?? null, collectionLocationId, currency, now, now, siteId, d1JsonStringSet(productIds)])
   const placements = await loadPublicSocialMedia(db, siteId, 'product', rows.map(row => row.id))
   return rows.map(row => ({ ...row, media: placements.get(row.id)?.media ?? [] }))
 }
@@ -134,8 +197,15 @@ async function hydrateBlocks(
   const collectionIds = new Set<string>()
   const locationIds = new Set<string>()
   const qaSources = new Set(blocks.map(faqBlockSource).filter((source): source is FaqBlockSource => source !== null))
-  const hasReviewSource = blocks.some(block => block.type === 'testimonial_grid' && block.data.source === 'site_reviews')
+  // A reviews grid has no source to choose — reviews are the site's reviews.
+  // The gate outlived the `source` field it read, so a grid authored in the
+  // CMS, which never writes that key, listed nothing.
+  const hasReviewSource = blocks.some(block => block.type === 'testimonial_grid')
   const hasPostSource = blocks.some(block => block.type === 'feature_grid' && block.data.source === 'site_posts')
+  // The site's social posts — Google Business updates and anything published
+  // beside them. They are `social_post` documents, a different record from the
+  // articles `site_posts` reads, and a Saya home shows both.
+  const hasUpdateSource = blocks.some(block => block.type === 'feature_grid' && block.data.source === 'site_updates')
   for (const block of blocks) {
     if (block.type === 'page_grid' && Array.isArray(block.data.page_ids)) {
       for (const value of block.data.page_ids) if (typeof value === 'string' && value.trim()) pageIds.add(value)
@@ -150,6 +220,14 @@ async function hydrateBlocks(
       for (const value of block.data.location_ids) if (typeof value === 'string' && value.trim()) locationIds.add(value)
     }
   }
+  // The site this page belongs to. Its template decides where an article
+  // lives, its vertical decides where a product lives, and its currency
+  // decides which offers apply.
+  const siteRow = await queryFirst<{ theme_id: string | null; vertical: string | null; default_currency: string | null }>(
+    db, 'SELECT theme_id, vertical, default_currency FROM sites WHERE id = ? LIMIT 1', [siteId])
+  if (!siteRow) throw new HTTPError({ statusCode: 500, statusMessage: 'Tenant page site is unavailable' })
+  const template = resolvePublicTemplate({ themeId: siteRow.theme_id, vertical: siteRow.vertical })
+  const articlePrefix = template.serviceRoutes.articleDetailPrefix
   const sourcePages = pageIds.size
     ? resources.pages
       ? (await resources.pages).filter(page => pageIds.has(page.id))
@@ -158,14 +236,20 @@ async function hydrateBlocks(
   // Each grid gets the products it named, and only those. Keyed by collection
   // rather than flattened into one list: two grids on a page name two different
   // collections, and a flat union rendered both collections in both grids.
+  const currency = siteRow.default_currency
+  // Null on a template that sells nothing; its pages carry no product grid.
+  const productPresentation = resolveProductPresentation(siteRow.vertical)
+  if ((collectionIds.size || productIds.size) && !currency) {
+    throw new HTTPError({ statusCode: 500, statusMessage: 'Tenant page site has no currency' })
+  }
   const productsByCollection = new Map(await Promise.all([...collectionIds].map(async collectionId =>
-    [collectionId, await listPublicTenantPageProductRows(db, siteId, { collectionId })] as const)))
+    [collectionId, await listPublicTenantPageProductRows(db, siteId, { collectionId }, currency!)] as const)))
   const productById = new Map((productIds.size
-    ? await listPublicTenantPageProductRows(db, siteId, { productIds: [...productIds] })
+    ? await listPublicTenantPageProductRows(db, siteId, { productIds: [...productIds] }, currency!)
     : []).map(product => [product.id, product]))
   const sourceLocations = locationIds.size
-    ? await queryAll<{ id: string; title: string; slug: string; description: string | null; short_description: string | null; asset_id: string | null; public_url: string | null; thumbnail_url: string | null; kind: string | null; alt_text: string | null }>(db, `
-        SELECT bl.id, bl.title, bl.slug, bl.description, bl.short_description, ma.id AS asset_id, ma.public_url, ma.thumbnail_url, ma.kind, ma.alt_text
+    ? await queryAll<{ id: string; title: string; slug: string; city: string | null; description: string | null; short_description: string | null; asset_id: string | null; public_url: string | null; thumbnail_url: string | null; kind: string | null; alt_text: string | null }>(db, `
+        SELECT bl.id, bl.title, bl.slug, bl.city, bl.description, bl.short_description, ma.id AS asset_id, ma.public_url, ma.thumbnail_url, ma.kind, ma.alt_text
           FROM business_locations bl
           LEFT JOIN media_placements mp ON mp.owner_type = 'business_location' AND mp.owner_id = bl.id AND mp.slot = 'hero' AND mp.sort_order = 0 AND mp.status = 'active'
           LEFT JOIN media_assets ma ON ma.id = mp.asset_id AND ma.status = 'active'
@@ -182,7 +266,7 @@ async function hydrateBlocks(
         return { ...location, slug, public_path: representation.routePath }
       })
     : sourceLocations
-  const [qaItemsBySource, sourceReviewRows, sourcePostRows] = await Promise.all([
+  const [qaItemsBySource, sourceReviewRows, sourcePostRows, updateRows] = await Promise.all([
     Promise.all([...qaSources].map(async source => [source, faqItems(await listFaqBlockQa(db, siteId, pagePath, source, locale))] as const)).then(entries => new Map(entries)),
     hasReviewSource ? listSiteReviews(db, siteId, { publishedOnly: true }) : Promise.resolve([]),
     hasPostSource ? queryAll<{ id: string; title: string; slug: string; excerpt: string | null; canonical_url: string | null; cover_asset_id: string | null; cover_public_url: string | null; cover_thumbnail_url: string | null; cover_kind: string | null; cover_alt_text: string | null; cover_width: number | null; cover_height: number | null }>(db, `
@@ -192,6 +276,7 @@ async function hydrateBlocks(
        WHERE root.kind = 'article' AND root.row_role = 'root' AND p.site_id = ? AND root.status = 'published' AND root.visibility = 'public'
        ORDER BY root.published_at IS NULL, root.published_at DESC, p.id DESC
     `, [locale, siteId]) : Promise.resolve([]),
+    hasUpdateSource ? getPublishedPosts(db, siteId, 12, undefined, locale) : Promise.resolve([]),
   ])
   const reviewRows = sourceReviewRows
   const postRows = sourcePostRows
@@ -209,6 +294,9 @@ async function hydrateBlocks(
     title: typeof row.author_name === 'string' ? row.author_name : '',
     description: typeof row.content === 'string' ? row.content : undefined,
     value: row.rating == null ? undefined : String(row.rating),
+    // The reviewer's picture, which the review record owns. It was dropped on
+    // the way into the item, so a template drawing portraits drew none.
+    media: Array.isArray(row.media) ? row.media : [],
   }))
   const postItems = postRows.map((post) => {
     const { cover, ...row } = attachCoverMedia(post)
@@ -216,13 +304,30 @@ async function hydrateBlocks(
       id: row.id,
       title: row.title,
       description: row.excerpt || undefined,
-      url: row.canonical_url || `/article/${row.slug}`,
+      url: row.canonical_url || `${articlePrefix}/${row.slug}`,
       labelKey: 'saya.posts.read_full_story',
       media: cover
         ? projectLocalizedMediaAlt([{ asset_id: cover.asset_id, slot: 'media', public_url: cover.public_url, thumbnail_url: cover.thumbnail_url, kind: cover.kind, alt_text: cover.alt_text }], localizations ?? [])
         : [],
     }
   })
+  // A social post is already a published public record with its own route and
+  // media; the grid shows it, it does not restate it.
+  const updateItems = updateRows.map(post => ({
+    id: post.id,
+    title: post.title,
+    description: post.summary || undefined,
+    url: post.public_path,
+    labelKey: 'saya.posts.read_full_story',
+    media: post.media.map(item => ({
+      asset_id: item.asset_id,
+      slot: 'media',
+      public_url: item.public_url,
+      thumbnail_url: item.thumbnail_url ?? null,
+      kind: item.kind ?? null,
+      alt_text: item.alt_text ?? null,
+    })),
+  }))
   return blocks.map(block => {
     const data = { ...block.data }
     if (block.type === 'page_grid' && Array.isArray(data.page_ids)) {
@@ -259,9 +364,30 @@ async function hydrateBlocks(
         id: product.id,
         title: product.name,
         description: product.description || undefined,
-        url: `/products/${product.slug}`,
+        // The product's own surface. An experience is named by its own slug
+        // site-wide; every other product is read under the one location that
+        // publishes it, and a product published in several places has no
+        // single route, so its card carries none.
+        url: product.is_bookable
+          ? EXPERIENCE_PRESENTATION.productPath('', product.slug)
+          : product.location_slug && productPresentation
+            ? productPresentation.productPath(product.location_slug, product.slug)
+            : '',
+        value: product.unit_amount === null || !product.currency
+          ? undefined
+          : formatMinorAmount(product.unit_amount, product.currency as CurrencyCode),
+        compare_at: product.compare_at_unit_amount === null || !product.currency
+          ? undefined
+          : formatMinorAmount(product.compare_at_unit_amount, product.currency as CurrencyCode),
         labelKey: 'saya.posts.cta_default',
-        media: product.media,
+        // A grid item carries the one image it is drawn with, which for a
+        // product is its `image` placement — the same cover `hydrateProductMedia`
+        // resolves for every other product surface. It carried the product's
+        // whole placement list instead, and the reader took the head of it;
+        // placements are read slot-ordered, so a product with a `gallery` asset
+        // handed the card that asset rather than its cover, and a gallery video
+        // put an .mp4 in the card's <img src>.
+        media: product.media.filter(item => item.slot === 'image'),
       }))
     }
     if (block.type === 'location_grid' && Array.isArray(data.location_ids)) {
@@ -275,6 +401,9 @@ async function hydrateBlocks(
         return [{
           id: location.id,
           title: location.title,
+          // The town the visitor is being sent to. A location card names it
+          // above the title, and the item carried everything except that.
+          city: location.city || undefined,
           description: location.short_description || location.description || undefined,
           url: 'public_path' in location && typeof location.public_path === 'string' ? location.public_path : `/locations/${location.slug}`,
           labelKey: 'saya.home.visit_location',
@@ -286,10 +415,11 @@ async function hydrateBlocks(
     }
     const faqSource = faqBlockSource(block)
     if (faqSource) data.items = qaItemsBySource.get(faqSource)
-    if (block.type === 'testimonial_grid' && data.source === 'site_reviews') data.items = reviewItems
-    if (block.type === 'feature_grid' && data.source === 'site_posts') {
-      const limit = typeof data.limit === 'number' && Number.isInteger(data.limit) && data.limit > 0 ? data.limit : postItems.length
-      data.items = postItems.slice(0, limit)
+    if (block.type === 'testimonial_grid') data.items = reviewItems
+    if (block.type === 'feature_grid' && (data.source === 'site_posts' || data.source === 'site_updates')) {
+      const items = data.source === 'site_posts' ? postItems : updateItems
+      const limit = typeof data.limit === 'number' && Number.isInteger(data.limit) && data.limit > 0 ? data.limit : items.length
+      data.items = items.slice(0, limit)
     }
     return { ...block, data }
   })
@@ -323,6 +453,7 @@ function mapPage(
 }
 
 export async function getPublicTenantPageForPath(
+  env: CloudflareEnv,
   db: DbClient,
   siteId: string,
   path: string,
@@ -339,7 +470,7 @@ export async function getPublicTenantPageForPath(
   if (!page) return null
   const localizations = page.locale === 'en'
     ? null
-    : options.localizations ?? await loadExactPublicLocalizations(db, page.organization_id, siteId, page.locale)
+    : options.localizations ?? await loadExactPublicLocalizations(env, db, page.organization_id, siteId, page.locale)
   const [blocks, media, sourceLocale] = await Promise.all([
     hydrateBlocks(db, siteId, page.path, page.locale, page.blocks, options.hydrationResources, localizations),
     loadPublicSocialMedia(db, siteId, 'content_document', [page.id]),
@@ -366,7 +497,7 @@ export async function getPublicTenantPageForPath(
   if (!sourceLocale) {
     throw new HTTPError({ statusCode: 500, statusMessage: 'Site primary language is missing' })
   }
-  const localeRepresentations = await listPublicLocaleRepresentations(db, {
+  const localeRepresentations = await listPublicLocaleRepresentations(env, db, {
     organizationId: page.organization_id,
     siteId,
     sourcePath: await resolvePublicDocumentSourcePath(db, siteId, page.page_id),
@@ -391,11 +522,11 @@ async function resolveVariantId(db: DbClient, siteId: string, path: string, loca
   return row.id
 }
 
-export async function listCanonicalTenantPages(db: DbClient, siteId: string, locale?: string | null) {
+export async function listCanonicalTenantPages(env: CloudflareEnv, db: DbClient, siteId: string, locale?: string | null) {
   const paths = await listPublishedTenantPagePaths(db, siteId, locale)
   const pages: PublicTenantPage[] = []
   for (const item of paths) {
-    const page = await getPublicTenantPageForPath(db, siteId, item.path, { locale })
+    const page = await getPublicTenantPageForPath(env, db, siteId, item.path, { locale })
     if (page) pages.push(page)
   }
   return pages

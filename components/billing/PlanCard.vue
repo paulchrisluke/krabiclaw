@@ -36,13 +36,12 @@
 
     <!-- Price -->
     <div class="mb-6 relative z-10">
-      <template v-if="plan.prices.length === 0">
-        <div class="flex items-baseline gap-1">
-          <span class="text-5xl font-black tracking-tight" :class="isHighlighted ? 'text-white' : 'text-default'">$0</span>
-          <span class="text-sm font-semibold" :class="isHighlighted ? 'text-white/50' : 'text-muted'">/month</span>
-        </div>
-      </template>
-      <template v-else>
+      <!--
+        One price, from the provider that owns it. A plan Stripe returned no
+        price for at this interval says so; it used to say "$0", which read as
+        a free plan to anyone looking at it.
+      -->
+      <template v-if="currentPrice !== null">
         <div class="flex items-baseline gap-1">
           <span class="text-5xl font-black tracking-tight" :class="isHighlighted ? 'text-white' : 'text-default'">
             {{ currentPrice }}
@@ -56,6 +55,9 @@
           {{ savingsNote }}
         </p>
       </template>
+      <p v-else data-price-unavailable class="text-sm font-semibold" :class="isHighlighted ? 'text-white/70' : 'text-muted'">
+        {{ billingPeriodLabel === '/year' ? 'Annual pricing is unavailable right now.' : 'Monthly pricing is unavailable right now.' }}
+      </p>
     </div>
 
     <!-- Divider -->

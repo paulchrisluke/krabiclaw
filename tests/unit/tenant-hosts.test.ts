@@ -76,9 +76,6 @@ test('getPlatformHtmlCacheHosts covers all platform host cache prefixes', () => 
 ])
 })
 
-// isPlatformHost scenarios stay under one top-level test() with TestContext
-// subtests, since check-unit-test-quality.mjs only counts direct test()/it()
-// calls (see tests/unit/blawby-client.test.ts for the same pattern).
 test('isPlatformHost', async (t) => {
   await t.test('recognizes localhost and loopback with and without a port', () => {
     for (const env of [prodEnv, localEnv]) {

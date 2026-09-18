@@ -26,3 +26,21 @@ export function isNotFoundError(error: unknown): boolean {
   const candidate = error as { statusCode?: unknown, status?: unknown }
   return candidate.statusCode === 404 || candidate.status === 404
 }
+
+/**
+ * Answers the canonical not-found for a record that is absent.
+ *
+ * Every level of an editor chain decides whether its record exists by looking
+ * into the loaded page, so the answer arrives in a watcher rather than in
+ * setup. A `throw` there only reaches Nuxt during the server render: on a
+ * client navigation Vue reports it and keeps rendering whatever was underneath,
+ * which is how a missing section came to paint itself as a divider. `showError`
+ * is what reaches the error page on the client, and on the server it only
+ * reaches the payload — answering HTTP 200 with the error page drawn after
+ * hydration. Each environment is given the one that answers.
+ */
+export function showNotFound(statusMessage = 'Page not found'): void {
+  const error = createError({ statusCode: 404, statusMessage })
+  if (import.meta.server) throw error
+  showError(error)
+}

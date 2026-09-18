@@ -11,9 +11,10 @@ export default defineHandler(async (event) => {
   if (!siteId || !locale || typeof path !== 'string') {
     throw createError({ statusCode: 400, statusMessage: 'Site ID, locale, and path are required' })
   }
-  const db = cloudflareEnv(event).db
+  const env = cloudflareEnv(event)
+  const db = env.db
   if (!db) throw createError({ statusCode: 503, statusMessage: 'Database unavailable' })
-  const page = await getPublicTenantPageForPath(db, siteId, path, { locale })
+  const page = await getPublicTenantPageForPath(env, db, siteId, path, { locale })
   if (!page) throw createError({ statusCode: 404, statusMessage: 'Localized page was not found' })
   return { success: true as const, page }
 })

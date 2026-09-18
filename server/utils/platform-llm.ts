@@ -6,9 +6,9 @@ import {  getRequestHost } from 'nitro/h3';
 import { queryAll, queryFirst, type DbClient } from '../db/index.ts'
 import { getContentBlocksForDocument } from './content/documents.ts'
 import { findAuthUsersByIds, type CloudflareEnv } from './auth.ts'
-import { blogCategoryToSlug, slugToBlogCategory } from '../../utils/blog-categories.ts'
-import { articleCategoryFromSlug, collectionArticlePath } from '../../utils/article-collections.ts'
+import { collectionArticlePath } from '../../utils/article-collections.ts'
 import { tenantBlogPostPath } from '../../utils/tenant-blog-route.ts'
+import { PLATFORM_TEMPLATE } from '../../utils/template-registry.ts'
 import { getPlatformSite } from './platform-site.ts'
 
 /** A documentation page: an ordinary site page whose path starts with /docs. */
@@ -194,10 +194,6 @@ function buildFrontMatter(lines: Array<string | null>) {
   return `---\n${lines.filter(Boolean).join('\n')}\n---`
 }
 
-function docCategory(path: string) {
-  return articleCategoryFromSlug('docs', path.split('/')[2] ?? null)
-}
-
 function docMarkdownPath(path: string) {
   return `/docs-md${path.slice('/docs'.length)}.md`
 }
@@ -211,7 +207,7 @@ export function renderPlatformDocMarkdown(doc: PlatformLlmDocDetail, origin: str
   return [
     buildFrontMatter([
       optionalFrontMatterLine('title', doc.title),
-      optionalFrontMatterLine('category', docCategory(path)),
+      optionalFrontMatterLine('category', doc.category),
       optionalFrontMatterLine('url', path),
       optionalFrontMatterLine('markdown_url', markdownPath),
       optionalFrontMatterLine('canonical_url', canonicalUrl),
@@ -254,17 +250,9 @@ function renderBlogMarkdown(
   ].join('\n')
 }
 
-export function renderPlatformBlogMarkdown(post: PlatformLlmBlogDetail, origin: string, categoryOverride?: string) {
-  const categorySlug = categoryOverride || blogCategoryToSlug(post.category)
-  if (!categorySlug) throw new HTTPError({ statusCode: 404, statusMessage: 'Post not found' })
-  const path = `/blog/${categorySlug}/${post.slug}`
-  const markdownPath = `/blog-md/${categorySlug}/${post.slug}.md`
-  return renderBlogMarkdown(post, origin, { path, markdownPath })
-}
-
-/** A tenant's template decides its article prefix (/blog or /article); the markdown mirror is always /blog-md. */
+/** A site's template decides its article prefix (/blog or /article); the markdown mirror is always /blog-md. */
 export function renderTenantBlogMarkdown(post: TenantLlmBlogDetail, origin: string, template: { themeId?: string | null; vertical?: string | null }) {
-  const path = tenantBlogPostPath(template, post.slug, post.category)
+  const path = tenantBlogPostPath(template, post.slug)
   const markdownPath = `/blog-md/${post.slug}.md`
   return renderBlogMarkdown(post, origin, { path, markdownPath })
 }
@@ -274,8 +262,8 @@ const DOC_SUMMARY_SELECT = `SELECT id, title, slug, (metadata_json ->> '$.catego
      WHERE kind = 'article' AND row_role = 'root' AND status = 'published' AND visibility = 'public'
        AND (metadata_json ->> '$.collection') = 'docs' AND site_id = ?`
 
-function withDocPath<T extends { slug: string; category: string | null }>(row: T): T & { path: string } {
-  return { ...row, path: collectionArticlePath('docs', row.category, row.slug) }
+function withDocPath<T extends { slug: string }>(row: T): T & { path: string } {
+  return { ...row, path: collectionArticlePath('docs', row.slug) }
 }
 
 /** Documentation is KrabiClaw's `docs` article collection, in editorial order. */
@@ -309,24 +297,15 @@ export async function listPublishedTenantBlogPostsForLlm(db: DbClient, siteId: s
   }))
 }
 
-export async function getPublishedPlatformDocBySlug(db: DbClient, categorySlug: string, slug: string): Promise<PlatformLlmDocDetail | null> {
-  const category = articleCategoryFromSlug('docs', categorySlug)
-  if (!category) return null
+export async function getPublishedPlatformDocBySlug(db: DbClient, slug: string): Promise<PlatformLlmDocDetail | null> {
   const row = await queryFirst<Omit<PlatformLlmDocSummary, 'path'>>(
-    db, `${DOC_SUMMARY_SELECT} AND slug = ? AND (metadata_json ->> '$.category') = ?`, [(await getPlatformSite(db)).id, slug, category],
+    db, `${DOC_SUMMARY_SELECT} AND slug = ?`, [(await getPlatformSite(db)).id, slug],
   )
   if (!row) return null
   const detail = withDocPath(row)
   const contentBlocks = await getContentBlocksForDocument(db, detail.id)
   if (!contentBlocks) throw new HTTPError({ statusCode: 500, statusMessage: 'Documentation content document is missing' })
   return { ...detail, content_blocks: contentBlocks }
-}
-
-export async function getPublishedBlogPostBySlug(db: DbClient, categorySlug: string, slug: string) {
-  const category = slugToBlogCategory(categorySlug)
-  if (!category) return null
-  const detail = await getPublishedTenantBlogPostBySlug(db, (await getPlatformSite(db)).id, slug, 'blog')
-  return detail?.category === category ? detail : null
 }
 
 export async function getPublishedTenantBlogPostBySlug(db: DbClient, siteId: string, slug: string, collection?: 'blog' | 'docs') {
@@ -352,7 +331,7 @@ export function buildPlatformDocLinkEntries(docs: PlatformLlmDocSummary[], origi
       markdownPath: docMarkdownPath(doc.path),
       canonicalUrl: doc.canonical_url?.trim() || absoluteUrl(origin, doc.path),
       summary: safeSummary(doc.seo_description || doc.excerpt, 'KrabiClaw documentation.'),
-      category: docCategory(doc.path),
+      category: doc.category,
       updatedAt: doc.updated_at,
     }))
 }
@@ -365,13 +344,11 @@ export function buildPlatformBlogLinkEntries(posts: PlatformLlmBlogSummary[], or
     return bDate - aDate
   })
   return sortedPosts.flatMap((post) => {
-    const categorySlug = blogCategoryToSlug(post.category)
-    if (!categorySlug) return []
-    const path = `/blog/${categorySlug}/${post.slug}`
+    const path = `/blog/${post.slug}`
     return [{
       title: post.title,
       path,
-      markdownPath: `/blog-md/${categorySlug}/${post.slug}.md`,
+      markdownPath: `/blog-md/${post.slug}.md`,
       canonicalUrl: post.canonical_url?.trim() || absoluteUrl(origin, path),
       summary: safeSummary(post.seo_description || post.excerpt, 'KrabiClaw platform blog article.'),
       category: post.category,
@@ -389,7 +366,7 @@ export function buildTenantBlogLinkEntries(posts: TenantLlmBlogSummary[], origin
     return bDate - aDate
   })
   return sortedPosts.map((post) => {
-    const path = tenantBlogPostPath(template, post.slug, post.category)
+    const path = tenantBlogPostPath(template, post.slug)
     return {
       title: post.title,
       path,
@@ -483,7 +460,7 @@ export function buildLlmsFullTxt(
   }
 
   lines.push('## Blog')
-  const renderBlog = options.renderBlog || renderPlatformBlogMarkdown
+  const renderBlog = options.renderBlog || ((post: PlatformLlmBlogDetail, postOrigin: string) => renderTenantBlogMarkdown(post, postOrigin, PLATFORM_TEMPLATE))
 
   for (const post of posts) {
     lines.push('', renderBlog(post, origin), '')

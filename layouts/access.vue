@@ -7,9 +7,9 @@
 </template>
 
 <script setup lang="ts">
-import '~/assets/css/platform-entry.css'
+import '~/assets/css/platform-app-entry.css'
 
-const platformStylesheetHref = '/_nuxt/surfaces/platform.css'
+const platformStylesheetHref = '/_nuxt/surfaces/platform-app.css'
 
 useHead({
   link: [{ rel: 'stylesheet', href: platformStylesheetHref }],

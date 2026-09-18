@@ -14,7 +14,7 @@
 // check regardless of whether this middleware ran (verified during Workstream 3:
 // see e.g. server/api/dashboard/context.get.ts's getDashboardContext() and
 // server/api/dashboard/sites/[siteId]/guest-threads/*.ts's per-route scope checks).
-import { isWhatsAppInboxDeepLinkPath } from '~/utils/dashboard-reauth'
+import { isWhatsAppMessagesDeepLinkPath } from '~/utils/dashboard-reauth'
 
 function requireDashboardRequestEvent() {
   const event = useRequestEvent()
@@ -51,8 +51,8 @@ export default defineNuxtRouteMiddleware(async (to) => {
     if (result.status !== 'ok' || !result.allowed) {
       const query: Record<string, string> = { redirect: to.fullPath }
       // Only the WhatsApp-notification inbox deep link forces the focused
-      // phone-OTP login branch — see isWhatsAppInboxDeepLinkPath's doc comment.
-      if (isWhatsAppInboxDeepLinkPath(to.path)) query.mode = 'whatsapp'
+      // phone-OTP login branch — see isWhatsAppMessagesDeepLinkPath's doc comment.
+      if (isWhatsAppMessagesDeepLinkPath(to.path)) query.mode = 'whatsapp'
       return navigateTo({ path: '/login', query })
     }
   }

@@ -1,4 +1,6 @@
+import { SUBSCRIPTION_STATE_INVALID } from '~/server/utils/billing-access'
 import { HTTPError } from 'nitro'
+import type { CloudflareEnv } from '~/server/utils/auth'
 import { queryAll, type DbClient } from '~/server/db'
 import { assertSiteLanguageEntitlement, getPersistedSourceLocale } from '~/server/utils/localization'
 import { platformLocale } from '~/shared/platform-locales'
@@ -45,15 +47,16 @@ export async function resolvePublicDocumentSourcePath(db: DbClient, siteId: stri
      WHERE d.site_id = ? AND d.id = ? AND d.row_role = 'root' LIMIT 1`, [siteId, documentId])
   if (row?.kind === 'page' && row.path) return row.path
   if (row?.kind === 'social_post') return postPublicPath(row.slug ?? row.id)
-  if (row?.kind === 'article' && row.slug) return tenantBlogPostPath({ themeId: row.theme_id, vertical: row.vertical }, row.slug, row.category)
+  if (row?.kind === 'article' && row.slug) return tenantBlogPostPath({ themeId: row.theme_id, vertical: row.vertical }, row.slug)
   throw new HTTPError({ statusCode: 500, statusMessage: 'Document source route is missing', data: { document_id: documentId } })
 }
 
 export async function listPublicResourceLocaleRepresentations(
+  env: CloudflareEnv,
   db: DbClient,
   input: Omit<RepresentationInput, 'sourcePath' | 'resource'> & { resource: { type: LocalizedResourceType; id: string; routeSuffix?: string } },
 ): Promise<PublicLocaleRepresentation[]> {
-  return listPublicLocaleRepresentations(db, {
+  return listPublicLocaleRepresentations(env, db, {
     ...input,
     sourcePath: await resolvePublicLocalizationSourcePath(db, input.siteId, input.resource),
   })
@@ -66,9 +69,11 @@ function isUnavailableRepresentation(error: unknown): boolean {
     : null
   return code === 'LANGUAGE_ENTITLEMENT_REQUIRED'
     || code === 'PLATFORM_LOCALE_UNAVAILABLE'
+    || code === SUBSCRIPTION_STATE_INVALID
 }
 
 export async function listPublicLocaleRepresentations(
+  env: CloudflareEnv,
   db: DbClient,
   input: RepresentationInput,
 ): Promise<PublicLocaleRepresentation[]> {
@@ -119,7 +124,7 @@ export async function listPublicLocaleRepresentations(
 
   for (const candidate of candidates) {
     try {
-      await assertSiteLanguageEntitlement(db, input.organizationId, input.siteId, candidate.locale)
+      await assertSiteLanguageEntitlement(env, db, input.organizationId, input.siteId, candidate.locale)
     } catch (error) {
       if (isUnavailableRepresentation(error)) continue
       throw error

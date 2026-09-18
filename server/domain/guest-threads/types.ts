@@ -2,7 +2,7 @@ import type { GuestRequest } from '~/server/domain/requests'
 import type { MemberAccessPrincipal } from '~/server/utils/member-access'
 
 export interface OrganizationMemberAccessPrincipal {
-  memberId: string
+  userId: string
   role: string
   organizationId: string
   teamIds: string[] | null
@@ -17,12 +17,6 @@ export type GuestThreadDeliveryChannel = 'email' | 'whatsapp'
 export type GuestThreadDeliveryProvider = 'resend' | 'meta' | 'log_only'
 export type GuestThreadDeliveryPurpose = 'owner_alert' | 'guest_acknowledgement' | 'member_reply' | 'status_update'
 export type GuestThreadDeliveryStatus = 'pending' | 'accepted' | 'sent' | 'delivered' | 'read' | 'failed' | 'unknown'
-
-export const CONVERSATION_STATE_LABELS: Record<ConversationState, string> = {
-  needs_attention: 'Needs reply',
-  waiting_on_guest: 'Waiting for guest',
-  resolved: 'Resolved',
-}
 
 export type GuestThreadRow = GuestRequest
 
@@ -109,7 +103,6 @@ export interface GuestThreadListItemViewModel {
   contextLabel: string
   locationLabel: string | null
   conversationState: ConversationState
-  conversationStateLabel: string
   operationalStatus: string | null
   operationalStatusLabel: string | null
   unread: boolean
@@ -117,6 +110,22 @@ export interface GuestThreadListItemViewModel {
   preview: { kind: 'message' | 'submission'; text: string } | null
   lastActivityAt: string
   needsAttention: boolean
+  /** The location hero the row leads with. Null when the thread or the location has none. */
+  imageUrl: string | null
+  /** When the booking behind this thread happens, in its own timezone. A contact thread has none. */
+  whenLabel: string | null
+}
+
+/**
+ * What became of one outbound send. `channel` here is where the message went,
+ * which is not the entry's own channel: a reservation submitted on the web can
+ * alert its owner over WhatsApp, and only this says so.
+ */
+export interface GuestThreadEntryDeliveryViewModel {
+  id: string
+  channel: GuestThreadDeliveryChannel
+  purpose: GuestThreadDeliveryPurpose
+  status: GuestThreadDeliveryStatus
 }
 
 export interface GuestThreadEntryViewModel {
@@ -131,6 +140,7 @@ export interface GuestThreadEntryViewModel {
   payload: Record<string, unknown> | null
   sequence: number | null
   occurredAt: string
+  deliveries: GuestThreadEntryDeliveryViewModel[]
 }
 
 export interface GuestThreadDeliveryFailureViewModel {
@@ -153,7 +163,6 @@ export interface GuestThreadDetailViewModel {
   contextLabel: string
   locationLabel: string | null
   conversationState: ConversationState
-  conversationStateLabel: string
   source: ThreadDetailSourceModel
   entries: GuestThreadEntryViewModel[]
   availableActions: string[]
@@ -173,5 +182,11 @@ export interface ListGuestThreadsOptions {
   type?: GuestThreadSubmissionType | null
   conversationState?: ConversationState | null
   unreadOnly?: boolean
+  /**
+   * Which side of now the booking behind the thread falls on. A thread with no
+   * booking has no occurrence and belongs to neither, so it stays in the
+   * unfiltered list.
+   */
+  occurrence?: 'upcoming' | 'past' | null
   limit?: number
 }

@@ -3,7 +3,6 @@
 // All records use source='template' so ChowBot can identify and reference them.
 
 import { getVerticalCopy, type SiteVertical } from "~/utils/vertical-copy";
-import { heroBlockSection } from "~/utils/tenant-page-blocks";
 import { executeBatch, queryFirst, type BatchQuery, type DbClient } from "~/server/db";
 import { createTenantPagesBatch } from "~/server/utils/content/pages";
 
@@ -14,6 +13,7 @@ function uid(prefix: string) {
 export async function seedNewSite(
   db: DbClient,
   params: {
+    env: CloudflareEnv;
     organizationId: string;
     siteId: string;
     name: string;
@@ -22,7 +22,7 @@ export async function seedNewSite(
 ): Promise<string> {
   if (!db) throw new Error("Database not configured");
 
-  const { organizationId, siteId, name, vertical } = params;
+  const { env, organizationId, siteId, name, vertical } = params;
 
   // Reuse existing location on resume (site may have failed mid-seed)
   const existing = await queryFirst<{ id: string }>(
@@ -63,7 +63,11 @@ export async function seedNewSite(
     ['home', { path: '/', title: 'Home', pageType: 'system', recipe: 'home' }],
     ['about', { path: '/about', title: 'About', pageType: 'system', recipe: 'about' }],
     ['contact', { path: '/contact', title: 'Contact', pageType: 'system', recipe: 'contact' }],
-    ['location', { path: '/locations/main', title: 'Location', pageType: 'system', recipe: 'locations' }],
+    // There is no '/locations/main' page. A location detail route renders the
+    // business_locations row and its datasets: usePublicPageRequest gives it the
+    // page key 'location', canonicalTenantPagePath() has no entry for that, and
+    // ROUTE_PAGE_PATHS has no 'locations' recipe. The page document this used to
+    // create was never read by anything.
   ]);
   if (vertical === 'service') {
     for (const [page, path, title, pageType] of [
@@ -101,7 +105,6 @@ export async function seedNewSite(
         // `section` is not copy: it says which hero slot on the page this block
         // fills, and the Blawby template resolves its home hero by it.
         data: {
-          section: heroBlockSection(definition.path),
           title: definition.path === '/' ? null : definition.title,
           subtitle: null,
         },
@@ -122,7 +125,7 @@ export async function seedNewSite(
       },
     })
   }
-  await createTenantPagesBatch(db, { organizationId, siteId, pages: pagesToCreate })
+  await createTenantPagesBatch(db, { env, organizationId, siteId, pages: pagesToCreate })
 
   // ── Consultation settings (professional services only) ────────────────────
   // The Blawby shell reads settings_json.$.consultation on every route and

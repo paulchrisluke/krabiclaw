@@ -1,9 +1,26 @@
 // https://nuxt.com/docs/api/configuration/nuxt-config
 import { createRequire } from 'node:module'
+import { mkdirSync, writeFileSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
 import { getIcons } from '@iconify/utils'
 import { visualizer } from 'rollup-plugin-visualizer'
 import { ROBOTS_DISABLED_DIRECTIVE, ROBOTS_ENABLED_DIRECTIVE } from './shared/robots-directive'
 import { localizedPublicRouteAliases } from './build/localized-public-routes'
+// One source for the entry -> public path map; patch.cjs rewrites the built
+// manifest from the same file, so a surface cannot be registered in one place
+// and missed in the other.
+import publicSurfaceCssPaths from './build/public-surface-css.json'
+import {
+  claimedRoutesFromHandlers,
+  claimedRoutesFromPages,
+  mergeClaimedRoutes,
+  nonRouteClaimedRoutes,
+  type ClaimedRoute,
+} from './build/claimed-public-routes'
+
+// Filled by pages:extend and read by nitro:init after server routes are scanned.
+let claimedPageRoutes: ClaimedRoute[] = []
+const claimedRoutesModulePath = resolve(import.meta.dirname, '.nuxt-generated/claimed-public-routes.mjs')
 
 // nuxt/icon's serverBundle bundles a named collection in full — no usage-based
 // tree-shaking. lucide is the app's sole icon pack (it's also what Nuxt UI's
@@ -30,11 +47,6 @@ const analyzeBundle = process.env.PERF_BUNDLE_ANALYZE === 'true'
 const publicPerfTestPage = process.env.PERF_PUBLIC_TEST_PAGE !== 'false'
 const workerWasmExternal = /(?:index_bg|yoga|webp_dec|squoosh_png_bg)\.wasm$/
 
-const publicSurfaceCssPaths = {
-  'platform-entry': 'surfaces/platform.css',
-  'saya': 'surfaces/saya.css',
-  'blawby': 'surfaces/blawby.css',
-} as const
 
 function escapeRegExp(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -109,6 +121,10 @@ export default defineNuxtConfig({
         { rel: 'preconnect', href: 'https://imagedelivery.net' },
       ],
     },
+  },
+
+  alias: {
+    '#claimed-public-routes': claimedRoutesModulePath,
   },
 
   compatibilityDate: '2024-11-01',
@@ -199,11 +215,28 @@ export default defineNuxtConfig({
     },
     'pages:extend'(pages) {
       pages.push(...localizedPublicRouteAliases(pages))
+      // Captured here because this is where the resolved route tree exists. The
+      // Worker needs it to answer "does anything already claim this path?" — see
+      // build/claimed-public-routes.ts.
+      claimedPageRoutes = claimedRoutesFromPages(pages)
     },
     'nitro:config'(nitroConfig) {
       nitroConfig.handlers = nitroConfig.handlers?.filter(
         handler => handler.route !== '/api/_nuxt_icon/:collection',
       )
+    },
+    'nitro:init'(nitro) {
+      // Nitro has now scanned both server/api and server/routes.
+      // Written to a real file rather than a Nitro virtual module because the
+      // page loader is reachable from the Vite SSR graph too (TenantPublicPage
+      // imports it), and both builders have to resolve the same artifact.
+      const claimed = mergeClaimedRoutes(
+        claimedPageRoutes,
+        claimedRoutesFromHandlers([...nitro.options.handlers, ...nitro.scannedHandlers]),
+        nonRouteClaimedRoutes(),
+      )
+      mkdirSync(dirname(claimedRoutesModulePath), { recursive: true })
+      writeFileSync(claimedRoutesModulePath, `export const CLAIMED_PUBLIC_ROUTES = ${JSON.stringify(claimed)}\n`)
     },
     'vite:extendConfig'(viteConfig, { isClient }) {
       if (analyzeBundle && isClient) {
@@ -325,10 +358,6 @@ export default defineNuxtConfig({
       pathPrefix: false,
     },
     {
-      path: '~/components/reviews',
-      pathPrefix: false,
-    },
-    {
       path: '~/lib/components/workspace/dashboard',
       pathPrefix: false,
     },
@@ -337,11 +366,7 @@ export default defineNuxtConfig({
       pathPrefix: false,
     },
     {
-      path: '~/lib/components/workspace/content',
-      pathPrefix: false,
-    },
-    {
-      path: '~/lib/components/workspace/inbox',
+      path: '~/lib/components/workspace/messages',
       pathPrefix: false,
     },
     {

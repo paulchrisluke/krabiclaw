@@ -3,18 +3,39 @@ import {    redirect, setResponseHeader } from 'nitro/h3';
 import { queryFirst } from '~/server/db'
 import { cloudflareEnv } from '~/server/utils/api-response'
 import { TENANT_TYPES } from '~/utils/tenant-routing'
-import { resolveLocalizedRedirect } from '~/server/utils/localization'
 import { EXPERIENCE_PRESENTATION } from '~/utils/product-presentation'
 
 const redirects: Record<string, string> = {
-  '/docs/mcp-setup': '/docs/integrations/mcp-setup',
   '/privacy-policy': '/privacy',
   '/terms-and-conditions': '/terms',
   // Preserve older guessed/short docs URLs while keeping the published article
   // slug as the canonical destination.
-  '/docs/getting-started/getting-started-with-krabiclaw-in-chatgpt': '/docs/getting-started/getting-started',
-  '/docs/getting-started/getting-started-with-krabiclaw': '/docs/getting-started/getting-started',
-  '/docs/getting-started/connect-krabiclaw-to-chatgpt': '/docs/integrations/mcp-setup',
+  '/docs/getting-started/getting-started-with-krabiclaw-in-chatgpt': '/docs/getting-started',
+  '/docs/getting-started/getting-started-with-krabiclaw': '/docs/getting-started',
+  '/docs/getting-started/connect-krabiclaw-to-chatgpt': '/docs/mcp-setup',
+  // A documentation category was never a page of its own: /docs/{category}
+  // answered only when some article's slug happened to equal the category
+  // slug. The index is where that reader was going.
+  '/docs/integrations': '/docs',
+  '/docs/menu-management': '/docs',
+  '/docs/theme-customization': '/docs',
+  '/docs/seo-marketing': '/docs',
+  '/docs/advanced': '/docs',
+}
+
+/**
+ * KrabiClaw's own articles used to carry their category between the prefix and
+ * the slug — /blog/{category}/{slug}, /docs/{category}/{slug}, and the same
+ * shape for both markdown mirrors. They are addressed by slug now, so any URL
+ * published under the old shape keeps working by dropping the segment that
+ * stopped meaning anything. Listing the moved articles instead would go stale
+ * the first time one is renamed.
+ */
+const ARTICLE_CATEGORY_PATH = /^\/(blog|docs|blog-md|docs-md)\/[^/]+\/([^/]+)$/
+
+function articlePathWithoutCategory(pathname: string): string | null {
+  const match = ARTICLE_CATEGORY_PATH.exec(pathname)
+  return match ? `/${match[1]}/${match[2]}` : null
 }
 
 // Platform-domain-only (krabiclaw.com bare host) paths Google Search Console
@@ -69,8 +90,9 @@ async function resolveRetiredExperiencePath(event: H3Event, path: string) {
 async function resolveTenantRedirectForRequest(event: H3Event) {
   const siteId = event.context.siteId as string | null | undefined
   if (!siteId) return null
-  const db = cloudflareEnv(event).db
-  if (!db) return null
+  const env = cloudflareEnv(event)
+  const db = env.db
+  if (!db) throw new HTTPError({ statusCode: 500, statusMessage: 'Database not available' })
   const url = event.url
   const path = url.pathname === '/' ? '/' : url.pathname.replace(/\/$/, '')
   const firstSegment = path.split('/')[1] || ''
@@ -90,20 +112,6 @@ async function resolveTenantRedirectForRequest(event: H3Event) {
      LIMIT 1
   `, [siteId, locale, tenantPagePath])
   if (exactPage) return null
-
-  if (localized) {
-    const site = await queryFirst<{ organization_id: string }>(db, 'SELECT organization_id FROM sites WHERE id = ? LIMIT 1', [siteId])
-    if (!site) return null
-    // A page miss under a locale prefix is not an entitlement check - if the
-    // language license lapsed or the catalog went unavailable after this
-    // locale was published, fall through to a normal 404 instead of leaking
-    // the billing/catalog error to every visitor hitting a stale link.
-    const resolved = await resolveLocalizedRedirect(db, site.organization_id, siteId, path).catch(error => {
-      if (error instanceof HTTPError) return null
-      throw error
-    })
-    return resolved ? { toPath: resolved.to_path, statusCode: resolved.status_code, behavior: resolved.behavior } : null
-  }
 
   const localeRedirect = await queryFirst<{
     toPath: string | null
@@ -134,7 +142,7 @@ export default defineHandler(async (event) => {
     event.req.method === 'GET' &&
     ((event.req.headers.get('accept')) ?? '').includes('text/html')
   ) {
-    return redirect('/docs/integrations/mcp-setup', 302)
+    return redirect('/docs/mcp-setup', 302)
   }
 
   if (event.context.tenantType === TENANT_TYPES.PLATFORM && PLATFORM_GONE_PATHS.has(normalizedPathname)) {
@@ -142,6 +150,7 @@ export default defineHandler(async (event) => {
   }
 
   const target = redirects[normalizedPathname]
+    ?? (event.context.tenantType === TENANT_TYPES.PLATFORM ? articlePathWithoutCategory(normalizedPathname) : null)
   if (target) {
     const targetWithParams = `${target}${url.search}${url.hash}`
     // Permanent redirect for SEO

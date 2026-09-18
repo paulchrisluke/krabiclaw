@@ -7,7 +7,7 @@ import { updateSiteSettingsFields } from '~/server/utils/site-settings'
 import type { UpdateSiteSettingsRequest } from '~/server/types/site'
 import { defineHandler } from 'nitro'
 import {  readBody } from 'nitro/h3';
-import { assertSiteWideAccess } from '~/server/utils/member-access'
+import { assertSiteWideAccess, memberAccessPrincipal } from '~/server/utils/member-access'
 import { hasPlatformEventPermission } from '~/server/utils/platform-admin-users'
 
 export default defineHandler(async (event) => {
@@ -23,9 +23,7 @@ export default defineHandler(async (event) => {
   if (!site) {
     return jsonResponse({ error: 'Site not found' }, { status: 404 })
   }
-  await assertSiteWideAccess(db, {
-    env,
-    memberId: organization.memberId, role: organization.role, organizationId: organization.id, siteId: site.id, })
+  await assertSiteWideAccess(db, memberAccessPrincipal(organization, { env, siteId: site.id, event }))
 
 
   try {

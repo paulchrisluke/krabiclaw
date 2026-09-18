@@ -1,3 +1,4 @@
+import type { CloudflareEnv } from '~/server/utils/auth'
 import {
   loadMetafieldDefinitionIndex,
   parseLocalizedResourceType,
@@ -28,12 +29,13 @@ export interface ExactPublicLocalization {
 }
 
 export async function loadExactPublicLocalizations(
+  env: CloudflareEnv,
   db: DbClient,
   organizationId: string,
   siteId: string,
   locale: string,
 ): Promise<ExactPublicLocalization[]> {
-  const entitlement = await assertPublicSiteLanguageEntitlement(db, organizationId, siteId, locale)
+  const entitlement = await assertPublicSiteLanguageEntitlement(env, db, organizationId, siteId, locale)
   if (entitlement.source) throw new HTTPError({ statusCode: 404, statusMessage: 'Primary-language routes are unprefixed' })
   const rows = await queryAll<StoredPublicLocalizationRow>(db, `
     SELECT resource_type, resource_id, locale, values_json, route_path

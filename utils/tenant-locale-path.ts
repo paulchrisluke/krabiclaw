@@ -8,17 +8,28 @@ export interface TenantLocalePath {
   publicPath: string
 }
 
+/**
+ * Syntax only: whether a first segment *could* be a language tag.
+ *
+ * `Intl` accepts any well-formed subtag, and plenty of our own top-level routes
+ * are well-formed language tags — `dev`, `api`, `faq`, `qa` all pass. So this
+ * answers "is this shaped like a locale", never "is this a locale"; a caller
+ * routing on the answer must check it against real locales, the way
+ * resolveTenantLocalePath checks the tenant's published ones.
+ */
+export function isLocaleShapedSegment(segment: string | undefined): boolean {
+  if (!segment || !/^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$/.test(segment)) return false
+  try {
+    const canonical = Intl.getCanonicalLocales(segment)
+    return canonical.length === 1 && canonical[0] === segment
+  } catch {
+    return false
+  }
+}
+
 export function splitLocalePrefix(path: string): TenantLocalePath {
   const first = path.split('/')[1]
-  let localeSegment: string | null = null
-  if (first && /^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$/.test(first)) {
-    try {
-      const canonical = Intl.getCanonicalLocales(first)
-      if (canonical.length === 1 && canonical[0] === first) localeSegment = first
-    } catch {
-      localeSegment = null
-    }
-  }
+  const localeSegment = isLocaleShapedSegment(first) ? first! : null
   const sourcePath = localeSegment ? (path.slice(localeSegment.length + 1) || '/') : path
   return { localeSegment, sourcePath, publicPath: path }
 }

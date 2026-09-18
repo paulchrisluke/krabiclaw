@@ -1,7 +1,7 @@
 import { jsonResponse } from '~/server/utils/api-response'
 import { queryFirst } from '~/server/db'
 import { sendReviewRequestForBooking } from '~/server/utils/review-request-delivery'
-import { assertResourceAccess } from '~/server/utils/member-access'
+import { assertResourceAccess, memberAccessPrincipal } from '~/server/utils/member-access'
 import { requireSiteAccess } from '~/server/utils/location-access'
 
 export default defineHandler(async (event) => {
@@ -18,9 +18,7 @@ export default defineHandler(async (event) => {
   `, [submissionId, siteId])
   if (!submission) return jsonResponse({ error: 'Reservation not found or access denied' }, { status: 404 })
 
-  await assertResourceAccess(db, {
-    env,
-    memberId: site.member_id, role: site.member_role, organizationId: site.organization_id, siteId, resourceLocationId: submission.location_id, })
+  await assertResourceAccess(db, { ...memberAccessPrincipal(site.membership, { env, siteId, event }), resourceLocationId: submission.location_id })
 
   const body = await readBody(event) as { kind?: string } | undefined
   const kind = body?.kind === 'reminder' ? 'reminder' : 'first'

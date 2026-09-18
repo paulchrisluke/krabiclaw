@@ -11,14 +11,36 @@ export interface PublicTemplateDefinition {
     offeringDetailPrefix: string | null
     articleIndex: string | null
     articleDetailPrefix: string
-    /** Whether an article's public path carries its category between the prefix and the slug. */
-    articlePathHasCategory: boolean
   }
   sitemap: {
     exactPaths: string[]
     dynamicPrefixes: string[]
   }
   nonIndexableExactPaths: string[]
+  /**
+   * Where this template renders a tenant page document.
+   *
+   * One declaration, read by the renderer that loads the document and by the
+   * writer that decides whether a page may exist there. They used to be six
+   * separate lists and they disagreed: /services was reserved against routes
+   * deleted two commits earlier, /order and /reservations were reserved against
+   * routes that do read a document, and /blog differs per template.
+   *
+   * `recipes` names the pages a template guarantees: the lookup a route loader
+   * performs, and the set whose deletion the writer refuses. `paths` are the
+   * documents a route still binds by path alone — only needed where a route
+   * file claims the path, because a claimed path is one the catch-all cannot
+   * reach. `prefixes` are subtrees served as documents. `catchAll` says whether
+   * pages/[...tenantPath].vue renders unclaimed paths for this template; every
+   * template sets it, KrabiClaw's own included, because KrabiClaw is a site row
+   * like any other (#903).
+   */
+  pageDocuments: {
+    recipes: Record<string, string>
+    paths: string[]
+    prefixes: string[]
+    catchAll: boolean
+  }
 }
 
 export const publicTemplateRegistry: Record<PublicTemplateSlug, PublicTemplateDefinition> = {
@@ -32,13 +54,22 @@ export const publicTemplateRegistry: Record<PublicTemplateSlug, PublicTemplateDe
       offeringDetailPrefix: null,
       articleIndex: '/blog',
       articleDetailPrefix: '/blog',
-      articlePathHasCategory: false,
     },
     sitemap: {
       exactPaths: ['/', '/menu', '/products', '/experiences', '/contact', '/blog', '/locations', '/reservations', '/posts', '/photos', '/qa', '/reviews'],
       dynamicPrefixes: ['/blog/', '/experiences/', '/locations/', '/posts/'],
     },
     nonIndexableExactPaths: ['/contact/confirmed', '/bookings/cancel', '/bookings/confirmed', '/reservations/cancel', '/reservations/confirmed'],
+    // Saya reads a document on the routes that request the 'content' dataset.
+    // /menu, /products, /experiences, /qa, /reviews, /posts, /photos and
+    // /locations/<slug> are absent on purpose: they render their own data, and
+    // a document stored at one of them would never be shown.
+    pageDocuments: {
+      recipes: { home: '/', about: '/about', contact: '/contact', order: '/order', reservations: '/reservations' },
+      paths: [],
+      prefixes: [],
+      catchAll: true,
+    },
   },
   blawby: {
     slug: 'blawby',
@@ -50,13 +81,27 @@ export const publicTemplateRegistry: Record<PublicTemplateSlug, PublicTemplateDe
       offeringDetailPrefix: '/services',
       articleIndex: '/blog',
       articleDetailPrefix: '/article',
-      articlePathHasCategory: false,
     },
     sitemap: {
       exactPaths: ['/', '/about', '/services', '/pricing', '/donate', '/schedule', '/contact', '/blog', '/policies/privacy', '/policies/terms', '/third-party-notices'],
       dynamicPrefixes: ['/services/', '/article/'],
     },
     nonIndexableExactPaths: ['/contact/confirmed'],
+    // The Blawby route loader looks a recipe up here. 'links', 'confirmation',
+    // 'article' and 'page' are absent because they hold no document of their
+    // own: the first two render from shell data, an article is a blog post, and
+    // 'page' names its own path through the catch-all.
+    pageDocuments: {
+      recipes: {
+        home: '/', services: '/services', about: '/about', pricing: '/pricing', contact: '/contact',
+        schedule: '/schedule', blog: '/blog', donate: '/donate',
+        privacy: '/policies/privacy', terms: '/policies/terms',
+        'third-party-notices': '/third-party-notices',
+      },
+      paths: [],
+      prefixes: ['/services/'],
+      catchAll: true,
+    },
   },
   // KrabiClaw's own site: the marketing pages, documentation and blog. It is an
   // ordinary site row rendered by the platform layout; the platform host resolves
@@ -71,13 +116,32 @@ export const publicTemplateRegistry: Record<PublicTemplateSlug, PublicTemplateDe
       offeringDetailPrefix: null,
       articleIndex: '/blog',
       articleDetailPrefix: '/blog',
-      articlePathHasCategory: true,
     },
     sitemap: {
-      exactPaths: ['/', '/about', '/blog', '/docs', '/features', '/help', '/plugin', '/pricing', '/privacy', '/templates', '/templates/blawby', '/templates/saya', '/terms'],
+      // The editorial marketing routes are not listed here: they are published
+      // page documents now, and the platform sitemap reads them from
+      // content_documents (see server/plugins/sitemap.ts). What remains is the
+      // set of code-owned platform routes that hold no document.
+      exactPaths: ['/blog', '/docs', '/help', '/privacy', '/templates', '/templates/blawby', '/templates/saya', '/terms'],
       dynamicPrefixes: ['/blog/', '/docs/'],
     },
     nonIndexableExactPaths: [],
+    // KrabiClaw's own marketing pages are ordinary page documents on the
+    // platform site, read by the same loader every customer site uses (#903).
+    // The routes that are not editorial — /blog, /docs, /help, /templates,
+    // /privacy, /terms — are absent on purpose: they render their own data or
+    // their own policy surface, and a document stored at one of them would
+    // never be shown.
+    pageDocuments: {
+      recipes: { home: '/', about: '/about', pricing: '/pricing' },
+      // Only a path a route file still claims needs naming here. /experiences is
+      // the Saya catalog's route on a customer host and KrabiClaw's own page on
+      // this one. Everything else KrabiClaw publishes is an unclaimed path the
+      // catch-all serves, the same as any tenant's.
+      paths: ['/experiences'],
+      prefixes: [],
+      catchAll: true,
+    },
   },
 }
 

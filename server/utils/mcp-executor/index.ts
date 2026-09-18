@@ -191,76 +191,6 @@ export async function executeMcpToolCall(
     };
   }
 
-  if (toolName === "show_generated_images") {
-    if (!authenticatedUser) await requireMcpUser(event);
-    const raw = objectArray(normalizedArguments.images, "images");
-    if (raw.length === 0) {
-      throw mcpProtocolError(
-        MCP_ERROR.invalidParams,
-        "images must be non-empty. First persist each image with save_generated_image or save_generated_image_file, then pass the asset_id and public_url here.",
-      );
-    }
-    for (const img of raw) {
-      if (
-        typeof img.asset_id !== "string" ||
-        !img.asset_id ||
-        typeof img.public_url !== "string" ||
-        !img.public_url
-      ) {
-        throw mcpProtocolError(
-          MCP_ERROR.invalidParams,
-          "Each image must have a non-empty asset_id and public_url returned by save_generated_image or save_generated_image_file.",
-        );
-      }
-    }
-    const images = raw.map((img) => ({
-      asset_id: img.asset_id as string,
-      public_url: img.public_url as string,
-    }));
-
-    let activeSiteName: string | null = null;
-    const rawSiteId = optionalString(normalizedArguments, "site_id");
-    const rawTargetForName = optionalString(normalizedArguments, "target");
-    if (rawTargetForName && rawSiteId) {
-      const activeSiteContext = await requireMcpSite(event, rawSiteId, "editor", authenticatedUser);
-      const siteRow = await queryFirst<{ brand_name: string | null; subdomain: string | null }>(
-        activeSiteContext.db,
-        `
-          SELECT brand_name, subdomain
-          FROM sites
-          WHERE id = ? AND organization_id = ?
-          LIMIT 1
-        `,
-        [activeSiteContext.siteId, activeSiteContext.organizationId],
-      );
-      const nameVal = siteRow?.brand_name?.trim();
-      activeSiteName = (nameVal ? nameVal : siteRow?.subdomain) ?? null;
-    }
-
-    const picker = pickerConfigFromShowGeneratedImages(normalizedArguments, activeSiteName);
-    const isDebug = normalizedArguments.debug === true;
-    return renderStructuredResponse(
-      {
-        title: picker.title,
-        subtitle: picker.subtitle,
-        images,
-        useLabel: picker.useLabel,
-        regenerateLabel: picker.regenerateLabel,
-        assignTool: picker.assignTool,
-        assignArgs: picker.assignArgs,
-        regenerateTool: picker.regenerateTool,
-        regenerateArgs: picker.regenerateArgs,
-        successMessage: picker.successMessage,
-        ...(isDebug ? {
-          debug: true,
-          debugLabel: "show_generated_images debug",
-          debugExpectedImageDomain: "https://imagedelivery.net",
-        } : {}),
-      },
-      `${images.length} AI-generated image${images.length !== 1 ? "s" : ""} ready to review.`,
-    );
-  }
-
   const siteId = requiredString(normalizedArguments, "site_id");
   const site = await requireMcpSite(event, siteId, tool.minimumRole, authenticatedUser);
   const args = omit(normalizedArguments, ["site_id"]);
@@ -280,6 +210,7 @@ export async function executeMcpToolCall(
   if (
     tool.requiredEntitlement &&
     !(await hasSiteEntitlement(
+      site.env as CloudflareEnv,
       site.db,
       site.siteId,
       tool.requiredEntitlement,

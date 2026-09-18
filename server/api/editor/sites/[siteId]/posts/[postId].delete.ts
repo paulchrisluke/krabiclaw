@@ -3,7 +3,7 @@ import { getAuthSession } from '~/server/utils/auth'
 import { deletePost } from '~/server/utils/post-management'
 import { queryFirst } from '~/server/db'
 import { loadMemberSiteRow } from '~/server/utils/location-access'
-import { assertResourceAccess, isOrganizationWideRole } from '~/server/utils/member-access'
+import { assertResourceAccess, isOrganizationWideRole, memberAccessPrincipal } from '~/server/utils/member-access'
 
 export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
@@ -17,7 +17,7 @@ export default defineHandler(async (event) => {
   const session = await getAuthSession(event, env)
   if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
-  const site = await loadMemberSiteRow(db, env, siteId, session.user.id)
+  const site = await loadMemberSiteRow(event, db, env, siteId, session.user.id)
   if (!site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
   if (!isOrganizationWideRole(site.member_role)) {
     return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
@@ -29,9 +29,7 @@ export default defineHandler(async (event) => {
     LIMIT 1
   `, [postId, site.organization_id, siteId])
   if (!post) return jsonResponse({ error: 'Post not found' }, { status: 404 })
-  await assertResourceAccess(db, {
-    env,
-    memberId: site.member_id, role: site.member_role, organizationId: site.organization_id, siteId, resourceLocationId: post.location_id, })
+  await assertResourceAccess(db, { ...memberAccessPrincipal(site.membership, { env, siteId, event }), resourceLocationId: post.location_id })
 
   await deletePost(db, site.organization_id, siteId, postId)
   return jsonResponse({ success: true })

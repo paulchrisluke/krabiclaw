@@ -1,4 +1,5 @@
 import { parseOpeningHours, parseSpecialHours } from '~/shared/reservation-hours'
+import { oncePerRequest } from '~/server/utils/request-scope'
 import { parseGoogleReviewMetadata } from '~/shared/google-review'
 // Canonical route-capability-driven public page service.
 //   ?page=home|about|contact|location|reviews|photos|qa|...
@@ -42,6 +43,7 @@ import { isPublicPagePayload } from '~/utils/public-resource-contracts'
 import type { LocalizedResourceType } from '~/server/utils/localization-registry'
 import { listPublicLocaleRepresentations } from '~/server/utils/public-locale-representations'
 import { normalizeVertical } from '~/utils/vertical-copy'
+import { resolvePublicTemplate } from '~/utils/template-registry'
 import { isPublicSourceRouteRoot } from '~/shared/public-locale-routes'
 import {
   loadExactPublicLocalizations,
@@ -115,43 +117,27 @@ interface ReviewRow {
 
 type ProductMediaRow = MediaAsset & { product_id: string; slot: 'image' | 'gallery'; sort_order: number };
 
-const publicPageReadsByRequest = new WeakMap<H3Event, Map<string, Promise<unknown>>>()
-
 interface PublicPageLoadOptions {
   mutateResponseHeaders?: boolean
   signal?: AbortSignal
 }
 
-function canonicalTenantPagePath(page: string | null): string | null {
+/**
+ * The canonical source path of this route, which is what a locale
+ * representation is keyed by. Every published locale route has one, whether or
+ * not it carries a tenant page document: /menu and /locations render products
+ * and locations, and still have /th/menu and /th/locations.
+ *
+ * Where the *document* lives is a different question, answered per template in
+ * utils/template-registry.ts. Collapsing the two is what made /th/menu 404.
+ */
+function routeSourcePath(page: string | null): string | null {
   if (!page) return null
   if (page === 'home') return '/'
-  // Location detail routes are backed by the canonical business_locations row
-  // and their route datasets. They are not tenant-page variants, so do not
-  // require a CMS page record for a valid location.
+  // A location detail route is its business_locations row, not a page.
   if (page === 'locations') return '/locations'
   if (isPublicSourceRouteRoot(page)) return `/${page}`
   return null
-}
-
-// A site has one story, and it lives on the About page: that is the document
-// the onboarding checklist counts as the story, and the one the home teaser
-// links to. The home teaser reads it from there. It does not carry a second
-// copy of its own.
-const STORY_SOURCE_PATH = '/about'
-
-function tenantPageToStory(page: PublicTenantPage | null): PublicPageStory | null {
-  if (!page) return null
-  const rows = tenantPageToContentRows(page)
-  const rowFor = (field: string) => rows.find(row => row.field === field) ?? null
-  const title = rowFor('story.title')?.content?.trim() ?? ''
-  const body = rowFor('story.body')?.content?.trim() ?? ''
-  const image = rowFor('story.image')?.media?.[0]?.public_url?.trim() ?? ''
-  if (!title && !body && !image) return null
-  return {
-    title: title || null,
-    body: body || null,
-    image: image || null,
-  }
 }
 
 function tenantPageToContentRows(page: PublicTenantPage): SiteContent[] {
@@ -328,7 +314,7 @@ async function loadPublicPageSource(
   const localizedLocale = locale && locale !== 'en' ? locale : null
   let publicLocalizations: ExactPublicLocalization[] = []
   if (localizedLocale) {
-    publicLocalizations = await loadExactPublicLocalizations(db, orgId, siteId, localizedLocale)
+    publicLocalizations = await loadExactPublicLocalizations(env, db, orgId, siteId, localizedLocale)
   }
 
   const localizedLocationId = localizedLocale && locationSlug
@@ -430,7 +416,7 @@ async function loadPublicPageSource(
     idxReviews = push(
       `SELECT r.id, r.author_name, r.rating, r.content, r.created_at, r.source,
               r.original_review_date, r.original_reference, r.google_review_metadata,
-              r.location_id, bl.title AS location_title
+              r.owner_reply, r.owner_reply_at, r.location_id, bl.title AS location_title
        FROM reviews r
        LEFT JOIN business_locations bl ON bl.id = r.location_id
        WHERE r.site_id = ? AND r.status = 'approved'
@@ -444,7 +430,7 @@ async function loadPublicPageSource(
 
   if (locationId && requestedDatasets.has("reviews"))
     idxLocReviews = push(
-      `SELECT r.id, r.author_name, r.rating, r.content, r.created_at, r.source, r.original_review_date, r.original_reference, r.google_review_metadata
+      `SELECT r.id, r.author_name, r.rating, r.content, r.created_at, r.source, r.original_review_date, r.original_reference, r.google_review_metadata, r.owner_reply, r.owner_reply_at
        FROM reviews r WHERE r.location_id = ? AND r.site_id = ? AND r.status = 'approved'
        ORDER BY CASE WHEN r.source = 'google_places' THEN r.original_review_date ELSE r.created_at END DESC, r.id ASC LIMIT 3`,
       [locationId, siteId],
@@ -599,22 +585,24 @@ async function loadPublicPageSource(
       ? (batchResults[idxQa] as { results: Record<string, unknown>[] })
       : { results: [] as Record<string, unknown>[] };
   const sourceLocale = 'en';
-  const routePagePath = canonicalTenantPagePath(page)
-  const contentPagePath = requestedDatasets.has('content') ? routePagePath : null
+  const routePagePath = routeSourcePath(page)
+  // Which paths carry a tenant page document is declared once, per template.
+  const documentPath = page
+    ? resolvePublicTemplate({ themeId: site.theme_id, vertical: site.vertical }).pageDocuments.recipes[page] ?? null
+    : null
+  const contentPagePath = requestedDatasets.has('content') ? documentPath : null
   const tenantPageOptions = {
     locale,
     preview: isPreviewAuthorized,
     localizations: localizedLocale ? publicLocalizations : null,
   }
-  const [tenantPage, storyPage] = await Promise.all([
-    contentPagePath
-      ? getPublicTenantPageForPath(db, siteId, contentPagePath, tenantPageOptions)
-      : null,
-    // The home teaser renders the story; every other route reads its own page.
-    contentPagePath === '/'
-      ? getPublicTenantPageForPath(db, siteId, STORY_SOURCE_PATH, tenantPageOptions)
-      : null,
-  ])
+  // One page, one read. The home route used to read the About page as well, to
+  // pull a story teaser out of it; the home document carries its own
+  // image-with-text block now, so the extra D1 round trip on every home
+  // request is gone with it.
+  const tenantPage = contentPagePath
+    ? await getPublicTenantPageForPath(env, db, siteId, contentPagePath, tenantPageOptions)
+    : null
   // These complete built-in routes may display an optional CMS content overlay.
   // The route remains valid when that optional overlay has no translated page.
   const allowsMissingLocalizedTenantPage = page === 'contact'
@@ -877,7 +865,7 @@ async function loadPublicPageSource(
   }
   const localeRepresentations = !representationResource && tenantPage?.localeRepresentations
     ? tenantPage.localeRepresentations
-    : await listPublicLocaleRepresentations(db, {
+    : await listPublicLocaleRepresentations(env, db, {
         organizationId: orgId,
         siteId,
         sourcePath: representationSourcePath,
@@ -892,7 +880,6 @@ async function loadPublicPageSource(
     content: contentRows,
     content_blocks: groupContentBlocks(contentRows),
     tenant_page: tenantPage,
-    story: tenantPageToStory(storyPage),
     products,
     collections,
     locationReviews: (locationReviewRows?.results ?? []).map(review => ({ ...review, google_review_metadata: parseGoogleReviewMetadata(review.google_review_metadata) })),
@@ -946,28 +933,19 @@ export const loadPublicPage = (
     return loadPublicPageSource(event, siteId, query, options)
       .finally(() => recordRequestPhase(event, "page", startedAt));
   }
-  let requestReads = publicPageReadsByRequest.get(event);
-  if (!requestReads) {
-    requestReads = new Map();
-    publicPageReadsByRequest.set(event, requestReads);
-  }
   const queryKey = JSON.stringify(
     Object.entries(query)
       .filter(([, value]) => value !== undefined)
       .sort(([left], [right]) => left.localeCompare(right)),
   );
-  const key = `${siteId}:${queryKey}`;
-  const existing = requestReads.get(key);
-  if (existing) return existing;
-
-  const startedAt = performance.now();
-  const operation = loadPublicPageSource(event, siteId, query, options);
-  const pending = operation
-    .finally(() => recordRequestPhase(event, "page", startedAt))
-    .catch((error) => {
-      if (requestReads.get(key) === pending) requestReads.delete(key);
-      throw error;
-    });
-  requestReads.set(key, pending);
-  return pending;
+  // The flag is part of the key because it changes what the call does to the
+  // response, not just what it returns: a memo shared across two callers that
+  // disagree about it would let the first one's header behaviour stand for both,
+  // including the `private, no-store` a preview-authorized response needs.
+  const headerKey = options?.mutateResponseHeaders === false ? 'no-headers' : 'headers'
+  return oncePerRequest(event, `public-page:${siteId}:${headerKey}:${queryKey}`, () => {
+    const startedAt = performance.now();
+    return loadPublicPageSource(event, siteId, query, options)
+      .finally(() => recordRequestPhase(event, "page", startedAt));
+  });
 };

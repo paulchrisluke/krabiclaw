@@ -17,7 +17,6 @@ export interface CreateQaInput {
   question_author?: string | null
   is_owner_answer?: boolean
   sort_order?: number
-  source?: 'manual' | 'import'
   status?: 'published' | 'hidden'
 }
 
@@ -127,13 +126,22 @@ export async function attachPageQa<T extends { type: string; data: Record<string
   })
 }
 
+/**
+ * The editor's Q&A is the site's own. `source = 'manual'` is written here and
+ * matched on every update and delete, so an imported Google question is not
+ * addressable through these paths — it belongs to the Places import, and the
+ * dashboard says to manage it in Google.
+ *
+ * Making *every* Q&A read-only instead stranded the 72 records four sites had
+ * authored — NCLS's practice-area answers and KrabiClaw's own 50 docs questions
+ * among them — with no way left to correct a word.
+ */
 export async function createQa(db: DbClient, scope: QaScope, input: CreateQaInput) {
   const question = input.question.trim()
   if (!question) return { status: 400, data: { error: 'question required' } }
   if (question.length > 500) return { status: 400, data: { error: 'question must be 500 characters or fewer' } }
   const answer = stringOrNull(input.answer, 2000)
   const status = input.status === 'hidden' ? 'hidden' : 'published'
-  const source = input.source === 'import' ? 'import' : 'manual'
   const explicitSortOrder = input.sort_order === undefined ? null : Number(input.sort_order)
   if (explicitSortOrder !== null && !Number.isInteger(explicitSortOrder)) {
     return { status: 400, data: { error: 'sort_order must be an integer' } }
@@ -145,7 +153,7 @@ export async function createQa(db: DbClient, scope: QaScope, input: CreateQaInpu
   const scoped = scopeSql(scope.locationId, pagePath)
   await createContentDocumentWithBlocks(db, {
     id, rowRole: 'root', kind: 'qa', locale: 'en', organizationId: scope.organizationId, siteId: scope.siteId,
-    locationId: scope.locationId, scopePath: pagePath, status, source, sortOrder: explicitSortOrder ?? 0,
+    locationId: scope.locationId, scopePath: pagePath, status, source: 'manual', sortOrder: explicitSortOrder ?? 0,
     title: question, summary: answer,
     metadata: { question_author: stringOrNull(input.question_author, 120),
       question_date: null, answer_author: null, answer_date: null,
@@ -228,7 +236,7 @@ export async function updateQa(db: DbClient, scope: QaScope, qaId: string, updat
   const result = await execute(db, `
     UPDATE content_documents
     SET ${sets.join(', ')}
-    WHERE row_role = 'root' AND kind = 'qa' AND id = ? AND organization_id = ? AND site_id = ? AND ${scoped.clause}
+    WHERE row_role = 'root' AND kind = 'qa' AND source = 'manual' AND id = ? AND organization_id = ? AND site_id = ? AND ${scoped.clause}
   `, params)
   if (!Number(result.meta.changes ?? 0)) throw new Error('Q&A not found')
   return { updated: true, qa_id: qaId }
@@ -237,7 +245,7 @@ export async function updateQa(db: DbClient, scope: QaScope, qaId: string, updat
 export async function deleteQa(db: DbClient, scope: QaScope, qaId: string) {
   const scoped = scopeSql(scope.locationId, scope.pagePath)
   const params = [qaId, scope.organizationId, scope.siteId, ...scoped.params]
-  const where = `row_role = 'root' AND kind = 'qa' AND id = ? AND organization_id = ? AND site_id = ? AND ${scoped.clause}`
+  const where = `row_role = 'root' AND kind = 'qa' AND source = 'manual' AND id = ? AND organization_id = ? AND site_id = ? AND ${scoped.clause}`
   const document = await queryFirst<{ id: string }>(db, `SELECT id FROM content_documents WHERE ${where}`, params)
   if (!document) return { status: 404, data: { error: 'Q&A not found' } }
   const results = await executeBatch(db, prepareContentDocumentDeletion({ documentId: qaId, organizationId: scope.organizationId, siteId: scope.siteId }))
@@ -272,7 +280,7 @@ export async function reorderQa(
     query: `
       UPDATE content_documents
       SET sort_order = ?, updated_at = ?
-      WHERE row_role = 'root' AND kind = 'qa' AND id = ? AND organization_id = ? AND site_id = ? AND ${scoped.clause}
+      WHERE row_role = 'root' AND kind = 'qa' AND source = 'manual' AND id = ? AND organization_id = ? AND site_id = ? AND ${scoped.clause}
     `,
     params: [update.sort_order, now, update.id, scope.organizationId, scope.siteId, ...scoped.params],
   })))

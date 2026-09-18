@@ -59,6 +59,7 @@
         :saving="saving"
         :save-disabled="saveDisabled"
         :save-label="saveLabel"
+        :error="saveError || photoError"
         :detail-title="sectionLabels[editorKey]"
         :dismiss-to="itemPath"
         @cancel="cancelEditor"
@@ -265,6 +266,33 @@
               <UFormField label="Places per session" description="Leave empty for no limit. Zero means no places at all.">
                 <UInput v-model="form.booking_capacity" inputmode="numeric" placeholder="10" class="w-full" />
               </UFormField>
+
+              <!--
+                The weekly schedule at this branch. Each time is a slot the
+                merchant runs every week; sessions a guest can book are
+                generated from these, so this is where a class time is added,
+                moved or dropped.
+              -->
+              <div v-if="product?.booking" class="space-y-3 border-t border-default pt-4">
+                <div>
+                  <p class="text-sm font-medium">Weekly schedule</p>
+                  <p class="text-sm text-muted">Times this branch runs it, in the branch's own clock. Dropping a time cancels its future sessions that nobody has booked.</p>
+                </div>
+                <p v-if="scheduleLoading" class="text-sm text-muted">Loading the schedule…</p>
+                <div v-else class="space-y-3">
+                  <div v-for="day in WEEKDAYS" :key="day.value" class="flex flex-col gap-2 sm:flex-row sm:items-start">
+                    <p class="w-24 shrink-0 pt-2 text-sm font-medium">{{ day.label }}</p>
+                    <div class="flex-1 space-y-2">
+                      <div v-for="(slot, index) in slotsFor(day.value)" :key="`${day.value}-${index}`" class="flex items-center gap-2">
+                        <UInput v-model="slot.start_time" type="time" step="300" class="w-32" />
+                        <UInput v-model="slot.capacity" inputmode="numeric" :placeholder="form.booking_capacity || 'Default'" class="w-28" aria-label="Places for this time" />
+                        <UButton icon="i-lucide-x" color="neutral" variant="ghost" size="sm" aria-label="Remove this time" @click="removeSlot(slot)" />
+                      </div>
+                      <UButton icon="i-lucide-plus" color="neutral" variant="subtle" size="sm" label="Add a time" @click="addSlot(day.value)" />
+                    </div>
+                  </div>
+                </div>
+              </div>
             </template>
           </div>
         </template>
@@ -280,22 +308,27 @@ import DashboardCoverPhotoField from '~/components/dashboard/DashboardCoverPhoto
 import DashboardResourceLocalization from '~/components/dashboard/DashboardResourceLocalization.vue'
 import type { Collection, Product } from '~/server/types/products'
 import type { MetafieldDefinition, MetafieldValue } from '~/shared/metafields'
-import { metafieldHandle } from '~/shared/metafields'
+import { metafieldHandle, PRICING_NOTE_HANDLE } from '~/shared/metafields'
 import { PRODUCT_LIMITS } from '~/shared/product-limits'
 import { isCurrencyCode } from '~/shared/currencies'
 import { majorAmountToMinor, minorAmountToMajor, selectPrice, type Price } from '~/shared/prices'
 import { formatProductMoney } from '~/utils/product-money'
-import { requireProductPresentation } from '~/utils/product-presentation'
+import { presentationForProduct, productSurfaceOf, requireProductPresentation } from '~/utils/product-presentation'
 import { getErrorMessage, isNotFoundError } from '~/utils/errors'
 
 const route = useRoute()
 const dashboardApi = useDashboardApi()
-const toast = useToast()
 const collectionId = computed(() => String(route.params.collectionId ?? route.params.categoryId ?? ''))
 const productId = computed(() => String(route.params.productId ?? ''))
 const locationPath = computed(() => `/dashboard/${String(route.params.orgSlug)}/sites/${String(route.params.siteSlug)}/locations/${String(route.params.locationSlug)}`)
-const productsPath = computed(() => `${locationPath.value}/products`)
-const collectionPath = computed(() => `${productsPath.value}/${collectionId.value}`)
+// The surface is the product's own, not the URL's: a dish saved as bookable is
+// an experience from that moment, and the rows it returns to have moved with
+// it. Until the row has loaded the URL is all there is to go on.
+const surfacePath = computed(() => {
+  const surface = product.value ? productSurfaceOf(vertical, product.value) : String(route.params.surface ?? '')
+  return `${locationPath.value}/products/${surface}`
+})
+const collectionPath = computed(() => `${surfacePath.value}/${collectionId.value}`)
 const itemPath = computed(() => `${collectionPath.value}/${productId.value}`)
 const frame = useEditorFrame(itemPath)
 
@@ -305,7 +338,11 @@ const dashboardLocation = useDashboardLocation()
 
 const vertical = dashboard.site.value?.vertical
 if (!vertical) throw createError({ statusCode: 500, statusMessage: 'Site vertical is not configured' })
-const presentation = requireProductPresentation(vertical)
+// The words follow the product: a class is an experience whatever the site
+// sells otherwise. Until the row has loaded, and for a product being created,
+// the screen speaks the vertical's own surface — it is not yet known to be
+// anything else.
+const presentation = computed(() => (product.value ? presentationForProduct(vertical, product.value) : requireProductPresentation(vertical)))
 const rawCurrency = dashboard.site.value?.default_currency
 if (!isCurrencyCode(rawCurrency)) throw createError({ statusCode: 500, statusMessage: 'Unsupported site currency' })
 const currency = rawCurrency
@@ -345,7 +382,14 @@ const collections = ref<Collection[]>([])
 const definitions = ref<MetafieldDefinition[]>([])
 const product = ref<Product | null>(null)
 const loadError = ref<string | null>(null)
+const saveError = ref<string | null>(null)
+const photoError = ref<string | null>(null)
 const saving = ref(false)
+
+watch(editorKey, () => {
+  saveError.value = null
+  photoError.value = null
+})
 
 const isCollectionList = (value: unknown): value is { collections: Collection[] } =>
   isRecord(value) && Array.isArray(value.collections)
@@ -358,7 +402,17 @@ const isOne = (value: unknown): value is { success: true, product: Product } =>
 
 const collection = computed(() => collections.value.find(row => row.id === collectionId.value) ?? null)
 
-async function load() {
+// What the last successful (or in-flight) load was for. locationId resolves
+// after mount on a cold navigation, so onMounted and the watcher below both
+// fire for the same product; this loads it once.
+//
+// `force` is for the writers. A save or a photo change has just made this row
+// different from what was loaded, so the key matching is exactly the wrong
+// answer there: it left `product` stale, and the photo preview and every hub
+// summary read `product`, not the form.
+let loadedKey = ''
+
+async function load(options: { force?: boolean } = {}) {
   const id = locationId.value
   if (!id || isNew.value) {
     if (!isNew.value) return
@@ -366,27 +420,31 @@ async function load() {
     definitions.value = (await dashboardApi(`/api/editor/sites/${siteId}/metafield-definitions`, { validate: isDefinitionList })).definitions
     return
   }
+  const key = `${id}:${productId.value}`
+  if (key === loadedKey && !options.force) return
+  loadedKey = key
   loadError.value = null
   try {
     const [collectionResponse, productResponse, definitionResponse] = await Promise.all([
       dashboardApi(`/api/editor/sites/${siteId}/collections?location_id=${encodeURIComponent(id)}`, { validate: isCollectionList }),
-      dashboardApi(`/api/editor/sites/${siteId}/locations/${id}/products`, { validate: isProductList }),
+      dashboardApi(`/api/editor/sites/${siteId}/locations/${encodeURIComponent(id)}/products/${encodeURIComponent(productId.value)}`, { validate: isOne }),
       dashboardApi(`/api/editor/sites/${siteId}/metafield-definitions`, { validate: isDefinitionList }),
     ])
     collections.value = collectionResponse.collections
     definitions.value = definitionResponse.definitions
-    const found = productResponse.products.find(row => row.id === productId.value)
-    if (!found) return showError(createError({ statusCode: 404, statusMessage: `${presentation.itemLabel} not found` }))
-    product.value = found
-    loadForm(found)
+    product.value = productResponse.product
+    loadForm(productResponse.product)
   } catch (error) {
-    if (isNotFoundError(error)) return showError(createError({ statusCode: 404, statusMessage: `${presentation.itemLabel} not found` }))
-    loadError.value = getErrorMessage(error, `Failed to load this ${presentation.itemLabel.toLowerCase()}`)
+    loadedKey = ''
+    if (isNotFoundError(error)) return showError(createError({ statusCode: 404, statusMessage: `${presentation.value.itemLabel} not found` }))
+    loadError.value = getErrorMessage(error, `Failed to load this ${presentation.value.itemLabel.toLowerCase()}`)
   }
 }
 
-onMounted(load)
-watch(locationId, load)
+// Called with no arguments on purpose: `watch` hands its listener
+// (value, oldValue, onCleanup), which would land in `options`.
+onMounted(() => { void load() })
+watch(locationId, () => { void load() })
 
 // ── The form ────────────────────────────────────────────
 interface OptionValueDraft { id: string | null; value: string }
@@ -605,7 +663,20 @@ function priceSummary(): string {
   const variant = row.variants[0]
   if (!variant) return 'No price set'
   const price = selectPrice(variant.prices, { currency, location_id: locationId.value, at: new Date().toISOString() })
-  return formatProductMoney(price) ?? 'No price set'
+  const amount = formatProductMoney(price)
+  if (amount) return amount
+  // Priced in words — "Contact us for group pricing" — is a price the merchant
+  // set, and the public page shows it; "No price set" would call it missing.
+  const note = row.metafields[PRICING_NOTE_HANDLE]
+  return typeof note === 'string' && note.trim() ? note : 'No price set'
+}
+
+function bookingSummary(): string {
+  const minutes = `${form.booking_duration || '?'} minutes`
+  const id = locationId.value
+  if (!id || scheduleLoadedFor.value !== `${productId.value}:${id}`) return minutes
+  const count = schedule.value.filter(slot => slot.start_time.trim()).length
+  return `${minutes} · ${count === 1 ? '1 time' : `${count} times`} a week`
 }
 
 function publicationSummary(): string {
@@ -620,6 +691,13 @@ const navigationGroups = computed<EditorNavigationGroup[]>(() => {
   if (isNew.value) return [{
     id: 'item',
     items: [{ id: 'name', label: 'Name', summary: form.name || 'Not named yet', placeholder: !form.name, to: `${itemPath.value}/name` }],
+  }]
+  // Until the row is here there is nothing to summarize. "Not named yet" and
+  // "Not bookable" are statements about a product; shown while loading they
+  // were statements about the network.
+  if (!product.value) return [{
+    id: 'item',
+    items: [{ id: 'loading', label: 'Loading', summary: `Loading this ${presentation.value.itemLabel.toLowerCase()}…`, placeholder: true, to: itemPath.value }],
   }]
   return [
     {
@@ -665,7 +743,7 @@ const navigationGroups = computed<EditorNavigationGroup[]>(() => {
           to: `${itemPath.value}/attributes`,
         },
         { id: 'publication', label: 'Where it appears', summary: publicationSummary(), to: `${itemPath.value}/publication` },
-        { id: 'booking', label: 'Bookings', summary: form.bookable ? `${form.booking_duration || '?'} minutes` : 'Not bookable', placeholder: !form.bookable, to: `${itemPath.value}/booking` },
+        { id: 'booking', label: 'Bookings', summary: form.bookable ? bookingSummary() : 'Not bookable', placeholder: !form.bookable, to: `${itemPath.value}/booking` },
       ],
     },
   ]
@@ -762,7 +840,7 @@ const { createActionLabel, saveLabel, saveDisabled, save: saveCurrentEditor, sta
   labels: sectionLabels,
   order: ['name'],
   missing: () => !form.name.trim(),
-  noun: presentation.itemLabel.toLowerCase(),
+  noun: presentation.value.itemLabel.toLowerCase(),
   saving,
   existingBlocked: () => !sectionValid.value,
   commit,
@@ -772,6 +850,7 @@ async function commit() {
   const id = locationId.value
   if (!id) return
   saving.value = true
+  saveError.value = null
   try {
     if (isNew.value) {
       const created = await dashboardApi(`/api/editor/sites/${siteId}/products`, {
@@ -794,10 +873,10 @@ async function commit() {
     })
     if (editorKey.value === 'publication') await savePublication(id)
     if (editorKey.value === 'booking') await saveBooking()
-    await load()
+    await load({ force: true })
     await navigateTo(itemPath.value)
   } catch (error) {
-    toast.add({ description: getErrorMessage(error, `Failed to save ${presentation.itemLabel.toLowerCase()}`), color: 'error' })
+    saveError.value = getErrorMessage(error, `Failed to save ${presentation.value.itemLabel.toLowerCase()}`)
   } finally {
     saving.value = false
   }
@@ -859,14 +938,77 @@ async function saveBooking() {
     },
     validate: isRecord,
   })
+  // The schedule is saved with the capability it belongs to. A product that
+  // has just become bookable has no schedule loaded yet, and none to save.
+  await saveSchedule()
+}
+
+// ── The weekly schedule ─────────────────────────────────
+// One draft slot per (weekday, time) at this branch. Capacity is kept as the
+// merchant typed it and read as a number, or the product's default, on save.
+interface ScheduleSlotDraft { weekday: number; start_time: string; capacity: string }
+const WEEKDAYS = [
+  { value: 1, label: 'Monday' }, { value: 2, label: 'Tuesday' }, { value: 3, label: 'Wednesday' },
+  { value: 4, label: 'Thursday' }, { value: 5, label: 'Friday' }, { value: 6, label: 'Saturday' }, { value: 0, label: 'Sunday' },
+]
+const schedule = ref<ScheduleSlotDraft[]>([])
+const scheduleLoading = ref(false)
+const scheduleLoadedFor = ref<string | null>(null)
+const isRuleList = (value: unknown): value is { success: true; rules: Array<{ weekday: number; start_time: string; capacity: number | null }> } =>
+  isRecord(value) && Array.isArray(value.rules)
+
+function slotsFor(weekday: number) {
+  return schedule.value.filter(slot => slot.weekday === weekday)
+}
+function addSlot(weekday: number) {
+  schedule.value.push({ weekday, start_time: '', capacity: '' })
+}
+function removeSlot(slot: ScheduleSlotDraft) {
+  schedule.value = schedule.value.filter(entry => entry !== slot)
+}
+
+async function loadSchedule() {
+  const id = locationId.value
+  if (!id || !product.value?.booking) return
+  const key = `${productId.value}:${id}`
+  if (scheduleLoadedFor.value === key) return
+  scheduleLoading.value = true
+  try {
+    const { rules } = await dashboardApi(`/api/editor/sites/${siteId}/products/${productId.value}/availability?location_id=${encodeURIComponent(id)}`, { validate: isRuleList })
+    // The reader moved on while this loaded; that location's own load owns the draft.
+    if (`${productId.value}:${locationId.value}` !== key) return
+    schedule.value = rules.map(rule => ({ weekday: rule.weekday, start_time: rule.start_time, capacity: rule.capacity === null ? '' : String(rule.capacity) }))
+    scheduleLoadedFor.value = key
+  } finally {
+    scheduleLoading.value = false
+  }
+}
+watch([editorKey, product, locationId], ([key]) => { if (key === 'booking') void loadSchedule() }, { immediate: true })
+
+/** The schedule as the writer takes it: every filled slot, capacity as a number or the default. */
+async function saveSchedule() {
+  const id = locationId.value
+  if (!id || scheduleLoadedFor.value !== `${productId.value}:${id}`) return
+  const slots = schedule.value
+    .filter(slot => slot.start_time.trim())
+    .map(slot => ({ weekday: slot.weekday, start_time: slot.start_time.trim().slice(0, 5), capacity: slot.capacity.trim() ? Number(slot.capacity) : null }))
+  await dashboardApi(`/api/editor/sites/${siteId}/products/${productId.value}/availability`, {
+    method: 'PUT', body: { location_id: id, slots }, validate: isRecord,
+  })
+  scheduleLoadedFor.value = null
 }
 
 async function cancelEditor() {
+  saveError.value = null
+  photoError.value = null
   if (product.value) loadForm(product.value)
+  // The schedule draft goes with the form: reopening Bookings reloads the saved rules.
+  scheduleLoadedFor.value = null
   await navigateTo(itemPath.value)
 }
 
 async function setPrimaryImage(assetId: string | null) {
+  photoError.value = null
   try {
     await dashboardApi(`/api/editor/sites/${siteId}/media/placements`, {
       method: 'PUT',
@@ -874,9 +1016,9 @@ async function setPrimaryImage(assetId: string | null) {
       validate: isRecord,
     })
     form.image_asset_id = assetId
-    await load()
+    await load({ force: true })
   } catch (error) {
-    toast.add({ description: getErrorMessage(error, 'Failed to update the photo'), color: 'error' })
+    photoError.value = getErrorMessage(error, 'Failed to update the photo')
   }
 }
 
@@ -933,7 +1075,7 @@ async function loadProductLocalization(locale: string): Promise<Record<string, u
 
 async function saveProductLocalization(locale: string, submitted: Record<string, unknown>): Promise<void> {
   const row = product.value
-  if (!row) throw new Error(`The ${presentation.itemLabel.toLowerCase()} is unavailable.`)
+  if (!row) throw new Error(`The ${presentation.value.itemLabel.toLowerCase()} is unavailable.`)
   const values: Record<string, unknown> = {}
   for (const key of ['name', 'description', 'tags']) {
     if (Object.hasOwn(submitted, key)) values[key] = submitted[key]
@@ -950,5 +1092,5 @@ async function saveProductLocalization(locale: string, submitted: Record<string,
   })
 }
 
-useSeoMeta({ title: () => `${form.name || presentation.itemLabel} | KrabiClaw Dashboard`, robots: 'noindex, nofollow' })
+useSeoMeta({ title: () => `${form.name || presentation.value.itemLabel} | KrabiClaw Dashboard`, robots: 'noindex, nofollow' })
 </script>

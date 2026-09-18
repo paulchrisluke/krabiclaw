@@ -127,7 +127,7 @@ Wrangler reads `.env` and `.dev.vars` using its documented local-development
 behavior.
 
 ```bash
-yarn test:e2e:local tests/e2e/smoke.spec.ts
+yarn test:e2e:local --grep @smoke
 ```
 
 For a production-like local Worker:
@@ -173,14 +173,19 @@ ulimit -n 65536
 
 Deployment follows the branches in `.github/workflows/ci.yml`:
 
-1. Runtime pull requests deploy the isolated preview Worker and run permanent
-   core plus diff-selected affected E2E coverage.
-2. Merges to `staging` deploy the staging Worker once, apply staging migrations,
-   provision fixtures/auth once, and run the full Playwright suite with two workers.
+1. Runtime pull requests deploy the isolated preview Worker and run the fixed
+   `@smoke` suite against it. The set does not vary with the diff.
+2. Pushes to `staging` run the same `@smoke` suite against the disposable
+   preview first; only then does the staging Worker deploy, apply staging
+   migrations, and run read-only MCP and tenant rendering/navigation against
+   staging itself. Nothing writes test data into real staging.
 3. The `staging` to `main` release PR reuses the checks attached to its exact
    staging head without another deployment or test cycle.
-4. A reviewed `staging` to `main` merge deploys the production Worker, applies
-   production migrations, and runs read-only production browser smoke.
+4. A reviewed `staging` to `main` merge first re-reads the merged staging
+   commit's checks and refuses to promote unless `Checks`, `Preview smoke` and
+   `Deploy and test staging` all succeeded on it, then deploys the production
+   Worker, applies production migrations, and runs read-only production browser
+   smoke.
 
 CI invokes native Wrangler commands only in the matching branch job. See
 [docs/operations/release-flow.md](docs/operations/release-flow.md).
@@ -224,3 +229,7 @@ yarn stripe:listen
 ```
 
 Copy the `whsec_...` signing secret it outputs into `.env` as `STRIPE_WEBHOOK_SECRET`. Swap back to the production webhook secret before deploying.
+
+Native marketplace onboarding uses a separate Accounts v2 thin-event
+destination and signing secret. See
+[Stripe Connect onboarding](docs/operations/stripe-connect.md).

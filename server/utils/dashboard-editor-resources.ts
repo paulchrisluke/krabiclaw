@@ -2,17 +2,16 @@ import { HTTPError } from 'nitro';
 
 import type { H3Event } from 'nitro'
 import { queryAll, queryFirst, type DbClient } from '~/server/db'
-import { getOrganizationBillingProjection } from '~/server/utils/organization-billing'
+import { getOrganizationEntitlements } from '~/server/utils/billing-access'
 import { listLocationQa } from '~/server/utils/location-qa'
 import { requireLocationAccess, requireSiteAccess } from '~/server/utils/location-access'
 import {
   assertLocationAccess,
   assertResourceAccess,
-  assertSiteContextAccess,
   assertSiteWideAccess,
   listAccessibleLocationIds,
+  memberAccessPrincipal,
 } from '~/server/utils/member-access'
-import { listSiteLocales } from '~/server/utils/site-locales'
 import { getMediaAsset, listMediaAssets } from '~/server/utils/media-asset-manager'
 import { getDashboardContext, getDashboardLocationContext } from '~/server/utils/dashboard-context'
 import { loadSettingsPayload } from '~/server/utils/site-settings'
@@ -20,9 +19,11 @@ import { getNotificationsSettings } from '~/server/utils/mcp-workflows'
 import { getFacebookPagesConnection } from '~/server/utils/facebook-pages'
 import { resolveLocationCapabilitySummary } from '~/server/utils/location-management'
 import { parseLocationPayload } from '~/server/utils/location-payload'
-import { getProduct, listLocationProducts } from '~/server/utils/product-management'
-import { loadDashboardGuestThreads } from '~/server/utils/dashboard-guest-threads'
+import { getProduct, hydrateProductMedia, summarizeLocationProducts } from '~/server/utils/product-management'
+import { listDashboardGuestThreadsForPrincipal } from '~/server/utils/dashboard-guest-threads'
 import { requireBlogAccess } from '~/server/utils/blog-access'
+import { requireTenantPageWriteAccess } from '~/server/utils/tenant-pages-api'
+import { getTenantPageById, listTenantPages } from '~/server/utils/content/pages'
 import { getBlogPost, listBlogPosts } from '~/server/utils/content/publishing'
 import { listPosts } from '~/server/utils/post-management'
 import { createPreviewToken, PREVIEW_TOKEN_TTL_MS } from '~/server/utils/preview-token'
@@ -43,27 +44,22 @@ export async function loadDashboardEditorContext(event: H3Event, siteId: string)
   const { env, db, site } = await requireSiteAccess(event, siteId, 'context')
   if (!site.vertical) throw new HTTPError({ statusCode: 500, statusMessage: 'Site vertical is not configured' })
 
-  const principal = {
-    env,
-    memberId: site.member_id,
-    role: site.member_role,
-    organizationId: site.organization_id,
-    siteId,
-  }
-  await assertSiteContextAccess(db, principal)
+  const principal = memberAccessPrincipal(site.membership, { env, siteId, event })
+  // requireSiteAccess(event, siteId, 'context') has already run
+  // assertSiteContextAccess with this exact principal (location-access.ts), so
+  // asserting it again here only bought a second read of the same member row.
   const accessibleLocationIds = await listAccessibleLocationIds(db, principal)
-  const [locationRows, billing] = await Promise.all([
+  const [locationRows, entitlements] = await Promise.all([
     queryAll<EditorLocationRow>(db, `
       SELECT id, slug, title, status, feature_overrides
         FROM business_locations
        WHERE organization_id = ? AND site_id = ? AND status = 'active'
        ORDER BY title ASC
     `, [site.organization_id, siteId]),
-    getOrganizationBillingProjection(db, site.organization_id),
+    getOrganizationEntitlements(env, site.organization_id),
   ])
   const locations = locationRows
     .filter(location => accessibleLocationIds === null || accessibleLocationIds.includes(location.id))
-  const entitlements = billing.entitlements
   if (typeof env.PREVIEW_SECRET !== 'string' || !env.PREVIEW_SECRET) {
     throw new HTTPError({ statusCode: 500, statusMessage: 'PREVIEW_SECRET is required for editor previews' })
   }
@@ -99,11 +95,6 @@ export async function loadDashboardEditorContext(event: H3Event, siteId: string)
   }
 }
 
-export async function loadDashboardSiteLocales(event: H3Event, siteId: string) {
-  const { db, site } = await requireSiteAccess(event, siteId)
-  return { success: true as const, ...await listSiteLocales(db, site.organization_id, siteId) }
-}
-
 export async function loadDashboardLocationQa(
   event: H3Event,
   siteId: string,
@@ -111,26 +102,6 @@ export async function loadDashboardLocationQa(
 ) {
   const { db } = await requireLocationAccess(event, siteId, locationId)
   return { qa: await listLocationQa(db, siteId, locationId) }
-}
-
-/**
- * The bookable products offered at one location.
- *
- * A booking config is what makes a product bookable, so this filters on that
- * relationship rather than on a discriminator column.
- */
-export async function loadDashboardLocationBookableProducts(
-  event: H3Event,
-  siteId: string,
-  locationId: string,
-) {
-  const { db, site } = await requireLocationAccess(event, siteId, locationId)
-  const products = await listLocationProducts(db, { organizationId: site.organization_id, locationId })
-  const bookable = await queryAll<{ product_id: string }>(db, `
-    SELECT product_id FROM product_booking_configs WHERE organization_id = ?
-  `, [site.organization_id])
-  const bookableIds = new Set(bookable.map(row => row.product_id))
-  return { products: products.filter(product => bookableIds.has(product.id)) }
 }
 
 export interface DashboardMediaFilters {
@@ -150,13 +121,7 @@ export async function loadDashboardMedia(
   filters: DashboardMediaFilters = {},
 ) {
   const { env, db, site } = await requireSiteAccess(event, siteId, 'context')
-  const principal = {
-    env,
-    memberId: site.member_id,
-    role: site.member_role,
-    organizationId: site.organization_id,
-    siteId,
-  }
+  const principal = memberAccessPrincipal(site.membership, { env, siteId, event })
   if (filters.id) {
     const asset = await getMediaAsset(db, filters.id, siteId)
     if (asset) {
@@ -197,13 +162,7 @@ export async function loadDashboardSettingsResource(
     siteSlug: options.siteSlug,
   })
   if (!site) throw new HTTPError({ statusCode: 404, statusMessage: 'Site not found' })
-  await assertSiteWideAccess(db, {
-    env,
-    memberId: organization.memberId,
-    role: organization.role,
-    organizationId: organization.id,
-    siteId: site.id,
-  })
+  await assertSiteWideAccess(db, memberAccessPrincipal(organization, { env, siteId: site.id, event }))
   const [settings, notifications, facebookConnection] = await Promise.all([
     loadSettingsPayload(db, organization.id, site.id),
     getNotificationsSettings(db, organization.id, site.id),
@@ -280,19 +239,13 @@ export async function loadDashboardLocationOverview(
   locationId: string,
   options: { includeProducts: boolean },
 ) {
-  const { env, db, organization, location } = await getDashboardLocationContext(event, locationId)
+  const { env, db, organization, location, userId } = await getDashboardLocationContext(event, locationId)
   if (location.site_id !== siteId) {
     throw new HTTPError({ statusCode: 404, statusMessage: 'Location not found' })
   }
-  await assertLocationAccess(db, {
-    env,
-    memberId: organization.memberId,
-    role: organization.role,
-    organizationId: organization.id,
-    siteId,
-    locationId,
-  })
-  const [capabilities, products, threads, counts] = await Promise.all([
+  const principal = memberAccessPrincipal(organization, { env, siteId, event })
+  await assertLocationAccess(db, { ...principal, locationId })
+  const [capabilities, catalog, threads, counts] = await Promise.all([
     resolveLocationCapabilitySummary(
       db,
       organization.id,
@@ -300,9 +253,12 @@ export async function loadDashboardLocationOverview(
       location.feature_overrides as string | null ?? null,
     ),
     options.includeProducts
-      ? listLocationProducts(db, { organizationId: organization.id, locationId })
-      : Promise.resolve([]),
-    loadDashboardGuestThreads(event, siteId, { locationId }),
+      ? summarizeLocationProducts(db, { organizationId: organization.id, locationId })
+      : Promise.resolve({ total: 0, experiences: 0 }),
+    // The principal is resolved and assertLocationAccess has just run for this
+    // exact location. Handing the event over instead would re-read the session,
+    // the site row and the member row, and assert the same thing again.
+    listDashboardGuestThreadsForPrincipal(db, siteId, { principal, userId, query: { locationId } }),
     loadLocationContentCounts(db, siteId, locationId),
   ])
   return {
@@ -311,7 +267,7 @@ export async function loadDashboardLocationOverview(
       location: parseLocationPayload(location)!,
       ...capabilities,
     },
-    products: { success: true as const, products },
+    catalog,
     threads: { summary: threads.summary },
     counts,
   }
@@ -326,14 +282,7 @@ export async function loadDashboardLocationSettings(
   if (location.site_id !== siteId) {
     throw new HTTPError({ statusCode: 404, statusMessage: 'Location not found' })
   }
-  await assertLocationAccess(db, {
-    env,
-    memberId: organization.memberId,
-    role: organization.role,
-    organizationId: organization.id,
-    siteId,
-    locationId,
-  })
+  await assertLocationAccess(db, { ...memberAccessPrincipal(organization, { env, siteId, event }), locationId })
   const capabilities = await resolveLocationCapabilitySummary(
     db,
     organization.id,
@@ -374,6 +323,26 @@ export async function loadDashboardBlogPost(
   return { post }
 }
 
+/**
+ * The Pages chain reads these on the server rather than calling its own
+ * endpoints over HTTP during render, the way the Blog chain does. Rendering the
+ * list and the open page server-side is what lets a section, a section's part
+ * or a record inside one survive a direct load or a refresh: every level's
+ * not-found guard reads the same loaded page, so a missing id answers 404 and a
+ * real one answers itself.
+ */
+export async function loadDashboardTenantPages(event: H3Event, siteId: string, locale?: string | null) {
+  const { db } = await requireTenantPageWriteAccess(event, siteId)
+  return { pages: await listTenantPages(db, siteId, { locale: locale ?? null }) }
+}
+
+export async function loadDashboardTenantPage(event: H3Event, siteId: string, variantId: string) {
+  const { db, site } = await requireTenantPageWriteAccess(event, siteId)
+  const page = await getTenantPageById(db, variantId, { siteId, organizationId: site.organization_id })
+  if (!page) throw new HTTPError({ statusCode: 404, statusMessage: 'Page not found' })
+  return { page }
+}
+
 export async function loadDashboardProduct(
   event: H3Event,
   siteId: string,
@@ -387,18 +356,11 @@ export async function loadDashboardProduct(
   if (!product.locations.some(entry => entry.location_id === locationId)) {
     throw new HTTPError({ statusCode: 404, statusMessage: 'Product not found at this location' })
   }
-  return { success: true as const, product }
-}
-
-// Loads the location-owned Product collection directly for the editor's SSR render.
-export async function loadDashboardLocationProducts(
-  event: H3Event,
-  siteId: string,
-  locationId: string,
-) {
-  const { db, site } = await requireLocationAccess(event, siteId, locationId)
-  const products = await listLocationProducts(db, { organizationId: site.organization_id, locationId })
-  return { success: true as const, products }
+  // Media placements are site-scoped, and the editor shows the photograph the
+  // public page shows — the same hydration the location list does, so opening
+  // one product and listing them cannot disagree about its cover.
+  const [hydrated] = await hydrateProductMedia(db, siteId, [product])
+  return { success: true as const, product: hydrated! }
 }
 
 export async function loadDashboardLocationPosts(

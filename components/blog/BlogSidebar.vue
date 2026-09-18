@@ -23,7 +23,8 @@
 
 <script setup lang="ts">
 import PlatformCommandSearchTrigger from '~/components/platform/search/PlatformCommandSearchTrigger.vue'
-import { getBlogPostPath } from '~/utils/blog-categories'
+import { tenantBlogPostPath } from '~/utils/tenant-blog-route'
+import { PLATFORM_TEMPLATE } from '~/utils/template-registry'
 
 const emit = defineEmits<{ navigate: [] }>()
 
@@ -33,8 +34,7 @@ const { categories } = useBlogNav()
 const groups = computed(() => categories.value.map(({ category, posts }) => ({
   label: category,
   items: posts.reduce<Array<{ label: string; to: string; active: boolean }>>((items, post) => {
-    const to = getBlogPostPath(post.category, post.slug)
-    if (!to) return items
+    const to = tenantBlogPostPath(PLATFORM_TEMPLATE, post.slug)
     items.push({
       label: post.label,
       to,

@@ -31,5 +31,5 @@ export async function getSiteQa(
   qaId: string | null = null,
 ): Promise<QaRow[]> {
   const rows = await listQa(db, siteId, null, false, pagePath, 'en', qaId)
-  return rows.map(({ id, question, answer, status, sort_order, page_path, upvote_count }) => ({ id, question, answer, status, sort_order, page_path, upvote_count }))
+  return rows.map(({ id, question, answer, status, sort_order, page_path, upvote_count, source }) => ({ id, question, answer, status, sort_order, page_path, upvote_count, source }))
 }

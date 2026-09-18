@@ -8,11 +8,10 @@ import { updateThreadProjectionIfLatestEntry } from '~/server/domain/guest-threa
 import { getGuestRequest, requestSummary } from '~/server/domain/requests'
 import { executeGuestThreadOperation } from '~/server/domain/guest-threads/operations'
 import { appendEntry, findEntryByDedupeKey } from '~/server/domain/guest-threads/entries'
-import { nextConversationState } from '~/server/domain/guest-threads/state-machine'
 import { publishGuestInboxThreadEvent } from '~/server/cloudflare/guest-inbox-events'
 import { notifyGuestThreadReply } from '~/server/utils/notifications'
 import { findSubmissionByPhone } from '~/server/utils/submission-messages'
-import { isAuthorizedWhatsAppRecipient, listAccessibleLocationIds, resolveMemberId, resolveOrganizationMembership } from '~/server/utils/member-access'
+import { isAuthorizedWhatsAppRecipient, listAccessibleLocationIds, resolveMemberId, resolveOrganizationMembership, memberAccessPrincipal } from '~/server/utils/member-access'
 import { findVerifiedAuthUserByPhone } from '~/server/utils/auth'
 import {
   PROMPT_QUOTE_NOTIFICATION_MESSAGE, REPLY_SENT_CONFIRMATION, buildCollectReplyPrompt, buildConfirmSendPrompt, buildDisambiguationPrompt, buildReplyFailedMessage, decideWhatsAppReplyRouting, maskEmailForDisplay, type DisambiguationCandidate, type PendingWhatsAppReplyState, } from '~/server/utils/whatsapp-reply-routing'
@@ -185,13 +184,7 @@ async function listRecentGuestDeliveryCandidates(db: D1Database, env: ApiRecord,
       userId,
     })
     if (!membership) return null
-    const locationIds = await listAccessibleLocationIds(db, {
-      env: env as CloudflareEnv,
-      memberId: membership.memberId,
-      role: membership.role,
-      organizationId: row.organizationId,
-      siteId: row.siteId,
-    })
+    const locationIds = await listAccessibleLocationIds(db, memberAccessPrincipal(membership, { env: env as CloudflareEnv, siteId: row.siteId }))
     return locationIds === null || Boolean(row.locationId && locationIds.includes(row.locationId)) ? row : null
   }))).filter((row): row is NonNullable<typeof row> => Boolean(row)).slice(0, 5)
   return authorizedRows.map((r) => ({
@@ -530,8 +523,7 @@ async function handleMessage(db: D1Database, env: ApiRecord, message: WhatsAppMe
             body: text,
             dedupeKey: `whatsapp:${message.id}`,
           })
-          const conversationState = nextConversationState(thread.conversation_state, { type: 'inbound_guest_message' })
-          await updateThreadProjectionIfLatestEntry(db, thread.id, entry.id, { conversationState })
+          await updateThreadProjectionIfLatestEntry(db, thread.id, entry.id, { conversationState: 'needs_attention' })
 
           const source = thread
           if (source) {

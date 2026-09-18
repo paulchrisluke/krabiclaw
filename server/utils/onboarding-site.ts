@@ -107,6 +107,10 @@ export async function ensureOnboardingSite(
       name: draft.name,
       subdomain: draft.subdomain_candidate,
       vertical: draft.vertical,
+      // The currency step has not been reached on the save that creates this
+      // site. It stays unset until the owner answers, and applyOnboardingDraftToSite
+      // writes it from that answer on the save that carries it.
+      defaultCurrency: null,
       activate: false,
     })
     if (result.status !== 200) {
@@ -155,13 +159,13 @@ export async function applyOnboardingDraftToSite(
     userId: string
     target: OnboardingSiteTarget
     payload: OnboardingDraftPayload
-    // Both are the owner's answers and arrive part-way through the wizard.
-    // Until they do the site keeps what site creation gave it, rather than
-    // being written with a currency or a zone nobody chose.
+    // Both are the owner's answers and arrive part-way through the wizard. Until
+    // they do they stay null on the site, which is what "not answered yet" looks
+    // like — never a currency or a zone nobody chose.
     defaultCurrency: CurrencyCode | null
     timezone: string | null
   },
-): Promise<{ locationSlug: string | null }> {
+): Promise<{ locationSlug: string | null } | { error: string; status: number }> {
   const { userId, payload, defaultCurrency, timezone } = input
   const { organizationId, siteId } = input.target
   const locationRow = { id: input.target.locationId }
@@ -205,11 +209,18 @@ export async function applyOnboardingDraftToSite(
     const updateResult = await updateLocation(db, organizationId, siteId, locationRow.id, {
       title: draftLocation.title, slug: updatedSlug, city: draftLocation.city, address: draftLocation.address, description: draftLocation.description, phone: draftLocation.phone, website_url: draftLocation.website_url, opening_hours: parseOpeningHours(draftLocation.opening_hours), special_hours: parseSpecialHours(draftLocation.special_hours), rating: draftLocation.rating, review_count: draftLocation.review_count, notification_phone: payload.source.details.notificationPhone, timezone: payload.source.details.timezone, status: 'active', maps_url: payload.source.place?.mapsUrl, google_place_id: payload.source.place?.placeId, }, userId, env)
 
+    // updateLocation answers with a status and a message naming the field it
+    // refused — a 400 for an unusable timezone or notification phone, a 409 for
+    // a slug already taken. Rethrowing those as a bare Error turned every one of
+    // them into a 500 that told the owner nothing about what to change, so the
+    // status and the message travel back to the caller intact.
     if (updateResult.status !== 200) {
-      throw new Error(
-        typeof updateResult.data?.error === 'string'
+      return {
+        status: updateResult.status,
+        error: typeof updateResult.data?.error === 'string'
           ? updateResult.data.error
-          : 'Location update failed.', )
+          : 'Location update failed.',
+      }
     }
   }
 
@@ -220,10 +231,15 @@ export async function applyOnboardingDraftToSite(
     contentByPage.set(row.page, rows)
   }
   await applyOnboardingTenantPages(db, {
+    env,
     organizationId, siteId, userId: userId, pages: [...contentByPage].map(([pageName, rows]) => {
       const pageType = onboardingPageType(pageName)
+      // The draft is the whole document. Onboarding does not collect SEO
+      // metadata or an explicit order, so it states null for them rather than
+      // leaving them to whatever a previous commit wrote.
       return {
-        path: onboardingPagePath(pageName), title: rows.find(row => row.field === 'hero')?.hero_title ?? pageName, pageType, recipe: pageName, blocks: onboardingPageBlocks(rows), trustedSystemPage: pageType === 'system', }
+        path: onboardingPagePath(pageName), title: rows.find(row => row.field === 'hero')?.hero_title ?? pageName, pageType, recipe: pageName, blocks: onboardingPageBlocks(rows), trustedSystemPage: pageType === 'system',
+        summary: null, seoTitle: null, seoDescription: null, canonicalUrl: null, robots: null, sortOrder: null, }
     }), })
 
   for (const [pageName, rows] of contentByPage) {
@@ -304,7 +320,7 @@ export async function applyOnboardingDraftToSite(
       batchQueries.push({
         query: `INSERT INTO collections (id, organization_id, site_id, location_id, name, slug, sort_order, created_at, updated_at, created_by, updated_by)
                 VALUES (?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT (organization_id, site_id, slug) WHERE location_id IS NULL DO UPDATE SET name = excluded.name, updated_at = excluded.updated_at`,
+                ON CONFLICT (site_id, slug) WHERE location_id IS NULL DO UPDATE SET name = excluded.name, updated_at = excluded.updated_at`,
         params: [id, organizationId, siteId, name, slugify(name) || id, [...collections.keys()].indexOf(name), now, now, userId, userId],
       })
     }

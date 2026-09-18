@@ -1,4 +1,5 @@
 import { HTTPError } from 'nitro';
+import { oncePerRequest } from '~/server/utils/request-scope'
 
 import type { H3Event } from 'nitro'
 import { queryFirst } from '~/server/db'
@@ -12,7 +13,7 @@ export interface PublicBase {
   site: {
     id: string
     organization_id: string
-    default_currency: CurrencyCode
+    default_currency: CurrencyCode | null
     contact_email: string | null
     contact_phone: string | null
     brand_name: string | null
@@ -33,23 +34,13 @@ export interface PublicBase {
   }
 }
 
-const readsByRequest = new WeakMap<H3Event, Map<string, Promise<PublicBase>>>()
-
 export function loadPublicBase(
   event: H3Event,
   siteId: string,
   options: { previewAuthorized?: boolean } = {},
 ): Promise<PublicBase> {
-  let requestReads = readsByRequest.get(event)
-  if (!requestReads) {
-    requestReads = new Map()
-    readsByRequest.set(event, requestReads)
-  }
-  const key = `${siteId}:${options.previewAuthorized ? 'preview' : 'public'}`
-  const existing = requestReads.get(key)
-  if (existing) return existing
-
-  const pending = (async () => {
+  const key = `public-base:${siteId}:${options.previewAuthorized ? 'preview' : 'public'}`
+  return oncePerRequest(event, key, async () => {
     const startedAt = performance.now()
     const db = cloudflareEnv(event).DB
     if (!db) throw new HTTPError({ statusCode: 503, statusMessage: 'Database unavailable' })
@@ -81,7 +72,5 @@ export function loadPublicBase(
     } finally {
       recordRequestPhase(event, 'base', startedAt)
     }
-  })()
-  requestReads.set(key, pending)
-  return pending
+  })
 }

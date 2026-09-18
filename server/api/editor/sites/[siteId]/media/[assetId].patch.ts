@@ -4,7 +4,7 @@ import { queryFirst } from '~/server/db'
 import { cloudflareEnv, jsonResponse, rethrowHttpError } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { updateMediaAssetMetadata, type MediaAsset } from '~/server/utils/media-asset-manager'
-import { assertResourceAccess } from '~/server/utils/member-access'
+import { assertResourceAccess, memberAccessPrincipal } from '~/server/utils/member-access'
 import { loadMemberSiteRow } from '~/server/utils/location-access'
 
 interface MediaAssetSiteRow {
@@ -27,7 +27,7 @@ export default defineHandler(async (event) => {
   const session = await getAuthSession(event, env)
   if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
-  const site = await loadMemberSiteRow(db, env, siteId, session.user.id)
+  const site = await loadMemberSiteRow(event, db, env, siteId, session.user.id)
   if (!site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
 
   try {
@@ -36,7 +36,7 @@ export default defineHandler(async (event) => {
     if (!asset) return jsonResponse({ error: 'Asset not found' }, { status: 404 })
     if (asset.site_id !== siteId) return jsonResponse({ error: 'Forbidden' }, { status: 403 })
 
-    const principal = { env, memberId: site.member_id, role: site.member_role, organizationId: site.organization_id, siteId }
+    const principal = memberAccessPrincipal(site.membership, { env, siteId, event })
     await assertResourceAccess(db, { ...principal, resourceLocationId: null })
 
     const body = await readBody(event)

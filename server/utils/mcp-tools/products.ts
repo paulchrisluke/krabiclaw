@@ -189,7 +189,7 @@ const productWrite = {
   tax_code: { type: ['string', 'null'] },
   options: { type: 'array', maxItems: PRODUCT_LIMITS.options, items: optionWrite },
   variants: { type: 'array', minItems: 1, maxItems: PRODUCT_LIMITS.variants, items: variantWrite, description: 'Omit to create a single default variant. Required once the product has options.' },
-  metafields: { type: 'object', description: 'Values keyed by "<namespace>.<key>". The definition must already exist; create it with create_metafield_definition.' },
+  metafields: { type: 'object', description: 'Complete replacement map keyed by "<namespace>.<key>"; preserve all entries you want to keep. Remove an entry to clear its value; use {} when no entries remain, never null values. For a literal price such as "Market price", set "pricing.note" to the exact user-provided text and send empty prices arrays for every variant. Numeric prices and pricing.note are mutually exclusive; clear pricing.note when adding numeric prices. Text-only prices display publicly but cannot be checked out. The definition must already exist; create it with create_metafield_definition.' },
 } as const
 
 const productResult = { type: 'object', properties: { product: productObject }, required: ['product'] } as const

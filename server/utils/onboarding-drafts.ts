@@ -4,7 +4,7 @@ import { queryFirst } from '~/server/db'
 import type { PlaceDetails, PlaceReview } from '~/server/utils/google-places'
 import type { CurrencyCode } from '~/shared/currencies'
 import type { PriceInput } from '~/shared/prices'
-import { heroBlockSection, type TenantPageBlock, type TenantPageType } from '~/utils/tenant-page-blocks'
+import type { TenantPageBlock, TenantPageType } from '~/utils/tenant-page-blocks'
 import { composePostalAddress } from '~/utils/postal-address'
 
 type DraftSourceType = 'google_places' | 'manual'
@@ -163,7 +163,7 @@ export function onboardingPageBlocks(rows: DraftContentRecord[]): TenantPageBloc
     if (row.field === 'hero') {
       // `hero_title` is the only source of a hero's headline: buildDraftContent
       // writes the owner's answer there and leaves `content` null on that row.
-      blocks.push({ id: row.id ?? crypto.randomUUID(), type: 'hero', position: blocks.length, data: { section: heroBlockSection(onboardingPagePath(row.page)), title: row.hero_title, subtitle: row.hero_subtitle }, media: [] })
+      blocks.push({ id: row.id ?? crypto.randomUUID(), type: 'hero', position: blocks.length, data: { title: row.hero_title, subtitle: row.hero_subtitle }, media: [] })
     } else if (row.type === 'media' || row.field.endsWith('.image')) {
       if (row.asset_id) {
         const type = row.field.endsWith('.image') ? 'image' : 'gallery'

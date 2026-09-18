@@ -1,4 +1,3 @@
-import { OWNER_REVIEW_COLLECTION_METHODS, OWNER_REVIEW_STATUSES } from '~/shared/site-reviews'
 import type { McpToolDefinition } from './shared'
 import { pageInfoObject, paginationInputSchema, reviewObject, siteTool } from './shared'
 
@@ -13,46 +12,6 @@ export const REVIEWS_TOOLS: McpToolDefinition[] = [
     outputSchema: { type: 'object', properties: { reviews: { type: 'array', items: reviewObject }, page_info: pageInfoObject }, required: ['reviews', 'page_info'] },
   }),
   siteTool({
-    name: 'create_owner_entered_site_review',
-    description: 'Create a tenant-wide review collected outside KrabiClaw. Publication authorization must be explicitly attested.',
-    domain: 'reviews',
-    minimumRole: 'owner',
-    confirmRequired: false,
-    inputSchema: {
-      author_name: { type: 'string' }, rating: { type: 'number' }, title: { type: ['string', 'null'] }, content: { type: 'string' },
-      collection_method: { type: 'string', enum: [...OWNER_REVIEW_COLLECTION_METHODS] },
-      original_review_date: { type: ['string', 'null'] }, original_reference: { type: ['string', 'null'] },
-      publication_authorized: { type: 'boolean' }, status: { type: 'string', enum: [...OWNER_REVIEW_STATUSES] },
-    },
-    required: ['author_name', 'rating', 'content', 'collection_method', 'publication_authorized'],
-    outputSchema: { type: 'object', properties: { id: { type: 'string' }, created: { type: 'boolean' }, verified: { type: 'boolean' } }, required: ['id', 'created', 'verified'] },
-  }),
-  siteTool({
-    name: 'update_owner_entered_site_review',
-    description: 'Update the content, provenance, or moderation status of an owner-entered tenant-wide review.',
-    domain: 'reviews',
-    minimumRole: 'owner',
-    confirmRequired: false,
-    inputSchema: {
-      review_id: { type: 'string' }, author_name: { type: 'string' }, rating: { type: 'number' }, title: { type: ['string', 'null'] }, content: { type: 'string' },
-      collection_method: { type: 'string', enum: [...OWNER_REVIEW_COLLECTION_METHODS] },
-      original_review_date: { type: ['string', 'null'] }, original_reference: { type: ['string', 'null'] },
-      publication_authorized: { type: 'boolean' }, status: { type: 'string', enum: [...OWNER_REVIEW_STATUSES] },
-    },
-    required: ['review_id'],
-    outputSchema: { type: 'object', properties: { review_id: { type: 'string' }, updated: { type: 'boolean' }, verified: { type: 'boolean' } }, required: ['review_id', 'updated', 'verified'] },
-  }),
-  siteTool({
-    name: 'delete_owner_entered_site_review',
-    description: 'Delete an owner-entered tenant-wide review. Provider and KrabiClaw-collected reviews cannot be deleted through this tool.',
-    domain: 'reviews',
-    minimumRole: 'owner',
-    confirmRequired: true,
-    inputSchema: { review_id: { type: 'string' } },
-    required: ['review_id'],
-    outputSchema: { type: 'object', properties: { review_id: { type: 'string' }, deleted: { type: 'boolean' } }, required: ['review_id', 'deleted'] },
-  }),
-  siteTool({
       name: 'list_location_reviews',
       description: 'List reviews for a location.',
       domain: 'reviews',
@@ -64,26 +23,6 @@ export const REVIEWS_TOOLS: McpToolDefinition[] = [
         type: 'object',
         properties: { reviews: { type: 'array', items: reviewObject }, page_info: pageInfoObject },
         required: ['reviews', 'page_info'],
-      },
-    }),
-  siteTool({
-      name: 'reply_to_review',
-      description: 'Add, update, or clear the owner reply for a review. Pass reply: null to clear an existing reply.',
-      domain: 'reviews',
-      minimumRole: 'owner',
-      confirmRequired: false,
-      inputSchema: { review_id: { type: 'string' }, reply: { type: ['string', 'null'] } },
-      required: ['review_id', 'reply'],
-      outputSchema: {
-        type: 'object',
-        properties: {
-          review_id: { type: 'string' },
-          reply: { type: ['string', 'null'] },
-          replied: { type: 'boolean' },
-          cleared: { type: 'boolean' },
-          updated_at: { type: 'string' },
-        },
-        required: ['review_id', 'replied', 'cleared', 'updated_at'],
       },
     }),
 ]

@@ -48,21 +48,37 @@ test.describe('stateless MCP server', () => {
     expect(pageBefore.status()).toBe(200)
     const pageBeforeData = mcpData<{
       page: {
-        document: { updated_at: string }
-        blocks: Array<{ id: string; type: string; position: number; data: Record<string, unknown>; media: unknown[] }>
+        updated_at: string
+        path: string
+        title: string
+        sort_order: number
+        page_type: string
+        recipe: string | null
+        blocks: Array<{ id: string; type: string; position: number; level: number | null; parent_block_id: string | null; source_block_id: string | null; data: Record<string, unknown>; media: unknown[] }>
       }
     }>(await pageBefore.json()).page
+    // update_tenant_page replaces the document, so the writer states the path,
+    // title, position and identity it read rather than leaving them to be
+    // filled in from the stored row.
     const contentUpdate = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
       toolName: 'update_tenant_page',
       args: {
         site_id: siteId,
         variant_id: homeVariant!.id,
-        expected_updated_at: pageBeforeData.document.updated_at,
+        expected_updated_at: pageBeforeData.updated_at,
+        path: pageBeforeData.path,
+        title: pageBeforeData.title,
+        sortOrder: pageBeforeData.sort_order,
+        pageType: pageBeforeData.page_type,
+        recipe: pageBeforeData.recipe,
         blocks: pageBeforeData.blocks.map(block => ({
           id: block.id,
           type: block.type,
           position: block.position,
+          level: block.level,
+          parent_block_id: block.parent_block_id,
+          source_block_id: block.source_block_id,
           data: block.type === 'hero'
             ? { ...block.data, title: `MCP Hero ${Date.now()}`, subtitle: 'Drafted through MCP' }
             : block.data,
@@ -175,9 +191,6 @@ test.describe('stateless MCP server', () => {
       guests: string
       date: string
       time: string
-      party_size?: unknown
-      requested_date?: unknown
-      requested_time?: unknown
     }> }>(reservationsBody).submissions[0]
     const reservationSubmissionId = reservationSubmission?.id
     expect(reservationSubmissionId).toEqual(expect.any(String))
@@ -186,9 +199,6 @@ test.describe('stateless MCP server', () => {
     expect(reservationSubmission?.guests).toBe('2')
     expect(reservationSubmission?.date).toBe('2030-01-15')
     expect(reservationSubmission?.time).toBe('19:00')
-    expect(reservationSubmission?.party_size).toBeUndefined()
-    expect(reservationSubmission?.requested_date).toBeUndefined()
-    expect(reservationSubmission?.requested_time).toBeUndefined()
 
     const tools = await mcpRequest(request, baseURL!, {
       method: 'tools/list',
@@ -199,8 +209,6 @@ test.describe('stateless MCP server', () => {
     const toolNames = toolsBody.result.tools.map(tool => tool.name)
     expect(toolNames).toContain('get_contact_inquiries')
     expect(toolNames).toContain('get_reservation_inquiries')
-    expect(toolNames).not.toContain('update_contact_submission')
-    expect(toolNames).not.toContain('update_reservation_submission')
   })
 
   test('owner can use location, reviews, and QA lifecycle tools', async ({ request, baseURL }) => {
@@ -231,67 +239,12 @@ test.describe('stateless MCP server', () => {
     })
     expect(reviewsList.status()).toBe(200)
 
-    const qaCreate = await mcpRequest(request, baseURL!, {
-      method: 'tools/call',
-      toolName: 'create_location_qa',
-      args: { site_id: siteId, location_id: locationId, question: 'Do you have vegan options?', answer: 'Yes', is_owner_answer: true },
-    })
-    expect(qaCreate.status()).toBe(200)
-    const qaCreateBody = await qaCreate.json()
-    const qaId = mcpData<{ id: string }>(qaCreateBody).id
-    expect(qaId).toEqual(expect.any(String))
-
-    const qaUpdate = await mcpRequest(request, baseURL!, {
-      method: 'tools/call',
-      toolName: 'update_location_qa',
-      args: { site_id: siteId, location_id: locationId, qa_id: qaId, answer: 'Yes, clearly marked vegan options.' },
-    })
-    expect(qaUpdate.status()).toBe(200)
-
     const qaList = await mcpRequest(request, baseURL!, {
-      method: 'tools/call',
-      toolName: 'list_location_qa',
+      method: 'tools/call', toolName: 'list_location_qa',
       args: { site_id: siteId, location_id: locationId },
     })
     expect(qaList.status()).toBe(200)
-
-    const qaCreateSecond = await mcpRequest(request, baseURL!, {
-      method: 'tools/call',
-      toolName: 'create_location_qa',
-      args: { site_id: siteId, location_id: locationId, question: 'Are pets allowed?', answer: 'Yes, on the patio.', is_owner_answer: true },
-    })
-    expect(qaCreateSecond.status()).toBe(200)
-    const qaCreateSecondBody = await qaCreateSecond.json()
-    const qaIdSecond = mcpData<{ id: string }>(qaCreateSecondBody).id
-    expect(qaIdSecond).toEqual(expect.any(String))
-
-    const qaReorder = await mcpRequest(request, baseURL!, {
-      method: 'tools/call',
-      toolName: 'reorder_location_qa',
-      args: {
-        site_id: siteId,
-        location_id: locationId,
-        updates: [
-          { id: qaId, sort_order: 2 },
-          { id: qaIdSecond, sort_order: 1 },
-        ],
-      },
-    })
-    expect(qaReorder.status()).toBe(200)
-
-    const qaDelete = await mcpRequest(request, baseURL!, {
-      method: 'tools/call',
-      toolName: 'delete_location_qa',
-      args: { site_id: siteId, location_id: locationId, qa_id: qaId },
-    })
-    expect(qaDelete.status()).toBe(200)
-
-    const qaDeleteSecond = await mcpRequest(request, baseURL!, {
-      method: 'tools/call',
-      toolName: 'delete_location_qa',
-      args: { site_id: siteId, location_id: locationId, qa_id: qaIdSecond },
-    })
-    expect(qaDeleteSecond.status()).toBe(200)
+    expect(mcpData<{ items: unknown[] }>(await qaList.json()).items).toEqual(expect.any(Array))
 
     const requestId = crypto.randomUUID()
     const cleanupStarted = Date.now()
@@ -307,104 +260,32 @@ test.describe('stateless MCP server', () => {
     }
   })
 
-  test('owner can manage site-level Q&A and provenance-aware reviews', async ({ request, baseURL }) => {
-    test.setTimeout(90_000)
+  test('Q&A and reviews are read-only through tenant MCP, and only Q&A is writable through the CMS', async ({ request, baseURL }) => {
     await loginAs(request, baseURL!, MCP_GROWTH_USER_ID)
     const siteId = MCP_GROWTH_SITE_ID
-    const qaIds: string[] = []
-    let reviewId = ''
-    try {
-      for (const question of [`MCP site question A ${Date.now()}`, `MCP site question B ${Date.now()}`]) {
-        const response = await mcpRequest(request, baseURL!, {
-          method: 'tools/call',
-          toolName: 'create_site_qa',
-          args: { site_id: siteId, question, answer: 'Site-wide answer.' },
-        })
-        expect(response.status()).toBe(200)
-        const id = mcpData<{ id: string }>(await response.json()).id
-        expect(id).toEqual(expect.any(String))
-        qaIds.push(id)
-      }
-
-      const reorder = await mcpRequest(request, baseURL!, {
-        method: 'tools/call',
-        toolName: 'reorder_site_qa',
-        args: { site_id: siteId, updates: [{ id: qaIds[0], sort_order: 2 }, { id: qaIds[1], sort_order: 1 }] },
+    for (const [toolName, key] of [['list_site_qa', 'items'], ['list_site_reviews', 'reviews']]) {
+      const response = await mcpRequest(request, baseURL!, {
+        method: 'tools/call', toolName, args: { site_id: siteId },
       })
-      expect(reorder.status()).toBe(200)
-
-      const qaList = await mcpRequest(request, baseURL!, {
-        method: 'tools/call', toolName: 'list_site_qa', args: { site_id: siteId },
-      })
-      expect(qaList.status()).toBe(200)
-
-      const reviewCreate = await mcpRequest(request, baseURL!, {
-        method: 'tools/call',
-        toolName: 'create_owner_entered_site_review',
-        args: {
-          site_id: siteId,
-          author_name: 'MCP reviewer',
-          rating: 5,
-          content: 'The service was clear, responsive, and useful.',
-          collection_method: 'email',
-          original_reference: 'MCP regression fixture',
-          publication_authorized: true,
-          status: 'approved',
-        },
-      })
-      expect(reviewCreate.status()).toBe(200)
-      const reviewData = mcpData<{ id: string; verified: boolean }>(await reviewCreate.json())
-      reviewId = reviewData.id
-      expect(reviewId).toEqual(expect.any(String))
-      expect(reviewData.verified).toBe(false)
-
-      const reviewList = await mcpRequest(request, baseURL!, {
-        method: 'tools/call', toolName: 'list_site_reviews', args: { site_id: siteId },
-      })
-      expect(reviewList.status()).toBe(200)
-
-      const reviewUpdate = await mcpRequest(request, baseURL!, {
-        method: 'tools/call',
-        toolName: 'update_owner_entered_site_review',
-        args: { site_id: siteId, review_id: reviewId, rating: 4 },
-      })
-      expect(reviewUpdate.status()).toBe(200)
-    } finally {
-      for (const qaId of qaIds) {
-        await mcpRequest(request, baseURL!, {
-          method: 'tools/call', toolName: 'delete_site_qa', args: { site_id: siteId, qa_id: qaId },
-        })
-      }
-      if (reviewId) {
-        await mcpRequest(request, baseURL!, {
-          method: 'tools/call', toolName: 'delete_owner_entered_site_review', args: { site_id: siteId, review_id: reviewId },
-        })
-      }
+      expect(response.status()).toBe(200)
+      expect(mcpData<Record<string, unknown[]>>(await response.json())[key!]).toEqual(expect.any(Array))
     }
+    const catalog = await mcpRequest(request, baseURL!, { method: 'tools/list', siteId })
+    const tools = (await catalog.json()).result.tools as Array<{ name: string; annotations: { readOnlyHint: boolean } }>
+    const reviewTools = tools.filter(tool => /(?:_qa|_review|_reviews)$/.test(tool.name))
+    expect(reviewTools.map(tool => tool.name).sort()).toEqual(['list_location_qa', 'list_location_reviews', 'list_site_qa', 'list_site_reviews'])
+    expect(reviewTools.every(tool => tool.annotations.readOnlyHint)).toBe(true)
+    // #1001 gave a site the ability to edit the Q&A it wrote, so the CMS does
+    // have a Q&A write route — it validates its body like any other, and a 404
+    // here would mean that feature had been lost. A review is a guest's words,
+    // so it stays unwritable everywhere.
+    const qaWrite = await request.post(`${baseURL}/api/editor/sites/${siteId}/qa`, { data: {} })
+    expect(qaWrite.status(), await qaWrite.text()).toBe(400)
+    const reviewWrite = await request.post(`${baseURL}/api/editor/sites/${siteId}/reviews`, { data: {} })
+    expect([404, 405]).toContain(reviewWrite.status())
   })
 
   test.describe('owner management workflows', () => {
-    test('CMS manages locations while MCP rejects business setup tools', async ({ request, baseURL }) => {
-      await loginAs(request, baseURL!, MCP_GROWTH_SERVICE_USER_ID)
-      const siteId = await ensureSite(request, baseURL!)
-      const locationId = await createScratchLocation(request, baseURL!, siteId)
-
-      const deleteLocationRes = await request.delete(`${baseURL}/api/sites/${siteId}/locations/${locationId}`)
-      expect(deleteLocationRes.status()).toBe(200)
-      const catalog = await mcpRequest(request, baseURL!, { method: 'tools/list' })
-      const names = (await catalog.json()).result.tools.map((tool: { name: string }) => tool.name)
-      for (const toolName of ['create_site', 'create_location', 'delete_location', 'copy_location_batch']) {
-        expect(names).not.toContain(toolName)
-        const rejected = await mcpRequest(request, baseURL!, {
-          method: 'tools/call', toolName, args: { site_id: siteId, location_id: locationId },
-        })
-        expect(rejected.status()).toBe(200)
-        expect((await rejected.json()).error.code).toBe(-32601)
-      }
-      expect(names).toEqual(expect.arrayContaining(['delete_media_asset', 'delete_product', 'update_location']))
-
-    })
-
     test('owner can manage media and Product tools including public booking', async ({ request, baseURL }) => {
       test.setTimeout(120_000)
       await loginAs(request, baseURL!, MCP_GROWTH_SERVICE_USER_ID)

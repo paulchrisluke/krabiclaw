@@ -159,7 +159,6 @@ const emit = defineEmits<{
   uploaded: [asset: MediaAsset]
 }>()
 
-const toast = useToast()
 const ALL_MEDIA_KIND = 'all'
 const { uploading, error: mediaUploadError, upload: uploadMedia } = useMediaUpload(`/api/editor/sites/${props.siteId}`)
 
@@ -279,7 +278,6 @@ async function upload(file: File) {
       return
     }
 
-    toast.add({ title: 'File uploaded', color: 'success' })
     await loadAssets()
     emit('uploaded', assets.value.find(asset => asset.id === result.asset_id) ?? {
       id: result.asset_id,

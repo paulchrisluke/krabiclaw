@@ -26,6 +26,7 @@ import {
   type MetafieldDefinition,
   type MetafieldValue,
 } from '~/shared/metafields'
+import type { CatalogCounts } from '~/utils/product-presentation'
 import type {
   Collection,
   CreateCollectionInput,
@@ -383,6 +384,31 @@ export async function listLocationProducts(db: DbClient, input: {
   `, [...(published ? [input.publishedOnSiteId] : []), input.organizationId, input.locationId,
     ...(input.window ? [input.window.limit + 1, input.window.offset] : [])])
   return hydrate(db, input.organizationId, rows.map(mapProductRow))
+}
+
+/**
+ * How many products a location carries and how many of them take bookings —
+ * the two counts a location's hub renders it from ("313 dishes", or
+ * "24 dishes · 3 experiences" where the location sells on both surfaces).
+ *
+ * The hub used to read the whole catalogue to count it and look at one nullable
+ * field per row. On a 365-item menu that is 665 KB and every variant, price,
+ * collection membership and media placement the location has.
+ */
+export async function summarizeLocationProducts(db: DbClient, input: {
+  organizationId: string; locationId: string
+}): Promise<CatalogCounts> {
+  const row = await queryFirst<{ total: number; bookable: number }>(db, `
+    SELECT count(*) AS total,
+           count(bc.product_id) AS bookable
+      FROM products p
+      JOIN product_locations pl ON pl.product_id = p.id AND pl.organization_id = p.organization_id
+      LEFT JOIN product_booking_configs bc ON bc.product_id = p.id AND bc.organization_id = p.organization_id
+     WHERE p.organization_id = ? AND pl.location_id = ?
+  `, [input.organizationId, input.locationId])
+  // The same two numbers countCatalog reads off the rows, so a surface is
+  // assigned identically whether the caller counted rows or SQL did.
+  return { total: Number(row?.total ?? 0), experiences: Number(row?.bookable ?? 0) }
 }
 
 export async function listCollectionProducts(db: DbClient, input: {

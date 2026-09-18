@@ -23,7 +23,7 @@ import {
   updateCollection,
   updateProduct,
 } from '~/server/utils/product-management'
-import { assertResourceAccess } from '~/server/utils/member-access'
+import { assertResourceAccess, memberAccessPrincipal } from '~/server/utils/member-access'
 import { mcpPageInfo, mcpPageWindow } from '~/server/utils/mcp-pagination'
 import { MCP_ERROR, mcpProtocolError } from '~/server/utils/mcp-protocol'
 import { listSitesForUser } from '~/server/utils/mcp-workflows'
@@ -39,11 +39,7 @@ import { NOT_HANDLED, objectArray, omit, requiredString, requiredStringArray } f
  */
 async function authorizeLocation(ctx: McpExecutorContext, locationId: string) {
   await assertResourceAccess(ctx.site.db, {
-    env: ctx.site.env,
-    memberId: ctx.site.memberId,
-    role: ctx.site.role,
-    organizationId: ctx.site.organizationId,
-    siteId: ctx.site.siteId,
+    ...memberAccessPrincipal(ctx.site.membership, { env: ctx.site.env, siteId: ctx.site.siteId }),
     resourceLocationId: locationId,
   })
 }
