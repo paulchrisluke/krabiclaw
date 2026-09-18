@@ -105,8 +105,17 @@ const catalogRows = computed<CollectionRow[]>(() => {
 const localOrder = ref<CollectionRow[] | null>(null)
 /** Every collection this location has, in the one order it stores. */
 const collections = computed<CollectionRow[]>(() => localOrder.value ?? catalogRows.value)
-/** The ones this surface manages, in that same order. */
-const onSurface = computed(() => collectionsOnSurface(vertical, collections.value, props.surface))
+/**
+ * The ones this surface manages, in that same order, each holding only its
+ * members on this surface — so the count and the cover describe what the owner
+ * opens, not what the collection holds altogether.
+ */
+const onSurface = computed<CollectionRow[]>(() =>
+  collectionsOnSurface(vertical, collections.value, props.surface).map(row => ({
+    ...row,
+    product_count: row.products.length,
+    cover: row.products.find(product => product.image)?.image ?? null,
+  })))
 const editing = ref(false)
 const removingId = ref<string | null>(null)
 const deleteError = ref<string | null>(null)

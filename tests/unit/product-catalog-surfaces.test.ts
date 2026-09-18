@@ -72,6 +72,28 @@ test('a mixed restaurant manages each surface\'s collections separately', () => 
   assert.deepEqual(collectionsOnSurface('restaurant', rows, 'experiences').map(row => row.name), ['Experiences'])
 })
 
+// A chef's counter is one collection the owner named once, holding dishes that
+// belong on the menu and a bookable seating that belongs to experiences. The
+// public pages already split it that way — /menu never shows the omakase and
+// /experiences never shows the dishes — so the CMS opens the same collection on
+// both surfaces with each surface's members and no others.
+test('a collection holding both a dish and an experience is on both surfaces, split', () => {
+  const rows = [{ name: "Chef's Counter", products: [dish, experience] }]
+
+  const onMenu = collectionsOnSurface('restaurant', rows, 'menu')
+  assert.deepEqual(onMenu.map(row => row.name), ["Chef's Counter"])
+  assert.deepEqual(onMenu[0]!.products, [dish])
+
+  const onExperiences = collectionsOnSurface('restaurant', rows, 'experiences')
+  assert.deepEqual(onExperiences.map(row => row.name), ["Chef's Counter"])
+  assert.deepEqual(onExperiences[0]!.products, [experience])
+})
+
+test('a collection with no member on a surface is not offered there', () => {
+  const rows = [{ name: 'Drinks', products: [dish] }]
+  assert.deepEqual(collectionsOnSurface('restaurant', rows, 'experiences'), [])
+})
+
 test('a collection with nothing in it is offered on every surface until it holds something', () => {
   const rows = [{ name: 'Not yet filled', products: [] as Pick<Product, 'booking'>[] }]
   assert.equal(collectionsOnSurface('restaurant', rows, 'menu').length, 1)

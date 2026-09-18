@@ -87,7 +87,7 @@ import { getErrorMessage } from '~/utils/errors'
 import { formatProductMoney } from '~/utils/product-money'
 import { selectPrice } from '~/shared/prices'
 import { isCurrencyCode } from '~/shared/currencies'
-import { collectionsOnSurface, isCatalogSurface, presentationForSurface } from '~/utils/product-presentation'
+import { collectionsOnSurface, isCatalogSurface, presentationForSurface, productSurfaceOf } from '~/utils/product-presentation'
 
 
 const route = useRoute()
@@ -123,10 +123,12 @@ const pending = catalog.pending
 // commits once when it closes, so it is held apart from the shared catalog.
 const localOrder = ref<Product[] | null>(null)
 /**
- * The products in this collection, in the order the merchant set.
+ * This surface's products in this collection, in the order the merchant set.
  *
  * Position is on the membership row, so the same product can sit third here
- * and first in another collection without being copied.
+ * and first in another collection without being copied. A collection holding
+ * both dishes and a bookable omakase is one collection on two surfaces, and
+ * each shows its own members — the same projection the public pages make.
  */
 const products = computed(() => {
   if (localOrder.value) return localOrder.value
@@ -136,7 +138,7 @@ const products = computed(() => {
     if (membership) positions.set(product.id, membership.sort_order)
   }
   return catalog.products.value
-    .filter(product => positions.has(product.id))
+    .filter(product => positions.has(product.id) && productSurfaceOf(vertical, product) === segment)
     .sort((left, right) => (positions.get(left.id)! - positions.get(right.id)!) || left.name.localeCompare(right.name))
 })
 /** Each collection with the products that are in it, which is what a surface is read from. */
@@ -156,10 +158,10 @@ const orderDirty = ref(false)
 const orderError = ref<string | null>(null)
 const moveError = ref<string | null>(null)
 
-// Reached through this surface, so it has to be one of this surface's. A
-// collection of bookable experiences opened under /menu would read as a menu
-// section and offer menu targets to move its products into. An empty
-// collection is on every surface until its first product settles it.
+// Reached through this surface, so it has to have a member on it. A collection
+// with only bookable products opened under /menu would read as a menu section
+// and offer menu targets to move them into. An empty collection is on every
+// surface until it holds something.
 const collection = computed(() =>
   collectionsOnSurface(vertical, collectionsWithProducts.value, segment).find(row => row.id === collectionId.value) ?? null)
 const loadError = computed(() => (catalog.error.value ? getErrorMessage(catalog.error.value, `Failed to load ${presentation.itemLabelPlural.toLowerCase()}`) : null))
