@@ -180,6 +180,7 @@ const isCollectionCreated = (value: unknown): value is { collection: { id: strin
 async function commit() {
   saving.value = true
   errorMessage.value = ''
+  let createdId: string | null = null
   try {
     // A collection created from a location's screen is scoped to that
     // location; a site-wide one is created from the site's own catalog screen.
@@ -190,20 +191,24 @@ async function commit() {
       const location = locationId.value
       if (!location) throw createError({ statusCode: 404, statusMessage: 'Location not found' })
       const created = await dashboardApi(endpoint, { method: 'POST', body: { name: form.name.trim(), location_id: location }, validate: isCollectionCreated })
-      form.name = ''
-      await catalog.refresh()
-      await navigateTo(`${surfacePath.value}/${created.collection.id}`)
-      return
+      createdId = created.collection.id
+    } else {
+      await dashboardApi(`${endpoint}/${collectionId.value}`, { method: 'PATCH', body: { name: form.name.trim() }, validate: isRecord })
     }
-    await dashboardApi(`${endpoint}/${collectionId.value}`, { method: 'PATCH', body: { name: form.name.trim() }, validate: isRecord })
-    await catalog.refresh()
-    await navigateTo(collectionPath.value)
   } catch (error) {
     // The index column, where the alert lives, is under the detail sheet on narrow screens.
     errorMessage.value = getErrorMessage(error, `Failed to save ${presentation.collectionGroupLabel.toLowerCase()}`)
+    return
   } finally {
     saving.value = false
   }
+  // The write has landed. Everything below only moves the screen onto it, and a
+  // failure here is not a failed save — saying it was would leave the create
+  // screen open over a collection that exists, and the next press would make a
+  // second one with the same name.
+  if (createdId) form.name = ''
+  await catalog.refresh()
+  await navigateTo(createdId ? `${surfacePath.value}/${createdId}` : collectionPath.value)
 }
 
 function closeLeaf() {
