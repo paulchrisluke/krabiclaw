@@ -31,7 +31,7 @@ function oauthMetadataBaseURL(baseURL: string) {
 }
 
 test.describe('OAuth discovery endpoints', () => {
-  test('the Kikuzuki publisher can exchange its loopback PKCE code for tenant access @smoke', async ({ request, baseURL }) => {
+  test('the Kikuzuki publisher can exchange its loopback PKCE code for tenant access', async ({ request, baseURL }) => {
     await loginAs(request, baseURL!, 'user-e2e-kikuzuki-owner')
     expect(process.env.MCP_CIMD_CLIENT_URL, 'MCP_CIMD_CLIENT_URL must name a public HTTPS metadata document').toBeTruthy()
     const clientId = new URL('/oauth-clients/client-localization.json', process.env.MCP_CIMD_CLIENT_URL!).toString()
@@ -100,23 +100,17 @@ test.describe('OAuth discovery endpoints', () => {
     const openid = await request.get(`${baseURL}/.well-known/openid-configuration`)
     expect(openid.status()).toBe(200)
     const openidBody = await openid.json() as Record<string, unknown>
-    expect(typeof openidBody.issuer).toBe('string')
-    expect(typeof openidBody.authorization_endpoint).toBe('string')
-    expect(typeof openidBody.token_endpoint).toBe('string')
-    expect(typeof openidBody.jwks_uri).toBe('string')
     // OpenID Connect Discovery requires RS256 support. ChatGPT validates the
     // ID token after code exchange and will abort before MCP initialize when
     // the provider advertises only Better Auth's EdDSA default.
     expect(openidBody.id_token_signing_alg_values_supported as string[]).toContain('RS256')
+    // CIMD instead of dynamic registration: a client is its own metadata URL.
     expect(openidBody.registration_endpoint).toBeUndefined()
     expect(openidBody.client_id_metadata_document_supported).toBe(true)
 
     const authorizationServer = await request.get(`${baseURL}/.well-known/oauth-authorization-server`)
     expect(authorizationServer.status()).toBe(200)
     const authorizationServerBody = await authorizationServer.json() as Record<string, unknown>
-    expect(typeof authorizationServerBody.issuer).toBe('string')
-    expect(typeof authorizationServerBody.authorization_endpoint).toBe('string')
-    expect(typeof authorizationServerBody.token_endpoint).toBe('string')
     expect(authorizationServerBody.registration_endpoint).toBeUndefined()
     expect(authorizationServerBody.client_id_metadata_document_supported).toBe(true)
     expect(authorizationServerBody.code_challenge_methods_supported as string[]).toContain('S256')

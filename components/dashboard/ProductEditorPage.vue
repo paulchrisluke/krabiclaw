@@ -313,7 +313,7 @@ import { PRODUCT_LIMITS } from '~/shared/product-limits'
 import { isCurrencyCode } from '~/shared/currencies'
 import { majorAmountToMinor, minorAmountToMajor, selectPrice, type Price } from '~/shared/prices'
 import { formatProductMoney } from '~/utils/product-money'
-import { presentationForProduct, requireProductPresentation } from '~/utils/product-presentation'
+import { presentationForProduct, productSurfaceOf, requireProductPresentation } from '~/utils/product-presentation'
 import { getErrorMessage, isNotFoundError } from '~/utils/errors'
 
 const route = useRoute()
@@ -321,8 +321,14 @@ const dashboardApi = useDashboardApi()
 const collectionId = computed(() => String(route.params.collectionId ?? route.params.categoryId ?? ''))
 const productId = computed(() => String(route.params.productId ?? ''))
 const locationPath = computed(() => `/dashboard/${String(route.params.orgSlug)}/sites/${String(route.params.siteSlug)}/locations/${String(route.params.locationSlug)}`)
-const productsPath = computed(() => `${locationPath.value}/products`)
-const collectionPath = computed(() => `${productsPath.value}/${collectionId.value}`)
+// The surface is the product's own, not the URL's: a dish saved as bookable is
+// an experience from that moment, and the rows it returns to have moved with
+// it. Until the row has loaded the URL is all there is to go on.
+const surfacePath = computed(() => {
+  const surface = product.value ? productSurfaceOf(vertical, product.value) : String(route.params.surface ?? '')
+  return `${locationPath.value}/products/${surface}`
+})
+const collectionPath = computed(() => `${surfacePath.value}/${collectionId.value}`)
 const itemPath = computed(() => `${collectionPath.value}/${productId.value}`)
 const frame = useEditorFrame(itemPath)
 

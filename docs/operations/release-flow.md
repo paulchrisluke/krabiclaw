@@ -4,14 +4,14 @@ KrabiClaw uses one branch-driven GitHub Actions workflow and three Cloudflare Wo
 
 | Git event | Worker | Release-blocking validation |
 | --- | --- | --- |
-| Pull request to `staging` | `krabiclaw-preview` | The fixed `@smoke` suite: Saya and blawby public navigation, one guest booking write, the public auth session, MCP OAuth, an MCP write reaching the public API, and one authorization boundary |
-| Push to `staging` | `krabiclaw-preview`, then `krabiclaw-staging` | The same `@smoke` suite on the disposable preview, which must pass before staging deploys; then read-only rendering on Pottery House, Kikuzuki, and NCLS aliases and read-only tenant MCP OAuth/content smoke |
+| Pull request to `staging` | None | `Checks`. The E2E suite is run locally against a local D1 |
+| Push to `staging` | `krabiclaw-staging` | `Checks`, then read-only rendering on Pottery House, Kikuzuki, and NCLS aliases and read-only tenant MCP OAuth/content smoke |
 | `staging` to `main` pull request | None | Reuses checks attached to the exact staging SHA |
 | Push to `main` | `krabiclaw` | `Checks`, then read-only rendering/navigation on all three customer custom domains |
 
-A direct push to `staging` is a normal hotfix path, so it runs the preview
-qualification on that exact commit before staging deploys; nothing reaches
-staging on the strength of a check that ran on a different SHA.
+A direct push to `staging` is a normal hotfix path. `Checks` runs on that exact
+commit before staging deploys; nothing reaches staging on the strength of a
+check that ran on a different SHA.
 
 Production deploys what `main` holds once its own `Checks` pass. It used to
 re-read the staging commit's check runs first and refuse otherwise, which meant
@@ -19,19 +19,21 @@ a promotion merged before staging finished failed the deploy rather than
 waiting for it, and the fix was always to re-run the job by hand. Whoever
 promotes to `main` decides the candidate is ready.
 
-Each environment receives one normal `wrangler deploy`. Preview uses one fixed, shared D1 resource; it may apply disposable fixtures and run writes. During ordinary releases, staging applies migrations but does not sweep, reset, reseed customers, provision E2E identities, or perform guest/MCP writes. A standalone staging database may be reset or reprovisioned while its schema remains unreleased; that exception never applies once the schema reaches production. Production is never seeded, reset, or mutated by test automation.
+Each environment receives one normal `wrangler deploy`. During ordinary releases, staging applies migrations but does not sweep, reset, reseed customers, provision E2E identities, or perform guest/MCP writes. A standalone staging database may be reset or reprovisioned while its schema remains unreleased; that exception never applies once the schema reaches production. Production is never seeded, reset, or mutated by test automation.
 
-Preview must keep persistent Workers Logs and traces enabled in `wrangler.toml`,
-with invocation logs and 100% sampling. This is permanent environment
-configuration, not a temporary debugging toggle. After an E2E failure, inspect
-the CI output and the preview Worker's Cloudflare Observability records for the
-failing request's timestamp and request ID before deciding whether to retry. Preserve relevant evidence before Cloudflare's retention window expires;
+Staging and production keep persistent Workers Logs and traces enabled in
+`wrangler.toml`, with invocation logs and 100% sampling. This is permanent
+environment configuration, not a temporary debugging toggle. After a staging or
+production failure, inspect that Worker's Cloudflare Observability records for
+the failing request's timestamp and request ID before deciding whether to retry.
+Preserve relevant evidence before Cloudflare's retention window expires;
 enabling logging cannot recover requests from an earlier unlogged deployment.
 
-Preview CI does not upload raw Playwright reports or test results: traces can
-contain persistent dev-route credentials in request headers, which GitHub's
-log masking does not redact. Use the masked CI output and Worker Observability
-for remote failures; reproduce locally to inspect a Playwright trace.
+An E2E failure is a local failure: the suite runs against a Worker it starts, so
+the run prints that Worker's own output beside the test, and the Playwright
+trace, screenshot and report are already on disk under `test-results/`. Read
+them there. Nothing uploads a trace to CI, which is what kept dev-route
+credentials in request headers out of GitHub's unredacted logs.
 
 For media failures, correlate `mcp_tool_failed` (tool, request ID, Ray ID,
 duration, error chain) with the same invocation's `media_attachment_failed`,
@@ -62,7 +64,7 @@ or production data and write restrictions.
 
 Production deployment and verification are separate jobs in the same workflow. The deploy job builds once, performs the single Wrangler deployment, then applies forward-compatible migrations and refreshes search only when indexed content definitions or document-generation code changed. The verification job waits until all three custom domains expose that exact Nuxt build and its referenced assets, then runs read-only browser coverage. Retrying a failed verification job never redeploys production.
 
-For migration safety, preview reset behavior, incident recovery, and detailed browser/MCP verification requirements, see [release-and-outage-prevention.md](release-and-outage-prevention.md).
+For migration safety, incident recovery, and detailed browser/MCP verification requirements, see [release-and-outage-prevention.md](release-and-outage-prevention.md).
 
 ## Dependency batches
 
@@ -104,7 +106,7 @@ or add a permanent blanket preapproval to make the update install.
 
 Grouping does not authorize merging or waive validation.
 
-Qualify the combined branch through local checks and one full preview run before
+Qualify the combined branch through `Checks` and one full local E2E run before
 merging to staging. Close superseded bot PRs only after the integration lands.
 An auth update that changes schema or network-security contracts requires that
 work to be designed and qualified explicitly; never upgrade one auth plugin in

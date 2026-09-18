@@ -7,7 +7,7 @@ customer behavior, rather than release bookkeeping, the approval signal.
 ## Release rule
 
 KrabiClaw uses the branch-driven flow in [release-flow.md](release-flow.md): a
-pull request deploys preview, a push to `staging` deploys the staging Worker,
+pull request deploys nothing, a push to `staging` deploys the staging Worker,
 and a push to `main` deploys production. Each environment receives one normal
 Cloudflare Worker deployment. Do not add candidate manifests, version-override
 headers, Worker UUID tracking, custom release locks, or repository rollback
@@ -52,19 +52,17 @@ inspection once to determine ownership, then report the actual result.
 
 1. Keep one coherent bugfix or feature in one ready pull request targeting
    `staging`. Split work only when the changes are independently releasable.
-2. Run focused validation locally. CI owns the environment-specific build,
-   preview deployment, and the fixed `@smoke` preview suite. That suite is the
-   same seven cases on every PR; nothing in the diff changes which tests run.
-3. When preview deploys, test the affected customer journey immediately.
-4. Merge to `staging` after required PR checks and preview validation pass.
-5. When staging deploys, begin read-only MCP and tenant browser validation
+2. Run the E2E suite locally against a local D1 (`yarn e2e:local:prepare &&
+   yarn test:e2e:local`). CI owns `Checks`; there is no preview deployment.
+3. Merge to `staging` after required PR checks and local validation pass.
+4. When staging deploys, begin read-only MCP and tenant browser validation
    immediately.
-6. Open or update the ordinary `staging` to `main` pull request. It reuses the
+5. Open or update the ordinary `staging` to `main` pull request. It reuses the
    completed checks attached to that exact staging SHA without another deploy,
    provisioning pass, or CI qualification cycle.
-7. Promote only after the required checks on that exact SHA and the scoped
+6. Promote only after the required checks on that exact SHA and the scoped
    customer validation pass.
-8. After production deploys, repeat the affected read-only customer journeys
+7. After production deploys, repeat the affected read-only customer journeys
    and production smoke. Use an explicit canary identity for any production
    action that writes or sends notifications.
 
@@ -98,7 +96,7 @@ For affected tenant routes, verify the final URL, tenant identity, visible copy,
 first-party media, primary navigation and calls to action, console errors,
 failed first-party requests, hydration errors, blank sections, and late content
 disappearance. Mutating form, booking, and MCP interactions belong only on local
-or preview disposable data. Staging and production checks stay read-only unless
+disposable data. Staging and production checks stay read-only unless
 a dedicated canary is explicitly authorized.
 
 Verification means completing what the customer came to do, up to the last
@@ -174,8 +172,8 @@ When a deployed customer journey is broken:
    Worker without changing D1 data.
 3. Re-open the affected customer journeys, including the relevant client sites
    and authenticated flows.
-4. Repair the source in one narrow pull request through the normal preview,
-   `staging`, and `main` branch flow.
+4. Repair the source in one narrow pull request through the normal `staging`
+   and `main` branch flow.
 
 Do not build a custom rollback system or delay emergency stabilization for
 release bookkeeping.

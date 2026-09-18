@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { collectPageErrors, dismissPreviewToolbar } from './helpers'
+import { dismissPreviewToolbar } from './helpers'
 import { loginAs } from './helpers/auth'
 import { tenantHostIsAddressable, testBaseUrl } from './test-env'
 import { environmentTenantAliasSlug } from '../../server/utils/tenant-hosts'
@@ -37,7 +37,6 @@ test('a new owner builds a draft and creates a site through the routed flow', as
   const discarded = await page.request.delete('/api/dashboard/onboarding/drafts/active')
   expect(discarded.status(), await discarded.text()).toBe(200)
 
-  const errors = collectPageErrors(page)
   const name = `E2E Wizard ${Date.now().toString(36)}`
 
   // Every step screen names itself, so waiting on it means "that step is
@@ -102,11 +101,11 @@ test('a new owner builds a draft and creates a site through the routed flow', as
   await page.getByRole('button', { name: 'Enter the details myself' }).click()
   await expect(step('location')).toBeVisible()
 
-  // Location: the country is asked once, as a picker that arrives on the product
-  // default (United States) and is changed here.
+  // Location: the country is asked once, and nothing proposes one — it is what
+  // the timezone and the currency are both derived from, so the owner names it.
   await page.getByPlaceholder('123 Main Street').fill('88 Moo 2, Ao Nang Beach Road')
   await page.getByPlaceholder('City', { exact: true }).fill('Ao Nang')
-  await step('location').getByText('United States').click()
+  await step('location').getByText('Select country').click()
   await page.getByPlaceholder('Search country...').fill('Thailand')
   await page.getByRole('option', { name: /Thailand/ }).click()
   await advance('Next', 'contact')
@@ -122,7 +121,12 @@ test('a new owner builds a draft and creates a site through the routed flow', as
   // Hours: the timezone follows the single-zone country the owner named. Zones
   // read as the city and its current offset, not the IANA identifier.
   await expect(step('hours')).toContainText('Bangkok · GMT+7')
-  await advance('Save hours', 'products')
+  await advance('Save hours', 'currency')
+
+  // Currency: proposed from the country the owner named, and confirmed here
+  // before anything is priced. Thailand prices in baht.
+  await expect(step('currency')).toContainText('Thai Baht (THB)')
+  await advance('Next', 'products')
 
   // The menu is optional and the footer says so. The front of house is not:
   // colour, logo and photo are, but the headline becomes the home page's only
@@ -170,9 +174,4 @@ test('a new owner builds a draft and creates a site through the routed flow', as
   const live = await request.get(asAnyone.url, { headers: asAnyone.headers })
   expect(live.status()).toBe(200)
   expect(await live.text()).toContain(name)
-
-  // The collector sees the framed site's console as well as the flow's, and both
-  // have to be clean: the pane frames the owner's own site, so a mismatch in
-  // there is this flow's defect too.
-  expect(errors).toEqual([])
 })

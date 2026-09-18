@@ -19,7 +19,9 @@ Use the narrowest real boundary that proves the behavior:
    atomicity.
 4. Use a browser against the local production Worker build for CMS and UI
    behavior.
-5. Use disposable deployed-preview E2E for release-critical customer journeys.
+5. Use the local E2E suite over a local D1 for release-critical customer
+   journeys, and read-only checks against staging for anything only a
+   deployment can answer.
 6. Use an actual ChatGPT session only for ChatGPT-specific tool discovery,
    selection, attachments, and host-provided arguments.
 
@@ -73,57 +75,41 @@ contract, not whether it expects success or failure.
 
 ## Release feedback loop
 
-An ordinary ready PR deploys a disposable preview and runs a fixed set of
-`@smoke` cases against it — the same set on every PR, whatever the diff
-touches. There is no selector and no impact map: a path nobody classified used
-to promote an ordinary PR to the entire inventory, which is how a one-line
-change bought a 13-minute E2E job.
+A pull request runs `Checks` and nothing else. There is no preview deployment
+and no E2E job: the suite ran against a shared preview database that every run
+reset and restored from a production snapshot, which wrote 8-10 million D1 rows
+a day and was the whole of this account's D1 bill. It also meant one mutable
+environment that runs had to queue for.
 
-The smoke set exists to cover distinct customer contracts, not to hit a count:
+The E2E suite runs locally, against a local D1 and a Worker the suite starts:
 
-| Case | Contract |
-| --- | --- |
-| Pottery home → experiences → detail | Saya public navigation into a detail route |
-| NCLS home → services → detail | blawby public navigation into a detail route |
-| Pottery Product booking | a real guest write and its owner dispatch |
-| Public auth CTAs reflect the SSR session | signed-in vs signed-out public surfaces |
-| Kikuzuki publisher PKCE | OAuth into current MCP workspace context |
-| MCP draft publishes to the public API | an MCP write becoming publicly visible |
-| A role sees and can invoke only its own tools | the authorization boundary |
+```bash
+yarn e2e:local:prepare   # local D1, migrations, fixtures, production build
+yarn test:e2e:local
+```
 
-If a change merges two of these into one case, that is fine. Do not add a case
-to preserve a number.
+`staging` is the first deployed validation. A push to `staging` deploys it and
+then runs read-only MCP discovery and tenant rendering against staging itself.
+Production deploys what `main` holds once `main`'s own `Checks` pass; whoever
+promotes decides the candidate is ready.
 
-Preview runs are serialized across workflow runs because preview is one mutable
-D1 environment and a run resets it. That serialization is infrastructure
-correctness, not test bookkeeping — and its identity is a pattern that matches
-every job that has ever held the lock, not the current job's display name, so
-renaming the job cannot let two runs reset preview at once. Within one run the
-suite uses two workers; the lock is between runs.
-
-A push straight to `staging` runs the same smoke suite on the disposable
-preview before staging deploys, so a hotfix cannot reach staging without it.
-Production then re-reads that exact staging commit's checks before deploying.
-
-Staging and production remain read-only. After staging deploys, CI runs the
-read-only MCP smoke and tenant rendering/navigation against staging itself.
-Guest and MCP write suites run only against fresh local data or disposable
-preview data.
+Staging and production remain read-only. Guest and MCP write suites run only
+against local data.
 
 Focused commands:
 
 ```bash
 yarn test:unit
-yarn test:e2e:preview:smoke
+yarn test:e2e:local
 yarn test:e2e:tenant-rendering
 yarn test:e2e:guest-journeys
 yarn test:e2e:mcp
 ```
 
-OAuth E2E requires `MCP_CIMD_CLIENT_URL` and `MCP_PRIVATE_CIMD_CLIENT_URL`
-to name reachable public HTTPS metadata documents, including when the tested
-Worker runs on localhost. Use the existing preview fixtures configured in
-`.github/workflows/ci.yml`; a localhost client ID is invalid under CIMD.
+The CIMD OAuth cases need `MCP_CIMD_CLIENT_URL` and
+`MCP_PRIVATE_CIMD_CLIENT_URL` to name reachable public HTTPS metadata
+documents, which localhost cannot be. Point them at the deployed staging
+Worker's own test-client documents when running those cases.
 
 Migration tooling changes also run `yarn test:migrations`. These integration
 tests invoke the real installed Drizzle CLI/API and migration guards against

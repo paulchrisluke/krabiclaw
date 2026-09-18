@@ -141,6 +141,7 @@ export default defineHandler(async (event) => {
       organizationId: site.organization_id, siteId, locationId: resolvedLocationId,
       reservationId, requestId: id, customerId: customer.id,
       timezone: availability.timezone, startsAt: slot.starts_at,
+      date, timeSlot: slot.time_slot,
       endsAt: new Date(Date.parse(slot.starts_at) + durationMinutes * 60_000).toISOString(),
       partySize, status: 'confirmed',
       thread: requestInsertQueries({

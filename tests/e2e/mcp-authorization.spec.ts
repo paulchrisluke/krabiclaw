@@ -11,7 +11,7 @@ test.describe('stateless MCP server', () => {
   // Discovery and execution are one boundary, not two: a tool the role may not
   // use must be absent from its catalog AND refuse the call, because a client
   // that guesses the name never reads the catalog.
-  test('a role sees and can invoke only its own tools @smoke', async ({ request, baseURL }) => {
+  test('a role sees and can invoke only its own tools', async ({ request, baseURL }) => {
     await loginAs(request, baseURL!, 'user-e2e-pottery-editor')
     const siteId = 'site-pottery-house'
 
