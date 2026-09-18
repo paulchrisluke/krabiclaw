@@ -26,10 +26,6 @@ function oauthAuthorizeUrl(baseURL: string, params: Record<string, string>) {
   return `${baseURL}/api/auth/oauth2/authorize?${new URLSearchParams(params).toString()}`
 }
 
-function oauthMetadataBaseURL(baseURL: string) {
-  return (process.env.BETTER_AUTH_URL || baseURL).replace(/\/$/, '')
-}
-
 test.describe('OAuth discovery endpoints', () => {
   test('the Kikuzuki publisher can exchange its loopback PKCE code for tenant access', async ({ request, baseURL }) => {
     await loginAs(request, baseURL!, 'user-e2e-kikuzuki-owner')
@@ -87,12 +83,10 @@ test.describe('OAuth discovery endpoints', () => {
   // One discovery pass: a client reads all three documents back to back, and
   // splitting them into three tests only repeats the fixture.
   test('the three OAuth discovery documents describe this resource server', async ({ request, baseURL }) => {
-    const metadataBase = oauthMetadataBaseURL(baseURL!)
-
     const protectedResource = await request.get(`${baseURL}/.well-known/oauth-protected-resource`)
     expect(protectedResource.status()).toBe(200)
     const resourceBody = await protectedResource.json() as Record<string, unknown>
-    expect(resourceBody.resource).toBe(`${metadataBase}/api/mcp`)
+    expect(resourceBody.resource).toBe(`${baseURL}/api/mcp`)
     expect(Array.isArray(resourceBody.authorization_servers)).toBe(true)
     expect((resourceBody.authorization_servers as string[]).length).toBeGreaterThan(0)
     expect(resourceBody.bearer_methods_supported as string[]).toContain('header')
