@@ -90,7 +90,8 @@ yarn test:e2e:local
 
 `staging` is the first deployed validation. A push to `staging` deploys it and
 then runs read-only MCP discovery and tenant rendering against staging itself.
-Production re-reads that exact staging commit's checks before deploying.
+Production deploys what `main` holds once `main`'s own `Checks` pass; whoever
+promotes decides the candidate is ready.
 
 Staging and production remain read-only. Guest and MCP write suites run only
 against local data.

@@ -21,17 +21,19 @@ promotes to `main` decides the candidate is ready.
 
 Each environment receives one normal `wrangler deploy`. During ordinary releases, staging applies migrations but does not sweep, reset, reseed customers, provision E2E identities, or perform guest/MCP writes. A standalone staging database may be reset or reprovisioned while its schema remains unreleased; that exception never applies once the schema reaches production. Production is never seeded, reset, or mutated by test automation.
 
-Preview must keep persistent Workers Logs and traces enabled in `wrangler.toml`,
-with invocation logs and 100% sampling. This is permanent environment
-configuration, not a temporary debugging toggle. After an E2E failure, inspect
-the run output and the deployed Worker's Cloudflare Observability records for the
-failing request's timestamp and request ID before deciding whether to retry. Preserve relevant evidence before Cloudflare's retention window expires;
+Staging and production keep persistent Workers Logs and traces enabled in
+`wrangler.toml`, with invocation logs and 100% sampling. This is permanent
+environment configuration, not a temporary debugging toggle. After a staging or
+production failure, inspect that Worker's Cloudflare Observability records for
+the failing request's timestamp and request ID before deciding whether to retry.
+Preserve relevant evidence before Cloudflare's retention window expires;
 enabling logging cannot recover requests from an earlier unlogged deployment.
 
-Preview CI does not upload raw Playwright reports or test results: traces can
-contain persistent dev-route credentials in request headers, which GitHub's
-log masking does not redact. Use the masked CI output and Worker Observability
-for remote failures; reproduce locally to inspect a Playwright trace.
+An E2E failure is a local failure: the suite runs against a Worker it starts, so
+the run prints that Worker's own output beside the test, and the Playwright
+trace, screenshot and report are already on disk under `test-results/`. Read
+them there. Nothing uploads a trace to CI, which is what kept dev-route
+credentials in request headers out of GitHub's unredacted logs.
 
 For media failures, correlate `mcp_tool_failed` (tool, request ID, Ray ID,
 duration, error chain) with the same invocation's `media_attachment_failed`,
