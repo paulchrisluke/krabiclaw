@@ -5,7 +5,6 @@ import { getOrganizationBillingStatus } from '~/server/utils/billing'
 import type { CloudflareEnv } from '~/server/utils/auth'
 import { canonicalizeLocale } from '~/server/utils/localization'
 import { localizationError } from '~/server/utils/localization-errors'
-import { getSiteLocalizationProgress } from '~/server/utils/site-localization-opportunities'
 
 interface SiteLanguageRow {
   id: string
@@ -55,9 +54,9 @@ export async function addSiteLanguage(
 }
 
 /**
- * Publishing is what makes a language public, and it refuses anything less than
- * a finished translation. The progress payload travels with the refusal so the
- * caller can say what is still missing rather than just that it failed.
+ * Publishing is what makes a language public. Untranslated fields fall back to
+ * the English source, so how much is translated is the owner's call to read off
+ * the progress report, not a condition of going public.
  */
 export async function publishSiteLanguage(
   db: DbClient, env: CloudflareEnv,
@@ -73,13 +72,6 @@ export async function publishSiteLanguage(
   }
   const existing = await loadLanguage(db, input.organizationId, input.siteId, locale)
   if (!existing) localizationError(404, 'LOCALIZATION_NOT_FOUND', 'Add the language before publishing it', { locale })
-
-  const progress = await getSiteLocalizationProgress(db, { organizationId: input.organizationId, siteId: input.siteId, locale })
-  if (progress.completed !== progress.total) {
-    localizationError(409, 'LOCALIZATION_INCOMPLETE', 'Every field has to be translated before the language goes public', {
-      locale, completed: progress.completed, total: progress.total, opportunities: progress.opportunities,
-    })
-  }
 
   const now = new Date().toISOString()
   const result = await execute(db, `

@@ -70,7 +70,7 @@ export const LOCALES_TOOLS: McpToolDefinition[] = [
       expected_updated_at: { type: ['string', 'null'] },
     },
     required: ['resource_type', 'resource_id', 'locale', 'values'],
-    outputSchema: { type: 'object', properties: { localization: localizationObject }, required: ['localization'], additionalProperties: false },
+    outputSchema: { type: 'object', properties: { localization: localizationObject, context: { type: 'object' } }, required: ['localization'], additionalProperties: false },
   }),
   siteTool({
     name: 'delete_resource_localization',
@@ -84,7 +84,7 @@ export const LOCALES_TOOLS: McpToolDefinition[] = [
       locale: { type: 'string' },
     },
     required: ['resource_type', 'resource_id', 'locale'],
-    outputSchema: { type: 'object', properties: { deleted: { type: 'boolean' }, resource_type: { type: 'string', enum: [...LOCALIZED_RESOURCE_TYPES, 'content_document'] }, resource_id: { type: 'string' }, locale: { type: 'string' } }, required: ['deleted', 'resource_type', 'resource_id', 'locale'], additionalProperties: false },
+    outputSchema: { type: 'object', properties: { deleted: { type: 'boolean' }, resource_type: { type: 'string', enum: [...LOCALIZED_RESOURCE_TYPES, 'content_document'] }, resource_id: { type: 'string' }, locale: { type: 'string' }, context: { type: 'object' } }, required: ['deleted', 'resource_type', 'resource_id', 'locale'], additionalProperties: false },
   }),
   siteTool({
     name: 'get_product_catalog_localization',
@@ -97,12 +97,13 @@ export const LOCALES_TOOLS: McpToolDefinition[] = [
     outputSchema: { type: 'object', properties: { locale: { type: 'string' }, products: { type: 'array', items: { type: 'object', additionalProperties: true } } }, required: ['locale', 'products'], additionalProperties: false },
   }),
   siteTool({
-    name: 'replace_product_localizations',
-    description: 'Atomically replace 1–250 exact Product localizations for one published locale. Omitted Products remain untouched; any invalid item rejects the whole submitted batch.',
+    name: 'replace_resource_localizations',
+    description: 'Atomically replace 1–250 exact localizations of one resource type for one locale. Omitted resources remain untouched; any invalid item rejects the whole submitted batch.',
     domain: 'locales',
     minimumRole: 'editor',
     confirmRequired: true,
     inputSchema: {
+      resource_type: { type: 'string', enum: [...LOCALIZED_RESOURCE_TYPES] },
       locale: { type: 'string' },
       items: {
         type: 'array',
@@ -111,15 +112,16 @@ export const LOCALES_TOOLS: McpToolDefinition[] = [
         items: {
           type: 'object',
           properties: {
-            product_id: { type: 'string' },
+            resource_id: { type: 'string' },
             values: localizedValuesSchema,
+            route_path: { type: ['string', 'null'] },
           },
-          required: ['product_id', 'values'],
+          required: ['resource_id', 'values'],
           additionalProperties: false,
         },
       },
     },
-    required: ['locale', 'items'],
-    outputSchema: { type: 'object', properties: { locale: { type: 'string' }, updated_product_ids: { type: 'array', items: { type: 'string' } } }, required: ['locale', 'updated_product_ids'], additionalProperties: false },
+    required: ['resource_type', 'locale', 'items'],
+    outputSchema: { type: 'object', properties: { locale: { type: 'string' }, resource_type: { type: 'string', enum: [...LOCALIZED_RESOURCE_TYPES] }, updated_resource_ids: { type: 'array', items: { type: 'string' } }, context: { type: 'object' } }, required: ['locale', 'resource_type', 'updated_resource_ids'], additionalProperties: false },
   }),
 ]
