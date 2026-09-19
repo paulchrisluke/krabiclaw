@@ -12,6 +12,7 @@ import type {
   ListGuestThreadsOptions,
 } from './types'
 import { formatOperationalStatusLabel, formatThreadWhenLabel } from './status-labels'
+import { mediaStillUrl } from '~/shared/media-placement-contract'
 
 const SOURCE_GUEST_NAME_SQL = "json_extract(gt.payload_json, '$.guest.name')"
 const SOURCE_GUEST_EMAIL_SQL = "json_extract(gt.payload_json, '$.guest.email')"
@@ -52,7 +53,7 @@ const LOCATION_HERO_SQL = `
     AND mp_hero.slot = 'hero' AND mp_hero.status = 'active'
   LEFT JOIN media_assets ma_hero ON ma_hero.id = mp_hero.asset_id AND ma_hero.status = 'active'`
 
-const LOCATION_HERO_COLUMNS = `ma_hero.thumbnail_url AS location_image_thumbnail_url, ma_hero.public_url AS location_image_public_url`
+const LOCATION_HERO_COLUMNS = `ma_hero.kind AS location_image_kind, ma_hero.thumbnail_url AS location_image_thumbnail_url, ma_hero.public_url AS location_image_public_url`
 
 function sourcePreviewText(row: {
   source_preview: string | null
@@ -182,6 +183,7 @@ type GuestThreadListRow = GuestThreadRow & {
   record_party_size: number | null
   party_size_is_minimum: unknown
   operational_status: string | null
+  location_image_kind: string | null
   location_image_thumbnail_url: string | null
   location_image_public_url: string | null
 }
@@ -300,7 +302,7 @@ export async function listGuestThreads(
       needsAttention: row.conversation_state === 'needs_attention',
       // Two renditions of one asset, not two sources: a row 60px wide takes the
       // thumbnail, and an asset with no rendition yet is served at full size.
-      imageUrl: row.location_image_thumbnail_url ?? row.location_image_public_url,
+      imageUrl: mediaStillUrl({ kind: row.location_image_kind, public_url: row.location_image_public_url, thumbnail_url: row.location_image_thumbnail_url }),
       whenLabel: row.record_starts_at && row.record_timezone
         ? formatThreadWhenLabel(row.record_starts_at, row.record_timezone)
         : null,
@@ -440,7 +442,7 @@ export async function listOrganizationGuestThreads(
       needsAttention: row.conversation_state === 'needs_attention',
       // Two renditions of one asset, not two sources: a row 60px wide takes the
       // thumbnail, and an asset with no rendition yet is served at full size.
-      imageUrl: row.location_image_thumbnail_url ?? row.location_image_public_url,
+      imageUrl: mediaStillUrl({ kind: row.location_image_kind, public_url: row.location_image_public_url, thumbnail_url: row.location_image_thumbnail_url }),
       whenLabel: row.record_starts_at && row.record_timezone
         ? formatThreadWhenLabel(row.record_starts_at, row.record_timezone)
         : null,

@@ -3,7 +3,7 @@ import { getQuery, getRouterParam } from 'nitro/h3';
 import { jsonResponse, rethrowHttpError } from '~/server/utils/api-response'
 import { requireSiteAccess } from '~/server/utils/location-access'
 import { uploadResolvedMediaToAssetStore } from '~/server/utils/media-upload'
-import { sniffMediaMimeType, VIDEO_MIME_TYPES, MAX_VIDEO_BYTES, POSTER_IMAGE_MIME_TYPES, MAX_POSTER_BYTES } from '~/server/utils/media-mime'
+import { sniffMediaMimeType, VIDEO_MIME_TYPES, MAX_VIDEO_BYTES, POSTER_IMAGE_MIME_TYPES, MAX_POSTER_BYTES, RESOLVED_MEDIA_IMAGE_TYPES, MAX_IMAGE_BYTES } from '~/server/utils/media-mime'
 
 const VALID_CATEGORIES = new Set(['exterior', 'interior', 'food', 'menu', 'team', 'other'])
 const MULTIPART_OVERHEAD_BYTES = 64 * 1024
@@ -52,10 +52,41 @@ export default defineHandler(async (event) => {
     }
 
     const formData = await event.req.formData()
+    const imagePart = formData.get('image')
     const videoPart = formData.get('video')
     const thumbnailPart = formData.get('thumbnail')
+
+    // An image is one part and arrives active in one request, the same way a
+    // video does. It used to take a request-upload / direct-to-Cloudflare /
+    // confirm round trip that left a pending row behind whenever a step failed.
+    if (imagePart instanceof File) {
+      if (imagePart.size > MAX_IMAGE_BYTES) return jsonResponse({ error: 'File too large (max 20 MB)' }, { status: 413 })
+      const imageData = new Uint8Array(await imagePart.arrayBuffer())
+      const imageContentType = sniffMediaMimeType(imageData)
+      if (!RESOLVED_MEDIA_IMAGE_TYPES.has(imageContentType)) return jsonResponse({ error: 'Unsupported image file type' }, { status: 415 })
+      const uploaded = await uploadResolvedMediaToAssetStore({
+        db, env, siteId,
+        organizationId: site.organization_id,
+        userId: session.user.id,
+        buffer: imageData,
+        contentType: imageContentType,
+        filename: sanitizeFilename(imagePart.name || queryValue(query.filename) || undefined),
+        kind: 'image',
+        source: 'uploaded',
+        category,
+        fileSize: imageData.byteLength,
+      })
+      return jsonResponse({
+        asset_id: uploaded.assetId,
+        public_url: uploaded.publicUrl,
+        thumbnail_url: uploaded.thumbnailUrl,
+        kind: 'image',
+        status: 'active',
+      })
+    }
+
     if (!(videoPart instanceof File) || !(thumbnailPart instanceof File)) {
-      return jsonResponse({ error: 'video and thumbnail fields are required' }, { status: 400 })
+      return jsonResponse({ error: 'an image field, or video and thumbnail fields, are required' }, { status: 400 })
     }
     if (videoPart.size > MAX_VIDEO_BYTES) return jsonResponse({ error: 'File too large (max 50 MB)' }, { status: 413 })
     if (thumbnailPart.size > MAX_POSTER_BYTES) return jsonResponse({ error: 'Thumbnail too large (max 10 MB)' }, { status: 413 })

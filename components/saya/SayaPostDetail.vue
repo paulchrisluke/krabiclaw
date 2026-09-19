@@ -124,8 +124,8 @@
             @click="goToMedia(index)"
           >
             <img
-              v-if="item.thumbnail_url || item.kind === 'image'"
-              :src="item.thumbnail_url || item.public_url"
+              v-if="mediaStillUrl(item)"
+              :src="mediaStillUrl(item) || undefined"
               :alt="item.alt_text || ''"
               class="size-full object-cover"
             >
@@ -277,6 +277,7 @@
 
 <script setup lang="ts">
 import { postActionUrl, postEventDescription, type PostTopic } from '~/shared/posts'
+import { mediaStillUrl } from '~/shared/media-placement-contract'
 interface SayaPostDetailMedia {
   asset_id: string
   public_url: string
@@ -337,7 +338,7 @@ const activeMedia = computed(() => mediaItems.value[currentIndex.value] ?? null)
 const activeBackdropUrl = computed(() => {
   const item = activeMedia.value
   if (!item) return null
-  return item.thumbnail_url || (item.kind === 'image' ? item.public_url : null)
+  return mediaStillUrl(item)
 })
 const hasMultipleMedia = computed(() => mediaItems.value.length > 1)
 const hasPreviousMedia = computed(() => currentIndex.value > 0)

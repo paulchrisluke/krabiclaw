@@ -86,6 +86,7 @@ import { tenantBlogRepository } from '~/lib/components/workspace/blog/tenantBlog
 import type { BlogPost } from '~/lib/components/workspace/blog/types'
 import { initialBlogEditorBlocks } from '~/utils/blog-editor'
 import { getErrorMessage } from '~/utils/errors'
+import { mediaStillUrl } from '~/shared/media-placement-contract'
 
 // The blog index. Rendered by `blog.vue`, which owns the frame.
 const dashboardApi = useDashboardApi()
@@ -175,7 +176,7 @@ function coverUrl(post: BlogPost): string | null {
   if (!post.cover) return null
   // The thumbnail is a scaled-down duplicate of the same asset, so it is the
   // right source for a row; the full image is only fetched where it shows big.
-  return post.cover.thumbnail_url ?? post.cover.public_url ?? null
+  return mediaStillUrl(post.cover)
 }
 
 /** The cover's description belongs to the asset; the headline is already beside it. */

@@ -6,9 +6,14 @@
 export const VIDEO_MIME_TYPES = new Set(["video/mp4", "video/webm"]);
 export const POSTER_IMAGE_MIME_TYPES = new Set(["image/avif", "image/gif", "image/jpeg", "image/png", "image/webp"]);
 export const R2_IMAGE_MIME_TYPES = new Set(["image/avif"]);
+// What counts as an image is the contract's answer, not each surface's. The
+// dashboard used to accept a different set at a different size from MCP, so the
+// same file was allowed through one door and refused at the other.
+export const RESOLVED_MEDIA_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif", "image/avif", "image/svg+xml"]);
 
 export const MAX_VIDEO_BYTES = 50 * 1024 * 1024;
 export const MAX_POSTER_BYTES = 10 * 1024 * 1024;
+export const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
 const MP4_BRANDS = new Set([
   "avc1",
   "dash",

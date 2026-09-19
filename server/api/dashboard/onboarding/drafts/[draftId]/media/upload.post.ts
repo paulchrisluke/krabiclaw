@@ -2,10 +2,8 @@ import { execute, queryFirst } from '~/server/db'
 import { cloudflareEnv, jsonResponse, rethrowHttpError } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { hasCloudflareImagesConfig, uploadImageBuffer } from '~/server/utils/cloudflare-images'
-import { sniffMediaMimeType } from '~/server/utils/media-mime'
+import { sniffMediaMimeType, RESOLVED_MEDIA_IMAGE_TYPES } from '~/server/utils/media-mime'
 import { parseOnboardingDraftPayload, type DraftUploadedImage } from '~/server/utils/onboarding-drafts'
-
-const ALLOWED_IMAGE_TYPES = new Set(['image/gif', 'image/jpeg', 'image/png', 'image/webp'])
 
 function sanitizeFilename(raw: string | undefined): string {
   const sanitized = (raw ?? '')
@@ -68,7 +66,7 @@ export default defineHandler(async (event) => {
     const declaredContentType = typeof filePart.type === 'string'
       ? filePart.type.split(';', 1)[0]?.toLowerCase().trim() || ''
       : ''
-    if (!ALLOWED_IMAGE_TYPES.has(contentType)) {
+    if (!RESOLVED_MEDIA_IMAGE_TYPES.has(contentType)) {
       return jsonResponse({ error: `Unsupported image type: ${contentType}` }, { status: 415 })
     }
     if (declaredContentType && declaredContentType !== contentType) {

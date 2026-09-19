@@ -11,6 +11,7 @@ import { appendEntry, getEntryById, GuestThreadEntryDedupeConflictError } from '
 import { requestBookingChange } from '~/server/domain/guest-threads/booking-changes'
 import { publishGuestInboxThreadEvent } from '~/server/cloudflare/guest-inbox-events'
 import { resolveLocationTimezone } from '~/server/utils/site-config'
+import { mediaStillUrl } from '~/shared/media-placement-contract'
 
 export type DashboardBookingType = 'reservation' | 'booking'
 
@@ -155,7 +156,7 @@ function localTimeOf(row: Pick<BookingRow, 'starts_at' | 'timezone'>): string {
 
 function mediaImage(media: PublicSocialMedia | undefined): string | null {
   const placed = media?.media.find(item => item.kind !== 'video' && ['hero', 'gallery'].includes(item.slot))
-  return placed?.thumbnail_url || placed?.public_url || media?.social_image?.url || null
+  return mediaStillUrl(placed) || media?.social_image?.url || null
 }
 
 async function loadResourceImage(db: DbClient, row: BookingRow, type: DashboardBookingType) {

@@ -113,6 +113,7 @@ import { dashboardOrganizationParentKey, dashboardScopeHeaderModelKey } from '~/
 import { authClient } from '~/lib/auth-client'
 import { useAnalytics } from '~/composables/useAnalytics'
 import '~/assets/css/dashboard.css'
+import { mediaStillUrl } from '~/shared/media-placement-contract'
 
 // ─────────────────────────────────────────────────────────────────────────
 // Dashboard shell architecture.
@@ -285,7 +286,7 @@ const organizationLabel = computed(() => organization.value?.name ?? 'Organizati
 const siteLabel = computed(() => site.value?.brand_name ?? site.value?.subdomain ?? 'No site')
 const siteAvatar = (candidate: (typeof sites.value)[number] | undefined) => {
   const media = candidate?.media.find(item => item.slot === 'media')
-  return media?.thumbnail_url || media?.public_url || undefined
+  return mediaStillUrl(media) || undefined
 }
 // Progressive drill-in: exactly one scope is active per route, and the sidebar's
 // single ContextSwitcher (this dropdown) and NavigationGroups both key off it —

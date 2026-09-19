@@ -52,17 +52,12 @@
       <UInput ref="fileInput" type="file" accept="image/*,video/*" class="hidden" :disabled="uploadLoading" @change="onFileSelect" />
 
       <UAlert v-if="uploadError" color="error" variant="soft" :description="uploadError" icon="i-lucide-triangle-alert" class="mt-4" />
-      <div v-if="pendingRetryFile" class="mt-4">
-        <UButton size="sm" color="neutral" variant="soft" :loading="uploadLoading" :disabled="uploadLoading" @click="retryPendingUpload">
-          Retry confirm
-        </UButton>
-      </div>
     </template>
 
     <template #tile="{ item }">
       <img
-        v-if="item.row.thumbnail_url || (item.row.kind === 'image' && item.row.public_url)"
-        :src="item.row.thumbnail_url || item.row.public_url || undefined"
+        v-if="mediaStillUrl(item.row)"
+        :src="mediaStillUrl(item.row) || undefined"
         :alt="item.row.alt_text ?? ''"
         class="h-full w-full object-cover"
         loading="lazy"
@@ -102,8 +97,8 @@
   >
     <template v-if="editingAsset" #default>
       <img
-        v-if="editingAsset.thumbnail_url || (editingAsset.kind === 'image' && editingAsset.public_url)"
-        :src="editingAsset.thumbnail_url || editingAsset.public_url || undefined"
+        v-if="mediaStillUrl(editingAsset)"
+        :src="mediaStillUrl(editingAsset) || undefined"
         :alt="editAltText"
         class="mx-auto h-32 w-32 rounded-lg object-cover"
       >
@@ -158,6 +153,7 @@ definePageMeta({ layout: 'dashboard', cmsCapabilityKey: 'site.media' })
 
 import { IMAGE_MAX_SIZE_BYTES, VIDEO_MAX_SIZE_BYTES } from '~/composables/useMediaUpload'
 import { getErrorMessage } from '~/utils/errors'
+import { mediaStillUrl } from '~/shared/media-placement-contract'
 
 const siteId = await useDashboardSiteId()
 const siteApiBase = `/api/editor/sites/${siteId}`
@@ -221,7 +217,6 @@ const isMediaResponse = (value: unknown): value is { media: MediaAsset[] } =>
 const {
   uploading: uploadLoading,
   error: uploadError,
-  pendingRetryFile,
   upload,
 } = useMediaUpload(siteApiBase)
 
@@ -363,12 +358,6 @@ function openUploadPicker() {
 
 function handleSelectedFile(file: File) {
   void uploadFile(file)
-}
-
-async function retryPendingUpload() {
-  const pendingUpload = pendingRetryFile.value
-  if (!pendingUpload) return
-  await uploadFile(pendingUpload.file)
 }
 
 async function uploadFile(file: File) {

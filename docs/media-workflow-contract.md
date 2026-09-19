@@ -2,7 +2,16 @@
 
 **Status: Contract**
 
-This document defines the canonical media workflow that ChowBot, the dashboard, and future MCP tools must share. References to future MCP tools are non-authorizing — they describe planned direction, not current implementation permission.
+This document defines the canonical media workflow every surface shares.
+
+There is one authority and it is not a route family: `media_assets` is the
+record, `media-asset-manager.ts` and `media-upload.ts` are the operations, and
+`shared/media-placement-contract.ts` says how a record is read and where it can
+be placed. MCP, the dashboard, the guest review form and onboarding are
+adapters over those — transport and auth only. This document used to name the
+dashboard's route family canonical in one section and MCP's `upload_user_media`
+the only upload path in another, which is how four upload lifecycles came to
+exist at once.
 
 ## Scope
 
@@ -11,31 +20,56 @@ Media is intentionally **workflow-based**, not CRUD-shaped.
 The canonical route family is under:
 
 - `GET /api/editor/sites/[siteId]/media`
-- `POST /api/editor/sites/[siteId]/media/request-upload`
 - `POST /api/editor/sites/[siteId]/media/upload`
-- `POST /api/editor/sites/[siteId]/media/[assetId]/confirm`
 - `PATCH /api/editor/sites/[siteId]/media/[assetId]`
 - `DELETE /api/editor/sites/[siteId]/media/[assetId]`
 
 ## Canonical lifecycle
 
-1. `request-upload`
-   The editor requests an upload slot and receives the provider-specific upload target plus a pending asset record.
+1. upload
+   One request carries the bytes and answers with an active asset. An image is
+   an `image` part; a video is a `video` part with its required `thumbnail`
+   poster. Every surface routes this through `uploadResolvedMediaToAssetStore`,
+   which chooses the provider, writes the row and resolves the URLs.
 
-2. direct upload
-   The client uploads bytes directly to the storage provider. This step is not proxied through the app server.
+   There is no pending state and no confirm step. Images used to take a
+   request-upload / direct-to-provider / confirm round trip, which left a
+   pending row behind whenever a step failed and gave the same file different
+   storage semantics depending on which surface uploaded it.
 
-3. `confirm`
-   The editor confirms the upload after the provider accepts the file. This transitions the asset from pending to active.
+2. metadata update
+   Alt text and category edits happen through `PATCH`. Content ownership is
+   never stored on the asset; assignment always uses a placement.
 
-4. metadata update
-   Optional follow-up edits such as alt text or category changes happen through `PATCH`. Content ownership is never stored on the asset; assignment always uses a placement.
+3. placement
+   An active asset is assigned to content through media placements.
 
-5. downstream workflows
-   Confirmed assets may then be assigned to content through media placements.
+4. delete
+   Deletion is a workflow action on the asset record and storage object, not a
+   table-row-only concern.
 
-6. delete
-   Deletion is a workflow action on the asset record and storage object, not a table-row-only concern.
+## Reading a media record
+
+`media_assets.kind` is the authority on what a record is. A video carries its
+file in `public_url` and a required poster in `thumbnail_url`; an image carries
+itself in `public_url`.
+
+Every surface reads a record through `mediaStillUrl` and `mediaPlaybackUrl` in
+`shared/media-placement-contract.ts`.
+
+- A still is the image itself, or a video's poster. Never a video file.
+- A record whose `kind` is missing or unrecognised has no still. Do not treat an
+  absent kind as an image, and do not read the kind back off the URL's
+  extension — a booking email shipped an `.mp4` inside an `<img>` because one
+  resolver returned `public_url` without looking at `kind`, and eight others
+  compensated with fallbacks that hid the disagreement instead of ending it.
+
+## Limits and accepted types
+
+`server/utils/media-mime.ts` is the only place that answers what a file may be
+and how large. A surface that wants a different number states it in
+`config/media-limits.ts` as a named product rule, the way guest review video
+does.
 
 ## Product rules
 
@@ -46,7 +80,7 @@ The canonical route family is under:
 - Canonical MCP generated-image contracts are split by source:
   - ChatGPT native image-generation output: `save_generated_image_file({ site_id, attachment_id, prompt })`
   - Raw base64 from a non-native image source: `save_generated_image({ site_id, image_data_base64, prompt })`
-- `upload_user_media({ site_id, file, poster_file?, category, description })` is the only user-attachment upload path. Pass the resolved native ChatGPT file argument; the content type is detected from the file bytes.
+- `upload_user_media({ site_id, file, poster_file?, category, description })` is the ChatGPT attachment adapter over the canonical upload. It is not a second lifecycle, and it cannot serve a browser file picker — the dashboard's `POST .../media/upload` is the adapter for that. Pass the resolved native ChatGPT file argument; the content type is detected from the file bytes.
 - One `upload_user_media` call performs one download attempt. If ChatGPT attachment delivery fails, stop and ask the user to attach the file again. Do not retry with a bare file ID, fabricate a download URL, or switch transports.
 - ChatGPT MCP uploads use native file attachments. There are no upload widget tools in the connector; no tool whose name starts with `open_` and contains `upload` exists.
 - Do not bypass the ChatGPT file-argument rewrite by fabricating `download_url` objects or inventing attachment transport.
@@ -66,4 +100,4 @@ The canonical route family is under:
 
 - Editor-facing media routes are site-scoped and require authenticated site membership.
 - Destructive actions stay confirm-gated in conversational surfaces.
-- Future MCP exposure must preserve the same site scoping and entitlement checks already enforced by the canonical APIs.
+- Every adapter preserves the same site scoping and entitlement checks.
