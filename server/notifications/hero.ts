@@ -1,5 +1,6 @@
 import type { DbClient } from '~/server/db'
 import { getMediaPlacements } from '~/server/utils/media-placement'
+import { mediaStillUrl } from '~/shared/media-placement-contract'
 
 /**
  * The picture a notification leads with.
@@ -29,8 +30,11 @@ async function firstPlacement(
     slot: input.slot,
   })
   const item = placements.get(input.ownerId)?.[0]
-  if (!item?.public_url) return null
-  return { imageUrl: item.public_url, alt: item.alt_text ?? '' }
+  // An email shows a picture. A video's picture is its poster: handing the
+  // `.mp4` in `public_url` to an `<img>` is what sent a broken hero to guests.
+  const imageUrl = mediaStillUrl(item)
+  if (!imageUrl) return null
+  return { imageUrl, alt: item?.alt_text ?? '' }
 }
 
 /** An experience's cover. */

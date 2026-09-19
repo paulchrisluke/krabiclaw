@@ -16,6 +16,7 @@ import {
   type SocialTemplate,
 } from '~/utils/social-metadata'
 import { resolvePublicTemplate } from '~/utils/template-registry'
+import { mediaStillUrl } from '~/shared/media-placement-contract'
 
 const SOCIAL_CARD_OWNERS = {
   site: { table: 'sites', site: 'o.id', filter: "o.status = 'active'", slots: ['social_share'] },
@@ -118,12 +119,6 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
-function mediaUrl(asset: SocialCardPlacedAsset | null): string | null {
-  if (!asset) return null
-  if (asset.kind === 'video') return asset.thumbnail_url?.trim() || null
-  return asset.kind === 'image' ? asset.public_url?.trim() || null : null
-}
-
 async function loadOwner(db: DbClient, owner: SocialCardOwner): Promise<OwnerRecord | null> {
   switch (owner.owner_type) {
     case 'site':
@@ -217,7 +212,7 @@ async function loadPlacedAssets(db: DbClient, siteId: string, owner: SocialCardO
 function firstAsset(assets: SocialCardPlacedAsset[], owner: SocialCardOwner, slots: readonly string[]): SocialCardPlacedAsset | null {
   for (const slot of slots) {
     const asset = assets.find(item => item.owner_type === owner.owner_type
-      && item.owner_id === owner.owner_id && item.slot === slot && mediaUrl(item))
+      && item.owner_id === owner.owner_id && item.slot === slot && mediaStillUrl(item))
     if (asset) return asset
   }
   return null
@@ -225,7 +220,7 @@ function firstAsset(assets: SocialCardPlacedAsset[], owner: SocialCardOwner, slo
 
 function siteAsset(assets: SocialCardPlacedAsset[], siteId: string, slot: string): SocialCardPlacedAsset | null {
   return assets.find(item => item.owner_type === 'site' && item.owner_id === siteId
-    && item.slot === slot && mediaUrl(item)) ?? null
+    && item.slot === slot && mediaStillUrl(item)) ?? null
 }
 
 export function selectSocialCardPlacements(
@@ -235,7 +230,7 @@ export function selectSocialCardPlacements(
   coverBlockId: string | null = null,
 ) {
   const cover = coverBlockId
-    ? assets.find(item => item.owner_type === 'content_block' && item.owner_id === coverBlockId && item.slot === 'media' && mediaUrl(item)) ?? null
+    ? assets.find(item => item.owner_type === 'content_block' && item.owner_id === coverBlockId && item.slot === 'media' && mediaStillUrl(item)) ?? null
     : null
   // Every page carries a card. An owner with nothing in its own slots falls back
   // to the site's approved share image, so the card is still page-specific in
@@ -292,7 +287,7 @@ export async function refreshSocialCard(input: {
     const coverBlockId = await loadCoverBlockId(db, owner)
     const assets = await loadPlacedAssets(db, site.id, owner, coverBlockId)
     const { logo, current, source } = selectSocialCardPlacements(assets, owner, site.id, coverBlockId)
-    const backgroundImageUrl = mediaUrl(source)
+    const backgroundImageUrl = mediaStillUrl(source)
     if (!source || !backgroundImageUrl) return await clearSocialCard(input, 'no_source')
 
     const payload: SocialCardRenderPayload = {
@@ -302,7 +297,7 @@ export async function refreshSocialCard(input: {
       siteName,
       label: ownerRecord.label,
       location: ownerRecord.location,
-      logoUrl: mediaUrl(logo),
+      logoUrl: mediaStillUrl(logo),
       backgroundImageUrl,
     }
     const generationKey = buildSocialCardGenerationKey({

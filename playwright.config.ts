@@ -47,6 +47,8 @@ if (!previewUrl && !process.env.E2E_TEST_PASSWORD) {
 }
 if (!previewUrl) {
   process.env.E2E_DEV_ROUTE_SECRET = localDevRouteSecret
+  process.env.MCP_CIMD_CLIENT_URL = `http://localhost:${port}/api/auth/oauth2/test-client-metadata`
+  process.env.MCP_PRIVATE_CIMD_CLIENT_URL = `http://localhost:${port}/api/auth/oauth2/test-private-client-metadata`
 }
 
 const localWorkerEnvironment = [
@@ -59,6 +61,8 @@ const localWorkerEnvironment = [
   'NUXT_PUBLIC_APP_NAME=KrabiClaw',
   `NUXT_PUBLIC_SITE_URL=http://localhost:${port}`,
   `NUXT_PUBLIC_HELP_URL=http://localhost:${port}/help`,
+  `MCP_CIMD_CLIENT_URL=http://localhost:${port}/api/auth/oauth2/test-client-metadata`,
+  `MCP_PRIVATE_CIMD_CLIENT_URL=http://localhost:${port}/api/auth/oauth2/test-private-client-metadata`,
 ].join(' ')
 
 const localWorkerCommand = [

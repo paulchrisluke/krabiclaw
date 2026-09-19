@@ -2,6 +2,7 @@
 
 import type { DomainStatus } from '~/server/utils/domains'
 import type { CurrencyCode } from '~/shared/currencies'
+import type { SiteFontPreset } from '~/shared/site-fonts'
 
 export type { CurrencyCode }
 
@@ -19,6 +20,7 @@ export interface SiteSettings {
   media: Array<{ asset_id: string; slot: string; public_url: string | null; thumbnail_url: string | null; kind: string }>
   contact_email: string | null
   brand_color: string
+  font_preset: SiteFontPreset
   // null until the owner has chosen one. Surfaces that quote a price refuse to
   // render rather than showing an amount in a currency nobody picked.
   default_currency: CurrencyCode | null
@@ -35,6 +37,7 @@ export interface UpdateSiteSettingsRequest {
   brand_description?: string
   contact_email?: string
   brand_color?: string
+  font_preset?: SiteFontPreset
   default_currency?: CurrencyCode
   last_published_at?: string
   press_email?: string

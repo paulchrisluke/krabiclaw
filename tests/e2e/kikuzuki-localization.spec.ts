@@ -43,7 +43,7 @@ test.beforeAll(async ({ playwright }, testInfo) => {
   await loginAs(owner, baseURL, 'user-e2e-kikuzuki-owner')
 
   try {
-    await expectStatus(await owner.post(`/api/editor/sites/${siteId}/locales/${locale}/enable`), 200)
+    await expectStatus(await owner.post(`/api/editor/sites/${siteId}/locales/${locale}/add`), 200)
 
     await putLocalization(owner, 'site', siteId, {
       values: {

@@ -12,7 +12,7 @@ import {
   type McpLocationSummary,
   type McpSiteSummary,
 } from "~/server/utils/mcp-context";
-import { sniffMediaMimeType, VIDEO_MIME_TYPES, MAX_VIDEO_BYTES, R2_IMAGE_MIME_TYPES } from "~/server/utils/media-mime";
+import { sniffMediaMimeType, VIDEO_MIME_TYPES, MAX_VIDEO_BYTES, MAX_IMAGE_BYTES, R2_IMAGE_MIME_TYPES, RESOLVED_MEDIA_IMAGE_TYPES } from "~/server/utils/media-mime";
 import { assertMarkdownSize, decodeMarkdownText, resolveMarkdownMimeType } from "~/server/utils/markdown-document";
 import { hasCloudflareImagesConfig } from "~/server/utils/cloudflare-images";
 import { findOrganizationById } from '~/server/utils/member-access'
@@ -80,7 +80,6 @@ export async function resolveGeneratedImageUpload(
   };
 }
 
-export const MAX_IMAGE_BYTES = 20 * 1024 * 1024; // 20 MB
 
 export function validateImageBuffer(
   bytes: Uint8Array,
@@ -285,7 +284,6 @@ export interface ResolvedMediaFile {
   kind: "image" | "video" | "file";
 }
 
-const RESOLVED_MEDIA_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif", "image/avif", "image/svg+xml"]);
 
 async function readMediaBufferWithLimit(
   response: Response,

@@ -1,35 +1,21 @@
+import { mediaPlaybackUrl, mediaStillUrl, type MediaPresentation } from '~/shared/media-placement-contract'
+
 /**
- * Standardized media resolution for the platform.
- * Follows the media_assets source of truth.
+ * One reading of a media record for the UI, over the canonical resolver.
+ * `media_assets.kind` decides; nothing here guesses at a missing one.
  */
 export const useMedia = () => {
-  const resolveMedia = (asset?: {
-    public_url?: string | null;
-    thumbnail_url?: string | null;
-    kind?: string | null;
-    alt_text?: string | null;
-  } | null) => {
-    const url = asset?.public_url ?? null
-    const kind = asset?.kind ?? 'image'
-    const thumbnailUrl = asset?.thumbnail_url?.trim() || null
-    if (kind === 'video' && !thumbnailUrl) {
-      throw new Error('Video media requires a thumbnail URL')
-    }
-    const thumb = kind === 'video' ? thumbnailUrl : url
+  const resolveMedia = (asset?: (MediaPresentation & { alt_text?: string | null }) | null) => ({
+    url: asset?.public_url ?? null,
+    kind: asset?.kind ?? null,
+    thumb: mediaStillUrl(asset),
+    playback: mediaPlaybackUrl(asset),
+    // The asset's own alt text, empty when it has none. A caller that wants a
+    // description the asset does not carry has to fix the asset.
+    alt: asset?.alt_text ?? '',
+    isImage: asset?.kind === 'image',
+    isVideo: asset?.kind === 'video',
+  })
 
-    return {
-      url,
-      kind,
-      thumb,
-      // The asset's own alt text, empty when it has none. A caller that wants a
-      // description the asset does not carry has to fix the asset.
-      alt: asset?.alt_text ?? '',
-      isImage: kind === 'image',
-      isVideo: kind === 'video'
-    }
-  }
-
-  return {
-    resolveMedia
-  }
+  return { resolveMedia }
 }

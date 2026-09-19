@@ -121,6 +121,13 @@ const locationMedia = (location: ApiRecord) => Array.isArray(location.media)
   ? (location.media as ApiRecord[]).find(item => item.slot === 'hero') ?? null
   : null
 
+// The first card's hero is this route's LCP element. A video hero has no poster
+// here, so there is no image to hint and it is left to normal discovery.
+useHeroLcpPreload(computed(() => {
+  const media = locations.value[0] ? locationMedia(locations.value[0] as ApiRecord) : null
+  if (!media || media.kind === 'video') return null
+  return String(media.public_url ?? '') || null
+}))
 function locationAddress(location: ApiRecord): string {
   return formatPostalAddress(location.address as PostalAddress | null)
 }

@@ -164,6 +164,7 @@ import { formatTime, localDateTimeToInstant } from '~/utils/timezone'
 import { setBookingConfirmation } from '~/composables/useBookingHandoff'
 import { requireProductPresentation } from '~/utils/product-presentation'
 import { addressPlaceName, formatPostalAddress, type PostalAddress } from '~/utils/postal-address'
+import { mediaStillUrl, type MediaPresentation } from '~/shared/media-placement-contract'
 
 function formatTitleItalics(text: string | null | undefined): string {
   if (!text) return ''
@@ -177,6 +178,13 @@ const route = useRoute()
 const { locale, t } = useI18n()
 const resCopy = computed(() => getVerticalCopy((site as ApiValue)?.vertical, locale.value))
 const { locations, config, getField, reservationPolicyByLocation } = await usePublicPageData()
+
+// The first location card's hero is this route's LCP element.
+useHeroLcpPreload(computed(() => {
+  const first = locations.value[0]
+  return first ? getLocationPoster(first) : null
+}))
+
 const isExperienceSite = computed(() => (site as { vertical?: string | null } | null)?.vertical === 'experience')
 
 // Experience-vertical sites book each Product on its own page. The
@@ -247,7 +255,7 @@ function getLocationMediaUrl(location: ApiRecord): string | null {
 
 function getLocationPoster(location: ApiRecord): string | null {
   const media = getLocationMedia(location)
-  return String(media?.thumbnail_url ?? (media?.kind === 'image' ? media.public_url : '') ?? '') || null
+  return mediaStillUrl(media as MediaPresentation | null)
 }
 
 function getLocationMedia(location: ApiRecord): ApiRecord | null {

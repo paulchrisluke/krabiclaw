@@ -2,6 +2,7 @@ import { sha256 } from '@noble/hashes/sha2.js'
 import { bytesToHex } from '@noble/hashes/utils.js'
 
 import { composeRobotsDirective, type RobotsIntent } from '~/shared/robots-directive'
+import { mediaStillUrl } from '~/shared/media-placement-contract'
 
 /**
  * Shared global OG/social SEO contract (#259).
@@ -88,14 +89,10 @@ function firstNonBlank(...values: Array<string | null | undefined>): string | nu
 }
 
 export function resolveSocialImageUrl(source: SocialMediaSource | null | undefined): string | null {
-  if (source?.kind === 'video') {
-    const thumbnailUrl = firstNonBlank(source.thumbnail_url)
-    if (!thumbnailUrl) throw new Error('Video media requires a thumbnail URL')
-    return thumbnailUrl
+  if (source?.kind === 'video' && !firstNonBlank(source.thumbnail_url)) {
+    throw new Error('Video media requires a thumbnail URL')
   }
-  return source?.kind === 'image' || !source?.kind
-    ? firstNonBlank(source?.public_url)
-    : null
+  return firstNonBlank(mediaStillUrl(source))
 }
 
 function toSocialImageSource(source: SocialMediaSource | null | undefined): SocialImageSource | null {
