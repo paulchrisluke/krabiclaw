@@ -102,6 +102,5 @@ CREATE UNIQUE INDEX `product_sessions_neutral_instant_unique` ON `product_sessio
 CREATE INDEX `product_sessions_product_start_idx` ON `product_sessions` (`product_id`,`starts_at`,`status`);--> statement-breakpoint
 CREATE INDEX `product_sessions_location_start_idx` ON `product_sessions` (`location_id`,`starts_at`,`status`);--> statement-breakpoint
 CREATE UNIQUE INDEX `product_sessions_org_id_unique` ON `product_sessions` (`organization_id`,`id`);--> statement-breakpoint
-CREATE UNIQUE INDEX `product_sessions_org_product_id_unique` ON `product_sessions` (`organization_id`,`product_id`,`id`);
---> statement-breakpoint
+CREATE UNIQUE INDEX `product_sessions_org_product_id_unique` ON `product_sessions` (`organization_id`,`product_id`,`id`);--> statement-breakpoint
 PRAGMA foreign_keys=ON;

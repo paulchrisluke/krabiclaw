@@ -433,10 +433,9 @@ watch([() => form.scheduled_for, publishTiming], () => {
 }, { flush: 'sync' })
 onMounted(async () => {
   interactive.value = true
-  window.addEventListener('beforeunload', beforeUnload)
   if (!props.initialPost && !props.deferLoad) await load()
 })
-onBeforeUnmount(() => { cancelScheduledAutosave(); if (import.meta.client) { window.removeEventListener('beforeunload', beforeUnload) } })
+onBeforeUnmount(() => { cancelScheduledAutosave() })
 
 async function load() {
   if (!postId.value || !props.isEdit) { loadPending.value = false; return }
@@ -723,14 +722,9 @@ function changeImage(index: number, value: unknown) {
   }
 }
 
-function beforeUnload(event: BeforeUnloadEvent) { if (dirtyState.value) event.preventDefault() }
 function windowOrigin() { return import.meta.client ? window.location.origin : 'https://krabiclaw.com' }
 function toLocalDatetime(value?: string | null) { if (!value) return ''; return instantDate(value).toISOString().slice(0, -1) }
 function resetSlugOverride() { slugResetRequested.value = true; form.slug = generatedSlug.value }
 function syncServerVersion(value: BlogPost) { serverPostUpdatedAt = value.updated_at }
 
-onBeforeRouteLeave(async () => {
-  if (dirtyState.value) return confirm('You have unsaved changes. Leave without saving them?')
-  return true
-})
 </script>
