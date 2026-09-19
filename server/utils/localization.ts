@@ -267,17 +267,27 @@ async function assertCanonicalResourceExists(
   siteId: string,
   resourceType: LocalizedResourceType,
   resourceId: string,
-): Promise<BatchQuery> {
-  const query = canonicalResourceQuery(resourceType, 'one')
-  const params = [organizationId, siteId, resourceId]
-  const row = await queryFirst<{ id: string }>(db, query, params)
+): Promise<void> {
+  const row = await queryFirst<{ id: string }>(db, canonicalResourceQuery(resourceType, 'one'), [organizationId, siteId, resourceId])
   if (!row) {
     localizationError(404, 'LOCALIZATION_NOT_FOUND', 'Canonical resource was not found', { resource_type: resourceType, resource_id: resourceId })
   }
+}
+
+// The existence read above happens before the write, so the resource can still
+// be deleted in between. This runs inside the same batch and orphans the row
+// rather than leaving it pointing at something that is gone.
+function canonicalResourceGuard(
+  organizationId: string,
+  siteId: string,
+  resourceType: LocalizedResourceType,
+  resourceId: string,
+): BatchQuery {
+  const query = canonicalResourceQuery(resourceType, 'one')
   return {
     query: `UPDATE resource_localizations SET resource_id = NULL
       WHERE organization_id = ? AND site_id = ? AND resource_type = ? AND resource_id = ? AND NOT EXISTS (${query})`,
-    params: [organizationId, siteId, resourceType, resourceId, ...params],
+    params: [organizationId, siteId, resourceType, resourceId, organizationId, siteId, resourceId],
   }
 }
 
@@ -478,6 +488,7 @@ function resourceLocalizationWriteQueries(input: {
       JSON.stringify(input.values), input.routePath,
       input.prior?.created_at ?? input.now, input.prior?.created_by_user_id ?? input.userId, input.now, input.userId],
   })
+  statements.push(canonicalResourceGuard(input.organizationId, input.siteId, input.resourceType, input.resourceId))
   return statements
 }
 
@@ -498,7 +509,7 @@ export async function putResourceLocalization(
   const resourceType = parseLocalizedResourceType(input.resourceType)
   const { locale, source } = await assertSiteLanguageEntitlement(env, db, input.organizationId, input.siteId, input.locale)
   if (source) localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', 'English source content must be edited through its canonical resource')
-  const ownerGuard = await assertCanonicalResourceExists(db, input.organizationId, input.siteId, resourceType, input.resourceId)
+  await assertCanonicalResourceExists(db, input.organizationId, input.siteId, resourceType, input.resourceId)
   // Which product attributes may be translated is declared by the tenant's
   // metafield definitions, so they are loaded and handed to the validator
   // rather than restated as a list here.
@@ -517,7 +528,7 @@ export async function putResourceLocalization(
     organizationId: input.organizationId, siteId: input.siteId, resourceType, resourceId: input.resourceId,
     locale, values, routePath, userId: input.userId, id, prior: existing, now,
   })
-  statements.push(ownerGuard, publicResourceCacheInvalidationQuery(input.siteId, 'resource-localization-put'))
+  statements.push(publicResourceCacheInvalidationQuery(input.siteId, 'resource-localization-put'))
   try {
     await executeBatch(db, statements, { operation: 'replace resource localization' })
   } catch (error) {
