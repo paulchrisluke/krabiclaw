@@ -62,6 +62,18 @@ const digest = (rows, names) => hash(rows.map(row => JSON.stringify(names.map(na
  * Each is idempotent on its own result.
  */
 export const TRANSFORMS = [
+  // A booking or reservation is confirmed or cancelled, and done is the clock:
+  // confirmed with an end that has passed. `pending` waited on a host approval
+  // nobody gives — reservations already wrote `confirmed` outright while
+  // experiences waited, leaving rows pending with dates months in the past — and
+  // `completed` was a click for something the calendar already knows. Neither
+  // was ever cancelled, so both read as the state they were really in.
+  { name: 'bookings_are_confirmed_or_cancelled', sql: `UPDATE bookings SET status = 'confirmed'
+    WHERE status IN ('pending', 'completed')` },
+  { name: 'reservations_are_confirmed_or_cancelled', sql: `UPDATE reservations SET status = 'confirmed'
+    WHERE status IN ('pending', 'completed')` },
+  { name: 'sessions_are_scheduled_or_cancelled', sql: `UPDATE product_sessions SET status = 'scheduled'
+    WHERE status NOT IN ('scheduled', 'cancelled')` },
   // `business_locations.address` is `google.type.PostalAddress` — what the Places
   // API answers with and what the CHECK now requires. Older exports carry two
   // earlier shapes: `{addressLines}` alone, and that plus `locality`,

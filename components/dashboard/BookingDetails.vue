@@ -317,7 +317,6 @@
 import { formatCalendarDate, formatTime, formatTimestamp } from '~/utils/timezone'
 import DashboardListItemDialog from '~/components/dashboard/DashboardListItemDialog.vue'
 import EditorPaneShell from '~/components/dashboard/EditorPaneShell.vue'
-import { bookingNeedsResponse } from '~/utils/booking-lifecycle'
 import { getErrorMessage } from '~/utils/errors'
 import type { DashboardBookingDetails, DashboardBookingType } from '~/server/utils/dashboard-booking-details'
 
@@ -476,17 +475,13 @@ function beginChange() {
   resetChangeDraft()
 }
 
+// Nothing to approve and nothing to mark done: a booking arrives confirmed and
+// is complete once its end passes. Cancelling is the one thing left to decide,
+// and changing it is the link above.
 const availableActions = computed<Array<{ value: string; label: string; icon: string; color: ActionColor }>>(() => {
   if (!booking.value || !presentation.value || !booking.value.threadId) return []
-  const label = presentation.value.noun
-  const cancel = { value: 'cancel', label: `Cancel ${label}`, icon: 'i-lucide-calendar-x', color: 'error' as const }
-  if (bookingNeedsResponse(booking.value.status)) {
-    return [{ value: 'confirm', label: `Confirm ${label}`, icon: 'i-lucide-calendar-check', color: 'success' }, cancel]
-  }
-  if (booking.value.status !== 'confirmed') return []
-  return booking.value.type === 'reservation'
-    ? [{ value: 'complete', label: 'Mark complete', icon: 'i-lucide-check-check', color: 'neutral' }, cancel]
-    : [cancel]
+  if (booking.value.status !== 'confirmed' || booking.value.complete) return []
+  return [{ value: 'cancel', label: `Cancel ${presentation.value.noun}`, icon: 'i-lucide-calendar-x', color: 'error' as const }]
 })
 
 function firstName(name: string) {

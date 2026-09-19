@@ -207,7 +207,7 @@ export default defineHandler(async (event) => {
 
   return jsonResponse({
     success: true, booking_id: threadId, cancellation_token: cancellation.token,
-    message: `Your booking request for ${product.name} on ${whenLabel} has been received. We'll confirm shortly.`,
+    message: `Your booking for ${product.name} on ${whenLabel} is confirmed.`,
     policy_summary: renderBookingPolicySummary(productPolicySummarySource(full.metafields), locale),
   }, { status: 201 })
 })

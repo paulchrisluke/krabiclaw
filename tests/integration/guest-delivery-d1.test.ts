@@ -58,7 +58,7 @@ test('D1 claims fence concurrent sends and bound ambiguous provider retries', as
     // read from and applied to this row.
     await upsertLocationReservationConfig(db, { organizationId: 'org-proof', locationId: 'booking-location', patch: { slot_capacity: 10 }, actorId: 'user-proof' })
     await db.prepare(`INSERT INTO reservations (id,organization_id,site_id,location_id,request_id,timezone,starts_at,ends_at,party_size,status)
-      VALUES ('reservation-change-proof','org-proof','site-proof','booking-location','change-proof','Asia/Bangkok','2099-01-05T09:00:00.000Z','2099-01-05T11:00:00.000Z',1,'pending')`).run()
+      VALUES ('reservation-change-proof','org-proof','site-proof','booking-location','change-proof','Asia/Bangkok','2099-01-05T09:00:00.000Z','2099-01-05T11:00:00.000Z',1,'confirmed')`).run()
     const propose = async (key: string, partySize: number) => {
       const current = await getGuestRequest(db, 'change-proof')
       assert(current)
@@ -73,7 +73,9 @@ test('D1 claims fence concurrent sends and bound ambiguous provider retries', as
     assert.equal(await db.prepare("SELECT party_size FROM reservations WHERE request_id='change-proof'").first('party_size'), 2)
     assert.equal(await db.prepare("SELECT count(*) AS count FROM activity_entries WHERE request_id='change-proof' AND event_name='booking_change.accepted'").first('count'), 1)
     const stale = await propose('stale-change', 3)
-    await executeGuestThreadOperation(db, { threadId: 'change-proof', siteId: 'site-proof', action: 'confirm', actorUserId: 'user-proof', idempotencyKey: 'owner-confirm', env })
+    // Anything that moves the record makes the open proposal stale. What moved
+    // it is not the subject; that it moved is.
+    await db.prepare("UPDATE reservations SET party_size = 5, updated_at = ? WHERE request_id = 'change-proof'").bind(new Date(Date.now() + 1000).toISOString()).run()
     await assert.rejects(respondToBookingChange(db, env, stale), /changed since the request/)
     const concurrent = await propose('concurrent-change', 4)
     const [decision, cancellation] = await Promise.allSettled([respondToBookingChange(db, env, concurrent), executeGuestThreadOperation(db, {
@@ -338,22 +340,22 @@ test('D1 status-email retries preserve recorded content and reject superseded bo
     // The instant and the zone the guest agreed to live on the reservation; the
     // confirmation email is formatted from them, never from a server clock.
     await db.prepare(`INSERT INTO reservations (id,organization_id,site_id,location_id,request_id,timezone,starts_at,ends_at,party_size,status)
-      VALUES ('reservation-status','org-status','site-status','location-status','booking-status','Asia/Bangkok','2026-10-01T11:00:00.000Z','2026-10-01T13:00:00.000Z',2,'pending')`).run()
+      VALUES ('reservation-status','org-status','site-status','location-status','booking-status','Asia/Bangkok','2026-10-01T11:00:00.000Z','2026-10-01T13:00:00.000Z',2,'confirmed')`).run()
 
     const input = {
       threadId: 'booking-status', siteId: 'site-status', actorUserId: 'user-status',
       env: { EMAIL_DELIVERY_MODE: 'provider', RESEND_API_KEY: 'controlled-provider-only', NUXT_PUBLIC_PLATFORM_DOMAIN: 'proof.example' },
     }
-    const confirm = { ...input, action: 'confirm', idempotencyKey: 'confirm-status' }
-    assert.equal((await executeGuestThreadOperation(db, confirm)).ok, true)
+    const cancel = { ...input, action: 'cancel', idempotencyKey: 'cancel-status' }
+    assert.equal((await executeGuestThreadOperation(db, cancel)).ok, true)
     assert.equal(requests.length, 1)
-    const deliveryId = 'guest-thread-email:booking-status:confirm-status'
+    const deliveryId = 'guest-thread-email:booking-status:cancel-status'
     assert.equal((await getDeliveryById(db, deliveryId))!.status, 'failed')
     const original = requests[0]!
     // The recorded body is now rendered inside the shared email shell, so the
     // sent copy contains it rather than being it.
-    assert.ok(original.text.includes('Your reservation is confirmed: Oct 1, 2026, 6:00 PM for 2 guests.'))
-    assert.ok(original.html.includes('Your reservation is confirmed: Oct 1, 2026, 6:00 PM for 2 guests.'))
+    assert.ok(original.text.includes('Your reservation for Oct 1, 2026, 6:00 PM for 2 guests has been cancelled.'))
+    assert.ok(original.html.includes('Your reservation for Oct 1, 2026, 6:00 PM for 2 guests has been cancelled.'))
     assert.equal((await executeGuestThreadOperation(db, { ...input, action: 'retry_delivery', deliveryId, idempotencyKey: 'retry-unchanged' })).status, 502)
     assert.deepEqual(requests[1], original)
 
@@ -361,15 +363,15 @@ test('D1 status-email retries preserve recorded content and reject superseded bo
     // carries no copy of the time to move.
     await db.prepare("UPDATE reservations SET starts_at = '2026-10-02T11:00:00.000Z', ends_at = '2026-10-02T13:00:00.000Z' WHERE request_id = 'booking-status'").run()
     const attemptsBefore = requests.length
-    for (const request of [confirm, { ...input, action: 'retry_delivery', deliveryId, idempotencyKey: 'retry-changed' }]) {
+    for (const request of [cancel, { ...input, action: 'retry_delivery', deliveryId, idempotencyKey: 'retry-changed' }]) {
       assert.equal((await executeGuestThreadOperation(db, request)).status, 409)
     }
     assert.equal(requests.length, attemptsBefore)
+    // Cancelling is the one transition, so a second one has nothing to move:
+    // the record is already cancelled and the stale send stays refused.
     reject = false
-    assert.equal((await executeGuestThreadOperation(db, { ...input, action: 'cancel', idempotencyKey: 'cancel-status' })).ok, true)
-    assert.match(requests.at(-1)!.text, /Oct 2, 2026.*cancelled/)
     const afterCancellation = requests.length
-    for (const request of [confirm, { ...input, action: 'retry_delivery', deliveryId, idempotencyKey: 'retry-cancelled' }]) {
+    for (const request of [{ ...input, action: 'cancel', idempotencyKey: 'cancel-again' }, { ...input, action: 'retry_delivery', deliveryId, idempotencyKey: 'retry-cancelled' }]) {
       assert.equal((await executeGuestThreadOperation(db, request)).status, 409)
     }
     assert.equal(requests.length, afterCancellation)
@@ -480,14 +482,15 @@ test('a review request reads the visit from the record that holds it', async () 
     await db.batch(thread.map(write => db.prepare(write.query).bind(...write.params)))
     // The visit is the reservation's, in the reservation's zone. 13:00Z in
     // Asia/Bangkok is 8:00 PM, and nothing else in the system knows that.
-    await db.prepare(`INSERT INTO reservations (id,organization_id,site_id,location_id,customer_id,request_id,timezone,starts_at,ends_at,party_size,status,completed_at)
-      VALUES ('res-review','org-review','site-review','loc-review','cust-review','reservation-review','Asia/Bangkok','2026-09-11T13:00:00.000Z','2026-09-11T15:00:00.000Z',6,'completed',?)`).bind(now).run()
+    // Complete is the clock: confirmed, and an end that has passed.
+    await db.prepare(`INSERT INTO reservations (id,organization_id,site_id,location_id,customer_id,request_id,timezone,starts_at,ends_at,party_size,status)
+      VALUES ('res-review','org-review','site-review','loc-review','cust-review','reservation-review','Asia/Bangkok','2026-09-11T13:00:00.000Z','2026-09-11T15:00:00.000Z',6,'confirmed')`).run()
 
     const context = await getReviewBookingContext(db, 'reservation', 'reservation-review')
     assert(context, 'the thread and its reservation resolve to one context')
     assert.deepEqual(
       { status: context.status, visit_starts_at: context.visit_starts_at, visit_timezone: context.visit_timezone, party_size: context.party_size },
-      { status: 'completed', visit_starts_at: '2026-09-11T13:00:00.000Z', visit_timezone: 'Asia/Bangkok', party_size: 6 },
+      { status: 'confirmed', visit_starts_at: '2026-09-11T13:00:00.000Z', visit_timezone: 'Asia/Bangkok', party_size: 6 },
       'status and the visit come from the reservation, not from the thread payload',
     )
 

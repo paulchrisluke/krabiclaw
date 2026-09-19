@@ -106,7 +106,7 @@ export async function getReviewBookingContext(
   return queryFirst<ReviewBookingContext>(db, `SELECT r.kind AS booking_type, r.id AS booking_id, r.organization_id, r.site_id, r.location_id, r.customer_id,
     c.name AS customer_name, c.email AS customer_email, c.review_request_opted_out_at AS customer_opted_out_at,
     json_extract(r.payload_json, '$.guest.name') AS guest_name, json_extract(r.payload_json, '$.guest.email') AS guest_email, record.status,
-    json_extract(r.payload_json, '$.completion.at') AS completed_at,
+    record.ends_at AS completed_at,
     json_extract(r.payload_json, '$.review.request_sent_at') AS review_request_sent_at,
     json_extract(r.payload_json, '$.review.reminder_sent_at') AS review_reminder_sent_at,
     json_extract(r.payload_json, '$.review.submitted_at') AS review_submitted_at, r.review_id,
@@ -115,12 +115,12 @@ export async function getReviewBookingContext(
     record.starts_at AS visit_starts_at, record.timezone AS visit_timezone, record.party_size, record.product_id
     FROM requests r JOIN sites s ON s.id = r.site_id LEFT JOIN customers c ON c.id = r.customer_id LEFT JOIN business_locations bl ON bl.id = r.location_id
     -- The visit itself lives on the operational record, never on the thread. A
-    -- review request only exists once that record reached 'completed', so this
-    -- join is total: same UNION shape the automation sweep uses.
+    -- review request only exists once that visit has ended, and its end is on
+    -- the record: same UNION shape the automation sweep uses.
     JOIN (
-      SELECT b.request_id, b.status, ps.timezone, ps.starts_at, b.party_size, ps.product_id FROM bookings b JOIN product_sessions ps ON ps.id = b.product_session_id
+      SELECT b.request_id, b.status, ps.timezone, ps.starts_at, ps.ends_at, b.party_size, ps.product_id FROM bookings b JOIN product_sessions ps ON ps.id = b.product_session_id
       UNION ALL
-      SELECT res.request_id, res.status, res.timezone, res.starts_at, res.party_size, NULL AS product_id FROM reservations res
+      SELECT res.request_id, res.status, res.timezone, res.starts_at, res.ends_at, res.party_size, NULL AS product_id FROM reservations res
     ) record ON record.request_id = r.id
     WHERE r.id = ? AND r.kind = ?`, [bookingId, bookingType])
 }
@@ -166,7 +166,7 @@ export async function createOrRotateReviewRequest(
   now = new Date().toISOString(),
 ): Promise<{ request: ReviewRequestRow; token: string; created: boolean }> {
   if (!context.customer_id) throw new Error('Booking is not linked to a customer')
-  if (!context.completed_at) throw new Error('Booking is not completed')
+  if (!context.completed_at || context.completed_at > now) throw new Error('Booking is not complete yet')
   if (context.status === 'cancelled') throw new Error('Cancelled bookings cannot receive review requests')
   if (context.review_submitted_at || context.review_id) throw new Error('Booking already has a submitted review')
   if (context.customer_opted_out_at) throw new Error('Customer has opted out of review requests')
