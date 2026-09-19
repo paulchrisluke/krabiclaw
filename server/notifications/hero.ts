@@ -1,5 +1,5 @@
 import type { DbClient } from '~/server/db'
-import { getMediaPlacements } from '~/server/utils/media-placement'
+import { getMediaPlacements, type MediaPlacementItem } from '~/server/utils/media-placement'
 
 /**
  * The picture a notification leads with.
@@ -18,6 +18,17 @@ export interface HeroImage {
   alt: string
 }
 
+export function notificationHeroImageUrl(
+  item: Pick<MediaPlacementItem, 'kind' | 'public_url' | 'thumbnail_url'>,
+): string | null {
+  const imageUrl = item.kind === 'video'
+    ? item.thumbnail_url
+    : item.kind === 'image'
+      ? item.public_url
+      : null
+  return imageUrl?.trim() || null
+}
+
 async function firstPlacement(
   db: DbClient,
   input: { siteId: string; ownerType: 'product' | 'business_location'; ownerId: string; slot: string },
@@ -29,8 +40,10 @@ async function firstPlacement(
     slot: input.slot,
   })
   const item = placements.get(input.ownerId)?.[0]
-  if (!item?.public_url) return null
-  return { imageUrl: item.public_url, alt: item.alt_text ?? '' }
+  if (!item) return null
+  const imageUrl = notificationHeroImageUrl(item)
+  if (!imageUrl) return null
+  return { imageUrl, alt: item.alt_text ?? '' }
 }
 
 /** An experience's cover. */
