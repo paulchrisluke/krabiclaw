@@ -6,7 +6,6 @@ import * as schema from '../../server/db/schema.ts'
 import {
   CapacityUnavailableError,
   claimSessionCapacity,
-  expireBookingHolds,
   listSessions,
   materializeSessions,
   setBookingStatus,
@@ -182,37 +181,18 @@ test('concurrent claims cannot exceed capacity, and variants share one pool', { 
       claimSessionCapacity(db, { organizationId: ORG, siteId: SITE, productId: PRODUCT, sessionId: 'sess-1', productVariantId: 'var-adult', partySize: 1 })))
     const granted = outcomes.filter(outcome => outcome.status === 'fulfilled').length
     assert.equal(granted, 3, `exactly the three remaining seats were granted, got ${granted}`)
-    const claimed = await db.prepare("SELECT SUM(party_size) n FROM bookings WHERE product_session_id = 'sess-1' AND status IN ('pending','confirmed','completed')").first<number>('n')
+    const claimed = await db.prepare("SELECT SUM(party_size) n FROM bookings WHERE product_session_id = 'sess-1' AND status = 'confirmed'").first<number>('n')
     assert.equal(claimed, 8, 'claims never exceed capacity')
 
     // Cancelling releases exactly that booking's seats.
     const one = await db.prepare("SELECT id FROM bookings WHERE party_size = 3 LIMIT 1").first<string>('id')
     assert(one)
     await setBookingStatus(db, { organizationId: ORG, bookingId: one, status: 'cancelled', reason: 'guest cancelled' })
-    const afterCancel = await db.prepare("SELECT SUM(party_size) n FROM bookings WHERE product_session_id = 'sess-1' AND status IN ('pending','confirmed','completed')").first<number>('n')
+    const afterCancel = await db.prepare("SELECT SUM(party_size) n FROM bookings WHERE product_session_id = 'sess-1' AND status = 'confirmed'").first<number>('n')
     assert.equal(afterCancel, 5, 'cancellation released exactly three seats')
     const [session] = await listSessions(db, { organizationId: ORG, productId: PRODUCT, fromInstant: '2099-01-01T00:00:00.000Z', toInstant: '2099-02-01T00:00:00.000Z' })
     assert.equal(session?.remaining, 3)
     assert.equal(session?.is_full, false)
-  } finally { await runtime.dispose() }
-})
-
-test('an expired hold releases its seats; an unexpired one does not', { timeout: 120_000 }, async () => {
-  const { runtime, db } = await boot()
-  try {
-    await db.prepare(`INSERT INTO product_sessions (id, organization_id, product_id, timezone, starts_at, ends_at, capacity, status, created_by, updated_by)
-      VALUES ('sess-hold', ?, ?, 'Asia/Bangkok', '2099-01-05T07:00:00.000Z', '2099-01-05T09:00:00.000Z', 2, 'scheduled', ?, ?)`)
-      .bind(ORG, PRODUCT, ACTOR, ACTOR).run()
-    const future = new Date(Date.now() + 600_000).toISOString()
-    await claimSessionCapacity(db, { organizationId: ORG, siteId: SITE, productId: PRODUCT, sessionId: 'sess-hold', productVariantId: 'var-adult', partySize: 2, holdExpiresAt: future })
-    await assert.rejects(
-      claimSessionCapacity(db, { organizationId: ORG, siteId: SITE, productId: PRODUCT, sessionId: 'sess-hold', productVariantId: 'var-adult', partySize: 1 }),
-      CapacityUnavailableError, 'an unexpired hold keeps its seats')
-
-    await db.prepare("UPDATE bookings SET hold_expires_at = '2020-01-01T00:00:00.000Z' WHERE product_session_id = 'sess-hold'").run()
-    const claim = await claimSessionCapacity(db, { organizationId: ORG, siteId: SITE, productId: PRODUCT, sessionId: 'sess-hold', productVariantId: 'var-adult', partySize: 2 })
-    assert(claim.bookingId, 'an expired hold releases its seats')
-    assert.equal(await expireBookingHolds(db, ORG), 1, 'the sweep marks the abandoned claim cancelled')
   } finally { await runtime.dispose() }
 })
 

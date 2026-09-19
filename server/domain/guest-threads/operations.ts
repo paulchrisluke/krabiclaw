@@ -8,6 +8,7 @@ import { updateThreadProjectionIfLatestEntry } from './repository'
 import { renderNotificationEmail } from '~/server/emails/render'
 import { guestThreadReplyMessage, guestThreadStatusMessage } from '~/server/notifications/guest-events'
 import { getPlatformDomain } from '~/server/utils/dashboard-notification-links'
+import { isBookingComplete } from '~/shared/bookings'
 import type {
   GuestThreadDeliveryProvider,
   GuestThreadDeliveryRow,
@@ -16,10 +17,10 @@ import type {
   GuestThreadSubmissionType,
 } from './types'
 
-// A thread is never archived by hand. Confirm, cancel and complete resolve it
+// A thread is never archived by hand. Cancelling resolves it
 // as a consequence of the booking's own lifecycle; there is no separate
 // resolve/reopen for a member to reach for, and no surface that offered one.
-export const GUEST_THREAD_ACTIONS = new Set(['confirm', 'cancel', 'complete', 'reply', 'retry_delivery'])
+export const GUEST_THREAD_ACTIONS = new Set(['cancel', 'reply', 'retry_delivery'])
 
 type SuccessfulOperationOutcome = { ok: true; status: 200 | 202; thread: GuestThreadRow; availableActions: string[] }
 
@@ -40,7 +41,8 @@ export type ExecuteOperationInput = {
   deliveryId?: string
   env: ReplyEmailEnv
   idempotencyKey?: string
-} & ({ actorUserId: string; completionSource?: 'manual' } | { actorUserId: null; action: 'complete'; completionSource: 'auto' })
+  actorUserId: string
+}
 
 interface ThreadContext {
   thread: GuestThreadRow
@@ -55,9 +57,9 @@ interface ThreadContext {
 
 interface SourceMutationPlan {
   kind: 'reservation' | 'booking'
-  action: 'confirm' | 'cancel' | 'complete'
+  action: 'cancel'
   beforeStatus: string
-  afterStatus: 'confirmed' | 'cancelled' | 'completed'
+  afterStatus: 'cancelled'
   requiresNotification: boolean
 }
 
@@ -102,23 +104,37 @@ async function successfulOutcome(
     ok: true,
     status,
     thread: thread ?? context.thread,
-    availableActions: requestActions(record),
+    availableActions: requestActions(record, new Date().toISOString()),
   }
 }
 
 function sourceMutationPlan(context: ThreadContext, action: string): SourceMutationPlan | null {
   if (context.thread.kind === 'contact' || !context.record) return null
   const { kind, status: beforeStatus } = context.record
-  if (beforeStatus === 'pending' && action === 'confirm') {
-    return { kind, action, beforeStatus, afterStatus: 'confirmed', requiresNotification: true }
-  }
-  if ((beforeStatus === 'pending' || beforeStatus === 'confirmed') && action === 'cancel') {
+  // Cancelling is the only transition left. A booking arrives confirmed and
+  // becomes complete when its end passes, so there is nothing to approve and
+  // nothing to mark done.
+  // History is not cancellable. `requestActions` already offers nothing once a
+  // record is complete; the transition says the same, so the two cannot drift.
+  if (isBookingComplete(context.record, new Date().toISOString())) return null
+  if (beforeStatus === 'confirmed' && action === 'cancel') {
     return { kind, action, beforeStatus, afterStatus: 'cancelled', requiresNotification: true }
   }
-  if (beforeStatus === 'confirmed' && action === 'complete') {
-    return { kind, action, beforeStatus, afterStatus: 'completed', requiresNotification: false }
-  }
   return null
+}
+
+/**
+ * The record has not finished yet, as the database sees it.
+ *
+ * A reservation holds its own end; a booking's is on its session. The entry and
+ * the status update each carry this, because they land in one batch and each
+ * carries the other's condition — a visit that finishes between the read and
+ * the write must not be cancelled by either half.
+ */
+function sourceStillRunningSql(plan: SourceMutationPlan, table: string): string {
+  return plan.kind === 'reservation'
+    ? `${table}.ends_at > ?`
+    : `EXISTS (SELECT 1 FROM product_sessions s WHERE s.id = ${table}.product_session_id AND s.ends_at > ?)`
 }
 
 function operationEntryQuery(
@@ -143,7 +159,7 @@ function operationEntryQuery(
         -- thread has no status of its own: two dashboards acting at once must
         -- not both write an entry for the same transition.
         AND EXISTS (SELECT 1 FROM ${plan.kind === 'reservation' ? 'reservations' : 'bookings'} src
-                     WHERE src.request_id = gt.id AND src.status = ?)
+                     WHERE src.request_id = gt.id AND src.status = ? AND ${sourceStillRunningSql(plan, 'src')})
       ON CONFLICT(dedupe_key) DO NOTHING
     `,
     params: [
@@ -160,6 +176,7 @@ function operationEntryQuery(
       context.thread.site_id,
       plan.kind,
       plan.beforeStatus,
+      now,
     ],
   }
 }
@@ -174,20 +191,20 @@ function operationEntryQuery(
  */
 function sourceUpdateQuery(context: ThreadContext, plan: SourceMutationPlan, input: ExecuteOperationInput, entryId: string, now: string): BatchQuery {
   const table = plan.kind === 'reservation' ? 'reservations' : 'bookings'
-  const stamps = plan.action === 'complete'
-    ? ', completed_at = COALESCE(completed_at, ?)'
-    : plan.action === 'cancel' ? ', cancelled_at = COALESCE(cancelled_at, ?), cancellation_reason = ?' : ''
-  const stampParams = plan.action === 'complete'
-    ? [now]
-    : plan.action === 'cancel' ? [now, input.completionSource === 'auto' ? 'auto_cancelled' : 'host_cancelled'] : []
+  const stamps = ', cancelled_at = COALESCE(cancelled_at, ?), cancellation_reason = ?'
+  const stampParams = [now, 'host_cancelled']
+  // The record's end carries the same refusal the caller already made, so a
+  // visit that finishes between reading it and writing cannot be cancelled
+  // afterwards. A reservation holds its own end; a booking's is on its session.
+  const stillRunning = sourceStillRunningSql(plan, table)
   return {
     query: `
       UPDATE ${table}
-      SET status = ?, updated_at = ?${stamps}${table === 'bookings' && plan.action !== 'complete' ? ', hold_expires_at = NULL' : ''}
-      WHERE id = ? AND status = ?
+      SET status = ?, updated_at = ?${stamps}
+      WHERE id = ? AND status = ? AND ${stillRunning}
         AND EXISTS (SELECT 1 FROM activity_entries WHERE id = ?)
     `,
-    params: [plan.afterStatus, now, ...stampParams, context.record!.id, plan.beforeStatus, entryId],
+    params: [plan.afterStatus, now, ...stampParams, context.record!.id, plan.beforeStatus, now, entryId],
   }
 }
 
@@ -252,7 +269,6 @@ async function getSiteBrandName(db: DbClient, siteId: string): Promise<string> {
 function operationSubject(action: string, fromName: string): string {
   if (action === 'confirm') return `Your reservation at ${fromName} is confirmed`
   if (action === 'cancel') return `Your booking at ${fromName} was cancelled`
-  if (action === 'complete') return `Thanks for visiting ${fromName}`
   return `Update on your booking at ${fromName}`
 }
 
@@ -337,12 +353,10 @@ async function executeSourceMutation(
   const existing = await findEntryByDedupeKey(db, dedupeKey)
   if (existing) {
     if (!entryMatchesRequest(existing, eventName)) return conflict()
-    if (input.action !== 'complete') {
-      const delivery = await getDeliveryById(db, deliveryDedupeKey(input))
-      if (!delivery) throw new Error('Status update delivery receipt was not created')
-      const outcome = await sendStatusUpdate(db, context, input, existing, delivery)
-      if ('ok' in outcome) return outcome
-    }
+    const delivery = await getDeliveryById(db, deliveryDedupeKey(input))
+    if (!delivery) throw new Error('Status update delivery receipt was not created')
+    const outcome = await sendStatusUpdate(db, context, input, existing, delivery)
+    if ('ok' in outcome) return outcome
     return await successfulOutcome(db, context)
   }
 

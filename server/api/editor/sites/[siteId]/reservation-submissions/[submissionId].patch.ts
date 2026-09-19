@@ -11,8 +11,7 @@ import { queryFirst } from '~/server/db'
 import { executeGuestThreadOperation } from '~/server/domain/guest-threads/operations'
 import { publishDashboardInvalidation } from '~/server/cloudflare/guest-inbox-events'
 
-const STATUS_TO_ACTION = {
-  confirmed: 'confirm', cancelled: 'cancel', completed: 'complete', } as const
+const STATUS_TO_ACTION = { cancelled: 'cancel' } as const
 
 export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
