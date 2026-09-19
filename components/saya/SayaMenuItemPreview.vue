@@ -33,6 +33,7 @@
 </template>
 
 <script setup lang="ts">
+import { mediaStillUrl } from '~/shared/media-placement-contract'
 type PreviewItem = {
   name: string
   media?: Array<{ public_url?: string | null; thumbnail_url?: string | null; kind?: string | null }>
@@ -48,7 +49,7 @@ const props = withDefaults(defineProps<{
 const media = computed(() => props.item.media?.[0] ?? null)
 const isVideo = computed(() => media.value?.kind === 'video')
 const previewUrl = computed(() => {
-  if (isVideo.value) return media.value?.thumbnail_url || media.value?.public_url || null
+  if (isVideo.value) return mediaStillUrl(media.value)
   return media.value?.public_url || null
 })
 </script>

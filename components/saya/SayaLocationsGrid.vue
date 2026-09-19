@@ -25,9 +25,9 @@
             </ClientOnly>
           </template>
           <UImage
-            v-else-if="item.media?.thumbnail_url || (item.media?.kind !== 'video' && item.media?.public_url)"
-            :src="item.media.thumbnail_url || item.media.public_url"
-            :alt="item.media.alt_text || item.title"
+            v-else-if="mediaStillUrl(item.media)"
+            :src="mediaStillUrl(item.media) || undefined"
+            :alt="item.media?.alt_text || item.title"
             loading="lazy"
             class="aspect-video w-full object-contain transition-transform duration-500 group-hover:scale-105"
           />
@@ -55,6 +55,7 @@ import AppSection from '~/components/ui/AppSection.vue'
 import type { PublicTenantPage } from '~/server/utils/public-tenant-pages'
 import type { TenantPageBlock } from '~/utils/tenant-page-blocks'
 import { blockText, blockRecords } from '~/utils/tenant-page-block-data'
+import { mediaStillUrl } from '~/shared/media-placement-contract'
 
 // Saya's locations grid. The block names the locations and the loader resolves
 // each one's title, town, route and picture, so the card shows what the block

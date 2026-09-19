@@ -1,15 +1,12 @@
 import { getErrorMessage } from '~/utils/errors'
 
-export const IMAGE_MAX_SIZE_BYTES = 10 * 1024 * 1024
+// The same limits the upload route enforces. A second, smaller number here
+// meant the dashboard refused images MCP accepted.
+export const IMAGE_MAX_SIZE_BYTES = 20 * 1024 * 1024
 export const VIDEO_MAX_SIZE_BYTES = 50 * 1024 * 1024
 
 export interface MediaUploadOptions {
   category?: string | null
-}
-
-export interface PendingMediaUpload {
-  file: File
-  options: MediaUploadOptions
 }
 
 export interface MediaUploadResult {
@@ -19,48 +16,16 @@ export interface MediaUploadResult {
   thumbnail_url?: string
 }
 
-function operationAndCleanupError(
-  label: string,
-  operationError: unknown,
-  cleanupError: unknown,
-): AggregateError {
-  return new AggregateError(
-    [operationError, cleanupError],
-    `${label}: ${getErrorMessage(operationError, 'operation failed')}; cleanup failed: ${getErrorMessage(cleanupError, 'unknown cleanup error')}`,
-  )
-}
-
 export function useMediaUpload(siteApiBase: string) {
   const dashboardApi = useDashboardApi()
   const uploading = ref(false)
   const error = ref<string | null>(null)
-  const pendingRetryFile = ref<PendingMediaUpload | null>(null)
-
-  async function cleanupPendingUpload(assetId: string) {
-    await dashboardApi(`${siteApiBase}/media/${assetId}`, {
-      method: 'DELETE',
-      validate: (value): value is { deleted: true } => isRecord(value) && value.deleted === true,
-    })
-  }
-
-  async function confirmPendingUpload(assetId: string) {
-    await dashboardApi(`${siteApiBase}/media/${assetId}/confirm`, {
-      method: 'POST',
-      validate: (value): value is { asset_id: string; public_url: string; thumbnail_url: string; status: 'active' } =>
-        isRecord(value)
-        && typeof value.asset_id === 'string'
-        && typeof value.public_url === 'string'
-        && typeof value.thumbnail_url === 'string'
-        && value.status === 'active',
-    })
-  }
 
   async function upload(file: File, options: MediaUploadOptions = {}): Promise<MediaUploadResult | null> {
     if (uploading.value) return null
 
     uploading.value = true
     error.value = null
-    pendingRetryFile.value = null
 
     const isImage = file.type.startsWith('image/')
     const isVideo = file.type.startsWith('video/')
@@ -81,71 +46,24 @@ export function useMediaUpload(siteApiBase: string) {
         return null
       }
 
-      if (isImage) {
-        const { asset_id: assetId, upload_url: uploadUrl } = await dashboardApi<{ asset_id: string, upload_url: string }>(
-          `${siteApiBase}/media/request-upload`,
-          {
-            method: 'POST',
-            validate: validateApiShape({ asset_id: 'string', upload_url: 'string' }),
-            body: {
-              filename: file.name,
-              category: options.category,
-            }
-          }
-        )
-
-        const form = new FormData()
-        form.append('file', file)
-
-        try {
-          const response = await fetch(uploadUrl, {
-            method: 'POST',
-            body: form,
-            signal: mediaUploadSignal(),
-          })
-          if (!response.ok) throw new Error(`Upload failed: ${response.status}`)
-        } catch (uploadError) {
-          try {
-            await cleanupPendingUpload(assetId)
-          } catch (cleanupError) {
-            throw operationAndCleanupError('Image upload failed', uploadError, cleanupError)
-          }
-          throw uploadError
-        }
-
-        try {
-          await confirmPendingUpload(assetId)
-        } catch (uploadError) {
-          try {
-            await cleanupPendingUpload(assetId)
-          } catch (cleanupError) {
-            throw operationAndCleanupError('Image confirmation failed', uploadError, cleanupError)
-          }
-          pendingRetryFile.value = { file, options }
-          throw uploadError
-        }
-
-        return {
-          asset_id: assetId,
-          kind: 'image',
-        }
+      const form = new FormData()
+      if (isImage) form.append('image', file)
+      else {
+        form.append('video', file)
+        form.append('thumbnail', await generateVideoThumbnail(file))
       }
 
-      const poster = await generateVideoThumbnail(file)
+      // An image has no separate poster unless the provider made one: an AVIF
+      // goes to R2 and answers with a null thumbnail. A video always has one.
       const response = await dashboardApi<{
         asset_id: string
-        kind: 'video'
+        kind: 'image' | 'video'
         public_url: string
-        thumbnail_url: string
+        thumbnail_url: string | null
         status: 'active'
       }>(`${siteApiBase}/media/upload`, {
         method: 'POST',
-        body: (() => {
-          const form = new FormData()
-          form.append('video', file)
-          form.append('thumbnail', poster)
-          return form
-        })(),
+        body: form,
         query: {
           filename: file.name,
           category: options.category || undefined,
@@ -153,15 +71,16 @@ export function useMediaUpload(siteApiBase: string) {
         timeout: MEDIA_UPLOAD_TIMEOUT_MS,
         validate: (value): value is {
           asset_id: string
-          kind: 'video'
+          kind: 'image' | 'video'
           public_url: string
-          thumbnail_url: string
+          thumbnail_url: string | null
           status: 'active'
         } => isRecord(value)
           && typeof value.asset_id === 'string'
-          && value.kind === 'video'
+          && (value.kind === 'image' || value.kind === 'video')
           && typeof value.public_url === 'string'
-          && typeof value.thumbnail_url === 'string'
+          && (typeof value.thumbnail_url === 'string' || value.thumbnail_url === null)
+          && (value.kind === 'image' || typeof value.thumbnail_url === 'string')
           && value.status === 'active',
       })
 
@@ -169,7 +88,7 @@ export function useMediaUpload(siteApiBase: string) {
         asset_id: response.asset_id,
         kind: response.kind,
         public_url: response.public_url,
-        thumbnail_url: response.thumbnail_url,
+        thumbnail_url: response.thumbnail_url ?? undefined,
       }
     } catch (uploadError) {
       error.value = getErrorMessage(uploadError, 'Upload failed.')
@@ -182,7 +101,6 @@ export function useMediaUpload(siteApiBase: string) {
   return {
     uploading,
     error,
-    pendingRetryFile,
     upload,
   }
 }

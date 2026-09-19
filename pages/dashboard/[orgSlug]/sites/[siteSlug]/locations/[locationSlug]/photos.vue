@@ -36,20 +36,14 @@
           {{ item.label }}
         </UButton>
       </div>
-
-      <div v-if="pendingRetryFile" class="mt-4">
-        <UButton size="sm" color="neutral" variant="soft" :loading="uploading" :disabled="uploading" @click="retryPendingUpload">
-          Retry confirm
-        </UButton>
-      </div>
       <UAlert v-if="uploadError" color="error" variant="soft" :description="uploadError" icon="i-lucide-triangle-alert" class="mt-4" />
       <UInput ref="fileInput" type="file" accept="image/*,video/*" class="hidden" :disabled="uploading" @change="onFileSelect" />
     </template>
 
     <template #tile="{ item }">
       <img
-        v-if="item.row.thumbnail_url || item.row.public_url"
-        :src="item.row.thumbnail_url || item.row.public_url || undefined"
+        v-if="mediaStillUrl(item.row)"
+        :src="mediaStillUrl(item.row) || undefined"
         :alt="item.row.alt_text || item.row.file_name || ''"
         class="h-full w-full object-cover"
         loading="lazy"
@@ -75,8 +69,8 @@
     @remove="detachOpenPhoto"
   >
     <img
-      v-if="openPhotoAsset && (openPhotoAsset.thumbnail_url || openPhotoAsset.public_url)"
-      :src="openPhotoAsset.thumbnail_url || openPhotoAsset.public_url || undefined"
+      v-if="openPhotoAsset && mediaStillUrl(openPhotoAsset)"
+      :src="mediaStillUrl(openPhotoAsset) || undefined"
       :alt="openPhotoAsset.alt_text || openPhotoAsset.file_name || ''"
       class="mx-auto max-h-64 rounded-lg object-contain"
     >
@@ -131,6 +125,7 @@
 <script setup lang="ts">
 import DashboardGridEditor from '~/components/dashboard/DashboardGridEditor.vue'
 import DashboardListItemDialog from '~/components/dashboard/DashboardListItemDialog.vue'
+import { mediaStillUrl } from '~/shared/media-placement-contract'
 
 const dashboardApi = useDashboardApi()
 definePageMeta({ layout: 'dashboard', cmsCapabilityKey: 'location.photos' })
@@ -169,7 +164,7 @@ const photoCategory = ref<string>('other')
 const photoError = ref<string | null>(null)
 const attachError = ref<string | null>(null)
 const detachError = ref<string | null>(null)
-const { uploading, error: uploadError, pendingRetryFile, upload } = useMediaUpload(siteApiBase)
+const { uploading, error: uploadError, upload } = useMediaUpload(siteApiBase)
 const isMediaResponse = (value: unknown): value is { media: MediaAsset[] } =>
   isRecord(value)
   && Array.isArray(value.media)
@@ -275,12 +270,6 @@ function onFileSelect(event: Event) {
 
 function handleSelectedFile(file: File) {
   void uploadSelectedFile(file)
-}
-
-async function retryPendingUpload() {
-  const pendingUpload = pendingRetryFile.value
-  if (!pendingUpload) return
-  await uploadSelectedFile(pendingUpload.file, pendingUpload.options)
 }
 
 async function uploadSelectedFile(file: File, existingOptions?: { category?: string | null }) {

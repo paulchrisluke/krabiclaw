@@ -83,6 +83,7 @@
 </template>
 
 <script setup lang="ts">
+import { mediaStillUrl } from '~/shared/media-placement-contract'
 const dashboardApi = useDashboardApi()
 const props = defineProps<{
   siteId: string
@@ -124,7 +125,7 @@ interface SelectedMediaAsset {
   asset_id: string
   public_url: string | null
   thumbnail_url: string | null
-  kind: string
+  kind: string | null
   alt_text: string
 }
 
@@ -183,7 +184,7 @@ function assetAlt(asset: Pick<PickerMediaAsset, 'alt_text' | 'file_name'> | Pick
 function summaryFor(id: string): ResolvedSelection | null {
   const summary = props.selectedSummary
   if (!summary || summary.asset_id !== id) return null
-  const url = summary.thumbnail_url ?? summary.public_url ?? null
+  const url = mediaStillUrl(summary)
   // A summary with no URL does not describe the asset, so it cannot stand in
   // for loading it. Accepting one left the picker on its placeholder icon
   // forever, because taking this branch is what stops the fetch below.
@@ -230,7 +231,7 @@ watch([() => props.modelValue, () => props.selectedSummary], async ([id]) => {
 
     const asset = (res.media ?? [])[0]
     resolved.value = asset
-      ? { asset_id: id, url: asset.thumbnail_url ?? asset.public_url ?? null, alt: assetAlt(asset) }
+      ? { asset_id: id, url: mediaStillUrl(asset), alt: assetAlt(asset) }
       : null
   } catch (err) {
     if (controller.signal.aborted || isAbortError(err)) return
@@ -258,14 +259,16 @@ function onSelect(asset: PickerMediaAsset) {
     asset_id: asset.id,
     public_url: asset.public_url ?? null,
     thumbnail_url: asset.thumbnail_url ?? null,
-    kind: asset.kind ?? 'image',
+    kind: asset.kind ?? null,
     alt_text: assetAlt(asset),
   }
 }
 
 function onUploaded(asset: PickerMediaAsset) {
-  const url = asset.public_url ?? ''
-  const kind = asset.kind ?? (url.toLowerCase().endsWith('.mp4') ? 'video' : 'image')
+  // The upload answered with the asset it created, and that asset knows what
+  // it is. Reading the kind back off the URL's extension invented a second
+  // answer that could disagree with the row.
+  const kind = asset.kind ?? null
   const size = asset.size ?? 0
   pendingAsset.value = {
     asset_id: asset.id,
@@ -289,7 +292,7 @@ function confirm() {
   // asset the owner just picked.
   resolved.value = {
     asset_id: asset.asset_id,
-    url: asset.thumbnail_url || asset.public_url,
+    url: mediaStillUrl(asset),
     alt: assetAlt(asset),
   }
   modelLoadError.value = null

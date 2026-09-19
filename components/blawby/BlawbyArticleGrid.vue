@@ -29,9 +29,10 @@
 function coverImage(post: { cover?: { kind?: string | null; public_url?: string | null; thumbnail_url?: string | null } | null }) {
   const cover = post.cover
   if (!cover) return null
-  return cover.kind === 'video' ? cover.thumbnail_url ?? null : cover.public_url ?? null
+  return mediaStillUrl(cover)
 }
 import type { PublicBlogSummary } from '~/types/blawby'
+import { mediaStillUrl } from '~/shared/media-placement-contract'
 
 withDefaults(defineProps<{ posts: PublicBlogSummary[], compact?: boolean }>(), { compact: false })
 const { formatDate } = useLocaleDate()
