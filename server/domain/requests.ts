@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { executeBatch, queryFirst, type BatchQuery, type DbClient } from '~/server/db'
+import { isBookingComplete, type BookingStatus } from '~/shared/bookings'
 
 /**
  * The inbox.
@@ -59,7 +60,7 @@ export type ThreadPayload = z.infer<typeof threadPayload>
 export interface ThreadOperationalRecord {
   kind: 'booking' | 'reservation'
   id: string
-  status: 'pending' | 'confirmed' | 'cancelled' | 'completed'
+  status: BookingStatus
   party_size: number
   starts_at: string
   ends_at: string
@@ -141,9 +142,14 @@ export function threadPayloadForGuest(input: GuestThreadInput): ThreadPayload {
   }
 }
 
-export function requestActions(record: ThreadOperationalRecord | null): string[] {
-  if (!record || record.status === 'cancelled' || record.status === 'completed') return []
-  return record.status === 'pending' ? ['confirm', 'cancel'] : ['complete', 'cancel']
+/**
+ * What a tenant can still do. Nothing is approved and nothing is marked done:
+ * a booking arrives confirmed, and one whose end has passed is complete
+ * because the clock says so.
+ */
+export function requestActions(record: ThreadOperationalRecord | null, now: string): string[] {
+  if (!record || record.status === 'cancelled' || isBookingComplete(record, now)) return []
+  return ['change', 'cancel']
 }
 
 export function requestPreview(request: GuestRequest, record: ThreadOperationalRecord | null): string {
@@ -181,7 +187,7 @@ export async function cancelBookingRequest(db: DbClient, input: {
   const current = await getGuestRequest(db, input.id, input.siteId, input.kind)
   if (!current || current.kind === 'contact') return null
   const record = await getThreadOperationalRecord(db, current.id)
-  if (!record || !['pending', 'confirmed'].includes(record.status)) return null
+  if (record?.status !== 'confirmed' || isBookingComplete(record, input.now)) return null
 
   // Two writes, one batch, each carrying the other's condition: the token is
   // spent only while the record is still cancellable, and the record is

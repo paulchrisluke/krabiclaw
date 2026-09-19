@@ -50,6 +50,13 @@
       "when": 1789461396809,
       "tag": "0006_site_currency_nullable",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1789794494822,
+      "tag": "0007_round_wendigo",
+      "breakpoints": true
     }
   ]
 }

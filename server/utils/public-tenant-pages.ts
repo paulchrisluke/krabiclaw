@@ -257,8 +257,13 @@ async function hydrateBlocks(
          WHERE bl.site_id = ? AND bl.status = 'active' AND bl.id IN (SELECT value FROM json_each(?))
       `, [siteId, d1JsonStringSet([...locationIds])])
     : []
+  // The row stores the address as text and a translation carries only the parts
+  // that are words, so the canonical one is read first: the overlay then merges
+  // the translated parts onto it and keeps the region code and postcode. Left as
+  // text, the overlay replaced the whole value with a partial address.
+  const parsedLocations = sourceLocations.map(location => ({ ...location, address: parsePostalAddress(location.address) }))
   const locations = localizations
-    ? projectExactLocalizedCollection('business_location', sourceLocations, localizations).map((location) => {
+    ? projectExactLocalizedCollection('business_location', parsedLocations, localizations).map((location) => {
         const representation = localizations.find(item => item.resourceType === 'business_location' && item.resourceId === location.id)
         const slug = representation?.routePath?.split('/').filter(Boolean).at(-1)
         if (!representation?.routePath?.startsWith('/') || !slug) {
@@ -266,7 +271,7 @@ async function hydrateBlocks(
         }
         return { ...location, slug, public_path: representation.routePath }
       })
-    : sourceLocations
+    : parsedLocations
   const [qaItemsBySource, sourceReviewRows, sourcePostRows, updateRows] = await Promise.all([
     Promise.all([...qaSources].map(async source => [source, faqItems(await listFaqBlockQa(db, siteId, pagePath, source, locale))] as const)).then(entries => new Map(entries)),
     hasReviewSource ? listSiteReviews(db, siteId, { publishedOnly: true }) : Promise.resolve([]),
@@ -404,7 +409,7 @@ async function hydrateBlocks(
           title: location.title,
           // The town the visitor is being sent to. A location card names it
           // above the title, and the item carried everything except that.
-          city: addressPlaceName(parsePostalAddress(location.address)) || undefined,
+          city: addressPlaceName(location.address) || undefined,
           description: location.short_description || location.description || undefined,
           url: 'public_path' in location && typeof location.public_path === 'string' ? location.public_path : `/locations/${location.slug}`,
           labelKey: 'saya.home.visit_location',

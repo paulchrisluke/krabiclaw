@@ -124,23 +124,6 @@
           a reply; naming the count once, pinned, does not. It stays out of the
           list so the cards keep the single shape they were redesigned for.
         -->
-        <div v-if="attentionCount" class="sticky bottom-4 z-10 mt-4">
-          <UButton
-            color="neutral"
-            variant="solid"
-            size="lg"
-            block
-            class="justify-start shadow-lg"
-            :aria-pressed="attentionOnly"
-            @click="attentionOnly = !attentionOnly"
-          >
-            <UIcon name="i-lucide-circle-alert" class="size-5 shrink-0 text-warning" />
-            <span class="min-w-0 text-left">
-              <span class="block">{{ attentionCount }} {{ attentionCount === 1 ? 'needs' : 'need' }} your response</span>
-              <span class="mt-0.5 block text-sm font-normal opacity-80">{{ attentionOnly ? 'Showing only these' : 'Show only these' }}</span>
-            </span>
-          </UButton>
-        </div>
       </div>
     </template>
   </UDashboardPanel>
@@ -149,7 +132,6 @@
 <script setup lang="ts">
 import { localDateAt } from '~/utils/timezone'
 import TodayAgendaCard from './TodayAgendaCard.vue'
-import { bookingNeedsResponse } from '~/utils/booking-lifecycle'
 import { bookingCountLabel, resolveAggregateBookingPresentation, type BookingKind } from '~/utils/booking-presentation'
 import { getErrorMessage } from '~/utils/errors'
 import type { AgendaItem, AgendaKind, AgendaLocation, AgendaPayload, AgendaSite, TodayAgendaPayload } from '~/server/utils/dashboard-agenda'
@@ -257,7 +239,6 @@ const rangeModel = computed<string | number>({
   get: () => activeRange.value,
   set: value => void selectRange(value === 'upcoming' ? 'upcoming' : 'today'),
 })
-const attentionOnly = ref(false)
 const todayVisibleCount = ref(PAGE_SIZE)
 const upcomingItems = ref<AgendaItem[]>([])
 const upcomingLoading = ref(false)
@@ -278,10 +259,9 @@ const allRangeItems = computed(() => activeRange.value === 'today' ? filteredTod
 const rangeItems = computed(() => activeRange.value === 'today'
   ? filteredTodayItems.value.slice(0, todayVisibleCount.value)
   : upcomingItems.value)
-const visibleItems = computed(() => attentionOnly.value ? allRangeItems.value.filter(needsResponse) : rangeItems.value)
-const attentionCount = computed(() => allRangeItems.value.filter(needsResponse).length)
+const visibleItems = computed(() => rangeItems.value)
 const hasMore = computed(() => activeRange.value === 'today'
-  ? !attentionOnly.value && todayVisibleCount.value < filteredTodayItems.value.length
+  ? todayVisibleCount.value < filteredTodayItems.value.length
   : upcomingCursor.value <= upcomingHorizon.value)
 const activeLoading = computed(() => activeRange.value === 'today' ? pending.value : upcomingLoading.value)
 const activeError = computed(() => activeRange.value === 'today' ? todayError.value : upcomingError.value)
@@ -303,7 +283,7 @@ const presentation = computed(() => {
   )
 })
 const heading = computed(() => {
-  const count = attentionOnly.value ? attentionCount.value : allRangeItems.value.length
+  const count = allRangeItems.value.length
   return `You have ${bookingCountLabel(presentation.value, count)}`
 })
 const emptyTitle = computed(() => activeRange.value === 'today'
@@ -406,10 +386,6 @@ function isBookingKind(kind: AgendaKind): kind is BookingKind {
   return kind === 'reservation' || kind === 'booking'
 }
 
-function needsResponse(item: AgendaItem): boolean {
-  return isBookingKind(item.kind) && bookingNeedsResponse(item.status)
-}
-
 function referenceDay(item: AgendaItem): string {
   return localDateAt(new Date(resolvedAt.value), item.timeZone)
 }
@@ -429,14 +405,7 @@ function minDate(left: string, right: string): string {
 }
 
 watch(() => filters.siteId, () => { filters.locationId = FILTER_ALL })
-// Nothing outstanding left to show, so drop the filter rather than leaving the
-// list empty behind a band that is no longer on screen to switch off.
-watch(attentionCount, (count) => {
-  if (!count) attentionOnly.value = false
-})
-
 watch(filterSignature, async () => {
-  attentionOnly.value = false
   todayVisibleCount.value = PAGE_SIZE
   upcomingItems.value = []
   upcomingLoading.value = false

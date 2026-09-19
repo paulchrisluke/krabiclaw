@@ -317,7 +317,6 @@
 import { formatCalendarDate, formatTime, formatTimestamp } from '~/utils/timezone'
 import DashboardListItemDialog from '~/components/dashboard/DashboardListItemDialog.vue'
 import EditorPaneShell from '~/components/dashboard/EditorPaneShell.vue'
-import { bookingNeedsResponse } from '~/utils/booking-lifecycle'
 import { getErrorMessage } from '~/utils/errors'
 import type { DashboardBookingDetails, DashboardBookingType } from '~/server/utils/dashboard-booking-details'
 
@@ -445,11 +444,14 @@ watch([detailsKey, () => selectedNote.value?.id, editorKey, editorField], () => 
   noteAttemptDraft.value = null
 }, { immediate: true })
 
-watch([booking, editorKey, editorField], ([currentBooking, key]) => {
+watch([booking, editorKey, editorField], ([currentBooking, key], previous) => {
   // A field leaf is a route, so Nuxt may recreate this component while moving
   // between it and the change hub. Keep the one staged draft in Nuxt state and
-  // only reseed it when it belongs to an older source revision.
-  if (currentBooking && key === 'change' && changeDraft.value.sourceUpdatedAt !== currentBooking.updatedAt) resetChangeDraft()
+  // only reseed it when it belongs to an older source revision, or when change
+  // mode is being entered afresh and the tenant should not inherit the edits
+  // they abandoned last time.
+  const entering = key === 'change' && previous !== undefined && previous[1] !== 'change'
+  if (currentBooking && key === 'change' && (entering || changeDraft.value.sourceUpdatedAt !== currentBooking.updatedAt)) resetChangeDraft()
   if (key === 'change' && isChangeField(editorField.value)) changeFieldOriginal.value = changeDraft.value[draftKey(editorField.value)]
 }, { immediate: true })
 
@@ -476,17 +478,13 @@ function beginChange() {
   resetChangeDraft()
 }
 
+// Nothing to approve and nothing to mark done: a booking arrives confirmed and
+// is complete once its end passes. Cancelling is the one thing left to decide,
+// and changing it is the link above.
 const availableActions = computed<Array<{ value: string; label: string; icon: string; color: ActionColor }>>(() => {
   if (!booking.value || !presentation.value || !booking.value.threadId) return []
-  const label = presentation.value.noun
-  const cancel = { value: 'cancel', label: `Cancel ${label}`, icon: 'i-lucide-calendar-x', color: 'error' as const }
-  if (bookingNeedsResponse(booking.value.status)) {
-    return [{ value: 'confirm', label: `Confirm ${label}`, icon: 'i-lucide-calendar-check', color: 'success' }, cancel]
-  }
-  if (booking.value.status !== 'confirmed') return []
-  return booking.value.type === 'reservation'
-    ? [{ value: 'complete', label: 'Mark complete', icon: 'i-lucide-check-check', color: 'neutral' }, cancel]
-    : [cancel]
+  if (booking.value.status !== 'confirmed' || booking.value.complete) return []
+  return [{ value: 'cancel', label: `Cancel ${presentation.value.noun}`, icon: 'i-lucide-calendar-x', color: 'error' as const }]
 })
 
 function firstName(name: string) {

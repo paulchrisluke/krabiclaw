@@ -150,6 +150,9 @@ export async function assertSiteLanguageEntitlement(
   organizationId: string,
   siteId: string,
   localeInput: unknown,
+  // Authoring needs the language to exist; the public site needs it published.
+  // One question, one query, and the caller says which answer it needs.
+  requires: 'exists' | 'published' = 'exists',
 ): Promise<{ locale: string; source: boolean; platform_messages: Record<string, string> | null }> {
   const locale = assertExactCanonicalLocale(localeInput)
   const catalog = platformLocale(locale)
@@ -167,8 +170,13 @@ export async function assertSiteLanguageEntitlement(
   `, [locale, organizationId, siteId])
   if (!row) localizationError(404, 'LOCALIZATION_NOT_FOUND', 'Site was not found', { site_id: siteId })
   const plan = await getOrganizationPlan(env, organizationId)
-  if (plan !== 'growth' || row.locale_status !== 'published') {
-    localizationError(402, 'LANGUAGE_ENTITLEMENT_REQUIRED', 'A published language on the Growth plan is required', {
+  // Authoring only needs the language to exist on a Growth site. Requiring
+  // `published` here made translate-before-publish impossible, which is why a
+  // language went public with nothing in it. The public gate below is what
+  // still insists on `published`.
+  const satisfied = requires === 'published' ? row.locale_status === 'published' : Boolean(row.locale_status)
+  if (plan !== 'growth' || !satisfied) {
+    localizationError(402, 'LANGUAGE_ENTITLEMENT_REQUIRED', `A ${requires === 'published' ? 'published ' : ''}language on the Growth plan is required`, {
       site_id: siteId,
       locale,
       billing_url: billingUrl(row.organization_slug, row.site_slug),
@@ -185,7 +193,7 @@ export async function assertPublicSiteLanguageEntitlement(
   locale: string,
 ) {
   try {
-    return await assertSiteLanguageEntitlement(env, db, organizationId, siteId, locale)
+    return await assertSiteLanguageEntitlement(env, db, organizationId, siteId, locale, 'published')
   } catch (error) {
     const status = error && typeof error === 'object' && 'status' in error
       ? error.status

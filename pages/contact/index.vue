@@ -99,19 +99,19 @@
             <dl v-if="hasAnyBrandContact" class="mt-8 space-y-0">
               <div v-if="siteConfig.press_email" class="flex justify-between gap-4 border-b border-inverted/10 py-4">
                 <dt class="saya-eyebrow text-inverted/60">{{ t('saya.contact_page.press') }}</dt>
-                <dd class="m-0 font-['Instrument_Serif',serif] italic"><a :href="`mailto:${siteConfig.press_email}`" class="border-b border-inverted/30 pb-px text-inverted no-underline">{{ siteConfig.press_email }}</a></dd>
+                <dd class="m-0 saya-display saya-italic"><a :href="`mailto:${siteConfig.press_email}`" class="border-b border-inverted/30 pb-px text-inverted no-underline">{{ siteConfig.press_email }}</a></dd>
               </div>
               <div v-if="siteConfig.partnerships_email" class="flex justify-between gap-4 border-b border-inverted/10 py-4">
                 <dt class="saya-eyebrow text-inverted/60">{{ t('saya.contact_page.partnerships') }}</dt>
-                <dd class="m-0 font-['Instrument_Serif',serif] italic"><a :href="`mailto:${siteConfig.partnerships_email}`" class="border-b border-inverted/30 pb-px text-inverted no-underline">{{ siteConfig.partnerships_email }}</a></dd>
+                <dd class="m-0 saya-display saya-italic"><a :href="`mailto:${siteConfig.partnerships_email}`" class="border-b border-inverted/30 pb-px text-inverted no-underline">{{ siteConfig.partnerships_email }}</a></dd>
               </div>
               <div v-if="siteConfig.catering_email" class="flex justify-between gap-4 border-b border-inverted/10 py-4">
                 <dt class="saya-eyebrow text-inverted/60">{{ vertCopy.contactSubjectCatering }}</dt>
-                <dd class="m-0 font-['Instrument_Serif',serif] italic"><a :href="`mailto:${siteConfig.catering_email}`" class="border-b border-inverted/30 pb-px text-inverted no-underline">{{ siteConfig.catering_email }}</a></dd>
+                <dd class="m-0 saya-display saya-italic"><a :href="`mailto:${siteConfig.catering_email}`" class="border-b border-inverted/30 pb-px text-inverted no-underline">{{ siteConfig.catering_email }}</a></dd>
               </div>
               <div v-if="siteConfig.careers_email" class="flex justify-between gap-4 border-b border-inverted/10 py-4">
                 <dt class="saya-eyebrow text-inverted/60">{{ t('saya.contact_page.careers') }}</dt>
-                <dd class="m-0 font-['Instrument_Serif',serif] italic"><a :href="`mailto:${siteConfig.careers_email}`" class="border-b border-inverted/30 pb-px text-inverted no-underline">{{ siteConfig.careers_email }}</a></dd>
+                <dd class="m-0 saya-display saya-italic"><a :href="`mailto:${siteConfig.careers_email}`" class="border-b border-inverted/30 pb-px text-inverted no-underline">{{ siteConfig.careers_email }}</a></dd>
               </div>
             </dl>
 

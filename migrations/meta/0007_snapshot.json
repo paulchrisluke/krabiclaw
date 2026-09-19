@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "d5660305-3d29-48fc-a9ca-cd971908370d",
-  "prevId": "9c601cbb-9492-4e55-8dc1-3cfd9a482338",
+  "id": "41b19c92-2945-4161-9542-8bc8158f8260",
+  "prevId": "d5660305-3d29-48fc-a9ca-cd971908370d",
   "tables": {
     "account": {
       "name": "account",
@@ -10381,15 +10381,6 @@
         }
       },
       "indexes": {
-        "site_locales_secondary_published_unique": {
-          "name": "site_locales_secondary_published_unique",
-          "columns": [
-            "organization_id",
-            "site_id"
-          ],
-          "isUnique": true,
-          "where": "is_source = 0 AND status = 'published'"
-        },
         "idx_site_locales_one_source_per_site": {
           "name": "idx_site_locales_one_source_per_site",
           "columns": [

@@ -943,24 +943,10 @@
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false,
-          "default": "'pending'"
-        },
-        "hold_expires_at": {
-          "name": "hold_expires_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "default": "'confirmed'"
         },
         "cancelled_at": {
           "name": "cancelled_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "completed_at": {
-          "name": "completed_at",
           "type": "text",
           "primaryKey": false,
           "notNull": false,
@@ -1021,14 +1007,6 @@
             "customer_id"
           ],
           "isUnique": false
-        },
-        "bookings_hold_expiry_idx": {
-          "name": "bookings_hold_expiry_idx",
-          "columns": [
-            "hold_expires_at"
-          ],
-          "isUnique": false,
-          "where": "hold_expires_at IS NOT NULL"
         }
       },
       "foreignKeys": {
@@ -1130,11 +1108,15 @@
       "checkConstraints": {
         "bookings_instants_check": {
           "name": "bookings_instants_check",
-          "value": "(hold_expires_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', hold_expires_at, '+0 days') IS hold_expires_at) AND (cancelled_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', cancelled_at, '+0 days') IS cancelled_at) AND (completed_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', completed_at, '+0 days') IS completed_at) AND (created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)"
+          "value": "(cancelled_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', cancelled_at, '+0 days') IS cancelled_at) AND (created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)"
         },
         "bookings_party_size_check": {
           "name": "bookings_party_size_check",
           "value": "party_size > 0"
+        },
+        "bookings_status_check": {
+          "name": "bookings_status_check",
+          "value": "status IN ('confirmed', 'cancelled')"
         }
       }
     },
@@ -8627,17 +8609,10 @@
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false,
-          "default": "'pending'"
+          "default": "'confirmed'"
         },
         "cancelled_at": {
           "name": "cancelled_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "completed_at": {
-          "name": "completed_at",
           "type": "text",
           "primaryKey": false,
           "notNull": false,
@@ -8768,7 +8743,7 @@
       "checkConstraints": {
         "reservations_instants_check": {
           "name": "reservations_instants_check",
-          "value": "(strftime('%Y-%m-%dT%H:%M:%fZ', starts_at, '+0 days') IS starts_at) AND (strftime('%Y-%m-%dT%H:%M:%fZ', ends_at, '+0 days') IS ends_at) AND (cancelled_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', cancelled_at, '+0 days') IS cancelled_at) AND (completed_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', completed_at, '+0 days') IS completed_at) AND (created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)"
+          "value": "(strftime('%Y-%m-%dT%H:%M:%fZ', starts_at, '+0 days') IS starts_at) AND (strftime('%Y-%m-%dT%H:%M:%fZ', ends_at, '+0 days') IS ends_at) AND (cancelled_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', cancelled_at, '+0 days') IS cancelled_at) AND (created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)"
         },
         "reservations_interval_check": {
           "name": "reservations_interval_check",
@@ -8781,6 +8756,10 @@
         "reservations_timezone_check": {
           "name": "reservations_timezone_check",
           "value": "timezone <> '' AND timezone NOT GLOB '*[^A-Za-z0-9/_+-]*'"
+        },
+        "reservations_status_check": {
+          "name": "reservations_status_check",
+          "value": "status IN ('confirmed', 'cancelled')"
         }
       }
     },

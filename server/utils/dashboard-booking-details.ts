@@ -12,6 +12,7 @@ import { requestBookingChange } from '~/server/domain/guest-threads/booking-chan
 import { publishGuestInboxThreadEvent } from '~/server/cloudflare/guest-inbox-events'
 import { resolveLocationTimezone } from '~/server/utils/site-config'
 import { mediaStillUrl } from '~/shared/media-placement-contract'
+import { isBookingComplete, type BookingStatus } from '~/shared/bookings'
 
 export type DashboardBookingType = 'reservation' | 'booking'
 
@@ -32,6 +33,7 @@ interface BookingRow {
   party_size: number
   /** The occurrence itself, in its own zone: one instant, not a date and a time. */
   starts_at: string
+  ends_at: string
   timezone: string
   status: string
   requests: string | null
@@ -71,6 +73,8 @@ export interface DashboardBookingDetails {
   bookingTime: string
   timeZone: string
   status: string
+  /** Derived, never stored: confirmed and its end has passed. */
+  complete: boolean
   requests: string | null
   experienceId: string | null
   /**
@@ -122,16 +126,16 @@ async function loadBookingRow(
   return queryFirst<BookingRow>(db, `SELECT r.id, r.organization_id, r.site_id, s.subdomain AS site_slug, s.brand_name AS site_name, s.vertical,
     record.location_id, l.slug AS location_slug, l.title AS location_title,
     json_extract(r.payload_json, '$.guest.name') AS guest_name, json_extract(r.payload_json, '$.guest.email') AS guest_email, json_extract(r.payload_json, '$.guest.phone') AS guest_phone,
-    NULL AS guest_image_url, record.party_size, record.starts_at, record.timezone, record.status, json_extract(r.payload_json, '$.notes') AS requests,
+    NULL AS guest_image_url, record.party_size, record.starts_at, record.ends_at, record.timezone, record.status, json_extract(r.payload_json, '$.notes') AS requests,
     record.product_id AS experience_id, record.product_name AS experience_title, record.product_session_id AS session_id,
     r.id AS request_id, r.created_at, r.updated_at
     FROM requests r
     JOIN sites s ON s.id = r.site_id
     JOIN (
-      SELECT b.request_id, b.status, b.party_size, ps.starts_at, ps.timezone, ps.location_id, b.product_id, p.name AS product_name, ps.id AS product_session_id
+      SELECT b.request_id, b.status, b.party_size, ps.starts_at, ps.ends_at, ps.timezone, ps.location_id, b.product_id, p.name AS product_name, ps.id AS product_session_id
         FROM bookings b JOIN product_sessions ps ON ps.id = b.product_session_id JOIN products p ON p.id = b.product_id
       UNION ALL
-      SELECT res.request_id, res.status, res.party_size, res.starts_at, res.timezone, res.location_id, NULL, NULL, NULL FROM reservations res
+      SELECT res.request_id, res.status, res.party_size, res.starts_at, res.ends_at, res.timezone, res.location_id, NULL, NULL, NULL FROM reservations res
     ) record ON record.request_id = r.id
     JOIN business_locations l ON l.id = record.location_id
     WHERE r.id = ? AND r.organization_id = ? AND r.kind = ?`, [bookingId, organizationId, type])
@@ -233,6 +237,7 @@ export async function loadDashboardBookingDetails(
     bookingTime: localTimeOf(row),
     timeZone,
     status: row.status,
+    complete: isBookingComplete({ status: row.status as BookingStatus, ends_at: row.ends_at }, new Date().toISOString()),
     requests: row.requests,
     experienceId: row.experience_id,
     sessionId: row.session_id,

@@ -436,9 +436,7 @@ function systemEventLabel(entry: StreamEntry) {
   if (entry.kind === 'operation') {
     const action = String(payload.action ?? '')
     if (entry.eventName === 'migration_snapshot') return 'Imported from previous system'
-    if (action === 'confirm') return `${actor}confirmed the ${noun}`.trim()
     if (action === 'cancel') return `${actor}cancelled the ${noun}`.trim()
-    if (action === 'complete') return `${actor}marked the ${noun} complete`.trim()
     return entry.eventName ?? 'Operation recorded'
   }
 

@@ -81,7 +81,7 @@ export async function getGuestThreadDetail(
           },
     },
     entries,
-    availableActions: requestActions(record),
+    availableActions: requestActions(record, new Date().toISOString()),
     deliveryFailures: deliveryFailureRows.map(d => ({
       id: d.id,
       channel: d.channel,
