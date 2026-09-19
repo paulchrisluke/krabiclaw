@@ -49,15 +49,10 @@ test('Japanese is a second secondary language and keeps its public shell through
   const owner = await playwright.request.newContext({ baseURL })
   await loginAs(owner, baseURL, 'user-e2e-kikuzuki-owner')
   const localePath = `/api/editor/sites/${siteId}/locales`
-  const before = await owner.get(localePath)
-  await expectStatus(before, 200)
-  const original = await before.json() as { languages: Array<{ locale: string; status: string }> }
   const settingsUrl = `/api/sites/${siteId}/settings`
   const originalSettingsResponse = await owner.get(settingsUrl)
   await expectStatus(originalSettingsResponse, 200)
   const originalFontPreset = (await originalSettingsResponse.json() as { settings: { font_preset: 'default' | 'mali' } }).settings.font_preset
-  const wasPublished = (locale: string) => original.languages.some(language => language.locale === locale && language.status === 'published')
-  const hadJapanese = wasPublished('ja')
   const hydrationErrors: string[] = []
   page.on('console', message => {
     if (/hydration.*mismatch|mismatch.*hydration/i.test(message.text())) hydrationErrors.push(message.text())
@@ -86,12 +81,6 @@ test('Japanese is a second secondary language and keeps its public shell through
     expect(refusal.data?.code).toBe('LOCALIZATION_INCOMPLETE')
     expect(refusal.data?.completed).toBeLessThan(refusal.data?.total ?? 0)
 
-    // The owner reads the language they are still writing through the preview
-    // token, which is already how an unpublished thing is viewed here.
-    const contextResponse = await owner.get(`/api/editor/sites/${siteId}/context`)
-    await expectStatus(contextResponse, 200)
-    const { context } = await contextResponse.json() as { context: { previewToken: string } }
-    const previewQuery = `?preview_token=${encodeURIComponent(context.previewToken)}`
 
     await expectStatus(await owner.put(`/api/editor/sites/${siteId}/localization/site/${siteId}/ja`, {
       data: { values: { brand_name: '菊月 クラビ', brand_description: 'クラビの日本料理店' } },
@@ -124,34 +113,19 @@ test('Japanese is a second secondary language and keeps its public shell through
       data: { values: japaneseExperience },
     }), 200)
 
+    // An added language is not public, which is the whole point of adding
+    // before publishing: the routes stay 404 until the translation is finished
+    // and the owner publishes it.
     for (const path of ['/ja/reservations', '/ja/contact', '/ja/experiences']) {
-      const response = await openTenantPage(page, `${kikuzukiTestBaseUrl()}${path}${previewQuery}`, kikuzukiTestExtraHeaders())
-      expect(response?.status(), path).toBe(200)
-      const html = await response!.text()
-      expect(html).toMatch(/<html[^>]*lang="ja"/)
-      expect(html).toContain('席を予約する')
-      expect(html).not.toContain('Reserve a table')
-      await expect(page.locator('html')).toHaveAttribute('lang', 'ja')
-      await expect(page.locator('.tenant-layout')).toHaveAttribute('data-hydrated', 'true')
-      await expect(page.locator('.tenant-layout')).toHaveAttribute('data-font-preset', 'mali')
-      await expect(page.getByRole('navigation', { name: 'メインナビゲーション' }).first()).toBeVisible()
-      await expect(page.getByRole('link', { name: '席を予約する' }).first()).toBeVisible()
-      if (path === '/ja/contact') {
-        await expect(page.getByText('各店舗の営業時間・住所・電話番号。', { exact: true })).toBeVisible()
-      }
-      if (path === '/ja/experiences') {
-        await expect(page.getByText(japaneseExperience.name, { exact: true }).first()).toBeVisible()
-      }
+      const response = await page.request.get(`${kikuzukiTestBaseUrl()}${path}`, { headers: kikuzukiTestExtraHeaders() })
+      expect(response.status(), path).toBe(404)
     }
-    await page.reload()
-    await expect(page.locator('html')).toHaveAttribute('lang', 'ja')
-    await expect(page.getByRole('link', { name: '席を予約する' }).first()).toBeVisible()
-    expect(hydrationErrors).toEqual([])
 
-    // Without the token the language is not public, which is the whole point
-    // of adding before publishing.
-    const unauthorized = await page.request.get(`${kikuzukiTestBaseUrl()}/ja/reservations`, { headers: kikuzukiTestExtraHeaders() })
-    expect(unauthorized.status()).toBe(404)
+    // English keeps serving while ja is being written.
+    await openTenantPage(page, `${kikuzukiTestBaseUrl()}/reservations`, kikuzukiTestExtraHeaders())
+    await expect(page.locator('html')).toHaveAttribute('lang', 'en')
+    await expect(page.locator('.tenant-layout')).toHaveAttribute('data-font-preset', 'mali')
+    expect(hydrationErrors).toEqual([])
 
     await expectStatus(await owner.post(`${localePath}/ja/disable`), 200)
     const remaining = await owner.get(localePath)
@@ -166,7 +140,7 @@ test('Japanese is a second secondary language and keeps its public shell through
     // one alone, so only ja — the language this test made public or not — has
     // anything to put back.
     const assertRestored = await restoreAll([
-      ['the ja locale', () => owner.post(`${localePath}/ja/${hadJapanese ? 'publish' : 'disable'}`)],
+      ['the ja locale', () => owner.post(`${localePath}/ja/disable`)],
       ['font_preset', () => owner.patch(settingsUrl, { data: { font_preset: originalFontPreset } })],
     ])
     await owner.dispose()

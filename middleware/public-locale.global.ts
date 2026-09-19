@@ -59,7 +59,7 @@ export default defineNuxtRouteMiddleware(async (to) => {
   const event = useRequestEvent()
   const siteId = event?.context.siteId as string | null | undefined
   if (!event || !siteId) return
-  const [{ cloudflareEnv }, { queryFirst }, { assertPublicSiteLanguageEntitlement, assertSiteLanguageEntitlement, getPersistedSourceLocale }] = await Promise.all([
+  const [{ cloudflareEnv }, { queryFirst }, { assertPublicSiteLanguageEntitlement, getPersistedSourceLocale }] = await Promise.all([
     import('~/server/utils/api-response'),
     import('~/server/db'),
     import('~/server/utils/localization'),
@@ -78,25 +78,16 @@ export default defineNuxtRouteMiddleware(async (to) => {
   setAppLocale(source.locale, { ...sourceCatalog.messages })
   if (!candidate || !platformLocale(candidate)) return
   if (candidate === source.locale) throw createError({ statusCode: 404, statusMessage: 'Primary language routes are unprefixed' })
-  // A language being translated is `disabled` until it is published, and the
-  // owner has to be able to read it before deciding it is ready. That is what
-  // the preview token already means everywhere else — an authorized preview
-  // sees the site's unpublished state — so it decides this too rather than
-  // growing a second way in.
-  const { previewAuthorized } = useTenantSite()
-  const locale = await queryFirst<{ locale: string; organization_id: string; status: string }>(db, `
-    SELECT sl.locale, s.organization_id, sl.status
+  const locale = await queryFirst<{ locale: string; organization_id: string }>(db, `
+    SELECT sl.locale, s.organization_id
       FROM site_locales sl
       JOIN sites s ON s.id = sl.site_id AND s.organization_id = sl.organization_id
      WHERE s.id = ? AND s.status = 'active'
-       AND sl.locale = ? AND sl.is_source = 0
-       AND (sl.status = 'published' OR ?)
+       AND sl.locale = ? AND sl.is_source = 0 AND sl.status = 'published'
      LIMIT 1
-  `, [siteId, candidate, previewAuthorized ? 1 : 0])
+  `, [siteId, candidate])
   if (!locale) throw createError({ statusCode: 404, statusMessage: 'Language is not enabled for this site' })
-  const entitlement = locale.status === 'published'
-    ? await assertPublicSiteLanguageEntitlement(env, db, locale.organization_id, siteId, locale.locale)
-    : await assertSiteLanguageEntitlement(env, db, locale.organization_id, siteId, locale.locale)
+  const entitlement = await assertPublicSiteLanguageEntitlement(env, db, locale.organization_id, siteId, locale.locale)
   if (!entitlement.platform_messages) {
     throw createError({ statusCode: 503, statusMessage: 'Published platform locale messages are unavailable' })
   }
