@@ -21,12 +21,9 @@ export interface HeroImage {
 export function notificationHeroImageUrl(
   item: Pick<MediaPlacementItem, 'kind' | 'public_url' | 'thumbnail_url'>,
 ): string | null {
-  const imageUrl = item.kind === 'video'
-    ? item.thumbnail_url
-    : item.kind === 'image'
-      ? item.public_url
-      : null
-  return imageUrl?.trim() || null
+  if (item.kind === 'video') return item.thumbnail_url?.trim() || null
+  if (item.kind === 'image') return item.public_url?.trim() || null
+  return null
 }
 
 async function firstPlacement(
