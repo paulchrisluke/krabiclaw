@@ -74,8 +74,8 @@
       >
         <!-- Media thumbnail -->
         <UImage
-          v-if="asset.thumbnail_url || (asset.kind === 'image' && asset.public_url)"
-          :src="asset.thumbnail_url || asset.public_url"
+          v-if="mediaStillUrl(asset)"
+          :src="mediaStillUrl(asset)"
           :alt="asset.alt_text ?? ''"
           class="h-full w-full object-cover"
           loading="lazy"
@@ -123,6 +123,7 @@
 
 <script setup lang="ts">
 import { getErrorMessage } from '~/utils/errors'
+import { mediaStillUrl } from '~/shared/media-placement-contract'
 const dashboardApi = useDashboardApi()
 const props = defineProps<{
   siteId: string

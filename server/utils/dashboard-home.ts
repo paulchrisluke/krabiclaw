@@ -7,6 +7,7 @@ import { loadSettingsPayload } from '~/server/utils/site-settings'
 import { listTenantPages } from '~/server/utils/content/pages'
 import { listMediaAssets } from '~/server/utils/media-asset-manager'
 import { getLinksPage } from '~/server/utils/site-links'
+import { parsePostalAddress } from '~/utils/postal-address'
 
 export interface DashboardHomeLocation {
   id: string
