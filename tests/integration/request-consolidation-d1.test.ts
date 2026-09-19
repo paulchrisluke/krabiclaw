@@ -38,7 +38,7 @@ test('a thread and the record it refers to commit and cancel as one', { timeout:
     await db.batch(statements.map(statement => db.prepare(statement)))
     await db.batch([
       `INSERT INTO organization (id,name,slug) VALUES ('${ORG}','Proof','proof')`,
-      `INSERT INTO sites (id,organization_id,slug,subdomain) VALUES ('${SITE}','${ORG}','proof','proof')`,
+      `INSERT INTO sites (id,organization_id,slug,subdomain,brand_name) VALUES ('${SITE}','${ORG}','proof','proof','Proof')`,
       `INSERT INTO user (id,name,email) VALUES ('${ACTOR}','Proof','owner@proof.example')`,
       `INSERT INTO business_locations (id,organization_id,site_id,slug,title,timezone) VALUES ('${LOCATION}','${ORG}','${SITE}','proof','Proof','Asia/Bangkok')`,
       `INSERT INTO products (id,organization_id,name,slug,created_by,updated_by) VALUES ('product-proof','${ORG}','Pottery Class','pottery-class','${ACTOR}','${ACTOR}')`,
@@ -92,14 +92,14 @@ test('a thread and the record it refers to commit and cancel as one', { timeout:
     const inbox = await listGuestThreads(db, SITE, { userId: ACTOR, locationId: LOCATION, type: 'booking', search: 'guest@proof.example' })
     assert.deepEqual(inbox.map(item => item.id), [winner])
 
-    // Completing is idempotent: the same operation key twice writes one entry.
-    // Only a confirmed booking can be completed, and the status lives on the
-    // booking, so that is where the transition is made.
+    // Cancelling is idempotent: the same operation key twice writes one entry.
+    // A booking arrives confirmed and is complete once its end passes, so
+    // cancelling is the only transition a person makes.
     await setBookingStatus(db, { organizationId: ORG, bookingId: record!.id, status: 'confirmed' })
-    const operation = { threadId: winner, siteId: SITE, action: 'complete', actorUserId: ACTOR, idempotencyKey: 'complete-proof', env: {} }
+    const operation = { threadId: winner, siteId: SITE, action: 'cancel', actorUserId: ACTOR, idempotencyKey: 'cancel-proof', env: { NUXT_PUBLIC_PLATFORM_DOMAIN: 'https://proof.example', EMAIL_REPLY_SECRET: 'local-reply-proof', EMAIL_DELIVERY_MODE: 'log_only', WHATSAPP_DELIVERY_MODE: 'log_only' } }
     assert.equal((await executeGuestThreadOperation(db, operation)).ok, true)
     assert.equal((await executeGuestThreadOperation(db, operation)).ok, true)
-    assert.equal(await db.prepare("SELECT status FROM bookings WHERE request_id=?").bind(winner).first('status'), 'completed')
+    assert.equal(await db.prepare("SELECT status FROM bookings WHERE request_id=?").bind(winner).first('status'), 'cancelled')
     assert.equal(await db.prepare("SELECT count(*) FROM activity_entries WHERE request_id=? AND kind='operation'").bind(winner).first('count(*)'), 1)
 
     // A reservation is the other half of the same split: a location policy is

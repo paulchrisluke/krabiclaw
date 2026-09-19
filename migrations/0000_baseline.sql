@@ -140,10 +140,8 @@ CREATE TABLE `bookings` (
 	`customer_id` text,
 	`request_id` text,
 	`party_size` integer NOT NULL,
-	`status` text DEFAULT 'pending' NOT NULL,
-	`hold_expires_at` text,
+	`status` text DEFAULT 'confirmed' NOT NULL,
 	`cancelled_at` text,
-	`completed_at` text,
 	`cancellation_reason` text,
 	`created_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
 	`updated_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
@@ -153,7 +151,8 @@ CREATE TABLE `bookings` (
 	FOREIGN KEY (`organization_id`,`product_id`,`product_session_id`) REFERENCES `product_sessions`(`organization_id`,`product_id`,`id`) ON UPDATE no action ON DELETE restrict,
 	FOREIGN KEY (`organization_id`,`product_id`,`product_variant_id`) REFERENCES `product_variants`(`organization_id`,`product_id`,`id`) ON UPDATE no action ON DELETE restrict,
 	FOREIGN KEY (`organization_id`,`site_id`,`request_id`) REFERENCES `requests`(`organization_id`,`site_id`,`id`) ON UPDATE no action ON DELETE restrict,
-	CONSTRAINT "bookings_instants_check" CHECK((hold_expires_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', hold_expires_at, '+0 days') IS hold_expires_at) AND (cancelled_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', cancelled_at, '+0 days') IS cancelled_at) AND (completed_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', completed_at, '+0 days') IS completed_at) AND (created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)),
+	CONSTRAINT "bookings_status_check" CHECK(status IN ('confirmed', 'cancelled')),
+	CONSTRAINT "bookings_instants_check" CHECK((cancelled_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', cancelled_at, '+0 days') IS cancelled_at) AND (created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)),
 	CONSTRAINT "bookings_party_size_check" CHECK(party_size > 0)
 );
 --> statement-breakpoint
@@ -161,7 +160,6 @@ CREATE UNIQUE INDEX `bookings_request_unique` ON `bookings` (`request_id`) WHERE
 CREATE INDEX `bookings_session_status_idx` ON `bookings` (`product_session_id`,`status`);--> statement-breakpoint
 CREATE INDEX `bookings_site_created_idx` ON `bookings` (`site_id`,`created_at`);--> statement-breakpoint
 CREATE INDEX `bookings_customer_idx` ON `bookings` (`customer_id`);--> statement-breakpoint
-CREATE INDEX `bookings_hold_expiry_idx` ON `bookings` (`hold_expires_at`) WHERE hold_expires_at IS NOT NULL;--> statement-breakpoint
 CREATE TABLE `business_locations` (
 	`id` text PRIMARY KEY NOT NULL,
 	`organization_id` text NOT NULL,
@@ -1226,9 +1224,8 @@ CREATE TABLE `reservations` (
 	`starts_at` text NOT NULL,
 	`ends_at` text NOT NULL,
 	`party_size` integer NOT NULL,
-	`status` text DEFAULT 'pending' NOT NULL,
+	`status` text DEFAULT 'confirmed' NOT NULL,
 	`cancelled_at` text,
-	`completed_at` text,
 	`cancellation_reason` text,
 	`created_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
 	`updated_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
@@ -1236,7 +1233,8 @@ CREATE TABLE `reservations` (
 	FOREIGN KEY (`customer_id`) REFERENCES `customers`(`id`) ON UPDATE no action ON DELETE set null,
 	FOREIGN KEY (`organization_id`,`site_id`,`location_id`) REFERENCES `business_locations`(`organization_id`,`site_id`,`id`) ON UPDATE no action ON DELETE cascade,
 	FOREIGN KEY (`organization_id`,`site_id`,`request_id`) REFERENCES `requests`(`organization_id`,`site_id`,`id`) ON UPDATE no action ON DELETE restrict,
-	CONSTRAINT "reservations_instants_check" CHECK((strftime('%Y-%m-%dT%H:%M:%fZ', starts_at, '+0 days') IS starts_at) AND (strftime('%Y-%m-%dT%H:%M:%fZ', ends_at, '+0 days') IS ends_at) AND (cancelled_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', cancelled_at, '+0 days') IS cancelled_at) AND (completed_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', completed_at, '+0 days') IS completed_at) AND (created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)),
+	CONSTRAINT "reservations_status_check" CHECK(status IN ('confirmed', 'cancelled')),
+	CONSTRAINT "reservations_instants_check" CHECK((strftime('%Y-%m-%dT%H:%M:%fZ', starts_at, '+0 days') IS starts_at) AND (strftime('%Y-%m-%dT%H:%M:%fZ', ends_at, '+0 days') IS ends_at) AND (cancelled_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', cancelled_at, '+0 days') IS cancelled_at) AND (created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)),
 	CONSTRAINT "reservations_interval_check" CHECK(ends_at > starts_at),
 	CONSTRAINT "reservations_party_size_check" CHECK(party_size > 0),
 	CONSTRAINT "reservations_timezone_check" CHECK(timezone <> '' AND timezone NOT GLOB '*[^A-Za-z0-9/_+-]*')

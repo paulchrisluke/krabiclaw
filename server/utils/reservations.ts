@@ -390,7 +390,6 @@ export async function claimReservation(db: DbClient, input: {
   date: string
   timeSlot: string
   partySize: number
-  status?: 'pending' | 'confirmed'
   /**
    * The guest thread this reservation answers, written in the same batch.
    *
@@ -441,7 +440,7 @@ export async function claimReservation(db: DbClient, input: {
     `,
     params: [
       input.reservationId, input.organizationId, input.siteId, input.locationId, input.customerId, null,
-      input.timezone, input.startsAt, input.endsAt, input.partySize, input.status ?? 'confirmed', now, now,
+      input.timezone, input.startsAt, input.endsAt, input.partySize, 'confirmed', now, now,
       input.locationId, input.organizationId,
       input.date, input.timeSlot,
       input.date, input.timeSlot, input.date,

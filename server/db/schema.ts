@@ -1026,16 +1026,18 @@ export const bookings = sqliteTable("bookings", {
 	request_id: text(),
 	party_size: integer().notNull(),
 	// 'pending' | 'confirmed' | 'cancelled' | 'completed' (registry in shared/).
-	status: text().default("pending").notNull(),
+	status: text().default("confirmed").notNull(),
 	// Hold expiry for a pending claim. NULL means the claim does not expire.
-	hold_expires_at: text(),
 	cancelled_at: text(),
-	completed_at: text(),
 	cancellation_reason: text(),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 }, (table) => [
-	check("bookings_instants_check", sql`(hold_expires_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', hold_expires_at, '+0 days') IS hold_expires_at) AND (cancelled_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', cancelled_at, '+0 days') IS cancelled_at) AND (completed_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', completed_at, '+0 days') IS completed_at) AND (created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)`),
+	// The status set lives here now. It never did: `status` was plain text with
+	// a comment pointing somewhere else, which is how `pending` survived after
+	// nothing wrote it on purpose.
+	check("bookings_status_check", sql`status IN ('confirmed', 'cancelled')`),
+	check("bookings_instants_check", sql`(cancelled_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', cancelled_at, '+0 days') IS cancelled_at) AND (created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)`),
 	foreignKey({ columns: [table.organization_id, table.site_id], foreignColumns: [sites.organization_id, sites.id], name: "bookings_site_scope_fk" }).onDelete("cascade"),
 	// A booking pins what it holds. Deleting the session or the variant it
 	// names is refused while the booking exists — a guest's seat is not
@@ -1053,7 +1055,6 @@ export const bookings = sqliteTable("bookings", {
 	index("bookings_session_status_idx").on(table.product_session_id, table.status),
 	index("bookings_site_created_idx").on(table.site_id, table.created_at),
 	index("bookings_customer_idx").on(table.customer_id),
-	index("bookings_hold_expiry_idx").on(table.hold_expires_at).where(sql`hold_expires_at IS NOT NULL`),
 	check("bookings_party_size_check", sql`party_size > 0`),
 ]);
 
@@ -1170,14 +1171,14 @@ export const reservations = sqliteTable("reservations", {
 	ends_at: text().notNull(),
 	party_size: integer().notNull(),
 	// 'pending' | 'confirmed' | 'cancelled' | 'completed' (registry in shared/).
-	status: text().default("pending").notNull(),
+	status: text().default("confirmed").notNull(),
 	cancelled_at: text(),
-	completed_at: text(),
 	cancellation_reason: text(),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 }, (table) => [
-	check("reservations_instants_check", sql`(strftime('%Y-%m-%dT%H:%M:%fZ', starts_at, '+0 days') IS starts_at) AND (strftime('%Y-%m-%dT%H:%M:%fZ', ends_at, '+0 days') IS ends_at) AND (cancelled_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', cancelled_at, '+0 days') IS cancelled_at) AND (completed_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', completed_at, '+0 days') IS completed_at) AND (created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)`),
+	check("reservations_status_check", sql`status IN ('confirmed', 'cancelled')`),
+	check("reservations_instants_check", sql`(strftime('%Y-%m-%dT%H:%M:%fZ', starts_at, '+0 days') IS starts_at) AND (strftime('%Y-%m-%dT%H:%M:%fZ', ends_at, '+0 days') IS ends_at) AND (cancelled_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', cancelled_at, '+0 days') IS cancelled_at) AND (created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)`),
 	foreignKey({ columns: [table.organization_id, table.site_id, table.location_id], foreignColumns: [business_locations.organization_id, business_locations.site_id, business_locations.id], name: "reservations_location_scope_fk" }).onDelete("cascade"),
 	foreignKey({ columns: [table.organization_id, table.site_id, table.request_id], foreignColumns: [requests.organization_id, requests.site_id, requests.id], name: "reservations_request_scope_fk" }).onDelete("restrict"),
 	uniqueIndex("reservations_request_unique").on(table.request_id).where(sql`request_id IS NOT NULL`),

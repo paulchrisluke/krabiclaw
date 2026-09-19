@@ -361,7 +361,7 @@ export async function replaceWeeklySchedule(db: DbClient, input: {
       query: `UPDATE product_sessions SET status = 'cancelled', updated_at = ?, updated_by = ?
               WHERE organization_id = ? AND availability_rule_id = ? AND status = 'scheduled' AND starts_at > ?
                 AND NOT EXISTS (SELECT 1 FROM bookings b WHERE b.product_session_id = product_sessions.id AND ${CAPACITY_CONSUMING_SQL})`,
-      params: [now, input.actorId, input.organizationId, rule.id, now, now],
+      params: [now, input.actorId, input.organizationId, rule.id, now],
     })
     // The rule is the session's provenance, and the schema refuses to delete a
     // rule that sessions still name (product_sessions_rule_scope_fk).
@@ -404,7 +404,6 @@ export async function listSessions(db: DbClient, input: {
   statuses?: ProductSessionStatus[]
 }): Promise<SessionAvailability[]> {
   const statuses = input.statuses ?? ['scheduled']
-  const now = new Date().toISOString()
   return queryAll<SessionAvailability>(db, `
     SELECT s.id, s.organization_id, s.product_id, s.location_id, s.availability_rule_id,
            s.source_occurrence_key, s.timezone, s.starts_at, s.ends_at, s.capacity, s.status,
@@ -428,7 +427,6 @@ export async function listSessions(db: DbClient, input: {
       AND s.status IN (SELECT value FROM json_each(?))
     ORDER BY s.starts_at, s.id
   `, [
-    now, now, now,
     input.organizationId,
     input.productId ?? null, input.productId ?? null,
     input.locationId ?? null, input.locationId ?? null,
@@ -474,7 +472,6 @@ export function sessionClaimQuery(input: {
   partySize: number
   customerId?: string | null
   requestId?: string | null
-  holdExpiresAt?: string | null
   /**
    * A booking this claim replaces. Its seats are not counted against the
    * destination's capacity: a guest moving within a full session is not
@@ -499,9 +496,9 @@ export function sessionClaimQuery(input: {
     query: `
       INSERT INTO bookings (
         id, organization_id, site_id, product_id, product_session_id, product_variant_id,
-        customer_id, request_id, party_size, status, hold_expires_at, created_at, updated_at
+        customer_id, request_id, party_size, status, created_at, updated_at
       )
-      SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?
+      SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, 'confirmed', ?, ?
       WHERE ${input.requireUndecided
         ? `EXISTS (SELECT 1 FROM requests WHERE id = ? AND site_id = ? AND updated_at = ?)
            AND NOT EXISTS (SELECT 1 FROM activity_entries WHERE dedupe_key = ?) AND `
@@ -526,11 +523,11 @@ export function sessionClaimQuery(input: {
     `,
     params: [
       input.bookingId, input.organizationId, input.siteId, input.productId, input.sessionId, input.productVariantId,
-      input.customerId ?? null, input.requestId ?? null, input.partySize, input.holdExpiresAt ?? null, input.now, input.now,
+      input.customerId ?? null, input.requestId ?? null, input.partySize, input.now, input.now,
       ...(input.requireUndecided
         ? [input.requireUndecided.requestId, input.requireUndecided.siteId, input.requireUndecided.updatedAt, input.requireUndecided.decisionDedupeKey]
         : []),
-      input.sessionId, input.organizationId, input.productId, input.now, input.partySize, input.replacingBookingId ?? null, input.now,
+      input.sessionId, input.organizationId, input.productId, input.now, input.partySize, input.replacingBookingId ?? null,
     ],
   }
 }
@@ -556,7 +553,6 @@ export async function claimSessionCapacity(db: DbClient, input: {
   partySize: number
   customerId?: string | null
   requestId?: string | null
-  holdExpiresAt?: string | null
   /**
    * The writes that belong to this claim, given the id it minted.
    *
@@ -601,37 +597,16 @@ export async function setBookingStatus(db: DbClient, input: {
     query: `
       UPDATE bookings SET
         status = ?,
-        hold_expires_at = CASE WHEN ? = 'pending' THEN hold_expires_at ELSE NULL END,
         cancelled_at = CASE WHEN ? = 'cancelled' THEN COALESCE(cancelled_at, ?) ELSE NULL END,
-        completed_at = CASE WHEN ? = 'completed' THEN COALESCE(completed_at, ?) ELSE NULL END,
         cancellation_reason = CASE WHEN ? = 'cancelled' THEN ? ELSE NULL END,
         updated_at = ?
       WHERE organization_id = ? AND id = ?
     `,
-    params: [input.status, input.status, input.status, now, input.status, now, input.status, input.reason ?? null, now, input.organizationId, input.bookingId],
+    params: [input.status, input.status, now, input.status, input.reason ?? null, now, input.organizationId, input.bookingId],
   }], { operation: 'Set booking status' })
   if ((results[0]?.meta?.changes ?? 0) === 0) throw new HTTPError({ statusCode: 404, statusMessage: 'Booking not found' })
 }
 
-/**
- * Release pending claims whose hold has passed.
- *
- * Expiry is a state change, not a delete: the abandoned claim stays visible in
- * the record and its seats come back because `bookingConsumesCapacity` stops
- * counting it, which the predicate above already reflects. This sweep only
- * makes that explicit so the inbox does not show stale pending threads.
- */
-export async function expireBookingHolds(db: DbClient, organizationId: string): Promise<number> {
-  const now = new Date().toISOString()
-  const results = await executeBatch(db, [{
-    query: `
-      UPDATE bookings SET status = 'cancelled', cancelled_at = ?, cancellation_reason = 'hold_expired', hold_expires_at = NULL, updated_at = ?
-      WHERE organization_id = ? AND status = 'pending' AND hold_expires_at IS NOT NULL AND hold_expires_at <= ?
-    `,
-    params: [now, now, organizationId, now],
-  }], { operation: 'Expire booking holds' })
-  return results[0]?.meta?.changes ?? 0
-}
 
 /**
  * Edit one session: its time, its capacity, or its state.
@@ -674,7 +649,7 @@ export async function updateSession(db: DbClient, input: {
     const claimed = await queryFirst<{ claimed: number }>(db, `
       SELECT COALESCE(SUM(b.party_size), 0) AS claimed FROM bookings b
       WHERE b.product_session_id = ? AND ${CAPACITY_CONSUMING_SQL}
-    `, [input.sessionId, new Date().toISOString()])
+    `, [input.sessionId])
     if ((claimed?.claimed ?? 0) > input.capacity) {
       throw new HTTPError({
         statusCode: 409,
@@ -701,7 +676,7 @@ export async function updateSession(db: DbClient, input: {
       startsAt, endsAt, capacity,
       input.status ?? session.status, now, input.actorId,
       input.organizationId, input.sessionId,
-      ...(capacity === null ? [] : [capacity, now]),
+      ...(capacity === null ? [] : [capacity]),
     ],
   }], { operation: 'Update product session' })
   if (written[0]?.meta?.changes === 0) {
