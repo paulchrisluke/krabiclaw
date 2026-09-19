@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:36d46c9e08de01225ea07d1cfe6a93c334c8b62a22893f530fd339e9b6b619b1",
+  "fingerprint": "sha256:e42c783ca38e66e998935797ec2df04849206044d9c9b66d406aeaa93ab1455b",
   "tools": [
     {
       "name": "attach_media",
@@ -5347,10 +5347,8 @@
                 },
                 "status": {
                   "enum": [
-                    "pending",
                     "confirmed",
-                    "cancelled",
-                    "completed"
+                    "cancelled"
                   ],
                   "type": "string"
                 },

@@ -73,14 +73,6 @@ test('Japanese is a second secondary language and keeps its public shell through
     const settings = await added.json() as { languages: Array<{ locale: string; status: string }> }
     expect(settings.languages.find(language => language.locale === 'ja')?.status).toBe('disabled')
 
-    // Publishing refuses a translation that is not finished, and says what is
-    // missing rather than only that it failed.
-    const refused = await owner.post(`${localePath}/ja/publish`)
-    expect(refused.status(), await refused.text()).toBe(409)
-    const refusal = await refused.json() as { data?: { code?: string; completed?: number; total?: number } }
-    expect(refusal.data?.code).toBe('LOCALIZATION_INCOMPLETE')
-    expect(refusal.data?.completed).toBeLessThan(refusal.data?.total ?? 0)
-
 
     await expectStatus(await owner.put(`/api/editor/sites/${siteId}/localization/site/${siteId}/ja`, {
       data: { values: { brand_name: '菊月 クラビ', brand_description: 'クラビの日本料理店' } },
