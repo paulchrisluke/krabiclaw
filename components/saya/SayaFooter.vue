@@ -163,6 +163,7 @@ import { getActiveSpecialClosure } from '~/utils/formatters'
 import { getTodayHoursLabel, type OpeningHours, type SpecialHours } from '~/shared/reservation-hours'
 import { getVerticalCopy } from '~/utils/vertical-copy'
 import { EXPERIENCE_PRESENTATION, resolveProductPresentation } from '~/utils/product-presentation'
+import { formatPostalAddress, type PostalAddress } from '~/utils/postal-address'
 
 interface Site {
   brand_name?: string | null
@@ -185,13 +186,7 @@ interface PublicLocation {
   id: string
   slug: string
   title: string
-  address?: {
-    addressLines?: string[]
-    locality?: string
-    administrativeArea?: string
-  } | string | null
-  address_translated?: string | null
-  city?: string | null
+  address?: PostalAddress | null
   phone?: string | null
   email?: string | null
   googleBusinessHours?: ApiValue
@@ -216,15 +211,13 @@ const props = defineProps<{
   hasBookableProducts: boolean
 }>()
 
-const isDark = ref(false)
-const syncDarkMode = () => {
-  isDark.value = document.documentElement.classList.contains('dark')
-}
-onMounted(syncDarkMode)
+// Theme state is read from the one composable that owns it. A local copy read
+// off the DOM went stale the moment the theme changed anywhere else, so the
+// button's icon and label described the mode the visitor was not in.
+const { value: colorMode, setPreference } = usePlatformTheme()
+const isDark = computed(() => colorMode.value === 'dark')
 function toggleColorMode() {
-  if (!window.toggleSayaDark) return
-  window.toggleSayaDark()
-  syncDarkMode()
+  setPreference(isDark.value ? 'light' : 'dark')
 }
 const { locale } = useI18n()
 const platformSiteUrl = useRuntimeConfig().public.siteUrl
@@ -316,21 +309,7 @@ const locations = computed(() =>
 )
 
 function formatLocAddress(loc: PublicLocation) {
-  if (locale.value !== 'en') return typeof loc.address_translated === 'string' ? loc.address_translated.trim() : ''
-  if (!loc.address) return ''
-  let addr: PublicLocation['address'] = loc.address
-  if (typeof addr === 'string') {
-    try {
-      const parsed = JSON.parse(addr) as PublicLocation['address']
-      if (parsed && typeof parsed === 'object') addr = parsed
-      else return addr
-    } catch {
-      return addr
-    }
-  }
-  const normalizedAddr = typeof addr === 'object' && addr !== null ? addr : null
-  const line1 = Array.isArray(normalizedAddr?.addressLines) ? normalizedAddr?.addressLines?.[0] : ''
-  return [line1, normalizedAddr?.locality, normalizedAddr?.administrativeArea].filter(Boolean).join(', ')
+  return formatPostalAddress(loc.address ?? null)
 }
 
 

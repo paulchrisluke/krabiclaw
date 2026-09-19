@@ -94,7 +94,8 @@ import { parseCmsFeatureOverrideDelta, resolveCmsCapabilities, type ProductFeatu
 import { resolvePublicTemplate } from '~/utils/template-registry'
 import { getTodayHoursLabel, type OpeningHours } from '~/shared/reservation-hours'
 import { normalizeVertical, type SiteVertical } from '~/utils/vertical-copy'
-import { presentationForCatalog } from '~/utils/product-presentation'
+import { catalogLabel, catalogSummary, type CatalogCounts } from '~/utils/product-presentation'
+import { formatPostalAddress } from '~/utils/postal-address'
 
 definePageMeta({ layout: 'dashboard', ownsChrome: true })
 
@@ -104,8 +105,7 @@ interface LocationOverview {
   status: string
   phone: string | null
   email: string | null
-  city: string | null
-  address: { addressLines?: string[] } | null
+  address: PostalAddress | null
   rating: number | null
   google_place_id: string | null
   timezone?: string | null
@@ -121,7 +121,7 @@ interface LocationContentCounts {
 }
 interface LocationOverviewResource {
   location: { success: boolean; location: LocationOverview }
-  catalog: { total: number; allExperiences: boolean }
+  catalog: CatalogCounts
   threads: { summary: MessagesSummary }
   counts: LocationContentCounts
 }
@@ -156,7 +156,7 @@ const hasDetail = computed(() => frame.mode.value === 'pair')
 const activeSection = computed(() => sectionSegment.value || null)
 
 const location = ref<LocationOverview | null>(null)
-const catalog = ref<{ total: number; allExperiences: boolean }>({ total: 0, allExperiences: false })
+const catalog = ref<CatalogCounts>({ total: 0, experiences: 0 })
 const messagesSummary = ref<MessagesSummary>({ openThreads: 0, unreadThreads: 0 })
 const counts = ref<LocationContentCounts>({ photos: 0, posts: 0, qa: 0, upcomingReservations: 0 })
 const error = ref<string | null>(null)
@@ -164,7 +164,7 @@ const error = ref<string | null>(null)
 const dashboardLocationRow = computed(() => dashboard.locations.value.find(candidate => candidate.id === locationId.value) ?? null)
 const locationImage = computed(() =>
   dashboardLocationRow.value?.media.find(item => item.slot === 'social_card')?.public_url ?? '')
-const addressSummary = computed(() => location.value?.address?.addressLines?.join(', ') || 'Address not set')
+const addressSummary = computed(() => formatPostalAddress(location.value?.address ?? null) || 'Address not set')
 
 const capabilities = computed(() => {
   const vertical = dashboard.site.value?.vertical
@@ -190,21 +190,14 @@ const currentOpeningState = computed(() => {
   return getTodayHoursLabel(hours, 'Closed', location.value?.timezone) || 'Hours not set'
 })
 
-// What this branch's catalogue is called: a studio's classes are experiences,
-// a restaurant's dishes are its menu. The count speaks the same word.
-const catalogWords = computed(() => presentationForCatalog(
-  dashboard.site.value?.vertical,
-  catalog.value.allExperiences,
-))
-
-// Plurals are the presentation's own ("Dish" → "Dishes"); appending an "s" is
+// What this branch's catalogue is called: a studio's classes are experiences, a
+// restaurant's dishes are its menu, and a restaurant that also takes bookings
+// holds both — which is a catalog, not a menu with experiences filed inside it.
+const catalogLabelText = computed(() => catalogLabel(dashboard.site.value?.vertical, catalog.value))
+// One count per surface, each in its own words: "24 dishes · 3 experiences".
+// Plurals are each presentation's own ("Dish" → "Dishes"); appending an "s" is
 // how "dishs" reaches a merchant's screen.
-const catalogSummary = computed(() => {
-  const total = catalog.value.total
-  const words = catalogWords.value
-  if (!total) return `Add your first ${words.itemLabel.toLowerCase()}`
-  return `${total} ${(total === 1 ? words.itemLabel : words.itemLabelPlural).toLowerCase()}`
-})
+const catalogSummaryText = computed(() => catalogSummary(dashboard.site.value?.vertical, catalog.value))
 
 function countSummary(total: number, noun: string, empty: string): string {
   if (!total) return empty
@@ -218,7 +211,7 @@ const contentGroups = computed(() => {
     // asking for it threw — which is why every location of such a site rendered
     // a 500 instead of its hub.
     ...(hasFeature('products')
-      ? [{ id: 'products', label: catalogWords.value.collectionLabel, summary: catalogSummary.value, to: `${locationPath.value}/products`, visible: true }]
+      ? [{ id: 'products', label: catalogLabelText.value, summary: catalogSummaryText.value, to: `${locationPath.value}/products`, visible: true }]
       : []),
     { id: 'photos', label: 'Photos', summary: countSummary(counts.value.photos, 'photo', 'Add photos'), to: `${locationPath.value}/photos`, visible: hasFeature('photos') },
     { id: 'posts', label: 'Posts', summary: countSummary(counts.value.posts, 'published post', 'Write your first post'), to: `${locationPath.value}/posts`, visible: hasFeature('posts') },
@@ -245,7 +238,7 @@ const detailTitle = computed(() => {
 const isOverviewResponse = (value: unknown): value is LocationOverviewResource =>
   isRecord(value)
   && isRecord(value.location) && isRecord(value.location.location)
-  && isRecord(value.catalog) && typeof value.catalog.total === 'number' && typeof value.catalog.allExperiences === 'boolean'
+  && isRecord(value.catalog) && typeof value.catalog.total === 'number' && typeof value.catalog.experiences === 'number'
   && isRecord(value.threads) && isRecord(value.threads.summary)
   && isRecord(value.counts) && typeof value.counts.photos === 'number'
 

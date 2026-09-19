@@ -69,19 +69,36 @@ export function seoOverrideFieldsSchema() {
 export const openingHoursInputSchema = { ...openingHoursSchema, description: 'Canonical weekly endpoint periods. Days use Sunday=0. Null means unknown; periods [] means closed. Sunday 00:00 without a close means always open.' }
 export const specialHoursInputSchema = { ...specialHoursSchema, description: 'Explicit dated hours or closures. Closure starts_on is required; ends_on is inclusive and null means indefinite. Dated hours replace regular hours; periods [] closes the date.' }
 
+/**
+ * A postal address as `google.type.PostalAddress`, which is what the Places API
+ * returns and what the column stores. `addressLines` is ordered and unbounded;
+ * `sublocality` is a real part of a Thai address.
+ */
+export const postalAddressSchema = {
+  type: ['object', 'null'],
+  properties: {
+    regionCode: { type: 'string', description: 'ISO 3166-1 alpha-2 country code, e.g. TH.' },
+    addressLines: { type: 'array', items: { type: 'string' }, description: 'Street lines in order, unbounded.' },
+    languageCode: { type: 'string', description: 'BCP-47 tag when the address is written in a specific language.' },
+    locality: { type: 'string', description: 'Town or city.' },
+    sublocality: { type: 'string', description: 'Neighbourhood or sub-district.' },
+    administrativeArea: { type: 'string', description: 'State, province or region.' },
+    postalCode: { type: 'string' },
+  },
+  required: ['regionCode', 'addressLines'],
+} as const
+
 export const locationObject = {
   type: 'object',
   properties: {
     id: { type: 'string' },
     slug: { type: 'string' },
     title: { type: 'string' },
-    city: { type: ['string', 'null'] },
-    neighborhood: { type: ['string', 'null'] },
     phone: { type: ['string', 'null'] },
     email: { type: ['string', 'null'] },
     website_url: { type: ['string', 'null'] },
     maps_url: { type: ['string', 'null'] },
-    address: { type: ['string', 'null'] },
+    address: postalAddressSchema,
     opening_hours: openingHoursSchema,
     special_hours: specialHoursSchema,
     rating: { type: ['number', 'null'] },
@@ -684,7 +701,7 @@ export const locationListItemObject = {
     id: { type: 'string' },
     slug: { type: 'string' },
     title: { type: 'string' },
-    city: { type: ['string', 'null'] },
+    place_name: { type: ['string', 'null'], description: 'The neighbourhood this location\'s address names, or its town. Derived from the address; call get_location for the address itself.' },
     status: { type: 'string' },
     active: { type: 'boolean', description: 'True when this is the currently active MCP location context.' },
   },

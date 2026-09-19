@@ -180,7 +180,7 @@
                 <div class="flex flex-col gap-6 p-9">
                   <div class="flex flex-wrap items-start justify-between gap-4">
                     <div>
-                      <p v-if="loc.city || loc.neighborhood" class="saya-eyebrow mb-2 text-muted">{{ loc.city || loc.neighborhood }}</p>
+                      <p v-if="addressPlaceName(loc.address ?? null)" class="saya-eyebrow mb-2 text-muted">{{ addressPlaceName(loc.address ?? null) }}</p>
                       <h3 class="saya-display saya-italic text-4xl text-default leading-none">{{ loc.title }}</h3>
                     </div>
                     <div class="flex items-center gap-2 text-xs uppercase tracking-widest text-default">
@@ -262,6 +262,7 @@ const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 // Plain-Tailwind form styling — replaces UInput/UTextarea's default look
 // now that this page no longer depends on Nuxt UI (see SayaFormField.vue).
 import { FORM_INPUT_CLASS } from '~/utils/form-constants'
+import { addressPlaceName, formatPostalAddress, type PostalAddress } from '~/utils/postal-address'
 const inputClass = FORM_INPUT_CLASS
 
 const businessName = computed(() => site?.brand_name?.trim() ?? '')
@@ -280,13 +281,7 @@ const contactAdditionalPage = computed(() => tenantPage.value
   : null)
 
 interface ContactLocation {
-  address?: string | {
-    addressLines?: string[]
-    locality?: string
-    administrativeArea?: string
-  } | null
-  address_translated?: string | null
-  city?: string | null
+  address?: PostalAddress | null
 }
 
 interface TenantContactForm {
@@ -302,11 +297,7 @@ interface TenantFieldError {
 }
 
 function formatLocAddress(loc: ContactLocation) {
-  if (locale.value !== 'en') return typeof loc.address_translated === 'string' ? loc.address_translated.trim() : ''
-  if (!loc.address) return loc.city || ''
-  if (typeof loc.address === 'string') return loc.address
-  const a = loc.address
-  return [a.addressLines?.[0], a.locality, a.administrativeArea].filter(Boolean).join(', ')
+  return formatPostalAddress(loc.address ?? null)
 }
 
 function safeUrl(val: unknown): string | undefined {

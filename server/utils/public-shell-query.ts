@@ -5,6 +5,7 @@ import { calculateMapEmbedUrl } from '~/server/utils/google-places'
 import type { PublicShellPayload } from '~/utils/public-resource-contracts'
 import { resolveSiteCmsCapabilities } from '~/server/utils/cms-capabilities'
 import { isCurrencyCode } from '~/shared/currencies'
+import { parsePostalAddress } from '~/utils/postal-address'
 
 type BatchResult = { results?: unknown[] }
 
@@ -39,8 +40,8 @@ export function appendPublicShellQueries(
     locations: push(`SELECT bl.id, bl.slug, bl.title, bl.address, bl.phone, bl.email,
                      bl.website_url, bl.maps_url, bl.latitude, bl.longitude,
                      bl.opening_hours, bl.special_hours, bl.timezone, bl.rating,
-                     bl.review_count, bl.status, bl.city,
-                     bl.neighborhood, bl.grab_url, bl.uber_eats_url,
+                     bl.review_count, bl.status,
+                     bl.grab_url, bl.uber_eats_url,
                      bl.foodpanda_url, bl.description, bl.short_description,
                      bl.last_synced_at, bl.seo_title, bl.seo_description,
                      bl.canonical_url, bl.robots, bl.feature_overrides, mp.asset_id AS asset_id,
@@ -103,11 +104,12 @@ export function buildPublicShellPayload(
   const locations = rawLocations.map(location => {
     const publicUrl = optionalLocationString(location.media_public_url)
     const socialUrl = optionalLocationString(location.social_public_url)
+    const address = parsePostalAddress(location.address)
     return {
       id: requireLocationString(location.id, 'id'),
       slug: requireLocationString(location.slug, 'slug'),
       title: requireLocationString(location.title, 'title'),
-      address: location.address ? JSON.parse(String(location.address)) : null,
+      address,
       phone: location.phone,
       email: location.email ?? null,
       website_url: location.website_url,
@@ -117,8 +119,7 @@ export function buildPublicShellPayload(
         maps_url: location.maps_url as string | null,
         latitude: location.latitude as number | null,
         longitude: location.longitude as number | null,
-        address: location.address as string | null,
-        city: location.city as string | null,
+        address,
       }),
       latitude: location.latitude,
       longitude: location.longitude,
@@ -132,8 +133,6 @@ export function buildPublicShellPayload(
         ...(publicUrl ? [{ asset_id: location.asset_id, slot: 'hero', public_url: publicUrl, thumbnail_url: location.media_thumbnail_url, kind: location.media_kind }] : []),
       ],
       social_image: socialUrl ? { url: socialUrl, width: 1200, height: 630, type: 'image/png' as const } : null,
-      city: location.city,
-      neighborhood: location.neighborhood ?? null,
       short_description: location.short_description ?? null,
       description: location.description ?? null,
       grab_url: location.grab_url ?? null,

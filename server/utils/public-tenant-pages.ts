@@ -23,6 +23,7 @@ import { EXPERIENCE_PRESENTATION, resolveProductPresentation } from '~/utils/pro
 import { formatMinorAmount } from '~/shared/prices'
 import type { CurrencyCode } from '~/shared/currencies'
 import type { PublicLocaleRepresentation } from '~/utils/public-resource-contracts'
+import { addressPlaceName, parsePostalAddress } from '~/utils/postal-address'
 
 export interface PublicTenantPage {
   id: string
@@ -248,8 +249,8 @@ async function hydrateBlocks(
     ? await listPublicTenantPageProductRows(db, siteId, { productIds: [...productIds] }, currency!)
     : []).map(product => [product.id, product]))
   const sourceLocations = locationIds.size
-    ? await queryAll<{ id: string; title: string; slug: string; city: string | null; description: string | null; short_description: string | null; asset_id: string | null; public_url: string | null; thumbnail_url: string | null; kind: string | null; alt_text: string | null }>(db, `
-        SELECT bl.id, bl.title, bl.slug, bl.city, bl.description, bl.short_description, ma.id AS asset_id, ma.public_url, ma.thumbnail_url, ma.kind, ma.alt_text
+    ? await queryAll<{ id: string; title: string; slug: string; address: string | null; description: string | null; short_description: string | null; asset_id: string | null; public_url: string | null; thumbnail_url: string | null; kind: string | null; alt_text: string | null }>(db, `
+        SELECT bl.id, bl.title, bl.slug, bl.address, bl.description, bl.short_description, ma.id AS asset_id, ma.public_url, ma.thumbnail_url, ma.kind, ma.alt_text
           FROM business_locations bl
           LEFT JOIN media_placements mp ON mp.owner_type = 'business_location' AND mp.owner_id = bl.id AND mp.slot = 'hero' AND mp.sort_order = 0 AND mp.status = 'active'
           LEFT JOIN media_assets ma ON ma.id = mp.asset_id AND ma.status = 'active'
@@ -403,7 +404,7 @@ async function hydrateBlocks(
           title: location.title,
           // The town the visitor is being sent to. A location card names it
           // above the title, and the item carried everything except that.
-          city: location.city || undefined,
+          city: addressPlaceName(parsePostalAddress(location.address)) || undefined,
           description: location.short_description || location.description || undefined,
           url: 'public_path' in location && typeof location.public_path === 'string' ? location.public_path : `/locations/${location.slug}`,
           labelKey: 'saya.home.visit_location',

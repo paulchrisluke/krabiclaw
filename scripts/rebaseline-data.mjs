@@ -62,6 +62,43 @@ const digest = (rows, names) => hash(rows.map(row => JSON.stringify(names.map(na
  * Each is idempotent on its own result.
  */
 export const TRANSFORMS = [
+  // `business_locations.address` is `google.type.PostalAddress` — what the Places
+  // API answers with and what the CHECK now requires. Older exports carry two
+  // earlier shapes: `{addressLines}` alone, and that plus `locality`,
+  // `administrativeArea`, `postalCode` and a `country` key where the standard
+  // says `regionCode`. `city` and `neighborhood` were separate columns; the
+  // address names those parts itself now, and the source is still attached as
+  // `old`, so they fold in here before they are gone.
+  //
+  // A row whose source names no country keeps its old value and the target's
+  // CHECK rejects it by name: re-reading `postalAddress` for its
+  // `google_place_id` is the fix, and inventing a country is not.
+  { name: 'addresses_are_postal_addresses', sql: `UPDATE business_locations SET address = json_patch(
+      json_remove(address, '$.country', '$.streetAddress'),
+      json_object('regionCode', address ->> '$.country'))
+    WHERE json_type(address, '$.country') IS 'text' AND json_type(address, '$.regionCode') IS NULL` },
+  // A translated address was one free line beside a translated `city`. It is
+  // the same structured address as the canonical one now, so the line becomes
+  // the street and the city becomes the town. Splitting Thai address text into
+  // its parts is a translator's job, not a transform's, so nothing is invented
+  // and no word is dropped.
+  { name: 'localized_addresses_are_postal_addresses', sql: `UPDATE resource_localizations SET values_json = json_patch(
+      json_remove(values_json, '$.address', '$.city', '$.neighborhood'),
+      json_object('address', json_object(
+        'addressLines', json_array(values_json ->> '$.address'),
+        'locality', values_json ->> '$.city',
+        'sublocality', values_json ->> '$.neighborhood')))
+    WHERE resource_type = 'business_location' AND json_type(values_json, '$.address') IS 'text'` },
+  // A location translated without its address kept only the retired keys.
+  { name: 'localized_locations_drop_city_and_neighbourhood', sql: `UPDATE resource_localizations SET values_json = json_remove(values_json, '$.city', '$.neighborhood')
+    WHERE resource_type = 'business_location'
+      AND (json_type(values_json, '$.city') IS NOT NULL OR json_type(values_json, '$.neighborhood') IS NOT NULL)` },
+  { name: 'addresses_absorb_city_and_neighbourhood', requires: { table: 'business_locations', columns: ['city', 'neighborhood'] }, sql: `UPDATE business_locations SET address = (
+      SELECT json_patch(business_locations.address, json_object(
+        'locality', COALESCE(business_locations.address ->> '$.locality', nullif(trim(coalesce(o.city, '')), '')),
+        'sublocality', COALESCE(business_locations.address ->> '$.sublocality', nullif(trim(coalesce(o.neighborhood, '')), ''))))
+      FROM old.business_locations o WHERE o.id = business_locations.id)
+    WHERE address IS NOT NULL` },
   // --- a hero paragraph is `subtitle`: the name onboarding, the site template and the
   // CMS hero editor all write, and the only name Saya and Blawby now read. Blawby's
   // private second name for the same field silently dropped whatever the owner typed,
@@ -936,6 +973,14 @@ export function rebaseline(sourcePath, targetPath, { payloadPath = null, without
     for (const table of names) manifest.tables.push({ table, source_rows: stage.prepare(`SELECT count(*) AS n FROM main.${qi(table)}`).get().n })
     if (reshapes) deriveCatalog(stage, now, (name, count) => { manifest.derived[name] = count })
     for (const transform of TRANSFORMS) {
+      // A transform that folds a retiring column reads it from the attached
+      // source. A source that never had it — a newer export, or the baseline
+      // itself — has nothing to fold, and the manifest says the transform was
+      // skipped rather than the run failing on a column that is already gone.
+      if (transform.requires && !transform.requires.columns.every(name => columns(source, transform.requires.table).includes(name))) {
+        manifest.transforms.push({ name: transform.name, changes: 0, skipped: 'source has no such column', sql_sha256: hash(transform.sql) })
+        continue
+      }
       const result = stage.prepare(transform.sql).run()
       manifest.transforms.push({ name: transform.name, changes: result.changes, sql_sha256: hash(transform.sql) })
     }

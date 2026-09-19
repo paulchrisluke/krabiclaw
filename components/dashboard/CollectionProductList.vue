@@ -3,7 +3,7 @@
     <template #header>
       <UDashboardNavbar :title="collection?.name ?? presentation.collectionLabel" :toggle="false">
         <template #leading>
-          <DashboardNavbarLeading :to="productsPath" :label="presentation.collectionLabel" />
+          <DashboardNavbarLeading :to="surfacePath" :label="presentation.collectionLabel" />
         </template>
       </UDashboardNavbar>
     </template>
@@ -87,7 +87,7 @@ import { getErrorMessage } from '~/utils/errors'
 import { formatProductMoney } from '~/utils/product-money'
 import { selectPrice } from '~/shared/prices'
 import { isCurrencyCode } from '~/shared/currencies'
-import { presentationForProducts } from '~/utils/product-presentation'
+import { collectionsOnSurface, isCatalogSurface, presentationForSurface, productSurfaceOf } from '~/utils/product-presentation'
 
 
 const route = useRoute()
@@ -98,6 +98,11 @@ const dashboardLocation = useDashboardLocation()
 
 const vertical = dashboard.site.value?.vertical
 if (!vertical) throw createError({ statusCode: 500, statusMessage: 'Site vertical is not configured' })
+// The surface this collection is managed on owns the words: a collection of
+// bookable products reads as experiences, a section of a menu as dishes.
+const segment = String(route.params.surface ?? '')
+if (!isCatalogSurface(vertical, segment)) throw createError({ statusCode: 404, statusMessage: 'Page not found' })
+const presentation = presentationForSurface(vertical, segment)
 const collectionId = computed(() => String(route.params.collectionId ?? route.params.categoryId ?? ''))
 const rawCurrency = dashboard.site.value?.default_currency
 if (!isCurrencyCode(rawCurrency)) throw createError({ statusCode: 500, statusMessage: 'Unsupported site currency' })
@@ -107,8 +112,8 @@ const locationId = computed(() => dashboardLocation.currentLocation.value?.id ??
 // location selector: an unresolved selector left it empty, and an empty path is
 // a link to nowhere and, where it roots the editor frame, a frame rooted at ''.
 const locationPath = computed(() => `/dashboard/${String(route.params.orgSlug)}/sites/${String(route.params.siteSlug)}/locations/${String(route.params.locationSlug)}`)
-const productsPath = computed(() => `${locationPath.value}/products`)
-const collectionPath = computed(() => `${productsPath.value}/${collectionId.value}`)
+const surfacePath = computed(() => `${locationPath.value}/products/${String(route.params.surface ?? '')}`)
+const collectionPath = computed(() => `${surfacePath.value}/${collectionId.value}`)
 
 const catalog = useLocationProductCatalog(siteId, locationId)
 const collections = catalog.collections
@@ -118,10 +123,12 @@ const pending = catalog.pending
 // commits once when it closes, so it is held apart from the shared catalog.
 const localOrder = ref<Product[] | null>(null)
 /**
- * The products in this collection, in the order the merchant set.
+ * This surface's products in this collection, in the order the merchant set.
  *
  * Position is on the membership row, so the same product can sit third here
- * and first in another collection without being copied.
+ * and first in another collection without being copied. A collection holding
+ * both dishes and a bookable omakase is one collection on two surfaces, and
+ * each shows its own members — the same projection the public pages make.
  */
 const products = computed(() => {
   if (localOrder.value) return localOrder.value
@@ -131,24 +138,41 @@ const products = computed(() => {
     if (membership) positions.set(product.id, membership.sort_order)
   }
   return catalog.products.value
-    .filter(product => positions.has(product.id))
+    .filter(product => positions.has(product.id) && productSurfaceOf(vertical, product) === segment)
     .sort((left, right) => (positions.get(left.id)! - positions.get(right.id)!) || left.name.localeCompare(right.name))
 })
+/** Each collection with the products that are in it, which is what a surface is read from. */
+const collectionsWithProducts = computed(() => {
+  const members = new Map<string, Product[]>()
+  for (const product of catalog.products.value) {
+    for (const membership of product.collections) {
+      members.set(membership.collection_id, [...(members.get(membership.collection_id) ?? []), product])
+    }
+  }
+  return collections.value.map(row => ({ ...row, products: members.get(row.id) ?? [] }))
+})
+
 const editing = ref(false)
 const selected = ref<string[]>([])
 const orderDirty = ref(false)
 const orderError = ref<string | null>(null)
 const moveError = ref<string | null>(null)
 
-const collection = computed(() => collections.value.find(row => row.id === collectionId.value) ?? null)
-// A collection of classes is read as experiences, a collection of dishes as
-// the menu: the words come from what is in it.
-const presentation = computed(() => presentationForProducts(vertical, products.value))
-const loadError = computed(() => (catalog.error.value ? getErrorMessage(catalog.error.value, `Failed to load ${presentation.value.itemLabelPlural.toLowerCase()}`) : null))
+// Reached through this surface, so it has to have a member on it. A collection
+// with only bookable products opened under /menu would read as a menu section
+// and offer menu targets to move them into. An empty collection is on every
+// surface until it holds something.
+const collection = computed(() =>
+  collectionsOnSurface(vertical, collectionsWithProducts.value, segment).find(row => row.id === collectionId.value) ?? null)
+const loadError = computed(() => (catalog.error.value ? getErrorMessage(catalog.error.value, `Failed to load ${presentation.itemLabelPlural.toLowerCase()}`) : null))
 const listItems = computed(() => products.value.map(row => ({ id: row.id, title: row.name, row })))
-const moveTargets = computed(() => collections.value.filter(row => row.id !== collectionId.value))
+// Somewhere else on this surface: moving a dish into a collection of bookable
+// experiences would file it where customers never read dishes.
+const moveTargets = computed(() =>
+  collectionsOnSurface(vertical, collectionsWithProducts.value, segment)
+    .filter(row => row.id !== collectionId.value))
 
-useSeoMeta({ title: () => `${collection.value?.name ?? presentation.value.collectionLabel} | KrabiClaw Dashboard`, robots: 'noindex, nofollow' })
+useSeoMeta({ title: () => `${collection.value?.name ?? presentation.collectionLabel} | KrabiClaw Dashboard`, robots: 'noindex, nofollow' })
 
 /** The offer this location shows, resolved through the one selection contract. */
 function priceLabel(product: Product) {
@@ -164,7 +188,7 @@ const load = catalog.refresh
 // would be an unhandled rejection rather than the 404 screen, so it is shown.
 watchEffect(() => {
   if (!catalog.pending.value && catalog.collections.value.length && !collection.value) {
-    showError(createError({ statusCode: 404, statusMessage: `${presentation.value.collectionGroupLabel} not found` }))
+    showError(createError({ statusCode: 404, statusMessage: `${presentation.collectionGroupLabel} not found` }))
   }
 })
 
@@ -259,7 +283,7 @@ async function moveSelected() {
     editing.value = false
     await load()
   } catch (error) {
-    moveError.value = getErrorMessage(error, `Failed to move ${presentation.value.itemLabelPlural.toLowerCase()}`)
+    moveError.value = getErrorMessage(error, `Failed to move ${presentation.itemLabelPlural.toLowerCase()}`)
   } finally {
     moving.value = false
   }

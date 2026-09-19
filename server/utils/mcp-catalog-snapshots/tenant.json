@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:a890c4d31a3d44714a595dc93e1ab07b039ecd74ff86184a7a643854bdb71757",
+  "fingerprint": "sha256:fea8031b58065668b983e0fb37ad44d9e36ddb795073de06ee415461e5b6b64a",
   "tools": [
     {
       "name": "attach_media",
@@ -3751,18 +3751,48 @@
           "location": {
             "properties": {
               "address": {
+                "properties": {
+                  "addressLines": {
+                    "description": "Street lines in order, unbounded.",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "administrativeArea": {
+                    "description": "State, province or region.",
+                    "type": "string"
+                  },
+                  "languageCode": {
+                    "description": "BCP-47 tag when the address is written in a specific language.",
+                    "type": "string"
+                  },
+                  "locality": {
+                    "description": "Town or city.",
+                    "type": "string"
+                  },
+                  "postalCode": {
+                    "type": "string"
+                  },
+                  "regionCode": {
+                    "description": "ISO 3166-1 alpha-2 country code, e.g. TH.",
+                    "type": "string"
+                  },
+                  "sublocality": {
+                    "description": "Neighbourhood or sub-district.",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "regionCode",
+                  "addressLines"
+                ],
                 "type": [
-                  "string",
+                  "object",
                   "null"
                 ]
               },
               "canonical_url": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "city": {
                 "type": [
                   "string",
                   "null"
@@ -3864,12 +3894,6 @@
                   "type": "object"
                 },
                 "type": "array"
-              },
-              "neighborhood": {
-                "type": [
-                  "string",
-                  "null"
-                ]
               },
               "notification_phone": {
                 "description": "WhatsApp number for internal booking/reservation alerts to this location's manager. Not shown to guests. Null means no location-specific recipient is configured. Site-wide recipients are configured independently.",
@@ -6599,14 +6623,15 @@
                   "description": "True when this is the currently active MCP location context.",
                   "type": "boolean"
                 },
-                "city": {
+                "id": {
+                  "type": "string"
+                },
+                "place_name": {
+                  "description": "The neighbourhood this location's address names, or its town. Derived from the address; call get_location for the address itself.",
                   "type": [
                     "string",
                     "null"
                   ]
-                },
-                "id": {
-                  "type": "string"
                 },
                 "slug": {
                   "type": "string"
@@ -7481,14 +7506,15 @@
                   "description": "True when this is the currently active MCP location context.",
                   "type": "boolean"
                 },
-                "city": {
+                "id": {
+                  "type": "string"
+                },
+                "place_name": {
+                  "description": "The neighbourhood this location's address names, or its town. Derived from the address; call get_location for the address itself.",
                   "type": [
                     "string",
                     "null"
                   ]
-                },
-                "id": {
-                  "type": "string"
                 },
                 "slug": {
                   "type": "string"
@@ -13298,14 +13324,15 @@
                   "description": "True when this is the currently active MCP location context.",
                   "type": "boolean"
                 },
-                "city": {
+                "id": {
+                  "type": "string"
+                },
+                "place_name": {
+                  "description": "The neighbourhood this location's address names, or its town. Derived from the address; call get_location for the address itself.",
                   "type": [
                     "string",
                     "null"
                   ]
-                },
-                "id": {
-                  "type": "string"
                 },
                 "slug": {
                   "type": "string"
@@ -14465,14 +14492,50 @@
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
-          "canonical_url": {
-            "description": "Optional canonical URL override. Leave unset for the default self-referencing canonical.",
+          "address": {
+            "properties": {
+              "addressLines": {
+                "description": "Street lines in order, unbounded.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "administrativeArea": {
+                "description": "State, province or region.",
+                "type": "string"
+              },
+              "languageCode": {
+                "description": "BCP-47 tag when the address is written in a specific language.",
+                "type": "string"
+              },
+              "locality": {
+                "description": "Town or city.",
+                "type": "string"
+              },
+              "postalCode": {
+                "type": "string"
+              },
+              "regionCode": {
+                "description": "ISO 3166-1 alpha-2 country code, e.g. TH.",
+                "type": "string"
+              },
+              "sublocality": {
+                "description": "Neighbourhood or sub-district.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "regionCode",
+              "addressLines"
+            ],
             "type": [
-              "string",
+              "object",
               "null"
             ]
           },
-          "city": {
+          "canonical_url": {
+            "description": "Optional canonical URL override. Leave unset for the default self-referencing canonical.",
             "type": [
               "string",
               "null"

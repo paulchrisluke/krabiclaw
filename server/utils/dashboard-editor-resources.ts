@@ -254,7 +254,7 @@ export async function loadDashboardLocationOverview(
     ),
     options.includeProducts
       ? summarizeLocationProducts(db, { organizationId: organization.id, locationId })
-      : Promise.resolve({ total: 0, allExperiences: false }),
+      : Promise.resolve({ total: 0, experiences: 0 }),
     // The principal is resolved and assertLocationAccess has just run for this
     // exact location. Handing the event over instead would re-read the session,
     // the site row and the member row, and assert the same thing again.

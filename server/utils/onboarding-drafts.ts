@@ -5,7 +5,7 @@ import type { PlaceDetails, PlaceReview } from '~/server/utils/google-places'
 import type { CurrencyCode } from '~/shared/currencies'
 import type { PriceInput } from '~/shared/prices'
 import type { TenantPageBlock, TenantPageType } from '~/utils/tenant-page-blocks'
-import { composePostalAddress } from '~/utils/postal-address'
+import { postalAddressFromAnswers, type PostalAddress } from '~/utils/postal-address'
 
 type DraftSourceType = 'google_places' | 'manual'
 
@@ -35,8 +35,7 @@ export interface DraftLocationRecord {
   id: string
   slug: string
   title: string
-  city: string | null
-  address: string | null
+  address: PostalAddress | null
   description: string | null
   phone: string | null
   website_url: string | null
@@ -191,11 +190,10 @@ export interface OnboardingDraftUpsertResult {
 export interface DraftDetailsInput {
   name: string
   /**
-   * The address one field per answer, never the composed line. The draft used
-   * to persist only the composed line, and resume read it straight back into
-   * the street field — so an owner returning to a saved draft found their
-   * street address reading "United States". The line a location stores is
-   * derived here by composePostalAddress().
+   * The address one field per answer, which is also how a location stores it.
+   * The draft used to persist a single composed line, and resume read it back
+   * into the street field — so an owner returning to a saved draft found their
+   * street address reading "United States".
    */
   streetAddress: string | null
   addressLine2: string | null
@@ -222,8 +220,7 @@ export interface DraftDetailsInput {
 export interface PlaceDetailsSnapshot {
   placeId: string
   name: string
-  formattedAddress: string
-  city: string | null
+  address: PostalAddress | null
   phone: string | null
   mapsUrl: string | null
   websiteUrl: string | null
@@ -248,8 +245,7 @@ function asPlaceSnapshot(place: DraftPlaceSource): PlaceDetailsSnapshot {
   return {
     placeId: place.placeId,
     name: place.name,
-    formattedAddress: place.formattedAddress,
-    city: place.city ?? null,
+    address: place.address,
     phone: place.phone ?? null,
     mapsUrl: place.mapsUrl ?? null,
     websiteUrl: place.websiteUrl ?? null,
@@ -376,16 +372,7 @@ export function buildOnboardingDraftPayload(input: {
         id: locationId,
         slug: locationSlug,
         title: brandName,
-        city: input.details.city ?? placeSnapshot?.city ?? null,
-        address: composePostalAddress({
-          streetAddress: input.details.streetAddress ?? '',
-          addressLine2: input.details.addressLine2 ?? '',
-          city: input.details.city ?? '',
-          region: input.details.region ?? '',
-          postalCode: input.details.postalCode ?? '',
-          country: input.details.country ?? '',
-          streetIsFormatted: placeSnapshot !== null,
-        }) || null,
+        address: postalAddressFromAnswers(input.details),
         description,
         phone: input.details.phone ?? placeSnapshot?.phone ?? null,
         website_url: input.details.websiteUrl ?? placeSnapshot?.websiteUrl ?? null,

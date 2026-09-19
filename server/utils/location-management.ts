@@ -1,3 +1,4 @@
+import { parsePostalAddress, type PostalAddress } from '~/utils/postal-address'
 import { parseOpeningHours, parseSpecialHours, type OpeningHours, type SpecialHours } from '~/shared/reservation-hours'
 import { fireOrganizationEventSafe } from "~/server/utils/organization-events";
 import { executeBatch, queryFirst } from "~/server/db";
@@ -38,8 +39,6 @@ const MAX_SLUG_ATTEMPTS = 10;
 export interface CreateLocationInput {
   title: string;
   slug?: string | null;
-  city?: string | null;
-  neighborhood?: string | null;
   phone?: string | null;
   email?: string | null;
   website_url?: string | null;
@@ -48,7 +47,7 @@ export interface CreateLocationInput {
   google_place_id?: string | null;
   description?: string | null;
   short_description?: string | null;
-  address?: string | Record<string, unknown> | null;
+  address?: PostalAddress | null;
   opening_hours?: OpeningHours;
   special_hours?: SpecialHours;
   price_level?: string | null;
@@ -81,8 +80,6 @@ export interface LocationRecord {
   id: string;
   slug: string;
   title: string;
-  city: string | null;
-  neighborhood: string | null;
   phone: string | null;
   email: string | null;
   website_url: string | null;
@@ -95,6 +92,7 @@ export interface LocationRecord {
   short_description: string | null;
   status: string;
   address?: string | null;
+  categories?: string | null;
   opening_hours?: string | null;
   special_hours?: string | null;
   price_level?: string | null;
@@ -150,40 +148,6 @@ function normalizeOrderingUrl(value: string | null | undefined, field: string) {
   } catch {
     throw new Error(`${field} must be a valid http:// or https:// URL`);
   }
-}
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function normalizeAddressLines(value: string) {
-  return value
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean);
-}
-
-function serializeAddress(value: unknown) {
-  if (value === undefined || value === null) return null;
-  if (typeof value !== "string") {
-    if (!isPlainObject(value) && !Array.isArray(value)) return null;
-    return JSON.stringify(value);
-  }
-  // Callers sometimes pre-stringify an already-structured address (e.g. round-tripping
-  // a value read from this same column) before passing it in here. Detect that case and
-  // pass it through rather than re-wrapping the JSON text as a literal address line,
-  // which previously produced double-encoded JSON (e.g. {"addressLines":["{\"addressLines\":...}"]}).
-  const trimmed = value.trim();
-  if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
-    try {
-      const parsed = JSON.parse(trimmed);
-      if (isPlainObject(parsed) || Array.isArray(parsed)) return JSON.stringify(parsed);
-    } catch {
-      // Not valid JSON — fall through and treat as freeform address text.
-    }
-  }
-  const addressLines = normalizeAddressLines(value);
-  return addressLines.length ? JSON.stringify({ addressLines }) : null;
 }
 
 export function serializeOpeningHours(value: unknown): string | null {
@@ -312,15 +276,41 @@ export async function resolveLocationCapabilitySummary(
   }
 }
 
+/**
+ * One location, read the same way by every surface that asks for one.
+ *
+ * MCP used to keep its own copy of this (`getLocationForMcp`) with its own
+ * address parse, which returned a shape its own tool schema rejected.
+ */
+export async function getLocation(
+  db: D1Database,
+  organizationId: string,
+  siteId: string,
+  locationIdOrSlug: string,
+) {
+  const row = await loadLocation(db, organizationId, siteId, locationIdOrSlug)
+  if (!row) return null
+  const { getMediaPlacements } = await import('~/server/utils/media-placement')
+  const placements = await getMediaPlacements(db, { siteId, ownerType: 'business_location', ownerIds: [row.id] })
+  return {
+    ...row,
+    address: parsePostalAddress(row.address),
+    opening_hours: parseOpeningHours(row.opening_hours ? JSON.parse(String(row.opening_hours)) : null),
+    special_hours: parseSpecialHours(row.special_hours ? JSON.parse(String(row.special_hours)) : null),
+    categories: row.categories ? JSON.parse(String(row.categories)) : null,
+    media: (placements.get(row.id) ?? []).map(item => ({ asset_id: item.asset_id, slot: item.slot, public_url: item.public_url, thumbnail_url: item.thumbnail_url, kind: item.kind, sort_order: item.sort_order })),
+  }
+}
+
 async function loadLocation(
   db: D1Database,
   organizationId: string,
   siteId: string,
   locationIdOrSlug: string,
 ) {
-  const columns = `id, slug, title, city, neighborhood, phone, email, website_url, maps_url, google_review_url, google_place_id,
+  const columns = `id, slug, title, phone, email, website_url, maps_url, google_review_url, google_place_id,
            rating, review_count, description, short_description, status,
-           address, opening_hours, special_hours, price_level,
+           address, opening_hours, special_hours, categories, price_level,
            facebook_url, instagram_url, tiktok_url, grab_url, uber_eats_url, foodpanda_url,
            notification_phone, timezone, max_capacity, seo_title, seo_description, canonical_url, robots,
            feature_overrides, created_at, updated_at`;
@@ -440,13 +430,13 @@ export async function createLocation(
       statements.push({
         query: `
           INSERT INTO business_locations (
-            id, organization_id, site_id, title, slug, city, neighborhood, phone, email, website_url, maps_url,
+            id, organization_id, site_id, title, slug, phone, email, website_url, maps_url,
             google_review_url, google_place_id, description, short_description, address, opening_hours, special_hours, rating, review_count,
             price_level, facebook_url, instagram_url, tiktok_url, grab_url, uber_eats_url, foodpanda_url,
             notification_phone, timezone, max_capacity, status,
             seo_title, seo_description, canonical_url, robots, feature_overrides, created_at, updated_at
           )
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, ?)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, ?)
         `,
         params: [
           id,
@@ -454,8 +444,6 @@ export async function createLocation(
           siteId,
           title,
           slug,
-          input.city ?? null,
-          input.neighborhood ?? null,
           input.phone ?? null,
           input.email ?? null,
           input.website_url ?? null,
@@ -464,7 +452,7 @@ export async function createLocation(
           input.google_place_id ?? null,
           input.description ?? null,
           input.short_description ?? null,
-          serializeAddress(input.address),
+          input.address ? JSON.stringify(input.address) : null,
           openingHours,
           specialHours,
           input.rating ?? null,
@@ -652,8 +640,6 @@ export async function updateLocation(
   }
 
   const simpleFields = [
-    "city",
-    "neighborhood",
     "phone",
     "email",
     "description",
@@ -693,7 +679,7 @@ export async function updateLocation(
 
   if (input.address !== undefined) {
     sets.push("address = ?");
-    params.push(serializeAddress(input.address));
+    params.push(input.address ? JSON.stringify(input.address) : null);
   }
   if (input.opening_hours !== undefined) {
     try {

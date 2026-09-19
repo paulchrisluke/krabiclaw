@@ -45,26 +45,7 @@ export function presentationForProduct(vertical: string | null | undefined, prod
   return isExperience(product) ? EXPERIENCE_PRESENTATION : requireProductPresentation(vertical)
 }
 
-/**
- * The surface a list of products is read on — a collection, a location's
- * catalogue, an editor screen. Every product bookable means the merchant is
- * looking at experiences and the screen says so; anything else is the
- * vertical's own goods and keeps its words. An empty list has no products to
- * be experiences, so it reads as the vertical's surface.
- */
-/**
- * A catalogue reads as experiences only when it has items and every one of them
- * is bookable. `allExperiences` is that fact, however the caller learned it —
- * from the rows themselves, or from a count the server did in SQL.
- */
-export function presentationForCatalog(vertical: string | null | undefined, allExperiences: boolean): ProductPresentation {
-  return allExperiences ? EXPERIENCE_PRESENTATION : requireProductPresentation(vertical)
-}
-
-export function presentationForProducts(vertical: string | null | undefined, products: ReadonlyArray<Pick<Product, 'booking'>>): ProductPresentation {
-  return presentationForCatalog(vertical, products.length > 0 && products.every(isExperience))
-}
-
+/** The words one surface owns: experiences read the same on every vertical. */
 export function presentationForSurface(vertical: string | null | undefined, surface: ProductSurface): ProductPresentation {
   return surface === 'experiences' ? EXPERIENCE_PRESENTATION : requireProductPresentation(vertical)
 }
@@ -112,6 +93,110 @@ export function requireProductPresentation(vertical: string | null | undefined):
 export function productLocationCollectionPath(vertical: string | null | undefined, locationSlug: string): string {
   const presentation = requireProductPresentation(vertical)
   return `/locations/${encodeURIComponent(locationSlug)}/${presentation.locationCollectionSegment}`
+}
+
+/**
+ * A catalog measured the only way a surface can be read off it: how many
+ * products it holds, and how many of those take bookings. The rows give this,
+ * and so does one aggregate query — the hub counts a 365-item menu in SQL
+ * rather than downloading it.
+ */
+export interface CatalogCounts {
+  total: number
+  experiences: number
+}
+
+export function countCatalog(products: ReadonlyArray<Pick<Product, 'booking'>>): CatalogCounts {
+  return { total: products.length, experiences: products.filter(isExperience).length }
+}
+
+/**
+ * What a catalog spanning more than one surface is called.
+ *
+ * A restaurant that also sells seats at its chef's counter has a Menu and it
+ * has Experiences; neither word covers the other, and calling the pair "Menu"
+ * is what filed bookable experiences as a menu section. The surfaces keep
+ * their own words one level down.
+ */
+export const CATALOG_LABEL = 'Catalog'
+
+/**
+ * The surfaces a location's catalog spans, in reading order: the vertical's
+ * own goods first, then anything bookable. A catalog with nothing in it still
+ * reads as the vertical's own surface — that is the surface a first product
+ * would land on.
+ */
+export function catalogSurfaces(vertical: string | null | undefined, counts: CatalogCounts): ProductSurface[] {
+  const own = requireProductPresentation(vertical).locationCollectionSegment
+  const surfaces: ProductSurface[] = []
+  if (counts.total > counts.experiences) surfaces.push(own)
+  if (counts.experiences > 0) surfaces.push('experiences')
+  return surfaces.length > 0 ? surfaces : [own]
+}
+
+/** What to call the whole catalog: one surface speaks for it, two do not. */
+export function catalogLabel(vertical: string | null | undefined, counts: CatalogCounts): string {
+  const surfaces = catalogSurfaces(vertical, counts)
+  return surfaces.length === 1 ? presentationForSurface(vertical, surfaces[0]!).collectionLabel : CATALOG_LABEL
+}
+
+/**
+ * The catalog counted in the merchant's own words, one count per surface:
+ * "24 dishes · 3 experiences". Plurals are each presentation's own, because
+ * appending an "s" is how "dishs" reaches a merchant's screen.
+ */
+export function catalogSummary(vertical: string | null | undefined, counts: CatalogCounts): string {
+  const surfaces = catalogSurfaces(vertical, counts)
+  if (counts.total === 0) return `Add your first ${presentationForSurface(vertical, surfaces[0]!).itemLabel.toLowerCase()}`
+  return surfaces.map((surface) => {
+    const words = presentationForSurface(vertical, surface)
+    const total = surface === 'experiences' ? counts.experiences : counts.total - counts.experiences
+    return `${total} ${(total === 1 ? words.itemLabel : words.itemLabelPlural).toLowerCase()}`
+  }).join(' · ')
+}
+
+/**
+ * Whether a route segment names a surface this vertical's catalog is managed
+ * on. Anything else is not a page: a location sells its own goods and, where
+ * it takes bookings, experiences — nothing else.
+ */
+export function isCatalogSurface(vertical: string | null | undefined, segment: string): segment is ProductSurface {
+  return segment === 'experiences' || segment === requireProductPresentation(vertical).locationCollectionSegment
+}
+
+/**
+ * The collections a merchant manages on one surface, holding only the members
+ * that are on it.
+ *
+ * The surface belongs to the product, not to the collection: a product takes
+ * bookings, so it is an Experience, or it is the vertical's own goods. Nothing
+ * is stored on a collection to say which surface it is on, because a collection
+ * can hold both — a chef's counter with dishes on the menu and a bookable
+ * omakase beside them is one collection the owner named once.
+ *
+ * So a collection appears on every surface it has a member on, carrying that
+ * surface's members and no others. This is what `loadPublicProductCollection`
+ * already does for the public pages, which filter products by surface and then
+ * drop the collections left empty: `/menu` never shows the omakase and
+ * `/experiences` never shows the dishes. The CMS reads the catalog the same way
+ * so an owner edits what a customer sees.
+ *
+ * A collection with nothing in it is on no surface yet, so it is offered on
+ * every one of them rather than disappearing from the screen it was created on.
+ */
+export function collectionsOnSurface<
+  P extends Pick<Product, 'booking'>,
+  T extends { products: readonly P[] },
+>(
+  vertical: string | null | undefined,
+  rows: readonly T[],
+  surface: ProductSurface,
+): Array<T & { products: P[] }> {
+  return rows.flatMap((row) => {
+    const products = row.products.filter(product => productSurfaceOf(vertical, product) === surface)
+    if (row.products.length > 0 && products.length === 0) return []
+    return [{ ...row, products }]
+  })
 }
 
 export interface ProductCollectionGroup {

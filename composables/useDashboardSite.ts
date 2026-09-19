@@ -44,7 +44,7 @@ export interface DashboardLocation {
   title: string
   status: string
   city: string | null
-  address: { addressLines?: string[] } | null
+  address: PostalAddress | null
   media: Array<{ asset_id: string; slot: string; public_url: string; thumbnail_url: string | null; kind: string | null }>
   social_image: { url: string; width?: number; height?: number; type?: string } | null
   feature_overrides: string | null

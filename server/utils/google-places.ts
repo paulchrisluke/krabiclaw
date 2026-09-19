@@ -3,6 +3,7 @@ import { serializeOpeningHours } from '~/server/utils/location-management'
 import type { D1Database } from '@cloudflare/workers-types'
 import { normalizeGoogleReview, type GoogleReview } from '~/shared/google-review'
 import { executeBatch } from '~/server/db'
+import { formatPostalAddress, parsePostalAddress, type PostalAddress } from '~/utils/postal-address'
 
 const PLACES_BASE = 'https://places.googleapis.com/v1/places'
 
@@ -13,8 +14,7 @@ export const calculateMapEmbedUrl = (loc: {
   maps_url?: string | null
   latitude?: number | null
   longitude?: number | null
-  address?: string | null
-  city?: string | null
+  address?: PostalAddress | null
 }) => {
   if (loc.maps_url) {
     try {
@@ -28,14 +28,7 @@ export const calculateMapEmbedUrl = (loc: {
     return `https://maps.google.com/maps?q=${loc.latitude},${loc.longitude}&output=embed`
   }
 
-  let address = loc.address || loc.city || ''
-  if (address.startsWith('{')) {
-    try {
-      const parsed = JSON.parse(address) as { addressLines?: string[]; streetAddress?: string }
-      address = parsed.addressLines?.[0] || parsed.streetAddress || loc.city || ''
-    } catch { /* use the raw address */ }
-  }
-
+  const address = formatPostalAddress(loc.address ?? null)
   if (!address) return null
   const query = loc.title ? `${loc.title}, ${address}` : address
   return `https://maps.google.com/maps?q=${encodeURIComponent(String(query))}&output=embed`
@@ -69,8 +62,7 @@ const SEARCH_FIELD_MASK = [
 const DETAIL_FIELD_MASK = [
   'id',
   'displayName',
-  'formattedAddress',
-  'addressComponents',
+  'postalAddress',
   'location',
   'googleMapsUri',
   'nationalPhoneNumber',
@@ -100,8 +92,7 @@ export type PlaceReview = GoogleReview
 export interface PlaceDetails {
   placeId: string
   name: string
-  formattedAddress: string
-  city: string | null
+  address: PostalAddress | null
   lat: number | null
   lng: number | null
   mapsUrl: string | null
@@ -127,17 +118,8 @@ interface RawPlace {
   userRatingCount?: number
   regularOpeningHours?: { periods?: unknown[] }
   timeZone?: { id?: string }
-  addressComponents?: Array<{ longText?: string; types?: string[]; languageCode?: string }>
+  postalAddress?: unknown
   reviews?: unknown[]
-}
-
-function extractCity(components?: RawPlace['addressComponents']): string | null {
-  if (!components) return null
-  for (const type of ['locality', 'administrative_area_level_2', 'administrative_area_level_1']) {
-    const component = components.find(component => component.types?.includes(type) && component.longText)
-    if (component?.longText) return component.longText
-  }
-  return null
 }
 
 function normalizeSearchResult(place: RawPlace): PlaceSearchResult {
@@ -158,8 +140,7 @@ function normalizeDetail(place: RawPlace): PlaceDetails {
   return {
     placeId: place.id ?? '',
     name: place.displayName?.text ?? '',
-    formattedAddress: place.formattedAddress ?? '',
-    city: extractCity(place.addressComponents),
+    address: parsePostalAddress(place.postalAddress),
     lat: place.location?.latitude ?? null,
     lng: place.location?.longitude ?? null,
     mapsUrl: place.googleMapsUri ?? null,
@@ -231,8 +212,7 @@ export async function syncPlaceToLocation(
     UPDATE business_locations SET
       phone = COALESCE(?, phone),
       website_url = COALESCE(?, website_url),
-      city = COALESCE(?, city),
-      address = ?,
+      address = COALESCE(?, address),
       latitude = COALESCE(?, latitude),
       longitude = COALESCE(?, longitude),
       maps_url = COALESCE(?, maps_url),
@@ -247,8 +227,7 @@ export async function syncPlaceToLocation(
   `, params: [
     place.phone,
     place.websiteUrl,
-    place.city,
-    JSON.stringify({ addressLines: [place.formattedAddress] }),
+    place.address ? JSON.stringify(place.address) : null,
     place.lat,
     place.lng,
     place.mapsUrl,
