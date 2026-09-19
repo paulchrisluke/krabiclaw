@@ -969,7 +969,6 @@ export const product_sessions = sqliteTable("product_sessions", {
 	created_by: text().notNull(),
 	updated_by: text().notNull(),
 }, (table) => [
-	check("product_sessions_status_check", sql`status IN ('scheduled', 'cancelled')`),
 	check("product_sessions_instants_check", sql`(strftime('%Y-%m-%dT%H:%M:%fZ', starts_at, '+0 days') IS starts_at) AND (strftime('%Y-%m-%dT%H:%M:%fZ', ends_at, '+0 days') IS ends_at) AND (created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)`),
 	foreignKey({ columns: [table.organization_id, table.product_id], foreignColumns: [product_booking_configs.organization_id, product_booking_configs.product_id], name: "product_sessions_config_scope_fk" }).onDelete("cascade"),
 	foreignKey({ columns: [table.organization_id, table.location_id], foreignColumns: [business_locations.organization_id, business_locations.id], name: "product_sessions_location_scope_fk" }).onDelete("cascade"),
