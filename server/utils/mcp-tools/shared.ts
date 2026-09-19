@@ -896,7 +896,7 @@ export const EXPECTED_TOOL_ANNOTATIONS = {
   create_metafield_definition: W,
   delete_metafield_definition: D,
   get_product_catalog_localization: R,
-  replace_product_localizations: D,
+  replace_resource_localizations: D,
   get_reservation_policy: R,
   update_reservation_policy: D,
 } as const satisfies Record<string, McpToolAnnotations>

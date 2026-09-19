@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:028d0b93937cbceb8d4c3f39735a4f17a54011cc96d95defead0923d6f4d050a",
+  "fingerprint": "sha256:36d46c9e08de01225ea07d1cfe6a93c334c8b62a22893f530fd339e9b6b619b1",
   "tools": [
     {
       "name": "attach_media",
@@ -11646,7 +11646,7 @@
       }
     },
     {
-      "name": "replace_product_localizations",
+      "name": "replace_resource_localizations",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -11654,8 +11654,14 @@
             "items": {
               "additionalProperties": false,
               "properties": {
-                "product_id": {
+                "resource_id": {
                   "type": "string"
+                },
+                "route_path": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
                 },
                 "values": {
                   "additionalProperties": true,
@@ -11664,7 +11670,7 @@
                 }
               },
               "required": [
-                "product_id",
+                "resource_id",
                 "values"
               ],
               "type": "object"
@@ -11676,12 +11682,23 @@
           "locale": {
             "type": "string"
           },
+          "resource_type": {
+            "enum": [
+              "site",
+              "business_location",
+              "product",
+              "collection",
+              "media_asset"
+            ],
+            "type": "string"
+          },
           "site_id": {
             "description": "Internal KrabiClaw site ID from get_workspace_context or list_sites, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           }
         },
         "required": [
+          "resource_type",
           "locale",
           "items"
         ],
@@ -11696,7 +11713,17 @@
           "locale": {
             "type": "string"
           },
-          "updated_product_ids": {
+          "resource_type": {
+            "enum": [
+              "site",
+              "business_location",
+              "product",
+              "collection",
+              "media_asset"
+            ],
+            "type": "string"
+          },
+          "updated_resource_ids": {
             "items": {
               "type": "string"
             },
@@ -11705,7 +11732,8 @@
         },
         "required": [
           "locale",
-          "updated_product_ids"
+          "resource_type",
+          "updated_resource_ids"
         ],
         "type": "object"
       }

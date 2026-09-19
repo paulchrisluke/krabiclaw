@@ -51,7 +51,7 @@ output schema, and executor must agree. Unknown tool names return JSON-RPC
 - `list_*` discovers a collection; `get_*` reads a selected record or aggregate.
 - `preview_*` computes a proposal without saving; `update_*` saves supplied changes.
 - `reconcile_products` is one atomic create/update operation for an explicitly selected location, not an ongoing sync. Each row supplies its intended Price or null. `set_missing_unavailable: true` explicitly makes omitted products unavailable.
-- `replace_product_localizations` replaces only the submitted products’ translations for one locale; omitted products are untouched.
+- `replace_resource_localizations` replaces only the submitted resources’ translations for one resource type and locale; omitted resources are untouched.
 
 MCP names map to shared domain functions. REST uses HTTP methods on the same resources; it does not need duplicate verb-named endpoints. `get_site`, `list_sites`, and workspace context expose the canonical public site URL; publishing a post returns its full public URL. DNS setup remains in the CMS.
 

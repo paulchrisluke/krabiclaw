@@ -656,16 +656,16 @@
         "destructive_justification": "Replaces the selected blog article content document after version and removal checks. Existing state is deleted, replaced or overwritten rather than only appended."
       }
     },
-    "replace_product_localizations": {
+    "replace_resource_localizations": {
       "annotations": {
         "readOnlyHint": false,
         "openWorldHint": true,
         "destructiveHint": true
       },
       "justifications": {
-        "read_only_justification": "Replaces the submitted product translations for one locale; omitted products remain untouched.",
-        "open_world_justification": "Replaces the submitted product translations for one locale; omitted products remain untouched. Its effects can change content or behavior on the public website.",
-        "destructive_justification": "Replaces the submitted product translations for one locale; omitted products remain untouched. Existing state is deleted, replaced or overwritten rather than only appended."
+        "read_only_justification": "Replaces the submitted translations for one resource type and locale; omitted resources remain untouched.",
+        "open_world_justification": "Replaces the submitted translations for one resource type and locale; omitted resources remain untouched. Its effects can change content or behavior on the public website.",
+        "destructive_justification": "Replaces the submitted translations for one resource type and locale; omitted resources remain untouched. Existing state is deleted, replaced or overwritten rather than only appended."
       }
     },
     "save_generated_image": {

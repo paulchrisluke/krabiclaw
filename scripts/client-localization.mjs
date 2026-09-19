@@ -143,14 +143,22 @@ async function publish() {
   console.log(`${base.origin} · ${bundle.site_id} · ${bundle.locale}: ${expectedIds.length} products, ${bundle.resources.length} resources, ${bundle.pages.length} pages`)
   if (!options.apply && !options.verify) { console.log('Preflight passed. No writes. Use --apply to publish this exact bundle.'); return }
   if (options.apply) {
-    for (const item of bundle.resources) {
-      await call('put_resource_localization', { ...item, locale: bundle.locale })
-      console.log(`Saved ${item.resource_type} ${item.resource_id}`)
+    // Products are resources; the bundle keeps them in their own list because
+    // they carry the English source it verified above, not because they are
+    // written differently.
+    const groups = new Map()
+    for (const { source, product_id: resourceId, ...item } of bundle.products) {
+      groups.set('product', [...(groups.get('product') ?? []), { ...item, resource_id: resourceId }])
     }
-    for (let offset = 0; offset < bundle.products.length; offset += 200) {
-      const items = bundle.products.slice(offset, offset + 200).map(({ source, ...item }) => item)
-      await call('replace_product_localizations', { locale: bundle.locale, items })
-      console.log(`Saved products ${offset + 1}–${offset + items.length}`)
+    for (const { resource_type: resourceType, ...item } of bundle.resources) {
+      groups.set(resourceType, [...(groups.get(resourceType) ?? []), item])
+    }
+    for (const [resourceType, all] of groups) {
+      for (let offset = 0; offset < all.length; offset += 200) {
+        const items = all.slice(offset, offset + 200)
+        await call('replace_resource_localizations', { resource_type: resourceType, locale: bundle.locale, items })
+        console.log(`Saved ${resourceType} ${offset + 1}–${offset + items.length}`)
+      }
     }
     for (const page of bundle.pages) {
       if (existingPages.has(page.page_id)) continue
