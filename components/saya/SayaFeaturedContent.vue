@@ -76,7 +76,7 @@
       </button>
       <div class="flex items-center gap-3">
         <button
-          v-for="(_, i) in items"
+          v-for="i in visibleDashes"
           :key="i"
           type="button"
           class="h-0.5 rounded-full transition-all duration-300"
@@ -149,6 +149,18 @@ const linkTarget = computed(() => props.data?.linkTarget || '')
 // --- Carousel state ---
 const trackRef = ref<HTMLElement | null>(null)
 const activeIndex = ref(0)
+
+// The dashes sit on one unwrapped line, so a dash per item is only viable for a
+// short collection: a 39-product menu drew a 1492px row and gave the whole page
+// a horizontal scrollbar. The row shows a window of this many instead, moving
+// with the active card, so its width no longer follows the collection's length.
+const DASH_WINDOW = 7
+const visibleDashes = computed(() => {
+  const total = items.value.length
+  if (total <= DASH_WINDOW) return Array.from({ length: total }, (_, index) => index)
+  const start = Math.min(Math.max(activeIndex.value - Math.floor(DASH_WINDOW / 2), 0), total - DASH_WINDOW)
+  return Array.from({ length: DASH_WINDOW }, (_, index) => start + index)
+})
 
 function cards(): HTMLElement[] {
   return Array.from(trackRef.value?.querySelectorAll<HTMLElement>('[data-carousel-item]') ?? [])
