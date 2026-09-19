@@ -1,3 +1,12 @@
+-- A booking or reservation is confirmed or cancelled, and done is the clock.
+-- These rows predate that: `pending` waited on a host approval nobody gives and
+-- `completed` was a click for something the calendar already knows. Neither was
+-- ever cancelled, so both are the state they were really in. The rebuild below
+-- copies them into a table whose CHECK allows only the two, so the values have
+-- to be right before the copy, not after it.
+UPDATE bookings SET status = 'confirmed' WHERE status IN ('pending', 'completed');--> statement-breakpoint
+UPDATE reservations SET status = 'confirmed' WHERE status IN ('pending', 'completed');--> statement-breakpoint
+UPDATE product_sessions SET status = 'scheduled' WHERE status NOT IN ('scheduled', 'cancelled');--> statement-breakpoint
 PRAGMA foreign_keys=OFF;--> statement-breakpoint
 CREATE TABLE `__new_bookings` (
 	`id` text PRIMARY KEY NOT NULL,
