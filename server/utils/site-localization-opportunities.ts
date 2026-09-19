@@ -96,7 +96,7 @@ export async function getSiteLocalizationProgress(
       FROM sites s LEFT JOIN resource_localizations rl ON rl.resource_type = 'site' AND rl.resource_id = s.id AND rl.locale = ?
         AND rl.organization_id = s.organization_id AND rl.site_id = s.id
       WHERE s.organization_id = ? AND s.id = ?`, params),
-    queryAll<LocalizableRow>(db, `SELECT l.id, l.slug AS location_slug, l.title, l.address, l.city, l.neighborhood, l.description, l.short_description, rl.values_json
+    queryAll<LocalizableRow>(db, `SELECT l.id, l.slug AS location_slug, l.title, l.address, l.description, l.short_description, rl.values_json
       FROM business_locations l LEFT JOIN resource_localizations rl ON rl.resource_type = 'business_location' AND rl.resource_id = l.id AND rl.locale = ?
         AND rl.organization_id = l.organization_id AND rl.site_id = l.site_id
       WHERE l.organization_id = ? AND l.site_id = ? AND l.status = 'active' ORDER BY l.id`, params),
@@ -169,7 +169,7 @@ export async function getSiteLocalizationProgress(
 
   const groups = [
     { id: 'brand', label: 'Brand', result: progress(site, ['brand_name', 'brand_description']), path: () => 'brand/name', resourceType: 'site', resourceId: (row: LocalizableRow) => row.id },
-    { id: 'locations', label: 'Locations', result: progress(locations, ['title', 'address', 'city', 'neighborhood', 'description', 'short_description']), path: (row: LocalizableRow) => `locations/${row.location_slug}/settings`, resourceType: 'business_location', resourceId: (row: LocalizableRow) => row.id },
+    { id: 'locations', label: 'Locations', result: progress(locations, ['title', 'address', 'description', 'short_description']), path: (row: LocalizableRow) => `locations/${row.location_slug}/settings`, resourceType: 'business_location', resourceId: (row: LocalizableRow) => row.id },
     // Which product attributes are translatable is the definition's own
     // declaration, so the field list is the columns plus whatever the tenant
     // declared — not a list maintained here.

@@ -1,6 +1,5 @@
 import type { McpExecutorContext } from './shared'
-import { updateLocation, type LocationRecord } from '~/server/utils/location-management'
-import { getLocationForMcp } from '~/server/utils/mcp-workflows'
+import { getLocation, updateLocation, type LocationRecord } from '~/server/utils/location-management'
 import { renderStructuredResponse } from '~/server/utils/mcp-render'
 import { paginateMcpCollection } from '~/server/utils/mcp-pagination'
 import { NOT_HANDLED, assertDomainSuccess, mutationContextPayload, omit, requiredString, workspaceLocationsPayload } from './shared'
@@ -26,7 +25,7 @@ export async function handleLocationsTools(ctx: McpExecutorContext): Promise<unk
       {
         const locationId = requiredString(args, "location_id");
         return {
-          location: await getLocationForMcp(
+          location: await getLocation(
           site.db,
           site.organizationId,
           site.siteId,

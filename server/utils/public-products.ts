@@ -14,6 +14,7 @@ import {
 } from '~/server/utils/public-localization'
 import { listPublicLocaleRepresentations } from '~/server/utils/public-locale-representations'
 import type { PublicLocaleRepresentation } from '~/utils/public-resource-contracts'
+import { parsePostalAddress, type PostalAddress } from '~/utils/postal-address'
 
 interface PublicProductSiteRow {
   id: string
@@ -30,7 +31,7 @@ export interface PublicProductLocation {
   slug: string
   title: string
   feature_overrides: string | null
-  /** Where a guest turns up: the branch's own address, phone and map, as stored. */
+  /** Where a guest turns up: the branch's own address, phone and map, as the row stores them. */
   address: string | null
   phone: string | null
   maps_url: string | null
@@ -42,12 +43,12 @@ export interface PublicProductLocation {
 export function publicLocationPayload(location: PublicProductLocation): PublicProductLocationPayload {
   return {
     id: location.id, slug: location.slug, title: location.title,
-    address: location.address, phone: location.phone, maps_url: location.maps_url,
+    address: parsePostalAddress(location.address), phone: location.phone, maps_url: location.maps_url,
     latitude: location.latitude, longitude: location.longitude,
   }
 }
 
-export type PublicProductLocationPayload = Omit<PublicProductLocation, 'feature_overrides'>
+export type PublicProductLocationPayload = Omit<PublicProductLocation, 'feature_overrides' | 'address'> & { address: PostalAddress | null }
 
 export interface PublicProductCollection {
   site: PublicProductSiteRow

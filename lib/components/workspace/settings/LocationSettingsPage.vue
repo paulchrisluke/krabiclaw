@@ -61,9 +61,12 @@
 
           <div v-else-if="editorKey === 'address'" class="space-y-6">
             <p class="text-base text-muted">Where guests find this location.</p>
-            <UFormField label="Address"><UTextarea v-model="detailsForm.address" :rows="4" autofocus class="w-full" /></UFormField>
-            <UFormField label="City"><UInput v-model="detailsForm.city" size="xl" class="w-full" /></UFormField>
-            <UFormField label="Neighbourhood"><UInput v-model="detailsForm.neighborhood" size="xl" class="w-full" /></UFormField>
+            <UFormField label="Street" help="One line per line."><UTextarea v-model="detailsForm.addressLines" :rows="3" autofocus class="w-full" /></UFormField>
+            <UFormField label="Neighbourhood"><UInput v-model="detailsForm.sublocality" size="xl" class="w-full" /></UFormField>
+            <UFormField label="City"><UInput v-model="detailsForm.locality" size="xl" class="w-full" /></UFormField>
+            <UFormField label="State or province"><UInput v-model="detailsForm.administrativeArea" size="xl" class="w-full" /></UFormField>
+            <UFormField label="Postcode"><UInput v-model="detailsForm.postalCode" size="xl" class="w-full" /></UFormField>
+            <UFormField label="Country" help="Two-letter code, e.g. TH."><UInput v-model="detailsForm.regionCode" size="xl" class="w-full" /></UFormField>
           </div>
 
           <div v-else-if="editorKey === 'contact'" class="space-y-6">
@@ -177,15 +180,14 @@ import { getErrorMessage } from '~/utils/errors'
 import { defaultModuleFeaturesForVertical, resolveCmsCapabilities, toggleableModulesForScope, type ProductFeature } from '~/config/cms-registry'
 import { resolvePublicTemplate } from '~/utils/template-registry'
 import type { SiteVertical } from '~/utils/vertical-copy'
+import { formatPostalAddress, postalAddressFromAnswers, type PostalAddress } from '~/utils/postal-address'
 
 
 interface BusinessLocation {
   id: string
   slug: string
   title: string
-  address: { addressLines?: string[] } | null
-  city: string | null
-  neighborhood: string | null
+  address: PostalAddress | null
   phone: string | null
   email: string | null
   website_url: string | null
@@ -292,7 +294,7 @@ const isBusinessLocation = (value: unknown): value is BusinessLocation => {
     && typeof value.slug === 'string'
     && typeof value.title === 'string'
     && typeof value.status === 'string'
-    && isNullableString(value.city)
+    && (value.address === null || isRecord(value.address))
     && isNullableString(value.phone)
     && isNullableString(value.google_place_id)
 }
@@ -365,11 +367,26 @@ function reservationPatchFrom(config: LocationReservationConfig | null): Locatio
   return patch
 }
 
+/**
+ * The address the form's fields make. The same mapping onboarding uses, so a
+ * street with no country is refused here exactly as it is there.
+ */
+function addressFromForm(): PostalAddress | null {
+  const [streetAddress, ...rest] = detailsForm.addressLines.split('\n').map(line => line.trim()).filter(Boolean)
+  return postalAddressFromAnswers({
+    streetAddress: streetAddress ?? null,
+    addressLine2: rest.join(', ') || null,
+    city: detailsForm.locality,
+    region: detailsForm.administrativeArea,
+    postalCode: detailsForm.postalCode,
+    country: detailsForm.regionCode,
+    sublocality: detailsForm.sublocality,
+  })
+}
+
 const detailsForm = reactive({
   title: '',
   slug: '',
-  city: '',
-  neighborhood: '',
   phone: '',
   email: '',
   website_url: '',
@@ -377,7 +394,12 @@ const detailsForm = reactive({
   google_review_url: '',
   google_place_id: '',
   price_level: '',
-  address: '',
+  addressLines: '',
+  regionCode: '',
+  locality: '',
+  sublocality: '',
+  administrativeArea: '',
+  postalCode: '',
   short_description: '',
   description: '',
   status: 'active',
@@ -388,9 +410,12 @@ const locationLocalizationFields = computed(() => [
   { key: 'title', label: 'Name', source: location.value?.title },
   { key: 'short_description', label: 'Short description', source: location.value?.short_description },
   { key: 'description', label: 'Description', source: location.value?.description, multiline: true, rows: 6 },
-  { key: 'city', label: 'City', source: location.value?.city },
-  { key: 'neighborhood', label: 'Neighbourhood', source: location.value?.neighborhood },
-  { key: 'address', label: 'Address', source: location.value?.address?.addressLines?.join('\n'), multiline: true, rows: 3 },
+  // The address localizes part by part, the way it is stored: a translator
+  // writes the street lines and the place names, not one run-together line.
+  { key: 'address.addressLines', label: 'Street', source: location.value?.address?.addressLines, kind: 'string-list' as const, rows: 3 },
+  { key: 'address.sublocality', label: 'Neighbourhood', source: location.value?.address?.sublocality },
+  { key: 'address.locality', label: 'City', source: location.value?.address?.locality },
+  { key: 'address.administrativeArea', label: 'State or province', source: location.value?.address?.administrativeArea },
 ])
 function localizedLocationPath(locale: string): string {
   const slug = location.value?.slug
@@ -404,8 +429,6 @@ const hoursForm = ref<LocationHoursForm>({ timezone: '', hours: null, specialHou
 function fillDetailsForm(loc: BusinessLocation) {
   detailsForm.title = loc.title
   detailsForm.slug = loc.slug
-  detailsForm.city = loc.city ?? ''
-  detailsForm.neighborhood = loc.neighborhood ?? ''
   detailsForm.phone = loc.phone ?? ''
   detailsForm.email = loc.email ?? ''
   detailsForm.website_url = loc.website_url ?? ''
@@ -413,7 +436,12 @@ function fillDetailsForm(loc: BusinessLocation) {
   detailsForm.google_review_url = loc.google_review_url ?? ''
   detailsForm.google_place_id = loc.google_place_id ?? ''
   detailsForm.price_level = loc.price_level ?? ''
-  detailsForm.address = loc.address?.addressLines?.join('\n') ?? ''
+  detailsForm.addressLines = loc.address?.addressLines?.join('\n') ?? ''
+  detailsForm.regionCode = loc.address?.regionCode ?? ''
+  detailsForm.locality = loc.address?.locality ?? ''
+  detailsForm.sublocality = loc.address?.sublocality ?? ''
+  detailsForm.administrativeArea = loc.address?.administrativeArea ?? ''
+  detailsForm.postalCode = loc.address?.postalCode ?? ''
   detailsForm.short_description = loc.short_description ?? ''
   detailsForm.description = loc.description ?? ''
   hoursForm.value = { timezone: loc.timezone ?? '', hours: parseOpeningHours(loc.opening_hours), specialHours: parseSpecialHours(loc.special_hours) }
@@ -426,7 +454,7 @@ const setDetailsActive = (v: boolean | 'indeterminate') => {
   detailsForm.status = v ? 'active' : 'inactive'
 }
 
-const addressSummary = computed(() => location.value?.address?.addressLines?.join(', ') || location.value?.city || 'Not set')
+const addressSummary = computed(() => formatPostalAddress(location.value?.address ?? null) || 'Not set')
 const nameSummary = computed(() => location.value?.title?.trim() || 'Not named yet')
 const slugSummary = computed(() => location.value?.slug?.trim() || 'Not set')
 const contactSummary = computed(() => location.value?.phone?.trim() || location.value?.email?.trim() || location.value?.website_url?.trim() || 'Not set')
@@ -488,7 +516,7 @@ function editorSignature(key: string | null): string {
   switch (key) {
     case 'name': return JSON.stringify(detailsForm.title)
     case 'slug': return JSON.stringify(detailsForm.slug)
-    case 'address': return JSON.stringify([detailsForm.address, detailsForm.city, detailsForm.neighborhood])
+    case 'address': return JSON.stringify([detailsForm.addressLines, detailsForm.regionCode, detailsForm.locality, detailsForm.sublocality, detailsForm.administrativeArea, detailsForm.postalCode])
     case 'contact': return JSON.stringify([detailsForm.phone, detailsForm.email, detailsForm.website_url])
     case 'status': return JSON.stringify(detailsForm.status)
     case 'hours': return JSON.stringify(hoursForm.value)
@@ -641,13 +669,7 @@ async function saveCurrentEditor() {
     return
   }
   if (editorKey.value === 'address') {
-    await patchLocation({
-      address: detailsForm.address.trim()
-        ? { addressLines: detailsForm.address.split('\n').map(line => line.trim()).filter(Boolean) }
-        : null,
-      city: detailsForm.city.trim() || null,
-      neighborhood: detailsForm.neighborhood.trim() || null,
-    })
+    await patchLocation({ address: addressFromForm() })
     return
   }
   if (editorKey.value === 'contact') {

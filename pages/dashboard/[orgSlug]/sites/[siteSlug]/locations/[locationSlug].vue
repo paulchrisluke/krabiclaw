@@ -95,6 +95,7 @@ import { resolvePublicTemplate } from '~/utils/template-registry'
 import { getTodayHoursLabel, type OpeningHours } from '~/shared/reservation-hours'
 import { normalizeVertical, type SiteVertical } from '~/utils/vertical-copy'
 import { catalogLabel, catalogSummary, type CatalogCounts } from '~/utils/product-presentation'
+import { formatPostalAddress } from '~/utils/postal-address'
 
 definePageMeta({ layout: 'dashboard', ownsChrome: true })
 
@@ -104,8 +105,7 @@ interface LocationOverview {
   status: string
   phone: string | null
   email: string | null
-  city: string | null
-  address: { addressLines?: string[] } | null
+  address: PostalAddress | null
   rating: number | null
   google_place_id: string | null
   timezone?: string | null
@@ -164,7 +164,7 @@ const error = ref<string | null>(null)
 const dashboardLocationRow = computed(() => dashboard.locations.value.find(candidate => candidate.id === locationId.value) ?? null)
 const locationImage = computed(() =>
   dashboardLocationRow.value?.media.find(item => item.slot === 'social_card')?.public_url ?? '')
-const addressSummary = computed(() => location.value?.address?.addressLines?.join(', ') || 'Address not set')
+const addressSummary = computed(() => formatPostalAddress(location.value?.address ?? null) || 'Address not set')
 
 const capabilities = computed(() => {
   const vertical = dashboard.site.value?.vertical

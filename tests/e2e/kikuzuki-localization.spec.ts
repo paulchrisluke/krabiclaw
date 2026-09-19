@@ -66,8 +66,7 @@ test.beforeAll(async ({ playwright }, testInfo) => {
       route_path: '/th/locations/kikuzuki-japanese-robatayaki-izakaya',
       values: {
         title: 'Kikuzuki โรบาตายากิและอิซากายะญี่ปุ่น',
-        address: '325 ตำบลอ่าวนาง กระบี่ 81180 ประเทศไทย',
-        city: 'ตำบลอ่าวนาง',
+        address: { addressLines: ['325'], sublocality: 'ตำบลอ่าวนาง', locality: 'กระบี่' },
         description: 'ร้านอาหารญี่ปุ่นใจกลางกระบี่',
         short_description: 'โรบาตายากิและซูชิในอ่าวนาง',
       },
@@ -164,15 +163,15 @@ test('Kikuzuki Localize preserves its translated address', async ({ browser, pla
       await cms.getByTestId('localize-resource').click()
       await cms.getByTestId('localize-language').click()
       await cms.getByRole('option', { name: /ไทย \(th\)/ }).click()
-      const address = cms.getByTestId('localize-field-address')
-      await expect(address).toHaveValue('325 ตำบลอ่าวนาง กระบี่ 81180 ประเทศไทย')
+      await expect(cms.getByTestId('localize-field-address.addressLines')).toHaveValue('325')
+      await expect(cms.getByTestId('localize-field-address.sublocality')).toHaveValue('ตำบลอ่าวนาง')
       const saveResponse = await Promise.all([
         cms.waitForResponse(response => response.request().method() === 'PUT' && response.url().includes('/localization/business_location/loc-kikuzuki/th')),
         cms.getByTestId('localize-save').click(),
       ]).then(([response]) => response)
       expect(saveResponse.status()).toBe(200)
       const payload = saveResponse.request().postDataJSON() as { values: { address: unknown } }
-      expect(payload.values.address).toBe('325 ตำบลอ่าวนาง กระบี่ 81180 ประเทศไทย')
+      expect(payload.values.address).toEqual({ addressLines: ['325'], sublocality: 'ตำบลอ่าวนาง', locality: 'กระบี่' })
     } finally {
       await cms.close()
       await dashboardContext.close()

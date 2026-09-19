@@ -46,10 +46,11 @@ test('MCP annotation validation accepts only internally consistent hint combinat
     assert.equal(byName.get(name)?.destructiveHint, true, name)
   }
 
-  for (const name of ['update_location']) {
-    const tool = MCP_PUBLIC_TOOLS.find(candidate => candidate.name === name)
-    assert.ok(tool && 'city' in tool.inputSchema.properties, `${name} must accept the canonical city field`)
-  }
+  // A location's address is the one place its town and neighbourhood are
+  // recorded, and MCP is the canonical way to write one.
+  const updateLocation = MCP_PUBLIC_TOOLS.find(candidate => candidate.name === 'update_location')
+  assert.ok(updateLocation && 'address' in updateLocation.inputSchema.properties, 'update_location must accept an address')
+  assert.deepEqual(updateLocation.inputSchema.properties.address.required, ['regionCode', 'addressLines'], 'an address names its country and street')
 
 
 })
