@@ -16,7 +16,7 @@ html {
 
 body {
   margin: 0;
-  font-family: Poppins, ui-sans-serif, system-ui, sans-serif;
+  font-family: Poppins, sans-serif;
 }
 
 a {
@@ -167,7 +167,7 @@ video {
 [data-saya-critical-title] {
   max-width: 56rem;
   color: #fff;
-  font-family: var(--font-saya, "Instrument Serif", Georgia, serif);
+  font-family: var(--font-saya);
   font-size: clamp(56px, 7.5vw, 104px);
   font-weight: 400;
   letter-spacing: -0.02em;

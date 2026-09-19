@@ -43,9 +43,19 @@ release. Platform interface catalogs ship with the application, so the deployed
 
 The account must have Better Auth platform content permission. A 403 is an
 access failure to resolve through the normal admin workflow, not permission to
-patch auth tables. Enable Thai for Kikuzuki through its normal site-language
-settings using a tenant member with the required permission. Platform admin
-access by itself does not grant tenant access.
+patch auth tables. Platform admin access by itself does not grant tenant access.
+
+The order is **add → publish the bundle → publish the language**, and it is not
+interchangeable. Adding the language through the site's language settings
+creates it `disabled`: writable, and invisible to the public. Publish the bundle
+into it. Only then publish the language, which is refused until every source
+field with content has a translation.
+
+Adding used to publish in the same step, so the moment a language was picked the
+site served that prefix with nothing in it — and a locale shows exactly what has
+been translated into it, so every one of those routes 404'd. While the bundle is
+going in, read the language through the site's preview token; without it the
+prefix is correctly not found.
 
 ## Authorize, preflight, publish
 

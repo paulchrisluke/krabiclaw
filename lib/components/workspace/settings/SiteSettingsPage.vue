@@ -80,6 +80,20 @@
             </UFormField>
           </div>
 
+          <div v-else-if="detailKey === 'font'" class="space-y-6">
+            <template v-if="supportsSiteFonts">
+              <p class="text-base text-muted">Choose the font for headings and text on the public website. Mali supports Thai and English. Default restores the template typography.</p>
+              <UFormField label="Website font">
+                <USelect v-model="form.font_preset" :items="SITE_FONT_OPTIONS" value-key="value" label-key="label" size="xl" class="w-full" />
+              </UFormField>
+              <div class="space-y-3 rounded-lg border border-default p-5 text-2xl leading-relaxed" :style="siteFontStyles(form.font_preset)" data-testid="site-font-preview">
+                <p lang="en">Welcome · 123</p>
+                <p lang="th">ยินดีต้อนรับ · ๑๒๓</p>
+              </div>
+            </template>
+            <p v-else class="text-base text-muted">Font presets are available for the Saya template.</p>
+          </div>
+
           <div v-else-if="detailKey === 'contact'" class="space-y-6">
             <p class="text-base text-muted">This is the shared public contact address for the site.</p>
             <UFormField label="Contact email">
@@ -125,7 +139,7 @@
 
           <div v-else-if="detailKey === 'localization'" class="space-y-6">
             <p class="text-base text-muted">
-              English is the permanent source language. Growth includes one secondary language at no extra cost.
+              English is the permanent source language. Growth includes two secondary languages at no extra cost.
             </p>
             <div v-if="localizationLoading" class="space-y-3">
               <USkeleton class="h-16 rounded-lg" />
@@ -138,10 +152,19 @@
                   <div>
                     <p class="font-medium">{{ language.label || language.locale }} <span class="text-sm text-muted">({{ language.locale }})</span></p>
                     <UBadge :color="language.is_source || language.status === 'published' ? 'success' : 'neutral'" variant="subtle" size="sm" class="mt-1">
-                      {{ language.is_source ? 'Source · published' : language.status }}
+                      {{ language.is_source ? 'Source · published' : language.status === 'published' ? 'published' : 'Not published' }}
                     </UBadge>
                   </div>
                   <div v-if="!language.is_source" class="flex gap-2">
+                    <UButton
+                      v-if="language.status === 'disabled'"
+                      color="primary"
+                      :disabled="!isTranslationComplete(language.locale)"
+                      :loading="localizationBusy"
+                      @click="publishLanguage(language.locale)"
+                    >
+                      Publish
+                    </UButton>
                     <UButton v-if="language.status === 'published'" color="neutral" variant="outline" :loading="localizationBusy" @click="disableLanguage(language.locale)">Disable</UButton>
                     <UButton v-if="language.status === 'disabled'" color="error" variant="outline" :loading="localizationBusy" @click="deleteLanguage(language.locale)">Delete content</UButton>
                   </div>
@@ -238,6 +261,7 @@ import MediaPicker from '~/lib/components/workspace/media/MediaPicker.vue'
 import EditorPaneShell from '~/components/dashboard/EditorPaneShell.vue'
 import EditorNavigationList from '~/components/dashboard/EditorNavigationList.vue'
 import { CURRENCY_OPTIONS, isCurrencyCode, type CurrencyCode } from '~/shared/currencies'
+import { SITE_FONT_OPTIONS, MALI_FONT_CSS, isSiteFontPreset, resolveSiteFontPreset, siteFontStyles, type SiteFontPreset } from '~/shared/site-fonts'
 
 const props = withDefaults(defineProps<{ surface?: 'brand' | 'settings' }>(), { surface: 'settings' })
 const surface = computed(() => props.surface)
@@ -330,11 +354,13 @@ async function keepWorkspace() {
 }
 
 interface SiteSettingsResponse {
+  theme?: string
   brand_name?: string | null
   brand_description?: string | null
   media?: Array<{ asset_id: string; slot: string; public_url?: string | null }>
   contact_email?: string | null
   brand_color?: string | null
+  font_preset?: SiteFontPreset
   default_currency?: string | null
   robots?: string | null
   google_analytics_measurement_id?: string | null
@@ -360,6 +386,7 @@ interface EditorNavigationItem { id: string; label: string; summary: string; ico
 const isSettingsResponse = (value: unknown): value is { success: boolean; settings: SiteSettingsResponse } =>
   isRecord(value) && typeof value.success === 'boolean' && isRecord(value.settings)
   && (value.settings.brand_name === undefined || value.settings.brand_name === null || typeof value.settings.brand_name === 'string')
+  && (value.settings.font_preset === undefined || isSiteFontPreset(value.settings.font_preset))
   && (value.settings.default_currency === undefined || value.settings.default_currency === null || typeof value.settings.default_currency === 'string')
 const isNotificationsResponse = (value: unknown): value is { success: boolean; notifications: { whatsapp_phone: string | null } } =>
   isRecord(value) && typeof value.success === 'boolean' && isRecord(value.notifications)
@@ -389,7 +416,7 @@ const routeSegments = frame.rest
 const firstSegment = computed(() => routeSegments.value[0] ?? null)
 const secondSegment = computed(() => routeSegments.value[1] ?? null)
 const detailKey = computed(() => surface.value === 'brand' ? firstSegment.value : firstSegment.value === 'search' ? secondSegment.value ?? 'search-index' : firstSegment.value)
-const validBrandKeys = new Set(['name', 'logo', 'sharing-image', 'description', 'color', 'contact', 'social'])
+const validBrandKeys = new Set(['name', 'logo', 'sharing-image', 'description', 'color', 'font', 'contact', 'social'])
 const validSettingsKeys = new Set(['currency', 'notifications', 'search', 'publishing', 'localization', 'delete'])
 const validSearchKeys = new Set(['analytics', 'verification', 'visibility'])
 const routeIsCanonical = computed(() => {
@@ -418,6 +445,7 @@ const localizationProgress = ref<LocalizationProgress[]>([])
 const localizationProgressError = ref<string | null>(null)
 const newLocale = ref('')
 const loadedSettings = ref<SiteSettingsResponse | null>(null)
+const supportsSiteFonts = computed(() => loadedSettings.value?.theme === 'saya')
 const loadedNotifications = ref<{ whatsapp_phone: string | null } | null>(null)
 const originalSignature = ref('')
 interface SiteSettingsForm {
@@ -427,6 +455,7 @@ interface SiteSettingsForm {
   socialShareAssetId: string | null
   contact_email: string
   brand_color: string
+  font_preset: SiteFontPreset
   default_currency: CurrencyCode | null
   google_analytics_measurement_id: string
   google_site_verification: string
@@ -435,10 +464,16 @@ interface SiteSettingsForm {
   social_tiktok_url: string
 }
 const form = reactive<SiteSettingsForm>({
-  brand_name: '', brand_description: '', logoAssetId: null, socialShareAssetId: null, contact_email: '', brand_color: '',
+  brand_name: '', brand_description: '', logoAssetId: null, socialShareAssetId: null, contact_email: '', brand_color: '', font_preset: 'default',
   default_currency: null, google_analytics_measurement_id: '', google_site_verification: '',
   social_facebook_url: '', social_instagram_url: '', social_tiktok_url: '',
 })
+// Only the specimen uses Mali. Never change the dashboard's typography.
+useHead(() => ({
+  style: surface.value === 'brand' && detailKey.value === 'font' && supportsSiteFonts.value && form.font_preset === 'mali'
+    ? [{ key: 'site-font-preview', innerHTML: MALI_FONT_CSS }]
+    : [],
+}))
 const brandLocalizationFields = computed(() => [
   { key: 'brand_name', label: 'Brand name', source: loadedSettings.value?.brand_name },
   { key: 'brand_description', label: 'Description', source: loadedSettings.value?.brand_description, multiline: true, rows: 6 },
@@ -464,6 +499,7 @@ const brandItems = computed<EditorNavigationItem[]>(() => [
   { id: 'sharing-image', label: 'Social sharing image', summary: loadedSettings.value?.media?.some(item => item.slot === 'social_share') ? 'Image selected' : 'Not set', icon: 'i-lucide-panels-top-left', to: `${brandPath.value}/sharing-image` },
   { id: 'description', label: 'Description', summary: explicitSummary(loadedSettings.value?.brand_description), icon: 'i-lucide-align-left', to: `${brandPath.value}/description` },
   { id: 'color', label: 'Brand color', summary: explicitSummary(loadedSettings.value?.brand_color), icon: 'i-lucide-palette', to: `${brandPath.value}/color` },
+  ...(supportsSiteFonts.value ? [{ id: 'font', label: 'Website font', summary: loadedSettings.value?.font_preset === 'mali' ? 'Mali (Thai and English)' : 'Default', icon: 'i-lucide-type', to: `${brandPath.value}/font` }] : []),
   { id: 'contact', label: 'Contact details', summary: explicitSummary(loadedSettings.value?.contact_email), icon: 'i-lucide-mail', to: `${brandPath.value}/contact` },
   { id: 'social', label: 'Social profiles', summary: socialSummary.value, icon: 'i-lucide-share-2', to: `${brandPath.value}/social` },
 ])
@@ -501,7 +537,7 @@ const navigationGroups = computed(() => {
 })
 const activeNavigationId = computed(() => surface.value === 'brand' || isSearchLevel.value ? detailKey.value : firstSegment.value)
 const hasDetail = computed(() => routeSegments.value.length > 0)
-const detailTitles: Record<string, string> = { 'search-index': 'Search and analytics', name: 'Brand name', logo: 'Logo', 'sharing-image': 'Social sharing image', description: 'Description', color: 'Brand color', contact: 'Contact details', social: 'Social profiles', currency: 'Currency', notifications: 'Notifications', analytics: 'Google Analytics', verification: 'Search verification', visibility: 'Search visibility', publishing: 'Facebook publishing', localization: 'Localization' }
+const detailTitles: Record<string, string> = { 'search-index': 'Search and analytics', name: 'Brand name', logo: 'Logo', 'sharing-image': 'Social sharing image', description: 'Description', color: 'Brand color', font: 'Website font', contact: 'Contact details', social: 'Social profiles', currency: 'Currency', notifications: 'Notifications', analytics: 'Google Analytics', verification: 'Search verification', visibility: 'Search visibility', publishing: 'Facebook publishing', localization: 'Localization' }
 const detailTitle = computed(() => detailKey.value ? detailTitles[detailKey.value] : undefined)
 
 // The navbar names the level, not the open section — at `lg` the section's own
@@ -512,7 +548,8 @@ const levelTitle = computed(() => {
   return isSearchLevel.value ? 'Search and analytics' : 'Site Settings'
 })
 const navbarTitle = computed(() => levelTitle.value)
-const showActions = computed(() => Boolean(detailKey.value && !['search-index', 'publishing', 'delete'].includes(detailKey.value)))
+const showActions = computed(() => Boolean(detailKey.value && !['search-index', 'publishing', 'delete'].includes(detailKey.value)
+  && (detailKey.value !== 'font' || supportsSiteFonts.value)))
 
 // Leaving a section resets its editor. This used to hang off the back button's
 // click handler, which left browser back with stale editor state.
@@ -527,6 +564,7 @@ function editorSignature(key: string | null) {
     case 'sharing-image': return JSON.stringify(form.socialShareAssetId)
     case 'description': return JSON.stringify(form.brand_description)
     case 'color': return JSON.stringify(form.brand_color)
+    case 'font': return JSON.stringify(form.font_preset)
     case 'contact': return JSON.stringify(form.contact_email)
     case 'social': return JSON.stringify([form.social_facebook_url, form.social_instagram_url, form.social_tiktok_url])
     case 'currency': return JSON.stringify(form.default_currency)
@@ -548,6 +586,7 @@ const validationMessage = computed(() => {
   switch (detailKey.value) {
     case 'name': return form.brand_name.trim() ? null : 'Enter a brand name.'
     case 'color': return !form.brand_color.trim() || /^#[0-9a-f]{6}$/i.test(form.brand_color) ? null : 'Enter a six-digit hex color.'
+    case 'font': return supportsSiteFonts.value && isSiteFontPreset(form.font_preset) ? null : 'Choose a supported website font.'
     case 'contact': return !form.contact_email.trim() || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.contact_email) ? null : 'Enter a valid email address.'
     case 'social': return [form.social_facebook_url, form.social_instagram_url, form.social_tiktok_url].every(isValidUrl) ? null : 'Enter complete http or https profile URLs.'
     case 'notifications': return null
@@ -568,6 +607,7 @@ function fillForm(settings: SiteSettingsResponse) {
   form.socialShareAssetId = settings.media?.find(item => item.slot === 'social_share')?.asset_id ?? null
   form.contact_email = settings.contact_email ?? ''
   form.brand_color = settings.brand_color ?? ''
+  form.font_preset = resolveSiteFontPreset(settings.font_preset)
   // A stored value that is not a supported code is not this form's to reinterpret:
   // showing it as USD invited the owner to save that over whatever is really there.
   form.default_currency = isCurrencyCode(settings.default_currency) ? settings.default_currency : null
@@ -644,6 +684,7 @@ async function saveCurrentEditor() {
       case 'sharing-image': await patchSettings({ media: [{ asset_id: form.socialShareAssetId, slot: 'social_share' }] }); break
       case 'description': await patchSettings({ brand_description: form.brand_description }); break
       case 'color': await patchSettings({ brand_color: form.brand_color }); break
+      case 'font': await patchSettings({ font_preset: form.font_preset }); break
       case 'contact': await patchSettings({ contact_email: form.contact_email.trim() }); break
       case 'social': await patchSettings({ social_facebook_url: form.social_facebook_url.trim() || null, social_instagram_url: form.social_instagram_url.trim() || null, social_tiktok_url: form.social_tiktok_url.trim() || null }); break
       case 'currency': {
@@ -685,8 +726,10 @@ const isLocalizationProgress = (value: unknown): value is LocalizationProgress =
     && typeof item.id === 'string' && typeof item.label === 'string' && typeof item.path === 'string'
     && typeof item.completed === 'number' && typeof item.total === 'number')
 async function loadLocalizationProgress() {
+  // Every added language, not only the published ones: progress is what the
+  // Publish button waits for, so a language being translated needs it most.
   const locales = localizationSettings.value?.languages
-    .filter(language => !language.is_source && language.status === 'published')
+    .filter(language => !language.is_source)
     .map(language => language.locale) ?? []
   try {
     localizationProgress.value = await Promise.all(locales.map(locale =>
@@ -723,12 +766,21 @@ async function enableLanguage(): Promise<boolean> {
   if (newLocale.value) {
     const selectedCatalog = localizationSettings.value?.available_catalogs.find(catalog => catalog.locale === newLocale.value)
     if (!selectedCatalog) return false
-    const success = await mutateLocalization(`/api/editor/sites/${siteId}/locales/${encodeURIComponent(newLocale.value)}/enable`, 'POST', { label: selectedCatalog.label })
+    const success = await mutateLocalization(`/api/editor/sites/${siteId}/locales/${encodeURIComponent(newLocale.value)}/add`, 'POST', { label: selectedCatalog.label })
     if (success) newLocale.value = ''
     return success
   }
   return false
 }
+/**
+ * A language goes public only when it is finished. The server refuses anything
+ * less; the button says so first rather than offering a click that 409s.
+ */
+function isTranslationComplete(locale: string): boolean {
+  const progress = localizationProgress.value.find(item => item.locale === locale)
+  return Boolean(progress && progress.total > 0 && progress.completed === progress.total)
+}
+async function publishLanguage(locale: string) { await mutateLocalization(`/api/editor/sites/${siteId}/locales/${encodeURIComponent(locale)}/publish`, 'POST') }
 async function disableLanguage(locale: string) { await mutateLocalization(`/api/editor/sites/${siteId}/locales/${encodeURIComponent(locale)}/disable`, 'POST') }
 async function deleteLanguage(locale: string) { if (window.confirm(`Permanently delete all ${locale} content for this site?`)) await mutateLocalization(`/api/editor/sites/${siteId}/locales/${encodeURIComponent(locale)}`, 'DELETE') }
 watch(detailKey, key => { if (key === 'localization' && !localizationSettings.value) loadLocalizationSettings() }, { immediate: true })

@@ -445,11 +445,14 @@ watch([detailsKey, () => selectedNote.value?.id, editorKey, editorField], () => 
   noteAttemptDraft.value = null
 }, { immediate: true })
 
-watch([booking, editorKey, editorField], ([currentBooking, key]) => {
+watch([booking, editorKey, editorField], ([currentBooking, key], previous) => {
   // A field leaf is a route, so Nuxt may recreate this component while moving
   // between it and the change hub. Keep the one staged draft in Nuxt state and
-  // only reseed it when it belongs to an older source revision.
-  if (currentBooking && key === 'change' && changeDraft.value.sourceUpdatedAt !== currentBooking.updatedAt) resetChangeDraft()
+  // only reseed it when it belongs to an older source revision, or when change
+  // mode is being entered afresh and the tenant should not inherit the edits
+  // they abandoned last time.
+  const entering = key === 'change' && previous !== undefined && previous[1] !== 'change'
+  if (currentBooking && key === 'change' && (entering || changeDraft.value.sourceUpdatedAt !== currentBooking.updatedAt)) resetChangeDraft()
   if (key === 'change' && isChangeField(editorField.value)) changeFieldOriginal.value = changeDraft.value[draftKey(editorField.value)]
 }, { immediate: true })
 

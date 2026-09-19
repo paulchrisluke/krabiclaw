@@ -5,6 +5,7 @@ import { getOrganizationBillingStatus } from '~/server/utils/billing'
 import type { CloudflareEnv } from '~/server/utils/auth'
 import { canonicalizeLocale } from '~/server/utils/localization'
 import { localizationError } from '~/server/utils/localization-errors'
+import { getSiteLocalizationProgress } from '~/server/utils/site-localization-opportunities'
 
 interface SiteLanguageRow {
   id: string
@@ -21,7 +22,16 @@ async function loadLanguage(db: DbClient, organizationId: string, siteId: string
   `, [organizationId, siteId, locale])
 }
 
-export async function enableSiteLanguage(
+/**
+ * Adding a language starts it disabled, which is the authoring state.
+ *
+ * It used to be created `published`, so the moment an owner picked Japanese the
+ * site served `/ja` with nothing in it — footer, sitemap, hreflang and routes
+ * all live against zero content, and a locale shows exactly what has been
+ * translated into it, so those routes 404. Translating first was impossible
+ * because writes required `published`. Add, translate, then publish.
+ */
+export async function addSiteLanguage(
   db: DbClient, env: CloudflareEnv,
   input: { organizationId: string; siteId: string; locale: unknown },
 ) {
@@ -31,17 +41,56 @@ export async function enableSiteLanguage(
   if (!catalog) localizationError(403, 'PLATFORM_LOCALE_UNAVAILABLE', 'The platform locale is unavailable', { locale })
   const projection = await getOrganizationBillingStatus(env, db, input.organizationId)
   if (projection.plan !== 'growth' || !projection.stripeSubscriptionId) {
-    localizationError(402, 'LANGUAGE_ENTITLEMENT_REQUIRED', 'An active Growth subscription is required to enable a language')
+    localizationError(402, 'LANGUAGE_ENTITLEMENT_REQUIRED', 'An active Growth subscription is required to add a language')
   }
   const now = new Date().toISOString()
+  // No public-slot count here: adding costs the site nothing until it is
+  // published, and the limit belongs where the slot is actually taken.
+  await execute(db, `
+    INSERT INTO site_locales (id, organization_id, site_id, locale, label, is_source, status, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, 0, 'disabled', ?, ?)
+    ON CONFLICT(organization_id, site_id, locale) DO UPDATE SET label = excluded.label, updated_at = excluded.updated_at
+  `, [`locale::${input.organizationId}::${input.siteId}::${locale}`, input.organizationId, input.siteId, locale, catalog.label, now, now])
+  return await loadLanguage(db, input.organizationId, input.siteId, locale)
+}
+
+/**
+ * Publishing is what makes a language public, and it refuses anything less than
+ * a finished translation. The progress payload travels with the refusal so the
+ * caller can say what is still missing rather than just that it failed.
+ */
+export async function publishSiteLanguage(
+  db: DbClient, env: CloudflareEnv,
+  input: { organizationId: string; siteId: string; locale: unknown },
+) {
+  const locale = canonicalizeLocale(input.locale)
+  if (locale === 'en') localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', 'English is the immutable source language')
+  const catalog = platformLocale(locale)
+  if (!catalog) localizationError(403, 'PLATFORM_LOCALE_UNAVAILABLE', 'The platform locale is unavailable', { locale })
+  const projection = await getOrganizationBillingStatus(env, db, input.organizationId)
+  if (projection.plan !== 'growth' || !projection.stripeSubscriptionId) {
+    localizationError(402, 'LANGUAGE_ENTITLEMENT_REQUIRED', 'An active Growth subscription is required to publish a language')
+  }
+  const existing = await loadLanguage(db, input.organizationId, input.siteId, locale)
+  if (!existing) localizationError(404, 'LOCALIZATION_NOT_FOUND', 'Add the language before publishing it', { locale })
+
+  const progress = await getSiteLocalizationProgress(db, { organizationId: input.organizationId, siteId: input.siteId, locale })
+  if (progress.completed !== progress.total) {
+    localizationError(409, 'LOCALIZATION_INCOMPLETE', 'Every field has to be translated before the language goes public', {
+      locale, completed: progress.completed, total: progress.total, opportunities: progress.opportunities,
+    })
+  }
+
+  const now = new Date().toISOString()
   const result = await execute(db, `
-    INSERT INTO site_locales (id, organization_id, site_id, locale, label, is_source, status, activated_at, created_at, updated_at)
-    SELECT ?, ?, ?, ?, ?, 0, 'published', ?, ?, ?
-     WHERE NOT EXISTS (SELECT 1 FROM site_locales WHERE organization_id = ? AND site_id = ? AND is_source = 0 AND status = 'published' AND locale <> ?)
-    ON CONFLICT(organization_id, site_id, locale) DO UPDATE SET label = excluded.label, status = 'published',
-      activated_at = COALESCE(site_locales.activated_at, excluded.activated_at), disabled_at = NULL, updated_at = excluded.updated_at
-  `, [`locale::${input.organizationId}::${input.siteId}::${locale}`, input.organizationId, input.siteId, locale, catalog.label, now, now, now, input.organizationId, input.siteId, locale])
-  if (result.meta?.changes !== 1) localizationError(409, 'LANGUAGE_ENTITLEMENT_REQUIRED', 'Language could not be enabled because another secondary language is already published.')
+    UPDATE site_locales SET status = 'published',
+      activated_at = COALESCE(activated_at, ?), disabled_at = NULL, updated_at = ?
+     WHERE organization_id = ? AND site_id = ? AND locale = ? AND is_source = 0
+       AND (SELECT COUNT(*) FROM site_locales other
+              WHERE other.organization_id = ? AND other.site_id = ? AND other.is_source = 0
+                AND other.status = 'published' AND other.locale <> ?) < 2
+  `, [now, now, input.organizationId, input.siteId, locale, input.organizationId, input.siteId, locale])
+  if (result.meta?.changes !== 1) localizationError(409, 'LANGUAGE_ENTITLEMENT_REQUIRED', 'Language could not be published because two secondary languages are already published.')
   return await loadLanguage(db, input.organizationId, input.siteId, locale)
 }
 

@@ -11,7 +11,7 @@ html {
 
 body {
   margin: 0;
-  font-family: Poppins, ui-sans-serif, system-ui, sans-serif;
+  font-family: Poppins, sans-serif;
   line-height: 1.5;
 }
 
@@ -164,7 +164,7 @@ button {
 [data-blawby-critical-hero] h1 {
   max-width: 56rem;
   margin: 0;
-  font-family: Marcellus, Georgia, serif;
+  font-family: Marcellus, serif;
   font-size: 3rem;
   font-weight: 500;
   line-height: 1;

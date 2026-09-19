@@ -1,9 +1,11 @@
 import { assertCalendarDate, localNow, MINUTE_TIME_PATTERN, isValidTimezone } from '~/utils/timezone'
 import { HTTPError } from 'nitro'
 import { execute, queryFirst, type DbClient } from '~/server/db'
+import { isSiteFontPreset, resolveSiteFontPreset, type SiteFontPreset } from '~/shared/site-fonts'
 
 export interface SiteConfig {
   brand_color?: string
+  font_preset?: SiteFontPreset
   social_facebook?: string
   social_instagram?: string
   social_tiktok?: string
@@ -21,8 +23,10 @@ export const getConfig = async (
   organizationId: string,
   siteId: string
 ): Promise<SiteConfig> => {
-  const row = await queryFirst<Record<keyof SiteConfig, unknown>>(db, `
+  const row = await queryFirst<Record<keyof SiteConfig | 'font_preset_type', unknown>>(db, `
     SELECT json_extract(settings_json, '$.config.brand_color') AS brand_color,
+           json_extract(settings_json, '$.config.font_preset') AS font_preset,
+           json_type(settings_json, '$.config.font_preset') AS font_preset_type,
            json_extract(settings_json, '$.config.press_email') AS press_email,
            json_extract(settings_json, '$.config.partnerships_email') AS partnerships_email,
            json_extract(settings_json, '$.config.catering_email') AS catering_email,
@@ -43,6 +47,9 @@ export const getConfig = async (
     if (typeof value !== 'string') throw new Error('Invalid stored site setting: ' + key)
     config[key] = value
   }
+  // A missing optional setting preserves the template. An explicit null or an
+  // unsupported stored value is not a valid preset.
+  config.font_preset = resolveSiteFontPreset(row.font_preset_type === null ? undefined : row.font_preset)
   return config
 }
 
@@ -61,9 +68,7 @@ export const resolveLocationTimezone = async (
 
 /**
  * Returns true if `dateStr` (YYYY-MM-DD) is strictly before "today" as observed in `timezone`.
- * Workers always run on a UTC clock, so "today" must be computed in the venue's zone rather
- * than compared against `new Date()` directly — otherwise bookings/reservations near midnight
- * are wrongly accepted/rejected for venues whose local day hasn't rolled over yet (or already has).
+ * Workers always run on a UTC clock, so the "today" check must use the venue's zone.
  */
 export const isDateBeforeTimezoneToday = (date: string, timezone: string): boolean => {
   assertCalendarDate(date)
@@ -83,6 +88,7 @@ export const setConfig = async (
   key: keyof SiteConfig,
   value: string
 ) => {
+  if (key === 'font_preset' && !isSiteFontPreset(value)) throw new HTTPError({ statusCode: 422, statusMessage: 'Unsupported site font preset' })
   if (key === 'default_timezone' && !isValidTimezone(value)) throw new HTTPError({ statusCode: 422, statusMessage: 'A valid analytics timezone is required' })
   if (key === 'social_facebook' || key === 'social_instagram' || key === 'social_tiktok') {
     const result = await execute(db, `UPDATE sites SET ${key}_url = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE organization_id = ? AND id = ?`, [value || null, organizationId, siteId])

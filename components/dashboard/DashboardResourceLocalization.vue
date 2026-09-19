@@ -159,11 +159,6 @@ const editorError = ref<string | null>(null)
 let requestGeneration = 0
 let documentRevision: { locale: string; updatedAt: string } | null = null
 
-const dirty = computed(() => props.fields.some(field => draft[field.key] !== baseline.value[field.key]))
-
-function canDiscardDraft(): boolean {
-  return !dirty.value || window.confirm('Discard unsaved translation changes?')
-}
 
 const modalOpen = computed({
   get: () => open.value,
@@ -172,7 +167,7 @@ const modalOpen = computed({
       open.value = true
       return
     }
-    if (!saving.value && canDiscardDraft()) open.value = false
+    if (!saving.value) open.value = false
   },
 })
 
@@ -180,7 +175,7 @@ const selectedLocale = computed({
   get: () => locale.value,
   set: (value: string) => {
     if (value === locale.value || saving.value) return
-    if (canDiscardDraft()) locale.value = value
+    locale.value = value
   },
 })
 
@@ -348,18 +343,7 @@ function requestClose(): void {
   modalOpen.value = false
 }
 
-function handleBeforeUnload(event: BeforeUnloadEvent): void {
-  if (!open.value || !dirty.value) return
-  event.preventDefault()
-  event.returnValue = ''
-}
 
-onBeforeRouteLeave(() => {
-  if (open.value && !canDiscardDraft()) return false
-})
-
-onMounted(() => window.addEventListener('beforeunload', handleBeforeUnload))
-onBeforeUnmount(() => window.removeEventListener('beforeunload', handleBeforeUnload))
 
 watch(open, (value) => {
   requestGeneration += 1
