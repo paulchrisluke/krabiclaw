@@ -1,4 +1,3 @@
-import { parseOpeningHours, parseSpecialHours } from '~/shared/reservation-hours'
 
 import {
   getOrgWhatsAppPhone,
@@ -48,38 +47,6 @@ export async function getSiteForMcp(
     : null
   if (!site || !membership) throw new Error("Site not found or access denied");
   return site;
-}
-
-export async function getLocationForMcp(
-  db: D1Database,
-  organizationId: string,
-  siteId: string,
-  locationIdOrSlug: string,
-) {
-  const byId = await queryFirst<Record<string, unknown>>(db, `
-    SELECT bl.*
-    FROM business_locations bl
-    WHERE bl.id = ? AND bl.organization_id = ? AND bl.site_id = ?
-    LIMIT 1
-  `, [locationIdOrSlug, organizationId, siteId]);
-  const row = byId ?? await queryFirst<Record<string, unknown>>(db, `
-    SELECT bl.*
-    FROM business_locations bl
-    WHERE bl.slug = ? AND bl.organization_id = ? AND bl.site_id = ?
-    LIMIT 1
-  `, [locationIdOrSlug, organizationId, siteId]);
-
-  if (!row) throw new Error("Location not found");
-  const { getMediaPlacements } = await import('~/server/utils/media-placement')
-  const placements = await getMediaPlacements(db, { siteId, ownerType: 'business_location', ownerIds: [String(row.id)] })
-  return {
-    ...row,
-    address: safeJson(row.address),
-    opening_hours: parseOpeningHours(row.opening_hours ? JSON.parse(String(row.opening_hours)) : null),
-    special_hours: parseSpecialHours(row.special_hours ? JSON.parse(String(row.special_hours)) : null),
-    categories: safeJson(row.categories),
-    media: (placements.get(String(row.id)) ?? []).map(item => ({ asset_id: item.asset_id, slot: item.slot, public_url: item.public_url, thumbnail_url: item.thumbnail_url, kind: item.kind, sort_order: item.sort_order })),
-  };
 }
 
 export async function getNotificationsSettings(
@@ -299,7 +266,3 @@ export function buildTenantPageReplacementConfirmationToken(expectedUpdatedAt: s
   return `tenant-page-replacement:${expectedUpdatedAt}:${[...removedBlockIds].sort().join(',')}`
 }
 
-function safeJson(value: unknown) {
-  if (typeof value !== "string" || !value.trim()) return null;
-  return JSON.parse(value)
-}

@@ -1,59 +1,127 @@
-import { getPhoneCountry } from '~/utils/phone'
+/**
+ * A postal address, exactly as the Places API (New) returns it.
+ *
+ * `GET https://places.googleapis.com/v1/places/{id}` answers a `postalAddress`
+ * of type `google.type.PostalAddress`, and that is what `business_locations.address`
+ * stores — unchanged, un-flattened, un-recomposed. One shape from the API we
+ * call, through the column, to the page.
+ *
+ * `addressLines` is ordered and unbounded because addresses are: Pottery House
+ * Krabi has three. `sublocality` is a real part of a Thai address ("Ao Nang",
+ * "Nong Thale") that a flat line1/line2/city/state model has nowhere to put.
+ *
+ * `revision`, `sortingCode`, `recipients` and `organization` are omitted: Places
+ * never populates them for a business.
+ */
+export interface PostalAddress {
+  /** ISO 3166-1 alpha-2, as `google.type.PostalAddress.regionCode`. */
+  regionCode: string
+  addressLines: string[]
+  /** BCP-47, present when the address is written in a specific language. */
+  languageCode?: string
+  locality?: string
+  sublocality?: string
+  administrativeArea?: string
+  postalCode?: string
+}
+
+const OPTIONAL_TEXT = ['languageCode', 'locality', 'sublocality', 'administrativeArea', 'postalCode'] as const
 
 /**
- * A street address as the owner answered it, one field per answer. These are
- * the source; the single-line form a location stores is derived from them by
- * composePostalAddress() and is never stored alongside them.
+ * Read a stored or submitted address.
  *
- * Keeping the parts is not tidiness. The draft used to persist only the
- * composed line and read it straight back into the street field on resume, so
- * an owner who left after the location step returned to find their street
- * address reading "United States".
+ * D1 has no JSON type, so the column hands us text and a request body hands us
+ * the parsed object; both arrive here and leave as one shape. An address that
+ * does not match throws, because the column's CHECK constraint permits nothing
+ * else — an unreadable value is a real failure, not a value to guess at.
  */
-export interface PostalAddressParts {
-  streetAddress: string
-  addressLine2: string
-  city: string
-  region: string
-  postalCode: string
-  /** ISO 3166-1 alpha-2, as answered on the location step. */
-  country: string
-  /**
-   * True when the street line came from Google, which returns the whole
-   * formatted address on one line, already ending in a country spelled its own
-   * way ("…, NY 10002, USA"). Our name for that country ("United States") does
-   * not appear in the line, so a containment test cannot detect it and the
-   * country is simply not appended.
-   */
-  streetIsFormatted: boolean
+export function parsePostalAddress(value: unknown): PostalAddress | null {
+  if (value === null || value === undefined || value === '') return null
+  const source: unknown = typeof value === 'string' ? JSON.parse(value) : value
+  if (typeof source !== 'object' || source === null || Array.isArray(source)) {
+    throw new TypeError('A postal address is an object')
+  }
+  const record = source as Record<string, unknown>
+  if (typeof record.regionCode !== 'string' || !record.regionCode.trim()) {
+    throw new TypeError('A postal address names its regionCode')
+  }
+  if (!Array.isArray(record.addressLines) || !record.addressLines.every(line => typeof line === 'string')) {
+    throw new TypeError('A postal address carries addressLines as strings')
+  }
+  const address: PostalAddress = {
+    regionCode: record.regionCode,
+    addressLines: record.addressLines.filter(line => line.trim().length > 0),
+  }
+  for (const field of OPTIONAL_TEXT) {
+    const part = record[field]
+    if (part === undefined || part === null) continue
+    if (typeof part !== 'string') throw new TypeError(`A postal address writes ${field} as text`)
+    if (part.trim()) address[field] = part
+  }
+  return address
+}
+
+/** The address on one line, the way a guest reads it. */
+export function formatPostalAddress(address: PostalAddress | null): string {
+  if (!address) return ''
+  return [...address.addressLines, address.sublocality, address.locality, address.administrativeArea, address.postalCode]
+    .filter((part): part is string => typeof part === 'string' && part.trim().length > 0)
+    .join(', ')
 }
 
 /**
- * The address as a location stores it: one line per block, the way it would be
- * written on an envelope. A segment the street line already contains is not
- * repeated.
+ * The place name a site shows above a location: its neighbourhood when the
+ * address names one, its town otherwise.
  */
-export function composePostalAddress(parts: PostalAddressParts): string {
-  const street = parts.streetAddress.trim()
-  // Word boundaries, not substrings: the region "CA" occurs inside "123 Acacia
-  // Ave", and treating that as "already written" dropped the state from the
-  // composed address.
-  const streetWords = new Set(street.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter(Boolean))
-  const alreadyInStreet = (segment: string) => {
-    const words = segment.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter(Boolean)
-    return words.length > 0 && words.every(word => streetWords.has(word))
-  }
+export function addressPlaceName(address: PostalAddress | null): string {
+  return address?.sublocality || address?.locality || ''
+}
 
-  const locality = [parts.city, parts.region, parts.postalCode]
-    .map(part => part.trim())
-    .filter(part => part && !alreadyInStreet(part))
-    .join(', ')
+/**
+ * The owner's own answers on the onboarding location step. The step is not
+ * complete without a street, a city and a country, so every required part of
+ * the address is present by the time this runs.
+ */
+export interface PostalAddressAnswers {
+  streetAddress: string | null
+  addressLine2: string | null
+  city: string | null
+  region: string | null
+  postalCode: string | null
+  /** ISO 3166-1 alpha-2, as answered on the location step. */
+  country: string | null
+  /** Only the CMS asks for a neighbourhood; onboarding does not. */
+  sublocality?: string | null
+}
 
-  const countryName = parts.streetIsFormatted ? '' : getPhoneCountry(parts.country)?.name ?? ''
-  const country = countryName && !alreadyInStreet(countryName) ? countryName : ''
-
-  return [street, parts.addressLine2, locality, country]
-    .map(part => part.trim())
+export function postalAddressFromAnswers(answers: PostalAddressAnswers): PostalAddress | null {
+  const addressLines = [answers.streetAddress, answers.addressLine2]
+    .map(line => line?.trim() ?? '')
     .filter(Boolean)
-    .join('\n')
+  // A street with no country is not an address. Both callers gate on the
+  // country before they get here, so there is nothing to answer with but null.
+  if (!addressLines.length || !answers.country?.trim()) return null
+  const address: PostalAddress = { regionCode: answers.country.trim(), addressLines }
+  if (answers.city?.trim()) address.locality = answers.city.trim()
+  if (answers.sublocality?.trim()) address.sublocality = answers.sublocality.trim()
+  if (answers.region?.trim()) address.administrativeArea = answers.region.trim()
+  if (answers.postalCode?.trim()) address.postalCode = answers.postalCode.trim()
+  return address
+}
+
+/**
+ * The address as schema.org writes it, for the JSON-LD a location page emits.
+ * `google.type.PostalAddress` and schema.org `PostalAddress` name the same
+ * parts, so the mapping is one to one and the whole address no longer has to be
+ * flattened into `streetAddress`.
+ */
+export function schemaPostalAddress(address: PostalAddress | null): Record<string, string> | undefined {
+  if (!address) return undefined
+  const node: Record<string, string> = { '@type': 'PostalAddress', addressCountry: address.regionCode }
+  const street = address.addressLines.filter(line => line.trim()).join(', ')
+  if (street) node.streetAddress = street
+  if (address.locality) node.addressLocality = address.locality
+  if (address.administrativeArea) node.addressRegion = address.administrativeArea
+  if (address.postalCode) node.postalCode = address.postalCode
+  return node
 }

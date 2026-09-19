@@ -30,7 +30,7 @@ function isPublicProductDetailPayload(value: unknown): value is PublicProductDet
     && typeof value.location.id === 'string'
     && typeof value.location.slug === 'string'
     && typeof value.location.title === 'string'
-    && (value.location.address === null || typeof value.location.address === 'string')
+    && (value.location.address === null || typeof value.location.address === 'object')
     && (value.location.phone === null || typeof value.location.phone === 'string')
     && (value.location.maps_url === null || typeof value.location.maps_url === 'string')
     && (value.location.latitude === null || typeof value.location.latitude === 'number')

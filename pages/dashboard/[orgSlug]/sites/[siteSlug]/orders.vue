@@ -21,7 +21,7 @@
         <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h2 class="font-semibold text-highlighted">{{ location.title }}</h2>
-            <p class="text-sm text-muted">{{ location.city || location.addressText || 'Location ordering links' }}</p>
+            <p class="text-sm text-muted">{{ location.addressText || 'Location ordering links' }}</p>
           </div>
           <UButton v-if="sitePaths" size="sm" color="neutral" variant="soft" icon="i-lucide-map-pin" :to="`${sitePaths.locations}/${location.slug}`">Location details</UButton>
         </div>
@@ -74,8 +74,8 @@ interface LocationRow {
   id: string
   slug: string
   title: string
-  city: string | null
-  address: { addressLines?: string[] } | null
+  status: string
+  address: PostalAddress | null
   grab_url?: string | null
   uber_eats_url?: string | null
   foodpanda_url?: string | null
@@ -95,7 +95,7 @@ const loadError = ref<string | null>(null)
 const savingId = ref<string | null>(null)
 
 function addressText(address: LocationRow['address']) {
-  return address?.addressLines?.filter(Boolean).join(', ') ?? ''
+  return formatPostalAddress(address)
 }
 
 function normalizedUrl(value: string): string | null {

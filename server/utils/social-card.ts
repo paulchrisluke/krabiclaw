@@ -135,7 +135,7 @@ async function loadOwner(db: DbClient, owner: SocialCardOwner): Promise<OwnerRec
       return await queryFirst<OwnerRecord>(db, `SELECT organization_id, site_id,
         COALESCE(NULLIF(trim(seo_title), ''), title) AS title,
         COALESCE(NULLIF(trim(seo_description), ''), NULLIF(trim(short_description), ''), NULLIF(trim(description), '')) AS description,
-        'Location' AS label, city AS location FROM business_locations WHERE id = ? LIMIT 1`, [owner.owner_id]) ?? null
+        'Location' AS label, COALESCE(address ->> '$.sublocality', address ->> '$.locality') AS location FROM business_locations WHERE id = ? LIMIT 1`, [owner.owner_id]) ?? null
     case 'product':
       return await queryFirst<OwnerRecord>(db, `SELECT p.organization_id, pub.site_id,
         p.name AS title,

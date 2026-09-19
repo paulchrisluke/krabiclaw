@@ -1,4 +1,5 @@
 import { currencyForCountry, type CurrencyCode } from '~/shared/currencies'
+import type { PostalAddress } from '~/utils/postal-address'
 import type { OpeningHours, SpecialHours } from '~/shared/reservation-hours'
 import type { SiteVertical } from '~/utils/vertical-copy'
 import type { DraftBrandForm } from '~/lib/components/workspace/onboarding/DraftBrandCard.vue'
@@ -28,8 +29,7 @@ export interface OnboardingProductDraft {
 export interface OnboardingPlacePreview {
   placeId: string
   name: string
-  address: string
-  city?: string | null
+  address: PostalAddress | null
   phone?: string | null
   mapsUrl?: string | null
   timezone?: string | null

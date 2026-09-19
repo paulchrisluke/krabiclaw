@@ -45,6 +45,7 @@ import { listPublicLocaleRepresentations } from '~/server/utils/public-locale-re
 import { normalizeVertical } from '~/utils/vertical-copy'
 import { resolvePublicTemplate } from '~/utils/template-registry'
 import { isPublicSourceRouteRoot } from '~/shared/public-locale-routes'
+import { parsePostalAddress } from '~/utils/postal-address'
 import {
   loadExactPublicLocalizations,
   projectExactLocalizedCollection,
@@ -685,14 +686,14 @@ async function loadPublicPageSource(
   const locations = (locRows.results ?? []).map((loc) => {
     const publicUrl = loc.media_public_url as string | null;
 
-    const address = loc.address as string | null
+    const address = parsePostalAddress(loc.address)
     const openingHours = loc.opening_hours as string | null
     const specialHours = loc.special_hours as string | null
     return {
       id: loc.id,
       slug: loc.slug,
       title: loc.title,
-      address: address ? JSON.parse(address) : null,
+      address,
       phone: loc.phone,
       email: (loc.email as string | null) ?? null,
       website_url: loc.website_url,
@@ -702,8 +703,7 @@ async function loadPublicPageSource(
         maps_url: loc.maps_url as string | null,
         latitude: loc.latitude as number | null,
         longitude: loc.longitude as number | null,
-        address: loc.address as string | null,
-        city: loc.city as string | null,
+        address,
       }),
       latitude: loc.latitude,
       longitude: loc.longitude,
@@ -720,8 +720,6 @@ async function loadPublicPageSource(
         thumbnail_url: loc.media_thumbnail_url,
         kind: loc.media_kind,
       }] : [],
-      city: loc.city,
-      neighborhood: loc.neighborhood || null,
       short_description: loc.short_description || null,
       description: loc.description || null,
       grab_url: loc.grab_url || null,

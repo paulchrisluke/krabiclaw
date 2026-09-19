@@ -2,8 +2,8 @@ import { applicationFetch, dashboardFetch, useDashboardRouteScope } from '~/comp
 import { isRecord } from '~/utils/api-clients'
 import { parseOpeningHours, parseSpecialHours, type OpeningHours } from '~/shared/reservation-hours'
 import { parsePhone } from '~/utils/phone'
-import { composePostalAddress } from '~/utils/postal-address'
 import { useOnboardingState, type OnboardingPlacePreview } from '~/composables/useOnboardingFlow'
+import { formatPostalAddress, postalAddressFromAnswers } from '~/utils/postal-address'
 
 /**
  * Every server call the flow makes, and the shapes they answer with. The step
@@ -18,15 +18,10 @@ export function useOnboardingDraft() {
 
   /** The address as the review step shows it, on one line. */
   function addressSummary() {
-    return composePostalAddress(addressParts()).split('\n').join(', ')
+    return formatPostalAddress(postalAddressFromAnswers(addressParts()))
   }
 
-  /**
-   * The address one field per answer. The server composes the single line a
-   * location stores; sending it from here as well would give one fact two
-   * sources, and persisting only the composed line is what made a resumed
-   * draft show "United States" as its street address.
-   */
+  /** The address one field per answer, which is how a location stores it. */
   function addressParts() {
     const details = state.value.details
     return {
@@ -36,7 +31,6 @@ export function useOnboardingDraft() {
       region: details.region,
       postalCode: details.postalCode,
       country: details.country,
-      streetIsFormatted: state.value.place !== null,
     }
   }
 
@@ -172,12 +166,15 @@ export function useOnboardingDraft() {
   function seedFromPlace(preview: OnboardingPlacePreview) {
     const details = state.value.details
     details.name = preview.name ?? ''
-    details.city = preview.city ?? ''
-    details.streetAddress = preview.address ?? ''
-    details.addressLine2 = ''
-    details.region = ''
-    details.postalCode = ''
-    details.country = ''
+    // Places answers with the address already split, so every field seeds from
+    // its own part instead of the whole formatted line landing in the street.
+    const address = preview.address
+    details.streetAddress = address?.addressLines?.[0] ?? ''
+    details.addressLine2 = address?.addressLines?.slice(1).join(', ') ?? ''
+    details.city = address?.locality ?? ''
+    details.region = address?.administrativeArea ?? ''
+    details.postalCode = address?.postalCode ?? ''
+    details.country = address?.regionCode ?? ''
     // Google returns the national format, which carries no country and cannot be
     // stored at the E.164 boundary. Seed it only when it parses on its own.
     details.phone = parsePhone(preview.phone ?? '').e164 ?? ''
