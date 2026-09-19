@@ -1,7 +1,6 @@
 // GET site settings
 import { cloudflareEnv, jsonResponse, rethrowHttpError } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
-import { getConfig } from '~/server/utils/site-config'
 import { assertSiteWideAccess, memberAccessPrincipal } from '~/server/utils/member-access'
 import { loadMemberSiteRow } from '~/server/utils/location-access'
 import { loadSettingsPayload } from '~/server/utils/site-settings'

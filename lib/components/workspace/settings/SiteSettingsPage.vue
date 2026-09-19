@@ -152,10 +152,19 @@
                   <div>
                     <p class="font-medium">{{ language.label || language.locale }} <span class="text-sm text-muted">({{ language.locale }})</span></p>
                     <UBadge :color="language.is_source || language.status === 'published' ? 'success' : 'neutral'" variant="subtle" size="sm" class="mt-1">
-                      {{ language.is_source ? 'Source · published' : language.status }}
+                      {{ language.is_source ? 'Source · published' : language.status === 'published' ? 'published' : 'Not published' }}
                     </UBadge>
                   </div>
                   <div v-if="!language.is_source" class="flex gap-2">
+                    <UButton
+                      v-if="language.status === 'disabled'"
+                      color="primary"
+                      :disabled="!isTranslationComplete(language.locale)"
+                      :loading="localizationBusy"
+                      @click="publishLanguage(language.locale)"
+                    >
+                      Publish
+                    </UButton>
                     <UButton v-if="language.status === 'published'" color="neutral" variant="outline" :loading="localizationBusy" @click="disableLanguage(language.locale)">Disable</UButton>
                     <UButton v-if="language.status === 'disabled'" color="error" variant="outline" :loading="localizationBusy" @click="deleteLanguage(language.locale)">Delete content</UButton>
                   </div>
@@ -717,8 +726,10 @@ const isLocalizationProgress = (value: unknown): value is LocalizationProgress =
     && typeof item.id === 'string' && typeof item.label === 'string' && typeof item.path === 'string'
     && typeof item.completed === 'number' && typeof item.total === 'number')
 async function loadLocalizationProgress() {
+  // Every added language, not only the published ones: progress is what the
+  // Publish button waits for, so a language being translated needs it most.
   const locales = localizationSettings.value?.languages
-    .filter(language => !language.is_source && language.status === 'published')
+    .filter(language => !language.is_source)
     .map(language => language.locale) ?? []
   try {
     localizationProgress.value = await Promise.all(locales.map(locale =>
@@ -755,12 +766,21 @@ async function enableLanguage(): Promise<boolean> {
   if (newLocale.value) {
     const selectedCatalog = localizationSettings.value?.available_catalogs.find(catalog => catalog.locale === newLocale.value)
     if (!selectedCatalog) return false
-    const success = await mutateLocalization(`/api/editor/sites/${siteId}/locales/${encodeURIComponent(newLocale.value)}/enable`, 'POST', { label: selectedCatalog.label })
+    const success = await mutateLocalization(`/api/editor/sites/${siteId}/locales/${encodeURIComponent(newLocale.value)}/add`, 'POST', { label: selectedCatalog.label })
     if (success) newLocale.value = ''
     return success
   }
   return false
 }
+/**
+ * A language goes public only when it is finished. The server refuses anything
+ * less; the button says so first rather than offering a click that 409s.
+ */
+function isTranslationComplete(locale: string): boolean {
+  const progress = localizationProgress.value.find(item => item.locale === locale)
+  return Boolean(progress && progress.total > 0 && progress.completed === progress.total)
+}
+async function publishLanguage(locale: string) { await mutateLocalization(`/api/editor/sites/${siteId}/locales/${encodeURIComponent(locale)}/publish`, 'POST') }
 async function disableLanguage(locale: string) { await mutateLocalization(`/api/editor/sites/${siteId}/locales/${encodeURIComponent(locale)}/disable`, 'POST') }
 async function deleteLanguage(locale: string) { if (window.confirm(`Permanently delete all ${locale} content for this site?`)) await mutateLocalization(`/api/editor/sites/${siteId}/locales/${encodeURIComponent(locale)}`, 'DELETE') }
 watch(detailKey, key => { if (key === 'localization' && !localizationSettings.value) loadLocalizationSettings() }, { immediate: true })

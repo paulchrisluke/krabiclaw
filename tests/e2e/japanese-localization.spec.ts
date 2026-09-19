@@ -58,7 +58,6 @@ test('Japanese is a second secondary language and keeps its public shell through
   const originalFontPreset = (await originalSettingsResponse.json() as { settings: { font_preset: 'default' | 'mali' } }).settings.font_preset
   const wasPublished = (locale: string) => original.languages.some(language => language.locale === locale && language.status === 'published')
   const hadJapanese = wasPublished('ja')
-  const hadThai = wasPublished('th')
   const hydrationErrors: string[] = []
   page.on('console', message => {
     if (/hydration.*mismatch|mismatch.*hydration/i.test(message.text())) hydrationErrors.push(message.text())
@@ -66,15 +65,33 @@ test('Japanese is a second secondary language and keeps its public shell through
   page.on('pageerror', error => hydrationErrors.push(error.message))
 
   try {
-    await expectStatus(await owner.post(`${localePath}/th/enable`), 200)
-    await expectStatus(await owner.post(`${localePath}/ja/enable`), 200)
+    // Adding a language does not make it public. It is the authoring state,
+    // so the site keeps serving only what it already published while the
+    // translation is written.
+    await expectStatus(await owner.post(`${localePath}/th/add`), 200)
+    await expectStatus(await owner.post(`${localePath}/ja/add`), 200)
     await expectStatus(await owner.patch(settingsUrl, { data: { font_preset: 'mali' } }), 200)
-    // Re-enabling an already published language does not consume another slot.
-    await expectStatus(await owner.post(`${localePath}/ja/enable`), 200)
-    const enabled = await owner.get(localePath)
-    await expectStatus(enabled, 200)
-    const settings = await enabled.json() as { languages: Array<{ locale: string; status: string }> }
-    expect(settings.languages.filter(language => language.status === 'published').map(language => language.locale).sort()).toEqual(['en', 'ja', 'th'])
+    // Adding twice is the same add.
+    await expectStatus(await owner.post(`${localePath}/ja/add`), 200)
+    const added = await owner.get(localePath)
+    await expectStatus(added, 200)
+    const settings = await added.json() as { languages: Array<{ locale: string; status: string }> }
+    expect(settings.languages.find(language => language.locale === 'ja')?.status).toBe('disabled')
+
+    // Publishing refuses a translation that is not finished, and says what is
+    // missing rather than only that it failed.
+    const refused = await owner.post(`${localePath}/ja/publish`)
+    expect(refused.status(), await refused.text()).toBe(409)
+    const refusal = await refused.json() as { data?: { code?: string; completed?: number; total?: number } }
+    expect(refusal.data?.code).toBe('LOCALIZATION_INCOMPLETE')
+    expect(refusal.data?.completed).toBeLessThan(refusal.data?.total ?? 0)
+
+    // The owner reads the language they are still writing through the preview
+    // token, which is already how an unpublished thing is viewed here.
+    const contextResponse = await owner.get(`/api/editor/sites/${siteId}/context`)
+    await expectStatus(contextResponse, 200)
+    const { context } = await contextResponse.json() as { context: { previewToken: string } }
+    const previewQuery = `?preview_token=${encodeURIComponent(context.previewToken)}`
 
     await expectStatus(await owner.put(`/api/editor/sites/${siteId}/localization/site/${siteId}/ja`, {
       data: { values: { brand_name: '菊月 クラビ', brand_description: 'クラビの日本料理店' } },
@@ -83,8 +100,9 @@ test('Japanese is a second secondary language and keeps its public shell through
       data: {
         route_path: '/ja/locations/kikuzuki-japanese-robatayaki-izakaya',
         values: {
-          title: '菊月 炉端焼き・居酒屋', address: '325 アオナン、クラビ 81180 タイ',
-          city: 'アオナン', description: 'クラビの日本料理店', short_description: '炉端焼きと寿司',
+          title: '菊月 炉端焼き・居酒屋',
+          address: { addressLines: ['325'], sublocality: 'アオナン', locality: 'クラビ' },
+          description: 'クラビの日本料理店', short_description: '炉端焼きと寿司',
         },
       },
     }), 200)
@@ -107,7 +125,7 @@ test('Japanese is a second secondary language and keeps its public shell through
     }), 200)
 
     for (const path of ['/ja/reservations', '/ja/contact', '/ja/experiences']) {
-      const response = await openTenantPage(page, `${kikuzukiTestBaseUrl()}${path}`, kikuzukiTestExtraHeaders())
+      const response = await openTenantPage(page, `${kikuzukiTestBaseUrl()}${path}${previewQuery}`, kikuzukiTestExtraHeaders())
       expect(response?.status(), path).toBe(200)
       const html = await response!.text()
       expect(html).toMatch(/<html[^>]*lang="ja"/)
@@ -130,6 +148,11 @@ test('Japanese is a second secondary language and keeps its public shell through
     await expect(page.getByRole('link', { name: '席を予約する' }).first()).toBeVisible()
     expect(hydrationErrors).toEqual([])
 
+    // Without the token the language is not public, which is the whole point
+    // of adding before publishing.
+    const unauthorized = await page.request.get(`${kikuzukiTestBaseUrl()}/ja/reservations`, { headers: kikuzukiTestExtraHeaders() })
+    expect(unauthorized.status()).toBe(404)
+
     await expectStatus(await owner.post(`${localePath}/ja/disable`), 200)
     const remaining = await owner.get(localePath)
     await expectStatus(remaining, 200)
@@ -139,11 +162,11 @@ test('Japanese is a second secondary language and keeps its public shell through
     await expect(page.locator('html')).toHaveAttribute('lang', 'en')
     await expect(page.getByRole('link', { name: 'Reserve a table' }).first()).toBeVisible()
   } finally {
-    // Sequential, and ja before th: each enable is refused while two secondary
-    // locales are already published, so the order the test relied on must hold.
+    // Adding a language takes no public slot and leaves an already-published
+    // one alone, so only ja — the language this test made public or not — has
+    // anything to put back.
     const assertRestored = await restoreAll([
-      ['the ja locale', () => owner.post(`${localePath}/ja/${hadJapanese ? 'enable' : 'disable'}`)],
-      ['the th locale', () => owner.post(`${localePath}/th/${hadThai ? 'enable' : 'disable'}`)],
+      ['the ja locale', () => owner.post(`${localePath}/ja/${hadJapanese ? 'publish' : 'disable'}`)],
       ['font_preset', () => owner.patch(settingsUrl, { data: { font_preset: originalFontPreset } })],
     ])
     await owner.dispose()

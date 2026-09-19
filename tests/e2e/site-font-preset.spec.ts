@@ -143,8 +143,6 @@ test('Mali saves through Brand, renders before hydration, and stays within the c
   const localePath = `/api/editor/sites/${siteId}/locales`
   const localesBefore = await owner.get(localePath)
   await expectStatus(localesBefore, 200)
-  const hadThai = (await localesBefore.json() as { languages: Array<{ locale: string; status: string }> })
-    .languages.some(language => language.locale === 'th' && language.status === 'published')
     // LCP is only a font measurement where the LCP element is text the font
     // renders. /th/reservations paints a video poster, so its LCP measured Mali's
     // bytes competing with a video for bandwidth -- a real cost, but a property of
@@ -193,7 +191,7 @@ test('Mali saves through Brand, renders before hydration, and stays within the c
     await expectStatus(persisted, 200)
     expect(await persisted.json()).toMatchObject({ settings: { font_preset: 'mali', brand_color: '' } })
     await expectStatus(await owner.patch(settingsUrl, { data: { font_preset: 'https://example.com/font.css' } }), 400)
-    await expectStatus(await owner.post(`${localePath}/th/enable`), 200)
+    await expectStatus(await owner.post(`${localePath}/th/add`), 200)
     phase('thai enabled')
 
     for (const path of ['/', '/menu', '/th/reservations', '/contact']) {
@@ -307,7 +305,6 @@ test('Mali saves through Brand, renders before hydration, and stays within the c
   } finally {
     const assertRestored = await restoreAll([
       ['font_preset and brand_color', () => owner.patch(settingsUrl, { data: { font_preset: original.font_preset, brand_color: original.brand_color } })],
-      ['the th locale', () => owner.post(`${localePath}/th/${hadThai ? 'enable' : 'disable'}`)],
     ])
     await dashboard.close()
     await owner.dispose()
