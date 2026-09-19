@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:fea8031b58065668b983e0fb37ad44d9e36ddb795073de06ee415461e5b6b64a",
+  "fingerprint": "sha256:028d0b93937cbceb8d4c3f39735a4f17a54011cc96d95defead0923d6f4d050a",
   "tools": [
     {
       "name": "attach_media",
@@ -3226,6 +3226,9 @@
       "outputSchema": {
         "additionalProperties": false,
         "properties": {
+          "context": {
+            "type": "object"
+          },
           "deleted": {
             "type": "boolean"
           },
@@ -9270,6 +9273,9 @@
       "outputSchema": {
         "additionalProperties": false,
         "properties": {
+          "context": {
+            "type": "object"
+          },
           "localization": {
             "oneOf": [
               {
@@ -11684,6 +11690,9 @@
       "outputSchema": {
         "additionalProperties": false,
         "properties": {
+          "context": {
+            "type": "object"
+          },
           "locale": {
             "type": "string"
           },

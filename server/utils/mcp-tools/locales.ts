@@ -70,7 +70,7 @@ export const LOCALES_TOOLS: McpToolDefinition[] = [
       expected_updated_at: { type: ['string', 'null'] },
     },
     required: ['resource_type', 'resource_id', 'locale', 'values'],
-    outputSchema: { type: 'object', properties: { localization: localizationObject }, required: ['localization'], additionalProperties: false },
+    outputSchema: { type: 'object', properties: { localization: localizationObject, context: { type: 'object' } }, required: ['localization'], additionalProperties: false },
   }),
   siteTool({
     name: 'delete_resource_localization',
@@ -84,7 +84,7 @@ export const LOCALES_TOOLS: McpToolDefinition[] = [
       locale: { type: 'string' },
     },
     required: ['resource_type', 'resource_id', 'locale'],
-    outputSchema: { type: 'object', properties: { deleted: { type: 'boolean' }, resource_type: { type: 'string', enum: [...LOCALIZED_RESOURCE_TYPES, 'content_document'] }, resource_id: { type: 'string' }, locale: { type: 'string' } }, required: ['deleted', 'resource_type', 'resource_id', 'locale'], additionalProperties: false },
+    outputSchema: { type: 'object', properties: { deleted: { type: 'boolean' }, resource_type: { type: 'string', enum: [...LOCALIZED_RESOURCE_TYPES, 'content_document'] }, resource_id: { type: 'string' }, locale: { type: 'string' }, context: { type: 'object' } }, required: ['deleted', 'resource_type', 'resource_id', 'locale'], additionalProperties: false },
   }),
   siteTool({
     name: 'get_product_catalog_localization',
@@ -120,6 +120,6 @@ export const LOCALES_TOOLS: McpToolDefinition[] = [
       },
     },
     required: ['locale', 'items'],
-    outputSchema: { type: 'object', properties: { locale: { type: 'string' }, updated_product_ids: { type: 'array', items: { type: 'string' } } }, required: ['locale', 'updated_product_ids'], additionalProperties: false },
+    outputSchema: { type: 'object', properties: { locale: { type: 'string' }, updated_product_ids: { type: 'array', items: { type: 'string' } }, context: { type: 'object' } }, required: ['locale', 'updated_product_ids'], additionalProperties: false },
   }),
 ]

@@ -717,14 +717,15 @@ export async function replaceProductLocalizations(
   })
   const ids = parsed.map(item => item.productId)
   if (new Set(ids).size !== ids.length) localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', 'Product IDs must be unique')
-  const placeholders = ids.map(() => '?').join(', ')
   // The catalog is organization-owned; a site reaches a product through its
-  // publication row, so that is what scopes this lookup.
+  // publication row, so that is what scopes this lookup. D1 binds at most 100
+  // parameters per statement, so the site's products are read whole and the
+  // batch is checked against them here rather than bound id by id.
   const products = await queryAll<{ id: string }>(db, `
     SELECT p.id FROM products p
     JOIN product_publications pub ON pub.product_id = p.id AND pub.organization_id = p.organization_id
-    WHERE p.organization_id = ? AND pub.site_id = ? AND p.id IN (${placeholders})
-  `, [input.organizationId, input.siteId, ...ids])
+    WHERE p.organization_id = ? AND pub.site_id = ?
+  `, [input.organizationId, input.siteId])
   const found = new Set(products.map(product => product.id))
   const missing = ids.filter(id => !found.has(id))
   if (missing.length) localizationError(404, 'LOCALIZATION_NOT_FOUND', 'One or more Products were not found', { product_ids: missing })
