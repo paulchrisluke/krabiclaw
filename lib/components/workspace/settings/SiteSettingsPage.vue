@@ -159,7 +159,6 @@
                     <UButton
                       v-if="language.status === 'disabled'"
                       color="primary"
-                      :disabled="!isTranslationComplete(language.locale)"
                       :loading="localizationBusy"
                       @click="publishLanguage(language.locale)"
                     >
@@ -726,8 +725,8 @@ const isLocalizationProgress = (value: unknown): value is LocalizationProgress =
     && typeof item.id === 'string' && typeof item.label === 'string' && typeof item.path === 'string'
     && typeof item.completed === 'number' && typeof item.total === 'number')
 async function loadLocalizationProgress() {
-  // Every added language, not only the published ones: progress is what the
-  // Publish button waits for, so a language being translated needs it most.
+  // Every added language, not only the published ones: a language still being
+  // translated is the one whose progress the owner most wants to see.
   const locales = localizationSettings.value?.languages
     .filter(language => !language.is_source)
     .map(language => language.locale) ?? []
@@ -771,14 +770,6 @@ async function enableLanguage(): Promise<boolean> {
     return success
   }
   return false
-}
-/**
- * A language goes public only when it is finished. The server refuses anything
- * less; the button says so first rather than offering a click that 409s.
- */
-function isTranslationComplete(locale: string): boolean {
-  const progress = localizationProgress.value.find(item => item.locale === locale)
-  return Boolean(progress && progress.total > 0 && progress.completed === progress.total)
 }
 async function publishLanguage(locale: string) { await mutateLocalization(`/api/editor/sites/${siteId}/locales/${encodeURIComponent(locale)}/publish`, 'POST') }
 async function disableLanguage(locale: string) { await mutateLocalization(`/api/editor/sites/${siteId}/locales/${encodeURIComponent(locale)}/disable`, 'POST') }
