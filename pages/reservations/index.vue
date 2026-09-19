@@ -163,7 +163,7 @@ import { getTodayHoursLabel, isOpenNow } from '~/shared/reservation-hours'
 import { formatTime, localDateTimeToInstant } from '~/utils/timezone'
 import { setBookingConfirmation } from '~/composables/useBookingHandoff'
 import { requireProductPresentation } from '~/utils/product-presentation'
-import { formatPostalAddress, type PostalAddress } from '~/utils/postal-address'
+import { addressPlaceName, formatPostalAddress, type PostalAddress } from '~/utils/postal-address'
 
 function formatTitleItalics(text: string | null | undefined): string {
   if (!text) return ''
@@ -232,7 +232,7 @@ const bookingLocations = computed(() => locations.value.map(location => ({
 
 
 function getLocationLabel(location: ApiRecord): string | null {
-  return typeof location.city === 'string' && location.city.trim() ? location.city : null
+  return addressPlaceName(location.address as PostalAddress | null) || null
 }
 
 function getLocationMediaKind(location: ApiRecord): 'image' | 'video' | null {

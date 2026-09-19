@@ -180,7 +180,7 @@ import { getErrorMessage } from '~/utils/errors'
 import { defaultModuleFeaturesForVertical, resolveCmsCapabilities, toggleableModulesForScope, type ProductFeature } from '~/config/cms-registry'
 import { resolvePublicTemplate } from '~/utils/template-registry'
 import type { SiteVertical } from '~/utils/vertical-copy'
-import { formatPostalAddress, type PostalAddress } from '~/utils/postal-address'
+import { formatPostalAddress, postalAddressFromAnswers, type PostalAddress } from '~/utils/postal-address'
 
 
 interface BusinessLocation {
@@ -294,7 +294,7 @@ const isBusinessLocation = (value: unknown): value is BusinessLocation => {
     && typeof value.slug === 'string'
     && typeof value.title === 'string'
     && typeof value.status === 'string'
-    && isNullableString(value.city)
+    && (value.address === null || isRecord(value.address))
     && isNullableString(value.phone)
     && isNullableString(value.google_place_id)
 }
@@ -367,16 +367,21 @@ function reservationPatchFrom(config: LocationReservationConfig | null): Locatio
   return patch
 }
 
-/** The address the form's fields make, in the one shape a location stores. */
+/**
+ * The address the form's fields make. The same mapping onboarding uses, so a
+ * street with no country is refused here exactly as it is there.
+ */
 function addressFromForm(): PostalAddress | null {
-  const addressLines = detailsForm.addressLines.split('\n').map(line => line.trim()).filter(Boolean)
-  if (!addressLines.length) return null
-  const address: PostalAddress = { regionCode: detailsForm.regionCode.trim(), addressLines }
-  if (detailsForm.locality.trim()) address.locality = detailsForm.locality.trim()
-  if (detailsForm.sublocality.trim()) address.sublocality = detailsForm.sublocality.trim()
-  if (detailsForm.administrativeArea.trim()) address.administrativeArea = detailsForm.administrativeArea.trim()
-  if (detailsForm.postalCode.trim()) address.postalCode = detailsForm.postalCode.trim()
-  return address
+  const [streetAddress, ...rest] = detailsForm.addressLines.split('\n').map(line => line.trim()).filter(Boolean)
+  return postalAddressFromAnswers({
+    streetAddress: streetAddress ?? null,
+    addressLine2: rest.join(', ') || null,
+    city: detailsForm.locality,
+    region: detailsForm.administrativeArea,
+    postalCode: detailsForm.postalCode,
+    country: detailsForm.regionCode,
+    sublocality: detailsForm.sublocality,
+  })
 }
 
 const detailsForm = reactive({

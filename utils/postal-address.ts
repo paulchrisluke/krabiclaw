@@ -90,18 +90,20 @@ export interface PostalAddressAnswers {
   postalCode: string | null
   /** ISO 3166-1 alpha-2, as answered on the location step. */
   country: string | null
+  /** Only the CMS asks for a neighbourhood; onboarding does not. */
+  sublocality?: string | null
 }
 
 export function postalAddressFromAnswers(answers: PostalAddressAnswers): PostalAddress | null {
   const addressLines = [answers.streetAddress, answers.addressLine2]
     .map(line => line?.trim() ?? '')
     .filter(Boolean)
-  if (!addressLines.length) return null
-  if (!answers.country?.trim()) {
-    throw new TypeError('A postal address names its country; the location step does not complete without one')
-  }
+  // A street with no country is not an address. Both callers gate on the
+  // country before they get here, so there is nothing to answer with but null.
+  if (!addressLines.length || !answers.country?.trim()) return null
   const address: PostalAddress = { regionCode: answers.country.trim(), addressLines }
   if (answers.city?.trim()) address.locality = answers.city.trim()
+  if (answers.sublocality?.trim()) address.sublocality = answers.sublocality.trim()
   if (answers.region?.trim()) address.administrativeArea = answers.region.trim()
   if (answers.postalCode?.trim()) address.postalCode = answers.postalCode.trim()
   return address

@@ -61,9 +61,18 @@ export default defineHandler(async (event) => {
     return jsonResponse({ error: 'feature_overrides must be an object with enabled/disabled arrays, or null' }, { status: 400 })
   }
 
+  // A malformed address is the caller's mistake, not a server fault, so it
+  // answers 400 rather than letting the parser's TypeError become a 500.
+  let address: PostalAddress | null | undefined
+  try {
+    address = body.address === undefined ? undefined : parsePostalAddress(body.address)
+  } catch (cause) {
+    return jsonResponse({ error: cause instanceof Error ? cause.message : 'address is invalid' }, { status: 400 })
+  }
+
   const result = await updateLocation(
     db, organizationId, siteId, locationId, {
-      title: typeof body.title === 'string' ? body.title : undefined, slug: typeof body.slug === 'string' ? body.slug : undefined, address: body.address === undefined ? undefined : parsePostalAddress(body.address), phone: typeof body.phone === 'string' ? body.phone : body.phone === null ? null : undefined, email: typeof body.email === 'string' ? body.email : body.email === null ? null : undefined, website_url: typeof body.website_url === 'string' ? body.website_url : body.website_url === null ? null : undefined, maps_url: typeof body.maps_url === 'string' ? body.maps_url : body.maps_url === null ? null : undefined, google_review_url: typeof body.google_review_url === 'string' ? body.google_review_url : body.google_review_url === null ? null : undefined, opening_hours: body.opening_hours === undefined
+      title: typeof body.title === 'string' ? body.title : undefined, slug: typeof body.slug === 'string' ? body.slug : undefined, address, phone: typeof body.phone === 'string' ? body.phone : body.phone === null ? null : undefined, email: typeof body.email === 'string' ? body.email : body.email === null ? null : undefined, website_url: typeof body.website_url === 'string' ? body.website_url : body.website_url === null ? null : undefined, maps_url: typeof body.maps_url === 'string' ? body.maps_url : body.maps_url === null ? null : undefined, google_review_url: typeof body.google_review_url === 'string' ? body.google_review_url : body.google_review_url === null ? null : undefined, opening_hours: body.opening_hours === undefined
         ? undefined
         : body.opening_hours === null
           ? null
@@ -84,4 +93,4 @@ export default defineHandler(async (event) => {
 })
 import { defineHandler } from 'nitro';
 import { getRouterParam, readBody  } from 'nitro/h3';
-import { parsePostalAddress } from '~/utils/postal-address'
+import { parsePostalAddress, type PostalAddress } from '~/utils/postal-address'

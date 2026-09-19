@@ -71,7 +71,7 @@
 
             <!-- Location name -->
             <div class="saya-display saya-italic text-4xl text-default leading-none">{{ loc.title }}</div>
-            <p v-if="loc.city" class="mt-1.5 text-sm text-muted">{{ loc.city }}</p>
+            <p v-if="addressPlaceName(loc.address as PostalAddress | null)" class="mt-1.5 text-sm text-muted">{{ addressPlaceName(loc.address as PostalAddress | null) }}</p>
 
             <!-- Address -->
             <p class="mt-5 text-sm leading-relaxed text-muted">{{ locationAddress(loc) }}</p>
@@ -102,7 +102,7 @@
 
 <script setup lang="ts">
 import { getTodayHoursLabel } from '~/shared/reservation-hours'
-import { formatPostalAddress, type PostalAddress } from '~/utils/postal-address'
+import { addressPlaceName, formatPostalAddress, type PostalAddress } from '~/utils/postal-address'
 
 definePageMeta({ layout: 'saya' })
 
