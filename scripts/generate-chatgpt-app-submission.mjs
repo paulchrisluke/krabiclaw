@@ -67,7 +67,7 @@ const effects = {
   reorder_collections: 'Overwrites the order collections are presented in on the selected site.',
   reorder_media: 'Overwrites media placement ordering for the selected public content collection.',
   replace_blog_content: 'Replaces the selected blog article content document after version and removal checks.',
-  replace_product_localizations: 'Replaces the submitted product translations for one locale; omitted products remain untouched.',
+  replace_resource_localizations: 'Replaces the submitted translations for one resource type and locale; omitted resources remain untouched.',
   save_generated_image: 'Stores supplied image bytes as a new media asset with a public URL; it does not generate the image.',
   save_generated_image_file: 'Stores the supplied image attachment as a new media asset with a public URL; it does not generate the image.',
   set_brand_color: 'Overwrites the selected site public brand color.',

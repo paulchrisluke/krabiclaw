@@ -255,13 +255,18 @@ async function getSiteVertical(db: DbClient, organizationId: string, siteId: str
  * existence check and the NOT EXISTS clause that clears a localization whose
  * canonical row has since gone.
  */
-function canonicalResourceQuery(resourceType: LocalizedResourceType): string {
+// Both forms take (organization_id, site_id); `one` takes the resource id as a
+// third parameter. The set form exists because D1 binds at most 100 parameters
+// per statement, so a batch is checked against the site's resources rather than
+// against a placeholder list that grows with the batch.
+function canonicalResourceQuery(resourceType: LocalizedResourceType, scope: 'one' | 'all'): string {
   const { table, siteScope } = RESOURCE_LOCALIZATION_REGISTRY[resourceType]
-  if (siteScope === 'self') return `SELECT id FROM ${table} WHERE organization_id = ? AND id = ? AND id = ?`
-  if (siteScope === 'site_column') return `SELECT id FROM ${table} WHERE organization_id = ? AND site_id = ? AND id = ?`
+  const one = scope === 'one'
+  if (siteScope === 'self') return `SELECT id FROM ${table} WHERE organization_id = ? AND id = ?${one ? ' AND id = ?' : ''}`
+  if (siteScope === 'site_column') return `SELECT id FROM ${table} WHERE organization_id = ? AND site_id = ?${one ? ' AND id = ?' : ''}`
   return `SELECT p.id FROM ${table} p
     JOIN product_publications pub ON pub.organization_id = p.organization_id AND pub.product_id = p.id
-    WHERE p.organization_id = ? AND pub.site_id = ? AND p.id = ?`
+    WHERE p.organization_id = ? AND pub.site_id = ?${one ? ' AND p.id = ?' : ''}`
 }
 
 async function assertCanonicalResourceExists(
@@ -270,17 +275,27 @@ async function assertCanonicalResourceExists(
   siteId: string,
   resourceType: LocalizedResourceType,
   resourceId: string,
-): Promise<BatchQuery> {
-  const query = canonicalResourceQuery(resourceType)
-  const params = [organizationId, siteId, resourceId]
-  const row = await queryFirst<{ id: string }>(db, query, params)
+): Promise<void> {
+  const row = await queryFirst<{ id: string }>(db, canonicalResourceQuery(resourceType, 'one'), [organizationId, siteId, resourceId])
   if (!row) {
     localizationError(404, 'LOCALIZATION_NOT_FOUND', 'Canonical resource was not found', { resource_type: resourceType, resource_id: resourceId })
   }
+}
+
+// The existence read above happens before the write, so the resource can still
+// be deleted in between. This runs inside the same batch and orphans the row
+// rather than leaving it pointing at something that is gone.
+function canonicalResourceGuard(
+  organizationId: string,
+  siteId: string,
+  resourceType: LocalizedResourceType,
+  resourceId: string,
+): BatchQuery {
+  const query = canonicalResourceQuery(resourceType, 'one')
   return {
     query: `UPDATE resource_localizations SET resource_id = NULL
       WHERE organization_id = ? AND site_id = ? AND resource_type = ? AND resource_id = ? AND NOT EXISTS (${query})`,
-    params: [organizationId, siteId, resourceType, resourceId, ...params],
+    params: [organizationId, siteId, resourceType, resourceId, organizationId, siteId, resourceId],
   }
 }
 
@@ -430,6 +445,61 @@ export async function resolveLocalizedPublicRoute(
   }
 }
 
+interface PriorLocalization {
+  id: string
+  route_path?: string | null
+  created_at: string
+  created_by_user_id: string
+}
+
+/**
+ * The statements that write one localized representation: the 301 that keeps
+ * the old localized route reachable when it moved, and the upsert itself.
+ *
+ * One resource and a batch of them differ only in how many of these they
+ * accumulate, so they share this rather than each holding a copy of the SQL.
+ */
+function resourceLocalizationWriteQueries(input: {
+  organizationId: string
+  siteId: string
+  resourceType: LocalizedResourceType
+  resourceId: string
+  locale: string
+  values: LocalizedValues
+  routePath: string | null
+  userId: string
+  id: string
+  prior?: PriorLocalization | null
+  now: string
+}): BatchQuery[] {
+  const statements: BatchQuery[] = []
+  const priorPath = input.prior?.route_path
+  if (priorPath && input.routePath && priorPath !== input.routePath) {
+    statements.push({
+      query: `INSERT INTO site_redirects
+        (id, organization_id, site_id, locale, owner_type, owner_id, from_path, to_path, status_code, behavior, reason, source, created_at, updated_at)
+        VALUES (?, ?, ?, ?, 'resource_localization', ?, ?, ?, 301, 'redirect', 'localized_route_change', 'localization', ?, ?)
+        ON CONFLICT(site_id, locale, from_path) DO UPDATE SET owner_type = excluded.owner_type, owner_id = excluded.owner_id,
+          to_path = excluded.to_path, status_code = 301, behavior = 'redirect', reason = excluded.reason, source = excluded.source, updated_at = excluded.updated_at`,
+      params: [crypto.randomUUID(), input.organizationId, input.siteId, input.locale, input.id, priorPath, input.routePath, input.now, input.now],
+    })
+  }
+  statements.push({
+    query: `INSERT INTO resource_localizations
+      (id, organization_id, site_id, resource_type, resource_id, locale, values_json, route_path,
+       created_at, created_by_user_id, updated_at, updated_by_user_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(organization_id, site_id, resource_type, resource_id, locale) DO UPDATE SET
+        values_json = excluded.values_json, route_path = excluded.route_path,
+        updated_at = excluded.updated_at, updated_by_user_id = excluded.updated_by_user_id`,
+    params: [input.id, input.organizationId, input.siteId, input.resourceType, input.resourceId, input.locale,
+      JSON.stringify(input.values), input.routePath,
+      input.prior?.created_at ?? input.now, input.prior?.created_by_user_id ?? input.userId, input.now, input.userId],
+  })
+  statements.push(canonicalResourceGuard(input.organizationId, input.siteId, input.resourceType, input.resourceId))
+  return statements
+}
+
 export async function putResourceLocalization(
   env: CloudflareEnv,
   db: DbClient,
@@ -447,7 +517,7 @@ export async function putResourceLocalization(
   const resourceType = parseLocalizedResourceType(input.resourceType)
   const { locale, source } = await assertSiteLanguageEntitlement(env, db, input.organizationId, input.siteId, input.locale)
   if (source) localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', 'English source content must be edited through its canonical resource')
-  const ownerGuard = await assertCanonicalResourceExists(db, input.organizationId, input.siteId, resourceType, input.resourceId)
+  await assertCanonicalResourceExists(db, input.organizationId, input.siteId, resourceType, input.resourceId)
   // Which product attributes may be translated is declared by the tenant's
   // metafield definitions, so they are loaded and handed to the validator
   // rather than restated as a list here.
@@ -462,29 +532,11 @@ export async function putResourceLocalization(
   `, [input.organizationId, input.siteId, resourceType, input.resourceId, locale])
   const id = existing?.id ?? crypto.randomUUID()
   const now = new Date().toISOString()
-  const statements: BatchQuery[] = []
-  if (existing?.route_path && existing.route_path !== routePath && routePath) {
-    statements.push({
-      query: `INSERT INTO site_redirects
-        (id, organization_id, site_id, locale, owner_type, owner_id, from_path, to_path, status_code, behavior, reason, source, created_at, updated_at)
-        VALUES (?, ?, ?, ?, 'resource_localization', ?, ?, ?, 301, 'redirect', 'localized_route_change', 'localization', ?, ?)
-        ON CONFLICT(site_id, locale, from_path) DO UPDATE SET owner_type = excluded.owner_type, owner_id = excluded.owner_id,
-          to_path = excluded.to_path, status_code = 301, behavior = 'redirect', reason = excluded.reason, source = excluded.source, updated_at = excluded.updated_at`,
-      params: [crypto.randomUUID(), input.organizationId, input.siteId, locale, id, existing.route_path, routePath, new Date().toISOString(), new Date().toISOString()],
-    })
-  }
-  statements.push({
-    query: `INSERT INTO resource_localizations
-      (id, organization_id, site_id, resource_type, resource_id, locale, values_json, route_path,
-       created_at, created_by_user_id, updated_at, updated_by_user_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(organization_id, site_id, resource_type, resource_id, locale) DO UPDATE SET
-        values_json = excluded.values_json, route_path = excluded.route_path,
-        updated_at = excluded.updated_at, updated_by_user_id = excluded.updated_by_user_id`,
-    params: [id, input.organizationId, input.siteId, resourceType, input.resourceId, locale, JSON.stringify(values), routePath,
-      existing?.created_at ?? now, existing?.created_by_user_id ?? input.userId, now, input.userId],
+  const statements: BatchQuery[] = resourceLocalizationWriteQueries({
+    organizationId: input.organizationId, siteId: input.siteId, resourceType, resourceId: input.resourceId,
+    locale, values, routePath, userId: input.userId, id, prior: existing, now,
   })
-  statements.push(ownerGuard, publicResourceCacheInvalidationQuery(input.siteId, 'resource-localization-put'))
+  statements.push(publicResourceCacheInvalidationQuery(input.siteId, 'resource-localization-put'))
   try {
     await executeBatch(db, statements, { operation: 'replace resource localization' })
   } catch (error) {
@@ -691,78 +743,73 @@ export async function getProductCatalogLocalization(
   }
 }
 
-export async function replaceProductLocalizations(
+export async function replaceResourceLocalizations(
   env: CloudflareEnv,
   db: DbClient,
   input: {
     organizationId: string
     siteId: string
+    resourceType: unknown
     locale: unknown
     items: unknown
     userId: string
   },
 ) {
+  const resourceType = parseLocalizedResourceType(input.resourceType)
   const { locale, source } = await assertSiteLanguageEntitlement(env, db, input.organizationId, input.siteId, input.locale)
-  if (source) localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', 'Product catalog localization requires a secondary locale')
+  if (source) localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', 'Localization requires a secondary locale')
   if (!Array.isArray(input.items) || input.items.length < 1 || input.items.length > 250) {
-    localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', 'items must contain 1 to 250 Product localizations')
+    localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', 'items must contain 1 to 250 localizations')
   }
-  const definitions = await loadMetafieldDefinitionIndex(db, input.organizationId)
+  // Which product attributes may be translated is declared by the tenant's
+  // metafield definitions, so they are loaded and handed to the validator
+  // rather than restated as a list here.
+  const definitions = resourceType === 'product' ? await loadMetafieldDefinitionIndex(db, input.organizationId) : undefined
   const parsed = input.items.map((value, index) => {
     if (!value || typeof value !== 'object' || Array.isArray(value)) {
       localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', `items[${index}] must be an object`, { index })
     }
     const item = value as Record<string, unknown>
-    const unknown = Object.keys(item).filter(key => !['product_id', 'values'].includes(key))
-    if (unknown.length || typeof item.product_id !== 'string' || !item.product_id.trim()) {
+    const unknown = Object.keys(item).filter(key => !['resource_id', 'values', 'route_path'].includes(key))
+    if (unknown.length || typeof item.resource_id !== 'string' || !item.resource_id.trim()) {
       localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', `items[${index}] is invalid`, { index, fields: unknown })
     }
     return {
-      productId: item.product_id.trim(),
-      values: validateLocalizedValues('product', item.values, definitions),
-      index,
+      resourceId: item.resource_id.trim(),
+      values: validateLocalizedValues(resourceType, item.values, definitions),
+      routePath: validateLocalizedRoutePath(resourceType, locale, item.route_path),
     }
   })
-  const ids = parsed.map(item => item.productId)
-  if (new Set(ids).size !== ids.length) localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', 'Product IDs must be unique')
-  const placeholders = ids.map(() => '?').join(', ')
-  // The catalog is organization-owned; a site reaches a product through its
-  // publication row, so that is what scopes this lookup.
-  const products = await queryAll<{ id: string }>(db, `
-    SELECT p.id FROM products p
-    JOIN product_publications pub ON pub.product_id = p.id AND pub.organization_id = p.organization_id
-    WHERE p.organization_id = ? AND pub.site_id = ? AND p.id IN (${placeholders})
-  `, [input.organizationId, input.siteId, ...ids])
-  const found = new Set(products.map(product => product.id))
+  const ids = parsed.map(item => item.resourceId)
+  if (new Set(ids).size !== ids.length) localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', 'Resource IDs must be unique')
+  const canonical = await queryAll<{ id: string }>(db, canonicalResourceQuery(resourceType, 'all'), [input.organizationId, input.siteId])
+  const found = new Set(canonical.map(row => row.id))
   const missing = ids.filter(id => !found.has(id))
-  if (missing.length) localizationError(404, 'LOCALIZATION_NOT_FOUND', 'One or more Products were not found', { product_ids: missing })
-  const existing = await queryAll<{
-    id: string
-    resource_id: string
-    created_at: string
-    created_by_user_id: string
-  }>(db, `
-    SELECT id, resource_id, created_at, created_by_user_id
+  if (missing.length) localizationError(404, 'LOCALIZATION_NOT_FOUND', 'One or more canonical resources were not found', { resource_type: resourceType, resource_ids: missing })
+  const existing = await queryAll<PriorLocalization & { resource_id: string }>(db, `
+    SELECT id, resource_id, route_path, created_at, created_by_user_id
       FROM resource_localizations
-     WHERE organization_id = ? AND site_id = ? AND resource_type = 'product' AND locale = ?
-  `, [input.organizationId, input.siteId, locale])
-  const byProduct = new Map(existing.map(row => [row.resource_id, row]))
+     WHERE organization_id = ? AND site_id = ? AND resource_type = ? AND locale = ?
+  `, [input.organizationId, input.siteId, resourceType, locale])
+  const byResource = new Map(existing.map(row => [row.resource_id, row]))
   const now = new Date().toISOString()
   const statements: BatchQuery[] = []
   for (const item of parsed) {
-    const prior = byProduct.get(item.productId)
-    statements.push({
-      query: `INSERT INTO resource_localizations
-        (id, organization_id, site_id, resource_type, resource_id, locale, values_json, route_path,
-         created_at, created_by_user_id, updated_at, updated_by_user_id)
-        VALUES (?, ?, ?, 'product', ?, ?, ?, NULL, ?, ?, ?, ?)
-        ON CONFLICT(organization_id, site_id, resource_type, resource_id, locale) DO UPDATE SET
-          values_json = excluded.values_json,
-          updated_at = excluded.updated_at, updated_by_user_id = excluded.updated_by_user_id`,
-      params: [prior?.id ?? crypto.randomUUID(), input.organizationId, input.siteId, item.productId, locale, JSON.stringify(item.values),
-        prior?.created_at ?? now, prior?.created_by_user_id ?? input.userId, now, input.userId],
-    })
+    const prior = byResource.get(item.resourceId)
+    statements.push(...resourceLocalizationWriteQueries({
+      organizationId: input.organizationId, siteId: input.siteId, resourceType, resourceId: item.resourceId,
+      locale, values: item.values, routePath: item.routePath, userId: input.userId,
+      id: prior?.id ?? crypto.randomUUID(), prior, now,
+    }))
   }
-  await executeBatch(db, statements, { operation: 'replace product localizations' })
-  return { locale, updated_product_ids: ids }
+  statements.push(publicResourceCacheInvalidationQuery(input.siteId, 'resource-localizations-replace'))
+  try {
+    await executeBatch(db, statements, { operation: 'replace resource localizations' })
+  } catch (error) {
+    if (error instanceof Error && /resource_localizations_site_locale_route_unique|UNIQUE constraint failed: resource_localizations\.site_id/.test(error.message)) {
+      localizationError(409, 'LOCALIZED_ROUTE_CONFLICT', 'A localized route path is already owned by another resource')
+    }
+    throw error
+  }
+  return { locale, resource_type: resourceType, updated_resource_ids: ids }
 }
