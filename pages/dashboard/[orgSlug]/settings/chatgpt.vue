@@ -18,7 +18,7 @@
                 Follow the step-by-step guide for the current ChatGPT setup flow.
               </p>
             </div>
-            <UButton to="/docs/integrations/mcp-setup" color="neutral" variant="outline">
+            <UButton to="/docs/mcp-setup" color="neutral" variant="outline">
               Open setup docs
             </UButton>
           </div>

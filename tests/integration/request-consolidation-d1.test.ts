@@ -118,6 +118,7 @@ test('a thread and the record it refers to commit and cancel as one', { timeout:
     const reserved = await claimReservation(db, {
       organizationId: ORG, siteId: SITE, locationId: LOCATION, reservationId: 'reservation-row-proof',
       timezone: 'Asia/Bangkok', startsAt: '2099-01-06T09:00:00.000Z', endsAt: '2099-01-06T11:00:00.000Z',
+      date: '2099-01-06', timeSlot: '16:00',
       partySize: 1, customerId: null, requestId: reservationThread,
     }).then(() => true, () => false)
     assert.equal(reserved, true)
@@ -126,6 +127,7 @@ test('a thread and the record it refers to commit and cancel as one', { timeout:
     const secondClaim = await claimReservation(db, {
       organizationId: ORG, siteId: SITE, locationId: LOCATION, reservationId: 'reservation-row-second',
       timezone: 'Asia/Bangkok', startsAt: '2099-01-06T09:00:00.000Z', endsAt: '2099-01-06T11:00:00.000Z',
+      date: '2099-01-06', timeSlot: '16:00',
       partySize: 1, customerId: null, requestId: null,
     }).then(() => true, () => false)
     assert.equal(secondClaim, false)

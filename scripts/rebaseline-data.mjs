@@ -1,15 +1,15 @@
 #!/usr/bin/env node
-// Offline transfer of a database export into the current generated baseline.
+// Offline transfer of a database export into the current migrated schema.
 // Never imported by application runtime.
 //
 //   node scripts/rebaseline-data.mjs <source.sql|source.sqlite> <target.sqlite> [--payload <payload.sql>] [--without-jwks]
 //
-// The target is created from migrations/0000_baseline.sql, every table the
-// source and the baseline share is copied column-for-column, the transforms
+// The target is created from the complete ordered migration chain, every table
+// the source and the current schema share is copied column-for-column, the transforms
 // below run against the copied rows, and the result is audited. With --payload
 // the script also writes the data-only replacement that
 // `wrangler d1 execute --file` applies to a database that already carries the
-// baseline (its d1_migrations ledger is never touched).
+// same migration chain (its d1_migrations ledger is never touched).
 //
 // The catalog epoch (#919) is a table-level reshape, not a column edit. The
 // source carries `offerings`, `product_categories` and a site- and
@@ -18,10 +18,10 @@
 // product_locations, money through variants and prices, grouping through
 // collections, description through metafields, and time through sessions,
 // bookings and reservations. Those tables are derived here rather than copied.
-// A source that already carries the baseline has no `offerings` table, the
+// A source that already carries the catalog schema has no `offerings` table, the
 // derivation reads nothing, and the plain copy transfers it.
 import { createHash } from 'node:crypto'
-import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import Database from 'better-sqlite3'
@@ -32,10 +32,18 @@ import { occurrenceKey } from '../shared/bookings.ts'
 import { isSupportedMediaPlacement } from '../shared/media-placement-contract.ts'
 import { localDateTimeToInstant } from '../utils/timezone.ts'
 
-const BASELINE = 'migrations/0000_baseline.sql'
+const MIGRATIONS_DIRECTORY = 'migrations'
 const hash = value => createHash('sha256').update(value).digest('hex')
 const qi = value => `"${value.replaceAll('"', '""')}"`
 const assert = (condition, message) => { if (!condition) throw new Error(message) }
+
+function migrationChainSql() {
+  const migrations = readdirSync(resolve(MIGRATIONS_DIRECTORY))
+    .filter(name => /^\d{4}_.+\.sql$/u.test(name))
+    .sort()
+  assert(migrations[0] === '0000_baseline.sql', 'Migration chain must start with migrations/0000_baseline.sql')
+  return migrations.map(name => readFileSync(resolve(MIGRATIONS_DIRECTORY, name), 'utf8')).join('\n')
+}
 
 export function openDatabase(path) {
   if (!path.endsWith('.sql')) return new Database(path, { readonly: true, fileMustExist: true })
@@ -54,6 +62,43 @@ const digest = (rows, names) => hash(rows.map(row => JSON.stringify(names.map(na
  * Each is idempotent on its own result.
  */
 export const TRANSFORMS = [
+  // `business_locations.address` is `google.type.PostalAddress` — what the Places
+  // API answers with and what the CHECK now requires. Older exports carry two
+  // earlier shapes: `{addressLines}` alone, and that plus `locality`,
+  // `administrativeArea`, `postalCode` and a `country` key where the standard
+  // says `regionCode`. `city` and `neighborhood` were separate columns; the
+  // address names those parts itself now, and the source is still attached as
+  // `old`, so they fold in here before they are gone.
+  //
+  // A row whose source names no country keeps its old value and the target's
+  // CHECK rejects it by name: re-reading `postalAddress` for its
+  // `google_place_id` is the fix, and inventing a country is not.
+  { name: 'addresses_are_postal_addresses', sql: `UPDATE business_locations SET address = json_patch(
+      json_remove(address, '$.country', '$.streetAddress'),
+      json_object('regionCode', address ->> '$.country'))
+    WHERE json_type(address, '$.country') IS 'text' AND json_type(address, '$.regionCode') IS NULL` },
+  // A translated address was one free line beside a translated `city`. It is
+  // the same structured address as the canonical one now, so the line becomes
+  // the street and the city becomes the town. Splitting Thai address text into
+  // its parts is a translator's job, not a transform's, so nothing is invented
+  // and no word is dropped.
+  { name: 'localized_addresses_are_postal_addresses', sql: `UPDATE resource_localizations SET values_json = json_patch(
+      json_remove(values_json, '$.address', '$.city', '$.neighborhood'),
+      json_object('address', json_object(
+        'addressLines', json_array(values_json ->> '$.address'),
+        'locality', values_json ->> '$.city',
+        'sublocality', values_json ->> '$.neighborhood')))
+    WHERE resource_type = 'business_location' AND json_type(values_json, '$.address') IS 'text'` },
+  // A location translated without its address kept only the retired keys.
+  { name: 'localized_locations_drop_city_and_neighbourhood', sql: `UPDATE resource_localizations SET values_json = json_remove(values_json, '$.city', '$.neighborhood')
+    WHERE resource_type = 'business_location'
+      AND (json_type(values_json, '$.city') IS NOT NULL OR json_type(values_json, '$.neighborhood') IS NOT NULL)` },
+  { name: 'addresses_absorb_city_and_neighbourhood', requires: { table: 'business_locations', columns: ['city', 'neighborhood'] }, sql: `UPDATE business_locations SET address = (
+      SELECT json_patch(business_locations.address, json_object(
+        'locality', COALESCE(business_locations.address ->> '$.locality', nullif(trim(coalesce(o.city, '')), '')),
+        'sublocality', COALESCE(business_locations.address ->> '$.sublocality', nullif(trim(coalesce(o.neighborhood, '')), ''))))
+      FROM old.business_locations o WHERE o.id = business_locations.id)
+    WHERE address IS NOT NULL` },
   // --- a hero paragraph is `subtitle`: the name onboarding, the site template and the
   // CMS hero editor all write, and the only name Saya and Blawby now read. Blawby's
   // private second name for the same field silently dropped whatever the owner typed,
@@ -453,7 +498,14 @@ function deriveMetafields(stage, now, record) {
     for (const [key, spec] of Object.entries(EXPERIENCE_METAFIELDS)) {
       const raw = experience?.[key]
       if (raw === undefined || raw === null || (Array.isArray(raw) ? raw.length === 0 : String(raw).trim() === '')) continue
-      const definition = defineFor(row.organization_id, 'experience', key, spec.name, spec.value_type)
+      // A pricing note is a price in words, and the catalog reads exactly one
+      // handle for it (PRICING_NOTE_HANDLE = 'pricing.note') whether it came
+      // from a dish's price-note detail or a class's experience blob. Written
+      // under 'experience', it was an attribute row the price never saw, and
+      // the product read "Unavailable" on the public card.
+      const definition = key === 'pricing_note'
+        ? defineFor(row.organization_id, 'pricing', 'note', 'Pricing note', 'single_line_text')
+        : defineFor(row.organization_id, 'experience', key, spec.name, spec.value_type)
       values.push({ ...row, definition, value: Array.isArray(raw) ? raw.map(String) : String(raw) })
     }
   }
@@ -822,7 +874,7 @@ function childFirstOrder(db, tables) {
   return order
 }
 
-export function writePayload(target, payloadPath, { withoutJwks = false } = {}) {
+export function writePayload(target, payloadPath, schemaSql, { withoutJwks = false } = {}) {
   const tables = tableNames(target).filter(table => !(withoutJwks && table === 'jwks'))
   const order = childFirstOrder(target, tables)
   const lines = ['PRAGMA foreign_keys = OFF;', 'PRAGMA defer_foreign_keys = ON;', ...order.map(table => `DELETE FROM ${qi(table)};`)]
@@ -836,7 +888,7 @@ export function writePayload(target, payloadPath, { withoutJwks = false } = {}) 
   writeFileSync(payloadPath, lines.join('\n') + '\n', { mode: 0o600 })
   // Replaying the payload onto a populated copy must reproduce the target exactly.
   const replay = new Database(':memory:')
-  replay.exec(readFileSync(resolve(BASELINE), 'utf8'))
+  replay.exec(schemaSql)
   replay.pragma('foreign_keys = ON')
   replay.exec(readFileSync(payloadPath, 'utf8'))
   replay.exec(readFileSync(payloadPath, 'utf8'))
@@ -851,7 +903,7 @@ export function writePayload(target, payloadPath, { withoutJwks = false } = {}) 
 
 /**
  * @typedef {{ table: string, source_rows: number, target_rows: number }} TableTransfer
- * @typedef {{ baseline_sha256: string, tables: TableTransfer[], retired_tables?: string[], retired_columns?: Record<string, string[]>,
+ * @typedef {{ baseline_sha256: string, migration_chain_sha256: string, tables: TableTransfer[], retired_tables?: string[], retired_columns?: Record<string, string[]>,
  *   derived?: Record<string, number>, transforms: Array<{ name: string, changes: number, sql_sha256: string }>,
  *   invariants: Array<{ name: string, violations: number, sql_sha256: string }>, payload?: { tables: number, statements: number } }} RebaselineManifest
  */
@@ -864,14 +916,14 @@ export function writePayload(target, payloadPath, { withoutJwks = false } = {}) 
  */
 export function rebaseline(sourcePath, targetPath, { payloadPath = null, withoutJwks = false } = {}) {
   assert(!existsSync(targetPath), `Target already exists: ${targetPath}`)
-  const baseline = readFileSync(resolve(BASELINE), 'utf8')
+  const schemaSql = migrationChainSql()
   const source = openDatabase(resolve(sourcePath))
   const sourceFile = resolve(`${targetPath}.source.sqlite`)
   assert(!existsSync(sourceFile), `Source scratch file already exists: ${sourceFile}`)
   // The derivation reads the retired tables through ATTACH, so the source has
   // to be a file even when it arrived as a dump.
   source.exec(`VACUUM INTO ${sqlLiteral(sourceFile)}`)
-  // Rows are copied and transformed in a staging copy of the baseline with CHECK
+  // Rows are copied and transformed in a staging copy of the current schema with CHECK
   // enforcement off: the source still holds the retired values the transforms
   // rewrite. The final target then re-inserts every row under full enforcement,
   // so nothing the transforms missed can survive into it.
@@ -879,16 +931,23 @@ export function rebaseline(sourcePath, targetPath, { payloadPath = null, without
   const target = new Database(targetPath)
   const now = new Date().toISOString()
   /** @type {RebaselineManifest} */
-  const manifest = { baseline_sha256: hash(baseline), tables: [], derived: {}, transforms: [], invariants: [] }
+  const manifest = {
+    baseline_sha256: hash(readFileSync(resolve(MIGRATIONS_DIRECTORY, '0000_baseline.sql'), 'utf8')),
+    migration_chain_sha256: hash(schemaSql),
+    tables: [],
+    derived: {},
+    transforms: [],
+    invariants: [],
+  }
   try {
-    stage.exec(baseline)
+    stage.exec(schemaSql)
     stage.pragma('ignore_check_constraints = ON')
     stage.pragma('foreign_keys = OFF')
     stage.exec(`ATTACH ${sqlLiteral(sourceFile)} AS old`)
     const names = tableNames(stage)
     const sourceTables = tableNames(source)
     const reshapes = sourceTables.includes('offerings')
-    // Tables and columns the baseline no longer has are retired features; their
+    // Tables and columns the current schema no longer has are retired features; their
     // rows are derived or dropped, and the manifest names them.
     manifest.retired_tables = sourceTables.filter(table => !names.includes(table))
     manifest.retired_columns = {}
@@ -900,12 +959,12 @@ export function rebaseline(sourcePath, targetPath, { payloadPath = null, without
       const sourceColumns = columns(source, table)
       const retired = sourceColumns.filter(name => !targetColumns.includes(name))
       if (retired.length) manifest.retired_columns[table] = retired
-      // A column the baseline added takes its own default. One that is NOT NULL
+      // A column the current schema added takes its own default. One that is NOT NULL
       // with no default has no value to take, and the transfer says so rather
       // than inventing one.
       const added = stage.prepare(`PRAGMA table_info(${qi(table)})`).all().filter(column => !sourceColumns.includes(column.name))
       const unfillable = added.filter(column => column.notnull === 1 && column.dflt_value === null)
-      assert(unfillable.length === 0, `${table}: baseline requires ${unfillable.map(column => column.name).join(', ')}, which the source cannot supply`)
+      assert(unfillable.length === 0, `${table}: current schema requires ${unfillable.map(column => column.name).join(', ')}, which the source cannot supply`)
       if (added.length) manifest.added_columns[table] = added.map(column => column.name)
       const shared = targetColumns.filter(name => sourceColumns.includes(name))
       stage.prepare(`INSERT INTO main.${qi(table)} (${shared.map(qi).join(',')}) SELECT ${shared.map(qi).join(',')} FROM old.${qi(table)}`).run()
@@ -914,11 +973,19 @@ export function rebaseline(sourcePath, targetPath, { payloadPath = null, without
     for (const table of names) manifest.tables.push({ table, source_rows: stage.prepare(`SELECT count(*) AS n FROM main.${qi(table)}`).get().n })
     if (reshapes) deriveCatalog(stage, now, (name, count) => { manifest.derived[name] = count })
     for (const transform of TRANSFORMS) {
+      // A transform that folds a retiring column reads it from the attached
+      // source. A source that never had it — a newer export, or the baseline
+      // itself — has nothing to fold, and the manifest says the transform was
+      // skipped rather than the run failing on a column that is already gone.
+      if (transform.requires && !transform.requires.columns.every(name => columns(source, transform.requires.table).includes(name))) {
+        manifest.transforms.push({ name: transform.name, changes: 0, skipped: 'source has no such column', sql_sha256: hash(transform.sql) })
+        continue
+      }
       const result = stage.prepare(transform.sql).run()
       manifest.transforms.push({ name: transform.name, changes: result.changes, sql_sha256: hash(transform.sql) })
     }
     stage.exec('DETACH old')
-    target.exec(baseline)
+    target.exec(schemaSql)
     // CHECK constraints stay on: the target must reject anything the derivation
     // missed. Foreign keys are verified in one pass afterwards, which names
     // every violating row instead of failing the commit with no detail.
@@ -940,7 +1007,7 @@ export function rebaseline(sourcePath, targetPath, { payloadPath = null, without
     manifest.invariants = auditTargetInvariants(target)
     const broken = manifest.invariants.filter(result => result.violations > 0)
     assert(broken.length === 0, `Invariant violations: ${broken.map(result => `${result.name}=${result.violations}`).join(', ')}`)
-    if (payloadPath) manifest.payload = writePayload(target, payloadPath, { withoutJwks })
+    if (payloadPath) manifest.payload = writePayload(target, payloadPath, schemaSql, { withoutJwks })
     writeFileSync(`${targetPath}.manifest.json`, JSON.stringify(manifest, null, 2), { mode: 0o600 })
     return manifest
   } finally {

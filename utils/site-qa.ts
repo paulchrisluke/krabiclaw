@@ -9,6 +9,8 @@ export interface QaRow {
   sort_order: number
   page_path: string | null
   upvote_count: number | null
+  /** Where the record came from. An 'import' row is Google's and is read-only. */
+  source: string | null
 }
 
 export const isQaRow = (value: unknown): value is QaRow =>
@@ -20,6 +22,7 @@ export const isQaRow = (value: unknown): value is QaRow =>
   && typeof value.sort_order === 'number'
   && (value.page_path === null || typeof value.page_path === 'string')
   && (value.upvote_count === null || typeof value.upvote_count === 'number')
+  && (value.source === null || typeof value.source === 'string')
 
 export const isQaResponse = (value: unknown): value is { qa: QaRow[] } =>
   isRecord(value) && Array.isArray(value.qa) && value.qa.every(isQaRow)

@@ -24,19 +24,27 @@
 </template>
 
 <script setup lang="ts">
-import type { PublicSiteQa } from '~/types/blawby'
+import type { PublicTenantPage } from '~/server/utils/public-tenant-pages'
+import type { TenantPageBlock } from '~/utils/tenant-page-blocks'
+import { blockText, blockTextOrNull, blockRecords, blockMedia } from '~/utils/tenant-page-block-data'
 
-const props = withDefaults(defineProps<{
-  items: PublicSiteQa[]
-  heading?: string
-  decorationUrl?: string | null
-}>(), {
-  heading: 'Frequently asked',
-  decorationUrl: null,
-})
+const props = defineProps<{ block: TenantPageBlock; page: PublicTenantPage }>()
+
+/** A decoration the block carries, which is the page's own art, not content. */
+const decorationUrl = computed(() => blockMedia(props.block, 'decoration')[0]?.public_url ?? null)
+
+// The questions are the site's own Q&A records, resolved onto the block by the
+// public page loader.
+const items = computed(() => blockRecords(props.block.data.items).map(item => ({
+  id: blockText(item.id),
+  question: blockText(item.title),
+  answer: blockTextOrNull(item.description),
+  sort_order: 0,
+})).filter(item => item.id && item.question))
+const heading = computed(() => blockText(props.block.data.title) || 'Frequently asked questions')
 
 const columns = computed(() => {
-  const size = Math.ceil(props.items.length / 3)
-  return Array.from({ length: 3 }, (_, index) => props.items.slice(index * size, (index + 1) * size))
+  const size = Math.ceil(items.value.length / 3)
+  return Array.from({ length: 3 }, (_, index) => items.value.slice(index * size, (index + 1) * size))
 })
 </script>

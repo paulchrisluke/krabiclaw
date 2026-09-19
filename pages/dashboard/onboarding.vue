@@ -94,7 +94,6 @@ definePageMeta({ layout: 'dashboard', skipDashboardContext: true })
 const route = useRoute()
 const router = useRouter()
 const config = useRuntimeConfig()
-const toast = useToast()
 const state = startOnboardingFlow('new-site')
 const draft = useOnboardingDraft()
 const { indexOf, nextOf, previousOf, resumeStep } = useOnboardingSteps()
@@ -287,7 +286,8 @@ onMounted(() => {
   stopViewportListener = () => query.removeEventListener('change', update)
 
   if (route.query.payment === 'cancelled') {
-    toast.add({ title: 'Payment cancelled', description: 'Your subscription was not completed.', color: 'warning' })
+    draft.error.value = 'Payment cancelled. Your subscription was not completed.'
+    void router.replace({ query: { ...route.query, payment: undefined } })
   }
 })
 
@@ -298,7 +298,13 @@ onUnmounted(() => {
 
 // Step order changes with the answers (the Maps steps do not exist for a manual
 // draft), so a step that no longer applies redirects to the one that does.
-watch([currentStep, () => indexOf(currentStep.value?.id ?? 'type')], async () => {
+//
+// A failed save belongs to the step it was attempted on. The message used to
+// outlive the step and follow the owner around the flow, so a save that failed
+// on one screen was still being reported at the bottom of the next one — which
+// is what made a 500 on the products step look like Back itself was broken.
+watch([currentStep, () => indexOf(currentStep.value?.id ?? 'type')], async ([step], [previous]) => {
+  if ((step as typeof currentStep.value)?.id !== (previous as typeof currentStep.value)?.id) draft.error.value = null
   if (route.params.step && !currentStep.value) await router.replace('/dashboard/onboarding')
 })
 </script>

@@ -1,7 +1,6 @@
 <template>
   <UDashboardPanel
     :id="surface === 'brand' ? 'site-brand' : 'site-settings'"
-    :ui="{ body: 'min-h-0 !gap-0 !overflow-hidden !p-0 sm:!p-0' }"
   >
     <template #header>
       <UDashboardNavbar :title="navbarTitle" :toggle="false">
@@ -34,6 +33,7 @@
         :show-actions="showActions"
         :saving="saving"
         :save-disabled="saveDisabled"
+        :error="editorError"
         :detail-title="detailTitle"
         :dismiss-to="dismissTo"
         @cancel="cancelEditor"
@@ -110,7 +110,7 @@
 
           <div v-else-if="detailKey === 'currency'" class="space-y-6">
             <p class="text-base text-muted">The default currency used for site-wide prices and reporting.</p>
-            <USelect v-model="form.default_currency" :items="CURRENCY_OPTIONS" value-key="value" label-key="label" size="xl" class="w-full" />
+            <USelect :model-value="form.default_currency ?? undefined" :items="CURRENCY_OPTIONS" value-key="value" label-key="label" size="xl" class="w-full" placeholder="Select currency" @update:model-value="form.default_currency = $event ?? null" />
           </div>
 
           <div v-else-if="detailKey === 'delete'" class="space-y-6">
@@ -193,11 +193,12 @@
           </div>
 
           <div v-else-if="detailKey === 'notifications'" class="space-y-8">
-            <p class="text-base text-muted">Choose the default channels used when a location has no notification override.</p>
-            <UFormField label="Alert channels">
-              <USelectMenu v-model="notificationChannels" multiple :items="CHANNEL_OPTIONS" value-key="value" label-key="label" size="xl" class="w-full" />
-            </UFormField>
-            <UFormField v-if="notificationChannels.includes('whatsapp')" label="Site-wide WhatsApp number">
+            <!--
+              The number the business is reached on. Which channels a person
+              wants is their own setting, at /dashboard/account/profile/notifications.
+            -->
+            <p class="text-base text-muted">The WhatsApp number used when a location has no number of its own.</p>
+            <UFormField label="Site-wide WhatsApp number">
               <UInput v-model="whatsappPhone" type="tel" placeholder="+66..." size="xl" class="w-full" />
             </UFormField>
           </div>
@@ -235,6 +236,7 @@
                 <UButton icon="i-simple-icons-facebook" :loading="connectingFacebook" @click="startFacebookConnect">{{ facebookConnection?.connected ? 'Reconnect' : 'Connect' }}</UButton>
               </div>
             </UCard>
+            <UAlert v-if="facebookError" color="error" variant="soft" icon="i-lucide-circle-alert" :description="facebookError" class="mt-4" />
           </div>
 
           <UAlert v-if="validationMessage" class="mt-6" color="error" variant="soft" :description="validationMessage" />
@@ -249,7 +251,7 @@ import DashboardResourceLocalization from '~/components/dashboard/DashboardResou
 import MediaPicker from '~/lib/components/workspace/media/MediaPicker.vue'
 import EditorPaneShell from '~/components/dashboard/EditorPaneShell.vue'
 import EditorNavigationList from '~/components/dashboard/EditorNavigationList.vue'
-import { CURRENCY_OPTIONS, DEFAULT_CURRENCY, isCurrencyCode, type CurrencyCode } from '~/shared/currencies'
+import { CURRENCY_OPTIONS, isCurrencyCode, type CurrencyCode } from '~/shared/currencies'
 import { SITE_FONT_OPTIONS, MALI_FONT_CSS, isSiteFontPreset, resolveSiteFontPreset, siteFontStyles, type SiteFontPreset } from '~/shared/site-fonts'
 
 const props = withDefaults(defineProps<{ surface?: 'brand' | 'settings' }>(), { surface: 'settings' })
@@ -257,7 +259,8 @@ const surface = computed(() => props.surface)
 const dashboardApi = useDashboardApi()
 const route = useRoute()
 const router = useRouter()
-const toast = useToast()
+const editorError = ref<string | null>(null)
+const facebookError = ref('')
 const dashboard = useDashboardSite()
 const siteDashboardPath = computed(() => `/dashboard/${String(route.params.orgSlug)}/sites/${String(route.params.siteSlug)}`)
 const brandPath = computed(() => `${siteDashboardPath.value}/brand`)
@@ -312,9 +315,8 @@ async function scheduleWorkspaceDeletion() {
   // owner schedules it twice, or believes their workspace is safe.
   try {
     await dashboard.refresh()
-    toast.add({ title: 'Deletion scheduled', description: `Everything is deleted on ${deletionDateLabel.value}. Cancel here any time before then.`, icon: 'i-lucide-clock', color: 'warning' })
   } catch {
-    toast.add({ title: 'Deletion scheduled', description: 'Reload this page to see the date it happens on.', icon: 'i-lucide-clock', color: 'warning' })
+    // Ignore refresh error; deletion has already scheduled
   } finally {
     deletionSaving.value = false
   }
@@ -338,7 +340,6 @@ async function keepWorkspace() {
   try {
     await dashboard.refresh()
   } finally {
-    toast.add({ title: 'Deletion cancelled', icon: 'i-lucide-circle-check', color: 'success' })
     deletionSaving.value = false
   }
 }
@@ -368,7 +369,7 @@ interface LocalizationProgress { locale: string; completed: number; total: numbe
 
 interface SettingsPageResource {
   settings: { success: boolean; settings: SiteSettingsResponse }
-  notifications: { success: boolean; notifications: { whatsapp_phone: string | null; channels: string[] } }
+  notifications: { success: boolean; notifications: { whatsapp_phone: string | null } }
   facebook: FacebookConnectionStatus
 }
 interface EditorNavigationItem { id: string; label: string; summary: string; icon: string; to: string }
@@ -378,10 +379,9 @@ const isSettingsResponse = (value: unknown): value is { success: boolean; settin
   && (value.settings.brand_name === undefined || value.settings.brand_name === null || typeof value.settings.brand_name === 'string')
   && (value.settings.font_preset === undefined || isSiteFontPreset(value.settings.font_preset))
   && (value.settings.default_currency === undefined || value.settings.default_currency === null || typeof value.settings.default_currency === 'string')
-const isNotificationsResponse = (value: unknown): value is { success: boolean; notifications: { whatsapp_phone: string | null; channels: string[] } } =>
+const isNotificationsResponse = (value: unknown): value is { success: boolean; notifications: { whatsapp_phone: string | null } } =>
   isRecord(value) && typeof value.success === 'boolean' && isRecord(value.notifications)
   && (value.notifications.whatsapp_phone === null || typeof value.notifications.whatsapp_phone === 'string')
-  && Array.isArray(value.notifications.channels) && value.notifications.channels.every(channel => typeof channel === 'string')
 const isFacebookStatus = (value: unknown): value is FacebookConnectionStatus =>
   isRecord(value) && typeof value.connected === 'boolean' && (value.facebook_page_name === undefined || typeof value.facebook_page_name === 'string')
 
@@ -425,7 +425,6 @@ const loading = ref(true)
 const loadError = ref<string | null>(null)
 const saving = ref(false)
 const connectingFacebook = ref(false)
-const notificationChannels = ref<string[]>([])
 const whatsappPhone = ref('')
 const searchIndexed = ref(true)
 const facebookConnection = ref<FacebookConnectionStatus | null>(null)
@@ -438,7 +437,7 @@ const localizationProgressError = ref<string | null>(null)
 const newLocale = ref('')
 const loadedSettings = ref<SiteSettingsResponse | null>(null)
 const supportsSiteFonts = computed(() => loadedSettings.value?.theme === 'saya')
-const loadedNotifications = ref<{ whatsapp_phone: string | null; channels: string[] } | null>(null)
+const loadedNotifications = ref<{ whatsapp_phone: string | null } | null>(null)
 const originalSignature = ref('')
 interface SiteSettingsForm {
   brand_name: string
@@ -448,7 +447,7 @@ interface SiteSettingsForm {
   contact_email: string
   brand_color: string
   font_preset: SiteFontPreset
-  default_currency: CurrencyCode
+  default_currency: CurrencyCode | null
   google_analytics_measurement_id: string
   google_site_verification: string
   social_facebook_url: string
@@ -457,7 +456,7 @@ interface SiteSettingsForm {
 }
 const form = reactive<SiteSettingsForm>({
   brand_name: '', brand_description: '', logoAssetId: null, socialShareAssetId: null, contact_email: '', brand_color: '', font_preset: 'default',
-  default_currency: DEFAULT_CURRENCY, google_analytics_measurement_id: '', google_site_verification: '',
+  default_currency: null, google_analytics_measurement_id: '', google_site_verification: '',
   social_facebook_url: '', social_instagram_url: '', social_tiktok_url: '',
 })
 // Only the specimen uses Mali. Never change the dashboard's typography.
@@ -470,7 +469,6 @@ const brandLocalizationFields = computed(() => [
   { key: 'brand_name', label: 'Brand name', source: loadedSettings.value?.brand_name },
   { key: 'brand_description', label: 'Description', source: loadedSettings.value?.brand_description, multiline: true, rows: 6 },
 ])
-const CHANNEL_OPTIONS = [{ label: 'Email', value: 'email' }, { label: 'WhatsApp', value: 'whatsapp' }]
 const hasFacebookAccess = computed(() => dashboard.site.value?.effective_plan === 'growth')
 const enableableCatalogOptions = computed(() => (localizationSettings.value?.available_catalogs ?? [])
   .filter(catalog => !localizationSettings.value?.languages.some(language => language.locale === catalog.locale && language.status !== 'disabled'))
@@ -479,10 +477,7 @@ const nameCharactersRemaining = computed(() => 50 - form.brand_name.length)
 const descriptionCharactersRemaining = computed(() => 500 - form.brand_description.length)
 
 function explicitSummary(value: string | null | undefined, empty = 'Not set') { return value?.trim() || empty }
-const notificationSummary = computed(() => {
-  const channels = loadedNotifications.value?.channels ?? []
-  return channels.length ? channels.map(channel => channel === 'whatsapp' ? 'WhatsApp' : 'Email').join(' and ') : 'Not configured'
-})
+const notificationSummary = computed(() => explicitSummary(loadedNotifications.value?.whatsapp_phone, 'Not configured'))
 const socialSummary = computed(() => {
   const count = [loadedSettings.value?.social_facebook_url, loadedSettings.value?.social_instagram_url, loadedSettings.value?.social_tiktok_url].filter(Boolean).length
   return count ? `${count} ${count === 1 ? 'profile' : 'profiles'} connected` : 'Not configured'
@@ -564,7 +559,7 @@ function editorSignature(key: string | null) {
     case 'contact': return JSON.stringify(form.contact_email)
     case 'social': return JSON.stringify([form.social_facebook_url, form.social_instagram_url, form.social_tiktok_url])
     case 'currency': return JSON.stringify(form.default_currency)
-    case 'notifications': return JSON.stringify([notificationChannels.value, whatsappPhone.value])
+    case 'notifications': return whatsappPhone.value
     case 'analytics': return JSON.stringify(form.google_analytics_measurement_id)
     case 'verification': return JSON.stringify(form.google_site_verification)
     case 'visibility': return JSON.stringify(searchIndexed.value)
@@ -585,7 +580,7 @@ const validationMessage = computed(() => {
     case 'font': return supportsSiteFonts.value && isSiteFontPreset(form.font_preset) ? null : 'Choose a supported website font.'
     case 'contact': return !form.contact_email.trim() || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.contact_email) ? null : 'Enter a valid email address.'
     case 'social': return [form.social_facebook_url, form.social_instagram_url, form.social_tiktok_url].every(isValidUrl) ? null : 'Enter complete http or https profile URLs.'
-    case 'notifications': return !notificationChannels.value.length ? 'Select at least one notification channel.' : notificationChannels.value.includes('whatsapp') && !whatsappPhone.value.trim() ? 'Enter the WhatsApp number used for notifications.' : null
+    case 'notifications': return null
     case 'analytics': return !form.google_analytics_measurement_id.trim() || /^G-[A-Z0-9]+$/i.test(form.google_analytics_measurement_id.trim()) ? null : 'Enter a valid Google Analytics measurement ID.'
     case 'localization': return localizationSettings.value?.effective_plan !== 'growth' ? 'A Growth subscription is required.' : null
     default: return null
@@ -604,7 +599,9 @@ function fillForm(settings: SiteSettingsResponse) {
   form.contact_email = settings.contact_email ?? ''
   form.brand_color = settings.brand_color ?? ''
   form.font_preset = resolveSiteFontPreset(settings.font_preset)
-  form.default_currency = isCurrencyCode(settings.default_currency) ? settings.default_currency : DEFAULT_CURRENCY
+  // A stored value that is not a supported code is not this form's to reinterpret:
+  // showing it as USD invited the owner to save that over whatever is really there.
+  form.default_currency = isCurrencyCode(settings.default_currency) ? settings.default_currency : null
   form.google_analytics_measurement_id = settings.google_analytics_measurement_id ?? ''
   form.google_site_verification = settings.google_site_verification ?? ''
   form.social_facebook_url = settings.social_facebook_url ?? ''
@@ -612,12 +609,13 @@ function fillForm(settings: SiteSettingsResponse) {
   form.social_tiktok_url = settings.social_tiktok_url ?? ''
   searchIndexed.value = settings.robots !== 'noindex,nofollow'
 }
-function fillNotifications(notifications: { whatsapp_phone: string | null; channels: string[] }) {
+function fillNotifications(notifications: { whatsapp_phone: string | null }) {
   loadedNotifications.value = notifications
-  notificationChannels.value = [...notifications.channels]
   whatsappPhone.value = notifications.whatsapp_phone ?? ''
 }
 function resetDraft() {
+  editorError.value = null
+  facebookError.value = ''
   if (loadedSettings.value) fillForm(loadedSettings.value)
   if (loadedNotifications.value) fillNotifications(loadedNotifications.value)
   newLocale.value = ''
@@ -638,7 +636,7 @@ const { data: settingsResource, pending: settingsPending, error: settingsResourc
   }
   const [settings, notifications, facebook] = await Promise.all([
     dashboardApi<{ success: boolean; settings: SiteSettingsResponse }>('/api/dashboard/settings', { validate: isSettingsResponse }),
-    dashboardApi<{ success: boolean; notifications: { whatsapp_phone: string | null; channels: string[] } }>(`/api/editor/sites/${siteId}/notifications`, { validate: isNotificationsResponse }),
+    dashboardApi<{ success: boolean; notifications: { whatsapp_phone: string | null } }>(`/api/editor/sites/${siteId}/notifications`, { validate: isNotificationsResponse }),
     hasFacebookAccess.value ? dashboardApi<FacebookConnectionStatus>('/api/integrations/facebook-pages/connection', { query: { siteId }, validate: isFacebookStatus }) : Promise.resolve<FacebookConnectionStatus>({ connected: false }),
   ])
   return { settings, notifications, facebook }
@@ -660,35 +658,38 @@ function cancelEditor() {
   const destination = surface.value === 'brand' ? brandPath.value : firstSegment.value === 'search' && secondSegment.value ? `${settingsPath.value}/search` : settingsPath.value
   router.push(destination)
 }
-async function patchSettings(body: Record<string, unknown>, successMessage: string) {
+async function patchSettings(body: Record<string, unknown>) {
   const response = await dashboardApi<{ success: boolean; settings: SiteSettingsResponse }>('/api/dashboard/settings', { method: 'PATCH', body, validate: isSettingsResponse })
   fillForm(response.settings)
   originalSignature.value = editorSignature(detailKey.value)
-  toast.add({ description: successMessage, color: 'success' })
   await dashboard.refresh()
 }
 async function saveCurrentEditor() {
   if (saveDisabled.value || !detailKey.value) return
   saving.value = true
+  editorError.value = null
   try {
     switch (detailKey.value) {
-      case 'name': await patchSettings({ brand_name: form.brand_name.trim() }, 'Brand name saved'); break
-      case 'logo': await patchSettings({ media: [{ asset_id: form.logoAssetId, slot: 'logo' }] }, 'Logo saved'); break
-      case 'sharing-image': await patchSettings({ media: [{ asset_id: form.socialShareAssetId, slot: 'social_share' }] }, 'Social sharing image saved'); break
-      case 'description': await patchSettings({ brand_description: form.brand_description }, 'Description saved'); break
-      case 'color': await patchSettings({ brand_color: form.brand_color }, 'Brand color saved'); break
-      case 'font': await patchSettings({ font_preset: form.font_preset }, 'Website font saved'); break
-      case 'contact': await patchSettings({ contact_email: form.contact_email.trim() }, 'Contact details saved'); break
-      case 'social': await patchSettings({ social_facebook_url: form.social_facebook_url.trim() || null, social_instagram_url: form.social_instagram_url.trim() || null, social_tiktok_url: form.social_tiktok_url.trim() || null }, 'Social profiles saved'); break
-      case 'currency': await patchSettings({ default_currency: form.default_currency }, 'Currency saved'); break
-      case 'analytics': await patchSettings({ google_analytics_measurement_id: form.google_analytics_measurement_id.trim() }, 'Google Analytics saved'); break
-      case 'verification': await patchSettings({ google_site_verification: form.google_site_verification.trim() }, 'Search verification saved'); break
-      case 'visibility': await patchSettings({ robots: searchIndexed.value ? 'index,follow' : 'noindex,nofollow' }, 'Search visibility saved'); break
+      case 'name': await patchSettings({ brand_name: form.brand_name.trim() }); break
+      case 'logo': await patchSettings({ media: [{ asset_id: form.logoAssetId, slot: 'logo' }] }); break
+      case 'sharing-image': await patchSettings({ media: [{ asset_id: form.socialShareAssetId, slot: 'social_share' }] }); break
+      case 'description': await patchSettings({ brand_description: form.brand_description }); break
+      case 'color': await patchSettings({ brand_color: form.brand_color }); break
+      case 'font': await patchSettings({ font_preset: form.font_preset }); break
+      case 'contact': await patchSettings({ contact_email: form.contact_email.trim() }); break
+      case 'social': await patchSettings({ social_facebook_url: form.social_facebook_url.trim() || null, social_instagram_url: form.social_instagram_url.trim() || null, social_tiktok_url: form.social_tiktok_url.trim() || null }); break
+      case 'currency': {
+        if (!form.default_currency) throw new Error('Choose the currency this site prices in.')
+        await patchSettings({ default_currency: form.default_currency })
+        break
+      }
+      case 'analytics': await patchSettings({ google_analytics_measurement_id: form.google_analytics_measurement_id.trim() }); break
+      case 'verification': await patchSettings({ google_site_verification: form.google_site_verification.trim() }); break
+      case 'visibility': await patchSettings({ robots: searchIndexed.value ? 'index,follow' : 'noindex,nofollow' }); break
       case 'notifications': {
-        const response = await dashboardApi<{ notifications: { whatsapp_phone: string | null; channels: string[] } }>(`/api/editor/sites/${siteId}/notifications`, { method: 'PATCH', body: { whatsapp_phone: whatsappPhone.value.trim() || null, channels: notificationChannels.value }, validate: isNotificationsResponse })
+        const response = await dashboardApi<{ notifications: { whatsapp_phone: string | null } }>(`/api/editor/sites/${siteId}/notifications`, { method: 'PATCH', body: { whatsapp_phone: whatsappPhone.value.trim() }, validate: isNotificationsResponse })
         fillNotifications(response.notifications)
         originalSignature.value = editorSignature(detailKey.value)
-        toast.add({ description: 'Notifications saved', color: 'success' })
         break
       }
       case 'localization': {
@@ -697,15 +698,16 @@ async function saveCurrentEditor() {
         break
       }
     }
-  } catch (error) { toast.add({ description: errorMessage(error, 'Failed to save this setting'), color: 'error' }) } finally { saving.value = false }
+  } catch (error) { editorError.value = errorMessage(error, 'Failed to save this setting') } finally { saving.value = false }
 }
 async function startFacebookConnect() {
   connectingFacebook.value = true
+  facebookError.value = ''
   try {
     const response = await dashboardApi<{ authUrl?: string; error?: string }>('/api/integrations/facebook-pages/auth', { method: 'POST', validate: (value): value is { authUrl?: string; error?: string } => isRecord(value) && (value.authUrl === undefined || typeof value.authUrl === 'string') && (value.error === undefined || typeof value.error === 'string') })
     if (!response.authUrl) throw new Error(response.error || 'No authorization URL returned')
     await navigateTo(response.authUrl, { external: true })
-  } catch (error) { toast.add({ description: errorMessage(error, 'Failed to connect Facebook'), color: 'error' }); connectingFacebook.value = false }
+  } catch (error) { facebookError.value = errorMessage(error, 'Failed to connect Facebook'); connectingFacebook.value = false }
 }
 const isLocalizationSettings = (value: unknown): value is LocalizationSettings =>
   isRecord(value) && Array.isArray(value.languages) && Array.isArray(value.available_catalogs)
@@ -743,7 +745,7 @@ async function mutateLocalization(path: string, method: 'POST' | 'DELETE', body?
     await loadLocalizationSettings()
     return true
   } catch (error) {
-    toast.add({ description: errorMessage(error, 'Localization request failed'), color: 'error' })
+    localizationError.value = errorMessage(error, 'Localization request failed')
     return false
   } finally {
     localizationBusy.value = false

@@ -386,6 +386,9 @@ export async function claimReservation(db: DbClient, input: {
   timezone: string
   startsAt: string
   endsAt: string
+  /** The location-local date and time the guest picked, which is how an override is keyed. */
+  date: string
+  timeSlot: string
   partySize: number
   status?: 'pending' | 'confirmed'
   /**
@@ -402,6 +405,18 @@ export async function claimReservation(db: DbClient, input: {
     throw new HTTPError({ statusCode: 400, statusMessage: 'party_size must be a positive integer' })
   }
   const now = new Date().toISOString()
+  // The seats this slot has, resolved exactly as listReservationSlots resolves
+  // them for the guest who is looking at it: the slot's own override decides,
+  // then the whole day's, then the location's standing capacity. A closed slot
+  // or a closed day has no seats at all, whatever those capacities say — the
+  // calendar shows it closed, and the claim has to agree or an owner who shuts
+  // a service down still takes bookings for it.
+  const overrideScope = `o.organization_id = c.organization_id AND o.location_id = c.location_id AND o.override_date = ?`
+  const resolvedCapacity = `COALESCE(
+            (SELECT o.capacity FROM location_reservation_overrides o WHERE ${overrideScope} AND o.time_slot = ?),
+            (SELECT o.capacity FROM location_reservation_overrides o WHERE ${overrideScope} AND o.time_slot IS NULL),
+            c.slot_capacity
+          )`
   const claim: BatchQuery = {
     query: `
       INSERT INTO reservations (
@@ -412,7 +427,12 @@ export async function claimReservation(db: DbClient, input: {
       WHERE EXISTS (
         SELECT 1 FROM location_reservation_configs c
         WHERE c.location_id = ? AND c.organization_id = ?
-          AND (c.slot_capacity IS NULL OR c.slot_capacity >= ? + COALESCE((
+          AND NOT EXISTS (
+            SELECT 1 FROM location_reservation_overrides o
+             WHERE ${overrideScope} AND (o.time_slot = ? OR o.time_slot IS NULL)
+               AND o.status = 'closed'
+          )
+          AND (${resolvedCapacity} IS NULL OR ${resolvedCapacity} >= ? + COALESCE((
             SELECT SUM(r.party_size) FROM reservations r
             WHERE r.location_id = c.location_id AND r.starts_at = ? AND ${RESERVATION_CAPACITY_CONSUMING_SQL}
           ), 0))
@@ -422,7 +442,11 @@ export async function claimReservation(db: DbClient, input: {
     params: [
       input.reservationId, input.organizationId, input.siteId, input.locationId, input.customerId, null,
       input.timezone, input.startsAt, input.endsAt, input.partySize, input.status ?? 'confirmed', now, now,
-      input.locationId, input.organizationId, input.partySize, input.startsAt,
+      input.locationId, input.organizationId,
+      input.date, input.timeSlot,
+      input.date, input.timeSlot, input.date,
+      input.date, input.timeSlot, input.date,
+      input.partySize, input.startsAt,
     ],
   }
   // The reservation takes its request id once the thread it answers exists.

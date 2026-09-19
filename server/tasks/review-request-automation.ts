@@ -1,15 +1,17 @@
 import type { D1Database } from '@cloudflare/workers-types'
-import { queryAll } from '~/server/db'
+import { queryAllPages } from '~/server/db'
 import type { ReviewBookingType } from '~/server/utils/review-requests'
 import { executeGuestThreadOperation } from '~/server/domain/guest-threads/operations'
 import { sendReviewRequestForBooking } from '~/server/utils/review-request-delivery'
 import { defineScheduledTask } from '~/server/utils/scheduled-task'
-import { collectScheduledPaidRows } from '~/server/utils/scheduled-billing-access'
+import { filterEntitledRows } from '~/server/utils/billing-access'
+import type { CloudflareEnv } from '~/server/utils/auth'
 import { publishGuestInboxThreadEvent } from '~/server/cloudflare/guest-inbox-events'
 
 interface ReviewRequestTaskContext {
   cloudflare?: { env?: ApiRecord }
 }
+
 
 interface AutoCompleteRow {
   id: string
@@ -18,12 +20,6 @@ interface AutoCompleteRow {
   location_id: string | null
   ends_at: string
   duration_minutes: number | null
-  access_plan: string | null
-  access_expires_at: string | null
-  payment_status: string | null
-  paid_through: string | null
-  past_due_since: string | null
-  updated_at: string | null
 }
 
 interface SendDueRow {
@@ -31,12 +27,6 @@ interface SendDueRow {
   organization_id: string
   site_id: string
   booking_type: ReviewBookingType
-  access_plan: string | null
-  access_expires_at: string | null
-  payment_status: string | null
-  paid_through: string | null
-  past_due_since: string | null
-  updated_at: string | null
 }
 
 interface TaskResult {
@@ -53,19 +43,18 @@ async function autoCompleteBookings(db: D1Database, env: ApiRecord, kind: Review
   // When it happened and how long it runs belong to the record — a session for
   // a booking, the held table for a reservation — so the sweep reads them
   // there rather than from a thread that no longer carries them.
-  const rows = await collectScheduledPaidRows((limit, offset) => queryAll<AutoCompleteRow>(db, `
-      SELECT r.id, r.organization_id, r.site_id, record.location_id, record.ends_at,
-             ob.access_plan, ob.access_expires_at, ob.payment_status, ob.paid_through, ob.past_due_since, ob.updated_at
+  const candidates = await queryAllPages<AutoCompleteRow>(db, `
+      SELECT r.id, r.organization_id, r.site_id, record.location_id, record.ends_at
         FROM requests r
         JOIN (
           SELECT b.request_id, b.status, ps.location_id, ps.ends_at FROM bookings b JOIN product_sessions ps ON ps.id = b.product_session_id
           UNION ALL
           SELECT res.request_id, res.status, res.location_id, res.ends_at FROM reservations res
         ) record ON record.request_id = r.id
-        JOIN organization_billing ob ON ob.organization_id = r.organization_id AND ob.access_plan = 'growth'
        WHERE r.kind = ? AND record.status = 'confirmed' AND json_extract(r.payload_json, '$.completion.at') IS NULL
-       ORDER BY r.id LIMIT ? OFFSET ?
-    `, [kind, limit, offset]), 'review_requests')
+       ORDER BY r.id
+    `, [kind])
+  const rows = await filterEntitledRows(env as CloudflareEnv, candidates, 'review_requests')
   let completed = 0
   for (const row of rows) {
     // The record says when it ends. Nothing here needs a duration to guess with.
@@ -84,16 +73,14 @@ async function autoCompleteBookings(db: D1Database, env: ApiRecord, kind: Review
 async function sendDue(db: D1Database, env: ApiRecord, kind: 'first' | 'reminder'): Promise<{ sent: number; failed: number }> {
   const reservationDelay = kind === 'first' ? '-2 hours' : '-5 days'
   const experienceDelay = kind === 'first' ? '-24 hours' : '-5 days'
-  const rows = await collectScheduledPaidRows((limit, offset) => queryAll<SendDueRow>(db, `
-      SELECT r.id, r.organization_id, r.site_id, r.kind AS booking_type,
-             ob.access_plan, ob.access_expires_at, ob.payment_status, ob.paid_through, ob.past_due_since, ob.updated_at
+  const candidates = await queryAllPages<SendDueRow>(db, `
+      SELECT r.id, r.organization_id, r.site_id, r.kind AS booking_type
         FROM requests r JOIN customers c ON c.id = r.customer_id
         JOIN (
           SELECT request_id, status FROM bookings
           UNION ALL
           SELECT request_id, status FROM reservations
         ) record ON record.request_id = r.id
-        JOIN organization_billing ob ON ob.organization_id = r.organization_id AND ob.access_plan = 'growth'
        WHERE r.kind IN ('reservation', 'booking') AND record.status = 'completed'
          AND json_extract(r.payload_json, '$.completion.at') IS NOT NULL
          AND json_extract(r.payload_json, '$.review.submitted_at') IS NULL
@@ -101,8 +88,9 @@ async function sendDue(db: D1Database, env: ApiRecord, kind: 'first' | 'reminder
          AND ${kind === 'first'
            ? "json_extract(r.payload_json, '$.review.request_sent_at') IS NULL AND datetime(json_extract(r.payload_json, '$.completion.at')) <= datetime('now', CASE r.kind WHEN 'reservation' THEN ? ELSE ? END)"
            : "json_extract(r.payload_json, '$.review.request_sent_at') IS NOT NULL AND json_extract(r.payload_json, '$.review.reminder_sent_at') IS NULL AND datetime(json_extract(r.payload_json, '$.review.request_sent_at')) <= datetime('now', CASE r.kind WHEN 'reservation' THEN ? ELSE ? END)"}
-       ORDER BY booking_type, r.id LIMIT ? OFFSET ?
-    `, [reservationDelay, experienceDelay, limit, offset]), 'review_requests')
+       ORDER BY booking_type, r.id
+    `, [reservationDelay, experienceDelay])
+  const rows = await filterEntitledRows(env as CloudflareEnv, candidates, 'review_requests')
 
   let sent = 0
   let failed = 0

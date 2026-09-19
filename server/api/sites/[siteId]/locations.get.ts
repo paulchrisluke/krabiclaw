@@ -1,7 +1,7 @@
 // Get business locations for a site
 import { cloudflareEnv, jsonResponse, rethrowHttpError } from '../../../utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
-import { assertSiteWideAccess } from '~/server/utils/member-access'
+import { assertSiteWideAccess, memberAccessPrincipal } from '~/server/utils/member-access'
 import { loadMemberSiteRow } from '~/server/utils/location-access'
 import { queryAll } from '~/server/db'
 
@@ -32,7 +32,7 @@ export default defineHandler(async (event) => {
   }
 
   try {
-    const site = await loadMemberSiteRow(db, env, siteId, session.user.id)
+    const site = await loadMemberSiteRow(event, db, env, siteId, session.user.id)
 
     if (!site) {
       return jsonResponse({
@@ -40,10 +40,10 @@ export default defineHandler(async (event) => {
       }, { status: 404 })
     }
 
-    await assertSiteWideAccess(db, { env, memberId: site.member_id, role: site.member_role, organizationId: site.organization_id, siteId })
+    await assertSiteWideAccess(db, memberAccessPrincipal(site.membership, { env, siteId, event }))
 
     const locations = await queryAll<ApiValue>(db, `
-      SELECT bl.id, bl.team_id, bl.slug, bl.title, bl.address, bl.city, bl.phone, bl.notification_phone, bl.website_url, bl.maps_url, bl.latitude, bl.longitude, bl.opening_hours, bl.description, bl.short_description, bl.email, bl.price_level, bl.facebook_url, bl.instagram_url, bl.tiktok_url, bl.google_place_id, bl.grab_url, bl.uber_eats_url, bl.foodpanda_url, bl.rating, bl.review_count, bl.status, bl.last_synced_at, ma.id AS asset_id, ma.public_url AS media_public_url, ma.thumbnail_url AS media_thumbnail_url, ma.kind AS media_kind
+      SELECT bl.id, bl.team_id, bl.slug, bl.title, bl.address, bl.phone, bl.notification_phone, bl.website_url, bl.maps_url, bl.latitude, bl.longitude, bl.opening_hours, bl.description, bl.short_description, bl.email, bl.price_level, bl.facebook_url, bl.instagram_url, bl.tiktok_url, bl.google_place_id, bl.grab_url, bl.uber_eats_url, bl.foodpanda_url, bl.rating, bl.review_count, bl.status, bl.last_synced_at, ma.id AS asset_id, ma.public_url AS media_public_url, ma.thumbnail_url AS media_thumbnail_url, ma.kind AS media_kind
       FROM business_locations bl
       LEFT JOIN media_placements mp ON mp.site_id = bl.site_id AND mp.owner_type = 'business_location' AND mp.owner_id = bl.id AND mp.slot = 'hero' AND mp.sort_order = 0 AND mp.status = 'active'
       LEFT JOIN media_assets ma ON mp.asset_id = ma.id AND ma.status = 'active'

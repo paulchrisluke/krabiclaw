@@ -1,4 +1,3 @@
-import { getBlogPostPath } from '~/utils/blog-categories'
 
 export type PlatformKnowledgeResultType =
   | 'doc'
@@ -449,25 +448,25 @@ export const PLATFORM_DASHBOARD_ROUTE_ENTRIES: PlatformDashboardRouteEntry[] = [
     surfaces: ['dashboard'],
   },
   {
-    id: 'site-inbox',
-    title: 'Site Inbox',
-    pathTemplate: '/dashboard/:orgSlug/sites/:siteSlug/inbox',
+    id: 'site-messages',
+    title: 'Site Messages',
+    pathTemplate: '/dashboard/:orgSlug/sites/:siteSlug/messages',
     fallbackPath: '/dashboard',
     snippet: 'Review guest work across the site.',
-    body: 'Site Inbox aggregates accessible guest threads across contact messages, reservations, and experience bookings, including site-wide unassigned messages.',
-    icon: 'inbox',
+    body: 'Site Messages aggregates accessible guest threads across contact messages, reservations, and experience bookings, including site-wide unassigned messages.',
+    icon: 'message-circle',
     section: 'Operations',
     keywords: ['inbox', 'submissions', 'messages', 'contact requests', 'guest threads'],
     surfaces: ['dashboard'],
   },
   {
-    id: 'location-inbox',
-    title: 'Location Inbox',
-    pathTemplate: '/dashboard/:orgSlug/sites/:siteSlug/locations/:locationSlug/inbox',
+    id: 'location-messages',
+    title: 'Location Messages',
+    pathTemplate: '/dashboard/:orgSlug/sites/:siteSlug/locations/:locationSlug/messages',
     fallbackPath: '/dashboard',
     snippet: 'Review submissions assigned to one location.',
-    body: 'Location Inbox covers only guest threads assigned to the active location, without duplicating site-wide unassigned messages.',
-    icon: 'inbox',
+    body: 'Location Messages covers only guest threads assigned to the active location, without duplicating site-wide unassigned messages.',
+    icon: 'message-circle',
     section: 'Operations',
     keywords: ['inbox', 'submissions', 'messages', 'contact requests'],
     surfaces: ['dashboard'],
@@ -509,10 +508,6 @@ export const PLATFORM_DASHBOARD_ROUTE_ENTRIES: PlatformDashboardRouteEntry[] = [
     surfaces: ['dashboard'],
   },
 ]
-
-export function getPlatformBlogPath(category: string | null | undefined, slug: string | null | undefined): string | null {
-  return getBlogPostPath(category, slug)
-}
 
 export function resolveDashboardPath(pathTemplate: string, context: DashboardRouteContext = {}) {
   const replacements: Record<string, string | null | undefined> = {

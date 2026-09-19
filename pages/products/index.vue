@@ -1,5 +1,5 @@
 <template>
-  <ProductCollectionPage :products="goods" :collections="collections" :locations="productLocations" :currency="currency" :presentation="presentation" :vertical="vertical" :title="collectionTitle" :brand-name="brandName" />
+  <ProductCollectionPage v-if="presentation" :products="goods" :collections="collections" :locations="productLocations" :currency="currency" :presentation="presentation" :vertical="vertical" :title="collectionTitle" :brand-name="brandName" />
 </template>
 
 <script setup lang="ts">
@@ -11,22 +11,27 @@ definePageMeta({ layout: 'saya' })
 const { isBlawby } = usePublicTemplate()
 if (isBlawby.value) throw createError({ statusCode: 404 })
 const { t } = useI18n()
-const { products, collections, locations, config, site } = await usePublicPageData({ lazy: false })
+const { products, collections, locations, config, site, data: pagePayload } = await usePublicPageData({ lazy: false })
 // What the merchant sells over the counter. Anything a guest books a seat on
 // is an Experience and has its own surface, so it is not listed twice.
 const goods = computed(() => products.value.filter(product => !isExperience(product)))
 // A surface with nothing on it is not a page: a studio that sells no
 // merchandise has no /products, rather than an indexable empty one. The
 // navigation hides it for the same reason.
-if (goods.value.length === 0) throw createError({ statusCode: 404 })
+// Only a loaded payload can say the catalog is empty. A navigation the router
+// has already left behind resolves with none at all, and answering that with
+// a 404 put an uncaught error on every guest who clicked twice quickly.
+if (pagePayload.value && goods.value.length === 0) throw createError({ statusCode: 404 })
 const vertical = String(site.value?.vertical ?? '')
-const presentation = requireProductPresentation(vertical)
-if (presentation.locationCollectionSegment !== 'products') throw createError({ statusCode: 404 })
+// Same rule for the vertical: only a loaded site can say how it presents its
+// catalog, and `requireProductPresentation` throws outright without one.
+const presentation = site.value ? requireProductPresentation(vertical) : null
+if (presentation && presentation.locationCollectionSegment !== 'products') throw createError({ statusCode: 404 })
 const rawCurrency = config.value.default_currency
 if (!isCurrencyCode(rawCurrency)) throw createError({ statusCode: 500, statusMessage: 'Unsupported site currency' })
 const currency = rawCurrency
 const brandName = String(site.value?.brand_name ?? '').trim()
 const collectionTitle = computed(() => t('saya.products.collection_title', { site: brandName }))
 const productLocations = computed(() => locations.value.map(location => ({ id: String(location.id), slug: String(location.slug), title: String(location.title) })))
-useSocialMetadata(() => ({ path: presentation.collectionPath, title: collectionTitle.value, description: t('saya.products.meta_description', { site: brandName }), brand: { siteName: brandName } }))
+useSocialMetadata(() => presentation && ({ path: presentation.collectionPath, title: collectionTitle.value, description: t('saya.products.meta_description', { site: brandName }), brand: { siteName: brandName } }))
 </script>

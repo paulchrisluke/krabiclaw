@@ -13,8 +13,6 @@
 @source "../../layouts/docs.vue";
 @source "../../layouts/platform.vue";
 @source "../../components/*.vue";
-@source "../../components/auth";
-@source "../../components/billing";
 @source "../../components/blog";
 @source "../../components/content";
 @source "../../components/docs";
@@ -23,3 +21,11 @@
 @source "../../components/ui/AppBreadcrumb.vue";
 @source "../../components/ui/AppSection.vue";
 @source "../../components/ui/UImage.vue";
+
+/*
+  No Nuxt UI here on purpose. Marketing, docs and blog render the surface's own
+  primitives (PlatformButton, PlatformIcon and plain markup), so this sheet
+  needs no part of Nuxt UI's theme and stays the size the cold path was tuned
+  for. Routes that do render Nuxt UI load platform-app-entry.css instead; a
+  component that needs it belongs on that surface, not in a safelist here.
+*/

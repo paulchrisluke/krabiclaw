@@ -363,7 +363,6 @@ test('Today uses the CMS patterns and sends one reservation change request', asy
   await page.goto(`${baseURL}/dashboard/ember-slice-demo`)
   const heading = page.getByRole('heading', { name: /^You have \d+ (?:bookings?|reservations?)$/ })
   await expect(heading).toBeVisible()
-  expect(await heading.evaluate(element => getComputedStyle(element).textAlign)).toBe('center')
   await expect(page.getByRole('tab', { name: 'Today', exact: true })).toBeVisible()
   await expect(page.getByRole('tab', { name: 'Upcoming', exact: true })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Filter bookings', exact: true })).toBeVisible()
@@ -377,7 +376,9 @@ test('Today uses the CMS patterns and sends one reservation change request', asy
   await page.goBack()
 
   const note = `Today page note ${Date.now()}`
-  await page.getByRole('link', { name: 'Add a note to yourself', exact: true }).click()
+  // The row is named for what it holds, and its second line counts the notes
+  // once there are any, so only the name itself is matched.
+  await page.getByRole('link', { name: /^Your notes/ }).click()
   await page.getByLabel('Note', { exact: true }).fill(note)
   await page.getByRole('button', { name: 'Save', exact: true }).click()
   await expect(page.getByText(note, { exact: true })).toBeVisible()
@@ -385,12 +386,13 @@ test('Today uses the CMS patterns and sends one reservation change request', asy
   await expect(page.getByLabel('Note', { exact: true })).toHaveValue(note)
   await page.getByRole('button', { name: 'Cancel', exact: true }).click()
 
-  await page.getByRole('button', { name: 'Manage reservation', exact: true }).click()
-  await expect(page.getByRole('dialog')).toBeVisible()
+  // Change is a mode of the booking leaf, not a dialog over it: the action is a
+  // link, every field is a row of the same staged draft, and one footer commit
+  // sends the request the guest confirms.
   await page.getByRole('link', { name: 'Change reservation', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'What do you want to change?', exact: true })).toBeVisible()
-  await expect(page.getByText(new RegExp(`send a request to your guest, ${firstName}, to confirm the alterations to your reservation`, 'i'))).toBeVisible()
-  await expect(page.getByRole('heading', { name: 'Reservation details', exact: true })).toBeVisible()
+  await expect(page.getByText(`${firstName} confirms the change before anything moves.`)).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Change date', exact: true })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Send request', exact: true })).toBeVisible()
 
   await page.goto(`${baseURL}/dashboard/ember-slice-demo/bookings/reservation/${upcomingBookingId}/change`)

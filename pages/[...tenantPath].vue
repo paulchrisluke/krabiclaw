@@ -1,11 +1,11 @@
 <template>
-  <NuxtLayout :name="isBlawby ? 'blawby' : 'saya'">
-    <template v-if="localizedRoute && tenantPagePath === '/'">
-      <LazyBlawbyHome v-if="isBlawby" />
-      <LazySayaHomePage v-else />
-    </template>
+  <NuxtLayout :name="isPlatform ? 'platform' : isBlawby ? 'blawby' : 'saya'">
+    <!--
+      A localized home is its page document too: the `/` branch here rendered a
+      template's own home component instead, which is how /th/ reached a
+      component that read no blocks.
+    -->
     <TenantPublicPage
-      v-else
       :path="tenantPagePath"
       :locale="localizedRoute?.locale"
     />
@@ -20,9 +20,13 @@ import { resolveTenantLocalePath } from '~/utils/tenant-locale-path'
 definePageMeta({ layout: false })
 
 const route = useRoute()
-const { isPlatform, isTenant, siteId } = useTenantSite()
+const { isPlatform, siteId } = useTenantSite()
 const { isBlawby } = usePublicTemplate()
-if (isPlatform || !isTenant || !siteId) throw createError({ statusCode: 404, statusMessage: 'Page not found' })
+// An unclaimed path is a page document on whichever site resolved, KrabiClaw's
+// own included: its marketing pages are ordinary documents now, and this is the
+// route that serves the ones no named route owns (#903). A path with no
+// published document still 404s here — there is nothing to fall back to.
+if (!siteId) throw createError({ statusCode: 404, statusMessage: 'Page not found' })
 
 const segments = route.params.tenantPath
 const pagePath = computed(() => {
@@ -74,11 +78,12 @@ const localizedData = localeSegment.value
           import('~/server/db'),
           import('~/server/utils/localization'),
         ])
-        const db = cloudflareEnv(requestEvent).db
+        const env = cloudflareEnv(requestEvent)
+        const db = env.db
         if (!db) throw createError({ statusCode: 503, statusMessage: 'Database unavailable' })
         const currentSite = await queryFirst<{ organization_id: string }>(db, 'SELECT organization_id FROM sites WHERE id = ? AND status = \'active\' LIMIT 1', [siteId])
         if (!currentSite) throw createError({ statusCode: 404, statusMessage: 'Site not found' })
-        return { route: await resolveLocalizedPublicRoute(db, currentSite.organization_id, siteId, pagePath.value) }
+        return { route: await resolveLocalizedPublicRoute(env, db, currentSite.organization_id, siteId, pagePath.value) }
       }
       const endpoint: string = `/api/public/sites/${encodeURIComponent(siteId)}/localized-route`
       return await publicApiRequest(endpoint, {

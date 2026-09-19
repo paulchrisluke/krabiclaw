@@ -5,13 +5,14 @@ import { getAuthSession } from '~/server/utils/auth'
 import { resolveRequestedOrganization } from '~/server/utils/dashboard-context'
 import { activateSessionOrganization } from '~/server/utils/session-organization'
 import { runSiteCreation, VALID_VERTICALS } from '~/server/utils/site-creation'
+import { isCurrencyCode, SUPPORTED_CURRENCIES } from '~/shared/currencies'
 import type { SiteVertical } from '~/utils/vertical-copy'
 
 // Adds a site to an organization the caller already belongs to. The organization
 // is explicit: the dashboard sends the route's `org` query param (dashboardFetch),
 // API callers send `organizationId` in the body. Nothing is inferred from memberships.
 export default defineHandler(async (event) => {
-  const body = await readBody<{ name?: string; subdomain?: string; vertical?: string; organizationId?: string }>(event)
+  const body = await readBody<{ name?: string; subdomain?: string; vertical?: string; organizationId?: string; defaultCurrency?: string }>(event)
   const name = body?.name?.trim()
   const subdomain = body?.subdomain?.trim()
   const vertical = body?.vertical
@@ -23,6 +24,15 @@ export default defineHandler(async (event) => {
   if (!vertical || !VALID_VERTICALS.includes(vertical as SiteVertical)) {
     return jsonResponse({
       error: `vertical is required and must be one of: ${VALID_VERTICALS.join(', ')}`
+    }, { status: 400 })
+  }
+  // This site is public the moment it is created, so it cannot start without a
+  // currency to quote its prices in. The caller states it; nothing here guesses
+  // one from the organization's other sites.
+  const defaultCurrency = typeof body?.defaultCurrency === 'string' ? body.defaultCurrency.trim().toUpperCase() : ''
+  if (!isCurrencyCode(defaultCurrency)) {
+    return jsonResponse({
+      error: `defaultCurrency is required and must be one of: ${SUPPORTED_CURRENCIES.join(', ')}`
     }, { status: 400 })
   }
 
@@ -44,7 +54,8 @@ export default defineHandler(async (event) => {
     organizationId: organization.id,
     name,
     subdomain,
-    vertical: vertical as SiteVertical
+    vertical: vertical as SiteVertical,
+    defaultCurrency,
   })
   if (result.status === 200) {
     // The site exists at this point; a failed activation must not turn that into a

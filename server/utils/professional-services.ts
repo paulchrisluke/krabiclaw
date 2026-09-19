@@ -12,7 +12,9 @@ import {
 } from '~/server/utils/public-localization'
 import { loadPublicSocialMedia } from '~/server/utils/public-social-image'
 import { listPublicLocaleRepresentations } from '~/server/utils/public-locale-representations'
-import { siteSupportsBlawbyTemplate } from '~/utils/template-registry'
+import { publicTemplateRegistry, siteSupportsBlawbyTemplate } from '~/utils/template-registry'
+
+const BLAWBY_TEMPLATE = publicTemplateRegistry.blawby
 import {
   getPublicTenantPageForPath,
   listCanonicalTenantPages,
@@ -102,8 +104,8 @@ export async function listPublicBlogSummaries(db: DbClient, siteId: string, limi
   }))
 }
 
-export async function listPublicTenantPages(db: DbClient, siteId: string): Promise<PublicTenantPage[]> {
-  const pages = await listCanonicalTenantPages(db, siteId)
+export async function listPublicTenantPages(env: CloudflareEnv, db: DbClient, siteId: string): Promise<PublicTenantPage[]> {
+  const pages = await listCanonicalTenantPages(env, db, siteId)
   return pages.map(page => ({
     id: page.id,
     page_id: page.page_id,
@@ -126,6 +128,7 @@ export async function listPublicTenantPages(db: DbClient, siteId: string): Promi
 }
 
 export async function getPublicTenantPageByPath(
+  env: CloudflareEnv,
   db: DbClient,
   siteId: string,
   path: string,
@@ -135,7 +138,7 @@ export async function getPublicTenantPageByPath(
     localizations?: readonly ExactPublicLocalization[] | null
   } = {},
 ): Promise<PublicTenantPage | null> {
-  const page = await getPublicTenantPageForPath(db, siteId, path, options)
+  const page = await getPublicTenantPageForPath(env, db, siteId, path, options)
   if (!page) return null
   return {
     id: page.id,
@@ -355,17 +358,19 @@ export async function getPublicBlawbyDocumentData(
   const locale = options.locale?.trim() || 'en'
   const localizations = locale === 'en'
     ? []
-    : await loadExactPublicLocalizations(db, site.organization_id, siteId, locale)
+    : await loadExactPublicLocalizations(env, db, site.organization_id, siteId, locale)
 
   const [shell, route] = await Promise.all([
     getPublicBlawbyShellData(db, siteId, { locale, localizations }),
     getPublicBlawbyRouteData(db, siteId, recipe, { ...options, locale, localizations }, env),
   ])
-  const pagePath = recipe === 'page' ? options.slug ?? null : ROUTE_PAGE_PATHS[recipe]
+  // Which path each recipe's document lives at is declared once, per template,
+  // in utils/template-registry.ts; 'page' names its own path.
+  const pagePath = recipe === 'page' ? options.slug ?? null : BLAWBY_TEMPLATE.pageDocuments.recipes[recipe] ?? null
   if (recipe === 'article') return { shell, route }
   // Every route on this template is a page now, so locale representations
   // come from the document — there is no second resource kind to branch on.
-  route.localeRepresentations = await listPublicLocaleRepresentations(db, {
+  route.localeRepresentations = await listPublicLocaleRepresentations(env, db, {
     organizationId: site.organization_id,
     siteId,
     sourcePath: pagePath ?? '/',
@@ -399,24 +404,6 @@ export async function resolvePublicBlawbyDocumentOrThrow(
   return { success: true, ...document }
 }
 
-const ROUTE_PAGE_PATHS: Record<PublicBlawbyRouteData['recipe'], string | null> = {
-  home: '/',
-  links: null,
-  services: '/services',
-  about: '/about',
-  pricing: '/pricing',
-  contact: '/contact',
-  confirmation: null,
-  schedule: '/schedule',
-  blog: '/blog',
-  article: null,
-  donate: '/donate',
-  privacy: '/policies/privacy',
-  terms: '/policies/terms',
-  'third-party-notices': '/third-party-notices',
-  // A generic page names its own path, so it has no fixed entry here.
-  page: null,
-}
 function faqBlockQa(page: { blocks: Array<{ type: string; data: Record<string, unknown> }> } | null): PublicSiteQa[] {
   const block = page?.blocks.find(candidate => candidate.type === 'faq')
   if (!block || !Array.isArray(block.data.items)) return []
@@ -496,12 +483,13 @@ export async function getPublicBlawbyRouteData(
 ): Promise<PublicBlawbyRouteData> {
   const needsReviews = ['home', 'about', 'contact', 'schedule'].includes(recipe)
   const postLimit = recipe === 'home' ? 3 : recipe === 'blog' ? 50 : 0
-  const pagePath = recipe === 'page' ? options.slug ?? null : ROUTE_PAGE_PATHS[recipe]
+  // Declared once, per template, in utils/template-registry.ts.
+  const pagePath = recipe === 'page' ? options.slug ?? null : BLAWBY_TEMPLATE.pageDocuments.recipes[recipe] ?? null
   const localized = options.locale !== undefined && options.locale !== 'en'
 
   const [page, reviewRows, initialPosts, postRow] = await Promise.all([
     pagePath
-      ? getPublicTenantPageByPath(db, siteId, pagePath, {
+      ? getPublicTenantPageByPath(env, db, siteId, pagePath, {
           locale: options.locale,
           localizations: localized ? options.localizations ?? [] : null,
         })
@@ -545,9 +533,9 @@ export function hasPublicBlawbyRouteContent(route: PublicBlawbyRouteData): boole
   return Boolean(route.page)
 }
 
-export async function getPublicBlawbyData(db: DbClient, siteId: string): Promise<PublicBlawbyData> {
+export async function getPublicBlawbyData(env: CloudflareEnv, db: DbClient, siteId: string): Promise<PublicBlawbyData> {
   const [tenantPages, compliance, consultation, themeTokens] = await Promise.all([
-    listPublicTenantPages(db, siteId),
+    listPublicTenantPages(env, db, siteId),
     getPublicCompliance(db, siteId),
     getPublicConsultationSettings(db, siteId),
     getPublicThemeTokens(db, siteId),

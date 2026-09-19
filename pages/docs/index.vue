@@ -194,7 +194,7 @@ if (docsError.value) {
 const docsWithCategorySlug = computed(() => articles.value)
 
 const startSetupDocs = computed(() =>
-  docsWithCategorySlug.value.filter(doc => doc.categorySlug === 'getting-started' || doc.path === '/docs/integrations/mcp-setup').slice(0, 4),
+  docsWithCategorySlug.value.filter(doc => doc.categorySlug === 'getting-started' || doc.path === '/docs/mcp-setup').slice(0, 4),
 )
 
 const editDocs = computed(() =>
@@ -233,7 +233,7 @@ const relatedResources = computed(() => [
   },
   {
     title: 'ChatGPT app setup',
-    to: findDocPath('/docs/integrations/mcp-setup'),
+    to: findDocPath('/docs/mcp-setup'),
     description: 'Connect KrabiClaw in ChatGPT and start editing through conversation.',
   },
 ].filter((resource): resource is { title: string; to: string; description: string } => Boolean(resource.to)))

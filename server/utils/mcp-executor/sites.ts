@@ -67,7 +67,7 @@ export async function handleSitesTools(ctx: McpExecutorContext): Promise<unknown
     }
     case "set_default_currency": {
       const { isCurrencyCode } = await import("~/shared/currencies");
-      const currency = String(args.currency ?? "").toUpperCase().trim();
+      const currency = requiredString(args, "currency").toUpperCase().trim();
       if (!isCurrencyCode(currency)) {
         throw mcpProtocolError(MCP_ERROR.invalidParams, `Unsupported currency: ${currency}`);
       }

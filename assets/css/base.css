@@ -1,4 +1,5 @@
 @import "tailwindcss" source(none);
+@source "../../utils/form-constants.ts";
 
 @plugin "@tailwindcss/typography";
 
@@ -21,10 +22,16 @@
   --breakpoint-sm: 576px;
   --breakpoint-md: 768px;
   --breakpoint-lg: 992px;
+  /* The public shell swaps between the desktop nav pill and the shared
+     hamburger here; header, mobile nav and footer all key off it. */
+  --breakpoint-nav: 1080px;
   --breakpoint-xl: 1200px;
   --breakpoint-2xl: 1366px;
   --breakpoint-3xl: 1600px;
 
+  /* Control radius for the public shell (nav menu items, mobile rows,
+     search trigger, hamburger, footer theme button, compact CTA). */
+  --radius-lg: 9px;
   --radius-xl: 12px;
   --radius-2xl: 16px;
   --radius-3xl: 24px;
@@ -104,6 +111,12 @@
   /* Global type scaling belongs at the root so rem-based sizing stays predictable. */
   font-size: 106%;
 
+  /* Form field boundary. WCAG 2.1 SC 1.4.11 wants 3:1 for the edge of a
+     control, and the decorative --ui-border this shared input class used to
+     borrow lands at 1.27:1 on white — the field read as floating text with no
+     visible box. Measured 3.25:1 on #FFFFFF. */
+  --kc-field-border: #8E8E97;
+
   --kc-navy:        #1F2547;
   --kc-navy-700:    #2C3360;
   --kc-navy-500:    #4A5380;
@@ -174,6 +187,11 @@
   --ui-border-muted:      var(--kc-border-muted);
   --ui-border-accented:   #D8D3CB;
   --ui-border-inverted:   var(--kc-navy-300);
+
+  /* The public footer is a distinct surface: lighter than the cream page in
+     light, darker than the navy page in dark. No --ui-* token inverts that
+     way, so the shared shell owns one. */
+  --kc-footer-bg:         var(--kc-cream-elev);
 }
 
 /* ── Platform theme dark mode ─────────────────────────────── */
@@ -224,6 +242,14 @@
   --ui-border-muted:      rgba(255,255,255,5%);
   --ui-border-accented:   rgba(255,255,255,12%);
   --ui-border-inverted:   var(--kc-cream-elev);
+
+  --kc-footer-bg:         #080A18;
+}
+
+/* Field boundary on any dark surface. Measured 3.44:1 on the Saya dark field
+   background #09090B, where --ui-border landed at 1.34:1. */
+.dark {
+  --kc-field-border: #64646E;
 }
 
 /* Dark mode wordmark: swap navy text to cream */
@@ -246,6 +272,8 @@
 .kc-wordmark__krabi { color: var(--kc-navy); }
 .kc-wordmark__claw  { color: var(--kc-coral); }
 .kc-wordmark__tld   { color: var(--kc-navy); font-size: 0.55em; vertical-align: top; margin-left: 1px; }
+/* Docs and blog carry a contextual word instead of the .com lock-up. */
+.kc-wordmark__suffix { color: var(--ui-text-muted); font-weight: 500; margin-left: 7px; }
 
 .kc-eyebrow {
   font-size: 12px;

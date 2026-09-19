@@ -27,7 +27,6 @@
                     <img v-if="portrait(review)" :src="portrait(review)!.public_url" :alt="review.author_name" width="56" height="56" loading="lazy" class="size-14 object-cover">
                   </div>
                 </figcaption>
-                <GoogleReviewAttribution v-if="review.source === 'google_places'" :metadata="review.google_review_metadata" :source-url="review.original_reference" />
               </figure>
             </li>
           </ul>
@@ -38,19 +37,39 @@
 </template>
 
 <script setup lang="ts">
+import type { PublicTenantPage } from '~/server/utils/public-tenant-pages'
+import type { TenantPageBlock } from '~/utils/tenant-page-blocks'
+import { blockText, blockRecords } from '~/utils/tenant-page-block-data'
 import type { PublicSiteReview } from '~/types/blawby'
 
 const portrait = (review: PublicSiteReview) => review.media.find(asset => asset.slot === 'portrait') ?? null
 
-const props = withDefaults(defineProps<{
-  reviews: PublicSiteReview[]
-  description?: string
-}>(), {
-  description: 'We believe access to quality professional help should not be limited by income.',
-})
+const props = defineProps<{ block: TenantPageBlock; page: PublicTenantPage }>()
+
+const description = computed(() => blockText(props.block.data.description) || undefined)
+const reviews = computed(() => blockRecords(props.block.data.items).map(item => ({
+  id: blockText(item.id),
+  author_name: blockText(item.title),
+  media: blockRecords(item.media).map(asset => ({
+    asset_id: blockText(asset.asset_id),
+    slot: blockText(asset.slot),
+    public_url: blockText(asset.public_url),
+    thumbnail_url: blockText(asset.thumbnail_url) || null,
+    kind: blockText(asset.kind),
+    alt_text: blockText(asset.alt_text) || null,
+  })),
+  rating: Number(item.value) || 5,
+  title: null,
+  content: blockText(item.description),
+  original_review_date: null,
+  verified: false,
+  source: null,
+  original_reference: null,
+  google_review_metadata: null,
+})).filter(item => item.id && item.author_name))
 
 const columns = computed(() => {
-  const size = Math.ceil(props.reviews.length / 3)
-  return Array.from({ length: 3 }, (_, index) => props.reviews.slice(index * size, (index + 1) * size))
+  const size = Math.ceil(reviews.value.length / 3)
+  return Array.from({ length: 3 }, (_, index) => reviews.value.slice(index * size, (index + 1) * size))
 })
 </script>

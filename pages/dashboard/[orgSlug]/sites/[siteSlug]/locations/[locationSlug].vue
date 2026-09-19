@@ -1,6 +1,6 @@
 <template>
   <!--
-    Settings and Inbox are their own screens with their own shells, the way the
+    Settings and Messages are their own screens with their own shells, the way the
     listing editor's cog opens a separate preferences screen rather than a pane
     beside the rail. Everything else is a section of this location.
   -->
@@ -10,7 +10,7 @@
     parent. Rendering the rail anyway is what put a third column beside a
     grandchild's own pair.
   -->
-  <NuxtPage v-if="rendersStandalone || frame.mode.value === 'yield'" />
+  <NuxtPage v-if="panelHidden" />
 
   <UDashboardPanel v-else id="location-hub">
     <template #header>
@@ -94,6 +94,8 @@ import { parseCmsFeatureOverrideDelta, resolveCmsCapabilities, type ProductFeatu
 import { resolvePublicTemplate } from '~/utils/template-registry'
 import { getTodayHoursLabel, type OpeningHours } from '~/shared/reservation-hours'
 import { normalizeVertical, type SiteVertical } from '~/utils/vertical-copy'
+import { catalogLabel, catalogSummary, type CatalogCounts } from '~/utils/product-presentation'
+import { formatPostalAddress } from '~/utils/postal-address'
 
 definePageMeta({ layout: 'dashboard', ownsChrome: true })
 
@@ -103,15 +105,14 @@ interface LocationOverview {
   status: string
   phone: string | null
   email: string | null
-  city: string | null
-  address: { addressLines?: string[] } | null
+  address: PostalAddress | null
   rating: number | null
   google_place_id: string | null
   timezone?: string | null
   opening_hours?: OpeningHours
 }
 
-interface InboxSummary { openThreads: number; unreadThreads: number }
+interface MessagesSummary { openThreads: number; unreadThreads: number }
 interface LocationContentCounts {
   photos: number
   posts: number
@@ -120,8 +121,8 @@ interface LocationContentCounts {
 }
 interface LocationOverviewResource {
   location: { success: boolean; location: LocationOverview }
-  products: { success: boolean; products: ApiRecord[] }
-  threads: { summary: InboxSummary }
+  catalog: CatalogCounts
+  threads: { summary: MessagesSummary }
   counts: LocationContentCounts
 }
 
@@ -142,25 +143,28 @@ const siteId = await useDashboardSiteId()
 const locationId = computed(() => dashboardLocation.currentLocationId.value)
 const settingsPath = computed(() => `${locationPath.value}/settings`)
 
-// Settings and Inbox are their own screens rather than sections of this one, so
+// Settings and Messages are their own screens rather than sections of this one, so
 // they leave the chain entirely rather than taking a column in it.
-const STANDALONE_SECTIONS = ['settings', 'inbox']
+const STANDALONE_SECTIONS = ['settings', 'messages']
 const sectionSegment = computed(() => frame.childSegment.value ?? '')
 const rendersStandalone = computed(() => STANDALONE_SECTIONS.includes(sectionSegment.value))
+// Whether this hub's own panel is on screen at all: a standalone section
+// (settings, inbox) replaces it, and so does a deeper level that owns both
+// columns. Nothing this page loads is rendered while it is true.
+const panelHidden = computed(() => rendersStandalone.value || frame.mode.value === 'yield')
 const hasDetail = computed(() => frame.mode.value === 'pair')
 const activeSection = computed(() => sectionSegment.value || null)
 
 const location = ref<LocationOverview | null>(null)
-const products = ref<ApiRecord[]>([])
-const inboxSummary = ref<InboxSummary>({ openThreads: 0, unreadThreads: 0 })
+const catalog = ref<CatalogCounts>({ total: 0, experiences: 0 })
+const messagesSummary = ref<MessagesSummary>({ openThreads: 0, unreadThreads: 0 })
 const counts = ref<LocationContentCounts>({ photos: 0, posts: 0, qa: 0, upcomingReservations: 0 })
-const loading = ref(true)
 const error = ref<string | null>(null)
 
 const dashboardLocationRow = computed(() => dashboard.locations.value.find(candidate => candidate.id === locationId.value) ?? null)
 const locationImage = computed(() =>
   dashboardLocationRow.value?.media.find(item => item.slot === 'social_card')?.public_url ?? '')
-const addressSummary = computed(() => location.value?.address?.addressLines?.join(', ') || 'Address not set')
+const addressSummary = computed(() => formatPostalAddress(location.value?.address ?? null) || 'Address not set')
 
 const capabilities = computed(() => {
   const vertical = dashboard.site.value?.vertical
@@ -186,6 +190,15 @@ const currentOpeningState = computed(() => {
   return getTodayHoursLabel(hours, 'Closed', location.value?.timezone) || 'Hours not set'
 })
 
+// What this branch's catalogue is called: a studio's classes are experiences, a
+// restaurant's dishes are its menu, and a restaurant that also takes bookings
+// holds both — which is a catalog, not a menu with experiences filed inside it.
+const catalogLabelText = computed(() => catalogLabel(dashboard.site.value?.vertical, catalog.value))
+// One count per surface, each in its own words: "24 dishes · 3 experiences".
+// Plurals are each presentation's own ("Dish" → "Dishes"); appending an "s" is
+// how "dishs" reaches a merchant's screen.
+const catalogSummaryText = computed(() => catalogSummary(dashboard.site.value?.vertical, catalog.value))
+
 function countSummary(total: number, noun: string, empty: string): string {
   if (!total) return empty
   return `${total} ${total === 1 ? noun : `${noun}s`}`
@@ -193,7 +206,13 @@ function countSummary(total: number, noun: string, empty: string): string {
 
 const contentGroups = computed(() => {
   const items = [
-    { id: 'products', label: dashboard.site.value?.vertical === 'restaurant' ? 'Menu' : 'Products', summary: countSummary(products.value.length, 'item', 'Add your first item'), to: `${locationPath.value}/products`, visible: hasFeature('products') },
+    // Built only when this site carries a catalogue at all. A vertical with no
+    // product presentation (a law firm's `service`) has no word for one, and
+    // asking for it threw — which is why every location of such a site rendered
+    // a 500 instead of its hub.
+    ...(hasFeature('products')
+      ? [{ id: 'products', label: catalogLabelText.value, summary: catalogSummaryText.value, to: `${locationPath.value}/products`, visible: true }]
+      : []),
     { id: 'photos', label: 'Photos', summary: countSummary(counts.value.photos, 'photo', 'Add photos'), to: `${locationPath.value}/photos`, visible: hasFeature('photos') },
     { id: 'posts', label: 'Posts', summary: countSummary(counts.value.posts, 'published post', 'Write your first post'), to: `${locationPath.value}/posts`, visible: hasFeature('posts') },
     { id: 'qa', label: 'Q&A', summary: countSummary(counts.value.qa, 'question', 'Answer your first question'), to: `${locationPath.value}/qa`, visible: hasFeature('qa') },
@@ -201,7 +220,7 @@ const contentGroups = computed(() => {
 
   const operations = [
     { id: 'reservations', label: 'Reservations', summary: countSummary(counts.value.upcomingReservations, 'upcoming booking', 'No upcoming bookings'), to: `${locationPath.value}/reservations`, visible: hasFeature('reservations') },
-    { id: 'inbox', label: 'Guest activity', summary: inboxSummary.value.unreadThreads ? `${inboxSummary.value.unreadThreads} unread · ${inboxSummary.value.openThreads} open` : countSummary(inboxSummary.value.openThreads, 'open request', 'Nothing waiting'), to: `${locationPath.value}/inbox`, visible: true },
+    { id: 'messages', label: 'Messages', summary: messagesSummary.value.unreadThreads ? `${messagesSummary.value.unreadThreads} unread · ${messagesSummary.value.openThreads} open` : countSummary(messagesSummary.value.openThreads, 'open request', 'Nothing waiting'), to: `${locationPath.value}/messages`, visible: true },
   ].filter(item => item.visible !== false)
 
   return [{ id: 'public-content', items }, { id: 'operations', label: 'Manage', items: operations }]
@@ -219,13 +238,13 @@ const detailTitle = computed(() => {
 const isOverviewResponse = (value: unknown): value is LocationOverviewResource =>
   isRecord(value)
   && isRecord(value.location) && isRecord(value.location.location)
-  && isRecord(value.products) && Array.isArray(value.products.products)
+  && isRecord(value.catalog) && typeof value.catalog.total === 'number' && typeof value.catalog.experiences === 'number'
   && isRecord(value.threads) && isRecord(value.threads.summary)
   && isRecord(value.counts) && typeof value.counts.photos === 'number'
 
 const requestEvent = useRequestEvent()
 const overviewKey = computed(() => `dashboard-location-overview:${siteId}:${locationId.value}:${includeProducts.value ? 'products' : 'no-products'}`)
-const { data: overview, pending: overviewPending, error: overviewError } = await useAsyncData<LocationOverviewResource>(overviewKey, async () => {
+const { data: overview, pending: overviewPending, error: overviewError, refresh } = await useAsyncData<LocationOverviewResource>(overviewKey, async () => {
   const requestedLocationId = locationId.value
   if (!requestedLocationId) throw createError({ statusCode: 404, statusMessage: 'Location not found' })
   const shouldIncludeProducts = includeProducts.value
@@ -238,18 +257,35 @@ const { data: overview, pending: overviewPending, error: overviewError } = await
     `/api/dashboard/sites/${siteId}/locations/${requestedLocationId}/overview`,
     { query: { includeProducts: String(shouldIncludeProducts) }, validate: isOverviewResponse },
   )
-}, { lazy: import.meta.client })
+}, {
+  lazy: import.meta.client,
+  // The location's own overview — its profile, its catalogue summary, its
+  // inbox summary and its content counts — is what this panel draws. Opening
+  // the location's settings or inbox, or a level below that owns both columns,
+  // replaces the panel entirely.
+  immediate: !panelHidden.value,
+})
 
-watch([overview, overviewPending, overviewError], ([resource, pending, cause]) => {
-  loading.value = pending
+// Coming back up to this hub from a level that hid it: the component stayed
+// mounted, so the read skipped above has to start now. Synchronous flush so
+// `loading` is already true on the render that first shows the panel.
+watch(panelHidden, (hidden) => {
+  if (!hidden && !overview.value && !overviewError.value) refresh()
+}, { flush: 'sync' })
+
+// Loading, or not started because this panel was not on screen yet.
+const loading = computed(() =>
+  overviewPending.value || (!panelHidden.value && !overview.value && !overviewError.value))
+
+watch([overview, overviewError], ([resource, cause]) => {
   if (cause) {
     error.value = cause instanceof Error ? cause.message : 'Failed to load location overview'
     return
   }
   if (!resource) return
   location.value = resource.location.location
-  products.value = resource.products.products
-  inboxSummary.value = resource.threads.summary
+  catalog.value = resource.catalog
+  messagesSummary.value = resource.threads.summary
   counts.value = resource.counts
   error.value = null
 }, { immediate: true })

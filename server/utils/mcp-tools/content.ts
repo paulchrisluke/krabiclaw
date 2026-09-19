@@ -2,17 +2,20 @@ import { CONTENT_BLOCK_TYPES, describeContentBlockTextFields } from '~/shared/co
 import type { McpToolDefinition } from './shared'
 import { locationReservationConfigObject, locationReservationConfigWriteSchema, pageInfoObject, paginationInputSchema, renderedBookingPolicySummaryObject, ROBOTS_DIRECTIVE_ENUM, siteTool } from './shared'
 
+// Create and update both write the whole document: an omitted metadata field is
+// written as null, never carried over from the stored row. path and title are
+// required on both for that reason.
 const TENANT_PAGE_METADATA_SCHEMA = {
-  path: { type: 'string' },
-  title: { type: 'string' },
+  path: { type: 'string', description: 'The page path to write. Send the current path unless you are moving the page; a different path moves it and creates the locale-scoped redirect.' },
+  title: { type: 'string', description: 'The page title to write. Always sent in full — an omitted title is not kept.' },
   summary: { type: ['string', 'null'] },
   seoTitle: { type: ['string', 'null'] },
   seoDescription: { type: ['string', 'null'] },
   canonicalUrl: { type: ['string', 'null'] },
   robots: { type: ['string', 'null'], enum: [...ROBOTS_DIRECTIVE_ENUM, null], description: 'Search engine indexing directive. Leave unset for the default index,follow.' },
-  pageType: { type: 'string', enum: ['custom', 'recipe', 'legal', 'system'] },
-  recipe: { type: ['string', 'null'] },
-  sortOrder: { type: ['number', 'null'] },
+  pageType: { type: 'string', enum: ['custom', 'recipe', 'legal', 'system'], description: "The page's type. Send the page_type from the last read unless you are changing it." },
+  recipe: { type: ['string', 'null'], description: 'The template section this page fills, or null for a page that fills none. Send the recipe from the last read unless you are changing it; an omitted recipe is not kept.' },
+  sortOrder: { type: 'number', description: "The page's position in the site's page list. Send the sort_order from the last read unless you are reordering." },
 }
 
 const TENANT_PAGE_BLOCKS_SCHEMA = {
@@ -22,7 +25,10 @@ const TENANT_PAGE_BLOCKS_SCHEMA = {
     properties: {
       id: { type: 'string' },
       type: { type: 'string' },
-      position: { type: 'number' },
+      position: { type: 'integer', description: 'Retain the position from the last read unless reordering blocks.' },
+      source_block_id: { type: ['string', 'null'] },
+      parent_block_id: { type: ['string', 'null'] },
+      level: { type: ['integer', 'null'], minimum: 1, maximum: 6 },
       data: { type: 'object', description: describeContentBlockTextFields(CONTENT_BLOCK_TYPES) },
       media: {
         type: 'array',
@@ -83,7 +89,7 @@ export const CONTENT_TOOLS: McpToolDefinition[] = [
     }),
   siteTool({
       name: 'update_tenant_page',
-      description: 'Update canonical tenant-page content with optimistic concurrency. Provide the complete blocks array and expected_updated_at from the last read. If existing block ids are omitted, also provide the exact removed_block_ids and confirmation_token returned by the canonical page read.',
+      description: 'Replace canonical tenant-page content with optimistic concurrency. This writes the whole document: provide the complete blocks array, path, title and expected_updated_at from the last read, because every omitted metadata field is written as null rather than kept. Sending a different path moves the page and creates its locale-scoped redirect. If existing block ids are omitted, also provide the exact removed_block_ids and confirmation_token returned by the canonical page read.',
       domain: 'content',
       minimumRole: 'editor',
       confirmRequired: true,
@@ -95,18 +101,34 @@ export const CONTENT_TOOLS: McpToolDefinition[] = [
         removed_block_ids: { type: 'array', items: { type: 'string' } },
         confirmation_token: { type: 'string' },
       },
-      required: ['variant_id', 'expected_updated_at', 'blocks'],
+      required: ['variant_id', 'expected_updated_at', 'path', 'title', 'pageType', 'recipe', 'sortOrder', 'blocks'],
       outputSchema: TENANT_PAGE_LIFECYCLE_OUTPUT,
     }),
   siteTool({
-      name: 'change_tenant_page_path',
-      description: 'Change a canonical tenant-page path and immediately create its locale-scoped redirect. Safe tenant-page redirect chains are flattened during the update.',
+      name: 'delete_tenant_page',
+      description: 'Delete a canonical tenant page. Deleting a translation removes that translation; deleting the source locale removes the page and every translation with it, and the response names the locales that went. A page the site template renders cannot be deleted, because its route would then have nothing to show.',
       domain: 'content',
       minimumRole: 'editor',
       confirmRequired: true,
-      inputSchema: { variant_id: { type: 'string' }, new_path: { type: 'string' }, expected_updated_at: { type: 'string' } },
-      required: ['variant_id', 'new_path', 'expected_updated_at'],
-      outputSchema: TENANT_PAGE_LIFECYCLE_OUTPUT,
+      inputSchema: {
+        variant_id: { type: 'string' },
+        expected_updated_at: { type: 'string', description: 'The document timestamp from the last read, so a page edited since is refused rather than silently removed.' },
+      },
+      required: ['variant_id', 'expected_updated_at'],
+      outputSchema: {
+        type: 'object',
+        properties: {
+          deleted: {
+            type: 'object',
+            properties: {
+              id: { type: 'string' }, path: { type: 'string' }, locale: { type: 'string' },
+              removed_locales: { type: 'array', items: { type: 'string' } },
+            },
+            required: ['id', 'path', 'locale', 'removed_locales'],
+          },
+        },
+        required: ['deleted'],
+      },
     }),
   siteTool({
       name: 'get_reservation_policy',

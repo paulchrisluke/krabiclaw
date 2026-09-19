@@ -46,7 +46,7 @@
               class="border border-default bg-elevated p-8"
             >
               <h3 class="saya-display saya-italic text-2xl text-default leading-none">{{ loc.title }}</h3>
-              <p v-if="loc.city || loc.neighborhood" class="saya-eyebrow mt-3 text-muted">{{ loc.neighborhood || loc.city }}</p>
+              <p v-if="addressPlaceName(loc.address)" class="saya-eyebrow mt-3 text-muted">{{ addressPlaceName(loc.address) }}</p>
               <div class="mt-6 flex flex-wrap gap-3">
                 <a
                   v-for="link in platformLinks(loc)"

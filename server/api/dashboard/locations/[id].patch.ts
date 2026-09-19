@@ -5,7 +5,7 @@ import { getDashboardLocationContext } from '~/server/utils/dashboard-context'
 import { resolveLocationCapabilitySummary, updateLocation, type UpdateLocationInput } from '~/server/utils/location-management'
 import { parseLocationPayload } from '~/server/utils/location-payload'
 import { purgePublicResourceCacheSafe } from '~/server/utils/public-resource-cache'
-import { assertMemberScope } from '~/server/utils/member-access'
+import { assertMemberScope, memberAccessPrincipal } from '~/server/utils/member-access'
 import { parsePhone } from '~/utils/phone'
 import type { ProductFeature } from '~/config/cms-registry'
 
@@ -16,9 +16,7 @@ export default defineHandler(async (event) => {
   const { env, db, session, organization, location: locationContext } = await getDashboardLocationContext(event, locationId)
   const organizationId = organization.id
   const siteId = locationContext.site_id
-  await assertMemberScope(db, {
-    env,
-    memberId: organization.memberId, role: organization.role, organizationId, siteId, locationId, })
+  await assertMemberScope(db, { ...memberAccessPrincipal(organization, { env, siteId, event }), locationId })
 
   const body = await readBody<Record<string, unknown>>(event)
   if (typeof body !== 'object' || body === null) {
@@ -63,15 +61,18 @@ export default defineHandler(async (event) => {
     return jsonResponse({ error: 'feature_overrides must be an object with enabled/disabled arrays, or null' }, { status: 400 })
   }
 
+  // A malformed address is the caller's mistake, not a server fault, so it
+  // answers 400 rather than letting the parser's TypeError become a 500.
+  let address: PostalAddress | null | undefined
+  try {
+    address = body.address === undefined ? undefined : parsePostalAddress(body.address)
+  } catch (cause) {
+    return jsonResponse({ error: cause instanceof Error ? cause.message : 'address is invalid' }, { status: 400 })
+  }
+
   const result = await updateLocation(
     db, organizationId, siteId, locationId, {
-      title: typeof body.title === 'string' ? body.title : undefined, slug: typeof body.slug === 'string' ? body.slug : undefined, address: body.address === undefined
-        ? undefined
-        : body.address === null
-          ? null
-          : typeof body.address === 'string'
-            ? body.address
-            : JSON.stringify(body.address), city: typeof body.city === 'string' ? body.city : body.city === null ? null : undefined, neighborhood: typeof body.neighborhood === 'string' ? body.neighborhood : body.neighborhood === null ? null : undefined, phone: typeof body.phone === 'string' ? body.phone : body.phone === null ? null : undefined, email: typeof body.email === 'string' ? body.email : body.email === null ? null : undefined, website_url: typeof body.website_url === 'string' ? body.website_url : body.website_url === null ? null : undefined, maps_url: typeof body.maps_url === 'string' ? body.maps_url : body.maps_url === null ? null : undefined, google_review_url: typeof body.google_review_url === 'string' ? body.google_review_url : body.google_review_url === null ? null : undefined, opening_hours: body.opening_hours === undefined
+      title: typeof body.title === 'string' ? body.title : undefined, slug: typeof body.slug === 'string' ? body.slug : undefined, address, phone: typeof body.phone === 'string' ? body.phone : body.phone === null ? null : undefined, email: typeof body.email === 'string' ? body.email : body.email === null ? null : undefined, website_url: typeof body.website_url === 'string' ? body.website_url : body.website_url === null ? null : undefined, maps_url: typeof body.maps_url === 'string' ? body.maps_url : body.maps_url === null ? null : undefined, google_review_url: typeof body.google_review_url === 'string' ? body.google_review_url : body.google_review_url === null ? null : undefined, opening_hours: body.opening_hours === undefined
         ? undefined
         : body.opening_hours === null
           ? null
@@ -92,3 +93,4 @@ export default defineHandler(async (event) => {
 })
 import { defineHandler } from 'nitro';
 import { getRouterParam, readBody  } from 'nitro/h3';
+import { parsePostalAddress, type PostalAddress } from '~/utils/postal-address'

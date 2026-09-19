@@ -59,7 +59,6 @@ type VerticalCopy = {
   allLocationsFilter: string
   aboutHeroTitle: string
   aboutHeroSubtitle: string
-  ourStoryTitle: string
   ourJourneyKicker: string
   ourJourneyTitle: string
   onlineOrderingNotAvailable: string
@@ -178,7 +177,6 @@ const registry: Record<LocaleCode, Partial<Record<SiteVertical, VerticalCopy>>> 
       allLocationsFilter: "All locations",
       aboutHeroTitle: "About us",
       aboutHeroSubtitle: "",
-      ourStoryTitle: "Our Story",
       ourJourneyKicker: "The journey",
       ourJourneyTitle: "Our Journey",
       onlineOrderingNotAvailable: "Online ordering not available",
@@ -294,7 +292,6 @@ const registry: Record<LocaleCode, Partial<Record<SiteVertical, VerticalCopy>>> 
       allLocationsFilter: "All locations",
       aboutHeroTitle: "About us",
       aboutHeroSubtitle: "",
-      ourStoryTitle: "Our Story",
       ourJourneyKicker: "The journey",
       ourJourneyTitle: "Our Journey",
       onlineOrderingNotAvailable: "Online booking not available",
@@ -412,7 +409,6 @@ const registry: Record<LocaleCode, Partial<Record<SiteVertical, VerticalCopy>>> 
       allLocationsFilter: "ทุกสาขา",
       aboutHeroTitle: "เกี่ยวกับเรา",
       aboutHeroSubtitle: "",
-      ourStoryTitle: "เรื่องราวของเรา",
       ourJourneyKicker: "การเดินทาง",
       ourJourneyTitle: "การเดินทางของเรา",
       onlineOrderingNotAvailable: "ไม่มีการสั่งออนไลน์",
@@ -528,7 +524,6 @@ const registry: Record<LocaleCode, Partial<Record<SiteVertical, VerticalCopy>>> 
       allLocationsFilter: "ทุกสาขา",
       aboutHeroTitle: "เกี่ยวกับเรา",
       aboutHeroSubtitle: "",
-      ourStoryTitle: "เรื่องราวของเรา",
       ourJourneyKicker: "การเดินทาง",
       ourJourneyTitle: "การเดินทางของเรา",
       onlineOrderingNotAvailable: "ไม่มีการจองออนไลน์",
@@ -648,7 +643,6 @@ registry.en.service = {
   allLocationsFilter: "All",
   aboutHeroTitle: "About us",
   aboutHeroSubtitle: "",
-  ourStoryTitle: "Our Story",
   ourJourneyKicker: "Our work",
   ourJourneyTitle: "How We Help",
   onlineOrderingNotAvailable: "Online booking not available",
@@ -739,7 +733,6 @@ registry.ja.restaurant = {
   allLocationsFilter: "すべての店舗",
   aboutHeroTitle: "私たちについて",
   aboutHeroSubtitle: "",
-  ourStoryTitle: "私たちのストーリー",
   ourJourneyKicker: "これまでの歩み",
   ourJourneyTitle: "私たちの歩み",
   onlineOrderingNotAvailable: "オンライン注文はご利用いただけません",

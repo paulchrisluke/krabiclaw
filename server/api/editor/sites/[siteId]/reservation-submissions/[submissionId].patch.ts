@@ -5,7 +5,7 @@
 // ledger-append path rather than forking editor-specific logic.
 import { cleanString, cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
-import { assertResourceAccess } from '~/server/utils/member-access'
+import { assertResourceAccess, memberAccessPrincipal } from '~/server/utils/member-access'
 import { loadMemberSiteRow } from '~/server/utils/location-access'
 import { queryFirst } from '~/server/db'
 import { executeGuestThreadOperation } from '~/server/domain/guest-threads/operations'
@@ -26,7 +26,7 @@ export default defineHandler(async (event) => {
   const session = await getAuthSession(event, env)
   if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
-  const site = await loadMemberSiteRow(db, env, siteId, session.user.id)
+  const site = await loadMemberSiteRow(event, db, env, siteId, session.user.id)
   if (!site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
 
   // The table held is its own row: it carries the location and the status this
@@ -37,9 +37,7 @@ export default defineHandler(async (event) => {
      WHERE r.kind = 'reservation' AND r.id = ? AND r.site_id = ? LIMIT 1`, [submissionId, siteId])
   if (!submission) return jsonResponse({ error: 'Reservation not found' }, { status: 404 })
 
-  await assertResourceAccess(db, {
-    env,
-    memberId: site.member_id, role: site.member_role, organizationId: site.organization_id, siteId, resourceLocationId: submission.location_id, })
+  await assertResourceAccess(db, { ...memberAccessPrincipal(site.membership, { env, siteId, event }), resourceLocationId: submission.location_id })
 
   const body = await readBody(event) as { status?: unknown }
   const status = cleanString(body.status, 20)

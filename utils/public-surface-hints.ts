@@ -1,5 +1,17 @@
 import { resolvePublicTemplate } from '~/utils/template-registry'
 
+/*
+  Platform routes on the `access` and `standalone` layouts render Nuxt UI, so
+  they load the app stylesheet instead of the lean marketing one. Only the
+  publicly reachable ones are listed: the rest sit behind prefixes that
+  server/plugins/public-resource-hints.ts already treats as private and never
+  hints. Preloading the wrong sheet costs a download and warms nothing.
+*/
+const PLATFORM_APP_ROUTE_PREFIXES = ['/help', '/unsubscribe', '/accept-invitation']
+
+const isPlatformAppRoute = (path: string) =>
+  PLATFORM_APP_ROUTE_PREFIXES.some(prefix => path === prefix || path.startsWith(`${prefix}/`))
+
 export function publicSurfaceStylesheetForRequest(input: {
   pathname: string
   tenantType?: string | null
@@ -7,7 +19,9 @@ export function publicSurfaceStylesheetForRequest(input: {
   vertical?: string | null
 }): string | null {
   if (input.tenantType === 'platform') {
-    return '/_nuxt/surfaces/platform.css'
+    return isPlatformAppRoute(input.pathname)
+      ? '/_nuxt/surfaces/platform-app.css'
+      : '/_nuxt/surfaces/platform.css'
   }
   if (input.tenantType !== 'tenant') return null
 

@@ -12,8 +12,43 @@
     {
       "idx": 1,
       "version": "6",
-      "when": 1789228923331,
-      "tag": "0001_careless_the_professor",
+      "when": 1789231899070,
+      "tag": "0001_cool_paladin",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1789278823813,
+      "tag": "0002_drop_billing_layer",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1789278825048,
+      "tag": "0003_stripe_ga4_invoice_deliveries",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1789350706008,
+      "tag": "0004_drop_stripe_ga4_invoice_deliveries",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1789367295470,
+      "tag": "0005_majestic_scarlet_spider",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1789461396809,
+      "tag": "0006_site_currency_nullable",
       "breakpoints": true
     }
   ]

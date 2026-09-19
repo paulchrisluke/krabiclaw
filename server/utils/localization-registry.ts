@@ -55,11 +55,17 @@ interface ResourceLocalizationDefinition {
 
 const POLICY_FIELDS = { additional_notes_html: 'text' } as const
 
+// The parts of an address that are words. `regionCode` is an ISO code and a
+// postcode is digits; neither is translated, and a reader that needs them takes
+// them from the location's own address.
+const ADDRESS_FIELDS = { addressLines: 'string_array', locality: 'text',
+  sublocality: 'text', administrativeArea: 'text' } as const
+
 export const RESOURCE_LOCALIZATION_REGISTRY: Readonly<Record<LocalizedResourceType, ResourceLocalizationDefinition>> = Object.freeze({
   site: { table: 'sites', siteScope: 'self', fields: { brand_name: 'text', brand_description: 'text', seo_title: 'text', seo_description: 'text',
     compliance: { service_area: 'text', disclaimer: 'text', footer_disclaimer: 'text' }, consultation: { cta_label: 'text' } }, route: 'none' },
-  business_location: { table: 'business_locations', siteScope: 'site_column', fields: { title: 'text', address: 'text', city: 'text',
-    neighborhood: 'text', description: 'text', short_description: 'text', seo_title: 'text', seo_description: 'text',
+  business_location: { table: 'business_locations', siteScope: 'site_column', fields: { title: 'text', address: ADDRESS_FIELDS,
+    description: 'text', short_description: 'text', seo_title: 'text', seo_description: 'text',
     reservation: { policy: POLICY_FIELDS } }, route: 'stored' },
   // Product SEO is owned by the canonical content document, so it is not
   // localized here: a second SEO source would be a second thing to keep true.

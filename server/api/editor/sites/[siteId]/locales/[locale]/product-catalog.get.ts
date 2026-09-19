@@ -8,6 +8,6 @@ export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   const locale = getRouterParam(event, 'locale')
   if (!siteId || !locale) throw createError({ statusCode: 400, statusMessage: 'Site and locale are required' })
-  const { db, site } = await requireSiteAccess(event, siteId)
-  return await getProductCatalogLocalization(db, site.organization_id, siteId, locale)
+  const { env, db, site } = await requireSiteAccess(event, siteId)
+  return await getProductCatalogLocalization(env, db, site.organization_id, siteId, locale)
 })

@@ -221,21 +221,31 @@ function attachPostPublicFields(
   origin: string | null,
 ): Post {
   const post = parsePostRow(row)
-  const slug = post.slug ?? post.id
-  const publicPath = postPublicPath(slug)
+  // A post's public path is its slug. `?? post.id` published the row id as the
+  // URL whenever the slug was missing, which is how demo serves
+  // /posts/post-demo-1 while its Thai translation announces
+  // /posts/margherita-monday: two different addresses for one post, and the
+  // English one a database id. publishPost allocates the slug, so a published
+  // post without one is a broken row, not a case to cover for.
+  if (post.status === 'published' && !post.slug) {
+    throw new Error(`Published post ${post.id} has no slug`)
+  }
+  const publicPath = post.slug ? postPublicPath(post.slug) : null
   const media = publicMediaFromRows(socialMedia?.media)
   return {
     ...post,
-    slug,
     public_path: post.status === 'published' ? publicPath : null,
-    canonical_url: post.status === 'published' ? absoluteUrl(origin, publicPath) : null,
+    canonical_url: post.status === 'published' && publicPath ? absoluteUrl(origin, publicPath) : null,
     media,
     social_image: socialMedia?.social_image ?? null,
   }
 }
 
 function formatPublishedPost(row: PublishedPostRow, socialMedia: PublicSocialMedia | undefined, origin: string | null, locale = 'en'): PublishedPostSummary {
-  const slug = row.slug ?? row.id
+  // Every row reaching here is published (the query filters on it), so the
+  // slug is not optional — see attachPostPublicFields above.
+  if (!row.slug) throw new Error(`Published post ${row.id} has no slug`)
+  const slug = row.slug
   const publicPath = (locale === 'en' ? '' : '/' + locale) + postPublicPath(slug)
   const media = publicMediaFromRows(socialMedia?.media)
   return {
@@ -636,12 +646,16 @@ interface DuePostRow {
   post_type: Post['post_type']
   scheduled_for: string
   updated_at: string
+  slug: string | null
+  title: string | null
+  body: string
 }
 
 export async function publishDuePosts(db: DbClient, now = new Date()) {
   const nowIso = now.toISOString()
   const due = await queryAll<DuePostRow>(db, `
-    SELECT id, organization_id, site_id, location_id, (metadata_json ->> '$.post_type') AS post_type, scheduled_for, updated_at
+    SELECT id, organization_id, site_id, location_id, (metadata_json ->> '$.post_type') AS post_type, scheduled_for, updated_at,
+           slug, title, summary AS body
       FROM content_documents
      WHERE kind = 'social_post' AND row_role = 'root' AND status = 'scheduled' AND scheduled_for <= ?
      ORDER BY scheduled_for ASC, id ASC
@@ -652,15 +666,23 @@ export async function publishDuePosts(db: DbClient, now = new Date()) {
     const previousUpdatedAt = Date.parse(post.updated_at)
     if (!Number.isFinite(previousUpdatedAt)) throw new Error(`Scheduled post ${post.id} has an invalid updated_at`)
     const updatedAt = new Date(Math.max(now.getTime(), previousUpdatedAt + 1)).toISOString()
+    // The slug is allocated here for the same reason publishPost allocates it:
+    // a published post's public path is its slug, and there is no second thing
+    // to address it by. Publishing on a schedule skipped this and wrote
+    // status='published' with slug NULL, so the post answered at its row id --
+    // /posts/post-demo-1 -- while its translation announced
+    // /posts/margherita-monday. Seven posts across two tenants reached
+    // production that way.
+    const slug = post.slug ?? await allocatePostSlug(db, post.site_id, post.title ?? post.body.slice(0, 80) ?? post.id, post.id)
     const results = await executeBatch(db, [
       {
         query: `
           UPDATE content_documents
-             SET status = 'published', scheduled_for = NULL,
+             SET status = 'published', slug = ?, scheduled_for = NULL,
                  published_at = scheduled_for, first_published_at = COALESCE(first_published_at, scheduled_for), updated_at = ?
            WHERE kind = 'social_post' AND row_role = 'root' AND id = ? AND status = 'scheduled' AND scheduled_for = ? AND scheduled_for <= ? AND updated_at = ?
         `,
-        params: [updatedAt, post.id, post.scheduled_for, nowIso, post.updated_at],
+        params: [slug, updatedAt, post.id, post.scheduled_for, nowIso, post.updated_at],
       },
       publicResourceCacheInvalidationQuery(post.site_id, 'post-scheduled-publish'),
     ])
@@ -701,7 +723,13 @@ export async function getPublishedPosts(
 ): Promise<PublishedPostSummary[]> {
   let query = `
     SELECT p.id, p.site_id, root.location_id, bl.title AS location_title, bl.slug AS location_slug, bl.phone AS location_phone,
-           p.slug, (root.metadata_json ->> '$.post_type') AS post_type, p.title, p.summary AS body,
+           -- A translation's address is its own path column; only the source
+           -- row carries a slug. Reading p.slug alone returned NULL for every
+           -- representation, and the formatter below refuses a published post
+           -- with no slug, so any locale but the source 500'd the moment a
+           -- surface listed its posts.
+           COALESCE(p.slug, ltrim(replace(p.path, '/posts/', ''), '/')) AS slug,
+           (root.metadata_json ->> '$.post_type') AS post_type, p.title, p.summary AS body,
            p.seo_title, p.seo_description,
            json_extract(root.metadata_json, '$.call_to_action') AS call_to_action, CASE WHEN (root.metadata_json ->> '$.event') IS NULL THEN NULL ELSE json_patch(json_extract(root.metadata_json, '$.event'), COALESCE(json_extract(p.metadata_json, '$.event'), '{}')) END AS event, CASE WHEN (root.metadata_json ->> '$.offer') IS NULL THEN NULL ELSE json_patch(json_extract(root.metadata_json, '$.offer'), COALESCE(json_extract(p.metadata_json, '$.offer'), '{}')) END AS offer, (root.metadata_json ->> '$.alert_type') AS alert_type, root.published_at, p.created_at, p.updated_at
     FROM content_documents root JOIN content_documents p ON COALESCE(p.root_id,p.id) = root.id AND p.locale = ?
@@ -726,10 +754,18 @@ export async function getPublishedPosts(
   return (rows ?? []).map((row) => formatPublishedPost(row, mediaByPost.get(row.id), origin, locale))
 }
 
-export async function getPublishedPostBySlug(
+/**
+ * One published post, addressed either by the slug its public URL carries or by
+ * the row id a localized representation points back to with `root_id`.
+ *
+ * The caller says which. `(p.slug = ? OR p.id = ?)` accepted both for every
+ * lookup, so each post answered at two addresses -- /posts/margherita-monday
+ * and /posts/post-demo-3 both returned the same page.
+ */
+export async function getPublishedPost(
   db: DbClient,
   siteId: string,
-  slugOrId: string,
+  key: { slug: string } | { id: string },
 ) {
   const row = await queryFirst<PublishedPostRow>(
     db,
@@ -740,10 +776,10 @@ export async function getPublishedPostBySlug(
            json_extract(p.metadata_json, '$.call_to_action') AS call_to_action, json_extract(p.metadata_json, '$.event') AS event, json_extract(p.metadata_json, '$.offer') AS offer, (p.metadata_json ->> '$.alert_type') AS alert_type, p.published_at, p.created_at, p.updated_at
     FROM content_documents p
     LEFT JOIN business_locations bl ON p.location_id = bl.id
-    WHERE p.kind = 'social_post' AND p.row_role = 'root' AND p.site_id = ? AND p.status = 'published' AND (p.slug = ? OR p.id = ?)
+    WHERE p.kind = 'social_post' AND p.row_role = 'root' AND p.site_id = ? AND p.status = 'published' AND ${'slug' in key ? 'p.slug = ?' : 'p.id = ?'}
     LIMIT 1
   `,
-    [siteId, slugOrId, slugOrId],
+    [siteId, 'slug' in key ? key.slug : key.id],
   )
   if (!row) return null
   const [origin, mediaByPost] = await Promise.all([
@@ -760,6 +796,7 @@ export async function getPublishedPostBySlug(
 }
 
 export async function getPublishedPostByPublicRoute(
+  env: CloudflareEnv,
   db: DbClient,
   siteId: string,
   slug: string,
@@ -768,7 +805,7 @@ export async function getPublishedPostByPublicRoute(
   const site = await queryFirst<{ organization_id: string }>(db, 'SELECT organization_id FROM sites WHERE id = ? AND status = \'active\' LIMIT 1', [siteId])
   if (!site) return null
 
-  const localizations = locale === 'en' ? [] : await loadExactPublicLocalizations(db, site.organization_id, siteId, locale)
+  const localizations = locale === 'en' ? [] : await loadExactPublicLocalizations(env, db, site.organization_id, siteId, locale)
   const translated = locale === 'en' ? null : await queryFirst<{
     id: string; root_id: string; title: string | null; summary: string | null;
     seo_title: string | null; seo_description: string | null; metadata_json: string;
@@ -777,7 +814,7 @@ export async function getPublishedPostByPublicRoute(
     WHERE d.site_id = ? AND d.locale = ? AND d.path = ? AND d.row_role = 'representation'
       AND root.kind = 'social_post' AND root.status = 'published' LIMIT 1`, [siteId, locale, '/posts/' + slug])
   if (locale !== 'en' && !translated) return null
-  const sourcePost = await getPublishedPostBySlug(db, siteId, translated?.root_id ?? slug)
+  const sourcePost = await getPublishedPost(db, siteId, translated ? { id: translated.root_id } : { slug })
   if (!sourcePost) return null
   let post = sourcePost
   if (translated) {
@@ -800,7 +837,7 @@ export async function getPublishedPostByPublicRoute(
     }
   }
 
-  const localeRepresentations = await listPublicLocaleRepresentations(db, {
+  const localeRepresentations = await listPublicLocaleRepresentations(env, db, {
     organizationId: site.organization_id,
     siteId,
     sourcePath: sourcePost.public_path,

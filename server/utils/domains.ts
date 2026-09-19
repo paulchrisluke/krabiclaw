@@ -3,7 +3,6 @@ import { instantDate } from '~/utils/timezone'
 
 import { execute, queryAll, queryFirst } from '~/server/db'
 import { d1JsonStringSet } from '~/server/db/d1-limits'
-import { hasSiteEntitlement } from '~/server/utils/billing'
 import { canonicalDomainForPair, domainPair, normalizeDomain } from '~/server/utils/domain-shared'
 import { fireOrganizationEvent, fireOrganizationEventSafe, type OrganizationEventType } from '~/server/utils/organization-events'
 
@@ -184,10 +183,6 @@ export function validateCustomDomain(env: DomainEnv, domain: string): { valid: b
   }
 
   return { valid: true }
-}
-
-export async function hasCustomDomainsEntitlement(db: D1Database, siteId: string): Promise<boolean> {
-  return hasSiteEntitlement(db, siteId, 'custom_domains')
 }
 
 export async function ensureDomainAvailable(db: D1Database, domains: string[], excludeSiteId?: string): Promise<void> {

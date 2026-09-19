@@ -27,7 +27,7 @@
     <EditorNavigationList :groups="navigationGroups" />
   </div>
 
-  <UDashboardPanel v-else id="site-qa-record" :ui="{ body: 'min-h-0 gap-0! overflow-hidden! p-0! sm:p-0!' }">
+  <UDashboardPanel v-else id="site-qa-record">
     <template #header>
       <UDashboardNavbar :title="isNew ? 'New question' : form.question || 'Question'" :toggle="false">
         <template #leading>
@@ -100,7 +100,6 @@ import { isQaResponse, isQaCreated, isQaUpdated, qaCreateBlockers, type QaRow } 
 const props = defineProps<{ locationId?: string }>()
 
 const route = useRoute()
-const toast = useToast()
 const dashboardApi = useDashboardApi()
 
 const qaId = computed(() => String(route.params.qaId ?? ''))
@@ -219,13 +218,11 @@ async function commit() {
     if (isNew.value) {
       const created = await dashboardApi(qaEndpoint.value, { method: 'POST', body, validate: isQaCreated })
       Object.assign(form, emptyDraft())
-      toast.add({ description: 'Question created', color: 'success' })
       await navigateTo(`${qaPath.value}/${created.id}`)
       return
     }
     await dashboardApi(`${qaEndpoint.value}/${qaId.value}`, { method: 'PATCH', body, validate: isQaUpdated })
     await refresh()
-    toast.add({ description: `${SECTION_LABELS[openKey.value]} saved`, color: 'success' })
     await navigateTo(recordPath.value)
   } catch (error) {
     errorMessage.value = getErrorMessage(error, 'Failed to save question')

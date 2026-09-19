@@ -12,7 +12,7 @@ export default defineHandler(async (event) => {
 
   const { env, db, site } = await requireRequestedLocationAccess(event, locationId, body?.siteId)
 
-  if (!await hasSiteEntitlement(db, site.id, 'google_places')) {
+  if (!await hasSiteEntitlement(env, db, site.id, 'google_places')) {
     return jsonResponse({ error: 'Google Places sync requires a Growth plan or higher.' }, { status: 403 })
   }
 
@@ -38,7 +38,7 @@ export default defineHandler(async (event) => {
 
     return jsonResponse({
       success: true, syncedAt: new Date().toISOString(), reviewsUpserted, place: {
-        name: place.name, phone: place.phone, rating: place.rating, ratingCount: place.ratingCount, openingHours: place.openingHours, timezone: place.timezone, city: place.city, }, })
+        name: place.name, phone: place.phone, rating: place.rating, ratingCount: place.ratingCount, openingHours: place.openingHours, timezone: place.timezone, address: place.address, }, })
   } catch (err) {
     console.error('Google Places sync failed:', err)
     return jsonResponse({ error: err instanceof Error ? err.message : 'Sync failed' }, { status: 502 })

@@ -97,14 +97,14 @@
         </UFormField>
         <UFormField v-if="section === 'currency'" label="Currency" required>
           <USelectMenu
-            v-model="form.currency"
+            :model-value="form.currency ?? undefined"
             class="w-full"
             size="xl"
             :items="currencyOptions"
             value-key="value"
             label-key="label"
             placeholder="Select currency"
-            @update:model-value="submitAfterSelection"
+            @update:model-value="selectCurrency"
           />
         </UFormField>
       </div>
@@ -144,7 +144,7 @@ type IntakeForm = {
   /** ISO 3166-1 alpha-2 code from `listPhoneCountries()`, or '' until the owner picks one. */
   country: string
   phone: string
-  currency: CurrencyCode | undefined
+  currency: CurrencyCode | null
 }
 
 const form = defineModel<IntakeForm>('form', { required: true })
@@ -168,9 +168,9 @@ const phoneTouched = ref(false)
 // One country for the whole intake: the Location step's "Country" and the phone
 // picker on the Contact step read and write the same `form.country`, so the
 // owner answers once and the phone picker arrives seeded with that answer.
-// The wizard seeds `form.country` with the product default (US); the owner
-// confirms or changes it on the Location step. The dial code and phone input
-// stay inert while no country is set.
+// Nothing seeds `form.country`: the owner names it on the Location step, and it
+// is what the Currency step's proposal is derived from. The dial code and phone
+// input stay inert while no country is set.
 const countryCode = computed<CountryCode | undefined>({
   get: () => getPhoneCountry(form.value.country)?.code,
   set: (value) => {
@@ -268,8 +268,11 @@ const phoneError = computed(() => {
   return `Enter a valid ${country.value?.name ?? ''} phone number.`.replace(/\s{2,}/g, ' ')
 })
 
-function submitAfterSelection() {
-  if (props.section !== 'currency') return
+// "No answer" is null everywhere it is stored or sent; the select spells the
+// same state undefined. This is the one place the two meet.
+function selectCurrency(value: CurrencyCode | undefined) {
+  form.value.currency = value ?? null
+  if (props.section !== 'currency' || !value) return
   nextTick(() => emit('submit'))
 }
 </script>

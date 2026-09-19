@@ -5,10 +5,10 @@
   -->
   <NuxtPage v-if="frame.mode.value === 'yield'" />
 
-  <!-- A category is open: I am the index column, it is the detail. -->
-  <UDashboardPanel v-else-if="frame.mode.value === 'pair'" id="location-products">
+  <!-- A surface is open: I am the index column, it is the detail. -->
+  <UDashboardPanel v-else-if="frame.mode.value === 'pair'" id="location-catalog">
     <template #header>
-      <UDashboardNavbar :title="presentation.collectionLabel" :toggle="false">
+      <UDashboardNavbar :title="catalogTitle" :toggle="false">
         <template #leading>
           <DashboardNavbarLeading :to="locationPath" label="Location" />
         </template>
@@ -19,12 +19,12 @@
       <EditorPaneShell
         has-detail
         :dismiss-to="productsPath"
-        :detail-title="presentation.itemLabel"
+        :detail-title="detailTitle"
         wide-detail
         hide-detail-heading
       >
         <template #index>
-          <CollectionList />
+          <CatalogSurfaceList />
         </template>
         <template #detail>
           <NuxtPage />
@@ -34,22 +34,22 @@
   </UDashboardPanel>
 
   <!-- Nothing below me is open, so I am my parent's detail column. -->
-  <CollectionList v-else />
+  <CatalogSurfaceList v-else />
 </template>
 
 <script setup lang="ts">
 import EditorPaneShell from '~/components/dashboard/EditorPaneShell.vue'
-import CollectionList from '~/components/dashboard/CollectionList.vue'
-import { requireProductPresentation } from '~/utils/product-presentation'
+import CatalogSurfaceList from '~/components/dashboard/CatalogSurfaceList.vue'
+import { catalogLabel, countCatalog, isCatalogSurface, presentationForSurface } from '~/utils/product-presentation'
 
 definePageMeta({ layout: 'dashboard', cmsCapabilityKey: 'location.products' })
 
 const route = useRoute()
 const dashboard = useDashboardSite()
+const dashboardLocation = useDashboardLocation()
 
 const vertical = dashboard.site.value?.vertical
 if (!vertical) throw createError({ statusCode: 500, statusMessage: 'Site vertical is not configured' })
-const presentation = requireProductPresentation(vertical)
 
 // The path comes from the route this screen is mounted on, not from the
 // location selector: an unresolved selector left it empty, and an empty path is
@@ -57,4 +57,17 @@ const presentation = requireProductPresentation(vertical)
 const locationPath = computed(() => `/dashboard/${String(route.params.orgSlug)}/sites/${String(route.params.siteSlug)}/locations/${String(route.params.locationSlug)}`)
 const productsPath = computed(() => `${locationPath.value}/products`)
 const frame = useEditorFrame(productsPath)
+
+const siteId = await useDashboardSiteId()
+const locationId = computed(() => dashboardLocation.currentLocation.value?.id ?? null)
+// The same catalog the surfaces below read, so titling this column costs no request.
+const catalog = useLocationProductCatalog(siteId, locationId)
+// This level is the catalog, not one of its surfaces: a restaurant that also
+// takes bookings holds a Menu and Experiences, and neither names the other.
+const catalogTitle = computed(() => catalogLabel(vertical, countCatalog(catalog.products.value)))
+// The detail column holds one surface, named the way that surface is named.
+const detailTitle = computed(() => {
+  const segment = frame.childSegment.value ?? ''
+  return isCatalogSurface(vertical, segment) ? presentationForSurface(vertical, segment).collectionLabel : catalogTitle.value
+})
 </script>

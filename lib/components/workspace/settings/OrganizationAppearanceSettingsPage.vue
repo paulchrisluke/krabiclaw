@@ -20,6 +20,10 @@
 const { preference, setPreference } = usePlatformTheme()
 type ThemePreference = 'system' | 'light' | 'dark'
 const selectedPreference = ref<ThemePreference>(preference.value)
+// The stored preference is only read back on the client, after this setup runs.
+// Without this the radio kept the 'system' seed, so the page showed System
+// selected while the dashboard was rendering dark, and Save was live on load.
+watch(preference, saved => { selectedPreference.value = saved })
 const dirty = computed(() => selectedPreference.value !== preference.value)
 const themeOptions: { label: string; description: string; value: ThemePreference }[] = [
   { label: 'System', description: 'Follow your device appearance.', value: 'system' },

@@ -71,7 +71,7 @@
 
             <!-- Location name -->
             <div class="saya-display saya-italic text-4xl text-default leading-none">{{ loc.title }}</div>
-            <p v-if="loc.city" class="mt-1.5 text-sm text-muted">{{ loc.city }}</p>
+            <p v-if="addressPlaceName(loc.address as PostalAddress | null)" class="mt-1.5 text-sm text-muted">{{ addressPlaceName(loc.address as PostalAddress | null) }}</p>
 
             <!-- Address -->
             <p class="mt-5 text-sm leading-relaxed text-muted">{{ locationAddress(loc) }}</p>
@@ -102,9 +102,9 @@
 
 <script setup lang="ts">
 import { getTodayHoursLabel } from '~/shared/reservation-hours'
-definePageMeta({ layout: 'saya' })
+import { addressPlaceName, formatPostalAddress, type PostalAddress } from '~/utils/postal-address'
 
-type AddressInput = string | { addressLines?: string[]; locality?: string; administrativeArea?: string; postalCode?: string } | null | undefined
+definePageMeta({ layout: 'saya' })
 
 const { siteId, site } = useTenantSite()
 if (!siteId) throw createError({ statusCode: 404 })
@@ -128,16 +128,8 @@ useHeroLcpPreload(computed(() => {
   if (!media || media.kind === 'video') return null
   return String(media.public_url ?? '') || null
 }))
-
-function formatAddress(address: AddressInput) {
-  if (!address) return ''
-  if (typeof address === 'string') return address
-  return [address.addressLines?.[0], address.locality, address.administrativeArea, address.postalCode].filter(Boolean).join(', ')
-}
-
 function locationAddress(location: ApiRecord): string {
-  if (locale.value === 'en') return formatAddress(location.address as AddressInput)
-  return typeof location.address_translated === 'string' ? location.address_translated : ''
+  return formatPostalAddress(location.address as PostalAddress | null)
 }
 
 function todayHours(location: ApiRecord): string {

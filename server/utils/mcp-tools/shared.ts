@@ -69,19 +69,36 @@ export function seoOverrideFieldsSchema() {
 export const openingHoursInputSchema = { ...openingHoursSchema, description: 'Canonical weekly endpoint periods. Days use Sunday=0. Null means unknown; periods [] means closed. Sunday 00:00 without a close means always open.' }
 export const specialHoursInputSchema = { ...specialHoursSchema, description: 'Explicit dated hours or closures. Closure starts_on is required; ends_on is inclusive and null means indefinite. Dated hours replace regular hours; periods [] closes the date.' }
 
+/**
+ * A postal address as `google.type.PostalAddress`, which is what the Places API
+ * returns and what the column stores. `addressLines` is ordered and unbounded;
+ * `sublocality` is a real part of a Thai address.
+ */
+export const postalAddressSchema = {
+  type: ['object', 'null'],
+  properties: {
+    regionCode: { type: 'string', description: 'ISO 3166-1 alpha-2 country code, e.g. TH.' },
+    addressLines: { type: 'array', items: { type: 'string' }, description: 'Street lines in order, unbounded.' },
+    languageCode: { type: 'string', description: 'BCP-47 tag when the address is written in a specific language.' },
+    locality: { type: 'string', description: 'Town or city.' },
+    sublocality: { type: 'string', description: 'Neighbourhood or sub-district.' },
+    administrativeArea: { type: 'string', description: 'State, province or region.' },
+    postalCode: { type: 'string' },
+  },
+  required: ['regionCode', 'addressLines'],
+} as const
+
 export const locationObject = {
   type: 'object',
   properties: {
     id: { type: 'string' },
     slug: { type: 'string' },
     title: { type: 'string' },
-    city: { type: ['string', 'null'] },
-    neighborhood: { type: ['string', 'null'] },
     phone: { type: ['string', 'null'] },
     email: { type: ['string', 'null'] },
     website_url: { type: ['string', 'null'] },
     maps_url: { type: ['string', 'null'] },
-    address: { type: ['string', 'null'] },
+    address: postalAddressSchema,
     opening_hours: openingHoursSchema,
     special_hours: specialHoursSchema,
     rating: { type: ['number', 'null'] },
@@ -684,7 +701,7 @@ export const locationListItemObject = {
     id: { type: 'string' },
     slug: { type: 'string' },
     title: { type: 'string' },
-    city: { type: ['string', 'null'] },
+    place_name: { type: ['string', 'null'], description: 'The neighbourhood this location\'s address names, or its town. Derived from the address; call get_location for the address itself.' },
     status: { type: 'string' },
     active: { type: 'boolean', description: 'True when this is the currently active MCP location context.' },
   },
@@ -723,33 +740,6 @@ export const organizationListItemObject = {
 export const siteIdSchema = {
   site_id: { type: 'string', description: 'Internal KrabiClaw site ID from get_workspace_context or list_sites, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.' },
 }
-
-export const generatedImagePickerOutputSchema = {
-  type: 'object',
-  properties: {
-    title: { type: 'string' },
-    subtitle: { type: ['string', 'null'] },
-    images: {
-      type: 'array',
-      items: {
-        type: 'object',
-        properties: {
-          asset_id: { type: 'string' },
-          public_url: { type: 'string' },
-        },
-        required: ['asset_id', 'public_url'],
-      },
-    },
-    useLabel: { type: ['string', 'null'] },
-    regenerateLabel: { type: ['string', 'null'] },
-    assignTool: { type: ['string', 'null'] },
-    assignArgs: { type: ['object', 'null'] },
-    regenerateTool: { type: ['string', 'null'] },
-    regenerateArgs: { type: ['object', 'null'] },
-    successMessage: { type: ['string', 'null'] },
-  },
-  required: ['images'],
-} as const
 
 export function siteTool(definition: Omit<RawMcpToolDefinition, 'inputSchema' | 'outputSchema'> & {
   inputSchema?: Record<string, unknown>
@@ -834,22 +824,15 @@ const D = Object.freeze(openWorldDestructiveAnnotations())
 export const EXPECTED_TOOL_ANNOTATIONS = {
   attach_media: W,
   batch_create_products: W,
-  change_tenant_page_path: D,
   create_blog_post: W,
-  create_location_qa: W,
-  create_owner_entered_site_review: W,
   create_post: W,
   create_product: W,
-  create_site_qa: W,
   create_tenant_page: W,
   delete_blog_post: D,
-  delete_location_qa: D,
   delete_media_asset: D,
-  delete_owner_entered_site_review: D,
   delete_post: D,
   delete_product: D,
   delete_resource_localization: D,
-  delete_site_qa: D,
   get_blog_post: R,
   get_contact_inquiries: R,
   get_location: R,
@@ -878,50 +861,44 @@ export const EXPECTED_TOOL_ANNOTATIONS = {
   publish_post: D,
   put_resource_localization: D,
   remove_media: D,
-  reorder_location_qa: D,
   reorder_media: D,
-  reorder_site_qa: D,
   replace_blog_content: D,
-  reply_to_review: D,
   save_generated_image: W,
   save_generated_image_file: W,
   set_brand_color: D,
   set_default_currency: D,
   set_media: D,
   set_workspace_context: BD,
-  show_generated_images: R,
   reconcile_products: D,
   update_blog_metadata: D,
   update_blog_post: D,
   update_location: D,
-  update_location_qa: D,
   update_media_asset: D,
-  update_owner_entered_site_review: D,
   update_post: D,
   update_product: D,
-  update_site_qa: D,
   update_site_settings: D,
   update_tenant_page: D,
+  delete_tenant_page: D,
   upload_user_media: W,
   list_products: R,
-  set_product_publication: W,
-  set_product_location: W,
+  set_product_publication: D,
+  set_product_location: D,
   remove_product_location: D,
   list_collections: R,
   create_collection: W,
-  update_collection: W,
+  update_collection: D,
   delete_collection: D,
   // Replaces the whole membership list: products left out lose their place in
   // the collection, which is a removal the caller must mean.
   set_collection_products: D,
-  reorder_collections: W,
+  reorder_collections: D,
   list_metafield_definitions: R,
   create_metafield_definition: W,
   delete_metafield_definition: D,
   get_product_catalog_localization: R,
-  replace_product_localizations: W,
+  replace_product_localizations: D,
   get_reservation_policy: R,
-  update_reservation_policy: W,
+  update_reservation_policy: D,
 } as const satisfies Record<string, McpToolAnnotations>
 
 export function buildToolAnnotationsByName() {

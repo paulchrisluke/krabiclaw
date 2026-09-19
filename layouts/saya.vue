@@ -71,12 +71,6 @@ useHead(() => {
   }
 })
 
-declare global {
-  interface Window {
-    toggleSayaDark?: () => void
-  }
-}
-
 if (import.meta.dev) useDebugLCP()
 
 // Persistent chrome uses the minimal shell contract. Route-specific Product and
@@ -163,14 +157,11 @@ if (import.meta.client) {
 
   onMounted(() => sayaTheme.restore())
   prefersDark.addEventListener('change', onSystemThemeChange)
-  window.toggleSayaDark = () => {
-    const isDark = !document.documentElement.classList.contains('dark')
-    sayaTheme.setPreference(isDark ? 'dark' : 'light')
-  }
+  const stopThemeWatch = watch(sayaTheme.preference, sayaTheme.sync)
 
   onBeforeUnmount(() => {
     prefersDark.removeEventListener('change', onSystemThemeChange)
-    delete window.toggleSayaDark
+    stopThemeWatch()
   })
 }
 

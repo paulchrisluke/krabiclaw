@@ -45,7 +45,7 @@
           <div class="p-8">
             <div class="mb-4 flex items-center gap-4">
               <span class="rounded-full bg-inverted px-3 py-1 text-sm font-medium text-inverted">Featured</span>
-              <span v-if="featuredPost.category" class="rounded-full px-3 py-1 text-sm font-medium" :class="blogCategoryClass(featuredPost.category)">
+              <span v-if="featuredPost.category" class="rounded-full bg-elevated px-3 py-1 text-sm font-medium text-muted">
                 {{ featuredPost.category }}
               </span>
               <span v-if="featuredPost.published_at" class="text-sm text-dimmed">
@@ -76,7 +76,7 @@
           <NuxtLink
             v-for="post in group.posts"
             :key="post.id"
-            :to="getBlogPostPath(post.category, post.slug) ?? '/blog'"
+            :to="postPath(post.slug)"
             class="block"
           >
             <div class="h-full overflow-hidden rounded-xl border border-default bg-elevated shadow-sm transition-shadow hover:shadow-md">
@@ -100,7 +100,7 @@
               </div>
               <div class="p-6">
                 <div class="mb-3 flex items-center gap-3">
-                  <span v-if="post.category" class="rounded px-2 py-1 text-xs font-medium" :class="blogCategoryClass(post.category)">
+                  <span v-if="post.category" class="rounded bg-elevated px-2 py-1 text-xs font-medium text-muted">
                     {{ post.category }}
                   </span>
                   <span v-if="post.published_at" class="text-sm text-dimmed">
@@ -120,27 +120,29 @@
 </template>
 
 <script setup lang="ts">
-import { BLOG_CATEGORY_LABELS, blogCategoryClass, blogCategoryToSlug, getBlogPostPath } from '~/utils/blog-categories'
+import { tenantBlogPostPath } from '~/utils/tenant-blog-route'
+import { PLATFORM_TEMPLATE } from '~/utils/template-registry'
 
 const { resolveMedia } = useMedia()
 
-const { posts, pending, error } = useBlogNav()
+const { posts, categories, pending, error } = useBlogNav()
 
+const postPath = (slug: string) => tenantBlogPostPath(PLATFORM_TEMPLATE, slug)
 const featuredPost = computed(() => posts.value[0] ?? null)
-const featuredPostPath = computed(() => getBlogPostPath(featuredPost.value?.category, featuredPost.value?.slug))
+const featuredPostPath = computed(() => (featuredPost.value ? postPath(featuredPost.value.slug) : null))
 const featuredMedia = computed(() => resolveMedia(featuredPost.value?.cover))
+// The sections are the categories the articles actually carry, in the order
+// the grouping returns them — not a fixed taxonomy the authors cannot add to.
 const visibleCategories = computed(() => {
   const featuredId = featuredPost.value?.id ?? null
-  return BLOG_CATEGORY_LABELS.map(category => ({
-    category,
-    categorySlug: blogCategoryToSlug(category)!,
-    posts: posts.value
-      .filter(post => post.category === category && post.id !== featuredId)
-      .map(post => ({
-        ...post,
-        media: resolveMedia(post.cover),
-      })),
-  }))
+  return categories.value
+    .map(group => ({
+      ...group,
+      posts: group.posts
+        .filter(post => post.id !== featuredId)
+        .map(post => ({ ...post, media: resolveMedia(post.cover) })),
+    }))
+    .filter(group => group.posts.length > 0)
 })
 
 useSocialMetadata({

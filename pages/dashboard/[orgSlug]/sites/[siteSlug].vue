@@ -1,6 +1,6 @@
 <template>
   <!--
-    Settings, Brand, Inbox and Locations are their own screens with their own
+    Settings, Brand, Messages and Locations are their own screens with their own
     shells. A location in particular is a different object with its own editor,
     the way choosing a listing leaves the listings index for that listing.
   -->
@@ -35,10 +35,20 @@
         hide-detail-heading
       >
         <template #index>
-          <div v-if="pending" class="space-y-4">
+          <div v-if="overviewPending" class="space-y-4">
             <USkeleton class="h-40 w-full rounded-2xl" />
             <USkeleton v-for="index in 5" :key="index" class="h-20 rounded-2xl" />
           </div>
+
+          <UAlert
+            v-else-if="overviewErrorMessage"
+            color="error"
+            variant="soft"
+            icon="i-lucide-triangle-alert"
+            title="This site could not be loaded"
+            :description="overviewErrorMessage"
+            :actions="[{ label: 'Try again', color: 'neutral', variant: 'subtle', onClick: () => refresh() }]"
+          />
 
           <div v-else class="space-y-6">
             <!--
@@ -84,6 +94,7 @@ import { resolvePublicTemplate } from '~/utils/template-registry'
 import { hasPlatformAdminPermission } from '~/utils/platform-admin-access'
 import { normalizeVertical, type SiteVertical } from '~/utils/vertical-copy'
 import type { DashboardHomeData } from '~/server/utils/dashboard-home'
+import { getErrorMessage } from '~/utils/errors'
 
 definePageMeta({ layout: 'dashboard' })
 
@@ -134,12 +145,12 @@ const capabilities = computed(() => resolveCmsCapabilities(vertical.value, templ
   site: parseCmsFeatureOverrideDelta(dashboard.site.value?.feature_overrides),
 }))
 
-const { data: overviewData, pending } = await useAsyncData(`dashboard-home-${siteId}`, async (_nuxtApp, { signal }) => {
+const { data: overviewData, pending, error: overviewError, refresh } = await useAsyncData(`dashboard-home-${siteId}`, async (_nuxtApp, { signal }) => {
   if (import.meta.server) {
     if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Request context unavailable' })
     const organization = dashboard.organization.value
     if (!organization) throw createError({ statusCode: 403, statusMessage: 'Dashboard organization unavailable' })
-    const [{ cloudflareEnv }, { getDashboardHomeData }, { assertSiteWideAccess }, { getAuthSession }] = await Promise.all([
+    const [{ cloudflareEnv }, { getDashboardHomeData }, { assertSiteWideAccess, memberAccessPrincipal, resolveMembership }, { getAuthSession }] = await Promise.all([
       import('~/server/utils/api-response'),
       import('~/server/utils/dashboard-home'),
       import('~/server/utils/member-access'),
@@ -150,8 +161,15 @@ const { data: overviewData, pending } = await useAsyncData(`dashboard-home-${sit
     if (!db) throw createError({ statusCode: 500, statusMessage: 'Database not available' })
     const session = await getAuthSession(requestEvent, environment)
     if (!session?.user?.id) throw createError({ statusCode: 401, statusMessage: 'Authentication required' })
-    await assertSiteWideAccess(db, { env: environment, memberId: organization.memberId, role: organization.role, organizationId: organization.id, siteId })
-    return await getDashboardHomeData(db, organization.id, siteId, { env: environment, memberId: organization.memberId, userId: session.user.id, role: organization.role })
+    // `organization` here is the rendered payload's organization, not a
+    // membership this request resolved: its id reached the server through the
+    // route. Resolve the membership for (that id, this session) before it
+    // authorizes anything.
+    const membership = await resolveMembership(environment, { userId: session.user.id, organizationId: organization.id })
+    if (!membership) throw createError({ statusCode: 403, statusMessage: 'Dashboard organization unavailable' })
+    const principal = memberAccessPrincipal(membership, { env: environment, siteId })
+    await assertSiteWideAccess(db, principal)
+    return await getDashboardHomeData(db, membership.organizationId, siteId, principal)
   }
   return await dashboardApi<DashboardHomeData>('/api/dashboard/home', {
     signal,
@@ -159,7 +177,29 @@ const { data: overviewData, pending } = await useAsyncData(`dashboard-home-${sit
       && Array.isArray(value.locations) && isRecord(value.settings)
       && Array.isArray(value.pages) && Array.isArray(value.media) && Array.isArray(value.links),
   })
+}, {
+  // While a child route owns the chrome — the page editor, the blog editor,
+  // media, settings, a location — this hub's body is not rendered at all
+  // (`rendersStandalone` above swaps the whole panel for <NuxtPage/>), so
+  // nothing on screen reads this. getDashboardHomeData is one of the heaviest
+  // reads in the dashboard: the site's locations, settings, pages, media,
+  // links and audit events.
+  immediate: !rendersStandalone.value,
 })
+
+// Landing directly on a child route and then navigating up to the hub: this
+// component stays mounted, so the read skipped above has to happen now.
+watch(rendersStandalone, (standalone) => {
+  if (!standalone && !overviewData.value) refresh()
+})
+
+// Pending, or not started yet because the hub was reached from a child route.
+// A failed read is neither: reporting it as pending left the skeletons up for
+// good, with nothing on screen saying what had happened.
+const overviewPending = computed(() =>
+  !overviewError.value && (pending.value || !overviewData.value))
+const overviewErrorMessage = computed(() =>
+  overviewError.value ? getErrorMessage(overviewError.value, 'Failed to load this site') : null)
 
 const settings = computed(() => overviewData.value?.settings ?? null)
 const locations = computed(() => overviewData.value?.locations ?? [])

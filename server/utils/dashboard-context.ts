@@ -8,34 +8,17 @@ import { cloudflareEnv } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { queryAll, queryFirst, type DbClient } from '~/server/db'
 import { d1JsonStringSet } from '~/server/db/d1-limits'
-import { assertDashboardPathPermission, assertMemberSiteAccess, isOrganizationWideRole, resolveUserOrganization } from '~/server/utils/member-access'
-import { getOrganizationBillingProjection } from '~/server/utils/organization-billing'
+import { assertMemberSiteAccess, isOrganizationWideRole, memberAccessPrincipal, resolveUserOrganization, type ResolvedMembership } from '~/server/utils/member-access'
+import { getOrganizationPlan } from '~/server/utils/billing-access'
 
-function safeJsonParse(value: string): unknown {
-  return JSON.parse(value)
-}
+import { parsePostalAddress } from '~/utils/postal-address'
 
-// business_locations.address is written exclusively as { addressLines: string[] }
-// (see normalizeAddressLines in location-management.ts) — this guards against
-// malformed/legacy rows that predate that normalization rather than trusting an
-// unchecked cast, which would otherwise silently hand callers a shape that
-// doesn't match what they expect from the address contract.
-function parseLocationAddress(value: string | null): { addressLines: string[] } | null {
-  if (!value) return null
-  const parsed = safeJsonParse(value)
-  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('Stored location address is invalid')
-  const addressLines = (parsed as Record<string, unknown>).addressLines
-  if (!Array.isArray(addressLines) || !addressLines.every(line => typeof line === 'string')) throw new Error('Stored location address lines are invalid')
-  return { addressLines }
-}
 
-export interface DashboardOrganizationRow {
+export interface DashboardOrganizationRow extends ResolvedMembership {
   id: string
   name: string
   slug: string
   logo: string | null
-  role: string
-  memberId: string
   // Set while a deletion is pending: the sites keep serving until the
   // deletion-sweep task runs, and an owner can cancel until then.
   deletionScheduledAt: string | null
@@ -44,6 +27,11 @@ export interface DashboardOrganizationRow {
 // One loader for site-level social media, used by both the sites list and the
 // single-site context so the two cannot report different images for the same
 // site. Slots and resolution order match the public surfaces exactly.
+//
+// Site cards render the same image the public pages do. The dashboard used to
+// run its own query against the home page hero block's social_card — a
+// different owner from the one public reads — which is why it showed nothing
+// while the public site rendered fine.
 async function loadSiteSocialMedia(db: DbClient, organizationId: string) {
   const rows = await queryAll<{
     site_id: string
@@ -77,6 +65,13 @@ async function loadSiteSocialMedia(db: DbClient, organizationId: string) {
   return bySite
 }
 
+/**
+ * A site as authorization resolves it: identity, scope and settings, and nothing
+ * that exists only to render a card. The plan and the site-card media are an
+ * organization-wide read each, and every caller that only needs to know which
+ * site it is allowed to touch was paying for both. They are added by
+ * `decorateDashboardSiteCard` for the surfaces that actually draw cards.
+ */
 export interface DashboardSiteRow {
   id: string
   organization_id: string
@@ -96,12 +91,54 @@ export interface DashboardSiteRow {
   public_url: string | null
   status: string
   onboarding_status: string
-  effective_plan: string
-  media: Array<{ asset_id: string, slot: string, public_url: string, thumbnail_url: string | null, kind: string | null }>
-  social_image: { url: string, width?: number, height?: number, type?: string } | null
-  default_currency: string
+  default_currency: string | null
   feature_overrides: string | null
   theme_id: string
+}
+
+export type DashboardSiteMedia = Array<{ asset_id: string, slot: string, public_url: string, thumbnail_url: string | null, kind: string | null }>
+
+/** The presentation a site card needs, loaded once per organization per request. */
+export interface DashboardSiteCardEnrichment {
+  effectivePlan: string
+  mediaBySite: Map<string, DashboardSiteMedia>
+}
+
+export type DashboardSiteCardRow<Row> = Row & {
+  effective_plan: string
+  media: DashboardSiteMedia
+  social_image: { url: string, width?: number, height?: number, type?: string } | null
+}
+
+/**
+ * The organization plan and the site-card media, together, once. Both are
+ * organization-wide, so a request that decorates a selected site *and* the
+ * site list reads each of them a single time and shares the result rather than
+ * repeating the pair per surface.
+ */
+export async function loadDashboardSiteCardEnrichment(
+  env: CloudflareEnv,
+  db: DbClient,
+  organizationId: string,
+): Promise<DashboardSiteCardEnrichment> {
+  const [effectivePlan, mediaBySite] = await Promise.all([
+    getOrganizationPlan(env, organizationId),
+    loadSiteSocialMedia(db, organizationId),
+  ])
+  return { effectivePlan, mediaBySite }
+}
+
+export function decorateDashboardSiteCard<Row extends { id: string }>(
+  row: Row,
+  enrichment: DashboardSiteCardEnrichment,
+): DashboardSiteCardRow<Row> {
+  const media = enrichment.mediaBySite.get(row.id) ?? []
+  return {
+    ...row,
+    effective_plan: enrichment.effectivePlan,
+    media,
+    social_image: resolveSocialImageFromMedia(media),
+  }
 }
 
 export interface DashboardLocationRow {
@@ -109,12 +146,15 @@ export interface DashboardLocationRow {
   slug: string
   title: string
   status: string
-  city: string | null
   address: string | null
   media: Array<{ asset_id: string; slot: 'hero'; public_url: string; thumbnail_url: string | null; kind: string | null }>
   // Same contract as DashboardSiteRow.feature_overrides, one scope down — the delta is applied
   // on top of the parent site's effective feature set (never the vertical defaults directly).
   feature_overrides: string | null
+  // NEW fields for organization-scoped mode
+  parent_site_id?: string
+  parent_site_name?: string
+  parent_site_slug?: string
 }
 
 export interface DashboardLocationContextRow {
@@ -124,8 +164,6 @@ export interface DashboardLocationContextRow {
   slug: string
   title: string
   address: string | null
-  city: string | null
-  neighborhood: string | null
   phone: string | null
   email: string | null
   website_url: string | null
@@ -155,16 +193,6 @@ export interface DashboardContextOptions {
   // canonical site query and assertMemberSiteAccess call below.
   siteId?: string | null
   siteSlug?: string | null
-  // The scoped-role path allowlist (SCOPED_ROLE_DASHBOARD_ROUTES) only lists
-  // /api/dashboard/* patterns. event.path is correct when a real API route
-  // handler calls this directly, but SSR callers that bypass the self-fetch
-  // (see docs/performance/data-loading-architecture.md) invoke this with the
-  // *page's* own event to preserve Cloudflare bindings — event.path there is a
-  // /dashboard/... page path, which never matches the allowlist and would 403
-  // every scoped-role page load regardless of whether that page is actually
-  // restricted. Those callers must pass the /api/dashboard/* path they're
-  // logically emulating.
-  pathname?: string
 }
 
 export interface ResolveOrganizationOptions {
@@ -212,7 +240,7 @@ export async function resolveRequestedOrganization(
   const env = cloudflareEnv(event)
 
   const headerOrg = organizationSlug
-    ? await resolveUserOrganization(env, { userId, organizationSlug })
+    ? await resolveUserOrganization(env, { userId, organizationSlug }, event)
     : null
 
   if (explicitOrganizationId) {
@@ -224,7 +252,7 @@ export async function resolveRequestedOrganization(
     }
     if (headerOrg) return headerOrg
 
-    return await resolveUserOrganization(env, { userId, organizationId: explicitOrganizationId })
+    return await resolveUserOrganization(env, { userId, organizationId: explicitOrganizationId }, event)
   }
 
   if (headerOrg) return headerOrg
@@ -232,7 +260,7 @@ export async function resolveRequestedOrganization(
   const activeOrganizationId = options.activeOrganizationId ?? null
   if (!activeOrganizationId) return null
 
-  return await resolveUserOrganization(env, { userId, organizationId: activeOrganizationId })
+  return await resolveUserOrganization(env, { userId, organizationId: activeOrganizationId }, event)
 }
 
 export async function getDashboardContext(
@@ -312,7 +340,6 @@ export async function getDashboardContext(event: H3Event, options: DashboardCont
         : 'Organization context is required. Use /dashboard/{orgSlug} routes.',
     })
   }
-  assertDashboardPathPermission(organization.role, options.pathname ?? event.path)
 
   // The organization and active site are resolved explicitly from the route segments,
   // sent on every /api/dashboard/* request as `org`/`site` query params (see
@@ -330,8 +357,8 @@ export async function getDashboardContext(event: H3Event, options: DashboardCont
     throw new HTTPError({ statusCode: 400, message: 'Site slug is required. Use /dashboard/{orgSlug}/sites/{siteSlug} routes.' })
   }
 
-  const rawSite = siteId
-    ? await queryFirst<Omit<DashboardSiteRow, 'effective_plan'>>(db, `
+  const site = siteId
+    ? await queryFirst<DashboardSiteRow>(db, `
         SELECT s.id, s.organization_id, s.brand_name, s.vertical, s.subdomain, (SELECT domain FROM site_domains WHERE site_id = s.id AND role = 'canonical' AND status = 'active' AND type = 'custom') AS custom_domain, (SELECT 'https://' || domain FROM site_domains WHERE site_id = s.id AND role = 'canonical' AND status = 'active') AS public_url,
                s.status, s.onboarding_status, s.default_currency,
                s.feature_overrides, s.theme_id
@@ -340,7 +367,7 @@ export async function getDashboardContext(event: H3Event, options: DashboardCont
         LIMIT 1
       `, [organization.id, siteId])
     : siteSlug
-      ? await queryFirst<Omit<DashboardSiteRow, 'effective_plan'>>(db, `
+      ? await queryFirst<DashboardSiteRow>(db, `
         SELECT s.id, s.organization_id, s.brand_name, s.vertical, s.subdomain, (SELECT domain FROM site_domains WHERE site_id = s.id AND role = 'canonical' AND status = 'active' AND type = 'custom') AS custom_domain, (SELECT 'https://' || domain FROM site_domains WHERE site_id = s.id AND role = 'canonical' AND status = 'active') AS public_url,
                s.status, s.onboarding_status, s.default_currency,
                s.feature_overrides, s.theme_id
@@ -350,28 +377,12 @@ export async function getDashboardContext(event: H3Event, options: DashboardCont
         `, [organization.id, siteSlug])
       : null
 
-  const siteSocialMedia = rawSite ? (await loadSiteSocialMedia(db, organization.id)).get(rawSite.id) ?? [] : []
-  const site = rawSite
-    ? {
-        ...rawSite,
-        effective_plan: (await getOrganizationBillingProjection(db, organization.id)).effectivePlan,
-        media: siteSocialMedia,
-        social_image: resolveSocialImageFromMedia(siteSocialMedia),
-      }
-    : null
-
   if (!site && options.requireSite !== false) {
     throw new HTTPError({ statusCode: 404, message: 'Site not found' })
   }
 
   if (site) {
-    await assertMemberSiteAccess(db, {
-      env,
-      memberId: organization.memberId,
-      role: organization.role,
-      organizationId: organization.id,
-      siteId: site.id,
-    })
+    await assertMemberSiteAccess(db, memberAccessPrincipal(organization, { env, siteId: site.id, event }))
   }
 
   return {
@@ -392,10 +403,14 @@ export interface DashboardSiteSummaryRow {
   vertical: string | null
   status: string | null
   onboarding_status: string | null
-  effective_plan: string
-  media: Array<{ asset_id: string; slot: 'media'; public_url: string; thumbnail_url: string | null; kind: string | null }>
 }
 
+/**
+ * The sites this principal may see, as scope rows. Card presentation is not
+ * loaded here: a caller that draws cards loads the enrichment once with
+ * `loadDashboardSiteCardEnrichment` and applies it, and a caller that only
+ * needs names and ids pays for neither.
+ */
 export async function listOrganizationSites(
   db: DbClient,
   organizationId: string,
@@ -404,7 +419,7 @@ export async function listOrganizationSites(
   const scopedTeamIds = principal && !isOrganizationWideRole(principal.role) ? principal.teamIds ?? [] : null
   if (scopedTeamIds && scopedTeamIds.length === 0) return []
   const scopedTeamIdsJson = scopedTeamIds ? d1JsonStringSet(scopedTeamIds) : null
-  const rows = await queryAll<Omit<DashboardSiteSummaryRow, 'media' | 'effective_plan'>>(db, `
+  return queryAll<DashboardSiteSummaryRow>(db, `
     SELECT s.id, s.team_id, s.brand_name, s.subdomain, s.vertical, s.status,
            s.onboarding_status
     FROM sites s
@@ -412,23 +427,6 @@ export async function listOrganizationSites(
       ${scopedTeamIds ? `AND s.team_id IN (SELECT value FROM json_each(?))` : ''}
     ORDER BY s.created_at ASC, s.id ASC
   `, scopedTeamIdsJson ? [organizationId, scopedTeamIdsJson] : [organizationId])
-  const effectivePlan = (await getOrganizationBillingProjection(db, organizationId)).effectivePlan
-
-  // Site cards render the same image the public pages do. This used to run its
-  // own query against the home page hero block's social_card — a different
-  // owner from the one public reads — which is why the dashboard showed nothing
-  // while the public site rendered fine.
-  const mediaBySite = await loadSiteSocialMedia(db, organizationId)
-
-  return rows.map(row => {
-    const media = mediaBySite.get(row.id) ?? []
-    return {
-      ...row,
-      effective_plan: effectivePlan,
-      media,
-      social_image: resolveSocialImageFromMedia(media),
-    }
-  })
 }
 
 export async function getDashboardSite(event: H3Event) {
@@ -476,10 +474,8 @@ export async function getDashboardLocationContext(event: H3Event, locationId: st
   const organization = await resolveUserOrganization(env, {
     userId: session.user.id,
     organizationId: row.organization_id,
-  })
+  }, event)
   if (!organization) throw new HTTPError({ statusCode: 404, message: 'Location not found' })
-
-  assertDashboardPathPermission(organization.role, event.path)
 
   return {
     env,
@@ -494,12 +490,15 @@ export async function getDashboardLocationContext(event: H3Event, locationId: st
 export async function listDashboardLocations(
   db: DbClient,
   organizationId: string,
-  siteId: string,
+  siteId: string | null,
   principal?: { role: string; teamIds: string[] | null },
+  organizationScoped?: boolean,
 ) {
   const scopedTeamIds = principal && !isOrganizationWideRole(principal.role) ? principal.teamIds ?? [] : null
   if (scopedTeamIds && scopedTeamIds.length === 0) return []
   const scopedTeamIdsJson = scopedTeamIds ? d1JsonStringSet(scopedTeamIds) : null
+  const isOrgWide = principal && isOrganizationWideRole(principal.role)
+
   const locations = await queryAll<Omit<DashboardLocationRow, 'media'> & {
     hero_asset_id: string | null
     hero_kind: string | null
@@ -509,10 +508,14 @@ export async function listDashboardLocations(
     social_kind: string | null
     social_public_url: string | null
     social_thumbnail_url: string | null
+    parent_site_id?: string
+    parent_site_name?: string
+    parent_site_slug?: string
   }>(db, `
     SELECT business_locations.id, business_locations.slug, business_locations.title,
            business_locations.status,
-           business_locations.city, business_locations.address, business_locations.feature_overrides,
+           business_locations.address, business_locations.feature_overrides,
+           ${organizationScoped ? `sites.id AS parent_site_id, sites.brand_name AS parent_site_name, sites.subdomain AS parent_site_slug,` : ''}
            ma_hero.id AS hero_asset_id,
            ma_hero.kind AS hero_kind,
            ma_hero.public_url AS hero_media_public_url,
@@ -529,14 +532,24 @@ export async function listDashboardLocations(
     LEFT JOIN media_placements mp_social ON mp_social.owner_type = 'business_location' AND mp_social.owner_id = business_locations.id AND mp_social.slot = 'social_card' AND mp_social.sort_order = 0 AND mp_social.status = 'active'
     LEFT JOIN media_assets ma_social ON ma_social.id = mp_social.asset_id
       AND ma_social.organization_id = business_locations.organization_id AND ma_social.site_id = business_locations.site_id AND ma_social.status = 'active'
-    WHERE business_locations.organization_id = ? AND business_locations.site_id = ? AND business_locations.status = 'active'
-      ${scopedTeamIds ? `AND (sites.team_id IN (SELECT value FROM json_each(?)) OR business_locations.team_id IN (SELECT value FROM json_each(?)))` : ''}
+    WHERE business_locations.organization_id = ?
+      ${organizationScoped ? '' : 'AND business_locations.site_id = ?'}
+      AND business_locations.status = 'active'
+      ${!isOrgWide && scopedTeamIds ? `
+        AND (
+          sites.team_id IN (SELECT value FROM json_each(?))
+          OR business_locations.team_id IN (SELECT value FROM json_each(?))
+        )
+      ` : ''}
     ORDER BY title ASC
-  `, scopedTeamIdsJson ? [organizationId, siteId, scopedTeamIdsJson, scopedTeamIdsJson] : [organizationId, siteId])
+  `, organizationScoped
+    ? (isOrgWide ? [organizationId] : [organizationId, scopedTeamIdsJson, scopedTeamIdsJson])
+    : (scopedTeamIdsJson ? [organizationId, siteId!, scopedTeamIdsJson, scopedTeamIdsJson] : [organizationId, siteId!]))
 
   return locations.map((location) => {
     const { hero_asset_id, hero_kind, hero_media_public_url, hero_media_thumbnail_url,
-      social_asset_id, social_kind, social_public_url, social_thumbnail_url, ...fields } = location
+      social_asset_id, social_kind, social_public_url, social_thumbnail_url,
+      parent_site_id, parent_site_name, parent_site_slug, ...fields } = location
     const ownerMedia = [
       ...(social_asset_id && social_public_url
         ? [{ asset_id: social_asset_id, slot: 'social_card' as const, public_url: social_public_url, thumbnail_url: social_thumbnail_url, kind: social_kind }]
@@ -551,11 +564,18 @@ export async function listDashboardLocations(
       slug: location.slug,
       title: location.title,
       status: location.status,
-      city: location.city,
-      address: parseLocationAddress(location.address),
+      address: parsePostalAddress(location.address),
       feature_overrides: location.feature_overrides,
       media: ownerMedia,
       social_image: resolveSocialImageFromMedia(ownerMedia),
+      ...(organizationScoped
+        && typeof parent_site_id === 'string' && parent_site_id.length > 0
+        && typeof parent_site_name === 'string' && parent_site_name.length > 0
+        && typeof parent_site_slug === 'string' && parent_site_slug.length > 0 ? {
+        parent_site_id,
+        parent_site_name,
+        parent_site_slug,
+      } : {}),
     }
   })
 }

@@ -6,7 +6,7 @@ import { publishPost, type PostPublishChannel, type PostSocialPublish } from '~/
 import { getFacebookPagesConnection } from '~/server/utils/facebook-pages'
 import { queryFirst } from '~/server/db'
 import { loadMemberSiteRow } from '~/server/utils/location-access'
-import { assertResourceAccess } from '~/server/utils/member-access'
+import { assertResourceAccess, memberAccessPrincipal } from '~/server/utils/member-access'
 
 export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
@@ -23,7 +23,7 @@ export default defineHandler(async (event) => {
   const body = await readRequiredBody<{ channels?: unknown }>(event)
   const channels = parsePublishChannels(body?.channels)
   if (!channels) return jsonResponse({ error: 'channels must be a non-empty array of site, facebook, or instagram' }, { status: 400 })
-  const site = await loadMemberSiteRow(db, env, siteId, session.user.id)
+  const site = await loadMemberSiteRow(event, db, env, siteId, session.user.id)
   if (!site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
 
   const postScope = await queryFirst<{ location_id: string | null }>(db, `
@@ -32,14 +32,7 @@ export default defineHandler(async (event) => {
      LIMIT 1
   `, [postId, site.organization_id, siteId])
   if (!postScope) return jsonResponse({ error: 'Post not found' }, { status: 404 })
-  await assertResourceAccess(db, {
-    env,
-    memberId: site.member_id,
-    role: site.member_role,
-    organizationId: site.organization_id,
-    siteId,
-    resourceLocationId: postScope.location_id,
-  })
+  await assertResourceAccess(db, { ...memberAccessPrincipal(site.membership, { env, siteId, event }), resourceLocationId: postScope.location_id })
 
   const wantsSocial = channels.includes('facebook') || channels.includes('instagram')
   let socialPublish: PostSocialPublish | null = null

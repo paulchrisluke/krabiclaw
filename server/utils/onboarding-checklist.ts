@@ -12,7 +12,6 @@ export interface OnboardingChecklist {
   success: true
   vertical: string | null
   brandName: string | null
-  city: string | null
   items: {
     business_info: boolean
     hero_image: boolean
@@ -26,7 +25,6 @@ export const EMPTY_ONBOARDING_CHECKLIST: OnboardingChecklist = Object.freeze({
   success: true as const,
   vertical: null,
   brandName: null,
-  city: null,
   items: Object.freeze({
     business_info: false,
     hero_image: false,
@@ -39,7 +37,6 @@ export const EMPTY_ONBOARDING_CHECKLIST: OnboardingChecklist = Object.freeze({
 interface ChecklistRow {
   vertical: string
   brand_name: string | null
-  city: string | null
   business_info: number
   has_hero: number
   products: number
@@ -72,7 +69,6 @@ export async function loadOnboardingChecklist(
     SELECT
       s.vertical,
       s.brand_name,
-      NULL AS city,
       EXISTS(
         SELECT 1 FROM business_locations
         WHERE site_id = s.id AND status = 'active' AND (
@@ -115,7 +111,6 @@ export async function loadOnboardingChecklist(
     success: true,
     vertical,
     brandName: row.brand_name ?? brandName,
-    city: row.city,
     items: {
       business_info: Boolean(row.business_info),
       hero_image: heroIsReal,

@@ -3,6 +3,7 @@ import { serializeOpeningHours } from '~/server/utils/location-management'
 import type { D1Database } from '@cloudflare/workers-types'
 import { normalizeGoogleReview, type GoogleReview } from '~/shared/google-review'
 import { executeBatch } from '~/server/db'
+import { formatPostalAddress, parsePostalAddress, type PostalAddress } from '~/utils/postal-address'
 
 const PLACES_BASE = 'https://places.googleapis.com/v1/places'
 
@@ -13,8 +14,7 @@ export const calculateMapEmbedUrl = (loc: {
   maps_url?: string | null
   latitude?: number | null
   longitude?: number | null
-  address?: string | null
-  city?: string | null
+  address?: PostalAddress | null
 }) => {
   if (loc.maps_url) {
     try {
@@ -28,14 +28,7 @@ export const calculateMapEmbedUrl = (loc: {
     return `https://maps.google.com/maps?q=${loc.latitude},${loc.longitude}&output=embed`
   }
 
-  let address = loc.address || loc.city || ''
-  if (address.startsWith('{')) {
-    try {
-      const parsed = JSON.parse(address) as { addressLines?: string[]; streetAddress?: string }
-      address = parsed.addressLines?.[0] || parsed.streetAddress || loc.city || ''
-    } catch { /* use the raw address */ }
-  }
-
+  const address = formatPostalAddress(loc.address ?? null)
   if (!address) return null
   const query = loc.title ? `${loc.title}, ${address}` : address
   return `https://maps.google.com/maps?q=${encodeURIComponent(String(query))}&output=embed`
@@ -69,8 +62,7 @@ const SEARCH_FIELD_MASK = [
 const DETAIL_FIELD_MASK = [
   'id',
   'displayName',
-  'formattedAddress',
-  'addressComponents',
+  'postalAddress',
   'location',
   'googleMapsUri',
   'nationalPhoneNumber',
@@ -100,8 +92,7 @@ export type PlaceReview = GoogleReview
 export interface PlaceDetails {
   placeId: string
   name: string
-  formattedAddress: string
-  city: string | null
+  address: PostalAddress | null
   lat: number | null
   lng: number | null
   mapsUrl: string | null
@@ -127,17 +118,8 @@ interface RawPlace {
   userRatingCount?: number
   regularOpeningHours?: { periods?: unknown[] }
   timeZone?: { id?: string }
-  addressComponents?: Array<{ longText?: string; types?: string[]; languageCode?: string }>
+  postalAddress?: unknown
   reviews?: unknown[]
-}
-
-function extractCity(components?: RawPlace['addressComponents']): string | null {
-  if (!components) return null
-  for (const type of ['locality', 'administrative_area_level_2', 'administrative_area_level_1']) {
-    const component = components.find(component => component.types?.includes(type) && component.longText)
-    if (component?.longText) return component.longText
-  }
-  return null
 }
 
 function normalizeSearchResult(place: RawPlace): PlaceSearchResult {
@@ -158,8 +140,7 @@ function normalizeDetail(place: RawPlace): PlaceDetails {
   return {
     placeId: place.id ?? '',
     name: place.displayName?.text ?? '',
-    formattedAddress: place.formattedAddress ?? '',
-    city: extractCity(place.addressComponents),
+    address: parsePostalAddress(place.postalAddress),
     lat: place.location?.latitude ?? null,
     lng: place.location?.longitude ?? null,
     mapsUrl: place.googleMapsUri ?? null,
@@ -171,6 +152,31 @@ function normalizeDetail(place: RawPlace): PlaceDetails {
     openingHours: normalizeGoogleOpeningHours(place.regularOpeningHours?.periods),
     reviews: (place.reviews ?? []).map(normalizeGoogleReview),
   }
+}
+
+/**
+ * A location's Google reviews are exactly what Google returned this sync.
+ * Google's Places API returns at most five reviews per place, chosen by
+ * Google, and the site shows exactly those (owner decision, 2026-09-14): a
+ * review Google no longer shows is not shown here either, and a row imported
+ * under a merged or legacy place id, or without a review id, is not a Google
+ * review of this place. Beachfront Pottery Krabi showed each review three
+ * times (2026-09-13) because earlier syncs kept everything ever imported.
+ * There is no fuller inventory to preserve: this response is the inventory.
+ */
+export function staleGoogleReviewDeletes(scope: { organizationId: string; siteId: string; locationId: string }, reviews: PlaceReview[]) {
+  const stale = `
+      SELECT id FROM reviews
+      WHERE organization_id = ? AND site_id = ? AND location_id = ?
+        AND source = 'google_places'
+        AND (google_review_id IS NULL OR google_review_id NOT IN (SELECT value FROM json_each(?)))`
+  const params = [scope.organizationId, scope.siteId, scope.locationId, JSON.stringify(reviews.map(review => review.google_review_id))]
+  // A review's media placements (author portrait) have no foreign key to the
+  // review, so they go first, by the same predicate.
+  return [
+    { query: `DELETE FROM media_placements WHERE owner_type = 'review' AND owner_id IN (${stale})`, params },
+    { query: `DELETE FROM reviews WHERE id IN (${stale})`, params },
+  ]
 }
 
 export function googleReviewUpserts(scope: { organizationId: string; siteId: string; locationId: string }, reviews: PlaceReview[], now: string) {
@@ -206,8 +212,7 @@ export async function syncPlaceToLocation(
     UPDATE business_locations SET
       phone = COALESCE(?, phone),
       website_url = COALESCE(?, website_url),
-      city = COALESCE(?, city),
-      address = ?,
+      address = COALESCE(?, address),
       latitude = COALESCE(?, latitude),
       longitude = COALESCE(?, longitude),
       maps_url = COALESCE(?, maps_url),
@@ -215,14 +220,14 @@ export async function syncPlaceToLocation(
       timezone = COALESCE(?, timezone),
       rating = COALESCE(?, rating),
       review_count = COALESCE(?, review_count),
+      google_place_id = COALESCE(?, google_place_id),
       last_synced_at = ?,
       updated_at = ?
     WHERE id = ? AND organization_id = ? AND site_id = ?
   `, params: [
     place.phone,
     place.websiteUrl,
-    place.city,
-    JSON.stringify({ addressLines: [place.formattedAddress] }),
+    place.address ? JSON.stringify(place.address) : null,
     place.lat,
     place.lng,
     place.mapsUrl,
@@ -230,13 +235,15 @@ export async function syncPlaceToLocation(
     place.timezone,
     place.rating,
     place.ratingCount,
+    place.placeId || null,
     now,
     now,
     locationId,
     organizationId,
     siteId
-  ] }, ...googleReviewUpserts({ organizationId, siteId, locationId }, place.reviews, now)])
-  const reviewsUpserted = results.slice(1).reduce((count, result) => count + Number(result.meta?.changes ?? 0), 0)
+  ] }, ...staleGoogleReviewDeletes({ organizationId, siteId, locationId }, place.reviews),
+  ...googleReviewUpserts({ organizationId, siteId, locationId }, place.reviews, now)])
+  const reviewsUpserted = results.slice(results.length - place.reviews.length).reduce((count, result) => count + Number(result.meta?.changes ?? 0), 0)
 
   return { place, reviewsUpserted }
 }

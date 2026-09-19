@@ -11,6 +11,7 @@ import {
 import { buildTenantPageReplacementConfirmationToken } from '~/server/utils/mcp-workflows'
 import {
   createTenantPage,
+  deleteTenantPage,
   getTenantPageById,
   listTenantPages,
   updateTenantPage,
@@ -27,22 +28,21 @@ function nullableStringArg(args: Record<string, unknown>, key: string, fallback:
   return value.trim()
 }
 
-function tenantPageDocumentData(args: Record<string, unknown>, page: Awaited<ReturnType<typeof getTenantPageById>>) {
-  const blocks = args.blocks === undefined ? page.blocks : args.blocks
-  return {
-    path: typeof args.path === 'string' ? args.path : page.path,
-    title: typeof args.title === 'string' ? args.title : page.title,
-    summary: nullableStringArg(args, 'summary', page.summary),
-    seoTitle: nullableStringArg(args, 'seoTitle', page.seo_title),
-    seoDescription: nullableStringArg(args, 'seoDescription', page.seo_description),
-    canonicalUrl: nullableStringArg(args, 'canonicalUrl', page.canonical_url),
-    robots: nullableStringArg(args, 'robots', page.robots),
-    pageType: typeof args.pageType === 'string' ? args.pageType as typeof page.page_type : page.page_type,
-    recipe: nullableStringArg(args, 'recipe', page.recipe),
-    sortOrder: typeof args.sortOrder === 'number' ? args.sortOrder : page.sort_order,
-    blocks,
-    expectedUpdatedAt: requiredString(args, 'expected_updated_at'),
-  }
+// Required, but legitimately null: a page that fills no template section has no
+// recipe. The caller must say which, rather than omitting the key and having the
+// stored row read back in.
+function requiredNullableString(args: Record<string, unknown>, key: string): string | null {
+  if (!Object.prototype.hasOwnProperty.call(args, key)) throw new Error(`${key} is required, and may be null`)
+  const value = args[key]
+  if (value == null || value === '') return null
+  if (typeof value !== 'string') throw new Error(`${key} must be a string or null`)
+  return value.trim()
+}
+
+function requiredNumber(args: Record<string, unknown>, key: string): number {
+  const value = args[key]
+  if (typeof value !== 'number' || !Number.isFinite(value)) throw new Error(`${key} must be a number`)
+  return value
 }
 
 function tenantPageLifecycleResponse(action: string, result: unknown) {
@@ -128,7 +128,10 @@ export async function handleContentTools(ctx: McpExecutorContext): Promise<unkno
             seoDescription: nullableStringArg(args, "seoDescription", null),
             canonicalUrl: nullableStringArg(args, "canonicalUrl", null),
             robots: nullableStringArg(args, "robots", null),
-            pageType: optionalString(args, "pageType") as "custom" | "recipe" | "legal" | "system" | undefined,
+            // Omitted is omitted: a translation takes its identity from the
+            // source page, and a null here would be read as stating a
+            // different one.
+            pageType: (optionalString(args, "pageType") ?? undefined) as "custom" | "recipe" | "legal" | "system" | undefined,
             recipe: nullableStringArg(args, "recipe", null),
             sortOrder: typeof args.sortOrder === 'number' ? args.sortOrder : null,
             blocks: args.blocks,
@@ -150,27 +153,34 @@ export async function handleContentTools(ctx: McpExecutorContext): Promise<unkno
         const updated = await updateTenantPage(site.db, variantId, {
           userId: site.userId,
           scope: { siteId: site.siteId, organizationId: site.organizationId },
-          data: tenantPageDocumentData(args, page),
+          data: {
+            path: requiredString(args, "path"),
+            title: requiredString(args, "title"),
+            summary: nullableStringArg(args, "summary", null),
+            seoTitle: nullableStringArg(args, "seoTitle", null),
+            seoDescription: nullableStringArg(args, "seoDescription", null),
+            canonicalUrl: nullableStringArg(args, "canonicalUrl", null),
+            robots: nullableStringArg(args, "robots", null),
+            pageType: requiredString(args, "pageType") as "custom" | "recipe" | "legal" | "system",
+            recipe: requiredNullableString(args, "recipe"),
+            sortOrder: requiredNumber(args, "sortOrder"),
+            blocks: args.blocks,
+            expectedUpdatedAt: requiredString(args, "expected_updated_at"),
+          },
           env: site.env,
         });
         return tenantPageLifecycleResponse("Updated", updated);
       } catch (error) {
         return rethrowAsInvalidParams(error);
       }
-    case "change_tenant_page_path":
+    case "delete_tenant_page":
       try {
-        const variantId = requiredString(args, "variant_id");
-        const page = await getTenantPageById(site.db, variantId, {
-          siteId: site.siteId,
-          organizationId: site.organizationId,
-        });
-        const updated = await updateTenantPage(site.db, variantId, {
-          userId: site.userId,
+        const deleted = await deleteTenantPage(site.db, requiredString(args, "variant_id"), {
           scope: { siteId: site.siteId, organizationId: site.organizationId },
-          data: tenantPageDocumentData({ ...args, path: requiredString(args, "new_path") }, page),
+          expectedUpdatedAt: requiredString(args, "expected_updated_at"),
           env: site.env,
         });
-        return tenantPageLifecycleResponse("Changed path for", updated);
+        return tenantPageLifecycleResponse("Deleted", deleted);
       } catch (error) {
         return rethrowAsInvalidParams(error);
       }

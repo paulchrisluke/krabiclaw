@@ -70,6 +70,7 @@
     removable
     :saving="galleryMutating"
     :removing="galleryMutating"
+    :error="photoError"
     @save="savePhoto"
     @remove="detachOpenPhoto"
   >
@@ -84,6 +85,8 @@
     </UFormField>
   </DashboardListItemDialog>
 
+  <UAlert v-if="detachError" color="error" variant="soft" :description="detachError" icon="i-lucide-circle-alert" class="mt-4" />
+
   <UModal v-model:open="attachOpen" :ui="{ content: 'max-w-4xl' }">
     <template #content>
       <div class="p-6">
@@ -94,6 +97,7 @@
           </div>
           <UButton icon="i-lucide-refresh-cw" color="neutral" variant="ghost" :loading="attachLoading" @click="loadAttachableMedia" />
         </div>
+        <UAlert v-if="attachError" color="error" variant="soft" :description="attachError" icon="i-lucide-circle-alert" class="mt-4" />
         <div v-if="attachLoading" class="mt-5 grid grid-cols-3 gap-3 sm:grid-cols-5">
           <USkeleton v-for="i in 10" :key="i" class="aspect-square rounded-lg" />
         </div>
@@ -145,7 +149,6 @@ interface MediaAsset {
 }
 
 const dashboardLocation = useDashboardLocation()
-const toast = useToast()
 const siteId = await useDashboardSiteId()
 const siteApiBase = `/api/editor/sites/${siteId}`
 const locationId = computed(() => dashboardLocation.currentLocationId.value)
@@ -163,6 +166,9 @@ const selectedIds = ref<string[]>([])
 const photoOpen = ref(false)
 const openPhotoAsset = ref<MediaAsset | null>(null)
 const photoCategory = ref<string>('other')
+const photoError = ref<string | null>(null)
+const attachError = ref<string | null>(null)
+const detachError = ref<string | null>(null)
 const { uploading, error: uploadError, pendingRetryFile, upload } = useMediaUpload(siteApiBase)
 const isMediaResponse = (value: unknown): value is { media: MediaAsset[] } =>
   isRecord(value)
@@ -204,6 +210,7 @@ function openPhoto(item: { id: string }) {
   if (!asset) return
   openPhotoAsset.value = asset
   photoCategory.value = asset.category ?? 'other'
+  photoError.value = null
   photoOpen.value = true
 }
 
@@ -214,7 +221,7 @@ async function savePhoto() {
     // patchAsset reports its own failure and returns false. Closing regardless
     // would show the toast and then take away the form still holding the change,
     // so the only way back would be to find the photo and set it again.
-    const saved = await patchAsset(asset, { category: photoCategory.value }, 'Photo category updated')
+    const saved = await patchAsset(asset, { category: photoCategory.value })
     if (!saved) return
   }
   photoOpen.value = false
@@ -226,7 +233,7 @@ async function detachOpenPhoto() {
   const before = filteredAssets.value.length
   await detachMany([asset.id])
   // Stay open if the photo is still attached: the detach failed, and closing
-  // would leave the grid contradicting the toast.
+  // would leave the grid contradicting the error alert.
   if (filteredAssets.value.length < before) photoOpen.value = false
 }
 
@@ -250,7 +257,6 @@ async function loadPhotos() {
     assets.value = res.media
   } catch (error) {
     loadError.value = error instanceof Error ? error.message : 'Failed to load photos'
-    toast.add({ description: error instanceof Error ? error.message : 'Failed to load photos', color: 'error' })
   } finally {
     loading.value = false
   }
@@ -285,19 +291,22 @@ async function uploadSelectedFile(file: File, existingOptions?: { category?: str
     const result = await upload(file, {
       ...options,
     })
-    if (!result) {
-      if (uploadError.value) toast.add({ description: uploadError.value, color: 'error' })
-      return
-    }
+    if (!result) return
 
-    await attachPhotoById(result.asset_id, result.kind === 'video' ? 'Video uploaded and attached' : 'Photo uploaded and attached')
+    const attached = await attachPhotoById(result.asset_id)
+    if (!attached && !uploadError.value) {
+      uploadError.value = attachError.value || 'Failed to attach photo to gallery'
+    }
   } catch (error) {
-    toast.add({ description: uploadError.value ?? (error instanceof Error ? error.message : 'Failed to upload file'), color: 'error' })
+    if (!uploadError.value) {
+      uploadError.value = error instanceof Error ? error.message : 'Failed to upload file'
+    }
   }
 }
 
 async function loadAttachableMedia() {
   attachLoading.value = true
+  attachError.value = null
   try {
     const params = new URLSearchParams({ limit: '100' })
     const res = await dashboardApi<{ media: MediaAsset[] }>(`${siteApiBase}/media?${params}`, {
@@ -306,18 +315,20 @@ async function loadAttachableMedia() {
     const attachedIds = new Set(assets.value.map(asset => asset.id))
     attachableAssets.value = res.media.filter(asset => !attachedIds.has(asset.id))
   } catch (error) {
-    toast.add({ description: error instanceof Error ? error.message : 'Failed to load media library', color: 'error' })
+    attachError.value = error instanceof Error ? error.message : 'Failed to load media library'
   } finally {
     attachLoading.value = false
   }
 }
 
 async function openAttachModal() {
+  attachError.value = null
   attachOpen.value = true
   await loadAttachableMedia()
 }
 
-async function patchAsset(asset: MediaAsset, body: ApiRecord, successMessage: string) {
+async function patchAsset(asset: MediaAsset, body: ApiRecord) {
+  photoError.value = null
   try {
     await dashboardApi(`${siteApiBase}/media/${asset.id}`, {
       method: 'PATCH',
@@ -325,36 +336,35 @@ async function patchAsset(asset: MediaAsset, body: ApiRecord, successMessage: st
       validate: (value): value is { updated: true } =>
         isRecord(value) && value.updated === true,
     })
-    toast.add({ description: successMessage, color: 'success' })
     await loadPhotos()
     return true
   } catch (error) {
-    toast.add({ description: error instanceof Error ? error.message : 'Failed to update photo', color: 'error' })
+    photoError.value = error instanceof Error ? error.message : 'Failed to update photo'
     return false
   }
 }
 
 const GALLERY_PLACEMENT = () => ({ owner_type: 'business_location' as const, owner_id: locationId.value as string, slot: 'gallery' })
 
-async function attachPhotoById(assetId: string, successMessage: string): Promise<boolean> {
+async function attachPhotoById(assetId: string): Promise<boolean> {
   if (!locationId.value) return false
   galleryMutating.value = true
+  attachError.value = null
   try {
     await dashboardApi(`${siteApiBase}/media/placements/attach`, {
       method: 'POST',
       body: { placement: GALLERY_PLACEMENT(), asset_id: assetId },
       validate: (value): value is { asset_ids: string[] } => isRecord(value) && Array.isArray(value.asset_ids),
     })
-    toast.add({ description: successMessage, color: 'success' })
     await loadPhotos()
     return true
   } catch (error) {
     if (error instanceof ApiClientError && error.statusCode === 409) {
-      toast.add({ description: 'This photo is already attached.', color: 'warning' })
+      attachError.value = 'This photo is already attached.'
       await loadPhotos()
       return false
     }
-    toast.add({ description: error instanceof Error ? error.message : 'Failed to attach media', color: 'error' })
+    attachError.value = error instanceof Error ? error.message : 'Failed to attach media'
     return false
   } finally {
     galleryMutating.value = false
@@ -362,7 +372,7 @@ async function attachPhotoById(assetId: string, successMessage: string): Promise
 }
 
 async function attachPhoto(asset: MediaAsset) {
-  const updated = await attachPhotoById(asset.id, 'Media attached')
+  const updated = await attachPhotoById(asset.id)
   if (updated) {
     attachableAssets.value = attachableAssets.value.filter(item => item.id !== asset.id)
   }
@@ -371,16 +381,16 @@ async function attachPhoto(asset: MediaAsset) {
 async function detachMany(ids: string[]) {
   if (!locationId.value || !ids.length) return
   galleryMutating.value = true
+  detachError.value = null
   try {
     await Promise.all(ids.map(assetId => dashboardApi(`${siteApiBase}/media/placements/remove`, {
       method: 'POST',
       body: { placement: GALLERY_PLACEMENT(), asset_id: assetId },
       validate: (value): value is { asset_ids: string[] } => isRecord(value) && Array.isArray(value.asset_ids),
     })))
-    toast.add({ description: `${ids.length} item(s) detached from this location`, color: 'success' })
     selecting.value = false
   } catch (error) {
-    toast.add({ description: error instanceof Error ? error.message : 'Failed to remove media', color: 'error' })
+    detachError.value = error instanceof Error ? error.message : 'Failed to remove media'
   } finally {
     galleryMutating.value = false
     // Reload whatever the outcome. A rejected batch may still have detached some

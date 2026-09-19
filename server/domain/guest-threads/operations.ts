@@ -5,6 +5,9 @@ import { getGuestRequest, getThreadOperationalRecord, requestActions, requestSum
 import { deliverGuestThreadEmail, getDeliveryById, getDeliveryClaimEligibility, getDeliveryRetryEligibility, isDeliveryClaimInFlight } from './deliveries'
 import { findEntryByDedupeKey, getEntryById } from './entries'
 import { updateThreadProjectionIfLatestEntry } from './repository'
+import { renderNotificationEmail } from '~/server/emails/render'
+import { guestThreadReplyMessage, guestThreadStatusMessage } from '~/server/notifications/guest-events'
+import { getPlatformDomain } from '~/server/utils/dashboard-notification-links'
 import type {
   GuestThreadDeliveryProvider,
   GuestThreadDeliveryRow,
@@ -13,7 +16,10 @@ import type {
   GuestThreadSubmissionType,
 } from './types'
 
-export const GUEST_THREAD_ACTIONS = new Set(['confirm', 'cancel', 'complete', 'resolve', 'reopen', 'reply', 'retry_delivery'])
+// A thread is never archived by hand. Confirm, cancel and complete resolve it
+// as a consequence of the booking's own lifecycle; there is no separate
+// resolve/reopen for a member to reach for, and no surface that offered one.
+export const GUEST_THREAD_ACTIONS = new Set(['confirm', 'cancel', 'complete', 'reply', 'retry_delivery'])
 
 type SuccessfulOperationOutcome = { ok: true; status: 200 | 202; thread: GuestThreadRow; availableActions: string[] }
 
@@ -270,6 +276,19 @@ function replySubject(submissionType: GuestThreadSubmissionType, fromName: strin
   return `Re: your booking at ${fromName}`
 }
 
+/**
+ * Guest-facing inbox mail renders through the shared shell like every other
+ * outbound message. A member's reply leads with their own words; a status
+ * update leads with what changed.
+ */
+function renderMemberReply(env: ReplyEmailEnv, siteName: string, body: string) {
+  return renderNotificationEmail(guestThreadReplyMessage({ siteName, body }), { platformDomain: getPlatformDomain(env) })
+}
+
+function renderStatusUpdate(env: ReplyEmailEnv, siteName: string, heading: string, body: string) {
+  return renderNotificationEmail(guestThreadStatusMessage({ siteName, heading, body }), { platformDomain: getPlatformDomain(env) })
+}
+
 function recordedEmailSubject(entry: GuestThreadEntryRow): string | null {
   if (!entry.payload_json) return null
   const payload: unknown = JSON.parse(entry.payload_json)
@@ -302,7 +321,7 @@ async function sendStatusUpdate(
     to: summary.guestEmail,
     fromName,
     subject,
-    body: entry.body,
+    email: await renderStatusUpdate(input.env, fromName, subject, entry.body),
     submissionType: context.thread.kind,
     submissionId: context.thread.id,
   })
@@ -366,54 +385,6 @@ async function executeSourceMutation(
   return await successfulOutcome(db, context)
 }
 
-async function executeManualTransition(
-  db: DbClient,
-  context: ThreadContext,
-  input: ExecuteOperationInput,
-): Promise<OperationOutcome> {
-  const resolving = input.action === 'resolve'
-  const eventName = resolving ? 'thread.resolved' : 'thread.reopened'
-  const targetState = resolving ? 'resolved' : 'needs_attention'
-  const statePredicate = resolving ? "conversation_state != 'resolved'" : "conversation_state = 'resolved'"
-  const dedupeKey = operationDedupeKey(input)
-  const existing = await findEntryByDedupeKey(db, dedupeKey)
-  if (existing) {
-    if (!entryMatchesRequest(existing, eventName)) return conflict()
-    return await successfulOutcome(db, context)
-  }
-
-  const entryId = crypto.randomUUID()
-  const now = new Date().toISOString()
-  await executeBatch(db, [
-    {
-      query: `
-        INSERT INTO activity_entries
-          (id, request_id, kind, scope_kind, actor_kind, actor_user_id, channel, body, event_name, payload_json, dedupe_key, sequence, occurred_at, created_at)
-        SELECT ?, id, 'resolution', 'request', 'member', ?, NULL, NULL, ?, '{}', ?,
-               COALESCE((SELECT MAX(sequence) FROM activity_entries WHERE request_id = requests.id), 0) + 1,
-               ?, ?
-        FROM requests
-        WHERE id = ? AND site_id = ? AND ${statePredicate}
-        ON CONFLICT(dedupe_key) DO NOTHING
-      `,
-      params: [entryId, input.actorUserId, eventName, dedupeKey, now, now, context.thread.id, context.thread.site_id],
-    },
-    {
-      query: `
-        UPDATE requests
-        SET conversation_state = ?, resolved_at = ?, updated_at = ?
-        WHERE id = ? AND EXISTS (SELECT 1 FROM activity_entries WHERE id = ?)
-      `,
-      params: [targetState, resolving ? now : null, now, context.thread.id, entryId],
-    },
-  ], { operation: `guest thread ${input.action}` })
-
-  const applied = await findEntryByDedupeKey(db, dedupeKey)
-  if (!applied) return conflict(`Thread is already ${resolving ? 'resolved' : 'open'}`)
-  if (!entryMatchesRequest(applied, eventName)) return conflict()
-  return await successfulOutcome(db, context)
-}
-
 async function executeReply(
   db: DbClient,
   context: ThreadContext,
@@ -474,7 +445,7 @@ async function executeReply(
     to: summary.guestEmail,
     fromName,
     subject: replySubject(context.thread.kind, fromName),
-    body,
+    email: await renderMemberReply(input.env, fromName, body),
     submissionType: context.thread.kind,
     submissionId: context.thread.id,
   })
@@ -523,7 +494,7 @@ async function retryDelivery(
         to: summary.guestEmail,
         fromName,
         subject: replySubject(context.thread.kind, fromName),
-        body: entry.body,
+        email: await renderMemberReply(input.env, fromName, entry.body),
         submissionType: context.thread.kind,
         submissionId: context.thread.id,
       })
@@ -547,7 +518,6 @@ export async function executeGuestThreadOperation(db: DbClient, input: ExecuteOp
   if ('ok' in context) return context
 
   if (input.action === 'reply') return await executeReply(db, context, input)
-  if (input.action === 'resolve' || input.action === 'reopen') return await executeManualTransition(db, context, input)
   if (input.action === 'retry_delivery') return await retryDelivery(db, context, input)
   return await executeSourceMutation(db, context, input)
 }

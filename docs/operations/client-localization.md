@@ -22,8 +22,10 @@ A bundle identifies one exact `origin`, `site_id`, and `locale`, and contains:
 - `pages`: canonical `create_tenant_page` arguments, including the existing
   source `page_id`, translated metadata and blocks, and existing media placements.
 
-The publisher supports the epoch-4 category model. Build a fresh production
-bundle from the production catalog after its approved epoch cutover. Do not
+The publisher supports the catalog epoch's product model, where a product is
+owned by its organization and reaches a site through a `product_publications`
+row rather than carrying a `site_id` of its own. Build a fresh production bundle
+from the production catalog after its approved epoch cutover. Do not
 reuse staging IDs or replace production's larger menu with staging's fixture
 catalog. Reuse the exact English-to-Thai dictionary, and stop for any new or
 changed English text that lacks an explicit translation.

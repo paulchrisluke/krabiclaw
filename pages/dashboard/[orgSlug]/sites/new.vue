@@ -16,6 +16,16 @@
         <UFormField label="Vertical">
           <USelect v-model="vertical" :items="VERTICAL_OPTIONS" value-key="value" label-key="label" />
         </UFormField>
+        <UFormField label="Currency" description="Prices on this site are quoted in this currency.">
+          <USelect
+            :model-value="defaultCurrency ?? undefined"
+            :items="CURRENCY_OPTIONS"
+            value-key="value"
+            label-key="label"
+            placeholder="Select currency"
+            @update:model-value="defaultCurrency = $event ?? null"
+          />
+        </UFormField>
         <UAlert v-if="error" color="error" variant="soft" :description="error" />
       </form>
 
@@ -34,6 +44,7 @@
 <script setup lang="ts">
 const dashboardApi = useDashboardApi()
 import type { SiteVertical } from '~/utils/vertical-copy'
+import { CURRENCY_OPTIONS, type CurrencyCode } from '~/shared/currencies'
 
 definePageMeta({ layout: 'dashboard' })
 
@@ -55,12 +66,19 @@ const orgSlug = route.params.orgSlug as string
 const name = ref('')
 const subdomain = ref('')
 const vertical = ref<SiteVertical>('restaurant')
+// No preselected currency: this site is live the moment it is created, and a
+// currency nobody chose would quote every price on it.
+const defaultCurrency = ref<CurrencyCode | null>(null)
 const creating = ref(false)
 const error = ref<string | null>(null)
 
 async function submit() {
   if (!name.value.trim() || !subdomain.value.trim()) {
     error.value = 'Name and subdomain are required'
+    return
+  }
+  if (!defaultCurrency.value) {
+    error.value = 'Choose the currency this site prices in'
     return
   }
   creating.value = true
@@ -72,7 +90,7 @@ async function submit() {
       error?: string
     }>('/api/sites', {
       method: 'POST',
-      body: { name: name.value.trim(), subdomain: subdomain.value.trim(), vertical: vertical.value },
+      body: { name: name.value.trim(), subdomain: subdomain.value.trim(), vertical: vertical.value, defaultCurrency: defaultCurrency.value },
       validate: (value): value is {
         siteId: string
         subdomain: string

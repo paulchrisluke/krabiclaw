@@ -69,7 +69,6 @@ export interface SiteSettings {
     google_site_verification?: string
     default_timezone?: string
     whatsapp_phone?: string
-    owner_notification_channels?: Array<'email' | 'whatsapp'>
   }
   theme_by_template?: Partial<Record<import('../utils/template-registry').PublicTemplateSlug, {
     tokens: Record<string, string>

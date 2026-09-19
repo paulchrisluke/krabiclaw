@@ -1,0 +1,89 @@
+<template>
+  <div class="relative rounded-[28px] overflow-hidden border border-default p-8 sm:p-12 mb-20 bg-(--kc-navy) text-white shadow-xl" data-parity-section="seo-band">
+    <div class="absolute -top-32 -right-32 w-80 h-80 bg-primary/20 rounded-full blur-3xl opacity-80"></div>
+    <div class="absolute -bottom-32 -left-32 w-80 h-80 bg-(--kc-teal)/20 rounded-full blur-3xl opacity-60"></div>
+
+    <div class="relative z-10 grid lg:grid-cols-12 gap-8 items-center">
+      <div class="lg:col-span-7 space-y-6">
+        <h2 class="text-3xl sm:text-4xl font-extrabold tracking-tight text-white m-0">{{ title }}</h2>
+        <TenantPageMarkdown v-if="description" :content="description" class="text-white/80 text-[15px] sm:text-base leading-relaxed max-w-2xl m-0" />
+        <div v-if="ctaLabel || secondaryLabel" class="flex flex-wrap gap-4 pt-2">
+          <PlatformButton v-if="ctaLabel && ctaUrl" :to="ctaUrl" size="lg">
+            {{ ctaLabel }}
+            <PlatformIcon name="book" class="size-4" />
+          </PlatformButton>
+          <NuxtLink
+            v-if="secondaryLabel && secondaryUrl"
+            :to="secondaryUrl"
+            class="inline-flex items-center gap-1 text-[14px] font-semibold text-white/90 hover:text-white hover:underline transition-colors no-underline"
+          >
+            {{ secondaryLabel }} →
+          </NuxtLink>
+        </div>
+      </div>
+      <div class="lg:col-span-5 flex justify-center">
+        <div class="bg-white/5 border border-white/10 rounded-2xl p-6 backdrop-blur-md shadow-2xl max-w-sm w-full space-y-4">
+          <div class="flex items-center justify-between border-b border-white/10 pb-4">
+            <div class="w-8 h-8 rounded-lg bg-(--kc-coral) flex items-center justify-center">
+              <PlatformIcon name="bar-chart" class="size-4 text-white" />
+            </div>
+            <span v-if="cardBadge" class="text-xs bg-(--kc-teal)/20 text-(--kc-teal) px-2.5 py-0.5 rounded-full font-medium">{{ cardBadge }}</span>
+          </div>
+          <div class="grid grid-cols-2 gap-4">
+            <div v-for="row in rows.slice(0, 2)" :key="row.label" class="bg-white/5 p-4 rounded-xl border border-white/5">
+              <div class="text-xs text-white/60 mb-1">{{ row.label }}</div>
+              <div class="text-xl font-bold">{{ row.value }}</div>
+            </div>
+          </div>
+          <div v-if="rows[2]" class="bg-white/5 p-4 rounded-xl border border-white/5 space-y-2">
+            <div class="flex justify-between text-xs">
+              <span class="text-white/60">{{ rows[2].label }}</span>
+              <span class="text-(--kc-teal) font-semibold">{{ rows[2].value }}</span>
+            </div>
+            <div class="h-1.5 w-full bg-white/10 rounded-full overflow-hidden">
+              <div class="h-full bg-linear-to-r from-primary to-(--kc-teal) w-4/5 rounded-full"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script setup lang="ts">
+import type { PublicTenantPage } from '~/server/utils/public-tenant-pages'
+import type { TenantPageBlock } from '~/utils/tenant-page-blocks'
+import { blockText, blockTextOrNull, blockRecords } from '~/utils/tenant-page-block-data'
+
+/**
+ * The Features page's navy analytics band with the mock dashboard card. The
+ * card's rows are content: two stat tiles and a labelled bar. What they say
+ * comes from the document, so the band cannot carry a number nobody measured.
+ */
+const props = defineProps<{ block: TenantPageBlock; page: PublicTenantPage }>()
+
+/**
+ * A callout: a note, optionally with supporting rows and a button.
+ *
+ * It absorbed two more blocks that were feature grids in name only — a proof
+ * card and an SEO band — because all three are a heading, some rows and a
+ * call to action.
+ */
+const title = computed(() => blockText(props.block.data.title))
+const description = computed(() => blockTextOrNull(props.block.data.body))
+// Both buttons come from the one declared list, in the order the block holds
+// them. They were read off `label`/`url` and `secondary_*`, keys a callout
+// never declared — and `label` was also the pill's, so the badge above the
+// heading and the words on the button could never differ.
+const buttons = computed(() => blockRecords(props.block.data.buttons)
+  .map(button => ({ label: blockText(button.label), url: blockText(button.url) }))
+  .filter(button => button.label && button.url))
+const ctaLabel = computed(() => buttons.value[0]?.label ?? null)
+const ctaUrl = computed(() => buttons.value[0]?.url ?? null)
+const secondaryLabel = computed(() => buttons.value[1]?.label ?? null)
+const secondaryUrl = computed(() => buttons.value[1]?.url ?? null)
+const cardBadge = computed(() => blockTextOrNull(props.block.data.badge))
+const rows = computed(() => blockRecords(props.block.data.items)
+  .map(item => ({ label: blockText(item.title), value: blockText(item.description) }))
+  .filter(row => row.label))
+</script>

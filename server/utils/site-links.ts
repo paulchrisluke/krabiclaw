@@ -1,4 +1,5 @@
 import { assertPublicSiteLanguageEntitlement, getPersistedSourceLocale } from '~/server/utils/localization'
+import type { CloudflareEnv } from '~/server/utils/auth'
 import { createContentDocumentWithBlocks, updateContentDocument } from '~/server/utils/content/documents'
 import { queryAll, queryFirst, type DbClient } from '~/server/db'
 import { d1JsonStringSet } from '~/server/db/d1-limits'
@@ -225,7 +226,7 @@ export async function getLinksPage(db: DbClient, siteId: string, locale = 'en'):
   return { page: mapPage(pageRow), items: items.map(mapItem) }
 }
 
-export async function getPublicLinksPage(db: DbClient, siteId: string, locale = 'en'): Promise<PublicSiteLinksPayload | null> {
+export async function getPublicLinksPage(env: CloudflareEnv, db: DbClient, siteId: string, locale = 'en'): Promise<PublicSiteLinksPayload | null> {
   const site = await queryFirst<ApiRecord>(db, `
     SELECT s.id, s.organization_id, s.brand_name, s.brand_description,
            s.theme_id, s.vertical,
@@ -237,7 +238,7 @@ export async function getPublicLinksPage(db: DbClient, siteId: string, locale = 
   if (!site) return null
   const media = await getMediaPlacements(db, { siteId, ownerType: 'site', ownerIds: [siteId] })
 
-  await assertPublicSiteLanguageEntitlement(db, String(site.organization_id), siteId, locale)
+  await assertPublicSiteLanguageEntitlement(env, db, String(site.organization_id), siteId, locale)
   const { page: sourcePage } = await getLinksPage(db, siteId)
   const { page, items } = await getLinksPage(db, siteId, locale)
   const publicItems = items.filter(item => item.status === 'active')
@@ -247,7 +248,7 @@ export async function getPublicLinksPage(db: DbClient, siteId: string, locale = 
   const isSourceLocale = locale === sourceLocale.locale
   const localizations = isSourceLocale
     ? []
-    : await loadExactPublicLocalizations(db, organizationId, siteId, locale)
+    : await loadExactPublicLocalizations(env, db, organizationId, siteId, locale)
   const siteLocalization = localizations.find(item => item.resourceType === 'site' && item.resourceId === siteId)
   const localizedSite = siteLocalization
     ? projectExactLocalizedResource('site', { ...site, id: siteId }, siteLocalization)
@@ -272,7 +273,7 @@ export async function getPublicLinksPage(db: DbClient, siteId: string, locale = 
     },
     page,
     items: publicItems,
-    localeRepresentations: await listPublicLocaleRepresentations(db, {
+    localeRepresentations: await listPublicLocaleRepresentations(env, db, {
       organizationId,
       siteId,
       sourcePath: '/links',

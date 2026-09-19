@@ -74,17 +74,5 @@
   "additionalDirectories": [
     "/Users/paulchrisluke/Repos 2026/kikuzuki-thailand-marketing/server/api/ai/[siteId]",
     "/Users/paulchrisluke/Repos 2026/kikuzuki-thailand-marketing/server/api/editor/sites/[siteId]"
-  ],
-  "hooks": {
-    "UserPromptSubmit": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/customer-cost.sh"
-          }
-        ]
-      }
-    ]
-  }
+  ]
 }

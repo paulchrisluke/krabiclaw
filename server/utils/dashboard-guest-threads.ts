@@ -1,4 +1,5 @@
 import { getGuestRequest } from '~/server/domain/requests'
+import type { DbClient } from '~/server/db'
 import { HTTPError, type H3Event } from 'nitro'
 import { getGuestThreadDetail } from '~/server/domain/guest-threads/detail'
 import {
@@ -11,7 +12,7 @@ import type {
   GuestThreadSubmissionType,
 } from '~/server/domain/guest-threads/types'
 import { requireSiteAccess } from '~/server/utils/location-access'
-import { assertMemberScope, isOrganizationWideRole, listUserOrganizationTeamIds } from '~/server/utils/member-access'
+import { assertMemberScope, isOrganizationWideRole, listUserOrganizationTeamIds, memberAccessPrincipal, assertRoleAllows } from '~/server/utils/member-access'
 import { publishNotificationInvalidation } from '~/server/cloudflare/guest-inbox-events'
 import { getDashboardContext } from '~/server/utils/dashboard-context'
 import { acknowledgeThreadNotifications } from '~/server/utils/notification-acknowledgement'
@@ -23,10 +24,43 @@ export interface DashboardGuestThreadListQuery {
   type?: GuestThreadSubmissionType | null
   conversationState?: ConversationState | null
   unreadOnly?: boolean
+  occurrence?: 'upcoming' | 'past' | null
 }
 
 export interface OrganizationGuestThreadListQuery extends DashboardGuestThreadListQuery {
   siteId?: string | null
+}
+
+/**
+ * The thread list for a caller whose access is already resolved.
+ *
+ * `loadDashboardGuestThreads` below is this with the resolution in front of it,
+ * for a request that arrives with nothing. A caller that has already resolved
+ * the principal and asserted the same scope — the location overview does both —
+ * uses this instead of handing over its event and paying for the whole chain a
+ * second time.
+ */
+export async function listDashboardGuestThreadsForPrincipal(
+  db: DbClient,
+  siteId: string,
+  input: { principal: MemberAccessPrincipal; userId: string; query: DashboardGuestThreadListQuery },
+) {
+  const { principal, userId, query } = input
+  const options = {
+    locationId: query.locationId ?? null,
+    principal,
+    userId,
+    search: query.search ?? null,
+    type: query.type ?? null,
+    conversationState: query.conversationState ?? null,
+    occurrence: query.occurrence ?? null,
+    unreadOnly: query.unreadOnly ?? false,
+  }
+  const [threads, summary] = await Promise.all([
+    listGuestThreads(db, siteId, options),
+    getGuestThreadOperationSummary(db, siteId, options),
+  ])
+  return { threads, summary }
 }
 
 export async function loadDashboardGuestThreads(
@@ -35,37 +69,11 @@ export async function loadDashboardGuestThreads(
   query: DashboardGuestThreadListQuery,
 ) {
   const { env, db, session, site } = await requireSiteAccess(event, siteId, 'context')
+  const principal = memberAccessPrincipal(site.membership, { env, siteId, event })
   if (query.locationId) {
-    await assertMemberScope(db, {
-      env,
-      memberId: site.member_id,
-      role: site.member_role,
-      organizationId: site.organization_id,
-      siteId,
-      locationId: query.locationId,
-    })
+    await assertMemberScope(db, { ...principal, locationId: query.locationId })
   }
-  const principal = {
-    env,
-    memberId: site.member_id,
-    role: site.member_role,
-    organizationId: site.organization_id,
-    siteId,
-  }
-  const options = {
-    locationId: query.locationId ?? null,
-    principal,
-    userId: session.user.id,
-    search: query.search ?? null,
-    type: query.type ?? null,
-    conversationState: query.conversationState ?? null,
-    unreadOnly: query.unreadOnly ?? false,
-  }
-  const [threads, summary] = await Promise.all([
-    listGuestThreads(db, siteId, options),
-    getGuestThreadOperationSummary(db, siteId, options),
-  ])
-  return { threads, summary }
+  return listDashboardGuestThreadsForPrincipal(db, siteId, { principal, userId: session.user.id, query })
 }
 
 export async function loadDashboardGuestThread(
@@ -78,14 +86,7 @@ export async function loadDashboardGuestThread(
   if (!thread) {
     throw new HTTPError({ statusCode: 404, statusMessage: 'Thread not found' })
   }
-  await assertMemberScope(db, {
-    env,
-    memberId: site.member_id,
-    role: site.member_role,
-    organizationId: site.organization_id,
-    siteId,
-    locationId: thread.location_id,
-  })
+  await assertMemberScope(db, { ...memberAccessPrincipal(site.membership, { env, siteId, event }), locationId: thread.location_id })
 
   const detail = await getGuestThreadDetail(db, threadId, siteId)
   if (!detail) {
@@ -115,19 +116,21 @@ export async function loadOrganizationGuestThreads(
     requireOrganization: true,
     requireSite: false,
     organizationSlug: scope?.orgSlug,
-    pathname: '/api/dashboard/guest-threads',
   })
   if (!organization) {
     throw new HTTPError({ statusCode: 404, statusMessage: 'Organization not found' })
   }
+  // The rows are filtered by team below, so this only asks whether the role
+  // takes part in guest operations at all.
+  await assertRoleAllows({ organizationId: organization.id, role: organization.role, permissions: { operations: ['read'] } })
 
   const principal = {
-    memberId: organization.memberId,
+    userId,
     role: organization.role,
     organizationId: organization.id,
     teamIds: isOrganizationWideRole(organization.role)
       ? null
-      : await listUserOrganizationTeamIds({ env, organizationId: organization.id, userId }),
+      : await listUserOrganizationTeamIds({ env, organizationId: organization.id, userId, event }),
   }
   const options = {
     organizationId: organization.id,
@@ -138,6 +141,7 @@ export async function loadOrganizationGuestThreads(
     search: query.search ?? null,
     type: query.type ?? null,
     conversationState: query.conversationState ?? null,
+    occurrence: query.occurrence ?? null,
     unreadOnly: query.unreadOnly ?? false,
   }
   const [threads, summary] = await Promise.all([

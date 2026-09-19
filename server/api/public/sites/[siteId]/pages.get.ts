@@ -23,8 +23,8 @@ export default defineHandler(async (event) => {
 
   try {
     const pages = path
-      ? await getPublicTenantPageForPath(db, siteId, path, { locale, preview })
-      : await listCanonicalTenantPages(db, siteId, locale)
+      ? await getPublicTenantPageForPath(env, db, siteId, path, { locale, preview })
+      : await listCanonicalTenantPages(env, db, siteId, locale)
     if (path && !pages) return apiErrorResponse(event, 404, 'PAGE_NOT_FOUND', 'Tenant page not found')
     return jsonResponse({ success: true, page: path ? pages : undefined, pages: path ? undefined : pages, preview })
   } catch (error) {

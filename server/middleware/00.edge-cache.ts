@@ -1,7 +1,7 @@
 // KV-based SSR HTML cache — globally replicated, ~4ms read latency from any edge.
 // Replaces the previous caches.default approach which was per-datacenter only.
 //
-// Cache key: html:<host>:<pathname>
+// Cache key: html:<host>[:<preview tenant>]:<build id>:<pathname>
 // Stored in SITE_CACHE KV namespace with CACHE_TTL_SECONDS TTL.
 // On a hit: D1 tenant lookup and Vue SSR are skipped entirely.
 // On a miss: falls through to SSR; server/plugins/edge-cache.ts populates KV.
@@ -19,7 +19,6 @@
 import { defineHandler } from 'nitro';
 import { setResponseHeaders } from 'nitro/h3';
 import { buildHtmlCacheKey } from '~/server/utils/edge-cache'
-import { isNonProductionHost } from '~/server/utils/tenant-hosts'
 import { PREVIEW_COOKIE_NAME } from '~/server/utils/preview-token'
 
 const CACHE_TTL_SECONDS = 60
@@ -38,17 +37,6 @@ export default defineHandler(async (event) => {
   if (requestCookies.includes(SESSION_COOKIE)) return
   if (requestCookies.includes(`${PREVIEW_COOKIE_NAME}=`)) return
   if (event.path.includes('?')) return
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const cfReq = (event.req.runtime?.cloudflare as any)?.request as Request | undefined
-  const host = cfReq?.headers.get('host') ?? (event.req.headers.get('host')) ?? ''
-  const hostname = host.split(':')[0] ?? host
-
-  // Preview/staging Workers are redeployed on every CI run. Serving KV-cached HTML
-  // from the previous deploy references stale asset hashes (/_nuxt/*.css|js) that
-  // no longer exist in the new deploy's Assets binding → ERR_ABORTED in tests.
-  // Skip the KV layer entirely; SSR always returns fresh HTML with correct hashes.
-  if (isNonProductionHost(hostname)) return
 
   const key = buildHtmlCacheKey(event)
   if (!key) return

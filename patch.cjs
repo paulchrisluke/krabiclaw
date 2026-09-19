@@ -1,10 +1,8 @@
 const fs = require('fs');
 
-const publicSurfaceCssPaths = {
-  'platform-entry': 'surfaces/platform.css',
-  'saya': 'surfaces/saya.css',
-  'blawby': 'surfaces/blawby.css',
-};
+// Shared with nuxt.config.ts so a surface cannot be registered in one place and
+// missed in the other.
+const publicSurfaceCssPaths = require('./build/public-surface-css.json');
 const precomputedManifestCandidates = [
   '.output/server/_chunks/precomputed.mjs',
   '.output/server/chunks/_/client.precomputed.mjs',

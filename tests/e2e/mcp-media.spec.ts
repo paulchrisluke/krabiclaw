@@ -8,7 +8,7 @@ const MCP_VIDEO_ATTACHMENT_URL = 'https://media.krabiclaw.com/sites/site-demo/me
 const MCP_VIDEO_POSTER_URL = 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/0762ea49-0bd2-4cc8-1044-d6c9b1f00100/public'
 
 test.describe('stateless MCP server', () => {
-  test('ChatGPT session exposes native media upload without widget launchers', async ({ request, baseURL }) => {
+  test('ChatGPT session exposes native media upload', async ({ request, baseURL }) => {
     await loginAs(request, baseURL!, MCP_GROWTH_USER_ID)
 
     const initialize = await mcpRequest(request, baseURL!, {
@@ -36,9 +36,19 @@ test.describe('stateless MCP server', () => {
     })
     expect(tools.status()).toBe(200)
     const toolsBody = await tools.json() as { result: { tools: Array<{ name: string, inputSchema?: { required?: string[], properties?: Record<string, unknown>, additionalProperties?: boolean }, outputSchema?: Record<string, unknown>, _meta?: Record<string, unknown> }> } }
-    expect(toolsBody.result.tools.filter(tool => tool.name.startsWith('open_') && tool.name.includes('upload')).map(tool => tool.name)).toEqual([])
-    expect(toolsBody.result.tools.find(tool => tool.name === 'upload_user_photo')).toBeUndefined()
     const uploadTool = toolsBody.result.tools.find(tool => tool.name === 'upload_user_media')
+    expect(toolsBody.result.tools.some(tool => tool.name === 'show_generated_images')).toBe(false)
+    const generatedFileTool = toolsBody.result.tools.find(tool => tool.name === 'save_generated_image_file')
+    expect(generatedFileTool?._meta?.['openai/fileParams']).toEqual(['attachment_id'])
+    const removedPicker = await mcpRequest(request, baseURL!, {
+      method: 'tools/call',
+      toolName: 'show_generated_images',
+      args: { images: [] },
+    })
+    expect(removedPicker.status()).toBe(200)
+    const removedPickerBody = await removedPicker.json() as { error?: { code?: number, message?: string } }
+    expect(removedPickerBody.error?.code).toBe(-32601)
+    expect(removedPickerBody.error?.message).toContain('Unknown tool')
     expect(uploadTool?.inputSchema?.required).toEqual(['file'])
     expect(uploadTool?.inputSchema?.properties?.file_id).toBeUndefined()
     expect(uploadTool?.inputSchema?.properties?.poster_file).toBeDefined()
@@ -48,7 +58,6 @@ test.describe('stateless MCP server', () => {
     expect(setMediaTool?.inputSchema?.required).toEqual(['placement', 'asset_id'])
     expect(setMediaTool?.inputSchema?.properties?.placement).toBeDefined()
     expect(setMediaTool?.inputSchema?.additionalProperties).toBe(false)
-    expect(toolsBody.result.tools.filter(tool => tool._meta?.ui || tool._meta?.['openai/outputTemplate'])).toEqual([])
 
     const locations = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
@@ -74,22 +83,6 @@ test.describe('stateless MCP server', () => {
     const mismatchedTargetBody = await mismatchedTarget.json() as { result?: { isError?: boolean, content?: Array<{ text?: string }> } }
     expect(mismatchedTargetBody.result?.isError).toBe(true)
     expect(mismatchedTargetBody.result?.content?.[0]?.text).toContain('Unknown argument: location_id')
-
-    const resources = await mcpRequest(request, baseURL!, { method: 'resources/list' })
-    expect(resources.status()).toBe(200)
-    const resourcesBody = await resources.json() as { result: { resources: Array<{ uri: string }> } }
-    expect(resourcesBody.result.resources).toHaveLength(0)
-
-    for (const uri of ['ui://media-upload', 'ui://video-upload']) {
-      const resource = await mcpRequest(request, baseURL!, {
-        method: 'resources/read',
-        params: { uri },
-      })
-      expect(resource.status()).toBe(200)
-      const body = await resource.json() as { error?: { code?: number, message?: string } }
-      expect(body.error?.code).toBe(-32602)
-      expect(body.error?.message).toContain('Unknown MCP app resource')
-    }
   })
 
   test('ChatGPT-shaped video and poster attachments produce an active public asset', async ({ request, baseURL }) => {
@@ -107,11 +100,11 @@ test.describe('stateless MCP server', () => {
           category: 'other',
           file: {
             download_url: MCP_VIDEO_ATTACHMENT_URL,
-            file_id: 'sediment://file_widget_e2e_video',
+            file_id: 'sediment://file_e2e_video',
           },
           poster_file: {
             download_url: MCP_VIDEO_POSTER_URL,
-            file_id: 'sediment://file_widget_e2e_video_poster',
+            file_id: 'sediment://file_e2e_video_poster',
           },
         },
       })

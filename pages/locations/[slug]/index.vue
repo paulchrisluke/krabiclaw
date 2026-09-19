@@ -47,7 +47,7 @@
             <NuxtLink :to="localePath('/locations')" class="saya-kicker mb-8 inline-block text-white/60 no-underline hover:text-white">
               ← {{ t('saya.footer.all_locations') }}
             </NuxtLink>
-            <p class="saya-eyebrow mb-5 text-white/80">{{ location.neighborhood || location.city }}</p>
+            <p class="saya-eyebrow mb-5 text-white/80">{{ addressPlaceName(location.address as PostalAddress | null) }}</p>
             <h1 class="saya-display-lg text-white">
               <em class="saya-italic">{{ heroTitle || location.title }}</em>
             </h1>
@@ -179,7 +179,7 @@
       />
 
       <!-- Reviews preview -->
-      <section v-if="reviewsPreview.length" class="bg-elevated">
+      <section v-if="reviewsPreview.length">
         <div class="mx-auto max-w-7xl px-4 py-24 sm:px-6 lg:px-8">
           <div class="mb-16 max-w-2xl">
             <p class="saya-kicker mb-6">{{ t('saya.reviews.subtitle') }}</p>
@@ -190,25 +190,12 @@
             </h2>
           </div>
           <div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            <div v-for="review in reviewsPreview" :key="review.id" class="border border-default bg-default p-8">
-              <div class="mb-3 flex gap-1" :aria-label="t('saya.reviews.stars_aria', { rating: review.rating })">
-                <SayaIcon
-                  v-for="s in 5"
-                  :key="s"
-                  name="star"
-                  solid
-                  aria-hidden="true"
-                  class="size-3.5"
-                  :class="s <= review.rating ? 'text-primary' : 'text-muted'"
-                />
-                <span class="sr-only">{{ t('saya.reviews.stars_aria', { rating: review.rating }) }}</span>
-              </div>
-              <p class="text-sm leading-relaxed text-default">"{{ review.content }}"</p>
-              <div class="mt-6 border-t border-default pt-4">
-                <div class="text-sm font-medium text-default">{{ review.author_name }}</div>
-                <GoogleReviewAttribution v-if="review.source === 'google_places'" :metadata="review.google_review_metadata" :source-url="review.original_reference" />
-              </div>
-            </div>
+            <SayaReviewCard
+              v-for="review in reviewsPreview"
+              :key="review.id"
+             
+              :review="review"
+            />
           </div>
         </div>
       </section>
@@ -250,7 +237,7 @@
                 >
               </div>
               <div class="p-7">
-                <p class="saya-eyebrow mb-3 text-inverted/50">{{ loc.neighborhood || loc.city }}</p>
+                <p class="saya-eyebrow mb-3 text-inverted/50">{{ addressPlaceName(loc.address as PostalAddress | null) }}</p>
                 <div class="saya-display saya-italic text-3xl text-inverted leading-none">{{ loc.title }}</div>
                 <p class="mt-4 text-xs uppercase tracking-widest text-inverted/50">{{ t('saya.footer.visit_page') }}</p>
               </div>
@@ -297,6 +284,8 @@ import { selectPrice, type Price } from '~/shared/prices'
 import { isCurrencyCode } from '~/shared/currencies'
 import type { Product } from '~/server/types/products'
 import { normalizeRobotsIntent } from '~/shared/robots-directive'
+import { resolveSocialImageUrl } from '~/utils/social-metadata'
+import { addressPlaceName, formatPostalAddress, schemaPostalAddress, type PostalAddress } from '~/utils/postal-address'
 
 const DOMPurify = useHtmlSanitizer()
 
@@ -366,6 +355,7 @@ const otherLocations = computed(() => locations.value.filter((l: ApiRecord) => l
 // Reviews preview from bootstrap
 const reviewsPreview = computed(() => locationReviews.value.slice(0, 3))
 
+
 // Neutral default until the owner picks a brand color in onboarding.
 const locationHeroBrandColor = computed(() => pageConfig.value?.brand_color || '#3F3F46')
 const locationHeroIcon = computed(() => (site as ApiValue)?.vertical === 'experience' ? 'sparkles' : 'map-pin')
@@ -395,12 +385,22 @@ const heroBackgroundStyle = computed(() => {
   return { backgroundImage: `url("${safeHref}")` }
 })
 
-const rawCurrency = (site as ApiValue)?.default_currency
-const currency = isCurrencyCode(rawCurrency) ? rawCurrency : null
+// Every other product surface refuses to render rather than quote a price in a
+// currency nobody set. This page used to degrade to null instead, which showed
+// the location with every price silently missing and no way to tell why.
+//
+// The currency is on the page payload's config, which is where the shell query
+// puts it (server/utils/public-shell-query.ts) and where every sibling surface
+// reads it. `useTenantSite`'s site is the tenant-resolution context — brand
+// name, media, vertical — and has never carried a currency, so reading it here
+// was always undefined and took both of Pottery House's location pages down.
+const rawCurrency = pageConfig.value.default_currency
+if (!isCurrencyCode(rawCurrency)) throw createError({ statusCode: 500, statusMessage: 'Unsupported site currency' })
+const currency = rawCurrency
 
 /** The offer this location shows for a product, through the one contract. */
 function offerFor(product: Product): Price | null {
-  if (!currency || !location.value) return null
+  if (!location.value) return null
   const selection = { currency, location_id: String(location.value.id), at: new Date().toISOString() }
   const offers = product.variants.flatMap(variant => selectPrice(variant.prices, selection) ?? [])
   return offers.reduce<Price | null>((lowest, offer) => (!lowest || offer.unit_amount < lowest.unit_amount ? offer : lowest), null)
@@ -448,7 +448,8 @@ const collectionProductItems = computed(() => {
         compareAtPrice: offer?.compare_at_unit_amount
           ? formatProductMoney({ ...offer, unit_amount: offer.compare_at_unit_amount, compare_at_unit_amount: null })
           : null,
-        image: product.image?.public_url || null,
+        // A card draws a still, so a video cover is shown as its own poster.
+        image: resolveSocialImageUrl(product.image),
         alt: product.image?.alt_text || product.name,
         href: localePath(presentation.productPath(slug.value, product.slug)),
         unavailable: !product.active || offer === null,
@@ -475,18 +476,7 @@ const sanitizedParkingInfo = computed(() => DOMPurify.sanitize(parkingInfo.value
 const sanitizedExtraNotes = computed(() => DOMPurify.sanitize(extraNotes.value))
 
 // Derived location data
-const canonicalFormattedAddress = computed(() => {
-  const loc = location.value
-  if (!loc) return ''
-  if (loc.address && typeof loc.address === 'object') {
-    const a = loc.address
-    return [a.addressLines?.[0], a.locality, a.administrativeArea, a.postalCode].filter(Boolean).join(', ')
-  }
-  return loc.address || loc.city || ''
-})
-const formattedAddress = computed(() => locale.value === 'en'
-  ? canonicalFormattedAddress.value
-  : location.value?.address_translated ?? '')
+const formattedAddress = computed(() => formatPostalAddress((location.value?.address ?? null) as PostalAddress | null))
 
 const weekHours = computed(() => formatOpeningHours(location.value?.opening_hours ?? null, locale.value, t('saya.location.closed'), location.value?.timezone))
 const todayHours = computed(() => getTodayHoursLabel(location.value?.opening_hours ?? null, t('saya.location.closed'), location.value?.timezone, new Date(), location.value?.special_hours ?? null, locale.value))
@@ -521,8 +511,8 @@ useSchemaOrg([
     return {
       '@type': getBusinessSchemaTypes((site as ApiValue)?.vertical),
       name: `${siteName.value} — ${loc.title}`,
-      description: canonicalFormattedAddress.value,
-      address: { '@type': 'PostalAddress', streetAddress: canonicalFormattedAddress.value },
+      description: formattedAddress.value,
+      address: schemaPostalAddress((location.value?.address ?? null) as PostalAddress | null),
       telephone: loc.phone,
       url: `${tenantOrigin}${localePath(`/locations/${loc.slug}`)}`,
       ...(loc.latitude && loc.longitude ? { geo: { '@type': 'GeoCoordinates', latitude: loc.latitude, longitude: loc.longitude } } : {}),

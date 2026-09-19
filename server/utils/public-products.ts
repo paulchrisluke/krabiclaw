@@ -1,3 +1,4 @@
+import { parseGoogleReviewMetadata, type GoogleReviewMetadata } from '~/shared/google-review'
 import { queryAll, queryFirst, type DbClient } from '~/server/db'
 import { resolveSiteCmsCapabilities } from '~/server/utils/cms-capabilities'
 import { getProductBySlug, hydrateProductMedia, listCollections, listLocationProducts } from '~/server/utils/product-management'
@@ -13,6 +14,7 @@ import {
 } from '~/server/utils/public-localization'
 import { listPublicLocaleRepresentations } from '~/server/utils/public-locale-representations'
 import type { PublicLocaleRepresentation } from '~/utils/public-resource-contracts'
+import { parsePostalAddress, type PostalAddress } from '~/utils/postal-address'
 
 interface PublicProductSiteRow {
   id: string
@@ -29,7 +31,24 @@ export interface PublicProductLocation {
   slug: string
   title: string
   feature_overrides: string | null
+  /** Where a guest turns up: the branch's own address, phone and map, as the row stores them. */
+  address: string | null
+  phone: string | null
+  maps_url: string | null
+  latitude: number | null
+  longitude: number | null
 }
+
+/** The branch as the product page sends it to the browser. */
+export function publicLocationPayload(location: PublicProductLocation): PublicProductLocationPayload {
+  return {
+    id: location.id, slug: location.slug, title: location.title,
+    address: parsePostalAddress(location.address), phone: location.phone, maps_url: location.maps_url,
+    latitude: location.latitude, longitude: location.longitude,
+  }
+}
+
+export type PublicProductLocationPayload = Omit<PublicProductLocation, 'feature_overrides' | 'address'> & { address: PostalAddress | null }
 
 export interface PublicProductCollection {
   site: PublicProductSiteRow
@@ -65,11 +84,15 @@ export interface PublicProductDetail extends PublicProductCollection {
 
 export interface PublicProductReview {
   id: string
-  author: string
+  author_name: string
   rating: number
-  title: string
+  title: string | null
   content: string
-  createdAt: string
+  source: string
+  original_reference: string | null
+  google_review_metadata: GoogleReviewMetadata | null
+  original_review_date: string | null
+  created_at: string
 }
 
 // previewAuthorized carries the site's one preview authorization down from the
@@ -112,7 +135,7 @@ export async function loadPublicProductCollection(
   const resolved = await loadProductSite(db, siteId, routeKind, previewAuthorized)
   if (!resolved) return null
   const locationRows = await queryAll<PublicProductLocation>(db, `
-    SELECT id, slug, title, feature_overrides
+    SELECT id, slug, title, feature_overrides, address, phone, maps_url, latitude, longitude
       FROM business_locations
      WHERE organization_id = ? AND site_id = ? AND status = 'active'
        ${locationSlug ? 'AND slug = ?' : ''}
@@ -143,6 +166,7 @@ export async function loadPublicProductCollection(
 }
 
 export async function loadPublicProductDetail(
+  env: CloudflareEnv,
   db: DbClient,
   siteId: string,
   routeKind: ProductSurface,
@@ -165,7 +189,7 @@ export async function loadPublicProductDetail(
     if (!found || !offeredHere || !publishedHere || !onThisSurface) return null
     const [product] = await hydrateProductMedia(db, siteId, [found])
     if (!product) return null
-    const localeRepresentations = await listPublicLocaleRepresentations(db, {
+    const localeRepresentations = await listPublicLocaleRepresentations(env, db, {
       organizationId: collection.site.organization_id,
       siteId,
       sourcePath: collection.presentation.productPath(location.slug, product.slug),
@@ -182,12 +206,12 @@ export async function loadPublicProductDetail(
 
   const resolved = await loadProductSite(db, siteId, routeKind, previewAuthorized)
   if (!resolved) return null
-  const localizations = await loadExactPublicLocalizations(db, resolved.site.organization_id, siteId, locale)
+  const localizations = await loadExactPublicLocalizations(env, db, resolved.site.organization_id, siteId, locale)
   const localizedLocationPath = `/${locale}/locations/${locationSlug}`
   const locationId = resolveLocalizedRouteResourceId(localizations, 'business_location', localizedLocationPath)
   if (!locationId) return null
   const sourceLocation = await queryFirst<PublicProductLocation>(db, `
-    SELECT id, slug, title, feature_overrides FROM business_locations
+    SELECT id, slug, title, feature_overrides, address, phone, maps_url, latitude, longitude FROM business_locations
      WHERE organization_id = ? AND site_id = ? AND id = ? AND status = 'active' LIMIT 1
   `, [resolved.site.organization_id, siteId, locationId])
   if (!sourceLocation) return null
@@ -215,7 +239,7 @@ export async function loadPublicProductDetail(
   const localizedSite = siteLocalization
     ? projectExactLocalizedResource('site', collection.site, siteLocalization)
     : { ...collection.site, brand_name: '' }
-  const localeRepresentations = await listPublicLocaleRepresentations(db, {
+  const localeRepresentations = await listPublicLocaleRepresentations(env, db, {
     organizationId: collection.site.organization_id,
     siteId,
     sourcePath: collection.presentation.productPath(location.slug, sourceProduct.slug),
@@ -244,6 +268,7 @@ export async function loadPublicProductDetail(
  * the merchant's behalf.
  */
 export async function loadPublicExperienceDetail(
+  env: CloudflareEnv,
   db: DbClient,
   siteId: string,
   previewAuthorized: boolean,
@@ -257,7 +282,7 @@ export async function loadPublicExperienceDetail(
   if (!found.publications.some(entry => entry.site_id === siteId && entry.published)) return null
   const offeredAt = new Set(found.locations.filter(entry => entry.published && entry.active).map(entry => entry.location_id))
   const locationRows = await queryAll<PublicProductLocation>(db, `
-    SELECT id, slug, title, feature_overrides
+    SELECT id, slug, title, feature_overrides, address, phone, maps_url, latitude, longitude
       FROM business_locations
      WHERE organization_id = ? AND site_id = ? AND status = 'active'
      ORDER BY title, id
@@ -266,15 +291,15 @@ export async function loadPublicExperienceDetail(
   if (locations.length !== 1) return null
   const location = locations[0]!
   if (locale === 'en') {
-    return loadPublicProductDetail(db, siteId, 'experiences', previewAuthorized, location.slug, productSlug, locale)
+    return loadPublicProductDetail(env, db, siteId, 'experiences', previewAuthorized, location.slug, productSlug, locale)
   }
   // The localized reader names its location by the localized route the tenant
   // published for it, so hand it that route's slug rather than the source one.
-  const localizations = await loadExactPublicLocalizations(db, resolved.site.organization_id, siteId, locale)
+  const localizations = await loadExactPublicLocalizations(env, db, resolved.site.organization_id, siteId, locale)
   const localizedRoute = localizations.find(item => item.resourceType === 'business_location' && item.resourceId === location.id)?.routePath
   const localizedLocationSlug = localizedRoute ? localizedRoute.split('/').filter(Boolean).at(-1) : null
   if (!localizedLocationSlug) return null
-  return loadPublicProductDetail(db, siteId, 'experiences', previewAuthorized, localizedLocationSlug, productSlug, locale)
+  return loadPublicProductDetail(env, db, siteId, 'experiences', previewAuthorized, localizedLocationSlug, productSlug, locale)
 }
 
 export async function loadPublicProductApiCollection(
@@ -290,6 +315,7 @@ export async function loadPublicProductApiCollection(
 }
 
 export async function loadPublicProductApiDetail(
+  env: CloudflareEnv,
   db: DbClient,
   siteId: string,
   previewAuthorized: boolean,
@@ -305,21 +331,31 @@ export async function loadPublicProductApiDetail(
   // other Product's.
   const product = await getProductBySlug(db, site.organization_id, productSlug)
   if (!product) return null
-  return loadPublicProductDetail(db, siteId, productSurfaceOf(site.vertical, product), previewAuthorized, locationSlug, productSlug, locale)
+  return loadPublicProductDetail(env, db, siteId, productSurfaceOf(site.vertical, product), previewAuthorized, locationSlug, productSlug, locale)
 }
 
+/**
+ * Approved reviews of this product at the location the page is for: the ones
+ * written about the product (a booking review names its product), and the
+ * place's Google reviews, which are about the location and name no product.
+ * A review of a different product at the same location is not shown. Google
+ * reviews carry no title, so a title is optional. Newest written first.
+ */
 export async function loadPublicProductReviews(
   db: DbClient,
   detail: PublicProductDetail,
 ): Promise<PublicProductReview[]> {
-  return queryAll<PublicProductReview>(db, `
-    SELECT id, author_name AS author, rating, title, content, created_at AS createdAt
+  const rows = await queryAll<Omit<PublicProductReview, 'google_review_metadata'> & { google_review_metadata: string | null }>(db, `
+    SELECT id, author_name, rating, title, content, source, original_reference, google_review_metadata,
+           original_review_date, created_at
      FROM reviews
-     WHERE product_id = ? AND organization_id = ? AND site_id = ? AND status = 'approved'
+     WHERE organization_id = ? AND site_id = ? AND status = 'approved'
+       AND location_id = ?
+       AND (product_id = ? OR (product_id IS NULL AND source = 'google_places'))
        AND author_name IS NOT NULL AND trim(author_name) <> ''
-       AND title IS NOT NULL AND trim(title) <> ''
        AND content IS NOT NULL AND trim(content) <> ''
-     ORDER BY created_at DESC, id DESC
+     ORDER BY COALESCE(original_review_date, created_at) DESC, id DESC
      LIMIT 50
-  `, [detail.product.id, detail.site.organization_id, detail.site.id])
+  `, [detail.site.organization_id, detail.site.id, detail.location.id, detail.product.id])
+  return rows.map(row => ({ ...row, google_review_metadata: parseGoogleReviewMetadata(row.google_review_metadata) }))
 }

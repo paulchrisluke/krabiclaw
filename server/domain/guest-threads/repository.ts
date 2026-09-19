@@ -5,7 +5,6 @@ import {
   isScopedRole,
   listAccessibleLocationIds,
 } from '~/server/utils/member-access'
-import { CONVERSATION_STATE_LABELS } from './types'
 import type {
   ConversationState,
   GuestThreadListItemViewModel,
@@ -42,6 +41,18 @@ const SOURCE_PREVIEW_SQL = `SUBSTR(CASE WHEN gt.kind = 'contact' THEN json_extra
 
 const SOURCE_PREVIEW_COLUMNS = `op.starts_at AS record_starts_at, op.timezone AS record_timezone, op.party_size AS record_party_size,
       json_extract(gt.payload_json, '$.party_size_is_minimum') AS party_size_is_minimum`
+
+/*
+  The picture the row leads with: the hero of the location the thread belongs
+  to. A thread with no location, or a location with no hero, has no picture —
+  the row draws its own placeholder rather than borrowing another location's.
+*/
+const LOCATION_HERO_SQL = `
+  LEFT JOIN media_placements mp_hero ON mp_hero.owner_type = 'business_location' AND mp_hero.owner_id = gt.location_id
+    AND mp_hero.slot = 'hero' AND mp_hero.status = 'active'
+  LEFT JOIN media_assets ma_hero ON ma_hero.id = mp_hero.asset_id AND ma_hero.status = 'active'`
+
+const LOCATION_HERO_COLUMNS = `ma_hero.thumbnail_url AS location_image_thumbnail_url, ma_hero.public_url AS location_image_public_url`
 
 function sourcePreviewText(row: {
   source_preview: string | null
@@ -171,6 +182,8 @@ type GuestThreadListRow = GuestThreadRow & {
   record_party_size: number | null
   party_size_is_minimum: unknown
   operational_status: string | null
+  location_image_thumbnail_url: string | null
+  location_image_public_url: string | null
 }
 
 /** Returns list view models with member-specific unread and one canonical `preview` field. */
@@ -205,6 +218,14 @@ export async function listGuestThreads(
   if (opts.conversationState) {
     where += ' AND gt.conversation_state = ?'
     params.push(opts.conversationState)
+  }
+  if (opts.occurrence) {
+    // A thread with no booking has no occurrence, so it is never past. It stays
+    // in the current list, the way a direct message does on Airbnb.
+    where += opts.occurrence === 'past'
+      ? ' AND op.starts_at < ?'
+      : ' AND (op.starts_at IS NULL OR op.starts_at >= ?)'
+    params.push(new Date().toISOString())
   }
   if (opts.search?.trim()) {
     const like = `%${opts.search.trim().toLowerCase()}%`
@@ -244,9 +265,10 @@ export async function listGuestThreads(
       ) AS latest_message_kind,
       ${SOURCE_PREVIEW_SQL} AS source_preview,
       ${SOURCE_PREVIEW_COLUMNS},
+      ${LOCATION_HERO_COLUMNS},
       op.status AS operational_status
     FROM requests gt${OPERATIONAL_RECORD_SQL}
-    LEFT JOIN business_locations bl ON bl.id = gt.location_id
+    LEFT JOIN business_locations bl ON bl.id = gt.location_id${LOCATION_HERO_SQL}
     WHERE gt.kind IN ('contact', 'reservation', 'booking') AND ${where}
     ${unreadFilter}
     ORDER BY gt.updated_at DESC
@@ -267,7 +289,6 @@ export async function listGuestThreads(
       contextLabel: preview ?? '',
       locationLabel: row.location_title,
       conversationState: row.conversation_state,
-      conversationStateLabel: CONVERSATION_STATE_LABELS[row.conversation_state],
       operationalStatus: row.operational_status,
       operationalStatusLabel: row.operational_status ? formatOperationalStatusLabel(row.kind, row.operational_status) : null,
       unread,
@@ -277,6 +298,12 @@ export async function listGuestThreads(
         : (preview ? { kind: 'submission', text: preview } : null),
       lastActivityAt: row.updated_at,
       needsAttention: row.conversation_state === 'needs_attention',
+      // Two renditions of one asset, not two sources: a row 60px wide takes the
+      // thumbnail, and an asset with no rendition yet is served at full size.
+      imageUrl: row.location_image_thumbnail_url ?? row.location_image_public_url,
+      whenLabel: row.record_starts_at && row.record_timezone
+        ? formatThreadWhenLabel(row.record_starts_at, row.record_timezone)
+        : null,
     })
   }
   return items
@@ -287,7 +314,7 @@ export async function listOrganizationGuestThreads(
   opts: Omit<ListGuestThreadsOptions, 'principal'> & {
     organizationId: string
     principal: {
-      memberId: string
+      userId: string
       role: string
       organizationId: string
       teamIds: string[] | null
@@ -321,6 +348,14 @@ export async function listOrganizationGuestThreads(
   if (opts.conversationState) {
     where += ' AND gt.conversation_state = ?'
     params.push(opts.conversationState)
+  }
+  if (opts.occurrence) {
+    // A thread with no booking has no occurrence, so it is never past. It stays
+    // in the current list, the way a direct message does on Airbnb.
+    where += opts.occurrence === 'past'
+      ? ' AND op.starts_at < ?'
+      : ' AND (op.starts_at IS NULL OR op.starts_at >= ?)'
+    params.push(new Date().toISOString())
   }
   if (opts.search?.trim()) {
     const like = `%${opts.search.trim().toLowerCase()}%`
@@ -362,10 +397,11 @@ export async function listOrganizationGuestThreads(
       ) AS latest_message_kind,
       ${SOURCE_PREVIEW_SQL} AS source_preview,
       ${SOURCE_PREVIEW_COLUMNS},
+      ${LOCATION_HERO_COLUMNS},
       op.status AS operational_status
     FROM requests gt${OPERATIONAL_RECORD_SQL}
     LEFT JOIN business_locations bl ON bl.id = gt.location_id
-    LEFT JOIN sites s ON s.id = gt.site_id
+    LEFT JOIN sites s ON s.id = gt.site_id${LOCATION_HERO_SQL}
     WHERE gt.kind IN ('contact', 'reservation', 'booking') AND ${where}
     ${unreadFilter}
     ORDER BY gt.updated_at DESC
@@ -393,7 +429,6 @@ export async function listOrganizationGuestThreads(
       contextLabel,
       locationLabel: row.location_title,
       conversationState: row.conversation_state,
-      conversationStateLabel: CONVERSATION_STATE_LABELS[row.conversation_state],
       operationalStatus: row.operational_status,
       operationalStatusLabel: row.operational_status ? formatOperationalStatusLabel(row.kind, row.operational_status) : null,
       unread,
@@ -403,6 +438,12 @@ export async function listOrganizationGuestThreads(
         : (preview ? { kind: 'submission', text: preview } : null),
       lastActivityAt: row.updated_at,
       needsAttention: row.conversation_state === 'needs_attention',
+      // Two renditions of one asset, not two sources: a row 60px wide takes the
+      // thumbnail, and an asset with no rendition yet is served at full size.
+      imageUrl: row.location_image_thumbnail_url ?? row.location_image_public_url,
+      whenLabel: row.record_starts_at && row.record_timezone
+        ? formatThreadWhenLabel(row.record_starts_at, row.record_timezone)
+        : null,
     })
   }
   return items

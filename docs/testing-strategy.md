@@ -19,7 +19,9 @@ Use the narrowest real boundary that proves the behavior:
    atomicity.
 4. Use a browser against the local production Worker build for CMS and UI
    behavior.
-5. Use disposable deployed-preview E2E for release-critical customer journeys.
+5. Use the local E2E suite over a local D1 for release-critical customer
+   journeys, and read-only checks against staging for anything only a
+   deployment can answer.
 6. Use an actual ChatGPT session only for ChatGPT-specific tool discovery,
    selection, attachments, and host-provided arguments.
 
@@ -51,29 +53,63 @@ Do not automatically replace a deleted mock test. When a real risk is not
 covered at the correct boundary, verify that boundary as part of the affected
 feature work.
 
-`yarn lint:test-quality` enforces the mechanical rules and caps the unit suite.
-The limits in that script are authoritative. Adding a valuable test above them
-requires deleting lower-value coverage in the same change.
+A test is admitted because it uniquely proves a current invariant, not because
+a numeric budget permits it. There is no cap on test files, test count, or test
+lines, and there never should be one: a cap makes deletion the cheapest way to
+add coverage and turns the suite into a number to manage.
+
+## Deletion history is not an invariant
+
+> Deletion history is not a permanent product invariant. Once old behavior is
+> removed and no external compatibility contract requires it, do not retain
+> tests, linters, guards, snapshots, comments, or documentation whose only
+> purpose is proving the old behavior remains absent.
+
+Ask of any test or check: would a developer designing this product fresh today
+write it to protect something that exists? If the answer is no, delete it.
+
+Negative testing remains appropriate for active invariants — authentication,
+authorization, validation, capacity, concurrency, isolation, and tamper
+resistance. The distinction is whether an assertion protects a current
+contract, not whether it expects success or failure.
 
 ## Release feedback loop
 
-`config/e2e-impact-map.mjs` maps runtime changes to `tenant-public`,
-`guest-journeys`, or `tenant-mcp`. Documentation-only changes skip preview.
-A deployed preview runs the affected retained Playwright specs. High-impact or
-unclassified runtime changes run the full retained E2E suite.
+A pull request runs `Checks` and nothing else. There is no preview deployment
+and no E2E job: the suite ran against a shared preview database that every run
+reset and restored from a production snapshot, which wrote 8-10 million D1 rows
+a day and was the whole of this account's D1 bill. It also meant one mutable
+environment that runs had to queue for.
+
+The E2E suite runs locally, against a local D1 and a Worker the suite starts:
+
+```bash
+yarn e2e:local:prepare   # local D1, migrations, fixtures, production build
+yarn test:e2e:local
+```
+
+`staging` is the first deployed validation. A push to `staging` deploys it and
+then runs read-only MCP discovery and tenant rendering against staging itself.
+Production deploys what `main` holds once `main`'s own `Checks` pass; whoever
+promotes decides the candidate is ready.
 
 Staging and production remain read-only. Guest and MCP write suites run only
-against fresh local data or disposable preview data.
+against local data.
 
 Focused commands:
 
 ```bash
-yarn lint:test-quality
 yarn test:unit
+yarn test:e2e:local
 yarn test:e2e:tenant-rendering
 yarn test:e2e:guest-journeys
 yarn test:e2e:mcp
 ```
+
+The CIMD OAuth cases need `MCP_CIMD_CLIENT_URL` and
+`MCP_PRIVATE_CIMD_CLIENT_URL` to name reachable public HTTPS metadata
+documents, which localhost cannot be. Point them at the deployed staging
+Worker's own test-client documents when running those cases.
 
 Migration tooling changes also run `yarn test:migrations`. These integration
 tests invoke the real installed Drizzle CLI/API and migration guards against
@@ -81,15 +117,3 @@ disposable schema fixtures. They prove no-change generation, detection of real
 changes and generator failures, and rejection of referenced-parent drops before
 execution. They neither apply migrations to a deployed database nor replace
 the local D1 and existing-data checks required for an actual schema change.
-
-## 2026-09-01 reduction baseline
-
-| Metric | Before | After |
-| --- | ---: | ---: |
-| Unit-test files | 101 | 37 |
-| Unit tests | 458 | 180 |
-| Unit-test lines | 8,803 | 2,907 |
-| Internal module-mock files | 16 | 0 |
-| Production source-scanning files | 15 | 0 |
-
-The retained Playwright files are unchanged by this reduction.

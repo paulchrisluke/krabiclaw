@@ -52,13 +52,10 @@
       </div>
 
       <BlawbyConsultationCta
-        v-if="ctaBlock && ctaBlock.title && ctaBlock.label && (consultation.external_url || ctaBlock.url)"
-        :title="String(ctaBlock?.title || '')"
-        :description="optionalString(ctaBlock?.description)"
-        :label="String(ctaBlock?.label || '')"
-        :destination="consultation.external_url || String(ctaBlock?.url || '')"
-        :background-url="assetUrl(ctaBlock?.background)"
-        :featured-url="assetUrl(ctaBlock?.featured)"
+        v-if="ctaBlockRaw"
+        :block="ctaBlockRaw"
+        :page="articlePage!"
+        :destination-override="consultation.external_url || null"
         @click="trackConsultation"
       />
       <ClientOnly v-if="searchSupportsLocale">
@@ -80,7 +77,6 @@
 import PlatformCommandSearchModal from '~/components/platform/search/PlatformCommandSearchModal.vue'
 import PlatformCommandSearchTrigger from '~/components/platform/search/PlatformCommandSearchTrigger.vue'
 import PlatformDrawer from '~/components/platform/PlatformDrawer.vue'
-import { findTenantPageBlock } from '~/utils/tenant-page-blocks'
 import { resolveSocialImageUrl } from '~/utils/social-metadata'
 
 const { isBlawby } = usePublicTemplate()
@@ -110,11 +106,8 @@ if (blogIndexError.value) throw blogIndexError.value
 const post = computed(() => data.value.post!)
 const articleSocialMedia = computed(() => post.value.cover ?? null)
 const articleSocialImage = computed(() => resolveSocialImageUrl(articleSocialMedia.value))
-const ctaBlock = computed(() => {
-  const page = data.value.page
-  if (!page) return null
-  return findTenantPageBlock(page.blocks, 'contact_cta')
-})
+const articlePage = computed(() => data.value.page ?? null)
+const ctaBlockRaw = computed(() => articlePage.value?.blocks.find(block => block.type === 'contact_cta') ?? null)
 const displayTags = computed(() => Array.isArray(post.value.tags) ? post.value.tags.slice(1) : [])
 const hasUpdatedDate = computed(() => Boolean(post.value.updated_at && post.value.updated_at !== post.value.published_at))
 const relatedPosts = computed(() => {
@@ -135,12 +128,6 @@ const resolvedSeo = computed(() => resolveBlogSeo({
 }))
 const { trackConsultationClick } = useSiteConversionTracking(consultation)
 
-function optionalString(value: unknown) {
-  return typeof value === 'string' && value ? value : null
-}
-function assetUrl(value: unknown) {
-  return value && typeof value === 'object' && typeof (value as ApiRecord).url === 'string' ? String((value as ApiRecord).url) : null
-}
 function trackConsultation() {
   trackConsultationClick('article', `/article/${slug}`, consultation.value.external_url || consultation.value.schedule_path)
 }

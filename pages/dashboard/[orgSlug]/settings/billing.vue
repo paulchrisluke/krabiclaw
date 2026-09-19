@@ -17,6 +17,14 @@
         :description="errorMessage"
       />
 
+      <UAlert
+        v-if="successMessage"
+        color="success"
+        variant="soft"
+        icon="i-lucide-circle-check"
+        :description="successMessage"
+      />
+
       <UCard v-if="sites.length">
         <template #header>
           <div class="flex items-center justify-between">
@@ -124,10 +132,13 @@
                 </div>
               </div>
               <p class="mt-2 text-3xl font-semibold text-highlighted">
-                {{ displayPrice(plan, annual) }}
-                <span v-if="plan.prices?.length" class="text-sm font-normal text-muted">
-                  /mo
-                </span>
+                <template v-if="displayPrice(plan, annual) !== null">
+                  {{ displayPrice(plan, annual) }}
+                  <span v-if="plan.prices?.length" class="text-sm font-normal text-muted">
+                    /mo
+                  </span>
+                </template>
+                <span v-else class="text-sm font-normal text-muted">Pricing is unavailable right now.</span>
               </p>
             </div>
 
@@ -172,7 +183,6 @@
 const dashboardApi = useDashboardApi()
 
 import { authClient } from '~/lib/auth-client'
-const toast = useToast()
 
 definePageMeta({ layout: 'dashboard', wideDetail: true })
 
@@ -206,6 +216,7 @@ const selectedSite = computed(() => sites.value.find(s => s.siteId === selectedS
 const upgrading = ref<string | null>(null)
 const portalLoading = ref(false)
 const errorMessage = ref('')
+const successMessage = ref('')
 const annual = ref(false)
 
 interface SavedCard { brand: string; last4: string; exp_month: number; exp_year: number }
@@ -370,13 +381,11 @@ onMounted(async () => {
 
   if (success === 'true') {
     trackSubscriptionCheckoutSuccess(selectedSite.value?.plan ?? undefined)
-    const paymentStatus = billing.value?.paymentStatus
-    toast.add({
-      description: paymentStatus === 'paid'
-        ? 'Payment confirmed. Your plan has been updated.'
-        : 'Payment is processing. Your plan will activate after Stripe confirms the invoice.',
-      color: paymentStatus === 'paid' ? 'success' : 'warning',
-    })
+    // The plan the guest paid for is in the query; the refreshed billing row says what Stripe has confirmed.
+    const live = typeof plan === 'string' && billing.value?.plan === plan
+    successMessage.value = live
+      ? 'Payment confirmed. Your plan has been updated.'
+      : 'Payment is processing. Your plan will activate after Stripe confirms the subscription.'
   }
   if (canceled === 'true') {
     errorMessage.value = 'Payment was canceled. Your plan was not changed.'

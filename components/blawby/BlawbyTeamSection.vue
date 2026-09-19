@@ -22,17 +22,25 @@
 </template>
 
 <script setup lang="ts">
+import type { PublicTenantPage } from '~/server/utils/public-tenant-pages'
+import type { TenantPageBlock } from '~/utils/tenant-page-blocks'
+import { blockText, blockTextOrNull, blockRecords } from '~/utils/tenant-page-block-data'
 // People only. The feature cards that used to ride along in this section are
 // their own block and their own component now, so a page can show either
 // without the other.
-defineProps<{
-  people: Array<{
-    first_name: string
-    last_name: string
-    title?: string | null
-    bio?: string | null
-    url?: string | null
-    media: Array<{ public_url?: string | null }>
-  }>
-}>()
+const props = defineProps<{ block: TenantPageBlock; page: PublicTenantPage }>()
+
+/** One slot spelling for every grid: `items.<index>.image`. */
+function itemMedia(index: number) {
+  return props.block.media.filter(asset => asset.slot === `items.${index}.image`)
+}
+
+const people = computed(() => blockRecords(props.block.data.items).map((item, index) => ({
+  first_name: blockText(item.first_name),
+  last_name: blockText(item.last_name),
+  title: blockTextOrNull(item.title),
+  bio: blockTextOrNull(item.bio),
+  url: blockTextOrNull(item.url),
+  media: itemMedia(index),
+})).filter(person => person.first_name || person.last_name))
 </script>

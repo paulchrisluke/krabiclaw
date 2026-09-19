@@ -8,7 +8,7 @@
   <DashboardListEditor
     v-model:editing="editing"
     title="Q&A"
-    :description="locationId ? 'Add common guest questions, then answer them once.' : 'Manage general questions or questions tailored to a public page.'"
+    :description="locationId ? 'Add common guest questions, then answer them once.' : 'Manage general questions or questions tailored to a public page. Questions imported from Google are managed in Google.'"
     :items="listItems"
     :pending="pending"
     :error="qaError ? getErrorMessage(qaError, 'Q&A request failed') : null"
@@ -25,12 +25,14 @@
     <template #item="{ item }">
       <div class="flex flex-wrap items-center gap-2">
         <UBadge :color="item.row.status === 'published' ? 'success' : 'neutral'" variant="soft">{{ item.row.status }}</UBadge>
+        <UBadge v-if="item.row.source === 'import'" color="neutral" variant="subtle">From Google</UBadge>
         <span v-if="item.row.upvote_count" class="text-xs text-muted">{{ item.row.upvote_count }} upvotes</span>
       </div>
       <p class="mt-2 text-sm font-medium text-highlighted">{{ item.title }}</p>
       <p class="mt-1 line-clamp-2 text-sm text-muted" :class="item.row.answer ? '' : 'italic'">{{ item.row.answer || 'No answer yet.' }}</p>
     </template>
   </DashboardListEditor>
+  <UAlert v-if="deleteError" color="error" variant="soft" icon="i-lucide-circle-alert" :description="deleteError" />
   </div>
 </template>
 
@@ -44,7 +46,6 @@ const props = defineProps<{ locationId?: string }>()
 const dashboardApi = useDashboardApi()
 const route = useRoute()
 const siteId = await useDashboardSiteId()
-const toast = useToast()
 const selectedPagePath = ref('general')
 
 const requestEvent = useRequestEvent()
@@ -161,10 +162,18 @@ const pageScopes = computed(() => {
   return Array.from(scopes.entries()).map(([value, label]) => ({ label, value }))
 })
 const qaRows = computed(() => data.value?.qa ?? [])
-const listItems = computed(() => qaRows.value.map(row => ({ id: row.id, title: row.question, row })))
+// A Google question is Google's: the server refuses to change or remove one,
+// so the row shows no remove control rather than offering a click that fails.
+const listItems = computed(() => qaRows.value.map(row => ({
+  id: row.id,
+  title: row.question,
+  removable: row.source !== 'import',
+  row,
+})))
 
 const editing = ref(false)
 const removingId = ref<string | null>(null)
+const deleteError = ref<string | null>(null)
 
 const qaPath = computed(() => props.locationId
   ? `/dashboard/${String(route.params.orgSlug)}/sites/${String(route.params.siteSlug)}/locations/${String(route.params.locationSlug)}/qa`
@@ -183,6 +192,7 @@ function openExisting(item: { id: string }) {
 
 async function removeItem(item: { id: string }) {
   removingId.value = item.id
+  deleteError.value = null
   try {
     await dashboardApi(`${qaEndpoint.value}/${item.id}`, {
       method: 'DELETE',
@@ -191,7 +201,7 @@ async function removeItem(item: { id: string }) {
     })
     await refresh()
   } catch (error) {
-    toast.add({ description: error instanceof Error ? error.message : 'Failed to remove question', color: 'error' })
+    deleteError.value = error instanceof Error ? error.message : 'Failed to remove question'
   } finally {
     removingId.value = null
   }

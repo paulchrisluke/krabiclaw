@@ -21,16 +21,12 @@ import { fireOrganizationEventSafe } from '~/server/utils/organization-events'
 import type { InferSelectModel } from 'drizzle-orm'
 import { organizationAccessControl, organizationRoles } from '~/utils/organization-access'
 import { platformAdminAccessControl, platformAdminRoles } from '~/utils/platform-admin-access'
-import {
-  createStripePlanLoader,
-  enqueueStripeEvent,
-} from '~/server/utils/better-auth-stripe'
-import { processStripeEvent } from '~/server/utils/stripe-event-processing'
+import { createStripePlanLoader } from '~/server/utils/better-auth-stripe'
+import { handleStripeGa4Event } from '~/server/utils/stripe-ga4'
 import { createStripeClient } from '~/server/utils/stripe-client'
 import { unwrapInstrumentedD1 } from '~/server/utils/request-metrics'
 import { timingSafeEqualText } from '~/server/utils/dev-route-auth'
 import { notifyOrganizationInvited } from '~/server/utils/notifications'
-import { linkLegalIntakeAuthorizedUser } from '~/server/utils/legal-intake-references'
 
 type MemberRow = InferSelectModel<typeof schema.member>
 type InvitationRow = InferSelectModel<typeof schema.invitation>
@@ -92,6 +88,62 @@ async function configureCimdTenantScopes(event: {
   })
 }
 
+// The generic @better-auth/core AuthContext type doesn't line up with this
+// app's concrete plugin/options shape (each plugin narrows it further), so
+// derive the type actually produced by this file's own createAuth() instead.
+export type AppAuthContext = Awaited<ReturnType<typeof createAuth>['$context']>
+
+// Client IDs that must always be CIMD-discovered, never manually managed.
+// getClient() (in @better-auth/oauth-provider) treats any oauthClient row
+// without clientDiscoveryId as permanently "managed" and never re-enters CIMD
+// discovery for it, even when the clientId is a CIMD-shaped URL — see
+// healStaleCimdClient below. Both of these vendors only ever authenticate
+// through CIMD, so a stale non-discovery row for either is always the bug,
+// never a legitimate managed client.
+const KNOWN_CIMD_VENDOR_CLIENT_IDS = new Set<string>([
+  'https://chatgpt.com/oauth/client.json',
+  'https://claude.ai/oauth/mcp-oauth-client-metadata',
+])
+
+/**
+ * Self-heals the exact failure mode from incident #953: a Better Auth 1.7.4
+ * upgrade (or any other path) can leave an oauthClient row for a known CIMD
+ * vendor without clientDiscoveryId set. getClient() then returns that row
+ * as-is forever, CIMD discovery never runs again for it, and token exchange
+ * fails with "client jwks_uri is not trusted" — because validateJwksUri only
+ * allows the same-origin fast path when clientDiscoveryId is set.
+ *
+ * Deleting the stale row here, before the request reaches Better Auth's
+ * handler, makes getClient() see no existing client and fall through to CIMD
+ * discovery in the same request — the same path any brand-new CIMD client
+ * takes. This only ever touches the two hardcoded vendor client IDs above, so
+ * it can't be used to reclassify an arbitrary client_id an attacker supplies.
+ *
+ * Takes an already-resolved `auth.$context` rather than `CloudflareEnv` so
+ * callers that already hold an auth instance (the route handler) don't pay
+ * for a second one, and so this stays testable against a bare adapter
+ * context without standing up all of createAuth()'s plugin dependencies.
+ */
+export async function healStaleCimdClient(context: AppAuthContext, clientId: string): Promise<void> {
+  if (!KNOWN_CIMD_VENDOR_CLIENT_IDS.has(clientId)) return
+  const existing = await context.adapter.findOne<{ clientDiscoveryId: string | null }>({
+    model: 'oauthClient',
+    where: [{ field: 'clientId', value: clientId }],
+  })
+  if (!existing || existing.clientDiscoveryId) return
+  // Re-assert clientDiscoveryId IS NULL in the delete's own where clause, not
+  // just the read above — a concurrent request can heal this same client_id
+  // between the findOne and this delete, and without this the delete would
+  // otherwise remove the row CIMD just (re)created correctly.
+  await context.adapter.delete({
+    model: 'oauthClient',
+    where: [
+      { field: 'clientId', value: clientId },
+      { field: 'clientDiscoveryId', value: null },
+    ],
+  })
+}
+
 export interface CloudflareEnv {
   DB: D1Database
   IMAGES: ImagesBinding
@@ -101,6 +153,7 @@ export interface CloudflareEnv {
   GOOGLE_CLIENT_SECRET: string
   STRIPE_SECRET_KEY?: string
   STRIPE_WEBHOOK_SECRET?: string
+  STRIPE_CONNECT_WEBHOOK_SECRET?: string
   GA4_MEASUREMENT_ID?: string
   GA4_API_SECRET?: string
   AI_SEARCH?: AiSearchNamespace
@@ -131,23 +184,6 @@ export interface CloudflareEnv {
   MEDIA_BUCKET?: R2Bucket
   SITE_CACHE?: KVNamespace
   GUEST_INBOX_HUBS?: DurableObjectNamespace
-  LEGAL_BLAWBY_ORIGIN?: string
-  LEGAL_BLAWBY_CLIENT_ID?: string
-  LEGAL_BLAWBY_CLIENT_SECRET?: string
-  LEGAL_BLAWBY_AUDIENCE?: string
-  LEGAL_BLAWBY_CALLBACK_URL_RETURN?: string
-  LEGAL_BLAWBY_CALLBACK_URL_REFRESH?: string
-  LEGAL_BLAWBY_TIMEOUT_MS?: string
-  LEGAL_PUBLIC_BUDGET_IP_SITE_OP_LIMIT?: string
-  LEGAL_PUBLIC_BUDGET_IP_SITE_OP_WINDOW_MS?: string
-  LEGAL_PUBLIC_BUDGET_ACTOR_SITE_OP_LIMIT?: string
-  LEGAL_PUBLIC_BUDGET_ACTOR_SITE_OP_WINDOW_MS?: string
-  LEGAL_PUBLIC_BUDGET_SITE_OP_LIMIT?: string
-  LEGAL_PUBLIC_BUDGET_SITE_OP_WINDOW_MS?: string
-  LEGAL_PUBLIC_BUDGET_REQUEST_REF_LIMIT?: string
-  LEGAL_PUBLIC_BUDGET_REQUEST_REF_WINDOW_MS?: string
-  LEGAL_DIGEST_KEY_ACTIVE?: string
-  LEGAL_DIGEST_KEYS_PREVIOUS?: string
   db?: ReturnType<typeof createDb>
   [key: string]: ApiValue
 }
@@ -167,9 +203,7 @@ export function shouldBypassE2eAuthRateLimit(
 // WeakMap keyed on the D1 binding instance — safe for the Worker lifecycle
 const authCache = new WeakMap<D1Database, unknown>()
 
-// Exported for U5's legal-access dashboard-origin resolution (see
-// server/utils/legal-access.ts) — the same normalization every other
-// trusted-origin comparison in this file already relies on.
+// The same normalization every trusted-origin comparison in this file relies on.
 export function normalizeOrigin(value: string | undefined): string | null {
   const trimmed = value?.trim().replace(/\/$/, '')
   if (!trimmed) return null
@@ -259,6 +293,22 @@ export function createAuth(env: CloudflareEnv) {
     basePath: '/api/auth',
     secret: env.BETTER_AUTH_SECRET,
     trustedOrigins: trustedOriginsForAuth(env),
+    // Better Auth reads the session from the database on every getSession call,
+    // and a dashboard render makes several: the route middleware, the capability
+    // check, the SSR context loader and the page's own loader each ask
+    // independently. Measured on a tenant-page editor render: 63 auth queries,
+    // 68 D1 round trips in total.
+    //
+    // This is Better Auth's own answer, from its performance guide: the session
+    // travels in a short-lived signed cookie, so validity is read from the cookie
+    // instead of the database. Documented trade: "revoked sessions may remain
+    // active on other devices until the cookie cache expires (maxAge)."
+    session: {
+      cookieCache: {
+        enabled: true,
+        maxAge: 5 * 60, // Cache duration in seconds
+      },
+    },
     user: {
       // Account deletion is scheduled through /api/user/delete-account and
       // performed by the deletion-sweep task (server/utils/tenant-deletion.ts),
@@ -399,6 +449,14 @@ export function createAuth(env: CloudflareEnv) {
     plugins: [
       lastLoginMethod({ customResolveMethod: ctx => loginMethodForPath(ctx.path) }),
       jwt({
+        // The plugin's default after-hook mints a fresh JWT on every
+        // /get-session — reading the jwks row, decrypting the private key and
+        // signing — purely to return a `set-auth-jwt` response header. Nothing
+        // in this codebase reads that header; MCP and the OAuth provider get
+        // their tokens from /api/auth/token and the oauthProvider plugin, which
+        // are unaffected. Measured on a tenant-page editor render: 9 jwks reads
+        // and 9 signatures for a header no caller consumes.
+        disableSettingJwtHeader: true,
         jwks: {
           keyPairConfig: { alg: OAUTH_SIGNING_POLICY.algorithm },
         },
@@ -431,10 +489,6 @@ export function createAuth(env: CloudflareEnv) {
                  WHERE anonymous_user_id = ?
                )
           `, [newUser.user.id, now, anonymousUser.user.id, anonymousUser.user.id])
-          // U4/U9 (R27, KTD9): sets legal_intake_references.current_authorized_user_id
-          // once, from NULL only — replay-safe and collision-safe, never touches
-          // original_actor_id/kind (original anonymous attribution is preserved).
-          await linkLegalIntakeAuthorizedUser(db, anonymousUser.user.id, newUser.user.id)
         },
       }),
       oauthProvider({
@@ -504,23 +558,12 @@ export function createAuth(env: CloudflareEnv) {
             }, ctx)
           },
         },
+        // The plugin's own /api/auth/stripe/webhook handlers own the
+        // `subscription` table, and Stripe's delivery retries are the retry
+        // mechanism. This hook adds analytics only; a throw here returns a
+        // non-2xx so Stripe redelivers the event.
         onEvent: async (event) => {
-          const queued = await enqueueStripeEvent(db, event)
-          if (!queued || !env.STRIPE_SECRET_KEY) return
-          const authContext = await instance.$context
-          await processStripeEvent(
-            env,
-            db,
-            event,
-            stripeClient,
-            authContext.adapter as unknown as import('~/server/utils/better-auth-stripe').BetterAuthSubscriptionAdapter,
-            loadStripePlans,
-          ).catch((error) => {
-            console.error('stripe_webhook_immediate_processing_failed', {
-              stripeEventId: event.id,
-              error: error instanceof Error ? error.message : String(error),
-            })
-          })
+          await handleStripeGa4Event(env, db, stripeClient, event)
         },
       }),
       admin({

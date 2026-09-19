@@ -1,60 +1,33 @@
 <template>
-  <div class="min-h-screen bg-default text-default">
-    <PlatformHeader />
+  <!-- A chat app, not a page with a chat in it: the shell owns the viewport so
+       the composer sits at the bottom of the screen rather than below the fold. -->
+  <div class="flex h-dvh flex-col bg-default text-default">
+    <PlatformHeader class="shrink-0" />
 
-    <main class="mx-auto max-w-6xl px-4 py-10 sm:px-6 sm:py-14 lg:px-8">
-      <div class="overflow-hidden rounded-[32px] border border-default bg-default shadow-sm">
-        <section class="border-b border-default px-6 py-10 sm:px-10 sm:py-12">
-          <div class="max-w-4xl">
-            <h1 class="text-4xl font-bold tracking-tight text-default sm:text-5xl">KrabiClaw Support</h1>
-            <p class="mt-3 text-3xl font-semibold tracking-tight text-muted sm:text-4xl">How can we help you today?</p>
+    <ClientOnly>
+      <HelpChowBotConversation>
+        <template #intro>
+          <PlatformHelpHero />
+        </template>
+      </HelpChowBotConversation>
 
-            <div class="mt-8 grid gap-4 md:grid-cols-2">
-              <NuxtLink
-                v-for="card in routeCards"
-                :key="card.to"
-                :to="card.to"
-                class="group rounded-3xl border border-default bg-elevated/40 p-6 no-underline transition hover:border-muted hover:bg-elevated"
-              >
-                <div class="flex items-start justify-between gap-4">
-                  <div>
-                    <p class="text-lg font-semibold text-default">{{ card.title }}</p>
-                    <p class="mt-3 text-sm leading-relaxed text-muted">{{ card.description }}</p>
-                  </div>
-                  <svg
-                    viewBox="0 0 20 20"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="1.8"
-                    class="mt-1 size-5 shrink-0 text-muted transition group-hover:text-default"
-                    aria-hidden="true"
-                  >
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M7 13 13 7M8 7h5v5" />
-                  </svg>
-                </div>
-              </NuxtLink>
-            </div>
-
+      <template #fallback>
+        <div class="min-h-0 flex-1 overflow-y-auto">
+          <div class="mx-auto w-full max-w-3xl px-4 sm:px-6">
+            <PlatformHelpHero />
           </div>
-        </section>
-
-        <ClientOnly>
-          <PublicHelpChowBot />
-        </ClientOnly>
-      </div>
-    </main>
-
-    <LazyPlatformFooter />
+        </div>
+      </template>
+    </ClientOnly>
   </div>
 </template>
 
 <script setup lang="ts">
-import PublicHelpChowBot from '~/components/platform/PublicHelpChowBot.vue'
-import { PUBLIC_SUPPORT_FAQ_ENTRIES, PUBLIC_SUPPORT_ROUTE_CARDS } from '~/utils/public-support'
+import HelpChowBotConversation from '~/components/conversation/HelpChowBotConversation.vue'
+import PlatformHelpHero from '~/components/platform/PlatformHelpHero.vue'
+import { PUBLIC_SUPPORT_FAQ_ENTRIES } from '~/utils/public-support'
 
 definePageMeta({ layout: 'standalone' })
-
-const routeCards = PUBLIC_SUPPORT_ROUTE_CARDS
 
 useSocialMetadata({
   template: 'platform',

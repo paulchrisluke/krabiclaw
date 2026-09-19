@@ -10,27 +10,22 @@ import { createLocation } from '~/server/utils/location-management'
 import { purgePublicResourceCacheSafe } from '~/server/utils/public-resource-cache'
 import { executeBatch, queryFirst, type DbClient } from '~/server/db'
 import { parsePhone } from '~/utils/phone'
-import { composePostalAddress } from '~/utils/postal-address'
-import { assertSiteWideAccess } from '~/server/utils/member-access'
+import { postalAddressFromAnswers } from '~/utils/postal-address'
+import { assertSiteWideAccess, memberAccessPrincipal } from '~/server/utils/member-access'
 
 type SetupEnv = Parameters<typeof createLocation>[0]
 
-/**
- * The address the collected parts compose to. The client sends one field per
- * answer and the single line is derived here, so the parts stay the only
- * source — the same composer the onboarding draft uses.
- */
-function detailsAddress(details: Record<string, unknown> | null | undefined, streetIsFormatted: boolean) {
-  const text = (value: unknown) => typeof value === 'string' ? value : ''
-  return composePostalAddress({
+/** The address the collected answers make, the same mapping onboarding uses. */
+function detailsAddress(details: Record<string, unknown> | null | undefined) {
+  const text = (value: unknown) => typeof value === 'string' ? value : null
+  return postalAddressFromAnswers({
     streetAddress: text(details?.streetAddress),
     addressLine2: text(details?.addressLine2),
     city: text(details?.city),
     region: text(details?.region),
     postalCode: text(details?.postalCode),
     country: text(details?.country),
-    streetIsFormatted,
-  }) || null
+  })
 }
 
 
@@ -81,9 +76,7 @@ export default defineHandler(async (event) => {
   const { site, organization } = dashboard
   const siteId = site.id as string
   const organizationId = organization?.id as string
-  await assertSiteWideAccess(db, {
-    env,
-    memberId: organization.memberId, role: organization.role, organizationId, siteId, })
+  await assertSiteWideAccess(db, memberAccessPrincipal(organization, { env, siteId, event }))
 
   const body = await readBody(event) as {
     mapsUrl?: unknown
@@ -116,7 +109,7 @@ export default defineHandler(async (event) => {
 
     const result = await createLocation(
       env as SetupEnv, db, organizationId, siteId, {
-        title: typeof details?.name === 'string' && details.name.trim() ? details.name.trim() : name, slug, city: typeof details?.city === 'string' && details.city.trim() ? details.city.trim() : null, address: detailsAddress(details, false), phone: typeof details?.phone === 'string' && details.phone.trim() ? details.phone.trim() : null, website_url: typeof details?.websiteUrl === 'string' && details.websiteUrl.trim() ? details.websiteUrl.trim() : null, opening_hours: parseOpeningHours(details?.openingHours ?? null), special_hours: parseSpecialHours(details?.specialHours ?? null), notification_phone: notificationPhone.value, timezone: typeof details?.timezone === 'string' && details.timezone.trim() ? details.timezone.trim() : null, }, session.user.id, )
+        title: typeof details?.name === 'string' && details.name.trim() ? details.name.trim() : name, slug, address: detailsAddress(details), phone: typeof details?.phone === 'string' && details.phone.trim() ? details.phone.trim() : null, website_url: typeof details?.websiteUrl === 'string' && details.websiteUrl.trim() ? details.websiteUrl.trim() : null, opening_hours: parseOpeningHours(details?.openingHours ?? null), special_hours: parseSpecialHours(details?.specialHours ?? null), notification_phone: notificationPhone.value, timezone: typeof details?.timezone === 'string' && details.timezone.trim() ? details.timezone.trim() : null, }, session.user.id, )
 
     if (result.status !== 200 && result.status !== 201) {
       return jsonResponse({ error: (result.data as { error?: string }).error ?? 'Could not add location.' }, { status: result.status })
@@ -152,7 +145,7 @@ export default defineHandler(async (event) => {
   if (previewOnly) {
     return jsonResponse({
       success: true, preview: {
-        placeId: place.placeId, name: place.name, address: place.formattedAddress, city: place.city, phone: place.phone, mapsUrl: place.mapsUrl, websiteUrl: place.websiteUrl, rating: place.rating, ratingCount: place.ratingCount, openingHours: place.openingHours, timezone: place.timezone, }, })
+        placeId: place.placeId, name: place.name, address: place.address, phone: place.phone, mapsUrl: place.mapsUrl, websiteUrl: place.websiteUrl, rating: place.rating, ratingCount: place.ratingCount, openingHours: place.openingHours, timezone: place.timezone, }, })
   }
 
   const notificationPhone = normalizeNotificationPhone(details?.notificationPhone)
@@ -167,11 +160,9 @@ export default defineHandler(async (event) => {
     env as SetupEnv, db, organizationId, siteId, {
       title: typeof details?.name === 'string' && details.name.trim() ? details.name.trim() : place.name, slug, phone: typeof details?.phone === 'string' && details.phone.trim()
         ? details.phone.trim()
-        : place.phone ?? null, city: typeof details?.city === 'string' && details.city.trim()
-        ? details.city.trim()
-        : place.city ?? null, maps_url: place.mapsUrl ?? null, google_place_id: place.placeId, website_url: typeof details?.websiteUrl === 'string' && details.websiteUrl.trim()
+        : place.phone ?? null, maps_url: place.mapsUrl ?? null, google_place_id: place.placeId, website_url: typeof details?.websiteUrl === 'string' && details.websiteUrl.trim()
         ? details.websiteUrl.trim()
-        : place.websiteUrl ?? null, address: detailsAddress(details, true), opening_hours: parseOpeningHours(details && 'openingHours' in details ? details.openingHours : place.openingHours), special_hours: parseSpecialHours(details?.specialHours ?? null), rating: place.rating ?? null, review_count: place.ratingCount ?? null, notification_phone: notificationPhone.value, timezone: typeof details?.timezone === 'string' && details.timezone.trim()
+        : place.websiteUrl ?? null, address: detailsAddress(details) ?? place.address, opening_hours: parseOpeningHours(details && 'openingHours' in details ? details.openingHours : place.openingHours), special_hours: parseSpecialHours(details?.specialHours ?? null), rating: place.rating ?? null, review_count: place.ratingCount ?? null, notification_phone: notificationPhone.value, timezone: typeof details?.timezone === 'string' && details.timezone.trim()
         ? details.timezone.trim()
         : place.timezone, }, session.user.id, )
 

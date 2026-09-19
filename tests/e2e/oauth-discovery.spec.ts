@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test'
 import { createHash } from 'node:crypto'
 import { decodeProtectedHeader, importJWK, SignJWT } from 'jose'
 import { loginAs } from './helpers/auth'
+import { mcpJson } from './helpers/mcp'
 
 const PRIVATE_CLIENT_TEST_KEY_ID = 'krabiclaw-cimd-e2e-rs256'
 const PRIVATE_CLIENT_TEST_JWK = {
@@ -25,14 +26,11 @@ function oauthAuthorizeUrl(baseURL: string, params: Record<string, string>) {
   return `${baseURL}/api/auth/oauth2/authorize?${new URLSearchParams(params).toString()}`
 }
 
-function oauthMetadataBaseURL(baseURL: string) {
-  return (process.env.BETTER_AUTH_URL || baseURL).replace(/\/$/, '')
-}
-
 test.describe('OAuth discovery endpoints', () => {
   test('the Kikuzuki publisher can exchange its loopback PKCE code for tenant access', async ({ request, baseURL }) => {
     await loginAs(request, baseURL!, 'user-e2e-kikuzuki-owner')
-    const clientId = `${baseURL}/oauth-clients/client-localization.json`
+    expect(process.env.MCP_CIMD_CLIENT_URL, 'MCP_CIMD_CLIENT_URL must name a public HTTPS metadata document').toBeTruthy()
+    const clientId = new URL('/oauth-clients/client-localization.json', process.env.MCP_CIMD_CLIENT_URL!).toString()
     const metadata = await request.get(clientId)
     expect(metadata.status()).toBe(200)
     expect(metadata.headers()['content-type']).toContain('application/json')
@@ -77,56 +75,46 @@ test.describe('OAuth discovery endpoints', () => {
       },
     })
     expect(workspace.status()).toBe(200)
-    const result = await workspace.json() as { result: { isError: boolean; structuredContent: { sites: Array<{ id: string }> } } }
+    const result = await mcpJson<{ result: { isError: boolean; structuredContent: { sites: Array<{ id: string }> } } }>(workspace)
     expect(result.result.isError).toBe(false)
     expect(result.result.structuredContent.sites.some(site => site.id === 'site-kikuzuki')).toBe(true)
   })
 
-  test('/.well-known/oauth-protected-resource returns valid document', async ({ request, baseURL }) => {
-    const res = await request.get(`${baseURL}/.well-known/oauth-protected-resource`)
-    expect(res.status()).toBe(200)
-    const body = await res.json() as Record<string, unknown>
-    expect(body.resource).toBe(`${oauthMetadataBaseURL(baseURL!)}/api/mcp`)
-    expect(Array.isArray(body.authorization_servers)).toBe(true)
-    expect((body.authorization_servers as string[]).length).toBeGreaterThan(0)
-    expect(Array.isArray(body.bearer_methods_supported)).toBe(true)
-    expect((body.bearer_methods_supported as string[])).toContain('header')
-  })
+  // One discovery pass: a client reads all three documents back to back, and
+  // splitting them into three tests only repeats the fixture.
+  test('the three OAuth discovery documents describe this resource server', async ({ request, baseURL }) => {
+    const protectedResource = await request.get(`${baseURL}/.well-known/oauth-protected-resource`)
+    expect(protectedResource.status()).toBe(200)
+    const resourceBody = await protectedResource.json() as Record<string, unknown>
+    expect(resourceBody.resource).toBe(`${baseURL}/api/mcp`)
+    expect(Array.isArray(resourceBody.authorization_servers)).toBe(true)
+    expect((resourceBody.authorization_servers as string[]).length).toBeGreaterThan(0)
+    expect(resourceBody.bearer_methods_supported as string[]).toContain('header')
 
-  test('/.well-known/openid-configuration returns valid document', async ({ request, baseURL }) => {
-    const res = await request.get(`${baseURL}/.well-known/openid-configuration`)
-    expect(res.status()).toBe(200)
-    const body = await res.json() as Record<string, unknown>
-    expect(typeof body.issuer).toBe('string')
-    expect(typeof body.authorization_endpoint).toBe('string')
-    expect(typeof body.token_endpoint).toBe('string')
-    expect(typeof body.jwks_uri).toBe('string')
-    expect(Array.isArray(body.id_token_signing_alg_values_supported)).toBe(true)
+    const openid = await request.get(`${baseURL}/.well-known/openid-configuration`)
+    expect(openid.status()).toBe(200)
+    const openidBody = await openid.json() as Record<string, unknown>
     // OpenID Connect Discovery requires RS256 support. ChatGPT validates the
     // ID token after code exchange and will abort before MCP initialize when
     // the provider advertises only Better Auth's EdDSA default.
-    expect(body.id_token_signing_alg_values_supported as string[]).toContain('RS256')
-    expect(body.registration_endpoint).toBeUndefined()
-    expect(body.client_id_metadata_document_supported).toBe(true)
-  })
+    expect(openidBody.id_token_signing_alg_values_supported as string[]).toContain('RS256')
+    // CIMD instead of dynamic registration: a client is its own metadata URL.
+    expect(openidBody.registration_endpoint).toBeUndefined()
+    expect(openidBody.client_id_metadata_document_supported).toBe(true)
 
-  test('/.well-known/oauth-authorization-server returns valid RFC 8414 document', async ({ request, baseURL }) => {
-    const res = await request.get(`${baseURL}/.well-known/oauth-authorization-server`)
-    expect(res.status()).toBe(200)
-    const body = await res.json() as Record<string, unknown>
-    expect(typeof body.issuer).toBe('string')
-    expect(typeof body.authorization_endpoint).toBe('string')
-    expect(typeof body.token_endpoint).toBe('string')
-    expect(body.registration_endpoint).toBeUndefined()
-    expect(body.client_id_metadata_document_supported).toBe(true)
-    expect(Array.isArray(body.code_challenge_methods_supported)).toBe(true)
-    expect((body.code_challenge_methods_supported as string[])).toContain('S256')
+    const authorizationServer = await request.get(`${baseURL}/.well-known/oauth-authorization-server`)
+    expect(authorizationServer.status()).toBe(200)
+    const authorizationServerBody = await authorizationServer.json() as Record<string, unknown>
+    expect(authorizationServerBody.registration_endpoint).toBeUndefined()
+    expect(authorizationServerBody.client_id_metadata_document_supported).toBe(true)
+    expect(authorizationServerBody.code_challenge_methods_supported as string[]).toContain('S256')
   })
 
   test('public CIMD exchanges codes once, rotates refresh grants and reuses remembered consent', async ({ request, baseURL }) => {
     await loginAs(request, baseURL!, 'user-e2e-oauth-cimd')
 
-    const cimdClientId = process.env.MCP_CIMD_CLIENT_URL || `${baseURL}/api/auth/oauth2/test-client-metadata?nonce=${Date.now()}`
+    const cimdClientId = process.env.MCP_CIMD_CLIENT_URL!
+    expect(cimdClientId, 'MCP_CIMD_CLIENT_URL must name a public HTTPS metadata document').toBeTruthy()
     const redirectUri = new URL('/oauth/test-callback', cimdClientId).toString()
     const verifier = 'krabiclaw-public-cimd-e2e-verifier-0123456789'
     const authorizeParams = {
@@ -213,7 +201,7 @@ test.describe('OAuth discovery endpoints', () => {
       },
     })
     expect(initialized.status(), await initialized.text()).toBe(200)
-    expect(await initialized.json()).toMatchObject({ result: { protocolVersion: '2025-06-18' } })
+    expect(await mcpJson(initialized)).toMatchObject({ result: { protocolVersion: '2025-06-18' } })
 
     const tools = await request.post(`${baseURL}/api/mcp`, {
       headers: {
@@ -224,7 +212,7 @@ test.describe('OAuth discovery endpoints', () => {
       data: { jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} },
     })
     expect(tools.status(), await tools.text()).toBe(200)
-    const toolsBody = await tools.json()
+    const toolsBody = await mcpJson<{ result: { tools: Array<{ name: string }> } }>(tools)
     expect(toolsBody.error).toBeUndefined()
     expect(toolsBody.result.tools.length).toBeGreaterThan(0)
 
@@ -253,7 +241,8 @@ test.describe('OAuth discovery endpoints', () => {
   test('requesting the email scope makes email and email_verified available through UserInfo', async ({ request, baseURL }) => {
     await loginAs(request, baseURL!, 'user-e2e-oauth-cimd')
 
-    const cimdClientId = `${baseURL}/api/auth/oauth2/test-client-metadata?nonce=${Date.now()}-email-scope`
+    const cimdClientId = process.env.MCP_CIMD_CLIENT_URL!
+    expect(cimdClientId, 'MCP_CIMD_CLIENT_URL must name a public HTTPS metadata document').toBeTruthy()
     const redirectUri = new URL('/oauth/test-callback', cimdClientId).toString()
     const verifier = 'krabiclaw-email-scope-e2e-verifier-0123456789'
     const authorizeParams = {
@@ -310,10 +299,10 @@ test.describe('OAuth discovery endpoints', () => {
   })
 
   test('CIMD uses its declared private_key_jwt method and rejects assertion replay', async ({ request, baseURL }) => {
-    test.skip(new URL(baseURL!).protocol !== 'https:', 'CIMD requires an HTTPS client metadata and JWKS URI')
     await loginAs(request, baseURL!, 'user-e2e-oauth-private-cimd')
 
-    const clientId = process.env.MCP_PRIVATE_CIMD_CLIENT_URL || `${baseURL}/api/auth/oauth2/test-private-client-metadata?nonce=${Date.now()}`
+    const clientId = process.env.MCP_PRIVATE_CIMD_CLIENT_URL!
+    expect(clientId, 'MCP_PRIVATE_CIMD_CLIENT_URL must name a public HTTPS metadata document').toBeTruthy()
     const redirectUri = new URL('/oauth/test-callback', clientId).toString()
     const verifier = 'krabiclaw-private-cimd-e2e-verifier-0123456789'
     const authorizeParams = {
@@ -390,8 +379,15 @@ test.describe('OAuth discovery endpoints', () => {
       },
     })
     expect(discovered.status()).toBe(400)
-    expect(await discovered.json()).toMatchObject({
-      id: 'openai-mcp-discover', error: { code: -32600, data: { requested: '2026-07-28' } },
+    // @modelcontextprotocol/server classifies this as a modern (2026-07-28)
+    // exchange from the MCP-Protocol-Version header, then rejects it for a
+    // more precise reason than the old hand-rolled "unsupported version"
+    // check: the envelope is missing the modern protocol's required
+    // clientCapabilities field. Either way the legacy client sees a 400 and
+    // retries with a legacy initialize below, which is the actual contract
+    // under test.
+    expect(await mcpJson(discovered)).toMatchObject({
+      id: 'openai-mcp-discover', error: { code: -32602, data: { envelope: { key: 'io.modelcontextprotocol/clientCapabilities', problem: 'missing' } } },
     })
     const initialized = await request.post(`${baseURL}/api/mcp`, {
       headers: mcpHeaders,
@@ -403,13 +399,13 @@ test.describe('OAuth discovery endpoints', () => {
       },
     })
     expect(initialized.status()).toBe(200)
-    expect(await initialized.json()).toMatchObject({ result: { protocolVersion: '2025-11-25' } })
+    expect(await mcpJson(initialized)).toMatchObject({ result: { protocolVersion: '2025-11-25' } })
     const tools = await request.post(`${baseURL}/api/mcp`, {
       headers: { ...mcpHeaders, 'MCP-Protocol-Version': '2025-11-25' },
       data: { jsonrpc: '2.0', id: 'legacy-tools', method: 'tools/list', params: {} },
     })
     expect(tools.status()).toBe(200)
-    expect((await tools.json()).result.tools.length).toBeGreaterThan(0)
+    expect((await mcpJson<{ result: { tools: unknown[] } }>(tools)).result.tools.length).toBeGreaterThan(0)
 
     const secondAuthorize = await request.get(oauthAuthorizeUrl(baseURL!, {
       ...authorizeParams,

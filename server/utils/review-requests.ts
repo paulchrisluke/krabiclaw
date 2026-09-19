@@ -33,6 +33,8 @@ export interface ReviewBookingContext {
   organization_id: string
   site_id: string
   location_id: string | null
+  /** The product a booking was for; a reservation has none. */
+  product_id: string | null
   customer_id: string | null
   customer_name: string | null
   customer_email: string | null
@@ -74,10 +76,6 @@ export function addDays(iso: string, days: number): string {
   return isoFromMs(new Date(iso).getTime() + days * 86_400_000)
 }
 
-export async function hasReviewRequestsEntitlement(db: DbClient, siteId: string): Promise<boolean> {
-  return await hasSiteEntitlement(db, siteId, 'review_requests')
-}
-
 export function createReviewRequestToken(): string {
   const bytes = new Uint8Array(32)
   crypto.getRandomValues(bytes)
@@ -114,15 +112,15 @@ export async function getReviewBookingContext(
     json_extract(r.payload_json, '$.review.submitted_at') AS review_submitted_at, r.review_id,
     s.brand_name AS site_name, (SELECT 'https://' || domain FROM site_domains WHERE site_id = s.id AND role = 'canonical' AND status = 'active') AS site_public_url,
     s.subdomain AS site_subdomain, bl.slug AS location_slug, bl.title AS location_title, bl.google_place_id, bl.google_review_url,
-    record.starts_at AS visit_starts_at, record.timezone AS visit_timezone, record.party_size
+    record.starts_at AS visit_starts_at, record.timezone AS visit_timezone, record.party_size, record.product_id
     FROM requests r JOIN sites s ON s.id = r.site_id LEFT JOIN customers c ON c.id = r.customer_id LEFT JOIN business_locations bl ON bl.id = r.location_id
     -- The visit itself lives on the operational record, never on the thread. A
     -- review request only exists once that record reached 'completed', so this
     -- join is total: same UNION shape the automation sweep uses.
     JOIN (
-      SELECT b.request_id, b.status, ps.timezone, ps.starts_at, b.party_size FROM bookings b JOIN product_sessions ps ON ps.id = b.product_session_id
+      SELECT b.request_id, b.status, ps.timezone, ps.starts_at, b.party_size, ps.product_id FROM bookings b JOIN product_sessions ps ON ps.id = b.product_session_id
       UNION ALL
-      SELECT res.request_id, res.status, res.timezone, res.starts_at, res.party_size FROM reservations res
+      SELECT res.request_id, res.status, res.timezone, res.starts_at, res.party_size, NULL AS product_id FROM reservations res
     ) record ON record.request_id = r.id
     WHERE r.id = ? AND r.kind = ?`, [bookingId, bookingType])
 }
@@ -162,6 +160,7 @@ export async function getReviewRequestByToken(
 }
 
 export async function createOrRotateReviewRequest(
+  env: CloudflareEnv,
   db: DbClient,
   context: ReviewBookingContext,
   now = new Date().toISOString(),
@@ -172,7 +171,7 @@ export async function createOrRotateReviewRequest(
   if (context.review_submitted_at || context.review_id) throw new Error('Booking already has a submitted review')
   if (context.customer_opted_out_at) throw new Error('Customer has opted out of review requests')
 
-  const entitled = await hasReviewRequestsEntitlement(db, context.site_id)
+  const entitled = await hasSiteEntitlement(env, db, context.site_id, 'review_requests')
   if (!entitled) throw new Error('Review requests are not enabled for this site')
 
   const token = createReviewRequestToken()

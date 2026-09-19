@@ -2,10 +2,52 @@
   <article
     data-tenant-page
     :data-template="template"
-    class="mx-auto max-w-7xl px-4 py-16 text-default sm:px-6 lg:px-8"
+    class="text-default"
+    :class="readingColumn ? 'py-16' : undefined"
   >
-    <section v-for="block in page.blocks" :key="block.id" :data-block-type="block.type" :data-parity-section="sectionKey(block)" class="tenant-page-block">
-      <template v-if="block.type === 'hero'">
+    <!--
+      A template's own component names its band; the wrapper only names one for
+      the markup below, or both would appear on the same section.
+    -->
+    <section v-for="block in renderedBlocks" :key="block.id" :data-block-type="block.type" :data-parity-section="presentationOf(block) ? undefined : sectionKey(block)"
+      class="tenant-page-block"
+      :class="!presentationOf(block) && template === 'saya' ? 'mx-auto max-w-7xl px-4 sm:px-6 lg:px-8' : undefined"
+    >
+      <!--
+        A template that draws this block its own way draws it; otherwise the
+        markup below is the presentation. See utils/tenant-page-presentation.ts.
+      -->
+      <component :is="presentationOf(block)" v-if="presentationOf(block)" :block="block" :page="page" />
+      <!--
+        A picture and the words beside it. It is one block; it used to be three
+        (`story.title`, `story.image`, `story.body`) that this renderer
+        re-assembled at display time, in the alphabetical order of the field
+        names the migration wrote.
+      -->
+      <template v-else-if="block.type === 'media_text'">
+        <div class="my-16 grid max-w-5xl gap-10 md:grid-cols-2 md:items-center">
+          <video
+            v-if="blockMedia(block, 'media')?.kind === 'video'"
+            :src="blockMedia(block, 'media')!.public_url!"
+            :poster="blockMedia(block, 'media')!.thumbnail_url ?? undefined"
+            autoplay muted loop playsinline
+            class="aspect-4/3 w-full object-cover"
+          />
+          <img
+            v-else-if="blockMedia(block, 'media')"
+            :src="blockMedia(block, 'media')!.public_url!"
+            :alt="blockMedia(block, 'media')!.alt_text ?? ''"
+            class="aspect-4/3 w-full object-cover"
+          >
+          <div>
+            <h2 v-if="text(block.data.title)" class="text-3xl font-semibold tracking-tight">{{ text(block.data.title) }}</h2>
+            <p v-if="text(block.data.body)" class="mt-6 whitespace-pre-line leading-8 text-muted">{{ text(block.data.body) }}</p>
+            <TenantPageButton v-if="text(block.data.label) && text(block.data.url)" class="mt-8" :label="text(block.data.label)" :url="text(block.data.url)" />
+          </div>
+        </div>
+      </template>
+
+      <template v-else-if="block.type === 'hero'">
         <div class="py-12 sm:py-20">
           <p v-if="text(block.data.eyebrow)" class="mb-4 text-xs font-semibold uppercase tracking-[0.2em] text-primary">{{ text(block.data.eyebrow) }}</p>
           <h1 v-if="text(block.data.title)" class="text-4xl font-bold tracking-tight sm:text-6xl">{{ text(block.data.title) }}</h1>
@@ -24,7 +66,7 @@
         </div>
       </template>
 
-      <TenantPageRichTextBlock v-else-if="block.type === 'heading' || block.type === 'markdown'" :block="block" :page-title="page.title" />
+      <TenantPageRichTextBlock v-else-if="block.type === 'heading' || block.type === 'markdown'" :block="block" />
 
       <template v-else-if="block.type === 'image'">
         <figure v-if="blockMedia(block, 'media')" class="my-12">
@@ -172,10 +214,37 @@
 <script setup lang="ts">
 import type { PublicTenantPage } from '~/server/utils/public-tenant-pages'
 import type { TenantPageBlock } from '~/utils/tenant-page-blocks'
+import type { Component } from 'vue'
+import type { PublicTemplateSlug } from '~/utils/template-registry'
+import { tenantPageBlockPresentation } from '~/utils/tenant-page-presentation'
+import { resolveSocialImageUrl } from '~/utils/social-metadata'
 
-defineProps<{ page: PublicTenantPage; template: 'saya' | 'platform' }>()
+const props = withDefaults(defineProps<{ page: PublicTenantPage; template?: PublicTemplateSlug }>(), {
+  template: undefined,
+})
+
+/**
+ * Which template's presentations apply. The prop wins so a route may render a
+ * page for a template other than the host's — pages/contact/index.vue renders a
+ * Saya section on a Blawby host — and the resolved template is the default.
+ */
+const { template: resolvedTemplate } = usePublicTemplate()
+const template = computed<PublicTemplateSlug>(() => props.template ?? resolvedTemplate.value.slug)
+
+function presentationOf(block: TenantPageBlock): Component | null {
+  return tenantPageBlockPresentation(template.value, block.type)
+}
 const sanitizer = useHtmlSanitizer()
 const { t } = useI18n()
+/** The page's blocks, in the order the page carries them. */
+const renderedBlocks = computed(() => props.page.blocks)
+
+/**
+ * A page this renderer draws by itself reads as one column of prose and needs
+ * the space around it. A page whose template draws bands does not: each band
+ * carries its own, and the outer padding left a gap above the first one.
+ */
+const readingColumn = computed(() => template.value === 'saya' && !renderedBlocks.value.some(presentationOf))
 
 type GridItem = { id?: string; title?: string; description?: string; value?: string; media?: Array<{ slot?: string; public_url?: string | null; thumbnail_url?: string | null; alt_text?: string | null; kind?: string | null }>; label?: string; labelKey?: string; url?: string; amount?: string }
 
@@ -187,8 +256,13 @@ function sanitize(value: string): string {
   return sanitizer.sanitize(value)
 }
 
-function sectionKey(block: TenantPageBlock): string | undefined {
-  return text(block.data.section) || undefined
+/**
+ * The name this band carries for tests and parity checks: the block's type.
+ * It used to read `data.section`, so a band was named by a key the document
+ * held only because two hand-written renderers needed it to tell blocks apart.
+ */
+function sectionKey(block: TenantPageBlock): string {
+  return block.type
 }
 
 function galleryImages(block: TenantPageBlock): Array<{ id?: string; url: string; alt?: string; caption?: string; kind?: string | null; thumbnailUrl?: string | null }> {
@@ -251,7 +325,7 @@ function itemLabel(item: GridItem): string {
 function gridItemImage(item: GridItem): { url: string; alt: string } | null {
   const asset = (item.media ?? [])[0]
   if (!asset) return null
-  const url = asset.kind === 'video' ? asset.thumbnail_url : asset.public_url
+  const url = resolveSocialImageUrl(asset)
   return url ? { url, alt: asset.alt_text ?? '' } : null
 }
 

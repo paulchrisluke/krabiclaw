@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "261a06e6-d00c-4c23-ae66-ef2821e424c6",
+  "id": "5473e9e7-06a1-4e14-a81c-7b9828d26425",
   "prevId": "61ba5912-f99b-42cb-ad24-54de0e844c2b",
   "tables": {
     "account": {
@@ -1183,20 +1183,6 @@
           "notNull": false,
           "autoincrement": false
         },
-        "city": {
-          "name": "city",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "neighborhood": {
-          "name": "neighborhood",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
         "phone": {
           "name": "phone",
           "type": "text",
@@ -1546,7 +1532,7 @@
         },
         "business_locations_address_check": {
           "name": "business_locations_address_check",
-          "value": "address IS NULL OR (json_valid(address) AND json_type(address) IS 'object')"
+          "value": "address IS NULL OR (json_valid(address) AND json_type(address) IS 'object' AND json_type(address, '$.regionCode') IS 'text' AND trim(address ->> '$.regionCode') <> '' AND json_type(address, '$.addressLines') IS 'array' AND json_array_length(address, '$.addressLines') > 0 AND (json_type(address, '$.languageCode') IS NULL OR json_type(address, '$.languageCode') IS 'text') AND (json_type(address, '$.locality') IS NULL OR json_type(address, '$.locality') IS 'text') AND (json_type(address, '$.sublocality') IS NULL OR json_type(address, '$.sublocality') IS 'text') AND (json_type(address, '$.administrativeArea') IS NULL OR json_type(address, '$.administrativeArea') IS 'text') AND (json_type(address, '$.postalCode') IS NULL OR json_type(address, '$.postalCode') IS 'text'))"
         },
         "business_locations_categories_check": {
           "name": "business_locations_categories_check",
@@ -3462,219 +3448,6 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "checkConstraints": {}
-    },
-    "legal_intake_references": {
-      "name": "legal_intake_references",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "organization_id": {
-          "name": "organization_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "site_id": {
-          "name": "site_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "original_actor_id": {
-          "name": "original_actor_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "original_actor_kind": {
-          "name": "original_actor_kind",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "current_authorized_user_id": {
-          "name": "current_authorized_user_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "payload_digest": {
-          "name": "payload_digest",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "digest_key_id": {
-          "name": "digest_key_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "digest_version": {
-          "name": "digest_version",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "blawby_intake_id": {
-          "name": "blawby_intake_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "checkout_session_id": {
-          "name": "checkout_session_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
-        }
-      },
-      "indexes": {
-        "legal_intake_references_blawby_intake_id_unique": {
-          "name": "legal_intake_references_blawby_intake_id_unique",
-          "columns": [
-            "blawby_intake_id"
-          ],
-          "isUnique": true
-        },
-        "legal_intake_references_checkout_session_id_unique": {
-          "name": "legal_intake_references_checkout_session_id_unique",
-          "columns": [
-            "checkout_session_id"
-          ],
-          "isUnique": true
-        },
-        "idx_legal_intake_references_site_actor": {
-          "name": "idx_legal_intake_references_site_actor",
-          "columns": [
-            "site_id",
-            "original_actor_id"
-          ],
-          "isUnique": false
-        },
-        "legal_intake_references_organization_id_idx": {
-          "name": "legal_intake_references_organization_id_idx",
-          "columns": [
-            "organization_id"
-          ],
-          "isUnique": false
-        },
-        "idx_legal_intake_references_actor": {
-          "name": "idx_legal_intake_references_actor",
-          "columns": [
-            "original_actor_id"
-          ],
-          "isUnique": false
-        }
-      },
-      "foreignKeys": {
-        "legal_intake_references_organization_id_organization_id_fk": {
-          "name": "legal_intake_references_organization_id_organization_id_fk",
-          "tableFrom": "legal_intake_references",
-          "tableTo": "organization",
-          "columnsFrom": [
-            "organization_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "restrict",
-          "onUpdate": "no action"
-        },
-        "legal_intake_references_site_id_sites_id_fk": {
-          "name": "legal_intake_references_site_id_sites_id_fk",
-          "tableFrom": "legal_intake_references",
-          "tableTo": "sites",
-          "columnsFrom": [
-            "site_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "restrict",
-          "onUpdate": "no action"
-        },
-        "legal_intake_references_original_actor_id_user_id_fk": {
-          "name": "legal_intake_references_original_actor_id_user_id_fk",
-          "tableFrom": "legal_intake_references",
-          "tableTo": "user",
-          "columnsFrom": [
-            "original_actor_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "restrict",
-          "onUpdate": "no action"
-        },
-        "legal_intake_references_current_authorized_user_id_user_id_fk": {
-          "name": "legal_intake_references_current_authorized_user_id_user_id_fk",
-          "tableFrom": "legal_intake_references",
-          "tableTo": "user",
-          "columnsFrom": [
-            "current_authorized_user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        },
-        "legal_intake_references_site_scope_fk": {
-          "name": "legal_intake_references_site_scope_fk",
-          "tableFrom": "legal_intake_references",
-          "tableTo": "sites",
-          "columnsFrom": [
-            "organization_id",
-            "site_id"
-          ],
-          "columnsTo": [
-            "organization_id",
-            "id"
-          ],
-          "onDelete": "restrict",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {
-        "legal_intake_references_actor_kind_check": {
-          "name": "legal_intake_references_actor_kind_check",
-          "value": "original_actor_kind IN ('human', 'anonymous')"
-        }
-      }
     },
     "location_reservation_configs": {
       "name": "location_reservation_configs",
@@ -10564,6 +10337,15 @@
         }
       },
       "indexes": {
+        "site_locales_secondary_published_unique": {
+          "name": "site_locales_secondary_published_unique",
+          "columns": [
+            "organization_id",
+            "site_id"
+          ],
+          "isUnique": true,
+          "where": "is_source = 0 AND status = 'published'"
+        },
         "idx_site_locales_one_source_per_site": {
           "name": "idx_site_locales_one_source_per_site",
           "columns": [
@@ -11370,6 +11152,170 @@
         }
       }
     },
+    "stripe_connected_accounts": {
+      "name": "stripe_connected_accounts",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "stripe_account_id": {
+          "name": "stripe_account_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "country": {
+          "name": "country",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "livemode": {
+          "name": "livemode",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'creating'"
+        },
+        "card_payments_status": {
+          "name": "card_payments_status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "requirements_json": {
+          "name": "requirements_json",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'[]'"
+        },
+        "stripe_refreshed_at": {
+          "name": "stripe_refreshed_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "last_error": {
+          "name": "last_error",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
+        }
+      },
+      "indexes": {
+        "stripe_connected_accounts_stripe_account_id_unique": {
+          "name": "stripe_connected_accounts_stripe_account_id_unique",
+          "columns": [
+            "stripe_account_id"
+          ],
+          "isUnique": true
+        },
+        "stripe_connected_accounts_status_idx": {
+          "name": "stripe_connected_accounts_status_idx",
+          "columns": [
+            "status",
+            "updated_at"
+          ],
+          "isUnique": false
+        },
+        "stripe_connected_accounts_org_unique": {
+          "name": "stripe_connected_accounts_org_unique",
+          "columns": [
+            "organization_id"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "stripe_connected_accounts_organization_id_organization_id_fk": {
+          "name": "stripe_connected_accounts_organization_id_organization_id_fk",
+          "tableFrom": "stripe_connected_accounts",
+          "tableTo": "organization",
+          "columnsFrom": [
+            "organization_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "stripe_connected_accounts_country_check": {
+          "name": "stripe_connected_accounts_country_check",
+          "value": "length(country) = 2 AND country = upper(country) AND country NOT GLOB '*[^A-Z]*'"
+        },
+        "stripe_connected_accounts_livemode_check": {
+          "name": "stripe_connected_accounts_livemode_check",
+          "value": "livemode IN (0, 1)"
+        },
+        "stripe_connected_accounts_status_check": {
+          "name": "stripe_connected_accounts_status_check",
+          "value": "status IN ('creating', 'creation_failed', 'action_required', 'pending_review', 'restricted', 'ready')"
+        },
+        "stripe_connected_accounts_capability_check": {
+          "name": "stripe_connected_accounts_capability_check",
+          "value": "card_payments_status IS NULL OR card_payments_status IN ('active', 'pending', 'restricted', 'unsupported')"
+        },
+        "stripe_connected_accounts_requirements_check": {
+          "name": "stripe_connected_accounts_requirements_check",
+          "value": "json_valid(requirements_json) AND json_type(requirements_json) = 'array'"
+        },
+        "stripe_connected_accounts_identity_check": {
+          "name": "stripe_connected_accounts_identity_check",
+          "value": "(stripe_account_id IS NULL AND status IN ('creating', 'creation_failed')) OR (trim(stripe_account_id) <> '' AND status IN ('action_required', 'pending_review', 'restricted', 'ready'))"
+        },
+        "stripe_connected_accounts_instants_check": {
+          "name": "stripe_connected_accounts_instants_check",
+          "value": "(stripe_refreshed_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', stripe_refreshed_at, '+0 days') IS stripe_refreshed_at) AND (created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)"
+        }
+      }
+    },
     "stripe_ga4_subscription_intents": {
       "name": "stripe_ga4_subscription_intents",
       "columns": {
@@ -11833,6 +11779,14 @@
           "notNull": false,
           "autoincrement": false
         },
+        "processor": {
+          "name": "processor",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'platform_billing'"
+        },
         "status": {
           "name": "status",
           "type": "text",
@@ -11919,7 +11873,8 @@
           "name": "stripe_webhook_events_retry_idx",
           "columns": [
             "status",
-            "next_attempt_at"
+            "next_attempt_at",
+            "processor"
           ],
           "isUnique": false
         }

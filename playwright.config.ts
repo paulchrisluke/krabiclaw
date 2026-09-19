@@ -2,6 +2,16 @@ import { randomBytes } from 'node:crypto'
 import { Buffer } from 'node:buffer'
 import { defineConfig, devices } from '@playwright/test'
 
+// A local run gets its secrets the way every other local command does. CI sets
+// them in the real environment and ships no .env, where this is a no-op — but
+// only a missing file is expected. An unreadable or malformed one is a broken
+// setup and has to say so rather than silently running without its secrets.
+try {
+  process.loadEnvFile()
+} catch (error) {
+  if ((error as NodeJS.ErrnoException)?.code !== 'ENOENT') throw error
+}
+
 const previewUrl = process.env.PLAYWRIGHT_PREVIEW_URL
 const port = Number(process.env.PLAYWRIGHT_PORT ?? 3000)
 const baseURL = previewUrl || `http://localhost:${port}`
@@ -9,7 +19,25 @@ const localPrepared = process.env.PLAYWRIGHT_LOCAL_PREPARED === 'true'
 const captureServerLogs = process.env.PLAYWRIGHT_SERVER_LOGS === 'true' || !!process.env.CI
 const localDevRouteSecret = previewUrl ? '' : 'local-playwright-dev-route-secret'
 const shellQuote = (value: string) => `'${value.replaceAll("'", `'\\''`)}'`
-const optionalWorkerVars = ['CF_ACCOUNT_ID', 'CLOUDFLARE_IMAGES_API_TOKEN', 'CLOUDFLARE_IMAGES_VARIANT_BASE']
+/**
+ * Secrets the local Worker needs from the environment.
+ *
+ * `wrangler dev` reads none of the process environment, so anything the Worker
+ * requires has to be handed over as a --var. Better Auth refuses to construct
+ * without STRIPE_SECRET_KEY, which is why a suite that signs anyone in cannot
+ * run against a Worker started without it.
+ */
+const forwardedWorkerVars = [
+  'STRIPE_SECRET_KEY',
+  'STRIPE_WEBHOOK_SECRET',
+  'BETTER_AUTH_SECRET',
+  'CONNECTOR_TOKEN_ENCRYPTION_KEY',
+  'PREVIEW_SECRET',
+  'CF_ACCOUNT_ID',
+  'CLOUDFLARE_IMAGES_API_TOKEN',
+  'CLOUDFLARE_IMAGES_VARIANT_BASE',
+]
+const optionalWorkerVars = forwardedWorkerVars
   .flatMap(name => process.env[name] ? ['--var', `${name}:${shellQuote(process.env[name]!)}`] : [])
 
 if (!previewUrl && !process.env.E2E_TEST_PASSWORD) {
@@ -84,7 +112,13 @@ export default defineConfig({
     command: localPrepared
       ? localWorkerCommand
       : `${localWorkerEnvironment} corepack yarn e2e:local:prepare && ${localWorkerCommand}`,
-    url: `http://localhost:${port}/`,
+    // Not `/`. On the platform host that is a tenant page, and a `db:pull:local`
+    // snapshot carries no page documents for the platform site, so `/` answers
+    // 404 and the suite never starts — which is how a test broken by #1001 sat
+    // failing while only the @smoke subset ran in CI. /api/health needs no
+    // content and no session, and pings D1, so readiness means the Worker and
+    // its binding are both up.
+    url: `http://localhost:${port}/api/health`,
     reuseExistingServer: false,
     timeout: localPrepared ? 180_000 : 600_000,
     stdout: captureServerLogs ? 'pipe' : 'ignore',

@@ -18,6 +18,7 @@
              so selection is reported up rather than written in place here. -->
         <MediaPicker
           :model-value="item.asset_id"
+          :selected-summary="summaryFor(item)"
           :site-id="siteId"
           accept="any"
           title="Select media"
@@ -60,6 +61,8 @@
 <script setup lang="ts">
 import MediaPicker from '~/lib/components/workspace/media/MediaPicker.vue'
 
+import type { MediaSummary } from '~/lib/components/workspace/media/MediaPicker.vue'
+
 export interface GalleryMediaItem {
   _key: string
   asset_id: string | null
@@ -74,6 +77,22 @@ withDefaults(defineProps<{
   /** Marks the first row as the cover, for galleries whose order sets it. */
   coverFirst?: boolean
 }>(), { coverFirst: true })
+
+/**
+ * What this row already knows about its asset. The gallery is handed its rows
+ * with their URLs, so a populated picker has no reason to ask the server for
+ * metadata the parent is already holding — an N-image gallery used to open N
+ * requests on mount. `url` is this list's name for the asset's public URL.
+ */
+function summaryFor(item: GalleryMediaItem): MediaSummary | null {
+  if (!item.asset_id) return null
+  return {
+    asset_id: item.asset_id,
+    public_url: item.url ?? null,
+    thumbnail_url: item.thumbnail_url ?? null,
+    kind: item.kind ?? null,
+  }
+}
 
 const emit = defineEmits<{
   add: []

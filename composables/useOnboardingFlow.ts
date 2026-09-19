@@ -1,4 +1,5 @@
-import type { CurrencyCode } from '~/shared/currencies'
+import { currencyForCountry, type CurrencyCode } from '~/shared/currencies'
+import type { PostalAddress } from '~/utils/postal-address'
 import type { OpeningHours, SpecialHours } from '~/shared/reservation-hours'
 import type { SiteVertical } from '~/utils/vertical-copy'
 import type { DraftBrandForm } from '~/lib/components/workspace/onboarding/DraftBrandCard.vue'
@@ -6,7 +7,7 @@ import type { DraftBrandForm } from '~/lib/components/workspace/onboarding/Draft
 export type OnboardingStepId =
   | 'type' | 'name' | 'source' | 'maps' | 'confirm'
   | 'location' | 'contact' | 'hours'
-  | 'products' | 'look'
+  | 'currency' | 'products' | 'look'
   | 'review'
 
 export type OnboardingSectionId = 'business' | 'place' | 'offer' | 'review'
@@ -28,8 +29,7 @@ export interface OnboardingProductDraft {
 export interface OnboardingPlacePreview {
   placeId: string
   name: string
-  address: string
-  city?: string | null
+  address: PostalAddress | null
   phone?: string | null
   mapsUrl?: string | null
   timezone?: string | null
@@ -57,7 +57,8 @@ export interface OnboardingFlowState {
     postalCode: string
     country: string
     phone: string
-    currency: CurrencyCode
+    /** null until the currency step is answered. Never seeded with a product default. */
+    currency: CurrencyCode | null
   }
   hours: { timezone: string; hours: OpeningHours; specialHours: SpecialHours }
   brand: DraftBrandForm
@@ -149,7 +150,11 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
   {
     id: 'location', section: 'place', flows: ['new-site', 'add-location'],
     title: () => 'Where should guests find you?',
-    complete: state => state.details.streetAddress.trim().length > 0 && state.details.city.trim().length > 0,
+    // The country is part of the address, and it is what the currency step and
+    // the timezone are both derived from, so this step is not done without it.
+    complete: state => state.details.streetAddress.trim().length > 0
+      && state.details.city.trim().length > 0
+      && state.details.country.trim().length > 0,
   },
   {
     id: 'contact', section: 'place', flows: ['new-site', 'add-location'],
@@ -162,6 +167,18 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
     complete: state => state.hours.timezone.trim().length > 0,
     optional: true,
     nextLabel: () => 'Save hours',
+  },
+  {
+    // Before products, because products are priced. Only the new-site flow asks:
+    // a location added to an existing site prices in the currency that site
+    // already has.
+    id: 'currency', section: 'offer', flows: ['new-site'],
+    advanceOnChoice: true,
+    title: () => 'What currency do you price in?',
+    lede: state => currencyForCountry(state.details.country)
+      ? 'Taken from the country you gave. Change it if that is not what you charge in.'
+      : 'We could not tell from the country you gave, so pick the one you charge in.',
+    complete: state => state.details.currency !== null,
   },
   {
     id: 'products', section: 'offer', flows: ['new-site'],
@@ -199,13 +216,15 @@ export function onboardingStep(id: string | undefined, flow: OnboardingFlowId): 
 function emptyState(flow: OnboardingFlowId): OnboardingFlowState {
   return {
     flow,
-    // The product defaults: a restaurant in the United States priced in USD.
-    // The owner confirms or changes each on its own step.
+    // 'restaurant' is the first choice on the type step, which the owner answers
+    // before anything is saved. The country and the currency have no such
+    // default: seeding them with the United States and USD is how a Krabi
+    // restaurant ended up priced in dollars without being asked.
     vertical: 'restaurant',
     source: null,
     details: {
       name: '', city: '', streetAddress: '', addressLine2: '', region: '', postalCode: '',
-      country: 'US', phone: '', currency: 'USD',
+      country: '', phone: '', currency: null,
     },
     hours: { timezone: '', hours: null, specialHours: null },
     brand: {

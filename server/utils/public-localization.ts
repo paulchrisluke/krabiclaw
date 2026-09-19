@@ -1,3 +1,4 @@
+import type { CloudflareEnv } from '~/server/utils/auth'
 import {
   loadMetafieldDefinitionIndex,
   parseLocalizedResourceType,
@@ -10,6 +11,7 @@ import {
 import { HTTPError } from 'nitro'
 import { queryAll, type DbClient } from '~/server/db'
 import { assertPublicSiteLanguageEntitlement } from '~/server/utils/localization'
+import { isRecord } from '~/server/utils/type-guards'
 
 export interface StoredPublicLocalizationRow {
   resource_type: string
@@ -28,12 +30,13 @@ export interface ExactPublicLocalization {
 }
 
 export async function loadExactPublicLocalizations(
+  env: CloudflareEnv,
   db: DbClient,
   organizationId: string,
   siteId: string,
   locale: string,
 ): Promise<ExactPublicLocalization[]> {
-  const entitlement = await assertPublicSiteLanguageEntitlement(db, organizationId, siteId, locale)
+  const entitlement = await assertPublicSiteLanguageEntitlement(env, db, organizationId, siteId, locale)
   if (entitlement.source) throw new HTTPError({ statusCode: 404, statusMessage: 'Primary-language routes are unprefixed' })
   const rows = await queryAll<StoredPublicLocalizationRow>(db, `
     SELECT resource_type, resource_id, locale, values_json, route_path
@@ -48,9 +51,6 @@ export async function loadExactPublicLocalizations(
 }
 
 const PROJECTED_FIELD_NAMES: Partial<Record<LocalizedResourceType, Readonly<Record<string, string>>>> = {
-  business_location: {
-    address: 'address_translated',
-  },
   product: {
     tags: 'tags',
   },
@@ -116,6 +116,15 @@ export function projectExactLocalizedResource<T extends { id: string }>(
   if ('seo_title' in canonical) projectedValues.seo_title = typeof localizedTitle === 'string' ? localizedTitle : null
   if ('seo_description' in canonical) projectedValues.seo_description = typeof localizedDescription === 'string' ? localizedDescription : null
   const slug = localizedSlug(localization.routePath)
+  // An address localizes the parts that are words. The ISO region code and the
+  // postcode read the same in every language and are not in the translation, so
+  // the translated parts sit on top of the location's own address instead of
+  // replacing it — otherwise a localized page loses the country it is in.
+  const canonicalAddress = (canonical as { address?: unknown }).address
+  const addressFields = isRecord(projectedValues.address) && isRecord(canonicalAddress)
+    ? { address: { ...canonicalAddress, ...projectedValues.address } }
+    : {}
+
   const routeFields = {
     ...(slug && 'slug' in canonical ? { slug } : {}),
     ...(localization.routePath && 'public_path' in canonical ? { public_path: localization.routePath } : {}),
@@ -125,6 +134,7 @@ export function projectExactLocalizedResource<T extends { id: string }>(
     ...canonical,
     ...clearedValues,
     ...projectedValues,
+    ...addressFields,
     ...routeFields,
   }
 }

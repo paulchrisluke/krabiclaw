@@ -4,13 +4,13 @@ import type { H3Event } from 'nitro'
 import { queryAll } from '~/server/db'
 import { d1JsonStringSet } from '~/server/db/d1-limits'
 import { getDashboardContext } from '~/server/utils/dashboard-context'
-import { listAccessibleLocationIds } from '~/server/utils/member-access'
+import { listAccessibleLocationIds, memberAccessPrincipal } from '~/server/utils/member-access'
+import { parsePostalAddress } from '~/utils/postal-address'
 
 export interface DashboardLocationResource {
   id: string
   slug: string
   title: string
-  city: string | null
   status: string
   address: string | null | Record<string, unknown>
   phone: string | null
@@ -31,19 +31,13 @@ export async function listDashboardLocationsResource(
     siteSlug: scope.siteSlug,
   })
   if (!site) throw new HTTPError({ statusCode: 404, statusMessage: 'Site not found' })
-  const accessibleLocationIds = await listAccessibleLocationIds(db, {
-    env,
-    memberId: organization.memberId,
-    role: organization.role,
-    organizationId: organization.id,
-    siteId: site.id,
-  })
+  const accessibleLocationIds = await listAccessibleLocationIds(db, memberAccessPrincipal(organization, { env, siteId: site.id, event }))
   if (accessibleLocationIds?.length === 0) return { success: true as const, locations: [] }
   const locationFilter = accessibleLocationIds
     ? `AND id IN (SELECT value FROM json_each(?))`
     : ''
   const locations = await queryAll<DashboardLocationResource>(db, `
-    SELECT id, slug, title, city, status, address, phone, email,
+    SELECT id, slug, title, status, address, phone, email,
            notification_phone, grab_url, uber_eats_url, foodpanda_url
       FROM business_locations
      WHERE organization_id = ? AND site_id = ?
@@ -54,15 +48,7 @@ export async function listDashboardLocationsResource(
     success: true as const,
     locations: locations.map(location => ({
       ...location,
-      address: typeof location.address === 'string'
-        ? (() => {
-            try {
-              return JSON.parse(location.address) as Record<string, unknown>
-            } catch {
-              return null
-            }
-          })()
-        : location.address,
+      address: parsePostalAddress(location.address),
     })),
   }
 }

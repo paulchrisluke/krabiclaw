@@ -3,7 +3,7 @@ import { HTTPError } from 'nitro';
 
 import { executeBatch, queryAll, queryFirst, type BatchQuery, type DbClient } from '../../db/index.ts'
 import { d1JsonStringSet } from '../../db/d1-limits.ts'
-import { assertNoEmbeddedMediaFields } from '../../../utils/tenant-page-blocks.ts'
+import { validateContentBlockData } from '../../../utils/tenant-page-blocks.ts'
 import type { content_documents } from '../../db/schema.ts'
 import {
   CONTENT_BLOCK_TYPES,
@@ -134,18 +134,20 @@ function asObject(value: unknown, field: string) {
 function mediaFreeBlockData(type: ContentBlockType, value: unknown, field: string) {
   const data = asObject(value, field)
   try {
-    assertNoEmbeddedMediaFields(data, field)
+    validateContentBlockData(type, data)
   } catch (error) {
-    badRequest(error instanceof Error ? error.message : `${field} contains embedded media`)
+    badRequest(error instanceof Error ? error.message : `${field} contains invalid block data`)
   }
-  if (type === 'image' && 'url' in data) badRequest(`${field}.url must use a media placement`)
   // A heading's text is `text`, and its level is the `level` column. Importers
   // also wrote a `markdown` key holding `'#'.repeat(level) + ' ' + text` — a
   // second copy of both, which no reader consumes and which the CMS leaves
   // behind when it edits `text`, so the row ends up asserting two different
   // headlines. Drop it on write: the block is exactly what the registry says
   // it is.
-  if (type === 'heading') delete data.markdown
+  if (type === 'heading') {
+    delete data.markdown
+    delete data.level
+  }
   // The markdown contract lives here, on the one batch builder every content
   // document write passes through, because `content_blocks` is one table and a
   // block cannot mean different things depending on which caller wrote it.
@@ -211,7 +213,15 @@ export async function getContentRepresentation(db: DbClient, input: { rootId: st
   `, [input.rootId, input.locale ?? null, input.locale ?? null])
 }
 
-export function prepareContentDocumentDeletion(input: { organizationId: string; siteId: string } & ({ documentId: string } | { locationId: string })): BatchQuery[] {
+/**
+ * `expectedUpdatedAt` is enforced inside the batch, not by the caller reading the
+ * row first. A caller that checks a timestamp and then deletes has every query
+ * in between as a window for another writer, and would delete the newer version
+ * it never saw. The assertion is the same one an update uses, and it runs first,
+ * so a stale delete aborts before a placement, a redirect or a document is
+ * touched.
+ */
+export function prepareContentDocumentDeletion(input: { organizationId: string; siteId: string } & ({ documentId: string; expectedUpdatedAt?: string; expectedRepresentations?: Array<{ id: string; updatedAt: string }> } | { locationId: string })): BatchQuery[] {
   const document = 'documentId' in input
   const owned = document
     ? 'SELECT id FROM content_documents WHERE (id = ? OR root_id = ?) AND organization_id = ? AND site_id = ?'
@@ -220,6 +230,24 @@ export function prepareContentDocumentDeletion(input: { organizationId: string; 
   const id = document ? input.documentId : input.locationId
   const params = [id, id, input.organizationId, input.siteId]
   return [
+    ...(document && input.expectedUpdatedAt !== undefined
+      ? [assertDocumentSnapshotQuery(input.documentId, new Date().toISOString(), input.expectedUpdatedAt)]
+      : []),
+    // A root takes its representations with it through the cascade, so each
+    // one the caller saw is asserted too: a translation edited between the
+    // locale read and this batch aborts the delete instead of vanishing.
+    ...(document && input.expectedRepresentations !== undefined
+      ? [
+          ...input.expectedRepresentations.map(representation =>
+            assertDocumentSnapshotQuery(representation.id, new Date().toISOString(), representation.updatedAt)),
+          // And none the caller did not see: a translation created after the
+          // locale read would otherwise go through the cascade unasserted.
+          assertRepresentationCountQuery(input.documentId, new Date().toISOString(), input.expectedRepresentations.length),
+        ]
+      : []),
+    // Deleting a location removes every document scoped to it, so one
+    // document's timestamp says nothing about the set; the union above is what
+    // keeps a caller from passing one there and believing it was honoured.
     { query: `DELETE FROM site_redirects WHERE owner_type = 'content_document' AND owner_id IN (${owned})`, params },
     { query: `DELETE FROM site_redirects WHERE owner_type = 'content_block' AND owner_id IN (
       SELECT id FROM content_blocks WHERE document_id IN (${owned})
@@ -228,8 +256,12 @@ export function prepareContentDocumentDeletion(input: { organizationId: string; 
     { query: `DELETE FROM media_placements WHERE owner_type = 'content_block' AND owner_id IN (
       SELECT id FROM content_blocks WHERE document_id IN (${owned})
     )`, params },
-    { query: `DELETE FROM content_documents WHERE ${document ? 'id' : 'location_id'} = ? AND organization_id = ? AND site_id = ?`,
-      params: [id, input.organizationId, input.siteId] },
+    // The same reach as every statement above it. `WHERE id = ?` deleted the
+    // root and left its translations behind: content_documents has no foreign
+    // key on root_id, so nothing cascaded, and each representation became a row
+    // whose root no longer exists.
+    { query: `DELETE FROM content_documents WHERE ${document ? '(id = ? OR root_id = ?)' : '(location_id = ? OR root_id IN (SELECT id FROM content_documents WHERE location_id = ?))'} AND organization_id = ? AND site_id = ?`,
+      params: [id, id, input.organizationId, input.siteId] },
   ]
 }
 
@@ -238,6 +270,15 @@ export async function getContentDocumentById(db: DbClient, documentId: string) {
     SELECT id, organization_id, site_id, kind, row_role, root_id, locale, created_at, updated_at
     FROM content_documents WHERE id = ? AND row_role IN ('root', 'representation')
   `, [documentId])
+}
+
+function assertRepresentationCountQuery(rootId: string, now: string, expectedCount: number): BatchQuery {
+  return {
+    query: `INSERT INTO content_blocks (id, document_id, parent_block_id, type, position, level, data_json, created_at, updated_at)
+      SELECT NULL, ?, NULL, 'markdown', 0, NULL, '{}', ?, ?
+       WHERE (SELECT count(*) FROM content_documents WHERE root_id = ? AND row_role = 'representation') != ?`,
+    params: [rootId, now, now, rootId, expectedCount],
+  }
 }
 
 function assertDocumentSnapshotQuery(documentId: string, now: string, expectedUpdatedAt?: string): BatchQuery {
@@ -442,7 +483,7 @@ export function prepareContentDocumentWithBlocks(
 
   const write = buildDocumentWriteBatch(document, blocks.map((block, index) => ({
     id: block.id, source_block_id: block.source_block_id ?? null, parent_block_id: block.parent_block_id ?? null, type: block.type,
-    position: index, level: block.level ?? null, data: block.data,
+    position: block.position ?? index, level: block.level ?? null, data: block.data,
   })), { bodyMarkdown: opts.bodyMarkdown, additionalQueriesAfter: opts.additionalQueriesAfter })
   return { document, ...write, queries: [...(opts.additionalQueriesBefore ?? []), documentInsert, ...write.queries] }
 }
@@ -460,7 +501,7 @@ export async function createContentDocumentWithBlocks(
   return { document, body_markdown: prepared.body_markdown, blocks: prepared.blocks }
 }
 
-function formatBlockOutline(block: ContentBlockRow) {
+export function formatBlockOutline(block: ContentBlockRow) {
   return {
     source_block_id: block.source_block_id,
     id: block.id,
@@ -473,7 +514,7 @@ function formatBlockOutline(block: ContentBlockRow) {
   }
 }
 
-async function attachContentBlockMedia(db: DbClient, documentId: string, blocks: ReturnType<typeof formatBlockOutline>[]) {
+export async function attachContentBlockMedia(db: DbClient, documentId: string, blocks: ReturnType<typeof formatBlockOutline>[]) {
   const media = await queryAll<ContentBlockMedia & { owner_id: string }>(
     db,
     `SELECT mp.owner_id, mp.asset_id, mp.slot, mp.sort_order,
@@ -651,12 +692,6 @@ export async function renderContentPreview(db: DbClient, documentId: string) {
   return { body_markdown: renderContentBlocksToMarkdown(blocks), blocks: await attachContentBlockMedia(db, documentId, blocks.map(formatBlockOutline)) }
 }
 
-export async function getContentEditorSnapshot(db: DbClient, documentId: string) {
-  const document = await getContentDocumentById(db, documentId)
-  if (!document) return null
-  return await getContentEditorSnapshotForDocument(db, document)
-}
-
 export async function getContentEditorSnapshotForDocument(db: DbClient, document: ContentDocumentRow) {
   const blocks = await listBlocksForDocument(db, document.id)
   return { document, blocks: await attachContentBlockMedia(db, document.id, blocks.map(formatBlockOutline)) }
@@ -698,7 +733,7 @@ export async function updateContentDocument(
   }
   const snapshots = input.blocks?.map((block, index) => ({
     id: block.id, source_block_id: block.source_block_id ?? null, parent_block_id: block.parent_block_id ?? null,
-    type: assertBlockType(block.type), position: index, level: block.level ?? null,
+    type: assertBlockType(block.type), position: block.position ?? index, level: block.level ?? null,
     data: asObject(block.data, `content block ${index} data`), updated_at: null,
   }))
   const result = await writeDocumentBlocks(db, document, snapshots, {
@@ -723,7 +758,7 @@ export function prepareContentDocumentUpdate(
   }
   const snapshots = input.blocks?.map((block, index) => ({
     id: block.id, source_block_id: block.source_block_id ?? null, parent_block_id: block.parent_block_id ?? null, type: assertBlockType(block.type),
-    position: index, level: block.level ?? null, data: asObject(block.data, `content block ${index} data`), updated_at: null,
+    position: block.position ?? index, level: block.level ?? null, data: asObject(block.data, `content block ${index} data`), updated_at: null,
   }))
   return buildDocumentWriteBatch(document, snapshots, {
     changes: input.changes, expectedDocument: { id: document.id, updatedAt: input.expected_updated_at },
