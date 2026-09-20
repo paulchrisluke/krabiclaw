@@ -111,9 +111,7 @@ The CIMD OAuth cases need `MCP_CIMD_CLIENT_URL` and
 documents, which localhost cannot be. Point them at the deployed staging
 Worker's own test-client documents when running those cases.
 
-Migration tooling changes also run `yarn test:migrations`. These integration
-tests invoke the real installed Drizzle CLI/API and migration guards against
-disposable schema fixtures. They prove no-change generation, detection of real
-changes and generator failures, and rejection of referenced-parent drops before
-execution. They neither apply migrations to a deployed database nor replace
-the local D1 and existing-data checks required for an actual schema change.
+Schema changes also run `yarn lint:migrations`, `yarn lint:schema-drift` and
+`yarn test:migrations`: the chain must not drop a referenced parent table,
+`db:generate` must emit nothing, and the chain must apply from zero.
+
