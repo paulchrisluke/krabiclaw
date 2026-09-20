@@ -143,12 +143,12 @@
     "delete_content_block": {
       "annotations": {
         "readOnlyHint": false,
-        "openWorldHint": false,
+        "openWorldHint": true,
         "destructiveHint": true
       },
       "justifications": {
         "read_only_justification": "Deletes one block, and the blocks nested under it, from the selected blog article or tenant page after a version check.",
-        "open_world_justification": "Deletes one block, and the blocks nested under it, from the selected blog article or tenant page after a version check. It does not publish content or write to an external service.",
+        "open_world_justification": "Deletes one block, and the blocks nested under it, from the selected blog article or tenant page after a version check. Its effects can change content or behavior on the public website.",
         "destructive_justification": "Deletes one block, and the blocks nested under it, from the selected blog article or tenant page after a version check. Existing state is deleted, replaced or overwritten rather than only appended."
       }
     },
@@ -671,12 +671,12 @@
     "replace_content_block": {
       "annotations": {
         "readOnlyHint": false,
-        "openWorldHint": false,
+        "openWorldHint": true,
         "destructiveHint": true
       },
       "justifications": {
         "read_only_justification": "Replaces one block's data and media in the selected blog article or tenant page after a version check, keeping its position.",
-        "open_world_justification": "Replaces one block's data and media in the selected blog article or tenant page after a version check, keeping its position. It does not publish content or write to an external service.",
+        "open_world_justification": "Replaces one block's data and media in the selected blog article or tenant page after a version check, keeping its position. Its effects can change content or behavior on the public website.",
         "destructive_justification": "Replaces one block's data and media in the selected blog article or tenant page after a version check, keeping its position. Existing state is deleted, replaced or overwritten rather than only appended."
       }
     },
