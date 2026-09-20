@@ -287,8 +287,9 @@ const blogContentBlockObject = {
     level: { type: ['number', 'null'] },
     data: { type: 'object' },
     media: { type: 'array', items: mediaPlacementObject },
+    updated_at: { type: 'string', description: 'The block\'s own concurrency token, for replace_content_block and delete_content_block.' },
   },
-  required: ['id', 'parent_block_id', 'type', 'level', 'data', 'media'],
+  required: ['id', 'parent_block_id', 'type', 'level', 'data', 'media', 'updated_at'],
   additionalProperties: false,
 }
 

@@ -125,6 +125,7 @@ function toContentBlockProjection(value: unknown, index: number) {
     level: responseNullableNumber(block.level, `${path}.level`),
     data,
     media: toMedia(block.media),
+    updated_at: responseString(block.updated_at, `${path}.updated_at`),
   }
 }
 

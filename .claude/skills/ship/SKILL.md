@@ -5,8 +5,9 @@ description: "The one path from a code change to staging in this repo: local Cod
 
 # Ship
 
-A PR runs the `Checks` job only. The E2E suite runs against the shared
-staging deployment after the merge, so a defect that reaches `staging` costs a
+A PR into `staging` runs the `Checks` job only (the `staging` → `main`
+promotion PR runs nothing; its commit was already qualified). The E2E suite
+runs against the shared staging deployment after the merge, so a defect that reaches `staging` costs a
 40-minute round trip to find and fix. CodeRabbit's local CLI and web review are
 both rate-limited. The procedure below exists to catch everything locally, in
 the browser, before the merge, and to spend CodeRabbit only as many times as
@@ -80,7 +81,7 @@ catalog check fails on drift. If the ChatGPT submission changed,
 
 ## 4. Open the PR as a draft
 
-Every PR runs `Checks` only; the E2E suite runs on `staging` after the merge.
+A PR into `staging` runs `Checks` only; the E2E suite runs on `staging` after the merge.
 Drafts also skip web CodeRabbit. Push to a draft only when the owner has seen
 the work in the browser and asked for it.
 

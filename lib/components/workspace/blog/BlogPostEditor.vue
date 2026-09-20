@@ -8,7 +8,8 @@
     draws no panel and no navbar. It draws them only once a section is open and
     the parent has yielded, which is the same rule every other editor follows.
   -->
-  <div v-if="frame.mode.value === 'index'" :inert="publishing" class="space-y-8">
+  <!-- Inert while a write is in flight: the ids that come back are matched to the blocks that were sent. -->
+  <div v-if="frame.mode.value === 'index'" :inert="publishing || saveState === 'saving'" class="space-y-8">
     <p v-if="actionError" role="alert" class="rounded-lg border border-error/30 bg-error/10 px-4 py-2 text-sm text-error">{{ actionError }}</p>
 
     <div v-if="loadPending" class="grid min-h-64 place-items-center"><UIcon name="i-lucide-loader-circle" class="size-6 animate-spin" /></div>

@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:d8807fcf0c513de668f1fdd94a8a2706639a7519b1caddd412a8793a09a0205b",
+  "fingerprint": "sha256:9afa919c4b4a57953f16641598dd69f2aaae532b35a1d507b7635be7b7da07a6",
   "tools": [
     {
       "name": "append_content_block",
@@ -1447,6 +1447,10 @@
                         "callout"
                       ],
                       "type": "string"
+                    },
+                    "updated_at": {
+                      "description": "The block's own concurrency token, for replace_content_block and delete_content_block.",
+                      "type": "string"
                     }
                   },
                   "required": [
@@ -1455,7 +1459,8 @@
                     "type",
                     "level",
                     "data",
-                    "media"
+                    "media",
+                    "updated_at"
                   ],
                   "type": "object"
                 },
@@ -3756,6 +3761,10 @@
                         "callout"
                       ],
                       "type": "string"
+                    },
+                    "updated_at": {
+                      "description": "The block's own concurrency token, for replace_content_block and delete_content_block.",
+                      "type": "string"
                     }
                   },
                   "required": [
@@ -3764,7 +3773,8 @@
                     "type",
                     "level",
                     "data",
-                    "media"
+                    "media",
+                    "updated_at"
                   ],
                   "type": "object"
                 },
@@ -9170,6 +9180,10 @@
                         "callout"
                       ],
                       "type": "string"
+                    },
+                    "updated_at": {
+                      "description": "The block's own concurrency token, for replace_content_block and delete_content_block.",
+                      "type": "string"
                     }
                   },
                   "required": [
@@ -9178,7 +9192,8 @@
                     "type",
                     "level",
                     "data",
-                    "media"
+                    "media",
+                    "updated_at"
                   ],
                   "type": "object"
                 },
@@ -13802,6 +13817,10 @@
                         "callout"
                       ],
                       "type": "string"
+                    },
+                    "updated_at": {
+                      "description": "The block's own concurrency token, for replace_content_block and delete_content_block.",
+                      "type": "string"
                     }
                   },
                   "required": [
@@ -13810,7 +13829,8 @@
                     "type",
                     "level",
                     "data",
-                    "media"
+                    "media",
+                    "updated_at"
                   ],
                   "type": "object"
                 },
