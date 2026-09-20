@@ -154,10 +154,12 @@ Ours: every settings row opens another page with one field and a paragraph of gu
 - Localize header buttons on Brand and Location settings (rows instead)
 - Billing row on Account; ChatGPT, Google and Appearance rows on Menu (Appearance moves to Account)
 - the location inbox page and location scope in the thread list
-- `people.vue` on the site (Team on Menu is the one place for members)
 - helper paragraphs on every settings leaf
 
 ## 6. Decisions taken
+
+- **People** on KrabiClaw's own site stays: it is the platform's impersonation tool, not a members list, and has no other door.
+- **Leaves that edit in place** (section 4) are the next PR. This one fixes the hierarchy, the routes and Back.
 
 - Org settings rows stay **flat on Menu** rather than behind one "Settings" row: fewer pages, and Menu is already the list.
 - **Location-only dashboard access is removed**; everyone who signs in sees the whole site.

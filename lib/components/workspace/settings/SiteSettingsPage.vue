@@ -58,17 +58,14 @@
         </div>
 
         <div v-else-if="detailKey === 'logo'" class="space-y-6">
-          <p class="text-base text-muted">Choose an image from the site media library or upload a new logo.</p>
           <MediaPicker v-model="form.logoAssetId" :site-id="siteId" accept="image" title="Select logo" />
         </div>
 
         <div v-else-if="detailKey === 'sharing-image'" class="space-y-6">
-          <p class="text-base text-muted">Choose the image used as the source for generated social sharing cards.</p>
           <MediaPicker v-model="form.socialShareAssetId" :site-id="siteId" accept="image" title="Select social sharing image" />
         </div>
 
         <div v-else-if="detailKey === 'description'" class="space-y-6">
-          <p class="text-base text-muted">A concise description shared across the site and its public metadata.</p>
           <div>
             <p class="mb-2 text-sm font-semibold text-muted">{{ descriptionCharactersRemaining }}/500 available</p>
             <UTextarea v-model="form.brand_description" :rows="10" maxlength="500" autofocus class="w-full" />
@@ -76,7 +73,6 @@
         </div>
 
         <div v-else-if="detailKey === 'color'" class="space-y-8">
-          <p class="text-base text-muted">Select the primary color used by the site theme.</p>
           <UColorPicker v-model="form.brand_color" format="hex" size="xl" class="w-full" />
           <UFormField label="Hex color">
             <UInput v-model="form.brand_color" maxlength="7" placeholder="#0f766e" size="xl" class="w-full" />
@@ -85,7 +81,6 @@
 
         <div v-else-if="detailKey === 'font'" class="space-y-6">
           <template v-if="supportsSiteFonts">
-            <p class="text-base text-muted">Choose the font for headings and text on the public website. Mali supports Thai and English. Default restores the template typography.</p>
             <UFormField label="Website font">
               <USelect v-model="form.font_preset" :items="SITE_FONT_OPTIONS" value-key="value" label-key="label" size="xl" class="w-full" />
             </UFormField>
@@ -98,21 +93,18 @@
         </div>
 
         <div v-else-if="detailKey === 'contact'" class="space-y-6">
-          <p class="text-base text-muted">This is the shared public contact address for the site.</p>
           <UFormField label="Contact email">
             <UInput v-model="form.contact_email" type="email" autocomplete="email" size="xl" autofocus class="w-full" />
           </UFormField>
         </div>
 
         <div v-else-if="detailKey === 'social'" class="space-y-6">
-          <p class="text-base text-muted">Add the brand-level profiles shown across the public site.</p>
           <UFormField label="Facebook"><UInput v-model="form.social_facebook_url" type="url" placeholder="https://facebook.com/..." size="xl" class="w-full" /></UFormField>
           <UFormField label="Instagram"><UInput v-model="form.social_instagram_url" type="url" placeholder="https://instagram.com/..." size="xl" class="w-full" /></UFormField>
           <UFormField label="TikTok"><UInput v-model="form.social_tiktok_url" type="url" placeholder="https://tiktok.com/@..." size="xl" class="w-full" /></UFormField>
         </div>
 
         <div v-else-if="detailKey === 'currency'" class="space-y-6">
-          <p class="text-base text-muted">The default currency used for site-wide prices and reporting.</p>
           <USelect :model-value="form.default_currency ?? undefined" :items="CURRENCY_OPTIONS" value-key="value" label-key="label" size="xl" class="w-full" placeholder="Select currency" @update:model-value="form.default_currency = $event ?? null" />
         </div>
 
@@ -225,7 +217,6 @@
         </div>
 
         <div v-else-if="detailKey === 'publishing'" class="space-y-6">
-          <p class="text-base text-muted">Connect the Facebook Page used to publish content for this site.</p>
           <UAlert v-if="!hasFacebookAccess" color="warning" variant="soft" icon="i-lucide-lock" title="Growth plan required" description="Upgrade this site to connect Facebook and Instagram publishing." />
           <UCard v-else variant="subtle">
             <div class="flex items-center justify-between gap-4">
@@ -256,7 +247,7 @@
 import DashboardResourceLocalization from '~/components/dashboard/DashboardResourceLocalization.vue'
 import SiteGoogleAnalyticsSettings from '~/components/dashboard/SiteGoogleAnalyticsSettings.vue'
 import MediaPicker from '~/lib/components/workspace/media/MediaPicker.vue'
-import EditorNavigationList from '~/components/dashboard/EditorNavigationList.vue'
+import EditorNavigationList, { type EditorNavigationItem } from '~/components/dashboard/EditorNavigationList.vue'
 import { CURRENCY_OPTIONS, isCurrencyCode, type CurrencyCode } from '~/shared/currencies'
 import { SITE_FONT_OPTIONS, MALI_FONT_CSS, isSiteFontPreset, resolveSiteFontPreset, siteFontStyles, type SiteFontPreset } from '~/shared/site-fonts'
 
@@ -377,7 +368,6 @@ interface SettingsPageResource {
   notifications: { success: boolean; notifications: { whatsapp_phone: string | null } }
   facebook: FacebookConnectionStatus
 }
-interface EditorNavigationItem { id: string; label: string; summary: string; icon: string; to: string }
 
 const isSettingsResponse = (value: unknown): value is { success: boolean; settings: SiteSettingsResponse } =>
   isRecord(value) && typeof value.success === 'boolean' && isRecord(value.settings)

@@ -90,7 +90,6 @@
         </div>
 
         <div v-else-if="editorKey === 'status'" class="space-y-6">
-          <p class="text-base text-muted">An inactive location is hidden from the public site.</p>
           <UCheckbox :model-value="detailsForm.status === 'active'" label="Active" @update:model-value="setDetailsActive" />
         </div>
 
@@ -106,7 +105,6 @@
         </div>
 
         <div v-else-if="editorKey === 'discovery'" class="space-y-6">
-          <p class="text-base text-muted">Connect the canonical Google place record used to import address, hours, ratings and reviews.</p>
           <UCard variant="subtle">
             <div class="flex items-center justify-between gap-4">
               <div>
@@ -128,7 +126,6 @@
         </div>
 
         <div v-else-if="editorKey === 'notifications'" class="space-y-6">
-          <p class="text-base text-muted">Internal alert routing for this location. These values are not shown to guests.</p>
           <UFormField label="WhatsApp notification phone" help="Use international format, for example +66812345678.">
             <UInput v-model="detailsForm.notification_phone" type="tel" placeholder="+66..." size="xl" class="w-full" />
           </UFormField>
@@ -157,7 +154,6 @@
         </div>
 
         <div v-else-if="editorKey === 'features'" class="space-y-6">
-          <p class="text-base text-muted">Choose which site modules are available at this location.</p>
           <div v-if="locationToggleableFeatures.length" class="space-y-3">
             <UCard v-for="feature in locationToggleableFeatures" :key="feature" variant="subtle">
             <UCheckbox v-model="locationEnabledFeatureSet[feature]" :label="locationFeatureLabel(feature)" />

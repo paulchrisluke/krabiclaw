@@ -1,6 +1,5 @@
 <template>
   <div class="space-y-8">
-    <p class="text-base text-muted">The ownership boundary for sites, members, billing, and connected services.</p>
     <UAlert v-if="errorMessage" color="error" variant="soft" :description="errorMessage" icon="i-lucide-circle-alert" />
     <UFormField label="Organization name">
       <UInput v-model="name" :disabled="!canManage" size="xl" autofocus class="w-full" />
