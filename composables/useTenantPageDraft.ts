@@ -139,28 +139,9 @@ export function useTenantPageDraft(siteId: string, pageId: string) {
 
   // Every level calls this, and Nuxt shares one request and one state per key,
   // so opening a leaf four levels down costs no fetch the page has not made.
-  //
-  // It renders on the server, reading D1 directly the way the Blog chain does.
-  // Every level below the page — a section, one of its parts, a record inside
-  // one — decides whether it exists by looking at this page, so a draft that is
-  // still empty during the first render is a page that answers "not found" to a
-  // direct load or a refresh of its own URL.
-  const requestEvent = useRequestEvent()
   const load = useAsyncData(
     key,
     async () => {
-      if (import.meta.server) {
-        if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Request context unavailable' })
-        const { loadDashboardEditorContext, loadDashboardTenantPage } = await import('~/server/utils/dashboard-editor-resources')
-        const [context, page] = await Promise.all([
-          loadDashboardEditorContext(requestEvent, siteId),
-          pageId === 'new' ? Promise.resolve(null) : loadDashboardTenantPage(requestEvent, siteId, pageId),
-        ])
-        return {
-          context: context.context as unknown as { previewToken: string; site: { subdomain: string | null } },
-          page: (page?.page ?? null) as TenantPageResponse | null,
-        }
-      }
       const [context, page] = await Promise.all([
         dashboardApi<{ context: { previewToken: string; site: { subdomain: string | null } } }>(
           `/api/editor/sites/${siteId}/context`,
@@ -172,7 +153,7 @@ export function useTenantPageDraft(siteId: string, pageId: string) {
       ])
       return { context: context.context, page: page?.page ?? null }
     },
-    { lazy: import.meta.client },
+    { lazy: true },
   )
   const { data, error, pending, refresh } = load
 

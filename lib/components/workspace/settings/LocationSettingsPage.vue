@@ -1,6 +1,8 @@
 <template>
   <UDashboardPanel
     id="location-settings"
+    :class="hasDetail ? 'hidden lg:flex' : undefined"
+    :default-size="32"
   >
     <template #header>
       <UDashboardNavbar :title="navbarTitle" :toggle="false">
@@ -23,146 +25,157 @@
     </template>
 
     <template #body>
-      <div v-if="loading" class="space-y-4 p-5 sm:p-8">
-        <USkeleton v-for="index in 6" :key="index" class="h-32 rounded-xl" />
+      <div class="mx-auto w-full max-w-xl">
+        <div v-if="loading" class="space-y-4">
+          <USkeleton v-for="index in 6" :key="index" class="h-32 rounded-xl" />
+        </div>
+        <UAlert v-else-if="error" color="error" variant="soft" icon="i-lucide-triangle-alert" :description="error" />
+        <EditorNavigationList v-else-if="location" :groups="navigationGroups" :active-item="detailKey" />
       </div>
-      <div v-else-if="error" class="p-5 sm:p-8">
-        <UAlert color="error" variant="soft" icon="i-lucide-triangle-alert" :description="error" />
-      </div>
-      <EditorPaneShell
-        v-else-if="location"
-        :has-detail="hasDetail"
-        show-desktop-detail
-        :show-actions="hasDetail"
-        :saving="saving"
-        :save-disabled="saveDisabled"
-        :error="editorError"
-        :detail-title="detailTitles[editorKey]"
-        :dismiss-to="settingsPath"
-        @cancel="cancelEditor"
-        @save="saveCurrentEditor"
-      >
-        <template #index>
-          <EditorNavigationList :groups="navigationGroups" :active-item="detailKey" />
+    </template>
+  </UDashboardPanel>
+
+  <!--
+    Drawn at `lg` even with nothing open, so the pair is there at rest.
+  -->
+  <UDashboardPanel
+    v-if="location"
+    id="location-settings-detail"
+    :class="hasDetail ? undefined : 'hidden lg:flex'"
+  >
+    <template #header>
+      <UDashboardNavbar :title="detailTitles[editorKey]" :toggle="false">
+        <template #leading>
+          <DashboardNavbarLeading :to="settingsPath" label="Settings" />
         </template>
+      </UDashboardNavbar>
+    </template>
 
-        <template #detail>
-          <UFormField v-if="editorKey === 'name'" label="Name" required>
-            <UInput v-model="detailsForm.title" size="xl" autofocus class="w-full" />
-          </UFormField>
+    <template #body>
+      <div class="mx-auto w-full max-w-2xl">
+        <UAlert v-if="editorError" color="error" variant="soft" icon="i-lucide-circle-alert" :description="editorError" class="mb-6" />
+        <UFormField v-if="editorKey === 'name'" label="Name" required>
+          <UInput v-model="detailsForm.title" size="xl" autofocus class="w-full" />
+        </UFormField>
 
-          <UFormField
-            v-else-if="editorKey === 'slug'"
-            label="Slug"
-            description="The location's segment in its public URL."
-          >
-            <UInput v-model="detailsForm.slug" size="xl" autofocus class="w-full" />
-          </UFormField>
+        <UFormField
+          v-else-if="editorKey === 'slug'"
+          label="Slug"
+          description="The location's segment in its public URL."
+        >
+          <UInput v-model="detailsForm.slug" size="xl" autofocus class="w-full" />
+        </UFormField>
 
-          <div v-else-if="editorKey === 'address'" class="space-y-6">
-            <p class="text-base text-muted">Where guests find this location.</p>
-            <UFormField label="Street" help="One line per line."><UTextarea v-model="detailsForm.addressLines" :rows="3" autofocus class="w-full" /></UFormField>
-            <UFormField label="Neighbourhood"><UInput v-model="detailsForm.sublocality" size="xl" class="w-full" /></UFormField>
-            <UFormField label="City"><UInput v-model="detailsForm.locality" size="xl" class="w-full" /></UFormField>
-            <UFormField label="State or province"><UInput v-model="detailsForm.administrativeArea" size="xl" class="w-full" /></UFormField>
-            <UFormField label="Postcode"><UInput v-model="detailsForm.postalCode" size="xl" class="w-full" /></UFormField>
-            <UFormField label="Country" help="Two-letter code, e.g. TH."><UInput v-model="detailsForm.regionCode" size="xl" class="w-full" /></UFormField>
-          </div>
+        <div v-else-if="editorKey === 'address'" class="space-y-6">
+          <p class="text-base text-muted">Where guests find this location.</p>
+          <UFormField label="Street" help="One line per line."><UTextarea v-model="detailsForm.addressLines" :rows="3" autofocus class="w-full" /></UFormField>
+          <UFormField label="Neighbourhood"><UInput v-model="detailsForm.sublocality" size="xl" class="w-full" /></UFormField>
+          <UFormField label="City"><UInput v-model="detailsForm.locality" size="xl" class="w-full" /></UFormField>
+          <UFormField label="State or province"><UInput v-model="detailsForm.administrativeArea" size="xl" class="w-full" /></UFormField>
+          <UFormField label="Postcode"><UInput v-model="detailsForm.postalCode" size="xl" class="w-full" /></UFormField>
+          <UFormField label="Country" help="Two-letter code, e.g. TH."><UInput v-model="detailsForm.regionCode" size="xl" class="w-full" /></UFormField>
+        </div>
 
-          <div v-else-if="editorKey === 'contact'" class="space-y-6">
-            <p class="text-base text-muted">How guests reach this location.</p>
-            <UFormField label="Phone"><UInput v-model="detailsForm.phone" type="tel" size="xl" autofocus class="w-full" /></UFormField>
-            <UFormField label="Email"><UInput v-model="detailsForm.email" type="email" size="xl" class="w-full" /></UFormField>
-            <UFormField label="Website URL"><UInput v-model="detailsForm.website_url" type="url" size="xl" class="w-full" /></UFormField>
-          </div>
+        <div v-else-if="editorKey === 'contact'" class="space-y-6">
+          <p class="text-base text-muted">How guests reach this location.</p>
+          <UFormField label="Phone"><UInput v-model="detailsForm.phone" type="tel" size="xl" autofocus class="w-full" /></UFormField>
+          <UFormField label="Email"><UInput v-model="detailsForm.email" type="email" size="xl" class="w-full" /></UFormField>
+          <UFormField label="Website URL"><UInput v-model="detailsForm.website_url" type="url" size="xl" class="w-full" /></UFormField>
+        </div>
 
-          <div v-else-if="editorKey === 'status'" class="space-y-6">
-            <p class="text-base text-muted">An inactive location is hidden from the public site.</p>
-            <UCheckbox :model-value="detailsForm.status === 'active'" label="Active" @update:model-value="setDetailsActive" />
-          </div>
+        <div v-else-if="editorKey === 'status'" class="space-y-6">
+          <p class="text-base text-muted">An inactive location is hidden from the public site.</p>
+          <UCheckbox :model-value="detailsForm.status === 'active'" label="Active" @update:model-value="setDetailsActive" />
+        </div>
 
 
-          <div v-else-if="editorKey === 'hours'" class="space-y-6">
-            <p class="text-base text-muted">Set the regular hours shown to guests. A Google Places sync replaces these hours with Google's current record.</p>
-            <LocationHoursCard v-model:form="hoursForm" exceptions />
-          </div>
+        <div v-else-if="editorKey === 'hours'" class="space-y-6">
+          <p class="text-base text-muted">Set the regular hours shown to guests. A Google Places sync replaces these hours with Google's current record.</p>
+          <LocationHoursCard v-model:form="hoursForm" exceptions />
+        </div>
 
-          <div v-else-if="editorKey === 'content'" class="space-y-6">
-            <p class="text-base text-muted">Location-specific copy used on the published site.</p>
-            <UFormField label="Short description"><UInput v-model="detailsForm.short_description" size="xl" class="w-full" /></UFormField>
-            <UFormField label="Description"><UTextarea v-model="detailsForm.description" :rows="10" class="w-full" /></UFormField>
-            <UFormField label="Price level"><UInput v-model="detailsForm.price_level" size="xl" class="w-full" /></UFormField>
-          </div>
+        <div v-else-if="editorKey === 'content'" class="space-y-6">
+          <p class="text-base text-muted">Location-specific copy used on the published site.</p>
+          <UFormField label="Short description"><UInput v-model="detailsForm.short_description" size="xl" class="w-full" /></UFormField>
+          <UFormField label="Description"><UTextarea v-model="detailsForm.description" :rows="10" class="w-full" /></UFormField>
+          <UFormField label="Price level"><UInput v-model="detailsForm.price_level" size="xl" class="w-full" /></UFormField>
+        </div>
 
-          <div v-else-if="editorKey === 'discovery'" class="space-y-6">
-            <p class="text-base text-muted">Connect the canonical Google place record used to import address, hours, ratings and reviews.</p>
-            <UCard variant="subtle">
-              <div class="flex items-center justify-between gap-4">
-                <div>
-                  <p class="font-semibold text-highlighted">Google Places</p>
-                  <p class="mt-1 text-sm text-muted">{{ location.google_place_id ? `Last imported: ${location.last_synced_at || 'never'}` : 'Not connected' }}</p>
-                </div>
-                <UBadge :color="location.google_place_id ? 'success' : 'neutral'" variant="soft">{{ location.google_place_id ? 'Connected' : 'Not connected' }}</UBadge>
+        <div v-else-if="editorKey === 'discovery'" class="space-y-6">
+          <p class="text-base text-muted">Connect the canonical Google place record used to import address, hours, ratings and reviews.</p>
+          <UCard variant="subtle">
+            <div class="flex items-center justify-between gap-4">
+              <div>
+                <p class="font-semibold text-highlighted">Google Places</p>
+                <p class="mt-1 text-sm text-muted">{{ location.google_place_id ? `Last imported: ${location.last_synced_at || 'never'}` : 'Not connected' }}</p>
               </div>
-              <dl v-if="location.google_place_id" class="mt-5 grid grid-cols-2 gap-4 text-sm">
-                <div><dt class="text-muted">Rating</dt><dd class="mt-1 font-medium text-highlighted">{{ location.rating ?? 'Not available' }}</dd></div>
-                <div><dt class="text-muted">Reviews</dt><dd class="mt-1 font-medium text-highlighted">{{ location.review_count ?? 'Not available' }}</dd></div>
-              </dl>
-              <UButton class="mt-5" icon="i-simple-icons-googlemaps" color="neutral" variant="outline" :disabled="!location.google_place_id" :loading="syncingPlace" block @click="syncGooglePlace">Sync Google Places</UButton>
-              <p v-if="placeSyncResult" class="mt-3 text-sm text-success">{{ placeSyncResult }}</p>
-            </UCard>
-            <UFormField label="Google Place ID"><UInput v-model="detailsForm.google_place_id" size="xl" class="w-full" /></UFormField>
-            <UFormField label="Maps URL"><UInput v-model="detailsForm.maps_url" type="url" size="xl" class="w-full" /></UFormField>
-            <UFormField label="Google review URL"><UInput v-model="detailsForm.google_review_url" type="url" size="xl" class="w-full" /></UFormField>
-          </div>
-
-          <div v-else-if="editorKey === 'notifications'" class="space-y-6">
-            <p class="text-base text-muted">Internal alert routing for this location. These values are not shown to guests.</p>
-            <UFormField label="WhatsApp notification phone" help="Use international format, for example +66812345678.">
-              <UInput v-model="detailsForm.notification_phone" type="tel" placeholder="+66..." size="xl" class="w-full" />
-            </UFormField>
-          </div>
-
-          <div v-else-if="editorKey === 'reservations'" class="space-y-6">
-            <p class="text-base text-muted">
-              Reservations are open at this location while a policy exists here. Every rule you
-              state below is a sentence guests read before they book; a rule left unchecked is not
-              stated at all.
-            </p>
-            <UAlert
-              v-if="!reservationConfigExists"
-              color="neutral"
-              variant="soft"
-              icon="i-lucide-calendar-off"
-              description="This location does not take reservations yet. Saving a policy opens them."
-            />
-            <ReservationPolicyForm v-model="reservationForm" />
-            <UButton
-              v-if="reservationConfigExists"
-              color="error"
-              variant="soft"
-              icon="i-lucide-trash-2"
-              :loading="closingReservations"
-              :disabled="saving"
-              @click="closeReservations"
-            >
-              Stop taking reservations here
-            </UButton>
-          </div>
-
-          <div v-else-if="editorKey === 'features'" class="space-y-6">
-            <p class="text-base text-muted">Choose which site modules are available at this location.</p>
-            <div v-if="locationToggleableFeatures.length" class="space-y-3">
-              <UCard v-for="feature in locationToggleableFeatures" :key="feature" variant="subtle">
-              <UCheckbox v-model="locationEnabledFeatureSet[feature]" :label="locationFeatureLabel(feature)" />
-              </UCard>
+              <UBadge :color="location.google_place_id ? 'success' : 'neutral'" variant="soft">{{ location.google_place_id ? 'Connected' : 'Not connected' }}</UBadge>
             </div>
-            <p v-else class="text-sm text-muted">No location-specific modules are enabled for this site.</p>
-          </div>
+            <dl v-if="location.google_place_id" class="mt-5 grid grid-cols-2 gap-4 text-sm">
+              <div><dt class="text-muted">Rating</dt><dd class="mt-1 font-medium text-highlighted">{{ location.rating ?? 'Not available' }}</dd></div>
+              <div><dt class="text-muted">Reviews</dt><dd class="mt-1 font-medium text-highlighted">{{ location.review_count ?? 'Not available' }}</dd></div>
+            </dl>
+            <UButton class="mt-5" icon="i-simple-icons-googlemaps" color="neutral" variant="outline" :disabled="!location.google_place_id" :loading="syncingPlace" block @click="syncGooglePlace">Sync Google Places</UButton>
+            <p v-if="placeSyncResult" class="mt-3 text-sm text-success">{{ placeSyncResult }}</p>
+          </UCard>
+          <UFormField label="Google Place ID"><UInput v-model="detailsForm.google_place_id" size="xl" class="w-full" /></UFormField>
+          <UFormField label="Maps URL"><UInput v-model="detailsForm.maps_url" type="url" size="xl" class="w-full" /></UFormField>
+          <UFormField label="Google review URL"><UInput v-model="detailsForm.google_review_url" type="url" size="xl" class="w-full" /></UFormField>
+        </div>
 
-          <UAlert v-if="validationMessage" class="mt-6" color="error" variant="soft" :description="validationMessage" />
-        </template>
-      </EditorPaneShell>
+        <div v-else-if="editorKey === 'notifications'" class="space-y-6">
+          <p class="text-base text-muted">Internal alert routing for this location. These values are not shown to guests.</p>
+          <UFormField label="WhatsApp notification phone" help="Use international format, for example +66812345678.">
+            <UInput v-model="detailsForm.notification_phone" type="tel" placeholder="+66..." size="xl" class="w-full" />
+          </UFormField>
+        </div>
+
+        <div v-else-if="editorKey === 'reservations'" class="space-y-6">
+          <p class="text-base text-muted">
+            Reservations are open at this location while a policy exists here. Every rule you
+            state below is a sentence guests read before they book; a rule left unchecked is not
+            stated at all.
+          </p>
+          <UAlert
+            v-if="!reservationConfigExists"
+            color="neutral"
+            variant="soft"
+            icon="i-lucide-calendar-off"
+            description="This location does not take reservations yet. Saving a policy opens them."
+          />
+          <ReservationPolicyForm v-model="reservationForm" />
+          <UButton
+            v-if="reservationConfigExists"
+            color="error"
+            variant="soft"
+            icon="i-lucide-trash-2"
+            :loading="closingReservations"
+            :disabled="saving"
+            @click="closeReservations"
+          >
+            Stop taking reservations here
+          </UButton>
+        </div>
+
+        <div v-else-if="editorKey === 'features'" class="space-y-6">
+          <p class="text-base text-muted">Choose which site modules are available at this location.</p>
+          <div v-if="locationToggleableFeatures.length" class="space-y-3">
+            <UCard v-for="feature in locationToggleableFeatures" :key="feature" variant="subtle">
+            <UCheckbox v-model="locationEnabledFeatureSet[feature]" :label="locationFeatureLabel(feature)" />
+            </UCard>
+          </div>
+          <p v-else class="text-sm text-muted">No location-specific modules are enabled for this site.</p>
+        </div>
+
+        <UAlert v-if="validationMessage" class="mt-6" color="error" variant="soft" :description="validationMessage" />
+      </div>
+    </template>
+
+    <template v-if="hasDetail" #footer>
+      <div class="flex shrink-0 items-center justify-between gap-4 border-t border-default px-4 py-3 sm:px-6">
+        <UButton color="neutral" variant="ghost" label="Cancel" @click="cancelEditor" />
+        <UButton label="Save" :loading="saving" :disabled="saveDisabled" @click="saveCurrentEditor" />
+      </div>
     </template>
   </UDashboardPanel>
 </template>
@@ -171,7 +184,6 @@ import LocationHoursCard, { type LocationHoursForm } from '~/lib/components/work
 import { parseOpeningHours, parseSpecialHours, type OpeningHours, type SpecialHours } from '~/shared/reservation-hours'
 import DashboardResourceLocalization from '~/components/dashboard/DashboardResourceLocalization.vue'
 
-import EditorPaneShell from '~/components/dashboard/EditorPaneShell.vue'
 import EditorNavigationList from '~/components/dashboard/EditorNavigationList.vue'
 import ReservationPolicyForm from '~/components/dashboard/ReservationPolicyForm.vue'
 import type { LocationReservationConfig, LocationReservationConfigPatch } from '~/server/utils/reservations'
@@ -750,7 +762,6 @@ interface LocationSettingsResource {
   reservationConfig: { success: true; config: LocationReservationConfig | null }
 }
 
-const requestEvent = useRequestEvent()
 const locationSettingsKey = computed(() => `dashboard-location-settings-${siteId}-${locationId.value}`)
 const {
   data: locationSettingsResource,
@@ -760,11 +771,6 @@ const {
 } = await useAsyncData<LocationSettingsResource>(locationSettingsKey, async () => {
   const requestedLocationId = locationId.value
   if (!requestedLocationId) throw createError({ statusCode: 400, statusMessage: 'Location is required' })
-  if (import.meta.server) {
-    if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Request event unavailable' })
-    const { loadDashboardLocationSettings } = await import('~/server/utils/dashboard-editor-resources')
-    return await loadDashboardLocationSettings(requestEvent, siteId, requestedLocationId)
-  }
   const [locationResponse, reservationResponse] = await Promise.all([
     dashboardApi<{ success: true; location: BusinessLocation } & LocationCapabilitySummary>(
       `/api/dashboard/locations/${requestedLocationId}`,

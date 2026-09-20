@@ -5,7 +5,7 @@
 <script setup lang="ts">
 import QaEditorPage from '~/components/dashboard/QaEditorPage.vue'
 
-definePageMeta({ layout: 'dashboard', cmsCapabilityKey: 'location.qa', ownsChrome: true })
+definePageMeta({ layout: 'dashboard', ownsChrome: true })
 
 const dashboardLocation = useDashboardLocation()
 // Reactive: Nuxt reuses this component when only the location slug changes.

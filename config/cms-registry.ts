@@ -364,9 +364,7 @@ export function validateCmsCapabilityRegistry(): void {
   }
 }
 
-/** All manager keys a template can ever produce across every vertical it supports — the set the
- *  route guard and the "nav entries without a matching guardable capability" check validate
- *  page-level `cmsCapabilityKey` meta against. */
+/** All manager keys a template can ever produce across every vertical it supports. */
 export function allGuardableManagerKeys(): readonly string[] {
   const keys = new Set<string>()
   for (const catalog of Object.values(templateCapabilityCatalog)) {

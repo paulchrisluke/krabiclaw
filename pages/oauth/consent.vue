@@ -95,7 +95,8 @@ const route = useRoute()
 
 // ── Client metadata ───────────────────────────────────────────────────────────
 const clientName = ref<string | null>(null)
-const { user: currentUser } = await useAuthSession()
+const session = authClient.useSession()
+const currentUser = computed(() => session.value.data?.user ?? null)
 
 onMounted(async () => {
   const client = await fetchOAuthClientPrelogin(route.query.client_id, window.location.search.slice(1))

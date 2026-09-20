@@ -1,3 +1,4 @@
+import type { ComputedRef, Ref } from 'vue'
 import type { DashboardRequestScope } from '~/composables/dashboardFetch'
 
 interface DashboardOrganization {
@@ -137,14 +138,6 @@ const isDashboardContextResponse = (value: unknown): value is DashboardContextRe
     || value.siteAccess === 'location'
   )
 
-let clientDashboardContextReads: Map<string, Promise<DashboardContextResponse>> | undefined
-
-function getClientDashboardContextReads() {
-  if (!import.meta.client) return undefined
-  clientDashboardContextReads ??= new Map()
-  return clientDashboardContextReads
-}
-
 // The dashboard org/site scope is sent as explicit `org`/`site` query params
 // (see dashboardFetch in composables/dashboardFetch.ts) rather than headers —
 // callers must go through dashboardFetch rather than spreading a bespoke
@@ -169,65 +162,76 @@ export function buildDashboardRequestQuery(scope: DashboardRequestScope): Record
   return query
 }
 
-export function useDashboardSite() {
-  const scope = useDashboardRouteScope()
-  const contextByScope = useState<Record<string, DashboardContextResponse | null>>('dashboard:contexts', () => ({}))
-  const pendingByScope = useState<Record<string, boolean>>('dashboard:context-pending', () => ({}))
-  const contextKey = computed(() => {
+/** The scope key the context is stored under. Empty on an unscoped route. */
+function dashboardContextKey(scope: Ref<DashboardRequestScope | null> | ComputedRef<DashboardRequestScope | null>) {
+  return computed(() => {
     const current = scope.value
-    return current ? `${current.orgSlug}:${current.siteSlug ?? ''}` : ''
+    return current ? `dashboard:context:${current.orgSlug}:${current.siteSlug ?? ''}` : 'dashboard:context:unscoped'
   })
-  const state = computed<DashboardContextResponse | null>({
-    get: () => contextKey.value ? contextByScope.value[contextKey.value] ?? null : null,
-    set: (value) => {
-      if (!contextKey.value) return
-      contextByScope.value = { ...contextByScope.value, [contextKey.value]: value }
-    },
-  })
-  const pending = computed(() => contextKey.value ? pendingByScope.value[contextKey.value] ?? false : false)
+}
 
-  async function refresh(signal?: AbortSignal) {
-    const requestScope = scope.value
-    const requestKey = contextKey.value
-    if (!requestScope || !requestKey) {
-      state.value = null
-      return null
-    }
-    const sharedReads = !signal ? getClientDashboardContextReads() : undefined
-    const existing = sharedReads?.get(requestKey)
-    if (existing) return await existing
-    pendingByScope.value = { ...pendingByScope.value, [requestKey]: true }
-    const pendingRead = (import.meta.server
-      ? (async () => {
-          const event = useRequestEvent()
-          if (!event) throw createError({ statusCode: 500, statusMessage: 'Dashboard request context unavailable' })
-          const [{ loadDashboardContext }, { finalizeRequestMetrics }] = await Promise.all([
-            import('~/server/utils/dashboard-context-service'),
-            import('~/server/utils/request-metrics'),
-          ])
-          const response = await loadDashboardContext(event, requestScope) as DashboardContextResponse
-          return finalizeRequestMetrics(event, 'dashboard-context-ssr', response) as DashboardContextResponse
-        })()
-      : dashboardFetch<DashboardContextResponse>('/api/dashboard/context', requestScope, {
-          signal,
-          validate: isDashboardContextResponse,
-        }))
-      .then((response) => {
-        if (!isDashboardContextResponse(response)) {
-          throw new ApiClientError('Dashboard context response did not match its contract', 502, 'INVALID_API_RESPONSE', null)
-        }
-        contextByScope.value = { ...contextByScope.value, [requestKey]: response }
-        return response
+/**
+ * Registers the context request. layouts/dashboard.vue is the only caller.
+ * Nothing else starts a context request; every other consumer reads the
+ * result through `useDashboardSite()`.
+ *
+ * The scope comes from the router's live route, not `useRoute()`. In a layout,
+ * `useRoute()` is Nuxt's lagging copy that only advances once the destination
+ * page has rendered -- and the layout does not render that page until this
+ * request has answered for the destination, so the two would wait on each
+ * other. The result carries the key it answered for: on a scope change Nuxt
+ * seeds the new key's `data` with the previous scope's result until the new
+ * one lands, so `data` alone cannot say which scope it belongs to.
+ */
+export function useDashboardContextOwner() {
+  const scope = useDashboardRouteScope(useRouter().currentRoute)
+  const contextKey = dashboardContextKey(scope)
+
+  const request = useAsyncData<{ key: string; context: DashboardContextResponse | null }>(
+    () => contextKey.value,
+    async (_nuxtApp, { signal }) => {
+      const key = contextKey.value
+      const current = scope.value
+
+      // An unscoped route has no context to ask for. Checked on every
+      // execution, so navigation and manual refresh are covered too.
+      if (!current) return { key, context: null }
+
+      const response = await $fetch<unknown>('/api/dashboard/context', {
+        query: buildDashboardRequestQuery(current),
+        signal,
       })
-      .finally(() => {
-        pendingByScope.value = { ...pendingByScope.value, [requestKey]: false }
-        if (sharedReads?.get(requestKey) === pendingRead) {
-          sharedReads.delete(requestKey)
-        }
-      })
-    sharedReads?.set(requestKey, pendingRead)
-    return await pendingRead
-  }
+
+      if (!isDashboardContextResponse(response)) {
+        throw new ApiClientError(
+          'Dashboard context response did not match its contract',
+          502,
+          'INVALID_API_RESPONSE',
+          null,
+        )
+      }
+
+      return { key, context: response }
+    },
+  )
+
+  return Object.assign(request, { contextKey })
+}
+
+/**
+ * Reads the context the owner already fetched. Starts no request, registers no
+ * async data and holds no state of its own, so mounting a hundred consumers
+ * costs nothing.
+ */
+export function useDashboardSite() {
+  const nuxtApp = useNuxtApp()
+  const scope = useDashboardRouteScope()
+  const contextKey = dashboardContextKey(scope)
+
+  const state = computed<DashboardContextResponse | null>(() => {
+    const entry = nuxtApp.payload.data[contextKey.value] as { key: string; context: DashboardContextResponse | null } | undefined
+    return entry?.context ?? null
+  })
 
   const organization = computed(() => state.value?.organization ?? null)
   const site = computed(() => state.value?.site ?? null)
@@ -240,14 +244,14 @@ export function useDashboardSite() {
     state,
     scope,
     contextKey,
-    pending,
     organization,
     site,
     siteId,
     sites,
     locations,
     siteAccess,
-    refresh,
+    /** Re-runs the owner's request. For an explicit reload after a mutation. */
+    refresh: () => refreshNuxtData(contextKey.value),
   }
 }
 

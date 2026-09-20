@@ -151,8 +151,8 @@ export const cloudflareEnv = (event: H3Event): CloudflareEnv => {
   // #nitro/virtual/runtime-config for any module reached only through a dynamic import() (proven
   // by inspecting .nuxt/dev/index.mjs: two distinct `useRuntimeConfig`/`useRuntimeConfig$N`
   // function bodies, each closing over its own `runtimeConfig` object) — this file is one such
-  // module (server/utils/api-response.ts is dynamically imported from composables/useAuthSession.ts
-  // and elsewhere per the AGENTS.md self-fetch pattern), and the inlined copy's snapshot is taken
+  // module (server/utils/api-response.ts is reached through dynamic import() per the AGENTS.md
+  // self-fetch pattern), and the inlined copy's snapshot is taken
   // before Nuxt modules finish registering their runtimeConfig.public keys, so `.public` itself is
   // absent rather than merely incomplete. `?? {}` is scoped to exactly that dev-bundler defect, not
   // a stand-in for a real API contract — every value read off `publicConfig` below is optional

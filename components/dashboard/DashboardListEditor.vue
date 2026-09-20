@@ -8,13 +8,11 @@
     -->
     <header>
       <!--
-        The controls sit against the heading, not against the whole text block.
-        Pairing them with the description too let a long sentence push them onto
-        a line of their own on a phone.
+        The panel's own navbar names this column, so the list does not repeat
+        the name underneath it. What is left here is the controls and the line
+        that says what the list is for.
       -->
-      <div class="flex items-center justify-between gap-4">
-        <h1 class="min-w-0 truncate text-2xl font-semibold text-highlighted">{{ title }}</h1>
-
+      <div class="flex items-center justify-end gap-4">
         <div class="flex shrink-0 items-center gap-2">
           <slot name="actions" />
           <slot v-if="!readOnly && editing && selected.length" name="selection-actions" :selected="selected" />

@@ -31,7 +31,7 @@
 
 <script setup lang="ts">
 
-definePageMeta({ layout: 'dashboard', skipDashboardContext: true })
+definePageMeta({ layout: 'dashboard' })
 import { onboardingStepPath, useOnboardingState, useOnboardingSteps } from '~/composables/useOnboardingFlow'
 
 const router = useRouter()

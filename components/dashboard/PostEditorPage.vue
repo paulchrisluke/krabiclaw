@@ -21,54 +21,69 @@
     </template>
   </div>
 
-  <UDashboardPanel v-else id="location-post-detail">
-    <template #header>
-      <UDashboardNavbar :title="isNew ? 'New post' : editor.form.title || 'Post'" :toggle="false">
-        <template #leading>
-          <DashboardNavbarLeading :to="postsPath" label="Posts" />
-        </template>
-        <template v-if="post" #right>
-          <DashboardResourceLocalization
-            :site-id="siteId"
-            resource-type="content_document"
-            :resource-id="postId"
-            resource-label="post"
-            :fields="postLocalizationFields"
-            :route-path="localizedPostPath"
-            :language-settings-path="siteLocalizationSettingsPath"
+  <template v-else>
+    <UDashboardPanel
+      id="location-post-detail"
+      class="hidden lg:flex"
+      :default-size="32"
+    >
+      <template #header>
+        <UDashboardNavbar :title="isNew ? 'New post' : editor.form.title || 'Post'" :toggle="false">
+          <template #leading>
+            <DashboardNavbarLeading :to="postsPath" label="Posts" />
+          </template>
+          <template v-if="post" #right>
+            <DashboardResourceLocalization
+              :site-id="siteId"
+              resource-type="content_document"
+              :resource-id="postId"
+              resource-label="post"
+              :fields="postLocalizationFields"
+              :route-path="localizedPostPath"
+              :language-settings-path="siteLocalizationSettingsPath"
+            />
+          </template>
+        </UDashboardNavbar>
+      </template>
+
+      <template #body>
+        <div class="mx-auto w-full max-w-xl">
+          <UAlert
+            v-if="loadError"
+            color="error"
+            variant="soft"
+            icon="i-lucide-triangle-alert"
+            title="Post could not be loaded"
+            :description="loadError"
           />
-        </template>
-      </UDashboardNavbar>
-    </template>
+          <EditorNavigationList v-else :groups="navigationGroups" :active-item="detailKey" />
+        </div>
+      </template>
+    </UDashboardPanel>
 
-    <template #body>
-      <UAlert
-        v-if="loadError"
-        color="error"
-        variant="soft"
-        icon="i-lucide-triangle-alert"
-        title="Post could not be loaded"
-        :description="loadError"
-      />
+    <!--
+      The open section is the other column: its own panel, its own header,
+      and Save/Cancel in the panel's own footer slot.
+    -->
+    <UDashboardPanel v-if="!loadError" id="location-post-section">
+      <template #header>
+        <UDashboardNavbar :title="sectionLabels[editorKey]" :toggle="false">
+          <template #leading>
+            <DashboardNavbarLeading :to="postPath" label="Post" />
+          </template>
+        </UDashboardNavbar>
+      </template>
 
-      <EditorPaneShell
-        v-else
-        has-detail
-        :show-actions="editorKey !== 'photo'"
-        :saving="editor.saving.value"
-        :save-disabled="saveDisabled"
-        :save-label="saveLabel"
-        :detail-title="sectionLabels[editorKey]"
-        :dismiss-to="postPath"
-        :error="editor.error.value"
-        @cancel="cancelEditor"
-        @save="saveCurrentEditor"
-      >
-        <template #index>
-          <EditorNavigationList :groups="navigationGroups" :active-item="detailKey" />
-        </template>
-
-        <template #detail>
+      <template #body>
+        <div class="mx-auto w-full max-w-5xl">
+          <UAlert
+            v-if="editor.error.value"
+            color="error"
+            variant="soft"
+            icon="i-lucide-circle-alert"
+            :description="editor.error.value"
+            class="mb-6"
+          />
           <!--
             Post type. Only a post being created has it: the contract's shape
             is chosen by the type, so an existing post cannot change it.
@@ -196,10 +211,17 @@
           <p v-else class="text-base text-muted">
             {{ typeLabel }} posts have no {{ sectionLabels[editorKey].toLowerCase() }}.
           </p>
-        </template>
-      </EditorPaneShell>
-    </template>
-  </UDashboardPanel>
+        </div>
+      </template>
+
+      <template v-if="editorKey !== 'photo'" #footer>
+        <div class="flex shrink-0 items-center justify-between gap-4 border-t border-default px-4 py-3 sm:px-6">
+          <UButton color="neutral" variant="ghost" label="Cancel" @click="cancelEditor" />
+          <UButton :label="saveLabel || 'Save'" :loading="editor.saving.value" :disabled="saveDisabled" @click="saveCurrentEditor" />
+        </div>
+      </template>
+    </UDashboardPanel>
+  </template>
 
   <!--
     Where the post goes out is a separate decision from what it says, so it is
@@ -233,7 +255,6 @@
 </template>
 
 <script setup lang="ts">
-import EditorPaneShell from '~/components/dashboard/EditorPaneShell.vue'
 import EditorNavigationList, { type EditorNavigationGroup } from '~/components/dashboard/EditorNavigationList.vue'
 import DashboardListItemDialog from '~/components/dashboard/DashboardListItemDialog.vue'
 import DashboardResourceLocalization from '~/components/dashboard/DashboardResourceLocalization.vue'

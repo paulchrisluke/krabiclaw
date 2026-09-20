@@ -115,24 +115,15 @@ const isPostsResponse = (value: unknown): value is { posts: BlogPost[] } =>
   && Array.isArray(value.posts)
   && value.posts.every(post => isRecord(post) && typeof post.id === 'string' && typeof post.title === 'string')
 
-const requestEvent = useRequestEvent()
 const { data, pending, error, refresh } = await useAsyncData(
   `dashboard-blog-posts:${siteId}`,
   async () => {
-    // On the server the data is read straight from D1; going back out over HTTP
-    // to our own endpoint would cost a round trip during render.
-    if (import.meta.server) {
-      if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Request context unavailable' })
-      const { loadDashboardBlogPosts } = await import('~/server/utils/dashboard-editor-resources')
-      const resource = await loadDashboardBlogPosts(requestEvent, siteId)
-      return { posts: resource.posts as unknown as BlogPost[] }
-    }
     const response = await dashboardApi<{ posts: BlogPost[] }>(`/api/editor/sites/${siteId}/blog/posts`, {
       validate: isPostsResponse,
     })
     return { posts: response.posts }
   },
-  { lazy: import.meta.client },
+  { lazy: true },
 )
 
 const loadError = computed(() => (error.value ? getErrorMessage(error.value, 'Failed to load posts') : null))

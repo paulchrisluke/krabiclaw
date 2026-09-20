@@ -1,30 +1,22 @@
 <template>
   <NuxtPage v-if="frame.mode.value === 'yield'" />
 
-  <UDashboardPanel v-else id="account-profile">
-    <template #header>
-      <UDashboardNavbar title="Account" :toggle="false">
-        <template #leading>
-          <DashboardNavbarLeading to="/dashboard" label="Dashboard" />
-        </template>
-      </UDashboardNavbar>
-    </template>
+  <template v-else>
+    <UDashboardPanel
+      id="account-profile"
+      :class="hasDetail ? 'hidden lg:flex' : undefined"
+      :default-size="32"
+    >
+      <template #header>
+        <UDashboardNavbar title="Account" :toggle="false">
+          <template #leading>
+            <DashboardNavbarLeading to="/dashboard" label="Dashboard" />
+          </template>
+        </UDashboardNavbar>
+      </template>
 
-    <template #body>
-      <EditorPaneShell
-        :has-detail="frame.mode.value === 'pair'"
-        show-desktop-detail
-        :detail-title="detailTitle"
-        :dismiss-to="profilePath"
-        :show-actions="hasCommit"
-        :saving="saving"
-        :save-disabled="saveDisabled"
-        :save-label="saveLabel"
-        :error="detailError"
-        @cancel="closeDetail"
-        @save="saveDetail"
-      >
-        <template #index>
+      <template #body>
+        <div class="mx-auto w-full max-w-xl">
           <!--
             One carded list of rows, the surface every other settings hub draws.
             A row states its value and opens a level; Log out acts on the
@@ -38,9 +30,33 @@
           </NuxtLink>
 
           <EditorNavigationList :groups="groups" :active-item="openKey" @act="runRowAction" />
-        </template>
+        </div>
+      </template>
+    </UDashboardPanel>
 
-        <template #detail>
+    <!--
+      The open row is the other column. It is drawn at `lg` even with nothing
+      open, so the pair never collapses to one column on a wide screen.
+    -->
+    <UDashboardPanel id="account-profile-detail" :class="hasDetail ? undefined : 'hidden lg:flex'">
+      <template #header>
+        <UDashboardNavbar :title="detailTitle" :toggle="false">
+          <template #leading>
+            <DashboardNavbarLeading :to="profilePath" label="Account" />
+          </template>
+        </UDashboardNavbar>
+      </template>
+
+      <template #body>
+        <div class="mx-auto w-full max-w-2xl">
+          <UAlert
+            v-if="detailError"
+            color="error"
+            variant="soft"
+            icon="i-lucide-circle-alert"
+            :description="detailError"
+            class="mb-6"
+          />
           <div v-if="openKey === 'photo'" class="space-y-6">
             <UAvatar :src="photoPreview ?? sessionData?.user?.image ?? undefined" icon="i-lucide-user" alt="" class="size-32" :ui="{ icon: 'size-16' }" />
             <UAlert v-if="photoError" color="error" variant="soft" icon="i-lucide-triangle-alert" :description="photoError" />
@@ -91,11 +107,17 @@
               </UFormField>
             </template>
           </div>
-        </template>
+        </div>
+      </template>
 
-      </EditorPaneShell>
-    </template>
-  </UDashboardPanel>
+      <template v-if="hasCommit" #footer>
+        <div class="flex shrink-0 items-center justify-between gap-4 border-t border-default px-4 py-3 sm:px-6">
+          <UButton color="neutral" variant="ghost" label="Cancel" @click="closeDetail" />
+          <UButton :label="saveLabel || 'Save'" :loading="saving" :disabled="saveDisabled" @click="saveDetail" />
+        </div>
+      </template>
+    </UDashboardPanel>
+  </template>
 
   <!-- OTP Verification Modal -->
   <UModal v-model:open="verifyModalOpen" :ui="{ content: 'max-w-sm' }">
@@ -137,7 +159,6 @@
 
 <script setup lang="ts">
 // -nocheck
-import EditorPaneShell from '~/components/dashboard/EditorPaneShell.vue'
 import EditorNavigationList, { type EditorNavigationGroup } from '~/components/dashboard/EditorNavigationList.vue'
 import { authClient } from '~/lib/auth-client'
 import { dashboardOrganizationParentKey } from '~/lib/components/workspace/dashboard/dashboardScopeHeaderContext'
@@ -149,7 +170,10 @@ const route = useRoute()
 // injects, which Vue binds only while setup is still synchronous.
 const profilePath = computed(() => '/dashboard/account/profile')
 const frame = useEditorFrame(profilePath)
-const { sessionData, refresh: refreshSession } = await useAuthSession()
+const hasDetail = computed(() => frame.mode.value === 'pair')
+const session = authClient.useSession()
+const sessionData = computed(() => session.value.data)
+const refreshSession = () => session.value.refetch()
 
 const organizationParent = inject(dashboardOrganizationParentKey, null)
 const billingTo = computed(() => organizationParent?.value ? `${organizationParent.value.to}/settings/billing` : null)
@@ -175,9 +199,7 @@ onMounted(async () => {
 })
 
 async function handleSignOut() {
-  // Preserve the current path across sign-out/sign-back-in like
-  // middleware/account.ts and middleware/dashboard.global.ts already do for
-  // session-expiry redirects.
+  // Preserve the current path across sign-out/sign-back-in.
   const redirect = route.fullPath
   await signOut()
   await navigateTo({ path: '/login', query: { redirect } })

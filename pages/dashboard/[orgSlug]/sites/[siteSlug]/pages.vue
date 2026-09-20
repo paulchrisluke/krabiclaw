@@ -2,38 +2,34 @@
   <NuxtPage v-if="frame.mode.value === 'yield'" />
 
   <!-- A page is open: my list is the index column, the page is the detail. -->
-  <UDashboardPanel v-else-if="frame.mode.value === 'pair'" id="site-pages">
-    <template #header>
-      <UDashboardNavbar title="Pages" :toggle="false">
-        <template #leading>
-          <DashboardNavbarLeading :to="sitePath" label="Site" />
-        </template>
-      </UDashboardNavbar>
-    </template>
+  <template v-else>
+    <UDashboardPanel
+      id="site-pages"
+      :class="hasDetail ? 'hidden lg:flex' : undefined"
+      :default-size="hasDetail ? 32 : undefined"
+    >
+      <template #header>
+        <UDashboardNavbar title="Pages" :toggle="false">
+          <template #leading>
+            <DashboardNavbarLeading :to="sitePath" label="Site" />
+          </template>
+        </UDashboardNavbar>
+      </template>
 
-    <template #body>
-      <EditorPaneShell
-        has-detail
-        :dismiss-to="pagesPath"
-        detail-title="Page"
-        wide-detail
-        hide-detail-heading
-      >
-        <template #index>
+      <template #body>
+        <div class="mx-auto w-full" :class="hasDetail ? 'max-w-xl' : 'max-w-3xl'">
           <TenantPageList />
-        </template>
-        <template #detail>
-          <NuxtPage />
-        </template>
-      </EditorPaneShell>
-    </template>
-  </UDashboardPanel>
+        </div>
+      </template>
+    </UDashboardPanel>
 
-  <TenantPageList v-else />
+    <!-- The open child owns the other column, header and all. -->
+    <NuxtPage v-if="hasDetail" />
+  </template>
+
 </template>
 
 <script setup lang="ts">
-import EditorPaneShell from '~/components/dashboard/EditorPaneShell.vue'
 import TenantPageList from '~/components/dashboard/TenantPageList.vue'
 
 definePageMeta({ layout: 'dashboard' })
@@ -46,6 +42,7 @@ const route = useRoute()
 const sitePath = computed(() => `/dashboard/${String(route.params.orgSlug)}/sites/${String(route.params.siteSlug)}`)
 const pagesPath = computed(() => `${sitePath.value}/pages`)
 const frame = useEditorFrame(pagesPath)
+const hasDetail = computed(() => frame.mode.value === 'pair')
 
 useSeoMeta({ title: 'Pages | KrabiClaw Dashboard', robots: 'noindex, nofollow' })
 </script>

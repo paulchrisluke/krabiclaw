@@ -5,13 +5,12 @@
       <p class="mt-2 text-sm text-muted">Sign in with the email address that received this invitation.</p>
     </div>
 
-    <!-- Not keyed on sessionLoading: the client reports pending for the tick
-         it hydrates on, so the server rendered the signed-out buttons where
-         the client wanted this node, and every load logged a hydration
-         mismatch. The session is awaited in setup, so by render time both
-         sides agree on isAuthenticated. -->
-    <div v-if="accepting" class="text-sm text-muted">
-      Accepting invitation…
+    <!-- The session resolves on the client after mount; both the server and
+         the hydrating client see it pending, so this branch is what both
+         render until it is known. The sign-in buttons wait for a resolved
+         signed-out session rather than flashing at a signed-in owner. -->
+    <div v-if="sessionLoading || accepting" class="text-sm text-muted">
+      {{ accepting ? 'Accepting invitation…' : 'Checking your session…' }}
     </div>
 
     <template v-else-if="!isAuthenticated">
@@ -39,7 +38,9 @@ const route = useRoute()
 const invitationId = String(route.params.invitationId || '')
 const pagePath = `/accept-invitation/${encodeURIComponent(invitationId)}`
 const emailLoginUrl = computed(() => buildLoginUrl({ redirect: pagePath }))
-const { isAuthenticated, sessionLoading } = await useAuthSession()
+const session = authClient.useSession()
+const isAuthenticated = computed(() => Boolean(session.value.data?.user))
+const sessionLoading = computed(() => session.value.isPending)
 const authOperation = useAuthOperation()
 const accepting = ref(false)
 const acceptError = ref<string | null>(null)

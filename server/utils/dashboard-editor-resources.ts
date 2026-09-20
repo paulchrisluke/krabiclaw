@@ -8,29 +8,21 @@ import { requireLocationAccess, requireSiteAccess } from '~/server/utils/locatio
 import {
   assertLocationAccess,
   assertResourceAccess,
-  assertSiteWideAccess,
   listAccessibleLocationIds,
   memberAccessPrincipal,
 } from '~/server/utils/member-access'
 import { getMediaAsset, listMediaAssets } from '~/server/utils/media-asset-manager'
-import { getDashboardContext, getDashboardLocationContext } from '~/server/utils/dashboard-context'
-import { loadSettingsPayload } from '~/server/utils/site-settings'
-import { getNotificationsSettings } from '~/server/utils/mcp-workflows'
-import { getFacebookPagesConnection } from '~/server/utils/facebook-pages'
+import { getDashboardLocationContext } from '~/server/utils/dashboard-context'
 import { resolveLocationCapabilitySummary } from '~/server/utils/location-management'
 import { parseLocationPayload } from '~/server/utils/location-payload'
 import { getProduct, hydrateProductMedia, summarizeLocationProducts } from '~/server/utils/product-management'
 import { listDashboardGuestThreadsForPrincipal } from '~/server/utils/dashboard-guest-threads'
 import { requireBlogAccess } from '~/server/utils/blog-access'
-import { requireTenantPageWriteAccess } from '~/server/utils/tenant-pages-api'
-import { getTenantPageById, listTenantPages } from '~/server/utils/content/pages'
 import { getBlogPost, listBlogPosts } from '~/server/utils/content/publishing'
-import { listPosts } from '~/server/utils/post-management'
 import { createPreviewToken, PREVIEW_TOKEN_TTL_MS } from '~/server/utils/preview-token'
 import { resolveSiteCmsCapabilities } from '~/server/utils/cms-capabilities'
 import { getEditablePages } from '~/config/content-registry'
 import { parseCmsFeatureOverrideDelta } from '~/config/cms-registry'
-import { getLocationReservationConfig } from '~/server/utils/reservations'
 
 interface EditorLocationRow {
   id: string
@@ -152,37 +144,6 @@ export async function loadDashboardMedia(
   }
 }
 
-export async function loadDashboardSettingsResource(
-  event: H3Event,
-  options: { includeFacebook: boolean; organizationSlug?: string; siteSlug?: string },
-) {
-  const { env, db, organization, site } = await getDashboardContext(event, {
-    requireSite: true,
-    organizationSlug: options.organizationSlug,
-    siteSlug: options.siteSlug,
-  })
-  if (!site) throw new HTTPError({ statusCode: 404, statusMessage: 'Site not found' })
-  await assertSiteWideAccess(db, memberAccessPrincipal(organization, { env, siteId: site.id, event }))
-  const [settings, notifications, facebookConnection] = await Promise.all([
-    loadSettingsPayload(db, organization.id, site.id),
-    getNotificationsSettings(db, organization.id, site.id),
-    options.includeFacebook
-      ? getFacebookPagesConnection(env, organization.id, site.id)
-      : Promise.resolve(null),
-  ])
-  return {
-    settings: { success: true as const, settings },
-    notifications: { success: true as const, notifications },
-    facebook: facebookConnection
-      ? {
-          connected: true as const,
-          facebook_page_name: facebookConnection.facebook_page_name,
-        }
-      : { connected: false as const },
-  }
-}
-
-
 export interface LocationContentCounts {
   photos: number
   posts: number
@@ -273,36 +234,6 @@ export async function loadDashboardLocationOverview(
   }
 }
 
-export async function loadDashboardLocationSettings(
-  event: H3Event,
-  siteId: string,
-  locationId: string,
-) {
-  const { env, db, organization, location } = await getDashboardLocationContext(event, locationId)
-  if (location.site_id !== siteId) {
-    throw new HTTPError({ statusCode: 404, statusMessage: 'Location not found' })
-  }
-  await assertLocationAccess(db, { ...memberAccessPrincipal(organization, { env, siteId, event }), locationId })
-  const capabilities = await resolveLocationCapabilitySummary(
-    db,
-    organization.id,
-    siteId,
-    location.feature_overrides as string | null ?? null,
-  )
-  // The reservation policy is a row of its own, and the settings editor opens
-  // its leaf from the same render — so it travels with the location rather than
-  // costing a second round trip from the client.
-  const reservationConfig = await getLocationReservationConfig(db, { organizationId: organization.id, locationId })
-  return {
-    location: {
-      success: true as const,
-      location: parseLocationPayload(location)!,
-      ...capabilities,
-    },
-    reservationConfig: { success: true as const, config: reservationConfig },
-  }
-}
-
 export async function loadDashboardBlogPosts(
   event: H3Event,
   siteId: string,
@@ -321,26 +252,6 @@ export async function loadDashboardBlogPost(
   const post = await getBlogPost(db, postId, siteId, env)
   if (!post) throw new HTTPError({ statusCode: 404, statusMessage: 'Post not found' })
   return { post }
-}
-
-/**
- * The Pages chain reads these on the server rather than calling its own
- * endpoints over HTTP during render, the way the Blog chain does. Rendering the
- * list and the open page server-side is what lets a section, a section's part
- * or a record inside one survive a direct load or a refresh: every level's
- * not-found guard reads the same loaded page, so a missing id answers 404 and a
- * real one answers itself.
- */
-export async function loadDashboardTenantPages(event: H3Event, siteId: string, locale?: string | null) {
-  const { db } = await requireTenantPageWriteAccess(event, siteId)
-  return { pages: await listTenantPages(db, siteId, { locale: locale ?? null }) }
-}
-
-export async function loadDashboardTenantPage(event: H3Event, siteId: string, variantId: string) {
-  const { db, site } = await requireTenantPageWriteAccess(event, siteId)
-  const page = await getTenantPageById(db, variantId, { siteId, organizationId: site.organization_id })
-  if (!page) throw new HTTPError({ statusCode: 404, statusMessage: 'Page not found' })
-  return { page }
 }
 
 export async function loadDashboardProduct(
@@ -363,19 +274,3 @@ export async function loadDashboardProduct(
   return { success: true as const, product: hydrated! }
 }
 
-export async function loadDashboardLocationPosts(
-  event: H3Event,
-  siteId: string,
-  locationId: string,
-  status?: string,
-) {
-  const { env, db, site } = await requireLocationAccess(event, siteId, locationId)
-  const [posts, connection] = await Promise.all([
-    listPosts(db, site.organization_id, siteId, status, locationId),
-    getFacebookPagesConnection(env, site.organization_id, siteId),
-  ])
-  return {
-    posts: { success: true as const, posts },
-    facebook: { connected: Boolean(connection) },
-  }
-}

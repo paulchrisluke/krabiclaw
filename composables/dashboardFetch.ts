@@ -1,4 +1,5 @@
 import type { FetchOptions } from 'ofetch'
+import type { MaybeRefOrGetter } from 'vue'
 import { $fetch } from 'ofetch'
 
 type DashboardFetchOptions<T> = Omit<FetchOptions<'json'>, 'method'> & {
@@ -103,14 +104,14 @@ export async function dashboardFetch<T>(
   return await executeApiFetch(request, scopedOptions, headers)
 }
 
-export function useDashboardRouteScope() {
-  const route = useRoute()
+export function useDashboardRouteScope(route: MaybeRefOrGetter<ReturnType<typeof useRoute>> = useRoute()) {
   return computed<DashboardRequestScope | null>(() => {
-    const orgSlug = typeof route.params.orgSlug === 'string' ? route.params.orgSlug : null
+    const params = toValue(route).params
+    const orgSlug = typeof params.orgSlug === 'string' ? params.orgSlug : null
     if (!orgSlug) return null
     return {
       orgSlug,
-      siteSlug: typeof route.params.siteSlug === 'string' ? route.params.siteSlug : null,
+      siteSlug: typeof params.siteSlug === 'string' ? params.siteSlug : null,
     }
   })
 }

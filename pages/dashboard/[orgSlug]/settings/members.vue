@@ -6,32 +6,34 @@
   -->
   <OrganizationMembersList v-if="frame.mode.value === 'index'" />
 
-  <UDashboardPanel v-else id="organization-members">
-    <template #header>
-      <UDashboardNavbar title="Members" :toggle="false">
-        <template #leading>
-          <DashboardNavbarLeading :to="settingsPath" label="Settings" />
-        </template>
-      </UDashboardNavbar>
-    </template>
+  <template v-else>
+    <UDashboardPanel id="organization-members" class="hidden lg:flex" :default-size="32">
+      <template #header>
+        <UDashboardNavbar title="Members" :toggle="false">
+          <template #leading>
+            <DashboardNavbarLeading :to="settingsPath" label="Settings" />
+          </template>
+        </UDashboardNavbar>
+      </template>
 
-    <template #body>
-      <EditorPaneShell
-        has-detail
-        detail-title="Invite a team member"
-        :dismiss-to="membersPath"
-        wide-detail
-        show-actions
-        :saving="inviting"
-        :save-disabled="!inviteForm.email.trim() || (inviteForm.role === 'editor' && !inviteForm.siteId)"
-        save-label="Send invite"
-        @cancel="closeInvite"
-        @save="sendInvite"
-      >
-        <template #index>
+      <template #body>
+        <div class="mx-auto w-full max-w-xl">
           <OrganizationMembersList />
-        </template>
-        <template #detail>
+        </div>
+      </template>
+    </UDashboardPanel>
+
+    <UDashboardPanel id="organization-members-invite">
+      <template #header>
+        <UDashboardNavbar title="Invite a team member" :toggle="false">
+          <template #leading>
+            <DashboardNavbarLeading :to="membersPath" label="Members" />
+          </template>
+        </UDashboardNavbar>
+      </template>
+
+      <template #body>
+        <div class="mx-auto w-full max-w-5xl">
           <div class="space-y-6">
             <UFormField label="Email address" required>
               <UInput v-model="inviteForm.email" type="email" placeholder="teammate@example.com" size="xl" autofocus class="w-full" />
@@ -49,14 +51,25 @@
             </template>
             <UAlert v-if="inviteError" color="error" variant="soft" icon="i-lucide-circle-alert" :description="inviteError" />
           </div>
-        </template>
-      </EditorPaneShell>
-    </template>
-  </UDashboardPanel>
+        </div>
+      </template>
+
+      <template #footer>
+        <div class="flex shrink-0 items-center justify-between gap-4 border-t border-default px-4 py-3 sm:px-6">
+          <UButton color="neutral" variant="ghost" label="Cancel" @click="closeInvite" />
+          <UButton
+            label="Send invite"
+            :loading="inviting"
+            :disabled="!inviteForm.email.trim() || (inviteForm.role === 'editor' && !inviteForm.siteId)"
+            @click="sendInvite"
+          />
+        </div>
+      </template>
+    </UDashboardPanel>
+  </template>
 </template>
 
 <script setup lang="ts">
-import EditorPaneShell from '~/components/dashboard/EditorPaneShell.vue'
 import OrganizationMembersList from '~/components/dashboard/OrganizationMembersList.vue'
 import { authClient } from '~/lib/auth-client'
 import { organizationMembersKey } from '~/utils/organization-members'
@@ -70,7 +83,6 @@ const membersPath = computed(() => `${settingsPath.value}/members`)
 const frame = useEditorFrame(membersPath)
 
 const dashboard = useDashboardSite()
-if (!dashboard.state.value) await dashboard.refresh()
 
 watchEffect(() => {
   if (frame.rest.value.length > 1 || (frame.childSegment.value && frame.childSegment.value !== 'invite')) {

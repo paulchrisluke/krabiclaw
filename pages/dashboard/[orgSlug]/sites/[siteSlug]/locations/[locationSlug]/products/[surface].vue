@@ -5,44 +5,41 @@
   -->
   <NuxtPage v-if="frame.mode.value === 'yield'" />
 
-  <!-- A collection is open: I am the index column, it is the detail. -->
-  <UDashboardPanel v-else-if="frame.mode.value === 'pair'" id="location-products">
-    <template #header>
-      <UDashboardNavbar :title="presentation.collectionLabel" :toggle="false">
-        <template #leading>
-          <DashboardNavbarLeading :to="productsPath" :label="catalogTitle" />
-        </template>
-      </UDashboardNavbar>
-    </template>
+  <!--
+    One panel either way: this level always owns a column and always titles it.
+    When a collection is open that column is the index and the collection takes
+    the other; when nothing is open this is the column my parent put me in.
+  -->
+  <template v-else>
+    <UDashboardPanel
+      id="location-products"
+      :class="hasDetail ? 'hidden lg:flex' : undefined"
+      :default-size="hasDetail ? 32 : undefined"
+    >
+      <template #header>
+        <UDashboardNavbar :title="presentation.collectionLabel" :toggle="false">
+          <template #leading>
+            <DashboardNavbarLeading :to="productsPath" :label="catalogTitle" />
+          </template>
+        </UDashboardNavbar>
+      </template>
 
-    <template #body>
-      <EditorPaneShell
-        has-detail
-        :dismiss-to="surfacePath"
-        :detail-title="presentation.collectionGroupLabel"
-        wide-detail
-        hide-detail-heading
-      >
-        <template #index>
+      <template #body>
+        <div class="mx-auto w-full" :class="hasDetail ? 'max-w-xl' : 'max-w-3xl'">
           <CollectionList :surface="surface" />
-        </template>
-        <template #detail>
-          <NuxtPage />
-        </template>
-      </EditorPaneShell>
-    </template>
-  </UDashboardPanel>
+        </div>
+      </template>
+    </UDashboardPanel>
 
-  <!-- Nothing below me is open, so I am my parent's detail column. -->
-  <CollectionList v-else :surface="surface" />
+    <NuxtPage v-if="hasDetail" />
+  </template>
 </template>
 
 <script setup lang="ts">
-import EditorPaneShell from '~/components/dashboard/EditorPaneShell.vue'
 import CollectionList from '~/components/dashboard/CollectionList.vue'
 import { catalogLabel, countCatalog, isCatalogSurface, presentationForSurface } from '~/utils/product-presentation'
 
-definePageMeta({ layout: 'dashboard', cmsCapabilityKey: 'location.products' })
+definePageMeta({ layout: 'dashboard' })
 
 const route = useRoute()
 const dashboard = useDashboardSite()
@@ -73,4 +70,5 @@ const locationId = computed(() => dashboardLocation.currentLocation.value?.id ??
 const catalog = useLocationProductCatalog(siteId, locationId)
 // The level above is the whole catalog, which one surface's word cannot name.
 const catalogTitle = computed(() => catalogLabel(vertical, countCatalog(catalog.products.value)))
+const hasDetail = computed(() => frame.mode.value === 'pair')
 </script>

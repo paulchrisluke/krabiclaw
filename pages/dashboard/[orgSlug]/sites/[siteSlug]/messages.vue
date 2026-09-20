@@ -8,38 +8,51 @@
     is open — an empty conversation pane says "pick one", where a full-width
     list followed by a jump to a full-width conversation says nothing.
   -->
-  <UDashboardPanel v-else id="site-messages">
-    <template #header>
-      <UDashboardNavbar :title="navbarTitle" :toggle="false">
-        <template #leading>
-          <DashboardNavbarLeading :to="navbarBackTo" :label="navbarBackLabel" />
-        </template>
-      </UDashboardNavbar>
-    </template>
+  <template v-else>
+    <!--
+      A list panel is not a form: its rows run to the edge of the column, so
+      both panels drop the body padding rather than a wrapper doing it for them.
+    -->
+    <UDashboardPanel
+      id="site-messages"
+      :class="hasDetail ? 'hidden lg:flex' : undefined"
+      :default-size="32"
+      :ui="{ body: 'p-0 sm:p-0 gap-0' }"
+    >
+      <template #header>
+        <UDashboardNavbar :title="navbarTitle" :toggle="false">
+          <template #leading>
+            <DashboardNavbarLeading :to="navbarBackTo" :label="navbarBackLabel" />
+          </template>
+        </UDashboardNavbar>
+      </template>
 
-    <template #body>
-      <EditorPaneShell
-        :has-detail="frame.mode.value === 'pair'"
-        show-desktop-detail
-        flush-index
-        flush-detail
-        :dismiss-to="listWithFilters"
-        detail-title="Conversation"
-        hide-detail-heading
-      >
-        <template #index>
-          <GuestThreadList scope="site" />
-        </template>
-        <template #detail>
-          <NuxtPage v-if="frame.mode.value === 'pair'" />
-        </template>
-      </EditorPaneShell>
-    </template>
-  </UDashboardPanel>
+      <template #body>
+        <GuestThreadList scope="site" />
+      </template>
+    </UDashboardPanel>
+
+    <UDashboardPanel
+      id="site-messages-thread"
+      :class="hasDetail ? undefined : 'hidden lg:flex'"
+      :ui="{ body: 'p-0 sm:p-0 gap-0' }"
+    >
+      <template v-if="hasDetail" #header>
+        <UDashboardNavbar title="Conversation" :toggle="false">
+          <template #leading>
+            <DashboardNavbarLeading :to="listWithFilters" label="Messages" />
+          </template>
+        </UDashboardNavbar>
+      </template>
+
+      <template #body>
+        <NuxtPage v-if="hasDetail" />
+      </template>
+    </UDashboardPanel>
+  </template>
 </template>
 
 <script setup lang="ts">
-import EditorPaneShell from '~/components/dashboard/EditorPaneShell.vue'
 import GuestThreadList from '~/lib/components/workspace/messages/GuestThreadList.vue'
 
 definePageMeta({ layout: 'dashboard', ownsChrome: true })
@@ -51,6 +64,7 @@ const route = useRoute()
 const sitePath = computed(() => `/dashboard/${String(route.params.orgSlug)}/sites/${String(route.params.siteSlug)}`)
 const messagesPath = computed(() => `${sitePath.value}/messages`)
 const frame = useEditorFrame(messagesPath)
+const hasDetail = computed(() => frame.mode.value === 'pair')
 
 // One back control, the navbar's. Past conversations is the list becoming the
 // other corpus, so the chrome names it and goes back to the list — a second

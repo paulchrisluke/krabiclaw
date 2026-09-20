@@ -19,13 +19,15 @@
 </template>
 
 <script setup lang="ts">
+import { authClient } from '~/lib/auth-client'
 import { isMandatoryEmailCategory, isNotificationCategory, type NotificationCategory } from '~/shared/notification-categories'
 
 // The category is passed in rather than read from the route, because the index
 // route renders this leaf for the first category with no segment of its own.
 const props = defineProps<{ category: NotificationCategory }>()
 
-const { sessionData } = await useAuthSession()
+const session = authClient.useSession()
+const sessionData = computed(() => session.value.data)
 const { preferences, save } = useNotificationPreferences(() => sessionData.value?.user?.id)
 
 if (!isNotificationCategory(props.category)) throw createError({ statusCode: 404, statusMessage: 'Page not found' })

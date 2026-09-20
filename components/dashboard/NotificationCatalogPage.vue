@@ -1,43 +1,53 @@
 <template>
   <NuxtPage v-if="frame.mode.value === 'yield'" />
 
-  <UDashboardPanel v-else id="notification-catalog">
-    <template #header>
-      <UDashboardNavbar title="Messages" :toggle="false" />
-    </template>
+  <!--
+    The same hub-and-leaf chain the CMS uses: rows preview what each event
+    sends, and one event opens at a time with both channels beside each
+    other. Seeing them together is the only way to tell whether they agree.
+  -->
+  <template v-else>
+    <UDashboardPanel
+      id="notification-catalog"
+      :class="hasDetail ? 'hidden lg:flex' : undefined"
+      :default-size="32"
+    >
+      <template #header>
+        <UDashboardNavbar title="Messages" :toggle="false" />
+      </template>
 
-    <template #body>
-      <!--
-        The same hub-and-leaf chain the CMS uses: rows preview what each event
-        sends, and one event opens at a time with both channels beside each
-        other. Seeing them together is the only way to tell whether they agree.
-      -->
-      <EditorPaneShell
-        :has-detail="frame.mode.value === 'pair'"
-        show-desktop-detail
-        wide-detail
-        :detail-title="detailTitle"
-        :dismiss-to="basePath"
-      >
-        <template #index>
+      <template #body>
+        <div class="mx-auto w-full max-w-xl">
           <UAlert v-if="error" color="error" variant="soft" icon="i-lucide-triangle-alert" :description="error" class="mb-6" />
           <EditorNavigationList :groups="groups" :active-item="openId" />
-        </template>
+        </div>
+      </template>
+    </UDashboardPanel>
 
-        <template #detail>
+    <UDashboardPanel id="notification-catalog-detail" :class="hasDetail ? undefined : 'hidden lg:flex'">
+      <template #header>
+        <UDashboardNavbar :title="detailTitle" :toggle="false">
+          <template #leading>
+            <DashboardNavbarLeading :to="basePath" label="Messages" />
+          </template>
+        </UDashboardNavbar>
+      </template>
+
+      <template #body>
+        <div class="mx-auto w-full max-w-5xl">
           <NuxtPage />
-        </template>
-      </EditorPaneShell>
-    </template>
-  </UDashboardPanel>
+        </div>
+      </template>
+    </UDashboardPanel>
+  </template>
 </template>
 
 <script setup lang="ts">
-import EditorPaneShell from '~/components/dashboard/EditorPaneShell.vue'
 import EditorNavigationList, { type EditorNavigationGroup } from '~/components/dashboard/EditorNavigationList.vue'
 
 const basePath = computed(() => '/dev/notifications')
 const frame = useEditorFrame(basePath)
+const hasDetail = computed(() => frame.mode.value === 'pair')
 
 const { entries, error } = await useNotificationCatalog()
 

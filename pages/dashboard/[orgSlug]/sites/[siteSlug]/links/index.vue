@@ -8,5 +8,5 @@ import LinksPageEditor from '~/components/dashboard/LinksPageEditor.vue'
 // column, so the site keeps its own rail and this renders the links rows inside
 // it. The catch-all beside this file claims the chrome once a section opens,
 // which is how `/blog` and a blog post divide it too.
-definePageMeta({ layout: 'dashboard', cmsCapabilityKey: 'site.links' })
+definePageMeta({ layout: 'dashboard' })
 </script>

@@ -2,41 +2,37 @@
   <NuxtPage v-if="frame.mode.value === 'yield'" />
 
   <!-- A testimonial is open: the list is the index column, the record the detail. -->
-  <UDashboardPanel v-else-if="frame.mode.value === 'pair'" id="site-testimonials">
-    <template #header>
-      <UDashboardNavbar title="Testimonials" :toggle="false">
-        <template #leading>
-          <DashboardNavbarLeading :to="sitePath" label="Site" />
-        </template>
-      </UDashboardNavbar>
-    </template>
+  <template v-else>
+    <UDashboardPanel
+      id="site-testimonials"
+      :class="hasDetail ? 'hidden lg:flex' : undefined"
+      :default-size="hasDetail ? 32 : undefined"
+    >
+      <template #header>
+        <UDashboardNavbar title="Testimonials" :toggle="false">
+          <template #leading>
+            <DashboardNavbarLeading :to="sitePath" label="Site" />
+          </template>
+        </UDashboardNavbar>
+      </template>
 
-    <template #body>
-      <EditorPaneShell
-        has-detail
-        :dismiss-to="testimonialsPath"
-        detail-title="Testimonial"
-        wide-detail
-        hide-detail-heading
-      >
-        <template #index>
+      <template #body>
+        <div class="mx-auto w-full" :class="hasDetail ? 'max-w-xl' : 'max-w-3xl'">
           <TestimonialList />
-        </template>
-        <template #detail>
-          <NuxtPage />
-        </template>
-      </EditorPaneShell>
-    </template>
-  </UDashboardPanel>
+        </div>
+      </template>
+    </UDashboardPanel>
 
-  <TestimonialList v-else />
+    <!-- The open child owns the other column, header and all. -->
+    <NuxtPage v-if="hasDetail" />
+  </template>
+
 </template>
 
 <script setup lang="ts">
-import EditorPaneShell from '~/components/dashboard/EditorPaneShell.vue'
 import TestimonialList from '~/components/dashboard/TestimonialList.vue'
 
-definePageMeta({ layout: 'dashboard', cmsCapabilityKey: 'site.testimonials' })
+definePageMeta({ layout: 'dashboard' })
 
 const route = useRoute()
 
@@ -45,6 +41,7 @@ const route = useRoute()
 const sitePath = computed(() => `/dashboard/${String(route.params.orgSlug)}/sites/${String(route.params.siteSlug)}`)
 const testimonialsPath = computed(() => `${sitePath.value}/testimonials`)
 const frame = useEditorFrame(testimonialsPath)
+const hasDetail = computed(() => frame.mode.value === 'pair')
 
 useSeoMeta({ title: 'Testimonials | KrabiClaw Dashboard', robots: 'noindex, nofollow' })
 </script>

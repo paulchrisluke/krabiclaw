@@ -291,33 +291,16 @@ async function loadDomains({ background = false }: { background?: boolean } = {}
   if (!background) loading.value = true
   loadError.value = null
   try {
-    const response = import.meta.server
-      ? await loadDomainsForServer(siteId.value)
-      : await dashboardApi<DomainsResponse>(
-          `/api/sites/${siteId.value}/domains`,
-          { validate: isDomainsResponse },
-        )
-    if (!isDomainsResponse(response)) {
-      throw new ApiClientError('Domains response did not match its contract', 502, 'INVALID_API_RESPONSE', null)
-    }
+    const response = await dashboardApi<DomainsResponse>(
+      `/api/sites/${siteId.value}/domains`,
+      { validate: isDomainsResponse },
+    )
     domainGroups.value = response.domain_groups
   } catch (error) {
     loadError.value = getErrorMessage(error, 'Failed to load domains')
   } finally {
     if (!background) loading.value = false
   }
-}
-
-async function loadDomainsForServer(siteId: string): Promise<DomainsResponse> {
-  const requestEvent = useRequestEvent()
-  if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Request event not available' })
-  const [{ cloudflareEnv }, { getSiteDomainsDashboardPayload }] = await Promise.all([
-    import('~/server/utils/api-response'),
-    import('~/server/utils/domain-read-model'),
-  ])
-  const env = cloudflareEnv(requestEvent)
-  if (!env.db || !env.DB) throw createError({ statusCode: 500, statusMessage: 'Database not available' })
-  return getSiteDomainsDashboardPayload(env.DB, siteId)
 }
 
 function openAddModal() {

@@ -2,41 +2,37 @@
   <NuxtPage v-if="frame.mode.value === 'yield'" />
 
   <!-- A post is open: my list is the index column, the post is the detail. -->
-  <UDashboardPanel v-else-if="frame.mode.value === 'pair'" id="site-blog">
-    <template #header>
-      <UDashboardNavbar title="Blog" :toggle="false">
-        <template #leading>
-          <DashboardNavbarLeading :to="sitePath" label="Site" />
-        </template>
-      </UDashboardNavbar>
-    </template>
+  <template v-else>
+    <UDashboardPanel
+      id="site-blog"
+      :class="hasDetail ? 'hidden lg:flex' : undefined"
+      :default-size="hasDetail ? 32 : undefined"
+    >
+      <template #header>
+        <UDashboardNavbar title="Blog" :toggle="false">
+          <template #leading>
+            <DashboardNavbarLeading :to="sitePath" label="Site" />
+          </template>
+        </UDashboardNavbar>
+      </template>
 
-    <template #body>
-      <EditorPaneShell
-        has-detail
-        :dismiss-to="blogPath"
-        detail-title="Post"
-        wide-detail
-        hide-detail-heading
-      >
-        <template #index>
+      <template #body>
+        <div class="mx-auto w-full" :class="hasDetail ? 'max-w-xl' : 'max-w-3xl'">
           <BlogPostList />
-        </template>
-        <template #detail>
-          <NuxtPage />
-        </template>
-      </EditorPaneShell>
-    </template>
-  </UDashboardPanel>
+        </div>
+      </template>
+    </UDashboardPanel>
 
-  <BlogPostList v-else />
+    <!-- The open child owns the other column, header and all. -->
+    <NuxtPage v-if="hasDetail" />
+  </template>
+
 </template>
 
 <script setup lang="ts">
-import EditorPaneShell from '~/components/dashboard/EditorPaneShell.vue'
 import BlogPostList from '~/components/dashboard/BlogPostList.vue'
 
-definePageMeta({ layout: 'dashboard', cmsCapabilityKey: 'site.blog' })
+definePageMeta({ layout: 'dashboard' })
 
 const route = useRoute()
 
@@ -46,4 +42,5 @@ const route = useRoute()
 const sitePath = computed(() => `/dashboard/${String(route.params.orgSlug)}/sites/${String(route.params.siteSlug)}`)
 const blogPath = computed(() => `/dashboard/${String(route.params.orgSlug)}/sites/${String(route.params.siteSlug)}/blog`)
 const frame = useEditorFrame(blogPath)
+const hasDetail = computed(() => frame.mode.value === 'pair')
 </script>
