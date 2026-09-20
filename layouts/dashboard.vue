@@ -311,7 +311,7 @@ const scopeHeaderModel = computed<DashboardScopeHeaderModel>(() => {
 provide(dashboardScopeHeaderModelKey, scopeHeaderModel)
 provide(dashboardOrganizationParentKey, computed(() => {
   const target = isAccountRoute.value ? accountOrganization.value : organization.value ?? accountOrganization.value
-  return target ? { label: target.name, to: `/dashboard/${encodeURIComponent(target.slug)}` } : null
+  return target ? { label: target.name, to: `/dashboard/${encodeURIComponent(target.slug)}/settings` } : null
 }))
 
 interface DashboardMobileNavItem {

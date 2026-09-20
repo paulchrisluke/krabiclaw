@@ -3,7 +3,7 @@
     <template #header>
       <UDashboardNavbar title="Notifications">
         <template #leading>
-          <DashboardNavbarLeading :to="orgPaths.org" label="Organization" />
+          <DashboardNavbarLeading />
         </template>
         <template #right>
           <UButton
@@ -70,9 +70,8 @@
 </template>
 
 <script setup lang="ts">
-definePageMeta({ layout: 'dashboard' })
+definePageMeta({ layout: 'dashboard', ownsChrome: true })
 
-const { orgPaths } = useDashboardSiteLinks()
 useSeoMeta({ title: 'Notifications | KrabiClaw Dashboard', robots: 'noindex, nofollow' })
 
 const dashboardApi = useDashboardApi()

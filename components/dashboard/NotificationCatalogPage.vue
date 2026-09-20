@@ -28,7 +28,7 @@
       <template #header>
         <UDashboardNavbar :title="detailTitle" :toggle="false">
           <template #leading>
-            <DashboardNavbarLeading :to="basePath" label="Messages" />
+            <DashboardNavbarLeading />
           </template>
         </UDashboardNavbar>
       </template>

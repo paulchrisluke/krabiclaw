@@ -3,10 +3,7 @@
     <template #header>
       <UDashboardNavbar :title="isChangeMode && noun ? `Change ${noun}` : pageTitle" :toggle="false">
         <template #leading>
-          <DashboardNavbarLeading
-            :to="isChangeMode ? bookingPath : todayPath"
-            :label="isChangeMode && noun ? capitalize(noun) : 'Today'"
-          />
+          <DashboardNavbarLeading />
         </template>
       </UDashboardNavbar>
     </template>
@@ -44,7 +41,4 @@ const { noun, pageTitle } = await useBookingDetails(bookingType, bookingId)
 // here rather than reported upward out of the body.
 const isChangeMode = computed(() => route.path.startsWith(`${bookingPath.value}/change`))
 
-function capitalize(value: string) {
-  return value ? value.charAt(0).toUpperCase() + value.slice(1) : ''
-}
 </script>

@@ -19,7 +19,7 @@
       <template #header>
         <UDashboardNavbar :title="catalogTitle" :toggle="false">
           <template #leading>
-            <DashboardNavbarLeading :to="locationPath" label="Location" />
+            <DashboardNavbarLeading />
           </template>
         </UDashboardNavbar>
       </template>

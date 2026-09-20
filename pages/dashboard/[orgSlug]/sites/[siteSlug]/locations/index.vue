@@ -3,7 +3,7 @@
     <template #header>
       <UDashboardNavbar :title="'Locations'" :toggle="false">
         <template #leading>
-          <DashboardNavbarLeading v-if="sitePaths?.site" :to="sitePaths?.site" label="Site" />
+          <DashboardNavbarLeading />
         </template>
       </UDashboardNavbar>
     </template>

@@ -7,7 +7,7 @@
     <template #header>
       <UDashboardNavbar :title="navbarTitle" :toggle="false">
         <template #leading>
-          <DashboardNavbarLeading :to="levelBackTo" :label="levelBackLabel" />
+          <DashboardNavbarLeading />
         </template>
         <template v-if="surface === 'brand'" #right>
           <DashboardResourceLocalization
@@ -41,7 +41,7 @@
     <template #header>
       <UDashboardNavbar :title="detailTitle" :toggle="false">
         <template #leading>
-          <DashboardNavbarLeading :to="dismissTo" :label="navbarTitle" />
+          <DashboardNavbarLeading />
         </template>
       </UDashboardNavbar>
     </template>
@@ -403,23 +403,6 @@ const isFacebookStatus = (value: unknown): value is FacebookConnectionStatus =>
   isRecord(value) && typeof value.connected === 'boolean' && (value.facebook_page_name === undefined || typeof value.facebook_page_name === 'string')
 
 
-// Two different "up"s, and they are not the same destination.
-//
-// The navbar's back control leaves the *level* — the index column and everything
-// reachable from it. At `lg` that index is on screen beside the open section, so
-// leaving the level means leaving settings entirely.
-//
-// The sheet's close control leaves the open *section* and lands on the index it
-// was opened from. It only exists below `lg`, where that index is covered.
-//
-// Conflating them sent the navbar to the settings index while the settings index
-// was already the thing on screen.
-const levelBackTo = computed(() => isSearchLevel.value ? settingsPath.value : siteDashboardPath.value)
-const levelBackLabel = computed(() => isSearchLevel.value ? 'Site settings' : 'Site overview')
-const dismissTo = computed(() => {
-  if (isSearchLevel.value) return `${settingsPath.value}/search`
-  return surface.value === 'brand' ? brandPath.value : settingsPath.value
-})
 const routeSegments = frame.rest
 const firstSegment = computed(() => routeSegments.value[0] ?? null)
 const secondSegment = computed(() => routeSegments.value[1] ?? null)

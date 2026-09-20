@@ -19,7 +19,7 @@
       <template #header>
         <UDashboardNavbar :title="presentation.collectionLabel" :toggle="false">
           <template #leading>
-            <DashboardNavbarLeading :to="productsPath" :label="catalogTitle" />
+            <DashboardNavbarLeading />
           </template>
         </UDashboardNavbar>
       </template>
@@ -37,13 +37,12 @@
 
 <script setup lang="ts">
 import CollectionList from '~/components/dashboard/CollectionList.vue'
-import { catalogLabel, countCatalog, isCatalogSurface, presentationForSurface } from '~/utils/product-presentation'
+import { isCatalogSurface, presentationForSurface } from '~/utils/product-presentation'
 
 definePageMeta({ layout: 'dashboard' })
 
 const route = useRoute()
 const dashboard = useDashboardSite()
-const dashboardLocation = useDashboardLocation()
 
 const vertical = dashboard.site.value?.vertical
 if (!vertical) throw createError({ statusCode: 500, statusMessage: 'Site vertical is not configured' })
@@ -64,11 +63,5 @@ const productsPath = computed(() => `${locationPath.value}/products`)
 const surfacePath = computed(() => `${productsPath.value}/${surface}`)
 const frame = useEditorFrame(surfacePath)
 
-const siteId = await useDashboardSiteId()
-const locationId = computed(() => dashboardLocation.currentLocation.value?.id ?? null)
-// The same catalog the list below reads, so titling this column costs no request.
-const catalog = useLocationProductCatalog(siteId, locationId)
-// The level above is the whole catalog, which one surface's word cannot name.
-const catalogTitle = computed(() => catalogLabel(vertical, countCatalog(catalog.products.value)))
 const hasDetail = computed(() => frame.mode.value === 'pair')
 </script>

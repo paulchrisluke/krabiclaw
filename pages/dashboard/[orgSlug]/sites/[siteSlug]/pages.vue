@@ -11,7 +11,7 @@
       <template #header>
         <UDashboardNavbar title="Pages" :toggle="false">
           <template #leading>
-            <DashboardNavbarLeading :to="sitePath" label="Site" />
+            <DashboardNavbarLeading />
           </template>
         </UDashboardNavbar>
       </template>

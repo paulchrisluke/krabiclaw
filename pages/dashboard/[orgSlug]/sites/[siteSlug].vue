@@ -20,7 +20,7 @@
       <template #header>
       <UDashboardNavbar :title="siteName || 'Site'" :toggle="false">
         <template #leading>
-          <DashboardNavbarLeading :to="`${orgPaths.org}/sites`" label="Sites" />
+          <DashboardNavbarLeading />
         </template>
         <template #right>
           <UButton
@@ -115,7 +115,6 @@ definePageMeta({ layout: 'dashboard' })
 const route = useRoute()
 const dashboardApi = useDashboardApi()
 const dashboard = useDashboardSite()
-const { orgPaths } = useDashboardSiteLinks()
 
 // The frame comes first, and before any `await`. `useEditorFrame` provides and
 // injects, which Vue only binds to this instance while setup is still

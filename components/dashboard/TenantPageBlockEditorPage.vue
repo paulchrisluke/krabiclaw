@@ -77,7 +77,7 @@
       <template #header>
         <UDashboardNavbar :title="blockLabel" :toggle="false">
           <template #leading>
-            <DashboardNavbarLeading :to="sectionsPath" label="Sections" />
+            <DashboardNavbarLeading />
           </template>
         </UDashboardNavbar>
       </template>
@@ -98,7 +98,7 @@
       <template #header>
         <UDashboardNavbar :title="openSection?.label" :toggle="false">
           <template #leading>
-            <DashboardNavbarLeading :to="blockPath" label="Section" />
+            <DashboardNavbarLeading />
           </template>
         </UDashboardNavbar>
       </template>

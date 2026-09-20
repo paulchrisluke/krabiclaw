@@ -13,7 +13,7 @@
     <template #header>
       <UDashboardNavbar :title="navbarTitle" :toggle="false">
         <template #leading>
-          <DashboardNavbarLeading :to="levelBackTo" label="Location" />
+          <DashboardNavbarLeading />
         </template>
         <template #right>
           <DashboardResourceLocalization
@@ -52,7 +52,7 @@
     <template #header>
       <UDashboardNavbar :title="detailTitles[editorKey]" :toggle="false">
         <template #leading>
-          <DashboardNavbarLeading :to="detail ? locationPath : settingsPath" :label="detail ? 'Location' : 'Settings'" />
+          <DashboardNavbarLeading />
         </template>
       </UDashboardNavbar>
     </template>
@@ -247,10 +247,6 @@ const locationId = computed(() => dashboardLocation.currentLocationId.value)
 
 // Up one level: out of a section back to the settings index, out of the index
 // back to the location overview.
-// The navbar leaves the level for the location overview. The open section's own
-// way out is the sheet's close control, which lands on the settings index — the
-// index that is already beside it at `lg`.
-const levelBackTo = computed(() => locationPath.value)
 const routeSegments = frame.rest
 const detailKey = computed(() => props.detail ?? routeSegments.value[0] ?? null)
 const editorKey = computed(() => detailKey.value ?? SETTINGS_KEYS[0])

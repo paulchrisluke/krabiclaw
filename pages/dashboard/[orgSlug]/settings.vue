@@ -1,5 +1,10 @@
 <template>
-  <NuxtPage v-if="frame.mode.value === 'yield'" />
+  <!--
+    Notifications, Insights and the members pair draw their own panels, so
+    this level only routes to them. Everything else is a leaf in the column
+    beside the Menu.
+  -->
+  <NuxtPage v-if="rendersStandalone || frame.mode.value === 'yield'" />
 
   <template v-else>
     <UDashboardPanel
@@ -8,27 +13,26 @@
       :default-size="hasDetail ? 32 : undefined"
     >
       <template #header>
-        <UDashboardNavbar title="Organization Settings" :toggle="false">
-          <template #leading>
-            <DashboardNavbarLeading :to="menuPath" label="Menu" />
+        <UDashboardNavbar title="Menu" :toggle="false">
+          <template #right>
+            <DashboardNotificationBell :to="notificationsTo" />
+            <DashboardAccountMenu />
           </template>
         </UDashboardNavbar>
       </template>
 
       <template #body>
-        <div class="mx-auto w-full" :class="hasDetail ? 'max-w-xl' : 'max-w-3xl'">
-          <EditorNavigationList :groups="groups" :active-item="activeItem" />
+        <div class="mx-auto w-full" :class="hasDetail ? 'max-w-xl' : 'max-w-[var(--ws-page-narrow,45rem)]'">
+          <DashboardMenuContent @search="openSearch" />
         </div>
       </template>
     </UDashboardPanel>
 
-    <!-- The open setting is the other column; the settings screens are plain
-         content, so this level gives them the column and the header. -->
     <UDashboardPanel v-if="hasDetail" id="organization-settings-detail">
       <template #header>
-        <UDashboardNavbar :title="detailTitle" :toggle="false">
+        <UDashboardNavbar :title="activeLabel" :toggle="false">
           <template #leading>
-            <DashboardNavbarLeading :to="settingsPath" label="Settings" />
+            <DashboardNavbarLeading />
           </template>
         </UDashboardNavbar>
       </template>
@@ -43,39 +47,25 @@
 </template>
 
 <script setup lang="ts">
-import EditorNavigationList from '~/components/dashboard/EditorNavigationList.vue'
+import DashboardMenuContent from '~/lib/components/workspace/dashboard/DashboardMenuContent.vue'
+import DashboardNotificationBell from '~/lib/components/workspace/dashboard/DashboardNotificationBell.vue'
+import DashboardAccountMenu from '~/lib/components/workspace/dashboard/DashboardAccountMenu.vue'
 
 definePageMeta({ layout: 'dashboard' })
+useSeoMeta({ title: 'Menu | KrabiClaw Dashboard', robots: 'noindex, nofollow' })
 
 const route = useRoute()
+const nuxtApp = useNuxtApp()
 
-const { orgPaths } = useDashboardSiteLinks()
-const settingsPath = computed(() => orgPaths.value.settings)
+const { settingsPath, activeLabel } = useOrganizationSettingsNavigation()
 const frame = useEditorFrame(settingsPath)
 const hasDetail = computed(() => frame.mode.value === 'pair')
-
-
-const { groups, activeItem } = useOrganizationSettingsNavigation()
-
-// Built from `orgPaths`, not spelled out: a literal dashboard path here trips
-// the retired-menu guard, and the helper already owns how these are composed.
-const menuPath = computed(() => `${orgPaths.value.org}/menu`)
-
-/**
- * The open section names itself from the same list the index renders, so a
- * renamed section changes in one place. A section that wants the wider pane
- * says so in its own `definePageMeta`, the way `ownsChrome` is declared, rather
- * than this level keeping a list of which sections are special.
- */
-const detailTitle = computed(() => {
-  const open = frame.childSegment.value
-  if (!open) return undefined
-  for (const group of groups.value) {
-    const item = group.items.find(candidate => candidate.id === open)
-    if (item) return item.label
-  }
-  return undefined
-})
-
+const rendersStandalone = computed(() => route.matched.some(record => record.meta?.ownsChrome === true))
 const wideDetail = computed(() => route.meta.wideDetail === true)
+
+const { notificationsTo } = useDashboardMenu()
+
+function openSearch() {
+  nuxtApp.hooks.callHook('dashboard:search:toggle')
+}
 </script>

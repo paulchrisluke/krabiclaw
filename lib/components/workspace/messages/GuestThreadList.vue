@@ -170,11 +170,11 @@
         lens on the one you are in.
       -->
       <NuxtLink
-        v-if="!loadingThreads && !pastOnly && threads.length > 0"
-        :to="{ path: listRoute, query: { ...route.query, archived: '' } }"
+        v-if="!loadingThreads && (pastOnly || threads.length > 0)"
+        :to="{ path: listRoute, query: pastOnly ? withoutArchived : { ...route.query, archived: '' } }"
         class="mt-2 flex items-center justify-between gap-3 border-t border-default px-4 py-4 text-sm font-medium text-default transition hover:bg-elevated/60"
       >
-        <span>Past conversations</span>
+        <span>{{ pastOnly ? 'Current conversations' : 'Past conversations' }}</span>
         <UIcon name="i-lucide-chevron-right" class="size-4 shrink-0 text-muted" />
       </NuxtLink>
 
@@ -255,6 +255,7 @@ const openThreadId = computed(() => {
 
 // Filter, search and corpus live in the URL, so a filtered list is a link.
 const pastOnly = computed(() => route.query.archived !== undefined)
+const withoutArchived = computed(() => { const { archived: _archived, ...rest } = route.query; return rest })
 const activeType = computed<SubmissionType | null>(() => {
   if (props.submissionTypeFilter) return props.submissionTypeFilter
   const value = route.query.filter
