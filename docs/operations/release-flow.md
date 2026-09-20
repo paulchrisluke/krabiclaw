@@ -112,6 +112,19 @@ An auth update that changes schema or network-security contracts requires that
 work to be designed and qualified explicitly; never upgrade one auth plugin in
 isolation or suppress its incompatible peer requirements.
 
+## Schema changes
+
+Edit `server/db/schema.ts`, run `yarn db:generate`, read the emitted SQL and
+commit it with the snapshot; CI applies it. Adding, dropping or renaming a
+column is an ordinary generated migration: D1 runs those in place. A CHECK,
+foreign-key or NOT NULL change on a table that other tables reference makes
+drizzle-kit emit a rebuild (`CREATE __new_x`, copy, `DROP TABLE x`, rename), and
+that DROP cascade-deletes every child row on D1, which ignores
+`PRAGMA foreign_keys=OFF` and `defer_foreign_keys`. `yarn lint:migrations`
+blocks it. When such a change is unavoidable, write the migration by hand as
+expand/contract (ADD COLUMN, UPDATE, DROP COLUMN, RENAME COLUMN), as
+`migrations/0006_site_currency_nullable.sql` does.
+
 ## Search indexing
 
 Staging and production deploys compare the push's before/after commits in the

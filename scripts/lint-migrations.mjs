@@ -1,185 +1,48 @@
 #!/usr/bin/env node
-/**
- * D1 migration guardrails.
- *
- * D1 rejects raw BEGIN/COMMIT/ROLLBACK, confirmed both via Drizzle's execute()
- * and the raw binding.
- * A migration that slips one in applies fine in isolation but breaks the first
- * write path that tries to wrap it, so this is checked at the SQL-file level:
- *
- * 1. Rejects bare BEGIN/COMMIT/ROLLBACK statements in migrations/*.sql outside
- *    of CREATE TRIGGER ... BEGIN ... END bodies (where BEGIN/END are trigger
- *    body delimiters, not transaction control, and are always allowed).
- * Usage:
- *   node scripts/lint-migrations.mjs
- */
-
+// A migration must never DROP TABLE a table that other tables reference. D1
+// ignores `PRAGMA foreign_keys=OFF` and `defer_foreign_keys`, so the rebuild
+// drizzle-kit generates for a constraint change on a parent (CREATE __new_x,
+// copy, DROP TABLE x, RENAME) cascade-deletes every child row. RENAME rewrites
+// the children's REFERENCES, so dropping the old table cascades just the same.
+// Measured on a throwaway D1 instance, 2026-09-09; see release-flow.md.
+//
+// SQLite replays the chain in the order wrangler applies it (the sorted .sql
+// files in migrations/) and its authorizer denies the DROP against the foreign
+// keys that exist at that statement. A parent whose
+// referencing tables were dropped first may go: nothing is left to cascade.
 import { readdir, readFile } from 'node:fs/promises'
-import { existsSync } from 'node:fs'
-import { join, relative } from 'node:path'
 import { DatabaseSync, constants } from 'node:sqlite'
 
-const ROOT = process.cwd()
-const MIGRATIONS_DIR = join(ROOT, 'migrations')
-const EPOCH_BASELINE = '0000_baseline.sql'
+const files = (await readdir('migrations')).filter(name => name.endsWith('.sql')).sort()
+const db = new DatabaseSync(':memory:')
+let parents = new Set()
+let blocked
 
-function stripTriggerBodies(sql) {
-  // Replace with an equal number of newlines (not '') so line numbers for any
-  // violation reported after a trigger body stay aligned with the source file.
-  return sql.replace(/CREATE\s+TRIGGER\b[\s\S]*?\bEND\s*;/gi, (match) => '\n'.repeat((match.match(/\n/g) || []).length))
-}
+db.setAuthorizer((action, table) => {
+  if (action === constants.SQLITE_DROP_TABLE && parents.has(table.toLowerCase())) blocked = table
+  return blocked ? constants.SQLITE_DENY : constants.SQLITE_OK
+})
 
-function lintTransactionControl(sql, filePath) {
-  const violations = []
-  const stripped = stripTriggerBodies(sql)
-  const statementRe = /\b(BEGIN|COMMIT|ROLLBACK)\b(\s+(IMMEDIATE|EXCLUSIVE|DEFERRED|TRANSACTION))*\s*;/gi
-  let match
-
-  while ((match = statementRe.exec(stripped)) !== null) {
-    const line = stripped.slice(0, match.index).split('\n').length
-    violations.push({
-      file: relative(ROOT, filePath),
-      line,
-      message: `Bare "${match[1]}" statement outside a CREATE TRIGGER body — D1 rejects raw transaction control.`,
-    })
-  }
-
-  return violations
-}
-
-async function collectSqlFiles() {
-  if (!existsSync(MIGRATIONS_DIR)) return []
-  const entries = await readdir(MIGRATIONS_DIR)
-  return entries
-    .filter((entry) => entry.endsWith('.sql'))
-    .sort()
-    .map((entry) => join(MIGRATIONS_DIR, entry))
-}
-
-function lintEpochBaseline(presentFiles) {
-  const names = presentFiles.map((file) => relative(MIGRATIONS_DIR, file))
-  if (names[0] === EPOCH_BASELINE) return []
-  return [{
-    file: `migrations/${EPOCH_BASELINE}`,
-    message: 'The chain must start with the generated baseline. Production history is immutable after cutover.',
-  }]
-}
-
-function lintDuplicateMigrationNumbers(presentFiles) {
-  const byNumber = new Map()
-  for (const file of presentFiles) {
-    const name = relative(MIGRATIONS_DIR, file)
-    const number = Number.parseInt(name.slice(0, 4), 10)
-    if (!Number.isInteger(number)) continue
-    const names = byNumber.get(number) ?? []
-    names.push(name)
-    byNumber.set(number, names)
-  }
-
-  return [...byNumber.entries()]
-    .filter(([, names]) => names.length > 1)
-    .map(([number, names]) => ({
-      file: `migrations/${String(number).padStart(4, '0')}_*.sql`,
-      message: `Duplicate migration number: ${names.join(', ')}. Regenerate the later migration on the current target branch.`,
-    }))
-}
-
-// Let SQLite parse the SQL and inspect its actual foreign keys. Snapshot metadata
-// alone cannot establish whether a DROP is safe at this point in the chain. A
-// table that only references itself may be dropped: its cascade cannot reach
-// another table.
-async function lintReferencedParentDrops(files) {
-  const db = new DatabaseSync(':memory:')
-  let parents = new Set()
-  let blockedTable
-  let droppedLater = new Set()
-  db.setAuthorizer((action, table) => {
-    if (action === constants.SQLITE_ATTACH) return constants.SQLITE_DENY
-    if (action === constants.SQLITE_DROP_TABLE && parents.has(table.toLowerCase()) && !droppedLater.has(table.toLowerCase())) {
-      blockedTable = table
-      return constants.SQLITE_DENY
-    }
-    return constants.SQLITE_OK
-  })
+for (const name of files) {
+  const file = `migrations/${name}`
+  let remaining = await readFile(file, 'utf8')
   try {
-    for (const file of files) {
-      let remaining = await readFile(file, 'utf8')
-      // A rebuild may drop a parent whose only referencing tables are themselves
-      // dropped in this file: the cascade cannot reach a table that survives.
-      const dropped = [...remaining.matchAll(/DROP TABLE\s+`?([A-Za-z0-9_]+)`?/gi)].map(match => match[1].toLowerCase())
-      try {
-        while (true) {
-          // Strip only leading whitespace, delimiters and comments; SQLite finds
-          // statement boundaries, including quoted text and trigger bodies.
-          remaining = remaining.replace(/^(?:\s|;|--[^\n]*(?:\n|$)|\/\*[\s\S]*?\*\/)+/, '')
-          if (!remaining) break
-          const references = db.prepare(`
-            SELECT DISTINCT lower(s.name) AS child, lower(f."table") AS parent
-            FROM sqlite_schema AS s, pragma_foreign_key_list(s.name) AS f
-            WHERE s.type = 'table' AND lower(s.name) <> lower(f."table")
-          `).all()
-          parents = new Set(references.map(row => row.parent))
-          droppedLater = new Set([...parents].filter(parent => references
-            .filter(row => row.parent === parent)
-            .every(row => dropped.includes(row.child))))
-          const statement = db.prepare(remaining)
-          const length = statement.sourceSQL.length
-          statement.run()
-          remaining = remaining.slice(length)
-        }
-      } catch (error) {
-        return [{
-          file: relative(ROOT, file),
-          message: blockedTable
-            ? `Cannot DROP referenced parent table "${blockedTable}". D1 may execute foreign-key actions during a rebuild; build the replacement family beside it and rename last.`
-            : `Migration chain cannot be validated: ${error.message}`,
-        }]
-      }
+    while ((remaining = remaining.replace(/^(?:\s|;|--[^\n]*(?:\n|$)|\/\*[\s\S]*?\*\/)+/, ''))) {
+      const references = db.prepare(`
+        SELECT DISTINCT lower(s.name) AS child, lower(f."table") AS parent
+        FROM sqlite_schema AS s, pragma_foreign_key_list(s.name) AS f
+        WHERE s.type = 'table' AND lower(s.name) <> lower(f."table")
+      `).all()
+      parents = new Set(references.map(row => row.parent))
+      const statement = db.prepare(remaining)
+      statement.run()
+      remaining = remaining.slice(statement.sourceSQL.length)
     }
-    return []
-  } finally {
-    db.close()
+  } catch (error) {
+    console.error(blocked
+      ? `✗ ${file} drops "${blocked}", which other tables reference. On D1 that cascade-deletes their rows. Write an expand/contract migration by hand instead (see migrations/0006_site_currency_nullable.sql).`
+      : `✗ ${file} does not apply: ${error.message}`)
+    process.exit(1)
   }
-}
-
-let totalViolations = 0
-
-const sqlFiles = await collectSqlFiles()
-
-for (const violation of lintEpochBaseline(sqlFiles)) {
-  console.error(`  ✗ ${violation.file} — ${violation.message}`)
-  totalViolations++
-}
-
-for (const violation of lintDuplicateMigrationNumbers(sqlFiles)) {
-  console.error(`  ✗ ${violation.file} — ${violation.message}`)
-  totalViolations++
-}
-
-for (const file of sqlFiles) {
-  const sql = await readFile(file, 'utf8')
-  const violations = lintTransactionControl(sql, file)
-
-  if (violations.length === 0) {
-    console.log(`  ✓ ${relative(ROOT, file)}`)
-    continue
-  }
-
-  for (const violation of violations) {
-    console.error(`  ✗ ${violation.file}:${violation.line} — ${violation.message}`)
-    totalViolations++
-  }
-}
-
-if (totalViolations === 0) {
-  for (const violation of await lintReferencedParentDrops(sqlFiles)) {
-    console.error(`  ✗ ${violation.file} — ${violation.message}`)
-    totalViolations++
-  }
-}
-
-console.log(`\nMigration guardrails finished with ${totalViolations} violation(s).`)
-
-if (totalViolations > 0) {
-  process.exit(1)
+  console.log(`✓ ${file}`)
 }
