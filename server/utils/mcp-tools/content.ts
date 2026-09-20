@@ -69,7 +69,7 @@ const TENANT_PAGE_LIFECYCLE_OUTPUT = {
 export const CONTENT_TOOLS: McpToolDefinition[] = [
   siteTool({
       name: 'append_content_block',
-      description: 'Insert one block into a blog article or tenant page: after the block named by after_block_id, or at the end. The first block of an article, when it is an image, is the article\'s cover. Returns the whole document so the next edit has every block\'s id and updated_at.',
+      description: 'Insert one block into a blog article or tenant page. Read the document first (get_blog_post, get_tenant_page): the writer says where the block goes by naming the block it follows in after_block_id — "under this paragraph" is the id of the markdown block holding that paragraph; omit after_block_id for the end of the document. To place a block inside a paragraph run, first replace_content_block the markdown block with the text before the split, then append the new block after it, then append the remaining text. The first block of an article, when it is an image, is the article\'s cover. Returns the whole document so the next edit has every block\'s id and updated_at.',
       domain: 'content',
       minimumRole: 'editor',
       confirmRequired: false,
