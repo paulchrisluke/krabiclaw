@@ -1,8 +1,10 @@
 import { instantSchema } from '~/utils/timezone'
 import type { McpToolDefinition } from './shared'
-import { ROBOTS_DIRECTIVE_ENUM, blogPostMutationResultObject, blogPostObject, blogPostSummaryObject, pageInfoObject, paginationInputSchema, siteTool } from './shared'
+import { ROBOTS_DIRECTIVE_ENUM, blogPostMutationResultObject, blogPostObject, blogPostSummaryObject, contentBlockMediaInputObject, pageInfoObject, paginationInputSchema, siteTool } from './shared'
 import { PUBLICATION_CONTENT_BLOCK_TYPES, describeContentBlockTextFields } from '~/shared/content-registries'
 
+// A block's place is its index in the array; there is no position to state.
+// An image block carries exactly one media item, or it is refused.
 const blogContentBlockSchema = {
   type: 'object',
   properties: {
@@ -10,19 +12,11 @@ const blogContentBlockSchema = {
     type: { type: 'string', enum: [...PUBLICATION_CONTENT_BLOCK_TYPES] },
     parent_block_id: { type: ['string', 'null'] },
     level: { type: ['number', 'null'] },
-    position: { type: ['number', 'null'] },
     data: { type: 'object', description: describeContentBlockTextFields(PUBLICATION_CONTENT_BLOCK_TYPES) },
-    media: {
-      type: 'array',
-      items: {
-        type: 'object',
-        properties: { asset_id: { type: 'string' }, slot: { type: 'string' } },
-        required: ['asset_id', 'slot'],
-        additionalProperties: false,
-      },
-    },
+    media: { type: 'array', items: contentBlockMediaInputObject, description: 'Required on image blocks: one item, the picture. A block read back keeps its media by sending it as read.' },
   },
   required: ['type', 'data'],
+  additionalProperties: false,
 } as const
 
 export const BLOG_TOOLS: McpToolDefinition[] = [

@@ -406,17 +406,42 @@ const saveQueue = new SerializedSnapshotQueue<SaveSnapshot, BlogPost>(
     syncServerVersion(updated)
     return updated
   },
-  (updated) => {
+  (updated, snapshot) => {
     applyingServerSnapshot = true
     post.value = updated
     form.slug = updated.slug || form.slug
     slugResetRequested.value = false
-    if (updated.content_document?.blocks) blocks.value = structuredClone(updated.content_document.blocks)
+    if (updated.content_document?.blocks) adoptServerBlockIds(snapshot.payload.content_blocks ?? [], updated.content_document.blocks)
     contentDirty.value = false
     saveState.value = 'saved'
     void nextTick(() => { applyingServerSnapshot = false })
   },
 )
+
+/**
+ * The canvas is the document; a save confirms it. It used to be replaced by the
+ * server's copy after every autosave, and every block became a new object — so
+ * the picker open on an image block was unmounted mid-choice, which read as
+ * "the picker just goes away". Only what the canvas cannot know is taken from
+ * the server: the id of a block it saved for the first time. Blocks the
+ * snapshot did not carry (an image still waiting for its picture) are left
+ * exactly as they are.
+ */
+function adoptServerBlockIds(sent: BlogEditorBlock[], saved: BlogEditorBlock[]) {
+  if (sent.length !== saved.length) return
+  const unsentIds = new Map<number, string>()
+  for (const [index, block] of sent.entries()) {
+    if (!block.id && saved[index]?.id) unsentIds.set(index, saved[index]!.id)
+  }
+  if (!unsentIds.size) return
+  let sentIndex = 0
+  for (const [index, block] of blocks.value.entries()) {
+    if (block.type === 'image' && !block.media?.length) continue
+    const id = unsentIds.get(sentIndex)
+    if (id && !block.id) blocks.value[index] = { ...block, id }
+    sentIndex++
+  }
+}
 
 /**
  * Autosave watches the canvas and only the canvas — the headline and the body,
@@ -529,8 +554,12 @@ async function flushSave() {
 function addCover() {
   blocks.value.unshift({ type: 'image', data: { caption: '' }, media: [] })
 }
+/** What is written: an image block waiting for its picture stays on the canvas and out of the document. */
+function savedBlocks() {
+  return cloneEditorBlocks(toRaw(blocks.value)).filter(block => block.type !== 'image' || block.media?.length)
+}
 function buildSaveSnapshot(id = persistedPostId.value): SaveSnapshot {
-  return { postId: id, payload: { title: form.title, collection: form.collection, category: form.category || null, tags: tagsText.value.split(',').map(v => v.trim()).filter(Boolean), excerpt: form.excerpt || null, seo_title: form.seo_title || null, seo_description: form.seo_description || null, slug: slugResetRequested.value ? null : form.slug !== post.value?.slug ? form.slug : undefined, reset_slug_override: slugResetRequested.value || undefined, redirect_old_slug: form.redirect_old_slug, canonical_url: form.canonical_url || null, robots: form.robots || null, visibility: form.visibility, content_blocks: cloneEditorBlocks(toRaw(blocks.value)) } }
+  return { postId: id, payload: { title: form.title, collection: form.collection, category: form.category || null, tags: tagsText.value.split(',').map(v => v.trim()).filter(Boolean), excerpt: form.excerpt || null, seo_title: form.seo_title || null, seo_description: form.seo_description || null, slug: slugResetRequested.value ? null : form.slug !== post.value?.slug ? form.slug : undefined, reset_slug_override: slugResetRequested.value || undefined, redirect_old_slug: form.redirect_old_slug, canonical_url: form.canonical_url || null, robots: form.robots || null, visibility: form.visibility, content_blocks: savedBlocks() } }
 }
 function lifecycleVersionInput() {
   if (!serverPostUpdatedAt) throw new Error('Blog lifecycle version is unavailable. Reload the editor.')
@@ -603,7 +632,7 @@ async function publish() {
       const created = await props.repository.create({
         title: form.title,
         slug: form.slug || undefined,
-        content_blocks: cloneEditorBlocks(toRaw(blocks.value)),
+        content_blocks: savedBlocks(),
         collection: form.collection,
         category: form.category || null,
         tags: tagsText.value.split(',').map(v => v.trim()).filter(Boolean),

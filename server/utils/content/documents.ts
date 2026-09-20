@@ -93,7 +93,6 @@ export interface ContentBlockInput {
   media?: ContentBlockMedia[]
   parent_block_id?: string | null
   level?: number | null
-  position?: number | null
 }
 
 type ContentBlockWriteInput = Omit<ContentBlockSnapshot, 'id'> & { id?: string; updated_at?: string | null }
@@ -304,7 +303,10 @@ function buildDocumentWriteBatch(
     source_block_id: block.source_block_id ?? null,
     parent_block_id: block.parent_block_id ?? null,
     type: assertBlockType(block.type),
-    position: typeof block.position === 'number' ? block.position : index,
+    // Where a block sits is its index in the array, always. The write used to
+    // take a caller's number when it sent one, which is how one document came
+    // to hold fifteen blocks at position 0.
+    position: index,
     level: block.level ?? null,
     data: mediaFreeBlockData(block.type, block.data, `content block ${index} data`),
     updated_at: block.updated_at ?? now,
@@ -483,7 +485,7 @@ export function prepareContentDocumentWithBlocks(
 
   const write = buildDocumentWriteBatch(document, blocks.map((block, index) => ({
     id: block.id, source_block_id: block.source_block_id ?? null, parent_block_id: block.parent_block_id ?? null, type: block.type,
-    position: block.position ?? index, level: block.level ?? null, data: block.data,
+    position: index, level: block.level ?? null, data: block.data,
   })), { bodyMarkdown: opts.bodyMarkdown, additionalQueriesAfter: opts.additionalQueriesAfter })
   return { document, ...write, queries: [...(opts.additionalQueriesBefore ?? []), documentInsert, ...write.queries] }
 }
@@ -733,7 +735,7 @@ export async function updateContentDocument(
   }
   const snapshots = input.blocks?.map((block, index) => ({
     id: block.id, source_block_id: block.source_block_id ?? null, parent_block_id: block.parent_block_id ?? null,
-    type: assertBlockType(block.type), position: block.position ?? index, level: block.level ?? null,
+    type: assertBlockType(block.type), position: index, level: block.level ?? null,
     data: asObject(block.data, `content block ${index} data`), updated_at: null,
   }))
   const result = await writeDocumentBlocks(db, document, snapshots, {
@@ -758,7 +760,7 @@ export function prepareContentDocumentUpdate(
   }
   const snapshots = input.blocks?.map((block, index) => ({
     id: block.id, source_block_id: block.source_block_id ?? null, parent_block_id: block.parent_block_id ?? null, type: assertBlockType(block.type),
-    position: block.position ?? index, level: block.level ?? null, data: asObject(block.data, `content block ${index} data`), updated_at: null,
+    position: index, level: block.level ?? null, data: asObject(block.data, `content block ${index} data`), updated_at: null,
   }))
   return buildDocumentWriteBatch(document, snapshots, {
     changes: input.changes, expectedDocument: { id: document.id, updatedAt: input.expected_updated_at },

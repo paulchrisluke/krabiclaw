@@ -1,6 +1,6 @@
 import { CONTENT_BLOCK_TYPES, describeContentBlockTextFields } from '~/shared/content-registries'
 import type { McpToolDefinition } from './shared'
-import { locationReservationConfigObject, locationReservationConfigWriteSchema, pageInfoObject, paginationInputSchema, renderedBookingPolicySummaryObject, ROBOTS_DIRECTIVE_ENUM, siteTool } from './shared'
+import { contentBlockMediaInputObject, locationReservationConfigObject, locationReservationConfigWriteSchema, pageInfoObject, paginationInputSchema, renderedBookingPolicySummaryObject, ROBOTS_DIRECTIVE_ENUM, siteTool } from './shared'
 
 // Create and update both write the whole document: an omitted metadata field is
 // written as null, never carried over from the stored row. path and title are
@@ -25,20 +25,11 @@ const TENANT_PAGE_BLOCKS_SCHEMA = {
     properties: {
       id: { type: 'string' },
       type: { type: 'string' },
-      position: { type: 'integer', description: 'Retain the position from the last read unless reordering blocks.' },
       source_block_id: { type: ['string', 'null'] },
       parent_block_id: { type: ['string', 'null'] },
       level: { type: ['integer', 'null'], minimum: 1, maximum: 6 },
       data: { type: 'object', description: describeContentBlockTextFields(CONTENT_BLOCK_TYPES) },
-      media: {
-        type: 'array',
-        items: {
-          type: 'object',
-          properties: { asset_id: { type: 'string' }, slot: { type: 'string' } },
-          required: ['asset_id', 'slot'],
-          additionalProperties: false,
-        },
-      },
+      media: { type: 'array', items: contentBlockMediaInputObject },
     },
     required: ['type', 'data'],
     additionalProperties: false,

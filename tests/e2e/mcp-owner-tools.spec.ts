@@ -58,8 +58,8 @@ test.describe('stateless MCP server', () => {
       }
     }>(await pageBefore.json()).page
     // update_tenant_page replaces the document, so the writer states the path,
-    // title, position and identity it read rather than leaving them to be
-    // filled in from the stored row.
+    // title and identity it read rather than leaving them to be filled in from
+    // the stored row. Order is the array's; there is no position to send.
     const contentUpdate = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
       toolName: 'update_tenant_page',
@@ -75,7 +75,6 @@ test.describe('stateless MCP server', () => {
         blocks: pageBeforeData.blocks.map(block => ({
           id: block.id,
           type: block.type,
-          position: block.position,
           level: block.level,
           parent_block_id: block.parent_block_id,
           source_block_id: block.source_block_id,

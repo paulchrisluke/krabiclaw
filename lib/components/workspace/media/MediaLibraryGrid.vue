@@ -2,13 +2,12 @@
   <div class="flex min-h-0 flex-col gap-3">
     <!-- Upload zone -->
     <div
-      class="flex flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed px-6 py-6 transition-colors cursor-pointer"
+      class="flex flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed px-6 py-6 transition-colors"
       :class="isDragging ? 'border-primary bg-primary/5' : 'border-default hover:border-accented'"
       @dragenter.prevent="isDragging = true"
       @dragover.prevent="isDragging = true"
       @dragleave.prevent="isDragging = false"
       @drop.prevent="onDrop"
-      @click="fileInput?.inputRef?.click()"
     >
       <UIcon name="i-lucide-upload" class="size-6 text-muted" />
       <UButton size="sm" color="neutral" variant="outline" @click.stop="fileInput?.inputRef?.click()">+ Add files</UButton>

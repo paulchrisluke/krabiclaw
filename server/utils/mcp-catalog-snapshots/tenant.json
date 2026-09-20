@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:b09064ba4b7ac5c6c0ff826ea4683fc84a035b14ab706697b341bedf937cc3bc",
+  "fingerprint": "sha256:4a1b27e20035a5597e9e369ce34f60b0e1262f477514aa84c2cf2dc60fb5fc37",
   "tools": [
     {
       "name": "attach_media",
@@ -973,6 +973,7 @@
           "content_blocks": {
             "description": "Canonical ordered article blocks. This is the source of truth for FAQ, How-To, media, and other structured content.",
             "items": {
+              "additionalProperties": false,
               "properties": {
                 "data": {
                   "description": "Typed block payload. Plain-text fields are rendered literally, so markdown syntax written into one reaches the reader as raw characters — a heading of \"**Title**\" publishes with the asterisks showing. Only the fields listed as markdown are parsed. A markdown field also requires editor_mode alongside it: \"rich\" for prose the visual editor can handle, \"source\" for tables or raw HTML. Asset IDs and delivery URLs belong in the block media array, never in data. Fields by block type — heading block: literal — text. Also level (one of 1, 2, 3, 4, 5, 6). markdown block: parsed as markdown — markdown. Also editor_mode (one of rich, source). image block: literal — caption. gallery block: literal — caption. faq block: literal — title. Also source (one of page_qa, site_qa). how_to block: literal — title, label, estimated_time, tool_items.*, supply_items.*, steps.*.name, steps.*.text. divider block: no text fields. ai_assistance block: literal — label, intro, prompts.*.title, prompts.*.prompt, prompts.*.description, prompts.*.copy_label. cta block: literal — title, accent, description, label, secondary_label. Also url (url), secondary_url (url). callout block: literal — title, body, badge, buttons.*.label. Also tone (one of neutral, info, success, warning, danger).",
@@ -988,14 +989,63 @@
                   ]
                 },
                 "media": {
+                  "description": "Required on image blocks: one item, the picture. A block read back keeps its media by sending it as read.",
                   "items": {
                     "additionalProperties": false,
                     "properties": {
+                      "alt_text": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
                       "asset_id": {
                         "type": "string"
                       },
+                      "file_name": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "height": {
+                        "type": [
+                          "number",
+                          "null"
+                        ]
+                      },
+                      "kind": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "public_url": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
                       "slot": {
                         "type": "string"
+                      },
+                      "sort_order": {
+                        "type": [
+                          "number",
+                          "null"
+                        ]
+                      },
+                      "thumbnail_url": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "width": {
+                        "type": [
+                          "number",
+                          "null"
+                        ]
                       }
                     },
                     "required": [
@@ -1009,12 +1059,6 @@
                 "parent_block_id": {
                   "type": [
                     "string",
-                    "null"
-                  ]
-                },
-                "position": {
-                  "type": [
-                    "number",
                     "null"
                   ]
                 },
@@ -2848,11 +2892,59 @@
                   "items": {
                     "additionalProperties": false,
                     "properties": {
+                      "alt_text": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
                       "asset_id": {
                         "type": "string"
                       },
+                      "file_name": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "height": {
+                        "type": [
+                          "number",
+                          "null"
+                        ]
+                      },
+                      "kind": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "public_url": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
                       "slot": {
                         "type": "string"
+                      },
+                      "sort_order": {
+                        "type": [
+                          "number",
+                          "null"
+                        ]
+                      },
+                      "thumbnail_url": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "width": {
+                        "type": [
+                          "number",
+                          "null"
+                        ]
                       }
                     },
                     "required": [
@@ -2868,10 +2960,6 @@
                     "string",
                     "null"
                   ]
-                },
-                "position": {
-                  "description": "Retain the position from the last read unless reordering blocks.",
-                  "type": "integer"
                 },
                 "source_block_id": {
                   "type": [
@@ -11201,6 +11289,7 @@
           "content_blocks": {
             "description": "Canonical ordered article blocks, replacing the complete block set.",
             "items": {
+              "additionalProperties": false,
               "properties": {
                 "data": {
                   "description": "Typed block payload. Plain-text fields are rendered literally, so markdown syntax written into one reaches the reader as raw characters — a heading of \"**Title**\" publishes with the asterisks showing. Only the fields listed as markdown are parsed. A markdown field also requires editor_mode alongside it: \"rich\" for prose the visual editor can handle, \"source\" for tables or raw HTML. Asset IDs and delivery URLs belong in the block media array, never in data. Fields by block type — heading block: literal — text. Also level (one of 1, 2, 3, 4, 5, 6). markdown block: parsed as markdown — markdown. Also editor_mode (one of rich, source). image block: literal — caption. gallery block: literal — caption. faq block: literal — title. Also source (one of page_qa, site_qa). how_to block: literal — title, label, estimated_time, tool_items.*, supply_items.*, steps.*.name, steps.*.text. divider block: no text fields. ai_assistance block: literal — label, intro, prompts.*.title, prompts.*.prompt, prompts.*.description, prompts.*.copy_label. cta block: literal — title, accent, description, label, secondary_label. Also url (url), secondary_url (url). callout block: literal — title, body, badge, buttons.*.label. Also tone (one of neutral, info, success, warning, danger).",
@@ -11216,14 +11305,63 @@
                   ]
                 },
                 "media": {
+                  "description": "Required on image blocks: one item, the picture. A block read back keeps its media by sending it as read.",
                   "items": {
                     "additionalProperties": false,
                     "properties": {
+                      "alt_text": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
                       "asset_id": {
                         "type": "string"
                       },
+                      "file_name": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "height": {
+                        "type": [
+                          "number",
+                          "null"
+                        ]
+                      },
+                      "kind": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "public_url": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
                       "slot": {
                         "type": "string"
+                      },
+                      "sort_order": {
+                        "type": [
+                          "number",
+                          "null"
+                        ]
+                      },
+                      "thumbnail_url": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "width": {
+                        "type": [
+                          "number",
+                          "null"
+                        ]
                       }
                     },
                     "required": [
@@ -11237,12 +11375,6 @@
                 "parent_block_id": {
                   "type": [
                     "string",
-                    "null"
-                  ]
-                },
-                "position": {
-                  "type": [
-                    "number",
                     "null"
                   ]
                 },
@@ -13938,6 +14070,7 @@
           "content_blocks": {
             "description": "Canonical ordered article blocks. Sending this replaces the complete block snapshot.",
             "items": {
+              "additionalProperties": false,
               "properties": {
                 "data": {
                   "description": "Typed block payload. Plain-text fields are rendered literally, so markdown syntax written into one reaches the reader as raw characters — a heading of \"**Title**\" publishes with the asterisks showing. Only the fields listed as markdown are parsed. A markdown field also requires editor_mode alongside it: \"rich\" for prose the visual editor can handle, \"source\" for tables or raw HTML. Asset IDs and delivery URLs belong in the block media array, never in data. Fields by block type — heading block: literal — text. Also level (one of 1, 2, 3, 4, 5, 6). markdown block: parsed as markdown — markdown. Also editor_mode (one of rich, source). image block: literal — caption. gallery block: literal — caption. faq block: literal — title. Also source (one of page_qa, site_qa). how_to block: literal — title, label, estimated_time, tool_items.*, supply_items.*, steps.*.name, steps.*.text. divider block: no text fields. ai_assistance block: literal — label, intro, prompts.*.title, prompts.*.prompt, prompts.*.description, prompts.*.copy_label. cta block: literal — title, accent, description, label, secondary_label. Also url (url), secondary_url (url). callout block: literal — title, body, badge, buttons.*.label. Also tone (one of neutral, info, success, warning, danger).",
@@ -13953,14 +14086,63 @@
                   ]
                 },
                 "media": {
+                  "description": "Required on image blocks: one item, the picture. A block read back keeps its media by sending it as read.",
                   "items": {
                     "additionalProperties": false,
                     "properties": {
+                      "alt_text": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
                       "asset_id": {
                         "type": "string"
                       },
+                      "file_name": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "height": {
+                        "type": [
+                          "number",
+                          "null"
+                        ]
+                      },
+                      "kind": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "public_url": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
                       "slot": {
                         "type": "string"
+                      },
+                      "sort_order": {
+                        "type": [
+                          "number",
+                          "null"
+                        ]
+                      },
+                      "thumbnail_url": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "width": {
+                        "type": [
+                          "number",
+                          "null"
+                        ]
                       }
                     },
                     "required": [
@@ -13974,12 +14156,6 @@
                 "parent_block_id": {
                   "type": [
                     "string",
-                    "null"
-                  ]
-                },
-                "position": {
-                  "type": [
-                    "number",
                     "null"
                   ]
                 },
@@ -16452,11 +16628,59 @@
                   "items": {
                     "additionalProperties": false,
                     "properties": {
+                      "alt_text": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
                       "asset_id": {
                         "type": "string"
                       },
+                      "file_name": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "height": {
+                        "type": [
+                          "number",
+                          "null"
+                        ]
+                      },
+                      "kind": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "public_url": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
                       "slot": {
                         "type": "string"
+                      },
+                      "sort_order": {
+                        "type": [
+                          "number",
+                          "null"
+                        ]
+                      },
+                      "thumbnail_url": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "width": {
+                        "type": [
+                          "number",
+                          "null"
+                        ]
                       }
                     },
                     "required": [
@@ -16472,10 +16696,6 @@
                     "string",
                     "null"
                   ]
-                },
-                "position": {
-                  "description": "Retain the position from the last read unless reordering blocks.",
-                  "type": "integer"
                 },
                 "source_block_id": {
                   "type": [

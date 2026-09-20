@@ -234,6 +234,31 @@ const mediaPlacementObject = {
   additionalProperties: false,
 }
 
+/**
+ * A block's media as a writer sends it. The same object a read returns, so a
+ * block read from get_blog_post or get_tenant_page can be sent back verbatim:
+ * only asset_id and slot are taken, the delivery fields are ignored. The input
+ * used to accept the two fields alone, and a block echoed with its public_url
+ * was refused as an unknown argument — which is how images went missing.
+ */
+export const contentBlockMediaInputObject = {
+  type: 'object',
+  properties: {
+    asset_id: { type: 'string' },
+    slot: { type: 'string' },
+    sort_order: { type: ['number', 'null'] },
+    public_url: { type: ['string', 'null'] },
+    thumbnail_url: { type: ['string', 'null'] },
+    kind: { type: ['string', 'null'] },
+    alt_text: { type: ['string', 'null'] },
+    file_name: { type: ['string', 'null'] },
+    width: { type: ['number', 'null'] },
+    height: { type: ['number', 'null'] },
+  },
+  required: ['asset_id', 'slot'],
+  additionalProperties: false,
+}
+
 /** The article's leading image block, or null when it opens with text. */
 const blogCoverObject = {
   type: ['object', 'null'],
