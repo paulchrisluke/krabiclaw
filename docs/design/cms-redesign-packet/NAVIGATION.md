@@ -121,9 +121,11 @@ Deleted from Menu: **Google** (it was a site picker in front of the two site-lev
 `/settings` index is deleted. Leaves stay at `/settings/<leaf>`; their parent is Menu. On `lg` the pair is Menu-list left, leaf right, first leaf open by default, as Airbnb's Account settings does.
 
 ### Account → `/account/profile`   title "Account settings" · parent Menu (active org)
-Profile photo · Display name · Sign in · WhatsApp number · Notifications · Appearance · **Log out** last (Airbnb has Log out on both Menu and Profile; same here).
+Profile photo · Display name · Login & security · WhatsApp number · Notifications · Appearance · **Log out** last (Airbnb has Log out on both Menu and Profile; same here).
 
-**Delete account** leaves the list. Today it sits directly above Log out, one mis-tap from the wrong irreversible action. It moves to the bottom of the **Sign in** leaf, where Airbnb keeps *Deactivate your account* at the bottom of Login & security, behind its own confirmation.
+**Login & security** replaces today's Sign in leaf and takes Airbnb's shape (`goal/airbnb/hosting/account-settings/login-and-security/`): a *Login* section with Email (verified state), Password (*Update*, using the existing reset flow), Google (connected state); a *Device history* section listing Better Auth sessions with the current one marked and *Log out* per row (`listSessions` / `revokeSession`, both already in Better Auth core, nothing new server-side); and **Delete account** at the bottom, behind its own confirmation.
+
+**Delete account** leaves the list. Today it sits directly above Log out, one mis-tap from the wrong irreversible action. It lives at the bottom of **Login & security**, where Airbnb keeps *Deactivate your account*.
 
 Deleted from Account: Billing (it is on Menu).
 
