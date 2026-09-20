@@ -6,7 +6,8 @@ export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   if (!siteId) return jsonResponse({ error: 'Site ID required' }, { status: 400 })
   const { db } = await requireSiteAccess(event, siteId)
-  return jsonResponse({ reviews: await listSiteReviews(db, siteId) })
+  const locationId = getQuery(event).location_id
+  return jsonResponse({ reviews: await listSiteReviews(db, siteId, { locationId: typeof locationId === 'string' ? locationId : null }) })
 })
 import { defineHandler } from 'nitro';
-import { getRouterParam } from 'nitro/h3';
+import { getQuery, getRouterParam } from 'nitro/h3';

@@ -13,6 +13,7 @@ const OUTPUT_PATH = 'chatgpt-app-submission.json'
 // Reviewed effects are authored here; annotation values still come from the registry.
 // A newly exposed tool must receive an explicit review before regeneration succeeds.
 const effects = {
+  append_content_block: 'Inserts one block into the selected blog article or tenant page after a named block, leaving every other block as it is.',
   attach_media: 'Adds an existing asset to a public content collection without replacing its existing placements.',
   batch_create_products: 'Creates products from the supplied catalog entries and records product events.',
   delete_tenant_page: 'Deletes a tenant page; deleting its source locale removes every translation with it.',
@@ -23,6 +24,7 @@ const effects = {
   create_product: 'Creates a product with explicit variants, prices and attributes; publication and placements are assigned separately.',
   create_tenant_page: 'Creates a tenant page and its structured content document.',
   delete_blog_post: 'Deletes the selected tenant blog article and its associated content.',
+  delete_content_block: 'Deletes one block, and the blocks nested under it, from the selected blog article or tenant page after a version check.',
   delete_collection: 'Deletes the selected collection and every product membership in it; the products themselves are untouched.',
   delete_media_asset: 'Removes an asset and its site placements, and deletes backing Cloudflare storage when no other asset references it.',
   delete_metafield_definition: 'Deletes a typed product attribute definition and every product value stored under it.',
@@ -66,7 +68,7 @@ const effects = {
   remove_product_location: 'Removes a product from a location, so the location no longer offers it.',
   reorder_collections: 'Overwrites the order collections are presented in on the selected site.',
   reorder_media: 'Overwrites media placement ordering for the selected public content collection.',
-  replace_blog_content: 'Replaces the selected blog article content document after version and removal checks.',
+  replace_content_block: 'Replaces one block\'s data and media in the selected blog article or tenant page after a version check, keeping its position.',
   replace_resource_localizations: 'Replaces the submitted translations for one resource type and locale; omitted resources remain untouched.',
   save_generated_image: 'Stores supplied image bytes as a new media asset with a public URL; it does not generate the image.',
   save_generated_image_file: 'Stores the supplied image attachment as a new media asset with a public URL; it does not generate the image.',
@@ -77,7 +79,6 @@ const effects = {
   set_product_location: 'Creates or overwrites the selected product’s location availability and publication settings.',
   set_product_publication: 'Creates or overwrites the selected product’s site publication setting, including removing it from public display.',
   set_workspace_context: 'Overwrites the authenticated user selected workspace site or location.',
-  update_blog_metadata: 'Overwrites selected blog metadata, including public navigation and search settings.',
   update_blog_post: 'Overwrites supplied fields of an existing tenant blog article.',
   update_collection: 'Overwrites the selected collection name, description or placement.',
   update_location: 'Overwrites location hours, contact details, capacity or notification settings supplied by the user.',

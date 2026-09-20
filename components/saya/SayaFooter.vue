@@ -97,21 +97,6 @@
         </div>
       </div>
 
-      <!-- Delivery partners row — only rendered when at least one link is configured AND not an experiences site -->
-      <div v-if="orderLinks.length && !isExperienceSite" class="flex flex-wrap items-center gap-8 border-b border-inverted/10 py-10">
-        <span class="saya-eyebrow text-inverted/50">{{ t('saya.footer.order_online') }}</span>
-        <a
-          v-for="link in orderLinks"
-          :key="link.label"
-          :href="link.url"
-          target="_blank"
-          rel="noopener noreferrer"
-          class="saya-display text-lg saya-italic text-inverted/60 transition hover:text-inverted"
-        >
-          {{ link.label }}
-        </a>
-      </div>
-
       <!-- Legal bar -->
       <div class="flex flex-wrap items-center justify-between gap-4 pt-6 text-xs text-inverted/70">
         <div>© {{ year }} {{ restaurantName }}</div>
@@ -193,9 +178,6 @@ interface PublicLocation {
   opening_hours?: OpeningHours
   special_hours?: SpecialHours
   timezone?: string | null
-  grab_url?: string | null
-  uber_eats_url?: string | null
-  foodpanda_url?: string | null
 }
 
 // Data comes from layouts/saya.vue, which already owns the single shared
@@ -260,13 +242,6 @@ const restaurantName = computed(() => props.site?.brand_name?.trim() || '')
 const tagline = computed(() => props.site?.brand_description?.trim() || '')
 const sitePlan = computed(() => props.site?.plan)
 const showBrandingCredit = computed(() => !props.isPlatform && sitePlan.value === 'free')
-
-interface OrderLink { label: string; url: string }
-const orderLinks = computed<OrderLink[]>(() => props.locations.flatMap(loc => [
-  { label: `${loc.title} � Grab`, url: loc.grab_url ?? '' },
-  { label: `${loc.title} � Uber Eats`, url: loc.uber_eats_url ?? '' },
-  { label: `${loc.title} � FoodPanda`, url: loc.foodpanda_url ?? '' },
-]).filter(link => link.url))
 
 function safeHttpUrl(value: unknown): string | null {
   if (!value || typeof value !== 'string') return null

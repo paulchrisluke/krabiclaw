@@ -9,7 +9,7 @@
       :default-size="hasDetail ? 32 : undefined"
     >
       <template #header>
-        <UDashboardNavbar title="Q&A" :toggle="false">
+        <UDashboardNavbar title="Reviews and Q&A" :toggle="false">
           <template #leading>
             <DashboardNavbarLeading :to="locationPath" label="Location" />
           </template>
@@ -18,7 +18,14 @@
 
       <template #body>
         <div class="mx-auto w-full" :class="hasDetail ? 'max-w-xl' : 'max-w-3xl'">
-          <QaList :location-id="locationId" />
+          <UTabs :items="tabs" class="w-full">
+            <template #qa>
+              <QaList :location-id="locationId" class="mt-4" />
+            </template>
+            <template #reviews>
+              <TestimonialList :location-id="locationId" class="mt-4" />
+            </template>
+          </UTabs>
         </div>
       </template>
     </UDashboardPanel>
@@ -31,6 +38,7 @@
 
 <script setup lang="ts">
 import QaList from '~/components/dashboard/QaList.vue'
+import TestimonialList from '~/components/dashboard/TestimonialList.vue'
 
 definePageMeta({ layout: 'dashboard' })
 
@@ -48,5 +56,10 @@ const locationId = computed(() => {
   return id
 })
 
-useSeoMeta({ title: 'Q&A | KrabiClaw Dashboard', robots: 'noindex, nofollow' })
+const tabs = [
+  { label: 'Q&A', slot: 'qa' as const },
+  { label: 'Reviews', slot: 'reviews' as const },
+]
+
+useSeoMeta({ title: 'Reviews and Q&A | KrabiClaw', robots: 'noindex, nofollow' })
 </script>

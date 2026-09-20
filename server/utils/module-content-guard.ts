@@ -38,16 +38,6 @@ async function reservationsHasLiveData(db: DbClient, scope: ModuleContentGuardSc
   return Boolean(row)
 }
 
-async function orderingHasLiveData(db: DbClient, scope: ModuleContentGuardScope): Promise<boolean> {
-  const row = await queryFirst<{ id: string }>(db, `
-    SELECT id FROM business_locations
-    WHERE site_id = ? ${scope.locationId ? 'AND id = ?' : ''}
-      AND (grab_url IS NOT NULL OR uber_eats_url IS NOT NULL OR foodpanda_url IS NOT NULL)
-    LIMIT 1
-  `, scope.locationId ? [scope.siteId, scope.locationId] : [scope.siteId])
-  return Boolean(row)
-}
-
 /**
  * A service page is the services page or a page beneath it.
  *
@@ -70,14 +60,12 @@ async function servicesHasLiveData(db: DbClient, scope: ModuleContentGuardScope)
 const MODULE_LABELS: Partial<Record<ProductFeature, string>> = {
   products: 'live Products',
   reservations: 'upcoming reservations',
-  ordering: 'active delivery links',
   services: 'published services',
 }
 
 const MODULE_CHECKS: Partial<Record<ProductFeature, (_db: DbClient, _scope: ModuleContentGuardScope) => Promise<boolean>>> = {
   products: productsHaveLiveData,
   reservations: reservationsHasLiveData,
-  ordering: orderingHasLiveData,
   services: servicesHasLiveData,
 }
 

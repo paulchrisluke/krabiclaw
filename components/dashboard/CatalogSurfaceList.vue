@@ -1,8 +1,5 @@
 <template>
   <section class="space-y-6">
-    <!-- The panel's navbar names this column, so the body says only what it is for. -->
-    <p class="text-sm text-muted">{{ description }}</p>
-
     <div v-if="loading" class="space-y-3">
       <USkeleton v-for="index in 2" :key="index" class="h-28 rounded-2xl" />
     </div>
@@ -16,7 +13,29 @@
       :description="loadError"
     />
 
-    <EditorNavigationList v-else :groups="surfaceGroups" :active-item="openSurface" variant="cards" />
+    <UPageList v-else class="gap-3">
+      <UPageCard
+        v-for="surface in surfaces"
+        :key="surface.id"
+        :to="surface.to"
+        :title="surface.label"
+        :description="surface.summary"
+        variant="soft"
+        :highlight="surface.id === openSurface"
+        :ui="{ container: 'p-5 sm:p-5', title: 'text-[15px]', description: 'mt-1' }"
+      >
+        <div v-if="surface.previews.length" class="flex gap-2">
+          <img
+            v-for="(preview, index) in surface.previews"
+            :key="index"
+            :src="preview"
+            alt=""
+            class="aspect-[20/19] w-full max-w-24 rounded-xl object-cover"
+            loading="lazy"
+          >
+        </div>
+      </UPageCard>
+    </UPageList>
   </section>
 </template>
 
@@ -29,7 +48,6 @@
 // the rows are derived from what the location carries, so there is nothing here
 // to add, rename, reorder or delete. That is why this level is a navigation
 // list and not a list editor.
-import EditorNavigationList, { type EditorNavigationGroup } from '~/components/dashboard/EditorNavigationList.vue'
 import { getErrorMessage } from '~/utils/errors'
 import {
   catalogLabel,
@@ -71,23 +89,15 @@ useSeoMeta({ title: () => `${catalogTitle.value} | KrabiClaw Dashboard`, robots:
 // only food opens straight onto its Menu and never meets an Experiences row it
 // has nothing to put in. The card shows what the surface holds, the way the
 // location's own hub shows its photographs.
-const surfaceGroups = computed<EditorNavigationGroup[]>(() => [{
-  id: 'catalog',
-  items: catalogSurfaces(vertical, counts.value).map((surface) => {
-    const words = presentationForSurface(vertical, surface)
-    const products = catalog.products.value.filter(product => productSurfaceOf(vertical, product) === surface)
-    return {
-      id: surface,
-      label: words.collectionLabel,
-      summary: catalogSummary(vertical, countCatalog(products)),
-      placeholder: products.length === 0,
-      previews: products.flatMap(product => product.image?.public_url ?? []).slice(0, 4),
-      to: `${productsPath.value}/${surface}`,
-    }
-  }),
-}])
-
-const description = computed(() => (surfaceGroups.value[0]!.items.length > 1
-  ? 'Customers read each of these separately.'
-  : `Everything this location offers, in the order customers read it.`))
+const surfaces = computed(() => catalogSurfaces(vertical, counts.value).map((surface) => {
+  const words = presentationForSurface(vertical, surface)
+  const products = catalog.products.value.filter(product => productSurfaceOf(vertical, product) === surface)
+  return {
+    id: surface,
+    label: words.collectionLabel,
+    summary: catalogSummary(vertical, countCatalog(products)),
+    previews: products.flatMap(product => product.image?.public_url ?? []).slice(0, 4),
+    to: `${productsPath.value}/${surface}`,
+  }
+}))
 </script>

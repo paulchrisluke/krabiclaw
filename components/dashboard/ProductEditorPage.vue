@@ -336,7 +336,6 @@ import { majorAmountToMinor, minorAmountToMajor, selectPrice, type Price } from 
 import { formatProductMoney } from '~/utils/product-money'
 import { presentationForProduct, productSurfaceOf, requireProductPresentation } from '~/utils/product-presentation'
 import { getErrorMessage, isNotFoundError } from '~/utils/errors'
-import { mediaStillUrl } from '~/shared/media-placement-contract'
 
 const route = useRoute()
 const dashboardApi = useDashboardApi()
@@ -736,7 +735,6 @@ const navigationGroups = computed<EditorNavigationGroup[]>(() => {
           summary: image ? '' : 'No photo yet',
           placeholder: !image,
           to: `${itemPath.value}/photo`,
-          previews: mediaStillUrl(image) ? [mediaStillUrl(image)!] : undefined,
         },
         { id: 'name', label: 'Name', summary: form.name || 'Not named yet', placeholder: !form.name, to: `${itemPath.value}/name` },
         { id: 'price', label: 'Price', summary: priceSummary(), placeholder: priceSummary() === 'No price set', to: `${itemPath.value}/price` },

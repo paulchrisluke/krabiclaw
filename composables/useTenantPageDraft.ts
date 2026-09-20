@@ -81,6 +81,55 @@ export function isTenantPageResponse(value: unknown): value is { page: TenantPag
     && isRecord(page.document) && typeof page.document.updated_at === 'string'
 }
 
+/**
+ * Pages a manager already owns are edited there, not in the Pages list: a
+ * location's page belongs to the location, and a recipe page is the Menu, the
+ * Q&A or the Blog seen from the other side. Listing them again would offer two
+ * ways to edit one thing, and the second one would not know what the first one
+ * means.
+ */
+const MANAGED_PAGE_RECIPES = new Set([
+  'locations', 'menu', 'products', 'reservations', 'qa', 'reviews',
+  'posts', 'photos', 'blog', 'services', 'pricing', 'donate', 'schedule',
+])
+
+export interface TenantPageRow {
+  id: string
+  recipe: string | null
+  title: string
+  summary: string
+  /** Stated by the server: a page the template renders a document at cannot be removed. */
+  removable: boolean
+  /** The delete endpoint takes the timestamp the row was last seen at. */
+  updatedAt: string
+}
+
+/**
+ * The rows the Pages list shows, in its order, and therefore what the site
+ * hub's Pages card counts. The links page leads: it is the page a tenant shares
+ * most, it opens its own editor, and it is listed before its row exists because
+ * that editor creates the row on the first save. Then the front page, then the
+ * rest.
+ */
+export function tenantPageRows(pages: readonly TenantPageListRow[]): TenantPageRow[] {
+  const editable = pages.filter(page => (!page.recipe || !MANAGED_PAGE_RECIPES.has(page.recipe)) && !page.path.startsWith('/locations/'))
+  const links = editable.find(page => page.recipe === 'links')
+  return [
+    { id: links?.id ?? 'links', recipe: 'links', title: 'Links page', summary: '/links', removable: false, updatedAt: links?.updated_at ?? '' },
+    ...editable
+      .filter(page => page.recipe !== 'links')
+      .sort((left, right) => Number(right.path === '/') - Number(left.path === '/'))
+      .map(page => ({
+        id: page.id,
+        recipe: page.recipe,
+        title: page.path === '/' ? 'Home' : page.title,
+        summary: page.path === '/' ? 'Homepage' : page.path,
+        removable: page.removable,
+        updatedAt: page.updated_at,
+      })),
+  ]
+}
+
 export function isTenantPageListResponse(value: unknown): value is { pages: TenantPageListRow[] } {
   return isRecord(value) && Array.isArray(value.pages)
     && value.pages.every(page => isRecord(page) && typeof page.id === 'string'

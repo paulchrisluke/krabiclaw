@@ -12,16 +12,16 @@ function publicReviewRow(row: Record<string, unknown>): Record<string, unknown> 
   }
 }
 
-export async function listSiteReviews(db: DbClient, siteId: string, options: { publishedOnly?: boolean } = {}) {
+export async function listSiteReviews(db: DbClient, siteId: string, options: { publishedOnly?: boolean; locationId?: string | null } = {}) {
   const rows = await queryAll<Record<string, unknown>>(db, `
     SELECT r.id, r.organization_id, r.site_id, r.location_id, r.author_name,
            r.rating, r.title, r.content, r.owner_reply, r.owner_reply_at, r.helpful_count, r.status, r.source,
            review_request_id, entered_by_user_id, collection_method, original_review_date,
            original_reference, google_review_metadata, publication_authorized, created_at, updated_at
     FROM reviews r
-    WHERE r.site_id = ? AND r.location_id IS NULL${options.publishedOnly ? " AND r.status = 'approved'" : ''}
+    WHERE r.site_id = ? AND ${options.locationId ? 'r.location_id = ?' : 'r.location_id IS NULL'}${options.publishedOnly ? " AND r.status = 'approved'" : ''}
     ORDER BY CASE WHEN r.source = 'google_places' THEN r.original_review_date ELSE r.created_at END DESC, r.id ASC
-  `, [siteId])
+  `, options.locationId ? [siteId, options.locationId] : [siteId])
   return await attachReviewMedia(db, siteId, rows.map(publicReviewRow))
 }
 

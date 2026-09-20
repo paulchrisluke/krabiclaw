@@ -8,6 +8,18 @@
     "category": "BUSINESS"
   },
   "tools": {
+    "append_content_block": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Inserts one block into the selected blog article or tenant page after a named block, leaving every other block as it is.",
+        "open_world_justification": "Inserts one block into the selected blog article or tenant page after a named block, leaving every other block as it is. Its effects can change content or behavior on the public website.",
+        "destructive_justification": "Inserts one block into the selected blog article or tenant page after a named block, leaving every other block as it is. Existing content is not deleted or overwritten."
+      }
+    },
     "attach_media": {
       "annotations": {
         "readOnlyHint": false,
@@ -126,6 +138,18 @@
         "read_only_justification": "Deletes the selected collection and every product membership in it; the products themselves are untouched.",
         "open_world_justification": "Deletes the selected collection and every product membership in it; the products themselves are untouched. Its effects can change content or behavior on the public website.",
         "destructive_justification": "Deletes the selected collection and every product membership in it; the products themselves are untouched. Existing state is deleted, replaced or overwritten rather than only appended."
+      }
+    },
+    "delete_content_block": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Deletes one block, and the blocks nested under it, from the selected blog article or tenant page after a version check.",
+        "open_world_justification": "Deletes one block, and the blocks nested under it, from the selected blog article or tenant page after a version check. Its effects can change content or behavior on the public website.",
+        "destructive_justification": "Deletes one block, and the blocks nested under it, from the selected blog article or tenant page after a version check. Existing state is deleted, replaced or overwritten rather than only appended."
       }
     },
     "delete_media_asset": {
@@ -644,16 +668,16 @@
         "destructive_justification": "Overwrites media placement ordering for the selected public content collection. Existing state is deleted, replaced or overwritten rather than only appended."
       }
     },
-    "replace_blog_content": {
+    "replace_content_block": {
       "annotations": {
         "readOnlyHint": false,
         "openWorldHint": true,
         "destructiveHint": true
       },
       "justifications": {
-        "read_only_justification": "Replaces the selected blog article content document after version and removal checks.",
-        "open_world_justification": "Replaces the selected blog article content document after version and removal checks. Its effects can change content or behavior on the public website.",
-        "destructive_justification": "Replaces the selected blog article content document after version and removal checks. Existing state is deleted, replaced or overwritten rather than only appended."
+        "read_only_justification": "Replaces one block's data and media in the selected blog article or tenant page after a version check, keeping its position.",
+        "open_world_justification": "Replaces one block's data and media in the selected blog article or tenant page after a version check, keeping its position. Its effects can change content or behavior on the public website.",
+        "destructive_justification": "Replaces one block's data and media in the selected blog article or tenant page after a version check, keeping its position. Existing state is deleted, replaced or overwritten rather than only appended."
       }
     },
     "replace_resource_localizations": {
@@ -774,18 +798,6 @@
         "read_only_justification": "Overwrites the authenticated user selected workspace site or location.",
         "open_world_justification": "Overwrites the authenticated user selected workspace site or location. It does not publish content or write to an external service.",
         "destructive_justification": "Overwrites the authenticated user selected workspace site or location. Existing state is deleted, replaced or overwritten rather than only appended."
-      }
-    },
-    "update_blog_metadata": {
-      "annotations": {
-        "readOnlyHint": false,
-        "openWorldHint": true,
-        "destructiveHint": true
-      },
-      "justifications": {
-        "read_only_justification": "Overwrites selected blog metadata, including public navigation and search settings.",
-        "open_world_justification": "Overwrites selected blog metadata, including public navigation and search settings. Its effects can change content or behavior on the public website.",
-        "destructive_justification": "Overwrites selected blog metadata, including public navigation and search settings. Existing state is deleted, replaced or overwritten rather than only appended."
       }
     },
     "update_blog_post": {

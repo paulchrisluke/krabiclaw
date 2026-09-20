@@ -102,67 +102,6 @@ export function initialBlogEditorBlocks(): EditorContentBlock[] {
   return [{ type: 'markdown', data: { markdown: '', editor_mode: 'rich' } }]
 }
 
-export class SerializedSnapshotQueue<TSnapshot, TResult> {
-  private generation = 0
-  private pending: { generation: number; snapshot: TSnapshot } | null = null
-  private running: Promise<void> | null = null
-  private readonly persist: (_snapshot: TSnapshot) => Promise<TResult>
-  private readonly applyCurrent: (_result: TResult, _snapshot: TSnapshot) => void
-
-  constructor(
-    persist: (_snapshot: TSnapshot) => Promise<TResult>,
-    applyCurrent: (_result: TResult, _snapshot: TSnapshot) => void,
-  ) {
-    this.persist = persist
-    this.applyCurrent = applyCurrent
-  }
-
-  mark(snapshot: TSnapshot) {
-    this.pending = { generation: ++this.generation, snapshot }
-    return this.generation
-  }
-
-  async flush() {
-    if (!this.running) this.running = this.drain().finally(() => { this.running = null })
-    await this.running
-  }
-
-  async runExclusive<T>(operation: () => Promise<T>) {
-    const prior = this.running
-    const exclusive = (async () => {
-      if (prior) await prior
-      await this.drain()
-      const result = await operation()
-      await this.drain()
-      return result
-    })()
-    const lock = exclusive.then(() => undefined, () => undefined)
-    this.running = lock
-    void lock.finally(() => {
-      if (this.running === lock) this.running = null
-    })
-    return await exclusive
-  }
-
-  private async drain() {
-    while (this.pending) {
-      const task = this.pending
-      this.pending = null
-      try {
-        const result = await this.persist(task.snapshot)
-        if (task.generation === this.generation) this.applyCurrent(result, task.snapshot)
-      } catch (error) {
-        // A failed request must remain retryable. Keep a newer snapshot when
-        // one arrived while the request was in flight; otherwise restore the
-        // failed task so the next explicit flush/back-navigation retries it.
-        const pending = this.pending as { generation: number; snapshot: TSnapshot } | null
-        if (!pending || pending.generation < task.generation) this.pending = task
-        throw error
-      }
-    }
-  }
-}
-
 const PLACEHOLDER_RE = /\{\{\s*component\b[^}]*\}\}/gi
 
 export function plainTextFromMarkdown(markdown: string) {

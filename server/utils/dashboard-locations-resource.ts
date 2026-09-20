@@ -16,9 +16,6 @@ export interface DashboardLocationResource {
   phone: string | null
   email: string | null
   notification_phone: string | null
-  grab_url: string | null
-  uber_eats_url: string | null
-  foodpanda_url: string | null
 }
 
 export async function listDashboardLocationsResource(
@@ -38,7 +35,7 @@ export async function listDashboardLocationsResource(
     : ''
   const locations = await queryAll<DashboardLocationResource>(db, `
     SELECT id, slug, title, status, address, phone, email,
-           notification_phone, grab_url, uber_eats_url, foodpanda_url
+           notification_phone
       FROM business_locations
      WHERE organization_id = ? AND site_id = ?
        ${locationFilter}

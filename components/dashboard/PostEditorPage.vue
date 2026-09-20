@@ -451,12 +451,6 @@ const supportsMedia = computed(() => postType.value !== 'alert')
 const postStatus = computed(() => (post.value?.status === 'published' || post.value?.status === 'scheduled' ? post.value.status : null))
 
 // ── The hub ─────────────────────────────────────────────
-function coverPreview(): string[] | undefined {
-  const cover = editor.form.media.find(item => item.slot === 'cover')
-  const url = cover?.thumbnail_url
-  return url ? [url] : undefined
-}
-
 function mediaSummary(): string {
   if (!supportsMedia.value) return 'Alerts carry no media'
   const count = editor.form.media.length
@@ -525,7 +519,6 @@ const navigationGroups = computed<EditorNavigationGroup[]>(() => {
       summary: mediaSummary(),
       placeholder: !editor.form.media.length,
       to: `${postPath.value}/photo`,
-      previews: coverPreview(),
     },
     {
       id: 'headline',

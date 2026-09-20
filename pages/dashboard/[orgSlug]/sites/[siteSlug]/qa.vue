@@ -9,7 +9,7 @@
       :default-size="hasDetail ? 32 : undefined"
     >
       <template #header>
-        <UDashboardNavbar title="Q&A" :toggle="false">
+        <UDashboardNavbar title="Reviews and Q&A" :toggle="false">
           <template #leading>
             <DashboardNavbarLeading :to="sitePath" label="Site" />
           </template>
@@ -18,7 +18,14 @@
 
       <template #body>
         <div class="mx-auto w-full" :class="hasDetail ? 'max-w-xl' : 'max-w-3xl'">
-          <QaList />
+          <UTabs :items="tabs" class="w-full">
+            <template #qa>
+              <QaList class="mt-4" />
+            </template>
+            <template #reviews>
+              <TestimonialList class="mt-4" />
+            </template>
+          </UTabs>
         </div>
       </template>
     </UDashboardPanel>
@@ -31,6 +38,7 @@
 
 <script setup lang="ts">
 import QaList from '~/components/dashboard/QaList.vue'
+import TestimonialList from '~/components/dashboard/TestimonialList.vue'
 
 definePageMeta({ layout: 'dashboard' })
 
@@ -43,5 +51,12 @@ const qaPath = computed(() => `${sitePath.value}/qa`)
 const frame = useEditorFrame(qaPath)
 const hasDetail = computed(() => frame.mode.value === 'pair')
 
-useSeoMeta({ title: 'Site Q&A | KrabiClaw Dashboard', robots: 'noindex, nofollow' })
+// One surface for the trust content a guest reads: the questions a tenant
+// answers and the reviews they import or enter. Two tables, one card.
+const tabs = [
+  { label: 'Q&A', slot: 'qa' as const },
+  { label: 'Reviews', slot: 'reviews' as const },
+]
+
+useSeoMeta({ title: 'Reviews and Q&A | KrabiClaw', robots: 'noindex, nofollow' })
 </script>

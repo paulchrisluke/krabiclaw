@@ -1,6 +1,6 @@
 import { CONTENT_BLOCK_TYPES, describeContentBlockTextFields } from '~/shared/content-registries'
 import type { McpToolDefinition } from './shared'
-import { locationReservationConfigObject, locationReservationConfigWriteSchema, pageInfoObject, paginationInputSchema, renderedBookingPolicySummaryObject, ROBOTS_DIRECTIVE_ENUM, siteTool } from './shared'
+import { contentBlockMediaInputObject, contentBlockUpdatedAtInput, locationReservationConfigObject, locationReservationConfigWriteSchema, pageInfoObject, paginationInputSchema, renderedBookingPolicySummaryObject, ROBOTS_DIRECTIVE_ENUM, siteTool } from './shared'
 
 // Create and update both write the whole document: an omitted metadata field is
 // written as null, never carried over from the stored row. path and title are
@@ -25,25 +25,40 @@ const TENANT_PAGE_BLOCKS_SCHEMA = {
     properties: {
       id: { type: 'string' },
       type: { type: 'string' },
-      position: { type: 'integer', description: 'Retain the position from the last read unless reordering blocks.' },
       source_block_id: { type: ['string', 'null'] },
       parent_block_id: { type: ['string', 'null'] },
       level: { type: ['integer', 'null'], minimum: 1, maximum: 6 },
       data: { type: 'object', description: describeContentBlockTextFields(CONTENT_BLOCK_TYPES) },
-      media: {
-        type: 'array',
-        items: {
-          type: 'object',
-          properties: { asset_id: { type: 'string' }, slot: { type: 'string' } },
-          required: ['asset_id', 'slot'],
-          additionalProperties: false,
-        },
-      },
+      media: { type: 'array', items: contentBlockMediaInputObject },
+      updated_at: contentBlockUpdatedAtInput,
     },
     required: ['type', 'data'],
     additionalProperties: false,
   },
   description: 'Complete canonical block array. Each existing block must retain its id unless its removal is explicitly confirmed. Block data never contains asset IDs or delivery URLs. Omit media to preserve that block\'s current placements; provide media explicitly to replace them, or call set_media with owner_type "content_block", the block id, and the intended slot.',
+}
+
+// One block, addressed by id, on any content document: a blog article, a tenant
+// page variant, a doc. Where it sits is a relationship to a neighbour, so an
+// insert names the block it follows and nothing states a position. The whole
+// document write (update_blog_post, update_tenant_page) is for rewriting an
+// article; these are for changing one thing in it.
+const CONTENT_BLOCK_WRITE_SCHEMA = {
+  type: { type: 'string', enum: [...CONTENT_BLOCK_TYPES] },
+  data: { type: 'object', description: describeContentBlockTextFields(CONTENT_BLOCK_TYPES) },
+  media: { type: 'array', items: contentBlockMediaInputObject, description: 'Required on image blocks: one item, the picture. Send a block\'s media as a read returned it.' },
+  level: { type: ['integer', 'null'], minimum: 1, maximum: 6, description: 'Heading blocks only.' },
+}
+
+const CONTENT_BLOCKS_OUTPUT = {
+  type: 'object',
+  properties: {
+    document_id: { type: 'string' },
+    updated_at: { type: 'string', description: 'The document\'s new concurrency token.' },
+    blocks: { type: 'array', items: { type: 'object' }, description: 'The whole document after the change, in order, each block with its id and updated_at.' },
+  },
+  required: ['document_id', 'updated_at', 'blocks'],
+  additionalProperties: false,
 }
 
 const TENANT_PAGE_LIFECYCLE_OUTPUT = {
@@ -52,6 +67,48 @@ const TENANT_PAGE_LIFECYCLE_OUTPUT = {
 }
 
 export const CONTENT_TOOLS: McpToolDefinition[] = [
+  siteTool({
+      name: 'append_content_block',
+      description: 'Insert one block into a blog article or tenant page. Read the document first (get_blog_post, get_tenant_page): the writer says where the block goes by naming the block it follows in after_block_id — "under this paragraph" is the id of the markdown block holding that paragraph; omit after_block_id for the end of the document. To place a block inside a paragraph run, first replace_content_block the markdown block with the text before the split, then append the new block after it, then append the remaining text. The first block of an article, when it is an image, is the article\'s cover. Returns the whole document so the next edit has every block\'s id and updated_at.',
+      domain: 'content',
+      minimumRole: 'editor',
+      confirmRequired: false,
+      inputSchema: {
+        document_id: { type: 'string', description: 'The blog post id or tenant page variant id.' },
+        after_block_id: { type: ['string', 'null'], description: 'The block this one follows. Omit to append at the end.' },
+        ...CONTENT_BLOCK_WRITE_SCHEMA,
+      },
+      required: ['document_id', 'type', 'data'],
+      outputSchema: CONTENT_BLOCKS_OUTPUT,
+    }),
+  siteTool({
+      name: 'replace_content_block',
+      description: 'Replace one block\'s data and media in place, keeping its position. Requires the block\'s own updated_at from the last read; a stale token is rejected with a conflict.',
+      domain: 'content',
+      minimumRole: 'editor',
+      confirmRequired: false,
+      inputSchema: {
+        block_id: { type: 'string' },
+        expected_updated_at: { type: 'string', description: 'The block\'s updated_at from the last read.' },
+        data: CONTENT_BLOCK_WRITE_SCHEMA.data,
+        media: CONTENT_BLOCK_WRITE_SCHEMA.media,
+      },
+      required: ['block_id', 'expected_updated_at', 'data'],
+      outputSchema: CONTENT_BLOCKS_OUTPUT,
+    }),
+  siteTool({
+      name: 'delete_content_block',
+      description: 'Delete one block, and any blocks nested under it, from a blog article or tenant page. Requires the block\'s own updated_at from the last read.',
+      domain: 'content',
+      minimumRole: 'editor',
+      confirmRequired: false,
+      inputSchema: {
+        block_id: { type: 'string' },
+        expected_updated_at: { type: 'string', description: 'The block\'s updated_at from the last read.' },
+      },
+      required: ['block_id', 'expected_updated_at'],
+      outputSchema: CONTENT_BLOCKS_OUTPUT,
+    }),
   siteTool({
       name: 'list_tenant_pages',
       description: 'List canonical tenant-page variants for one manually managed locale. Automated translation is not used; create or update each locale explicitly.',

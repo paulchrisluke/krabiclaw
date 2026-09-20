@@ -93,7 +93,6 @@ export interface ContentBlockInput {
   media?: ContentBlockMedia[]
   parent_block_id?: string | null
   level?: number | null
-  position?: number | null
 }
 
 type ContentBlockWriteInput = Omit<ContentBlockSnapshot, 'id'> & { id?: string; updated_at?: string | null }
@@ -304,7 +303,10 @@ function buildDocumentWriteBatch(
     source_block_id: block.source_block_id ?? null,
     parent_block_id: block.parent_block_id ?? null,
     type: assertBlockType(block.type),
-    position: typeof block.position === 'number' ? block.position : index,
+    // Where a block sits is its index in the array, always. The write used to
+    // take a caller's number when it sent one, which is how one document came
+    // to hold fifteen blocks at position 0.
+    position: index,
     level: block.level ?? null,
     data: mediaFreeBlockData(block.type, block.data, `content block ${index} data`),
     updated_at: block.updated_at ?? now,
@@ -483,7 +485,7 @@ export function prepareContentDocumentWithBlocks(
 
   const write = buildDocumentWriteBatch(document, blocks.map((block, index) => ({
     id: block.id, source_block_id: block.source_block_id ?? null, parent_block_id: block.parent_block_id ?? null, type: block.type,
-    position: block.position ?? index, level: block.level ?? null, data: block.data,
+    position: index, level: block.level ?? null, data: block.data,
   })), { bodyMarkdown: opts.bodyMarkdown, additionalQueriesAfter: opts.additionalQueriesAfter })
   return { document, ...write, queries: [...(opts.additionalQueriesBefore ?? []), documentInsert, ...write.queries] }
 }
@@ -571,6 +573,7 @@ export async function appendContentBlock(
   db: DbClient,
   documentId: string,
   input: ContentBlockInput & { after_block_id?: string | null },
+  opts: Pick<ContentDocumentWriteOptions, 'additionalQueriesAfter'> = {},
 ) {
   const document = await getContentDocumentById(db, documentId)
   if (!document) notFound('Content document not found')
@@ -580,6 +583,9 @@ export async function appendContentBlock(
   if (input.after_block_id && afterIndex === -1) badRequest('after_block_id was not found in this document')
 
   const newBlock: ContentBlockWriteInput = {
+    // The caller's id when it has one, so the media placements it batches
+    // alongside this write address the block that is actually inserted.
+    id: input.id,
     source_block_id: input.source_block_id ?? null,
     parent_block_id: input.parent_block_id ?? null,
     type: assertBlockType(input.type),
@@ -613,13 +619,14 @@ export async function appendContentBlock(
     })),
   ].map((block, index) => ({ ...block, position: index, updated_at: block.position === index ? block.updated_at : null }))
 
-  return await writeDocumentBlocks(db, document, snapshots)
+  return await writeDocumentBlocks(db, document, snapshots, opts)
 }
 
 export async function replaceContentBlock(
   db: DbClient,
   blockId: string,
   input: { data: Record<string, unknown>; expected_updated_at: string },
+  opts: Pick<ContentDocumentWriteOptions, 'additionalQueriesAfter'> = {},
 ) {
   const current = await getContentBlock(db, blockId)
   const document = await getContentDocumentById(db, current.document_id)
@@ -641,7 +648,7 @@ export async function replaceContentBlock(
     updated_at: block.id === blockId ? null : block.updated_at,
   }))
 
-  return await writeDocumentBlocks(db, document, snapshots)
+  return await writeDocumentBlocks(db, document, snapshots, opts)
 }
 
 export async function deleteContentBlock(
@@ -687,11 +694,6 @@ export async function deleteContentBlock(
   return await writeDocumentBlocks(db, document, snapshots)
 }
 
-export async function renderContentPreview(db: DbClient, documentId: string) {
-  const blocks = await listBlocksForDocument(db, documentId)
-  return { body_markdown: renderContentBlocksToMarkdown(blocks), blocks: await attachContentBlockMedia(db, documentId, blocks.map(formatBlockOutline)) }
-}
-
 export async function getContentEditorSnapshotForDocument(db: DbClient, document: ContentDocumentRow) {
   const blocks = await listBlocksForDocument(db, document.id)
   return { document, blocks: await attachContentBlockMedia(db, document.id, blocks.map(formatBlockOutline)) }
@@ -733,7 +735,7 @@ export async function updateContentDocument(
   }
   const snapshots = input.blocks?.map((block, index) => ({
     id: block.id, source_block_id: block.source_block_id ?? null, parent_block_id: block.parent_block_id ?? null,
-    type: assertBlockType(block.type), position: block.position ?? index, level: block.level ?? null,
+    type: assertBlockType(block.type), position: index, level: block.level ?? null,
     data: asObject(block.data, `content block ${index} data`), updated_at: null,
   }))
   const result = await writeDocumentBlocks(db, document, snapshots, {
@@ -758,7 +760,7 @@ export function prepareContentDocumentUpdate(
   }
   const snapshots = input.blocks?.map((block, index) => ({
     id: block.id, source_block_id: block.source_block_id ?? null, parent_block_id: block.parent_block_id ?? null, type: assertBlockType(block.type),
-    position: block.position ?? index, level: block.level ?? null, data: asObject(block.data, `content block ${index} data`), updated_at: null,
+    position: index, level: block.level ?? null, data: asObject(block.data, `content block ${index} data`), updated_at: null,
   }))
   return buildDocumentWriteBatch(document, snapshots, {
     changes: input.changes, expectedDocument: { id: document.id, updatedAt: input.expected_updated_at },

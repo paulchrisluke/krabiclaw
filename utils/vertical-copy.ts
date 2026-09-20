@@ -38,7 +38,6 @@ type VerticalCopy = {
   highlightsSectionHeading: string
   seoReservationDescription: (_name: string) => string
   seoExperiencesDescription: (_name: string) => string
-  orderNowCta: string
   viewMenuCta: string
   viewMenuRoute: string
   findUsKicker: string
@@ -61,14 +60,7 @@ type VerticalCopy = {
   aboutHeroSubtitle: string
   ourJourneyKicker: string
   ourJourneyTitle: string
-  onlineOrderingNotAvailable: string
   wedLoveToSeeYou: string
-  orderKicker: string
-  orderHeroTitle: string
-  preferReservation: string
-  grabLabel: string
-  uberEatsLabel: string
-  foodpandaLabel: string
   openNowLabel: string
   closedLabel: string
   mainDiningRoomLabel: string
@@ -110,7 +102,6 @@ type VerticalCopy = {
   selectLocationLabel: string
   chooseLocationLabel: string
   oneGuestLabel: string
-  seoOrderDescription: (_name: string) => string
   thankYouLabel: (_name: string) => string
   confirmationMessage: (_guests: number | string, _guestLabel: string, _date: string, _time: string) => string
   manageLabel: (_word: string) => string
@@ -156,7 +147,6 @@ const registry: Record<LocaleCode, Partial<Record<SiteVertical, VerticalCopy>>> 
       seoReservationDescription: (_name: string) => `Reserve a table at ${_name}.`,
       seoExperiencesDescription: (_name: string) =>
         `Explore classes, tasting nights, and bookable experiences at ${_name}.`,
-      orderNowCta: "Order Now",
       viewMenuCta: "View Menu",
       viewMenuRoute: "/menu",
       findUsKicker: "Find us",
@@ -179,14 +169,7 @@ const registry: Record<LocaleCode, Partial<Record<SiteVertical, VerticalCopy>>> 
       aboutHeroSubtitle: "",
       ourJourneyKicker: "The journey",
       ourJourneyTitle: "Our Journey",
-      onlineOrderingNotAvailable: "Online ordering not available",
       wedLoveToSeeYou: "We'd love to see you in person.",
-      orderKicker: "Order",
-      orderHeroTitle: "Order online",
-      preferReservation: "Prefer to",
-      grabLabel: "Grab",
-      uberEatsLabel: "Uber Eats",
-      foodpandaLabel: "FoodPanda",
       openNowLabel: "Open now",
       closedLabel: "Closed",
       mainDiningRoomLabel: "Main Dining Room",
@@ -228,7 +211,6 @@ const registry: Record<LocaleCode, Partial<Record<SiteVertical, VerticalCopy>>> 
       selectLocationLabel: "Select a location",
       chooseLocationLabel: "Please choose a location.",
       oneGuestLabel: "1 Guest",
-      seoOrderDescription: (_name: string) => `Order online from ${_name}.`,
       thankYouLabel: (_name: string) => `Thank you, ${_name}!`,
       confirmationMessage: (_guests: number | string, _guestLabel: string, _date: string, _time: string) =>
         `Your reservation for ${_guests} ${_guestLabel} on ${_date} at ${_time} is confirmed.`,
@@ -271,7 +253,6 @@ const registry: Record<LocaleCode, Partial<Record<SiteVertical, VerticalCopy>>> 
       seoReservationDescription: (_name: string) => `Book a class at ${_name}.`,
       seoExperiencesDescription: (_name: string) =>
         `Browse classes and bookable experiences at ${_name}.`,
-      orderNowCta: "Book Now",
       viewMenuCta: "View Experiences",
       viewMenuRoute: "/experiences",
       findUsKicker: "Find us",
@@ -294,14 +275,7 @@ const registry: Record<LocaleCode, Partial<Record<SiteVertical, VerticalCopy>>> 
       aboutHeroSubtitle: "",
       ourJourneyKicker: "The journey",
       ourJourneyTitle: "Our Journey",
-      onlineOrderingNotAvailable: "Online booking not available",
       wedLoveToSeeYou: "We'd love to see you in person.",
-      orderKicker: "Book",
-      orderHeroTitle: "Book online",
-      preferReservation: "Prefer to",
-      grabLabel: "Grab",
-      uberEatsLabel: "Uber Eats",
-      foodpandaLabel: "FoodPanda",
       openNowLabel: "Open now",
       closedLabel: "Closed",
       mainDiningRoomLabel: "Main Studio",
@@ -343,7 +317,6 @@ const registry: Record<LocaleCode, Partial<Record<SiteVertical, VerticalCopy>>> 
       selectLocationLabel: "Select a studio",
       chooseLocationLabel: "Please choose a studio.",
       oneGuestLabel: "1 Guest",
-      seoOrderDescription: (_name: string) => `Order online from ${_name}.`,
       thankYouLabel: (_name: string) => `Thank you, ${_name}!`,
       confirmationMessage: (_guests: number | string, _guestLabel: string, _date: string, _time: string) =>
         `We've received your request for ${_guests} ${_guestLabel} on ${_date} at ${_time}.`,
@@ -388,7 +361,6 @@ const registry: Record<LocaleCode, Partial<Record<SiteVertical, VerticalCopy>>> 
       seoReservationDescription: (_name: string) => `จองโต๊ะที่ ${_name}`,
       seoExperiencesDescription: (_name: string) =>
         `สำรวจคลาส ชิมอาหารค่ำ และประสบการณ์ที่จองได้ที่ ${_name}`,
-      orderNowCta: "สั่งออนไลน์",
       viewMenuCta: "ดูเมนู",
       viewMenuRoute: "/menu",
       findUsKicker: "หาเรา",
@@ -411,14 +383,7 @@ const registry: Record<LocaleCode, Partial<Record<SiteVertical, VerticalCopy>>> 
       aboutHeroSubtitle: "",
       ourJourneyKicker: "การเดินทาง",
       ourJourneyTitle: "การเดินทางของเรา",
-      onlineOrderingNotAvailable: "ไม่มีการสั่งออนไลน์",
       wedLoveToSeeYou: "เรายินดีต้อนรับคุณอย่างใกล้ชิด",
-      orderKicker: "สั่ง",
-      orderHeroTitle: "สั่งออนไลน์",
-      preferReservation: "ต้องการ",
-      grabLabel: "Grab",
-      uberEatsLabel: "Uber Eats",
-      foodpandaLabel: "FoodPanda",
       openNowLabel: "เปิดอยู่",
       closedLabel: "ปิดแล้ว",
       mainDiningRoomLabel: "ห้องรับประทานอาหารหลัก",
@@ -460,7 +425,6 @@ const registry: Record<LocaleCode, Partial<Record<SiteVertical, VerticalCopy>>> 
       selectLocationLabel: "เลือกสาขา",
       chooseLocationLabel: "กรุณาเลือกสาขา",
       oneGuestLabel: "1 แขก",
-      seoOrderDescription: (_name: string) => `สั่งออนไลน์จาก ${_name}`,
       thankYouLabel: (_name: string) => `ขอบคุณ ${_name}!`,
       confirmationMessage: (_guests: number | string, _guestLabel: string, _date: string, _time: string) =>
         `การจองสำหรับ ${_guests} ${_guestLabel} วันที่ ${_date} เวลา ${_time} ได้รับการยืนยันแล้ว`,
@@ -503,7 +467,6 @@ const registry: Record<LocaleCode, Partial<Record<SiteVertical, VerticalCopy>>> 
       seoReservationDescription: (_name: string) => `จองคลาสที่ ${_name}`,
       seoExperiencesDescription: (_name: string) =>
         `เลือกดูคลาสและประสบการณ์ที่จองได้ที่ ${_name}`,
-      orderNowCta: "จองเลย",
       viewMenuCta: "ดูประสบการณ์",
       viewMenuRoute: "/experiences",
       findUsKicker: "หาเรา",
@@ -526,14 +489,7 @@ const registry: Record<LocaleCode, Partial<Record<SiteVertical, VerticalCopy>>> 
       aboutHeroSubtitle: "",
       ourJourneyKicker: "การเดินทาง",
       ourJourneyTitle: "การเดินทางของเรา",
-      onlineOrderingNotAvailable: "ไม่มีการจองออนไลน์",
       wedLoveToSeeYou: "เรายินดีต้อนรับคุณอย่างใกล้ชิด",
-      orderKicker: "จอง",
-      orderHeroTitle: "จองออนไลน์",
-      preferReservation: "ต้องการ",
-      grabLabel: "Grab",
-      uberEatsLabel: "Uber Eats",
-      foodpandaLabel: "FoodPanda",
       openNowLabel: "เปิดอยู่",
       closedLabel: "ปิดแล้ว",
       mainDiningRoomLabel: "สตูดิโอหลัก",
@@ -575,7 +531,6 @@ const registry: Record<LocaleCode, Partial<Record<SiteVertical, VerticalCopy>>> 
       selectLocationLabel: "เลือกสตูดิโอ",
       chooseLocationLabel: "กรุณาเลือกสตูดิโอ",
       oneGuestLabel: "1 แขก",
-      seoOrderDescription: (_name: string) => `สั่งออนไลน์จาก ${_name}`,
       thankYouLabel: (_name: string) => `ขอบคุณ ${_name}!`,
       confirmationMessage: (_guests: number | string, _guestLabel: string, _date: string, _time: string) =>
         `เราได้รับคำขอของคุณสำหรับ ${_guests} ${_guestLabel} วันที่ ${_date} เวลา ${_time}`,
@@ -622,7 +577,6 @@ registry.en.service = {
   seoReservationDescription: (_name: string) => `Request a consultation with ${_name}.`,
   seoExperiencesDescription: (_name: string) =>
     `Explore professional services from ${_name}.`,
-  orderNowCta: "Book Now",
   viewMenuCta: "View Services",
   viewMenuRoute: "/services",
   findUsKicker: "Contact",
@@ -645,14 +599,7 @@ registry.en.service = {
   aboutHeroSubtitle: "",
   ourJourneyKicker: "Our work",
   ourJourneyTitle: "How We Help",
-  onlineOrderingNotAvailable: "Online booking not available",
   wedLoveToSeeYou: "We would be glad to hear from you.",
-  orderKicker: "Consultation",
-  orderHeroTitle: "",
-  preferReservation: "Prefer to",
-  grabLabel: "External booking",
-  uberEatsLabel: "External booking",
-  foodpandaLabel: "External booking",
   openNowLabel: "Open now",
   closedLabel: "Closed",
   mainDiningRoomLabel: "Primary office",
@@ -677,7 +624,6 @@ registry.en.service = {
   selectLocationLabel: "Select an office",
   chooseLocationLabel: "Please choose an office or contact point.",
   oneGuestLabel: "1 person",
-  seoOrderDescription: (_name: string) => "",
   confirmationMessage: (_guests: number | string, _guestLabel: string, _date: string, _time: string) =>
     `We have received your consultation request for ${_guests} ${_guestLabel} on ${_date} at ${_time}.`,
   callUsLabel: (_phone: string) => `Call: ${_phone}`,
@@ -712,7 +658,6 @@ registry.ja.restaurant = {
   highlightsSectionHeading: "各店舗の投稿・レビュー・料理。",
   seoReservationDescription: (_name: string) => `${_name}のお席をご予約いただけます。`,
   seoExperiencesDescription: (_name: string) => `${_name}の料理教室、テイスティング、各種体験をご覧ください。`,
-  orderNowCta: "今すぐ注文",
   viewMenuCta: "メニューを見る",
   viewMenuRoute: "/menu",
   findUsKicker: "アクセス",
@@ -735,14 +680,7 @@ registry.ja.restaurant = {
   aboutHeroSubtitle: "",
   ourJourneyKicker: "これまでの歩み",
   ourJourneyTitle: "私たちの歩み",
-  onlineOrderingNotAvailable: "オンライン注文はご利用いただけません",
   wedLoveToSeeYou: "ご来店をお待ちしております。",
-  orderKicker: "ご注文",
-  orderHeroTitle: "オンライン注文",
-  preferReservation: "ご希望の場合は",
-  grabLabel: "Grab",
-  uberEatsLabel: "Uber Eats",
-  foodpandaLabel: "FoodPanda",
   openNowLabel: "営業中",
   closedLabel: "営業時間外",
   mainDiningRoomLabel: "メインダイニング",
@@ -784,7 +722,6 @@ registry.ja.restaurant = {
   selectLocationLabel: "店舗を選択",
   chooseLocationLabel: "店舗を選択してください。",
   oneGuestLabel: "1名",
-  seoOrderDescription: (_name: string) => `${_name}からオンラインでご注文いただけます。`,
   thankYouLabel: (_name: string) => `${_name}様、ありがとうございます。`,
   confirmationMessage: (_guests: number | string, _guestLabel: string, _date: string, _time: string) =>
     `${_date} ${_time}、${_guests}${_guestLabel}様のご予約が確定しました。`,
@@ -817,21 +754,16 @@ registry.ja.experience = {
   highlightsSectionHeading: "各スタジオの投稿・レビュー・クラス。",
   seoReservationDescription: (_name: string) => `${_name}のクラスをご予約いただけます。`,
   seoExperiencesDescription: (_name: string) => `${_name}のクラスや各種体験をご覧ください。`,
-  orderNowCta: "今すぐ予約",
   viewMenuCta: "体験を見る",
   viewMenuRoute: "/experiences",
   visitLocationCta: "このスタジオを見る →",
   mainLocationLabel: "メインスタジオ",
   secondLocationLabel: "2つ目のスタジオ",
   addSecondLocationNote: "最初のスタジオを接続した後、2つ目を追加できます。",
-  onlineOrderingNotAvailable: "オンライン予約はご利用いただけません",
-  orderKicker: "ご予約",
-  orderHeroTitle: "オンライン予約",
   mainDiningRoomLabel: "メインスタジオ",
   locationLabel: "スタジオ",
   selectLocationLabel: "スタジオを選択",
   chooseLocationLabel: "スタジオを選択してください。",
-  seoOrderDescription: (_name: string) => `${_name}の体験をオンラインでご予約いただけます。`,
   confirmationMessage: (_guests: number | string, _guestLabel: string, _date: string, _time: string) =>
     `${_date} ${_time}、${_guests}${_guestLabel}様のご予約リクエストを受け付けました。`,
 }
@@ -862,7 +794,6 @@ registry.ja.service = {
   highlightsSectionHeading: "サービス・記事・最新情報。",
   seoReservationDescription: (_name: string) => `${_name}へのご相談をお申し込みいただけます。`,
   seoExperiencesDescription: (_name: string) => `${_name}の専門サービスをご覧ください。`,
-  orderNowCta: "今すぐ予約",
   viewMenuCta: "サービスを見る",
   viewMenuRoute: "/services",
   findUsKicker: "お問い合わせ",
@@ -876,11 +807,6 @@ registry.ja.service = {
   ourJourneyKicker: "私たちの仕事",
   ourJourneyTitle: "私たちにできること",
   wedLoveToSeeYou: "お問い合わせをお待ちしております。",
-  orderKicker: "ご相談",
-  orderHeroTitle: "",
-  grabLabel: "外部予約",
-  uberEatsLabel: "外部予約",
-  foodpandaLabel: "外部予約",
   mainDiningRoomLabel: "主な事務所",
   connectGoogleLocationsCta: "Google マップから事務所の情報を追加",
   additionalLocationsNote: "追加した事務所や対応地域がここに表示されます。",
@@ -893,7 +819,6 @@ registry.ja.service = {
   locationLabel: "事務所",
   selectLocationLabel: "事務所を選択",
   chooseLocationLabel: "事務所または窓口を選択してください。",
-  seoOrderDescription: (_name: string) => "",
   confirmationMessage: (_guests: number | string, _guestLabel: string, _date: string, _time: string) =>
     `${_date} ${_time}、${_guests}${_guestLabel}様のご相談リクエストを受け付けました。`,
 }

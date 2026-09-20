@@ -301,9 +301,11 @@ async function normalizeEditorContentBlocks(
       allowedKinds: ['image', 'video'],
       fieldName: `content_blocks.${id}.media`,
     })
-    const data = { ...block.data }
-    if (block.type === 'image' && !placementMedia.length) return { ...block, id, data, media: [], placement_media: [] }
-    return { ...block, id, data, media: placementMedia, placement_media: placementMedia }
+    // An image block with no image is nothing: it used to be written anyway,
+    // and a post that took fifteen such blocks came back fifteen times from
+    // the cover join.
+    if (block.type === 'image' && !placementMedia.length) badRequest('Image blocks require one media asset')
+    return { ...block, id, data: { ...block.data }, media: placementMedia, placement_media: placementMedia }
   }))
 }
 
