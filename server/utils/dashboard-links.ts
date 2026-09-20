@@ -7,7 +7,6 @@ export const DASHBOARD_DESTINATIONS = {
   'settings.billing': 'settings/billing',
   'settings.members': 'settings/members',
   'site.overview': 'sites/:siteSlug',
-  'site.locations': 'sites/:siteSlug/locations',
   'site.locations.new': 'sites/:siteSlug/locations/new',
   'site.domains': 'sites/:siteSlug/domains',
   'site.settings': 'sites/:siteSlug/settings',

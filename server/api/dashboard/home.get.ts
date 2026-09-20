@@ -11,5 +11,5 @@ export default defineHandler(async (event) => {
   const principal = memberAccessPrincipal(organization, { env, siteId: site.id, event })
   await assertSiteWideAccess(db, principal)
 
-  return jsonResponse(await getDashboardHomeData(db, organization.id, site.id, principal))
+  return jsonResponse(await getDashboardHomeData(db, site.id))
 })

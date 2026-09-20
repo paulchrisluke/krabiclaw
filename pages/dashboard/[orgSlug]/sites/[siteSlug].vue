@@ -54,39 +54,61 @@
           />
 
           <!--
-            One card per thing a visitor meets on the site, in the order they
-            meet it, each stating what it holds right now. What a visitor never
-            sees — the domain, languages, currency — is behind the gear.
+            Two aspects of one site, the way the listing editor splits Your
+            space from Arrival guide. Site: one card per thing a visitor meets,
+            in the order they meet it, each stating what it holds. Locations:
+            the places themselves. What a visitor never sees is behind the gear.
+            The open tab lives in the URL, so Back from a location lands on it.
           -->
-          <UPageList v-else class="gap-3">
-            <UPageCard
-              v-for="card in cards"
-              :key="card.id"
-              :to="card.to"
-              :title="card.title"
-              :description="card.description"
-              variant="soft"
-              :highlight="card.id === activeSection"
-              :ui="{ container: 'p-5 sm:p-5', title: 'text-[15px]', description: 'mt-1 line-clamp-2' }"
-            >
-              <img
-                v-if="card.logo"
-                :src="card.logo"
-                alt=""
-                class="h-14 w-auto max-w-40 object-contain"
-              >
-              <div v-else-if="card.previews?.length" class="flex gap-2">
-                <img
-                  v-for="(preview, index) in card.previews.slice(0, 4)"
-                  :key="index"
-                  :src="preview"
-                  alt=""
-                  class="aspect-[20/19] w-full max-w-24 rounded-xl object-cover"
-                  loading="lazy"
+          <UTabs v-else v-model="tab" :items="tabs" class="w-full" :ui="{ list: 'mb-4' }">
+            <template #site>
+              <UPageList class="gap-3">
+                <UPageCard
+                  v-for="card in cards"
+                  :key="card.id"
+                  :to="card.to"
+                  :title="card.title"
+                  :description="card.description"
+                  variant="soft"
+                  :highlight="card.id === activeSection"
+                  :ui="{ container: 'p-5 sm:p-5', title: 'text-[15px]', description: 'mt-1 line-clamp-2' }"
                 >
+                  <img
+                    v-if="card.logo"
+                    :src="card.logo"
+                    alt=""
+                    class="h-14 w-auto max-w-40 object-contain"
+                  >
+                </UPageCard>
+              </UPageList>
+            </template>
+
+            <template #locations>
+              <div class="space-y-4">
+                <div class="flex justify-end">
+                  <UButton
+                    :to="`${sitePath}/locations/new`"
+                    icon="i-lucide-plus"
+                    color="neutral"
+                    variant="soft"
+                    square
+                    :aria-label="`Add a ${locationNoun}`"
+                  />
+                </div>
+                <div v-if="!locations.length" class="rounded-2xl border border-default bg-elevated px-6 py-20 text-center">
+                  <UIcon name="i-lucide-map-pin" class="mx-auto size-6 text-muted" />
+                  <h2 class="mt-5 text-base font-semibold text-highlighted">No {{ locationsLabel.toLowerCase() }} yet</h2>
+                  <UButton :label="`Add your first ${locationNoun}`" icon="i-lucide-plus" class="mt-6" :to="`${sitePath}/locations/new`" />
+                </div>
+                <DashboardSiteLocationSelector
+                  v-else
+                  :items="locationTiles"
+                  missing-image-label="No hero photo"
+                  missing-image-hint="Add one under this location's photos."
+                />
               </div>
-            </UPageCard>
-          </UPageList>
+            </template>
+          </UTabs>
         </div>
       </template>
     </UDashboardPanel>
@@ -102,6 +124,7 @@
 
 <script setup lang="ts">
 import { authClient } from '~/lib/auth-client'
+import DashboardSiteLocationSelector, { type SiteLocationSelectorItem } from '~/components/dashboard/SiteLocationSelector.vue'
 import { parseCmsFeatureOverrideDelta, resolveCmsCapabilities } from '~/config/cms-registry'
 import { resolvePublicTemplate } from '~/utils/template-registry'
 import { hasPlatformAdminPermission } from '~/utils/platform-admin-access'
@@ -158,7 +181,7 @@ const { data: overviewData, pending, error: overviewError, refresh } = await use
   dashboardApi<DashboardHomeData>('/api/dashboard/home', {
     signal,
     validate: (value): value is DashboardHomeData => isRecord(value)
-      && Array.isArray(value.locations) && Array.isArray(value.pages)
+      && Array.isArray(value.pages)
       && isRecord(value.counts) && typeof value.counts.blog === 'number',
   }), {
   // While a child route owns the chrome — the page editor, the blog editor,
@@ -185,7 +208,7 @@ const overviewPending = computed(() =>
 const overviewErrorMessage = computed(() =>
   overviewError.value ? getErrorMessage(overviewError.value, 'Failed to load this site') : null)
 
-const locations = computed(() => overviewData.value?.locations ?? [])
+const locations = computed(() => dashboard.locations.value)
 const pagesCount = computed(() => tenantPageRows(overviewData.value?.pages ?? []).length)
 const counts = computed(() => overviewData.value?.counts ?? { blog: 0, qa: 0, reviews: 0 })
 
@@ -201,28 +224,51 @@ function trustSummary(qa: number, reviews: number): string {
   return parts.length ? parts.join(' · ') : 'Answer your first question'
 }
 
-interface HubCard { id: string; title: string; description: string; to: string; logo?: string; previews?: string[] }
+interface HubCard { id: string; title: string; description: string; to: string; logo?: string }
+
+const usesServiceAreaVocabulary = computed(() => capabilities.value.locationVocabulary === 'office/service area')
+const locationsLabel = computed(() => (usesServiceAreaVocabulary.value ? 'Offices / Service Areas' : 'Locations'))
+const locationNoun = computed(() => (usesServiceAreaVocabulary.value ? 'office' : 'location'))
+
+const tabs = computed(() => [
+  { label: 'Site', slot: 'site' as const, value: 'site' },
+  { label: locationsLabel.value, slot: 'locations' as const, value: 'locations' },
+])
+const router = useRouter()
+const tab = computed({
+  get: () => (route.query.tab === 'locations' ? 'locations' : 'site'),
+  set: (value: string | number) => { void router.replace({ query: { ...route.query, tab: value === 'locations' ? 'locations' : undefined } }) },
+})
+
+/**
+ * A location is identified by where it is, so the tile carries its address
+ * and its own hero photograph. The generated social card has the name composed
+ * into the pixels and cropped badly to the tile; the name belongs under it.
+ */
+const locationTiles = computed<SiteLocationSelectorItem[]>(() => locations.value.map(location => {
+  const hero = location.media.find(item => item.slot === 'hero')
+  const lines = location.address?.addressLines?.filter(line => line.trim()) ?? []
+  return {
+    id: location.id,
+    label: location.title,
+    imageUrl: hero ? (hero.kind === 'video' ? hero.thumbnail_url : hero.public_url) : null,
+    eyebrow: '',
+    summary: lines.length ? lines.join(', ') : 'Address not set',
+    to: `${sitePath.value}/locations/${location.slug}`,
+  }
+}))
 
 const managers = computed(() => new Set(capabilities.value.managers.filter(manager => manager.scope === 'site').map(manager => manager.id)))
 
 /**
  * The site as a visitor meets it, ordered by how often a tenant edits it: the
- * locations, the pages, the blog, the reviews and questions, and last the
- * brand, which is set up once. Each card states its value. Brand is also the
- * one card that owns the whole screen, so it must not be the card the rail
- * opens beside itself at `lg`.
+ * pages, the blog, the reviews and questions, and last the brand, which is set
+ * up once. Each card states its value. Brand is also the one card that owns
+ * the whole screen, so it must not be the card the rail opens beside itself
+ * at `lg`.
  */
 const cards = computed<HubCard[]>(() => {
   const list: HubCard[] = [
-    {
-      id: 'locations',
-      title: capabilities.value.managers.find(manager => manager.key === 'site.locations')?.label ?? 'Locations',
-      description: countSummary(locations.value.length, 'location', 'Add your first location'),
-      to: `${sitePath.value}/locations`,
-      previews: locations.value
-        .map(location => location.media.find(item => item.slot === 'social_card')?.public_url)
-        .filter((url): url is string => Boolean(url)),
-    },
     { id: 'pages', title: 'Pages', description: countSummary(pagesCount.value, 'page', 'No pages yet'), to: `${sitePath.value}/pages` },
   ]
   if (managers.value.has('blog')) list.push({ id: 'blog', title: 'Blog', description: countSummary(counts.value.blog, 'published post', 'Write your first post'), to: `${sitePath.value}/blog` })
