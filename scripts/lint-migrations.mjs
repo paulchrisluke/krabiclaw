@@ -7,9 +7,8 @@
 // Measured on a throwaway D1 instance, 2026-09-09; see release-flow.md.
 //
 // SQLite replays the chain in journal order and its authorizer denies the DROP
-// against the foreign keys that actually exist at that point. A parent whose
-// referencing tables are all dropped in the same file may go: the cascade
-// cannot reach a table that survives.
+// against the foreign keys that exist at that statement. A parent whose
+// referencing tables were dropped first may go: nothing is left to cascade.
 import { readFile } from 'node:fs/promises'
 import { DatabaseSync, constants } from 'node:sqlite'
 
@@ -26,7 +25,6 @@ db.setAuthorizer((action, table) => {
 for (const { tag } of journal.entries) {
   const file = `migrations/${tag}.sql`
   let remaining = await readFile(file, 'utf8')
-  const dropped = [...remaining.matchAll(/DROP TABLE\s+`?(\w+)`?/gi)].map(match => match[1].toLowerCase())
   try {
     while ((remaining = remaining.replace(/^(?:\s|;|--[^\n]*(?:\n|$)|\/\*[\s\S]*?\*\/)+/, ''))) {
       const references = db.prepare(`
@@ -34,7 +32,7 @@ for (const { tag } of journal.entries) {
         FROM sqlite_schema AS s, pragma_foreign_key_list(s.name) AS f
         WHERE s.type = 'table' AND lower(s.name) <> lower(f."table")
       `).all()
-      parents = new Set(references.filter(row => !dropped.includes(row.child)).map(row => row.parent))
+      parents = new Set(references.map(row => row.parent))
       const statement = db.prepare(remaining)
       statement.run()
       remaining = remaining.slice(statement.sourceSQL.length)
