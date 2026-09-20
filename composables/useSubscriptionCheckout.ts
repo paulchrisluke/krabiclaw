@@ -59,8 +59,7 @@ export function useSubscriptionCheckout() {
     }
 
     // Checkout runs from a click, not a render, so the session is read the
-    // imperative way Better Auth provides for exactly that. useAuthSession is
-    // for rendering; calling it here would want a setup context it does not have.
+    // imperative way Better Auth provides for exactly that.
     const currentUser = (await authClient.getSession()).data?.user
     const metadata = {
       site_id: input.siteId,

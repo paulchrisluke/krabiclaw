@@ -195,7 +195,8 @@ const {
   trackSubscriptionDowngrade,
   trackSubscriptionCheckoutSuccess,
 } = useAnalytics()
-const { isAuthenticated } = await useAuthSession()
+const session = authClient.useSession()
+const isAuthenticated = computed(() => Boolean(session.value.data?.user))
 const { startSubscriptionCheckout } = useSubscriptionCheckout()
 const loading = ref(true)
 const billing = ref<ApiRecord | null>(null)
@@ -334,17 +335,9 @@ const isBillingResponse = (value: unknown): value is ApiRecord =>
   && isRecord(value.billing)
   && typeof value.billing.organizationId === 'string'
   && typeof value.billing.plan === 'string'
-const requestEvent = useRequestEvent()
 const { data: billingResource, error: billingResourceError, pending: billingResourcePending } = await useAsyncData<BillingResource>(
   computed(() => `dashboard-billing:${String(route.params.orgSlug || '')}`),
   async () => {
-    if (import.meta.server) {
-      if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Request context unavailable' })
-      const { loadDashboardBillingResource } = await import('~/server/utils/dashboard-billing-resource')
-      const organizationSlug = typeof route.params.orgSlug === 'string' ? route.params.orgSlug : null
-      if (!organizationSlug) throw createError({ statusCode: 400, statusMessage: 'Organization slug is required for billing' })
-      return await loadDashboardBillingResource(requestEvent, organizationSlug)
-    }
     const [billingResponse, paymentMethodResponse, sitesResponse] = await Promise.all([
       dashboardApi<ApiRecord>('/api/billing/status', { validate: isBillingResponse }),
       dashboardApi<{ card: SavedCard | null }>('/api/billing/payment-method', { validate: isPaymentMethodResponse }),

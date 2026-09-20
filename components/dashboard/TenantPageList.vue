@@ -2,7 +2,6 @@
   <div class="space-y-4">
   <DashboardListEditor
     title="Pages"
-    description="The pages of your site that you write yourself."
     :items="listItems"
     empty-title="No pages yet"
     empty-icon="i-lucide-file-text"
@@ -29,68 +28,30 @@
 import DashboardListEditor from '~/components/dashboard/DashboardListEditor.vue'
 import { getErrorMessage } from '~/utils/errors'
 import { isRecord } from '~/utils/api-clients'
-import { isTenantPageListResponse, type TenantPageListRow } from '~/composables/useTenantPageDraft'
+import { isTenantPageListResponse, tenantPageRows, type TenantPageListRow } from '~/composables/useTenantPageDraft'
 
 const route = useRoute()
 const dashboardApi = useDashboardApi()
 const siteId = await useDashboardSiteId()
-const pagesPath = computed(() => `/dashboard/${String(route.params.orgSlug)}/sites/${String(route.params.siteSlug)}/pages`)
+const sitePath = computed(() => `/dashboard/${String(route.params.orgSlug)}/sites/${String(route.params.siteSlug)}`)
+const pagesPath = computed(() => `${sitePath.value}/pages`)
 
-const requestEvent = useRequestEvent()
 const { data, pending, error, refresh } = await useAsyncData(
   `tenant-pages-${siteId}`,
-  async () => {
-    // On the server the list is read straight from D1; going back out over HTTP
-    // to our own endpoint would cost a round trip during render, and rendering
-    // the empty state server-side only to replace it on the client is a
-    // hydration mismatch the visitor sees flash.
-    if (import.meta.server) {
-      if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Request context unavailable' })
-      const { loadDashboardTenantPages } = await import('~/server/utils/dashboard-editor-resources')
-      const resource = await loadDashboardTenantPages(requestEvent, siteId)
-      return { pages: resource.pages as unknown as TenantPageListRow[] }
-    }
-    return await dashboardApi<{ pages: TenantPageListRow[] }>(`/api/editor/sites/${siteId}/pages`, { validate: isTenantPageListResponse })
-  },
-  { lazy: import.meta.client },
+  () => dashboardApi<{ pages: TenantPageListRow[] }>(`/api/editor/sites/${siteId}/pages`, { validate: isTenantPageListResponse }),
+  { lazy: true },
 )
 
 const loadError = computed(() => (error.value ? getErrorMessage(error.value, 'Failed to load pages') : null))
 
-/**
- * Pages a manager already owns are edited there, not here: a location's page
- * belongs to the location, and a recipe page is the Menu, the Q&A or the Blog
- * seen from the other side. Listing them again would offer two ways to edit one
- * thing, and the second one would not know what the first one means.
- */
-const MANAGED_PAGE_RECIPES = new Set([
-  'locations', 'menu', 'order', 'products', 'reservations', 'qa', 'reviews',
-  'posts', 'photos', 'blog', 'services', 'pricing', 'donate', 'schedule',
-])
-
-const listItems = computed(() => (data.value?.pages ?? [])
-  .filter(page => (!page.recipe || !MANAGED_PAGE_RECIPES.has(page.recipe)) && !page.path.startsWith('/locations/'))
-  // The front page first, wherever its title sorts.
-  .sort((left, right) => Number(right.path === '/') - Number(left.path === '/'))
-  .map(page => ({
-    id: page.id,
-    title: page.path === '/' ? 'Home' : page.title,
-    summary: page.path === '/' ? 'Homepage' : page.path,
-    // Stated by the server, not recomputed here: a page the template renders a
-    // document at cannot be removed, and a rule copied into the client drifts
-    // from the one the endpoint enforces.
-    removable: page.removable,
-    // The delete endpoint takes the timestamp the row was last seen at, so a
-    // page someone else changed in the meantime conflicts instead of going.
-    updatedAt: page.updated_at,
-  })))
+const listItems = computed(() => tenantPageRows(data.value?.pages ?? []))
 
 function openNew() {
   void navigateTo(`${pagesPath.value}/new`)
 }
 
-function open(item: { id: string }) {
-  void navigateTo(`${pagesPath.value}/${item.id}`)
+function open(item: { id: string; recipe: string | null }) {
+  void navigateTo(item.recipe === 'links' ? `${sitePath.value}/links` : `${pagesPath.value}/${item.id}`)
 }
 
 const removingId = ref<string | null>(null)

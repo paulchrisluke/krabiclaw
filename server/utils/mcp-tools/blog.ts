@@ -1,8 +1,10 @@
 import { instantSchema } from '~/utils/timezone'
 import type { McpToolDefinition } from './shared'
-import { ROBOTS_DIRECTIVE_ENUM, blogPostMutationResultObject, blogPostObject, blogPostSummaryObject, pageInfoObject, paginationInputSchema, siteTool } from './shared'
+import { ROBOTS_DIRECTIVE_ENUM, blogPostMutationResultObject, blogPostObject, blogPostSummaryObject, contentBlockMediaInputObject, contentBlockUpdatedAtInput, pageInfoObject, paginationInputSchema, siteTool } from './shared'
 import { PUBLICATION_CONTENT_BLOCK_TYPES, describeContentBlockTextFields } from '~/shared/content-registries'
 
+// A block's place is its index in the array; there is no position to state.
+// An image block carries exactly one media item, or it is refused.
 const blogContentBlockSchema = {
   type: 'object',
   properties: {
@@ -10,19 +12,12 @@ const blogContentBlockSchema = {
     type: { type: 'string', enum: [...PUBLICATION_CONTENT_BLOCK_TYPES] },
     parent_block_id: { type: ['string', 'null'] },
     level: { type: ['number', 'null'] },
-    position: { type: ['number', 'null'] },
     data: { type: 'object', description: describeContentBlockTextFields(PUBLICATION_CONTENT_BLOCK_TYPES) },
-    media: {
-      type: 'array',
-      items: {
-        type: 'object',
-        properties: { asset_id: { type: 'string' }, slot: { type: 'string' } },
-        required: ['asset_id', 'slot'],
-        additionalProperties: false,
-      },
-    },
+    media: { type: 'array', items: contentBlockMediaInputObject, description: 'Required on image blocks: one item, the picture. A block read back keeps its media by sending it as read.' },
+    updated_at: contentBlockUpdatedAtInput,
   },
   required: ['type', 'data'],
+  additionalProperties: false,
 } as const
 
 export const BLOG_TOOLS: McpToolDefinition[] = [
@@ -69,7 +64,7 @@ export const BLOG_TOOLS: McpToolDefinition[] = [
         collection: { type: 'string', enum: ['blog', 'docs'], description: "KrabiClaw's own site only: which collection the article belongs to. Every other site has one blog." },
         category: { type: 'string' },
         tags: { type: 'array', items: { type: 'string' }, description: 'Searchable topical tags. Use a short, deduplicated list; category remains the primary public grouping.' },
-        content_blocks: { type: 'array', minItems: 1, description: 'Canonical ordered article blocks. This is the source of truth for FAQ, How-To, media, and other structured content.', items: blogContentBlockSchema },
+        content_blocks: { type: 'array', minItems: 1, description: 'The article, in order. Any number of blocks of any type, images wherever they belong. The first block, when it is an image, is the cover.', items: blogContentBlockSchema },
         seo_title: { type: ['string', 'null'], description: 'Optional SEO/browser-tab title override. Falls back to the post title if unset.' },
         seo_description: { type: 'string' },
         seo_keywords: { type: ['string', 'null'], description: 'Comma-separated SEO keyword phrases when useful.' },
@@ -84,7 +79,7 @@ export const BLOG_TOOLS: McpToolDefinition[] = [
     }),
   siteTool({
       name: 'update_blog_post',
-      description: 'Save changes to an existing live or scheduled blog article. Only provided fields are changed. Sending content_blocks replaces the complete block snapshot and requires expected_updated_at. Changes to a live article are public immediately; compose and review them with the user first.',
+      description: 'Save changes to an existing blog article: metadata, or the whole article body. Only provided fields are changed. content_blocks replaces every block and requires expected_updated_at; to change one block, use append_content_block, replace_content_block or delete_content_block instead. Changes to a live article are public immediately; compose and review them with the user first.',
       domain: 'blog',
       minimumRole: 'editor',
       confirmRequired: false,
@@ -95,7 +90,7 @@ export const BLOG_TOOLS: McpToolDefinition[] = [
         collection: { type: 'string', enum: ['blog', 'docs'], description: "KrabiClaw's own site only: which collection the article belongs to. Every other site has one blog." },
         category: { type: 'string' },
         tags: { type: 'array', items: { type: 'string' }, description: 'Searchable topical tags. Use a short, deduplicated list; category remains the primary public grouping.' },
-        content_blocks: { type: 'array', minItems: 1, description: 'Canonical ordered article blocks. Sending this replaces the complete block snapshot.', items: blogContentBlockSchema },
+        content_blocks: { type: 'array', minItems: 1, description: 'The whole article, in order, replacing every block. Blocks read back keep their id. The first block, when it is an image, is the cover.', items: blogContentBlockSchema },
         expected_updated_at: { type: 'string', description: 'Required with content_blocks. Use updated_at returned by get_blog_post; stale tokens are rejected with a conflict.' },
         seo_title: { type: ['string', 'null'], description: 'Optional SEO/browser-tab title override. Falls back to the post title if unset.' },
         seo_description: { type: 'string' },
@@ -108,47 +103,6 @@ export const BLOG_TOOLS: McpToolDefinition[] = [
         reset_slug_override: { type: 'boolean' },
       },
       required: ['post_id'],
-      outputSchema: blogPostMutationResultObject,
-    }),
-  siteTool({
-      name: 'update_blog_metadata',
-      description: 'Update blog metadata only (title, excerpt, category, tags, nav, SEO fields, visibility, or slug). Does not replace content_blocks or change publication state. Requires post_id and at least one metadata field.',
-      domain: 'blog',
-      minimumRole: 'editor',
-      confirmRequired: false,
-      inputSchema: {
-        post_id: { type: 'string', description: 'Post id or slug.' },
-        expected_updated_at: { type: 'string', description: 'Optional metadata concurrency token from the post updated_at field.' },
-        title: { type: 'string' },
-        excerpt: { type: 'string' },
-        collection: { type: 'string', enum: ['blog', 'docs'], description: "KrabiClaw's own site only: which collection the article belongs to. Every other site has one blog." },
-        category: { type: 'string' },
-        tags: { type: 'array', items: { type: 'string' }, description: 'Searchable topical tags. Use a short, deduplicated list; category remains the primary public grouping.' },
-        seo_title: { type: ['string', 'null'], description: 'Optional SEO/browser-tab title override. Falls back to the post title if unset.' },
-        seo_description: { type: ['string', 'null'] },
-        seo_keywords: { type: ['string', 'null'], description: 'Comma-separated SEO keyword phrases when useful.' },
-        canonical_url: { type: ['string', 'null'] },
-        robots: { type: ['string', 'null'], enum: [...ROBOTS_DIRECTIVE_ENUM, null] },
-        visibility: { type: 'string', enum: ['public', 'unlisted'] },
-        slug: { type: ['string', 'null'], description: 'Manual URL slug override. Published slug changes preserve a permanent redirect by default.' },
-        redirect_old_slug: { type: 'boolean', description: 'Defaults true after first publish.' },
-        reset_slug_override: { type: 'boolean' },
-      },
-      required: ['post_id'],
-      outputSchema: blogPostMutationResultObject,
-    }),
-  siteTool({
-      name: 'replace_blog_content',
-      description: 'Replace a blog post\'s complete content_blocks document. This is a full replace, not a merge; include every block that should remain. Requires expected_updated_at from get_blog_post post.updated_at.',
-      domain: 'blog',
-      minimumRole: 'editor',
-      confirmRequired: false,
-      inputSchema: {
-        post_id: { type: 'string', description: 'Post id or slug.' },
-        content_blocks: { type: 'array', minItems: 1, description: 'Canonical ordered article blocks, replacing the complete block set.', items: blogContentBlockSchema },
-        expected_updated_at: { type: 'string', description: 'Concurrency token from the post updated_at (get_blog_post). A stale token is rejected with a conflict.' },
-      },
-      required: ['post_id', 'content_blocks', 'expected_updated_at'],
       outputSchema: blogPostMutationResultObject,
     }),
   siteTool({

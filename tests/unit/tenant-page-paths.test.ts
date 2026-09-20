@@ -58,7 +58,6 @@ const CLAIMS = mergeClaimedRoutes(
     { path: '/blog' },
     { path: '/blog/:slug()' },
     { path: '/menu' },
-    { path: '/order' },
     { path: '/reservations' },
     { path: '/locations/:slug()' },
     { path: '/docs/:segments(.*)*' },
@@ -78,8 +77,7 @@ test('/blog is a page document on blawby and never one on saya', () => {
   assert.equal(allows('saya', '/blog'), false)
 })
 
-test('saya owns /order and /reservations, which no tenant could author before', () => {
-  assert.equal(allows('saya', '/order'), true)
+test('saya owns /reservations, which no tenant could author before', () => {
   assert.equal(allows('saya', '/reservations'), true)
 })
 
@@ -113,7 +111,6 @@ test('the platform template holds its own marketing pages', () => {
   // An unclaimed path is writable through the catch-all, and a claimed
   // tenant-only route the platform template does not map still is not.
   assert.equal(allows('platform', '/our-story'), true)
-  assert.equal(allows('platform', '/order'), false)
   assert.equal(allows('platform', '/menu'), false)
 })
 

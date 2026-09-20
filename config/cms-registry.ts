@@ -13,9 +13,9 @@ export type CmsSectionId = 'pages' | 'collections' | 'locations' | 'media' | 'si
 // routes provide distinct customer-facing UX.
 export type ProductFeature =
   | 'contact' | 'locations' | 'settings'
-  | 'products' | 'reservations' | 'ordering'
+  | 'products' | 'reservations'
   | 'services' | 'consultations' | 'appointments'
-  | 'blog' | 'qa' | 'testimonials' | 'reviews' | 'media' | 'posts' | 'photos' | 'links'
+  | 'blog' | 'qa' | 'reviews' | 'posts' | 'photos'
 
 export interface CmsPageCapability {
   id: string
@@ -48,8 +48,8 @@ export interface CmsCapabilityDefinition {
 /** Explicit site/location module override, as an ADDITIVE/SUBTRACTIVE DELTA on top of the
  *  underlying default set (never a full-replacement snapshot) — this is what lets a future
  *  default addition still reach a site that already has an override, and lets an owner add a
- *  module the vertical doesn't default to (a restaurant adding ordering) independently of
- *  removing one it does (turn off ordering), without either action clobbering the other. */
+ *  module the vertical doesn't default to independently of removing one it does, without
+ *  either action clobbering the other. */
 export interface CmsCapabilityOverrideDelta {
   enabled?: readonly ProductFeature[]
   disabled?: readonly ProductFeature[]
@@ -83,13 +83,10 @@ const sayaCorePages: readonly CmsPageCapability[] = [
 ]
 
 const sayaCoreManagers: readonly CmsManagerCapability[] = [
-  { key: 'site.blog', id: 'blog', label: 'Blog posts', section: 'collections', route: 'blog', scope: 'site' },
-  { key: 'site.testimonials', id: 'testimonials', label: 'Testimonials', section: 'collections', route: 'testimonials', scope: 'site' },
-  { key: 'site.qa', id: 'qa', label: 'Q&A', section: 'collections', route: 'qa', scope: 'site' },
-  { key: 'site.media', id: 'media', label: 'Media library', section: 'media', route: 'media', scope: 'site' },
-  { key: 'site.links', id: 'links', label: 'Links page', section: 'collections', route: 'links', scope: 'site' },
+  { key: 'site.blog', id: 'blog', label: 'Blog', section: 'collections', route: 'blog', scope: 'site' },
+  { key: 'site.qa', id: 'qa', label: 'Reviews and Q&A', section: 'collections', route: 'qa', scope: 'site' },
   { key: 'site.locations', id: 'locations', label: 'Locations', section: 'locations', route: '', scope: 'site' },
-  { key: 'location.qa', id: 'qa', label: 'Q&A', section: 'collections', route: ':location/qa', scope: 'location' },
+  { key: 'location.qa', id: 'qa', label: 'Reviews and Q&A', section: 'collections', route: ':location/qa', scope: 'location' },
   { key: 'location.posts', id: 'posts', label: 'Posts', section: 'collections', route: ':location/posts', scope: 'location' },
   { key: 'location.photos', id: 'photos', label: 'Photos', section: 'media', route: ':location/photos', scope: 'location' },
   { key: 'site.settings', id: 'settings', label: 'Brand', section: 'site', route: 'settings', scope: 'site' },
@@ -103,13 +100,11 @@ const sayaTemplateCatalog: CmsTemplateCatalog = {
   pages: [
     ...sayaCorePages,
     { id: 'products', feature: 'products', label: 'Products', route: '/products', scope: 'site', editor: 'tenant_pages' },
-    { id: 'order', feature: 'ordering', label: 'Order online', route: '/order', scope: 'site', editor: 'tenant_pages' },
     { id: 'reservations', feature: 'reservations', label: 'Reservations', route: '/reservations', scope: 'site', editor: 'tenant_pages' },
   ],
   managers: [
     ...sayaCoreManagers,
     { key: 'location.products', id: 'products', label: 'Products', section: 'collections', route: ':location/products', scope: 'location' },
-    { key: 'site.ordering', id: 'ordering', label: 'Orders', section: 'collections', route: 'orders', scope: 'site' },
     { key: 'location.reservations', id: 'reservations', label: 'Reservations', section: 'collections', route: ':location/reservations', scope: 'location' },
   ],
   locationVocabularyDefault: 'location',
@@ -131,14 +126,11 @@ const blawbyTemplateCatalog: CmsTemplateCatalog = {
     { id: 'schedule', feature: 'services', label: 'Schedule', route: '/schedule', scope: 'site', editor: 'tenant_pages' },
   ],
   managers: [
-    { key: 'site.blog', id: 'blog', label: 'Blog posts', section: 'collections', route: 'blog', scope: 'site' },
-    { key: 'site.testimonials', id: 'testimonials', label: 'Testimonials', section: 'collections', route: 'testimonials', scope: 'site' },
-    { key: 'site.qa', id: 'qa', label: 'Q&A', section: 'collections', route: 'qa', scope: 'site' },
-    { key: 'site.media', id: 'media', label: 'Media library', section: 'media', route: 'media', scope: 'site' },
-    { key: 'site.links', id: 'links', label: 'Links page', section: 'collections', route: 'links', scope: 'site' },
+    { key: 'site.blog', id: 'blog', label: 'Blog', section: 'collections', route: 'blog', scope: 'site' },
+    { key: 'site.qa', id: 'qa', label: 'Reviews and Q&A', section: 'collections', route: 'qa', scope: 'site' },
     { key: 'site.locations', id: 'locations', label: 'Offices / service areas', section: 'locations', route: '', scope: 'site' },
     { key: 'site.services', id: 'services', label: 'Services', section: 'collections', route: 'professional-services', scope: 'site' },
-    { key: 'location.qa', id: 'qa', label: 'Q&A', section: 'collections', route: ':location/qa', scope: 'location' },
+    { key: 'location.qa', id: 'qa', label: 'Reviews and Q&A', section: 'collections', route: ':location/qa', scope: 'location' },
     { key: 'location.posts', id: 'posts', label: 'Posts', section: 'collections', route: ':location/posts', scope: 'location' },
     { key: 'location.photos', id: 'photos', label: 'Photos', section: 'media', route: ':location/photos', scope: 'location' },
     { key: 'site.settings', id: 'settings', label: 'Brand', section: 'site', route: 'settings', scope: 'site' },
@@ -157,9 +149,8 @@ const platformTemplateCatalog: CmsTemplateCatalog = {
     { id: 'contact', feature: 'contact', label: 'Help', route: '/help', scope: 'site', editor: 'tenant_pages' },
   ],
   managers: [
-    { key: 'site.blog', id: 'blog', label: 'Blog posts', section: 'collections', route: 'blog', scope: 'site' },
-    { key: 'site.qa', id: 'qa', label: 'Q&A', section: 'collections', route: 'qa', scope: 'site' },
-    { key: 'site.media', id: 'media', label: 'Media library', section: 'media', route: 'media', scope: 'site' },
+    { key: 'site.blog', id: 'blog', label: 'Blog', section: 'collections', route: 'blog', scope: 'site' },
+    { key: 'site.qa', id: 'qa', label: 'Reviews and Q&A', section: 'collections', route: 'qa', scope: 'site' },
     { key: 'site.settings', id: 'settings', label: 'Brand', section: 'site', route: 'settings', scope: 'site' },
   ],
   locationVocabularyDefault: 'office/service area',
@@ -173,9 +164,8 @@ export const templateCapabilityCatalog: Record<PublicTemplateSlug, CmsTemplateCa
 
 /** Where a business module can be toggled. Deliberately explicit rather than inferred from
  *  CmsManagerCapability.scope — issue #342 is explicit that "scope" there means WHERE a feature is
- *  MANAGED, which doesn't necessarily match where it can be turned on/off (e.g. ordering's URLs
- *  live on business_locations rows, but that doesn't by itself say whether ordering is a
- *  site-only decision or can vary per location — that's a product decision, stated here). */
+ *  MANAGED, which doesn't necessarily match where it can be turned on/off. That is a product
+ *  decision, stated here. */
 export interface ProductModuleDefinition {
   feature: ProductFeature
   configurableAt: readonly ('site' | 'location')[]
@@ -183,7 +173,6 @@ export interface ProductModuleDefinition {
 
 const sayaModules: readonly ProductModuleDefinition[] = [
   { feature: 'products', configurableAt: ['site', 'location'] },
-  { feature: 'ordering', configurableAt: ['site', 'location'] },
   { feature: 'reservations', configurableAt: ['site', 'location'] },
 ]
 const blawbyModules: readonly ProductModuleDefinition[] = [
@@ -213,14 +202,14 @@ const supportedCombinations: Record<SiteVertical, readonly PublicTemplateSlug[]>
 }
 
 // Always-on features: 'contact'/'locations'/'settings' are infra; 'blog'/'qa'/
-// 'testimonials'/'reviews'/'posts'/'photos'/'media'/'links' are content managers — never business modules. An empty content manager still
-// needs to be reachable so an owner can create the first item (turning it off because it's empty
-// creates a circular UX problem). None of these are
-// user-toggleable, and every delta below still gets them unioned in by resolveCmsCapabilities —
-// including surviving an explicit `disabled` entry — so an override can never drop them.
+// 'reviews'/'posts'/'photos' are content managers — never business modules. An empty content
+// manager still needs to be reachable so an owner can create the first item (turning it off
+// because it's empty creates a circular UX problem). None of these are user-toggleable, and
+// every delta below still gets them unioned in by resolveCmsCapabilities — including surviving
+// an explicit `disabled` entry — so an override can never drop them.
 export const ALWAYS_ON_FEATURES: readonly ProductFeature[] = [
   'contact', 'locations', 'settings',
-  'blog', 'qa', 'testimonials', 'reviews', 'posts', 'photos', 'media', 'links',
+  'blog', 'qa', 'reviews', 'posts', 'photos',
 ]
 
 // Real business-module defaults only — content managers are handled uniformly via
@@ -230,7 +219,7 @@ const verticalDefaultFeatures: Record<SiteVertical, readonly ProductFeature[]> =
   // the same modules: a Product is a Product, and booking is a capability it
   // may have. The difference between these verticals is vocabulary (menu vs
   // products), not which modules exist.
-  restaurant: ['products', 'reservations', 'ordering'],
+  restaurant: ['products', 'reservations'],
   experience: ['products', 'reservations'],
   service: ['services'],
 }
@@ -364,9 +353,7 @@ export function validateCmsCapabilityRegistry(): void {
   }
 }
 
-/** All manager keys a template can ever produce across every vertical it supports — the set the
- *  route guard and the "nav entries without a matching guardable capability" check validate
- *  page-level `cmsCapabilityKey` meta against. */
+/** All manager keys a template can ever produce across every vertical it supports. */
 export function allGuardableManagerKeys(): readonly string[] {
   const keys = new Set<string>()
   for (const catalog of Object.values(templateCapabilityCatalog)) {

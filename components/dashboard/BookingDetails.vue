@@ -12,20 +12,8 @@
       <div v-else-if="error" class="p-5 sm:p-8">
         <UAlert color="error" variant="soft" title="Booking details could not be loaded" :description="getErrorMessage(error, 'Booking request failed')" />
       </div>
-      <EditorPaneShell
-        v-else
-        :has-detail="Boolean(detailTitle)"
-        :detail-title="detailTitle"
-        :dismiss-to="isChangeMode ? `${bookingPath}/change` : bookingPath"
-        :show-actions="editorKey === 'notes' || Boolean(isChangeMode && editorField)"
-        :saving="noteSaving || changeSaving"
-        :save-label="isChangeMode && editorField ? 'Done' : undefined"
-        :save-disabled="editorKey === 'notes' && (!noteDraft.trim() || noteDraft === selectedNote?.body)"
-        :error="editorKey === 'notes' ? noteError : changeError"
-        @cancel="cancelEditor"
-        @save="commitEditor"
-      >
-        <template #index>
+      <template v-else>
+        <div class="min-h-0 flex-1 overflow-y-auto p-5 sm:p-8">
           <UAlert
             v-if="actionError"
             class="mb-5"
@@ -213,14 +201,37 @@
             </div>
             </div>
           </template>
-        </template>
 
-        <template v-if="booking && isChangeMode" #index-footer>
+        <!--
+          In change mode the record keeps a footer of its own: these act on
+          the whole request, not on the one field the slideover is editing.
+        -->
+          <div v-if="booking && isChangeMode" class="mt-6 flex items-center justify-between gap-4 border-t border-default pt-4">
           <UButton label="Cancel" color="neutral" variant="ghost" :to="bookingPath" @click="resetChangeDraft" />
           <UButton label="Send request" :loading="changeSaving" :disabled="Boolean(editorField) || !changeValid || !changeDirty" @click="sendChangeRequest" />
-        </template>
+          </div>
+        </div>
+      </template>
 
-        <template #detail>
+      <!--
+        Editing one note or one changed field is an overlay, not a second
+        column: this record is mounted inside another panel's body, so it has
+        no column of its own to give away. Route-driven, so Back still closes it.
+      -->
+      <USlideover
+        :open="Boolean(detailTitle)"
+        :title="detailTitle"
+        @update:open="value => { if (!value) cancelEditor() }"
+      >
+        <template #body>
+          <UAlert
+            v-if="editorKey === 'notes' ? noteError : changeError"
+            class="mb-6"
+            color="error"
+            variant="soft"
+            icon="i-lucide-circle-alert"
+            :description="(editorKey === 'notes' ? noteError : changeError) ?? undefined"
+          />
           <template v-if="booking">
             <div v-if="editorKey === 'notes'" class="mx-auto w-full max-w-md space-y-6">
               <p class="text-base text-muted">Only your team can see these notes.</p>
@@ -267,7 +278,17 @@
             </div>
           </template>
         </template>
-      </EditorPaneShell>
+
+        <template v-if="editorKey === 'notes' || Boolean(isChangeMode && editorField)" #footer>
+          <UButton color="neutral" variant="ghost" label="Cancel" @click="cancelEditor" />
+          <UButton
+            :label="isChangeMode && editorField ? 'Done' : 'Save'"
+            :loading="noteSaving || changeSaving"
+            :disabled="editorKey === 'notes' && (!noteDraft.trim() || noteDraft === selectedNote?.body)"
+            @click="commitEditor"
+          />
+        </template>
+      </USlideover>
   </div>
 
   <DashboardListItemDialog v-model:open="policyOpen" :title="booking?.policy?.heading || 'Cancellation policy'" :show-actions="false">
@@ -316,7 +337,6 @@
 <script setup lang="ts">
 import { formatCalendarDate, formatTime, formatTimestamp } from '~/utils/timezone'
 import DashboardListItemDialog from '~/components/dashboard/DashboardListItemDialog.vue'
-import EditorPaneShell from '~/components/dashboard/EditorPaneShell.vue'
 import { getErrorMessage } from '~/utils/errors'
 import type { DashboardBookingDetails, DashboardBookingType } from '~/server/utils/dashboard-booking-details'
 

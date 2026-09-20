@@ -5,5 +5,5 @@
 <script setup lang="ts">
 import BlogPostEditorPage from '~/components/dashboard/BlogPostEditorPage.vue'
 
-definePageMeta({ layout: 'dashboard', cmsCapabilityKey: 'site.blog', ownsChrome: true })
+definePageMeta({ layout: 'dashboard', ownsChrome: true })
 </script>

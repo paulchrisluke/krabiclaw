@@ -8,7 +8,6 @@
   <DashboardListEditor
     v-model:editing="editing"
     title="Q&A"
-    :description="locationId ? 'Add common guest questions, then answer them once.' : 'Manage general questions or questions tailored to a public page. Questions imported from Google are managed in Google.'"
     :items="listItems"
     :pending="pending"
     :error="qaError ? getErrorMessage(qaError, 'Q&A request failed') : null"
@@ -48,7 +47,6 @@ const route = useRoute()
 const siteId = await useDashboardSiteId()
 const selectedPagePath = ref('general')
 
-const requestEvent = useRequestEvent()
 const qaEndpoint = computed(() => props.locationId
   ? `/api/editor/sites/${siteId}/locations/${props.locationId}/qa`
   : `/api/editor/sites/${siteId}/qa`)
@@ -58,16 +56,6 @@ const tenantPagesAsyncData = useAsyncData(
   () => `dashboard-tenant-pages-${siteId}`,
   async () => {
     if (props.locationId) return []
-    if (import.meta.server) {
-      if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Request context unavailable' })
-      const [{ cloudflareEnv }, { getTenantPages }] = await Promise.all([
-        import('~/server/utils/api-response'),
-        import('~/server/utils/qa-dashboard'),
-      ])
-      const db = cloudflareEnv(requestEvent).db
-      if (!db) throw createError({ statusCode: 500, statusMessage: 'Database not available' })
-      return await getTenantPages(db, siteId)
-    }
     return await dashboardApi<Array<{ path: string; title: string }>>(
       `/api/editor/sites/${siteId}/tenant-pages`,
       {
@@ -87,16 +75,6 @@ const existingQaScopesAsyncData = useAsyncData(
   () => `dashboard-qa-scopes-${siteId}`,
   async () => {
     if (props.locationId) return []
-    if (import.meta.server) {
-      if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Request context unavailable' })
-      const [{ cloudflareEnv }, { getQaScopes }] = await Promise.all([
-        import('~/server/utils/api-response'),
-        import('~/server/utils/qa-dashboard'),
-      ])
-      const db = cloudflareEnv(requestEvent).db
-      if (!db) throw createError({ statusCode: 500, statusMessage: 'Database not available' })
-      return await getQaScopes(db, siteId)
-    }
     return await dashboardApi<Array<{ page_path: string | null }>>(
       `/api/editor/sites/${siteId}/qa/scopes`,
       {
@@ -114,27 +92,10 @@ const existingQaScopesAsyncData = useAsyncData(
 const pagePath = computed(() => selectedPagePath.value === 'general' ? null : selectedPagePath.value)
 const qaAsyncData = useAsyncData(
   () => props.locationId ? `dashboard-location-qa-${siteId}-${props.locationId}` : `dashboard-site-qa-${siteId}-${selectedPagePath.value}`,
-  async () => {
-    if (import.meta.server) {
-      if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Request context unavailable' })
-      if (props.locationId) {
-        const { loadDashboardLocationQa } = await import('~/server/utils/dashboard-editor-resources')
-        return await loadDashboardLocationQa(requestEvent, siteId, props.locationId)
-      }
-      const [{ cloudflareEnv }, { getSiteQa }] = await Promise.all([
-        import('~/server/utils/api-response'),
-        import('~/server/utils/qa-dashboard'),
-      ])
-      const db = cloudflareEnv(requestEvent).db
-      if (!db) throw createError({ statusCode: 500, statusMessage: 'Database not available' })
-      const qa = await getSiteQa(db, siteId, pagePath.value)
-      return { qa }
-    }
-    return await dashboardApi<{ qa: QaRow[] }>(qaEndpoint.value, {
-      query: pagePath.value ? { page_path: pagePath.value } : undefined,
-      validate: isQaResponse,
-    })
-  },
+  () => dashboardApi<{ qa: QaRow[] }>(qaEndpoint.value, {
+    query: pagePath.value ? { page_path: pagePath.value } : undefined,
+    validate: isQaResponse,
+  }),
 )
 
 const [

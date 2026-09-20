@@ -23,28 +23,17 @@ export function isBookingDetailsResponse(value: unknown): value is { booking: Da
 export async function useBookingDetails(bookingType: DashboardBookingType, bookingId: string) {
   const route = useRoute()
   const dashboardApi = useDashboardApi()
-  const requestEvent = useRequestEvent()
   const orgSlug = computed(() => String(route.params.orgSlug || ''))
 
   const key = computed(() => `dashboard-booking:${orgSlug.value}:${bookingType}:${bookingId}`)
-  const { data: resource, pending, error } = await useAsyncData<{ booking: DashboardBookingDetails }>(key, async () => {
-    if (import.meta.server) {
-      if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Dashboard request context unavailable' })
-      const { loadDashboardBookingDetails } = await import('~/server/utils/dashboard-booking-details')
-      return { booking: await loadDashboardBookingDetails(requestEvent, {
-        type: bookingType,
-        bookingId,
-        organizationSlug: orgSlug.value,
-      }) }
-    }
-    return await dashboardApi(`/api/dashboard/bookings/${bookingType}/${encodeURIComponent(bookingId)}`, {
+  const { data: resource, pending, error } = await useAsyncData<{ booking: DashboardBookingDetails }>(
+    key,
+    () => dashboardApi(`/api/dashboard/bookings/${bookingType}/${encodeURIComponent(bookingId)}`, {
       validate: isBookingDetailsResponse,
-    })
-  },
-  // Awaiting this on the client blocks the navigation into the booking, and
-  // every surface that reads it already renders `pending`. On the server it
-  // stays immediate, so the booking is in the SSR payload.
-  { lazy: import.meta.client },
+    }),
+    // Awaiting this blocks the navigation into the booking, and every surface
+    // that reads it already renders `pending`.
+    { lazy: true },
   )
 
   const booking = computed(() => resource.value?.booking ?? null)

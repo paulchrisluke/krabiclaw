@@ -2,41 +2,37 @@
   <NuxtPage v-if="frame.mode.value === 'yield'" />
 
   <!-- A post is open: my list is the index column, the post is the detail. -->
-  <UDashboardPanel v-else-if="frame.mode.value === 'pair'" id="location-posts">
-    <template #header>
-      <UDashboardNavbar title="Posts" :toggle="false">
-        <template #leading>
-          <DashboardNavbarLeading :to="locationPath" label="Location" />
-        </template>
-      </UDashboardNavbar>
-    </template>
+  <template v-else>
+    <UDashboardPanel
+      id="location-posts"
+      :class="hasDetail ? 'hidden lg:flex' : undefined"
+      :default-size="hasDetail ? 32 : undefined"
+    >
+      <template #header>
+        <UDashboardNavbar title="Posts" :toggle="false">
+          <template #leading>
+            <DashboardNavbarLeading :to="locationPath" label="Location" />
+          </template>
+        </UDashboardNavbar>
+      </template>
 
-    <template #body>
-      <EditorPaneShell
-        has-detail
-        :dismiss-to="postsPath"
-        detail-title="Post"
-        wide-detail
-        hide-detail-heading
-      >
-        <template #index>
+      <template #body>
+        <div class="mx-auto w-full" :class="hasDetail ? 'max-w-xl' : 'max-w-3xl'">
           <PostList />
-        </template>
-        <template #detail>
-          <NuxtPage />
-        </template>
-      </EditorPaneShell>
-    </template>
-  </UDashboardPanel>
+        </div>
+      </template>
+    </UDashboardPanel>
 
-  <PostList v-else />
+    <!-- The open child owns the other column, header and all. -->
+    <NuxtPage v-if="hasDetail" />
+  </template>
+
 </template>
 
 <script setup lang="ts">
-import EditorPaneShell from '~/components/dashboard/EditorPaneShell.vue'
 import PostList from '~/components/dashboard/PostList.vue'
 
-definePageMeta({ layout: 'dashboard', cmsCapabilityKey: 'location.posts' })
+definePageMeta({ layout: 'dashboard' })
 
 const route = useRoute()
 
@@ -46,4 +42,5 @@ const route = useRoute()
 const locationPath = computed(() => `/dashboard/${String(route.params.orgSlug)}/sites/${String(route.params.siteSlug)}/locations/${String(route.params.locationSlug)}`)
 const postsPath = computed(() => `${locationPath.value}/posts`)
 const frame = useEditorFrame(postsPath)
+const hasDetail = computed(() => frame.mode.value === 'pair')
 </script>

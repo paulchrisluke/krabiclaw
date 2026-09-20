@@ -1,6 +1,8 @@
 <template>
   <UDashboardPanel
     :id="surface === 'brand' ? 'site-brand' : 'site-settings'"
+    :class="hasDetail ? 'hidden lg:flex' : undefined"
+    :default-size="hasDetail ? 32 : undefined"
   >
     <template #header>
       <UDashboardNavbar :title="navbarTitle" :toggle="false">
@@ -21,235 +23,244 @@
     </template>
 
     <template #body>
-      <div v-if="loading" class="space-y-4 p-5 sm:p-8">
-        <USkeleton v-for="i in 4" :key="i" class="h-32 rounded-xl" />
+      <div class="mx-auto w-full" :class="hasDetail ? 'max-w-xl' : 'max-w-3xl'">
+        <div v-if="loading" class="space-y-4">
+          <USkeleton v-for="i in 4" :key="i" class="h-32 rounded-xl" />
+        </div>
+        <UAlert v-else-if="loadError" color="error" variant="soft" icon="i-lucide-triangle-alert" :description="loadError" />
+        <EditorNavigationList v-else :groups="navigationGroups" :active-item="activeNavigationId" />
       </div>
-      <div v-else-if="loadError" class="p-5 sm:p-8">
-        <UAlert color="error" variant="soft" icon="i-lucide-triangle-alert" :description="loadError" />
-      </div>
-      <EditorPaneShell
-        v-else
-        :has-detail="hasDetail"
-        :show-actions="showActions"
-        :saving="saving"
-        :save-disabled="saveDisabled"
-        :error="editorError"
-        :detail-title="detailTitle"
-        :dismiss-to="dismissTo"
-        @cancel="cancelEditor"
-        @save="saveCurrentEditor"
-      >
-        <template #index>
-          <EditorNavigationList :groups="navigationGroups" :active-item="activeNavigationId" />
+    </template>
+  </UDashboardPanel>
+
+  <!--
+    The open setting is the other column: its own panel, its own header,
+    and Save/Cancel in the panel's own footer slot.
+  -->
+  <UDashboardPanel v-if="hasDetail" id="site-settings-detail">
+    <template #header>
+      <UDashboardNavbar :title="detailTitle" :toggle="false">
+        <template #leading>
+          <DashboardNavbarLeading :to="dismissTo" :label="navbarTitle" />
         </template>
+      </UDashboardNavbar>
+    </template>
 
-        <template #detail>
-          <div v-if="detailKey === 'search-index'" class="space-y-3">
-            <p class="mb-8 text-base text-muted">Manage how the published site is discovered and measured.</p>
-            <EditorNavigationList :groups="[{ id: 'search', items: searchItems }]" :active-item="activeNavigationId" />
+    <template #body>
+      <div class="mx-auto w-full max-w-2xl">
+        <UAlert v-if="editorError" color="error" variant="soft" icon="i-lucide-circle-alert" :description="editorError" class="mb-6" />
+        <div v-if="detailKey === 'search-index'" class="space-y-3">
+          <p class="mb-8 text-base text-muted">Manage how the published site is discovered and measured.</p>
+          <EditorNavigationList :groups="[{ id: 'search', items: searchItems }]" :active-item="activeNavigationId" />
+        </div>
+
+        <div v-else-if="detailKey === 'name'" class="space-y-6">
+          <p class="mb-2 text-sm font-semibold text-muted">{{ nameCharactersRemaining }}/50 available</p>
+          <UInput v-model="form.brand_name" size="xl" maxlength="50" autofocus class="w-full" />
+        </div>
+
+        <div v-else-if="detailKey === 'logo'" class="space-y-6">
+          <p class="text-base text-muted">Choose an image from the site media library or upload a new logo.</p>
+          <MediaPicker v-model="form.logoAssetId" :site-id="siteId" accept="image" title="Select logo" />
+        </div>
+
+        <div v-else-if="detailKey === 'sharing-image'" class="space-y-6">
+          <p class="text-base text-muted">Choose the image used as the source for generated social sharing cards.</p>
+          <MediaPicker v-model="form.socialShareAssetId" :site-id="siteId" accept="image" title="Select social sharing image" />
+        </div>
+
+        <div v-else-if="detailKey === 'description'" class="space-y-6">
+          <p class="text-base text-muted">A concise description shared across the site and its public metadata.</p>
+          <div>
+            <p class="mb-2 text-sm font-semibold text-muted">{{ descriptionCharactersRemaining }}/500 available</p>
+            <UTextarea v-model="form.brand_description" :rows="10" maxlength="500" autofocus class="w-full" />
           </div>
+        </div>
 
-          <div v-else-if="detailKey === 'name'" class="space-y-6">
-            <p class="mb-2 text-sm font-semibold text-muted">{{ nameCharactersRemaining }}/50 available</p>
-            <UInput v-model="form.brand_name" size="xl" maxlength="50" autofocus class="w-full" />
-          </div>
+        <div v-else-if="detailKey === 'color'" class="space-y-8">
+          <p class="text-base text-muted">Select the primary color used by the site theme.</p>
+          <UColorPicker v-model="form.brand_color" format="hex" size="xl" class="w-full" />
+          <UFormField label="Hex color">
+            <UInput v-model="form.brand_color" maxlength="7" placeholder="#0f766e" size="xl" class="w-full" />
+          </UFormField>
+        </div>
 
-          <div v-else-if="detailKey === 'logo'" class="space-y-6">
-            <p class="text-base text-muted">Choose an image from the site media library or upload a new logo.</p>
-            <MediaPicker v-model="form.logoAssetId" :site-id="siteId" accept="image" title="Select logo" />
-          </div>
-
-          <div v-else-if="detailKey === 'sharing-image'" class="space-y-6">
-            <p class="text-base text-muted">Choose the image used as the source for generated social sharing cards.</p>
-            <MediaPicker v-model="form.socialShareAssetId" :site-id="siteId" accept="image" title="Select social sharing image" />
-          </div>
-
-          <div v-else-if="detailKey === 'description'" class="space-y-6">
-            <p class="text-base text-muted">A concise description shared across the site and its public metadata.</p>
-            <div>
-              <p class="mb-2 text-sm font-semibold text-muted">{{ descriptionCharactersRemaining }}/500 available</p>
-              <UTextarea v-model="form.brand_description" :rows="10" maxlength="500" autofocus class="w-full" />
+        <div v-else-if="detailKey === 'font'" class="space-y-6">
+          <template v-if="supportsSiteFonts">
+            <p class="text-base text-muted">Choose the font for headings and text on the public website. Mali supports Thai and English. Default restores the template typography.</p>
+            <UFormField label="Website font">
+              <USelect v-model="form.font_preset" :items="SITE_FONT_OPTIONS" value-key="value" label-key="label" size="xl" class="w-full" />
+            </UFormField>
+            <div class="space-y-3 rounded-lg border border-default p-5 text-2xl leading-relaxed" :style="siteFontStyles(form.font_preset)" data-testid="site-font-preview">
+              <p lang="en">Welcome · 123</p>
+              <p lang="th">ยินดีต้อนรับ · ๑๒๓</p>
             </div>
-          </div>
+          </template>
+          <p v-else class="text-base text-muted">Font presets are available for the Saya template.</p>
+        </div>
 
-          <div v-else-if="detailKey === 'color'" class="space-y-8">
-            <p class="text-base text-muted">Select the primary color used by the site theme.</p>
-            <UColorPicker v-model="form.brand_color" format="hex" size="xl" class="w-full" />
-            <UFormField label="Hex color">
-              <UInput v-model="form.brand_color" maxlength="7" placeholder="#0f766e" size="xl" class="w-full" />
-            </UFormField>
-          </div>
+        <div v-else-if="detailKey === 'contact'" class="space-y-6">
+          <p class="text-base text-muted">This is the shared public contact address for the site.</p>
+          <UFormField label="Contact email">
+            <UInput v-model="form.contact_email" type="email" autocomplete="email" size="xl" autofocus class="w-full" />
+          </UFormField>
+        </div>
 
-          <div v-else-if="detailKey === 'font'" class="space-y-6">
-            <template v-if="supportsSiteFonts">
-              <p class="text-base text-muted">Choose the font for headings and text on the public website. Mali supports Thai and English. Default restores the template typography.</p>
-              <UFormField label="Website font">
-                <USelect v-model="form.font_preset" :items="SITE_FONT_OPTIONS" value-key="value" label-key="label" size="xl" class="w-full" />
-              </UFormField>
-              <div class="space-y-3 rounded-lg border border-default p-5 text-2xl leading-relaxed" :style="siteFontStyles(form.font_preset)" data-testid="site-font-preview">
-                <p lang="en">Welcome · 123</p>
-                <p lang="th">ยินดีต้อนรับ · ๑๒๓</p>
-              </div>
-            </template>
-            <p v-else class="text-base text-muted">Font presets are available for the Saya template.</p>
-          </div>
+        <div v-else-if="detailKey === 'social'" class="space-y-6">
+          <p class="text-base text-muted">Add the brand-level profiles shown across the public site.</p>
+          <UFormField label="Facebook"><UInput v-model="form.social_facebook_url" type="url" placeholder="https://facebook.com/..." size="xl" class="w-full" /></UFormField>
+          <UFormField label="Instagram"><UInput v-model="form.social_instagram_url" type="url" placeholder="https://instagram.com/..." size="xl" class="w-full" /></UFormField>
+          <UFormField label="TikTok"><UInput v-model="form.social_tiktok_url" type="url" placeholder="https://tiktok.com/@..." size="xl" class="w-full" /></UFormField>
+        </div>
 
-          <div v-else-if="detailKey === 'contact'" class="space-y-6">
-            <p class="text-base text-muted">This is the shared public contact address for the site.</p>
-            <UFormField label="Contact email">
-              <UInput v-model="form.contact_email" type="email" autocomplete="email" size="xl" autofocus class="w-full" />
-            </UFormField>
-          </div>
+        <div v-else-if="detailKey === 'currency'" class="space-y-6">
+          <p class="text-base text-muted">The default currency used for site-wide prices and reporting.</p>
+          <USelect :model-value="form.default_currency ?? undefined" :items="CURRENCY_OPTIONS" value-key="value" label-key="label" size="xl" class="w-full" placeholder="Select currency" @update:model-value="form.default_currency = $event ?? null" />
+        </div>
 
-          <div v-else-if="detailKey === 'social'" class="space-y-6">
-            <p class="text-base text-muted">Add the brand-level profiles shown across the public site.</p>
-            <UFormField label="Facebook"><UInput v-model="form.social_facebook_url" type="url" placeholder="https://facebook.com/..." size="xl" class="w-full" /></UFormField>
-            <UFormField label="Instagram"><UInput v-model="form.social_instagram_url" type="url" placeholder="https://instagram.com/..." size="xl" class="w-full" /></UFormField>
-            <UFormField label="TikTok"><UInput v-model="form.social_tiktok_url" type="url" placeholder="https://tiktok.com/@..." size="xl" class="w-full" /></UFormField>
-          </div>
-
-          <div v-else-if="detailKey === 'currency'" class="space-y-6">
-            <p class="text-base text-muted">The default currency used for site-wide prices and reporting.</p>
-            <USelect :model-value="form.default_currency ?? undefined" :items="CURRENCY_OPTIONS" value-key="value" label-key="label" size="xl" class="w-full" placeholder="Select currency" @update:model-value="form.default_currency = $event ?? null" />
-          </div>
-
-          <div v-else-if="detailKey === 'delete'" class="space-y-6">
-            <template v-if="deletionScheduledAt">
-              <UAlert
-                color="warning"
-                variant="soft"
-                icon="i-lucide-clock"
-                title="Deletion scheduled"
-                :description="`This workspace — the site, its locations, content and media — is deleted on ${deletionDateLabel}. Everything stays online until then, and the address stays reserved.`"
-              />
-              <UAlert v-if="deletionError" color="error" variant="soft" icon="i-lucide-triangle-alert" :description="deletionError" />
-              <UButton color="neutral" variant="solid" size="lg" :loading="deletionSaving" @click="keepWorkspace">Keep this workspace</UButton>
-            </template>
-            <template v-else>
-              <p class="text-base text-muted">
-                This schedules the whole workspace for deletion in {{ deletionGraceDays }} days: this site, its locations, content, media and the organization itself. Nothing is removed today, the site stays online, and you can cancel here until then.
-              </p>
-              <UAlert v-if="deletionError" color="error" variant="soft" icon="i-lucide-triangle-alert" :description="deletionError" />
-              <UFormField label="Type DELETE to confirm">
-                <UInput v-model="deletionConfirmText" placeholder="DELETE" :disabled="deletionSaving" class="w-full" />
-              </UFormField>
-              <UButton color="error" variant="solid" size="lg" :disabled="deletionConfirmText !== 'DELETE'" :loading="deletionSaving" @click="scheduleWorkspaceDeletion">Schedule deletion</UButton>
-            </template>
-          </div>
-
-          <div v-else-if="detailKey === 'localization'" class="space-y-6">
+        <div v-else-if="detailKey === 'delete'" class="space-y-6">
+          <template v-if="deletionScheduledAt">
+            <UAlert
+              color="warning"
+              variant="soft"
+              icon="i-lucide-clock"
+              title="Deletion scheduled"
+              :description="`This workspace — the site, its locations, content and media — is deleted on ${deletionDateLabel}. Everything stays online until then, and the address stays reserved.`"
+            />
+            <UAlert v-if="deletionError" color="error" variant="soft" icon="i-lucide-triangle-alert" :description="deletionError" />
+            <UButton color="neutral" variant="solid" size="lg" :loading="deletionSaving" @click="keepWorkspace">Keep this workspace</UButton>
+          </template>
+          <template v-else>
             <p class="text-base text-muted">
-              English is the permanent source language. Growth includes two secondary languages at no extra cost.
+              This schedules the whole workspace for deletion in {{ deletionGraceDays }} days: this site, its locations, content, media and the organization itself. Nothing is removed today, the site stays online, and you can cancel here until then.
             </p>
-            <div v-if="localizationLoading" class="space-y-3">
-              <USkeleton class="h-16 rounded-lg" />
-              <USkeleton class="h-16 rounded-lg" />
-            </div>
-            <UAlert v-else-if="localizationError" color="error" variant="soft" icon="i-lucide-triangle-alert" :description="localizationError" />
-            <template v-else-if="localizationSettings">
-              <div class="space-y-3">
-                <div v-for="language in localizationSettings.languages" :key="language.locale" class="flex flex-wrap items-center justify-between gap-4 rounded-lg border border-default p-4">
-                  <div>
-                    <p class="font-medium">{{ language.label || language.locale }} <span class="text-sm text-muted">({{ language.locale }})</span></p>
-                    <UBadge :color="language.is_source || language.status === 'published' ? 'success' : 'neutral'" variant="subtle" size="sm" class="mt-1">
-                      {{ language.is_source ? 'Source · published' : language.status === 'published' ? 'published' : 'Not published' }}
-                    </UBadge>
-                  </div>
-                  <div v-if="!language.is_source" class="flex gap-2">
-                    <UButton
-                      v-if="language.status === 'disabled'"
-                      color="primary"
-                      :loading="localizationBusy"
-                      @click="publishLanguage(language.locale)"
-                    >
-                      Publish
-                    </UButton>
-                    <UButton v-if="language.status === 'published'" color="neutral" variant="outline" :loading="localizationBusy" @click="disableLanguage(language.locale)">Disable</UButton>
-                    <UButton v-if="language.status === 'disabled'" color="error" variant="outline" :loading="localizationBusy" @click="deleteLanguage(language.locale)">Delete content</UButton>
-                  </div>
-                </div>
-              </div>
-              <UCard v-for="progress in localizationProgress" :key="progress.locale" variant="soft">
-                <template #header>
-                  <div>
-                    <h3 class="font-semibold text-highlighted">Let’s translate your site</h3>
-                    <p class="mt-1 text-sm text-muted">{{ progress.completed }}/{{ progress.total }} fields translated in {{ progress.locale }}.</p>
-                  </div>
-                </template>
-                <div v-if="progress.opportunities.length" class="divide-y divide-default">
-                  <NuxtLink
-                    v-for="item in progress.opportunities"
-                    :key="item.id"
-                    :to="`${siteDashboardPath}/${item.path}`"
-                    class="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0"
-                  >
-                    <span class="font-medium text-highlighted">{{ item.label }}</span>
-                    <span class="flex items-center gap-2 text-sm text-muted">
-                      {{ item.total - item.completed }} left
-                      <UIcon name="i-lucide-chevron-right" class="size-4" />
-                    </span>
-                  </NuxtLink>
-                </div>
-                <UAlert v-else color="success" variant="soft" title="Translation is complete" description="Every source field with content has a translation." />
-              </UCard>
-              <UAlert v-if="localizationProgressError" color="error" variant="soft" :description="localizationProgressError" />
-              <p v-if="!enableableCatalogOptions.length" class="text-sm text-muted">No additional languages are available to enable right now.</p>
-              <UFormField v-else label="Available language">
-                <USelect v-model="newLocale" :items="enableableCatalogOptions" placeholder="Select a language to enable" size="xl" class="w-full" />
-              </UFormField>
-            </template>
-          </div>
-
-          <div v-else-if="detailKey === 'notifications'" class="space-y-8">
-            <!--
-              The number the business is reached on. Which channels a person
-              wants is their own setting, at /dashboard/account/profile/notifications.
-            -->
-            <p class="text-base text-muted">The WhatsApp number used when a location has no number of its own.</p>
-            <UFormField label="Site-wide WhatsApp number">
-              <UInput v-model="whatsappPhone" type="tel" placeholder="+66..." size="xl" class="w-full" />
+            <UAlert v-if="deletionError" color="error" variant="soft" icon="i-lucide-triangle-alert" :description="deletionError" />
+            <UFormField label="Type DELETE to confirm">
+              <UInput v-model="deletionConfirmText" placeholder="DELETE" :disabled="deletionSaving" class="w-full" />
             </UFormField>
-          </div>
+            <UButton color="error" variant="solid" size="lg" :disabled="deletionConfirmText !== 'DELETE'" :loading="deletionSaving" @click="scheduleWorkspaceDeletion">Schedule deletion</UButton>
+          </template>
+        </div>
 
-          <div v-else-if="detailKey === 'analytics'" class="space-y-6">
-            <p class="text-base text-muted">Connect this site to a Google Analytics property.</p>
-            <UFormField label="Measurement ID" hint="Format: G-XXXXXXXXXX">
-              <UInput v-model="form.google_analytics_measurement_id" placeholder="G-XXXXXXXXXX" size="xl" autofocus class="w-full" />
-            </UFormField>
+        <div v-else-if="detailKey === 'localization'" class="space-y-6">
+          <p class="text-base text-muted">
+            English is the permanent source language. Growth includes two secondary languages at no extra cost.
+          </p>
+          <div v-if="localizationLoading" class="space-y-3">
+            <USkeleton class="h-16 rounded-lg" />
+            <USkeleton class="h-16 rounded-lg" />
           </div>
-
-          <div v-else-if="detailKey === 'verification'" class="space-y-6">
-            <p class="text-base text-muted">Enter the verification token supplied by Google Search Console.</p>
-            <UFormField label="Google site verification token">
-              <UInput v-model="form.google_site_verification" size="xl" autofocus class="w-full" />
-            </UFormField>
-          </div>
-
-          <div v-else-if="detailKey === 'visibility'" class="space-y-8">
-            <p class="text-base text-muted">Control whether search engines may index the published site.</p>
-            <UCard variant="subtle">
-              <USwitch v-model="searchIndexed" label="Visible to search engines" description="Allow the site to appear in search results." size="xl" />
-            </UCard>
-          </div>
-
-          <div v-else-if="detailKey === 'publishing'" class="space-y-6">
-            <p class="text-base text-muted">Connect the Facebook Page used to publish content for this site.</p>
-            <UAlert v-if="!hasFacebookAccess" color="warning" variant="soft" icon="i-lucide-lock" title="Growth plan required" description="Upgrade this site to connect Facebook and Instagram publishing." />
-            <UCard v-else variant="subtle">
-              <div class="flex items-center justify-between gap-4">
+          <UAlert v-else-if="localizationError" color="error" variant="soft" icon="i-lucide-triangle-alert" :description="localizationError" />
+          <template v-else-if="localizationSettings">
+            <div class="space-y-3">
+              <div v-for="language in localizationSettings.languages" :key="language.locale" class="flex flex-wrap items-center justify-between gap-4 rounded-lg border border-default p-4">
                 <div>
-                  <p class="font-semibold text-highlighted">{{ facebookConnection?.connected ? 'Connected' : 'Not connected' }}</p>
-                  <p v-if="facebookConnection?.facebook_page_name" class="mt-1 text-sm text-muted">{{ facebookConnection.facebook_page_name }}</p>
+                  <p class="font-medium">{{ language.label || language.locale }} <span class="text-sm text-muted">({{ language.locale }})</span></p>
+                  <UBadge :color="language.is_source || language.status === 'published' ? 'success' : 'neutral'" variant="subtle" size="sm" class="mt-1">
+                    {{ language.is_source ? 'Source · published' : language.status === 'published' ? 'published' : 'Not published' }}
+                  </UBadge>
                 </div>
-                <UButton icon="i-simple-icons-facebook" :loading="connectingFacebook" @click="startFacebookConnect">{{ facebookConnection?.connected ? 'Reconnect' : 'Connect' }}</UButton>
+                <div v-if="!language.is_source" class="flex gap-2">
+                  <UButton
+                    v-if="language.status === 'disabled'"
+                    color="primary"
+                    :loading="localizationBusy"
+                    @click="publishLanguage(language.locale)"
+                  >
+                    Publish
+                  </UButton>
+                  <UButton v-if="language.status === 'published'" color="neutral" variant="outline" :loading="localizationBusy" @click="disableLanguage(language.locale)">Disable</UButton>
+                  <UButton v-if="language.status === 'disabled'" color="error" variant="outline" :loading="localizationBusy" @click="deleteLanguage(language.locale)">Delete content</UButton>
+                </div>
               </div>
+            </div>
+            <UCard v-for="progress in localizationProgress" :key="progress.locale" variant="soft">
+              <template #header>
+                <div>
+                  <h3 class="font-semibold text-highlighted">Let’s translate your site</h3>
+                  <p class="mt-1 text-sm text-muted">{{ progress.completed }}/{{ progress.total }} fields translated in {{ progress.locale }}.</p>
+                </div>
+              </template>
+              <div v-if="progress.opportunities.length" class="divide-y divide-default">
+                <NuxtLink
+                  v-for="item in progress.opportunities"
+                  :key="item.id"
+                  :to="`${siteDashboardPath}/${item.path}`"
+                  class="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0"
+                >
+                  <span class="font-medium text-highlighted">{{ item.label }}</span>
+                  <span class="flex items-center gap-2 text-sm text-muted">
+                    {{ item.total - item.completed }} left
+                    <UIcon name="i-lucide-chevron-right" class="size-4" />
+                  </span>
+                </NuxtLink>
+              </div>
+              <UAlert v-else color="success" variant="soft" title="Translation is complete" description="Every source field with content has a translation." />
             </UCard>
-            <UAlert v-if="facebookError" color="error" variant="soft" icon="i-lucide-circle-alert" :description="facebookError" class="mt-4" />
-          </div>
+            <UAlert v-if="localizationProgressError" color="error" variant="soft" :description="localizationProgressError" />
+            <p v-if="!enableableCatalogOptions.length" class="text-sm text-muted">No additional languages are available to enable right now.</p>
+            <UFormField v-else label="Available language">
+              <USelect v-model="newLocale" :items="enableableCatalogOptions" placeholder="Select a language to enable" size="xl" class="w-full" />
+            </UFormField>
+          </template>
+        </div>
 
-          <UAlert v-if="validationMessage" class="mt-6" color="error" variant="soft" :description="validationMessage" />
-        </template>
-      </EditorPaneShell>
+        <div v-else-if="detailKey === 'notifications'" class="space-y-8">
+          <!--
+            The number the business is reached on. Which channels a person
+            wants is their own setting, at /dashboard/account/profile/notifications.
+          -->
+          <p class="text-base text-muted">The WhatsApp number used when a location has no number of its own.</p>
+          <UFormField label="Site-wide WhatsApp number">
+            <UInput v-model="whatsappPhone" type="tel" placeholder="+66..." size="xl" class="w-full" />
+          </UFormField>
+        </div>
+
+        <div v-else-if="detailKey === 'analytics'" class="space-y-6">
+          <p class="text-base text-muted">Connect this site to a Google Analytics property.</p>
+          <UFormField label="Measurement ID" hint="Format: G-XXXXXXXXXX">
+            <UInput v-model="form.google_analytics_measurement_id" placeholder="G-XXXXXXXXXX" size="xl" autofocus class="w-full" />
+          </UFormField>
+        </div>
+
+        <div v-else-if="detailKey === 'verification'" class="space-y-6">
+          <p class="text-base text-muted">Enter the verification token supplied by Google Search Console.</p>
+          <UFormField label="Google site verification token">
+            <UInput v-model="form.google_site_verification" size="xl" autofocus class="w-full" />
+          </UFormField>
+        </div>
+
+        <div v-else-if="detailKey === 'visibility'" class="space-y-8">
+          <p class="text-base text-muted">Control whether search engines may index the published site.</p>
+          <UCard variant="subtle">
+            <USwitch v-model="searchIndexed" label="Visible to search engines" description="Allow the site to appear in search results." size="xl" />
+          </UCard>
+        </div>
+
+        <div v-else-if="detailKey === 'publishing'" class="space-y-6">
+          <p class="text-base text-muted">Connect the Facebook Page used to publish content for this site.</p>
+          <UAlert v-if="!hasFacebookAccess" color="warning" variant="soft" icon="i-lucide-lock" title="Growth plan required" description="Upgrade this site to connect Facebook and Instagram publishing." />
+          <UCard v-else variant="subtle">
+            <div class="flex items-center justify-between gap-4">
+              <div>
+                <p class="font-semibold text-highlighted">{{ facebookConnection?.connected ? 'Connected' : 'Not connected' }}</p>
+                <p v-if="facebookConnection?.facebook_page_name" class="mt-1 text-sm text-muted">{{ facebookConnection.facebook_page_name }}</p>
+              </div>
+              <UButton icon="i-simple-icons-facebook" :loading="connectingFacebook" @click="startFacebookConnect">{{ facebookConnection?.connected ? 'Reconnect' : 'Connect' }}</UButton>
+            </div>
+          </UCard>
+          <UAlert v-if="facebookError" color="error" variant="soft" icon="i-lucide-circle-alert" :description="facebookError" class="mt-4" />
+        </div>
+
+        <UAlert v-if="validationMessage" class="mt-6" color="error" variant="soft" :description="validationMessage" />
+      </div>
+    </template>
+
+    <template v-if="showActions" #footer>
+      <div class="flex shrink-0 items-center justify-between gap-4 border-t border-default px-4 py-3 sm:px-6">
+        <UButton color="neutral" variant="ghost" label="Cancel" @click="cancelEditor" />
+        <UButton label="Save" :loading="saving" :disabled="saveDisabled" @click="saveCurrentEditor" />
+      </div>
     </template>
   </UDashboardPanel>
 </template>
@@ -257,7 +268,6 @@
 <script setup lang="ts">
 import DashboardResourceLocalization from '~/components/dashboard/DashboardResourceLocalization.vue'
 import MediaPicker from '~/lib/components/workspace/media/MediaPicker.vue'
-import EditorPaneShell from '~/components/dashboard/EditorPaneShell.vue'
 import EditorNavigationList from '~/components/dashboard/EditorNavigationList.vue'
 import { CURRENCY_OPTIONS, isCurrencyCode, type CurrencyCode } from '~/shared/currencies'
 import { SITE_FONT_OPTIONS, MALI_FONT_CSS, isSiteFontPreset, resolveSiteFontPreset, siteFontStyles, type SiteFontPreset } from '~/shared/site-fonts'
@@ -279,7 +289,6 @@ const settingsPath = computed(() => `${siteDashboardPath.value}/settings`)
 // of the composable's own `rest`.
 const frame = useEditorFrame(computed(() => surface.value === 'brand' ? brandPath.value : settingsPath.value))
 
-if (!dashboard.state.value) await dashboard.refresh()
 const siteId = await useDashboardSiteId()
 
 // Workspace deletion is scheduled, never immediate: the organization carries a
@@ -634,21 +643,15 @@ function errorMessage(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback
 }
 
-const requestEvent = useRequestEvent()
 const settingsResourceKey = computed(() => `dashboard-site-settings:${String(route.params.orgSlug)}:${String(route.params.siteSlug)}`)
 const { data: settingsResource, pending: settingsPending, error: settingsResourceError } = await useAsyncData<SettingsPageResource>(settingsResourceKey, async () => {
-  if (import.meta.server) {
-    if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Request context unavailable' })
-    const { loadDashboardSettingsResource } = await import('~/server/utils/dashboard-editor-resources')
-    return await loadDashboardSettingsResource(requestEvent, { includeFacebook: hasFacebookAccess.value, organizationSlug: String(route.params.orgSlug), siteSlug: String(route.params.siteSlug) })
-  }
   const [settings, notifications, facebook] = await Promise.all([
     dashboardApi<{ success: boolean; settings: SiteSettingsResponse }>('/api/dashboard/settings', { validate: isSettingsResponse }),
     dashboardApi<{ success: boolean; notifications: { whatsapp_phone: string | null } }>(`/api/editor/sites/${siteId}/notifications`, { validate: isNotificationsResponse }),
     hasFacebookAccess.value ? dashboardApi<FacebookConnectionStatus>('/api/integrations/facebook-pages/connection', { query: { siteId }, validate: isFacebookStatus }) : Promise.resolve<FacebookConnectionStatus>({ connected: false }),
   ])
   return { settings, notifications, facebook }
-}, { lazy: import.meta.client })
+}, { lazy: true })
 watch([settingsResource, settingsPending, settingsResourceError], ([resource, pending, error]) => {
   loading.value = pending
   if (error) { loadError.value = errorMessage(error, 'Failed to load site settings'); return }

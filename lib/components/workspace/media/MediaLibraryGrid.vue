@@ -2,13 +2,12 @@
   <div class="flex min-h-0 flex-col gap-3">
     <!-- Upload zone -->
     <div
-      class="flex flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed px-6 py-6 transition-colors cursor-pointer"
+      class="flex flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed px-6 py-6 transition-colors"
       :class="isDragging ? 'border-primary bg-primary/5' : 'border-default hover:border-accented'"
       @dragenter.prevent="isDragging = true"
       @dragover.prevent="isDragging = true"
       @dragleave.prevent="isDragging = false"
       @drop.prevent="onDrop"
-      @click="fileInput?.inputRef?.click()"
     >
       <UIcon name="i-lucide-upload" class="size-6 text-muted" />
       <UButton size="sm" color="neutral" variant="outline" @click.stop="fileInput?.inputRef?.click()">+ Add files</UButton>
@@ -292,7 +291,6 @@ async function upload(file: File) {
   }
 }
 
-const requestEvent = useRequestEvent()
 const initialMediaKey = computed(() =>
   `dashboard-media-library:${props.siteId}:${props.locationId ?? 'site'}:${kindFilter.value}`,
 )
@@ -304,17 +302,6 @@ const {
   const kind = kindFilter.value && kindFilter.value !== ALL_MEDIA_KIND
     ? kindFilter.value
     : undefined
-  if (import.meta.server) {
-    if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Request context unavailable' })
-    const { loadDashboardMedia } = await import('~/server/utils/dashboard-editor-resources')
-    return await loadDashboardMedia(requestEvent, props.siteId, {
-      kind,
-      ownerType: props.locationId ? 'business_location' : undefined,
-      ownerId: props.locationId ?? undefined,
-      slot: props.locationId ? 'gallery' : undefined,
-      limit: 100,
-    })
-  }
   const params = new URLSearchParams({ limit: '100' })
   if (kind) params.set('kind', kind)
   if (props.locationId) {
@@ -326,7 +313,7 @@ const {
     `/api/editor/sites/${props.siteId}/media?${params}`,
     { validate: isMediaResponse },
   )
-}, { lazy: import.meta.client })
+}, { lazy: true })
 
 watch([initialMedia, initialMediaPending, initialMediaError], ([data, pending, error]) => {
   loading.value = pending

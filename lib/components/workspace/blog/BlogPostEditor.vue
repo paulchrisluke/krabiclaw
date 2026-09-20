@@ -8,7 +8,8 @@
     draws no panel and no navbar. It draws them only once a section is open and
     the parent has yielded, which is the same rule every other editor follows.
   -->
-  <div v-if="frame.mode.value === 'index'" :inert="publishing" class="space-y-8">
+  <!-- Inert while a write is in flight: the ids that come back are matched to the blocks that were sent. -->
+  <div v-if="frame.mode.value === 'index'" :inert="publishing || saveState === 'saving'" class="space-y-8">
     <p v-if="actionError" role="alert" class="rounded-lg border border-error/30 bg-error/10 px-4 py-2 text-sm text-error">{{ actionError }}</p>
 
     <div v-if="loadPending" class="grid min-h-64 place-items-center"><UIcon name="i-lucide-loader-circle" class="size-6 animate-spin" /></div>
@@ -63,131 +64,144 @@
       </div>
 
       <!--
-        The body autosaves, so there is no commit bar for it. This one line is
-        the only place that state is reported.
+        The article commits on Save, like every other editor. It used to write
+        the whole document after every burst of typing — a write nothing else
+        in the product performs, and the one that kept replacing the canvas
+        under the writer.
       -->
-      <p class="px-1 text-xs text-muted">
-        <span :class="saveState === 'failed' || saveState === 'conflict' ? 'text-error' : ''">{{ saveLabel }}</span>
-      </p>
+      <div class="flex items-center justify-between gap-4 px-1">
+        <span class="text-xs" :class="saveState === 'failed' || saveState === 'conflict' ? 'text-error' : 'text-muted'">{{ saveLabel }}</span>
+        <UButton label="Save" :loading="saveState === 'saving'" :disabled="!contentDirty || saveState === 'conflict'" @click="saveArticle" />
+      </div>
 
       <EditorNavigationList :groups="settingsGroups" />
 
     </template>
   </div>
 
-  <UDashboardPanel v-else :id="panelId">
-    <template #header>
-      <UDashboardNavbar :title="form.title || 'Untitled post'" :toggle="false">
-        <template #leading>
-          <DashboardNavbarLeading :to="postPath" label="Post" />
-        </template>
-        <template #right>
-          <slot name="actions" />
-        </template>
-      </UDashboardNavbar>
-    </template>
-
-    <template #body>
-      <p v-if="actionError" role="alert" class="mb-4 rounded-lg border border-error/30 bg-error/10 px-4 py-2 text-sm text-error">{{ actionError }}</p>
-
-      <EditorPaneShell
-        has-detail
-        :show-actions="section !== 'share'"
-        :saving="savingExplicitly || publishing"
-        :detail-title="sectionLabel"
-        :dismiss-to="postPath"
-        @cancel="cancelSection"
-        @save="saveSection"
-      >
-        <template #index>
-          <EditorNavigationList :groups="settingsGroups" :active-item="section" />
-        </template>
-
-        <template #detail>
-          <template v-if="section === 'category'">
-            <!-- KrabiClaw's own site publishes two collections; a category is the author's own word in both. -->
-            <UFormField v-if="isPlatformTemplate" label="Collection" class="mb-4">
-              <USelect v-model="form.collection" :items="collectionOptions" value-key="value" class="w-full" />
-            </UFormField>
-            <UFormField label="Category">
-              <UInput v-model="form.category" autofocus class="w-full" />
-            </UFormField>
+  <template v-else>
+    <UDashboardPanel :id="panelId" class="hidden lg:flex" :default-size="32">
+      <template #header>
+        <UDashboardNavbar :title="form.title || 'Untitled post'" :toggle="false">
+          <template #leading>
+            <DashboardNavbarLeading :to="postPath" label="Post" />
           </template>
+          <template #right>
+            <slot name="actions" />
+          </template>
+        </UDashboardNavbar>
+      </template>
 
-          <UFormField v-else-if="section === 'tags'" label="Tags" help="Comma separated">
-            <UInput v-model="tagsText" autofocus class="w-full" />
+      <template #body>
+        <div class="mx-auto w-full max-w-xl">
+          <p v-if="actionError" role="alert" class="mb-4 rounded-lg border border-error/30 bg-error/10 px-4 py-2 text-sm text-error">{{ actionError }}</p>
+          <EditorNavigationList :groups="settingsGroups" :active-item="section" />
+        </div>
+      </template>
+    </UDashboardPanel>
+
+    <UDashboardPanel :id="`${panelId}-section`">
+      <template #header>
+        <UDashboardNavbar :title="sectionLabel" :toggle="false">
+          <template #leading>
+            <DashboardNavbarLeading :to="postPath" label="Post" />
+          </template>
+        </UDashboardNavbar>
+      </template>
+
+      <template #body>
+        <div class="mx-auto w-full max-w-2xl">
+        <template v-if="section === 'category'">
+          <!-- KrabiClaw's own site publishes two collections; a category is the author's own word in both. -->
+          <UFormField v-if="isPlatformTemplate" label="Collection" class="mb-4">
+            <USelect v-model="form.collection" :items="collectionOptions" value-key="value" class="w-full" />
           </UFormField>
-
-          <UFormField v-else-if="section === 'excerpt'" label="Excerpt">
-            <UTextarea v-model="form.excerpt" :rows="5" autofocus :placeholder="resolvedExcerpt" class="w-full" />
-            <p class="mt-1 text-xs text-dimmed">{{ form.excerpt ? 'Custom' : `Auto: ${resolvedExcerpt}` }}</p>
-          </UFormField>
-
-          <!--
-            Publishing is a leaf like any other, so it commits through the pane's
-            own Cancel/Save bar. It used to carry its own "Publish now" button in
-            the body as well, which put two commit mechanisms on one screen: the
-            selects saved with the bar, the lifecycle went through a separate
-            endpoint the moment you pressed it. That is the whole reason the CMS
-            felt inconsistent about how you save — a tenant had to learn a second
-            place to look, on exactly one screen.
-
-            Save now carries the lifecycle change too. What the fields say when
-            you press Save is what the post becomes.
-          -->
-          <div v-else-if="section === 'publishing'" class="space-y-5">
-            <UFormField label="Status">
-              <p class="text-sm text-muted">{{ lifecycleLabel }}</p>
-            </UFormField>
-            <UFormField v-if="!post || post.status === 'scheduled'" label="Publish timing">
-              <USelect v-model="publishTiming" :items="['Now', 'Scheduled']" class="w-full" />
-            </UFormField>
-            <UFormField v-if="(!post || post.status === 'scheduled') && publishTiming === 'Scheduled'" label="Scheduled for (UTC)">
-              <UInput v-model="form.scheduled_for" type="datetime-local" step="any" class="w-full" />
-            </UFormField>
-            <UFormField label="Visibility">
-              <USelect v-model="form.visibility" :items="['public', 'unlisted']" class="w-full" />
-            </UFormField>
-          </div>
-
-          <div v-else-if="section === 'search'" class="space-y-5">
-            <div class="rounded-lg border border-default bg-muted p-3">
-              <p class="truncate text-sm text-primary">{{ resolvedSeo.title }}</p>
-              <p class="truncate text-xs text-success">{{ resolvedSeo.canonicalUrl }}</p>
-              <p class="mt-1 line-clamp-2 text-xs text-muted">{{ resolvedSeo.description }}</p>
-            </div>
-            <UFormField label="SEO title"><UInput v-model="form.seo_title" :placeholder="form.title" class="w-full" /></UFormField>
-            <UFormField label="Meta description"><UTextarea v-model="form.seo_description" :rows="4" :placeholder="resolvedExcerpt" class="w-full" /></UFormField>
-          </div>
-
-          <UFormField v-else-if="section === 'share'" label="Share preview">
-            <img v-if="resolvedPrimaryImageUrl" :src="resolvedPrimaryImageUrl" alt="Resolved share preview" class="aspect-video w-full rounded-lg object-cover">
-            <video v-else-if="resolvedPrimaryVideoUrl" :src="resolvedPrimaryVideoUrl" controls muted playsinline class="aspect-video w-full rounded-lg object-cover" />
-            <p v-else class="text-xs text-dimmed">This post has no cover photo, so its share card cannot be generated. Add a picture at the top of the article.</p>
-          </UFormField>
-
-          <div v-else-if="section === 'url'" class="space-y-5">
-            <UFormField label="URL slug">
-              <UInput v-model="form.slug" :disabled="slugResetRequested" autofocus class="w-full" />
-              <div class="mt-1 flex items-center justify-between gap-3">
-                <p class="text-xs text-dimmed">{{ slugResetRequested ? generatedSlug : form.slug || generatedSlug }}</p>
-                <UButton v-if="post?.slug_manually_overridden" size="xs" variant="link" @click="resetSlugOverride">Use automatic slug</UButton>
-              </div>
-            </UFormField>
-            <UCheckbox v-if="post?.first_published_at && form.slug !== post.slug" v-model="form.redirect_old_slug" label="Redirect old URL" />
-          </div>
-
-          <UFormField v-else-if="section === 'canonical'" label="Canonical URL">
-            <UInput v-model="form.canonical_url" autofocus :placeholder="resolvedSeo.canonicalUrl" class="w-full" />
-          </UFormField>
-
-          <UFormField v-else-if="section === 'robots'" label="Robots">
-            <UInput v-model="form.robots" autofocus placeholder="index, follow" class="w-full" />
+          <UFormField label="Category">
+            <UInput v-model="form.category" autofocus class="w-full" />
           </UFormField>
         </template>
-      </EditorPaneShell>
-    </template>
-  </UDashboardPanel>
+
+        <UFormField v-else-if="section === 'tags'" label="Tags" help="Comma separated">
+          <UInput v-model="tagsText" autofocus class="w-full" />
+        </UFormField>
+
+        <UFormField v-else-if="section === 'excerpt'" label="Excerpt">
+          <UTextarea v-model="form.excerpt" :rows="5" autofocus :placeholder="resolvedExcerpt" class="w-full" />
+          <p class="mt-1 text-xs text-dimmed">{{ form.excerpt ? 'Custom' : `Auto: ${resolvedExcerpt}` }}</p>
+        </UFormField>
+
+        <!--
+          Publishing is a leaf like any other, so it commits through the pane's
+          own Cancel/Save bar. It used to carry its own "Publish now" button in
+          the body as well, which put two commit mechanisms on one screen: the
+          selects saved with the bar, the lifecycle went through a separate
+          endpoint the moment you pressed it. That is the whole reason the CMS
+          felt inconsistent about how you save — a tenant had to learn a second
+          place to look, on exactly one screen.
+
+          Save now carries the lifecycle change too. What the fields say when
+          you press Save is what the post becomes.
+        -->
+        <div v-else-if="section === 'publishing'" class="space-y-5">
+          <UFormField label="Status">
+            <p class="text-sm text-muted">{{ lifecycleLabel }}</p>
+          </UFormField>
+          <UFormField v-if="!post || post.status === 'scheduled'" label="Publish timing">
+            <USelect v-model="publishTiming" :items="['Now', 'Scheduled']" class="w-full" />
+          </UFormField>
+          <UFormField v-if="(!post || post.status === 'scheduled') && publishTiming === 'Scheduled'" label="Scheduled for (UTC)">
+            <UInput v-model="form.scheduled_for" type="datetime-local" step="any" class="w-full" />
+          </UFormField>
+          <UFormField label="Visibility">
+            <USelect v-model="form.visibility" :items="['public', 'unlisted']" class="w-full" />
+          </UFormField>
+        </div>
+
+        <div v-else-if="section === 'search'" class="space-y-5">
+          <div class="rounded-lg border border-default bg-muted p-3">
+            <p class="truncate text-sm text-primary">{{ resolvedSeo.title }}</p>
+            <p class="truncate text-xs text-success">{{ resolvedSeo.canonicalUrl }}</p>
+            <p class="mt-1 line-clamp-2 text-xs text-muted">{{ resolvedSeo.description }}</p>
+          </div>
+          <UFormField label="SEO title"><UInput v-model="form.seo_title" :placeholder="form.title" class="w-full" /></UFormField>
+          <UFormField label="Meta description"><UTextarea v-model="form.seo_description" :rows="4" :placeholder="resolvedExcerpt" class="w-full" /></UFormField>
+        </div>
+
+        <UFormField v-else-if="section === 'share'" label="Share preview">
+          <img v-if="resolvedPrimaryImageUrl" :src="resolvedPrimaryImageUrl" alt="Resolved share preview" class="aspect-video w-full rounded-lg object-cover">
+          <video v-else-if="resolvedPrimaryVideoUrl" :src="resolvedPrimaryVideoUrl" controls muted playsinline class="aspect-video w-full rounded-lg object-cover" />
+          <p v-else class="text-xs text-dimmed">This post has no cover photo, so its share card cannot be generated. Add a picture at the top of the article.</p>
+        </UFormField>
+
+        <div v-else-if="section === 'url'" class="space-y-5">
+          <UFormField label="URL slug">
+            <UInput v-model="form.slug" :disabled="slugResetRequested" autofocus class="w-full" />
+            <div class="mt-1 flex items-center justify-between gap-3">
+              <p class="text-xs text-dimmed">{{ slugResetRequested ? generatedSlug : form.slug || generatedSlug }}</p>
+              <UButton v-if="post?.slug_manually_overridden" size="xs" variant="link" @click="resetSlugOverride">Use automatic slug</UButton>
+            </div>
+          </UFormField>
+          <UCheckbox v-if="post?.first_published_at && form.slug !== post.slug" v-model="form.redirect_old_slug" label="Redirect old URL" />
+        </div>
+
+        <UFormField v-else-if="section === 'canonical'" label="Canonical URL">
+          <UInput v-model="form.canonical_url" autofocus :placeholder="resolvedSeo.canonicalUrl" class="w-full" />
+        </UFormField>
+
+        <UFormField v-else-if="section === 'robots'" label="Robots">
+          <UInput v-model="form.robots" autofocus placeholder="index, follow" class="w-full" />
+        </UFormField>
+        </div>
+      </template>
+
+      <template v-if="section !== 'share'" #footer>
+        <div class="flex shrink-0 items-center justify-between gap-4 border-t border-default px-4 py-3 sm:px-6">
+          <UButton color="neutral" variant="ghost" label="Cancel" @click="cancelSection" />
+          <UButton label="Save" :loading="savingExplicitly || publishing" @click="saveSection" />
+        </div>
+      </template>
+    </UDashboardPanel>
+  </template>
 </template>
 
 <script setup lang="ts">
@@ -195,12 +209,11 @@ import { instantDate } from '~/utils/timezone'
 import type { Component } from 'vue'
 import BlogArticleView from '~/components/blog/BlogArticleView.vue'
 import EditorNavigationList, { type EditorNavigationGroup } from '~/components/dashboard/EditorNavigationList.vue'
-import EditorPaneShell from '~/components/dashboard/EditorPaneShell.vue'
 import { ARTICLE_COLLECTIONS, ARTICLE_COLLECTION_SLUGS, type ArticleCollection } from '~/utils/article-collections'
 import { tenantBlogPostPath } from '~/utils/tenant-blog-route'
 import { publicTemplateRegistry } from '~/utils/template-registry'
 import type { BlogLifecycleState, BlogPostRepository, BlogPost, BlogEditorBlock, BlogPostUpdateInput } from './types'
-import { cloneEditorBlocks, generatedExcerpt, initialBlogEditorBlocks, normalizeBlogSlug, resolveBlogSeo, scheduledLifecycleValue, SerializedSnapshotQueue } from '~/utils/blog-editor'
+import { cloneEditorBlocks, generatedExcerpt, initialBlogEditorBlocks, normalizeBlogSlug, resolveBlogSeo, scheduledLifecycleValue } from '~/utils/blog-editor'
 import { getErrorMessage } from '~/utils/errors'
 import { resolveSocialImageUrl } from '~/utils/social-metadata'
 
@@ -387,45 +400,63 @@ const saveLabel = computed(() => {
 })
 type InserterBlockType = 'image' | 'faq' | 'how_to' | 'cta' | 'divider'
 
-type SaveSnapshot = { postId: string; payload: BlogPostUpdateInput }
-const saveQueue = new SerializedSnapshotQueue<SaveSnapshot, BlogPost>(
-  async (snapshot) => {
-    const updated = await props.repository.update(snapshot.postId, {
-      ...snapshot.payload,
-      expected_updated_at: serverPostUpdatedAt,
-    })
+/**
+ * Writes the article as the canvas holds it and takes back what the canvas
+ * cannot know: the server's copy of the post and the ids of blocks saved for
+ * the first time.
+ */
+async function saveArticle() {
+  if (!post.value || !contentDirty.value) return post.value
+  saveState.value = 'saving'
+  const payload = buildSavePayload()
+  try {
+    const updated = await props.repository.update(persistedPostId.value, { ...payload, expected_updated_at: serverPostUpdatedAt })
     syncServerVersion(updated)
-    return updated
-  },
-  (updated) => {
     applyingServerSnapshot = true
     post.value = updated
     form.slug = updated.slug || form.slug
     slugResetRequested.value = false
-    if (updated.content_document?.blocks) blocks.value = structuredClone(updated.content_document.blocks)
+    if (updated.content_document?.blocks) adoptServerBlockIds(payload.content_blocks ?? [], updated.content_document.blocks)
     contentDirty.value = false
     saveState.value = 'saved'
     void nextTick(() => { applyingServerSnapshot = false })
-  },
-)
+    return updated
+  } catch (error: unknown) {
+    const status = Number((error as { statusCode?: number; status?: number })?.statusCode ?? (error as { status?: number })?.status)
+    saveState.value = status === 409 ? 'conflict' : 'failed'
+    throw error
+  }
+}
 
 /**
- * Autosave watches the canvas and only the canvas — the headline and the body,
- * the two things typed into the article itself.
- *
- * It used to watch every settings field as well, which quietly made each leaf's
- * Cancel button a lie: the value was already persisted by the time it was
- * pressed. A canvas autosaves because you cannot cancel an hour of writing; a
- * field describing the post commits on Save and reverts on Cancel, the way it
- * does in every other editor.
+ * The canvas is the document; a save confirms it. It used to be replaced by the
+ * server's copy after every save, and every block became a new object — so the
+ * picker open on an image block was unmounted mid-choice, which read as "the
+ * picker just goes away". Only the id of a block saved for the first time is
+ * taken from the server. Blocks the payload did not carry (an image still
+ * waiting for its picture) are left exactly as they are.
  */
+function adoptServerBlockIds(sent: BlogEditorBlock[], saved: BlogEditorBlock[]) {
+  if (sent.length !== saved.length) return
+  const unsentIds = new Map<number, string>()
+  for (const [index, block] of sent.entries()) {
+    if (!block.id && saved[index]?.id) unsentIds.set(index, saved[index]!.id)
+  }
+  if (!unsentIds.size) return
+  let sentIndex = 0
+  for (const [index, block] of blocks.value.entries()) {
+    if (block.type === 'image' && !block.media?.length) continue
+    const id = unsentIds.get(sentIndex)
+    if (id && !block.id) blocks.value[index] = { ...block, id }
+    sentIndex++
+  }
+}
+
+// The headline and the body are the canvas; typing into either marks the
+// article unsaved. A settings leaf marks itself when its Save is pressed.
 watch([() => form.title, blocks], () => {
   if (applyingServerSnapshot) return
   markContentDirty()
-  if (post.value && !loadPending.value && saveState.value !== 'conflict') {
-    saveQueue.mark(buildSaveSnapshot())
-    scheduleAutosave()
-  }
 }, { deep: true, flush: 'sync' })
 watch([() => form.scheduled_for, publishTiming], () => {
   if (applyingServerSnapshot) return
@@ -435,7 +466,6 @@ onMounted(async () => {
   interactive.value = true
   if (!props.initialPost && !props.deferLoad) await load()
 })
-onBeforeUnmount(() => { cancelScheduledAutosave() })
 
 async function load() {
   if (!postId.value || !props.isEdit) { loadPending.value = false; return }
@@ -481,47 +511,16 @@ function markLifecycleDirty() {
   if (loadPending.value || saveState.value === 'conflict') return
   lifecycleDirty.value = true
 }
-/**
- * Marking the queue is not saving it. The header's "Save live changes" button
- * used to be the only thing that flushed a body edit, and removing that button
- * left the canvas marking itself dirty forever — it is supposed to autosave,
- * so it does it here rather than waiting for a control that no longer exists.
- *
- * The write is debounced so a burst of typing is one request, and its failure
- * is already reported by `saveState`, which is why the rejection is swallowed.
- */
-let autosaveTimer: ReturnType<typeof setTimeout> | null = null
-function scheduleAutosave() {
-  if (!import.meta.client) return
-  if (autosaveTimer) clearTimeout(autosaveTimer)
-  autosaveTimer = setTimeout(() => {
-    autosaveTimer = null
-    void flushSave().catch(() => {})
-  }, 1200)
-}
-function cancelScheduledAutosave() {
-  if (autosaveTimer) clearTimeout(autosaveTimer)
-  autosaveTimer = null
-}
-async function flushSave() {
-  if (!contentDirty.value) return post.value
-  if (!post.value) return null
-  saveState.value = 'saving'
-  try {
-    await saveQueue.flush()
-    return post.value
-  } catch (error: unknown) {
-    const status = Number((error as { statusCode?: number; status?: number })?.statusCode ?? (error as { status?: number })?.status)
-    saveState.value = status === 409 ? 'conflict' : 'failed'
-    throw error
-  }
-}
 /** Opens the article with an empty image block; choosing its picture makes it the cover. */
 function addCover() {
   blocks.value.unshift({ type: 'image', data: { caption: '' }, media: [] })
 }
-function buildSaveSnapshot(id = persistedPostId.value): SaveSnapshot {
-  return { postId: id, payload: { title: form.title, collection: form.collection, category: form.category || null, tags: tagsText.value.split(',').map(v => v.trim()).filter(Boolean), excerpt: form.excerpt || null, seo_title: form.seo_title || null, seo_description: form.seo_description || null, slug: slugResetRequested.value ? null : form.slug !== post.value?.slug ? form.slug : undefined, reset_slug_override: slugResetRequested.value || undefined, redirect_old_slug: form.redirect_old_slug, canonical_url: form.canonical_url || null, robots: form.robots || null, visibility: form.visibility, content_blocks: cloneEditorBlocks(toRaw(blocks.value)) } }
+/** What is written: an image block waiting for its picture stays on the canvas and out of the document. */
+function savedBlocks() {
+  return cloneEditorBlocks(toRaw(blocks.value)).filter(block => block.type !== 'image' || block.media?.length)
+}
+function buildSavePayload(): BlogPostUpdateInput {
+  return { title: form.title, collection: form.collection, category: form.category || null, tags: tagsText.value.split(',').map(v => v.trim()).filter(Boolean), excerpt: form.excerpt || null, seo_title: form.seo_title || null, seo_description: form.seo_description || null, slug: slugResetRequested.value ? null : form.slug !== post.value?.slug ? form.slug : undefined, reset_slug_override: slugResetRequested.value || undefined, redirect_old_slug: form.redirect_old_slug, canonical_url: form.canonical_url || null, robots: form.robots || null, visibility: form.visibility, content_blocks: savedBlocks() }
 }
 function lifecycleVersionInput() {
   if (!serverPostUpdatedAt) throw new Error('Blog lifecycle version is unavailable. Reload the editor.')
@@ -565,11 +564,10 @@ async function saveSection() {
   actionError.value = ''
   savingExplicitly.value = true
   try {
-    // A settings leaf is not watched by autosave, so nothing has marked the
-    // draft dirty. Saying so here is what lets `flushSave` write it.
+    // A settings leaf is not watched, so nothing has marked the draft dirty.
+    // Saying so here is what lets `saveArticle` write it.
     markContentDirty()
-    saveQueue.mark(buildSaveSnapshot())
-    await flushSave()
+    await saveArticle()
     // The publishing leaf's Save is what commits the lifecycle. A post that is
     // already live has nothing left to schedule, so only an unpublished one
     // goes through the lifecycle endpoint.
@@ -594,7 +592,7 @@ async function publish() {
       const created = await props.repository.create({
         title: form.title,
         slug: form.slug || undefined,
-        content_blocks: cloneEditorBlocks(toRaw(blocks.value)),
+        content_blocks: savedBlocks(),
         collection: form.collection,
         category: form.category || null,
         tags: tagsText.value.split(',').map(v => v.trim()).filter(Boolean),
@@ -613,14 +611,14 @@ async function publish() {
       await navigateTo(props.repository.editUrl(created.id), { replace: true })
       return
     }
-    await saveQueue.runExclusive(async () => {
-      const lifecycle = await props.repository.publish(persistedPostId.value, {
-        ...lifecycleVersionInput(),
-        scheduled_for: scheduledLifecycleValue(publishTiming.value, form.scheduled_for, 'UTC'),
-      })
-      applyLifecycle(lifecycle)
-      return lifecycle
+    // Publish what is on the canvas: an unsaved article is written first, so
+    // the lifecycle token it hands over is the one the save produced.
+    await saveArticle()
+    const lifecycle = await props.repository.publish(persistedPostId.value, {
+      ...lifecycleVersionInput(),
+      scheduled_for: scheduledLifecycleValue(publishTiming.value, form.scheduled_for, 'UTC'),
     })
+    applyLifecycle(lifecycle)
     lifecycleDirty.value = false
     saveState.value = 'saved'
   } catch (error: unknown) {

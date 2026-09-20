@@ -21,55 +21,70 @@
     </template>
   </div>
 
-  <UDashboardPanel v-else id="location-product-detail">
-    <template #header>
-      <UDashboardNavbar :title="form.name || presentation.itemLabel" :toggle="false">
-        <template #leading>
-          <DashboardNavbarLeading :to="collectionPath" :label="collection?.name ?? presentation.collectionLabel" />
-        </template>
-        <template v-if="product" #right>
-          <DashboardResourceLocalization
-            :site-id="siteId"
-            resource-type="product"
-            :resource-id="productId"
-            :resource-label="presentation.itemLabel.toLowerCase()"
-            :fields="productLocalizationFields"
-            :load-values="loadProductLocalization"
-            :save-values="saveProductLocalization"
-            :language-settings-path="siteLocalizationSettingsPath"
+  <template v-else>
+    <UDashboardPanel
+      id="location-product-detail"
+      class="hidden lg:flex"
+      :default-size="32"
+    >
+      <template #header>
+        <UDashboardNavbar :title="form.name || presentation.itemLabel" :toggle="false">
+          <template #leading>
+            <DashboardNavbarLeading :to="collectionPath" :label="collection?.name ?? presentation.collectionLabel" />
+          </template>
+          <template v-if="product" #right>
+            <DashboardResourceLocalization
+              :site-id="siteId"
+              resource-type="product"
+              :resource-id="productId"
+              :resource-label="presentation.itemLabel.toLowerCase()"
+              :fields="productLocalizationFields"
+              :load-values="loadProductLocalization"
+              :save-values="saveProductLocalization"
+              :language-settings-path="siteLocalizationSettingsPath"
+            />
+          </template>
+        </UDashboardNavbar>
+      </template>
+
+      <template #body>
+        <div class="mx-auto w-full max-w-xl">
+          <UAlert
+            v-if="loadError"
+            color="error"
+            variant="soft"
+            icon="i-lucide-triangle-alert"
+            :title="`${presentation.itemLabel} could not be loaded`"
+            :description="loadError"
           />
-        </template>
-      </UDashboardNavbar>
-    </template>
+          <EditorNavigationList v-else :groups="navigationGroups" :active-item="detailKey" />
+        </div>
+      </template>
+    </UDashboardPanel>
 
-    <template #body>
-      <UAlert
-        v-if="loadError"
-        color="error"
-        variant="soft"
-        icon="i-lucide-triangle-alert"
-        :title="`${presentation.itemLabel} could not be loaded`"
-        :description="loadError"
-      />
+    <!--
+      The open section is the other column: its own panel, its own header,
+      and Save/Cancel in the panel's own footer slot.
+    -->
+    <UDashboardPanel v-if="!loadError" id="location-product-section">
+      <template #header>
+        <UDashboardNavbar :title="sectionLabels[editorKey]" :toggle="false">
+          <template #leading>
+            <DashboardNavbarLeading :to="itemPath" :label="presentation.itemLabel" />
+          </template>
+        </UDashboardNavbar>
+      </template>
 
-      <EditorPaneShell
-        v-else
-        has-detail
-        :show-actions="editorKey !== 'photo'"
-        :saving="saving"
-        :save-disabled="saveDisabled"
-        :save-label="saveLabel"
-        :error="saveError || photoError"
-        :detail-title="sectionLabels[editorKey]"
-        :dismiss-to="itemPath"
-        @cancel="cancelEditor"
-        @save="saveCurrentEditor"
-      >
-        <template #index>
-          <EditorNavigationList :groups="navigationGroups" :active-item="detailKey" />
-        </template>
-
-        <template #detail>
+      <template #body>
+        <div class="mx-auto w-full max-w-5xl">
+          <UAlert
+            v-if="saveError || photoError"
+            color="error"
+            variant="soft"
+            icon="i-lucide-circle-alert"
+            :description="saveError || photoError || undefined"
+            class="mb-6"
+          />
           <!-- Photo -->
           <div v-if="editorKey === 'photo'" class="space-y-4">
             <p class="text-base text-muted">The picture guests recognise this by, in the list and on your site.</p>
@@ -295,14 +310,20 @@
               </div>
             </template>
           </div>
-        </template>
-      </EditorPaneShell>
-    </template>
-  </UDashboardPanel>
+        </div>
+      </template>
+
+      <template v-if="editorKey !== 'photo'" #footer>
+        <div class="flex shrink-0 items-center justify-between gap-4 border-t border-default px-4 py-3 sm:px-6">
+          <UButton color="neutral" variant="ghost" label="Cancel" @click="cancelEditor" />
+          <UButton :label="saveLabel || 'Save'" :loading="saving" :disabled="saveDisabled" @click="saveCurrentEditor" />
+        </div>
+      </template>
+    </UDashboardPanel>
+  </template>
 </template>
 
 <script setup lang="ts">
-import EditorPaneShell from '~/components/dashboard/EditorPaneShell.vue'
 import EditorNavigationList, { type EditorNavigationGroup } from '~/components/dashboard/EditorNavigationList.vue'
 import DashboardCoverPhotoField from '~/components/dashboard/DashboardCoverPhotoField.vue'
 import DashboardResourceLocalization from '~/components/dashboard/DashboardResourceLocalization.vue'
@@ -315,7 +336,6 @@ import { majorAmountToMinor, minorAmountToMajor, selectPrice, type Price } from 
 import { formatProductMoney } from '~/utils/product-money'
 import { presentationForProduct, productSurfaceOf, requireProductPresentation } from '~/utils/product-presentation'
 import { getErrorMessage, isNotFoundError } from '~/utils/errors'
-import { mediaStillUrl } from '~/shared/media-placement-contract'
 
 const route = useRoute()
 const dashboardApi = useDashboardApi()
@@ -325,6 +345,12 @@ const locationPath = computed(() => `/dashboard/${String(route.params.orgSlug)}/
 // The surface is the product's own, not the URL's: a dish saved as bookable is
 // an experience from that moment, and the rows it returns to have moved with
 // it. Until the row has loaded the URL is all there is to go on.
+// Declared above the computeds that read it. `surfacePath` resolves the
+// surface from the product's own row, so evaluating it before this line was
+// reached threw "Cannot access 'product' before initialization" and the
+// whole editor 500d.
+const product = ref<Product | null>(null)
+
 const surfacePath = computed(() => {
   const surface = product.value ? productSurfaceOf(vertical, product.value) : String(route.params.surface ?? '')
   return `${locationPath.value}/products/${surface}`
@@ -381,7 +407,6 @@ if (frame.rest.value.length > 1 || (detailKey.value && !openSections.value.some(
 // ── Load ────────────────────────────────────────────────
 const collections = ref<Collection[]>([])
 const definitions = ref<MetafieldDefinition[]>([])
-const product = ref<Product | null>(null)
 const loadError = ref<string | null>(null)
 const saveError = ref<string | null>(null)
 const photoError = ref<string | null>(null)
@@ -710,7 +735,6 @@ const navigationGroups = computed<EditorNavigationGroup[]>(() => {
           summary: image ? '' : 'No photo yet',
           placeholder: !image,
           to: `${itemPath.value}/photo`,
-          previews: mediaStillUrl(image) ? [mediaStillUrl(image)!] : undefined,
         },
         { id: 'name', label: 'Name', summary: form.name || 'Not named yet', placeholder: !form.name, to: `${itemPath.value}/name` },
         { id: 'price', label: 'Price', summary: priceSummary(), placeholder: priceSummary() === 'No price set', to: `${itemPath.value}/price` },

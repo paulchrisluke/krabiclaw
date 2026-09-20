@@ -11,65 +11,75 @@
     <EditorNavigationList v-else :groups="navigationGroups" />
   </div>
 
-  <UDashboardPanel v-else-if="!itemId" id="site-links">
-    <template #header>
-      <UDashboardNavbar title="Links page" :toggle="false">
-        <template #leading>
-          <DashboardNavbarLeading :to="sitePath" label="Site" />
-        </template>
-        <template #right>
-          <UButton
-            color="neutral"
-            variant="ghost"
-            :icon="copiedUrl ? 'i-lucide-check' : 'i-lucide-copy'"
-            :disabled="!publicLinksUrl"
-            @click="copyPublicUrl"
-          >
-            {{ copiedUrl ? 'Copied' : 'Copy URL' }}
-          </UButton>
-          <UButton
-            color="neutral"
-            variant="soft"
-            icon="i-lucide-external-link"
-            :to="publicLinksUrl || undefined"
-            target="_blank"
-            :disabled="!publicLinksUrl"
-          >
-            Open
-          </UButton>
-          <DashboardResourceLocalization
-            v-if="form.id"
-            :site-id="siteId"
-            resource-type="content_document"
-            :resource-id="form.id"
-            resource-label="links page"
-            :fields="linksPageLocalizationFields"
-            :load-values="loadLinksLocalization"
-            :save-values="saveLinksLocalization"
-            :route-path="localizedLinksPath"
-            :language-settings-path="siteLocalizationSettingsPath"
-          />
-        </template>
-      </UDashboardNavbar>
-    </template>
+  <template v-else-if="!itemId">
+    <UDashboardPanel
+      id="site-links"
+      :class="hasDetail ? 'hidden lg:flex' : undefined"
+      :default-size="hasDetail ? 32 : undefined"
+    >
+      <template #header>
+        <UDashboardNavbar title="Links page" :toggle="false">
+          <template #leading>
+            <DashboardNavbarLeading :to="sitePath" label="Site" />
+          </template>
+          <template #right>
+            <UButton
+              color="neutral"
+              variant="ghost"
+              :icon="copiedUrl ? 'i-lucide-check' : 'i-lucide-copy'"
+              :disabled="!publicLinksUrl"
+              @click="copyPublicUrl"
+            >
+              {{ copiedUrl ? 'Copied' : 'Copy URL' }}
+            </UButton>
+            <UButton
+              color="neutral"
+              variant="soft"
+              icon="i-lucide-external-link"
+              :to="publicLinksUrl || undefined"
+              target="_blank"
+              :disabled="!publicLinksUrl"
+            >
+              Open
+            </UButton>
+            <DashboardResourceLocalization
+              v-if="form.id"
+              :site-id="siteId"
+              resource-type="content_document"
+              :resource-id="form.id"
+              resource-label="links page"
+              :fields="linksPageLocalizationFields"
+              :load-values="loadLinksLocalization"
+              :save-values="saveLinksLocalization"
+              :route-path="localizedLinksPath"
+              :language-settings-path="siteLocalizationSettingsPath"
+            />
+          </template>
+        </UDashboardNavbar>
+      </template>
 
-    <template #body>
-      <EditorPaneShell
-        has-detail
-        show-actions
-        :saving="saving"
-        :save-disabled="!editorReady || !sectionValid"
-        :detail-title="SECTION_LABELS[editorKey]"
-        :hide-detail-heading="editorKey === 'items'"
-        :dismiss-to="linksPath"
-        @cancel="cancelEditor"
-        @save="save"
-      >
-        <template #index>
+      <template #body>
+        <div class="mx-auto w-full" :class="hasDetail ? 'max-w-xl' : 'max-w-3xl'">
           <EditorNavigationList :groups="navigationGroups" :active-item="editorKey" />
-        </template>
+        </div>
+      </template>
+    </UDashboardPanel>
 
-        <template #detail>
+    <!--
+      The open level is the other column: its own panel, its own header,
+      and Save/Cancel in the panel's own footer slot.
+    -->
+    <UDashboardPanel v-if="hasDetail" id="site-links-section">
+      <template #header>
+        <UDashboardNavbar :title="SECTION_LABELS[editorKey]" :toggle="false">
+          <template #leading>
+            <DashboardNavbarLeading :to="linksPath" label="Links" />
+          </template>
+        </UDashboardNavbar>
+      </template>
+
+      <template #body>
+        <div class="mx-auto w-full max-w-5xl">
           <UAlert
             v-if="errorMessage"
             class="mb-6"
@@ -132,51 +142,52 @@
               <p class="mt-1 truncate text-sm text-muted">{{ item.row.destination || 'No destination yet' }}</p>
             </template>
           </DashboardListEditor>
-        </template>
-      </EditorPaneShell>
-    </template>
-  </UDashboardPanel>
+        </div>
+      </template>
+
+      <template #footer>
+        <div class="flex shrink-0 items-center justify-between gap-4 border-t border-default px-4 py-3 sm:px-6">
+          <UButton color="neutral" variant="ghost" label="Cancel" @click="cancelEditor" />
+          <UButton :label="'Save'" :loading="saving" :disabled="!editorReady || !sectionValid" @click="save" />
+        </div>
+      </template>
+    </UDashboardPanel>
+  </template>
 
   <!--
     A link is a record of its own, at `links/items/<id>`, with one leaf per
     field. Adding is the same screen at `links/items/new`, so there is nothing
     a sheet did that a URL does not.
   -->
-  <UDashboardPanel v-else id="site-links-item">
-    <template #header>
-      <UDashboardNavbar :title="isNewItem ? 'New link' : itemForm.label || 'Link'" :toggle="false">
-        <template #leading>
-          <DashboardNavbarLeading :to="itemsPath" label="Links" />
-        </template>
-        <template #right>
-          <DashboardResourceLocalization
-            v-if="itemRecord"
-            :site-id="siteId"
-            resource-type="content_block"
-            :resource-id="itemRecord.id"
-            resource-label="link"
-            :fields="linkItemLocalizationFields"
-            :load-values="locale => loadLinksLocalization(locale, itemId)"
-            :save-values="(locale, values) => saveLinksLocalization(locale, values, itemId)"
-            :language-settings-path="siteLocalizationSettingsPath"
-          />
-        </template>
-      </UDashboardNavbar>
-    </template>
+  <template v-else>
+    <UDashboardPanel
+      id="site-links-item"
+      :class="hasDetail ? 'hidden lg:flex' : undefined"
+      :default-size="hasDetail ? 32 : undefined"
+    >
+      <template #header>
+        <UDashboardNavbar :title="isNewItem ? 'New link' : itemForm.label || 'Link'" :toggle="false">
+          <template #leading>
+            <DashboardNavbarLeading :to="itemsPath" label="Links" />
+          </template>
+          <template #right>
+            <DashboardResourceLocalization
+              v-if="itemRecord"
+              :site-id="siteId"
+              resource-type="content_block"
+              :resource-id="itemRecord.id"
+              resource-label="link"
+              :fields="linkItemLocalizationFields"
+              :load-values="locale => loadLinksLocalization(locale, itemId)"
+              :save-values="(locale, values) => saveLinksLocalization(locale, values, itemId)"
+              :language-settings-path="siteLocalizationSettingsPath"
+            />
+          </template>
+        </UDashboardNavbar>
+      </template>
 
-    <template #body>
-      <EditorPaneShell
-        :has-detail="Boolean(itemLeaf)"
-        :show-actions="Boolean(itemLeaf)"
-        :saving="saving"
-        :save-disabled="itemSaveDisabled"
-        :save-label="itemSaveLabel"
-        :detail-title="ITEM_SECTION_LABELS[openItemKey]"
-        :dismiss-to="itemPath"
-        @cancel="cancelItemEditor"
-        @save="saveItemSection"
-      >
-        <template #index>
+      <template #body>
+        <div class="mx-auto w-full" :class="hasDetail ? 'max-w-xl' : 'max-w-3xl'">
           <UAlert
             v-if="errorMessage"
             class="mb-6"
@@ -194,9 +205,25 @@
             </div>
             <EditorNavigationList :groups="itemNavigationGroups" :active-item="itemLeaf" />
           </template>
-        </template>
+        </div>
+      </template>
+    </UDashboardPanel>
 
-        <template #detail>
+    <!--
+      The open level is the other column: its own panel, its own header,
+      and Save/Cancel in the panel's own footer slot.
+    -->
+    <UDashboardPanel v-if="hasDetail" id="site-links-item-section">
+      <template #header>
+        <UDashboardNavbar :title="ITEM_SECTION_LABELS[openItemKey]" :toggle="false">
+          <template #leading>
+            <DashboardNavbarLeading :to="itemPath" label="Link" />
+          </template>
+        </UDashboardNavbar>
+      </template>
+
+      <template #body>
+        <div class="mx-auto w-full max-w-5xl">
           <!-- The record's own values are still in flight; an input bound to the
                empty draft would take a keystroke and then lose it. -->
           <div v-if="!editorReady" class="space-y-4">
@@ -226,14 +253,20 @@
           >
             <USelect v-model="itemForm.status" :items="ITEM_STATUS_OPTIONS" size="xl" class="w-full" />
           </UFormField>
-        </template>
-      </EditorPaneShell>
-    </template>
-  </UDashboardPanel>
+        </div>
+      </template>
+
+      <template v-if="Boolean(itemLeaf)" #footer>
+        <div class="flex shrink-0 items-center justify-between gap-4 border-t border-default px-4 py-3 sm:px-6">
+          <UButton color="neutral" variant="ghost" label="Cancel" @click="cancelItemEditor" />
+          <UButton :label="itemSaveLabel" :loading="saving" :disabled="itemSaveDisabled" @click="saveItemSection" />
+        </div>
+      </template>
+    </UDashboardPanel>
+  </template>
 </template>
 
 <script setup lang="ts">
-import EditorPaneShell from '~/components/dashboard/EditorPaneShell.vue'
 import EditorNavigationList, { type EditorNavigationGroup } from '~/components/dashboard/EditorNavigationList.vue'
 import DashboardListEditor from '~/components/dashboard/DashboardListEditor.vue'
 import DashboardResourceLocalization from '~/components/dashboard/DashboardResourceLocalization.vue'
@@ -293,6 +326,7 @@ const isLinksWriteResponse = (
 // never resolves, and the server renders an empty node where this should be.
 const linksPath = computed(() => `/dashboard/${String(route.params.orgSlug)}/sites/${String(route.params.siteSlug)}/links`)
 const frame = useEditorFrame(linksPath)
+const hasDetail = computed(() => frame.mode.value === 'pair')
 
 const siteId = await useDashboardSiteId()
 const dashboard = useDashboardSite()

@@ -76,8 +76,15 @@ const props = withDefaults(defineProps<{ account?: boolean, to?: string, label?:
   to: '/signup',
   label: 'Start free',
 })
-// The canonical Better Auth session is shared and hydrated from the Nuxt payload.
-const { user, sessionError } = await useAuthSession()
+// The session is read on the client only: the server has none, and the
+// client's fetch can finish before this hydrates, so reading it during
+// hydration rendered "Dashboard" over the server's "Start free". Both sides
+// render signed-out until mounted; the account branch follows after.
+const session = authClient.useSession()
+const mounted = ref(false)
+onMounted(() => { mounted.value = true })
+const user = computed(() => mounted.value ? session.value.data?.user ?? null : null)
+const sessionError = computed(() => mounted.value ? session.value.error : null)
 // The marketing stylesheet carries no Nuxt UI, so the avatar is the surface's
 // own markup: the photo when there is one, the owner's initials when there is
 // not, in the same footprint either way.

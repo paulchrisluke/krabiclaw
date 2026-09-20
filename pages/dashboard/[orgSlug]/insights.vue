@@ -480,7 +480,7 @@ const { data: insightsResource, pending: analyticsPending, error: analyticsResou
   await useAsyncData(
     `dashboard-org-insights:${initialRange.startDate}:${initialRange.endDate}:${selectedSiteId.value ?? 'all'}`,
     () => fetchInsights({}),
-    { lazy: import.meta.client },
+    { lazy: true },
   )
 
 watch([insightsResource, analyticsPending, analyticsResourceError], ([resource, pending, error]) => {

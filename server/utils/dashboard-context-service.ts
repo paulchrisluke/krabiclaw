@@ -3,6 +3,8 @@ import { HTTPError } from 'nitro';
 import type { H3Event } from 'nitro'
 import { cloudflareEnv } from '~/server/utils/api-response'
 import {
+  dashboardOrgQueryParam,
+  dashboardSiteQueryParam,
   decorateDashboardSiteCard,
   getDashboardContext,
   listOrganizationSites,
@@ -12,42 +14,26 @@ import {
 import { isOrganizationWideRole, listUserOrganizationTeamIds, resolveDashboardSiteAccess, memberAccessPrincipal } from '~/server/utils/member-access'
 import { recordRequestPhase } from '~/server/utils/request-metrics'
 
+// The scope is the route's `org`/`site` query params. No organization is a
+// 400 and one this session cannot see is a 404 (getDashboardContext); a site
+// the organization does not have is a 404 here. None of them is a payload with
+// nulls in it: the dashboard rendered that payload as "Site not found" on the
+// client while the server had logged a 200.
 export async function loadDashboardContext(
   event: H3Event,
-  scope?: { orgSlug?: string | null; siteId?: string | null; siteSlug?: string | null },
+  scope: { orgSlug: string | null; siteSlug: string | null } = {
+    orgSlug: dashboardOrgQueryParam(event),
+    siteSlug: dashboardSiteQueryParam(event),
+  },
 ) {
   const contextStartedAt = performance.now()
   const env = cloudflareEnv(event)
   const { db, organization, site, userId } = await getDashboardContext(event, {
     requireSite: false,
-    requireOrganization: scope?.orgSlug ? true : false,
-    organizationSlug: scope?.orgSlug,
-    siteId: scope?.siteId,
-    siteSlug: scope?.siteSlug,
-    // This function is the canonical /api/dashboard/context payload loader —
-    // called directly by that route's own handler (where event.path already
-    // matches) and, for SSR, by useDashboardSite's refresh() using the page's
-    // own event (see the pathname doc on DashboardContextOptions). Pinning
-    // the logical path here keeps the scoped-role allowlist check correct
-    // for both callers instead of only the former.
+    organizationSlug: scope.orgSlug,
+    siteSlug: scope.siteSlug,
   })
   recordRequestPhase(event, 'context', contextStartedAt)
-
-  if (!organization) {
-    // If an organization slug was explicitly requested but not found,
-    // that's an error, not a fallback to null.
-    if (scope?.orgSlug) {
-      throw new HTTPError({ statusCode: 404, statusMessage: `Organization not found: ${scope.orgSlug}` })
-    }
-    return {
-      success: true as const,
-      organization: null,
-      site: null,
-      sites: [],
-      locations: [],
-      siteAccess: null,
-    }
-  }
 
   const teamIds = isOrganizationWideRole(organization.role)
     ? null
@@ -66,6 +52,9 @@ export async function loadDashboardContext(
   ])
   const sites = siteRows.map(row => decorateDashboardSiteCard(row, enrichment))
   if (!site) {
+    if (scope.siteSlug) {
+      throw new HTTPError({ statusCode: 404, statusMessage: `Site not found: ${scope.siteSlug}` })
+    }
     return {
       success: true as const,
       organization,

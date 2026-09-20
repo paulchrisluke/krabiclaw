@@ -27,38 +27,32 @@
     <EditorNavigationList :groups="navigationGroups" />
   </div>
 
-  <UDashboardPanel v-else id="site-qa-record">
-    <template #header>
-      <UDashboardNavbar :title="isNew ? 'New question' : form.question || 'Question'" :toggle="false">
-        <template #leading>
-          <DashboardNavbarLeading :to="qaPath" label="Q&A" />
-        </template>
-        <template v-if="!isNew" #right>
-          <DashboardResourceLocalization
-            :site-id="siteId"
-            resource-type="content_document"
-            :resource-id="qaId"
-            resource-label="question"
-            :fields="qaLocalizationFields"
-            :language-settings-path="siteLocalizationSettingsPath"
-          />
-        </template>
-      </UDashboardNavbar>
-    </template>
+  <template v-else>
+    <UDashboardPanel
+      id="site-qa-record"
+      :class="hasDetail ? 'hidden lg:flex' : undefined"
+      :default-size="hasDetail ? 32 : undefined"
+    >
+      <template #header>
+        <UDashboardNavbar :title="isNew ? 'New question' : form.question || 'Question'" :toggle="false">
+          <template #leading>
+            <DashboardNavbarLeading :to="qaPath" label="Q&A" />
+          </template>
+          <template v-if="!isNew" #right>
+            <DashboardResourceLocalization
+              :site-id="siteId"
+              resource-type="content_document"
+              :resource-id="qaId"
+              resource-label="question"
+              :fields="qaLocalizationFields"
+              :language-settings-path="siteLocalizationSettingsPath"
+            />
+          </template>
+        </UDashboardNavbar>
+      </template>
 
-    <template #body>
-      <EditorPaneShell
-        :has-detail="frame.mode.value === 'pair'"
-        :detail-title="SECTION_LABELS[openKey]"
-        :dismiss-to="recordPath"
-        show-actions
-        :saving="saving"
-        :save-disabled="saveDisabled"
-        :save-label="saveLabel"
-        @cancel="closeDetail"
-        @save="saveOpenSection"
-      >
-        <template #index>
+      <template #body>
+        <div class="mx-auto w-full" :class="hasDetail ? 'max-w-xl' : 'max-w-3xl'">
           <UAlert
             v-if="errorMessage"
             class="mb-6"
@@ -68,9 +62,25 @@
             :description="errorMessage"
           />
           <EditorNavigationList :groups="navigationGroups" :active-item="openKey" />
-        </template>
+        </div>
+      </template>
+    </UDashboardPanel>
 
-        <template #detail>
+    <!--
+      The open section is the other column: its own panel, its own header, and
+      the Save/Cancel pair in the panel's own footer slot.
+    -->
+    <UDashboardPanel v-if="hasDetail" id="site-qa-section">
+      <template #header>
+        <UDashboardNavbar :title="SECTION_LABELS[openKey]" :toggle="false">
+          <template #leading>
+            <DashboardNavbarLeading :to="recordPath" label="Question" />
+          </template>
+        </UDashboardNavbar>
+      </template>
+
+      <template #body>
+        <div class="mx-auto w-full max-w-2xl">
           <UFormField v-if="openKey === 'question'" label="Question" required>
             <UTextarea v-model="form.question" :rows="4" autofocus class="w-full" />
           </UFormField>
@@ -83,14 +93,20 @@
             <p class="text-base text-muted">A published question appears on the page it is filed under.</p>
             <UCheckbox v-model="form.published" label="Published" />
           </div>
-        </template>
-      </EditorPaneShell>
-    </template>
-  </UDashboardPanel>
+        </div>
+      </template>
+
+      <template #footer>
+        <div class="flex shrink-0 items-center justify-between gap-4 border-t border-default px-4 py-3 sm:px-6">
+          <UButton color="neutral" variant="ghost" label="Cancel" @click="closeDetail" />
+          <UButton :label="saveLabel || 'Save'" :loading="saving" :disabled="saveDisabled" @click="saveOpenSection" />
+        </div>
+      </template>
+    </UDashboardPanel>
+  </template>
 </template>
 
 <script setup lang="ts">
-import EditorPaneShell from '~/components/dashboard/EditorPaneShell.vue'
 import EditorNavigationList, { type EditorNavigationGroup } from '~/components/dashboard/EditorNavigationList.vue'
 import DashboardResourceLocalization from '~/components/dashboard/DashboardResourceLocalization.vue'
 import { getErrorMessage } from '~/utils/errors'
@@ -108,6 +124,7 @@ const qaPath = computed(() => props.locationId
   : `/dashboard/${String(route.params.orgSlug)}/sites/${String(route.params.siteSlug)}/qa`)
 const recordPath = computed(() => `${qaPath.value}/${qaId.value}`)
 const frame = useEditorFrame(recordPath)
+const hasDetail = computed(() => frame.mode.value === 'pair')
 
 const siteId = await useDashboardSiteId()
 const isNew = computed(() => qaId.value === 'new')

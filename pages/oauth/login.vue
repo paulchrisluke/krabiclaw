@@ -107,8 +107,10 @@ const oauthAuthorizeUrl = computed(() => `/api/auth/oauth2/authorize${route.full
 // ── Client metadata ───────────────────────────────────────────────────────────
 const clientName = ref<string | null>(null)
 const clientIcon = ref<string | null>(null)
-const { user: sessionUser } = await useAuthSession()
-const existingSession = ref(sessionUser.value)
+const session = authClient.useSession()
+// Read live: the session resolves after mount, and signing out to switch
+// account clears it in the same store.
+const existingSession = computed(() => session.value.data?.user ?? null)
 
 onMounted(async () => {
   // The banner names the app requesting access. With no client to look up, or
@@ -191,7 +193,6 @@ async function switchAccount() {
   } finally {
     switching.value = false
   }
-  existingSession.value = null
 }
 
 // ── Sign-in options (no existing session) ────────────────────────────────────

@@ -212,12 +212,12 @@ export interface ResolveOrganizationOptions {
 // truth for which org/site a request is for. dashboardFetch (composables/dashboardFetch.ts)
 // sends that route context on every /api/dashboard/* request as explicit,
 // visible `org`/`site` query params rather than a bespoke request header.
-function dashboardOrgQueryParam(event: H3Event): string | null {
+export function dashboardOrgQueryParam(event: H3Event): string | null {
   const value = getQuery(event).org
   return typeof value === 'string' && value ? value : null
 }
 
-function dashboardSiteQueryParam(event: H3Event): string | null {
+export function dashboardSiteQueryParam(event: H3Event): string | null {
   const value = getQuery(event).site
   return typeof value === 'string' && value ? value : null
 }

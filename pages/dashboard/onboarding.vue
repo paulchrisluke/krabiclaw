@@ -86,10 +86,9 @@ import {
 import { useOnboardingDraft } from '~/composables/useOnboardingDraft'
 
 // This route creates a new site, so it has no org or site of its own yet: there
-// is no orgSlug segment and nothing dashboard-scoped to load. The dashboard
-// layout honours skipDashboardContext and renders the shared header without org
-// nav; middleware/dashboard.global.ts still gates the route on a session.
-definePageMeta({ layout: 'dashboard', skipDashboardContext: true })
+// is no orgSlug segment, so the dashboard layout requests no context and
+// renders the shared header without org nav.
+definePageMeta({ layout: 'dashboard' })
 
 const route = useRoute()
 const router = useRouter()

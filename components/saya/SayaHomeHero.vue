@@ -74,12 +74,10 @@
         </NuxtLink>
       </div>
       <div v-else class="mt-12 flex flex-wrap gap-4">
-        <NuxtLink v-if="hasOrderLinks" :to="localePath('/order')" class="inline-flex items-center justify-center rounded-full bg-white px-6 py-3 text-base font-medium text-black no-underline transition hover:bg-zinc-100">{{ orderNowCta }}</NuxtLink>
         <NuxtLink
           v-if="ctaRoute"
           :to="localePath(ctaRoute)"
-          class="inline-flex items-center justify-center rounded-full px-6 py-3 text-base font-medium no-underline transition"
-          :class="hasOrderLinks ? 'border border-white/50 text-white hover:bg-white/10' : 'bg-white text-black hover:bg-zinc-100'"
+          class="inline-flex items-center justify-center rounded-full bg-white px-6 py-3 text-base font-medium text-black no-underline transition hover:bg-zinc-100"
         >
           {{ reserveCta }}
         </NuxtLink>
@@ -120,15 +118,12 @@ interface Props {
     locations?: Array<{ id: string; slug: string; title: string }>
     businessTitle?: string
     businessSubtitle?: string
-    hasOrderLinks?: boolean
     ctaRoute?: string
     reserveCta?: string
-    // Vertical-aware CTA copy (e.g. "Book Now"/"View Experiences" for
-    // experience-vertical tenants vs "Order Now"/"View Menu" for restaurants)
-    // — must come from the caller's homeCopy, never hardcoded here. Getting
-    // this wrong is the canonical Pottery House regression (restaurant copy
-    // on an experience-vertical site).
-    orderNowCta?: string
+    // Vertical-aware CTA copy (e.g. "View Experiences" for experience-vertical
+    // tenants vs "View Menu" for restaurants) — must come from the caller's
+    // homeCopy, never hardcoded here. Getting this wrong is the canonical
+    // Pottery House regression (restaurant copy on an experience-vertical site).
     viewMenuCta?: string
     viewMenuRoute?: string
     brandColor?: string
@@ -144,14 +139,12 @@ const locations = computed(() => props.data?.locations || [])
 const hasLocations = computed(() => locations.value.length > 1)
 const businessTitle = computed(() => props.data?.businessTitle || '')
 const businessSubtitle = computed(() => props.data?.businessSubtitle || '')
-const hasOrderLinks = computed(() => props.data?.hasOrderLinks || false)
 const ctaRoute = computed(() => props.data?.ctaRoute || '')
 const reserveCta = computed(() => props.data?.reserveCta || '')
-const orderNowCta = computed(() => props.data?.orderNowCta || '')
 const viewMenuCta = computed(() => props.data?.viewMenuCta || '')
 const viewMenuRoute = computed(() => props.data?.viewMenuRoute || '')
 const showSecondaryCta = computed(() =>
-  !hasOrderLinks.value && !!viewMenuRoute.value && !!viewMenuCta.value && viewMenuRoute.value !== ctaRoute.value
+  !!viewMenuRoute.value && !!viewMenuCta.value && viewMenuRoute.value !== ctaRoute.value
 )
 // The theme's --brand-color is the one source for this; the layout defaults it
 // to the platform colour until the owner picks one in the brand step. Reading

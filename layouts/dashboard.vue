@@ -18,17 +18,7 @@
     </div>
 
     <div
-      v-if="!skipDashboardContext && dashboard.pending.value"
-      class="flex min-h-screen items-center justify-center bg-default px-6"
-      data-testid="dashboard-context-loading"
-    >
-      <div class="w-full max-w-xl space-y-4">
-        <div class="h-7 w-48 animate-pulse rounded bg-elevated" />
-        <div class="h-32 animate-pulse rounded-xl bg-elevated" />
-      </div>
-    </div>
-    <div
-      v-else-if="!skipDashboardContext && dashboardContextError"
+      v-if="context.error.value"
       class="flex min-h-screen items-center justify-center bg-default px-6"
       data-testid="dashboard-context-error"
     >
@@ -38,15 +28,24 @@
         <p v-if="dashboardContextRequestId" class="mt-2 text-xs text-dimmed">
           Request ID: {{ dashboardContextRequestId }}
         </p>
-        <UButton class="mt-6" :loading="dashboard.pending.value" @click="retryDashboardContext">
+        <UButton class="mt-6" @click="retryDashboardContext">
           Try again
         </UButton>
       </UCard>
     </div>
+    <div
+      v-else-if="!contextReady"
+      class="flex min-h-screen items-center justify-center bg-default px-6"
+      data-testid="dashboard-context-loading"
+    >
+      <div class="w-full max-w-xl space-y-4">
+        <div class="h-7 w-48 animate-pulse rounded bg-elevated" />
+        <div class="h-32 animate-pulse rounded-xl bg-elevated" />
+      </div>
+    </div>
 
     <div v-else>
     <DashboardTopNav
-      v-if="showDashboardChrome"
       :items="showNavChrome ? primaryNavItems : []"
       :home-to="topNavHomeTo"
       @menu="menuOpen = true"
@@ -61,7 +60,7 @@
       case; only an element that deliberately spans the viewport reaches them.
     -->
     <UDashboardGroup
-      :ui="{ base: [showDashboardChrome ? 'z-40' : '', showNavChrome ? 'md:top-(--kc-dashboard-top-nav) max-md:bottom-(--kc-dashboard-bottom-nav)' : showDashboardChrome ? 'top-(--kc-dashboard-top-nav)' : ''].filter(Boolean).join(' ') }"
+      :ui="{ base: ['z-40', showNavChrome ? 'md:top-(--kc-dashboard-top-nav) max-md:bottom-(--kc-dashboard-bottom-nav)' : 'top-(--kc-dashboard-top-nav)'].join(' ') }"
     >
       <UDashboardSearch v-model:search-term="dashboardSearchTerm" :groups="dashboardSearchGroups" :loading="dashboardSearchLoading" :color-mode="false" />
 
@@ -146,12 +145,21 @@ interface AuthOrganization {
 
 const route = useRoute()
 const router = useRouter()
-const { sessionData, refresh: refreshSession } = await useAuthSession()
+const session = authClient.useSession()
+const sessionData = computed(() => session.value.data)
+const refreshSession = () => session.value.refetch()
 const { trackDashboardVisited, setUserId } = useAnalytics()
 const impersonationError = ref<string | null>(null)
 const stoppingImpersonation = ref(false)
 const { searchTerm: dashboardSearchTerm, loading: dashboardSearchLoading, groups: dashboardSearchGroups } = useDashboardSearch()
+// This layout owns the context request. Nothing below it starts one.
+const context = useDashboardContextOwner()
 const dashboard = useDashboardSite()
+// The page renders once the result held is the one for the destination route.
+// A refresh keeps the same-scope result in place, so the page stays mounted; a
+// scope change holds the previous scope's result until the new one lands, so
+// the page waits.
+const contextReady = computed(() => context.data.value?.key === context.contextKey.value)
 const platformTheme = usePlatformTheme()
 const organizationsState = authClient.useListOrganizations()
 
@@ -175,61 +183,17 @@ watch(
   { immediate: true },
 )
 
-const dashboardContextErrors = shallowRef<Record<string, unknown>>({})
-const dashboardContextError = computed(() =>
-  dashboard.contextKey.value
-    ? dashboardContextErrors.value[dashboard.contextKey.value] ?? null
-    : null,
-)
-let dashboardContextController: AbortController | null = null
-
-function setDashboardContextError(scopeKey: string, error: unknown) {
-  if (!scopeKey) return
-  dashboardContextErrors.value = { ...dashboardContextErrors.value, [scopeKey]: error }
-}
-
-function clearDashboardContextError(scopeKey: string) {
-  if (!scopeKey || !(scopeKey in dashboardContextErrors.value)) return
-  dashboardContextErrors.value = Object.fromEntries(
-    Object.entries(dashboardContextErrors.value)
-      .filter(([key]) => key !== scopeKey),
-  )
-}
-
-// Matches the H3Error createError({ statusCode: 403 }) thrown by
-// assertDashboardPathPermission (server/utils/member-access.ts) when a
-// scoped role (editor/member) hits an organization-wide dashboard path.
-function isDashboardPermissionError(error: unknown): boolean {
-  return typeof error === 'object' && error !== null && 'statusCode' in error
-    && (error as { statusCode?: unknown }).statusCode === 403
-}
 
 const dashboardContextErrorMessage = computed(() =>
-  getErrorMessage(dashboardContextError.value, 'Dashboard context request failed'),
+  getErrorMessage(context.error.value, 'Dashboard context request failed'),
 )
 const dashboardContextRequestId = computed(() =>
-  dashboardContextError.value instanceof ApiClientError
-    ? dashboardContextError.value.requestId
+  context.error.value instanceof ApiClientError
+    ? context.error.value.requestId
     : null,
 )
 
-async function retryDashboardContext() {
-  const requestedScope = dashboard.contextKey.value
-  if (!requestedScope) return
-  clearDashboardContextError(requestedScope)
-  dashboardContextController?.abort()
-  const controller = new AbortController()
-  dashboardContextController = controller
-  try {
-    await dashboard.refresh(controller.signal)
-  } catch (error) {
-    if (!controller.signal.aborted && dashboard.contextKey.value === requestedScope) {
-      setDashboardContextError(requestedScope, error)
-    }
-  } finally {
-    if (dashboardContextController === controller) dashboardContextController = null
-  }
-}
+const retryDashboardContext = () => context.refresh()
 
 const organization = dashboard.organization
 const site = dashboard.site
@@ -276,11 +240,6 @@ const siteBase = computed(() => orgBase.value && activeSiteSlug.value ? `${orgBa
 const routeLocationSlug = computed(() => typeof route.params.locationSlug === 'string' ? route.params.locationSlug : null)
 const routeName = computed(() => typeof route.name === 'string' ? route.name : '')
 const isAccountRoute = computed(() => routeName.value.startsWith('dashboard-account'))
-// Set by routes that own their context and have no org/site scope of their own —
-// the onboarding wizard, which loads its own via a dedicated endpoint. Same meaning
-// as in layouts/editor.vue.
-const skipDashboardContext = computed(() => route.meta.skipDashboardContext === true)
-
 const organizationLabel = computed(() => organization.value?.name ?? 'Organization')
 
 const siteLabel = computed(() => site.value?.brand_name ?? site.value?.subdomain ?? 'No site')
@@ -417,83 +376,19 @@ const primaryNavItems = computed(() => mobileNavItems.value)
 // exist until there is one. Gating both together is what left an owner who
 // abandoned onboarding with no way to reach account settings or log out.
 const showNavChrome = computed(() => primaryNavItems.value.length > 0 && !isAccountRoute.value)
-// The bar itself is user-scoped, so it stays on an account route; only its
-// links go, because they are organization-scoped and the account pages are not.
-// Dropping the whole bar there left the profile page with no wordmark, no way
-// back, and no place for a page's own header control to land.
-const showDashboardChrome = computed(() => primaryNavItems.value.length > 0 || skipDashboardContext.value || isAccountRoute.value)
 const topNavHomeTo = computed(() => {
   const routeOrgSlug = typeof route.params.orgSlug === 'string' ? route.params.orgSlug : null
   return routeOrgSlug ? `/dashboard/${encodeURIComponent(routeOrgSlug)}` : '/dashboard'
 })
 const isMenuPageActive = computed(() => isActivePath(menuPageTo.value))
 
-watch(
-  () => dashboard.contextKey.value,
-  async (nextContextKey, previousContextKey) => {
-    dashboardContextController?.abort()
-    dashboardContextController = null
-    if (skipDashboardContext.value || !nextContextKey) return
-    clearDashboardContextError(nextContextKey)
-    if (nextContextKey === previousContextKey || dashboard.state.value) return
-    const controller = new AbortController()
-    dashboardContextController = controller
-    try {
-      await dashboard.refresh(controller.signal)
-    } catch (error) {
-      if (!controller.signal.aborted && dashboard.contextKey.value === nextContextKey) {
-        setDashboardContextError(nextContextKey, error)
-      }
-    } finally {
-      if (dashboardContextController === controller) dashboardContextController = null
-    }
-  },
-)
 
-// Load dashboard context during SSR so nav links render stable org-scoped routes.
-if (!skipDashboardContext.value && routeName.value.startsWith('dashboard') && !dashboard.state.value) {
-  const requestedScope = dashboard.contextKey.value
-  try {
-    await dashboard.refresh()
-  } catch (error) {
-    // A role-permission denial (assertDashboardPathPermission) isn't a transient
-    // failure a retry banner can recover from — it must surface as a real HTTP
-    // error on the initial SSR response, not a soft 200 with a "try again" state.
-    // Only during SSR: once the page has already rendered (onMounted/watch
-    // below), the same denial is shown as an inline banner instead, since a full
-    // error page would be worse UX for an in-app navigation the user just made.
-    if (import.meta.server && isDashboardPermissionError(error)) throw error
-    if (requestedScope && dashboard.contextKey.value === requestedScope) {
-      setDashboardContextError(requestedScope, error)
-    }
-  }
-}
 
 onMounted(async () => {
-  if (routeName.value.startsWith('dashboard') && !dashboard.state.value && !dashboardContextError.value) {
-    dashboardContextController?.abort()
-    const controller = new AbortController()
-    dashboardContextController = controller
-    try {
-      await dashboard.refresh(controller.signal)
-    } catch (error) {
-      if (!controller.signal.aborted && dashboard.contextKey.value) {
-        setDashboardContextError(dashboard.contextKey.value, error)
-      }
-    } finally {
-      if (dashboardContextController === controller) dashboardContextController = null
-    }
-  }
-
   // Track dashboard visit
   if (activeSiteId.value) {
     trackDashboardVisited(scope.value, activeSiteId.value)
   }
-})
-
-onBeforeUnmount(() => {
-  dashboardContextController?.abort()
-  dashboardContextController = null
 })
 
 async function stopImpersonating() {

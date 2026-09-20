@@ -82,9 +82,6 @@
                   {{ t('saya.header.locations') }}
                 </NuxtLink>
                 <div class="my-1 border-t border-default" />
-                <NuxtLink v-if="hasOrderLinks && !isExperienceSite" :to="localePath('/order')" class="rounded-full px-4 py-3 text-sm font-semibold text-default hover:bg-muted" @click="closeMobileNav">
-                  {{ t('saya.header.order_now') }}
-                </NuxtLink>
                 <NuxtLink v-if="!isExperienceSite" :to="localePath('/reservations')" class="rounded-full px-4 py-3 text-sm text-default hover:bg-muted" @click="closeMobileNav">
                   {{ t('saya.header.reservations') }}
                 </NuxtLink>
@@ -180,18 +177,7 @@ const showExperiences = computed(() => props.hasBookableProducts)
 const productCollectionLabel = computed(() => productPresentation.value?.locationCollectionSegment === 'menu'
   ? t('saya.header.menu')
   : t('saya.footer.products'))
-const hasOrderLinks = computed(() =>
-  props.locations.some((loc: ApiRecord) => loc.grab_url || loc.uber_eats_url || loc.foodpanda_url)
-)
-
-const primaryCtaPath = computed(() => {
-  if (hasOrderLinks.value && !isExperienceSite.value) return '/order'
-  return verticalCopy.value.ctaRoute
-})
-
-const primaryCtaLabel = computed(() => {
-  if (hasOrderLinks.value && !isExperienceSite.value) return t('saya.header.order_now')
-  return verticalCopy.value.reserveCta
-})
+const primaryCtaPath = computed(() => verticalCopy.value.ctaRoute)
+const primaryCtaLabel = computed(() => verticalCopy.value.reserveCta)
 
 </script>

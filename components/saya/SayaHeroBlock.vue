@@ -33,7 +33,6 @@ const heroData = computed(() => {
     },
     eyebrow: blockText(props.block.data.eyebrow),
     locations: locations.value,
-    hasOrderLinks: locations.value.some(location => location.grab_url || location.uber_eats_url || location.foodpanda_url),
     ctaRoute: blockText(props.block.data.cta_url),
     reserveCta: blockText(props.block.data.cta_label),
     viewMenuRoute: blockText(props.block.data.secondary_url),

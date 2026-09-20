@@ -22,27 +22,22 @@
     </template>
   </DashboardListEditor>
 
-  <UDashboardPanel v-else id="site-page-block-record">
-    <template #header>
-      <UDashboardNavbar :title="recordTitle" :toggle="false">
-        <template #leading>
-          <DashboardNavbarLeading :to="collectionPath" :label="noun.plural" />
-        </template>
-      </UDashboardNavbar>
-    </template>
+  <template v-else>
+    <UDashboardPanel
+      id="site-page-block-record"
+      :class="hasDetail ? 'hidden lg:flex' : undefined"
+      :default-size="hasDetail ? 32 : undefined"
+    >
+      <template #header>
+        <UDashboardNavbar :title="recordTitle" :toggle="false">
+          <template #leading>
+            <DashboardNavbarLeading :to="collectionPath" :label="noun.plural" />
+          </template>
+        </UDashboardNavbar>
+      </template>
 
-    <template #body>
-      <EditorPaneShell
-        has-detail
-        :detail-title="detailTitle"
-        :dismiss-to="recordSections.length ? recordPath : collectionPath"
-        :show-actions="!recordSections.length || Boolean(openLeaf)"
-        :saving="saving"
-        :save-disabled="saveDisabled"
-        @cancel="cancel"
-        @save="save"
-      >
-        <template #index>
+      <template #body>
+        <div class="mx-auto w-full" :class="hasDetail ? 'max-w-xl' : 'max-w-3xl'">
           <UAlert v-if="errorMessage" class="mb-6" color="error" variant="soft" icon="i-lucide-triangle-alert" :description="errorMessage" />
           <!--
             A record with one concern is the leaf; the list stays beside it. A
@@ -70,9 +65,25 @@
               </button>
             </template>
           </DashboardListEditor>
-        </template>
+        </div>
+      </template>
+    </UDashboardPanel>
 
-        <template #detail>
+    <!--
+      The open level is the other column: its own panel, its own header,
+      and Save/Cancel in the panel's own footer slot.
+    -->
+    <UDashboardPanel v-if="hasDetail" id="site-page-block-record-detail">
+      <template #header>
+        <UDashboardNavbar :title="detailTitle" :toggle="false">
+          <template #leading>
+            <DashboardNavbarLeading :to="recordSections.length ? recordPath : collectionPath" label="Back" />
+          </template>
+        </UDashboardNavbar>
+      </template>
+
+      <template #body>
+        <div class="mx-auto w-full max-w-5xl">
           <EditorNavigationList v-if="recordSections.length && !openLeaf" :groups="recordGroups" />
 
           <div v-else-if="record" class="space-y-6">
@@ -163,14 +174,20 @@
               </template>
             </template>
           </div>
-        </template>
-      </EditorPaneShell>
-    </template>
-  </UDashboardPanel>
+        </div>
+      </template>
+
+      <template v-if="!recordSections.length || Boolean(openLeaf)" #footer>
+        <div class="flex shrink-0 items-center justify-between gap-4 border-t border-default px-4 py-3 sm:px-6">
+          <UButton color="neutral" variant="ghost" label="Cancel" @click="cancel" />
+          <UButton :label="'Save'" :loading="saving" :disabled="saveDisabled" @click="save" />
+        </div>
+      </template>
+    </UDashboardPanel>
+  </template>
 </template>
 
 <script setup lang="ts">
-import EditorPaneShell from '~/components/dashboard/EditorPaneShell.vue'
 import EditorNavigationList, { type EditorNavigationGroup } from '~/components/dashboard/EditorNavigationList.vue'
 import DashboardListEditor from '~/components/dashboard/DashboardListEditor.vue'
 import MediaPicker from '~/lib/components/workspace/media/MediaPicker.vue'
@@ -200,6 +217,7 @@ const route = useRoute()
 const blockPath = computed(() => `/dashboard/${String(route.params.orgSlug)}/sites/${String(route.params.siteSlug)}/pages/${props.pageId}/sections/${props.blockId}`)
 const collectionPath = computed(() => `${blockPath.value}/${props.collection}`)
 const frame = useEditorFrame(collectionPath)
+const hasDetail = computed(() => frame.mode.value === 'pair')
 
 const { draft, dirty, ready, revert, commit } = useTenantPageDraft(props.siteId, props.pageId)
 

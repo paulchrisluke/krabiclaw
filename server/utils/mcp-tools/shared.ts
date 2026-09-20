@@ -112,9 +112,6 @@ export const locationObject = {
     facebook_url: { type: ['string', 'null'] },
     instagram_url: { type: ['string', 'null'] },
     tiktok_url: { type: ['string', 'null'] },
-    grab_url: { type: ['string', 'null'] },
-    uber_eats_url: { type: ['string', 'null'] },
-    foodpanda_url: { type: ['string', 'null'] },
     seo_title: { type: ['string', 'null'] },
     seo_description: { type: ['string', 'null'] },
     canonical_url: { type: ['string', 'null'] },
@@ -237,6 +234,34 @@ const mediaPlacementObject = {
   additionalProperties: false,
 }
 
+/**
+ * A block's media as a writer sends it. The same object a read returns, so a
+ * block read from get_blog_post or get_tenant_page can be sent back verbatim:
+ * only asset_id and slot are taken, the delivery fields are ignored. The input
+ * used to accept the two fields alone, and a block echoed with its public_url
+ * was refused as an unknown argument — which is how images went missing.
+ */
+export const contentBlockMediaInputObject = {
+  type: 'object',
+  properties: {
+    asset_id: { type: 'string' },
+    slot: { type: 'string' },
+    sort_order: { type: ['number', 'null'] },
+    public_url: { type: ['string', 'null'] },
+    thumbnail_url: { type: ['string', 'null'] },
+    kind: { type: ['string', 'null'] },
+    alt_text: { type: ['string', 'null'] },
+    file_name: { type: ['string', 'null'] },
+    width: { type: ['number', 'null'] },
+    height: { type: ['number', 'null'] },
+  },
+  required: ['asset_id', 'slot'],
+  additionalProperties: false,
+}
+
+/** A block's own timestamp as a read returns it. Accepted on a whole-document write so a read can be sent back verbatim; the document's expected_updated_at is the concurrency token there. */
+export const contentBlockUpdatedAtInput = { type: ['string', 'null'], description: 'As read. Ignored on a whole-document write.' }
+
 /** The article's leading image block, or null when it opens with text. */
 const blogCoverObject = {
   type: ['object', 'null'],
@@ -259,12 +284,12 @@ const blogContentBlockObject = {
     id: { type: 'string' },
     parent_block_id: { type: ['string', 'null'] },
     type: { type: 'string', enum: [...PUBLICATION_CONTENT_BLOCK_TYPES] },
-    position: { type: 'number' },
     level: { type: ['number', 'null'] },
     data: { type: 'object' },
     media: { type: 'array', items: mediaPlacementObject },
+    updated_at: { type: 'string', description: 'The block\'s own concurrency token, for replace_content_block and delete_content_block.' },
   },
-  required: ['id', 'parent_block_id', 'type', 'position', 'level', 'data', 'media'],
+  required: ['id', 'parent_block_id', 'type', 'level', 'data', 'media', 'updated_at'],
   additionalProperties: false,
 }
 
@@ -822,6 +847,7 @@ const D = Object.freeze(openWorldDestructiveAnnotations())
 
 /** Submission-review contract. Every real public tool is listed explicitly. */
 export const EXPECTED_TOOL_ANNOTATIONS = {
+  append_content_block: W,
   attach_media: W,
   batch_create_products: W,
   create_blog_post: W,
@@ -829,6 +855,7 @@ export const EXPECTED_TOOL_ANNOTATIONS = {
   create_product: W,
   create_tenant_page: W,
   delete_blog_post: D,
+  delete_content_block: D,
   delete_media_asset: D,
   delete_post: D,
   delete_product: D,
@@ -862,7 +889,7 @@ export const EXPECTED_TOOL_ANNOTATIONS = {
   put_resource_localization: D,
   remove_media: D,
   reorder_media: D,
-  replace_blog_content: D,
+  replace_content_block: D,
   save_generated_image: W,
   save_generated_image_file: W,
   set_brand_color: D,
@@ -870,7 +897,6 @@ export const EXPECTED_TOOL_ANNOTATIONS = {
   set_media: D,
   set_workspace_context: BD,
   reconcile_products: D,
-  update_blog_metadata: D,
   update_blog_post: D,
   update_location: D,
   update_media_asset: D,

@@ -23,9 +23,17 @@ export interface CoverMedia {
 export const COVER_SELECT = `cover_placement.asset_id AS cover_asset_id, cover_asset.public_url AS cover_public_url, cover_asset.thumbnail_url AS cover_thumbnail_url,
       cover_asset.kind AS cover_kind, cover_asset.alt_text AS cover_alt_text, cover_asset.width AS cover_width, cover_asset.height AS cover_height`
 
-/** Joins the leading image block and its active asset for the document aliased `document`. */
+/**
+ * Joins the leading image block and its active asset for the document aliased
+ * `document`. One block, by construction: the join is on the block's id, chosen
+ * by a subquery, so a document whose rows disagree about position 0 still
+ * yields one row rather than one per block.
+ */
 export function coverJoinSql(document: string) {
-  return `LEFT JOIN content_blocks cover_block ON cover_block.document_id = ${document}.id AND cover_block.parent_block_id IS NULL AND cover_block.position = 0 AND cover_block.type = 'image'
+  return `LEFT JOIN content_blocks cover_block ON cover_block.id = (
+      SELECT lead.id FROM content_blocks lead
+       WHERE lead.document_id = ${document}.id AND lead.parent_block_id IS NULL AND lead.position = 0 AND lead.type = 'image'
+       ORDER BY lead.created_at, lead.id LIMIT 1)
     LEFT JOIN media_placements cover_placement ON cover_placement.owner_type = 'content_block' AND cover_placement.owner_id = cover_block.id AND cover_placement.slot = 'media' AND cover_placement.sort_order = 0 AND cover_placement.status = 'active'
     LEFT JOIN media_assets cover_asset ON cover_asset.id = cover_placement.asset_id AND cover_asset.status = 'active'`
 }

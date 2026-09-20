@@ -1,49 +1,57 @@
 <template>
-  <div class="space-y-6">
-    <div class="flex flex-wrap items-center justify-end gap-2">
-    <UButton
-      :to="`${locationsPath}/new`"
-      icon="i-lucide-plus"
-      color="neutral"
-      variant="soft"
-      square
-      :aria-label="`Add a ${locationNoun}`"
-    />
-    </div>
+  <UDashboardPanel id="site-locations">
+    <template #header>
+      <UDashboardNavbar :title="'Locations'" :toggle="false">
+        <template #leading>
+          <DashboardNavbarLeading v-if="sitePaths?.site" :to="sitePaths?.site" label="Site" />
+        </template>
+      </UDashboardNavbar>
+    </template>
 
-  <!--
-    The skeleton borrows the selector's own grid and card ratio, so the page
-    does not jump when the locations arrive.
-  -->
-  <div v-if="pending" class="space-y-6">
-    <div class="grid grid-cols-[repeat(auto-fill,minmax(min(100%,18rem),1fr))] gap-6">
-      <USkeleton v-for="index in 2" :key="index" class="aspect-[20/19] rounded-2xl" />
-    </div>
-  </div>
+    <template #body>
+      <div class="mx-auto w-full max-w-3xl">
+        <div class="space-y-6">
+          <div class="flex flex-wrap items-center justify-end gap-2">
+          <UButton
+            :to="`${locationsPath}/new`"
+            icon="i-lucide-plus"
+            color="neutral"
+            variant="soft"
+            square
+            :aria-label="`Add a ${locationNoun}`"
+          />
+          </div>
 
-  <div
-    v-else-if="!locations.length"
-    class="rounded-2xl border border-default bg-elevated px-6 py-20 text-center"
-  >
-    <div class="mx-auto flex size-14 items-center justify-center rounded-full bg-muted">
-      <UIcon name="i-lucide-map-pin" class="size-6 text-muted" />
-    </div>
-    <h2 class="mt-5 text-base font-semibold text-highlighted">No {{ locationsLabel.toLowerCase() }} yet</h2>
-    <UButton
-      :label="`Add your first ${locationNoun}`"
-      icon="i-lucide-plus"
-      class="mt-6"
-      :to="`${locationsPath}/new`"
-    />
-  </div>
+        <!--
+          The skeleton borrows the selector's own grid and card ratio, so the page
+          does not jump when the locations arrive.
+        -->
+        <div
+          v-if="!locations.length"
+          class="rounded-2xl border border-default bg-elevated px-6 py-20 text-center"
+        >
+          <div class="mx-auto flex size-14 items-center justify-center rounded-full bg-muted">
+            <UIcon name="i-lucide-map-pin" class="size-6 text-muted" />
+          </div>
+          <h2 class="mt-5 text-base font-semibold text-highlighted">No {{ locationsLabel.toLowerCase() }} yet</h2>
+          <UButton
+            :label="`Add your first ${locationNoun}`"
+            icon="i-lucide-plus"
+            class="mt-6"
+            :to="`${locationsPath}/new`"
+          />
+        </div>
 
-  <DashboardSiteLocationSelector
-    v-else
-    :items="selectorItems"
-    missing-image-label="No hero photo"
-    missing-image-hint="Add one under this location's photos."
-  />
-  </div>
+        <DashboardSiteLocationSelector
+          v-else
+          :items="selectorItems"
+          missing-image-label="No hero photo"
+          missing-image-hint="Add one under this location's photos."
+        />
+        </div>
+      </div>
+    </template>
+  </UDashboardPanel>
 </template>
 
 <script setup lang="ts">
@@ -57,7 +65,6 @@ definePageMeta({ layout: 'dashboard' })
 const dashboard = useDashboardSite()
 const { sitePaths } = useDashboardSiteLinks()
 
-const pending = dashboard.pending
 const locations = computed(() => dashboard.locations.value)
 
 const locationsPath = computed(() => {
