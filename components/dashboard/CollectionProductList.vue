@@ -301,13 +301,17 @@ function openExisting(item: { row: Product }) {
   return navigateTo(`${collectionPath.value}/${item.row.id}`)
 }
 
+// Resets this list's own edit state when the catalog underneath it changes.
+// It does not refetch: the catalog is one keyed `useAsyncData` whose key holds
+// the location, so it reloads itself. Calling `refresh` here as well turned
+// `pending` true for every level sharing that key, and the server rendered the
+// catalog column as skeletons while the payload beside it already held the rows.
 watch([locationId, collectionId], () => {
   orderDirty.value = false
   localOrder.value = null
   editing.value = false
   moveDialogOpen.value = false
   selected.value = []
-  void load()
 }, { immediate: true })
 
 </script>

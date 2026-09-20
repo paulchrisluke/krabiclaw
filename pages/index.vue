@@ -11,6 +11,7 @@
 </template>
 
 <script setup lang="ts">
+import { authClient } from '~/lib/auth-client'
 definePageMeta({ layout: false })
 
 const { isPlatform, siteId } = useTenantSite()
@@ -30,8 +31,14 @@ if (!isPlatform && !siteId) {
 // a second account. The marketing homepage is for people who do not have an
 // account yet; everyone else goes to their dashboard. Anonymous visitors and
 // crawlers are untouched, so the cached public page is unchanged.
-if (isPlatform) {
-  const { user } = await useAuthSession()
-  if (user.value) await navigateTo('/api/post-login', { external: true, redirectCode: 302 })
+if (isPlatform && import.meta.client) {
+  const session = authClient.useSession()
+  watchEffect(() => {
+    // `isPending` is not "signed out": redirecting on an unresolved session
+    // would bounce every anonymous visitor, and treating it as signed-in would
+    // bounce nobody. Only a resolved session with a user redirects.
+    if (session.value.isPending) return
+    if (session.value.data?.user) navigateTo('/api/post-login', { external: true, redirectCode: 302 })
+  })
 }
 </script>

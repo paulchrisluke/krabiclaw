@@ -6,8 +6,18 @@
   -->
   <NuxtPage v-if="rendersStandalone" />
 
-  <UDashboardPanel v-else id="site-hub">
-    <template #header>
+  <!--
+    Two columns, two panels. `UDashboardPanel` already carries the divider
+    (`lg:not-last:border-e`), the scroll container and the body's padding.
+    Below `lg` the open level is the whole screen and this one is not drawn.
+  -->
+  <template v-else>
+    <UDashboardPanel
+      id="site-hub"
+      :class="hasDetail ? 'hidden lg:flex' : undefined"
+      :default-size="hasDetail ? 32 : undefined"
+    >
+      <template #header>
       <UDashboardNavbar :title="siteName || 'Site'" :toggle="false">
         <template #leading>
           <DashboardNavbarLeading :to="`${orgPaths.org}/sites`" label="Sites" />
@@ -26,15 +36,8 @@
       </UDashboardNavbar>
     </template>
 
-    <template #body>
-      <EditorPaneShell
-        :has-detail="hasDetail"
-        :detail-title="detailTitle"
-        :dismiss-to="sitePath"
-        wide-detail
-        hide-detail-heading
-      >
-        <template #index>
+      <template #body>
+        <div class="mx-auto w-full" :class="hasDetail ? 'max-w-xl' : 'max-w-3xl'">
           <div v-if="overviewPending" class="space-y-4">
             <USkeleton class="h-40 w-full rounded-2xl" />
             <USkeleton v-for="index in 5" :key="index" class="h-20 rounded-2xl" />
@@ -72,23 +75,22 @@
 
             <EditorNavigationList :groups="sectionGroups" :active-item="activeSection" variant="cards" />
           </div>
-        </template>
+        </div>
+      </template>
+    </UDashboardPanel>
 
-        <template #detail>
-          <NuxtPage />
-        </template>
-      </EditorPaneShell>
+    <!-- The open child owns the other column, header and all. -->
+    <NuxtPage v-if="hasDetail" />
 
-      <div v-if="publicSiteUrl && !hasDetail" class="pointer-events-none fixed inset-x-0 bottom-[calc(var(--kc-dashboard-bottom-nav)+1.25rem)] z-20 flex justify-center px-4 md:bottom-5">
-        <UButton :to="publicSiteUrl" target="_blank" icon="i-lucide-external-link" label="View site" class="pointer-events-auto rounded-full px-5 shadow-lg" />
-      </div>
-    </template>
-  </UDashboardPanel>
+    <div v-if="publicSiteUrl && !hasDetail" class="pointer-events-none fixed inset-x-0 bottom-[calc(var(--kc-dashboard-bottom-nav)+1.25rem)] z-20 flex justify-center px-4 md:bottom-5">
+      <UButton :to="publicSiteUrl" target="_blank" icon="i-lucide-external-link" label="View site" class="pointer-events-auto rounded-full px-5 shadow-lg" />
+    </div>
+  </template>
 </template>
 
 <script setup lang="ts">
+import { authClient } from '~/lib/auth-client'
 import EditorNavigationList from '~/components/dashboard/EditorNavigationList.vue'
-import EditorPaneShell from '~/components/dashboard/EditorPaneShell.vue'
 import { parseCmsFeatureOverrideDelta, resolveCmsCapabilities } from '~/config/cms-registry'
 import { resolvePublicTemplate } from '~/utils/template-registry'
 import { hasPlatformAdminPermission } from '~/utils/platform-admin-access'
@@ -101,7 +103,6 @@ definePageMeta({ layout: 'dashboard' })
 const route = useRoute()
 const dashboardApi = useDashboardApi()
 const dashboard = useDashboardSite()
-const requestEvent = useRequestEvent()
 const { orgPaths } = useDashboardSiteLinks()
 
 // The frame comes first, and before any `await`. `useEditorFrame` provides and
@@ -111,7 +112,6 @@ const { orgPaths } = useDashboardSiteLinks()
 const sitePath = computed(() => `/dashboard/${String(route.params.orgSlug)}/sites/${String(route.params.siteSlug)}`)
 const frame = useEditorFrame(sitePath)
 
-if (!dashboard.state.value) await dashboard.refresh()
 const siteId = dashboard.siteId.value
 if (!siteId) throw createError({ statusCode: 404, statusMessage: 'Site not found' })
 
@@ -134,7 +134,8 @@ const canManageSite = computed(() => dashboard.siteAccess.value !== 'location')
 const siteDomain = computed(() => dashboard.site.value?.custom_domain ?? null)
 const publicSiteUrl = computed(() => dashboard.site.value?.public_url || '')
 
-const { user: currentUser } = await useAuthSession()
+const session = authClient.useSession()
+const currentUser = computed(() => session.value.data?.user ?? null)
 const template = computed(() => resolvePublicTemplate({ themeId: dashboard.site.value?.theme_id, vertical: dashboard.site.value?.vertical }).slug)
 const vertical = computed(() => {
   const raw = dashboard.site.value?.vertical
@@ -145,39 +146,13 @@ const capabilities = computed(() => resolveCmsCapabilities(vertical.value, templ
   site: parseCmsFeatureOverrideDelta(dashboard.site.value?.feature_overrides),
 }))
 
-const { data: overviewData, pending, error: overviewError, refresh } = await useAsyncData(`dashboard-home-${siteId}`, async (_nuxtApp, { signal }) => {
-  if (import.meta.server) {
-    if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Request context unavailable' })
-    const organization = dashboard.organization.value
-    if (!organization) throw createError({ statusCode: 403, statusMessage: 'Dashboard organization unavailable' })
-    const [{ cloudflareEnv }, { getDashboardHomeData }, { assertSiteWideAccess, memberAccessPrincipal, resolveMembership }, { getAuthSession }] = await Promise.all([
-      import('~/server/utils/api-response'),
-      import('~/server/utils/dashboard-home'),
-      import('~/server/utils/member-access'),
-      import('~/server/utils/auth'),
-    ])
-    const environment = cloudflareEnv(requestEvent)
-    const db = environment.db
-    if (!db) throw createError({ statusCode: 500, statusMessage: 'Database not available' })
-    const session = await getAuthSession(requestEvent, environment)
-    if (!session?.user?.id) throw createError({ statusCode: 401, statusMessage: 'Authentication required' })
-    // `organization` here is the rendered payload's organization, not a
-    // membership this request resolved: its id reached the server through the
-    // route. Resolve the membership for (that id, this session) before it
-    // authorizes anything.
-    const membership = await resolveMembership(environment, { userId: session.user.id, organizationId: organization.id })
-    if (!membership) throw createError({ statusCode: 403, statusMessage: 'Dashboard organization unavailable' })
-    const principal = memberAccessPrincipal(membership, { env: environment, siteId })
-    await assertSiteWideAccess(db, principal)
-    return await getDashboardHomeData(db, membership.organizationId, siteId, principal)
-  }
-  return await dashboardApi<DashboardHomeData>('/api/dashboard/home', {
+const { data: overviewData, pending, error: overviewError, refresh } = await useAsyncData(`dashboard-home-${siteId}`, (_nuxtApp, { signal }) =>
+  dashboardApi<DashboardHomeData>('/api/dashboard/home', {
     signal,
     validate: (value): value is DashboardHomeData => isRecord(value)
       && Array.isArray(value.locations) && isRecord(value.settings)
       && Array.isArray(value.pages) && Array.isArray(value.media) && Array.isArray(value.links),
-  })
-}, {
+  }), {
   // While a child route owns the chrome — the page editor, the blog editor,
   // media, settings, a location — this hub's body is not rendered at all
   // (`rendersStandalone` above swaps the whole panel for <NuxtPage/>), so
@@ -196,8 +171,11 @@ watch(rendersStandalone, (standalone) => {
 // Pending, or not started yet because the hub was reached from a child route.
 // A failed read is neither: reporting it as pending left the skeletons up for
 // good, with nothing on screen saying what had happened.
+// In flight AND nothing to show. On `pending` alone a refetch replaced the
+// loaded hub with a skeleton; without `pending` the skeleton outlived a
+// finished request that returned nothing.
 const overviewPending = computed(() =>
-  !overviewError.value && (pending.value || !overviewData.value))
+  !overviewError.value && pending.value && !overviewData.value)
 const overviewErrorMessage = computed(() =>
   overviewError.value ? getErrorMessage(overviewError.value, 'Failed to load this site') : null)
 
@@ -272,15 +250,7 @@ const sectionGroups = computed(() => {
   ].filter(group => group.items.length > 0)
 })
 
-const detailTitle = computed(() => {
-  for (const group of sectionGroups.value) {
-    const match = group.items.find(item => item.id === activeSection.value)
-    if (match) return match.label
-  }
-  return ''
-})
-
-// Tailwind's `lg`, which is where EditorPaneShell puts the pane and where
+// Tailwind's `lg`, which is where the second panel appears and where
 // every other split in the dashboard sits. Kept as one constant per hub so the
 // redirect and the layout cannot disagree about whether a pane exists.
 const PANE_BREAKPOINT = '(min-width: 1024px)'

@@ -1,11 +1,9 @@
 <template>
   <section class="space-y-6">
-    <header>
-      <h1 class="min-w-0 truncate text-2xl font-semibold text-highlighted">{{ catalogTitle }}</h1>
-      <p class="mt-2 text-sm text-muted">{{ description }}</p>
-    </header>
+    <!-- The panel's navbar names this column, so the body says only what it is for. -->
+    <p class="text-sm text-muted">{{ description }}</p>
 
-    <div v-if="pending" class="space-y-3">
+    <div v-if="loading" class="space-y-3">
       <USkeleton v-for="index in 2" :key="index" class="h-28 rounded-2xl" />
     </div>
 
@@ -59,7 +57,11 @@ const productsPath = computed(() => `${locationPath.value}/products`)
 const openSurface = computed(() => String(route.params.surface ?? '') || null)
 
 const catalog = useLocationProductCatalog(siteId, locationId)
-const pending = catalog.pending
+// A skeleton means "there is nothing to show yet", not "a refetch is in
+// flight". Keyed on `pending` alone, a server render that had the rows in hand
+// still drew the placeholder, and the client hydrated the real list over it --
+// the catalog column's hydration mismatch.
+const loading = computed(() => catalog.pending.value && !catalog.collections.value.length && !catalog.products.value.length)
 const counts = computed(() => countCatalog(catalog.products.value))
 const catalogTitle = computed(() => catalogLabel(vertical, counts.value))
 const loadError = computed(() => (catalog.error.value ? getErrorMessage(catalog.error.value, `Failed to load ${catalogTitle.value.toLowerCase()}`) : null))
@@ -88,6 +90,4 @@ const surfaceGroups = computed<EditorNavigationGroup[]>(() => [{
 const description = computed(() => (surfaceGroups.value[0]!.items.length > 1
   ? 'Customers read each of these separately.'
   : `Everything this location offers, in the order customers read it.`))
-
-watch(locationId, () => { void catalog.refresh() }, { immediate: true })
 </script>

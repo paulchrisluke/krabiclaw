@@ -36,23 +36,10 @@ const dashboardApi = useDashboardApi()
 const siteId = await useDashboardSiteId()
 const pagesPath = computed(() => `/dashboard/${String(route.params.orgSlug)}/sites/${String(route.params.siteSlug)}/pages`)
 
-const requestEvent = useRequestEvent()
 const { data, pending, error, refresh } = await useAsyncData(
   `tenant-pages-${siteId}`,
-  async () => {
-    // On the server the list is read straight from D1; going back out over HTTP
-    // to our own endpoint would cost a round trip during render, and rendering
-    // the empty state server-side only to replace it on the client is a
-    // hydration mismatch the visitor sees flash.
-    if (import.meta.server) {
-      if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Request context unavailable' })
-      const { loadDashboardTenantPages } = await import('~/server/utils/dashboard-editor-resources')
-      const resource = await loadDashboardTenantPages(requestEvent, siteId)
-      return { pages: resource.pages as unknown as TenantPageListRow[] }
-    }
-    return await dashboardApi<{ pages: TenantPageListRow[] }>(`/api/editor/sites/${siteId}/pages`, { validate: isTenantPageListResponse })
-  },
-  { lazy: import.meta.client },
+  () => dashboardApi<{ pages: TenantPageListRow[] }>(`/api/editor/sites/${siteId}/pages`, { validate: isTenantPageListResponse }),
+  { lazy: true },
 )
 
 const loadError = computed(() => (error.value ? getErrorMessage(error.value, 'Failed to load pages') : null))

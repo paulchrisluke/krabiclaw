@@ -6,7 +6,7 @@
 import OnboardingStepScreen from '~/lib/components/workspace/onboarding/OnboardingStepScreen.vue'
 import { onboardingStep, onboardingStepPath, useOnboardingSteps } from '~/composables/useOnboardingFlow'
 
-definePageMeta({ layout: 'dashboard', skipDashboardContext: true })
+definePageMeta({ layout: 'dashboard' })
 
 const route = useRoute()
 const router = useRouter()

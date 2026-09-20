@@ -1,41 +1,55 @@
 <template>
-  <div class="space-y-6">
-    <p class="text-sm text-muted">
-      Every account on the platform. Impersonating opens that person's dashboard exactly as they see it; use their
-      own pages for domains, billing, members and inbox, then stop impersonating from the banner.
-    </p>
+  <UDashboardPanel id="site-people">
+    <template #header>
+      <UDashboardNavbar :title="'People'" :toggle="false">
+        <template #leading>
+          <DashboardNavbarLeading v-if="sitePaths?.site" :to="sitePaths?.site" label="Site" />
+        </template>
+      </UDashboardNavbar>
+    </template>
 
-    <UInput v-model="search" icon="i-lucide-search" placeholder="Search by email" class="w-full max-w-md" />
+    <template #body>
+      <div class="mx-auto w-full max-w-3xl">
+        <div class="space-y-6">
+          <p class="text-sm text-muted">
+            Every account on the platform. Impersonating opens that person's dashboard exactly as they see it; use their
+            own pages for domains, billing, members and inbox, then stop impersonating from the banner.
+          </p>
 
-    <UAlert v-if="impersonateError" color="error" variant="soft" icon="i-lucide-circle-alert" :description="impersonateError" />
+          <UInput v-model="search" icon="i-lucide-search" placeholder="Search by email" class="w-full max-w-md" />
 
-    <UAlert v-if="loadError" color="error" variant="soft" title="Could not load accounts" :description="loadError" />
+          <UAlert v-if="impersonateError" color="error" variant="soft" icon="i-lucide-circle-alert" :description="impersonateError" />
 
-    <div v-else-if="loading" class="space-y-2">
-      <USkeleton v-for="i in 6" :key="i" class="h-12 rounded-lg" />
-    </div>
+          <UAlert v-if="loadError" color="error" variant="soft" title="Could not load accounts" :description="loadError" />
 
-    <ul v-else class="divide-y divide-default rounded-2xl border border-default">
-      <li v-for="user in users" :key="user.id" class="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
-        <div class="min-w-0">
-          <p class="truncate text-sm font-medium text-highlighted">{{ user.name || user.email }}</p>
-          <p class="truncate text-xs text-muted">{{ user.email }}<span v-if="user.role && user.role !== 'user'"> · {{ user.role }}</span><span v-if="user.banned"> · banned</span></p>
+          <div v-else-if="loading" class="space-y-2">
+            <USkeleton v-for="i in 6" :key="i" class="h-12 rounded-lg" />
+          </div>
+
+          <ul v-else class="divide-y divide-default rounded-2xl border border-default">
+            <li v-for="user in users" :key="user.id" class="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+              <div class="min-w-0">
+                <p class="truncate text-sm font-medium text-highlighted">{{ user.name || user.email }}</p>
+                <p class="truncate text-xs text-muted">{{ user.email }}<span v-if="user.role && user.role !== 'user'"> · {{ user.role }}</span><span v-if="user.banned"> · banned</span></p>
+              </div>
+              <UButton
+                size="xs"
+                color="neutral"
+                variant="soft"
+                :disabled="user.id === currentUserId"
+                :loading="impersonatingUserId === user.id"
+                @click="impersonate(user.id)"
+              >
+                Impersonate
+              </UButton>
+            </li>
+            <li v-if="!users.length" class="px-4 py-8 text-center text-sm text-muted">No accounts match.</li>
+          </ul>
+          <p v-if="total > users.length" class="text-xs text-muted">Showing {{ users.length }} of {{ total }}. Narrow the search to find the rest.</p>
         </div>
-        <UButton
-          size="xs"
-          color="neutral"
-          variant="soft"
-          :disabled="user.id === currentUserId"
-          :loading="impersonatingUserId === user.id"
-          @click="impersonate(user.id)"
-        >
-          Impersonate
-        </UButton>
-      </li>
-      <li v-if="!users.length" class="px-4 py-8 text-center text-sm text-muted">No accounts match.</li>
-    </ul>
-    <p v-if="total > users.length" class="text-xs text-muted">Showing {{ users.length }} of {{ total }}. Narrow the search to find the rest.</p>
-  </div>
+      </div>
+    </template>
+  </UDashboardPanel>
 </template>
 
 <script setup lang="ts">
@@ -44,12 +58,16 @@ import { authClient } from '~/lib/auth-client'
 // KrabiClaw's own site gives a Better Auth admin the one platform-only tool: pick
 // a person and act as them. Everything else is that tenant's ordinary dashboard.
 definePageMeta({ layout: 'dashboard' })
+
+const { sitePaths } = useDashboardSiteLinks()
 useSeoMeta({ title: 'People | KrabiClaw Dashboard', robots: 'noindex, nofollow' })
 
 interface PlatformUser { id: string; name: string | null; email: string; role?: string | null; banned?: boolean | null }
 
 const impersonateError = ref<string | null>(null)
-const { user: currentUser, refresh: refreshSession } = await useAuthSession()
+const session = authClient.useSession()
+const currentUser = computed(() => session.value.data?.user ?? null)
+const refreshSession = () => session.value.refetch()
 const currentUserId = computed(() => currentUser.value?.id ?? null)
 
 const search = ref('')

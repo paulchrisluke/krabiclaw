@@ -102,27 +102,14 @@ const eventTypeOptions = computed(() => [
 ])
 
 interface Member { userId: string; name: string }
-const requestEvent = useRequestEvent()
 const membersKey = computed(() => `dashboard-activity-members-${String(route.params.orgSlug ?? '')}`)
 // Not awaited: the events read below does not depend on it (eventQuery is built
 // from the filters, not from members), and its only consumer is the reactive
 // actorOptions computed. Awaiting it here made the feed's two independent reads
 // into two serial round trips before anything could render.
-const { data: membersData } = useAsyncData<{ members: Member[] }>(membersKey, async () => {
-  if (import.meta.server) {
-    if (!requestEvent || !dashboard.organization.value?.id) {
-      throw createError({ statusCode: 500, statusMessage: 'Dashboard member context unavailable' })
-    }
-    const [{ cloudflareEnv }, { getOrganizationMembersData }] = await Promise.all([
-      import('~/server/utils/api-response'),
-      import('~/server/utils/dashboard-members'),
-    ])
-    const env = cloudflareEnv(requestEvent)
-    if (!env.DB) throw createError({ statusCode: 500, statusMessage: 'Database not available' })
-    const result = await getOrganizationMembersData(env, dashboard.organization.value.id)
-    return { members: result.members }
-  }
-  return await dashboardApi<{ members: Member[] }>('/api/dashboard/members', {
+const { data: membersData } = useAsyncData<{ members: Member[] }>(
+  membersKey,
+  () => dashboardApi<{ members: Member[] }>('/api/dashboard/members', {
     validate: (value): value is { members: Member[] } =>
       isRecord(value)
       && Array.isArray(value.members)
@@ -131,9 +118,8 @@ const { data: membersData } = useAsyncData<{ members: Member[] }>(membersKey, as
         && typeof member.userId === 'string'
         && typeof member.name === 'string',
       ),
-  })
-},
-  { lazy: import.meta.client },
+  }),
+  { lazy: true },
 )
 const actorOptions = computed(() => [
   { label: 'Everyone', value: FILTER_ALL },
@@ -202,28 +188,14 @@ const isEventsResponse = (value: unknown): value is { events: SiteEvent[]; nextC
 
 const { data: eventsData, pending, error: eventsError } = await useAsyncData(
   eventsKey,
-  async () => {
-    if (import.meta.server) {
-      if (!requestEvent || !dashboard.organization.value?.id) {
-        throw createError({ statusCode: 500, statusMessage: 'Dashboard event context unavailable' })
-      }
-      const [{ cloudflareEnv }, { listDashboardEvents }] = await Promise.all([
-        import('~/server/utils/api-response'),
-        import('~/server/utils/dashboard-events'),
-      ])
-      const db = cloudflareEnv(requestEvent).DB
-      if (!db) throw createError({ statusCode: 500, statusMessage: 'Database not available' })
-      return await listDashboardEvents(db, dashboard.organization.value.id, eventQuery.value)
-    }
-    return await dashboardApi<{ events: SiteEvent[]; nextCursor: string | null }>(
-      '/api/dashboard/events',
-      { query: eventQuery.value, validate: isEventsResponse },
-    )
-  },
+  () => dashboardApi<{ events: SiteEvent[]; nextCursor: string | null }>(
+    '/api/dashboard/events',
+    { query: eventQuery.value, validate: isEventsResponse },
+  ),
   // Nuxt blocks navigation on useAsyncData by default; the client does not
   // need to wait for this to paint the route, and `pending` already drives a
   // loading state here.
-  { watch: [eventQuery], lazy: import.meta.client },
+  { watch: [eventQuery], lazy: true },
 )
 const events = ref<SiteEvent[]>([])
 const nextCursor = ref<string | null>(null)

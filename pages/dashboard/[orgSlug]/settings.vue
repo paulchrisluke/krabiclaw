@@ -1,39 +1,48 @@
 <template>
   <NuxtPage v-if="frame.mode.value === 'yield'" />
 
-  <UDashboardPanel
-    v-else
-    id="organization-settings"
-  >
-    <template #header>
-      <UDashboardNavbar title="Organization Settings" :toggle="false">
-        <template #leading>
-          <DashboardNavbarLeading :to="menuPath" label="Menu" />
-        </template>
-      </UDashboardNavbar>
-    </template>
+  <template v-else>
+    <UDashboardPanel
+      id="organization-settings"
+      :class="hasDetail ? 'hidden lg:flex' : undefined"
+      :default-size="hasDetail ? 32 : undefined"
+    >
+      <template #header>
+        <UDashboardNavbar title="Organization Settings" :toggle="false">
+          <template #leading>
+            <DashboardNavbarLeading :to="menuPath" label="Menu" />
+          </template>
+        </UDashboardNavbar>
+      </template>
 
-    <template #body>
-      <EditorPaneShell
-        :has-detail="frame.mode.value === 'pair'"
-        :detail-title="detailTitle"
-        :dismiss-to="settingsPath"
-        :wide-detail="wideDetail"
-      >
-        <template #index>
+      <template #body>
+        <div class="mx-auto w-full" :class="hasDetail ? 'max-w-xl' : 'max-w-3xl'">
           <EditorNavigationList :groups="groups" :active-item="activeItem" />
-        </template>
+        </div>
+      </template>
+    </UDashboardPanel>
 
-        <template #detail>
+    <!-- The open setting is the other column; the settings screens are plain
+         content, so this level gives them the column and the header. -->
+    <UDashboardPanel v-if="hasDetail" id="organization-settings-detail">
+      <template #header>
+        <UDashboardNavbar :title="detailTitle" :toggle="false">
+          <template #leading>
+            <DashboardNavbarLeading :to="settingsPath" label="Settings" />
+          </template>
+        </UDashboardNavbar>
+      </template>
+
+      <template #body>
+        <div class="mx-auto w-full" :class="wideDetail ? 'max-w-5xl' : 'max-w-2xl'">
           <NuxtPage />
-        </template>
-      </EditorPaneShell>
-    </template>
-  </UDashboardPanel>
+        </div>
+      </template>
+    </UDashboardPanel>
+  </template>
 </template>
 
 <script setup lang="ts">
-import EditorPaneShell from '~/components/dashboard/EditorPaneShell.vue'
 import EditorNavigationList from '~/components/dashboard/EditorNavigationList.vue'
 
 definePageMeta({ layout: 'dashboard' })
@@ -43,9 +52,8 @@ const route = useRoute()
 const { orgPaths } = useDashboardSiteLinks()
 const settingsPath = computed(() => orgPaths.value.settings)
 const frame = useEditorFrame(settingsPath)
+const hasDetail = computed(() => frame.mode.value === 'pair')
 
-const dashboard = useDashboardSite()
-if (!dashboard.state.value) await dashboard.refresh()
 
 const { groups, activeItem } = useOrganizationSettingsNavigation()
 

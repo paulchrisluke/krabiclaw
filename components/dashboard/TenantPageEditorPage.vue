@@ -54,33 +54,43 @@
   -->
   <TenantPageSections v-else-if="frame.mode.value === 'yield'" :site-id="siteId" :page-id="pageId" />
 
-  <UDashboardPanel v-else id="site-page">
-    <template #header>
-      <UDashboardNavbar :title="isNew ? 'New page' : draft.title || 'Page'" :toggle="false">
-        <template #leading>
-          <DashboardNavbarLeading :to="pagesPath" label="Pages" />
-        </template>
-      </UDashboardNavbar>
-    </template>
+  <template v-else>
+    <UDashboardPanel
+      id="site-page"
+      :class="hasDetail ? 'hidden lg:flex' : undefined"
+      :default-size="hasDetail ? 32 : undefined"
+    >
+      <template #header>
+        <UDashboardNavbar :title="isNew ? 'New page' : draft.title || 'Page'" :toggle="false">
+          <template #leading>
+            <DashboardNavbarLeading :to="pagesPath" label="Pages" />
+          </template>
+        </UDashboardNavbar>
+      </template>
 
-    <template #body>
-      <EditorPaneShell
-        has-detail
-        :detail-title="openLabel"
-        :dismiss-to="recordPath"
-        show-actions
-        :saving="saving"
-        :save-disabled="saveDisabled"
-        :save-label="saveLabel"
-        @cancel="cancel"
-        @save="saveOpenSection"
-      >
-        <template #index>
+      <template #body>
+        <div class="mx-auto w-full" :class="hasDetail ? 'max-w-xl' : 'max-w-3xl'">
           <UAlert v-if="errorMessage" class="mb-6" color="error" variant="soft" icon="i-lucide-triangle-alert" :description="errorMessage" />
           <EditorNavigationList :groups="navigationGroups" :active-item="openKey" />
-        </template>
+        </div>
+      </template>
+    </UDashboardPanel>
 
-        <template #detail>
+    <!--
+      The open level is the other column: its own panel, its own header,
+      and Save/Cancel in the panel's own footer slot.
+    -->
+    <UDashboardPanel v-if="hasDetail" id="site-page-detail">
+      <template #header>
+        <UDashboardNavbar :title="openLabel" :toggle="false">
+          <template #leading>
+            <DashboardNavbarLeading :to="recordPath" label="Page" />
+          </template>
+        </UDashboardNavbar>
+      </template>
+
+      <template #body>
+        <div class="mx-auto w-full max-w-5xl">
           <TenantPageSections v-if="openKey === 'sections'" :site-id="siteId" :page-id="pageId" />
 
           <UFormField v-else-if="openKey === 'title'" label="Title" required>
@@ -114,14 +124,20 @@
           >
             <UInput v-model="draft.canonical_url" size="xl" placeholder="https://example.com/about" autofocus class="w-full" />
           </UFormField>
-        </template>
-      </EditorPaneShell>
-    </template>
-  </UDashboardPanel>
+        </div>
+      </template>
+
+      <template #footer>
+        <div class="flex shrink-0 items-center justify-between gap-4 border-t border-default px-4 py-3 sm:px-6">
+          <UButton color="neutral" variant="ghost" label="Cancel" @click="cancel" />
+          <UButton :label="saveLabel" :loading="saving" :disabled="saveDisabled" @click="saveOpenSection" />
+        </div>
+      </template>
+    </UDashboardPanel>
+  </template>
 </template>
 
 <script setup lang="ts">
-import EditorPaneShell from '~/components/dashboard/EditorPaneShell.vue'
 import EditorNavigationList, { type EditorNavigationGroup } from '~/components/dashboard/EditorNavigationList.vue'
 import DashboardResourceLocalization from '~/components/dashboard/DashboardResourceLocalization.vue'
 import TenantPageSections from '~/components/dashboard/TenantPageSections.vue'
@@ -151,17 +167,12 @@ const pageId = computed(() => String(route.params.pageId ?? ''))
 const pagesPath = computed(() => `/dashboard/${String(route.params.orgSlug)}/sites/${String(route.params.siteSlug)}/pages`)
 const recordPath = computed(() => `${pagesPath.value}/${pageId.value}`)
 const frame = useEditorFrame(recordPath)
+const hasDetail = computed(() => frame.mode.value === 'pair')
 
 const siteId = await useDashboardSiteId()
 const dashboardApi = useDashboardApi()
 
-const { load, data, error, pending, draft, dirty, revert, commit, isNew, previewUrl } = useTenantPageDraft(siteId, pageId.value)
-
-// The page has to have been read before this renders, or a missing id answers
-// HTTP 200 with the error page painted after hydration: `showError` during the
-// render pass only reaches the payload. The Blog chain awaits its own load for
-// the same reason.
-if (import.meta.server) await load
+const { data, error, pending, draft, dirty, revert, commit, isNew, previewUrl } = useTenantPageDraft(siteId, pageId.value)
 
 // A page that is not there is not a page. A request that failed is a state this
 // surface shows, because the page may well still exist.

@@ -75,119 +75,129 @@
     </template>
   </div>
 
-  <UDashboardPanel v-else :id="panelId">
-    <template #header>
-      <UDashboardNavbar :title="form.title || 'Untitled post'" :toggle="false">
-        <template #leading>
-          <DashboardNavbarLeading :to="postPath" label="Post" />
-        </template>
-        <template #right>
-          <slot name="actions" />
-        </template>
-      </UDashboardNavbar>
-    </template>
-
-    <template #body>
-      <p v-if="actionError" role="alert" class="mb-4 rounded-lg border border-error/30 bg-error/10 px-4 py-2 text-sm text-error">{{ actionError }}</p>
-
-      <EditorPaneShell
-        has-detail
-        :show-actions="section !== 'share'"
-        :saving="savingExplicitly || publishing"
-        :detail-title="sectionLabel"
-        :dismiss-to="postPath"
-        @cancel="cancelSection"
-        @save="saveSection"
-      >
-        <template #index>
-          <EditorNavigationList :groups="settingsGroups" :active-item="section" />
-        </template>
-
-        <template #detail>
-          <template v-if="section === 'category'">
-            <!-- KrabiClaw's own site publishes two collections; a category is the author's own word in both. -->
-            <UFormField v-if="isPlatformTemplate" label="Collection" class="mb-4">
-              <USelect v-model="form.collection" :items="collectionOptions" value-key="value" class="w-full" />
-            </UFormField>
-            <UFormField label="Category">
-              <UInput v-model="form.category" autofocus class="w-full" />
-            </UFormField>
+  <template v-else>
+    <UDashboardPanel :id="panelId" class="hidden lg:flex" :default-size="32">
+      <template #header>
+        <UDashboardNavbar :title="form.title || 'Untitled post'" :toggle="false">
+          <template #leading>
+            <DashboardNavbarLeading :to="postPath" label="Post" />
           </template>
+          <template #right>
+            <slot name="actions" />
+          </template>
+        </UDashboardNavbar>
+      </template>
 
-          <UFormField v-else-if="section === 'tags'" label="Tags" help="Comma separated">
-            <UInput v-model="tagsText" autofocus class="w-full" />
+      <template #body>
+        <div class="mx-auto w-full max-w-xl">
+          <p v-if="actionError" role="alert" class="mb-4 rounded-lg border border-error/30 bg-error/10 px-4 py-2 text-sm text-error">{{ actionError }}</p>
+          <EditorNavigationList :groups="settingsGroups" :active-item="section" />
+        </div>
+      </template>
+    </UDashboardPanel>
+
+    <UDashboardPanel :id="`${panelId}-section`">
+      <template #header>
+        <UDashboardNavbar :title="sectionLabel" :toggle="false">
+          <template #leading>
+            <DashboardNavbarLeading :to="postPath" label="Post" />
+          </template>
+        </UDashboardNavbar>
+      </template>
+
+      <template #body>
+        <div class="mx-auto w-full max-w-2xl">
+        <template v-if="section === 'category'">
+          <!-- KrabiClaw's own site publishes two collections; a category is the author's own word in both. -->
+          <UFormField v-if="isPlatformTemplate" label="Collection" class="mb-4">
+            <USelect v-model="form.collection" :items="collectionOptions" value-key="value" class="w-full" />
           </UFormField>
-
-          <UFormField v-else-if="section === 'excerpt'" label="Excerpt">
-            <UTextarea v-model="form.excerpt" :rows="5" autofocus :placeholder="resolvedExcerpt" class="w-full" />
-            <p class="mt-1 text-xs text-dimmed">{{ form.excerpt ? 'Custom' : `Auto: ${resolvedExcerpt}` }}</p>
-          </UFormField>
-
-          <!--
-            Publishing is a leaf like any other, so it commits through the pane's
-            own Cancel/Save bar. It used to carry its own "Publish now" button in
-            the body as well, which put two commit mechanisms on one screen: the
-            selects saved with the bar, the lifecycle went through a separate
-            endpoint the moment you pressed it. That is the whole reason the CMS
-            felt inconsistent about how you save — a tenant had to learn a second
-            place to look, on exactly one screen.
-
-            Save now carries the lifecycle change too. What the fields say when
-            you press Save is what the post becomes.
-          -->
-          <div v-else-if="section === 'publishing'" class="space-y-5">
-            <UFormField label="Status">
-              <p class="text-sm text-muted">{{ lifecycleLabel }}</p>
-            </UFormField>
-            <UFormField v-if="!post || post.status === 'scheduled'" label="Publish timing">
-              <USelect v-model="publishTiming" :items="['Now', 'Scheduled']" class="w-full" />
-            </UFormField>
-            <UFormField v-if="(!post || post.status === 'scheduled') && publishTiming === 'Scheduled'" label="Scheduled for (UTC)">
-              <UInput v-model="form.scheduled_for" type="datetime-local" step="any" class="w-full" />
-            </UFormField>
-            <UFormField label="Visibility">
-              <USelect v-model="form.visibility" :items="['public', 'unlisted']" class="w-full" />
-            </UFormField>
-          </div>
-
-          <div v-else-if="section === 'search'" class="space-y-5">
-            <div class="rounded-lg border border-default bg-muted p-3">
-              <p class="truncate text-sm text-primary">{{ resolvedSeo.title }}</p>
-              <p class="truncate text-xs text-success">{{ resolvedSeo.canonicalUrl }}</p>
-              <p class="mt-1 line-clamp-2 text-xs text-muted">{{ resolvedSeo.description }}</p>
-            </div>
-            <UFormField label="SEO title"><UInput v-model="form.seo_title" :placeholder="form.title" class="w-full" /></UFormField>
-            <UFormField label="Meta description"><UTextarea v-model="form.seo_description" :rows="4" :placeholder="resolvedExcerpt" class="w-full" /></UFormField>
-          </div>
-
-          <UFormField v-else-if="section === 'share'" label="Share preview">
-            <img v-if="resolvedPrimaryImageUrl" :src="resolvedPrimaryImageUrl" alt="Resolved share preview" class="aspect-video w-full rounded-lg object-cover">
-            <video v-else-if="resolvedPrimaryVideoUrl" :src="resolvedPrimaryVideoUrl" controls muted playsinline class="aspect-video w-full rounded-lg object-cover" />
-            <p v-else class="text-xs text-dimmed">This post has no cover photo, so its share card cannot be generated. Add a picture at the top of the article.</p>
-          </UFormField>
-
-          <div v-else-if="section === 'url'" class="space-y-5">
-            <UFormField label="URL slug">
-              <UInput v-model="form.slug" :disabled="slugResetRequested" autofocus class="w-full" />
-              <div class="mt-1 flex items-center justify-between gap-3">
-                <p class="text-xs text-dimmed">{{ slugResetRequested ? generatedSlug : form.slug || generatedSlug }}</p>
-                <UButton v-if="post?.slug_manually_overridden" size="xs" variant="link" @click="resetSlugOverride">Use automatic slug</UButton>
-              </div>
-            </UFormField>
-            <UCheckbox v-if="post?.first_published_at && form.slug !== post.slug" v-model="form.redirect_old_slug" label="Redirect old URL" />
-          </div>
-
-          <UFormField v-else-if="section === 'canonical'" label="Canonical URL">
-            <UInput v-model="form.canonical_url" autofocus :placeholder="resolvedSeo.canonicalUrl" class="w-full" />
-          </UFormField>
-
-          <UFormField v-else-if="section === 'robots'" label="Robots">
-            <UInput v-model="form.robots" autofocus placeholder="index, follow" class="w-full" />
+          <UFormField label="Category">
+            <UInput v-model="form.category" autofocus class="w-full" />
           </UFormField>
         </template>
-      </EditorPaneShell>
-    </template>
-  </UDashboardPanel>
+
+        <UFormField v-else-if="section === 'tags'" label="Tags" help="Comma separated">
+          <UInput v-model="tagsText" autofocus class="w-full" />
+        </UFormField>
+
+        <UFormField v-else-if="section === 'excerpt'" label="Excerpt">
+          <UTextarea v-model="form.excerpt" :rows="5" autofocus :placeholder="resolvedExcerpt" class="w-full" />
+          <p class="mt-1 text-xs text-dimmed">{{ form.excerpt ? 'Custom' : `Auto: ${resolvedExcerpt}` }}</p>
+        </UFormField>
+
+        <!--
+          Publishing is a leaf like any other, so it commits through the pane's
+          own Cancel/Save bar. It used to carry its own "Publish now" button in
+          the body as well, which put two commit mechanisms on one screen: the
+          selects saved with the bar, the lifecycle went through a separate
+          endpoint the moment you pressed it. That is the whole reason the CMS
+          felt inconsistent about how you save — a tenant had to learn a second
+          place to look, on exactly one screen.
+
+          Save now carries the lifecycle change too. What the fields say when
+          you press Save is what the post becomes.
+        -->
+        <div v-else-if="section === 'publishing'" class="space-y-5">
+          <UFormField label="Status">
+            <p class="text-sm text-muted">{{ lifecycleLabel }}</p>
+          </UFormField>
+          <UFormField v-if="!post || post.status === 'scheduled'" label="Publish timing">
+            <USelect v-model="publishTiming" :items="['Now', 'Scheduled']" class="w-full" />
+          </UFormField>
+          <UFormField v-if="(!post || post.status === 'scheduled') && publishTiming === 'Scheduled'" label="Scheduled for (UTC)">
+            <UInput v-model="form.scheduled_for" type="datetime-local" step="any" class="w-full" />
+          </UFormField>
+          <UFormField label="Visibility">
+            <USelect v-model="form.visibility" :items="['public', 'unlisted']" class="w-full" />
+          </UFormField>
+        </div>
+
+        <div v-else-if="section === 'search'" class="space-y-5">
+          <div class="rounded-lg border border-default bg-muted p-3">
+            <p class="truncate text-sm text-primary">{{ resolvedSeo.title }}</p>
+            <p class="truncate text-xs text-success">{{ resolvedSeo.canonicalUrl }}</p>
+            <p class="mt-1 line-clamp-2 text-xs text-muted">{{ resolvedSeo.description }}</p>
+          </div>
+          <UFormField label="SEO title"><UInput v-model="form.seo_title" :placeholder="form.title" class="w-full" /></UFormField>
+          <UFormField label="Meta description"><UTextarea v-model="form.seo_description" :rows="4" :placeholder="resolvedExcerpt" class="w-full" /></UFormField>
+        </div>
+
+        <UFormField v-else-if="section === 'share'" label="Share preview">
+          <img v-if="resolvedPrimaryImageUrl" :src="resolvedPrimaryImageUrl" alt="Resolved share preview" class="aspect-video w-full rounded-lg object-cover">
+          <video v-else-if="resolvedPrimaryVideoUrl" :src="resolvedPrimaryVideoUrl" controls muted playsinline class="aspect-video w-full rounded-lg object-cover" />
+          <p v-else class="text-xs text-dimmed">This post has no cover photo, so its share card cannot be generated. Add a picture at the top of the article.</p>
+        </UFormField>
+
+        <div v-else-if="section === 'url'" class="space-y-5">
+          <UFormField label="URL slug">
+            <UInput v-model="form.slug" :disabled="slugResetRequested" autofocus class="w-full" />
+            <div class="mt-1 flex items-center justify-between gap-3">
+              <p class="text-xs text-dimmed">{{ slugResetRequested ? generatedSlug : form.slug || generatedSlug }}</p>
+              <UButton v-if="post?.slug_manually_overridden" size="xs" variant="link" @click="resetSlugOverride">Use automatic slug</UButton>
+            </div>
+          </UFormField>
+          <UCheckbox v-if="post?.first_published_at && form.slug !== post.slug" v-model="form.redirect_old_slug" label="Redirect old URL" />
+        </div>
+
+        <UFormField v-else-if="section === 'canonical'" label="Canonical URL">
+          <UInput v-model="form.canonical_url" autofocus :placeholder="resolvedSeo.canonicalUrl" class="w-full" />
+        </UFormField>
+
+        <UFormField v-else-if="section === 'robots'" label="Robots">
+          <UInput v-model="form.robots" autofocus placeholder="index, follow" class="w-full" />
+        </UFormField>
+        </div>
+      </template>
+
+      <template v-if="section !== 'share'" #footer>
+        <div class="flex shrink-0 items-center justify-between gap-4 border-t border-default px-4 py-3 sm:px-6">
+          <UButton color="neutral" variant="ghost" label="Cancel" @click="cancelSection" />
+          <UButton label="Save" :loading="savingExplicitly || publishing" @click="saveSection" />
+        </div>
+      </template>
+    </UDashboardPanel>
+  </template>
 </template>
 
 <script setup lang="ts">
@@ -195,7 +205,6 @@ import { instantDate } from '~/utils/timezone'
 import type { Component } from 'vue'
 import BlogArticleView from '~/components/blog/BlogArticleView.vue'
 import EditorNavigationList, { type EditorNavigationGroup } from '~/components/dashboard/EditorNavigationList.vue'
-import EditorPaneShell from '~/components/dashboard/EditorPaneShell.vue'
 import { ARTICLE_COLLECTIONS, ARTICLE_COLLECTION_SLUGS, type ArticleCollection } from '~/utils/article-collections'
 import { tenantBlogPostPath } from '~/utils/tenant-blog-route'
 import { publicTemplateRegistry } from '~/utils/template-registry'

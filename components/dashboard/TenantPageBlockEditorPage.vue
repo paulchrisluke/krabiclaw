@@ -68,33 +68,43 @@
     :collection="openCollection!"
   />
 
-  <UDashboardPanel v-else id="site-page-block">
-    <template #header>
-      <UDashboardNavbar :title="blockLabel" :toggle="false">
-        <template #leading>
-          <DashboardNavbarLeading :to="sectionsPath" label="Sections" />
-        </template>
-      </UDashboardNavbar>
-    </template>
+  <template v-else>
+    <UDashboardPanel
+      id="site-page-block"
+      :class="hasDetail ? 'hidden lg:flex' : undefined"
+      :default-size="hasDetail ? 32 : undefined"
+    >
+      <template #header>
+        <UDashboardNavbar :title="blockLabel" :toggle="false">
+          <template #leading>
+            <DashboardNavbarLeading :to="sectionsPath" label="Sections" />
+          </template>
+        </UDashboardNavbar>
+      </template>
 
-    <template #body>
-      <EditorPaneShell
-        has-detail
-        :detail-title="openSection?.label"
-        :dismiss-to="blockPath"
-        show-actions
-        :saving="saving"
-        :save-disabled="saveDisabled"
-        :save-label="saveLabel"
-        @cancel="cancel"
-        @save="saveOpenSection"
-      >
-        <template #index>
+      <template #body>
+        <div class="mx-auto w-full" :class="hasDetail ? 'max-w-xl' : 'max-w-3xl'">
           <UAlert v-if="errorMessage" class="mb-6" color="error" variant="soft" icon="i-lucide-triangle-alert" :description="errorMessage" />
           <EditorNavigationList :groups="navigationGroups" :active-item="openSection?.key" />
-        </template>
+        </div>
+      </template>
+    </UDashboardPanel>
 
-        <template #detail>
+    <!--
+      The open level is the other column: its own panel, its own header,
+      and Save/Cancel in the panel's own footer slot.
+    -->
+    <UDashboardPanel v-if="hasDetail" id="site-page-block-detail">
+      <template #header>
+        <UDashboardNavbar :title="openSection?.label" :toggle="false">
+          <template #leading>
+            <DashboardNavbarLeading :to="blockPath" label="Section" />
+          </template>
+        </UDashboardNavbar>
+      </template>
+
+      <template #body>
+        <div class="mx-auto w-full max-w-5xl">
           <TenantPageBlockItemEditor
             v-if="openSection?.kind === 'list'"
             :site-id="siteId"
@@ -110,14 +120,20 @@
             :section-key="openSection.key"
             @split-insert="splitMarkdown"
           />
-        </template>
-      </EditorPaneShell>
-    </template>
-  </UDashboardPanel>
+        </div>
+      </template>
+
+      <template #footer>
+        <div class="flex shrink-0 items-center justify-between gap-4 border-t border-default px-4 py-3 sm:px-6">
+          <UButton color="neutral" variant="ghost" label="Cancel" @click="cancel" />
+          <UButton :label="saveLabel" :loading="saving" :disabled="saveDisabled" @click="saveOpenSection" />
+        </div>
+      </template>
+    </UDashboardPanel>
+  </template>
 </template>
 
 <script setup lang="ts">
-import EditorPaneShell from '~/components/dashboard/EditorPaneShell.vue'
 import EditorNavigationList, { type EditorNavigationGroup } from '~/components/dashboard/EditorNavigationList.vue'
 import TenantPageBlockFields from '~/components/dashboard/TenantPageBlockFields.vue'
 import TenantPageBlockItemEditor from '~/components/dashboard/TenantPageBlockItemEditor.vue'
@@ -150,6 +166,7 @@ const blockId = computed(() => {
 })
 const blockPath = computed(() => `${sectionsPath.value}/${blockId.value}`)
 const frame = useEditorFrame(blockPath)
+const hasDetail = computed(() => frame.mode.value === 'pair')
 
 const { draft, dirty, ready, revert, commit } = useTenantPageDraft(props.siteId, props.pageId)
 const newBlock = useTenantPageNewBlock(props.siteId, props.pageId)

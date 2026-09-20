@@ -12,7 +12,6 @@ export async function useGuestThread(threadId: Ref<string> | ComputedRef<string>
   const dashboard = useDashboardSite()
   const dashboardScope = useDashboardRouteScope()
   const dashboardApi = useDashboardApi(dashboardScope)
-  const requestEvent = useRequestEvent()
 
   const siteId = computed(() => dashboard.siteId.value)
   const key = computed(() => `dashboard-guest-thread:${siteId.value ?? 'pending-site'}:${threadId.value}`)
@@ -23,14 +22,6 @@ export async function useGuestThread(threadId: Ref<string> | ComputedRef<string>
     }
     if (!siteId.value) {
       throw createError({ statusCode: 400, statusMessage: 'Thread detail requires site scope' })
-    }
-    if (import.meta.server) {
-      if (!requestEvent) {
-        throw createError({ statusCode: 500, statusMessage: 'Dashboard request event unavailable' })
-      }
-      const { loadDashboardGuestThread } = await import('~/server/utils/dashboard-guest-threads')
-      const result = await loadDashboardGuestThread(requestEvent, siteId.value, threadId.value)
-      return { thread: result.thread as ThreadDetail }
     }
     return await dashboardApi<{ thread: ThreadDetail }>(
       `/api/dashboard/sites/${siteId.value}/guest-threads/${threadId.value}`,

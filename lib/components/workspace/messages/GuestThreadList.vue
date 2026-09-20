@@ -324,7 +324,6 @@ const capabilities = computed(() => {
 
 const dashboardScope = useDashboardRouteScope()
 const dashboardApi = useDashboardApi(dashboardScope)
-const requestEvent = useRequestEvent()
 const effectiveFeatureSet = computed(() => new Set<ProductFeature>([
   ...(capabilities.value?.pages.map(page => page.feature) ?? []),
   ...(capabilities.value?.managers.map(manager => manager.id) ?? []),
@@ -400,34 +399,6 @@ const {
   }
   if (!dashboardScope.value) {
     throw createError({ statusCode: 400, statusMessage: 'Dashboard route scope is incomplete' })
-  }
-  if (import.meta.server) {
-    if (!requestEvent) {
-      throw createError({ statusCode: 500, statusMessage: 'Dashboard request event unavailable' })
-    }
-    const { loadDashboardGuestThreads, loadOrganizationGuestThreads } = await import(
-      '~/server/utils/dashboard-guest-threads'
-    )
-    if (isOrganizationScope.value) {
-      const result = await loadOrganizationGuestThreads(requestEvent, {
-        type: activeType.value,
-        occurrence: listQuery.value.occurrence,
-        unreadOnly: unreadOnly.value,
-      }, {
-        orgSlug: dashboardScope.value.orgSlug,
-      })
-      return { threads: result.threads as ThreadListItem[] }
-    }
-    if (!siteId.value) {
-      throw createError({ statusCode: 400, statusMessage: 'Messages requires site scope' })
-    }
-    const result = await loadDashboardGuestThreads(requestEvent, siteId.value, {
-      locationId: isLocationScope.value ? selectedLocationId.value : null,
-      type: activeType.value,
-      occurrence: listQuery.value.occurrence,
-      unreadOnly: unreadOnly.value,
-    })
-    return { threads: result.threads as ThreadListItem[] }
   }
   if (isOrganizationScope.value) {
     return await dashboardApi<{ threads: ThreadListItem[] }>('/api/dashboard/guest-threads', {

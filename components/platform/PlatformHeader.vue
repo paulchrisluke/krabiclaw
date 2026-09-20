@@ -154,6 +154,7 @@
 </template>
 
 <script setup lang="ts">
+import { authClient } from '~/lib/auth-client'
 import PlatformCommandSearchTrigger from '~/components/platform/search/PlatformCommandSearchTrigger.vue'
 import PlatformMobileContentNav from '~/components/platform/PlatformMobileContentNav.vue'
 import type { PlatformSearchPaletteSurface } from '~/composables/usePlatformSearchPalette'
@@ -188,8 +189,12 @@ const MORE_ITEMS = [
 ] as const
 
 const route = useRoute()
-// The same hydrated Better Auth session PlatformAccountCta reads; no extra request.
-const { user } = await useAuthSession()
+// The same client-only session read as PlatformAccountCta, gated the same way
+// so the server and the hydrating client agree on the signed-out link.
+const session = authClient.useSession()
+const mounted = ref(false)
+onMounted(() => { mounted.value = true })
+const user = computed(() => mounted.value ? session.value.data?.user ?? null : null)
 const mobileOpen = ref(false)
 const toggleButton = ref<HTMLButtonElement | null>(null)
 const { acquire: acquireScrollLock, release: releaseScrollLock } = useScrollLock()

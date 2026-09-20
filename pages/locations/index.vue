@@ -101,6 +101,7 @@
 </template>
 
 <script setup lang="ts">
+import { authClient } from '~/lib/auth-client'
 import { getTodayHoursLabel } from '~/shared/reservation-hours'
 import { addressPlaceName, formatPostalAddress, type PostalAddress } from '~/utils/postal-address'
 
@@ -108,7 +109,8 @@ definePageMeta({ layout: 'saya' })
 
 const { siteId, site } = useTenantSite()
 if (!siteId) throw createError({ statusCode: 404 })
-const { isAuthenticated } = await useAuthSession()
+const session = authClient.useSession()
+const isAuthenticated = computed(() => Boolean(session.value.data?.user))
 const { locale, localePath, t } = useI18n()
 const locationsCopy = computed(() => getVerticalCopy(unref(site)?.vertical, locale.value))
 

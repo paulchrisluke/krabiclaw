@@ -1,42 +1,53 @@
 <template>
   <NuxtPage v-if="frame.mode.value === 'yield'" />
 
-  <UDashboardPanel v-else id="account-notifications">
-    <template #header>
-      <UDashboardNavbar title="Notifications" :toggle="false">
-        <template #leading>
-          <DashboardNavbarLeading :to="profilePath" label="Account" />
-        </template>
-      </UDashboardNavbar>
-    </template>
+  <template v-else>
+    <UDashboardPanel
+      id="account-notifications"
+      :class="hasDetail ? 'hidden lg:flex' : undefined"
+      :default-size="32"
+    >
+      <template #header>
+        <UDashboardNavbar title="Notifications" :toggle="false">
+          <template #leading>
+            <DashboardNavbarLeading :to="profilePath" label="Account" />
+          </template>
+        </UDashboardNavbar>
+      </template>
 
-    <template #body>
-      <!--
-        `show-desktop-detail` so the pair is drawn at rest, like every other
-        hub in the chain. With nothing open the index route renders the first
-        category rather than leaving the column empty.
-      -->
-      <EditorPaneShell
-        :has-detail="frame.mode.value === 'pair'"
-        show-desktop-detail
-        :detail-title="detailTitle"
-        :dismiss-to="notificationsPath"
-      >
-        <template #index>
+      <template #body>
+        <div class="mx-auto w-full max-w-xl">
           <UAlert v-if="error" color="error" variant="soft" icon="i-lucide-triangle-alert" :description="error" class="mb-6" />
           <EditorNavigationList :groups="groups" :active-item="activeItem" />
-        </template>
+        </div>
+      </template>
+    </UDashboardPanel>
 
-        <template #detail>
+    <!--
+      Drawn at `lg` even with nothing open, so the pair is there at rest like
+      every other hub in the chain. The category screen is plain content, so
+      this level gives it the column and the header.
+    -->
+    <UDashboardPanel id="account-notifications-detail" :class="hasDetail ? undefined : 'hidden lg:flex'">
+      <template #header>
+        <UDashboardNavbar :title="detailTitle" :toggle="false">
+          <template #leading>
+            <DashboardNavbarLeading :to="notificationsPath" label="Notifications" />
+          </template>
+        </UDashboardNavbar>
+      </template>
+
+      <template #body>
+        <div class="mx-auto w-full max-w-2xl">
           <NuxtPage />
-        </template>
-      </EditorPaneShell>
-    </template>
-  </UDashboardPanel>
+        </div>
+      </template>
+    </UDashboardPanel>
+  </template>
 </template>
 
 <script setup lang="ts">
-import EditorPaneShell from '~/components/dashboard/EditorPaneShell.vue'
+import { authClient } from '~/lib/auth-client'
 import EditorNavigationList, { type EditorNavigationGroup } from '~/components/dashboard/EditorNavigationList.vue'
 import {
   NOTIFICATION_CATEGORIES,
@@ -48,8 +59,10 @@ import {
 const notificationsPath = computed(() => '/dashboard/account/profile/notifications')
 const profilePath = '/dashboard/account/profile'
 const frame = useEditorFrame(notificationsPath)
+const hasDetail = computed(() => frame.mode.value === 'pair')
 
-const { sessionData } = await useAuthSession()
+const session = authClient.useSession()
+const sessionData = computed(() => session.value.data)
 const { preferences, error, load } = useNotificationPreferences(() => sessionData.value?.user?.id)
 await load()
 

@@ -5,29 +5,22 @@
     The category's own level: creating one at `new`, or its Name leaf. Both are
     the category record, so this page owns the chrome and the field.
   -->
-  <UDashboardPanel v-else-if="isNew || openLeaf" id="location-product-category">
-    <template #header>
-      <UDashboardNavbar :title="isNew ? `New ${presentation.collectionGroupLabel.toLowerCase()}` : collectionName" :toggle="false">
-        <template #leading>
-          <DashboardNavbarLeading :to="surfacePath" :label="presentation.collectionLabel" />
-        </template>
-      </UDashboardNavbar>
-    </template>
+  <template v-else-if="isNew || openLeaf">
+    <UDashboardPanel
+      id="location-product-category"
+      :class="openLeaf ? 'hidden lg:flex' : undefined"
+      :default-size="openLeaf ? 32 : undefined"
+    >
+      <template #header>
+        <UDashboardNavbar :title="isNew ? `New ${presentation.collectionGroupLabel.toLowerCase()}` : collectionName" :toggle="false">
+          <template #leading>
+            <DashboardNavbarLeading :to="surfacePath" :label="presentation.collectionLabel" />
+          </template>
+        </UDashboardNavbar>
+      </template>
 
-    <template #body>
-      <EditorPaneShell
-        :has-detail="Boolean(openLeaf)"
-        :detail-title="COLLECTION_LABELS.name"
-        :dismiss-to="collectionPath"
-        show-actions
-        :saving="saving"
-        :save-disabled="saveDisabled"
-        :save-label="saveLabel"
-        :error="errorMessage"
-        @cancel="closeLeaf"
-        @save="saveLeaf"
-      >
-        <template #index>
+      <template #body>
+        <div class="mx-auto w-full" :class="openLeaf ? 'max-w-xl' : 'max-w-3xl'">
           <UAlert v-if="errorMessage" class="mb-6" color="error" variant="soft" icon="i-lucide-triangle-alert" :description="errorMessage" />
           <template v-if="isNew">
             <div class="mb-6 flex justify-end">
@@ -36,8 +29,21 @@
             <EditorNavigationList :groups="collectionNavigation" :active-item="openLeaf" />
           </template>
           <CollectionProductList v-else />
-        </template>
-        <template #detail>
+        </div>
+      </template>
+    </UDashboardPanel>
+
+    <UDashboardPanel v-if="openLeaf" id="location-product-category-name">
+      <template #header>
+        <UDashboardNavbar :title="COLLECTION_LABELS.name" :toggle="false">
+          <template #leading>
+            <DashboardNavbarLeading :to="collectionPath" :label="presentation.collectionGroupLabel" />
+          </template>
+        </UDashboardNavbar>
+      </template>
+
+      <template #body>
+        <div class="mx-auto w-full max-w-2xl">
           <UFormField label="Name" required>
             <UInput v-model="form.name" :placeholder="presentation.collectionGroupLabel === 'Section' ? 'Appetizers' : 'Accessories'" size="xl" autofocus class="w-full" />
           </UFormField>
@@ -51,50 +57,51 @@
             :fields="collectionLocalizationFields"
             :language-settings-path="siteLocalizationSettingsPath"
           />
-        </template>
-      </EditorPaneShell>
-    </template>
-  </UDashboardPanel>
+        </div>
+      </template>
+
+      <template #footer>
+        <div class="flex shrink-0 items-center justify-between gap-4 border-t border-default px-4 py-3 sm:px-6">
+          <UButton color="neutral" variant="ghost" label="Cancel" @click="closeLeaf" />
+          <UButton :label="saveLabel || 'Save'" :loading="saving" :disabled="saveDisabled" @click="saveLeaf" />
+        </div>
+      </template>
+    </UDashboardPanel>
+  </template>
 
   <!-- An item is open: my list is the index column, the item is the detail. -->
-  <UDashboardPanel v-else-if="frame.mode.value === 'pair'" id="location-product-category">
-    <template #header>
-      <UDashboardNavbar :title="collectionName" :toggle="false">
-        <template #leading>
-          <DashboardNavbarLeading :to="surfacePath" :label="presentation.collectionLabel" />
-        </template>
-      </UDashboardNavbar>
-    </template>
+  <template v-else-if="frame.mode.value === 'pair'">
+    <UDashboardPanel id="location-product-category" class="hidden lg:flex" :default-size="32">
+      <template #header>
+        <UDashboardNavbar :title="collectionName" :toggle="false">
+          <template #leading>
+            <DashboardNavbarLeading :to="surfacePath" :label="presentation.collectionLabel" />
+          </template>
+        </UDashboardNavbar>
+      </template>
 
-    <template #body>
-      <EditorPaneShell
-        has-detail
-        :dismiss-to="collectionPath"
-        wide-detail
-        hide-detail-heading
-      >
-        <template #index>
+      <template #body>
+        <div class="mx-auto w-full max-w-xl">
           <CollectionProductList />
-        </template>
-        <template #detail>
-          <NuxtPage />
-        </template>
-      </EditorPaneShell>
-    </template>
-  </UDashboardPanel>
+        </div>
+      </template>
+    </UDashboardPanel>
+
+    <!-- The open item owns the other column, header and all. -->
+    <NuxtPage />
+  </template>
 
   <CollectionProductList v-else />
 </template>
 
 <script setup lang="ts">
-import EditorPaneShell from '~/components/dashboard/EditorPaneShell.vue'
 import EditorNavigationList, { type EditorNavigationGroup } from '~/components/dashboard/EditorNavigationList.vue'
 import DashboardResourceLocalization from '~/components/dashboard/DashboardResourceLocalization.vue'
 import CollectionProductList from '~/components/dashboard/CollectionProductList.vue'
 import { getErrorMessage } from '~/utils/errors'
 import { isCatalogSurface, presentationForSurface } from '~/utils/product-presentation'
 
-definePageMeta({ layout: 'dashboard', cmsCapabilityKey: 'location.products' })
+definePageMeta({ layout: 'dashboard' })
 
 const route = useRoute()
 const dashboardApi = useDashboardApi()

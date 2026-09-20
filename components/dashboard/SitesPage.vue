@@ -23,14 +23,7 @@
         loaded — a placeholder that does not reserve the real space is worse than
         none.
       -->
-      <div v-if="pending" class="space-y-6">
-        <USkeleton class="h-9 w-40 rounded-lg" />
-        <div class="grid grid-cols-[repeat(auto-fill,minmax(min(100%,18rem),1fr))] gap-6">
-          <USkeleton v-for="i in 2" :key="i" class="aspect-[20/19] rounded-2xl" />
-        </div>
-      </div>
-
-      <div v-else class="space-y-8">
+      <div class="space-y-8">
         <!-- Discard acts on the caller's own draft, so without that lookup the
              page does not know which tile the control belongs to. It says so
              rather than leaving the control silently missing. -->
@@ -168,7 +161,6 @@ const config = useRuntimeConfig()
 const orgSlug = computed(() => String(route.params.orgSlug || ''))
 const dashboard = useDashboardSite()
 const draft = useOnboardingDraft()
-const pending = dashboard.pending
 
 const sites = computed(() => dashboard.sites.value)
 const organizationLocations = ref<DashboardLocation[]>([])

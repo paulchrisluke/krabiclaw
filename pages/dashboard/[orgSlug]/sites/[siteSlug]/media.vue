@@ -1,145 +1,159 @@
 <template>
-  <div class="space-y-6">
-  <DashboardGridEditor
-    v-model:selecting="selecting"
-    v-model:selected="selectedIds"
-    title="Media library"
-    description="Site-wide library for page media, posts, galleries, and reusable assets."
-    :items="gridItems"
-    :pending="loading"
-    :error="loadError"
-    :empty-title="search || kindFilter ? 'No matches' : 'No media yet'"
-    :empty-icon="search || kindFilter ? 'i-lucide-search-x' : 'i-lucide-image'"
-    add-label="Upload media"
-    selection-title="Select media"
-    grid-class="grid grid-cols-4 gap-3 sm:grid-cols-5 lg:grid-cols-7"
-    :removing="deleting"
-    @add="openUploadPicker"
-    @open="openEditById"
-    @remove-many="deleteMany"
-  >
-    <template #filters>
-      <div class="flex flex-wrap items-center gap-2">
-        <UInput v-model="search" placeholder="Search files…" icon="i-lucide-search" size="sm" />
-        <div class="flex gap-1">
-          <UButton
-            v-for="k in kindTabs"
-            :key="k.value"
-            size="sm"
-            :variant="kindFilter === k.value ? 'soft' : 'ghost'"
-            color="neutral"
-            @click="kindFilter = k.value; load()"
-          >
-            {{ k.label }}
-          </UButton>
+  <UDashboardPanel id="site-media">
+    <template #header>
+      <UDashboardNavbar :title="'Media library'" :toggle="false">
+        <template #leading>
+          <DashboardNavbarLeading v-if="sitePaths?.site" :to="sitePaths?.site" label="Site" />
+        </template>
+      </UDashboardNavbar>
+    </template>
+
+    <template #body>
+      <div class="mx-auto w-full max-w-3xl">
+        <div class="space-y-6">
+        <DashboardGridEditor
+          v-model:selecting="selecting"
+          v-model:selected="selectedIds"
+          title="Media library"
+          description="Site-wide library for page media, posts, galleries, and reusable assets."
+          :items="gridItems"
+          :pending="loading"
+          :error="loadError"
+          :empty-title="search || kindFilter ? 'No matches' : 'No media yet'"
+          :empty-icon="search || kindFilter ? 'i-lucide-search-x' : 'i-lucide-image'"
+          add-label="Upload media"
+          selection-title="Select media"
+          grid-class="grid grid-cols-4 gap-3 sm:grid-cols-5 lg:grid-cols-7"
+          :removing="deleting"
+          @add="openUploadPicker"
+          @open="openEditById"
+          @remove-many="deleteMany"
+        >
+          <template #filters>
+            <div class="flex flex-wrap items-center gap-2">
+              <UInput v-model="search" placeholder="Search files…" icon="i-lucide-search" size="sm" />
+              <div class="flex gap-1">
+                <UButton
+                  v-for="k in kindTabs"
+                  :key="k.value"
+                  size="sm"
+                  :variant="kindFilter === k.value ? 'soft' : 'ghost'"
+                  color="neutral"
+                  @click="kindFilter = k.value; load()"
+                >
+                  {{ k.label }}
+                </UButton>
+              </div>
+            </div>
+
+            <div
+              class="mt-4 flex cursor-pointer flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed px-6 py-8 transition-colors"
+              :class="[isDragging ? 'border-primary bg-primary/5' : 'border-default hover:border-accented', uploadLoading ? 'pointer-events-none opacity-60' : '']"
+              @dragenter.prevent="handleDragEnter"
+              @dragover.prevent="handleDragOver"
+              @dragleave.prevent="handleDragLeave"
+              @drop.prevent="handleDrop"
+              @click="openUploadPicker"
+            >
+              <UIcon name="i-lucide-upload" class="size-7 text-muted" />
+              <p class="text-sm text-muted">Drag and drop images or videos here, or <span class="cursor-pointer text-primary">click to browse</span></p>
+              <p class="text-xs text-muted">Images up to {{ formatSize(IMAGE_MAX_SIZE_BYTES) }} via Cloudflare Images · Videos up to {{ formatSize(VIDEO_MAX_SIZE_BYTES) }} via R2</p>
+            </div>
+
+            <UInput ref="fileInput" type="file" accept="image/*,video/*" class="hidden" :disabled="uploadLoading" @change="onFileSelect" />
+
+            <UAlert v-if="uploadError" color="error" variant="soft" :description="uploadError" icon="i-lucide-triangle-alert" class="mt-4" />
+          </template>
+
+          <template #tile="{ item }">
+            <img
+              v-if="mediaStillUrl(item.row)"
+              :src="mediaStillUrl(item.row) || undefined"
+              :alt="item.row.alt_text ?? ''"
+              class="h-full w-full object-cover"
+              loading="lazy"
+            >
+            <div v-else class="flex h-full w-full items-center justify-center bg-elevated">
+              <UIcon :name="item.row.kind === 'video' ? 'i-lucide-film' : 'i-lucide-file'" class="size-6 text-muted" />
+            </div>
+
+            <UBadge :label="item.row.kind" size="xs" color="neutral" variant="solid" class="absolute right-1.5 top-1.5 uppercase opacity-0 transition-opacity group-hover:opacity-100" />
+
+            <div class="absolute inset-x-0 bottom-0 translate-y-full bg-black/70 px-2 py-1.5 transition-transform group-hover:translate-y-0">
+              <p class="truncate text-xs text-white">{{ item.row.file_name || item.row.kind }}</p>
+              <p v-if="item.row.file_size" class="text-xs text-white/60">{{ formatSize(item.row.file_size) }}</p>
+            </div>
+          </template>
+        </DashboardGridEditor>
+
+        <!--
+          Alt text is a leaf, so it commits the way every other leaf does: the item
+          sheet's own bar, dismiss on the left, Save on the right. It used to carry a
+          lone Save button loose in the body, which made this the one place in the CMS
+          where committing looked different.
+
+          The field stays optional. An empty alt is the correct markup for a
+          decorative image, and this is the one place a human sets it — the same field
+          the media MCP tool writes, so an assistant filling it in and a person typing
+          it are editing one value, not two.
+        -->
+        <DashboardListItemDialog
+          v-model:open="editOpen"
+          title="Media details"
+          :removable="false"
+          :saving="editSaving"
+          :save-disabled="!altTextChanged"
+          :error="editError"
+          @save="saveAltText"
+        >
+          <template v-if="editingAsset" #default>
+            <img
+              v-if="mediaStillUrl(editingAsset)"
+              :src="mediaStillUrl(editingAsset) || undefined"
+              :alt="editAltText"
+              class="mx-auto h-32 w-32 rounded-lg object-cover"
+            >
+            <!--
+              The placeholder is a worked example rather than an instruction. "Describe
+              this image" tells a writer what to do without showing what good looks
+              like, and the alt text that came back was a noun or two; a sentence in
+              the box demonstrates the length and the specificity. Saying who it is
+              for is what makes anyone bother.
+            -->
+            <UFormField
+              label="Alt text"
+              description="A brief description of this image for readers who cannot see it. Leave it empty if the image is decorative."
+            >
+              <UInput
+                v-model="editAltText"
+                placeholder="e.g. A wood-fired oven with a margherita pizza blistering at the mouth"
+                class="w-full"
+              />
+            </UFormField>
+          </template>
+          <template v-if="editingAsset" #actions>
+            <DashboardResourceLocalization
+              :site-id="siteId"
+              resource-type="media_asset"
+              :resource-id="editingAsset.id"
+              resource-label="media details"
+              :fields="mediaLocalizationFields"
+              :language-settings-path="siteLocalizationSettingsPath"
+            />
+          </template>
+        </DashboardListItemDialog>
+
+        <UAlert v-if="deleteError" color="error" variant="soft" :description="deleteError" icon="i-lucide-circle-alert" class="mt-4" />
+
+        <!-- Load more -->
+        <div v-if="hasMore" class="mt-6 text-center space-y-3">
+          <UButton color="neutral" variant="ghost" :loading="loadingMore" @click="loadMore">Load more</UButton>
+          <UAlert v-if="loadMoreError" color="error" variant="soft" :description="loadMoreError" icon="i-lucide-circle-alert" />
+        </div>
         </div>
       </div>
-
-      <div
-        class="mt-4 flex cursor-pointer flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed px-6 py-8 transition-colors"
-        :class="[isDragging ? 'border-primary bg-primary/5' : 'border-default hover:border-accented', uploadLoading ? 'pointer-events-none opacity-60' : '']"
-        @dragenter.prevent="handleDragEnter"
-        @dragover.prevent="handleDragOver"
-        @dragleave.prevent="handleDragLeave"
-        @drop.prevent="handleDrop"
-        @click="openUploadPicker"
-      >
-        <UIcon name="i-lucide-upload" class="size-7 text-muted" />
-        <p class="text-sm text-muted">Drag and drop images or videos here, or <span class="cursor-pointer text-primary">click to browse</span></p>
-        <p class="text-xs text-muted">Images up to {{ formatSize(IMAGE_MAX_SIZE_BYTES) }} via Cloudflare Images · Videos up to {{ formatSize(VIDEO_MAX_SIZE_BYTES) }} via R2</p>
-      </div>
-
-      <UInput ref="fileInput" type="file" accept="image/*,video/*" class="hidden" :disabled="uploadLoading" @change="onFileSelect" />
-
-      <UAlert v-if="uploadError" color="error" variant="soft" :description="uploadError" icon="i-lucide-triangle-alert" class="mt-4" />
     </template>
-
-    <template #tile="{ item }">
-      <img
-        v-if="mediaStillUrl(item.row)"
-        :src="mediaStillUrl(item.row) || undefined"
-        :alt="item.row.alt_text ?? ''"
-        class="h-full w-full object-cover"
-        loading="lazy"
-      >
-      <div v-else class="flex h-full w-full items-center justify-center bg-elevated">
-        <UIcon :name="item.row.kind === 'video' ? 'i-lucide-film' : 'i-lucide-file'" class="size-6 text-muted" />
-      </div>
-
-      <UBadge :label="item.row.kind" size="xs" color="neutral" variant="solid" class="absolute right-1.5 top-1.5 uppercase opacity-0 transition-opacity group-hover:opacity-100" />
-
-      <div class="absolute inset-x-0 bottom-0 translate-y-full bg-black/70 px-2 py-1.5 transition-transform group-hover:translate-y-0">
-        <p class="truncate text-xs text-white">{{ item.row.file_name || item.row.kind }}</p>
-        <p v-if="item.row.file_size" class="text-xs text-white/60">{{ formatSize(item.row.file_size) }}</p>
-      </div>
-    </template>
-  </DashboardGridEditor>
-
-  <!--
-    Alt text is a leaf, so it commits the way every other leaf does: the item
-    sheet's own bar, dismiss on the left, Save on the right. It used to carry a
-    lone Save button loose in the body, which made this the one place in the CMS
-    where committing looked different.
-
-    The field stays optional. An empty alt is the correct markup for a
-    decorative image, and this is the one place a human sets it — the same field
-    the media MCP tool writes, so an assistant filling it in and a person typing
-    it are editing one value, not two.
-  -->
-  <DashboardListItemDialog
-    v-model:open="editOpen"
-    title="Media details"
-    :removable="false"
-    :saving="editSaving"
-    :save-disabled="!altTextChanged"
-    :error="editError"
-    @save="saveAltText"
-  >
-    <template v-if="editingAsset" #default>
-      <img
-        v-if="mediaStillUrl(editingAsset)"
-        :src="mediaStillUrl(editingAsset) || undefined"
-        :alt="editAltText"
-        class="mx-auto h-32 w-32 rounded-lg object-cover"
-      >
-      <!--
-        The placeholder is a worked example rather than an instruction. "Describe
-        this image" tells a writer what to do without showing what good looks
-        like, and the alt text that came back was a noun or two; a sentence in
-        the box demonstrates the length and the specificity. Saying who it is
-        for is what makes anyone bother.
-      -->
-      <UFormField
-        label="Alt text"
-        description="A brief description of this image for readers who cannot see it. Leave it empty if the image is decorative."
-      >
-        <UInput
-          v-model="editAltText"
-          placeholder="e.g. A wood-fired oven with a margherita pizza blistering at the mouth"
-          class="w-full"
-        />
-      </UFormField>
-    </template>
-    <template v-if="editingAsset" #actions>
-      <DashboardResourceLocalization
-        :site-id="siteId"
-        resource-type="media_asset"
-        :resource-id="editingAsset.id"
-        resource-label="media details"
-        :fields="mediaLocalizationFields"
-        :language-settings-path="siteLocalizationSettingsPath"
-      />
-    </template>
-  </DashboardListItemDialog>
-
-  <UAlert v-if="deleteError" color="error" variant="soft" :description="deleteError" icon="i-lucide-circle-alert" class="mt-4" />
-
-  <!-- Load more -->
-  <div v-if="hasMore" class="mt-6 text-center space-y-3">
-    <UButton color="neutral" variant="ghost" :loading="loadingMore" @click="loadMore">Load more</UButton>
-    <UAlert v-if="loadMoreError" color="error" variant="soft" :description="loadMoreError" icon="i-lucide-circle-alert" />
-  </div>
-  </div>
+  </UDashboardPanel>
 </template>
 
 <script setup lang="ts">
@@ -148,7 +162,9 @@ import DashboardGridEditor from '~/components/dashboard/DashboardGridEditor.vue'
 import DashboardListItemDialog from '~/components/dashboard/DashboardListItemDialog.vue'
 
 const dashboardApi = useDashboardApi()
-definePageMeta({ layout: 'dashboard', cmsCapabilityKey: 'site.media' })
+definePageMeta({ layout: 'dashboard' })
+
+const { sitePaths } = useDashboardSiteLinks()
 
 
 import { IMAGE_MAX_SIZE_BYTES, VIDEO_MAX_SIZE_BYTES } from '~/composables/useMediaUpload'
@@ -376,20 +392,12 @@ function formatSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
-const requestEvent = useRequestEvent()
 const { data: initialMedia, pending: initialMediaPending, error: initialMediaError } = await useAsyncData(
   `dashboard-site-media:${siteId}`,
-  async () => {
-    if (import.meta.server) {
-      if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Request context unavailable' })
-      const { loadDashboardMedia } = await import('~/server/utils/dashboard-editor-resources')
-      return await loadDashboardMedia(requestEvent, siteId, { limit: LIMIT, offset: 0 })
-    }
-    return await dashboardApi<{ media: MediaAsset[] }>(`${siteApiBase}/media?limit=${LIMIT}&offset=0`, {
-      validate: isMediaResponse,
-    })
-  },
-  { lazy: import.meta.client },
+  () => dashboardApi<{ media: MediaAsset[] }>(`${siteApiBase}/media?limit=${LIMIT}&offset=0`, {
+    validate: isMediaResponse,
+  }),
+  { lazy: true },
 )
 
 watch([initialMedia, initialMediaPending, initialMediaError], ([data, pending, error]) => {

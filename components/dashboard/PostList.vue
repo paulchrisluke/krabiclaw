@@ -93,27 +93,18 @@ const isPostsResponse = (value: unknown): value is { posts: ApiRecord[] } =>
   && Array.isArray(value.posts)
   && value.posts.every(post => isRecord(post) && typeof post.id === 'string' && typeof post.status === 'string')
 
-const requestEvent = useRequestEvent()
 const postsKey = computed(() => `dashboard-location-posts:${siteId}:${currentLocationId.value ?? 'missing'}`)
 const { data, pending, error, refresh } = await useAsyncData(
   postsKey,
   async () => {
     if (!currentLocationId.value) throw createError({ statusCode: 404, statusMessage: 'Location not found' })
-    // On the server the data is read straight from D1; going back out over HTTP
-    // to our own endpoint would cost a round trip during render.
-    if (import.meta.server) {
-      if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Request context unavailable' })
-      const { loadDashboardLocationPosts } = await import('~/server/utils/dashboard-editor-resources')
-      const resource = await loadDashboardLocationPosts(requestEvent, siteId, currentLocationId.value)
-      return { posts: resource.posts.posts as ApiRecord[] }
-    }
     const response = await dashboardApi<{ posts: ApiRecord[] }>(`/api/editor/sites/${siteId}/posts`, {
       query: { location_id: currentLocationId.value },
       validate: isPostsResponse,
     })
     return { posts: response.posts }
   },
-  { lazy: import.meta.client },
+  { lazy: true },
 )
 
 const loadError = computed(() => (error.value ? getErrorMessage(error.value, 'Failed to load posts') : null))

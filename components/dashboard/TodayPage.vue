@@ -152,10 +152,8 @@ const ranges: Array<{ label: string; value: TodayRange }> = [
 ]
 
 const route = useRoute()
-const dashboard = useDashboardSite()
 const dashboardApi = useDashboardApi()
 const realtime = useDashboardInvalidations()
-const requestEvent = useRequestEvent()
 const orgSlug = computed(() => String(route.params.orgSlug ?? ''))
 const todayKey = computed(() => `dashboard-today-${orgSlug.value}`)
 const filters = reactive({ siteId: FILTER_ALL, locationId: FILTER_ALL, kind: FILTER_ALL })
@@ -212,24 +210,10 @@ const isAgendaPayload = (value: unknown): value is AgendaPayload =>
   && Array.isArray(value.locations)
   && value.locations.every(isLocation)
 
-const { data: todayData, pending, error: todayError, refresh: refreshToday } = await useAsyncData<TodayAgendaPayload>(todayKey, async () => {
-  if (import.meta.server) {
-    if (!requestEvent || !dashboard.organization.value) {
-      throw createError({ statusCode: 500, statusMessage: 'Dashboard context unavailable' })
-    }
-    const [{ getDashboardContext }, { listTodayAgenda }] = await Promise.all([
-      import('~/server/utils/dashboard-context'),
-      import('~/server/utils/dashboard-agenda'),
-    ])
-    const context = await getDashboardContext(requestEvent, { requireSite: false, organizationSlug: orgSlug.value })
-    return await listTodayAgenda(context.db, context.organization.id, {
-      organizationSlug: orgSlug.value,
-      principal: { env: context.env, membership: context.organization },
-    })
-  }
-  return await dashboardApi<TodayAgendaPayload>('/api/dashboard/today', { validate: isTodayResponse })
-},
-  { lazy: import.meta.client },
+const { data: todayData, pending, error: todayError, refresh: refreshToday } = await useAsyncData<TodayAgendaPayload>(
+  todayKey,
+  () => dashboardApi<TodayAgendaPayload>('/api/dashboard/today', { validate: isTodayResponse }),
+  { lazy: true },
 )
 
 const activeRange = ref<TodayRange>('today')

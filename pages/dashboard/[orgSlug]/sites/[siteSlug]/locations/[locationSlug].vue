@@ -12,35 +12,43 @@
   -->
   <NuxtPage v-if="panelHidden" />
 
-  <UDashboardPanel v-else id="location-hub">
-    <template #header>
-      <UDashboardNavbar :title="location?.title || 'Location'" :toggle="false">
-        <template #leading>
-          <DashboardNavbarLeading :to="locationsPath" label="Locations" />
-        </template>
-        <template #right>
-          <UButton
-            :to="settingsPath"
-            icon="i-lucide-settings"
-            color="neutral"
-            variant="ghost"
-            square
-            aria-label="Location settings"
-          />
-        </template>
-      </UDashboardNavbar>
-    </template>
+  <!--
+    Two columns, two panels. `UDashboardPanel` already carries the divider
+    (`lg:not-last:border-e`), the scroll container and the body's padding, so
+    this level states only which column it is and how wide.
 
-    <template #body>
-      <EditorPaneShell
-        :has-detail="hasDetail"
-        :detail-title="detailTitle"
-        :dismiss-to="locationPath"
-        wide-detail
-        hide-detail-heading
-      >
-        <template #index>
-          <div v-if="loading" class="space-y-4">
+    Below `lg` the open level is the whole screen and this one is simply not
+    drawn: `hidden` rather than a `fixed` overlay on top of it. Overlaying left
+    both columns laid out and painted at every width, and put the covered
+    column's images on the wire for nothing.
+  -->
+  <template v-else>
+    <UDashboardPanel
+      id="location-hub"
+      :class="hasDetail ? 'hidden lg:flex' : undefined"
+      :default-size="hasDetail ? 32 : undefined"
+    >
+      <template #header>
+        <UDashboardNavbar :title="location?.title || 'Location'" :toggle="false">
+          <template #leading>
+            <DashboardNavbarLeading :to="locationsPath" label="Locations" />
+          </template>
+          <template #right>
+            <UButton
+              :to="settingsPath"
+              icon="i-lucide-settings"
+              color="neutral"
+              variant="ghost"
+              square
+              aria-label="Location settings"
+            />
+          </template>
+        </UDashboardNavbar>
+      </template>
+
+      <template #body>
+        <div class="mx-auto w-full" :class="hasDetail ? 'max-w-xl' : 'max-w-3xl'">
+          <div v-if="loading && !location" class="space-y-4">
             <USkeleton class="aspect-[40/21] w-full rounded-2xl" />
             <USkeleton v-for="index in 5" :key="index" class="h-20 rounded-2xl" />
           </div>
@@ -77,19 +85,17 @@
 
             <EditorNavigationList :groups="contentGroups" :active-item="activeSection" variant="cards" />
           </div>
-        </template>
+        </div>
+      </template>
+    </UDashboardPanel>
 
-        <template #detail>
-          <NuxtPage />
-        </template>
-      </EditorPaneShell>
-    </template>
-  </UDashboardPanel>
+    <!-- The open child owns the other column, header and all. -->
+    <NuxtPage v-if="hasDetail" />
+  </template>
 </template>
 
 <script setup lang="ts">
 import EditorNavigationList from '~/components/dashboard/EditorNavigationList.vue'
-import EditorPaneShell from '~/components/dashboard/EditorPaneShell.vue'
 import { parseCmsFeatureOverrideDelta, resolveCmsCapabilities, type ProductFeature } from '~/config/cms-registry'
 import { resolvePublicTemplate } from '~/utils/template-registry'
 import { getTodayHoursLabel, type OpeningHours } from '~/shared/reservation-hours'
@@ -227,14 +233,6 @@ const contentGroups = computed(() => {
     .filter(group => group.items.length > 0)
 })
 
-const detailTitle = computed(() => {
-  for (const group of contentGroups.value) {
-    const match = group.items.find(item => item.id === activeSection.value)
-    if (match) return match.label
-  }
-  return ''
-})
-
 const isOverviewResponse = (value: unknown): value is LocationOverviewResource =>
   isRecord(value)
   && isRecord(value.location) && isRecord(value.location.location)
@@ -242,23 +240,17 @@ const isOverviewResponse = (value: unknown): value is LocationOverviewResource =
   && isRecord(value.threads) && isRecord(value.threads.summary)
   && isRecord(value.counts) && typeof value.counts.photos === 'number'
 
-const requestEvent = useRequestEvent()
 const overviewKey = computed(() => `dashboard-location-overview:${siteId}:${locationId.value}:${includeProducts.value ? 'products' : 'no-products'}`)
 const { data: overview, pending: overviewPending, error: overviewError, refresh } = await useAsyncData<LocationOverviewResource>(overviewKey, async () => {
   const requestedLocationId = locationId.value
   if (!requestedLocationId) throw createError({ statusCode: 404, statusMessage: 'Location not found' })
   const shouldIncludeProducts = includeProducts.value
-  if (import.meta.server) {
-    if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Request context unavailable' })
-    const { loadDashboardLocationOverview } = await import('~/server/utils/dashboard-editor-resources')
-    return await loadDashboardLocationOverview(requestEvent, siteId, requestedLocationId, { includeProducts: shouldIncludeProducts }) as LocationOverviewResource
-  }
   return await dashboardApi<LocationOverviewResource>(
     `/api/dashboard/sites/${siteId}/locations/${requestedLocationId}/overview`,
     { query: { includeProducts: String(shouldIncludeProducts) }, validate: isOverviewResponse },
   )
 }, {
-  lazy: import.meta.client,
+  lazy: true,
   // The location's own overview — its profile, its catalogue summary, its
   // inbox summary and its content counts — is what this panel draws. Opening
   // the location's settings or inbox, or a level below that owns both columns,
@@ -301,7 +293,7 @@ watch([overview, overviewError], ([resource, cause]) => {
  * because the server cannot know the viewport, and `replace` so Back still
  * leaves the location instead of bouncing through the hub.
  */
-// Tailwind's `lg`, which is where EditorPaneShell puts the pane and where
+// Tailwind's `lg`, which is where the second panel appears and where
 // every other split in the dashboard sits. Kept as one constant per hub so the
 // redirect and the layout cannot disagree about whether a pane exists.
 const PANE_BREAKPOINT = '(min-width: 1024px)'

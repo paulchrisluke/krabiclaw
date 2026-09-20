@@ -59,22 +59,14 @@ if (!postId) throw createError({ statusCode: 400, statusMessage: 'Post ID is req
 const blogPath = `/dashboard/${orgSlug}/sites/${siteSlug}/blog`
 const siteLocalizationSettingsPath = `/dashboard/${orgSlug}/sites/${siteSlug}/settings/localization`
 
-const requestEvent = useRequestEvent()
 const { data: postResource, error: postError } = await useAsyncData(
   `dashboard-blog-post:${siteId}:${postId}`,
-  async () => {
-    if (import.meta.server) {
-      if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Request context unavailable' })
-      const { loadDashboardBlogPost } = await import('~/server/utils/dashboard-editor-resources')
-      return await loadDashboardBlogPost(requestEvent, siteId, postId)
-    }
-    return await dashboardFetch<{ post: BlogPost }>(
-      `/api/editor/sites/${siteId}/blog/${postId}`,
-      { orgSlug, siteSlug },
-      { validate: isBlogPostResponse },
-    )
-  },
-  { lazy: import.meta.client },
+  () => dashboardFetch<{ post: BlogPost }>(
+    `/api/editor/sites/${siteId}/blog/${postId}`,
+    { orgSlug, siteSlug },
+    { validate: isBlogPostResponse },
+  ),
+  { lazy: true },
 )
 
 // A post that is not there is not a page. A request that failed is a state this

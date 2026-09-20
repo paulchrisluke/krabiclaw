@@ -144,7 +144,6 @@ const FILTER_ALL = '__all__'
 const route = useRoute()
 const router = useRouter()
 const dashboardApi = useDashboardApi()
-const requestEvent = useRequestEvent()
 const orgSlug = computed(() => String(route.params.orgSlug ?? ''))
 const currentMonth = ref(new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), 1)))
 const routeKind = typeof route.query.kinds === 'string' && ['reservation', 'booking', 'session', 'post'].includes(route.query.kinds) ? route.query.kinds : FILTER_ALL
@@ -194,17 +193,6 @@ const isAgendaPayload = (value: unknown): value is AgendaPayload =>
   && Array.isArray(value.locations) && value.locations.every(isLocation)
 
 async function fetchAgenda(): Promise<AgendaPayload> {
-  if (import.meta.server) {
-    if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Dashboard context unavailable' })
-    const [{ getDashboardContext }, { listAgenda }] = await Promise.all([
-      import('~/server/utils/dashboard-context'), import('~/server/utils/dashboard-agenda'),
-    ])
-    const context = await getDashboardContext(requestEvent, { requireSite: false, organizationSlug: orgSlug.value })
-    return await listAgenda(context.db, context.organization.id, {
-      ...query.value, organizationSlug: orgSlug.value,
-      principal: { env: context.env, membership: context.organization },
-    })
-  }
   return await dashboardApi<AgendaPayload>('/api/dashboard/agenda', {
     query: { ...query.value, kinds: query.value.kinds?.join(',') }, validate: isAgendaPayload,
   })
