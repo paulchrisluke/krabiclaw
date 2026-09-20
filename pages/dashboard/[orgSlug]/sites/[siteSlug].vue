@@ -70,10 +70,10 @@
               :ui="{ container: 'p-5 sm:p-5', title: 'text-[15px]', description: 'mt-1 line-clamp-2' }"
             >
               <img
-                v-if="card.image"
-                :src="card.image"
+                v-if="card.logo"
+                :src="card.logo"
                 alt=""
-                class="aspect-[40/21] w-full rounded-xl object-cover"
+                class="h-14 w-auto max-w-40 object-contain"
               >
               <div v-else-if="card.previews?.length" class="flex gap-2">
                 <img
@@ -107,6 +107,7 @@ import { resolvePublicTemplate } from '~/utils/template-registry'
 import { hasPlatformAdminPermission } from '~/utils/platform-admin-access'
 import { normalizeVertical, type SiteVertical } from '~/utils/vertical-copy'
 import type { DashboardHomeData } from '~/server/utils/dashboard-home'
+import { tenantPageRows } from '~/composables/useTenantPageDraft'
 import { getErrorMessage } from '~/utils/errors'
 
 definePageMeta({ layout: 'dashboard' })
@@ -186,7 +187,7 @@ const overviewErrorMessage = computed(() =>
   overviewError.value ? getErrorMessage(overviewError.value, 'Failed to load this site') : null)
 
 const locations = computed(() => overviewData.value?.locations ?? [])
-const pagesCount = computed(() => overviewData.value?.pages.length ?? 0)
+const pagesCount = computed(() => tenantPageRows(overviewData.value?.pages ?? []).length)
 const counts = computed(() => overviewData.value?.counts ?? { blog: 0, qa: 0, reviews: 0 })
 
 /** Plural-aware count, or the empty state that says what to do instead. */
@@ -201,17 +202,19 @@ function trustSummary(qa: number, reviews: number): string {
   return parts.length ? parts.join(' · ') : 'Answer your first question'
 }
 
-interface HubCard { id: string; title: string; description: string; to: string; image?: string; previews?: string[] }
+interface HubCard { id: string; title: string; description: string; to: string; logo?: string; previews?: string[] }
 
 const managers = computed(() => new Set(capabilities.value.managers.filter(manager => manager.scope === 'site').map(manager => manager.id)))
 
 /**
- * The site as a visitor meets it: the brand on every page, the locations, the
- * pages, the blog, the reviews and questions. Each card states its value.
+ * The site as a visitor meets it, ordered by how often a tenant edits it: the
+ * locations, the pages, the blog, the reviews and questions, and last the
+ * brand, which is set up once. Each card states its value. Brand is also the
+ * one card that owns the whole screen, so it must not be the card the rail
+ * opens beside itself at `lg`.
  */
 const cards = computed<HubCard[]>(() => {
   const list: HubCard[] = [
-    { id: 'brand', title: 'Brand', description: siteName.value, to: `${sitePath.value}/brand`, image: siteLogo.value || undefined },
     {
       id: 'locations',
       title: capabilities.value.managers.find(manager => manager.key === 'site.locations')?.label ?? 'Locations',
@@ -225,6 +228,7 @@ const cards = computed<HubCard[]>(() => {
   ]
   if (managers.value.has('blog')) list.push({ id: 'blog', title: 'Blog', description: countSummary(counts.value.blog, 'published post', 'Write your first post'), to: `${sitePath.value}/blog` })
   if (managers.value.has('qa')) list.push({ id: 'qa', title: 'Reviews and Q&A', description: trustSummary(counts.value.qa, counts.value.reviews), to: `${sitePath.value}/qa` })
+  list.push({ id: 'brand', title: 'Brand', description: siteName.value, to: `${sitePath.value}/brand`, logo: siteLogo.value || undefined })
   // KrabiClaw's own site adds the one platform-only tool: acting as a customer.
   if (template.value === 'platform' && hasPlatformAdminPermission(currentUser.value?.role)) {
     list.push({ id: 'people', title: 'People', description: 'Every account; impersonate to see their dashboard', to: `${sitePath.value}/people` })

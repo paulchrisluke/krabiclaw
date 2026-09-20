@@ -149,6 +149,8 @@ export interface LocationContentCounts {
   posts: number
   qa: number
   reviews: number
+  /** The site's own questions, which this location's page also answers from. */
+  siteQa: number
 }
 
 /**
@@ -179,13 +181,15 @@ async function loadLocationContentCounts(
           AND mp.slot IN ('hero', 'gallery') AND mp.status = 'active') AS photos,
       (SELECT COUNT(*) FROM content_documents WHERE kind = 'social_post' AND row_role = 'root' AND site_id = ? AND location_id = ? AND status = 'published') AS posts,
       (SELECT COUNT(*) FROM content_documents WHERE kind = 'qa' AND row_role = 'root' AND site_id = ? AND location_id = ?) AS qa,
-      (SELECT COUNT(*) FROM reviews WHERE site_id = ? AND location_id = ?) AS reviews
-  `, Array.from({ length: 4 }, () => [siteId, locationId]).flat())
+      (SELECT COUNT(*) FROM reviews WHERE site_id = ? AND location_id = ?) AS reviews,
+      (SELECT COUNT(*) FROM content_documents WHERE kind = 'qa' AND row_role = 'root' AND site_id = ? AND location_id IS NULL) AS site_qa
+  `, [...Array.from({ length: 4 }, () => [siteId, locationId]).flat(), siteId])
   return {
     photos: row?.photos ?? 0,
     posts: row?.posts ?? 0,
     qa: row?.qa ?? 0,
     reviews: row?.reviews ?? 0,
+    siteQa: row?.site_qa ?? 0,
   }
 }
 

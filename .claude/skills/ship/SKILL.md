@@ -5,12 +5,12 @@ description: "The one path from a code change to staging in this repo: local Cod
 
 # Ship
 
-KrabiClaw has one shared preview deployment, so every PR's E2E job runs
-serially behind every other PR's. A ready PR costs 5 minutes when its changed
-files are classified and 13 when they are not, and every push to a ready PR
-pays again. CodeRabbit's local CLI and web review are both rate-limited. The
-whole procedure below exists to spend the preview once per PR and CodeRabbit
-only as many times as its findings demand.
+A PR runs the `Checks` job only. The E2E suite runs against the shared
+staging deployment after the merge, so a defect that reaches `staging` costs a
+40-minute round trip to find and fix. CodeRabbit's local CLI and web review are
+both rate-limited. The procedure below exists to catch everything locally, in
+the browser, before the merge, and to spend CodeRabbit only as many times as
+its findings demand.
 
 Read `AGENTS.md` first. It says what must be true; this file says the order.
 
@@ -78,22 +78,11 @@ If an MCP tool schema changed, `corepack yarn mcp:catalog:write` first; the
 catalog check fails on drift. If the ChatGPT submission changed,
 `chatgpt:submission:write`.
 
-## 4. Smoke e2e, locally
+## 4. Open the PR as a draft
 
-Run the same seven cases CI will run against the worktree's worker:
-
-```bash
-PLAYWRIGHT_PORT=<N> corepack yarn playwright test --project=chromium --grep @smoke
-```
-
-Add the specs your change actually touches on top of that. There is no
-selector: the PR suite is fixed, so nothing about your diff changes what CI
-runs.
-
-## 5. Open the PR as a draft
-
-Drafts run `Checks` only. They skip the shared preview E2E and skip web
-CodeRabbit. Push as often as you like while it is a draft.
+Every PR runs `Checks` only; the E2E suite runs on `staging` after the merge.
+Drafts also skip web CodeRabbit. Push to a draft only when the owner has seen
+the work in the browser and asked for it.
 
 ```bash
 gh pr create --draft --base staging --assignee paulchrisluke --title "<what changes, in the repo's voice>" --body-file <body>
@@ -103,9 +92,9 @@ The body says what was measured, how, and what is "not checked". It names the
 issues it closes. Add the PR to the project board when the token has the
 `project` scope (`gh project item-add`); otherwise say so in the handoff.
 
-## 6. Ready once
+## 5. Ready once
 
-Flip to ready only when steps 1 to 4 are all green on the exact HEAD you are
+Flip to ready only when steps 1 to 3 are all green on the exact HEAD you are
 about to qualify:
 
 ```bash
@@ -114,10 +103,9 @@ gh pr ready <number>
 
 Then stop. Do not poll, do not `gh run watch`, do not schedule a wakeup, do not
 write "still running". The owner watches CI. Act when the check notification
-arrives. Every push after ready re-queues the shared preview, so a fix after
-ready goes back through steps 2 to 4 first.
+arrives. A fix after ready goes back through steps 2 and 3 first.
 
-## 7. Green: merge, close, board
+## 6. Green: merge, close, board
 
 CI green on the exact SHA is the only gate for staging.
 
@@ -159,9 +147,9 @@ after steps 2 and 3.
 
 - One issue plan, larger PRs grouped by surface so parallel worktrees do not
   edit the same files.
-- Implementers run steps 0 to 5 and hand back the draft PR URL plus the
+- Implementers run steps 0 to 4 and hand back the draft PR URL plus the
   measured claim list. The orchestrator does step 2's review of that list and
-  the adversarial pass before step 6, because that is where the 40-minute
+  the adversarial pass before step 5, because that is where the 40-minute
   mistakes come from.
 - Flip PRs to ready as they qualify and merge each on green immediately. The
   preview queue only exists while several PRs are ready at once.

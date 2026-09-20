@@ -124,6 +124,7 @@ interface LocationContentCounts {
   posts: number
   qa: number
   reviews: number
+  siteQa: number
 }
 interface LocationOverviewResource {
   location: { success: boolean; location: LocationOverview }
@@ -164,7 +165,7 @@ const activeSection = computed(() => sectionSegment.value || null)
 const location = ref<LocationOverview | null>(null)
 const catalog = ref<CatalogCounts>({ total: 0, experiences: 0 })
 const reservationConfig = ref<LocationReservationConfig | null>(null)
-const counts = ref<LocationContentCounts>({ photos: 0, posts: 0, qa: 0, reviews: 0 })
+const counts = ref<LocationContentCounts>({ photos: 0, posts: 0, qa: 0, reviews: 0, siteQa: 0 })
 const error = ref<string | null>(null)
 
 const dashboardLocationRow = computed(() => dashboard.locations.value.find(candidate => candidate.id === locationId.value) ?? null)
@@ -210,9 +211,13 @@ function countSummary(total: number, noun: string, empty: string): string {
   return `${total} ${total === 1 ? noun : `${noun}s`}`
 }
 
-/** "5 questions · 18 reviews", or what to do when there are none. */
-function trustSummary(qa: number, reviews: number): string {
-  const parts = [qa ? countSummary(qa, 'question', '') : '', reviews ? countSummary(reviews, 'review', '') : ''].filter(Boolean)
+/** "5 questions · 18 reviews · 110 site-wide", or what to do when there are none. */
+function trustSummary(qa: number, reviews: number, siteQa: number): string {
+  const parts = [
+    qa ? countSummary(qa, 'question', '') : '',
+    reviews ? countSummary(reviews, 'review', '') : '',
+    siteQa ? `${siteQa} site-wide` : '',
+  ].filter(Boolean)
   return parts.length ? parts.join(' · ') : 'Answer your first question'
 }
 
@@ -236,7 +241,7 @@ const cards = computed<HubCard[]>(() => {
       ? [{ id: 'products', title: catalogLabelText.value, description: catalogSummaryText.value, to: `${locationPath.value}/products`, visible: true }]
       : []),
     { id: 'posts', title: 'Posts', description: countSummary(counts.value.posts, 'published post', 'Write your first post'), to: `${locationPath.value}/posts`, visible: hasFeature('posts') },
-    { id: 'qa', title: 'Reviews and Q&A', description: trustSummary(counts.value.qa, counts.value.reviews), to: `${locationPath.value}/qa`, visible: hasFeature('qa') },
+    { id: 'qa', title: 'Reviews and Q&A', description: trustSummary(counts.value.qa, counts.value.reviews, counts.value.siteQa), to: `${locationPath.value}/qa`, visible: hasFeature('qa') },
     {
       id: 'reservations',
       title: 'Reservations',
