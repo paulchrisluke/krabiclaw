@@ -16,7 +16,7 @@ import { getDashboardLocationContext } from '~/server/utils/dashboard-context'
 import { resolveLocationCapabilitySummary } from '~/server/utils/location-management'
 import { parseLocationPayload } from '~/server/utils/location-payload'
 import { getProduct, hydrateProductMedia, summarizeLocationProducts } from '~/server/utils/product-management'
-import { listDashboardGuestThreadsForPrincipal } from '~/server/utils/dashboard-guest-threads'
+import { getLocationReservationConfig } from '~/server/utils/reservations'
 import { requireBlogAccess } from '~/server/utils/blog-access'
 import { getBlogPost, listBlogPosts } from '~/server/utils/content/publishing'
 import { createPreviewToken, PREVIEW_TOKEN_TTL_MS } from '~/server/utils/preview-token'
@@ -148,7 +148,6 @@ export interface LocationContentCounts {
   photos: number
   posts: number
   qa: number
-  upcomingReservations: number
 }
 
 /**
@@ -178,19 +177,12 @@ async function loadLocationContentCounts(
         WHERE mp.site_id = ? AND mp.owner_type = 'business_location' AND mp.owner_id = ?
           AND mp.slot IN ('hero', 'gallery') AND mp.status = 'active') AS photos,
       (SELECT COUNT(*) FROM content_documents WHERE kind = 'social_post' AND row_role = 'root' AND site_id = ? AND location_id = ? AND status = 'published') AS posts,
-      (SELECT COUNT(*) FROM content_documents WHERE kind = 'qa' AND row_role = 'root' AND site_id = ? AND location_id = ?) AS qa,
-      -- Counted on the reservation, not the thread: the thread holds the
-      -- conversation and the reservation holds the seating, including when it
-      -- starts and whether it still stands.
-      (SELECT COUNT(*) FROM reservations
-        WHERE site_id = ? AND location_id = ? AND status IN ('pending', 'confirmed')
-          AND starts_at >= strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) AS upcoming_reservations
-  `, Array.from({ length: 4 }, () => [siteId, locationId]).flat())
+      (SELECT COUNT(*) FROM content_documents WHERE kind = 'qa' AND row_role = 'root' AND site_id = ? AND location_id = ?) AS qa
+  `, Array.from({ length: 3 }, () => [siteId, locationId]).flat())
   return {
     photos: row?.photos ?? 0,
     posts: row?.posts ?? 0,
     qa: row?.qa ?? 0,
-    upcomingReservations: row?.upcoming_reservations ?? 0,
   }
 }
 
@@ -200,13 +192,13 @@ export async function loadDashboardLocationOverview(
   locationId: string,
   options: { includeProducts: boolean },
 ) {
-  const { env, db, organization, location, userId } = await getDashboardLocationContext(event, locationId)
+  const { env, db, organization, location } = await getDashboardLocationContext(event, locationId)
   if (location.site_id !== siteId) {
     throw new HTTPError({ statusCode: 404, statusMessage: 'Location not found' })
   }
   const principal = memberAccessPrincipal(organization, { env, siteId, event })
   await assertLocationAccess(db, { ...principal, locationId })
-  const [capabilities, catalog, threads, counts] = await Promise.all([
+  const [capabilities, catalog, reservationConfig, counts] = await Promise.all([
     resolveLocationCapabilitySummary(
       db,
       organization.id,
@@ -216,10 +208,7 @@ export async function loadDashboardLocationOverview(
     options.includeProducts
       ? summarizeLocationProducts(db, { organizationId: organization.id, locationId })
       : Promise.resolve({ total: 0, experiences: 0 }),
-    // The principal is resolved and assertLocationAccess has just run for this
-    // exact location. Handing the event over instead would re-read the session,
-    // the site row and the member row, and assert the same thing again.
-    listDashboardGuestThreadsForPrincipal(db, siteId, { principal, userId, query: { locationId } }),
+    getLocationReservationConfig(db, { organizationId: organization.id, locationId }),
     loadLocationContentCounts(db, siteId, locationId),
   ])
   return {
@@ -229,7 +218,7 @@ export async function loadDashboardLocationOverview(
       ...capabilities,
     },
     catalog,
-    threads: { summary: threads.summary },
+    reservationConfig,
     counts,
   }
 }

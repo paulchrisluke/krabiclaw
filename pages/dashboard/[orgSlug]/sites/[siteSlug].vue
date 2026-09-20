@@ -73,7 +73,30 @@
               </span>
             </NuxtLink>
 
-            <EditorNavigationList :groups="sectionGroups" :active-item="activeSection" variant="cards" />
+            <UPageList v-for="group in sectionGroups" :key="group.id" class="gap-3">
+              <h2 v-if="group.label" class="px-1 text-sm font-semibold text-muted">{{ group.label }}</h2>
+              <UPageCard
+                v-for="item in group.items"
+                :key="item.id"
+                :to="item.to"
+                :title="item.label"
+                :description="item.summary"
+                variant="soft"
+                :highlight="item.id === activeSection"
+                :ui="{ container: 'p-5 sm:p-5', title: 'text-[15px]', description: 'mt-1 line-clamp-2' }"
+              >
+                <div v-if="item.previews?.length" class="flex gap-2">
+                  <img
+                    v-for="(preview, index) in item.previews.slice(0, 4)"
+                    :key="index"
+                    :src="preview"
+                    alt=""
+                    class="aspect-[20/19] w-full max-w-24 rounded-xl object-cover"
+                    loading="lazy"
+                  >
+                </div>
+              </UPageCard>
+            </UPageList>
           </div>
         </div>
       </template>
@@ -90,7 +113,6 @@
 
 <script setup lang="ts">
 import { authClient } from '~/lib/auth-client'
-import EditorNavigationList from '~/components/dashboard/EditorNavigationList.vue'
 import { parseCmsFeatureOverrideDelta, resolveCmsCapabilities } from '~/config/cms-registry'
 import { resolvePublicTemplate } from '~/utils/template-registry'
 import { hasPlatformAdminPermission } from '~/utils/platform-admin-access'
@@ -196,10 +218,12 @@ function countSummary(total: number, noun: string, empty: string): string {
  * one; the rest are site-wide content. Collections come from the registry, so a
  * manager declared there cannot be left unreachable.
  */
-const sectionGroups = computed(() => {
+interface HubCard { id: string; label: string; summary: string; to: string; previews?: string[] }
+
+const sectionGroups = computed<Array<{ id: string; label?: string; items: HubCard[] }>>(() => {
   // Opening a location is the thing a tenant does most, so it leads the rail
   // and shows the locations themselves rather than only counting them.
-  const place = [{
+  const place: HubCard[] = [{
     id: 'locations',
     label: 'Locations',
     summary: countSummary(locations.value.length, 'location', 'Add your first location'),
@@ -223,7 +247,7 @@ const sectionGroups = computed(() => {
 
   // Brand is its own surface, not the cog's: the gear opens site settings,
   // this opens the brand editor. It ranks last because it is set up once.
-  const content = [
+  const content: HubCard[] = [
     { id: 'pages', label: 'Pages', summary: countSummary(pagesCount.value, 'page', 'No pages yet'), to: `${sitePath.value}/pages` },
     ...capabilities.value.managers
       .filter(manager => manager.scope === 'site' && manager.route && known[manager.id])
@@ -239,7 +263,7 @@ const sectionGroups = computed(() => {
   ]
 
   // KrabiClaw's own site adds the one platform-only tool: acting as a customer.
-  const platform = template.value === 'platform' && hasPlatformAdminPermission(currentUser.value?.role)
+  const platform: HubCard[] = template.value === 'platform' && hasPlatformAdminPermission(currentUser.value?.role)
     ? [{ id: 'people', label: 'People', summary: 'Every account; impersonate to see their dashboard', to: `${sitePath.value}/people` }]
     : []
 

@@ -55,7 +55,6 @@ export function useDashboardSiteLinks() {
       photos: `${location}/photos`,
       qa: `${location}/qa`,
       inbox: `${location}/messages`,
-      reservations: `${location}/reservations`,
       settings: `${location}/settings`,
     }
   })
