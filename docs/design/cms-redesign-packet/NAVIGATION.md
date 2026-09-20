@@ -114,19 +114,26 @@ Airbnb ends this list with *Remove listing*; we have no delete-location endpoint
 ### Menu → `/menu`   tab root · bell · avatar
 Org switcher · Search · Insights card, then rows:
 
-Organization (name, logo, slug) · Team (members) · Billing · Payouts (Stripe Connect) · Google (OAuth connection for Analytics and Search Console) · ChatGPT · Appearance, then **Log out** last.
+Organization (name, logo, slug) · Team (members) · Billing · Payouts (Stripe Connect), then **Log out** last, as on Airbnb's Menu.
 
-`/settings` index is deleted. Leaves stay at `/settings/<leaf>`; their Back is Menu. On `lg` the pair is Menu-list left, leaf right, first leaf open by default, as Airbnb's Account settings does.
+Deleted from Menu: **Google** (it was a site picker in front of the two site-level rows Site settings already has); **ChatGPT** (a static page of MCP setup text — belongs in platform docs or marketing, removed from the CMS entirely); **Appearance** (a per-device preference, moves to Account).
 
-### Account → `/account/profile`   title "Account settings" · Back → Menu (active org)
-Profile photo · Display name · Sign in · WhatsApp number · Notification preferences · Delete account
+`/settings` index is deleted. Leaves stay at `/settings/<leaf>`; their parent is Menu. On `lg` the pair is Menu-list left, leaf right, first leaf open by default, as Airbnb's Account settings does.
 
-Deleted from Account: Billing (it is on Menu), Log out (it is on Menu).
+### Account → `/account/profile`   title "Account settings" · parent Menu (active org)
+Profile photo · Display name · Sign in · WhatsApp number · Notifications · Appearance · **Log out** last (Airbnb has Log out on both Menu and Profile; same here).
+
+**Delete account** leaves the list. Today it sits directly above Log out, one mis-tap from the wrong irreversible action. It moves to the bottom of the **Sign in** leaf, where Airbnb keeps *Deactivate your account* at the bottom of Login & security, behind its own confirmation.
+
+Deleted from Account: Billing (it is on Menu).
 
 ### Notifications (bell) → `/notifications`   Back → Menu
 ### Insights → `/insights`   Back → Menu
 ### Messages
-Unchanged. A location-scoped editor has only the location inbox, so the three inboxes stay.
+Production has 19 members: 8 owners, 9 admins, 2 editors. The two editors are WhatsApp phone identities (`phone-…@phone.krabiclaw.local`) on location teams; they have never signed in. The scoped role exists only to route WhatsApp messages to the right recipient. So: **no signed-in user is ever restricted to one location.** The location inbox page and the `scope="location"` branch of the thread list are deleted; the site inbox with its location filter is the one inbox below the org view. The `editor` role and team tables stay for WhatsApp routing, surfaced as Location settings → WhatsApp number and Account → Notifications.
+
+### Back
+Nuxt's nested directories decide what renders inside what; they do not draw a Back or choose its target. `DashboardNavbarLeading` takes an explicit `to`, and that is why four screens point at the wrong parent. Once the tree above is real (Menu is `/settings`' parent, Notifications and Insights live under Menu, Account's parent is Menu), the parent is `route.matched[-2]` with params filled, derived once in the leading control. The `to` prop and every hand-written target are then deleted. Nobody has ever wanted a Back that goes anywhere other than up one level.
 
 ## 4. Leaves
 
@@ -143,12 +150,14 @@ Ours: every settings row opens another page with one field and a paragraph of gu
 - `pages/dashboard/[orgSlug]/sites/[siteSlug]/locations/index.vue` (becomes the Locations tab)
 - `settings/search/*` nested list (three rows flatten into the settings list)
 - Localize header buttons on Brand and Location settings (rows instead)
-- Billing and Log out rows on Account
+- Billing row on Account; ChatGPT, Google and Appearance rows on Menu (Appearance moves to Account)
+- the location inbox page and location scope in the thread list
 - `people.vue` on the site (Team on Menu is the one place for members)
 - helper paragraphs on every settings leaf
 
 ## 6. Decisions taken
 
 - Org settings rows stay **flat on Menu** rather than behind one "Settings" row: fewer pages, and Menu is already the list.
+- **Location-only dashboard access is removed**; everyone who signs in sees the whole site.
 - Bottom nav **stays** on Account and settings screens. Airbnb drops it there; keeping it is one code path.
 - Back stays a **declared parent**, not browser history, which is also what Airbnb does.
