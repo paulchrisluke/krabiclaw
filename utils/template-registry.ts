@@ -65,7 +65,7 @@ export const publicTemplateRegistry: Record<PublicTemplateSlug, PublicTemplateDe
     // /locations/<slug> are absent on purpose: they render their own data, and
     // a document stored at one of them would never be shown.
     pageDocuments: {
-      recipes: { home: '/', about: '/about', contact: '/contact', order: '/order', reservations: '/reservations' },
+      recipes: { home: '/', about: '/about', contact: '/contact', reservations: '/reservations' },
       paths: [],
       prefixes: [],
       catchAll: true,

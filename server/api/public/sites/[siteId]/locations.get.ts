@@ -33,9 +33,6 @@ interface LocationRow {
   city: string | null
   public_url: string | null
   kind: string | null
-  grab_url: string | null
-  uber_eats_url: string | null
-  foodpanda_url: string | null
 }
 
 export default defineHandler(async (event) => {
@@ -76,7 +73,7 @@ export default defineHandler(async (event) => {
       media_kind: string | null
       media_thumbnail_url: string | null
     }>(db, `
-      SELECT bl.id, bl.slug, bl.title, bl.address, bl.phone, bl.website_url, bl.maps_url, bl.latitude, bl.longitude, bl.opening_hours, bl.rating, bl.review_count, bl.status, bl.last_synced_at, bl.grab_url, bl.uber_eats_url, bl.foodpanda_url, ma.id AS asset_id, ma.public_url AS media_public_url, ma.kind AS media_kind, ma.thumbnail_url AS media_thumbnail_url
+      SELECT bl.id, bl.slug, bl.title, bl.address, bl.phone, bl.website_url, bl.maps_url, bl.latitude, bl.longitude, bl.opening_hours, bl.rating, bl.review_count, bl.status, bl.last_synced_at, ma.id AS asset_id, ma.public_url AS media_public_url, ma.kind AS media_kind, ma.thumbnail_url AS media_thumbnail_url
       FROM business_locations bl
       LEFT JOIN media_placements mp ON mp.site_id = bl.site_id AND mp.owner_type = 'business_location' AND mp.owner_id = bl.id AND mp.slot = 'hero' AND mp.sort_order = 0 AND mp.status = 'active'
       LEFT JOIN media_assets ma ON mp.asset_id = ma.id AND ma.status = 'active'
@@ -90,7 +87,7 @@ export default defineHandler(async (event) => {
       return {
         id: location.id, slug: location.slug, title: location.title, address: parsePostalAddress(location.address), phone: location.phone, website_url: location.website_url, maps_url: location.maps_url, map_embed_url: calculateMapEmbedUrl({
           title: location.title, maps_url: location.maps_url, latitude: location.latitude, longitude: location.longitude, address: parsePostalAddress(location.address)
-        }), latitude: location.latitude, longitude: location.longitude, opening_hours: location.opening_hours ? JSON.parse(location.opening_hours) : null, rating: location.rating, review_count: location.review_count, status: location.status, media: location.media_public_url ? [{ asset_id: location.asset_id, slot: 'hero', public_url: location.media_public_url, thumbnail_url: location.media_thumbnail_url, kind: location.media_kind }] : [], grab_url: location.grab_url || null, uber_eats_url: location.uber_eats_url || null, foodpanda_url: location.foodpanda_url || null
+        }), latitude: location.latitude, longitude: location.longitude, opening_hours: location.opening_hours ? JSON.parse(location.opening_hours) : null, rating: location.rating, review_count: location.review_count, status: location.status, media: location.media_public_url ? [{ asset_id: location.asset_id, slot: 'hero', public_url: location.media_public_url, thumbnail_url: location.media_thumbnail_url, kind: location.media_kind }] : []
       }
     })
 

@@ -1,6 +1,6 @@
 export const PUBLIC_SOURCE_ROUTE_ROOTS = new Set([
   'about', 'article', 'blog', 'contact', 'experiences', 'help', 'links', 'locations',
-  'donate', 'menu', 'order', 'photos', 'policies', 'posts', 'pricing', 'privacy', 'products',
+  'donate', 'menu', 'photos', 'policies', 'posts', 'pricing', 'privacy', 'products',
   'qa', 'reservations', 'reviews', 'schedule', 'services', 'terms', 'third-party-notices',
 ])
 

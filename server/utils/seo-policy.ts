@@ -48,7 +48,6 @@ export const TENANT_ONLY_EXACT_ROUTES = new Set([
   '/contact',
   '/locations',
   '/menu',
-  '/order',
   '/photos',
   '/posts',
   '/products',

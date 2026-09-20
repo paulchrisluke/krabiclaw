@@ -1,12 +1,11 @@
 <template>
   <DashboardListEditor
     read-only
-    title="Testimonials"
-    description="Reviews and testimonials are read-only. Manage Google reviews and replies in Google."
+    title="Reviews"
     :items="listItems"
     :pending="pending"
     :error="error ? getErrorMessage(error, 'Reviews request failed') : null"
-    empty-title="No testimonials yet"
+    empty-title="No reviews yet"
     empty-icon="i-lucide-star"
   >
     <template #item="{ item }">
@@ -31,14 +30,17 @@ import {
   type SiteTestimonial,
 } from '~/utils/testimonials'
 
+/** Set when this list is a location's reviews rather than the site's. */
+const props = defineProps<{ locationId?: string }>()
+
 const dashboardApi = useDashboardApi()
 const siteId = await useDashboardSiteId()
 
 const { data, pending, error } = await useAsyncData(
-  `dashboard-site-testimonials-${siteId}`,
+  () => props.locationId ? `dashboard-location-reviews-${siteId}-${props.locationId}` : `dashboard-site-reviews-${siteId}`,
   () => dashboardApi<{ reviews: SiteTestimonial[] }>(
     `/api/editor/sites/${siteId}/reviews`,
-    { validate: isTestimonialsResponse },
+    { query: props.locationId ? { location_id: props.locationId } : undefined, validate: isTestimonialsResponse },
   ),
   // Nuxt blocks navigation on useAsyncData by default; the client does not
   // need to wait for this to paint the route, and `pending` already drives a

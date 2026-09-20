@@ -1,12 +1,8 @@
-import { queryAll, type DbClient } from '~/server/db'
+import { queryAll, queryFirst, type DbClient } from '~/server/db'
 import { d1JsonStringSet } from '~/server/db/d1-limits'
 import { listAccessibleLocationIds, type MemberAccessPrincipal } from '~/server/utils/member-access'
-import { getGuestThreadOperationSummary } from '~/server/domain/guest-threads/repository'
 import { calculateMapEmbedUrl } from '~/server/utils/google-places'
-import { loadSettingsPayload } from '~/server/utils/site-settings'
 import { listTenantPages } from '~/server/utils/content/pages'
-import { listMediaAssets } from '~/server/utils/media-asset-manager'
-import { getLinksPage } from '~/server/utils/site-links'
 import { parsePostalAddress } from '~/utils/postal-address'
 
 export interface DashboardHomeLocation {
@@ -24,39 +20,14 @@ export interface DashboardHomeLocation {
   media: Array<{ asset_id: string; slot: 'social_card'; public_url: string; thumbnail_url: string | null; kind: string | null }>
 }
 
-export interface DashboardHomeEvent {
-  id: string
-  event_type: string
-  entity_type: string | null
-  entity_id: string | null
-  location_id: string | null
-  metadata: unknown
-  created_at: string
-  location_title: string | null
-}
-
 export interface DashboardHomeData {
   locations: DashboardHomeLocation[]
-  events: DashboardHomeEvent[]
-  operations: {
-    openThreads: number
-    unreadThreads: number
-    reservations: number
-    experienceBookings: number
-  }
-  settings: Awaited<ReturnType<typeof loadSettingsPayload>>
   pages: Awaited<ReturnType<typeof listTenantPages>>
-  media: Array<Awaited<ReturnType<typeof listMediaAssets>>[number] & { public_url: string }>
-  links: Awaited<ReturnType<typeof getLinksPage>>['items']
+  /** What the site-wide cards state: published articles, site questions, site reviews. */
+  counts: { blog: number; qa: number; reviews: number }
 }
 
-function safeJsonParse(value: string): unknown {
-  return JSON.parse(value)
-}
-
-// Shared by server/api/dashboard/home.get.ts and the site overview page's SSR
-// branch — see the "Nested SSR self-fetch loses Cloudflare bindings" rule in
-// the SSR boundary rule for why the page can't just $fetch its own API route.
+/** The site hub's payload: its locations, its pages and the counts its cards state. */
 export async function getDashboardHomeData(
   db: DbClient,
   organizationId: string,
@@ -68,15 +39,12 @@ export async function getDashboardHomeData(
   const locationScopeClause = scoped
     ? accessibleLocationIds.length > 0 ? `AND bl.id IN (SELECT value FROM json_each(?))` : 'AND 0'
     : ''
-  const eventScopeClause = scoped
-    ? accessibleLocationIds.length > 0 ? `AND e.location_id IN (SELECT value FROM json_each(?))` : 'AND 0'
-    : ''
   const scopedParams = accessibleLocationIds?.length ? [d1JsonStringSet(accessibleLocationIds)] : []
-  const [locations, events, operations, settings, pages, media, linksPage] = await Promise.all([
+  const [locations, pages, counts] = await Promise.all([
     queryAll<{
       id: string; slug: string; title: string
       rating: number | null; review_count: number | null
-    status: string; updated_at: string
+      status: string; updated_at: string
       address: string | null; maps_url: string | null
       latitude: number | null; longitude: number | null
       card_asset_id: string | null; card_kind: string | null; card_public_url: string | null
@@ -98,33 +66,14 @@ export async function getDashboardHomeData(
       ${locationScopeClause}
       ORDER BY bl.title ASC
     `, [organizationId, siteId, ...scopedParams]),
-
-    queryAll<{
-      id: string; event_type: string; entity_type: string | null
-      entity_id: string | null; location_id: string | null
-      metadata: string | null; created_at: string
-      location_title: string | null
-    }>(db, `
-      SELECT e.id, e.event_name AS event_type, json_extract(e.payload_json, '$.entityType') AS entity_type, json_extract(e.payload_json, '$.entityId') AS entity_id,
-             e.location_id, json_extract(e.payload_json, '$.metadata') AS metadata, e.created_at,
-             l.title as location_title
-      FROM activity_entries e
-    LEFT JOIN sites event_site ON event_site.id = e.site_id
-      LEFT JOIN business_locations l ON l.id = e.location_id
-      WHERE e.kind = 'audit' AND event_site.organization_id = ? AND e.site_id = ?
-      ${eventScopeClause}
-      ORDER BY e.created_at DESC
-      LIMIT 15
-    `, [organizationId, siteId, ...scopedParams]),
-
-    getGuestThreadOperationSummary(db, siteId, {
-      principal: scoped ? principal : null,
-      userId: principal.userId,
-    }),
-    loadSettingsPayload(db, organizationId, siteId),
     listTenantPages(db, siteId),
-    listMediaAssets(db, siteId, { kind: 'image', limit: 6, offset: 0 }),
-    getLinksPage(db, siteId),
+    // Positional placeholders repeated per subquery: D1 binds each `?` in order.
+    queryFirst<{ blog: number; qa: number; reviews: number }>(db, `
+      SELECT
+        (SELECT COUNT(*) FROM content_documents WHERE kind = 'article' AND row_role = 'root' AND site_id = ? AND status = 'published') AS blog,
+        (SELECT COUNT(*) FROM content_documents WHERE kind = 'qa' AND row_role = 'root' AND site_id = ? AND location_id IS NULL) AS qa,
+        (SELECT COUNT(*) FROM reviews WHERE site_id = ? AND location_id IS NULL) AS reviews
+    `, [siteId, siteId, siteId]),
   ])
 
   return {
@@ -138,22 +87,7 @@ export async function getDashboardHomeData(
         map_embed_url: calculateMapEmbedUrl({ ...l, address }),
       }
     }),
-    events: events.map(e => ({
-      ...e,
-      metadata: e.metadata ? safeJsonParse(e.metadata) : null,
-    })),
-    operations: {
-      openThreads: operations.openThreads,
-      unreadThreads: operations.unreadThreads,
-      reservations: operations.reservations,
-      experienceBookings: operations.experienceBookings,
-    },
-    settings,
     pages,
-    media: media.map((asset) => {
-      if (!asset.public_url) throw new Error(`Active overview media asset ${asset.id} has no public URL`)
-      return { ...asset, public_url: asset.public_url }
-    }),
-    links: linksPage.items,
+    counts: { blog: counts?.blog ?? 0, qa: counts?.qa ?? 0, reviews: counts?.reviews ?? 0 },
   }
 }

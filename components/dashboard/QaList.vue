@@ -8,7 +8,6 @@
   <DashboardListEditor
     v-model:editing="editing"
     title="Q&A"
-    :description="locationId ? 'Add common guest questions, then answer them once.' : 'Manage general questions or questions tailored to a public page. Questions imported from Google are managed in Google.'"
     :items="listItems"
     :pending="pending"
     :error="qaError ? getErrorMessage(qaError, 'Q&A request failed') : null"

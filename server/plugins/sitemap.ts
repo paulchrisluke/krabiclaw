@@ -243,7 +243,7 @@ export default definePlugin((nitroApp) => {
     const [locations, products, posts, tenantPages] = await Promise.all([
       queryAll<ApiRecord>(
         db,
-        `SELECT id, slug, updated_at, grab_url, uber_eats_url, foodpanda_url
+        `SELECT id, slug, updated_at
          FROM business_locations
          WHERE site_id = ?
            AND status = 'active'
@@ -295,9 +295,6 @@ export default definePlugin((nitroApp) => {
     if (productPresentation && surfaceProducts.length > 0) entries.push({ loc: productPresentation.collectionPath })
     if (productPresentation && bookableProducts.length > 0) entries.push({ loc: presentationForSurface(site.vertical, 'experiences').collectionPath })
     if (posts.length > 0) entries.push({ loc: '/blog' })
-    if (locations.some(location => location.grab_url || location.uber_eats_url || location.foodpanda_url)) {
-      entries.push({ loc: '/order' })
-    }
 
     const countByLocation = (rows: ApiRecord[]) => {
       const counts = new Map<string, number>()

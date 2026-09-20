@@ -53,51 +53,40 @@
             :actions="[{ label: 'Try again', color: 'neutral', variant: 'subtle', onClick: () => refresh() }]"
           />
 
-          <div v-else class="space-y-6">
-            <!--
-              A problem with the site comes first and only when there is one,
-              the way the listing editor leads with "Unlisted" rather than with
-              the listing's own details. Otherwise the rail opens on Locations,
-              which is what a tenant came here to open.
-            -->
-            <NuxtLink
-              v-if="settings && settings.custom_domain_status !== 'active'"
-              :to="`${sitePath}/settings/domains`"
-              class="block rounded-2xl bg-elevated p-5 transition-colors hover:bg-accented focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+          <!--
+            One card per thing a visitor meets on the site, in the order they
+            meet it, each stating what it holds right now. What a visitor never
+            sees — the domain, languages, currency — is behind the gear.
+          -->
+          <UPageList v-else class="gap-3">
+            <UPageCard
+              v-for="card in cards"
+              :key="card.id"
+              :to="card.to"
+              :title="card.title"
+              :description="card.description"
+              variant="soft"
+              :highlight="card.id === activeSection"
+              :ui="{ container: 'p-5 sm:p-5', title: 'text-[15px]', description: 'mt-1 line-clamp-2' }"
             >
-              <span class="flex items-center gap-2 text-[15px] font-semibold text-warning">
-                <UIcon name="i-lucide-circle-alert" class="size-4 shrink-0" /> Custom domain not connected
-              </span>
-              <span class="mt-1 block text-sm text-muted">
-                {{ siteDomain ?? 'No custom domain set' }}
-              </span>
-            </NuxtLink>
-
-            <UPageList v-for="group in sectionGroups" :key="group.id" class="gap-3">
-              <h2 v-if="group.label" class="px-1 text-sm font-semibold text-muted">{{ group.label }}</h2>
-              <UPageCard
-                v-for="item in group.items"
-                :key="item.id"
-                :to="item.to"
-                :title="item.label"
-                :description="item.summary"
-                variant="soft"
-                :highlight="item.id === activeSection"
-                :ui="{ container: 'p-5 sm:p-5', title: 'text-[15px]', description: 'mt-1 line-clamp-2' }"
+              <img
+                v-if="card.image"
+                :src="card.image"
+                alt=""
+                class="aspect-[40/21] w-full rounded-xl object-cover"
               >
-                <div v-if="item.previews?.length" class="flex gap-2">
-                  <img
-                    v-for="(preview, index) in item.previews.slice(0, 4)"
-                    :key="index"
-                    :src="preview"
-                    alt=""
-                    class="aspect-[20/19] w-full max-w-24 rounded-xl object-cover"
-                    loading="lazy"
-                  >
-                </div>
-              </UPageCard>
-            </UPageList>
-          </div>
+              <div v-else-if="card.previews?.length" class="flex gap-2">
+                <img
+                  v-for="(preview, index) in card.previews.slice(0, 4)"
+                  :key="index"
+                  :src="preview"
+                  alt=""
+                  class="aspect-[20/19] w-full max-w-24 rounded-xl object-cover"
+                  loading="lazy"
+                >
+              </div>
+            </UPageCard>
+          </UPageList>
         </div>
       </template>
     </UDashboardPanel>
@@ -150,10 +139,7 @@ const activeSection = frame.childSegment
 
 const siteName = computed(() => dashboard.site.value?.brand_name ?? '')
 const canManageSite = computed(() => dashboard.siteAccess.value !== 'location')
-// The custom domain and only the custom domain. Falling through to the public
-// URL printed a working krabiclaw.com address underneath "Custom domain not
-// connected", which reads as the domain that failed.
-const siteDomain = computed(() => dashboard.site.value?.custom_domain ?? null)
+const siteLogo = computed(() => dashboard.sites.value.find(site => site.id === siteId)?.media.find(item => item.slot === 'logo')?.public_url ?? '')
 const publicSiteUrl = computed(() => dashboard.site.value?.public_url || '')
 
 const session = authClient.useSession()
@@ -172,15 +158,13 @@ const { data: overviewData, pending, error: overviewError, refresh } = await use
   dashboardApi<DashboardHomeData>('/api/dashboard/home', {
     signal,
     validate: (value): value is DashboardHomeData => isRecord(value)
-      && Array.isArray(value.locations) && isRecord(value.settings)
-      && Array.isArray(value.pages) && Array.isArray(value.media) && Array.isArray(value.links),
+      && Array.isArray(value.locations) && Array.isArray(value.pages)
+      && isRecord(value.counts) && typeof value.counts.blog === 'number',
   }), {
   // While a child route owns the chrome — the page editor, the blog editor,
-  // media, settings, a location — this hub's body is not rendered at all
+  // settings, a location — this hub's body is not rendered at all
   // (`rendersStandalone` above swaps the whole panel for <NuxtPage/>), so
-  // nothing on screen reads this. getDashboardHomeData is one of the heaviest
-  // reads in the dashboard: the site's locations, settings, pages, media,
-  // links and audit events.
+  // nothing on screen reads this.
   immediate: !rendersStandalone.value,
 })
 
@@ -201,11 +185,9 @@ const overviewPending = computed(() =>
 const overviewErrorMessage = computed(() =>
   overviewError.value ? getErrorMessage(overviewError.value, 'Failed to load this site') : null)
 
-const settings = computed(() => overviewData.value?.settings ?? null)
 const locations = computed(() => overviewData.value?.locations ?? [])
 const pagesCount = computed(() => overviewData.value?.pages.length ?? 0)
-const mediaCount = computed(() => overviewData.value?.media.length ?? 0)
-const activeLinksCount = computed(() => overviewData.value?.links.filter(item => item.status === 'active').length ?? 0)
+const counts = computed(() => overviewData.value?.counts ?? { blog: 0, qa: 0, reviews: 0 })
 
 /** Plural-aware count, or the empty state that says what to do instead. */
 function countSummary(total: number, noun: string, empty: string): string {
@@ -213,65 +195,41 @@ function countSummary(total: number, noun: string, empty: string): string {
   return `${total} ${total === 1 ? noun : `${noun}s`}`
 }
 
+/** "5 questions · 18 reviews", or what to do when there are none. */
+function trustSummary(qa: number, reviews: number): string {
+  const parts = [qa ? countSummary(qa, 'question', '') : '', reviews ? countSummary(reviews, 'review', '') : ''].filter(Boolean)
+  return parts.length ? parts.join(' · ') : 'Answer your first question'
+}
+
+interface HubCard { id: string; title: string; description: string; to: string; image?: string; previews?: string[] }
+
+const managers = computed(() => new Set(capabilities.value.managers.filter(manager => manager.scope === 'site').map(manager => manager.id)))
+
 /**
- * The site's own sections. Locations comes first because a tenant works inside
- * one; the rest are site-wide content. Collections come from the registry, so a
- * manager declared there cannot be left unreachable.
+ * The site as a visitor meets it: the brand on every page, the locations, the
+ * pages, the blog, the reviews and questions. Each card states its value.
  */
-interface HubCard { id: string; label: string; summary: string; to: string; previews?: string[] }
-
-const sectionGroups = computed<Array<{ id: string; label?: string; items: HubCard[] }>>(() => {
-  // Opening a location is the thing a tenant does most, so it leads the rail
-  // and shows the locations themselves rather than only counting them.
-  const place: HubCard[] = [{
-    id: 'locations',
-    label: 'Locations',
-    summary: countSummary(locations.value.length, 'location', 'Add your first location'),
-    to: `${sitePath.value}/locations`,
-    previews: locations.value
-      .map(location => location.media.find(item => item.slot === 'social_card')?.public_url)
-      .filter((url): url is string => Boolean(url)),
-  }]
-
-  // Ordered by how often a tenant edits it, not by the order the registry
-  // happens to declare things in. Guest-facing content first, then the
-  // long-form and peripheral surfaces.
-  const known: Record<string, { label: string; summary: string; rank: number }> = {
-    qa: { label: 'Q&A', summary: '', rank: 1 },
-    testimonials: { label: 'Testimonials', summary: '', rank: 2 },
-    ordering: { label: 'Orders', summary: '', rank: 3 },
-    blog: { label: 'Blog posts', summary: '', rank: 4 },
-    media: { label: 'Media library', summary: countSummary(mediaCount.value, 'file', 'Upload your first file'), rank: 5 },
-    links: { label: 'Links page', summary: countSummary(activeLinksCount.value, 'active link', 'Add your first link'), rank: 6 },
-  }
-
-  // Brand is its own surface, not the cog's: the gear opens site settings,
-  // this opens the brand editor. It ranks last because it is set up once.
-  const content: HubCard[] = [
-    { id: 'pages', label: 'Pages', summary: countSummary(pagesCount.value, 'page', 'No pages yet'), to: `${sitePath.value}/pages` },
-    ...capabilities.value.managers
-      .filter(manager => manager.scope === 'site' && manager.route && known[manager.id])
-      .map(manager => ({
-        id: manager.route.split('/')[0]!,
-        label: known[manager.id]!.label,
-        summary: known[manager.id]!.summary,
-        to: `${sitePath.value}/${manager.route}`,
-        rank: known[manager.id]!.rank,
-      }))
-      .sort((a, b) => a.rank - b.rank),
-    { id: 'brand', label: 'Brand', summary: siteName.value, to: `${sitePath.value}/brand` },
+const cards = computed<HubCard[]>(() => {
+  const list: HubCard[] = [
+    { id: 'brand', title: 'Brand', description: siteName.value, to: `${sitePath.value}/brand`, image: siteLogo.value || undefined },
+    {
+      id: 'locations',
+      title: capabilities.value.managers.find(manager => manager.key === 'site.locations')?.label ?? 'Locations',
+      description: countSummary(locations.value.length, 'location', 'Add your first location'),
+      to: `${sitePath.value}/locations`,
+      previews: locations.value
+        .map(location => location.media.find(item => item.slot === 'social_card')?.public_url)
+        .filter((url): url is string => Boolean(url)),
+    },
+    { id: 'pages', title: 'Pages', description: countSummary(pagesCount.value, 'page', 'No pages yet'), to: `${sitePath.value}/pages` },
   ]
-
+  if (managers.value.has('blog')) list.push({ id: 'blog', title: 'Blog', description: countSummary(counts.value.blog, 'published post', 'Write your first post'), to: `${sitePath.value}/blog` })
+  if (managers.value.has('qa')) list.push({ id: 'qa', title: 'Reviews and Q&A', description: trustSummary(counts.value.qa, counts.value.reviews), to: `${sitePath.value}/qa` })
   // KrabiClaw's own site adds the one platform-only tool: acting as a customer.
-  const platform: HubCard[] = template.value === 'platform' && hasPlatformAdminPermission(currentUser.value?.role)
-    ? [{ id: 'people', label: 'People', summary: 'Every account; impersonate to see their dashboard', to: `${sitePath.value}/people` }]
-    : []
-
-  return [
-    { id: 'place', items: place },
-    { id: 'content', label: 'Content', items: content },
-    { id: 'platform', label: 'KrabiClaw', items: platform },
-  ].filter(group => group.items.length > 0)
+  if (template.value === 'platform' && hasPlatformAdminPermission(currentUser.value?.role)) {
+    list.push({ id: 'people', title: 'People', description: 'Every account; impersonate to see their dashboard', to: `${sitePath.value}/people` })
+  }
+  return list
 })
 
 // Tailwind's `lg`, which is where the second panel appears and where
@@ -283,7 +241,7 @@ let sectionChosen = false
 function openFirstSectionBesideTheRail() {
   if (sectionChosen || pending.value || hasDetail.value) return
   if (!window.matchMedia(PANE_BREAKPOINT).matches) return
-  const first = sectionGroups.value[0]?.items[0]
+  const first = cards.value[0]
   if (!first) return
   sectionChosen = true
   void navigateTo(first.to, { replace: true })

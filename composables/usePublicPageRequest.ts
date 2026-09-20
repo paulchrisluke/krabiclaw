@@ -125,13 +125,6 @@ export function getPublicPageRequest(path: string): Omit<PublicPageRequest, "loc
       datasets: ['content', 'reservationPolicies'],
       blogSlug: null,
     };
-  if (path.startsWith("/order"))
-    return {
-      page: "order",
-      location: null,
-      datasets: ['content'],
-      blogSlug: null,
-    };
   if (path.startsWith("/qa"))
     return {
       page: "qa",

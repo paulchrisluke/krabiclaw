@@ -233,7 +233,7 @@ async function loadPublicPageSource(
   // the page value; allowlisting against the real route set bounds that space.
   const VALID_PAGES = new Set([
     'home', 'locations', 'location', 'about', 'contact', 'reservations',
-    'order', 'qa', 'reviews', 'posts', 'photos', 'menu', 'products',
+    'qa', 'reviews', 'posts', 'photos', 'menu', 'products',
     'experiences', 'blog',
   ]);
   const areDatasetsValid = [...requestedDatasets].every(dataset => VALID_DATASETS.has(dataset));
@@ -608,7 +608,6 @@ async function loadPublicPageSource(
   // The route remains valid when that optional overlay has no translated page.
   const allowsMissingLocalizedTenantPage = page === 'contact'
     || page === 'reservations'
-    || page === 'order'
   if (contentPagePath && !tenantPage && locale && locale !== sourceLocale && !isPreviewAuthorized && !allowsMissingLocalizedTenantPage) {
     throw new HTTPError({ statusCode: 404, statusMessage: 'Localized page was not found' })
   }
@@ -722,9 +721,6 @@ async function loadPublicPageSource(
       }] : [],
       short_description: loc.short_description || null,
       description: loc.description || null,
-      grab_url: loc.grab_url || null,
-      uber_eats_url: loc.uber_eats_url || null,
-      foodpanda_url: loc.foodpanda_url || null,
       seo_title: (loc.seo_title as string | null) ?? null,
       seo_description: (loc.seo_description as string | null) ?? null,
       canonical_url: (loc.canonical_url as string | null) ?? null,

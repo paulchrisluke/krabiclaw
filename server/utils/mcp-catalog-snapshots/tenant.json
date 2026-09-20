@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:e42c783ca38e66e998935797ec2df04849206044d9c9b66d406aeaa93ab1455b",
+  "fingerprint": "sha256:b09064ba4b7ac5c6c0ff826ea4683fc84a035b14ab706697b341bedf937cc3bc",
   "tools": [
     {
       "name": "attach_media",
@@ -3822,18 +3822,6 @@
                   "null"
                 ]
               },
-              "foodpanda_url": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "grab_url": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
               "id": {
                 "type": "string"
               },
@@ -4196,12 +4184,6 @@
               },
               "title": {
                 "type": "string"
-              },
-              "uber_eats_url": {
-                "type": [
-                  "string",
-                  "null"
-                ]
               },
               "updated_at": {
                 "type": "string"
@@ -14587,14 +14569,6 @@
             "description": "Full Facebook page URL for this location, e.g. https://facebook.com/yourpage. Include the https:// scheme.",
             "type": "string"
           },
-          "foodpanda_url": {
-            "description": "Foodpanda URL for this location. Must be a full http:// or https:// URL — bare domains are rejected.",
-            "type": "string"
-          },
-          "grab_url": {
-            "description": "Grab delivery/booking URL for this location. Must be a full http:// or https:// URL — bare domains are rejected.",
-            "type": "string"
-          },
           "instagram_url": {
             "description": "Full Instagram profile URL for this location, e.g. https://instagram.com/yourhandle. Include the https:// scheme.",
             "type": "string"
@@ -14888,10 +14862,6 @@
           },
           "timezone": {
             "description": "IANA time zone identifier for this location, e.g. Asia/Bangkok. Used to interpret opening hours and booking slots.",
-            "type": "string"
-          },
-          "uber_eats_url": {
-            "description": "Uber Eats URL for this location. Must be a full http:// or https:// URL — bare domains are rejected.",
             "type": "string"
           }
         },

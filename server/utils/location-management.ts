@@ -56,9 +56,6 @@ export interface CreateLocationInput {
   facebook_url?: string | null;
   instagram_url?: string | null;
   tiktok_url?: string | null;
-  grab_url?: string | null;
-  uber_eats_url?: string | null;
-  foodpanda_url?: string | null;
   notification_phone?: string | null;
   timezone?: string | null;
   max_capacity?: number | null;
@@ -99,9 +96,6 @@ export interface LocationRecord {
   facebook_url?: string | null;
   instagram_url?: string | null;
   tiktok_url?: string | null;
-  grab_url?: string | null;
-  uber_eats_url?: string | null;
-  foodpanda_url?: string | null;
   notification_phone?: string | null;
   timezone?: string | null;
   max_capacity?: number | null;
@@ -131,23 +125,6 @@ function toSlug(value: string) {
 function isUniqueConstraintError(error: unknown) {
   const message = error instanceof Error ? error.message : String(error || "");
   return /UNIQUE constraint failed/i.test(message);
-}
-
-function normalizeOrderingUrl(value: string | null | undefined, field: string) {
-  if (value === undefined || value === null || value === "") return null;
-
-  const trimmed = value.trim();
-  if (!trimmed) return null;
-
-  try {
-    const url = new URL(trimmed);
-    if (!["http:", "https:"].includes(url.protocol)) {
-      throw new Error("Invalid protocol");
-    }
-    return url.toString();
-  } catch {
-    throw new Error(`${field} must be a valid http:// or https:// URL`);
-  }
 }
 
 export function serializeOpeningHours(value: unknown): string | null {
@@ -311,7 +288,7 @@ async function loadLocation(
   const columns = `id, slug, title, phone, email, website_url, maps_url, google_review_url, google_place_id,
            rating, review_count, description, short_description, status,
            address, opening_hours, special_hours, categories, price_level,
-           facebook_url, instagram_url, tiktok_url, grab_url, uber_eats_url, foodpanda_url,
+           facebook_url, instagram_url, tiktok_url,
            notification_phone, timezone, max_capacity, seo_title, seo_description, canonical_url, robots,
            feature_overrides, created_at, updated_at`;
   // Check id first so a slug that happens to collide with another row's id can
@@ -432,11 +409,11 @@ export async function createLocation(
           INSERT INTO business_locations (
             id, organization_id, site_id, title, slug, phone, email, website_url, maps_url,
             google_review_url, google_place_id, description, short_description, address, opening_hours, special_hours, rating, review_count,
-            price_level, facebook_url, instagram_url, tiktok_url, grab_url, uber_eats_url, foodpanda_url,
+            price_level, facebook_url, instagram_url, tiktok_url,
             notification_phone, timezone, max_capacity, status,
             seo_title, seo_description, canonical_url, robots, feature_overrides, created_at, updated_at
           )
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, ?)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, ?)
         `,
         params: [
           id,
@@ -461,9 +438,6 @@ export async function createLocation(
           input.facebook_url ?? null,
           input.instagram_url ?? null,
           input.tiktok_url ?? null,
-          normalizeOrderingUrl(input.grab_url, "grab_url"),
-          normalizeOrderingUrl(input.uber_eats_url, "uber_eats_url"),
-          normalizeOrderingUrl(input.foodpanda_url, "foodpanda_url"),
           normalizedNotificationPhone,
           normalizedTimezone ?? null,
           input.max_capacity ?? null,
@@ -716,47 +690,6 @@ export async function updateLocation(
   if (input.review_count !== undefined) {
     sets.push("review_count = ?");
     params.push(input.review_count ?? null);
-  }
-  if (input.grab_url !== undefined) {
-    try {
-      sets.push("grab_url = ?");
-      params.push(normalizeOrderingUrl(input.grab_url, "grab_url"));
-    } catch (error) {
-      return {
-        status: 400,
-        data: {
-          error: error instanceof Error ? error.message : "Invalid grab_url.",
-        },
-      };
-    }
-  }
-  if (input.uber_eats_url !== undefined) {
-    try {
-      sets.push("uber_eats_url = ?");
-      params.push(normalizeOrderingUrl(input.uber_eats_url, "uber_eats_url"));
-    } catch (error) {
-      return {
-        status: 400,
-        data: {
-          error:
-            error instanceof Error ? error.message : "Invalid uber_eats_url.",
-        },
-      };
-    }
-  }
-  if (input.foodpanda_url !== undefined) {
-    try {
-      sets.push("foodpanda_url = ?");
-      params.push(normalizeOrderingUrl(input.foodpanda_url, "foodpanda_url"));
-    } catch (error) {
-      return {
-        status: 400,
-        data: {
-          error:
-            error instanceof Error ? error.message : "Invalid foodpanda_url.",
-        },
-      };
-    }
   }
   if (input.feature_overrides !== undefined) {
     sets.push("feature_overrides = ?");

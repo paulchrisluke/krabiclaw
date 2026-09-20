@@ -32,8 +32,6 @@ export function useDashboardSiteLinks() {
       pages: `${site}/pages`,
       qa: `${site}/qa`,
       inbox: `${site}/messages`,
-      order: `${site}/orders`,
-      media: `${site}/media`,
       locations: `${site}/locations`,
       domains: `${settings}/domains`,
       settings,

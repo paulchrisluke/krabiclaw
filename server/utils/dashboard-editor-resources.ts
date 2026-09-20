@@ -148,6 +148,7 @@ export interface LocationContentCounts {
   photos: number
   posts: number
   qa: number
+  reviews: number
 }
 
 /**
@@ -177,12 +178,14 @@ async function loadLocationContentCounts(
         WHERE mp.site_id = ? AND mp.owner_type = 'business_location' AND mp.owner_id = ?
           AND mp.slot IN ('hero', 'gallery') AND mp.status = 'active') AS photos,
       (SELECT COUNT(*) FROM content_documents WHERE kind = 'social_post' AND row_role = 'root' AND site_id = ? AND location_id = ? AND status = 'published') AS posts,
-      (SELECT COUNT(*) FROM content_documents WHERE kind = 'qa' AND row_role = 'root' AND site_id = ? AND location_id = ?) AS qa
-  `, Array.from({ length: 3 }, () => [siteId, locationId]).flat())
+      (SELECT COUNT(*) FROM content_documents WHERE kind = 'qa' AND row_role = 'root' AND site_id = ? AND location_id = ?) AS qa,
+      (SELECT COUNT(*) FROM reviews WHERE site_id = ? AND location_id = ?) AS reviews
+  `, Array.from({ length: 4 }, () => [siteId, locationId]).flat())
   return {
     photos: row?.photos ?? 0,
     posts: row?.posts ?? 0,
     qa: row?.qa ?? 0,
+    reviews: row?.reviews ?? 0,
   }
 }
 

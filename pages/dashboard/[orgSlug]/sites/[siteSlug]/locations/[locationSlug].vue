@@ -123,6 +123,7 @@ interface LocationContentCounts {
   photos: number
   posts: number
   qa: number
+  reviews: number
 }
 interface LocationOverviewResource {
   location: { success: boolean; location: LocationOverview }
@@ -163,7 +164,7 @@ const activeSection = computed(() => sectionSegment.value || null)
 const location = ref<LocationOverview | null>(null)
 const catalog = ref<CatalogCounts>({ total: 0, experiences: 0 })
 const reservationConfig = ref<LocationReservationConfig | null>(null)
-const counts = ref<LocationContentCounts>({ photos: 0, posts: 0, qa: 0 })
+const counts = ref<LocationContentCounts>({ photos: 0, posts: 0, qa: 0, reviews: 0 })
 const error = ref<string | null>(null)
 
 const dashboardLocationRow = computed(() => dashboard.locations.value.find(candidate => candidate.id === locationId.value) ?? null)
@@ -209,6 +210,12 @@ function countSummary(total: number, noun: string, empty: string): string {
   return `${total} ${total === 1 ? noun : `${noun}s`}`
 }
 
+/** "5 questions · 18 reviews", or what to do when there are none. */
+function trustSummary(qa: number, reviews: number): string {
+  const parts = [qa ? countSummary(qa, 'question', '') : '', reviews ? countSummary(reviews, 'review', '') : ''].filter(Boolean)
+  return parts.length ? parts.join(' · ') : 'Answer your first question'
+}
+
 interface HubCard { id: string; title: string; description: string; to: string; image?: string }
 
 const cards = computed<HubCard[]>(() => {
@@ -229,7 +236,7 @@ const cards = computed<HubCard[]>(() => {
       ? [{ id: 'products', title: catalogLabelText.value, description: catalogSummaryText.value, to: `${locationPath.value}/products`, visible: true }]
       : []),
     { id: 'posts', title: 'Posts', description: countSummary(counts.value.posts, 'published post', 'Write your first post'), to: `${locationPath.value}/posts`, visible: hasFeature('posts') },
-    { id: 'qa', title: 'Q&A', description: countSummary(counts.value.qa, 'question', 'Answer your first question'), to: `${locationPath.value}/qa`, visible: hasFeature('qa') },
+    { id: 'qa', title: 'Reviews and Q&A', description: trustSummary(counts.value.qa, counts.value.reviews), to: `${locationPath.value}/qa`, visible: hasFeature('qa') },
     {
       id: 'reservations',
       title: 'Reservations',
