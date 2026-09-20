@@ -6,13 +6,14 @@
 // the children's REFERENCES, so dropping the old table cascades just the same.
 // Measured on a throwaway D1 instance, 2026-09-09; see release-flow.md.
 //
-// SQLite replays the chain in journal order and its authorizer denies the DROP
-// against the foreign keys that exist at that statement. A parent whose
+// SQLite replays the chain in the order wrangler applies it (the sorted .sql
+// files in migrations/) and its authorizer denies the DROP against the foreign
+// keys that exist at that statement. A parent whose
 // referencing tables were dropped first may go: nothing is left to cascade.
-import { readFile } from 'node:fs/promises'
+import { readdir, readFile } from 'node:fs/promises'
 import { DatabaseSync, constants } from 'node:sqlite'
 
-const journal = JSON.parse(await readFile('migrations/meta/_journal.json', 'utf8'))
+const files = (await readdir('migrations')).filter(name => name.endsWith('.sql')).sort()
 const db = new DatabaseSync(':memory:')
 let parents = new Set()
 let blocked
@@ -22,8 +23,8 @@ db.setAuthorizer((action, table) => {
   return blocked ? constants.SQLITE_DENY : constants.SQLITE_OK
 })
 
-for (const { tag } of journal.entries) {
-  const file = `migrations/${tag}.sql`
+for (const name of files) {
+  const file = `migrations/${name}`
   let remaining = await readFile(file, 'utf8')
   try {
     while ((remaining = remaining.replace(/^(?:\s|;|--[^\n]*(?:\n|$)|\/\*[\s\S]*?\*\/)+/, ''))) {
