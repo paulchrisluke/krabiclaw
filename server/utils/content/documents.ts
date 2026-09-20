@@ -573,6 +573,7 @@ export async function appendContentBlock(
   db: DbClient,
   documentId: string,
   input: ContentBlockInput & { after_block_id?: string | null },
+  opts: Pick<ContentDocumentWriteOptions, 'additionalQueriesAfter'> = {},
 ) {
   const document = await getContentDocumentById(db, documentId)
   if (!document) notFound('Content document not found')
@@ -582,6 +583,9 @@ export async function appendContentBlock(
   if (input.after_block_id && afterIndex === -1) badRequest('after_block_id was not found in this document')
 
   const newBlock: ContentBlockWriteInput = {
+    // The caller's id when it has one, so the media placements it batches
+    // alongside this write address the block that is actually inserted.
+    id: input.id,
     source_block_id: input.source_block_id ?? null,
     parent_block_id: input.parent_block_id ?? null,
     type: assertBlockType(input.type),
@@ -615,13 +619,14 @@ export async function appendContentBlock(
     })),
   ].map((block, index) => ({ ...block, position: index, updated_at: block.position === index ? block.updated_at : null }))
 
-  return await writeDocumentBlocks(db, document, snapshots)
+  return await writeDocumentBlocks(db, document, snapshots, opts)
 }
 
 export async function replaceContentBlock(
   db: DbClient,
   blockId: string,
   input: { data: Record<string, unknown>; expected_updated_at: string },
+  opts: Pick<ContentDocumentWriteOptions, 'additionalQueriesAfter'> = {},
 ) {
   const current = await getContentBlock(db, blockId)
   const document = await getContentDocumentById(db, current.document_id)
@@ -643,7 +648,7 @@ export async function replaceContentBlock(
     updated_at: block.id === blockId ? null : block.updated_at,
   }))
 
-  return await writeDocumentBlocks(db, document, snapshots)
+  return await writeDocumentBlocks(db, document, snapshots, opts)
 }
 
 export async function deleteContentBlock(
@@ -687,11 +692,6 @@ export async function deleteContentBlock(
     }))
 
   return await writeDocumentBlocks(db, document, snapshots)
-}
-
-export async function renderContentPreview(db: DbClient, documentId: string) {
-  const blocks = await listBlocksForDocument(db, documentId)
-  return { body_markdown: renderContentBlocksToMarkdown(blocks), blocks: await attachContentBlockMedia(db, documentId, blocks.map(formatBlockOutline)) }
 }
 
 export async function getContentEditorSnapshotForDocument(db: DbClient, document: ContentDocumentRow) {

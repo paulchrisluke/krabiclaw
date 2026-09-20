@@ -54,7 +54,7 @@ test.describe('stateless MCP server', () => {
         sort_order: number
         page_type: string
         recipe: string | null
-        blocks: Array<{ id: string; type: string; position: number; level: number | null; parent_block_id: string | null; source_block_id: string | null; data: Record<string, unknown>; media: unknown[] }>
+        blocks: Array<{ id: string; type: string; level: number | null; parent_block_id: string | null; source_block_id: string | null; data: Record<string, unknown>; media: unknown[] }>
       }
     }>(await pageBefore.json()).page
     // update_tenant_page replaces the document, so the writer states the path,

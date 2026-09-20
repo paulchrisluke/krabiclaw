@@ -234,7 +234,7 @@ test.describe('stateless MCP server', () => {
       expect(readPost.content_blocks.map(block => block.type)).toEqual(['heading', 'markdown'])
 
       const update = await mcpRequest(request, baseURL!, {
-        method: 'tools/call', toolName: 'replace_blog_content',
+        method: 'tools/call', toolName: 'update_blog_post',
         args: {
           site_id: siteId,
           post_id: postId,
@@ -288,7 +288,7 @@ test.describe('stateless MCP server', () => {
       })
       expect((await reschedule.json()).result?.isError).toBe(true)
       const unlist = await mcpRequest(request, baseURL!, {
-        method: 'tools/call', toolName: 'update_blog_metadata',
+        method: 'tools/call', toolName: 'update_blog_post',
         args: { site_id: siteId, post_id: postId, expected_updated_at: published.updated_at, visibility: 'unlisted' },
       })
       const unlisted = mcpData<{ post: { status: string; visibility: string; public_url: string; published_at: string } }>(await unlist.json()).post

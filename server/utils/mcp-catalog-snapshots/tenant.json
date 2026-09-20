@@ -1,7 +1,174 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:4a1b27e20035a5597e9e369ce34f60b0e1262f477514aa84c2cf2dc60fb5fc37",
+  "fingerprint": "sha256:d8807fcf0c513de668f1fdd94a8a2706639a7519b1caddd412a8793a09a0205b",
   "tools": [
+    {
+      "name": "append_content_block",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "after_block_id": {
+            "description": "The block this one follows. Omit to append at the end.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "data": {
+            "description": "Typed block payload. Plain-text fields are rendered literally, so markdown syntax written into one reaches the reader as raw characters — a heading of \"**Title**\" publishes with the asterisks showing. Only the fields listed as markdown are parsed. A markdown field also requires editor_mode alongside it: \"rich\" for prose the visual editor can handle, \"source\" for tables or raw HTML. Asset IDs and delivery URLs belong in the block media array, never in data. Fields by block type — heading block: literal — text. Also level (one of 1, 2, 3, 4, 5, 6). markdown block: parsed as markdown — markdown. Also editor_mode (one of rich, source). image block: literal — caption. gallery block: literal — caption. faq block: literal — title. Also source (one of page_qa, site_qa). how_to block: literal — title, label, estimated_time, tool_items.*, supply_items.*, steps.*.name, steps.*.text. divider block: no text fields. cta block: literal — title, accent, description, label, secondary_label. Also url (url), secondary_url (url). contact_cta block: literal — title, accent, description, label, secondary_label. Also url (url), secondary_url (url). booking_cta block: literal — title, accent, description, label, secondary_label, price_line, notice. Also url (url), secondary_url (url). callout block: literal — title, body, badge, buttons.*.label. Also tone (one of neutral, info, success, warning, danger). hero block: literal — title, accent, eyebrow, subtitle, cta_label, secondary_label. Also cta_url (url), secondary_url (url). button_group block: literal — buttons.*.label. feature_grid block: literal — title, description, items.*.title, items.*.description, items.*.value, items.*.label; parsed as markdown — items.*.body. Also source (one of manual, site_posts, site_updates, calculator, billing_plans). comparison block: literal — title, description, problem_title, problem_label, problem_items.*.title, problem_items.*.description, solution_title, solution_label, solution_items.*.title, solution_items.*.description. stat_grid block: literal — title, description, label, items.*.value, items.*.title. workflow_grid block: literal — title, description, label, items.*.title, items.*.prompt, items.*.description. video_feature block: literal — title, description, video_title, items.*.title, items.*.description. Also video_url (url). media_text block: literal — title, body, label. Also url (url). contact_form block: no text fields. team_grid block: literal — title, description, items.*.first_name, items.*.last_name, items.*.title, items.*.bio. testimonial_grid block: literal — title, description. donation_choices block: literal — title, description, tiers.*.title, tiers.*.description. Also destination (url). page_grid block: literal — title, accent, description. Also page_ids (page ids). product_grid block: literal — title, description. Also collection_id (collection ids), product_ids (product ids). location_grid block: literal — title, description. Also location_ids (location ids). ai_assistance block: literal — label, intro, prompts.*.title, prompts.*.prompt, prompts.*.description, prompts.*.copy_label.",
+            "type": "object"
+          },
+          "document_id": {
+            "description": "The blog post id or tenant page variant id.",
+            "type": "string"
+          },
+          "level": {
+            "description": "Heading blocks only.",
+            "maximum": 6,
+            "minimum": 1,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "media": {
+            "description": "Required on image blocks: one item, the picture. Send a block's media as a read returned it.",
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "alt_text": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "asset_id": {
+                  "type": "string"
+                },
+                "file_name": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "height": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "kind": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "public_url": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "slot": {
+                  "type": "string"
+                },
+                "sort_order": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "thumbnail_url": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "width": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                }
+              },
+              "required": [
+                "asset_id",
+                "slot"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "site_id": {
+            "description": "Internal KrabiClaw site ID from get_workspace_context or list_sites, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
+            "type": "string"
+          },
+          "type": {
+            "enum": [
+              "heading",
+              "markdown",
+              "image",
+              "gallery",
+              "faq",
+              "how_to",
+              "divider",
+              "cta",
+              "contact_cta",
+              "booking_cta",
+              "callout",
+              "hero",
+              "button_group",
+              "feature_grid",
+              "comparison",
+              "stat_grid",
+              "workflow_grid",
+              "video_feature",
+              "media_text",
+              "contact_form",
+              "team_grid",
+              "testimonial_grid",
+              "donation_choices",
+              "page_grid",
+              "product_grid",
+              "location_grid",
+              "ai_assistance"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "document_id",
+          "type",
+          "data"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "blocks": {
+            "description": "The whole document after the change, in order, each block with its id and updated_at.",
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "document_id": {
+            "type": "string"
+          },
+          "updated_at": {
+            "description": "The document's new concurrency token.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "document_id",
+          "updated_at",
+          "blocks"
+        ],
+        "type": "object"
+      }
+    },
     {
       "name": "attach_media",
       "inputSchema": {
@@ -971,7 +1138,7 @@
             "type": "string"
           },
           "content_blocks": {
-            "description": "Canonical ordered article blocks. This is the source of truth for FAQ, How-To, media, and other structured content.",
+            "description": "The article, in order. Any number of blocks of any type, images wherever they belong. The first block, when it is an image, is the cover.",
             "items": {
               "additionalProperties": false,
               "properties": {
@@ -1076,6 +1243,13 @@
                     "callout"
                   ],
                   "type": "string"
+                },
+                "updated_at": {
+                  "description": "As read. Ignored on a whole-document write.",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
                 }
               },
               "required": [
@@ -1259,9 +1433,6 @@
                         "null"
                       ]
                     },
-                    "position": {
-                      "type": "number"
-                    },
                     "type": {
                       "enum": [
                         "heading",
@@ -1282,7 +1453,6 @@
                     "id",
                     "parent_block_id",
                     "type",
-                    "position",
                     "level",
                     "data",
                     "media"
@@ -2969,6 +3139,13 @@
                 },
                 "type": {
                   "type": "string"
+                },
+                "updated_at": {
+                  "description": "As read. Ignored on a whole-document write.",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
                 }
               },
               "required": [
@@ -3150,6 +3327,55 @@
         },
         "required": [
           "deleted"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "name": "delete_content_block",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "block_id": {
+            "type": "string"
+          },
+          "expected_updated_at": {
+            "description": "The block's updated_at from the last read.",
+            "type": "string"
+          },
+          "site_id": {
+            "description": "Internal KrabiClaw site ID from get_workspace_context or list_sites, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "block_id",
+          "expected_updated_at"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "blocks": {
+            "description": "The whole document after the change, in order, each block with its id and updated_at.",
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "document_id": {
+            "type": "string"
+          },
+          "updated_at": {
+            "description": "The document's new concurrency token.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "document_id",
+          "updated_at",
+          "blocks"
         ],
         "type": "object"
       }
@@ -3516,9 +3742,6 @@
                         "null"
                       ]
                     },
-                    "position": {
-                      "type": "number"
-                    },
                     "type": {
                       "enum": [
                         "heading",
@@ -3539,7 +3762,6 @@
                     "id",
                     "parent_block_id",
                     "type",
-                    "position",
                     "level",
                     "data",
                     "media"
@@ -8934,9 +9156,6 @@
                         "null"
                       ]
                     },
-                    "position": {
-                      "type": "number"
-                    },
                     "type": {
                       "enum": [
                         "heading",
@@ -8957,7 +9176,6 @@
                     "id",
                     "parent_block_id",
                     "type",
-                    "position",
                     "level",
                     "data",
                     "media"
@@ -11282,134 +11500,88 @@
       }
     },
     {
-      "name": "replace_blog_content",
+      "name": "replace_content_block",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
-          "content_blocks": {
-            "description": "Canonical ordered article blocks, replacing the complete block set.",
+          "block_id": {
+            "type": "string"
+          },
+          "data": {
+            "description": "Typed block payload. Plain-text fields are rendered literally, so markdown syntax written into one reaches the reader as raw characters — a heading of \"**Title**\" publishes with the asterisks showing. Only the fields listed as markdown are parsed. A markdown field also requires editor_mode alongside it: \"rich\" for prose the visual editor can handle, \"source\" for tables or raw HTML. Asset IDs and delivery URLs belong in the block media array, never in data. Fields by block type — heading block: literal — text. Also level (one of 1, 2, 3, 4, 5, 6). markdown block: parsed as markdown — markdown. Also editor_mode (one of rich, source). image block: literal — caption. gallery block: literal — caption. faq block: literal — title. Also source (one of page_qa, site_qa). how_to block: literal — title, label, estimated_time, tool_items.*, supply_items.*, steps.*.name, steps.*.text. divider block: no text fields. cta block: literal — title, accent, description, label, secondary_label. Also url (url), secondary_url (url). contact_cta block: literal — title, accent, description, label, secondary_label. Also url (url), secondary_url (url). booking_cta block: literal — title, accent, description, label, secondary_label, price_line, notice. Also url (url), secondary_url (url). callout block: literal — title, body, badge, buttons.*.label. Also tone (one of neutral, info, success, warning, danger). hero block: literal — title, accent, eyebrow, subtitle, cta_label, secondary_label. Also cta_url (url), secondary_url (url). button_group block: literal — buttons.*.label. feature_grid block: literal — title, description, items.*.title, items.*.description, items.*.value, items.*.label; parsed as markdown — items.*.body. Also source (one of manual, site_posts, site_updates, calculator, billing_plans). comparison block: literal — title, description, problem_title, problem_label, problem_items.*.title, problem_items.*.description, solution_title, solution_label, solution_items.*.title, solution_items.*.description. stat_grid block: literal — title, description, label, items.*.value, items.*.title. workflow_grid block: literal — title, description, label, items.*.title, items.*.prompt, items.*.description. video_feature block: literal — title, description, video_title, items.*.title, items.*.description. Also video_url (url). media_text block: literal — title, body, label. Also url (url). contact_form block: no text fields. team_grid block: literal — title, description, items.*.first_name, items.*.last_name, items.*.title, items.*.bio. testimonial_grid block: literal — title, description. donation_choices block: literal — title, description, tiers.*.title, tiers.*.description. Also destination (url). page_grid block: literal — title, accent, description. Also page_ids (page ids). product_grid block: literal — title, description. Also collection_id (collection ids), product_ids (product ids). location_grid block: literal — title, description. Also location_ids (location ids). ai_assistance block: literal — label, intro, prompts.*.title, prompts.*.prompt, prompts.*.description, prompts.*.copy_label.",
+            "type": "object"
+          },
+          "expected_updated_at": {
+            "description": "The block's updated_at from the last read.",
+            "type": "string"
+          },
+          "media": {
+            "description": "Required on image blocks: one item, the picture. Send a block's media as a read returned it.",
             "items": {
               "additionalProperties": false,
               "properties": {
-                "data": {
-                  "description": "Typed block payload. Plain-text fields are rendered literally, so markdown syntax written into one reaches the reader as raw characters — a heading of \"**Title**\" publishes with the asterisks showing. Only the fields listed as markdown are parsed. A markdown field also requires editor_mode alongside it: \"rich\" for prose the visual editor can handle, \"source\" for tables or raw HTML. Asset IDs and delivery URLs belong in the block media array, never in data. Fields by block type — heading block: literal — text. Also level (one of 1, 2, 3, 4, 5, 6). markdown block: parsed as markdown — markdown. Also editor_mode (one of rich, source). image block: literal — caption. gallery block: literal — caption. faq block: literal — title. Also source (one of page_qa, site_qa). how_to block: literal — title, label, estimated_time, tool_items.*, supply_items.*, steps.*.name, steps.*.text. divider block: no text fields. ai_assistance block: literal — label, intro, prompts.*.title, prompts.*.prompt, prompts.*.description, prompts.*.copy_label. cta block: literal — title, accent, description, label, secondary_label. Also url (url), secondary_url (url). callout block: literal — title, body, badge, buttons.*.label. Also tone (one of neutral, info, success, warning, danger).",
-                  "type": "object"
-                },
-                "id": {
-                  "type": "string"
-                },
-                "level": {
-                  "type": [
-                    "number",
-                    "null"
-                  ]
-                },
-                "media": {
-                  "description": "Required on image blocks: one item, the picture. A block read back keeps its media by sending it as read.",
-                  "items": {
-                    "additionalProperties": false,
-                    "properties": {
-                      "alt_text": {
-                        "type": [
-                          "string",
-                          "null"
-                        ]
-                      },
-                      "asset_id": {
-                        "type": "string"
-                      },
-                      "file_name": {
-                        "type": [
-                          "string",
-                          "null"
-                        ]
-                      },
-                      "height": {
-                        "type": [
-                          "number",
-                          "null"
-                        ]
-                      },
-                      "kind": {
-                        "type": [
-                          "string",
-                          "null"
-                        ]
-                      },
-                      "public_url": {
-                        "type": [
-                          "string",
-                          "null"
-                        ]
-                      },
-                      "slot": {
-                        "type": "string"
-                      },
-                      "sort_order": {
-                        "type": [
-                          "number",
-                          "null"
-                        ]
-                      },
-                      "thumbnail_url": {
-                        "type": [
-                          "string",
-                          "null"
-                        ]
-                      },
-                      "width": {
-                        "type": [
-                          "number",
-                          "null"
-                        ]
-                      }
-                    },
-                    "required": [
-                      "asset_id",
-                      "slot"
-                    ],
-                    "type": "object"
-                  },
-                  "type": "array"
-                },
-                "parent_block_id": {
+                "alt_text": {
                   "type": [
                     "string",
                     "null"
                   ]
                 },
-                "type": {
-                  "enum": [
-                    "heading",
-                    "markdown",
-                    "image",
-                    "gallery",
-                    "faq",
-                    "how_to",
-                    "divider",
-                    "ai_assistance",
-                    "cta",
-                    "callout"
-                  ],
+                "asset_id": {
                   "type": "string"
+                },
+                "file_name": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "height": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "kind": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "public_url": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "slot": {
+                  "type": "string"
+                },
+                "sort_order": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "thumbnail_url": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "width": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
                 }
               },
               "required": [
-                "type",
-                "data"
+                "asset_id",
+                "slot"
               ],
               "type": "object"
             },
-            "minItems": 1,
             "type": "array"
-          },
-          "expected_updated_at": {
-            "description": "Concurrency token from the post updated_at (get_blog_post). A stale token is rejected with a conflict.",
-            "type": "string"
-          },
-          "post_id": {
-            "description": "Post id or slug.",
-            "type": "string"
           },
           "site_id": {
             "description": "Internal KrabiClaw site ID from get_workspace_context or list_sites, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
@@ -11417,342 +11589,34 @@
           }
         },
         "required": [
-          "post_id",
-          "content_blocks",
-          "expected_updated_at"
+          "block_id",
+          "expected_updated_at",
+          "data"
         ],
         "type": "object"
       },
       "outputSchema": {
         "additionalProperties": false,
         "properties": {
-          "post": {
-            "additionalProperties": false,
-            "properties": {
-              "admin_edit_url": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "canonical_url": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "category": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "collection": {
-                "enum": [
-                  "blog",
-                  "docs"
-                ],
-                "type": "string"
-              },
-              "content_blocks": {
-                "items": {
-                  "additionalProperties": false,
-                  "properties": {
-                    "data": {
-                      "type": "object"
-                    },
-                    "id": {
-                      "type": "string"
-                    },
-                    "level": {
-                      "type": [
-                        "number",
-                        "null"
-                      ]
-                    },
-                    "media": {
-                      "items": {
-                        "additionalProperties": false,
-                        "properties": {
-                          "asset_id": {
-                            "type": "string"
-                          },
-                          "height": {
-                            "type": [
-                              "number",
-                              "null"
-                            ]
-                          },
-                          "kind": {
-                            "type": [
-                              "string",
-                              "null"
-                            ]
-                          },
-                          "public_url": {
-                            "type": [
-                              "string",
-                              "null"
-                            ]
-                          },
-                          "slot": {
-                            "type": "string"
-                          },
-                          "width": {
-                            "type": [
-                              "number",
-                              "null"
-                            ]
-                          }
-                        },
-                        "type": "object"
-                      },
-                      "type": "array"
-                    },
-                    "parent_block_id": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
-                    },
-                    "position": {
-                      "type": "number"
-                    },
-                    "type": {
-                      "enum": [
-                        "heading",
-                        "markdown",
-                        "image",
-                        "gallery",
-                        "faq",
-                        "how_to",
-                        "divider",
-                        "ai_assistance",
-                        "cta",
-                        "callout"
-                      ],
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "id",
-                    "parent_block_id",
-                    "type",
-                    "position",
-                    "level",
-                    "data",
-                    "media"
-                  ],
-                  "type": "object"
-                },
-                "type": "array"
-              },
-              "cover": {
-                "additionalProperties": false,
-                "properties": {
-                  "alt_text": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
-                  },
-                  "asset_id": {
-                    "type": "string"
-                  },
-                  "height": {
-                    "type": [
-                      "number",
-                      "null"
-                    ]
-                  },
-                  "kind": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
-                  },
-                  "public_url": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
-                  },
-                  "thumbnail_url": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
-                  },
-                  "width": {
-                    "type": [
-                      "number",
-                      "null"
-                    ]
-                  }
-                },
-                "required": [
-                  "asset_id",
-                  "public_url",
-                  "thumbnail_url",
-                  "kind",
-                  "alt_text",
-                  "width",
-                  "height"
-                ],
-                "type": [
-                  "object",
-                  "null"
-                ]
-              },
-              "created_at": {
-                "type": "string"
-              },
-              "edit_url": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "excerpt": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "id": {
-                "type": "string"
-              },
-              "preview_url": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "public_path": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "public_url": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "published": {
-                "type": "boolean"
-              },
-              "published_at": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "robots": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "scheduled_for": {
-                "description": "RFC 3339 instant with an explicit Z or numeric UTC offset. Offsetless timestamps are invalid.",
-                "format": "date-time",
-                "pattern": "^\\d{4}-\\d{2}-\\d{2}T(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d{1,9})?(?:Z|[+-](?:[01]\\d|2[0-3]):[0-5]\\d)$",
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "seo_description": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "seo_keywords": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "seo_title": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "slug": {
-                "type": "string"
-              },
-              "status": {
-                "enum": [
-                  "draft",
-                  "published",
-                  "scheduled"
-                ],
-                "type": "string"
-              },
-              "tags": {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
-              },
-              "title": {
-                "type": "string"
-              },
-              "updated_at": {
-                "type": "string"
-              },
-              "view_url": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "visibility": {
-                "enum": [
-                  "public",
-                  "unlisted"
-                ],
-                "type": "string"
-              }
+          "blocks": {
+            "description": "The whole document after the change, in order, each block with its id and updated_at.",
+            "items": {
+              "type": "object"
             },
-            "required": [
-              "id",
-              "title",
-              "slug",
-              "excerpt",
-              "collection",
-              "category",
-              "tags",
-              "seo_title",
-              "seo_description",
-              "seo_keywords",
-              "canonical_url",
-              "robots",
-              "published",
-              "published_at",
-              "status",
-              "visibility",
-              "scheduled_for",
-              "created_at",
-              "updated_at",
-              "cover",
-              "admin_edit_url",
-              "edit_url",
-              "public_path",
-              "public_url",
-              "preview_url",
-              "view_url",
-              "content_blocks"
-            ],
-            "type": "object"
+            "type": "array"
+          },
+          "document_id": {
+            "type": "string"
+          },
+          "updated_at": {
+            "description": "The document's new concurrency token.",
+            "type": "string"
           }
         },
         "required": [
-          "post"
+          "document_id",
+          "updated_at",
+          "blocks"
         ],
         "type": "object"
       }
@@ -13608,447 +13472,6 @@
       }
     },
     {
-      "name": "update_blog_metadata",
-      "inputSchema": {
-        "additionalProperties": false,
-        "properties": {
-          "canonical_url": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "category": {
-            "type": "string"
-          },
-          "collection": {
-            "description": "KrabiClaw's own site only: which collection the article belongs to. Every other site has one blog.",
-            "enum": [
-              "blog",
-              "docs"
-            ],
-            "type": "string"
-          },
-          "excerpt": {
-            "type": "string"
-          },
-          "expected_updated_at": {
-            "description": "Optional metadata concurrency token from the post updated_at field.",
-            "type": "string"
-          },
-          "post_id": {
-            "description": "Post id or slug.",
-            "type": "string"
-          },
-          "redirect_old_slug": {
-            "description": "Defaults true after first publish.",
-            "type": "boolean"
-          },
-          "reset_slug_override": {
-            "type": "boolean"
-          },
-          "robots": {
-            "enum": [
-              "index,follow",
-              "noindex,follow",
-              "index,nofollow",
-              "noindex,nofollow",
-              null
-            ],
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "seo_description": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "seo_keywords": {
-            "description": "Comma-separated SEO keyword phrases when useful.",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "seo_title": {
-            "description": "Optional SEO/browser-tab title override. Falls back to the post title if unset.",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context or list_sites, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
-            "type": "string"
-          },
-          "slug": {
-            "description": "Manual URL slug override. Published slug changes preserve a permanent redirect by default.",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "tags": {
-            "description": "Searchable topical tags. Use a short, deduplicated list; category remains the primary public grouping.",
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
-          },
-          "title": {
-            "type": "string"
-          },
-          "visibility": {
-            "enum": [
-              "public",
-              "unlisted"
-            ],
-            "type": "string"
-          }
-        },
-        "required": [
-          "post_id"
-        ],
-        "type": "object"
-      },
-      "outputSchema": {
-        "additionalProperties": false,
-        "properties": {
-          "post": {
-            "additionalProperties": false,
-            "properties": {
-              "admin_edit_url": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "canonical_url": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "category": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "collection": {
-                "enum": [
-                  "blog",
-                  "docs"
-                ],
-                "type": "string"
-              },
-              "content_blocks": {
-                "items": {
-                  "additionalProperties": false,
-                  "properties": {
-                    "data": {
-                      "type": "object"
-                    },
-                    "id": {
-                      "type": "string"
-                    },
-                    "level": {
-                      "type": [
-                        "number",
-                        "null"
-                      ]
-                    },
-                    "media": {
-                      "items": {
-                        "additionalProperties": false,
-                        "properties": {
-                          "asset_id": {
-                            "type": "string"
-                          },
-                          "height": {
-                            "type": [
-                              "number",
-                              "null"
-                            ]
-                          },
-                          "kind": {
-                            "type": [
-                              "string",
-                              "null"
-                            ]
-                          },
-                          "public_url": {
-                            "type": [
-                              "string",
-                              "null"
-                            ]
-                          },
-                          "slot": {
-                            "type": "string"
-                          },
-                          "width": {
-                            "type": [
-                              "number",
-                              "null"
-                            ]
-                          }
-                        },
-                        "type": "object"
-                      },
-                      "type": "array"
-                    },
-                    "parent_block_id": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
-                    },
-                    "position": {
-                      "type": "number"
-                    },
-                    "type": {
-                      "enum": [
-                        "heading",
-                        "markdown",
-                        "image",
-                        "gallery",
-                        "faq",
-                        "how_to",
-                        "divider",
-                        "ai_assistance",
-                        "cta",
-                        "callout"
-                      ],
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "id",
-                    "parent_block_id",
-                    "type",
-                    "position",
-                    "level",
-                    "data",
-                    "media"
-                  ],
-                  "type": "object"
-                },
-                "type": "array"
-              },
-              "cover": {
-                "additionalProperties": false,
-                "properties": {
-                  "alt_text": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
-                  },
-                  "asset_id": {
-                    "type": "string"
-                  },
-                  "height": {
-                    "type": [
-                      "number",
-                      "null"
-                    ]
-                  },
-                  "kind": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
-                  },
-                  "public_url": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
-                  },
-                  "thumbnail_url": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
-                  },
-                  "width": {
-                    "type": [
-                      "number",
-                      "null"
-                    ]
-                  }
-                },
-                "required": [
-                  "asset_id",
-                  "public_url",
-                  "thumbnail_url",
-                  "kind",
-                  "alt_text",
-                  "width",
-                  "height"
-                ],
-                "type": [
-                  "object",
-                  "null"
-                ]
-              },
-              "created_at": {
-                "type": "string"
-              },
-              "edit_url": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "excerpt": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "id": {
-                "type": "string"
-              },
-              "preview_url": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "public_path": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "public_url": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "published": {
-                "type": "boolean"
-              },
-              "published_at": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "robots": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "scheduled_for": {
-                "description": "RFC 3339 instant with an explicit Z or numeric UTC offset. Offsetless timestamps are invalid.",
-                "format": "date-time",
-                "pattern": "^\\d{4}-\\d{2}-\\d{2}T(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d{1,9})?(?:Z|[+-](?:[01]\\d|2[0-3]):[0-5]\\d)$",
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "seo_description": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "seo_keywords": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "seo_title": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "slug": {
-                "type": "string"
-              },
-              "status": {
-                "enum": [
-                  "draft",
-                  "published",
-                  "scheduled"
-                ],
-                "type": "string"
-              },
-              "tags": {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
-              },
-              "title": {
-                "type": "string"
-              },
-              "updated_at": {
-                "type": "string"
-              },
-              "view_url": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "visibility": {
-                "enum": [
-                  "public",
-                  "unlisted"
-                ],
-                "type": "string"
-              }
-            },
-            "required": [
-              "id",
-              "title",
-              "slug",
-              "excerpt",
-              "collection",
-              "category",
-              "tags",
-              "seo_title",
-              "seo_description",
-              "seo_keywords",
-              "canonical_url",
-              "robots",
-              "published",
-              "published_at",
-              "status",
-              "visibility",
-              "scheduled_for",
-              "created_at",
-              "updated_at",
-              "cover",
-              "admin_edit_url",
-              "edit_url",
-              "public_path",
-              "public_url",
-              "preview_url",
-              "view_url",
-              "content_blocks"
-            ],
-            "type": "object"
-          }
-        },
-        "required": [
-          "post"
-        ],
-        "type": "object"
-      }
-    },
-    {
       "name": "update_blog_post",
       "inputSchema": {
         "additionalProperties": false,
@@ -14068,7 +13491,7 @@
             "type": "string"
           },
           "content_blocks": {
-            "description": "Canonical ordered article blocks. Sending this replaces the complete block snapshot.",
+            "description": "The whole article, in order, replacing every block. Blocks read back keep their id. The first block, when it is an image, is the cover.",
             "items": {
               "additionalProperties": false,
               "properties": {
@@ -14173,6 +13596,13 @@
                     "callout"
                   ],
                   "type": "string"
+                },
+                "updated_at": {
+                  "description": "As read. Ignored on a whole-document write.",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
                 }
               },
               "required": [
@@ -14358,9 +13788,6 @@
                         "null"
                       ]
                     },
-                    "position": {
-                      "type": "number"
-                    },
                     "type": {
                       "enum": [
                         "heading",
@@ -14381,7 +13808,6 @@
                     "id",
                     "parent_block_id",
                     "type",
-                    "position",
                     "level",
                     "data",
                     "media"
@@ -16705,6 +16131,13 @@
                 },
                 "type": {
                   "type": "string"
+                },
+                "updated_at": {
+                  "description": "As read. Ignored on a whole-document write.",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
                 }
               },
               "required": [

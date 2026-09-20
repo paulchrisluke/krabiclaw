@@ -16,6 +16,20 @@ import {
   listTenantPages,
   updateTenantPage,
 } from '~/server/utils/content/pages'
+import {
+  appendContentBlock,
+  deleteContentBlock,
+  getContentBlock,
+  getContentDocumentById,
+  getContentOutline,
+  replaceContentBlock,
+  type ContentBlockMedia,
+  type ContentBlockType,
+} from '~/server/utils/content/documents'
+import { prepareTenantBlogContentBlocks } from '~/server/utils/content/publishing'
+import { executeBatch } from '~/server/db'
+import { publicResourceCacheInvalidationQuery } from '~/server/utils/public-resource-cache'
+import { refreshSocialCard } from '~/server/utils/social-card'
 import { renderStructuredResponse } from '~/server/utils/mcp-render'
 import { paginateMcpCollection } from '~/server/utils/mcp-pagination'
 import { NOT_HANDLED, omit, mutationContextPayload, optionalString, requiredString, rethrowAsInvalidParams } from './shared'
@@ -45,8 +59,19 @@ function requiredNumber(args: Record<string, unknown>, key: string): number {
   return value
 }
 
+/** A block as MCP reads it: where it sits is its index in the array, so no position. */
+function withoutPosition<T extends { position?: number }>(block: T): Omit<T, 'position'> {
+  const { position: _position, ...rest } = block
+  return rest
+}
+
 function tenantPageLifecycleResponse(action: string, result: unknown) {
-  return renderStructuredResponse(result, `${action} tenant page.`, { tenant_page: result })
+  const page = result && typeof result === 'object' && 'page' in result && result.page && typeof result.page === 'object' && Array.isArray((result.page as { blocks?: unknown }).blocks)
+    ? { ...result, page: { ...(result.page as object), blocks: ((result.page as { blocks: Array<{ position?: number }> }).blocks).map(withoutPosition) } }
+    : result && typeof result === 'object' && Array.isArray((result as { blocks?: unknown }).blocks)
+      ? { ...result, blocks: ((result as { blocks: Array<{ position?: number }> }).blocks).map(withoutPosition) }
+      : result
+  return renderStructuredResponse(page, `${action} tenant page.`, { tenant_page: page })
 }
 
 function tenantPageReplacementConfirmation(page: Awaited<ReturnType<typeof getTenantPageById>>) {
@@ -85,6 +110,38 @@ function assertTenantPageReplacementConfirmed(
       statusMessage: `Complete block replacement would remove ${removedBlockIds.length} existing block(s). Confirm with expected_updated_at="${page.document.updated_at}", removed_block_ids=${JSON.stringify(removedBlockIds)}, confirmation_token="${expectedToken}".`,
     })
   }
+}
+
+/**
+ * The document a block operation addresses, and only if it is this site's. A
+ * block id from another site is not found here rather than forbidden: the
+ * caller learns nothing about what exists elsewhere.
+ */
+async function requireSiteDocument(ctx: McpExecutorContext, documentId: string) {
+  const document = await getContentDocumentById(ctx.site.db, documentId)
+  if (!document || document.site_id !== ctx.site.siteId) {
+    throw new HTTPError({ statusCode: 404, statusMessage: 'Content document not found' })
+  }
+  return document
+}
+
+/**
+ * After a block changed: the public copy is stale, an article's social card may
+ * be, and the caller gets the whole document back so its next edit holds every
+ * block's id and updated_at.
+ */
+async function contentBlocksChanged(ctx: McpExecutorContext, document: { id: string; kind: string }, message: string) {
+  const { site } = ctx
+  await executeBatch(site.db, [publicResourceCacheInvalidationQuery(site.siteId, `${document.kind}-block-write`)])
+  if (document.kind === 'article' && site.env) {
+    await refreshSocialCard({ db: site.db, env: site.env, owner: { owner_type: 'content_document', owner_id: document.id } })
+  }
+  const current = await getContentDocumentById(site.db, document.id)
+  if (!current) throw new HTTPError({ statusCode: 500, statusMessage: 'Content document disappeared after write' })
+  return renderStructuredResponse(
+    { document_id: document.id, updated_at: current.updated_at, blocks: (await getContentOutline(site.db, document.id)).map(withoutPosition) },
+    message,
+  )
 }
 
 export async function handleContentTools(ctx: McpExecutorContext): Promise<unknown> {
@@ -224,6 +281,39 @@ export async function handleContentTools(ctx: McpExecutorContext): Promise<unkno
         "Updated the reservation policy.",
         { policy: config },
       );
+    }
+    case "append_content_block": {
+      const document = await requireSiteDocument(ctx, requiredString(args, "document_id"))
+      const afterBlockId = optionalString(args, "after_block_id")
+      const id = crypto.randomUUID()
+      // The same normalisation every whole-document write goes through: the
+      // asset must be this site's, an image block must carry its picture.
+      const { blocks, placementQueries } = await prepareTenantBlogContentBlocks(
+        site.db, [{ id, type: args.type as ContentBlockType, data: args.data as Record<string, unknown>, media: args.media as ContentBlockMedia[] | undefined, level: typeof args.level === 'number' ? args.level : null }],
+        site.siteId, site.organizationId,
+      )
+      const block = blocks[0]!
+      // One batch: the block and its media land together or not at all.
+      await appendContentBlock(site.db, document.id, { id, type: block.type, data: block.data, level: block.level ?? null, after_block_id: afterBlockId ?? null }, { additionalQueriesAfter: placementQueries })
+      return await contentBlocksChanged(ctx, document, `Added a ${block.type} block.`)
+    }
+    case "replace_content_block": {
+      const blockId = requiredString(args, "block_id")
+      const existing = await getContentBlock(site.db, blockId)
+      const document = await requireSiteDocument(ctx, existing.document_id)
+      const { blocks, placementQueries } = await prepareTenantBlogContentBlocks(
+        site.db, [{ id: blockId, type: existing.type, data: args.data as Record<string, unknown>, media: (args.media ?? existing.media) as ContentBlockMedia[], level: existing.level }],
+        site.siteId, site.organizationId,
+      )
+      await replaceContentBlock(site.db, blockId, { data: blocks[0]!.data, expected_updated_at: requiredString(args, "expected_updated_at") }, { additionalQueriesAfter: placementQueries })
+      return await contentBlocksChanged(ctx, document, `Replaced the ${existing.type} block.`)
+    }
+    case "delete_content_block": {
+      const blockId = requiredString(args, "block_id")
+      const existing = await getContentBlock(site.db, blockId)
+      const document = await requireSiteDocument(ctx, existing.document_id)
+      await deleteContentBlock(site.db, blockId, { expected_updated_at: requiredString(args, "expected_updated_at") })
+      return await contentBlocksChanged(ctx, document, `Deleted the ${existing.type} block.`)
     }
     default:
       return NOT_HANDLED

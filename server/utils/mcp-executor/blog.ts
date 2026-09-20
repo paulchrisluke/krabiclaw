@@ -26,23 +26,6 @@ const UPDATE_BLOG_MUTATION_FIELDS = [
   'reset_slug_override',
 ]
 
-const BLOG_METADATA_FIELDS = [
-  'title',
-  'excerpt',
-  'collection',
-  'category',
-  'tags',
-  'seo_title',
-  'seo_description',
-  'seo_keywords',
-  'canonical_url',
-  'robots',
-  'visibility',
-  'slug',
-  'redirect_old_slug',
-  'reset_slug_override',
-]
-
 const BLOG_CONTENT_BLOCK_TYPES = new Set<string>(CONTENT_BLOCK_TYPES)
 
 const BLOG_POST_STATUSES = new Set(['draft', 'published', 'scheduled'])
@@ -88,10 +71,6 @@ function responseNullableNumber(value: unknown, path: string) {
   return value
 }
 
-function responseNumber(value: unknown, path: string) {
-  if (typeof value !== 'number' || !Number.isFinite(value)) invalidBlogResponse(path, 'a finite number')
-  return value
-}
 
 function responseBoolean(value: unknown, path: string) {
   if (typeof value !== 'boolean') invalidBlogResponse(path, 'a boolean')
@@ -143,7 +122,6 @@ function toContentBlockProjection(value: unknown, index: number) {
     id: responseString(block.id, `${path}.id`),
     parent_block_id: responseNullableString(block.parent_block_id, `${path}.parent_block_id`),
     type: responseEnumString(block.type, `${path}.type`, BLOG_CONTENT_BLOCK_TYPES),
-    position: responseNumber(block.position, `${path}.position`),
     level: responseNullableNumber(block.level, `${path}.level`),
     data,
     media: toMedia(block.media),
@@ -189,13 +167,6 @@ export function projectBlogPostForMcp(post: Record<string, unknown>, site: McpEx
     ...toBlogPostSummary(post, site),
     content_blocks: contentDocument.blocks.map((block, index) => toContentBlockProjection(block, index)),
   }
-}
-
-function blogPostResponse(post: Record<string, unknown>, site: McpExecutorContext['site'], message: string) {
-  return renderStructuredResponse(
-    { post: projectBlogPostForMcp(post, site) },
-    message,
-  )
 }
 
 export async function handleBlogTools(ctx: McpExecutorContext): Promise<unknown> {
@@ -250,38 +221,6 @@ export async function handleBlogTools(ctx: McpExecutorContext): Promise<unknown>
         { post: projectBlogPostForMcp(result.post, site) },
         `Saved changes to blog article "${result.post.title ?? result.post.id}".`,
       );
-    }
-    case "update_blog_metadata": {
-      requireAtLeastOneField(args, BLOG_METADATA_FIELDS, "At least one blog metadata field is required.")
-      const result = await updateBlogPost(
-        site.db,
-        requiredString(args, "post_id"),
-        omit(args, ["post_id", "site_id"]) as never,
-        site.siteId,
-        site.env,
-      )
-      return blogPostResponse(
-        result.post,
-        site,
-        `Updated blog post metadata for "${result.post.title ?? result.post.id}".`,
-      )
-    }
-    case "replace_blog_content": {
-      const result = await updateBlogPost(
-        site.db,
-        requiredString(args, "post_id"),
-        {
-          content_blocks: args.content_blocks,
-          expected_updated_at: requiredString(args, "expected_updated_at"),
-        } as never,
-        site.siteId,
-        site.env,
-      )
-      return blogPostResponse(
-        result.post,
-        site,
-        `Saved content changes for blog article "${result.post.title ?? result.post.id}".`,
-      )
     }
     case "publish_blog_post": {
       const postId = requiredString(args, "post_id")
