@@ -53,9 +53,8 @@ export function composeOwnerThreadInboxUrl(
   slugs: SiteLocationSlugs,
   threadId: string,
 ): string {
-  const base = `https://${getPlatformDomain(env)}/dashboard/${slugs.orgSlug}/sites/${slugs.siteSlug}`
-  const inboxPath = slugs.locationSlug ? `/locations/${slugs.locationSlug}/messages` : '/messages'
-  return `${base}${inboxPath}/${encodeURIComponent(threadId)}`
+  // One inbox per site: a thread opens there whichever location it belongs to.
+  return `https://${getPlatformDomain(env)}/dashboard/${slugs.orgSlug}/sites/${slugs.siteSlug}/messages/${encodeURIComponent(threadId)}`
 }
 
 export async function buildOwnerThreadInboxUrl(

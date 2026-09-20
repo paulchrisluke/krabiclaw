@@ -346,13 +346,7 @@ const mobileNavItems = computed<DashboardMobileNavItem[]>(() => {
   const routeOrgBase = `/dashboard/${encodeURIComponent(routeOrgSlug)}`
   const routeSiteSlug = typeof route.params.siteSlug === 'string' ? route.params.siteSlug : null
   const routeSiteBase = routeSiteSlug ? `${routeOrgBase}/sites/${encodeURIComponent(routeSiteSlug)}` : null
-  const routeLocationSlug = typeof route.params.locationSlug === 'string' ? route.params.locationSlug : null
-  const routeLocationBase = routeSiteBase && routeLocationSlug
-    ? `${routeSiteBase}/locations/${encodeURIComponent(routeLocationSlug)}`
-    : null
-  const messagesTo = scope.value === 'location' && routeLocationBase
-    ? `${routeLocationBase}/messages`
-    : routeSiteBase ? `${routeSiteBase}/messages` : `${routeOrgBase}/messages`
+  const messagesTo = routeSiteBase ? `${routeSiteBase}/messages` : `${routeOrgBase}/messages`
   const items: DashboardMobileNavItem[] = [
     { key: 'today', label: 'Today', icon: 'i-lucide-bookmark', to: routeOrgBase, exact: true },
     { key: 'calendar', label: 'Calendar', icon: 'i-lucide-calendar-days', to: `${routeOrgBase}/calendar` },

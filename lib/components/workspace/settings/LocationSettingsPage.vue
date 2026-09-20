@@ -15,18 +15,6 @@
         <template #leading>
           <DashboardNavbarLeading />
         </template>
-        <template #right>
-          <DashboardResourceLocalization
-            v-if="location"
-            :site-id="siteId"
-            resource-type="business_location"
-            :resource-id="location.id"
-            resource-label="location"
-            :fields="locationLocalizationFields"
-            :route-path="localizedLocationPath"
-            :language-settings-path="siteLocalizationSettingsPath"
-          />
-        </template>
       </UDashboardNavbar>
     </template>
 
@@ -36,10 +24,24 @@
           <USkeleton v-for="index in 6" :key="index" class="h-32 rounded-xl" />
         </div>
         <UAlert v-else-if="error" color="error" variant="soft" icon="i-lucide-triangle-alert" :description="error" />
-        <EditorNavigationList v-else-if="location" :groups="navigationGroups" :active-item="detailKey" />
+        <EditorNavigationList v-else-if="location" :groups="navigationGroups" :active-item="detailKey" @act="onRowAction" />
       </div>
     </template>
   </UDashboardPanel>
+
+  <!-- Translating the location is a row on the list; this is the sheet it opens. -->
+  <DashboardResourceLocalization
+    v-if="location"
+    v-model:open="localizeOpen"
+    row-trigger
+    :site-id="siteId"
+    resource-type="business_location"
+    :resource-id="location.id"
+    resource-label="location"
+    :fields="locationLocalizationFields"
+    :route-path="localizedLocationPath"
+    :language-settings-path="siteLocalizationSettingsPath"
+  />
 
   <!--
     Drawn at `lg` even with nothing open, so the pair is there at rest.
@@ -486,12 +488,17 @@ const navigationGroups = computed(() => [{
   id: 'settings',
   items: [
     { id: 'status', label: 'Status', summary: statusSummary.value, to: `${settingsPath.value}/status` },
-    { id: 'slug', label: 'Slug', summary: slugSummary.value, to: `${settingsPath.value}/slug` },
-    { id: 'discovery', label: 'Google', summary: discoverySummary.value, to: `${settingsPath.value}/discovery` },
-    { id: 'notifications', label: 'Notifications', summary: notificationSummary.value, to: `${settingsPath.value}/notifications` },
+    { id: 'slug', label: 'Link', summary: slugSummary.value, to: `${settingsPath.value}/slug` },
+    { id: 'languages', label: 'Languages', summary: 'Translate the name, description and address', action: { label: 'Localize' } },
+    { id: 'discovery', label: 'Google Business Profile', summary: discoverySummary.value, to: `${settingsPath.value}/discovery` },
+    { id: 'notifications', label: 'WhatsApp number', summary: notificationSummary.value, to: `${settingsPath.value}/notifications` },
     { id: 'features', label: 'Features', summary: featureSummary.value, to: `${settingsPath.value}/features` },
   ],
 }])
+const localizeOpen = ref(false)
+function onRowAction(id: string) {
+  if (id === 'languages') localizeOpen.value = true
+}
 const detailTitles: Record<string, string> = {
   name: 'Name',
   description: 'Description',
@@ -500,15 +507,14 @@ const detailTitles: Record<string, string> = {
   contact: 'Contact',
   reservations: 'Reservations',
   status: 'Status',
-  slug: 'Slug',
-  discovery: 'Google',
-  notifications: 'Notifications',
+  slug: 'Link',
+  discovery: 'Google Business Profile',
+  notifications: 'WhatsApp number',
   features: 'Features',
 }
 const hasDetail = computed(() => Boolean(props.detail) || routeSegments.value.length > 0)
-// Names the level, not the open section: at `lg` the section's title is a
-// heading on its own pane with the index still beside it.
-const navbarTitle = computed(() => location.value?.title || 'Location')
+const navbarTitle = 'Settings'
+
 // Every write this screen can be in the middle of, including the one that
 // stops reservations: Save stayed live during that delete, and a save landing
 // on top of it recreated the policy it had just removed.
@@ -805,5 +811,5 @@ const loadLocationWorkspace = async () => {
   return !locationSettingsError.value
 }
 
-useSeoMeta({ title: () => `${detailTitles[editorKey.value]} | KrabiClaw`, robots: 'noindex, nofollow' })
+useSeoMeta({ title: () => `${detailKey.value ? detailTitles[detailKey.value] : 'Settings'} | KrabiClaw`, robots: 'noindex, nofollow' })
 </script>

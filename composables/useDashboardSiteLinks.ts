@@ -52,7 +52,6 @@ export function useDashboardSiteLinks() {
       posts: `${location}/posts`,
       photos: `${location}/photos`,
       qa: `${location}/qa`,
-      inbox: `${location}/messages`,
       settings: `${location}/settings`,
     }
   })

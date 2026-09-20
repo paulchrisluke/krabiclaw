@@ -217,7 +217,7 @@ import { useDashboardInvalidations } from '~/composables/useDashboardInvalidatio
   route parent owns that chrome.
 */
 const props = defineProps<{
-  scope: 'organization' | 'site' | 'location'
+  scope: 'organization' | 'site'
   /** Locks the list to one kind, for a surface that is only ever about that kind. */
   submissionTypeFilter?: SubmissionType
   /** Rendered somewhere other than the messages screen: it opens nothing on its own. */
@@ -225,25 +225,18 @@ const props = defineProps<{
 }>()
 
 const dashboard = useDashboardSite()
-const dashboardLocation = useDashboardLocation()
 const { formatRelativeTime } = useHumanTime()
 
 const route = useRoute()
 const router = useRouter()
 
-const isLocationScope = computed(() => props.scope === 'location')
 const isOrganizationScope = computed(() => props.scope === 'organization')
-const selectedLocationId = computed(() => dashboardLocation.currentLocationId.value)
 const siteId = computed(() => isOrganizationScope.value ? null : dashboard.siteId.value)
 
 const listRoute = computed(() => {
   const orgSlug = String(route.params.orgSlug)
   if (isOrganizationScope.value) return `/dashboard/${orgSlug}/messages`
-  const siteSlug = String(route.params.siteSlug)
-  if (isLocationScope.value) {
-    return `/dashboard/${orgSlug}/sites/${siteSlug}/locations/${String(route.params.locationSlug)}/messages`
-  }
-  return `/dashboard/${orgSlug}/sites/${siteSlug}/messages`
+  return `/dashboard/${orgSlug}/sites/${String(route.params.siteSlug)}/messages`
 })
 
 // The open thread, for the selected row. It is the segment below this list, so
@@ -311,12 +304,8 @@ const capabilities = computed(() => {
   try {
     const normalizedVertical = normalizeVertical(vertical) as SiteVertical
     const template = resolvePublicTemplate({ themeId: dashboard.site.value?.theme_id, vertical }).slug
-    const location = props.scope === 'location'
-      ? dashboard.locations.value.find(candidate => candidate.id === selectedLocationId.value) ?? null
-      : null
     return resolveCmsCapabilities(normalizedVertical, template, {
       site: parseCmsFeatureOverrideDelta(dashboard.site.value?.feature_overrides),
-      location: location ? parseCmsFeatureOverrideDelta(location.feature_overrides) : undefined,
     })
   } catch {
     return null
@@ -354,8 +343,6 @@ const typeOptions = computed(() => {
   ]
 })
 
-const locationVocabulary = computed(() => capabilities.value?.locationVocabulary ?? 'location')
-const locationNoun = computed(() => locationVocabulary.value === 'office/service area' ? 'office/service area' : 'location')
 const emptyTitle = computed(() => {
   if (filtersApplied.value) return 'No conversations match'
   return pastOnly.value ? 'Nothing here yet' : 'No conversations yet'
@@ -365,7 +352,6 @@ const emptyDescription = computed(() => {
   if (filtersApplied.value) return 'Try a different filter, or clear them to see everything.'
   if (pastOnly.value) return 'Conversations move here once their booking has passed.'
   if (isOrganizationScope.value) return 'New guest conversations across all sites will appear here.'
-  if (props.scope === 'location') return `Conversations assigned to this ${locationNoun.value} will appear here.`
   return 'New guest conversations will appear here.'
 })
 
@@ -384,7 +370,7 @@ const initialThreadsKey = computed(() => [
   String(route.params.orgSlug ?? ''),
   siteId.value ?? 'org',
   props.scope,
-  isLocationScope.value ? selectedLocationId.value ?? 'pending-location' : isOrganizationScope.value ? 'org' : 'site',
+  isOrganizationScope.value ? 'org' : 'site',
   activeType.value ?? 'all',
   pastOnly.value ? 'past' : 'current',
   unreadOnly.value ? 'unread' : 'any',
@@ -395,9 +381,6 @@ const {
   pending: initialThreadsPending,
   error: initialThreadsError,
 } = await useAsyncData<{ threads: ThreadListItem[] }>(initialThreadsKey, async () => {
-  if (isLocationScope.value && !selectedLocationId.value) {
-    return { threads: [] }
-  }
   if (!dashboardScope.value) {
     throw createError({ statusCode: 400, statusMessage: 'Dashboard route scope is incomplete' })
   }
@@ -410,10 +393,7 @@ const {
   return await dashboardApi<{ threads: ThreadListItem[] }>(
     `/api/dashboard/sites/${siteId.value}/guest-threads`,
     {
-      query: {
-        location_id: isLocationScope.value ? selectedLocationId.value : undefined,
-        ...listQuery.value,
-      },
+      query: listQuery.value,
       validate: isThreadListResponse,
     },
   )
@@ -473,7 +453,6 @@ function occurrenceLine(thread: ThreadListItem) {
 }
 
 async function loadThreads() {
-  if (isLocationScope.value && !selectedLocationId.value) return
   if (!dashboardScope.value) return
   const requestToken = ++threadsRequestToken
   loadingThreads.value = true
@@ -485,10 +464,7 @@ async function loadThreads() {
         validate: isThreadListResponse,
       })
       : await dashboardApi<{ threads: ThreadListItem[] }>(`/api/dashboard/sites/${siteId.value}/guest-threads`, {
-        query: {
-          location_id: isLocationScope.value ? selectedLocationId.value : undefined,
-          ...listQuery.value,
-        },
+        query: listQuery.value,
         validate: isThreadListResponse,
       })
     if (requestToken !== threadsRequestToken) return

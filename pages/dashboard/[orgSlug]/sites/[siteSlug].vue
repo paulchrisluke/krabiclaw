@@ -24,7 +24,6 @@
         </template>
         <template #right>
           <UButton
-            v-if="canManageSite"
             :to="`${sitePath}/settings`"
             icon="i-lucide-settings"
             color="neutral"
@@ -161,7 +160,6 @@ const hasDetail = computed(() => frame.mode.value !== 'index')
 const activeSection = frame.childSegment
 
 const siteName = computed(() => dashboard.site.value?.brand_name ?? '')
-const canManageSite = computed(() => dashboard.siteAccess.value !== 'location')
 const siteLogo = computed(() => dashboard.sites.value.find(site => site.id === siteId)?.media.find(item => item.slot === 'logo')?.public_url ?? '')
 const publicSiteUrl = computed(() => dashboard.site.value?.public_url || '')
 
