@@ -8,7 +8,7 @@
   >
     <NuxtLink :to="homeTo" class="group flex w-fit shrink-0 items-center gap-2.5 no-underline">
       <img
-        src="/krabi-claw-logo-96.webp"
+        src="/platform/krabiclaw-symbol.svg"
         alt="KrabiClaw"
         width="36"
         height="36"

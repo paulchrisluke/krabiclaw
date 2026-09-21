@@ -3,7 +3,7 @@
 
       <!-- Header -->
       <div class="mb-6">
-        <img src="/krabi-claw-logo-96.webp" alt="KrabiClaw Logo" width="32" height="32" class="h-8 mb-4">
+        <img src="/platform/krabiclaw-symbol.svg" alt="KrabiClaw Logo" width="32" height="32" class="h-8 mb-4">
         <h1 class="text-2xl font-bold text-default tracking-tight mt-0.5">
           {{ clientName || 'This app' }} wants to access your KrabiClaw Account.
         </h1>

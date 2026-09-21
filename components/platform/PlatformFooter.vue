@@ -5,7 +5,7 @@
       <div class="mb-12 grid grid-cols-2 gap-8 md:grid-cols-[1.4fr_repeat(4,1fr)] md:gap-10">
         <div class="col-span-2 md:col-span-1">
           <NuxtLink to="/" class="group inline-flex items-center gap-2.5 no-underline">
-            <img src="/krabi-claw-logo-96.webp" alt="KrabiClaw" width="34" height="34" class="size-8.5 rounded-lg transition-transform duration-200 group-hover:rotate-12" />
+            <img src="/platform/krabiclaw-symbol.svg" alt="KrabiClaw" width="34" height="34" class="size-8.5 rounded-lg transition-transform duration-200 group-hover:rotate-12" />
             <span class="kc-wordmark text-[19px] leading-none">
               <span class="kc-wordmark__krabi">krabi</span><span class="kc-wordmark__claw">claw</span><span class="kc-wordmark__tld">.com</span>
             </span>

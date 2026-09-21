@@ -37,7 +37,7 @@
             >
               <div class="flex max-w-[86%] items-end gap-2">
                 <UAvatar
-                  :src="item.entry.platform ? '/krabi-claw-logo-96.webp' : undefined"
+                  :src="item.entry.platform ? '/platform/krabiclaw-symbol.svg' : undefined"
                   :alt="actorLabel(item.entry)"
                   size="md"
                   class="mb-1 shrink-0"
