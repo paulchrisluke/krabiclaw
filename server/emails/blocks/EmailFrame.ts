@@ -26,7 +26,10 @@ export default defineComponent({
   },
   setup(props, { slots }) {
     const year = new Date().getFullYear()
-    const origin = `https://${props.platformDomain.replace(/^https?:\/\//, '').replace(/\/$/, '')}`
+    // A domain given with its own scheme keeps it, so a local origin stays
+    // reachable over http; a bare domain is https, which is every deployment.
+    const trimmedDomain = props.platformDomain.trim().replace(/\/$/, '')
+    const origin = /^https?:\/\//.test(trimmedDomain) ? trimmedDomain : `https://${trimmedDomain}`
 
     return () => {
       const preferencesUrl = props.preferencesUrl
@@ -77,9 +80,9 @@ export default defineComponent({
               h(EImg, {
                 src: `${origin}/krabi-claw-logo.png`,
                 alt: 'KrabiClaw',
-                width: '132',
-                height: 'auto',
-                style: 'display:block;max-width:132px;height:auto',
+                width: '64',
+                height: '64',
+                style: 'display:block;width:64px;height:64px',
               }),
             ]),
             slots.default?.(),

@@ -20,7 +20,7 @@ export default defineNuxtPlugin(() => {
       ],
       link: [
         { rel: 'manifest', href: '/manifest.webmanifest' },
-        { rel: 'apple-touch-icon', href: '/krabi-claw-logo.png' },
+        { rel: 'apple-touch-icon', href: '/platform/apple-touch-icon.png' },
       ],
     }
   })
