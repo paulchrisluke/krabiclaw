@@ -126,8 +126,9 @@
         class="mx-3 flex items-start gap-3 rounded-xl px-3 py-3 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
         :class="thread.id === openThreadId ? 'bg-elevated' : 'hover:bg-elevated/60'"
       >
-        <!-- The picture leads. A thread whose location has no hero keeps the
-             same footprint so the rows do not reflow between them. -->
+        <!-- The picture leads: the location's hero, or the business's logo for
+             a thread that came to the business itself. A place with neither
+             keeps the same footprint so the rows do not reflow between them. -->
         <img
           v-if="thread.imageUrl"
           :src="thread.imageUrl"
@@ -147,11 +148,11 @@
             the picture to align against.
           -->
           <div v-if="occurrenceLine(thread)" class="flex items-baseline justify-between gap-3 text-xs text-muted">
-            <span class="truncate">{{ occurrenceLine(thread) }}</span>
+            <span class="min-w-0 flex-1 truncate">{{ occurrenceLine(thread) }}</span>
             <span class="shrink-0">{{ formatRelativeTime(thread.lastActivityAt) }}</span>
           </div>
           <div class="flex items-baseline justify-between gap-3">
-            <p class="min-w-0 truncate text-sm font-medium text-highlighted">{{ thread.guestName }}</p>
+            <p class="min-w-0 flex-1 truncate text-sm font-medium text-highlighted">{{ thread.guestName }}</p>
             <span v-if="!occurrenceLine(thread)" class="shrink-0 text-xs text-muted">{{ formatRelativeTime(thread.lastActivityAt) }}</span>
           </div>
           <p class="mt-0.5 line-clamp-2 text-sm leading-snug text-muted">{{ thread.preview?.text || 'New conversation' }}</p>

@@ -20,7 +20,7 @@
       :ui="{ body: 'p-0 sm:p-0 gap-0' }"
     >
       <template #header>
-        <UDashboardNavbar :title="navbarTitle" :toggle="false">
+        <UDashboardNavbar :title="siteName" :toggle="false">
           <template #leading>
             <DashboardNavbarLeading />
           </template>
@@ -66,12 +66,10 @@ const messagesPath = computed(() => `${sitePath.value}/messages`)
 const frame = useEditorFrame(messagesPath)
 const hasDetail = computed(() => frame.mode.value === 'pair')
 
-const pastOnly = computed(() => route.query.archived !== undefined)
-
-// The chrome names the place; the panel names itself.
+// The chrome names the place; the panel names itself — including when the
+// panel is showing past conversations.
 const dashboard = useDashboardSite()
 const siteName = computed(() => dashboard.site.value?.brand_name ?? 'Messages')
-const navbarTitle = computed(() => pastOnly.value ? 'Past conversations' : siteName.value)
 
 useSeoMeta({ title: 'Messages | KrabiClaw Dashboard', robots: 'noindex, nofollow' })
 </script>

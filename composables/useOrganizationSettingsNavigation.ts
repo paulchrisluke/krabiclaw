@@ -26,7 +26,7 @@ export function useOrganizationSettingsNavigation() {
       { id: 'members', label: 'Team', summary: 'People and access', to: `${settingsPath.value}/members` },
       { id: 'billing', label: 'Billing', summary: 'Plans and payments', to: `${settingsPath.value}/billing` },
       { id: 'connect', label: 'Payouts', summary: 'Stripe business onboarding', to: `${settingsPath.value}/connect` },
-      { id: 'log-out', label: 'Log out', action: { label: 'Log out' } },
+      { id: 'log-out', label: 'Log out', action: {} },
     ]
   })
 

@@ -1,7 +1,7 @@
 <template>
   <UDashboardPanel id="org-messages">
     <template #header>
-      <UDashboardNavbar title="Messages" :toggle="false" />
+      <UDashboardNavbar :title="businessName" :toggle="false" />
     </template>
 
     <template #body>
@@ -21,5 +21,10 @@ import GuestThreadList from '~/lib/components/workspace/messages/GuestThreadList
   need a second, organization-scoped copy of the thread API.
 */
 definePageMeta({ layout: 'dashboard' })
+
+// The chrome names the place; the panel names itself. Both saying "Messages"
+// stacked two titles on the mobile screen.
+const dashboard = useDashboardSite()
+const businessName = computed(() => dashboard.organization.value?.name ?? 'Messages')
 useSeoMeta({ title: 'Messages | KrabiClaw', robots: 'noindex, nofollow' })
 </script>
