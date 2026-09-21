@@ -106,12 +106,15 @@ test.afterEach(async ({ page }) => {
   await expectStatus(await setLocationSlot(page.request, slot, 'inherit'), 200)
 })
 
-async function loadThreadList(request: APIRequestContext, search: string) {
+// The list has no search of its own any more (search is the dashboard's one
+// palette), so the guest under test is picked out of the site's contact threads.
+async function loadThreadList(request: APIRequestContext, guestName: string) {
   const response = await request.get(`/api/dashboard/sites/${siteId}/guest-threads`, {
-    params: { search, type: 'contact' },
+    params: { type: 'contact' },
   })
   await expectStatus(response, 200)
-  return await response.json() as { threads: GuestThreadListItemViewModel[] }
+  const { threads } = await response.json() as { threads: GuestThreadListItemViewModel[] }
+  return { threads: threads.filter(thread => thread.guestName === guestName) }
 }
 
 async function loadThreadDetail(
@@ -173,12 +176,13 @@ test('guest thread state stays source-owned, per-user, tenant-isolated, and idem
     expect(secondOwnerListBefore.threads).toHaveLength(1)
     const threadId = ownerListBefore.threads[0]!.id
     const organizationList = await owner.get('/api/dashboard/guest-threads', {
-      params: { org: 'org-user-pottery-house', search: guestName },
+      params: { org: 'org-user-pottery-house', type: 'contact' },
     })
     await expectStatus(organizationList, 200)
-    expect(await organizationList.json()).toMatchObject({ threads: [{ id: threadId }] })
+    expect((await organizationList.json() as { threads: GuestThreadListItemViewModel[] }).threads.filter(thread => thread.guestName === guestName))
+      .toMatchObject([{ id: threadId }])
     await expectStatus(await foreignOwner.get('/api/dashboard/guest-threads', {
-      params: { org: 'org-user-pottery-house', search: guestName },
+      params: { org: 'org-user-pottery-house', type: 'contact' },
     }), 404)
     expect(secondOwnerListBefore.threads[0]!.id).toBe(threadId)
     expect(ownerListBefore.threads[0]).toMatchObject({ guestName, submissionType: 'contact', unread: true })
