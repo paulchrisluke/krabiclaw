@@ -1410,15 +1410,21 @@ export interface CatalogPreviewEntry {
  * One entry per event carrying both channels, because the question the page
  * answers is whether they agree — and the WhatsApp side is the approved
  * template's filled slots rather than prose written to stand in for them.
+ *
+ * The origin comes from the request rather than a constant, so the page shows
+ * the assets of the server being looked at. Hardcoding the production domain
+ * made every preview load production's images, which cannot show a local
+ * change to one.
  */
-export async function renderNotificationCatalog(): Promise<CatalogPreviewEntry[]> {
+export async function renderNotificationCatalog(origin: string): Promise<CatalogPreviewEntry[]> {
+  const root = origin.trim().replace(/\/$/, '')
   return Promise.all(NOTIFICATION_CATALOG.map(async (entry) => {
     const rendered = await renderNotificationEmail(entry.message, {
-      platformDomain: 'krabiclaw.com',
-      preferencesUrl: 'https://krabiclaw.com/dashboard/account/profile/notifications',
+      platformDomain: root,
+      preferencesUrl: `${root}/dashboard/account/profile/notifications`,
       unsubscribeUrl: entry.message.category === 'account_security'
         ? null
-        : 'https://krabiclaw.com/unsubscribe?user=preview&category=preview&token=preview',
+        : `${root}/unsubscribe?user=preview&category=preview&token=preview`,
     })
 
     let whatsapp: CatalogPreviewEntry['whatsapp'] = null

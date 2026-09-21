@@ -26,7 +26,10 @@ export default defineComponent({
   },
   setup(props, { slots }) {
     const year = new Date().getFullYear()
-    const origin = `https://${props.platformDomain.replace(/^https?:\/\//, '').replace(/\/$/, '')}`
+    // A domain given with its own scheme keeps it, so a local origin stays
+    // reachable over http; a bare domain is https, which is every deployment.
+    const trimmedDomain = props.platformDomain.trim().replace(/\/$/, '')
+    const origin = /^https?:\/\//.test(trimmedDomain) ? trimmedDomain : `https://${trimmedDomain}`
 
     return () => {
       const preferencesUrl = props.preferencesUrl
