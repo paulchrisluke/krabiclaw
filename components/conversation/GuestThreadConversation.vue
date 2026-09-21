@@ -28,20 +28,15 @@
               <span>{{ systemEventLabel(item.entry) }}</span>
             </div>
 
-            <!-- Guest and member messages. Delivery receipts sit with the message they
-                 describe and stay visible: a failed send is the one thing an owner must
-                 not have to hover to discover. -->
+            <!-- What someone said. Whoever said it, it reads the same way: the
+                 avatar in the gutter, who and when above, one grey bubble. -->
             <div
               v-else
               class="flex px-4 sm:px-6"
-              :class="[
-                item.entry.actorKind === 'member' ? 'justify-end' : 'justify-start',
-                item.startsRun ? 'pt-2' : 'pt-0.5',
-              ]"
+              :class="item.startsRun ? 'pt-2' : 'pt-0.5'"
             >
-              <div class="flex max-w-[78%] items-end gap-2" :class="item.entry.actorKind === 'member' ? 'flex-row-reverse' : ''">
+              <div class="flex max-w-[86%] items-end gap-2">
                 <UAvatar
-                  v-if="item.entry.actorKind !== 'member'"
                   :src="item.entry.platform ? '/krabi-claw-logo-96.webp' : undefined"
                   :alt="actorLabel(item.entry)"
                   size="md"
@@ -54,7 +49,6 @@
                   <div
                     v-if="item.startsRun"
                     class="flex flex-wrap items-center gap-2 pb-0.5 text-xs font-medium text-muted"
-                    :class="item.entry.actorKind === 'member' ? 'justify-end' : ''"
                   >
                     <!-- Who and when. Which pipe it travelled down is not part
                          of the conversation; a reply's own receipt says that. -->
@@ -62,12 +56,7 @@
                     <span>{{ formatRelativeTime(item.entry.occurredAt) }}</span>
                   </div>
 
-                  <div
-                    class="rounded-2xl px-4 py-3 text-base leading-normal"
-                    :class="item.entry.actorKind === 'member'
-                      ? 'rounded-br-[2px] bg-primary text-(--primary-foreground,#fff)'
-                      : 'rounded-bl-[2px] bg-elevated text-default'"
-                  >
+                  <div class="rounded-2xl rounded-bl-[2px] bg-elevated px-4 py-3 text-base leading-normal text-default">
                     <!--
                       One bubble, one text size. A message is a message: the
                       facts read as lines of it, with the label carried by
@@ -90,22 +79,6 @@
                       </NuxtLink>
                     </template>
                     <span v-else class="whitespace-pre-wrap">{{ item.entry.body }}</span>
-                  </div>
-
-                  <div
-                    v-if="item.entry.deliveries.length && !item.entry.platform"
-                    class="flex flex-wrap items-center gap-x-3 gap-y-1"
-                    :class="item.entry.actorKind === 'member' ? 'justify-end' : ''"
-                  >
-                    <span
-                      v-for="delivery in item.entry.deliveries"
-                      :key="delivery.id"
-                      class="flex items-center gap-1 text-[11px]"
-                      :class="deliveryTone(delivery)"
-                    >
-                      <UIcon :name="deliveryIcon(delivery)" class="size-3 shrink-0" />
-                      {{ deliveryLabel(delivery) }}
-                    </span>
                   </div>
                 </div>
               </div>
@@ -222,18 +195,6 @@ const DELIVERY_PURPOSE_LABELS = {
   member_reply: 'reply',
   status_update: 'status update',
 } satisfies Record<GuestThreadDeliveryFailure['purpose'], string>
-
-// The provider's own words for what happened, not a summary of them: 'sent'
-// and 'read' are different facts and the thread says which one it has.
-const DELIVERY_STATUS_LABELS = {
-  pending: 'queued',
-  accepted: 'accepted',
-  sent: 'sent',
-  delivered: 'delivered',
-  read: 'read',
-  failed: 'failed',
-  unknown: 'unconfirmed',
-} satisfies Record<GuestThreadEntryDelivery['status'], string>
 
 const draft = defineModel<string>('input', { required: true })
 
@@ -367,24 +328,6 @@ function actorLabel(entry: StreamEntry) {
   if (entry.actorKind === 'guest') return props.guestName
   if (entry.actorKind === 'member') return entry.actorLabel || 'Owner'
   return 'System'
-}
-
-function deliveryLabel(delivery: GuestThreadEntryDelivery) {
-  const channel = delivery.channel === 'whatsapp' ? 'WhatsApp' : 'Email'
-  return `${channel} ${DELIVERY_PURPOSE_LABELS[delivery.purpose]} · ${DELIVERY_STATUS_LABELS[delivery.status]}`
-}
-
-function deliveryTone(delivery: GuestThreadEntryDelivery) {
-  if (delivery.status === 'failed' || delivery.status === 'unknown') return 'text-warning'
-  if (delivery.status === 'delivered' || delivery.status === 'read') return 'text-success'
-  return 'text-muted'
-}
-
-function deliveryIcon(delivery: GuestThreadEntryDelivery) {
-  if (delivery.status === 'failed' || delivery.status === 'unknown') return 'i-lucide-triangle-alert'
-  if (delivery.status === 'read') return 'i-lucide-check-check'
-  if (delivery.status === 'delivered' || delivery.status === 'sent' || delivery.status === 'accepted') return 'i-lucide-check'
-  return 'i-lucide-clock'
 }
 
 function systemEventIcon(entry: StreamEntry) {
