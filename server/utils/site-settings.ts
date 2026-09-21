@@ -570,8 +570,9 @@ export async function updateSiteSettingsFields(
       if (existing) continue
       if (await isSystemSubdomainSpent(env, db, subdomain)) continue
 
+      let result: SiteSettingsUpdateResult
       try {
-        const result = await attemptSiteUpdate(
+        result = await attemptSiteUpdate(
           db,
           env,
           site,
@@ -581,19 +582,20 @@ export async function updateSiteSettingsFields(
           userId,
           subdomain
         )
-        // One business, one name. The organization Better Auth holds is that
-        // business, so it takes the brand name a guest sees rather than
-        // keeping a second name of its own.
-        if (result.status === 200) {
-          const adapter = await organizationAdapter(env)
-          await adapter.updateOrganization(organizationId, { name: updates.brand_name.trim() })
-        }
-        return result
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error)
         if (/UNIQUE constraint failed/i.test(message)) continue
         throw error
       }
+      // One business, one name. The organization Better Auth holds is that
+      // business, so it takes the brand name a guest sees rather than keeping
+      // a second name of its own. Outside the retry: a failure here is not a
+      // subdomain collision and must not spend another attempt.
+      if (result.status === 200) {
+        const adapter = await organizationAdapter(env)
+        await adapter.updateOrganization(organizationId, { name: updates.brand_name.trim() })
+      }
+      return result
     }
 
     return {

@@ -91,7 +91,7 @@ const tiles = computed<SiteLocationSelectorItem[]>(() => locations.value.map((lo
     imageUrl: hero ? (hero.kind === 'video' ? hero.thumbnail_url : hero.public_url) : null,
     eyebrow: '',
     summary: lines.length ? lines.join(', ') : 'Address not set',
-    to: `${businessPaths.value?.site ?? ''}/locations/${location.slug}`,
+    to: `/dashboard/${orgSlug.value}/sites/${location.parent_site_slug}/locations/${location.slug}`,
   }
 }))
 
