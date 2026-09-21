@@ -135,7 +135,7 @@ Deleted from Account: Billing (it is on Menu).
 Production has 19 members: 8 owners, 9 admins, 2 editors. The two editors are WhatsApp phone identities (`phone-…@phone.krabiclaw.local`) on location teams; they have never signed in. The scoped role exists only to route WhatsApp messages to the right recipient. So: **no signed-in user is ever restricted to one location.** The location inbox page and the `scope="location"` branch of the thread list are deleted; the site inbox with its location filter is the one inbox below the org view. The `editor` role and team tables stay for WhatsApp routing, surfaced as Location settings → WhatsApp number and Account → Notifications.
 
 ### Back
-Nuxt's nested directories decide what renders inside what; they do not draw a Back or choose its target. `DashboardNavbarLeading` takes an explicit `to`, and that is why four screens point at the wrong parent. Once the tree above is real (Menu is `/settings`' parent, Notifications and Insights live under Menu, Account's parent is Menu), the parent is `route.matched[-2]` with params filled, derived once in the leading control. The `to` prop and every hand-written target are then deleted. Nobody has ever wanted a Back that goes anywhere other than up one level.
+`DashboardNavbarLeading` used to take a declared destination, and four screens declared the wrong one. It now takes nothing: Back is `router.back()`, the browser's own previous entry, and only a tab with nothing behind it goes to `/dashboard`, which routes to Today. Airbnb pushes to a declared parent (section 1); the owner's call is that nobody wants a Back that goes anywhere other than where they came from, and with the tree above fixed the two agree in practice.
 
 ## 4. Leaves
 
@@ -164,4 +164,4 @@ Ours: every settings row opens another page with one field and a paragraph of gu
 - Org settings rows stay **flat on Menu** rather than behind one "Settings" row: fewer pages, and Menu is already the list.
 - **Location-only dashboard access is removed**; everyone who signs in sees the whole site.
 - Bottom nav **stays** on Account and settings screens. Airbnb drops it there; keeping it is one code path.
-- Back stays a **declared parent**, not browser history, which is also what Airbnb does.
+- Back is **the browser's back**, with `/dashboard` as the only fallback. The explicit target prop is deleted.
