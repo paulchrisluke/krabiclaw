@@ -13,12 +13,15 @@
 </template>
 
 <script setup lang="ts">
-// Back is the browser's back. A tab opened straight onto a deep link has no
-// previous entry, so it goes to the dashboard root, which routes to Today.
+// Back is the browser's back. Only a tab with nothing behind it, opened
+// straight onto a deep link, goes to the dashboard root instead, which routes
+// to Today. The browser's history length is the test, not the router's own
+// record of the previous entry: a reload or a redirect keeps the former and
+// clears the latter.
 const router = useRouter()
 
 function back() {
-  if (import.meta.client && window.history.state?.back) return router.back()
+  if (import.meta.client && window.history.length > 1) return router.back()
   return navigateTo('/dashboard')
 }
 </script>
