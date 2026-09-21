@@ -143,7 +143,9 @@ onMounted(async () => {
 
   if (success || plan || canceled) await router.replace({ query: restQuery })
 
-  // /api/post-login?plan=growth lands here with the plan still to buy.
+  // Stripe sends the plan back with success or canceled: that checkout is
+  // over. Only /api/post-login?plan=growth arrives with the plan still to buy.
+  if (success || canceled) return
   const planId = Array.isArray(plan) ? plan[0] : plan
   if (typeof planId === 'string' && planId) {
     try {

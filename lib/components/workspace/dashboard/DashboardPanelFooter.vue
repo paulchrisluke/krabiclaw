@@ -21,7 +21,10 @@ withDefaults(defineProps<{
 
 defineEmits<{ cancel: []; save: [] }>()
 
+// Counted on the client only: an increment in setup also ran on the server,
+// was serialized into the payload, and then ran again on hydration, so the
+// count never came back to zero and the tab bar never came back.
 const open = useDashboardLeafFooters()
-open.value += 1
+onMounted(() => { open.value += 1 })
 onUnmounted(() => { open.value -= 1 })
 </script>
