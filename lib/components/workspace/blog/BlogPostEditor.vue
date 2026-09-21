@@ -2,207 +2,127 @@
   <!--
     A blog post is read the way every other record is: the thing itself first,
     then the rows that describe it. The canvas takes the place a product's
-    photograph takes on its hub — it does not take the place of the hub.
-
-    One panel either way: this level always owns a column and always titles it.
-    With no section open it is the whole screen; once one is open it is the
-    index column and the section takes the other.
+    photograph takes on its hub — it does not take the place of the hub. Each
+    row is a leaf below this level.
   -->
-  <UDashboardPanel :id="panelId" :class="hasDetail ? 'hidden lg:flex' : undefined" :default-size="hasDetail ? 32 : undefined">
-    <template #header>
-      <UDashboardNavbar :title="form.title || 'Untitled post'" :toggle="false">
-        <template #leading>
-          <DashboardNavbarLeading />
-        </template>
-        <template #right>
-          <slot name="actions" />
-        </template>
-      </UDashboardNavbar>
+  <DashboardIndexPanel :id="panelId" :title="form.title || 'Untitled post'">
+    <template #right>
+      <slot name="actions" />
     </template>
 
-    <template #body>
-      <!-- Inert while a write is in flight: the ids that come back are matched to the blocks that were sent. -->
-      <div class="mx-auto w-full space-y-8" :class="hasDetail ? 'max-w-xl' : 'max-w-3xl'" :inert="publishing || saveState === 'saving'">
-        <p v-if="actionError && !hasDetail" role="alert" class="rounded-lg border border-error/30 bg-error/10 px-4 py-2 text-sm text-error">{{ actionError }}</p>
+    <!-- Inert while a write is in flight: the ids that come back are matched to the blocks that were sent. -->
+    <div class="space-y-8" :inert="publishing || saveState === 'saving'">
+      <p v-if="actionError" role="alert" class="rounded-lg border border-error/30 bg-error/10 px-4 py-2 text-sm text-error">{{ actionError }}</p>
 
-        <EditorNavigationList v-if="hasDetail" :groups="settingsGroups" :active-item="section" />
-        <div v-else-if="loadPending" class="grid min-h-64 place-items-center"><UIcon name="i-lucide-loader-circle" class="size-6 animate-spin" /></div>
-        <UAlert v-else-if="loadError" color="error" variant="soft" :description="loadError" />
-
-        <template v-else>
-        <div class="overflow-hidden rounded-lg bg-[var(--editor-canvas,#fff)] text-[var(--editor-ink,#1f2937)]" :style="editorCanvasStyle">
-          <div class="mx-auto max-w-4xl px-4 py-10 sm:px-6 sm:py-14 lg:px-8">
-            <BlogArticleView
-              v-model:title="form.title"
-              :excerpt="form.excerpt || null"
-              :category="form.category || null"
-              :published-at="post?.published_at || post?.created_at || null"
-              :updated-at="post?.updated_at || null"
-              :author-name="resolvedSiteName"
-              :site-name="resolvedSiteName"
-              :read-minutes="readMinutes"
-              :blocks="blocks"
-              :template="templateName"
-              editable
-              :show-meta="false"
-              @update:block="updateBlock"
-              @insert-block="handleInsertBlock"
-              @insert-block-type="handleInsertBlockType"
-              @move-block="moveBlock"
-              @merge-block="handleMergeBlock"
-              @split-insert="handleSplitInsert"
-            >
-              <template #cover-empty>
-                <button type="button" class="mb-8 flex aspect-video w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-current/30 text-sm opacity-70 transition hover:border-current/60 hover:opacity-100" @click="addCover">
-                  <UIcon name="i-lucide-image-plus" class="size-4" />
-                  Add a cover photo
-                </button>
-              </template>
-              <template #image-editor="{ block, index }">
-                <component
-                  :is="mediaPickerComponent"
-                  :site-id="siteId"
-                  :model-value="block.media?.find(item => item.slot === 'media')?.asset_id || ''"
-                  accept="image"
-                  @change="changeImage(index, $event)"
-                />
-                <!--
-                  Alt text is not asked for here. It describes the picture, so it
-                  belongs to the media asset and is edited once in the media
-                  library — not re-entered at every place the asset is used.
-                -->
-                <UInput class="mt-2 w-full" :model-value="String(block.data.caption || '')" placeholder="Caption" @update:model-value="value => setBlockData(index, 'caption', value)" />
-              </template>
-            </BlogArticleView>
-          </div>
-        </div>
-
-        <!--
-          The article commits on Save, like every other editor. It used to write
-          the whole document after every burst of typing — a write nothing else
-          in the product performs, and the one that kept replacing the canvas
-          under the writer.
-        -->
-        <div class="flex items-center justify-between gap-4 px-1">
-          <span class="text-xs" :class="saveState === 'failed' || saveState === 'conflict' ? 'text-error' : 'text-muted'">{{ saveLabel }}</span>
-          <UButton label="Save" :loading="saveState === 'saving'" :disabled="!contentDirty || saveState === 'conflict'" @click="saveArticle" />
-        </div>
-          <EditorNavigationList :groups="settingsGroups" />
-        </template>
-      </div>
-    </template>
-  </UDashboardPanel>
-
-  <UDashboardPanel v-if="hasDetail" :id="`${panelId}-section`">
-    <template #header>
-      <UDashboardNavbar :title="sectionLabel" :toggle="false">
-        <template #leading>
-          <DashboardNavbarLeading />
-        </template>
-      </UDashboardNavbar>
-    </template>
-
-    <template #body>
-      <!-- The fields bind to the loaded post; shown earlier they bind to a blank form the load then overwrites. -->
       <div v-if="loadPending" class="grid min-h-64 place-items-center"><UIcon name="i-lucide-loader-circle" class="size-6 animate-spin" /></div>
       <UAlert v-else-if="loadError" color="error" variant="soft" :description="loadError" />
-      <div v-else class="mx-auto w-full max-w-2xl space-y-6" :inert="savingExplicitly || publishing">
-      <p v-if="actionError" role="alert" class="rounded-lg border border-error/30 bg-error/10 px-4 py-2 text-sm text-error">{{ actionError }}</p>
-      <template v-if="section === 'category'">
-        <!-- KrabiClaw's own site publishes two collections; a category is the author's own word in both. -->
-        <UFormField v-if="isPlatformTemplate" label="Collection" class="mb-4">
-          <USelect v-model="form.collection" :items="collectionOptions" value-key="value" class="w-full" />
-        </UFormField>
-        <UFormField label="Category">
-          <UInput v-model="form.category" autofocus class="w-full" />
-        </UFormField>
-      </template>
 
-      <UFormField v-else-if="section === 'tags'" label="Tags" help="Comma separated">
-        <UInput v-model="tagsText" autofocus class="w-full" />
-      </UFormField>
-
-      <UFormField v-else-if="section === 'excerpt'" label="Excerpt">
-        <UTextarea v-model="form.excerpt" :rows="5" autofocus :placeholder="resolvedExcerpt" class="w-full" />
-        <p class="mt-1 text-xs text-dimmed">{{ form.excerpt ? 'Custom' : `Auto: ${resolvedExcerpt}` }}</p>
-      </UFormField>
+      <template v-else>
+      <div class="overflow-hidden rounded-lg bg-[var(--editor-canvas,#fff)] text-[var(--editor-ink,#1f2937)]" :style="editorCanvasStyle">
+        <div class="mx-auto max-w-4xl px-4 py-10 sm:px-6 sm:py-14 lg:px-8">
+          <BlogArticleView
+            v-model:title="form.title"
+            :excerpt="form.excerpt || null"
+            :category="form.category || null"
+            :published-at="post?.published_at || post?.created_at || null"
+            :updated-at="post?.updated_at || null"
+            :author-name="resolvedSiteName"
+            :site-name="resolvedSiteName"
+            :read-minutes="readMinutes"
+            :blocks="blocks"
+            :template="templateName"
+            editable
+            :show-meta="false"
+            @update:block="updateBlock"
+            @insert-block="handleInsertBlock"
+            @insert-block-type="handleInsertBlockType"
+            @move-block="moveBlock"
+            @merge-block="handleMergeBlock"
+            @split-insert="handleSplitInsert"
+          >
+            <template #cover-empty>
+              <button type="button" class="mb-8 flex aspect-video w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-current/30 text-sm opacity-70 transition hover:border-current/60 hover:opacity-100" @click="addCover">
+                <UIcon name="i-lucide-image-plus" class="size-4" />
+                Add a cover photo
+              </button>
+            </template>
+            <template #image-editor="{ block, index }">
+              <component
+                :is="mediaPickerComponent"
+                :site-id="siteId"
+                :model-value="block.media?.find(item => item.slot === 'media')?.asset_id || ''"
+                accept="image"
+                @change="changeImage(index, $event)"
+              />
+              <!--
+                Alt text is not asked for here. It describes the picture, so it
+                belongs to the media asset and is edited once in the media
+                library — not re-entered at every place the asset is used.
+              -->
+              <UInput class="mt-2 w-full" :model-value="String(block.data.caption || '')" placeholder="Caption" @update:model-value="value => setBlockData(index, 'caption', value)" />
+            </template>
+          </BlogArticleView>
+        </div>
+      </div>
 
       <!--
-        Publishing is a leaf like any other, so it commits through the pane's
-        own Cancel/Save bar. It used to carry its own "Publish now" button in
-        the body as well, which put two commit mechanisms on one screen: the
-        selects saved with the bar, the lifecycle went through a separate
-        endpoint the moment you pressed it. That is the whole reason the CMS
-        felt inconsistent about how you save — a tenant had to learn a second
-        place to look, on exactly one screen.
-
-        Save now carries the lifecycle change too. What the fields say when
-        you press Save is what the post becomes.
+        The article commits on Save, like every other editor. It used to write
+        the whole document after every burst of typing — a write nothing else
+        in the product performs, and the one that kept replacing the canvas
+        under the writer.
       -->
-      <div v-else-if="section === 'publishing'" class="space-y-5">
-        <UFormField label="Status">
-          <p class="text-sm text-muted">{{ lifecycleLabel }}</p>
-        </UFormField>
-        <UFormField v-if="!post || post.status === 'scheduled'" label="Publish timing">
-          <USelect v-model="publishTiming" :items="['Now', 'Scheduled']" class="w-full" />
-        </UFormField>
-        <UFormField v-if="(!post || post.status === 'scheduled') && publishTiming === 'Scheduled'" label="Scheduled for (UTC)">
-          <UInput v-model="form.scheduled_for" type="datetime-local" step="any" class="w-full" />
-        </UFormField>
-        <UFormField label="Visibility">
-          <USelect v-model="form.visibility" :items="['public', 'unlisted']" class="w-full" />
-        </UFormField>
+      <div class="flex items-center justify-between gap-4 px-1">
+        <span class="text-xs" :class="saveState === 'failed' || saveState === 'conflict' ? 'text-error' : 'text-muted'">{{ saveLabel }}</span>
+        <UButton label="Save" :loading="saveState === 'saving'" :disabled="!contentDirty || saveState === 'conflict'" @click="saveArticle" />
       </div>
-
-      <div v-else-if="section === 'search'" class="space-y-5">
-        <div class="rounded-lg border border-default bg-muted p-3">
-          <p class="truncate text-sm text-primary">{{ resolvedSeo.title }}</p>
-          <p class="truncate text-xs text-success">{{ resolvedSeo.canonicalUrl }}</p>
-          <p class="mt-1 line-clamp-2 text-xs text-muted">{{ resolvedSeo.description }}</p>
-        </div>
-        <UFormField label="SEO title"><UInput v-model="form.seo_title" :placeholder="form.title" class="w-full" /></UFormField>
-        <UFormField label="Meta description"><UTextarea v-model="form.seo_description" :rows="4" :placeholder="resolvedExcerpt" class="w-full" /></UFormField>
-      </div>
-
-      <UFormField v-else-if="section === 'share'" label="Share preview">
-        <img v-if="resolvedPrimaryImageUrl" :src="resolvedPrimaryImageUrl" alt="Resolved share preview" class="aspect-video w-full rounded-lg object-cover">
-        <video v-else-if="resolvedPrimaryVideoUrl" :src="resolvedPrimaryVideoUrl" controls muted playsinline class="aspect-video w-full rounded-lg object-cover" />
-        <p v-else class="text-xs text-dimmed">This post has no cover photo, so its share card cannot be generated. Add a picture at the top of the article.</p>
-      </UFormField>
-
-      <div v-else-if="section === 'url'" class="space-y-5">
-        <UFormField label="URL slug">
-          <UInput v-model="form.slug" :disabled="slugResetRequested" autofocus class="w-full" />
-          <div class="mt-1 flex items-center justify-between gap-3">
-            <p class="text-xs text-dimmed">{{ slugResetRequested ? generatedSlug : form.slug || generatedSlug }}</p>
-            <UButton v-if="post?.slug_manually_overridden" size="xs" variant="link" @click="resetSlugOverride">Use automatic slug</UButton>
-          </div>
-        </UFormField>
-        <UCheckbox v-if="post?.first_published_at && form.slug !== post.slug" v-model="form.redirect_old_slug" label="Redirect old URL" />
-      </div>
-
-      <UFormField v-else-if="section === 'canonical'" label="Canonical URL">
-        <UInput v-model="form.canonical_url" autofocus :placeholder="resolvedSeo.canonicalUrl" class="w-full" />
-      </UFormField>
-
-      <UFormField v-else-if="section === 'robots'" label="Robots">
-        <UInput v-model="form.robots" autofocus placeholder="index, follow" class="w-full" />
-      </UFormField>
-      </div>
-    </template>
-
-    <template v-if="section !== 'share' && !loadPending && !loadError" #footer>
-      <DashboardPanelFooter :loading="savingExplicitly || publishing" @cancel="cancelSection" @save="saveSection" />
-    </template>
-  </UDashboardPanel>
+        <EditorNavigationList :groups="settingsGroups" :active-item="section" />
+      </template>
+    </div>
+  </DashboardIndexPanel>
 </template>
+
+<script lang="ts">
+import type { Component, ComputedRef, InjectionKey, Reactive, Ref } from 'vue'
+
+export type SettingsSection = 'category' | 'tags' | 'excerpt' | 'publishing' | 'search' | 'share' | 'url' | 'canonical' | 'robots'
+export const SETTINGS_SECTIONS: SettingsSection[] = ['category', 'tags', 'excerpt', 'publishing', 'search', 'share', 'url', 'canonical', 'robots']
+export const SETTINGS_LABELS: Record<SettingsSection, string> = {
+  category: 'Category', tags: 'Tags', excerpt: 'Excerpt', publishing: 'When it goes live', search: 'Search appearance',
+  share: 'Share preview', url: 'URL', canonical: 'Canonical URL', robots: 'Robots',
+}
+
+/** The post's draft and what its leaves show beside their one field. */
+export interface BlogEditor {
+  form: Reactive<{ title: string; collection: ArticleCollection; category: string; excerpt: string; seo_title: string; seo_description: string; slug: string; canonical_url: string; robots: string; visibility: 'public' | 'unlisted'; scheduled_for: string; redirect_old_slug: boolean }>
+  tagsText: Ref<string>
+  publishTiming: Ref<'Now' | 'Scheduled'>
+  post: Ref<BlogPost | null>
+  loadPending: Ref<boolean>
+  loadError: Ref<string>
+  actionError: Ref<string>
+  saving: ComputedRef<boolean>
+  isPlatformTemplate: ComputedRef<boolean>
+  collectionOptions: Array<{ label: string; value: ArticleCollection }>
+  lifecycleLabel: ComputedRef<string>
+  generatedSlug: ComputedRef<string>
+  resolvedExcerpt: ComputedRef<string>
+  resolvedSeo: ComputedRef<{ title: string; description: string; canonicalUrl: string }>
+  resolvedPrimaryImageUrl: ComputedRef<string | null>
+  resolvedPrimaryVideoUrl: ComputedRef<string | null>
+  slugResetRequested: Ref<boolean>
+  resetSlugOverride: () => void
+  revert: () => void
+  save: () => Promise<void>
+}
+
+export const blogEditorKey = Symbol('blog-editor') as InjectionKey<BlogEditor>
+</script>
 
 <script setup lang="ts">
 import { instantDate } from '~/utils/timezone'
-import type { Component } from 'vue'
 import BlogArticleView from '~/components/blog/BlogArticleView.vue'
 import EditorNavigationList, { type EditorNavigationGroup } from '~/components/dashboard/EditorNavigationList.vue'
-import { ARTICLE_COLLECTIONS, ARTICLE_COLLECTION_SLUGS, type ArticleCollection } from '~/utils/article-collections'
+import { ARTICLE_COLLECTIONS, ARTICLE_COLLECTION_SLUGS } from '~/utils/article-collections'
 import { tenantBlogPostPath } from '~/utils/tenant-blog-route'
 import { publicTemplateRegistry } from '~/utils/template-registry'
 import type { BlogLifecycleState, BlogPostRepository, BlogPost, BlogEditorBlock, BlogPostUpdateInput } from './types'
@@ -225,8 +145,6 @@ const saveState = ref<'saved' | 'saving' | 'failed' | 'conflict'>('saved')
 const actionError = ref('')
 const publishing = ref(false)
 const savingExplicitly = ref(false)
-type SettingsSection = 'category' | 'tags' | 'excerpt' | 'publishing' | 'search' | 'share' | 'url' | 'canonical' | 'robots'
-const SETTINGS_SECTIONS: SettingsSection[] = ['category', 'tags', 'excerpt', 'publishing', 'search', 'share', 'url', 'canonical', 'robots']
 const contentDirty = ref(false)
 const lifecycleDirty = ref(false)
 const dirtyState = computed(() => contentDirty.value || lifecycleDirty.value)
@@ -234,16 +152,11 @@ let applyingServerSnapshot = false
 let serverPostUpdatedAt: string | undefined
 const slugResetRequested = ref(false)
 
-/**
- * This post's own base path, and the frame computed from it. `blog.vue` yields
- * once a section is open, so this level draws the panel only then — the same
- * index/pair split every other editor uses.
- */
-const postPath = computed(() => `${props.backUrl}/${persistedPostId.value}`)
-const frame = useEditorFrame(postPath)
-const hasDetail = computed(() => frame.mode.value === 'pair')
+/** This post's own URL, which its rows hang off. */
+const level = useRouteLevel()
+const postPath = level.path
 const section = computed<SettingsSection | null>(() => {
-  const segment = frame.childSegment.value
+  const segment = level.child.value
   return segment && (SETTINGS_SECTIONS as string[]).includes(segment) ? segment as SettingsSection : null
 })
 
@@ -374,13 +287,6 @@ const publishingSummary = computed(() => {
   return `${statusLabel.value} · ${visibility}`
 })
 
-const sectionLabel = computed(() => {
-  for (const group of settingsGroups.value) {
-    const match = group.items.find(item => item.id === section.value)
-    if (match) return match.label
-  }
-  return 'Post settings'
-})
 
 const resolvedPrimaryVideoUrl = computed<string | null>(() => {
   const candidate = coverMedia.value?.kind === 'video' ? coverMedia.value.public_url : null
@@ -548,11 +454,6 @@ function recordLifecycleError(error: unknown) {
   saveState.value = status === 409 ? 'conflict' : 'failed'
   actionError.value = getErrorMessage(error, 'Failed to change publishing status.')
 }
-/** Dismissing a leaf discards its draft, matching every other editor. */
-async function cancelSection() {
-  if (post.value) applyLoadedPost(post.value)
-  await navigateTo(postPath.value)
-}
 async function saveSection() {
   if (!post.value || !persistedPostId.value) return
   actionError.value = ''
@@ -570,7 +471,7 @@ async function saveSection() {
       // Stay on the leaf when it failed, so the reason is still on screen.
       if (actionError.value) return
     }
-    await navigateTo(postPath.value)
+    await level.close()
   } catch (error: unknown) {
     actionError.value = getErrorMessage(error, 'Failed to save.')
   } finally {
@@ -719,4 +620,28 @@ function toLocalDatetime(value?: string | null) { if (!value) return ''; return 
 function resetSlugOverride() { slugResetRequested.value = true; form.slug = generatedSlug.value }
 function syncServerVersion(value: BlogPost) { serverPostUpdatedAt = value.updated_at }
 
+provide(blogEditorKey, {
+  form,
+  tagsText,
+  publishTiming,
+  post,
+  loadPending,
+  loadError,
+  actionError,
+  saving: computed(() => savingExplicitly.value || publishing.value),
+  isPlatformTemplate,
+  collectionOptions,
+  lifecycleLabel,
+  generatedSlug,
+  resolvedExcerpt,
+  resolvedSeo,
+  resolvedPrimaryImageUrl,
+  resolvedPrimaryVideoUrl,
+  slugResetRequested,
+  resetSlugOverride,
+  // A cancelled leaf puts the loaded post back before it closes.
+  revert: () => { if (post.value) applyLoadedPost(post.value) },
+  save: saveSection,
+})
 </script>
+

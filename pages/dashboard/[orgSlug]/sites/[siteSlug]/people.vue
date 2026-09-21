@@ -57,7 +57,8 @@ import { authClient } from '~/lib/auth-client'
 
 // KrabiClaw's own site gives a Better Auth admin the one platform-only tool: pick
 // a person and act as them. Everything else is that tenant's ordinary dashboard.
-definePageMeta({ layout: 'dashboard' })
+// People is a row on Menu, which is where Back goes.
+definePageMeta({ layout: 'dashboard', back: 'dashboard-orgSlug-settings' })
 
 useSeoMeta({ title: 'People | KrabiClaw Dashboard', robots: 'noindex, nofollow' })
 

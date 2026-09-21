@@ -382,13 +382,17 @@ test('Today uses the CMS patterns and sends one reservation change request', asy
   const note = `Today page note ${Date.now()}`
   // The row is named for what it holds, and its second line counts the notes
   // once there are any, so only the name itself is matched.
+  // Your notes is a level of the record: the new note is written there and the
+  // ones already written are leaves below it.
   await page.getByRole('link', { name: /^Your notes/ }).click()
-  await page.getByLabel('Note', { exact: true }).fill(note)
+  await page.getByLabel('New note', { exact: true }).fill(note)
   await page.getByRole('button', { name: 'Save', exact: true }).click()
   await expect(page.getByText(note, { exact: true })).toBeVisible()
   await page.getByRole('link', { name: `Edit note: ${note}` }).click()
   await expect(page.getByLabel('Note', { exact: true })).toHaveValue(note)
   await page.getByRole('button', { name: 'Cancel', exact: true }).click()
+  // Back is a link to the level above, never the browser's history.
+  await page.getByRole('link', { name: 'Back', exact: true }).click()
 
   // Change is a mode of the booking leaf, not a dialog over it: the action is a
   // link, every field is a row of the same staged draft, and one footer commit

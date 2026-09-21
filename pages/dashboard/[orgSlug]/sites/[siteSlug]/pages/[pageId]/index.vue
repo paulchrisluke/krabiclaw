@@ -1,9 +1,8 @@
 <template>
-  <TenantPageEditorPage />
+  <!-- Nothing open: the page above is the screen. -->
+  <div />
 </template>
 
 <script setup lang="ts">
-import TenantPageEditorPage from '~/components/dashboard/TenantPageEditorPage.vue'
-
-definePageMeta({ layout: 'dashboard', ownsChrome: true })
+definePageMeta({ layout: 'dashboard' })
 </script>

@@ -1,195 +1,11 @@
 <template>
-  <NuxtPage v-if="frame.mode.value === 'yield'" />
-
-  <template v-else>
-    <UDashboardPanel
-      id="account-profile"
-      :class="hasDetail ? 'hidden lg:flex' : undefined"
-      :default-size="32"
-    >
-      <template #header>
-        <UDashboardNavbar title="Account settings" :toggle="false">
-          <template #leading>
-            <DashboardNavbarLeading />
-          </template>
-        </UDashboardNavbar>
-      </template>
-
-      <template #body>
-        <div class="mx-auto w-full max-w-xl">
-          <!--
-            The reference's Account settings: a row per section, and the fields
-            live inside the section as value rows that edit in place.
-          -->
-          <EditorNavigationList :groups="groups" :active-item="openKey" @act="runRowAction" />
-        </div>
-      </template>
-    </UDashboardPanel>
-
-    <!--
-      The open row is the other column. It is drawn at `lg` even with nothing
-      open, so the pair never collapses to one column on a wide screen.
-    -->
-    <UDashboardPanel id="account-profile-detail" :class="hasDetail ? undefined : 'hidden lg:flex'">
-      <template #header>
-        <UDashboardNavbar :title="detailTitle" :toggle="false">
-          <template #leading>
-            <DashboardNavbarLeading />
-          </template>
-        </UDashboardNavbar>
-      </template>
-
-      <template #body>
-        <div class="mx-auto w-full max-w-2xl">
-          <div v-if="openKey === 'personal'" class="divide-y divide-default">
-            <!-- Photo -->
-            <div class="flex items-start justify-between gap-4 py-5">
-              <div class="flex min-w-0 items-center gap-4">
-                <UAvatar :src="photoPreview ?? sessionData?.user?.image ?? undefined" icon="i-lucide-user" alt="" class="size-16" :ui="{ icon: 'size-8' }" />
-                <div class="min-w-0">
-                  <p class="font-semibold text-highlighted">Photo</p>
-                  <p v-if="photoError" class="mt-1 text-sm text-error">{{ photoError }}</p>
-                  <UInput v-if="editing === 'photo'" type="file" accept="image/*" class="mt-3 w-full" :disabled="photoSaving" @change="pickPhoto" />
-                </div>
-              </div>
-              <UButton variant="link" color="neutral" class="shrink-0" :label="editing === 'photo' ? 'Cancel' : 'Edit'" @click="toggleEdit('photo')" />
-            </div>
-
-            <!-- Display name -->
-            <div class="py-5">
-              <div class="flex items-start justify-between gap-4">
-                <div class="min-w-0">
-                  <p class="font-semibold text-highlighted">Display name</p>
-                  <p v-if="editing !== 'name'" class="mt-1 text-sm" :class="sessionData?.user?.name ? 'text-muted' : 'italic text-dimmed'">{{ sessionData?.user?.name || 'Not provided' }}</p>
-                </div>
-                <UButton variant="link" color="neutral" class="shrink-0" :label="editing === 'name' ? 'Cancel' : sessionData?.user?.name ? 'Edit' : 'Add'" @click="toggleEdit('name')" />
-              </div>
-              <div v-if="editing === 'name'" class="mt-4 space-y-4">
-                <UInput v-model="nameInput" autofocus class="w-full" @input="nameTouched = true" @keydown.enter="saveNameInline" />
-                <p v-if="nameError" class="text-sm text-error">{{ nameError }}</p>
-                <UButton label="Save" :loading="nameSaving" :disabled="!nameDirty" @click="saveNameInline" />
-              </div>
-            </div>
-
-            <!-- WhatsApp number -->
-            <div class="py-5">
-              <div class="flex items-start justify-between gap-4">
-                <div class="min-w-0">
-                  <p class="font-semibold text-highlighted">WhatsApp number</p>
-                  <p v-if="editing !== 'phone'" class="mt-1 text-sm" :class="sessionData?.user?.phoneNumber ? 'text-muted' : 'italic text-dimmed'">
-                    {{ sessionData?.user?.phoneNumber || 'Not provided' }}
-                    <UBadge v-if="sessionData?.user?.phoneNumber" :color="sessionData?.user?.phoneNumberVerified ? 'success' : 'warning'" variant="subtle" size="sm" class="ms-2">{{ sessionData?.user?.phoneNumberVerified ? 'Verified' : 'Not verified' }}</UBadge>
-                  </p>
-                  <p class="mt-1 text-sm text-dimmed">Notifications and codes are sent over WhatsApp.</p>
-                </div>
-                <UButton variant="link" color="neutral" class="shrink-0" :label="editing === 'phone' ? 'Cancel' : sessionData?.user?.phoneNumber ? 'Edit' : 'Add'" @click="toggleEdit('phone')" />
-              </div>
-              <div v-if="editing === 'phone'" class="mt-4 space-y-4">
-                <UInput v-model="phoneInput" type="tel" placeholder="+66..." autofocus class="w-full" @input="phoneTouched = true" @keydown.enter="requestPhoneVerify" />
-                <p v-if="phoneError" class="text-sm text-error">{{ phoneError }}</p>
-                <UButton label="Verify and save" :loading="phoneSaving" :disabled="!phoneDirty || !phoneInput.trim()" @click="requestPhoneVerify" />
-              </div>
-            </div>
-          </div>
-
-          <!--
-            Login & security, laid out the way the reference does it: what you
-            sign in with, the devices signed in now, and account deletion at the
-            very bottom, behind its own confirmation and nowhere near Log out.
-          -->
-          <div v-else-if="openKey === 'login'" class="space-y-10">
-            <section>
-              <h2 class="text-lg font-semibold text-highlighted">Login</h2>
-              <div class="mt-2 divide-y divide-default">
-                <div class="flex items-start justify-between gap-4 py-4">
-                  <div class="min-w-0">
-                    <p class="font-semibold text-highlighted">Email</p>
-                    <p class="mt-1 truncate text-sm text-muted">{{ sessionData?.user?.email }}</p>
-                  </div>
-                  <UBadge v-if="sessionData?.user?.emailVerified" color="success" variant="subtle">Verified</UBadge>
-                  <UBadge v-else color="warning" variant="subtle">Not verified</UBadge>
-                </div>
-                <div class="flex items-start justify-between gap-4 py-4">
-                  <div>
-                    <p class="font-semibold text-highlighted">Password</p>
-                    <p class="mt-1 text-sm text-muted">Sent to your email as a reset link.</p>
-                  </div>
-                  <NuxtLink to="/forgot-password" class="shrink-0 text-sm font-semibold text-highlighted underline underline-offset-4">Update</NuxtLink>
-                </div>
-                <div class="flex items-start justify-between gap-4 py-4">
-                  <div>
-                    <p class="font-semibold text-highlighted">Google</p>
-                    <p class="mt-1 text-sm text-muted">{{ googleStatus === 'connected' ? 'Connected' : googleStatus === 'not-connected' ? 'Not connected' : googleStatus === 'error' ? 'Could not be checked' : '' }}</p>
-                  </div>
-                </div>
-              </div>
-            </section>
-
-            <section>
-              <h2 class="text-lg font-semibold text-highlighted">Device history</h2>
-              <UAlert v-if="sessionsError" color="error" variant="soft" icon="i-lucide-triangle-alert" :description="sessionsError" class="mt-3" />
-              <div v-else class="mt-2 divide-y divide-default">
-                <div v-for="device in sessions" :key="device.token" class="flex items-start justify-between gap-4 py-4">
-                  <div class="min-w-0">
-                    <p class="font-semibold text-highlighted">{{ describeDevice(device.userAgent) }}</p>
-                    <UBadge v-if="device.current" color="neutral" variant="subtle" size="sm" class="mt-1">Current session</UBadge>
-                    <p class="mt-1 text-sm text-muted">{{ device.ipAddress ? `${device.ipAddress} · ` : '' }}{{ formatExactDateTime(device.updatedAt, { includeTime: true }) }}</p>
-                  </div>
-                  <UButton
-                    v-if="!device.current"
-                    variant="link"
-                    color="neutral"
-                    label="Log out"
-                    :loading="revoking === device.token"
-                    @click="revokeDevice(device.token)"
-                  />
-                </div>
-              </div>
-            </section>
-
-            <section>
-              <h2 class="text-lg font-semibold text-highlighted">Delete account</h2>
-              <div class="mt-3 space-y-4">
-                <template v-if="deletionScheduledAt">
-                  <UAlert
-                    color="warning"
-                    variant="soft"
-                    icon="i-lucide-clock"
-                    title="Deletion scheduled"
-                    :description="`Everything is deleted on ${deletionDateLabel}. Your site stays online until then.`"
-                  />
-                  <UAlert v-if="deleteError" color="error" variant="soft" icon="i-lucide-triangle-alert" :description="deleteError" />
-                  <UButton color="neutral" variant="outline" label="Keep my account" :loading="deleting" @click="keepAccount" />
-                </template>
-                <template v-else>
-                  <p class="text-sm text-muted">Your account, organization, site, locations and menu data are deleted in {{ graceDays }} days. You can cancel until then.</p>
-                  <UAlert v-if="deleteError" color="error" variant="soft" icon="i-lucide-triangle-alert" :description="deleteError" />
-                  <UFormField label="Type DELETE to confirm">
-                    <UInput v-model="deleteConfirmText" placeholder="DELETE" :disabled="deleting" class="w-full" />
-                  </UFormField>
-                  <UButton color="error" variant="soft" label="Schedule deletion" :disabled="deleteConfirmText !== 'DELETE'" :loading="deleting" @click="confirmDeleteAccount" />
-                </template>
-              </div>
-            </section>
-          </div>
-
-          <URadioGroup
-            v-else-if="openKey === 'appearance'"
-            v-model="themeInput"
-            legend="Theme"
-            :items="THEME_OPTIONS"
-            value-key="value"
-            size="xl"
-            variant="card"
-          />
-        </div>
-      </template>
-
-      <template v-if="hasCommit" #footer>
-        <DashboardPanelFooter :save-label="saveLabel" :loading="saving" :disabled="saveDisabled" @cancel="closeDetail" @save="saveDetail" />
-      </template>
-    </UDashboardPanel>
-  </template>
+  <!--
+    Account settings: a row per section, each a leaf below. Where there is a
+    pane it opens on Personal information, the way the reference does.
+  -->
+  <DashboardIndexPanel id="account-profile" title="Account settings" :auto-open="`${level.path.value}/personal`">
+    <EditorNavigationList :groups="groups" :active-item="level.child.value" @act="runRowAction" />
+  </DashboardIndexPanel>
 
   <!-- OTP Verification Modal -->
   <UModal v-model:open="verifyModalOpen" :ui="{ content: 'max-w-sm' }">
@@ -229,17 +45,78 @@
   </UModal>
 </template>
 
+<script lang="ts">
+import type { ComputedRef, InjectionKey, Ref } from 'vue'
+import type { PlatformThemePreference } from '~/composables/usePlatformTheme'
+
+export const DETAIL_LABELS: Record<string, string> = {
+  personal: 'Personal information',
+  login: 'Login & security',
+  appearance: 'Appearance',
+}
+
+/** The signed-in person's account, for the three leaves that edit parts of it. */
+export interface AccountEditor {
+  sessionData: ComputedRef<{
+    user?: { name?: string | null; email?: string | null; image?: string | null; phoneNumber?: string | null; phoneNumberVerified?: boolean | null; emailVerified?: boolean | null } | null
+    session?: { token?: string | null } | null
+  } | null | undefined>
+  // personal information: rows that edit in place
+  editing: Ref<'photo' | 'name' | 'phone' | null>
+  toggleEdit: (row: 'photo' | 'name' | 'phone') => void
+  photoPreview: Ref<string | null>
+  photoSaving: Ref<boolean>
+  photoError: Ref<string>
+  pickPhoto: (event: Event) => Promise<void>
+  nameInput: Ref<string>
+  nameDirty: ComputedRef<boolean>
+  nameSaving: Ref<boolean>
+  nameError: Ref<string | null>
+  nameTouched: Ref<boolean>
+  saveNameInline: () => Promise<void>
+  phoneInput: Ref<string>
+  phoneDirty: ComputedRef<boolean>
+  phoneSaving: Ref<boolean>
+  phoneError: Ref<string | null>
+  phoneTouched: Ref<boolean>
+  requestPhoneVerify: () => Promise<void>
+  // login & security
+  googleStatus: Ref<'loading' | 'connected' | 'not-connected' | 'error'>
+  sessions: Ref<Array<{ token: string; current: boolean; userAgent?: string | null; ipAddress?: string | null; updatedAt: string | Date }>>
+  sessionsError: Ref<string | null>
+  revoking: Ref<string | null>
+  revokeDevice: (token: string) => Promise<void>
+  describeDevice: (userAgent?: string | null) => string
+  formatExactDateTime: (value: string | Date, options?: { includeTime?: boolean }) => string
+  deletionScheduledAt: ComputedRef<Date | null>
+  deletionDateLabel: ComputedRef<string>
+  deleteError: Ref<string>
+  deleting: Ref<boolean>
+  graceDays: Ref<number>
+  deleteConfirmText: Ref<string>
+  confirmDeleteAccount: () => Promise<void>
+  keepAccount: () => Promise<void>
+  // appearance
+  themeInput: Ref<PlatformThemePreference>
+  themeOptions: Array<{ label: string; value: PlatformThemePreference; description?: string }>
+  saveDisabled: ComputedRef<boolean>
+  revert: () => void
+  save: () => Promise<void>
+}
+
+export const accountEditorKey = Symbol('account-editor') as InjectionKey<AccountEditor>
+</script>
+
 <script setup lang="ts">
 // -nocheck
 import EditorNavigationList, { type EditorNavigationGroup } from '~/components/dashboard/EditorNavigationList.vue'
 import { authClient } from '~/lib/auth-client'
 
 
-// The frame comes first, and before any `await`: `useEditorFrame` provides and
-// injects, which Vue binds only while setup is still synchronous.
-const profilePath = computed(() => '/dashboard/account/profile')
-const frame = useEditorFrame(profilePath)
-const hasDetail = computed(() => frame.mode.value === 'pair')
+// The level runs while setup is still synchronous: it injects the record the
+// `<RouterView>` above rendered, and an `await` before it would bind nothing.
+const level = useRouteLevel()
+const profilePath = level.path
 const session = authClient.useSession()
 const sessionData = computed(() => session.value.data)
 const refreshSession = () => session.value.refetch()
@@ -355,12 +232,6 @@ async function pickPhoto(event: Event) {
 const nameInput = ref(sessionData.value?.user?.name || '')
 const nameDirty = computed(() => nameInput.value.trim() !== (sessionData.value?.user?.name || ''))
 const nameSaving = ref(false)
-const DETAIL_LABELS: Record<string, string> = {
-  personal: 'Personal information',
-  login: 'Login & security',
-  appearance: 'Appearance',
-}
-
 // Which Personal information row is open for editing. One at a time, the way
 // the reference expands one row and leaves the rest as they are.
 const editing = ref<'photo' | 'name' | 'phone' | null>(null)
@@ -373,14 +244,8 @@ function toggleEdit(row: 'photo' | 'name' | 'phone') {
   cancelEdit()
   editing.value = row
 }
-const detailKey = computed(() => frame.childSegment.value)
-/**
- * With nothing open the pane still shows the first row rather than empty space:
- * the reference profile opens on its first section too. `has-detail` stays tied
- * to the route, so below `lg` a phone shows the index and no sheet to escape.
- */
+const detailKey = computed(() => level.child.value)
 const openKey = computed(() => detailKey.value ?? 'personal')
-const detailTitle = computed(() => DETAIL_LABELS[openKey.value])
 
 // The current token arrives with the session fetch; until it has, every
 // device would read as another device, with a Log out it must not have.
@@ -388,7 +253,7 @@ watch(() => [openKey.value === 'login', sessionData.value?.session?.token] as co
 
 // An unsupported row 404s rather than opening an empty pane.
 watchEffect(() => {
-  if (frame.rest.value.length > 1 || (detailKey.value && !(detailKey.value in DETAIL_LABELS))) {
+  if (level.mode.value === 'yield' || (detailKey.value && !(detailKey.value in DETAIL_LABELS))) {
     throw createError({ statusCode: 404, statusMessage: 'Page not found' })
   }
 })
@@ -424,25 +289,18 @@ function runRowAction(id: string) {
 
 // Personal information and Login & security carry their own controls on
 // each row; only Appearance commits from the footer.
-const hasCommit = computed(() => openKey.value === 'appearance')
-const saving = computed(() => false)
 const saveDisabled = computed(() => !themeDirty.value)
-const saveLabel = computed(() => undefined)
 
 async function saveDetail() {
   if (saveDisabled.value) return
   setThemePreference(themeInput.value)
-  await navigateTo(profilePath.value)
+  await level.close()
 }
 
 const nameError = ref<string | null>(null)
 const phoneError = ref<string | null>(null)
 
 
-function closeDetail() {
-  cancelEdit()
-  void navigateTo(profilePath.value)
-}
 
 function cancelEdit() {
   nameInput.value = sessionData.value?.user?.name || ''
@@ -636,4 +494,16 @@ async function keepAccount() {
 }
 
 useSeoMeta({ title: 'Account settings | KrabiClaw Dashboard', robots: 'noindex, nofollow' })
+provide(accountEditorKey, {
+  sessionData,
+  editing, toggleEdit,
+  photoPreview, photoSaving, photoError, pickPhoto,
+  nameInput, nameDirty, nameSaving, nameError, nameTouched, saveNameInline,
+  phoneInput, phoneDirty, phoneSaving, phoneError, phoneTouched, requestPhoneVerify,
+  googleStatus, sessions, sessionsError, revoking, revokeDevice, describeDevice, formatExactDateTime,
+  deletionScheduledAt, deletionDateLabel, deleteError, deleting, graceDays, deleteConfirmText, confirmDeleteAccount, keepAccount,
+  themeInput, themeOptions: [...THEME_OPTIONS], saveDisabled,
+  revert: cancelEdit,
+  save: saveDetail,
+})
 </script>

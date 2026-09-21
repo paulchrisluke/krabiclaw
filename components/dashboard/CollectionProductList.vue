@@ -1,80 +1,71 @@
 <template>
-  <UDashboardPanel id="location-collection">
-    <template #header>
-      <UDashboardNavbar :title="collection?.name ?? presentation.collectionLabel" :toggle="false">
-        <template #leading>
-          <DashboardNavbarLeading />
-        </template>
-      </UDashboardNavbar>
-    </template>
+  <!-- One collection: its products, in the order customers see them. Each is a level below. -->
+  <DashboardIndexPanel id="location-collection" :title="collection?.name ?? presentation.collectionLabel">
+    <DashboardListEditor
+      v-model:editing="editing"
+      v-model:selected="selected"
+      :title="collection?.name ?? presentation.collectionLabel"
+      :description="`Customers see ${presentation.itemLabelPlural.toLowerCase()} in this order.`"
+      :items="listItems"
+      :pending="pending"
+      :error="loadError"
+      :empty-title="`No ${presentation.itemLabelPlural.toLowerCase()} here yet`"
+      empty-icon="i-lucide-utensils"
+      :add-label="`Add a ${presentation.itemLabel.toLowerCase()}`"
+      reorderable
+      selectable
+      @add="openNew"
+      @open="openExisting"
+      @move="moveProduct"
+    >
+      <template #selection-actions>
+        <UButton label="Move" color="neutral" variant="soft" data-testid="product-move-open" @click="moveDialogOpen = true" />
+      </template>
 
-    <template #body>
-      <DashboardListEditor
-        v-model:editing="editing"
-        v-model:selected="selected"
-        :title="collection?.name ?? presentation.collectionLabel"
-        :description="`Customers see ${presentation.itemLabelPlural.toLowerCase()} in this order.`"
-        :items="listItems"
-        :pending="pending"
-        :error="loadError"
-        :empty-title="`No ${presentation.itemLabelPlural.toLowerCase()} here yet`"
-        empty-icon="i-lucide-utensils"
-        :add-label="`Add a ${presentation.itemLabel.toLowerCase()}`"
-        reorderable
-        selectable
-        @add="openNew"
-        @open="openExisting"
-        @move="moveProduct"
-      >
-        <template #selection-actions>
-          <UButton label="Move" color="neutral" variant="soft" data-testid="product-move-open" @click="moveDialogOpen = true" />
-        </template>
-
-        <template #item="{ item }">
-          <button type="button" class="flex w-full items-center gap-4 text-left" :data-testid="`product-${item.id}`" @click="openExisting(item)">
-            <DashboardMediaThumb :asset="item.row.image" :label="item.row.name" fallback-icon="i-lucide-image" />
-            <span class="min-w-0 flex-1">
-              <span class="block truncate text-sm font-semibold text-highlighted">{{ item.row.name }}</span>
-              <span class="mt-1 block text-sm tabular-nums" :class="priceLabel(item.row) ? 'text-muted' : 'italic text-muted'">
-                {{ priceLabel(item.row) || 'No price set' }}
-              </span>
+      <template #item="{ item }">
+        <button type="button" class="flex w-full items-center gap-4 text-left" :data-testid="`product-${item.id}`" @click="openExisting(item)">
+          <DashboardMediaThumb :asset="item.row.image" :label="item.row.name" fallback-icon="i-lucide-image" />
+          <span class="min-w-0 flex-1">
+            <span class="block truncate text-sm font-semibold text-highlighted">{{ item.row.name }}</span>
+            <span class="mt-1 block text-sm tabular-nums" :class="priceLabel(item.row) ? 'text-muted' : 'italic text-muted'">
+              {{ priceLabel(item.row) || 'No price set' }}
             </span>
-          </button>
-        </template>
-      </DashboardListEditor>
+          </span>
+        </button>
+      </template>
+    </DashboardListEditor>
 
-      <!-- Move is its own action, exactly as it is on Airbnb: it changes which
-           category items belong to, never their order inside one. -->
-      <DashboardListItemDialog
-        v-model:open="moveDialogOpen"
-        :title="`Move ${selected.length === 1 ? presentation.itemLabel.toLowerCase() : `${selected.length} ${presentation.itemLabelPlural.toLowerCase()}`}`"
-        :removable="false"
-        :saving="moving"
-        :save-disabled="!moveTargetId"
-        save-label="Move"
-        :error="moveError"
-        @save="moveSelected"
-      >
-        <UFormField :label="`Choose a ${presentation.collectionGroupLabel.toLowerCase()}`">
-          <div class="space-y-2">
-            <label
-              v-for="option in moveTargets"
-              :key="option.id"
-              class="flex cursor-pointer items-center gap-3 rounded-lg border border-default px-3 py-2"
-              :class="moveTargetId === option.id ? 'border-primary' : ''"
-            >
-              <input v-model="moveTargetId" type="radio" :value="option.id" :name="`move-target`">
-              <span class="text-sm text-highlighted">{{ option.name }}</span>
-            </label>
-            <p v-if="!moveTargets.length" class="text-sm text-muted">
-              There is nowhere else to move these yet. Add another {{ presentation.collectionGroupLabel.toLowerCase() }} first.
-            </p>
-          </div>
-        </UFormField>
-      </DashboardListItemDialog>
-      <UAlert v-if="orderError" color="error" variant="soft" icon="i-lucide-circle-alert" :description="orderError" class="mt-4" />
-    </template>
-  </UDashboardPanel>
+    <!-- Move is its own action, exactly as it is on Airbnb: it changes which
+         category items belong to, never their order inside one. -->
+    <DashboardListItemDialog
+      v-model:open="moveDialogOpen"
+      :title="`Move ${selected.length === 1 ? presentation.itemLabel.toLowerCase() : `${selected.length} ${presentation.itemLabelPlural.toLowerCase()}`}`"
+      :removable="false"
+      :saving="moving"
+      :save-disabled="!moveTargetId"
+      save-label="Move"
+      :error="moveError"
+      @save="moveSelected"
+    >
+      <UFormField :label="`Choose a ${presentation.collectionGroupLabel.toLowerCase()}`">
+        <div class="space-y-2">
+          <label
+            v-for="option in moveTargets"
+            :key="option.id"
+            class="flex cursor-pointer items-center gap-3 rounded-lg border border-default px-3 py-2"
+            :class="moveTargetId === option.id ? 'border-primary' : ''"
+          >
+            <input v-model="moveTargetId" type="radio" :value="option.id" :name="`move-target`">
+            <span class="text-sm text-highlighted">{{ option.name }}</span>
+          </label>
+          <p v-if="!moveTargets.length" class="text-sm text-muted">
+            There is nowhere else to move these yet. Add another {{ presentation.collectionGroupLabel.toLowerCase() }} first.
+          </p>
+        </div>
+      </UFormField>
+    </DashboardListItemDialog>
+    <UAlert v-if="orderError" color="error" variant="soft" icon="i-lucide-circle-alert" :description="orderError" class="mt-4" />
+  </DashboardIndexPanel>
 </template>
 
 <script setup lang="ts">

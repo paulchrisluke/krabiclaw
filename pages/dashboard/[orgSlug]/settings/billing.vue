@@ -1,34 +1,37 @@
 <template>
-  <div class="space-y-6">
-    <UAlert
-      v-if="errorMessage"
-      color="error"
-      variant="soft"
-      icon="i-lucide-triangle-alert"
-      :description="errorMessage"
-    />
+  <!-- A row on Menu, with its own controls: nothing here saves from a footer. -->
+  <DashboardLeafPanel id="organization-billing" title="Billing" :footer="false">
+    <div class="space-y-6">
+      <UAlert
+        v-if="errorMessage"
+        color="error"
+        variant="soft"
+        icon="i-lucide-triangle-alert"
+        :description="errorMessage"
+      />
 
-    <UAlert
-      v-if="successMessage"
-      color="success"
-      variant="soft"
-      icon="i-lucide-circle-check"
-      :description="successMessage"
-    />
+      <UAlert
+        v-if="successMessage"
+        color="success"
+        variant="soft"
+        icon="i-lucide-circle-check"
+        :description="successMessage"
+      />
 
-    <div v-if="loading" class="space-y-3">
-      <USkeleton class="h-20 w-full rounded-2xl" />
-      <USkeleton class="h-20 w-full rounded-2xl" />
+      <div v-if="loading" class="space-y-3">
+        <USkeleton class="h-20 w-full rounded-2xl" />
+        <USkeleton class="h-20 w-full rounded-2xl" />
+      </div>
+
+      <!--
+        Two value rows, the Personal information shape. The plan row says what the
+        business is on and what happens next; everything else about money — the
+        card, receipts, invoices, cancelling — is Stripe's hosted portal, which is
+        the only surface the Better Auth Stripe plugin exposes for it.
+      -->
+      <EditorNavigationList v-else :groups="groups" @act="onRowAction" />
     </div>
-
-    <!--
-      Two value rows, the Personal information shape. The plan row says what the
-      business is on and what happens next; everything else about money — the
-      card, receipts, invoices, cancelling — is Stripe's hosted portal, which is
-      the only surface the Better Auth Stripe plugin exposes for it.
-    -->
-    <EditorNavigationList v-else :groups="groups" @act="onRowAction" />
-  </div>
+  </DashboardLeafPanel>
 </template>
 
 <script setup lang="ts">

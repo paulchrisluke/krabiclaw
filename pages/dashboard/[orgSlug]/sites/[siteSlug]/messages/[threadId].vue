@@ -26,7 +26,7 @@
   </UDashboardPanel>
 
   <USlideover
-    :open="frame.mode.value !== 'index'"
+    :open="level.child.value !== null"
     :title="recordTitle"
     :ui="{ content: 'sm:max-w-md', body: 'p-0 sm:p-0 overflow-y-auto' }"
     @update:open="onDrawerToggle"
@@ -41,13 +41,12 @@
 import GuestThreadDetail from '~/lib/components/workspace/messages/GuestThreadDetail.vue'
 import { threadRecordTitle } from '~/lib/components/workspace/messages/guest-thread-client'
 
-definePageMeta({ layout: 'dashboard', ownsChrome: true })
+definePageMeta({ layout: 'dashboard' })
 
 const route = useRoute()
-const router = useRouter()
 const threadId = computed(() => String(route.params.threadId))
 const threadPath = computed(() => `/dashboard/${String(route.params.orgSlug)}/sites/${String(route.params.siteSlug)}/messages/${encodeURIComponent(threadId.value)}`)
-const frame = useEditorFrame(threadPath)
+const level = useRouteLevel()
 
 // The drawer's title says what the record is called here, in the tenant's own
 // word, so the conversation's control and the panel it opens agree.
@@ -70,9 +69,10 @@ const recordTo = computed(() => {
 })
 
 // Closing is a navigation, not local state: the record has its own URL. The
-// conversation keeps whichever list it was opened from.
+// conversation keeps whichever list it was opened from, and dismissing the
+// drawer is a push back to this level, never a step into history.
 function onDrawerToggle(open: boolean) {
-  if (!open) void router.push({ path: threadPath.value, query: route.query })
+  if (!open) void level.close()
 }
 
 useSeoMeta({ title: 'Conversation | KrabiClaw Dashboard', robots: 'noindex, nofollow' })

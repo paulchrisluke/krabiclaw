@@ -1,319 +1,131 @@
 <template>
-<!--
-  One panel either way: this level always owns a column and always titles it.
-  With no section open it is the whole screen; once one is open it is the
-  index column and the section takes the other.
--->
-  <UDashboardPanel
-    id="location-product-detail"
-    :class="hasDetail ? 'hidden lg:flex' : undefined"
-    :default-size="hasDetail ? 32 : undefined"
-  >
-    <template #header>
-      <UDashboardNavbar :title="form.name || presentation.itemLabel" :toggle="false">
-        <template #leading>
-          <DashboardNavbarLeading />
-        </template>
-        <template v-if="product" #right>
-          <DashboardResourceLocalization
-            :site-id="siteId"
-            resource-type="product"
-            :resource-id="productId"
-            :resource-label="presentation.itemLabel.toLowerCase()"
-            :fields="productLocalizationFields"
-            :load-values="loadProductLocalization"
-            :save-values="saveProductLocalization"
-            :language-settings-path="siteLocalizationSettingsPath"
-          />
-        </template>
-      </UDashboardNavbar>
+  <!-- One product: its rows are the things it holds, each a leaf below this level. -->
+  <DashboardIndexPanel id="product" :title="form.name || presentation.itemLabel">
+    <template v-if="product" #right>
+      <DashboardResourceLocalization
+      :site-id="siteId"
+      resource-type="product"
+      :resource-id="productId"
+      :resource-label="presentation.itemLabel.toLowerCase()"
+      :fields="productLocalizationFields"
+      :load-values="loadProductLocalization"
+      :save-values="saveProductLocalization"
+      :language-settings-path="siteLocalizationSettingsPath"
+      />
     </template>
 
-    <template #body>
-      <div class="mx-auto w-full" :class="hasDetail ? 'max-w-xl' : 'max-w-3xl'">
-        <UAlert
-          v-if="loadError"
-          color="error"
-          variant="soft"
-          icon="i-lucide-triangle-alert"
-          :title="`${presentation.itemLabel} could not be loaded`"
-          :description="loadError"
-        />
-        <template v-else>
-          <div v-if="isNew && !hasDetail" class="mb-6 flex justify-end">
-            <UButton :label="createActionLabel" :loading="saving" @click="startOrCreate" />
-          </div>
-          <EditorNavigationList :groups="navigationGroups" :active-item="detailKey" />
-        </template>
+    <UAlert
+      v-if="loadError"
+      color="error"
+      variant="soft"
+      icon="i-lucide-triangle-alert"
+      :title="`${presentation.itemLabel} could not be loaded`"
+      :description="loadError"
+    />
+    <template v-else>
+      <div v-if="isNew" class="mb-6 flex justify-end">
+        <UButton :label="createActionLabel" :loading="saving" @click="startOrCreate" />
       </div>
+      <EditorNavigationList :groups="navigationGroups" :active-item="level.child.value" />
     </template>
-  </UDashboardPanel>
-
-  <!--
-    The open section is the other column: its own panel, its own header,
-    and Save/Cancel in the panel's own footer slot.
-  -->
-  <UDashboardPanel v-if="hasDetail && !loadError" id="location-product-section">
-    <template #header>
-      <UDashboardNavbar :title="sectionLabels[editorKey]" :toggle="false">
-        <template #leading>
-          <DashboardNavbarLeading />
-        </template>
-      </UDashboardNavbar>
-    </template>
-
-    <template #body>
-      <div class="mx-auto w-full max-w-5xl">
-        <UAlert
-          v-if="saveError || photoError"
-          color="error"
-          variant="soft"
-          icon="i-lucide-circle-alert"
-          :description="saveError || photoError || undefined"
-          class="mb-6"
-        />
-        <!-- Photo -->
-        <div v-if="editorKey === 'photo'" class="space-y-4">
-          <p class="text-base text-muted">The picture guests recognise this by, in the list and on your site.</p>
-          <DashboardCoverPhotoField
-            :site-id="siteId"
-            :location-id="locationId"
-            :model-value="form.image_asset_id"
-            :preview-url="product?.image?.public_url ?? null"
-            :preview-alt="product?.image?.alt_text || form.name"
-            :title="`${presentation.itemLabel} photo`"
-            testid="product-photo"
-            @update:model-value="setPrimaryImage"
-          />
-          <p class="text-sm text-muted">A photo saves as soon as you choose it.</p>
-        </div>
-
-        <!-- Name -->
-        <UFormField v-else-if="editorKey === 'name'" label="Name" required>
-          <UInput v-model="form.name" size="xl" autofocus class="w-full" />
-        </UFormField>
-
-        <!--
-          One price, on the one thing being bought. A product with options has
-          a price per option combination, so this section hands over to
-          Options rather than quietly editing whichever variant came first.
-        -->
-        <div v-else-if="editorKey === 'price'" class="space-y-5">
-          <template v-if="form.variants.length === 1">
-            <UFormField :label="`Amount (${currency})`" description="Leave empty if this is not purchasable. Zero is a real price and means free.">
-              <UInput v-model="form.variants[0]!.price_major" inputmode="decimal" placeholder="280" class="w-full" data-testid="product-price" />
-            </UFormField>
-          </template>
-          <UAlert
-            v-else
-            color="neutral"
-            variant="soft"
-            icon="i-lucide-list"
-            title="This has options"
-            :description="`Each combination has its own price. Edit them under Options.`"
-          />
-        </div>
-
-        <!-- Description -->
-        <UFormField v-else-if="editorKey === 'description'" label="Description">
-          <UTextarea v-model="form.description" :rows="10" autofocus class="w-full" />
-        </UFormField>
-
-        <!--
-          Options and the combinations they produce. A combination is what a
-          customer actually buys, so it is what carries a price — and every
-          combination has to be answered, or two of them look identical.
-        -->
-        <div v-else-if="editorKey === 'options'" class="space-y-6">
-          <div v-for="(option, optionIndex) in form.options" :key="option.id" class="space-y-2 rounded-lg border border-default p-3">
-            <div class="flex items-center gap-2">
-              <UInput v-model="option.name" placeholder="Size" :maxlength="PRODUCT_LIMITS.optionName" class="flex-1" aria-label="Option name" />
-              <UButton
-                icon="i-lucide-trash-2" color="neutral" variant="ghost"
-                :aria-label="`Remove ${option.name || 'option'}`"
-                @click="removeOption(optionIndex)"
-              />
-            </div>
-            <UInputTags
-              :model-value="option.values.map(value => value.value)"
-              placeholder="Add a value"
-              :max="PRODUCT_LIMITS.optionValues"
-              :max-length="PRODUCT_LIMITS.optionValue"
-              delimiter=","
-              add-on-blur
-              add-on-paste
-              class="w-full"
-              @update:model-value="setOptionValues(optionIndex, $event as string[])"
-            />
-          </div>
-          <UButton
-            v-if="form.options.length < PRODUCT_LIMITS.options"
-            label="Add an option" icon="i-lucide-plus" color="neutral" variant="soft"
-            @click="addOption"
-          />
-
-          <div v-if="form.variants.length > 1" class="space-y-2">
-            <p class="text-sm font-semibold text-highlighted">Combinations</p>
-            <div v-for="variant in form.variants" :key="variant.key" class="flex items-center gap-3 rounded-lg border border-default p-3">
-              <span class="min-w-0 flex-1 truncate text-sm text-highlighted">{{ variant.name }}</span>
-              <UInput v-model="variant.price_major" inputmode="decimal" :placeholder="`Amount (${currency})`" class="w-40" />
-            </div>
-          </div>
-        </div>
-
-        <!-- Order link -->
-        <UFormField v-else-if="editorKey === 'order-url'" label="Order URL" description="Where a customer goes to order this. Not the page it is shown on.">
-          <UInput v-model="form.order_url" type="url" placeholder="https://…" class="w-full" />
-        </UFormField>
-
-        <!-- Tags -->
-        <UFormField v-else-if="editorKey === 'tags'" label="Tags">
-          <UInputTags
-            v-model="form.tags"
-            placeholder="Add a tag"
-            :max="PRODUCT_LIMITS.tags"
-            :max-length="PRODUCT_LIMITS.tag"
-            delimiter=","
-            add-on-blur
-            add-on-paste
-            class="w-full"
-          />
-        </UFormField>
-
-        <!--
-          Attributes are your own defined facts — allergens, what to bring,
-          a cancellation policy. Each one is a definition you made once, so
-          the same attribute means the same thing on every product.
-        -->
-        <div v-else-if="editorKey === 'attributes'" class="space-y-3">
-          <p v-if="!definitions.length" class="text-base text-muted">
-            No attributes are defined yet. Define one in your catalog settings and it becomes available on every {{ presentation.itemLabel.toLowerCase() }}.
-          </p>
-          <UFormField
-            v-for="definition in definitions"
-            :key="definition.id"
-            :label="definition.name"
-            :description="definition.description ?? undefined"
-          >
-            <UInputTags
-              v-if="definition.value_type === 'list.single_line_text'"
-              :model-value="listValue(definition)"
-              placeholder="Add a value"
-              delimiter=","
-              add-on-blur
-              add-on-paste
-              class="w-full"
-              @update:model-value="form.metafields[metafieldKey(definition)] = $event as string[]"
-            />
-            <UTextarea
-              v-else-if="definition.value_type === 'multi_line_text'"
-              :model-value="textValue(definition)"
-              :rows="4"
-              class="w-full"
-              @update:model-value="form.metafields[metafieldKey(definition)] = $event"
-            />
-            <!-- A typed attribute is edited in its own type. A number typed
-                 into a text box arrives as a string the validator refuses,
-                 and a boolean has no text form at all. -->
-            <UInputNumber
-              v-else-if="definition.value_type === 'integer'"
-              :model-value="integerValue(definition)"
-              class="w-full"
-              @update:model-value="setIntegerMetafield(definition, $event)"
-            />
-            <UCheckbox
-              v-else-if="definition.value_type === 'boolean'"
-              :model-value="booleanValue(definition)"
-              :label="definition.name"
-              @update:model-value="form.metafields[metafieldKey(definition)] = $event === true"
-            />
-            <UInput
-              v-else
-              :model-value="textValue(definition)"
-              class="w-full"
-              @update:model-value="form.metafields[metafieldKey(definition)] = $event"
-            />
-          </UFormField>
-        </div>
-
-        <!--
-          Three separate switches, because they answer three different
-          questions. Turning off the sale switch does not hide the item, and
-          hiding it does not say it is sold out.
-        -->
-        <div v-else-if="editorKey === 'publication'" class="space-y-4">
-          <UCheckbox v-model="form.active" label="On sale" description="The merchant switch. Off means you are not selling it anywhere." />
-          <UCheckbox v-model="form.published" label="Published on this site" description="Whether the site shows it at all." />
-          <UCheckbox v-model="form.location_published" label="Shown at this location" description="Whether this branch lists it." />
-          <UCheckbox v-model="form.location_active" label="Sold at this location" description="Whether this branch takes orders for it." />
-        </div>
-
-        <!--
-          Booking capability. Adding it is what makes this bookable; removing
-          it takes its sessions and their bookings with it, so it asks first.
-        -->
-        <div v-else-if="editorKey === 'booking'" class="space-y-4">
-          <UCheckbox v-model="form.bookable" label="Takes bookings" description="Guests choose a session and reserve a place." />
-          <UAlert
-            v-if="!form.bookable && product?.booking"
-            color="warning"
-            variant="soft"
-            icon="i-lucide-triangle-alert"
-            description="Saving removes this product's schedule. It is refused while anything is booked."
-          />
-          <template v-if="form.bookable">
-            <UFormField label="Session length (minutes)">
-              <UInput v-model="form.booking_duration" inputmode="numeric" placeholder="120" class="w-full" />
-            </UFormField>
-            <UFormField label="Places per session" description="Leave empty for no limit. Zero means no places at all.">
-              <UInput v-model="form.booking_capacity" inputmode="numeric" placeholder="10" class="w-full" />
-            </UFormField>
-
-            <!--
-              The weekly schedule at this branch. Each time is a slot the
-              merchant runs every week; sessions a guest can book are
-              generated from these, so this is where a class time is added,
-              moved or dropped.
-            -->
-            <div v-if="product?.booking" class="space-y-3 border-t border-default pt-4">
-              <div>
-                <p class="text-sm font-medium">Weekly schedule</p>
-                <p class="text-sm text-muted">Times this branch runs it, in the branch's own clock. Dropping a time cancels its future sessions that nobody has booked.</p>
-              </div>
-              <p v-if="scheduleLoading" class="text-sm text-muted">Loading the schedule…</p>
-              <div v-else class="space-y-3">
-                <div v-for="day in WEEKDAYS" :key="day.value" class="flex flex-col gap-2 sm:flex-row sm:items-start">
-                  <p class="w-24 shrink-0 pt-2 text-sm font-medium">{{ day.label }}</p>
-                  <div class="flex-1 space-y-2">
-                    <div v-for="(slot, index) in slotsFor(day.value)" :key="`${day.value}-${index}`" class="flex items-center gap-2">
-                      <UInput v-model="slot.start_time" type="time" step="300" class="w-32" />
-                      <UInput v-model="slot.capacity" inputmode="numeric" :placeholder="form.booking_capacity || 'Default'" class="w-28" aria-label="Places for this time" />
-                      <UButton icon="i-lucide-x" color="neutral" variant="ghost" size="sm" aria-label="Remove this time" @click="removeSlot(slot)" />
-                    </div>
-                    <UButton icon="i-lucide-plus" color="neutral" variant="subtle" size="sm" label="Add a time" @click="addSlot(day.value)" />
-                  </div>
-                </div>
-              </div>
-            </div>
-          </template>
-        </div>
-      </div>
-    </template>
-
-    <template v-if="editorKey !== 'photo'" #footer>
-      <DashboardPanelFooter :save-label="saveLabel" :loading="saving" :disabled="saveDisabled" @cancel="cancelEditor" @save="saveCurrentEditor" />
-    </template>
-  </UDashboardPanel>
+  </DashboardIndexPanel>
 </template>
+
+<script lang="ts">
+import type { ComputedRef, InjectionKey, Ref } from 'vue'
+
+export const SECTION_KEYS = ['photo', 'name', 'price', 'description', 'options', 'order-url', 'tags', 'attributes', 'publication', 'booking'] as const
+export type SectionKey = typeof SECTION_KEYS[number]
+
+export interface ScheduleSlotDraft { weekday: number; start_time: string; capacity: string }
+
+export interface OptionValueDraft { id: string | null; value: string }
+export interface OptionDraft { id: string; name: string; values: OptionValueDraft[] }
+export interface VariantDraft {
+  /**
+   * The combination of option values this variant selects, not its row id.
+   *
+   * A rebuild after an option edit looks a variant up by the combination it
+   * describes; keying by id here made every surviving combination look new,
+   * which took its id and its prices with it.
+   */
+  key: string
+  id: string | null
+  name: string
+  selections: Record<string, string>
+  /** Restated on save: a submitted variant is its complete state. */
+  sku: string | null
+  active: boolean
+  price_major: string
+  /** The amount this box held when the product was loaded. */
+  loaded_price_major: string
+  /** Every offer this variant already has, kept whole so an edit here cannot retire the others. */
+  prices: Price[]
+}
+
+/** The editable shape of one product, as its leaves bind to it. */
+export interface ProductForm {
+  name: string
+  description: string
+  order_url: string
+  tags: string[]
+  options: OptionDraft[]
+  variants: VariantDraft[]
+  metafields: Record<string, MetafieldValue>
+  active: boolean
+  published: boolean
+  location_active: boolean
+  location_published: boolean
+  bookable: boolean
+  booking_duration: string
+  booking_capacity: string
+  image_asset_id: string | null
+}
+
+/** The product's draft and what its leaves show or do beside their one field. */
+export interface ProductEditor {
+  form: ProductForm
+  product: Ref<Product | null>
+  presentation: ComputedRef<{ itemLabel: string }>
+  currency: string
+  siteId: string
+  locationId: ComputedRef<string | null>
+  definitions: Ref<MetafieldDefinition[]>
+  isNew: ComputedRef<boolean>
+  sectionLabels: Record<SectionKey, string>
+  saving: Ref<boolean>
+  saveError: Ref<string | null>
+  photoError: Ref<string | null>
+  saveLabel: Ref<string | undefined>
+  saveDisabled: Ref<boolean>
+  setPrimaryImage: (assetId: string | null) => Promise<void>
+  addOption: () => void
+  removeOption: (index: number) => void
+  setOptionValues: (index: number, values: string[]) => void
+  metafieldKey: (definition: MetafieldDefinition) => string
+  listValue: (definition: MetafieldDefinition) => string[]
+  textValue: (definition: MetafieldDefinition) => string
+  integerValue: (definition: MetafieldDefinition) => number | undefined
+  setIntegerMetafield: (definition: MetafieldDefinition, value: unknown) => void
+  booleanValue: (definition: MetafieldDefinition) => boolean
+  weekdays: ReadonlyArray<{ value: number; label: string }>
+  scheduleLoading: Ref<boolean>
+  slotsFor: (weekday: number) => ScheduleSlotDraft[]
+  addSlot: (weekday: number) => void
+  removeSlot: (slot: ScheduleSlotDraft) => void
+  revert: () => void
+  save: () => Promise<void>
+}
+
+export const productEditorKey = Symbol('product-editor') as InjectionKey<ProductEditor>
+</script>
 
 <script setup lang="ts">
 import EditorNavigationList, { type EditorNavigationGroup } from '~/components/dashboard/EditorNavigationList.vue'
-import DashboardCoverPhotoField from '~/components/dashboard/DashboardCoverPhotoField.vue'
 import DashboardResourceLocalization from '~/components/dashboard/DashboardResourceLocalization.vue'
 import type { Collection, Product } from '~/server/types/products'
 import type { MetafieldDefinition, MetafieldValue } from '~/shared/metafields'
 import { metafieldHandle, PRICING_NOTE_HANDLE } from '~/shared/metafields'
-import { PRODUCT_LIMITS } from '~/shared/product-limits'
 import { isCurrencyCode } from '~/shared/currencies'
 import { majorAmountToMinor, minorAmountToMajor, selectPrice, type Price } from '~/shared/prices'
 import { formatProductMoney } from '~/utils/product-money'
@@ -340,7 +152,7 @@ const surfacePath = computed(() => {
 })
 const collectionPath = computed(() => `${surfacePath.value}/${collectionId.value}`)
 const itemPath = computed(() => `${collectionPath.value}/${productId.value}`)
-const frame = useEditorFrame(itemPath)
+const level = useRouteLevel()
 
 const siteId = await useDashboardSiteId()
 const dashboard = useDashboardSite()
@@ -360,8 +172,6 @@ const currency = rawCurrency
 const locationId = computed(() => dashboardLocation.currentLocation.value?.id ?? null)
 
 // ── Which leaf is open ──────────────────────────────────
-const SECTION_KEYS = ['photo', 'name', 'price', 'description', 'options', 'order-url', 'tags', 'attributes', 'publication', 'booking'] as const
-type SectionKey = typeof SECTION_KEYS[number]
 
 const sectionLabels: Record<SectionKey, string> = {
   'photo': 'Photo',
@@ -376,15 +186,14 @@ const sectionLabels: Record<SectionKey, string> = {
   'booking': 'Bookings',
 }
 
-const hasDetail = computed(() => frame.mode.value === 'pair')
-const detailKey = computed(() => frame.childSegment.value)
+const detailKey = computed(() => level.child.value)
 const editorKey = computed<SectionKey>(() => (detailKey.value ?? 'photo') as SectionKey)
 
 const NEW_SECTION_KEYS: readonly SectionKey[] = ['name']
 const isNew = computed(() => productId.value === 'new')
 const openSections = computed<readonly SectionKey[]>(() => (isNew.value ? NEW_SECTION_KEYS : SECTION_KEYS))
 
-if (frame.rest.value.length > 1 || (detailKey.value && !openSections.value.some(key => key === detailKey.value))) {
+if (level.mode.value === 'yield' || (detailKey.value && !openSections.value.some(key => key === detailKey.value))) {
   throw createError({ statusCode: 404, statusMessage: 'Page not found' })
 }
 
@@ -456,31 +265,8 @@ onMounted(() => { void load() })
 watch(locationId, () => { void load() })
 
 // ── The form ────────────────────────────────────────────
-interface OptionValueDraft { id: string | null; value: string }
-interface OptionDraft { id: string; name: string; values: OptionValueDraft[] }
-interface VariantDraft {
-  /**
-   * The combination of option values this variant selects, not its row id.
-   *
-   * A rebuild after an option edit looks a variant up by the combination it
-   * describes; keying by id here made every surviving combination look new,
-   * which took its id and its prices with it.
-   */
-  key: string
-  id: string | null
-  name: string
-  selections: Record<string, string>
-  /** Restated on save: a submitted variant is its complete state. */
-  sku: string | null
-  active: boolean
-  price_major: string
-  /** The amount this box held when the product was loaded. */
-  loaded_price_major: string
-  /** Every offer this variant already has, kept whole so an edit here cannot retire the others. */
-  prices: Price[]
-}
 
-const form = reactive({
+const form = reactive<ProductForm>({
   name: '',
   description: '',
   order_url: '',
@@ -873,7 +659,9 @@ async function commit() {
         method: 'PUT', body: { active: true, published: false }, validate: isRecord,
       })
       await addToCollection(created.product.id, id)
-      await navigateTo(`${collectionPath.value}/${created.product.id}`)
+      // The record it became, not the `new` form it was, so Back from a saved
+      // product goes to the collection and never to an empty Add screen.
+      await navigateTo(`${collectionPath.value}/${created.product.id}`, { replace: true })
       return
     }
     await dashboardApi(`/api/editor/sites/${siteId}/products/${productId.value}`, {
@@ -882,7 +670,7 @@ async function commit() {
     if (editorKey.value === 'publication') await savePublication(id)
     if (editorKey.value === 'booking') await saveBooking()
     await load({ force: true })
-    await navigateTo(itemPath.value)
+    await level.close()
   } catch (error) {
     saveError.value = getErrorMessage(error, `Failed to save ${presentation.value.itemLabel.toLowerCase()}`)
   } finally {
@@ -1006,13 +794,13 @@ async function saveSchedule() {
   scheduleLoadedFor.value = null
 }
 
-async function cancelEditor() {
+/** A cancelled leaf puts the loaded product back before it closes. */
+function revert() {
   saveError.value = null
   photoError.value = null
   if (product.value) loadForm(product.value)
   // The schedule draft goes with the form: reopening Bookings reloads the saved rules.
   scheduleLoadedFor.value = null
-  await navigateTo(itemPath.value)
 }
 
 async function setPrimaryImage(assetId: string | null) {
@@ -1101,4 +889,37 @@ async function saveProductLocalization(locale: string, submitted: Record<string,
 }
 
 useSeoMeta({ title: () => `${form.name || presentation.value.itemLabel} | KrabiClaw Dashboard`, robots: 'noindex, nofollow' })
+provide(productEditorKey, {
+  form,
+  product,
+  presentation,
+  currency,
+  siteId,
+  locationId,
+  definitions,
+  isNew,
+  sectionLabels,
+  saving,
+  saveError,
+  photoError,
+  saveLabel,
+  saveDisabled,
+  setPrimaryImage,
+  addOption,
+  removeOption,
+  setOptionValues,
+  metafieldKey,
+  listValue,
+  textValue,
+  integerValue,
+  setIntegerMetafield,
+  booleanValue,
+  weekdays: WEEKDAYS,
+  scheduleLoading,
+  slotsFor,
+  addSlot,
+  removeSlot,
+  revert,
+  save: saveCurrentEditor,
+})
 </script>

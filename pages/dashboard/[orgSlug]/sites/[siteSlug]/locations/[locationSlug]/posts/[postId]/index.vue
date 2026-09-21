@@ -1,9 +1,8 @@
 <template>
-  <PostEditorPage />
+  <!-- Nothing open: the post above is the screen. -->
+  <div />
 </template>
 
 <script setup lang="ts">
-import PostEditorPage from '~/components/dashboard/PostEditorPage.vue'
-
 definePageMeta({ layout: 'dashboard' })
 </script>

@@ -176,7 +176,7 @@
 <script setup lang="ts">
 import { formatTimestamp } from '~/utils/timezone'
 const dashboardApi = useDashboardApi()
-definePageMeta({ layout: 'dashboard', ownsChrome: true })
+definePageMeta({ layout: 'dashboard' })
 
 
 type DomainStatus = 'pending' | 'verifying' | 'active' | 'blocked' | 'failed' | 'disabled' | 'deleted'

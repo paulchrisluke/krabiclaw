@@ -1,27 +1,15 @@
 <template>
-  <UDashboardPanel
-    :id="surface === 'brand' ? 'site-brand' : 'site-settings'"
-    :class="hasDetail ? 'hidden lg:flex' : undefined"
-    :default-size="hasDetail ? 32 : undefined"
-  >
-    <template #header>
-      <UDashboardNavbar :title="navbarTitle" :toggle="false">
-        <template #leading>
-          <DashboardNavbarLeading />
-        </template>
-      </UDashboardNavbar>
-    </template>
-
-    <template #body>
-      <div class="mx-auto w-full" :class="hasDetail ? 'max-w-xl' : 'max-w-3xl'">
-        <div v-if="loading" class="space-y-4">
-          <USkeleton v-for="i in 4" :key="i" class="h-32 rounded-xl" />
-        </div>
-        <UAlert v-else-if="loadError" color="error" variant="soft" icon="i-lucide-triangle-alert" :description="loadError" />
-        <EditorNavigationList v-else :groups="navigationGroups" :active-item="activeNavigationId" @act="onRowAction" />
-      </div>
-    </template>
-  </UDashboardPanel>
+  <!--
+    Brand is what a guest sees; Website is what a guest never sees. Each is a
+    flat list of settings, and each setting is a leaf below this level.
+  -->
+  <DashboardIndexPanel :id="surface === 'brand' ? 'site-brand' : 'site-settings'" :title="navbarTitle">
+    <div v-if="loading" class="space-y-4">
+      <USkeleton v-for="i in 4" :key="i" class="h-32 rounded-xl" />
+    </div>
+    <UAlert v-else-if="loadError" color="error" variant="soft" icon="i-lucide-triangle-alert" :description="loadError" />
+    <EditorNavigationList v-else :groups="navigationGroups" :active-item="detailKey" @act="onRowAction" />
+  </DashboardIndexPanel>
 
   <!-- Translating the brand is a row on the Brand list; this is the sheet it opens. -->
   <DashboardResourceLocalization
@@ -35,235 +23,125 @@
     :fields="brandLocalizationFields"
     :language-settings-path="`${settingsPath}/localization`"
   />
-
-  <!--
-    The open setting is the other column: its own panel, its own header,
-    and Save/Cancel in the panel's own footer slot.
-  -->
-  <UDashboardPanel v-if="hasDetail" id="site-settings-detail">
-    <template #header>
-      <UDashboardNavbar :title="detailTitle" :toggle="false">
-        <template #leading>
-          <DashboardNavbarLeading />
-        </template>
-      </UDashboardNavbar>
-    </template>
-
-    <template #body>
-      <div class="mx-auto w-full max-w-2xl">
-        <UAlert v-if="editorError" color="error" variant="soft" icon="i-lucide-circle-alert" :description="editorError" class="mb-6" />
-        <div v-if="detailKey === 'name'" class="space-y-6">
-          <p class="mb-2 text-sm font-semibold text-muted">{{ nameCharactersRemaining }}/50 available</p>
-          <UInput v-model="form.brand_name" size="xl" maxlength="50" autofocus class="w-full" />
-        </div>
-
-        <div v-else-if="detailKey === 'logo'" class="space-y-6">
-          <MediaPicker v-model="form.logoAssetId" :site-id="siteId" accept="image" title="Select logo" />
-        </div>
-
-        <div v-else-if="detailKey === 'sharing-image'" class="space-y-6">
-          <MediaPicker v-model="form.socialShareAssetId" :site-id="siteId" accept="image" title="Select social sharing image" />
-        </div>
-
-        <div v-else-if="detailKey === 'description'" class="space-y-6">
-          <div>
-            <p class="mb-2 text-sm font-semibold text-muted">{{ descriptionCharactersRemaining }}/500 available</p>
-            <UTextarea v-model="form.brand_description" :rows="10" maxlength="500" autofocus class="w-full" />
-          </div>
-        </div>
-
-        <div v-else-if="detailKey === 'color'" class="space-y-8">
-          <UColorPicker v-model="form.brand_color" format="hex" size="xl" class="w-full" />
-          <UFormField label="Hex color">
-            <UInput v-model="form.brand_color" maxlength="7" placeholder="#0f766e" size="xl" class="w-full" />
-          </UFormField>
-        </div>
-
-        <div v-else-if="detailKey === 'font'" class="space-y-6">
-          <template v-if="supportsSiteFonts">
-            <UFormField label="Website font">
-              <USelect v-model="form.font_preset" :items="SITE_FONT_OPTIONS" value-key="value" label-key="label" size="xl" class="w-full" />
-            </UFormField>
-            <div class="space-y-3 rounded-lg border border-default p-5 text-2xl leading-relaxed" :style="siteFontStyles(form.font_preset)" data-testid="site-font-preview">
-              <p lang="en">Welcome · 123</p>
-              <p lang="th">ยินดีต้อนรับ · ๑๒๓</p>
-            </div>
-          </template>
-          <p v-else class="text-base text-muted">Font presets are available for the Saya template.</p>
-        </div>
-
-        <div v-else-if="detailKey === 'contact'" class="space-y-6">
-          <UFormField label="Contact email">
-            <UInput v-model="form.contact_email" type="email" autocomplete="email" size="xl" autofocus class="w-full" />
-          </UFormField>
-        </div>
-
-        <div v-else-if="detailKey === 'social'" class="space-y-6">
-          <UFormField label="Facebook"><UInput v-model="form.social_facebook_url" type="url" placeholder="https://facebook.com/..." size="xl" class="w-full" /></UFormField>
-          <UFormField label="Instagram"><UInput v-model="form.social_instagram_url" type="url" placeholder="https://instagram.com/..." size="xl" class="w-full" /></UFormField>
-          <UFormField label="TikTok"><UInput v-model="form.social_tiktok_url" type="url" placeholder="https://tiktok.com/@..." size="xl" class="w-full" /></UFormField>
-        </div>
-
-        <div v-else-if="detailKey === 'currency'" class="space-y-6">
-          <USelect :model-value="form.default_currency ?? undefined" :items="CURRENCY_OPTIONS" value-key="value" label-key="label" size="xl" class="w-full" placeholder="Select currency" @update:model-value="form.default_currency = $event ?? null" />
-        </div>
-
-        <div v-else-if="detailKey === 'delete'" class="space-y-6">
-          <template v-if="deletionScheduledAt">
-            <UAlert
-              color="warning"
-              variant="soft"
-              icon="i-lucide-clock"
-              title="Deletion scheduled"
-              :description="`This workspace — the site, its locations, content and media — is deleted on ${deletionDateLabel}. Everything stays online until then, and the address stays reserved.`"
-            />
-            <UAlert v-if="deletionError" color="error" variant="soft" icon="i-lucide-triangle-alert" :description="deletionError" />
-            <UButton color="neutral" variant="solid" size="lg" :loading="deletionSaving" @click="keepWorkspace">Keep this workspace</UButton>
-          </template>
-          <template v-else>
-            <p class="text-base text-muted">
-              This schedules the whole workspace for deletion in {{ deletionGraceDays }} days: this site, its locations, content, media and the organization itself. Nothing is removed today, the site stays online, and you can cancel here until then.
-            </p>
-            <UAlert v-if="deletionError" color="error" variant="soft" icon="i-lucide-triangle-alert" :description="deletionError" />
-            <UFormField label="Type DELETE to confirm">
-              <UInput v-model="deletionConfirmText" placeholder="DELETE" :disabled="deletionSaving" class="w-full" />
-            </UFormField>
-            <UButton color="error" variant="solid" size="lg" :disabled="deletionConfirmText !== 'DELETE'" :loading="deletionSaving" @click="scheduleWorkspaceDeletion">Schedule deletion</UButton>
-          </template>
-        </div>
-
-        <div v-else-if="detailKey === 'localization'" class="space-y-6">
-          <p class="text-base text-muted">
-            English is the permanent source language. Growth includes two secondary languages at no extra cost.
-          </p>
-          <div v-if="localizationLoading" class="space-y-3">
-            <USkeleton class="h-16 rounded-lg" />
-            <USkeleton class="h-16 rounded-lg" />
-          </div>
-          <UAlert v-else-if="localizationError" color="error" variant="soft" icon="i-lucide-triangle-alert" :description="localizationError" />
-          <template v-else-if="localizationSettings">
-            <div class="space-y-3">
-              <div v-for="language in localizationSettings.languages" :key="language.locale" class="flex flex-wrap items-center justify-between gap-4 rounded-lg border border-default p-4">
-                <div>
-                  <p class="font-medium">{{ language.label || language.locale }} <span class="text-sm text-muted">({{ language.locale }})</span></p>
-                  <UBadge :color="language.is_source || language.status === 'published' ? 'success' : 'neutral'" variant="subtle" size="sm" class="mt-1">
-                    {{ language.is_source ? 'Source · published' : language.status === 'published' ? 'published' : 'Not published' }}
-                  </UBadge>
-                </div>
-                <div v-if="!language.is_source" class="flex gap-2">
-                  <UButton
-                    v-if="language.status === 'disabled'"
-                    color="primary"
-                    :loading="localizationBusy"
-                    @click="publishLanguage(language.locale)"
-                  >
-                    Publish
-                  </UButton>
-                  <UButton v-if="language.status === 'published'" color="neutral" variant="outline" :loading="localizationBusy" @click="disableLanguage(language.locale)">Disable</UButton>
-                  <UButton v-if="language.status === 'disabled'" color="error" variant="outline" :loading="localizationBusy" @click="deleteLanguage(language.locale)">Delete content</UButton>
-                </div>
-              </div>
-            </div>
-            <UCard v-for="progress in localizationProgress" :key="progress.locale" variant="soft">
-              <template #header>
-                <div>
-                  <h3 class="font-semibold text-highlighted">Let’s translate your site</h3>
-                  <p class="mt-1 text-sm text-muted">{{ progress.completed }}/{{ progress.total }} fields translated in {{ progress.locale }}.</p>
-                </div>
-              </template>
-              <div v-if="progress.opportunities.length" class="divide-y divide-default">
-                <NuxtLink
-                  v-for="item in progress.opportunities"
-                  :key="item.id"
-                  :to="`${siteDashboardPath}/${item.path}`"
-                  class="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0"
-                >
-                  <span class="font-medium text-highlighted">{{ item.label }}</span>
-                  <span class="flex items-center gap-2 text-sm text-muted">
-                    {{ item.total - item.completed }} left
-                    <UIcon name="i-lucide-chevron-right" class="size-4" />
-                  </span>
-                </NuxtLink>
-              </div>
-              <UAlert v-else color="success" variant="soft" title="Translation is complete" description="Every source field with content has a translation." />
-            </UCard>
-            <UAlert v-if="localizationProgressError" color="error" variant="soft" :description="localizationProgressError" />
-            <p v-if="!enableableCatalogOptions.length" class="text-sm text-muted">No additional languages are available to enable right now.</p>
-            <UFormField v-else label="Available language">
-              <USelect v-model="newLocale" :items="enableableCatalogOptions" placeholder="Select a language to enable" size="xl" class="w-full" />
-            </UFormField>
-          </template>
-        </div>
-
-        <div v-else-if="detailKey === 'notifications'" class="space-y-8">
-          <!--
-            The number the business is reached on. Which channels a person
-            wants is their own setting, at /dashboard/account/profile/notifications.
-          -->
-          <UFormField label="Site-wide WhatsApp number" hint="Used when a location has no number of its own.">
-            <UInput v-model="whatsappPhone" type="tel" placeholder="+66..." size="xl" class="w-full" />
-          </UFormField>
-        </div>
-
-        <SiteGoogleAnalyticsSettings v-else-if="detailKey === 'analytics'" :site-id="siteId" @changed="refreshSettings" />
-
-        <div v-else-if="detailKey === 'search'" class="space-y-8">
-          <UCard variant="subtle">
-            <USwitch v-model="searchIndexed" label="Visible to search engines" description="Allow the site to appear in search results." size="xl" />
-          </UCard>
-          <UFormField label="Google Search Console verification token">
-            <UInput v-model="form.google_site_verification" size="xl" class="w-full" />
-          </UFormField>
-        </div>
-
-        <div v-else-if="detailKey === 'publishing'" class="space-y-6">
-          <UAlert v-if="!hasFacebookAccess" color="warning" variant="soft" icon="i-lucide-lock" title="Growth plan required" description="Upgrade this site to connect Facebook and Instagram publishing." />
-          <UCard v-else variant="subtle">
-            <div class="flex items-center justify-between gap-4">
-              <div>
-                <p class="font-semibold text-highlighted">{{ facebookConnection?.connected ? 'Connected' : 'Not connected' }}</p>
-                <p v-if="facebookConnection?.facebook_page_name" class="mt-1 text-sm text-muted">{{ facebookConnection.facebook_page_name }}</p>
-              </div>
-              <UButton icon="i-simple-icons-facebook" :loading="connectingFacebook" @click="startFacebookConnect">{{ facebookConnection?.connected ? 'Reconnect' : 'Connect' }}</UButton>
-            </div>
-          </UCard>
-          <UAlert v-if="facebookError" color="error" variant="soft" icon="i-lucide-circle-alert" :description="facebookError" class="mt-4" />
-        </div>
-
-        <UAlert v-if="validationMessage" class="mt-6" color="error" variant="soft" :description="validationMessage" />
-      </div>
-    </template>
-
-    <template v-if="showActions" #footer>
-      <DashboardPanelFooter :loading="saving" :disabled="saveDisabled" @cancel="cancelEditor" @save="saveCurrentEditor" />
-    </template>
-  </UDashboardPanel>
 </template>
+
+<script lang="ts">
+import type { ComputedRef, InjectionKey, Reactive, Ref } from 'vue'
+import type { CurrencyCode } from '~/shared/currencies'
+import type { SiteFontPreset } from '~/shared/site-fonts'
+
+export interface SiteSettingsForm {
+  brand_name: string
+  brand_description: string
+  logoAssetId: string | null
+  socialShareAssetId: string | null
+  contact_email: string
+  brand_color: string
+  font_preset: SiteFontPreset
+  default_currency: CurrencyCode | null
+  google_site_verification: string
+  social_facebook_url: string
+  social_instagram_url: string
+  social_tiktok_url: string
+}
+
+export interface SiteSettingsResponse {
+  theme?: string
+  brand_name?: string | null
+  brand_description?: string | null
+  media?: Array<{ asset_id: string; slot: string; public_url?: string | null }>
+  contact_email?: string | null
+  brand_color?: string | null
+  font_preset?: SiteFontPreset
+  default_currency?: string | null
+  robots?: string | null
+  google_analytics_measurement_id?: string | null
+  google_site_verification?: string | null
+  social_facebook_url?: string | null
+  social_instagram_url?: string | null
+  social_tiktok_url?: string | null
+}
+
+export interface LocalizationLanguageRow { locale: string; label: string | null; is_source: number | boolean; status: string }
+
+export interface LocalizationCatalogRow { locale: string; label: string; direction: string }
+
+export interface LocalizationSettings { effective_plan: string; languages: LocalizationLanguageRow[]; available_catalogs: LocalizationCatalogRow[] }
+
+export interface LocalizationProgress { locale: string; completed: number; total: number; opportunities: Array<{ id: string; label: string; completed: number; total: number; path: string }> }
+
+export interface FacebookConnectionStatus { connected: boolean; facebook_page_name?: string }
+
+/**
+ * The site's settings draft and everything a leaf shows or does beside its
+ * one field. Brand and Website mount the same provider; a leaf reads what it
+ * needs and commits through `save`, which writes only the open setting.
+ */
+export interface SiteSettingsEditor {
+  form: Reactive<SiteSettingsForm>
+  siteId: string
+  siteDashboardPath: ComputedRef<string>
+  loading: Ref<boolean>
+  saving: Ref<boolean>
+  saveDisabled: ComputedRef<boolean>
+  editorError: Ref<string | null>
+  validationMessage: ComputedRef<string | null>
+  nameCharactersRemaining: ComputedRef<number>
+  descriptionCharactersRemaining: ComputedRef<number>
+  supportsSiteFonts: ComputedRef<boolean>
+  whatsappPhone: Ref<string>
+  searchIndexed: Ref<boolean>
+  hasFacebookAccess: ComputedRef<boolean>
+  facebookConnection: Ref<FacebookConnectionStatus | null>
+  facebookError: Ref<string>
+  connectingFacebook: Ref<boolean>
+  startFacebookConnect: () => Promise<void>
+  refreshSettings: () => Promise<void>
+  localizationSettings: Ref<LocalizationSettings | null>
+  localizationLoading: Ref<boolean>
+  localizationBusy: Ref<boolean>
+  localizationError: Ref<string | null>
+  localizationProgress: Ref<LocalizationProgress[]>
+  localizationProgressError: Ref<string | null>
+  enableableCatalogOptions: ComputedRef<Array<{ label: string; value: string }>>
+  newLocale: Ref<string>
+  publishLanguage: (locale: string) => Promise<void>
+  disableLanguage: (locale: string) => Promise<void>
+  deleteLanguage: (locale: string) => Promise<void>
+  deletionScheduledAt: ComputedRef<Date | null>
+  deletionDateLabel: ComputedRef<string>
+  deletionGraceDays: Ref<number>
+  deletionConfirmText: Ref<string>
+  deletionSaving: Ref<boolean>
+  deletionError: Ref<string>
+  scheduleWorkspaceDeletion: () => Promise<void>
+  keepWorkspace: () => Promise<void>
+  revert: () => void
+  save: () => Promise<void>
+}
+
+export const siteSettingsEditorKey = Symbol('site-settings-editor') as InjectionKey<SiteSettingsEditor>
+</script>
 
 <script setup lang="ts">
 import DashboardResourceLocalization from '~/components/dashboard/DashboardResourceLocalization.vue'
-import SiteGoogleAnalyticsSettings from '~/components/dashboard/SiteGoogleAnalyticsSettings.vue'
-import MediaPicker from '~/lib/components/workspace/media/MediaPicker.vue'
 import EditorNavigationList, { type EditorNavigationItem } from '~/components/dashboard/EditorNavigationList.vue'
-import { CURRENCY_OPTIONS, isCurrencyCode, type CurrencyCode } from '~/shared/currencies'
-import { SITE_FONT_OPTIONS, MALI_FONT_CSS, isSiteFontPreset, resolveSiteFontPreset, siteFontStyles, type SiteFontPreset } from '~/shared/site-fonts'
+import { isCurrencyCode } from '~/shared/currencies'
+import { MALI_FONT_CSS, isSiteFontPreset, resolveSiteFontPreset } from '~/shared/site-fonts'
 
 const props = withDefaults(defineProps<{ surface?: 'brand' | 'settings' }>(), { surface: 'settings' })
 const surface = computed(() => props.surface)
 const dashboardApi = useDashboardApi()
 const route = useRoute()
-const router = useRouter()
 const editorError = ref<string | null>(null)
 const facebookError = ref('')
 const dashboard = useDashboardSite()
 const siteDashboardPath = computed(() => `/dashboard/${String(route.params.orgSlug)}/sites/${String(route.params.siteSlug)}`)
 const brandPath = computed(() => `${siteDashboardPath.value}/brand`)
 const settingsPath = computed(() => `${siteDashboardPath.value}/settings`)
-// `useEditorFrame` provides and injects, so it runs before any `await`, and it
-// is the only place the route below this level is split into segments. This
-// component used to re-derive them from `route.params.segments`, a second copy
-// of the composable's own `rest`.
-const frame = useEditorFrame(computed(() => surface.value === 'brand' ? brandPath.value : settingsPath.value))
+// The level runs while setup is still synchronous: it injects the record the
+// `<RouterView>` above rendered, and an `await` before it would bind nothing.
+const level = useRouteLevel()
 
 const siteId = await useDashboardSiteId()
 
@@ -337,28 +215,7 @@ async function keepWorkspace() {
   }
 }
 
-interface SiteSettingsResponse {
-  theme?: string
-  brand_name?: string | null
-  brand_description?: string | null
-  media?: Array<{ asset_id: string; slot: string; public_url?: string | null }>
-  contact_email?: string | null
-  brand_color?: string | null
-  font_preset?: SiteFontPreset
-  default_currency?: string | null
-  robots?: string | null
-  google_analytics_measurement_id?: string | null
-  google_site_verification?: string | null
-  social_facebook_url?: string | null
-  social_instagram_url?: string | null
-  social_tiktok_url?: string | null
-}
 
-interface FacebookConnectionStatus { connected: boolean; facebook_page_name?: string }
-interface LocalizationLanguageRow { locale: string; label: string | null; is_source: number | boolean; status: string }
-interface LocalizationCatalogRow { locale: string; label: string; direction: string }
-interface LocalizationSettings { effective_plan: string; languages: LocalizationLanguageRow[]; available_catalogs: LocalizationCatalogRow[] }
-interface LocalizationProgress { locale: string; completed: number; total: number; opportunities: Array<{ id: string; label: string; completed: number; total: number; path: string }> }
 
 interface SettingsPageResource {
   settings: { success: boolean; settings: SiteSettingsResponse }
@@ -378,15 +235,14 @@ const isFacebookStatus = (value: unknown): value is FacebookConnectionStatus =>
   isRecord(value) && typeof value.connected === 'boolean' && (value.facebook_page_name === undefined || typeof value.facebook_page_name === 'string')
 
 
-const routeSegments = frame.rest
-const detailKey = computed(() => routeSegments.value[0] ?? null)
+/** Which leaf is open, named by the route below this rail rather than counted here. */
+const detailKey = computed(() => level.child.value)
 const validBrandKeys = new Set(['name', 'logo', 'sharing-image', 'description', 'color', 'font', 'contact', 'social'])
-const validSettingsKeys = new Set(['currency', 'notifications', 'search', 'analytics', 'publishing', 'localization', 'delete'])
+const validSettingsKeys = new Set(['domains', 'currency', 'notifications', 'search', 'analytics', 'publishing', 'localization', 'delete'])
 const routeIsCanonical = computed(() => {
-  const segments = routeSegments.value
-  if (segments.length === 0) return true
-  if (segments.length > 1) return false
-  return (surface.value === 'brand' ? validBrandKeys : validSettingsKeys).has(segments[0]!)
+  if (level.mode.value === 'index') return true
+  if (level.mode.value === 'yield') return false
+  return (surface.value === 'brand' ? validBrandKeys : validSettingsKeys).has(detailKey.value ?? '')
 })
 watchEffect(() => {
   if (!routeIsCanonical.value) throw createError({ statusCode: 404, statusMessage: 'Setting not found' })
@@ -410,20 +266,6 @@ const loadedSettings = ref<SiteSettingsResponse | null>(null)
 const supportsSiteFonts = computed(() => loadedSettings.value?.theme === 'saya')
 const loadedNotifications = ref<{ whatsapp_phone: string | null } | null>(null)
 const originalSignature = ref('')
-interface SiteSettingsForm {
-  brand_name: string
-  brand_description: string
-  logoAssetId: string | null
-  socialShareAssetId: string | null
-  contact_email: string
-  brand_color: string
-  font_preset: SiteFontPreset
-  default_currency: CurrencyCode | null
-  google_site_verification: string
-  social_facebook_url: string
-  social_instagram_url: string
-  social_tiktok_url: string
-}
 const form = reactive<SiteSettingsForm>({
   brand_name: '', brand_description: '', logoAssetId: null, socialShareAssetId: null, contact_email: '', brand_color: '', font_preset: 'default',
   default_currency: null, google_site_verification: '',
@@ -489,17 +331,7 @@ const settingsItems = computed<EditorNavigationItem[]>(() => [
 const navigationGroups = computed(() => [surface.value === 'brand'
   ? { id: 'brand', items: brandItems.value }
   : { id: 'settings', items: settingsItems.value }])
-const activeNavigationId = detailKey
-const hasDetail = computed(() => routeSegments.value.length > 0)
-const detailTitles: Record<string, string> = { name: 'Brand name', logo: 'Logo', 'sharing-image': 'Social sharing image', description: 'Description', color: 'Brand color', font: 'Website font', contact: 'Contact details', social: 'Social profiles', domains: 'Domain', currency: 'Currency', notifications: 'WhatsApp number', analytics: 'Google Analytics', search: 'Search engines', publishing: 'Facebook publishing', localization: 'Languages', delete: 'Delete site' }
-const detailTitle = computed(() => detailKey.value ? detailTitles[detailKey.value] : undefined)
-
-// The navbar names the level, not the open section — at `lg` the section's own
-// title is a heading on its pane, with the index list still beside it. Naming the
-// section twice made the navbar claim to be the page the pane was showing.
 const navbarTitle = computed(() => surface.value === 'brand' ? 'Brand' : 'Website')
-const showActions = computed(() => Boolean(detailKey.value && !['analytics', 'publishing', 'delete'].includes(detailKey.value)
-  && (detailKey.value !== 'font' || supportsSiteFonts.value)))
 
 // Leaving a section resets its editor. This used to hang off the back button's
 // click handler, which left browser back with stale editor state.
@@ -602,11 +434,6 @@ watch([settingsResource, settingsPending, settingsResourceError], ([resource, pe
 }, { immediate: true })
 watch(detailKey, () => resetDraft())
 
-function cancelEditor() {
-  resetDraft()
-  const destination = surface.value === 'brand' ? brandPath.value : settingsPath.value
-  router.push(destination)
-}
 async function patchSettings(body: Record<string, unknown>) {
   const response = await dashboardApi<{ success: boolean; settings: SiteSettingsResponse }>('/api/dashboard/settings', { method: 'PATCH', body, validate: isSettingsResponse })
   fillForm(response.settings)
@@ -714,4 +541,47 @@ async function publishLanguage(locale: string) { await mutateLocalization(`/api/
 async function disableLanguage(locale: string) { await mutateLocalization(`/api/editor/sites/${siteId}/locales/${encodeURIComponent(locale)}/disable`, 'POST') }
 async function deleteLanguage(locale: string) { if (window.confirm(`Permanently delete all ${locale} content for this site?`)) await mutateLocalization(`/api/editor/sites/${siteId}/locales/${encodeURIComponent(locale)}`, 'DELETE') }
 watch(detailKey, key => { if (key === 'localization' && !localizationSettings.value) loadLocalizationSettings() }, { immediate: true })
+provide(siteSettingsEditorKey, {
+  form,
+  siteId,
+  siteDashboardPath,
+  loading,
+  saving,
+  saveDisabled,
+  editorError,
+  validationMessage,
+  nameCharactersRemaining,
+  descriptionCharactersRemaining,
+  supportsSiteFonts,
+  whatsappPhone,
+  searchIndexed,
+  hasFacebookAccess,
+  facebookConnection,
+  facebookError,
+  connectingFacebook,
+  startFacebookConnect,
+  refreshSettings,
+  localizationSettings,
+  localizationLoading,
+  localizationBusy,
+  localizationError,
+  localizationProgress,
+  localizationProgressError,
+  enableableCatalogOptions,
+  newLocale,
+  publishLanguage,
+  disableLanguage,
+  deleteLanguage,
+  deletionScheduledAt,
+  deletionDateLabel,
+  deletionGraceDays,
+  deletionConfirmText,
+  deletionSaving,
+  deletionError,
+  scheduleWorkspaceDeletion,
+  keepWorkspace,
+  // A cancelled leaf puts the loaded settings back before it closes.
+  revert: resetDraft,
+  save: saveCurrentEditor,
+})
 </script>

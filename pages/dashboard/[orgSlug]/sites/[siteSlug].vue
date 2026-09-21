@@ -8,7 +8,7 @@
 </template>
 
 <script setup lang="ts">
-definePageMeta({ layout: 'dashboard' })
+definePageMeta({ layout: 'dashboard', passthrough: true })
 
 const dashboard = useDashboardSite()
 if (!dashboard.siteId.value) throw createError({ statusCode: 404, statusMessage: 'Site not found' })

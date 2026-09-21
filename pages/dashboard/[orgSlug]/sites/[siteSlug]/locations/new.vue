@@ -80,11 +80,9 @@ import {
 import { useOnboardingDraft } from '~/composables/useOnboardingDraft'
 import { normalizeVertical, type SiteVertical } from '~/utils/vertical-copy'
 
-// Adding a location is its own screen with its own preview, like the location
-// editor next to it — not a pane inside the site hub. Without ownsChrome the
-// site hub kept drawing its rail and navbar around this one, so the footer's
-// Back/Next sat below the fold.
-definePageMeta({ layout: 'dashboard', ownsChrome: true })
+// Adding a location is a tile's worth of work reached from Locations, which is
+// where Back goes.
+definePageMeta({ layout: 'dashboard', back: 'dashboard-orgSlug-sites' })
 
 const route = useRoute()
 const config = useRuntimeConfig()

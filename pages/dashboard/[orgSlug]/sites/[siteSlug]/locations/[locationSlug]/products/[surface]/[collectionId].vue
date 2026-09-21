@@ -1,84 +1,44 @@
 <template>
-  <NuxtPage v-if="frame.mode.value === 'yield'" />
-
-  <template v-else>
-    <!--
-      The list column. Creating a category is this page's own level, so it draws
-      the panel; an existing category's list owns its panel itself, and is
-      hidden below `lg` while a leaf or an item takes the screen.
-    -->
-    <UDashboardPanel
-      v-if="isNew"
-      id="location-product-category"
-      :class="openLeaf ? 'hidden lg:flex' : undefined"
-      :default-size="openLeaf ? 32 : undefined"
-    >
-      <template #header>
-        <UDashboardNavbar :title="`New ${presentation.collectionGroupLabel.toLowerCase()}`" :toggle="false">
-          <template #leading>
-            <DashboardNavbarLeading />
-          </template>
-        </UDashboardNavbar>
-      </template>
-
-      <template #body>
-        <div class="mx-auto w-full" :class="openLeaf ? 'max-w-xl' : 'max-w-3xl'">
-          <UAlert v-if="errorMessage" class="mb-6" color="error" variant="soft" icon="i-lucide-triangle-alert" :description="errorMessage" />
-          <div class="mb-6 flex justify-end">
-            <UButton :label="createActionLabel" :loading="saving" @click="startOrCreate" />
-          </div>
-          <EditorNavigationList :groups="collectionNavigation" :active-item="openLeaf" />
-        </div>
-      </template>
-    </UDashboardPanel>
-    <CollectionProductList
-      v-else
-      :class="hasColumnBeside ? 'hidden lg:flex' : undefined"
-      :default-size="hasColumnBeside ? 32 : undefined"
-    />
-
-    <!-- The category's Name leaf: the record itself, so this page owns the field. -->
-    <UDashboardPanel v-if="openLeaf" id="location-product-category-name">
-      <template #header>
-        <UDashboardNavbar :title="COLLECTION_LABELS.name" :toggle="false">
-          <template #leading>
-            <DashboardNavbarLeading />
-          </template>
-        </UDashboardNavbar>
-      </template>
-
-      <template #body>
-        <div class="mx-auto w-full max-w-2xl">
-          <UAlert v-if="errorMessage" class="mb-6" color="error" variant="soft" icon="i-lucide-triangle-alert" :description="errorMessage" />
-          <UFormField label="Name" required>
-            <UInput v-model="form.name" :placeholder="presentation.collectionGroupLabel === 'Section' ? 'Appetizers' : 'Accessories'" size="xl" autofocus class="w-full" />
-          </UFormField>
-          <DashboardResourceLocalization
-            v-if="!isNew"
-            class="mt-6"
-            :site-id="siteId"
-            resource-type="collection"
-            :resource-id="collectionId"
-            :resource-label="presentation.collectionGroupLabel.toLowerCase()"
-            :fields="collectionLocalizationFields"
-            :language-settings-path="siteLocalizationSettingsPath"
-          />
-        </div>
-      </template>
-
-      <template #footer>
-        <DashboardPanelFooter :save-label="saveLabel" :loading="saving" :disabled="saveDisabled" @cancel="closeLeaf" @save="saveLeaf" />
-      </template>
-    </UDashboardPanel>
-
-    <!-- An item is open: it owns the other column, header and all. -->
-    <NuxtPage v-else-if="frame.mode.value === 'pair'" />
-  </template>
+  <!--
+    An existing collection is its list of products; one being created has only
+    its name to give. Either way the level below is a leaf or a product.
+  -->
+  <CollectionProductList v-if="!isNew" />
+  <DashboardIndexPanel v-else id="location-product-category" :title="`New ${presentation.collectionGroupLabel.toLowerCase()}`">
+    <UAlert v-if="errorMessage" class="mb-6" color="error" variant="soft" icon="i-lucide-triangle-alert" :description="errorMessage" />
+    <div class="mb-6 flex justify-end">
+      <UButton :label="createActionLabel" :loading="saving" @click="startOrCreate" />
+    </div>
+    <EditorNavigationList :groups="collectionNavigation" :active-item="level.child.value" />
+  </DashboardIndexPanel>
 </template>
+
+<script lang="ts">
+import type { ComputedRef, InjectionKey, Ref } from 'vue'
+
+/** The collection's one field and the walk that creates it. */
+export interface CollectionEditor {
+  form: { name: string }
+  isNew: ComputedRef<boolean>
+  collectionId: ComputedRef<string>
+  siteId: string
+  groupLabel: string
+  hasRecord: ComputedRef<boolean>
+  saving: Ref<boolean>
+  errorMessage: Ref<string>
+  saveLabel: Ref<string | undefined>
+  saveDisabled: Ref<boolean>
+  localizationFields: ComputedRef<Array<{ key: string; label: string; source: string | null | undefined }>>
+  siteLocalizationSettingsPath: ComputedRef<string>
+  revert: () => void
+  save: () => Promise<void>
+}
+
+export const collectionEditorKey = Symbol('collection-editor') as InjectionKey<CollectionEditor>
+</script>
 
 <script setup lang="ts">
 import EditorNavigationList, { type EditorNavigationGroup } from '~/components/dashboard/EditorNavigationList.vue'
-import DashboardResourceLocalization from '~/components/dashboard/DashboardResourceLocalization.vue'
 import CollectionProductList from '~/components/dashboard/CollectionProductList.vue'
 import { getErrorMessage } from '~/utils/errors'
 import { isCatalogSurface, presentationForSurface } from '~/utils/product-presentation'
@@ -102,13 +62,8 @@ const surface = segment
 // is a Collection of Experiences, a section of a menu holds dishes.
 const presentation = presentationForSurface(vertical, surface)
 
-// The path comes from the route this screen is mounted on, not from the
-// location selector: an unresolved selector left it empty, and an empty path is
-// a link to nowhere and, where it roots the editor frame, a frame rooted at ''.
-const locationPath = computed(() => `/dashboard/${String(route.params.orgSlug)}/sites/${String(route.params.siteSlug)}/locations/${String(route.params.locationSlug)}`)
-const surfacePath = computed(() => `${locationPath.value}/products/${surface}`)
-const collectionPath = computed(() => `${surfacePath.value}/${collectionId.value}`)
-const frame = useEditorFrame(collectionPath)
+const level = useRouteLevel()
+const collectionPath = level.path
 
 const siteId = await useDashboardSiteId()
 
@@ -122,14 +77,11 @@ const collection = computed(() => catalog.collections.value.find(row => row.id =
 const isNew = computed(() => collectionId.value === 'new')
 const COLLECTION_LABELS = { name: 'Name' } as const
 type CollectionLeaf = keyof typeof COLLECTION_LABELS
-/** The collection's own leaf, as opposed to a product open beneath it. */
-const openLeaf = computed<CollectionLeaf | null>(() => (frame.childSegment.value === 'name' ? 'name' : null))
-const openKey = computed<CollectionLeaf>(() => openLeaf.value ?? 'name')
-/** Something takes the screen beside the list: the Name leaf, or an open item. */
-const hasColumnBeside = computed(() => Boolean(openLeaf.value) || frame.mode.value === 'pair')
+const openKey = computed<CollectionLeaf>(() => 'name')
 
+// A collection being created has one leaf; anything else below it is not a page.
 watchEffect(() => {
-  if (isNew.value && (frame.rest.value.length > 1 || (frame.childSegment.value && !openLeaf.value))) {
+  if (isNew.value && level.child.value && level.child.value !== 'name') {
     throw createError({ statusCode: 404, statusMessage: 'Page not found' })
   }
 })
@@ -197,12 +149,32 @@ async function commit() {
   // second one with the same name.
   if (createdId) form.name = ''
   await catalog.refresh()
-  await navigateTo(createdId ? `${surfacePath.value}/${createdId}` : collectionPath.value)
+  // The record it became, not the `new` form it was, so Back from a saved
+  // collection goes to the surface and never to an empty Add screen.
+  if (createdId) await navigateTo(`${level.to.value}/${createdId}`, { replace: true })
+  else await level.close()
 }
 
-function closeLeaf() {
+/** A cancelled leaf puts the stored name back before it closes. */
+function revert() {
   errorMessage.value = ''
   if (collection.value) form.name = collection.value.name
-  void navigateTo(collectionPath.value)
 }
+
+provide(collectionEditorKey, {
+  form,
+  isNew,
+  collectionId,
+  siteId,
+  groupLabel: presentation.collectionGroupLabel,
+  hasRecord: computed(() => Boolean(collection.value)),
+  saving,
+  errorMessage,
+  saveLabel,
+  saveDisabled,
+  localizationFields: collectionLocalizationFields,
+  siteLocalizationSettingsPath,
+  revert,
+  save: saveLeaf,
+})
 </script>

@@ -1,5 +1,5 @@
 <template>
-  <!-- The parent level renders this leaf's content; the route exists so it has an address. -->
+  <!-- Nothing open: the members list above is the screen. -->
   <div />
 </template>
 

@@ -1,5 +1,6 @@
 <template>
   <UButton
+    v-if="level.to.value"
     icon="i-lucide-arrow-left"
     aria-label="Back"
     color="neutral"
@@ -8,20 +9,14 @@
     square
     class="min-w-0 shrink-0"
     data-testid="dashboard-navbar-back"
-    @click="back"
+    :to="level.to.value"
   />
 </template>
 
 <script setup lang="ts">
-// Back is the browser's back. Only a tab with nothing behind it, opened
-// straight onto a deep link, goes to the dashboard root instead, which routes
-// to Today. The browser's history length is the test, not the router's own
-// record of the previous entry: a reload or a redirect keeps the former and
-// clears the latter.
-const router = useRouter()
-
-function back() {
-  if (import.meta.client && window.history.length > 1) return router.back()
-  return navigateTo('/dashboard')
-}
+// An index's Back: a link to the level's declared parent, so it lands in the
+// same place however the level was reached and a sheet that was closed can
+// never become its destination. A tab root has nothing above it and renders
+// nothing. A leaf has no Back — its Close is the leaf shell's.
+const level = useRouteLevel()
 </script>

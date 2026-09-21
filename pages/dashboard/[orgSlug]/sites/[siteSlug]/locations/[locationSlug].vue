@@ -1,96 +1,54 @@
 <template>
   <!--
-    Settings and Messages are their own screens with their own shells, the way the
-    listing editor's cog opens a separate preferences screen rather than a pane
-    beside the rail. Everything else is a section of this location.
+    The location: one card per thing a guest sees on its page, in the order the
+    page shows it, each stating what it holds now. Every card is a level below
+    this one; the gear opens the settings that a guest never sees.
   -->
-  <!--
-    Nothing of this level is on screen once the open level is deeper than one of
-    its sections: the two columns always belong to the open level and its
-    parent. Rendering the rail anyway is what put a third column beside a
-    grandchild's own pair.
-  -->
-  <NuxtPage v-if="panelHidden" />
+  <DashboardIndexPanel id="location-hub" :title="location?.title || 'Location'" :auto-open="cards[0]?.to ?? null">
+    <template #right>
+      <UButton
+        :to="`${level.path.value}/settings`"
+        icon="i-lucide-settings"
+        color="neutral"
+        variant="ghost"
+        square
+        aria-label="Location settings"
+      />
+    </template>
 
-  <!--
-    Two columns, two panels. `UDashboardPanel` already carries the divider
-    (`lg:not-last:border-e`), the scroll container and the body's padding, so
-    this level states only which column it is and how wide.
+    <div v-if="loading && !location" class="space-y-4">
+      <USkeleton class="aspect-[40/21] w-full rounded-2xl" />
+      <USkeleton v-for="index in 5" :key="index" class="h-20 rounded-2xl" />
+    </div>
 
-    Below `lg` the open level is the whole screen and this one is simply not
-    drawn: `hidden` rather than a `fixed` overlay on top of it. Overlaying left
-    both columns laid out and painted at every width, and put the covered
-    column's images on the wire for nothing.
-  -->
-  <template v-else>
-    <UDashboardPanel
-      id="location-hub"
-      :class="hasDetail ? 'hidden lg:flex' : undefined"
-      :default-size="hasDetail ? 32 : undefined"
-    >
-      <template #header>
-        <UDashboardNavbar :title="location?.title || 'Location'" :toggle="false">
-          <template #leading>
-            <DashboardNavbarLeading />
-          </template>
-          <template #right>
-            <UButton
-              :to="settingsPath"
-              icon="i-lucide-settings"
-              color="neutral"
-              variant="ghost"
-              square
-              aria-label="Location settings"
-            />
-          </template>
-        </UDashboardNavbar>
-      </template>
+    <UAlert
+      v-else-if="error"
+      color="error"
+      variant="soft"
+      icon="i-lucide-triangle-alert"
+      :description="error"
+    />
 
-      <template #body>
-        <div class="mx-auto w-full" :class="hasDetail ? 'max-w-xl' : 'max-w-3xl'">
-          <div v-if="loading && !location" class="space-y-4">
-            <USkeleton class="aspect-[40/21] w-full rounded-2xl" />
-            <USkeleton v-for="index in 5" :key="index" class="h-20 rounded-2xl" />
-          </div>
-
-          <UAlert
-            v-else-if="error"
-            color="error"
-            variant="soft"
-            icon="i-lucide-triangle-alert"
-            :description="error"
-          />
-
-          <!--
-            One card per thing a guest sees on this location's page, in the
-            order the page shows it, each stating what it holds right now.
-          -->
-          <UPageList v-else-if="location" class="gap-3">
-            <UPageCard
-              v-for="card in cards"
-              :key="card.id"
-              :to="card.to"
-              :title="card.title"
-              :description="card.description"
-              variant="soft"
-              :highlight="card.id === activeSection"
-              :ui="{ container: 'p-5 sm:p-5', title: 'text-[15px]', description: 'mt-1 line-clamp-2' }"
-            >
-              <img
-                v-if="card.image"
-                :src="card.image"
-                alt=""
-                class="aspect-[40/21] w-full rounded-xl object-cover"
-              >
-            </UPageCard>
-          </UPageList>
-        </div>
-      </template>
-    </UDashboardPanel>
-
-    <!-- The open child owns the other column, header and all. -->
-    <NuxtPage v-if="hasDetail" />
-  </template>
+    <UPageList v-else-if="location" class="gap-3">
+      <UPageCard
+        v-for="card in cards"
+        :key="card.id"
+        :to="card.to"
+        :title="card.title"
+        :description="card.description"
+        variant="soft"
+        :highlight="card.id === level.child.value"
+        :ui="{ container: 'p-5 sm:p-5', title: 'text-[15px]', description: 'mt-1 line-clamp-2' }"
+      >
+        <img
+          v-if="card.image"
+          :src="card.image"
+          alt=""
+          class="aspect-[40/21] w-full rounded-xl object-cover"
+        >
+      </UPageCard>
+    </UPageList>
+  </DashboardIndexPanel>
 </template>
 
 <script setup lang="ts">
@@ -102,7 +60,8 @@ import { catalogLabel, catalogSummary, type CatalogCounts } from '~/utils/produc
 import { formatPostalAddress } from '~/utils/postal-address'
 import type { LocationReservationConfig } from '~/server/utils/reservations'
 
-definePageMeta({ layout: 'dashboard', ownsChrome: true })
+// A location is a tile on the Locations tab, which is where Back goes.
+definePageMeta({ layout: 'dashboard', back: 'dashboard-orgSlug-sites' })
 
 interface LocationOverview {
   id: string
@@ -134,32 +93,16 @@ interface LocationOverviewResource {
 }
 
 const dashboardApi = useDashboardApi()
-const route = useRoute()
 const dashboard = useDashboardSite()
 const dashboardLocation = useDashboardLocation()
-const sitePath = computed(() => `/dashboard/${String(route.params.orgSlug)}/sites/${String(route.params.siteSlug)}`)
-const locationPath = computed(() => `${sitePath.value}/locations/${String(route.params.locationSlug)}`)
-// `useEditorFrame` provides and injects, so it must run while setup is still
-// synchronous. Awaiting before it binds the frame to nothing: the mode never
-// resolves and this level silently drops out of the chain.
-const frame = useEditorFrame(locationPath)
+// The level runs while setup is still synchronous: it injects the record the
+// `<RouterView>` above rendered, and an `await` before it would bind nothing.
+const level = useRouteLevel()
+const locationPath = level.path
 
 const siteId = await useDashboardSiteId()
 
 const locationId = computed(() => dashboardLocation.currentLocationId.value)
-const settingsPath = computed(() => `${locationPath.value}/settings`)
-
-// Settings and Messages are their own screens rather than sections of this one, so
-// they leave the chain entirely rather than taking a column in it.
-const STANDALONE_SECTIONS = ['settings', 'messages']
-const sectionSegment = computed(() => frame.childSegment.value ?? '')
-const rendersStandalone = computed(() => STANDALONE_SECTIONS.includes(sectionSegment.value))
-// Whether this hub's own panel is on screen at all: a standalone section
-// (settings, inbox) replaces it, and so does a deeper level that owns both
-// columns. Nothing this page loads is rendered while it is true.
-const panelHidden = computed(() => rendersStandalone.value || frame.mode.value === 'yield')
-const hasDetail = computed(() => frame.mode.value === 'pair')
-const activeSection = computed(() => sectionSegment.value || null)
 
 const location = ref<LocationOverview | null>(null)
 const catalog = ref<CatalogCounts>({ total: 0, experiences: 0 })
@@ -259,7 +202,7 @@ const isOverviewResponse = (value: unknown): value is LocationOverviewResource =
   && isRecord(value.counts) && typeof value.counts.photos === 'number'
 
 const overviewKey = computed(() => `dashboard-location-overview:${siteId}:${locationId.value}`)
-const { data: overview, pending: overviewPending, error: overviewError, refresh } = await useAsyncData<LocationOverviewResource>(overviewKey, async () => {
+const { data: overview, pending: overviewPending, error: overviewError } = await useAsyncData<LocationOverviewResource>(overviewKey, async () => {
   const requestedLocationId = locationId.value
   if (!requestedLocationId) throw createError({ statusCode: 404, statusMessage: 'Location not found' })
   const shouldIncludeProducts = includeProducts.value
@@ -269,25 +212,9 @@ const { data: overview, pending: overviewPending, error: overviewError, refresh 
   )
 }, {
   lazy: true,
-  // The location's own overview — its profile, its catalogue summary, its
-  // inbox summary and its content counts — is what this panel draws. Opening
-  // the location's settings or inbox, or a level below that owns both columns,
-  // replaces the panel entirely.
-  immediate: !panelHidden.value,
 })
 
-// Coming back up to this hub from a level that hid it: the component stayed
-// mounted, so the read skipped above has to start now, and a read that already
-// happened is re-run because settings may have changed what the cards state.
-// Synchronous flush so `loading` is already true on the render that first
-// shows the panel.
-watch(panelHidden, (hidden) => {
-  if (!hidden) refresh()
-}, { flush: 'sync' })
-
-// Loading, or not started because this panel was not on screen yet.
-const loading = computed(() =>
-  overviewPending.value || (!panelHidden.value && !overview.value && !overviewError.value))
+const loading = computed(() => overviewPending.value || (!overview.value && !overviewError.value))
 
 watch([overview, overviewError], ([resource, cause]) => {
   if (cause) {
@@ -302,42 +229,6 @@ watch([overview, overviewError], ([resource, cause]) => {
   error.value = null
 }, { immediate: true })
 
-/**
- * Where there is a pane, it opens on the first section rather than sitting
- * empty beside the rail — the listing editor does the same, sending /details to
- * /details/photo-tour, but only at the width where the pane exists. Below it
- * the rail is the whole screen and nothing is chosen for the tenant.
- *
- * Gated on the shell's own breakpoint, so the redirect and the pane can never
- * disagree about whether there is somewhere to put a section. Client-only,
- * because the server cannot know the viewport, and `replace` so Back still
- * leaves the location instead of bouncing through the hub.
- */
-// Tailwind's `lg`, which is where the second panel appears and where
-// every other split in the dashboard sits. Kept as one constant per hub so the
-// redirect and the layout cannot disagree about whether a pane exists.
-const PANE_BREAKPOINT = '(min-width: 1024px)'
-let sectionChosen = false
-
-function openFirstSectionBesideTheRail() {
-  // Only from the location itself. `hasDetail` is also false when a deeper
-  // level owns both columns, and opening the first section from there threw the
-  // tenant out of whatever they had open.
-  if (sectionChosen || loading.value || frame.mode.value !== 'index') return
-  if (!window.matchMedia(PANE_BREAKPOINT).matches) return
-  const first = cards.value[0]
-  if (!first) return
-  sectionChosen = true
-  void navigateTo(first.to, { replace: true })
-}
-
-onMounted(() => {
-  // Runs once now for data that arrived with the page, and again when a later
-  // load settles. A `watch` with `immediate` could not do both: its first call
-  // happens before its own stop handle exists.
-  openFirstSectionBesideTheRail()
-  watch([loading, hasDetail], openFirstSectionBesideTheRail)
-})
 
 useSeoMeta({ title: () => `${location.value?.title || 'Location'} | KrabiClaw`, robots: 'noindex, nofollow' })
 </script>

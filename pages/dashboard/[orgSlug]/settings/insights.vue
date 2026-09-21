@@ -316,7 +316,7 @@
 <script setup lang="ts">
 import ActivityFeed from '~/components/dashboard/ActivityFeed.vue'
 const dashboardApi = useDashboardApi()
-definePageMeta({ layout: 'dashboard', ownsChrome: true })
+definePageMeta({ layout: 'dashboard' })
 
 import DashboardAnalyticsRow from '~/lib/components/workspace/dashboard/AnalyticsRow.vue'
 import { localDateAt, addLocalDays, formatCalendarDate } from '~/utils/timezone'

@@ -1,49 +1,15 @@
 <template>
   <!--
-    Notifications, Insights and the members pair draw their own panels, so
-    this level only routes to them. Everything else is a leaf in the column
-    beside the Menu.
+    Menu: the business's own page, a tab root. Its rows are the site's lists
+    and settings, each a level below; the bell and the account hang off it.
   -->
-  <NuxtPage v-if="rendersStandalone || frame.mode.value === 'yield'" />
-
-  <template v-else>
-    <UDashboardPanel
-      id="organization-settings"
-      :class="hasDetail ? 'hidden lg:flex' : undefined"
-      :default-size="hasDetail ? 32 : undefined"
-    >
-      <template #header>
-        <UDashboardNavbar title="Menu" :toggle="false">
-          <template #right>
-            <DashboardNotificationBell :to="notificationsTo" />
-            <DashboardAccountMenu />
-          </template>
-        </UDashboardNavbar>
-      </template>
-
-      <template #body>
-        <div class="mx-auto w-full" :class="hasDetail ? 'max-w-xl' : 'max-w-[var(--ws-page-narrow,45rem)]'">
-          <DashboardMenuContent @search="openSearch" />
-        </div>
-      </template>
-    </UDashboardPanel>
-
-    <UDashboardPanel v-if="hasDetail" id="organization-settings-detail">
-      <template #header>
-        <UDashboardNavbar :title="activeLabel" :toggle="false">
-          <template #leading>
-            <DashboardNavbarLeading />
-          </template>
-        </UDashboardNavbar>
-      </template>
-
-      <template #body>
-        <div class="mx-auto w-full max-w-2xl">
-          <NuxtPage />
-        </div>
-      </template>
-    </UDashboardPanel>
-  </template>
+  <DashboardIndexPanel id="organization-settings" title="Menu">
+    <template #right>
+      <DashboardNotificationBell :to="notificationsTo" />
+      <DashboardAccountMenu />
+    </template>
+    <DashboardMenuContent @search="openSearch" />
+  </DashboardIndexPanel>
 </template>
 
 <script setup lang="ts">
@@ -54,14 +20,7 @@ import DashboardAccountMenu from '~/lib/components/workspace/dashboard/Dashboard
 definePageMeta({ layout: 'dashboard' })
 useSeoMeta({ title: 'Menu | KrabiClaw Dashboard', robots: 'noindex, nofollow' })
 
-const route = useRoute()
 const nuxtApp = useNuxtApp()
-
-const { settingsPath, activeLabel } = useOrganizationSettingsNavigation()
-const frame = useEditorFrame(settingsPath)
-const hasDetail = computed(() => frame.mode.value === 'pair')
-const rendersStandalone = computed(() => route.matched.some(record => record.meta?.ownsChrome === true))
-
 const { notificationsTo } = useDashboardMenu()
 
 function openSearch() {

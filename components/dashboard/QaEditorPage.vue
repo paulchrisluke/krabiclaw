@@ -1,85 +1,51 @@
 <template>
-  <!--
-    One panel either way: this level always owns a column and always titles it.
-    With no section open it is the whole screen; once one is open it is the
-    index column and the section takes the other.
-  -->
-  <UDashboardPanel
-    id="site-qa-record"
-    :class="hasDetail ? 'hidden lg:flex' : undefined"
-    :default-size="hasDetail ? 32 : undefined"
-  >
-    <template #header>
-      <UDashboardNavbar :title="isNew ? 'New question' : form.question || 'Question'" :toggle="false">
-        <template #leading>
-          <DashboardNavbarLeading />
-        </template>
-        <template v-if="!isNew" #right>
-          <DashboardResourceLocalization
-            :site-id="siteId"
-            resource-type="content_document"
-            :resource-id="qaId"
-            resource-label="question"
-            :fields="qaLocalizationFields"
-            :language-settings-path="siteLocalizationSettingsPath"
-          />
-        </template>
-      </UDashboardNavbar>
+  <!-- A question: its rows are the three things it holds, each a leaf below. -->
+  <DashboardIndexPanel id="site-qa-record" :title="isNew ? 'New question' : form.question || 'Question'">
+    <template v-if="!isNew" #right>
+      <DashboardResourceLocalization
+        :site-id="siteId"
+        resource-type="content_document"
+        :resource-id="qaId"
+        resource-label="question"
+        :fields="qaLocalizationFields"
+        :language-settings-path="siteLocalizationSettingsPath"
+      />
     </template>
 
-    <template #body>
-      <div class="mx-auto w-full" :class="hasDetail ? 'max-w-xl' : 'max-w-3xl'">
-        <UAlert
-          v-if="errorMessage"
-          class="mb-6"
-          color="error"
-          variant="soft"
-          icon="i-lucide-triangle-alert"
-          :description="errorMessage"
-        />
-        <div v-if="isNew && !hasDetail" class="mb-6 flex justify-end">
-          <UButton :label="createActionLabel" :loading="saving" @click="startOrCreate" />
-        </div>
-        <EditorNavigationList :groups="navigationGroups" :active-item="openKey" />
-      </div>
-    </template>
-  </UDashboardPanel>
-
-  <!--
-    The open section is the other column: its own panel, its own header, and
-    the Save/Cancel pair in the panel's own footer slot.
-  -->
-  <UDashboardPanel v-if="hasDetail" id="site-qa-section">
-    <template #header>
-      <UDashboardNavbar :title="SECTION_LABELS[openKey]" :toggle="false">
-        <template #leading>
-          <DashboardNavbarLeading />
-        </template>
-      </UDashboardNavbar>
-    </template>
-
-    <template #body>
-      <div class="mx-auto w-full max-w-2xl">
-        <UFormField v-if="openKey === 'question'" label="Question" required>
-          <UTextarea v-model="form.question" :rows="4" autofocus class="w-full" />
-        </UFormField>
-
-        <UFormField v-else-if="openKey === 'answer'" label="Answer">
-          <UTextarea v-model="form.answer" :rows="10" autofocus class="w-full" />
-        </UFormField>
-
-        <div v-else-if="openKey === 'visibility'" class="space-y-4">
-          <p class="text-base text-muted">A published question appears on the page it is filed under.</p>
-          <UCheckbox v-model="form.published" label="Published" />
-        </div>
-      </div>
-    </template>
-
-    <template #footer>
-      <DashboardPanelFooter :save-label="saveLabel" :loading="saving" :disabled="saveDisabled" @cancel="closeDetail" @save="saveOpenSection" />
-    </template>
-  </UDashboardPanel>
+    <UAlert
+      v-if="errorMessage"
+      class="mb-6"
+      color="error"
+      variant="soft"
+      icon="i-lucide-triangle-alert"
+      :description="errorMessage"
+    />
+    <div v-if="isNew" class="mb-6 flex justify-end">
+      <UButton :label="createActionLabel" :loading="saving" @click="startOrCreate" />
+    </div>
+    <EditorNavigationList :groups="navigationGroups" :active-item="level.child.value" />
+  </DashboardIndexPanel>
 </template>
+
+<script lang="ts">
+import type { InjectionKey, Reactive, Ref } from 'vue'
+
+export const SECTION_LABELS = { question: 'Question', answer: 'Answer', visibility: 'Visibility' } as const
+export type SectionKey = keyof typeof SECTION_LABELS
+
+/** The question's draft and the save walk its leaves commit through. */
+export interface QaEditor {
+  form: Reactive<{ question: string; answer: string; published: boolean }>
+  saving: Ref<boolean>
+  saveDisabled: Ref<boolean>
+  saveLabel: Ref<string | undefined>
+  errorMessage: Ref<string>
+  revert: () => void
+  save: () => Promise<void>
+}
+
+export const qaEditorKey = Symbol('qa-editor') as InjectionKey<QaEditor>
+</script>
 
 <script setup lang="ts">
 import EditorNavigationList, { type EditorNavigationGroup } from '~/components/dashboard/EditorNavigationList.vue'
@@ -98,8 +64,7 @@ const qaPath = computed(() => props.locationId
   ? `/dashboard/${String(route.params.orgSlug)}/sites/${String(route.params.siteSlug)}/locations/${String(route.params.locationSlug)}/qa`
   : `/dashboard/${String(route.params.orgSlug)}/sites/${String(route.params.siteSlug)}/qa`)
 const recordPath = computed(() => `${qaPath.value}/${qaId.value}`)
-const frame = useEditorFrame(recordPath)
-const hasDetail = computed(() => frame.mode.value === 'pair')
+const level = useRouteLevel()
 
 const siteId = await useDashboardSiteId()
 const isNew = computed(() => qaId.value === 'new')
@@ -107,15 +72,12 @@ const qaEndpoint = computed(() => props.locationId
   ? `/api/editor/sites/${siteId}/locations/${props.locationId}/qa`
   : `/api/editor/sites/${siteId}/qa`)
 
-const SECTION_LABELS = { question: 'Question', answer: 'Answer', visibility: 'Visibility' } as const
-type SectionKey = keyof typeof SECTION_LABELS
-
-const detailKey = computed(() => frame.childSegment.value)
+const detailKey = computed(() => level.child.value)
 /** With nothing open the pane still shows the first section rather than empty space. */
 const openKey = computed<SectionKey>(() => (detailKey.value ?? 'question') as SectionKey)
 
 watchEffect(() => {
-  if (frame.rest.value.length > 1 || (detailKey.value && !(detailKey.value in SECTION_LABELS))) {
+  if (level.mode.value === 'yield' || (detailKey.value && !(detailKey.value in SECTION_LABELS))) {
     throw createError({ statusCode: 404, statusMessage: 'Page not found' })
   }
 })
@@ -210,12 +172,14 @@ async function commit() {
     if (isNew.value) {
       const created = await dashboardApi(qaEndpoint.value, { method: 'POST', body, validate: isQaCreated })
       Object.assign(form, emptyDraft())
-      await navigateTo(`${qaPath.value}/${created.id}`)
+      // The record it became, not the `new` form it was, so Back from a saved
+      // question goes to the list and never to an empty Add screen.
+      await navigateTo(`${qaPath.value}/${created.id}`, { replace: true })
       return
     }
     await dashboardApi(`${qaEndpoint.value}/${qaId.value}`, { method: 'PATCH', body, validate: isQaUpdated })
     await refresh()
-    await navigateTo(recordPath.value)
+    await level.close()
   } catch (error) {
     errorMessage.value = getErrorMessage(error, 'Failed to save question')
   } finally {
@@ -223,10 +187,12 @@ async function commit() {
   }
 }
 
-function closeDetail() {
+/** A cancelled leaf puts the loaded question back before it closes. */
+function revert() {
   if (record.value) loadForm(record.value)
-  void navigateTo(recordPath.value)
 }
+
+provide(qaEditorKey, { form, saving, saveDisabled, saveLabel, errorMessage, revert, save: saveOpenSection })
 
 useSeoMeta({ title: 'Question | KrabiClaw Dashboard', robots: 'noindex, nofollow' })
 </script>
