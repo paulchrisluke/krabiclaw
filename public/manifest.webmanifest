@@ -11,8 +11,14 @@
   "theme_color": "#1F2547",
   "icons": [
     {
-      "src": "/krabi-claw-logo.png",
+      "src": "/platform/krabiclaw-symbol.svg",
       "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/krabi-claw-logo.png",
+      "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
     }

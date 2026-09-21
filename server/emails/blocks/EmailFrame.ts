@@ -77,9 +77,9 @@ export default defineComponent({
               h(EImg, {
                 src: `${origin}/krabi-claw-logo.png`,
                 alt: 'KrabiClaw',
-                width: '132',
-                height: 'auto',
-                style: 'display:block;max-width:132px;height:auto',
+                width: '64',
+                height: '64',
+                style: 'display:block;width:64px;height:64px',
               }),
             ]),
             slots.default?.(),
