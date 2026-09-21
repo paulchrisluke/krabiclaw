@@ -31,7 +31,7 @@
       <template #header>
         <UDashboardNavbar :title="location?.title || 'Location'" :toggle="false">
           <template #leading>
-            <DashboardNavbarLeading :to="locationsPath" label="Locations" />
+            <DashboardNavbarLeading />
           </template>
           <template #right>
             <UButton
@@ -138,8 +138,7 @@ const route = useRoute()
 const dashboard = useDashboardSite()
 const dashboardLocation = useDashboardLocation()
 const sitePath = computed(() => `/dashboard/${String(route.params.orgSlug)}/sites/${String(route.params.siteSlug)}`)
-const locationsPath = computed(() => `${sitePath.value}/locations`)
-const locationPath = computed(() => `${locationsPath.value}/${String(route.params.locationSlug)}`)
+const locationPath = computed(() => `${sitePath.value}/locations/${String(route.params.locationSlug)}`)
 // `useEditorFrame` provides and injects, so it must run while setup is still
 // synchronous. Awaiting before it binds the frame to nothing: the mode never
 // resolves and this level silently drops out of the chain.

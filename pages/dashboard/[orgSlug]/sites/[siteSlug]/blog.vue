@@ -11,7 +11,7 @@
       <template #header>
         <UDashboardNavbar title="Blog" :toggle="false">
           <template #leading>
-            <DashboardNavbarLeading :to="sitePath" label="Site" />
+            <DashboardNavbarLeading />
           </template>
         </UDashboardNavbar>
       </template>
@@ -39,7 +39,6 @@ const route = useRoute()
 // The path comes from the route this screen is mounted on, not from the
 // location selector: an unresolved selector left it empty, and an empty path is
 // a link to nowhere and, where it roots the editor frame, a frame rooted at ''.
-const sitePath = computed(() => `/dashboard/${String(route.params.orgSlug)}/sites/${String(route.params.siteSlug)}`)
 const blogPath = computed(() => `/dashboard/${String(route.params.orgSlug)}/sites/${String(route.params.siteSlug)}/blog`)
 const frame = useEditorFrame(blogPath)
 const hasDetail = computed(() => frame.mode.value === 'pair')

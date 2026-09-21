@@ -36,7 +36,7 @@
       <template #header>
         <UDashboardNavbar :title="isNew ? 'New question' : form.question || 'Question'" :toggle="false">
           <template #leading>
-            <DashboardNavbarLeading :to="qaPath" label="Q&A" />
+            <DashboardNavbarLeading />
           </template>
           <template v-if="!isNew" #right>
             <DashboardResourceLocalization
@@ -74,7 +74,7 @@
       <template #header>
         <UDashboardNavbar :title="SECTION_LABELS[openKey]" :toggle="false">
           <template #leading>
-            <DashboardNavbarLeading :to="recordPath" label="Question" />
+            <DashboardNavbarLeading />
           </template>
         </UDashboardNavbar>
       </template>

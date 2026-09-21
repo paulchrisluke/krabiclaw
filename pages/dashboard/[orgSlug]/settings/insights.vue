@@ -3,7 +3,7 @@
     <template #header>
       <UDashboardNavbar title="Insights">
         <template #leading>
-          <DashboardNavbarLeading :to="orgPaths.org" label="Today" />
+          <DashboardNavbarLeading />
         </template>
       </UDashboardNavbar>
     </template>
@@ -316,7 +316,7 @@
 <script setup lang="ts">
 import ActivityFeed from '~/components/dashboard/ActivityFeed.vue'
 const dashboardApi = useDashboardApi()
-definePageMeta({ layout: 'dashboard' })
+definePageMeta({ layout: 'dashboard', ownsChrome: true })
 
 import DashboardAnalyticsRow from '~/lib/components/workspace/dashboard/AnalyticsRow.vue'
 import { localDateAt, addLocalDays, formatCalendarDate } from '~/utils/timezone'
@@ -345,7 +345,6 @@ interface AnalyticsResponse {
 }
 
 const route = useRoute()
-const { orgPaths } = useDashboardSiteLinks()
 
 interface InsightsSite { id: string; label: string; subdomain: string | null }
 interface InsightsReviews {

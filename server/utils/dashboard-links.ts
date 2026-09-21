@@ -3,13 +3,9 @@
 // (server/utils/chowbot-agent.ts) — two otherwise-separate tool-calling
 // implementations that should still produce identical dashboard URLs.
 export const DASHBOARD_DESTINATIONS = {
-  'settings.general': 'settings/general',
-  'settings.analytics': 'settings/analytics',
   'settings.billing': 'settings/billing',
   'settings.members': 'settings/members',
-  'settings.chatgpt': 'settings/chatgpt',
   'site.overview': 'sites/:siteSlug',
-  'site.locations': 'sites/:siteSlug/locations',
   'site.locations.new': 'sites/:siteSlug/locations/new',
   'site.domains': 'sites/:siteSlug/domains',
   'site.settings': 'sites/:siteSlug/settings',

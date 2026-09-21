@@ -63,7 +63,7 @@
       <template #header>
         <UDashboardNavbar :title="isNew ? 'New page' : draft.title || 'Page'" :toggle="false">
           <template #leading>
-            <DashboardNavbarLeading :to="pagesPath" label="Pages" />
+            <DashboardNavbarLeading />
           </template>
         </UDashboardNavbar>
       </template>
@@ -84,7 +84,7 @@
       <template #header>
         <UDashboardNavbar :title="openLabel" :toggle="false">
           <template #leading>
-            <DashboardNavbarLeading :to="recordPath" label="Page" />
+            <DashboardNavbarLeading />
           </template>
         </UDashboardNavbar>
       </template>

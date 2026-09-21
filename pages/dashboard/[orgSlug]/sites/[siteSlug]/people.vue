@@ -3,7 +3,7 @@
     <template #header>
       <UDashboardNavbar :title="'People'" :toggle="false">
         <template #leading>
-          <DashboardNavbarLeading v-if="sitePaths?.site" :to="sitePaths?.site" label="Site" />
+          <DashboardNavbarLeading />
         </template>
       </UDashboardNavbar>
     </template>
@@ -59,7 +59,6 @@ import { authClient } from '~/lib/auth-client'
 // a person and act as them. Everything else is that tenant's ordinary dashboard.
 definePageMeta({ layout: 'dashboard' })
 
-const { sitePaths } = useDashboardSiteLinks()
 useSeoMeta({ title: 'People | KrabiClaw Dashboard', robots: 'noindex, nofollow' })
 
 interface PlatformUser { id: string; name: string | null; email: string; role?: string | null; banned?: boolean | null }

@@ -13,19 +13,7 @@
     <template #header>
       <UDashboardNavbar :title="navbarTitle" :toggle="false">
         <template #leading>
-          <DashboardNavbarLeading :to="levelBackTo" label="Location" />
-        </template>
-        <template #right>
-          <DashboardResourceLocalization
-            v-if="location"
-            :site-id="siteId"
-            resource-type="business_location"
-            :resource-id="location.id"
-            resource-label="location"
-            :fields="locationLocalizationFields"
-            :route-path="localizedLocationPath"
-            :language-settings-path="siteLocalizationSettingsPath"
-          />
+          <DashboardNavbarLeading />
         </template>
       </UDashboardNavbar>
     </template>
@@ -36,10 +24,24 @@
           <USkeleton v-for="index in 6" :key="index" class="h-32 rounded-xl" />
         </div>
         <UAlert v-else-if="error" color="error" variant="soft" icon="i-lucide-triangle-alert" :description="error" />
-        <EditorNavigationList v-else-if="location" :groups="navigationGroups" :active-item="detailKey" />
+        <EditorNavigationList v-else-if="location" :groups="navigationGroups" :active-item="detailKey" @act="onRowAction" />
       </div>
     </template>
   </UDashboardPanel>
+
+  <!-- Translating the location is a row on the list; this is the sheet it opens. -->
+  <DashboardResourceLocalization
+    v-if="location"
+    v-model:open="localizeOpen"
+    row-trigger
+    :site-id="siteId"
+    resource-type="business_location"
+    :resource-id="location.id"
+    resource-label="location"
+    :fields="locationLocalizationFields"
+    :route-path="localizedLocationPath"
+    :language-settings-path="siteLocalizationSettingsPath"
+  />
 
   <!--
     Drawn at `lg` even with nothing open, so the pair is there at rest.
@@ -52,7 +54,7 @@
     <template #header>
       <UDashboardNavbar :title="detailTitles[editorKey]" :toggle="false">
         <template #leading>
-          <DashboardNavbarLeading :to="detail ? locationPath : settingsPath" :label="detail ? 'Location' : 'Settings'" />
+          <DashboardNavbarLeading />
         </template>
       </UDashboardNavbar>
     </template>
@@ -88,7 +90,6 @@
         </div>
 
         <div v-else-if="editorKey === 'status'" class="space-y-6">
-          <p class="text-base text-muted">An inactive location is hidden from the public site.</p>
           <UCheckbox :model-value="detailsForm.status === 'active'" label="Active" @update:model-value="setDetailsActive" />
         </div>
 
@@ -104,7 +105,6 @@
         </div>
 
         <div v-else-if="editorKey === 'discovery'" class="space-y-6">
-          <p class="text-base text-muted">Connect the canonical Google place record used to import address, hours, ratings and reviews.</p>
           <UCard variant="subtle">
             <div class="flex items-center justify-between gap-4">
               <div>
@@ -126,7 +126,6 @@
         </div>
 
         <div v-else-if="editorKey === 'notifications'" class="space-y-6">
-          <p class="text-base text-muted">Internal alert routing for this location. These values are not shown to guests.</p>
           <UFormField label="WhatsApp notification phone" help="Use international format, for example +66812345678.">
             <UInput v-model="detailsForm.notification_phone" type="tel" placeholder="+66..." size="xl" class="w-full" />
           </UFormField>
@@ -155,7 +154,6 @@
         </div>
 
         <div v-else-if="editorKey === 'features'" class="space-y-6">
-          <p class="text-base text-muted">Choose which site modules are available at this location.</p>
           <div v-if="locationToggleableFeatures.length" class="space-y-3">
             <UCard v-for="feature in locationToggleableFeatures" :key="feature" variant="subtle">
             <UCheckbox v-model="locationEnabledFeatureSet[feature]" :label="locationFeatureLabel(feature)" />
@@ -247,10 +245,6 @@ const locationId = computed(() => dashboardLocation.currentLocationId.value)
 
 // Up one level: out of a section back to the settings index, out of the index
 // back to the location overview.
-// The navbar leaves the level for the location overview. The open section's own
-// way out is the sheet's close control, which lands on the settings index — the
-// index that is already beside it at `lg`.
-const levelBackTo = computed(() => locationPath.value)
 const routeSegments = frame.rest
 const detailKey = computed(() => props.detail ?? routeSegments.value[0] ?? null)
 const editorKey = computed(() => detailKey.value ?? SETTINGS_KEYS[0])
@@ -490,12 +484,17 @@ const navigationGroups = computed(() => [{
   id: 'settings',
   items: [
     { id: 'status', label: 'Status', summary: statusSummary.value, to: `${settingsPath.value}/status` },
-    { id: 'slug', label: 'Slug', summary: slugSummary.value, to: `${settingsPath.value}/slug` },
-    { id: 'discovery', label: 'Google', summary: discoverySummary.value, to: `${settingsPath.value}/discovery` },
-    { id: 'notifications', label: 'Notifications', summary: notificationSummary.value, to: `${settingsPath.value}/notifications` },
+    { id: 'slug', label: 'Link', summary: slugSummary.value, to: `${settingsPath.value}/slug` },
+    { id: 'languages', label: 'Languages', summary: 'Translate the name, description and address', action: { label: 'Localize' } },
+    { id: 'discovery', label: 'Google Business Profile', summary: discoverySummary.value, to: `${settingsPath.value}/discovery` },
+    { id: 'notifications', label: 'WhatsApp number', summary: notificationSummary.value, to: `${settingsPath.value}/notifications` },
     { id: 'features', label: 'Features', summary: featureSummary.value, to: `${settingsPath.value}/features` },
   ],
 }])
+const localizeOpen = ref(false)
+function onRowAction(id: string) {
+  if (id === 'languages') localizeOpen.value = true
+}
 const detailTitles: Record<string, string> = {
   name: 'Name',
   description: 'Description',
@@ -504,15 +503,14 @@ const detailTitles: Record<string, string> = {
   contact: 'Contact',
   reservations: 'Reservations',
   status: 'Status',
-  slug: 'Slug',
-  discovery: 'Google',
-  notifications: 'Notifications',
+  slug: 'Link',
+  discovery: 'Google Business Profile',
+  notifications: 'WhatsApp number',
   features: 'Features',
 }
 const hasDetail = computed(() => Boolean(props.detail) || routeSegments.value.length > 0)
-// Names the level, not the open section: at `lg` the section's title is a
-// heading on its own pane with the index still beside it.
-const navbarTitle = computed(() => location.value?.title || 'Location')
+const navbarTitle = 'Settings'
+
 // Every write this screen can be in the middle of, including the one that
 // stops reservations: Save stayed live during that delete, and a save landing
 // on top of it recreated the policy it had just removed.
@@ -809,5 +807,5 @@ const loadLocationWorkspace = async () => {
   return !locationSettingsError.value
 }
 
-useSeoMeta({ title: () => `${detailTitles[editorKey.value]} | KrabiClaw`, robots: 'noindex, nofollow' })
+useSeoMeta({ title: () => `${detailKey.value ? detailTitles[detailKey.value] : 'Settings'} | KrabiClaw`, robots: 'noindex, nofollow' })
 </script>

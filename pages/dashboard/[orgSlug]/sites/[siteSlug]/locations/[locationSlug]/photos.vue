@@ -3,7 +3,7 @@
     <template #header>
       <UDashboardNavbar :title="'Photos'" :toggle="false">
         <template #leading>
-          <DashboardNavbarLeading v-if="locationPaths?.location" :to="locationPaths?.location" label="Location" />
+          <DashboardNavbarLeading />
         </template>
       </UDashboardNavbar>
     </template>
@@ -144,7 +144,6 @@ import { mediaStillUrl } from '~/shared/media-placement-contract'
 const dashboardApi = useDashboardApi()
 definePageMeta({ layout: 'dashboard' })
 
-const { locationPaths } = useDashboardSiteLinks()
 
 
 

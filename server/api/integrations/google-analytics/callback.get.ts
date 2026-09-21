@@ -45,8 +45,7 @@ export default defineHandler(async (event) => {
       const context = await getDashboardSiteRouteContext(db, env, userId, organizationId, siteId)
       if (!context) return `/dashboard?ga=${status}`
       const encodedOrgSlug = encodeURIComponent(context.organizationSlug)
-      const params = new URLSearchParams({ ga: status, site: context.siteSlug })
-      return `/dashboard/${encodedOrgSlug}/settings/analytics?${params.toString()}`
+      return `/dashboard/${encodedOrgSlug}/sites/${encodeURIComponent(context.siteSlug)}/settings/analytics?ga=${status}`
     } catch (e) {
       console.error('Google Analytics redirect organization query failed:', e)
       return `/dashboard?ga=${status}`

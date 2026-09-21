@@ -42,7 +42,7 @@
       <template #header>
         <UDashboardNavbar :title="openTitle" :toggle="false">
           <template #leading>
-            <DashboardNavbarLeading :to="sectionsPath" label="Sections" />
+            <DashboardNavbarLeading />
           </template>
         </UDashboardNavbar>
       </template>
@@ -82,7 +82,7 @@
       <template #header>
         <UDashboardNavbar :title="openTitle" :toggle="false">
           <template #leading>
-            <DashboardNavbarLeading :to="sectionsPath" label="Sections" />
+            <DashboardNavbarLeading />
           </template>
         </UDashboardNavbar>
       </template>

@@ -3,7 +3,7 @@
     <template #header>
       <UDashboardNavbar title="Add a location" :toggle="false">
         <template #leading>
-          <DashboardNavbarLeading :to="`/dashboard/${orgSlug}/sites/${siteSlug}`" label="Site" />
+          <DashboardNavbarLeading />
         </template>
       </UDashboardNavbar>
     </template>

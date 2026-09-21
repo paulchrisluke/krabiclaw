@@ -30,7 +30,7 @@
       <template #header>
         <UDashboardNavbar :title="form.name || presentation.itemLabel" :toggle="false">
           <template #leading>
-            <DashboardNavbarLeading :to="collectionPath" :label="collection?.name ?? presentation.collectionLabel" />
+            <DashboardNavbarLeading />
           </template>
           <template v-if="product" #right>
             <DashboardResourceLocalization
@@ -70,7 +70,7 @@
       <template #header>
         <UDashboardNavbar :title="sectionLabels[editorKey]" :toggle="false">
           <template #leading>
-            <DashboardNavbarLeading :to="itemPath" :label="presentation.itemLabel" />
+            <DashboardNavbarLeading />
           </template>
         </UDashboardNavbar>
       </template>
@@ -426,7 +426,6 @@ const isProductList = (value: unknown): value is { success: true, products: Prod
 const isOne = (value: unknown): value is { success: true, product: Product } =>
   isRecord(value) && isRecord(value.product)
 
-const collection = computed(() => collections.value.find(row => row.id === collectionId.value) ?? null)
 
 // What the last successful (or in-flight) load was for. locationId resolves
 // after mount on a cold navigation, so onMounted and the watcher below both

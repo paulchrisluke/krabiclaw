@@ -10,7 +10,7 @@
       <template #header>
         <UDashboardNavbar title="Notifications" :toggle="false">
           <template #leading>
-            <DashboardNavbarLeading :to="profilePath" label="Account" />
+            <DashboardNavbarLeading />
           </template>
         </UDashboardNavbar>
       </template>
@@ -32,7 +32,7 @@
       <template #header>
         <UDashboardNavbar :title="detailTitle" :toggle="false">
           <template #leading>
-            <DashboardNavbarLeading :to="notificationsPath" label="Notifications" />
+            <DashboardNavbarLeading />
           </template>
         </UDashboardNavbar>
       </template>
@@ -57,7 +57,6 @@ import {
 } from '~/shared/notification-categories'
 
 const notificationsPath = computed(() => '/dashboard/account/profile/notifications')
-const profilePath = '/dashboard/account/profile'
 const frame = useEditorFrame(notificationsPath)
 const hasDetail = computed(() => frame.mode.value === 'pair')
 

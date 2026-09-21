@@ -14,9 +14,29 @@ export function useDashboardSiteLinks() {
       base,
       org,
       settings,
-      settingsGeneral: `${settings}/general`,
       settingsBilling: `${settings}/billing`,
       accountProfile: `${base}/account/profile`,
+    }
+  })
+
+  /**
+   * The business's site. Every organization has exactly one, so its paths are
+   * known from any dashboard route, not only from under `/sites/:siteSlug`.
+   */
+  const businessPaths = computed(() => {
+    const organizationSlug = dashboard.scope.value?.orgSlug
+    const subdomain = dashboard.sites.value[0]?.subdomain
+    if (!organizationSlug || !subdomain) return null
+    const site = `/dashboard/${organizationSlug}/sites/${subdomain}`
+    return {
+      site,
+      locations: `/dashboard/${organizationSlug}/sites`,
+      newLocation: `${site}/locations/new`,
+      pages: `${site}/pages`,
+      blog: `${site}/blog`,
+      qa: `${site}/qa`,
+      brand: `${site}/brand`,
+      settings: `${site}/settings`,
     }
   })
 
@@ -52,13 +72,13 @@ export function useDashboardSiteLinks() {
       posts: `${location}/posts`,
       photos: `${location}/photos`,
       qa: `${location}/qa`,
-      inbox: `${location}/messages`,
       settings: `${location}/settings`,
     }
   })
 
   return {
     orgPaths,
+    businessPaths,
     sitePaths,
     locationPaths,
   }

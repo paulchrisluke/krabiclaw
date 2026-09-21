@@ -84,7 +84,7 @@
       <template #header>
         <UDashboardNavbar :title="form.title || 'Untitled post'" :toggle="false">
           <template #leading>
-            <DashboardNavbarLeading :to="postPath" label="Post" />
+            <DashboardNavbarLeading />
           </template>
           <template #right>
             <slot name="actions" />
@@ -104,7 +104,7 @@
       <template #header>
         <UDashboardNavbar :title="sectionLabel" :toggle="false">
           <template #leading>
-            <DashboardNavbarLeading :to="postPath" label="Post" />
+            <DashboardNavbarLeading />
           </template>
         </UDashboardNavbar>
       </template>

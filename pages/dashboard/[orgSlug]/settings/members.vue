@@ -11,7 +11,7 @@
       <template #header>
         <UDashboardNavbar title="Members" :toggle="false">
           <template #leading>
-            <DashboardNavbarLeading :to="settingsPath" label="Settings" />
+            <DashboardNavbarLeading />
           </template>
         </UDashboardNavbar>
       </template>
@@ -27,7 +27,7 @@
       <template #header>
         <UDashboardNavbar title="Invite a team member" :toggle="false">
           <template #leading>
-            <DashboardNavbarLeading :to="membersPath" label="Members" />
+            <DashboardNavbarLeading />
           </template>
         </UDashboardNavbar>
       </template>

@@ -1,5 +1,6 @@
 <template>
   <UButton
+    v-if="!rowTrigger"
     color="neutral"
     variant="outline"
     icon="i-lucide-languages"
@@ -138,6 +139,8 @@ const props = defineProps<{
   routePath?: (locale: string) => string
   languageSettingsPath?: string
   disabled?: boolean
+  /** Opened by a row in a settings list through `v-model:open`; draws no button of its own. */
+  rowTrigger?: boolean
   loadValues?: (locale: string) => Promise<Record<string, unknown>>
   saveValues?: (locale: string, values: Record<string, unknown>) => Promise<void>
 }>()

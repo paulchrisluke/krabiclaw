@@ -20,7 +20,7 @@
       <template #header>
         <UDashboardNavbar title="Links page" :toggle="false">
           <template #leading>
-            <DashboardNavbarLeading :to="sitePath" label="Site" />
+            <DashboardNavbarLeading />
           </template>
           <template #right>
             <UButton
@@ -73,7 +73,7 @@
       <template #header>
         <UDashboardNavbar :title="SECTION_LABELS[editorKey]" :toggle="false">
           <template #leading>
-            <DashboardNavbarLeading :to="linksPath" label="Links" />
+            <DashboardNavbarLeading />
           </template>
         </UDashboardNavbar>
       </template>
@@ -168,7 +168,7 @@
       <template #header>
         <UDashboardNavbar :title="isNewItem ? 'New link' : itemForm.label || 'Link'" :toggle="false">
           <template #leading>
-            <DashboardNavbarLeading :to="itemsPath" label="Links" />
+            <DashboardNavbarLeading />
           </template>
           <template #right>
             <DashboardResourceLocalization
@@ -217,7 +217,7 @@
       <template #header>
         <UDashboardNavbar :title="ITEM_SECTION_LABELS[openItemKey]" :toggle="false">
           <template #leading>
-            <DashboardNavbarLeading :to="itemPath" label="Link" />
+            <DashboardNavbarLeading />
           </template>
         </UDashboardNavbar>
       </template>
@@ -338,7 +338,6 @@ const errorMessage = ref('')
 // The path comes from the route this screen is mounted on, not from the
 // location selector: an unresolved selector left it empty, and an empty path is
 // a link to nowhere and, where it roots the editor frame, a frame rooted at ''.
-const sitePath = computed(() => `/dashboard/${String(route.params.orgSlug)}/sites/${String(route.params.siteSlug)}`)
 
 // ── Which leaf is open ──────────────────────────────────
 // One leaf per field: a leaf edits one concern, and the hub is read by scanning
