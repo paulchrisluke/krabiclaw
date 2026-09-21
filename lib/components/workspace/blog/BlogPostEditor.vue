@@ -478,7 +478,7 @@ function applyLoadedPost(loaded: BlogPost) {
     tagsText.value = loaded.tags?.join(', ') || ''
     publishTiming.value = loaded.scheduled_for ? 'Scheduled' : 'Now'
     if (!loaded.content_document) throw new Error('Blog content document is missing')
-    blocks.value = structuredClone(loaded.content_document.blocks || [])
+    blocks.value = cloneEditorBlocks(loaded.content_document.blocks || [])
     ensureTrailingTextBlock()
     contentDirty.value = false
     lifecycleDirty.value = false
