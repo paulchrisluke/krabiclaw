@@ -390,7 +390,10 @@ test('Today uses the CMS patterns and sends one reservation change request', asy
   await expect(page.getByText(note, { exact: true })).toBeVisible()
   await page.getByRole('link', { name: `Edit note: ${note}` }).click()
   await expect(page.getByLabel('Note', { exact: true })).toHaveValue(note)
-  await page.getByRole('button', { name: 'Cancel', exact: true }).click()
+  // Beside its index a leaf carries only Save — Airbnb's shape at two columns,
+  // measured 2026-09-21 — so leaving one here is the index's own Back. Cancel
+  // belongs to the sheet the leaf becomes below `lg`.
+  await expect(page.getByRole('button', { name: 'Cancel', exact: true })).toBeHidden()
   // Back is a link to the level above, never the browser's history.
   await page.getByRole('link', { name: 'Back', exact: true }).click()
 
