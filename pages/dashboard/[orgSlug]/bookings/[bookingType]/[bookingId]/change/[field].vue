@@ -1,6 +1,6 @@
 <template>
   <!-- One field of the staged request. Done keeps the edit in the draft; nothing is sent from here. -->
-  <DashboardLeafPanel id="booking-change-field" :title="`Change ${field}`" save-label="Done" @cancel="b.cancelChangeField(field)" @save="navigateTo(level.to.value ?? '/dashboard')">
+  <DashboardLeafPanel v-if="field" id="booking-change-field" :title="`Change ${field}`" save-label="Done" @cancel="b.cancelChangeField(field)" @save="navigateTo(level.to.value ?? '/dashboard')">
     <div v-if="b.booking.value" class="mx-auto w-full max-w-md space-y-6">
       <UFormField v-if="field === 'date'" label="Date">
         <UInput v-model="b.changeDraft.value.bookingDate" type="date" size="xl" autofocus class="w-full" />
@@ -28,7 +28,8 @@ const route = useRoute()
 const level = useRouteLevel()
 const b = inject(bookingEditorKey)!
 const value = String(route.params.field ?? '')
-if (!['date', 'time', 'guests', 'location'].includes(value)) throw createError({ statusCode: 404, statusMessage: 'Editor not found' })
-const field = value as BookingChangeField
-b.beginChangeField(field)
+const field = (['date', 'time', 'guests', 'location'].includes(value) ? value : null) as BookingChangeField | null
+// Raised, not thrown: the dashboard renders on the client, where a throw in a nested page's setup leaves a blank screen (DESIGN.md).
+if (!field) showError(createError({ statusCode: 404, statusMessage: 'Editor not found' }))
+else b.beginChangeField(field)
 </script>

@@ -11,10 +11,6 @@
       Add a WhatsApp number
     </NuxtLink>
 
-    <div class="flex items-center justify-between gap-4 border-t border-default pt-4">
-      <UButton color="neutral" variant="ghost" label="Cancel" :disabled="!dirty || saving" @click="cancel" />
-      <UButton label="Save" :disabled="!dirty" :loading="saving" @click="commit" />
-    </div>
   </div>
 </template>
 
@@ -70,4 +66,7 @@ async function commit() {
     saving.value = false
   }
 }
+
+// The page it sits in owns the Cancel/Save row, so every leaf commits the same way.
+defineExpose({ dirty, saving, cancel, commit })
 </script>

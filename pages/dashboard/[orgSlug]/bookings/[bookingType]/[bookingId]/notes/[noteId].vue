@@ -30,7 +30,8 @@ const noteId = String(route.params.noteId ?? '')
 b.openNote(noteId)
 // A note that is not there is not a page.
 watchEffect(() => {
-  if (b.booking.value && !b.selectedNote.value) throw createError({ statusCode: 404, statusMessage: 'Note not found' })
+  if (level.stale.value) return
+  if (b.booking.value && !b.selectedNote.value) showError(createError({ statusCode: 404, statusMessage: 'Note not found' }))
 })
 
 async function save() {

@@ -1,5 +1,5 @@
 <template>
-  <BookingDetails :booking-type="bookingType" :booking-id="bookingId" :editor-path="level.path.value" />
+  <BookingDetails v-if="bookingType && bookingId" :booking-type="bookingType" :booking-id="bookingId" :editor-path="level.path.value" />
 </template>
 
 <script setup lang="ts">
@@ -12,10 +12,8 @@ useSeoMeta({ title: 'Booking details | KrabiClaw', robots: 'noindex, nofollow' }
 const route = useRoute()
 const level = useRouteLevel()
 const rawType = typeof route.params.bookingType === 'string' ? route.params.bookingType : undefined
-if (rawType !== 'reservation' && rawType !== 'booking') {
-  throw createError({ statusCode: 404, statusMessage: 'Booking not found' })
-}
-const bookingType = rawType
+const bookingType = rawType === 'reservation' || rawType === 'booking' ? rawType : null
 const bookingId = String(route.params.bookingId || '')
-if (!bookingId) throw createError({ statusCode: 404, statusMessage: 'Booking not found' })
+// Raised, not thrown: the dashboard renders on the client, where a throw in a nested page's setup leaves a blank screen (DESIGN.md).
+if (!bookingType || !bookingId) showError(createError({ statusCode: 404, statusMessage: 'Booking not found' }))
 </script>
