@@ -48,6 +48,8 @@ pr_body.txt
 .env
 .env.*
 !.env.example
+# Older checkouts may still have this secret file; migrate its values into .env.
+.dev.vars*
 
 # Prod data backups (contain auth tokens — never commit)
 prod-backup-*.sql
