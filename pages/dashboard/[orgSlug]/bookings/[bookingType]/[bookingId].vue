@@ -1,7 +1,5 @@
 <template>
-  <DashboardIndexPanel id="booking-details" :title="pageTitle" :ui="{ body: 'p-0 sm:p-0' }">
-    <BookingDetails :booking-type="bookingType" :booking-id="bookingId" :editor-path="level.path.value" />
-  </DashboardIndexPanel>
+  <BookingDetails :booking-type="bookingType" :booking-id="bookingId" :editor-path="level.path.value" />
 </template>
 
 <script setup lang="ts">
@@ -20,8 +18,4 @@ if (rawType !== 'reservation' && rawType !== 'booking') {
 const bookingType = rawType
 const bookingId = String(route.params.bookingId || '')
 if (!bookingId) throw createError({ statusCode: 404, statusMessage: 'Booking not found' })
-
-// The navbar names the record, so it reads the same load the body reads — one
-// `useAsyncData` key, one request.
-const { pageTitle } = await useBookingDetails(bookingType, bookingId)
 </script>

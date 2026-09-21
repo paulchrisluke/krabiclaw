@@ -1,6 +1,6 @@
 <template>
   <!-- A post: its rows are the things it holds, each a leaf below this level. -->
-  <DashboardIndexPanel id="location-post" :title="isNew ? 'New post' : editor.form.title || 'Post'">
+  <DashboardIndexPanel id="location-post" :title="isNew ? 'New post' : editor.form.title || 'Post'" :auto-open="navigationGroups[0]?.items.find(item => item.to)?.to ?? null">
     <template v-if="post" #right>
       <DashboardResourceLocalization
         :site-id="siteId"
@@ -164,10 +164,16 @@ const detailKey = computed(() => level.child.value)
 const editorKey = computed<SectionKey>(() => (detailKey.value ?? (isNew.value ? 'type' : 'photo')) as SectionKey)
 
 const openSections = computed(() => (isNew.value ? NEW_SECTION_KEYS : EXISTING_SECTION_KEYS))
-// An unsupported route 404s rather than silently showing the first section.
-if (level.mode.value === 'yield' || (detailKey.value && !openSections.value.some(key => key === detailKey.value))) {
-  throw createError({ statusCode: 404, statusMessage: 'Page not found' })
-}
+// An unsupported route 404s rather than silently showing the first section. A
+// watcher, not a setup-time check: moving between leaves reuses this component.
+watchEffect(() => {
+  // A level on its way out after a navigation elsewhere answers about a route
+  // it is no longer part of, so it judges nothing.
+  if (level.stale.value) return
+  if (level.mode.value === 'yield' || (detailKey.value && !openSections.value.some(key => key === detailKey.value))) {
+    showError(createError({ statusCode: 404, statusMessage: 'Page not found' }))
+  }
+})
 
 // ── The post ────────────────────────────────────────────
 const isSinglePostResponse = (value: unknown): value is { post: ApiRecord } =>
@@ -282,7 +288,7 @@ const supportsMedia = computed(() => postType.value !== 'alert')
 
 const postStatus = computed(() => (post.value?.status === 'published' || post.value?.status === 'scheduled' ? post.value.status : null))
 
-// ── The hub ─────────────────────────────────────────────
+// ── The index ─────────────────────────────────────────────
 function mediaSummary(): string {
   if (!supportsMedia.value) return 'Alerts carry no media'
   const count = editor.form.media.length

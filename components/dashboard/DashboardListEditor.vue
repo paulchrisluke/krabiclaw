@@ -107,12 +107,23 @@
           @click="$emit('remove', item)"
         />
 
-        <div class="min-w-0 flex-1">
+        <!--
+          The row body is the way in, and it is a link: a row that navigated
+          from a click handler could not be opened in a new tab, showed the
+          reader no destination before they pressed it, and put a second copy
+          of the record's path in every list (DESIGN.md).
+        -->
+        <component
+          :is="item.to ? NuxtLink : 'div'"
+          :to="item.to"
+          class="min-w-0 flex-1"
+          :class="item.to ? 'no-underline' : undefined"
+        >
           <slot name="item" :item="item">
             <p class="truncate text-sm font-medium text-highlighted">{{ item.title }}</p>
             <p v-if="item.summary" class="mt-1 line-clamp-2 text-sm text-muted">{{ item.summary }}</p>
           </slot>
-        </div>
+        </component>
 
         <div v-if="!readOnly && editing" class="flex shrink-0 items-center gap-1">
           <template v-if="reorderable">
@@ -138,13 +149,14 @@
             />
           </template>
           <UButton
+            v-if="item.to"
             icon="i-lucide-pencil"
             :aria-label="`Edit ${item.title}`"
             color="neutral"
             variant="ghost"
             size="sm"
             square
-            @click="$emit('open', item)"
+            :to="item.to"
           />
         </div>
       </li>
@@ -177,10 +189,13 @@ defineProps<{
 
 defineEmits<{
   add: []
-  open: [item: T]
   remove: [item: T]
   move: [item: T, direction: -1 | 1]
 }>()
+
+// Resolved rather than written in the template so one expression can choose
+// between a link and a plain row.
+const NuxtLink = resolveComponent('NuxtLink')
 
 const editing = defineModel<boolean>('editing', { default: false })
 const selected = defineModel<string[]>('selected', { default: () => [] })
@@ -206,6 +221,11 @@ export interface ListEditorItem {
   id: string
   /** Names the row in the remove, reorder and open controls' labels. */
   title: string
+  /**
+   * The record's own URL. Set it and the row is a link to it; leave it off and
+   * the row is not a way in, which is what a list of media fields wants.
+   */
+  to?: string
   /** Set false for a row that may not be removed; its remove control is omitted. */
   removable?: boolean
   summary?: string | null

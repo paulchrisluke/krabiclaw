@@ -15,7 +15,6 @@
       reorderable
       selectable
       @add="openNew"
-      @open="openExisting"
       @move="moveProduct"
     >
       <template #selection-actions>
@@ -23,7 +22,7 @@
       </template>
 
       <template #item="{ item }">
-        <button type="button" class="flex w-full items-center gap-4 text-left" :data-testid="`product-${item.id}`" @click="openExisting(item)">
+        <span class="flex w-full items-center gap-4 text-left" :data-testid="`product-${item.id}`">
           <DashboardMediaThumb :asset="item.row.image" :label="item.row.name" fallback-icon="i-lucide-image" />
           <span class="min-w-0 flex-1">
             <span class="block truncate text-sm font-semibold text-highlighted">{{ item.row.name }}</span>
@@ -31,7 +30,7 @@
               {{ priceLabel(item.row) || 'No price set' }}
             </span>
           </span>
-        </button>
+        </span>
       </template>
     </DashboardListEditor>
 
@@ -102,9 +101,7 @@ const locationId = computed(() => dashboardLocation.currentLocation.value?.id ??
 // The path comes from the route this screen is mounted on, not from the
 // location selector: an unresolved selector left it empty, and an empty path is
 // a link to nowhere and, where it roots the editor frame, a frame rooted at ''.
-const locationPath = computed(() => `/dashboard/${String(route.params.orgSlug)}/sites/${String(route.params.siteSlug)}/locations/${String(route.params.locationSlug)}`)
-const surfacePath = computed(() => `${locationPath.value}/products/${String(route.params.surface ?? '')}`)
-const collectionPath = computed(() => `${surfacePath.value}/${collectionId.value}`)
+const level = useRouteLevel()
 
 const catalog = useLocationProductCatalog(siteId, locationId)
 const collections = catalog.collections
@@ -156,7 +153,7 @@ const moveError = ref<string | null>(null)
 const collection = computed(() =>
   collectionsOnSurface(vertical, collectionsWithProducts.value, segment).find(row => row.id === collectionId.value) ?? null)
 const loadError = computed(() => (catalog.error.value ? getErrorMessage(catalog.error.value, `Failed to load ${presentation.itemLabelPlural.toLowerCase()}`) : null))
-const listItems = computed(() => products.value.map(row => ({ id: row.id, title: row.name, row })))
+const listItems = computed(() => products.value.map(row => ({ id: row.id, title: row.name, to: `${level.path.value}/${row.id}`, row })))
 // Somewhere else on this surface: moving a dish into a collection of bookable
 // experiences would file it where customers never read dishes.
 const moveTargets = computed(() =>
@@ -283,14 +280,10 @@ async function moveSelected() {
 
 /** Adding opens the item's own level, the same screen editing uses. */
 function openNew() {
-  void navigateTo(`${collectionPath.value}/new`)
+  void navigateTo(`${level.path.value}/new`)
 }
 
 
-/** An item is its own screen now, so opening one is navigation, not a sheet. */
-function openExisting(item: { row: Product }) {
-  return navigateTo(`${collectionPath.value}/${item.row.id}`)
-}
 
 // Resets this list's own edit state when the catalog underneath it changes.
 // It does not refetch: the catalog is one keyed `useAsyncData` whose key holds

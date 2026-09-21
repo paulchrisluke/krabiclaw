@@ -3,7 +3,7 @@
     The gear's list: what a guest never sees about this location, one row per
     setting, each a leaf below. Languages is a row that opens the sheet.
   -->
-  <DashboardIndexPanel id="location-settings" title="Settings">
+  <DashboardIndexPanel id="location-settings" title="Settings" :auto-open="editor.navigationGroups.value[0]?.items.find(item => item.to)?.to ?? null">
     <div v-if="editor.loading.value" class="space-y-4">
       <USkeleton v-for="index in 6" :key="index" class="h-32 rounded-xl" />
     </div>
@@ -63,7 +63,7 @@ export interface BusinessLocation {
 
 /**
  * The editors a guest sees the result of — name, description, hours, address,
- * contact, the reservation policy — open from the location hub's cards. The
+ * contact, the reservation policy — open from the location index's cards. The
  * rest are the gear's.
  */
 export const HUB_KEYS = ['name', 'description', 'hours', 'address', 'contact', 'reservations'] as const
@@ -402,7 +402,7 @@ export async function useLocationEditor(siteId: string, locationId: Ref<string |
       fillLocationFeatures(response)
       fillDetailsForm(response.location)
       originalSignature.value = editorSignature(key)
-      // The hub beside this editor draws the same location from its own read.
+      // The index beside this editor draws the same location from its own read.
       await refreshNuxtData(`dashboard-location-overview:${siteId}:${requestedLocationId}`)
       if (response.location.slug !== previousSlug) {
         await dashboard.refresh()

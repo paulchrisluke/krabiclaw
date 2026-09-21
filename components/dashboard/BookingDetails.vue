@@ -5,7 +5,12 @@
     the things that change it — the request, a note, the guest — are levels of
     their own under the record's canonical URL, which both mounts link to.
   -->
-  <div class="flex min-h-0 flex-1 flex-col">
+  <!--
+    The provider owns its chrome: the levels below inject what this component
+    holds, and `<NuxtPage>` reaches them only from inside its own subtree. In
+    the thread's drawer there is no column to own, so it is the body alone.
+  -->
+  <component :is="embedded ? 'div' : DashboardIndexPanel" v-bind="chrome">
     <div v-if="pending && !booking" class="space-y-4 p-5 sm:p-8">
       <USkeleton v-for="index in 4" :key="index" class="h-40 rounded-2xl" />
     </div>
@@ -110,18 +115,6 @@
               <UIcon name="i-lucide-chevron-right" class="size-5 shrink-0 text-muted" />
             </NuxtLink>
 
-            <div v-if="booking.notes.length" class="border-t border-default py-2">
-              <NuxtLink
-                v-for="note in booking.notes"
-                :key="note.id"
-                :to="`${editorPath}/notes/${note.id}`"
-                class="block py-2"
-                :aria-label="`Edit note: ${note.body}`"
-              >
-                <span class="block whitespace-pre-wrap text-sm text-highlighted">{{ note.body }}</span>
-                <span class="block text-xs text-dimmed">{{ formatCreatedAt(note.createdAt) }}</span>
-              </NuxtLink>
-            </div>
 
             <div class="flex items-center gap-4 border-t border-default py-4">
               <span class="min-w-0 flex-1">
@@ -148,7 +141,7 @@
         </template>
       </div>
     </template>
-  </div>
+  </component>
 
   <DashboardListItemDialog v-model:open="policyOpen" :title="booking?.policy?.heading || 'Cancellation policy'" :show-actions="false">
     <div v-if="booking" class="space-y-4">
@@ -238,6 +231,7 @@ export const bookingEditorKey = Symbol('booking-editor') as InjectionKey<Booking
 <script setup lang="ts">
 import { formatCalendarDate, formatTime, formatTimestamp } from '~/utils/timezone'
 import DashboardListItemDialog from '~/components/dashboard/DashboardListItemDialog.vue'
+import DashboardIndexPanel from '~/lib/components/workspace/dashboard/DashboardIndexPanel.vue'
 import { getErrorMessage } from '~/utils/errors'
 
 const props = defineProps<{
@@ -245,6 +239,8 @@ const props = defineProps<{
   bookingId: string
   /** The record's canonical URL, which the rows that change it link into. */
   editorPath: string
+  /** Mounted inside the guest thread's drawer, which already owns the column. */
+  embedded?: boolean
 }>()
 
 type ActionColor = 'success' | 'error' | 'neutral'
@@ -253,11 +249,15 @@ const dashboardApi = useDashboardApi()
 const realtime = useDashboardInvalidations()
 const actionError = ref<string | null>(null)
 const editorPath = computed(() => props.editorPath)
+// Owning the column means owning its header; inside the drawer it is a plain body.
+const chrome = computed(() => (props.embedded
+  ? { class: 'flex min-h-0 flex-1 flex-col' }
+  : { id: 'booking-details', title: pageTitle.value, ui: { body: 'p-0 sm:p-0' } }))
 /** Which note a leaf is editing, or none for a new one. */
 const openNoteId = ref<string | null>(null)
 const selectedNote = computed(() => booking.value?.notes.find(note => note.id === openNoteId.value))
 
-const { resource, booking, pending, error, presentation, noun, orgSlug, refresh: refreshDetails } = await useBookingDetails(props.bookingType, props.bookingId)
+const { resource, booking, pending, error, presentation, noun, pageTitle, orgSlug, refresh: refreshDetails } = await useBookingDetails(props.bookingType, props.bookingId)
 
 const formattedDate = computed(() => booking.value ? formatCalendarDate(booking.value.bookingDate, 'en') : '')
 const formattedTime = computed(() => {
@@ -350,7 +350,7 @@ function openNote(noteId: string | null) {
   noteError.value = null
 }
 
-// The staged change lives in Nuxt state so the change hub and its field leaves,
+// The staged change lives in Nuxt state so the change index and its field leaves,
 // each a route of its own, edit one draft. It is reseeded only when it belongs
 // to an older source revision.
 watch(booking, (currentBooking) => {

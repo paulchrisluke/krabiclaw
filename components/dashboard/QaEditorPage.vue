@@ -1,6 +1,6 @@
 <template>
   <!-- A question: its rows are the three things it holds, each a leaf below. -->
-  <DashboardIndexPanel id="site-qa-record" :title="isNew ? 'New question' : form.question || 'Question'">
+  <DashboardIndexPanel id="site-qa-record" :title="isNew ? 'New question' : form.question || 'Question'" :auto-open="navigationGroups[0]?.items.find(item => item.to)?.to ?? null">
     <template v-if="!isNew" #right>
       <DashboardResourceLocalization
         :site-id="siteId"
@@ -77,8 +77,11 @@ const detailKey = computed(() => level.child.value)
 const openKey = computed<SectionKey>(() => (detailKey.value ?? 'question') as SectionKey)
 
 watchEffect(() => {
+  // A level on its way out after a navigation elsewhere answers about a route
+  // it is no longer part of, so it judges nothing.
+  if (level.stale.value) return
   if (level.mode.value === 'yield' || (detailKey.value && !(detailKey.value in SECTION_LABELS))) {
-    throw createError({ statusCode: 404, statusMessage: 'Page not found' })
+    showError(createError({ statusCode: 404, statusMessage: 'Page not found' }))
   }
 })
 
@@ -109,6 +112,10 @@ const { data, refresh } = await useAsyncData(
 )
 
 const record = computed(() => data.value?.qa.find(row => row.id === qaId.value) ?? null)
+// A question that is not there is not a page, so it 404s rather than rendering an empty editor for it.
+watchEffect(() => {
+  if (!isNew.value && data.value && !record.value) showError(createError({ statusCode: 404, statusMessage: 'Question not found' }))
+})
 
 function loadForm(row: QaRow) {
   form.question = row.question

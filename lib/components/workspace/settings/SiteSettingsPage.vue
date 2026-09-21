@@ -3,7 +3,7 @@
     Brand is what a guest sees; Website is what a guest never sees. Each is a
     flat list of settings, and each setting is a leaf below this level.
   -->
-  <DashboardIndexPanel :id="surface === 'brand' ? 'site-brand' : 'site-settings'" :title="navbarTitle">
+  <DashboardIndexPanel :id="surface === 'brand' ? 'site-brand' : 'site-settings'" :title="navbarTitle" :auto-open="navigationGroups[0]?.items.find(item => item.to)?.to ?? null">
     <div v-if="loading" class="space-y-4">
       <USkeleton v-for="i in 4" :key="i" class="h-32 rounded-xl" />
     </div>
@@ -240,12 +240,17 @@ const detailKey = computed(() => level.child.value)
 const validBrandKeys = new Set(['name', 'logo', 'sharing-image', 'description', 'color', 'font', 'contact', 'social'])
 const validSettingsKeys = new Set(['domains', 'currency', 'notifications', 'search', 'analytics', 'publishing', 'localization', 'delete'])
 const routeIsCanonical = computed(() => {
+  // A level on its way out after a navigation elsewhere answers about a route
+  // it is no longer part of, so it judges nothing.
+  if (level.stale.value) return true
   if (level.mode.value === 'index') return true
   if (level.mode.value === 'yield') return false
   return (surface.value === 'brand' ? validBrandKeys : validSettingsKeys).has(detailKey.value ?? '')
 })
+// Raised, not thrown: the dashboard renders on the client, where a throw in a
+// nested page's setup leaves a blank screen (DESIGN.md).
 watchEffect(() => {
-  if (!routeIsCanonical.value) throw createError({ statusCode: 404, statusMessage: 'Setting not found' })
+  if (!routeIsCanonical.value) showError(createError({ statusCode: 404, statusMessage: 'Setting not found' }))
 })
 
 const loading = ref(true)

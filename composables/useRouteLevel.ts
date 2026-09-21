@@ -35,12 +35,28 @@ export function useRouteLevel() {
   // The layout's answer to "which organization" for a route that carries none, such as Account settings.
   const organizationParent = inject(dashboardOrganizationParentKey, null)
 
-  /** Where this level sits in the matched chain; the deepest one for a component mounted outside a page. */
+  /**
+   * Where this level sits in the matched chain, or `-1` once it sits nowhere.
+   *
+   * A component whose own record has left `route.matched` is being torn down
+   * after a navigation, and it is not a level any more. Answering with the
+   * deepest matched record instead — which is what a bare fallback does —
+   * makes every question below report for somebody else's level: a location
+   * index unmounting on the way to Pages read its path off the new route and
+   * its `autoOpen` replaced the URL with a child of it, which took the tenant
+   * to a URL nothing matches.
+   *
+   * A component mounted outside a page has no record to find and takes the
+   * deepest one, which is the level it is drawn inside.
+   */
   const index = computed(() => {
     const record = ownRecord?.value
-    const at = record ? route.matched.findIndex(candidate => candidate === record) : -1
-    return at === -1 ? route.matched.length - 1 : at
+    if (!record) return route.matched.length - 1
+    return route.matched.findIndex(candidate => candidate === record)
   })
+
+  /** True once this level's record has left the matched chain. Nothing it answers is about the current route. */
+  const stale = computed(() => index.value === -1)
 
   const depth = computed(() => segments(route.matched[index.value]?.path ?? route.path))
 
@@ -51,6 +67,7 @@ export function useRouteLevel() {
    * columns appearing and squeezing the leaf into a third of the width.
    */
   const mode = computed<RouteLevelMode>(() => {
+    if (stale.value) return 'yield'
     const below = segments(route.path) - depth.value
     if (below <= 0) return 'index'
     if (below === 1) return 'pair'
@@ -83,6 +100,7 @@ export function useRouteLevel() {
    * page names its own with `definePageMeta({ back: '<route name>' })`.
    */
   const to = computed<string | null>(() => {
+    if (stale.value) return null
     const declared = route.matched[index.value]?.meta?.back
     if (typeof declared === 'string') return resolveNamed(declared)
     const record = parent.value
@@ -119,5 +137,5 @@ export function useRouteLevel() {
     return navigateTo({ path: path.value, query: route.query })
   }
 
-  return { mode, to, path, child, close }
+  return { mode, to, path, child, close, stale }
 }

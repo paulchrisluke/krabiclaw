@@ -4,7 +4,7 @@
     column once a leaf is, and it yields both columns to a link record below
     `items`. The shell reads that from the route tree.
   -->
-  <DashboardIndexPanel id="site-links" title="Links page">
+  <DashboardIndexPanel id="site-links" title="Links page" :auto-open="navigationGroups[0]?.items.find(item => item.to)?.to ?? null">
     <template #right>
       <UButton
         color="neutral"
@@ -319,7 +319,7 @@ function revert() {
   if (data.value) loadForm(data.value)
 }
 
-// ── The hub ─────────────────────────────────────────────
+// ── The index ─────────────────────────────────────────────
 const robotsLabel = computed(() => ROBOTS_INTENT_LABELS[form.robots])
 
 function linksSummary(): string {

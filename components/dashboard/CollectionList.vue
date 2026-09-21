@@ -13,22 +13,21 @@
     reorderable
     :removing-id="removingId"
     @add="openNew"
-    @open="openExisting"
     @remove="removeCollection"
     @move="moveCollection"
   >
     <template #item="{ item }">
       <!--
-        The row body is the way in. Reordering and renaming live in the edit
-        state beside it, so browsing never has to step around edit controls.
+        Reordering and renaming live in the edit state beside the row, so
+        browsing never has to step around edit controls.
       -->
-      <NuxtLink :to="`${surfacePath}/${item.id}`" class="flex items-center gap-4 no-underline" :data-testid="`collection-${item.id}`">
+      <span class="flex items-center gap-4" :data-testid="`collection-${item.id}`">
         <DashboardMediaThumb :asset="item.row.cover" :label="item.row.name" fallback-icon="i-lucide-layout-list" />
         <span class="min-w-0 flex-1">
         <p class="truncate text-sm font-semibold text-highlighted">{{ item.row.name }}</p>
         <p class="mt-1 text-sm text-muted">{{ item.row.product_count === 1 ? `1 ${presentation.itemLabel.toLowerCase()}` : `${item.row.product_count} ${presentation.itemLabelPlural.toLowerCase()}` }}</p>
         </span>
-      </NuxtLink>
+      </span>
     </template>
   </DashboardListEditor>
   <UAlert v-if="deleteError" color="error" variant="soft" icon="i-lucide-circle-alert" :description="deleteError" />
@@ -65,8 +64,7 @@ const locationId = computed(() => dashboardLocation.currentLocation.value?.id ??
 // The path comes from the route this screen is mounted on, not from the
 // location selector: an unresolved selector left it empty, and an empty path is
 // a link to nowhere and, where it roots the editor frame, a frame rooted at ''.
-const locationPath = computed(() => `/dashboard/${String(route.params.orgSlug)}/sites/${String(route.params.siteSlug)}/locations/${String(route.params.locationSlug)}`)
-const surfacePath = computed(() => `${locationPath.value}/products/${props.surface}`)
+const level = useRouteLevel()
 
 // The cover is the first Product in the collection that has a photo, which is
 // how the collection reads on the public site too.
@@ -121,22 +119,20 @@ const removingId = ref<string | null>(null)
 const deleteError = ref<string | null>(null)
 const orderError = ref<string | null>(null)
 
-const listItems = computed(() => onSurface.value.map(row => ({ id: row.id, title: row.name, row })))
+const listItems = computed(() => onSurface.value.map(row => ({ id: row.id, title: row.name, to: `${level.path.value}/${row.id}`, row })))
 const loadError = computed(() => (catalog.error.value ? getErrorMessage(catalog.error.value, `Failed to load ${presentation.value.collectionGroupLabelPlural.toLowerCase()}`) : null))
 useSeoMeta({ title: () => `${presentation.value.collectionLabel} | KrabiClaw Dashboard`, robots: 'noindex, nofollow' })
 
 const load = catalog.refresh
 
 
-// A collection is a record with its own level: adding opens `new`, and renaming
-// opens its Name leaf.
+// A collection is a record with its own level: adding opens `new`, and the row
+// opens the record, whose Name leaf is one of its rows.
 function openNew() {
-  void navigateTo(`${surfacePath.value}/new`)
+  void navigateTo(`${level.path.value}/new`)
 }
 
-function openExisting(item: { row: CollectionRow }) {
-  void navigateTo(`${surfacePath.value}/${item.row.id}/name`)
-}
+
 
 async function removeCollection(item: { row: CollectionRow }) {
   const id = locationId.value

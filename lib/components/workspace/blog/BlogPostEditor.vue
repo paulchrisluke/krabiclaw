@@ -2,7 +2,7 @@
   <!--
     A blog post is read the way every other record is: the thing itself first,
     then the rows that describe it. The canvas takes the place a product's
-    photograph takes on its hub — it does not take the place of the hub. Each
+    photograph takes on its index — it does not take the place of the index. Each
     row is a leaf below this level.
   -->
   <DashboardIndexPanel :id="panelId" :title="form.title || 'Untitled post'">

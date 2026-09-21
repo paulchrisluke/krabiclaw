@@ -3,7 +3,7 @@
     The page: its rows are its sections list and the fields a page has of its
     own. Each is a level below this one; the shell reads which is open.
   -->
-  <DashboardIndexPanel id="site-page" :title="isNew ? 'New page' : draft.title || 'Page'">
+  <DashboardIndexPanel id="site-page" :title="isNew ? 'New page' : draft.title || 'Page'" :auto-open="navigationGroups[0]?.items.find(item => item.to)?.to ?? null">
     <UAlert
       v-if="loadError"
       color="error"
@@ -132,6 +132,9 @@ const openKey = computed<SectionKey>(() => (level.child.value ?? 'title') as Sec
 // An unsupported route 404s rather than quietly showing the first section. A
 // watcher, not a setup-time check: moving between leaves reuses this component.
 watchEffect(() => {
+  // A level on its way out after a navigation elsewhere answers about a route
+  // it is no longer part of, so it judges nothing.
+  if (level.stale.value) return
   const open = level.child.value
   if (open && !(open in SECTION_LABELS)) return showNotFound()
   // Only Sections has anything beneath it; the rest are leaves.

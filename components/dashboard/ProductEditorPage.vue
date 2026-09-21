@@ -1,6 +1,6 @@
 <template>
   <!-- One product: its rows are the things it holds, each a leaf below this level. -->
-  <DashboardIndexPanel id="product" :title="form.name || presentation.itemLabel">
+  <DashboardIndexPanel id="product" :title="form.name || presentation.itemLabel" :auto-open="navigationGroups[0]?.items.find(item => item.to)?.to ?? null">
     <template v-if="product" #right>
       <DashboardResourceLocalization
       :site-id="siteId"
@@ -193,9 +193,15 @@ const NEW_SECTION_KEYS: readonly SectionKey[] = ['name']
 const isNew = computed(() => productId.value === 'new')
 const openSections = computed<readonly SectionKey[]>(() => (isNew.value ? NEW_SECTION_KEYS : SECTION_KEYS))
 
-if (level.mode.value === 'yield' || (detailKey.value && !openSections.value.some(key => key === detailKey.value))) {
-  throw createError({ statusCode: 404, statusMessage: 'Page not found' })
-}
+// A watcher, not a setup-time check: moving between leaves reuses this component.
+watchEffect(() => {
+  // A level on its way out after a navigation elsewhere answers about a route
+  // it is no longer part of, so it judges nothing.
+  if (level.stale.value) return
+  if (level.mode.value === 'yield' || (detailKey.value && !openSections.value.some(key => key === detailKey.value))) {
+    showError(createError({ statusCode: 404, statusMessage: 'Page not found' }))
+  }
+})
 
 // ── Load ────────────────────────────────────────────────
 const collections = ref<Collection[]>([])
@@ -226,7 +232,7 @@ const isOne = (value: unknown): value is { success: true, product: Product } =>
 //
 // `force` is for the writers. A save or a photo change has just made this row
 // different from what was loaded, so the key matching is exactly the wrong
-// answer there: it left `product` stale, and the photo preview and every hub
+// answer there: it left `product` stale, and the photo preview and every index
 // summary read `product`, not the form.
 let loadedKey = ''
 
@@ -446,7 +452,7 @@ const sectionValid = computed(() => {
   return true
 })
 
-// ── The hub ─────────────────────────────────────────────
+// ── The index ─────────────────────────────────────────────
 function listSummary(values: readonly string[], empty: string) {
   return values.length ? values.join(', ') : empty
 }
@@ -492,7 +498,7 @@ const navigationGroups = computed<EditorNavigationGroup[]>(() => {
   // were statements about the network.
   if (!product.value) return [{
     id: 'item',
-    items: [{ id: 'loading', label: 'Loading', summary: `Loading this ${presentation.value.itemLabel.toLowerCase()}…`, placeholder: true, to: itemPath.value }],
+    items: [{ id: 'loading', label: 'Loading', summary: `Loading this ${presentation.value.itemLabel.toLowerCase()}…`, placeholder: true }],
   }]
   return [
     {

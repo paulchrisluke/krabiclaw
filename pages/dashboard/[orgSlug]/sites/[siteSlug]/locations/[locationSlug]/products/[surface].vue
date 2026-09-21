@@ -1,5 +1,5 @@
 <template>
-  <DashboardIndexPanel id="location-products" :title="presentation.collectionLabel">
+  <DashboardIndexPanel v-if="surface && presentation" id="location-products" :title="presentation.collectionLabel">
     <CollectionList :surface="surface" />
   </DashboardIndexPanel>
 </template>
@@ -20,7 +20,7 @@ if (!vertical) throw createError({ statusCode: 500, statusMessage: 'Site vertica
 // sells its own goods and, where it takes bookings, experiences; anything else
 // in this slot is a URL nobody can reach from the catalog.
 const segment = String(route.params.surface ?? '')
-if (!isCatalogSurface(vertical, segment)) throw createError({ statusCode: 404, statusMessage: 'Page not found' })
-const surface = segment
-const presentation = presentationForSurface(vertical, surface)
+const surface = isCatalogSurface(vertical, segment) ? segment : null
+if (!surface) showError(createError({ statusCode: 404, statusMessage: 'Page not found' }))
+const presentation = surface ? presentationForSurface(vertical, surface) : null
 </script>

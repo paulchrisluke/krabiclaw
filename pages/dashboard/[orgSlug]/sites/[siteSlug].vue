@@ -1,6 +1,6 @@
 <template>
   <!--
-    A business is one site, so there is no site hub: the site's own things are
+    A business is one site, so there is no site index: the site's own things are
     rows on Menu and its locations are the Locations tab. This level only
     carries the `/sites/:siteSlug` segment the routes beneath it are built on.
   -->

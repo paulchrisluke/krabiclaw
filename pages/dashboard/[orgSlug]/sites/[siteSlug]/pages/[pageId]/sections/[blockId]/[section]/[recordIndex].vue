@@ -3,7 +3,7 @@
     One record. A record with several concerns is an index whose rows are those
     concerns; a record with one is the leaf itself.
   -->
-  <DashboardIndexPanel v-if="records.recordSections.value.length" id="site-page-block-record" :title="records.recordTitle.value">
+  <DashboardIndexPanel v-if="records.recordSections.value.length" id="site-page-block-record" :title="records.recordTitle.value" :auto-open="groups[0]?.items.find(item => item.to)?.to ?? null">
     <UAlert v-if="editor.errorMessage.value" class="mb-6" color="error" variant="soft" icon="i-lucide-triangle-alert" :description="editor.errorMessage.value" />
     <EditorNavigationList :groups="groups" :active-item="level.child.value" />
   </DashboardIndexPanel>
@@ -55,7 +55,7 @@ const recordIndex = computed(() => {
   const value = Number(route.params.recordIndex)
   return Number.isInteger(value) && value >= 0 ? value : -1
 })
-const records = useTenantPageBlockRecords(siteId, pageId, blockId, collection.value, recordIndex)
+const records = useTenantPageBlockRecords(siteId, pageId, blockId, collection, recordIndex)
 
 // A record that is not there is not a page, and neither is a concern it does not have.
 watchEffect(() => {

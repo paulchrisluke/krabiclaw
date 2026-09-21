@@ -106,7 +106,7 @@ export interface TenantPageRow {
 
 /**
  * The rows the Pages list shows, in its order, and therefore what the site
- * hub's Pages card counts. The links page leads: it is the page a tenant shares
+ * index's Pages card counts. The links page leads: it is the page a tenant shares
  * most, it opens its own editor, and it is listed before its row exists because
  * that editor creates the row on the first save. Then the front page, then the
  * rest.

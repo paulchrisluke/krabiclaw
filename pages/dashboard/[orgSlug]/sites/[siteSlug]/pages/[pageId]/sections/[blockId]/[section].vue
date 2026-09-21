@@ -8,22 +8,15 @@
     <DashboardListEditor
       v-model:editing="editing"
       :title="records.noun.value.plural"
-      :items="records.listItems.value"
+      :items="listItems"
       :empty-title="`No ${records.noun.value.plural.toLowerCase()} yet`"
       empty-icon="i-lucide-list"
       :add-label="records.noun.value.add"
       reorderable
       @add="navigateTo(`${level.path.value}/${records.addRecord()}`)"
-      @open="item => navigateTo(`${level.path.value}/${item.id}`)"
       @remove="records.removeRecord"
       @move="records.move"
     >
-      <template #item="{ item }">
-        <NuxtLink :to="`${level.path.value}/${item.id}`" class="block w-full text-left">
-          <p class="truncate text-sm font-medium text-highlighted">{{ item.title }}</p>
-          <p v-if="item.summary" class="mt-1 line-clamp-2 text-sm text-muted">{{ item.summary }}</p>
-        </NuxtLink>
-      </template>
     </DashboardListEditor>
 
     <template v-if="!editor.saveDisabled.value" #footer>
@@ -81,4 +74,5 @@ const collection = computed<TenantPageBlockCollection | null>(() => {
 
 const editing = ref(false)
 const records = useTenantPageBlockRecords(siteId, pageId, blockId, collection)
+const listItems = computed(() => records.listItems.value.map(item => ({ ...item, to: `${level.path.value}/${item.id}` })))
 </script>

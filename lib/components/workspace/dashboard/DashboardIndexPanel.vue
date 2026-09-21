@@ -3,13 +3,17 @@
     v-if="level.mode.value !== 'yield'"
     :id="id"
     :class="pair ? 'hidden lg:flex' : undefined"
-    :default-size="pair ? 32 : undefined"
+    :default-size="pair ? 50 : undefined"
     :ui="ui"
   >
     <template #header>
-      <UDashboardNavbar :title="title" :toggle="false">
+      <UDashboardNavbar :title="title" :toggle="false" :ui="navbarUi">
         <template #leading>
           <DashboardNavbarLeading />
+        </template>
+        <!-- A control that names what the whole level is showing — Today's range — belongs beside the title, not in the body. -->
+        <template v-if="$slots.center" #default>
+          <slot name="center" />
         </template>
         <template v-if="$slots.right" #right>
           <slot name="right" />
@@ -18,7 +22,8 @@
     </template>
 
     <template #body>
-      <div class="mx-auto w-full" :class="pair ? 'max-w-xl' : 'max-w-3xl'">
+      <!-- Alone it uses the frame, as Airbnb's listing grid does; beside a child it is a column. -->
+      <div class="mx-auto w-full" :class="pair ? 'max-w-2xl' : undefined">
         <slot />
       </div>
     </template>
@@ -51,16 +56,25 @@ const props = defineProps<{
   title: string
   autoOpen?: RouteLocationRaw | null
   ui?: { root?: string; body?: string }
+  /** For a level whose navbar carries its own control, such as Today's range. */
+  navbarUi?: Record<string, string>
 }>()
 
 const level = useRouteLevel()
 const pair = computed(() => level.mode.value === 'pair')
 
 const pane = useDashboardPane()
+const router = useRouter()
 let opened = false
 onMounted(() => {
   watch([() => props.autoOpen, pane, level.mode], ([target, wide, mode]) => {
-    if (opened || !target || !wide || mode !== 'index') return
+    // `stale` is this index on its way out after a navigation elsewhere; its
+    // answers are about a route it is no longer part of.
+    if (opened || !target || !wide || mode !== 'index' || level.stale.value) return
+    // A target that is this level's own URL opens nothing. An index whose rows
+    // are still loading offers itself as the first row, and taking that as the
+    // child both navigated nowhere and used up the one open this index gets.
+    if (router.resolve(target).path === level.path.value) return
     opened = true
     void navigateTo(target, { replace: true })
   }, { immediate: true })

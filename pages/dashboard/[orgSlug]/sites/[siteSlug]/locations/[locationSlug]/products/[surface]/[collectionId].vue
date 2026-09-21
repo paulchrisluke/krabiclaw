@@ -4,7 +4,7 @@
     its name to give. Either way the level below is a leaf or a product.
   -->
   <CollectionProductList v-if="!isNew" />
-  <DashboardIndexPanel v-else id="location-product-category" :title="`New ${presentation.collectionGroupLabel.toLowerCase()}`">
+  <DashboardIndexPanel v-else id="location-product-category" :title="`New ${presentation.collectionGroupLabel.toLowerCase()}`" :auto-open="collectionNavigation[0]?.items.find(item => item.to)?.to ?? null">
     <UAlert v-if="errorMessage" class="mb-6" color="error" variant="soft" icon="i-lucide-triangle-alert" :description="errorMessage" />
     <div class="mb-6 flex justify-end">
       <UButton :label="createActionLabel" :loading="saving" @click="startOrCreate" />
@@ -41,7 +41,8 @@ export const collectionEditorKey = Symbol('collection-editor') as InjectionKey<C
 import EditorNavigationList, { type EditorNavigationGroup } from '~/components/dashboard/EditorNavigationList.vue'
 import CollectionProductList from '~/components/dashboard/CollectionProductList.vue'
 import { getErrorMessage } from '~/utils/errors'
-import { isCatalogSurface, presentationForSurface } from '~/utils/product-presentation'
+import { presentationForSurface } from '~/utils/product-presentation'
+import type { ProductSurface } from '~/server/types/products'
 
 definePageMeta({ layout: 'dashboard' })
 
@@ -53,11 +54,9 @@ const collectionId = computed(() => String(route.params.collectionId ?? ''))
 
 const vertical = dashboard.site.value?.vertical
 if (!vertical) throw createError({ statusCode: 500, statusMessage: 'Site vertical is not configured' })
-// A segment that names no surface of this vertical is not a page, and neither
-// is a collection reached through one.
-const segment = String(route.params.surface ?? '')
-if (!isCatalogSurface(vertical, segment)) throw createError({ statusCode: 404, statusMessage: 'Page not found' })
-const surface = segment
+// `[surface].vue` renders nothing below it for a segment that names no surface
+// of this vertical, so this level is only ever reached through a real one.
+const surface = String(route.params.surface ?? '') as ProductSurface
 // The surface owns the words at this level: a collection of bookable products
 // is a Collection of Experiences, a section of a menu holds dishes.
 const presentation = presentationForSurface(vertical, surface)
@@ -82,7 +81,7 @@ const openKey = computed<CollectionLeaf>(() => 'name')
 // A collection being created has one leaf; anything else below it is not a page.
 watchEffect(() => {
   if (isNew.value && level.child.value && level.child.value !== 'name') {
-    throw createError({ statusCode: 404, statusMessage: 'Page not found' })
+    showError(createError({ statusCode: 404, statusMessage: 'Page not found' }))
   }
 })
 

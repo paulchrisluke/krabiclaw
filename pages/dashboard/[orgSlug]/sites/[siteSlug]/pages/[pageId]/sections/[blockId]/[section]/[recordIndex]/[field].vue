@@ -40,6 +40,6 @@ const collection = computed<TenantPageBlockCollection>(() => {
   return (section?.kind === 'list' ? section.collection : key) as TenantPageBlockCollection
 })
 const recordIndex = computed(() => Number(route.params.recordIndex))
-const records = useTenantPageBlockRecords(siteId, pageId, blockId, collection.value, recordIndex)
+const records = useTenantPageBlockRecords(siteId, pageId, blockId, collection, recordIndex)
 const title = computed(() => records.recordSections.value.find(section => section.key === field)?.label ?? records.recordTitle.value)
 </script>

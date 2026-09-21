@@ -20,7 +20,6 @@
       add-label="Add a link"
       reorderable
       @add="navigateTo(`${level.path.value}/new`)"
-      @open="item => navigateTo(`${level.path.value}/${item.id}`)"
       @remove="removeItem"
       @move="move"
     >
@@ -59,6 +58,7 @@ function revert() {
 const listItems = computed(() => editor.items.value.map(row => ({
   id: row.id,
   title: row.label || 'Untitled link',
+  to: `${level.path.value}/${row.id}`,
   row,
 })))
 

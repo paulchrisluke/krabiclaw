@@ -344,27 +344,67 @@ interface DashboardMobileNavItem {
   icon: string
   to?: string
   active?: boolean
-  exact?: boolean
-}
-
-function isActivePath(path?: string, exact = false) {
-  if (!path) return false
-  return route.path === path || (!exact && route.path.startsWith(`${path}/`))
 }
 
 /**
- * Only the most specific matching item is active. Nav paths nest — a location's
- * Messages lives under the Locations path — so plain prefix matching lit up both
- * Messages and Locations at once. The longest matching path is the one the route
- * actually belongs to.
+ * Which tab the current route belongs to: the one reached by walking up from
+ * here the way Back does, following `meta.back` where a page declares a parent
+ * the URL does not nest under and cutting a segment otherwise.
+ *
+ * Prefix matching cannot answer this. The links page lives at
+ * `/sites/:siteSlug/links` but is reached from Pages, under Menu, so the URL
+ * said Locations while every way out of it led to Menu. Asking the same
+ * question Back asks means the lit tab is always the one the walk ends at.
  */
-function withActiveItem<T extends { to?: string; exact?: boolean }>(items: T[]): Array<T & { active: boolean }> {
-  const depths = items.map(item => isActivePath(item.to, item.exact) ? (item.to?.length ?? 0) : -1)
-  const deepest = Math.max(...depths)
-  return items.map((item, index) => ({ ...item, active: depths[index] === deepest && depths[index] >= 0 }))
+function tabRootPath(stops: readonly string[]): string | null {
+  let path = route.path
+  const seen = new Set<string>()
+  while (!seen.has(path)) {
+    // The walk ends at the first tab it reaches. Menu declares no parent of its
+    // own, so without this it kept cutting segments and every page under it lit
+    // Today.
+    if (stops.includes(path)) return path
+    seen.add(path)
+    const resolved = router.resolve(path)
+    // A directory's `index.vue` is a second record at the same URL and the same
+    // level, and it is the one `matched` ends on. Both are asked, so the `back:`
+    // its directory declares is not missed — which is what sent every page
+    // under Menu to Locations instead.
+    const depth = (candidate: string) => candidate.split('/').filter(Boolean).length
+    const deepest = Math.max(...resolved.matched.map(candidate => depth(candidate.path)))
+    const declared = resolved.matched
+      .filter(candidate => depth(candidate.path) === deepest && candidate.meta?.passthrough !== true)
+      .map(candidate => candidate.meta?.back)
+      .find(candidate => typeof candidate === 'string')
+    if (typeof declared === 'string') {
+      const target = router.getRoutes().find(candidate => candidate.name === declared)
+      const keys = target ? [...target.path.matchAll(/:(\w+)/g)].map(match => match[1]!) : []
+      if (target && keys.every(key => resolved.params[key] !== undefined)) {
+        path = router.resolve({ name: declared, params: Object.fromEntries(keys.map(key => [key, resolved.params[key]])) }).path
+        continue
+      }
+    }
+    const above = path.split('/').filter(Boolean).slice(0, -1)
+    // `/dashboard/:orgSlug` is Today, and there is nothing above it to walk to.
+    if (above.length < 2) break
+    path = `/${above.join('/')}`
+  }
+  return stops.includes(path) ? path : null
 }
 
-const mobileNavItems = computed<DashboardMobileNavItem[]>(() => {
+
+
+/**
+ * A tab is active when the walk above ends at it. Two tabs could otherwise
+ * claim one route, because their paths nest: a location's Messages lives under
+ * the Locations path.
+ */
+function withActiveItem<T extends { to?: string }>(items: T[], root: string | null): Array<T & { active: boolean }> {
+  return items.map(item => ({ ...item, active: Boolean(item.to) && item.to === root }))
+}
+
+/** The tabs themselves; which one is lit is answered after they are known. */
+const navTargets = computed<DashboardMobileNavItem[]>(() => {
   const routeOrgSlug = typeof route.params.orgSlug === 'string' ? route.params.orgSlug : null
   if (!routeOrgSlug) return []
   const routeOrgBase = `/dashboard/${encodeURIComponent(routeOrgSlug)}`
@@ -372,12 +412,12 @@ const mobileNavItems = computed<DashboardMobileNavItem[]>(() => {
   const routeSiteBase = routeSiteSlug ? `${routeOrgBase}/sites/${encodeURIComponent(routeSiteSlug)}` : null
   const messagesTo = routeSiteBase ? `${routeSiteBase}/messages` : `${routeOrgBase}/messages`
   const items: DashboardMobileNavItem[] = [
-    { key: 'today', label: 'Today', icon: 'i-lucide-bookmark', to: routeOrgBase, exact: true },
+    { key: 'today', label: 'Today', icon: 'i-lucide-bookmark', to: routeOrgBase },
     { key: 'calendar', label: 'Calendar', icon: 'i-lucide-calendar-days', to: `${routeOrgBase}/calendar` },
     { key: 'locations', label: 'Locations', icon: 'i-lucide-map-pin', to: `${routeOrgBase}/sites` },
     { key: 'messages', label: 'Messages', icon: 'i-lucide-message-square', to: messagesTo },
   ]
-  return withActiveItem(items)
+  return items
 })
 
 // The top nav (tablet and desktop, md and up) and the bottom bar (mobile, below
@@ -387,7 +427,14 @@ const mobileNavItems = computed<DashboardMobileNavItem[]>(() => {
 // it, because a slideover is the wrong control on a phone.
 const menuOpen = ref(false)
 const { menuPageTo } = useDashboardMenu()
-const primaryNavItems = computed(() => mobileNavItems.value)
+
+/** Every tab the walk may end at, Menu included. */
+const tabStops = computed(() => [
+  ...navTargets.value.map(item => item.to).filter((to): to is string => Boolean(to)),
+  menuPageTo.value,
+])
+const activeTabPath = computed(() => tabRootPath(tabStops.value))
+const primaryNavItems = computed(() => withActiveItem(navTargets.value, activeTabPath.value))
 // A signed-in owner always gets the header: the wordmark and the account menu
 // are user-scoped and need no organization. Only the nav links and the bottom
 // bar wait for an organization, because Today, Calendar, Sites and Messages do not
@@ -402,7 +449,9 @@ const topNavHomeTo = computed(() => {
   const routeOrgSlug = typeof route.params.orgSlug === 'string' ? route.params.orgSlug : null
   return routeOrgSlug ? `/dashboard/${encodeURIComponent(routeOrgSlug)}` : '/dashboard'
 })
-const isMenuPageActive = computed(() => isActivePath(menuPageTo.value))
+// Menu is lit by the same walk as the other tabs, so a page reached through it
+// — Pages, Blog, Website, and every level under them — lights Menu and nothing else.
+const isMenuPageActive = computed(() => activeTabPath.value === menuPageTo.value)
 
 
 

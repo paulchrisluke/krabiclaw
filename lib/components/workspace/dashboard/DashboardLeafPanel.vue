@@ -10,7 +10,7 @@
             variant="ghost"
             size="sm"
             square
-            class="min-w-0 shrink-0"
+            class="min-w-0 shrink-0 lg:hidden"
             data-testid="dashboard-navbar-close"
             :to="level.to.value ?? undefined"
           />
@@ -43,6 +43,7 @@
         :save-label="saveLabel"
         :loading="saving"
         :disabled="!ready || disabled"
+        leaf
         @cancel="cancel"
         @save="$emit('save')"
       />
@@ -60,6 +61,11 @@
 
   Cancel is the leaf's own Back: a push to the level that contains it, which is
   the route record above this one.
+
+  Beside its index — two columns, `lg` — the leaf has no Close and no Cancel:
+  the index's Back is the way out and Save is the only control, which is what
+  Airbnb's editor does at its two-column width (measured 2026-09-21). Both
+  exist only where the leaf is a sheet covering the list it came from.
 */
 withDefaults(defineProps<{
   id: string

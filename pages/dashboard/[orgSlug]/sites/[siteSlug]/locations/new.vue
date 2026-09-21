@@ -1,72 +1,62 @@
 <template>
-  <UDashboardPanel id="location-new" :ui="{ body: 'p-0 sm:p-0 gap-0' }">
-    <template #header>
-      <UDashboardNavbar title="Add a location" :toggle="false">
-        <template #leading>
-          <DashboardNavbarLeading />
-        </template>
-      </UDashboardNavbar>
-    </template>
+  <DashboardIndexPanel id="location-new" title="Add a location" :ui="{ body: 'p-0 sm:p-0 gap-0' }">
+    <div
+      class="grid min-h-0 flex-1 overflow-hidden"
+      style="grid-template-columns: minmax(24rem, 45%) 1fr; grid-template-rows: minmax(0, 1fr)"
+    >
+      <!-- The step column, the same screens the new-site flow walks. -->
+      <div class="flex min-h-0 flex-col border-r border-default bg-default">
+        <div v-if="created" class="flex min-h-0 flex-1 flex-col justify-center gap-4 px-6">
+          <h1 class="text-2xl font-bold leading-snug text-highlighted">Location added</h1>
+          <p class="text-[15px] leading-relaxed text-toned">
+            <strong class="text-highlighted">{{ state.details.name }}</strong> is on your site now, and the preview
+            beside this is showing it.
+          </p>
+          <UButton
+            class="self-start"
+            label="Back to dashboard"
+            :to="`/dashboard/${orgSlug}/sites/${siteSlug}`"
+          />
+        </div>
 
-    <template #body>
-      <div
-        class="grid min-h-0 flex-1 overflow-hidden"
-        style="grid-template-columns: minmax(24rem, 45%) 1fr; grid-template-rows: minmax(0, 1fr)"
-      >
-        <!-- The step column, the same screens the new-site flow walks. -->
-        <div class="flex min-h-0 flex-col border-r border-default bg-default">
-          <div v-if="created" class="flex min-h-0 flex-1 flex-col justify-center gap-4 px-6">
-            <h1 class="text-2xl font-bold leading-snug text-highlighted">Location added</h1>
-            <p class="text-[15px] leading-relaxed text-toned">
-              <strong class="text-highlighted">{{ state.details.name }}</strong> is on your site now, and the preview
-              beside this is showing it.
-            </p>
-            <UButton
-              class="self-start"
-              label="Back to dashboard"
-              :to="`/dashboard/${orgSlug}/sites/${siteSlug}`"
-            />
+        <template v-else-if="currentStep">
+          <div class="min-h-0 flex-1 overflow-y-auto px-6 pb-6">
+            <OnboardingStepScreen :step="currentStep" @advance="goNext" />
           </div>
 
-          <template v-else-if="currentStep">
-            <div class="min-h-0 flex-1 overflow-y-auto px-6 pb-6">
-              <OnboardingStepScreen :step="currentStep" @advance="goNext" />
+          <div class="shrink-0 border-t border-default px-6 py-4">
+            <p v-if="draft.error.value" class="mb-3 text-sm text-error">{{ draft.error.value }}</p>
+            <div class="flex items-center justify-between gap-4">
+              <UButton
+                variant="link"
+                color="neutral"
+                label="Back"
+                :disabled="!previousStep"
+                @click="goBack"
+              />
+              <UButton
+                :label="nextLabel"
+                :loading="draft.busy.value"
+                :disabled="!canAdvance"
+                @click="goNext"
+              />
             </div>
-
-            <div class="shrink-0 border-t border-default px-6 py-4">
-              <p v-if="draft.error.value" class="mb-3 text-sm text-error">{{ draft.error.value }}</p>
-              <div class="flex items-center justify-between gap-4">
-                <UButton
-                  variant="link"
-                  color="neutral"
-                  label="Back"
-                  :disabled="!previousStep"
-                  @click="goBack"
-                />
-                <UButton
-                  :label="nextLabel"
-                  :loading="draft.busy.value"
-                  :disabled="!canAdvance"
-                  @click="goNext"
-                />
-              </div>
-            </div>
-          </template>
-        </div>
-        <OnboardingPreviewPane
-          :iframe-src="iframeSrc"
-          :site-locations="siteLocations"
-          :selected-location-id="selectedLocationId"
-          :selected-page="selectedPreviewPage"
-          :site-status="computedSiteStatus"
-          :site-domain="siteDomain"
-          :vertical="previewVertical"
-          @select-page="onSelectPage"
-          @select-location="onSelectLocation"
-        />
+          </div>
+        </template>
       </div>
-    </template>
-  </UDashboardPanel>
+      <OnboardingPreviewPane
+        :iframe-src="iframeSrc"
+        :site-locations="siteLocations"
+        :selected-location-id="selectedLocationId"
+        :selected-page="selectedPreviewPage"
+        :site-status="computedSiteStatus"
+        :site-domain="siteDomain"
+        :vertical="previewVertical"
+        @select-page="onSelectPage"
+        @select-location="onSelectLocation"
+      />
+    </div>
+  </DashboardIndexPanel>
 </template>
 
 <script setup lang="ts">

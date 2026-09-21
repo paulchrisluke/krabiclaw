@@ -4,7 +4,7 @@
     field. Adding is the same screen at `links/items/new`, so there is nothing
     a sheet did that a URL does not.
   -->
-  <DashboardIndexPanel id="site-links-item" :title="isNew ? 'New link' : itemForm.label || 'Link'">
+  <DashboardIndexPanel id="site-links-item" :title="isNew ? 'New link' : itemForm.label || 'Link'" :auto-open="navigationGroups[0]?.items.find(item => item.to)?.to ?? null">
     <template v-if="record" #right>
       <DashboardResourceLocalization
         :site-id="editor.siteId"
@@ -77,6 +77,10 @@ type SectionKey = keyof typeof SECTION_LABELS
 const itemId = computed(() => String(route.params.itemId))
 const isNew = computed(() => itemId.value === 'new')
 const record = computed(() => editor.items.value.find(item => item.id === itemId.value) ?? null)
+// A link that is not in the page is not a page of its own: it 404s rather than rendering an empty editor for it.
+watchEffect(() => {
+  if (!isNew.value && editor.editorReady.value && !record.value) showError(createError({ statusCode: 404, statusMessage: 'Link not found' }))
+})
 /** The open field, for the create walk; with nothing open the walk starts at Label. */
 const openKey = computed<SectionKey>(() => ((level.child.value ?? 'label') in SECTION_LABELS ? level.child.value ?? 'label' : 'label') as SectionKey)
 

@@ -17,7 +17,6 @@
     reorderable
     :removing-id="removingId"
     @add="openNew"
-    @open="openExisting"
     @remove="removeItem"
     @move="move"
   >
@@ -43,7 +42,7 @@ import { isQaDeleted, isQaResponse, type QaRow } from '~/utils/site-qa'
 const props = defineProps<{ locationId?: string }>()
 
 const dashboardApi = useDashboardApi()
-const route = useRoute()
+const level = useRouteLevel()
 const siteId = await useDashboardSiteId()
 const selectedPagePath = ref('general')
 
@@ -129,6 +128,7 @@ const listItems = computed(() => qaRows.value.map(row => ({
   id: row.id,
   title: row.question,
   removable: row.source !== 'import',
+  to: `${level.path.value}/${row.id}`,
   row,
 })))
 
@@ -136,19 +136,11 @@ const editing = ref(false)
 const removingId = ref<string | null>(null)
 const deleteError = ref<string | null>(null)
 
-const qaPath = computed(() => props.locationId
-  ? `/dashboard/${String(route.params.orgSlug)}/sites/${String(route.params.siteSlug)}/locations/${String(route.params.locationSlug)}/qa`
-  : `/dashboard/${String(route.params.orgSlug)}/sites/${String(route.params.siteSlug)}/qa`)
-
 // A question opens its own level rather than a sheet over the list, so the
 // record has a URL and adding and editing are the same screen. The page the
 // list is filtered to rides along as the new record's intended scope.
 function openNew() {
-  void navigateTo({ path: `${qaPath.value}/new`, query: pagePath.value ? { page_path: pagePath.value } : undefined })
-}
-
-function openExisting(item: { id: string }) {
-  void navigateTo(`${qaPath.value}/${item.id}`)
+  void navigateTo({ path: `${level.path.value}/new`, query: pagePath.value ? { page_path: pagePath.value } : undefined })
 }
 
 async function removeItem(item: { id: string }) {

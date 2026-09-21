@@ -1,40 +1,20 @@
 <template>
   <!--
     The conversation's own column: the guest in the navbar, Details beside it
-    for a thread with a record behind it, the stream in the body. The record
-    opens over it as a right-hand drawer — a sheet below `sm` — the way the
-    dashboard menu does. It is still a route, so back dismisses it and the URL
-    is shareable.
+    for a thread with a record behind it, the stream in the body. The record is
+    a level below this one, so it is the column beside the thread where there
+    is room for one and the sheet over it where there is not — the shells decide
+    that, not this page.
   -->
-  <UDashboardPanel id="site-messages-thread" :ui="{ body: 'p-0 sm:p-0 gap-0' }">
-    <template #header>
-      <UDashboardNavbar :title="thread?.guestName ?? 'Conversation'" :toggle="false">
-        <template #leading>
-          <DashboardNavbarLeading />
-        </template>
-        <template v-if="recordTo" #right>
-          <UButton :to="recordTo" color="neutral" variant="soft" class="h-10 rounded-full px-4" :aria-label="`Show ${recordTitle.toLowerCase()}`">
-            Details
-          </UButton>
-        </template>
-      </UDashboardNavbar>
+  <DashboardIndexPanel id="site-messages-thread" :title="thread?.guestName ?? 'Conversation'" :ui="{ body: 'p-0 sm:p-0 gap-0' }">
+    <template v-if="recordTo" #right>
+      <UButton :to="recordTo" color="neutral" variant="soft" class="h-10 rounded-full px-4" :aria-label="`Show ${recordTitle.toLowerCase()}`">
+        Details
+      </UButton>
     </template>
 
-    <template #body>
-      <GuestThreadDetail :thread-id="threadId" />
-    </template>
-  </UDashboardPanel>
-
-  <USlideover
-    :open="level.child.value !== null"
-    :title="recordTitle"
-    :ui="{ content: 'sm:max-w-md', body: 'p-0 sm:p-0 overflow-y-auto' }"
-    @update:open="onDrawerToggle"
-  >
-    <template #body>
-      <NuxtPage />
-    </template>
-  </USlideover>
+    <GuestThreadDetail :thread-id="threadId" />
+  </DashboardIndexPanel>
 </template>
 
 <script setup lang="ts">
@@ -45,8 +25,8 @@ definePageMeta({ layout: 'dashboard' })
 
 const route = useRoute()
 const threadId = computed(() => String(route.params.threadId))
-const threadPath = computed(() => `/dashboard/${String(route.params.orgSlug)}/sites/${String(route.params.siteSlug)}/messages/${encodeURIComponent(threadId.value)}`)
 const level = useRouteLevel()
+const threadPath = level.path
 
 // The drawer's title says what the record is called here, in the tenant's own
 // word, so the conversation's control and the panel it opens agree.
@@ -67,13 +47,6 @@ const recordTo = computed(() => {
   const search = query.toString()
   return search ? `${threadPath.value}/details?${search}` : `${threadPath.value}/details`
 })
-
-// Closing is a navigation, not local state: the record has its own URL. The
-// conversation keeps whichever list it was opened from, and dismissing the
-// drawer is a push back to this level, never a step into history.
-function onDrawerToggle(open: boolean) {
-  if (!open) void level.close()
-}
 
 useSeoMeta({ title: 'Conversation | KrabiClaw Dashboard', robots: 'noindex, nofollow' })
 </script>

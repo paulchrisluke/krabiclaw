@@ -16,16 +16,9 @@
       add-label="Add a section"
       reorderable
       @add="navigateTo(`${level.path.value}/new`)"
-      @open="item => navigateTo(`${level.path.value}/${item.id}`)"
       @remove="remove"
       @move="move"
     >
-      <template #item="{ item }">
-        <NuxtLink :to="`${level.path.value}/${item.id}`" class="block w-full text-left">
-          <p class="truncate text-sm font-medium text-highlighted">{{ item.title }}</p>
-          <p class="mt-1 line-clamp-2 text-sm text-muted">{{ item.summary }}</p>
-        </NuxtLink>
-      </template>
     </DashboardListEditor>
 
     <template v-if="dirty" #footer>
@@ -53,6 +46,7 @@ const listItems = computed(() => draft.value.blocks.map(block => ({
   id: block.id,
   title: tenantPageBlockLabel(block.type),
   summary: tenantPageBlockSummary(block),
+  to: `${level.path.value}/${block.id}`,
 })))
 
 function reindex() {

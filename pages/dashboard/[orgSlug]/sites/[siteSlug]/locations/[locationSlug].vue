@@ -4,7 +4,7 @@
     page shows it, each stating what it holds now. Every card is a level below
     this one; the gear opens the settings that a guest never sees.
   -->
-  <DashboardIndexPanel id="location-hub" :title="location?.title || 'Location'" :auto-open="cards[0]?.to ?? null">
+  <DashboardIndexPanel id="location-index" :title="location?.title || 'Location'" :auto-open="cards[0]?.to ?? null">
     <template #right>
       <UButton
         :to="`${level.path.value}/settings`"
@@ -29,29 +29,13 @@
       :description="error"
     />
 
-    <UPageList v-else-if="location" class="gap-3">
-      <UPageCard
-        v-for="card in cards"
-        :key="card.id"
-        :to="card.to"
-        :title="card.title"
-        :description="card.description"
-        variant="soft"
-        :highlight="card.id === level.child.value"
-        :ui="{ container: 'p-5 sm:p-5', title: 'text-[15px]', description: 'mt-1 line-clamp-2' }"
-      >
-        <img
-          v-if="card.image"
-          :src="card.image"
-          alt=""
-          class="aspect-[40/21] w-full rounded-xl object-cover"
-        >
-      </UPageCard>
-    </UPageList>
+    <!-- The same rows every other index draws, so a location reads like the rest of the dashboard. -->
+    <EditorNavigationList v-else-if="location" :groups="navigationGroups" :active-item="level.child.value" />
   </DashboardIndexPanel>
 </template>
 
 <script setup lang="ts">
+import EditorNavigationList, { type EditorNavigationGroup } from '~/components/dashboard/EditorNavigationList.vue'
 import { parseCmsFeatureOverrideDelta, resolveCmsCapabilities, type ProductFeature } from '~/config/cms-registry'
 import { resolvePublicTemplate } from '~/utils/template-registry'
 import { getTodayHoursLabel, type OpeningHours } from '~/shared/reservation-hours'
@@ -118,7 +102,7 @@ const addressSummary = computed(() => formatPostalAddress(location.value?.addres
 const capabilities = computed(() => {
   const vertical = dashboard.site.value?.vertical
   if (!vertical) throw createError({ statusCode: 500, statusMessage: 'Site vertical is not configured' })
-  // Deliberately unguarded: swallowing a capability error left the hub with an
+  // Deliberately unguarded: swallowing a capability error left the index with an
   // empty feature set, which removes every content and reservation row and
   // leaves a location that looks like it holds nothing.
   return resolveCmsCapabilities(normalizeVertical(vertical) as SiteVertical, resolvePublicTemplate({ themeId: dashboard.site.value?.theme_id, vertical }).slug, {
@@ -193,6 +177,18 @@ const cards = computed<HubCard[]>(() => {
     },
   ].filter(card => card.visible).map(({ visible: _visible, ...card }) => card)
 })
+
+/** One group, because a location's things are one list in the order its page shows them. */
+const navigationGroups = computed<EditorNavigationGroup[]>(() => [{
+  id: 'location',
+  items: cards.value.map(card => ({
+    id: card.id,
+    label: card.title,
+    summary: card.description,
+    to: card.to,
+    image: card.image ?? null,
+  })),
+}])
 
 const isOverviewResponse = (value: unknown): value is LocationOverviewResource =>
   isRecord(value)
