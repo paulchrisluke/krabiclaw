@@ -217,20 +217,18 @@ async function buildOwnerInboxUrl(
   }
 }
 
-// Deep-links an owner notification straight to the dashboard reviews page for that location,
-// optionally scrolling to/highlighting a single review via the `reply` query param.
+// Deep-links an owner notification to the Reviews tab of Reviews and Q&A, at
+// the location the review belongs to when it has one.
 async function buildOwnerReviewsUrl(
   env: NotificationEnv,
   db: DbClient,
-  opts: { organizationId: string; siteId: string; locationId?: string | null; reviewId?: string | null }
+  opts: { organizationId: string; siteId: string; locationId?: string | null }
 ): Promise<string | null> {
   const slugs = await resolveSiteLocationSlugs(env, db, opts)
   if (!slugs) return null
 
-  const platformDomain = getPlatformDomain(env)
-  const base = `https://${platformDomain}/dashboard/${slugs.orgSlug}/sites/${slugs.siteSlug}/reviews`
-  if (!opts.reviewId) return base
-  return `${base}?${new URLSearchParams({ reply: opts.reviewId }).toString()}`
+  const site = `https://${getPlatformDomain(env)}/dashboard/${slugs.orgSlug}/sites/${slugs.siteSlug}`
+  return `${slugs.locationSlug ? `${site}/locations/${slugs.locationSlug}` : site}/qa?tab=reviews`
 }
 
 export interface OwnerEmailRecipient {
@@ -880,7 +878,6 @@ export async function notifyReviewReceived(
     organizationId: opts.organizationId,
     siteId: opts.siteId,
     locationId: opts.locationId,
-    reviewId: opts.reviewId,
   })
 
   try {

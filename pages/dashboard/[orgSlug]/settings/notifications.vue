@@ -120,13 +120,14 @@ function severityDot(severity: DashboardNotification['severity']) {
   return 'bg-primary'
 }
 
-// A deep link is stored data, so it is treated as untrusted: only a same-origin
-// destination is followed, and only its path is handed to the router.
+// A deep link is a dashboard path the server wrote, sometimes under another
+// host (production, or a snapshot restored locally). Only its path is handed
+// to the router.
 function safeDeepLink(value: string | null): string | null {
   if (!value || !import.meta.client) return null
   try {
     const resolved = new URL(value, window.location.origin)
-    if (resolved.origin !== window.location.origin) return null
+    if (!resolved.pathname.startsWith('/dashboard')) return null
     return `${resolved.pathname}${resolved.search}${resolved.hash}`
   } catch {
     return null
@@ -173,9 +174,9 @@ async function markAllRead() {
       method: 'PATCH',
       validate: (value): value is { success: true } => isRecord(value) && value.success === true,
     })
-    const now = new Date().toISOString()
-    notifications.value = notifications.value.map(notification => ({ ...notification, read_at: notification.read_at ?? now }))
-    unreadCount.value = 0
+    // The server's list is the state; a refresh also outranks any older read
+    // still in flight, which a local rewrite of the rows would not.
+    await refreshNotifications()
   } finally {
     markingAll.value = false
   }
