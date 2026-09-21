@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { executeBatch, queryFirst, type BatchQuery, type DbClient } from '~/server/db'
 import { isBookingComplete, type BookingStatus } from '~/shared/bookings'
+import { publicResourceCacheInvalidationQuery } from '~/server/utils/public-resource-cache'
 
 /**
  * The inbox.
@@ -113,7 +114,7 @@ export async function getThreadOperationalRecord(db: DbClient, requestId: string
  * it would commit anyway and leave a conversation about a seat nobody holds.
  * Carrying the claim's existence into this insert is what ties them together.
  */
-export function requestInsertQueries(request: GuestRequest, claimedBy?: BatchQuery): [BatchQuery, BatchQuery] {
+export function requestInsertQueries(request: GuestRequest, claimedBy?: BatchQuery): BatchQuery[] {
   const values = [request.id, request.kind, request.organization_id, request.site_id, request.location_id, request.customer_id, request.review_id,
     request.conversation_state, request.resolved_at, JSON.stringify(request.payload), request.created_at, request.updated_at]
   return [{
@@ -127,7 +128,7 @@ export function requestInsertQueries(request: GuestRequest, claimedBy?: BatchQue
     query: `INSERT INTO activity_entries (id, request_id, kind, scope_kind, actor_kind, channel, payload_json, dedupe_key, sequence, occurred_at, created_at)
       SELECT ?, id, 'submission', 'request', 'guest', 'web', json_object('kind', kind), ?, 1, created_at, created_at FROM requests WHERE id = ? AND changes() = 1`,
     params: [crypto.randomUUID(), `request:${request.id}:submission`, request.id],
-  }]
+  }, publicResourceCacheInvalidationQuery(request.site_id, 'guest-thread-create')]
 }
 
 interface GuestThreadInput { name: string; email: string; phone?: string | null; notes?: string | null; ipHash?: string | null; partySizeIsMinimum?: boolean }

@@ -199,13 +199,12 @@ const resultRefs = new Map<string, HTMLButtonElement>()
 const dialogTitleId = useId()
 // User-facing labels describe what the user is opening, not how it's stored —
 // never reintroduce "Platform Pages", "Routes", or "Route" here (see issue #254).
-const resultTypeMeta: Record<PublicSearchResult['type'], { badge: string, group: string }> = {
+const resultTypeMeta: Partial<Record<PublicSearchResult['type'], { badge: string, group: string }>> = {
   doc: { badge: 'Guide', group: 'Guides' },
   blog: { badge: 'Article', group: 'Articles' },
   faq: { badge: 'Answer', group: 'Help answers' },
   route: { badge: 'Link', group: 'Quick links' },
   platform_page: { badge: 'Page', group: 'Pages' },
-  dashboard_route: { badge: 'Dashboard', group: 'Dashboard' },
 }
 
 const surfaceLabel = computed(() => {

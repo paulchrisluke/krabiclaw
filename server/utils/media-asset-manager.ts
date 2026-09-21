@@ -1,7 +1,8 @@
 import { HTTPError } from 'nitro';
 import { deleteImage } from './cloudflare-images'
 import { deleteFromR2 } from './cloudflare-r2'
-import { execute, executeBatch, queryAll, queryFirst, type BatchQuery, type DbClient } from '~/server/db'
+import { executeBatch, queryAll, queryFirst, type BatchQuery, type DbClient } from '~/server/db'
+import { publicResourceCacheInvalidationQuery } from '~/server/utils/public-resource-cache'
 import { d1JsonStringSet } from '~/server/db/d1-limits'
 import { fireOrganizationEventSafe } from '~/server/utils/organization-events'
 import {
@@ -458,7 +459,7 @@ export function buildMediaAssetInsertQuery(data: CreateInput, now = new Date().t
 
 export async function createMediaAsset(db: DbClient, data: CreateInput): Promise<void> {
   const query = buildMediaAssetInsertQuery(data)
-  await execute(db, query.query, query.params)
+  await executeBatch(db, [query, publicResourceCacheInvalidationQuery(data.site_id, 'media-create')])
 
   await fireOrganizationEventSafe({
     db,
@@ -529,16 +530,18 @@ export async function activateMediaAsset(
   if (updates.thumbnail_url !== undefined) { sets.push('thumbnail_url = ?'); params.push(updates.thumbnail_url) }
   if (updates.cloudflare_image_id !== undefined) { sets.push('cloudflare_image_id = ?'); params.push(updates.cloudflare_image_id) }
   params.push(id, siteId)
-  const result = await execute(db, `UPDATE media_assets SET ${sets.join(', ')} WHERE id = ? AND site_id = ? AND status = 'pending'`, params)
+  const [result] = await executeBatch(db, [
+    { query: `UPDATE media_assets SET ${sets.join(', ')} WHERE id = ? AND site_id = ? AND status = 'pending'`, params },
+    publicResourceCacheInvalidationQuery(siteId, 'media-activate'),
+  ])
   return Number(result?.meta?.changes ?? 0) > 0
 }
 
 export async function updateMediaAssetAlt(db: DbClient, id: string, siteId: string, altText: string): Promise<boolean> {
-  const result = await execute(
-    db,
-    `UPDATE media_assets SET alt_text = ?, updated_at = ? WHERE id = ? AND site_id = ?`,
-    [altText, new Date().toISOString(), id, siteId],
-  )
+  const [result] = await executeBatch(db, [
+    { query: `UPDATE media_assets SET alt_text = ?, updated_at = ? WHERE id = ? AND site_id = ?`, params: [altText, new Date().toISOString(), id, siteId] },
+    publicResourceCacheInvalidationQuery(siteId, 'media-update'),
+  ])
   return Number(result?.meta?.changes ?? 0) > 0
 }
 
@@ -561,7 +564,10 @@ export async function updateMediaAssetMetadata(
   if (sets.length === 1) return false
 
   params.push(id, siteId)
-  const result = await execute(db, `UPDATE media_assets SET ${sets.join(', ')} WHERE id = ? AND site_id = ?`, params)
+  const [result] = await executeBatch(db, [
+    { query: `UPDATE media_assets SET ${sets.join(', ')} WHERE id = ? AND site_id = ?`, params },
+    publicResourceCacheInvalidationQuery(siteId, 'media-update'),
+  ])
   return Number(result?.meta?.changes ?? 0) > 0
 }
 
@@ -666,7 +672,7 @@ export async function deleteMediaAsset(db: DbClient, env: MediaProviderEnv, id: 
   }, {
     query: 'DELETE FROM media_placements WHERE site_id = ? AND asset_id = ?',
     params: [siteId, pendingAsset.id],
-  }])
+  }, publicResourceCacheInvalidationQuery(siteId, 'media-delete')])
   if (Number(result?.meta?.changes ?? 0) !== 1) {
     throw new Error(`Media asset ${pendingAsset.id} changed during deletion`)
   }

@@ -36,18 +36,16 @@ Walk these, in this order, on the phone viewport and at 1280:
 
 Shared primitives to fix once rather than per page: `EditorNavigationList.vue` (the row list; needs an inline-edit row mode so settings leaves can be the Personal information shape), the pair panels' footer (Cancel/Save), and the phone sheet (a leaf on a phone should be a sheet with Close, per the captures, not a page with Back).
 
-## Deferred by the owner to the next PR: search
+## Search
 
-Inventoried 2026-09-21, nothing changed. Six controls take a query: the Menu's
-Search opens Nuxt UI's command palette over `/api/public/search?surface=dashboard`
-(AI Search; indexes docs, the KrabiClaw blog, FAQ and 15 fixed route entries —
-no tenant data, so "pizza" or a guest's name can never match; locally it 500s
-because `AI_SEARCH` is remote-only; its empty state leaks `dashboardSearch.title`).
-Messages searches guest name/email/phone only, not message bodies. People
-searches email (Better Auth `listUsers`). Media filters the loaded page. The rest
-are select-menu filters. Owner's direction: one global search over the business's
-own things rather than a search hand-rolled into each list; the help-centre
-search stays on the public site. Airbnb's host app has no global search.
+One search for the dashboard: Nuxt UI's command palette over `/api/dashboard/search`, which
+is Cloudflare AI Search filtered to the business's `site_id`. Every record a member can open
+is in it — locations, catalog, Q&A, posts, pages, articles including drafts, guest threads,
+members and media — each carrying the URL it opens at. The palette opens from ⌘K, the
+Menu's Search row and the Messages list's search icon; the per-list search boxes
+(Messages LIKE over guest fields, the media grid's text filter) are gone. Writes keep the
+index current through the same durable queue that clears the site's caches; see
+`docs/ai-search.md`.
 
 ## How the owner works (do not relearn this)
 

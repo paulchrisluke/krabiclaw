@@ -30,15 +30,8 @@
     <UAlert v-if="uploadError" color="error" variant="soft" :description="uploadError" icon="i-lucide-triangle-alert" />
     <UAlert v-if="loadError" color="error" variant="soft" :description="loadError" icon="i-lucide-triangle-alert" />
 
-    <!-- Search + filters -->
+    <!-- Filters -->
     <div class="flex items-center gap-2">
-      <UInput
-        v-model="search"
-        placeholder="Search files…"
-        icon="i-lucide-search"
-        size="sm"
-        class="flex-1"
-      />
       <USelect
         v-if="accept === 'any'"
         v-model="kindFilter"
@@ -55,14 +48,14 @@
       <div v-for="i in 12" :key="i" class="aspect-square rounded-lg bg-elevated animate-pulse" />
     </div>
 
-    <div v-else-if="!loadError && filteredAssets.length === 0" class="py-10 text-center">
+    <div v-else-if="!loadError && assets.length === 0" class="py-10 text-center">
       <UIcon name="i-lucide-image" class="mx-auto size-8 text-muted" />
       <p class="mt-3 text-sm text-muted">No media yet. Upload your first file.</p>
     </div>
 
     <div v-else class="grid grid-cols-4 gap-2 sm:grid-cols-5 lg:grid-cols-6 overflow-y-auto max-h-80">
       <button
-        v-for="asset in filteredAssets"
+        v-for="asset in assets"
         :key="asset.id"
         type="button"
         class="group relative aspect-square overflow-hidden rounded-lg border-2 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
@@ -168,7 +161,6 @@ const loadError = ref<string | null>(null)
 const uploadError = ref<string | null>(null)
 const isDragging = ref(false)
 const fileInput = ref<{ inputRef?: HTMLInputElement | null } | null>(null)
-const search = ref('')
 const kindFilter = ref(props.accept === 'video' ? 'video' : 'image')
 const loadAbortController = ref<AbortController | null>(null)
 const loadRequestId = ref(0)
@@ -184,17 +176,6 @@ const kindOptions = [
   { label: 'Videos', value: 'video' },
   { label: 'All', value: ALL_MEDIA_KIND },
 ]
-
-const filteredAssets = computed(() => {
-  const query = search.value.toLowerCase().trim()
-  if (!query) return assets.value
-  return assets.value.filter(asset =>
-    asset.title?.toLowerCase().includes(query) ||
-    asset.file_name?.toLowerCase().includes(query) ||
-    asset.public_url?.toLowerCase().includes(query) ||
-    asset.id.toLowerCase().includes(query)
-  )
-})
 
 function isAbortError(error: unknown): boolean {
   return error instanceof Error && error.name === 'AbortError'

@@ -44,24 +44,39 @@ if (!secret) {
   process.exit(1)
 }
 
-try {
-  // Full rebuilds upload the corpus and briefly wait for asynchronous indexing.
-  const response = await fetch(`${baseUrl}/api/internal/search/reindex`, {
+// Each pass is its own request so none meets the Workers request ceiling: the
+// platform's corpus first, then every live business's slice, one at a time.
+async function reindex(site?: string) {
+  const url = new URL('/api/internal/search/reindex', baseUrl)
+  if (site) url.searchParams.set('site', site)
+  const response = await fetch(url, {
     method: 'POST',
     headers: {
       'x-krabiclaw-search-secret': secret,
     },
     signal: AbortSignal.timeout(11 * 60 * 1000),
   })
-
-  const payload = await response.json().catch(() => null)
-
+  const payload = await response.json().catch(() => null) as Record<string, unknown> | null
   if (!response.ok) {
-    console.error(`AI Search sync failed (${response.status})`, payload)
+    console.error(`AI Search sync failed (${response.status})${site ? ` for site ${site}` : ''}`, payload)
     process.exit(1)
   }
+  console.log(JSON.stringify({ site: site ?? 'platform', ...payload }, null, 2))
+  return payload
+}
 
-  console.log(JSON.stringify(payload, null, 2))
+// A pass sends a bounded batch of uploads per request and says what is left;
+// it is repeated until nothing is.
+async function reindexUntilDone(site?: string) {
+  let payload = await reindex(site)
+  while (Number(payload?.pending ?? 0) > 0) payload = await reindex(site)
+  return payload
+}
+
+try {
+  const platform = await reindexUntilDone()
+  const sites = Array.isArray(platform?.sites) ? platform.sites.filter((site): site is string => typeof site === 'string') : []
+  for (const site of sites) await reindexUntilDone(site)
 } catch (error) {
   const message = error instanceof Error && error.name === 'AbortError'
     ? 'Request timed out'

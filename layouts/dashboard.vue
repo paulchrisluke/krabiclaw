@@ -62,7 +62,16 @@
     <UDashboardGroup
       :ui="{ base: ['z-40', showNavChrome ? 'md:top-(--kc-dashboard-top-nav)' : 'top-(--kc-dashboard-top-nav)', showBottomNav ? 'max-md:bottom-(--kc-dashboard-bottom-nav)' : ''].join(' ') }"
     >
-      <UDashboardSearch v-model:search-term="dashboardSearchTerm" :groups="dashboardSearchGroups" :loading="dashboardSearchLoading" :color-mode="false" />
+      <UDashboardSearch
+        v-model:open="dashboardSearchOpen"
+        v-model:search-term="dashboardSearchTerm"
+        title="Search"
+        description="Search this business"
+        placeholder="Search…"
+        :groups="dashboardSearchGroups"
+        :loading="dashboardSearchLoading"
+        :color-mode="false"
+      />
 
       <slot />
     </UDashboardGroup>
@@ -152,6 +161,16 @@ const { trackDashboardVisited, setUserId } = useAnalytics()
 const impersonationError = ref<string | null>(null)
 const stoppingImpersonation = ref(false)
 const { searchTerm: dashboardSearchTerm, loading: dashboardSearchLoading, groups: dashboardSearchGroups } = useDashboardSearch()
+// The Menu's Search row and a list's search icon open the same palette ⌘K does.
+// Registered for this layout's lifetime only: a hook left behind by an earlier
+// mount toggled the palette a second time and cancelled the first.
+const dashboardSearchOpen = ref(false)
+const nuxtApp = useNuxtApp()
+let unhookSearchToggle: (() => void) | null = null
+onMounted(() => {
+  unhookSearchToggle = nuxtApp.hooks.hook('dashboard:search:toggle', () => { dashboardSearchOpen.value = !dashboardSearchOpen.value })
+})
+onBeforeUnmount(() => { unhookSearchToggle?.(); unhookSearchToggle = null })
 // This layout owns the context request. Nothing below it starts one.
 const context = useDashboardContextOwner()
 const dashboard = useDashboardSite()
