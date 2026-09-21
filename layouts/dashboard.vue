@@ -68,6 +68,7 @@
         title="Search"
         description="Search this business"
         placeholder="Search…"
+        :fullscreen="isPhoneWidth"
         :groups="dashboardSearchGroups"
         :loading="dashboardSearchLoading"
         :color-mode="false"
@@ -122,6 +123,7 @@ import { authClient } from '~/lib/auth-client'
 import { useAnalytics } from '~/composables/useAnalytics'
 import '~/assets/css/dashboard.css'
 import { mediaStillUrl } from '~/shared/media-placement-contract'
+import { useMediaQuery } from '@vueuse/core'
 
 // ─────────────────────────────────────────────────────────────────────────
 // Dashboard shell architecture.
@@ -165,6 +167,8 @@ const { searchTerm: dashboardSearchTerm, loading: dashboardSearchLoading, groups
 // Registered for this layout's lifetime only: a hook left behind by an earlier
 // mount toggled the palette a second time and cancelled the first.
 const dashboardSearchOpen = ref(false)
+// On a phone the palette is the screen, like every other sheet here; on a wide screen it is a card.
+const isPhoneWidth = useMediaQuery('(max-width: 767px)')
 const nuxtApp = useNuxtApp()
 let unhookSearchToggle: (() => void) | null = null
 onMounted(() => {
