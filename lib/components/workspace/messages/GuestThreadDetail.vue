@@ -28,7 +28,6 @@
         :delivery-failures="detail.deliveryFailures"
         :guest-name="detail.guestName"
         :record-noun="recordNoun"
-        :record-to="recordTo"
         :opening-message="openingMessage"
         :announcement="announcement"
         :loading="replySaving"
@@ -69,18 +68,14 @@ import { useDashboardInvalidations } from '~/composables/useDashboardInvalidatio
 /*
   One guest thread, and only that thread. The list is a separate level of the
   editor frame, so nothing here loads or renders it, and this component draws no
-  panel or navbar of its own — the route parent owns that chrome. The record
-  behind the thread is a level of its own too: this links to it and does not
-  draw it.
+  panel or navbar of its own — the route parent owns that chrome, and the way
+  into the record behind the thread sits in that chrome too.
 */
 const props = defineProps<{
   threadId: string
-  /** Where this thread lives in the URL. The record hangs off it. */
-  threadPath: string
 }>()
 
 const dashboard = useDashboardSite()
-const route = useRoute()
 const actionError = ref<string | null>(null)
 
 const siteId = computed(() => dashboard.siteId.value)
@@ -116,23 +111,10 @@ watch([initialDetail, initialDetailPending, initialDetailError], ([data, pending
   detail.value = data?.thread ?? null
 }, { immediate: true })
 
-// The tenant's own word for the record, and the route it is read at. A contact
-// thread has no record, so it offers no way to one.
+// The tenant's own word for the record.
 const recordNoun = computed(() => detail.value
   ? threadRecordTitle(detail.value.submissionType, dashboard.site.value?.vertical ?? null).toLowerCase()
   : 'details')
-// Opening the record keeps the list it was reached through, the same way
-// closing it does; dropping the query here sent the member back to the current
-// list when they closed the drawer from the archive.
-const recordTo = computed(() => {
-  if (!detail.value || detail.value.submissionType === 'contact') return null
-  const query = new URLSearchParams()
-  for (const [key, value] of Object.entries(route.query)) {
-    if (typeof value === 'string' && value) query.set(key, value)
-  }
-  const search = query.toString()
-  return search ? `${props.threadPath}/details?${search}` : `${props.threadPath}/details`
-})
 // A contact thread's words are its `message`; a reservation or booking carries
 // them as `notes`. Either way they are what the guest typed to start this.
 const openingMessage = computed(() => {

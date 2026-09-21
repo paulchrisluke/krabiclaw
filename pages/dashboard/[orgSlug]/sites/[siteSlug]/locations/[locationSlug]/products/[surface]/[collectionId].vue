@@ -23,6 +23,7 @@
 
       <template #body>
         <div class="mx-auto w-full" :class="openLeaf ? 'max-w-xl' : 'max-w-3xl'">
+          <UAlert v-if="errorMessage" class="mb-6" color="error" variant="soft" icon="i-lucide-triangle-alert" :description="errorMessage" />
           <div class="mb-6 flex justify-end">
             <UButton :label="createActionLabel" :loading="saving" @click="startOrCreate" />
           </div>

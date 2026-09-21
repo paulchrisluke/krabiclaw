@@ -68,15 +68,6 @@
                         <span class="font-semibold text-highlighted">{{ row.label }}</span>
                         <span class="ms-2 break-words">{{ row.value }}</span>
                       </p>
-                      <!-- The way into the record sits in the message that
-                           announced it, so the booking is one click away. -->
-                      <NuxtLink
-                        v-if="recordTo"
-                        :to="recordTo"
-                        class="mt-3 block font-semibold text-primary"
-                      >
-                        Show {{ recordNoun }}
-                      </NuxtLink>
                     </template>
                     <span v-else class="whitespace-pre-wrap">{{ item.entry.body }}</span>
                   </div>
@@ -205,7 +196,6 @@ const props = withDefaults(defineProps<{
   /** The tenant's word for the record behind this thread: reservation, experience, consultation. */
   recordNoun: string
   /** Where that record is read. Null for a thread that has none. */
-  recordTo?: string | null
   /** What the guest wrote when they opened the thread, if anything. */
   openingMessage?: string | null
   /** What the platform announced when the record arrived: a title and its facts. */
@@ -219,7 +209,6 @@ const props = withDefaults(defineProps<{
   emptyDescription?: string
   error?: string | null
 }>(), {
-  recordTo: null,
   openingMessage: null,
   announcement: null,
   placeholder: 'Write your reply…',

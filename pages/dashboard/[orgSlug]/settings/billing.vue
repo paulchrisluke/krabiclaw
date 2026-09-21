@@ -147,11 +147,14 @@ onMounted(async () => {
   // over. Only /api/post-login?plan=growth arrives with the plan still to buy.
   if (success || canceled) return
   const planId = Array.isArray(plan) ? plan[0] : plan
-  if (typeof planId === 'string' && planId) {
+  if (typeof planId === 'string' && planId && !busy.value) {
+    busy.value = true
     try {
       await upgrade(planId)
     } catch (error) {
       errorMessage.value = error instanceof Error ? error.message : 'Failed to create checkout session'
+    } finally {
+      busy.value = false
     }
   }
 })

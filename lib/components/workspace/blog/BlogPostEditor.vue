@@ -103,7 +103,10 @@
     </template>
 
     <template #body>
-      <div class="mx-auto w-full max-w-2xl">
+      <!-- The fields bind to the loaded post; shown earlier they bind to a blank form the load then overwrites. -->
+      <div v-if="loadPending" class="grid min-h-64 place-items-center"><UIcon name="i-lucide-loader-circle" class="size-6 animate-spin" /></div>
+      <UAlert v-else-if="loadError" color="error" variant="soft" :description="loadError" />
+      <div v-else class="mx-auto w-full max-w-2xl">
       <template v-if="section === 'category'">
         <!-- KrabiClaw's own site publishes two collections; a category is the author's own word in both. -->
         <UFormField v-if="isPlatformTemplate" label="Collection" class="mb-4">
@@ -187,7 +190,7 @@
       </div>
     </template>
 
-    <template v-if="section !== 'share'" #footer>
+    <template v-if="section !== 'share' && !loadPending && !loadError" #footer>
       <DashboardPanelFooter :loading="savingExplicitly || publishing" @cancel="cancelSection" @save="saveSection" />
     </template>
   </UDashboardPanel>

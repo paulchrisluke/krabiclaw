@@ -21,7 +21,7 @@
     </template>
 
     <template #body>
-      <GuestThreadDetail :thread-id="threadId" :thread-path="threadPath" />
+      <GuestThreadDetail :thread-id="threadId" />
     </template>
   </UDashboardPanel>
 
@@ -62,7 +62,8 @@ const recordTo = computed(() => {
   if (!thread.value || thread.value.submissionType === 'contact') return null
   const query = new URLSearchParams()
   for (const [key, value] of Object.entries(route.query)) {
-    if (typeof value === 'string' && value) query.set(key, value)
+    // `archived` is present and empty on the past list; the emptiness is the value.
+    if (typeof value === 'string') query.set(key, value)
   }
   const search = query.toString()
   return search ? `${threadPath.value}/details?${search}` : `${threadPath.value}/details`
