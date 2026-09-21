@@ -12,17 +12,18 @@
         :ui="{ body: 'p-0! sm:p-0!' }"
       >
         <component
-          :is="item.to ? NuxtLink : 'div'"
+          :is="item.to ? NuxtLink : item.action ? 'button' : 'div'"
           v-for="(item, index) in group.items"
           :key="item.id"
-          v-bind="item.to ? { to: item.to } : {}"
+          v-bind="item.to ? { to: item.to } : item.action ? { type: 'button' } : {}"
           class="group flex min-h-20 w-full items-center gap-4 text-left px-5 py-4 transition-colors focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-primary"
           :class="[
             index > 0 ? 'border-t border-default' : '',
             item.id === activeItem ? 'bg-elevated' : '',
-            item.to ? 'hover:bg-elevated' : '',
+            item.to || item.action ? 'hover:bg-elevated' : '',
           ]"
           :aria-current="item.id === activeItem ? 'page' : undefined"
+          @click="item.action ? $emit('act', item.id) : undefined"
         >
           <span class="min-w-0 flex-1">
             <span class="block font-semibold text-highlighted">{{ item.label }}</span>
@@ -58,16 +59,14 @@
             </span>
           </span>
           <!--
-            A row that opens a level gets the chevron; a row that acts carries
-            the control that performs the action instead.
+            A row that opens a level gets the chevron. A row that acts is the
+            control: the whole row presses, and a trailing verb names what it
+            does only where the label is a noun (Languages → Localize).
           -->
-          <UButton
-            v-if="item.action"
-            variant="link"
-            color="neutral"
-            class="shrink-0"
-            @click="$emit('act', item.id)"
-          >{{ item.action.label }}</UButton>
+          <span
+            v-if="item.action?.label"
+            class="shrink-0 text-sm font-medium text-highlighted underline underline-offset-4"
+          >{{ item.action.label }}</span>
           <UIcon v-else-if="item.to" name="i-lucide-chevron-right" class="size-5 shrink-0 text-muted transition-transform group-hover:translate-x-0.5" />
         </component>
       </UCard>
@@ -99,12 +98,13 @@ export interface EditorNavigationItem {
    */
   card?: { image: string | null; title: string; description: string | null; empty: string }
   /**
-   * A row that acts on the session rather than opening anything — Log out. It
-   * is not a level of the chain, so it takes no chevron and carries its own
-   * control, and the id is emitted through `act`. A row that goes somewhere
-   * uses `to` and gets the chevron like any other.
+   * A row that acts rather than opening anything. It is not a level of the
+   * chain, so it takes no chevron: the row itself is the button and its id is
+   * emitted through `act`. `label` adds a trailing verb where the row's own
+   * label does not say what pressing it does — Languages → Localize. Log out
+   * already does, so it carries none.
    */
-  action?: { label: string }
+  action?: { label?: string }
 }
 
 export interface EditorNavigationGroup {

@@ -1,5 +1,4 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
-import { getAuthSession } from '~/server/utils/auth'
 import { getClientIp, hashClientIp, incrementHourlyRateLimit } from '~/server/utils/hourly-rate-limit'
 import { searchPublicResources } from '~/server/utils/public-search'
 import { PUBLIC_SEARCH_TYPES, type PublicSearchTypeFilter } from '~/server/utils/platform-search-types'
@@ -11,22 +10,18 @@ export default defineHandler(async (event) => {
   const q = typeof query.q === 'string' ? query.q : ''
   const type = typeof query.type === 'string' ? query.type : 'all'
   const surface = typeof query.surface === 'string' ? query.surface : 'public'
-  const orgSlug = typeof query.orgSlug === 'string' ? query.orgSlug : ''
-  const siteSlug = typeof query.siteSlug === 'string' ? query.siteSlug : ''
-  const locationSlug = typeof query.locationSlug === 'string' ? query.locationSlug : ''
   const validTypes = new Set<string>(PUBLIC_SEARCH_TYPES)
-  const validSurfaces = new Set(['public', 'docs', 'blog', 'dashboard', 'help', 'chowbot', 'tenant_blog'])
-  const requiresDashboardAuth = surface === 'dashboard' || type === 'dashboard_route'
+  const validSurfaces = new Set(['public', 'docs', 'blog', 'help', 'chowbot', 'tenant_blog'])
   const isTenantRequest = event.context.tenantType === 'tenant' && Boolean(event.context.siteId)
 
   if (!q.trim()) {
     return jsonResponse({ error: 'q is required' }, { status: 400 })
   }
   if (!validTypes.has(type)) {
-    return jsonResponse({ error: 'type must be one of all, doc, blog, faq, route, platform_page, dashboard_route' }, { status: 400 })
+    return jsonResponse({ error: 'type must be one of all, doc, blog, faq, route, platform_page' }, { status: 400 })
   }
   if (!validSurfaces.has(surface)) {
-    return jsonResponse({ error: 'surface must be one of public, docs, blog, dashboard, help, chowbot, tenant_blog' }, { status: 400 })
+    return jsonResponse({ error: 'surface must be one of public, docs, blog, help, chowbot, tenant_blog' }, { status: 400 })
   }
   // tenant_blog is a single shared corpus across every tenant, scoped by
   // site_id at query time — without a resolved tenant site there is no safe
@@ -51,18 +46,9 @@ export default defineHandler(async (event) => {
       }
     }
 
-    if (requiresDashboardAuth) {
-      const session = await getAuthSession(event, env)
-      if (!session?.user) {
-        return jsonResponse({ error: 'Authentication required' }, { status: 401 })
-      }
-    }
-
     const results = await searchPublicResources(env, q, {
-      type: type as PublicSearchTypeFilter, surface: surface as 'public' | 'docs' | 'blog' | 'dashboard' | 'help' | 'chowbot' | 'tenant_blog', limit: 10, siteId: isTenantRequest && surface === 'tenant_blog' ? String(event.context.siteId) : null, dashboardContext: requiresDashboardAuth
-        ? {
-            orgSlug: orgSlug || null, siteSlug: siteSlug || null, locationSlug: locationSlug || null, }
-        : undefined, })
+      type: type as PublicSearchTypeFilter, surface: surface as 'public' | 'docs' | 'blog' | 'help' | 'chowbot' | 'tenant_blog', limit: 10,
+      siteId: isTenantRequest && surface === 'tenant_blog' ? String(event.context.siteId) : null, })
     return jsonResponse({ query: q, surface, results })
   } catch (error) {
     console.error('Failed to run public search:', error)

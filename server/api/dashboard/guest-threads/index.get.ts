@@ -7,7 +7,6 @@ export default defineHandler(async (event) => {
   const query = getQuery(event)
   const siteId = typeof query.site_id === 'string' && query.site_id.trim() ? query.site_id.trim() : null
   const locationId = typeof query.location_id === 'string' && query.location_id.trim() ? query.location_id.trim() : null
-  const search = typeof query.search === 'string' ? query.search : null
   const type = query.type === 'contact' || query.type === 'reservation' || query.type === 'booking'
     ? query.type as GuestThreadSubmissionType
     : null
@@ -18,7 +17,7 @@ export default defineHandler(async (event) => {
   const occurrence = query.occurrence === 'past' || query.occurrence === 'upcoming' ? query.occurrence : null
 
   const payload = await loadOrganizationGuestThreads(event, {
-    siteId, locationId, search, type, conversationState, unreadOnly, occurrence, })
+    siteId, locationId, type, conversationState, unreadOnly, occurrence, })
   return jsonResponse(finalizeRequestMetrics(event, 'dashboard-organization-guest-threads', payload))
 })
 import { defineHandler } from 'nitro';

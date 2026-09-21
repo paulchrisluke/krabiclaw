@@ -15,8 +15,6 @@ import { formatOperationalStatusLabel, formatThreadWhenLabel } from './status-la
 import { mediaStillUrl } from '~/shared/media-placement-contract'
 
 const SOURCE_GUEST_NAME_SQL = "json_extract(gt.payload_json, '$.guest.name')"
-const SOURCE_GUEST_EMAIL_SQL = "json_extract(gt.payload_json, '$.guest.email')"
-const SOURCE_GUEST_PHONE_SQL = "json_extract(gt.payload_json, '$.guest.phone')"
 /**
  * The operational record a thread refers to.
  *
@@ -44,16 +42,24 @@ const SOURCE_PREVIEW_COLUMNS = `op.starts_at AS record_starts_at, op.timezone AS
       json_extract(gt.payload_json, '$.party_size_is_minimum') AS party_size_is_minimum`
 
 /*
-  The picture the row leads with: the hero of the location the thread belongs
-  to. A thread with no location, or a location with no hero, has no picture —
-  the row draws its own placeholder rather than borrowing another location's.
+  The picture the row leads with: the place the thread belongs to. A thread at
+  a location takes that location's hero; a thread that came to the business
+  itself — a contact form with no location — takes the business's logo, the
+  same picture the menu's switcher shows for it. A place with neither has no
+  picture, and the row draws its own placeholder rather than borrowing another
+  location's.
 */
-const LOCATION_HERO_SQL = `
+const PLACE_IMAGE_SQL = `
   LEFT JOIN media_placements mp_hero ON mp_hero.owner_type = 'business_location' AND mp_hero.owner_id = gt.location_id
     AND mp_hero.slot = 'hero' AND mp_hero.status = 'active'
-  LEFT JOIN media_assets ma_hero ON ma_hero.id = mp_hero.asset_id AND ma_hero.status = 'active'`
+  LEFT JOIN media_assets ma_hero ON ma_hero.id = mp_hero.asset_id AND ma_hero.status = 'active'
+  LEFT JOIN media_placements mp_logo ON gt.location_id IS NULL AND mp_logo.owner_type = 'site' AND mp_logo.owner_id = gt.site_id
+    AND mp_logo.slot = 'logo' AND mp_logo.status = 'active'
+  LEFT JOIN media_assets ma_logo ON ma_logo.id = mp_logo.asset_id AND ma_logo.status = 'active'`
 
-const LOCATION_HERO_COLUMNS = `ma_hero.kind AS location_image_kind, ma_hero.thumbnail_url AS location_image_thumbnail_url, ma_hero.public_url AS location_image_public_url`
+const PLACE_IMAGE_COLUMNS = `COALESCE(ma_hero.kind, ma_logo.kind) AS place_image_kind,
+      COALESCE(ma_hero.thumbnail_url, ma_logo.thumbnail_url) AS place_image_thumbnail_url,
+      COALESCE(ma_hero.public_url, ma_logo.public_url) AS place_image_public_url`
 
 function sourcePreviewText(row: {
   source_preview: string | null
@@ -183,9 +189,9 @@ type GuestThreadListRow = GuestThreadRow & {
   record_party_size: number | null
   party_size_is_minimum: unknown
   operational_status: string | null
-  location_image_kind: string | null
-  location_image_thumbnail_url: string | null
-  location_image_public_url: string | null
+  place_image_kind: string | null
+  place_image_thumbnail_url: string | null
+  place_image_public_url: string | null
 }
 
 /** Returns list view models with member-specific unread and one canonical `preview` field. */
@@ -229,11 +235,6 @@ export async function listGuestThreads(
       : ' AND (op.starts_at IS NULL OR op.starts_at >= ?)'
     params.push(new Date().toISOString())
   }
-  if (opts.search?.trim()) {
-    const like = `%${opts.search.trim().toLowerCase()}%`
-    where += ` AND (LOWER(${SOURCE_GUEST_NAME_SQL}) LIKE ? OR LOWER(COALESCE(${SOURCE_GUEST_EMAIL_SQL}, '')) LIKE ? OR LOWER(COALESCE(${SOURCE_GUEST_PHONE_SQL}, '')) LIKE ?)`
-    params.push(like, like, like)
-  }
 
   const limit = Math.max(1, Math.min(opts.limit ?? 100, 200))
 
@@ -267,10 +268,10 @@ export async function listGuestThreads(
       ) AS latest_message_kind,
       ${SOURCE_PREVIEW_SQL} AS source_preview,
       ${SOURCE_PREVIEW_COLUMNS},
-      ${LOCATION_HERO_COLUMNS},
+      ${PLACE_IMAGE_COLUMNS},
       op.status AS operational_status
     FROM requests gt${OPERATIONAL_RECORD_SQL}
-    LEFT JOIN business_locations bl ON bl.id = gt.location_id${LOCATION_HERO_SQL}
+    LEFT JOIN business_locations bl ON bl.id = gt.location_id${PLACE_IMAGE_SQL}
     WHERE gt.kind IN ('contact', 'reservation', 'booking') AND ${where}
     ${unreadFilter}
     ORDER BY gt.updated_at DESC
@@ -302,7 +303,7 @@ export async function listGuestThreads(
       needsAttention: row.conversation_state === 'needs_attention',
       // Two renditions of one asset, not two sources: a row 60px wide takes the
       // thumbnail, and an asset with no rendition yet is served at full size.
-      imageUrl: mediaStillUrl({ kind: row.location_image_kind, public_url: row.location_image_public_url, thumbnail_url: row.location_image_thumbnail_url }),
+      imageUrl: mediaStillUrl({ kind: row.place_image_kind, public_url: row.place_image_public_url, thumbnail_url: row.place_image_thumbnail_url }),
       whenLabel: row.record_starts_at && row.record_timezone
         ? formatThreadWhenLabel(row.record_starts_at, row.record_timezone)
         : null,
@@ -359,11 +360,6 @@ export async function listOrganizationGuestThreads(
       : ' AND (op.starts_at IS NULL OR op.starts_at >= ?)'
     params.push(new Date().toISOString())
   }
-  if (opts.search?.trim()) {
-    const like = `%${opts.search.trim().toLowerCase()}%`
-    where += ` AND (LOWER(${SOURCE_GUEST_NAME_SQL}) LIKE ? OR LOWER(COALESCE(${SOURCE_GUEST_EMAIL_SQL}, '')) LIKE ? OR LOWER(COALESCE(${SOURCE_GUEST_PHONE_SQL}, '')) LIKE ?)`
-    params.push(like, like, like)
-  }
 
   const limit = Math.max(1, Math.min(opts.limit ?? 100, 200))
 
@@ -399,11 +395,11 @@ export async function listOrganizationGuestThreads(
       ) AS latest_message_kind,
       ${SOURCE_PREVIEW_SQL} AS source_preview,
       ${SOURCE_PREVIEW_COLUMNS},
-      ${LOCATION_HERO_COLUMNS},
+      ${PLACE_IMAGE_COLUMNS},
       op.status AS operational_status
     FROM requests gt${OPERATIONAL_RECORD_SQL}
     LEFT JOIN business_locations bl ON bl.id = gt.location_id
-    LEFT JOIN sites s ON s.id = gt.site_id${LOCATION_HERO_SQL}
+    LEFT JOIN sites s ON s.id = gt.site_id${PLACE_IMAGE_SQL}
     WHERE gt.kind IN ('contact', 'reservation', 'booking') AND ${where}
     ${unreadFilter}
     ORDER BY gt.updated_at DESC
@@ -442,7 +438,7 @@ export async function listOrganizationGuestThreads(
       needsAttention: row.conversation_state === 'needs_attention',
       // Two renditions of one asset, not two sources: a row 60px wide takes the
       // thumbnail, and an asset with no rendition yet is served at full size.
-      imageUrl: mediaStillUrl({ kind: row.location_image_kind, public_url: row.location_image_public_url, thumbnail_url: row.location_image_thumbnail_url }),
+      imageUrl: mediaStillUrl({ kind: row.place_image_kind, public_url: row.place_image_public_url, thumbnail_url: row.place_image_thumbnail_url }),
       whenLabel: row.record_starts_at && row.record_timezone
         ? formatThreadWhenLabel(row.record_starts_at, row.record_timezone)
         : null,

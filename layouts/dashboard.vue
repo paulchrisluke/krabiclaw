@@ -60,15 +60,26 @@
       case; only an element that deliberately spans the viewport reaches them.
     -->
     <UDashboardGroup
-      :ui="{ base: ['z-40', showNavChrome ? 'md:top-(--kc-dashboard-top-nav) max-md:bottom-(--kc-dashboard-bottom-nav)' : 'top-(--kc-dashboard-top-nav)'].join(' ') }"
+      :ui="{ base: ['z-40', showNavChrome ? 'md:top-(--kc-dashboard-top-nav)' : 'top-(--kc-dashboard-top-nav)', showBottomNav ? 'max-md:bottom-(--kc-dashboard-bottom-nav)' : ''].join(' ') }"
     >
-      <UDashboardSearch v-model:search-term="dashboardSearchTerm" :groups="dashboardSearchGroups" :loading="dashboardSearchLoading" :color-mode="false" />
+      <UDashboardSearch
+        v-model:open="dashboardSearchOpen"
+        v-model:search-term="dashboardSearchTerm"
+        title="Search"
+        description="Search this business"
+        placeholder="Search…"
+        size="lg"
+        :fullscreen="isPhoneWidth"
+        :groups="dashboardSearchGroups"
+        :loading="dashboardSearchLoading"
+        :color-mode="false"
+      />
 
       <slot />
     </UDashboardGroup>
 
     <nav
-      v-if="showNavChrome"
+      v-if="showBottomNav"
       class="fixed inset-x-0 bottom-0 z-30 flex h-(--kc-dashboard-bottom-nav) items-stretch border-t border-default bg-default pb-[env(safe-area-inset-bottom)] md:hidden"
       aria-label="Dashboard"
       data-testid="dashboard-mobile-nav"
@@ -113,6 +124,7 @@ import { authClient } from '~/lib/auth-client'
 import { useAnalytics } from '~/composables/useAnalytics'
 import '~/assets/css/dashboard.css'
 import { mediaStillUrl } from '~/shared/media-placement-contract'
+import { useMediaQuery } from '@vueuse/core'
 
 // ─────────────────────────────────────────────────────────────────────────
 // Dashboard shell architecture.
@@ -152,6 +164,18 @@ const { trackDashboardVisited, setUserId } = useAnalytics()
 const impersonationError = ref<string | null>(null)
 const stoppingImpersonation = ref(false)
 const { searchTerm: dashboardSearchTerm, loading: dashboardSearchLoading, groups: dashboardSearchGroups } = useDashboardSearch()
+// The Menu's Search row and a list's search icon open the same palette ⌘K does.
+// Registered for this layout's lifetime only: a hook left behind by an earlier
+// mount toggled the palette a second time and cancelled the first.
+const dashboardSearchOpen = ref(false)
+// On a phone the palette is the screen, like every other sheet here; on a wide screen it is a card.
+const isPhoneWidth = useMediaQuery('(max-width: 767px)')
+const nuxtApp = useNuxtApp()
+let unhookSearchToggle: (() => void) | null = null
+onMounted(() => {
+  unhookSearchToggle = nuxtApp.hooks.hook('dashboard:search:toggle', () => { dashboardSearchOpen.value = !dashboardSearchOpen.value })
+})
+onBeforeUnmount(() => { unhookSearchToggle?.(); unhookSearchToggle = null })
 // This layout owns the context request. Nothing below it starts one.
 const context = useDashboardContextOwner()
 const dashboard = useDashboardSite()
@@ -370,6 +394,10 @@ const primaryNavItems = computed(() => mobileNavItems.value)
 // exist until there is one. Gating both together is what left an owner who
 // abandoned onboarding with no way to reach account settings or log out.
 const showNavChrome = computed(() => primaryNavItems.value.length > 0 && !isAccountRoute.value)
+// A leaf with Cancel/Save is a sheet on a phone: the tab bar is not there
+// under it, the way Airbnb's editor leaves cover theirs.
+const leafFooters = useDashboardLeafFooters()
+const showBottomNav = computed(() => showNavChrome.value && leafFooters.value === 0)
 const topNavHomeTo = computed(() => {
   const routeOrgSlug = typeof route.params.orgSlug === 'string' ? route.params.orgSlug : null
   return routeOrgSlug ? `/dashboard/${encodeURIComponent(routeOrgSlug)}` : '/dashboard'

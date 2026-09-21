@@ -22,10 +22,9 @@ import {
 import { MCP_PUBLIC_TOOLS, MCP_TOOLS } from "~/server/utils/mcp-tools";
 import { MCP_PROMPTS, renderMcpPrompt } from "~/server/utils/mcp-prompts";
 import { cloudflareEnv } from "~/server/utils/api-response";
-import { queryAll } from "~/server/db";
+import { createDb, queryAll } from "~/server/db";
 import { purgeSiteKvCache } from "~/server/utils/edge-cache";
-import { purgePublicResourceCacheSafe } from "~/server/utils/public-resource-cache";
-import { schedulePlatformKnowledgeIndexRebuild } from "~/server/utils/platform-search-rebuild";
+import { drainPublicResourceCacheInvalidations, purgePublicResourceCacheSafe } from "~/server/utils/public-resource-cache";
 import {
   visibleConversationalMcpTools, } from "~/server/utils/conversational-tool-surface";
 import { resolveMissingMcpCredential, type McpToolMeta } from "~/server/utils/mcp-runtime";
@@ -393,9 +392,18 @@ function createTenantMcpServer(ctx: McpRequestContext): McpServer {
         }
       }
     }
-    if (toolDef?.domain === "blog" && isMcpMutatingTool(toolDef)) {
+    // The write above queued "this site changed"; drain it now so the site's
+    // search index follows the tool call, the way a dashboard write's does.
+    if (isMcpMutatingTool(toolDef) && resolvedSiteId) {
       const env = cloudflareEnv(event);
-      schedulePlatformKnowledgeIndexRebuild(event, env, `tenant MCP ${toolName}`);
+      const kv = env.SITE_CACHE;
+      const db = env.db ?? (env.DB ? createDb(env.DB) : null);
+      if (kv && db) {
+        const drained = drainPublicResourceCacheInvalidations(db, kv, env, { siteId: resolvedSiteId, limit: 100 })
+          .catch((error: unknown) => console.warn(`[ai-search] site change drain failed after tenant MCP ${toolName}: ${String(error)}`));
+        const waitUntil = getCloudflareWaitUntil(event);
+        if (waitUntil) waitUntil(drained);
+      }
     }
 
     return {

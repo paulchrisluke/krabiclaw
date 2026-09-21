@@ -1,4 +1,5 @@
 import { markdownRequiresSourceMode } from '~/shared/markdown-editor-mode'
+import { publicResourceCacheInvalidationQuery } from '~/server/utils/public-resource-cache'
 import { HTTPError } from 'nitro';
 
 import { executeBatch, queryAll, queryFirst, type BatchQuery, type DbClient } from '../../db/index.ts'
@@ -255,6 +256,8 @@ export function prepareContentDocumentDeletion(input: { organizationId: string; 
     { query: `DELETE FROM media_placements WHERE owner_type = 'content_block' AND owner_id IN (
       SELECT id FROM content_blocks WHERE document_id IN (${owned})
     )`, params },
+    // Before the delete itself, whose result the caller reads as the last statement's.
+    publicResourceCacheInvalidationQuery(input.siteId, 'content-document-delete'),
     // The same reach as every statement above it. `WHERE id = ?` deleted the
     // root and left its translations behind: content_documents has no foreign
     // key on root_id, so nothing cascaded, and each representation became a row
@@ -497,7 +500,7 @@ export async function createContentDocumentWithBlocks(
   opts: Parameters<typeof prepareContentDocumentWithBlocks>[2] = {},
 ) {
   const prepared = prepareContentDocumentWithBlocks(input, blocks, opts)
-  await executeBatch(db, prepared.queries)
+  await executeBatch(db, [...prepared.queries, publicResourceCacheInvalidationQuery(input.siteId, `${input.kind}-create`)])
   const document = await getContentDocumentById(db, prepared.document.id)
   if (!document) throw new HTTPError({ statusCode: 500, statusMessage: 'Content document disappeared after synchronization' })
   return { document, body_markdown: prepared.body_markdown, blocks: prepared.blocks }
@@ -740,7 +743,8 @@ export async function updateContentDocument(
   }))
   const result = await writeDocumentBlocks(db, document, snapshots, {
     changes: input.changes, expectedDocument: { id: document.id, updatedAt: input.expected_updated_at },
-    additionalQueriesBefore: input.additionalQueriesBefore, additionalQueriesAfter: input.additionalQueriesAfter,
+    additionalQueriesBefore: input.additionalQueriesBefore,
+    additionalQueriesAfter: [...(input.additionalQueriesAfter ?? []), publicResourceCacheInvalidationQuery(document.site_id, `${document.kind}-update`)],
   })
   return { updated_at: result.updated_at }
 }

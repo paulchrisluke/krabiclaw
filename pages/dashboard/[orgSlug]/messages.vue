@@ -1,7 +1,7 @@
 <template>
   <UDashboardPanel id="org-messages">
     <template #header>
-      <UDashboardNavbar title="Messages" :toggle="false" />
+      <UDashboardNavbar :title="pastOnly ? 'Past conversations' : 'Messages'" :toggle="false" />
     </template>
 
     <template #body>
@@ -21,5 +21,8 @@ import GuestThreadList from '~/lib/components/workspace/messages/GuestThreadList
   need a second, organization-scoped copy of the thread API.
 */
 definePageMeta({ layout: 'dashboard' })
+
+const route = useRoute()
+const pastOnly = computed(() => route.query.archived !== undefined)
 useSeoMeta({ title: 'Messages | KrabiClaw', robots: 'noindex, nofollow' })
 </script>

@@ -186,10 +186,7 @@
       </template>
 
       <template v-if="hasCommit" #footer>
-        <div class="flex shrink-0 items-center justify-between gap-4 border-t border-default px-4 py-3 sm:px-6">
-          <UButton color="neutral" variant="ghost" label="Cancel" @click="closeDetail" />
-          <UButton :label="saveLabel || 'Save'" :loading="saving" :disabled="saveDisabled" @click="saveDetail" />
-        </div>
+        <DashboardPanelFooter :save-label="saveLabel" :loading="saving" :disabled="saveDisabled" @cancel="closeDetail" @save="saveDetail" />
       </template>
     </UDashboardPanel>
   </template>
@@ -416,7 +413,7 @@ const groups = computed<EditorNavigationGroup[]>(() => [
       { id: 'login', label: 'Login & security', summary: sessionData.value?.user?.email ?? '', to: `${profilePath.value}/login` },
       { id: 'notifications', label: 'Notifications', summary: notificationSummary.value, to: `${profilePath.value}/notifications` },
       { id: 'appearance', label: 'Appearance', summary: `${themePreference.value.charAt(0).toUpperCase()}${themePreference.value.slice(1)} theme`, to: `${profilePath.value}/appearance` },
-      { id: 'log-out', label: 'Log out', action: { label: 'Log out' } },
+      { id: 'log-out', label: 'Log out', action: {} },
     ],
   },
 ])

@@ -15,12 +15,14 @@ function checkoutReturnUrls(): { successUrl: string; cancelUrl: string; returnUr
 async function organizationSubscriptionId(
   dashboardApi: ReturnType<typeof useDashboardApi>,
   organizationId: string,
-): Promise<{ id?: string; status: string; plan: string }> {
+): Promise<{ id?: string; status?: string; plan: string }> {
+  // A business on Starter has no subscription row, so the id and status are
+  // absent from the response rather than present and empty.
   type BillingStatusResponse = {
     success: true
     billing: {
       stripeSubscriptionId?: string
-      subscriptionStatus: string
+      subscriptionStatus?: string
       plan: string
     }
   }
@@ -32,8 +34,7 @@ async function organizationSubscriptionId(
       return typeof billing === 'object'
         && billing !== null
         && (!('stripeSubscriptionId' in billing) || billing.stripeSubscriptionId === undefined || typeof billing.stripeSubscriptionId === 'string')
-        && 'subscriptionStatus' in billing
-        && typeof billing.subscriptionStatus === 'string'
+        && (!('subscriptionStatus' in billing) || billing.subscriptionStatus === undefined || typeof billing.subscriptionStatus === 'string')
         && 'plan' in billing
         && isKnownBillingPlan(billing.plan)
     },
@@ -51,6 +52,24 @@ export const useOrganizationSubscription = () => {
   const { trackSubscriptionUpgrade, trackSubscriptionDowngrade } = useAnalytics()
   const { startSubscriptionCheckout } = useSubscriptionCheckout()
 
+  // Stripe's hosted portal: card, invoices, receipts, cancelling. The plugin
+  // exposes nothing else for those, so nothing here draws them.
+  async function openBillingPortal() {
+    const organizationId = dashboard.organization.value?.id
+    if (!organizationId) throw new Error('Organization context is unavailable')
+    const { returnUrl } = checkoutReturnUrls()
+    const portal = await authClient.subscription.billingPortal({
+      referenceId: organizationId,
+      customerType: 'organization',
+      returnUrl,
+      disableRedirect: true,
+    })
+    if (portal.error) throw new Error(portal.error.message ?? 'Unable to open billing portal')
+    const portalUrl = portal.data && 'url' in portal.data ? portal.data.url : null
+    if (!portalUrl) throw new Error('Missing billing portal URL')
+    await navigateTo(portalUrl, { external: true })
+  }
+
   // The organization owns one recurring subscription. A site is only
   // metadata on the upgrade request and receives derived entitlements after
   // Better Auth confirms the subscription through Stripe.
@@ -58,18 +77,8 @@ export const useOrganizationSubscription = () => {
     const organizationId = dashboard.organization.value?.id
     if (!organizationId) throw new Error('Organization context is unavailable')
     const subscription = await organizationSubscriptionId(dashboardApi, organizationId)
-    const { returnUrl } = checkoutReturnUrls()
     if (subscription.status === 'past_due') {
-      const portal = await authClient.subscription.billingPortal({
-        referenceId: organizationId,
-        customerType: 'organization',
-        returnUrl,
-        disableRedirect: true,
-      })
-      if (portal.error) throw new Error(portal.error.message ?? 'Unable to open billing portal')
-      const portalUrl = portal.data && 'url' in portal.data ? portal.data.url : null
-      if (!portalUrl) throw new Error('Missing billing portal URL')
-      await navigateTo(portalUrl, { external: true })
+      await openBillingPortal()
       return
     }
     const currentPlan = subscription.plan
@@ -86,5 +95,5 @@ export const useOrganizationSubscription = () => {
     })
   }
 
-  return { startOrganizationCheckout }
+  return { startOrganizationCheckout, openBillingPortal }
 }

@@ -104,7 +104,10 @@ KrabiClaw exists so restaurants and local businesses can keep a polished, multil
 
 ## Approved assets
 
-- Square logo, 1024×1024: `docs/marketing/directory-assets/00-krabiclaw-logo-1024.png`
+- Canonical logo source: `public/platform/krabiclaw-symbol.svg`. Every other logo file in the
+  repository is generated from it and none of them is a second master.
+- Square logo, 1024×1024: `docs/marketing/directory-assets/00-krabiclaw-logo-1024.png`, a derived
+  distribution export of that source.
 - Today's bookings, 1270×760: `docs/marketing/directory-assets/01-todays-bookings.png`
 - Operations calendar, 1270×760: `docs/marketing/directory-assets/02-operations-calendar.png`
 - Location content, 1270×760: `docs/marketing/directory-assets/03-location-content.png`
