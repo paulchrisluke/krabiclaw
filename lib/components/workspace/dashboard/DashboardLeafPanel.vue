@@ -2,6 +2,10 @@
   <UDashboardPanel :id="id">
     <template #header>
       <UDashboardNavbar :title="title" :toggle="false">
+        <!-- An action that belongs to the whole leaf — adding a domain — sits beside its title. -->
+        <template v-if="$slots.right" #right>
+          <slot name="right" />
+        </template>
         <template #leading>
           <UButton
             icon="i-lucide-x"

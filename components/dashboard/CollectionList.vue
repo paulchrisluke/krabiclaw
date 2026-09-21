@@ -49,7 +49,6 @@ import { collectionsOnSurface, presentationForSurface } from '~/utils/product-pr
 const props = defineProps<{ surface: ProductSurface }>()
 
 const dashboardApi = useDashboardApi()
-const route = useRoute()
 const siteId = await useDashboardSiteId()
 const dashboard = useDashboardSite()
 const dashboardLocation = useDashboardLocation()

@@ -178,10 +178,34 @@ breakpoint, no `hidden lg:flex`, and no mode of its own — which is what keeps
 the two renderings of a node in one place instead of in every page that has
 children.
 
-An index opens a child on arrival where there is a pane to put it in
-(`autoOpen`): client-only and `replace`, so Back still leaves the index rather
-than landing on it again. Below the pane width the index *is* the screen and
-nothing is chosen on the tenant's behalf.
+### An index of leaves opens its first leaf; a list of records stands alone
+
+Measured on a live Airbnb host account at 1332px (2026-09-21):
+
+| Their screen | What it does | Ours |
+| --- | --- | --- |
+| `/hosting/listings` | one column, full width: heading, filters, a grid of records | every list of records |
+| `…/details` (the listing editor) | opens `photo-tour` on arrival and keeps a half-width column of rows beside it | every index whose rows are leaves |
+
+So an index whose children are **leaves** names its first leaf as `autoOpen`,
+and an index whose children are **records** names none: which a tenant meant to
+open is not something the screen can guess, and a record is a place, not a
+field. The pair splits down the middle, as Airbnb's does (80–660 of 1332).
+
+`autoOpen` is client-only and navigates with `replace`, so Back still leaves the
+index rather than landing on it again, and it is ignored when the target is the
+index's own URL — an index still loading offers itself as its first row, and
+taking that both went nowhere and used up the one open it gets. Below the pane
+width the index *is* the screen and nothing is chosen on the tenant's behalf.
+
+### Beside its index, a leaf carries only Save
+
+At two columns Airbnb's leaf has no Close and no Back of its own: the index's
+Back is the way out and Save is the only control it draws. Both Close and Cancel
+belong to the sheet the leaf becomes below `lg`, where it covers the list it came
+from and needs its own way back.
+
+One shell owns that, so a leaf states what it commits and nothing about width.
 
 ### Where a level goes when it closes
 
@@ -204,6 +228,19 @@ Pages — the page names its own parent: `definePageMeta({ back: '<route name>' 
 other way to declare one.
 
 A tab root has nothing above it, so it renders no Back at all.
+
+**The lit tab is the one this walk ends at.** Matching a tab's path as a prefix
+of the URL cannot answer it: the links page lives at `/sites/:siteSlug/links`,
+so the URL said Locations while every way out of it led to Menu. Walking up
+asks the same question Back asks, and both records at the deepest URL are asked
+for a declared parent, because a directory's `index.vue` is the record
+`matched` ends on and it is the directory that carries the `back:`.
+
+**A level whose own record has left `route.matched` is `stale`** — it is being
+torn down after a navigation elsewhere — and it answers nothing: no parent, no
+mode but `yield`, and no `autoOpen`. A guard that raises a 404 asks `stale`
+first. Reading the new route from an old level is what made a location index,
+unmounting on the way to Pages, replace the URL with a child of itself.
 
 ## Creating
 

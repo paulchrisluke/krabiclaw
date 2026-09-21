@@ -1,5 +1,6 @@
 <template>
-  <DashboardIndexPanel id="site-domains" title="Domains">
+  <!-- A row of Website settings, so it closes back to it like its siblings; adding a domain is its own action, not a Save. -->
+  <DashboardLeafPanel id="site-domains" title="Domains" :footer="false">
     <template #right>
       <UButton icon="i-lucide-plus" size="sm" @click="openAddModal">Add domain</UButton>
     </template>
@@ -161,7 +162,7 @@
         </UForm>
       </template>
     </UModal>
-  </DashboardIndexPanel>
+  </DashboardLeafPanel>
 </template>
 
 <script setup lang="ts">
