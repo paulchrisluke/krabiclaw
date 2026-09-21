@@ -8,7 +8,7 @@
       this row holds the filters, with search at its end, and the search field
       takes the row's place while it is open — the way a mail list does.
     -->
-    <header class="shrink-0 border-b border-default px-4 py-3">
+    <header class="shrink-0 px-4 py-3">
       <div v-if="searchOpen" class="flex items-center gap-2">
         <UInput
           v-model="search"

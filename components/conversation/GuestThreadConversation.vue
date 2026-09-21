@@ -1,34 +1,5 @@
 <template>
   <div class="flex min-h-0 w-full min-w-0 flex-1 flex-col">
-    <!--
-      Who this is with, and the way to the record behind it. The reservation is
-      not a card in the stream: the stream holds what people said, and every
-      fact about the booking lives one control away, at its own URL.
-    -->
-    <!--
-      Measured on Airbnb: a 40px avatar in the left gutter, a 22px/500 title,
-      a 12px subline, and a fully-rounded 40px grey pill trailing. Not a small
-      ringed rectangle, which is what this was.
-    -->
-    <header class="flex shrink-0 items-center gap-3 border-b border-default px-4 py-4 sm:px-6">
-      <UAvatar :alt="guestName" size="lg" class="shrink-0" />
-      <div class="min-w-0 flex-1">
-        <p class="truncate text-[22px] font-medium leading-tight text-highlighted">{{ guestName }}</p>
-        <p v-if="subline" class="truncate text-xs text-muted">{{ subline }}</p>
-      </div>
-      <UButton
-        v-if="recordTo"
-        :to="recordTo"
-        color="neutral"
-        variant="soft"
-        class="h-10 shrink-0 rounded-full px-4"
-        :aria-label="`Show ${recordNoun}`"
-      >
-        <span class="hidden sm:inline">Show {{ recordNoun }}</span>
-        <span class="sm:hidden">Details</span>
-      </UButton>
-    </header>
-
     <div ref="scrollContainer" class="min-h-0 flex-1 overflow-y-auto">
       <div
         v-if="!entries.length"
@@ -278,7 +249,6 @@ const props = withDefaults(defineProps<{
   openingMessage?: string | null
   /** What the platform announced when the record arrived: a title and its facts. */
   announcement?: { title: string, rows: Array<{ label: string, value: string }> } | null
-  subline?: string | null
   placeholder?: string
   loading?: boolean
   disabled?: boolean
@@ -291,7 +261,6 @@ const props = withDefaults(defineProps<{
   recordTo: null,
   openingMessage: null,
   announcement: null,
-  subline: null,
   placeholder: 'Write your reply…',
   loading: false,
   disabled: false,

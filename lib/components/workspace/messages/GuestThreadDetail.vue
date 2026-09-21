@@ -31,7 +31,6 @@
         :record-to="recordTo"
         :opening-message="openingMessage"
         :announcement="announcement"
-        :subline="subline"
         :loading="replySaving"
         :disabled="replySaving || !detail.guestEmail"
         :disabled-reason="!detail.guestEmail ? 'This guest has no email on file, so a reply cannot be sent.' : null"
@@ -171,11 +170,6 @@ const announcement = computed(() => {
 function capitalize(value: string) {
   return value ? value.charAt(0).toUpperCase() + value.slice(1) : ''
 }
-
-const subline = computed(() => {
-  if (!detail.value) return null
-  return [detail.value.locationLabel, detail.value.guestEmail].filter(Boolean).join(' · ') || null
-})
 
 function activeReplyAttemptKey() {
   replyAttemptKey.value ||= crypto.randomUUID()
