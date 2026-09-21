@@ -1,227 +1,210 @@
 <template>
   <!--
-    With no section open this post is its parent's detail column, so it renders
-    its rows and nothing else. It becomes the index column only once a section
-    is open.
+    One panel either way: this level always owns a column and always titles it.
+    With no section open it is the whole screen; once one is open it is the
+    index column and the section takes the other.
   -->
-  <div v-if="frame.mode.value === 'index'" class="space-y-6">
-    <UAlert
-      v-if="loadError"
-      color="error"
-      variant="soft"
-      icon="i-lucide-triangle-alert"
-      title="Post could not be loaded"
-      :description="loadError"
-    />
-    <template v-else>
-      <div v-if="isNew" class="flex justify-end">
-        <UButton :label="createActionLabel" :loading="editor.saving.value" @click="startOrCreate" />
-      </div>
-      <EditorNavigationList :groups="navigationGroups" />
+  <UDashboardPanel
+    id="location-post-detail"
+    :class="hasDetail ? 'hidden lg:flex' : undefined"
+    :default-size="hasDetail ? 32 : undefined"
+  >
+    <template #header>
+      <UDashboardNavbar :title="isNew ? 'New post' : editor.form.title || 'Post'" :toggle="false">
+        <template #leading>
+          <DashboardNavbarLeading />
+        </template>
+        <template v-if="post" #right>
+          <DashboardResourceLocalization
+            :site-id="siteId"
+            resource-type="content_document"
+            :resource-id="postId"
+            resource-label="post"
+            :fields="postLocalizationFields"
+            :route-path="localizedPostPath"
+            :language-settings-path="siteLocalizationSettingsPath"
+          />
+        </template>
+      </UDashboardNavbar>
     </template>
-  </div>
 
-  <template v-else>
-    <UDashboardPanel
-      id="location-post-detail"
-      class="hidden lg:flex"
-      :default-size="32"
-    >
-      <template #header>
-        <UDashboardNavbar :title="isNew ? 'New post' : editor.form.title || 'Post'" :toggle="false">
-          <template #leading>
-            <DashboardNavbarLeading />
-          </template>
-          <template v-if="post" #right>
-            <DashboardResourceLocalization
-              :site-id="siteId"
-              resource-type="content_document"
-              :resource-id="postId"
-              resource-label="post"
-              :fields="postLocalizationFields"
-              :route-path="localizedPostPath"
-              :language-settings-path="siteLocalizationSettingsPath"
-            />
-          </template>
-        </UDashboardNavbar>
-      </template>
+    <template #body>
+      <div class="mx-auto w-full" :class="hasDetail ? 'max-w-xl' : 'max-w-3xl'">
+        <UAlert
+          v-if="loadError"
+          color="error"
+          variant="soft"
+          icon="i-lucide-triangle-alert"
+          title="Post could not be loaded"
+          :description="loadError"
+        />
+        <template v-else>
+          <div v-if="isNew && !hasDetail" class="mb-6 flex justify-end">
+            <UButton :label="createActionLabel" :loading="editor.saving.value" @click="startOrCreate" />
+          </div>
+          <EditorNavigationList :groups="navigationGroups" :active-item="detailKey" />
+        </template>
+      </div>
+    </template>
+  </UDashboardPanel>
 
-      <template #body>
-        <div class="mx-auto w-full max-w-xl">
-          <UAlert
-            v-if="loadError"
-            color="error"
-            variant="soft"
-            icon="i-lucide-triangle-alert"
-            title="Post could not be loaded"
-            :description="loadError"
+  <!--
+    The open section is the other column: its own panel, its own header,
+    and Save/Cancel in the panel's own footer slot.
+  -->
+  <UDashboardPanel v-if="hasDetail && !loadError" id="location-post-section">
+    <template #header>
+      <UDashboardNavbar :title="sectionLabels[editorKey]" :toggle="false">
+        <template #leading>
+          <DashboardNavbarLeading />
+        </template>
+      </UDashboardNavbar>
+    </template>
+
+    <template #body>
+      <div class="mx-auto w-full max-w-5xl">
+        <UAlert
+          v-if="editor.error.value"
+          color="error"
+          variant="soft"
+          icon="i-lucide-circle-alert"
+          :description="editor.error.value"
+          class="mb-6"
+        />
+        <!--
+          Post type. Only a post being created has it: the contract's shape
+          is chosen by the type, so an existing post cannot change it.
+        -->
+        <UFormField v-if="editorKey === 'type'" label="What are you posting?">
+          <URadioGroup
+            :model-value="postType"
+            :items="typeOptions"
+            :ui="{ fieldset: 'flex flex-wrap gap-4' }"
+            @update:model-value="setType(String($event))"
           />
-          <EditorNavigationList v-else :groups="navigationGroups" :active-item="detailKey" />
+        </UFormField>
+
+        <!-- Photo -->
+        <div v-else-if="editorKey === 'photo'" class="space-y-4">
+          <p class="text-base text-muted">The picture this post is recognised by, in the list and on your site.</p>
+          <PostMediaFields
+            v-model:media="editor.form.media"
+            :site-id="siteId"
+            :supports-media="supportsMedia"
+          />
+          <p v-if="supportsMedia" class="text-sm text-muted">Media saves with the post.</p>
         </div>
-      </template>
-    </UDashboardPanel>
 
-    <!--
-      The open section is the other column: its own panel, its own header,
-      and Save/Cancel in the panel's own footer slot.
-    -->
-    <UDashboardPanel v-if="!loadError" id="location-post-section">
-      <template #header>
-        <UDashboardNavbar :title="sectionLabels[editorKey]" :toggle="false">
-          <template #leading>
-            <DashboardNavbarLeading />
-          </template>
-        </UDashboardNavbar>
-      </template>
+        <!-- Headline -->
+        <UFormField v-else-if="editorKey === 'headline'" label="Headline" description="Optional. Shown as the post's title on your site and in this list.">
+          <UInput v-model="editor.form.title" size="xl" autofocus placeholder="Add a headline" class="w-full" />
+        </UFormField>
 
-      <template #body>
-        <div class="mx-auto w-full max-w-5xl">
-          <UAlert
-            v-if="editor.error.value"
-            color="error"
-            variant="soft"
-            icon="i-lucide-circle-alert"
-            :description="editor.error.value"
-            class="mb-6"
+        <!-- Body -->
+        <UFormField v-else-if="editorKey === 'body'" label="Post" required>
+          <UTextarea
+            v-model="editor.form.body"
+            :rows="10"
+            autofocus
+            placeholder="What's new? Write it the way you'd say it to a guest."
+            size="xl"
+            class="w-full"
           />
-          <!--
-            Post type. Only a post being created has it: the contract's shape
-            is chosen by the type, so an existing post cannot change it.
-          -->
-          <UFormField v-if="editorKey === 'type'" label="What are you posting?">
-            <URadioGroup
-              :model-value="postType"
-              :items="typeOptions"
-              :ui="{ fieldset: 'flex flex-wrap gap-4' }"
-              @update:model-value="setType(String($event))"
-            />
+        </UFormField>
+
+        <!-- Event schedule / offer period -->
+        <div v-else-if="editorKey === 'schedule' && editor.form.topic.event" class="space-y-6">
+          <p class="text-base text-muted">
+            {{ isOffer ? 'When the offer starts and stops.' : 'When it happens, and whether it repeats.' }}
+          </p>
+          <PostScheduleFields v-model="editor.form.topic.event" :is-offer="isOffer" />
+        </div>
+
+        <!-- Offer details -->
+        <div v-else-if="editorKey === 'offer' && editor.form.topic.offer" class="space-y-6">
+          <p class="text-base text-muted">What a guest needs in order to claim it.</p>
+          <UFormField label="Coupon code" description="Optional.">
+            <UInput :model-value="editor.form.topic.offer.coupon_code ?? ''" class="w-full" @update:model-value="setOffer('coupon_code', String($event))" />
           </UFormField>
-
-          <!-- Photo -->
-          <div v-else-if="editorKey === 'photo'" class="space-y-4">
-            <p class="text-base text-muted">The picture this post is recognised by, in the list and on your site.</p>
-            <PostMediaFields
-              v-model:media="editor.form.media"
-              :site-id="siteId"
-              :supports-media="supportsMedia"
-            />
-            <p v-if="supportsMedia" class="text-sm text-muted">Media saves with the post.</p>
-          </div>
-
-          <!-- Headline -->
-          <UFormField v-else-if="editorKey === 'headline'" label="Headline" description="Optional. Shown as the post's title on your site and in this list.">
-            <UInput v-model="editor.form.title" size="xl" autofocus placeholder="Add a headline" class="w-full" />
+          <UFormField label="Link to redeem online" description="Optional.">
+            <UInput :model-value="editor.form.topic.offer.redeem_online_url ?? ''" type="url" placeholder="https://" class="w-full" @update:model-value="setOffer('redeem_online_url', String($event))" />
           </UFormField>
+          <UFormField label="Terms" description="Optional. Any restriction a guest should know before they arrive.">
+            <UTextarea :model-value="editor.form.topic.offer.terms_conditions ?? ''" :rows="4" class="w-full" @update:model-value="setOffer('terms_conditions', String($event))" />
+          </UFormField>
+        </div>
 
-          <!-- Body -->
-          <UFormField v-else-if="editorKey === 'body'" label="Post" required>
-            <UTextarea
-              v-model="editor.form.body"
-              :rows="10"
-              autofocus
-              placeholder="What's new? Write it the way you'd say it to a guest."
-              size="xl"
+        <!-- Call to action -->
+        <div v-else-if="editorKey === 'action'" class="space-y-6">
+          <p class="text-base text-muted">The button a guest sees under the post.</p>
+          <UFormField label="Button">
+            <USelect
+              :model-value="editor.form.topic.call_to_action?.action_type ?? 'none'"
+              :items="actionOptions"
+              value-key="value"
+              label-key="label"
               class="w-full"
+              @update:model-value="setAction(String($event))"
             />
           </UFormField>
+          <p v-if="editor.form.topic.call_to_action?.action_type === 'call'" class="text-sm text-muted">
+            Calls the phone number saved on this location.
+          </p>
+          <UFormField v-else-if="editor.form.topic.call_to_action" label="Where it goes" required>
+            <UInput v-model="editor.form.topic.call_to_action.url" type="url" placeholder="https://" class="w-full" />
+          </UFormField>
+        </div>
 
-          <!-- Event schedule / offer period -->
-          <div v-else-if="editorKey === 'schedule' && editor.form.topic.event" class="space-y-6">
-            <p class="text-base text-muted">
-              {{ isOffer ? 'When the offer starts and stops.' : 'When it happens, and whether it repeats.' }}
-            </p>
-            <PostScheduleFields v-model="editor.form.topic.event" :is-offer="isOffer" />
-          </div>
-
-          <!-- Offer details -->
-          <div v-else-if="editorKey === 'offer' && editor.form.topic.offer" class="space-y-6">
-            <p class="text-base text-muted">What a guest needs in order to claim it.</p>
-            <UFormField label="Coupon code" description="Optional.">
-              <UInput :model-value="editor.form.topic.offer.coupon_code ?? ''" class="w-full" @update:model-value="setOffer('coupon_code', String($event))" />
-            </UFormField>
-            <UFormField label="Link to redeem online" description="Optional.">
-              <UInput :model-value="editor.form.topic.offer.redeem_online_url ?? ''" type="url" placeholder="https://" class="w-full" @update:model-value="setOffer('redeem_online_url', String($event))" />
-            </UFormField>
-            <UFormField label="Terms" description="Optional. Any restriction a guest should know before they arrive.">
-              <UTextarea :model-value="editor.form.topic.offer.terms_conditions ?? ''" :rows="4" class="w-full" @update:model-value="setOffer('terms_conditions', String($event))" />
-            </UFormField>
-          </div>
-
-          <!-- Call to action -->
-          <div v-else-if="editorKey === 'action'" class="space-y-6">
-            <p class="text-base text-muted">The button a guest sees under the post.</p>
-            <UFormField label="Button">
+        <!-- Publishing -->
+        <div v-else-if="editorKey === 'publishing'" class="space-y-6">
+          <p v-if="postStatus === 'published'" class="text-base text-muted">
+            This post is already live, so it no longer has a publishing time to set.
+          </p>
+          <template v-else>
+            <p class="text-base text-muted">When this post goes live on your site.</p>
+            <UFormField label="When">
               <USelect
-                :model-value="editor.form.topic.call_to_action?.action_type ?? 'none'"
-                :items="actionOptions"
+                :model-value="editor.form.topic.scheduled_for ? 'later' : 'now'"
+                :items="TIMING_OPTIONS"
                 value-key="value"
                 label-key="label"
                 class="w-full"
-                @update:model-value="setAction(String($event))"
+                @update:model-value="setTiming(String($event))"
               />
             </UFormField>
-            <p v-if="editor.form.topic.call_to_action?.action_type === 'call'" class="text-sm text-muted">
-              Calls the phone number saved on this location.
-            </p>
-            <UFormField v-else-if="editor.form.topic.call_to_action" label="Where it goes" required>
-              <UInput v-model="editor.form.topic.call_to_action.url" type="url" placeholder="https://" class="w-full" />
+            <UFormField v-if="editor.form.topic.scheduled_for" label="Goes live (UTC)" required description="Must be in the future.">
+              <UInput
+                :model-value="instantDate(editor.form.topic.scheduled_for).toISOString().slice(0, -1)"
+                type="datetime-local"
+                step="any"
+                class="w-full"
+                @update:model-value="editor.form.topic.scheduled_for = $event ? scheduledLifecycleValue('Scheduled', String($event), 'UTC') : null"
+              />
             </UFormField>
+          </template>
+
+          <div class="flex flex-wrap items-center gap-2 border-t border-default pt-4">
+            <UButton :loading="editor.publishing.value" label="Publish…" @click="openPublish" />
+            <UButton v-if="publicPath" :to="publicPath" target="_blank" size="sm" color="neutral" variant="soft" icon="i-lucide-external-link">
+              View public post
+            </UButton>
           </div>
-
-          <!-- Publishing -->
-          <div v-else-if="editorKey === 'publishing'" class="space-y-6">
-            <p v-if="postStatus === 'published'" class="text-base text-muted">
-              This post is already live, so it no longer has a publishing time to set.
-            </p>
-            <template v-else>
-              <p class="text-base text-muted">When this post goes live on your site.</p>
-              <UFormField label="When">
-                <USelect
-                  :model-value="editor.form.topic.scheduled_for ? 'later' : 'now'"
-                  :items="TIMING_OPTIONS"
-                  value-key="value"
-                  label-key="label"
-                  class="w-full"
-                  @update:model-value="setTiming(String($event))"
-                />
-              </UFormField>
-              <UFormField v-if="editor.form.topic.scheduled_for" label="Goes live (UTC)" required description="Must be in the future.">
-                <UInput
-                  :model-value="instantDate(editor.form.topic.scheduled_for).toISOString().slice(0, -1)"
-                  type="datetime-local"
-                  step="any"
-                  class="w-full"
-                  @update:model-value="editor.form.topic.scheduled_for = $event ? scheduledLifecycleValue('Scheduled', String($event), 'UTC') : null"
-                />
-              </UFormField>
-            </template>
-
-            <div class="flex flex-wrap items-center gap-2 border-t border-default pt-4">
-              <UButton :loading="editor.publishing.value" label="Publish…" @click="openPublish" />
-              <UButton v-if="publicPath" :to="publicPath" target="_blank" size="sm" color="neutral" variant="soft" icon="i-lucide-external-link">
-                View public post
-              </UButton>
-            </div>
-          </div>
-
-          <!--
-            A real section that this post type does not have — /offer on an
-            update, say. Named rather than left as a blank pane with a live Save.
-          -->
-          <p v-else class="text-base text-muted">
-            {{ typeLabel }} posts have no {{ sectionLabels[editorKey].toLowerCase() }}.
-          </p>
         </div>
-      </template>
 
-      <template v-if="editorKey !== 'photo'" #footer>
-        <div class="flex shrink-0 items-center justify-between gap-4 border-t border-default px-4 py-3 sm:px-6">
-          <UButton color="neutral" variant="ghost" label="Cancel" @click="cancelEditor" />
-          <UButton :label="saveLabel || 'Save'" :loading="editor.saving.value" :disabled="saveDisabled" @click="saveCurrentEditor" />
-        </div>
-      </template>
-    </UDashboardPanel>
-  </template>
+        <!--
+          A real section that this post type does not have — /offer on an
+          update, say. Named rather than left as a blank pane with a live Save.
+        -->
+        <p v-else class="text-base text-muted">
+          {{ typeLabel }} posts have no {{ sectionLabels[editorKey].toLowerCase() }}.
+        </p>
+      </div>
+    </template>
+
+    <template v-if="editorKey !== 'photo'" #footer>
+      <DashboardPanelFooter :save-label="saveLabel" :loading="editor.saving.value" :disabled="saveDisabled" @cancel="cancelEditor" @save="saveCurrentEditor" />
+    </template>
+  </UDashboardPanel>
 
   <!--
     Where the post goes out is a separate decision from what it says, so it is
@@ -328,6 +311,7 @@ const sectionLabels = computed<Record<SectionKey, string>>(() => ({
   publishing: 'Publishing',
 }))
 
+const hasDetail = computed(() => frame.mode.value === 'pair')
 const detailKey = computed(() => frame.childSegment.value)
 const editorKey = computed<SectionKey>(() => (detailKey.value ?? (isNew.value ? 'type' : 'photo')) as SectionKey)
 

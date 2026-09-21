@@ -1,10 +1,29 @@
 <template>
   <!--
-    The conversation keeps the column; the record it refers to opens over it as
-    a right-hand drawer — a sheet below `sm` — the way the dashboard menu does.
-    It is still a route, so back dismisses it and the URL is shareable.
+    The conversation's own column: the guest in the navbar, Details beside it
+    for a thread with a record behind it, the stream in the body. The record
+    opens over it as a right-hand drawer — a sheet below `sm` — the way the
+    dashboard menu does. It is still a route, so back dismisses it and the URL
+    is shareable.
   -->
-  <GuestThreadDetail :thread-id="threadId" :thread-path="threadPath" />
+  <UDashboardPanel id="site-messages-thread" :ui="{ body: 'p-0 sm:p-0 gap-0' }">
+    <template #header>
+      <UDashboardNavbar :title="thread?.guestName ?? 'Conversation'" :toggle="false">
+        <template #leading>
+          <DashboardNavbarLeading />
+        </template>
+        <template v-if="recordTo" #right>
+          <UButton :to="recordTo" color="neutral" variant="soft" class="h-10 rounded-full px-4" :aria-label="`Show ${recordTitle.toLowerCase()}`">
+            Details
+          </UButton>
+        </template>
+      </UDashboardNavbar>
+    </template>
+
+    <template #body>
+      <GuestThreadDetail :thread-id="threadId" />
+    </template>
+  </UDashboardPanel>
 
   <USlideover
     :open="frame.mode.value !== 'index'"
@@ -37,6 +56,18 @@ const dashboard = useDashboardSite()
 const recordTitle = computed(() => thread.value
   ? threadRecordTitle(thread.value.submissionType, dashboard.site.value?.vertical ?? null)
   : 'Details')
+// Opening the record keeps the list it was reached through, the same way
+// closing it does. A contact thread has no record and offers no way to one.
+const recordTo = computed(() => {
+  if (!thread.value || thread.value.submissionType === 'contact') return null
+  const query = new URLSearchParams()
+  for (const [key, value] of Object.entries(route.query)) {
+    // `archived` is present and empty on the past list; the emptiness is the value.
+    if (typeof value === 'string') query.set(key, value)
+  }
+  const search = query.toString()
+  return search ? `${threadPath.value}/details?${search}` : `${threadPath.value}/details`
+})
 
 // Closing is a navigation, not local state: the record has its own URL. The
 // conversation keeps whichever list it was opened from.

@@ -1,18 +1,20 @@
 <template>
   <NuxtPage v-if="frame.mode.value === 'yield'" />
 
-  <!--
-    The category's own level: creating one at `new`, or its Name leaf. Both are
-    the category record, so this page owns the chrome and the field.
-  -->
-  <template v-else-if="isNew || openLeaf">
+  <template v-else>
+    <!--
+      The list column. Creating a category is this page's own level, so it draws
+      the panel; an existing category's list owns its panel itself, and is
+      hidden below `lg` while a leaf or an item takes the screen.
+    -->
     <UDashboardPanel
+      v-if="isNew"
       id="location-product-category"
       :class="openLeaf ? 'hidden lg:flex' : undefined"
       :default-size="openLeaf ? 32 : undefined"
     >
       <template #header>
-        <UDashboardNavbar :title="isNew ? `New ${presentation.collectionGroupLabel.toLowerCase()}` : collectionName" :toggle="false">
+        <UDashboardNavbar :title="`New ${presentation.collectionGroupLabel.toLowerCase()}`" :toggle="false">
           <template #leading>
             <DashboardNavbarLeading />
           </template>
@@ -22,17 +24,20 @@
       <template #body>
         <div class="mx-auto w-full" :class="openLeaf ? 'max-w-xl' : 'max-w-3xl'">
           <UAlert v-if="errorMessage" class="mb-6" color="error" variant="soft" icon="i-lucide-triangle-alert" :description="errorMessage" />
-          <template v-if="isNew">
-            <div class="mb-6 flex justify-end">
-              <UButton :label="createActionLabel" :loading="saving" @click="startOrCreate" />
-            </div>
-            <EditorNavigationList :groups="collectionNavigation" :active-item="openLeaf" />
-          </template>
-          <CollectionProductList v-else />
+          <div class="mb-6 flex justify-end">
+            <UButton :label="createActionLabel" :loading="saving" @click="startOrCreate" />
+          </div>
+          <EditorNavigationList :groups="collectionNavigation" :active-item="openLeaf" />
         </div>
       </template>
     </UDashboardPanel>
+    <CollectionProductList
+      v-else
+      :class="hasColumnBeside ? 'hidden lg:flex' : undefined"
+      :default-size="hasColumnBeside ? 32 : undefined"
+    />
 
+    <!-- The category's Name leaf: the record itself, so this page owns the field. -->
     <UDashboardPanel v-if="openLeaf" id="location-product-category-name">
       <template #header>
         <UDashboardNavbar :title="COLLECTION_LABELS.name" :toggle="false">
@@ -44,6 +49,7 @@
 
       <template #body>
         <div class="mx-auto w-full max-w-2xl">
+          <UAlert v-if="errorMessage" class="mb-6" color="error" variant="soft" icon="i-lucide-triangle-alert" :description="errorMessage" />
           <UFormField label="Name" required>
             <UInput v-model="form.name" :placeholder="presentation.collectionGroupLabel === 'Section' ? 'Appetizers' : 'Accessories'" size="xl" autofocus class="w-full" />
           </UFormField>
@@ -61,37 +67,13 @@
       </template>
 
       <template #footer>
-        <div class="flex shrink-0 items-center justify-between gap-4 border-t border-default px-4 py-3 sm:px-6">
-          <UButton color="neutral" variant="ghost" label="Cancel" @click="closeLeaf" />
-          <UButton :label="saveLabel || 'Save'" :loading="saving" :disabled="saveDisabled" @click="saveLeaf" />
-        </div>
-      </template>
-    </UDashboardPanel>
-  </template>
-
-  <!-- An item is open: my list is the index column, the item is the detail. -->
-  <template v-else-if="frame.mode.value === 'pair'">
-    <UDashboardPanel id="location-product-category" class="hidden lg:flex" :default-size="32">
-      <template #header>
-        <UDashboardNavbar :title="collectionName" :toggle="false">
-          <template #leading>
-            <DashboardNavbarLeading />
-          </template>
-        </UDashboardNavbar>
-      </template>
-
-      <template #body>
-        <div class="mx-auto w-full max-w-xl">
-          <CollectionProductList />
-        </div>
+        <DashboardPanelFooter :save-label="saveLabel" :loading="saving" :disabled="saveDisabled" @cancel="closeLeaf" @save="saveLeaf" />
       </template>
     </UDashboardPanel>
 
-    <!-- The open item owns the other column, header and all. -->
-    <NuxtPage />
+    <!-- An item is open: it owns the other column, header and all. -->
+    <NuxtPage v-else-if="frame.mode.value === 'pair'" />
   </template>
-
-  <CollectionProductList v-else />
 </template>
 
 <script setup lang="ts">
@@ -132,10 +114,9 @@ const siteId = await useDashboardSiteId()
 
 const locationId = computed(() => dashboardLocation.currentLocation.value?.id ?? null)
 
-// The same catalog the two lists read, so titling this column costs no request.
+// The same catalog the list reads, so the Name leaf's draft costs no request.
 const catalog = useLocationProductCatalog(siteId, locationId)
 const collection = computed(() => catalog.collections.value.find(row => row.id === collectionId.value) ?? null)
-const collectionName = computed(() => collection.value?.name ?? presentation.collectionGroupLabel)
 
 // ── The collection record ───────────────────────────────
 const isNew = computed(() => collectionId.value === 'new')
@@ -144,6 +125,8 @@ type CollectionLeaf = keyof typeof COLLECTION_LABELS
 /** The collection's own leaf, as opposed to a product open beneath it. */
 const openLeaf = computed<CollectionLeaf | null>(() => (frame.childSegment.value === 'name' ? 'name' : null))
 const openKey = computed<CollectionLeaf>(() => openLeaf.value ?? 'name')
+/** Something takes the screen beside the list: the Name leaf, or an open item. */
+const hasColumnBeside = computed(() => Boolean(openLeaf.value) || frame.mode.value === 'pair')
 
 watchEffect(() => {
   if (isNew.value && (frame.rest.value.length > 1 || (frame.childSegment.value && !openLeaf.value))) {
@@ -203,7 +186,6 @@ async function commit() {
       await dashboardApi(`${endpoint}/${collectionId.value}`, { method: 'PATCH', body: { name: form.name.trim() }, validate: isRecord })
     }
   } catch (error) {
-    // The index column, where the alert lives, is under the detail sheet on narrow screens.
     errorMessage.value = getErrorMessage(error, `Failed to save ${presentation.collectionGroupLabel.toLowerCase()}`)
     return
   } finally {

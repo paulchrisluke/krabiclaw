@@ -1,326 +1,309 @@
 <template>
-  <!--
-    With no section open this item is its parent's detail column, so it renders
-    its rows and nothing else — no panel, no navbar, and no section opened on
-    its behalf. It becomes the index column only once a section is open.
-  -->
-  <div v-if="frame.mode.value === 'index'">
-    <UAlert
-      v-if="loadError"
-      color="error"
-      variant="soft"
-      icon="i-lucide-triangle-alert"
-      :title="`${presentation.itemLabel} could not be loaded`"
-      :description="loadError"
-    />
-    <template v-else>
-      <div v-if="isNew" class="mb-6 flex justify-end">
-        <UButton :label="createActionLabel" :loading="saving" @click="startOrCreate" />
-      </div>
-      <EditorNavigationList :groups="navigationGroups" />
+<!--
+  One panel either way: this level always owns a column and always titles it.
+  With no section open it is the whole screen; once one is open it is the
+  index column and the section takes the other.
+-->
+  <UDashboardPanel
+    id="location-product-detail"
+    :class="hasDetail ? 'hidden lg:flex' : undefined"
+    :default-size="hasDetail ? 32 : undefined"
+  >
+    <template #header>
+      <UDashboardNavbar :title="form.name || presentation.itemLabel" :toggle="false">
+        <template #leading>
+          <DashboardNavbarLeading />
+        </template>
+        <template v-if="product" #right>
+          <DashboardResourceLocalization
+            :site-id="siteId"
+            resource-type="product"
+            :resource-id="productId"
+            :resource-label="presentation.itemLabel.toLowerCase()"
+            :fields="productLocalizationFields"
+            :load-values="loadProductLocalization"
+            :save-values="saveProductLocalization"
+            :language-settings-path="siteLocalizationSettingsPath"
+          />
+        </template>
+      </UDashboardNavbar>
     </template>
-  </div>
 
-  <template v-else>
-    <UDashboardPanel
-      id="location-product-detail"
-      class="hidden lg:flex"
-      :default-size="32"
-    >
-      <template #header>
-        <UDashboardNavbar :title="form.name || presentation.itemLabel" :toggle="false">
-          <template #leading>
-            <DashboardNavbarLeading />
-          </template>
-          <template v-if="product" #right>
-            <DashboardResourceLocalization
-              :site-id="siteId"
-              resource-type="product"
-              :resource-id="productId"
-              :resource-label="presentation.itemLabel.toLowerCase()"
-              :fields="productLocalizationFields"
-              :load-values="loadProductLocalization"
-              :save-values="saveProductLocalization"
-              :language-settings-path="siteLocalizationSettingsPath"
-            />
-          </template>
-        </UDashboardNavbar>
-      </template>
+    <template #body>
+      <div class="mx-auto w-full" :class="hasDetail ? 'max-w-xl' : 'max-w-3xl'">
+        <UAlert
+          v-if="loadError"
+          color="error"
+          variant="soft"
+          icon="i-lucide-triangle-alert"
+          :title="`${presentation.itemLabel} could not be loaded`"
+          :description="loadError"
+        />
+        <template v-else>
+          <div v-if="isNew && !hasDetail" class="mb-6 flex justify-end">
+            <UButton :label="createActionLabel" :loading="saving" @click="startOrCreate" />
+          </div>
+          <EditorNavigationList :groups="navigationGroups" :active-item="detailKey" />
+        </template>
+      </div>
+    </template>
+  </UDashboardPanel>
 
-      <template #body>
-        <div class="mx-auto w-full max-w-xl">
-          <UAlert
-            v-if="loadError"
-            color="error"
-            variant="soft"
-            icon="i-lucide-triangle-alert"
-            :title="`${presentation.itemLabel} could not be loaded`"
-            :description="loadError"
+  <!--
+    The open section is the other column: its own panel, its own header,
+    and Save/Cancel in the panel's own footer slot.
+  -->
+  <UDashboardPanel v-if="hasDetail && !loadError" id="location-product-section">
+    <template #header>
+      <UDashboardNavbar :title="sectionLabels[editorKey]" :toggle="false">
+        <template #leading>
+          <DashboardNavbarLeading />
+        </template>
+      </UDashboardNavbar>
+    </template>
+
+    <template #body>
+      <div class="mx-auto w-full max-w-5xl">
+        <UAlert
+          v-if="saveError || photoError"
+          color="error"
+          variant="soft"
+          icon="i-lucide-circle-alert"
+          :description="saveError || photoError || undefined"
+          class="mb-6"
+        />
+        <!-- Photo -->
+        <div v-if="editorKey === 'photo'" class="space-y-4">
+          <p class="text-base text-muted">The picture guests recognise this by, in the list and on your site.</p>
+          <DashboardCoverPhotoField
+            :site-id="siteId"
+            :location-id="locationId"
+            :model-value="form.image_asset_id"
+            :preview-url="product?.image?.public_url ?? null"
+            :preview-alt="product?.image?.alt_text || form.name"
+            :title="`${presentation.itemLabel} photo`"
+            testid="product-photo"
+            @update:model-value="setPrimaryImage"
           />
-          <EditorNavigationList v-else :groups="navigationGroups" :active-item="detailKey" />
+          <p class="text-sm text-muted">A photo saves as soon as you choose it.</p>
         </div>
-      </template>
-    </UDashboardPanel>
 
-    <!--
-      The open section is the other column: its own panel, its own header,
-      and Save/Cancel in the panel's own footer slot.
-    -->
-    <UDashboardPanel v-if="!loadError" id="location-product-section">
-      <template #header>
-        <UDashboardNavbar :title="sectionLabels[editorKey]" :toggle="false">
-          <template #leading>
-            <DashboardNavbarLeading />
+        <!-- Name -->
+        <UFormField v-else-if="editorKey === 'name'" label="Name" required>
+          <UInput v-model="form.name" size="xl" autofocus class="w-full" />
+        </UFormField>
+
+        <!--
+          One price, on the one thing being bought. A product with options has
+          a price per option combination, so this section hands over to
+          Options rather than quietly editing whichever variant came first.
+        -->
+        <div v-else-if="editorKey === 'price'" class="space-y-5">
+          <template v-if="form.variants.length === 1">
+            <UFormField :label="`Amount (${currency})`" description="Leave empty if this is not purchasable. Zero is a real price and means free.">
+              <UInput v-model="form.variants[0]!.price_major" inputmode="decimal" placeholder="280" class="w-full" data-testid="product-price" />
+            </UFormField>
           </template>
-        </UDashboardNavbar>
-      </template>
-
-      <template #body>
-        <div class="mx-auto w-full max-w-5xl">
           <UAlert
-            v-if="saveError || photoError"
-            color="error"
+            v-else
+            color="neutral"
             variant="soft"
-            icon="i-lucide-circle-alert"
-            :description="saveError || photoError || undefined"
-            class="mb-6"
+            icon="i-lucide-list"
+            title="This has options"
+            :description="`Each combination has its own price. Edit them under Options.`"
           />
-          <!-- Photo -->
-          <div v-if="editorKey === 'photo'" class="space-y-4">
-            <p class="text-base text-muted">The picture guests recognise this by, in the list and on your site.</p>
-            <DashboardCoverPhotoField
-              :site-id="siteId"
-              :location-id="locationId"
-              :model-value="form.image_asset_id"
-              :preview-url="product?.image?.public_url ?? null"
-              :preview-alt="product?.image?.alt_text || form.name"
-              :title="`${presentation.itemLabel} photo`"
-              testid="product-photo"
-              @update:model-value="setPrimaryImage"
-            />
-            <p class="text-sm text-muted">A photo saves as soon as you choose it.</p>
-          </div>
+        </div>
 
-          <!-- Name -->
-          <UFormField v-else-if="editorKey === 'name'" label="Name" required>
-            <UInput v-model="form.name" size="xl" autofocus class="w-full" />
-          </UFormField>
+        <!-- Description -->
+        <UFormField v-else-if="editorKey === 'description'" label="Description">
+          <UTextarea v-model="form.description" :rows="10" autofocus class="w-full" />
+        </UFormField>
 
-          <!--
-            One price, on the one thing being bought. A product with options has
-            a price per option combination, so this section hands over to
-            Options rather than quietly editing whichever variant came first.
-          -->
-          <div v-else-if="editorKey === 'price'" class="space-y-5">
-            <template v-if="form.variants.length === 1">
-              <UFormField :label="`Amount (${currency})`" description="Leave empty if this is not purchasable. Zero is a real price and means free.">
-                <UInput v-model="form.variants[0]!.price_major" inputmode="decimal" placeholder="280" class="w-full" data-testid="product-price" />
-              </UFormField>
-            </template>
-            <UAlert
-              v-else
-              color="neutral"
-              variant="soft"
-              icon="i-lucide-list"
-              title="This has options"
-              :description="`Each combination has its own price. Edit them under Options.`"
-            />
-          </div>
-
-          <!-- Description -->
-          <UFormField v-else-if="editorKey === 'description'" label="Description">
-            <UTextarea v-model="form.description" :rows="10" autofocus class="w-full" />
-          </UFormField>
-
-          <!--
-            Options and the combinations they produce. A combination is what a
-            customer actually buys, so it is what carries a price — and every
-            combination has to be answered, or two of them look identical.
-          -->
-          <div v-else-if="editorKey === 'options'" class="space-y-6">
-            <div v-for="(option, optionIndex) in form.options" :key="option.id" class="space-y-2 rounded-lg border border-default p-3">
-              <div class="flex items-center gap-2">
-                <UInput v-model="option.name" placeholder="Size" :maxlength="PRODUCT_LIMITS.optionName" class="flex-1" aria-label="Option name" />
-                <UButton
-                  icon="i-lucide-trash-2" color="neutral" variant="ghost"
-                  :aria-label="`Remove ${option.name || 'option'}`"
-                  @click="removeOption(optionIndex)"
-                />
-              </div>
-              <UInputTags
-                :model-value="option.values.map(value => value.value)"
-                placeholder="Add a value"
-                :max="PRODUCT_LIMITS.optionValues"
-                :max-length="PRODUCT_LIMITS.optionValue"
-                delimiter=","
-                add-on-blur
-                add-on-paste
-                class="w-full"
-                @update:model-value="setOptionValues(optionIndex, $event as string[])"
+        <!--
+          Options and the combinations they produce. A combination is what a
+          customer actually buys, so it is what carries a price — and every
+          combination has to be answered, or two of them look identical.
+        -->
+        <div v-else-if="editorKey === 'options'" class="space-y-6">
+          <div v-for="(option, optionIndex) in form.options" :key="option.id" class="space-y-2 rounded-lg border border-default p-3">
+            <div class="flex items-center gap-2">
+              <UInput v-model="option.name" placeholder="Size" :maxlength="PRODUCT_LIMITS.optionName" class="flex-1" aria-label="Option name" />
+              <UButton
+                icon="i-lucide-trash-2" color="neutral" variant="ghost"
+                :aria-label="`Remove ${option.name || 'option'}`"
+                @click="removeOption(optionIndex)"
               />
             </div>
-            <UButton
-              v-if="form.options.length < PRODUCT_LIMITS.options"
-              label="Add an option" icon="i-lucide-plus" color="neutral" variant="soft"
-              @click="addOption"
-            />
-
-            <div v-if="form.variants.length > 1" class="space-y-2">
-              <p class="text-sm font-semibold text-highlighted">Combinations</p>
-              <div v-for="variant in form.variants" :key="variant.key" class="flex items-center gap-3 rounded-lg border border-default p-3">
-                <span class="min-w-0 flex-1 truncate text-sm text-highlighted">{{ variant.name }}</span>
-                <UInput v-model="variant.price_major" inputmode="decimal" :placeholder="`Amount (${currency})`" class="w-40" />
-              </div>
-            </div>
-          </div>
-
-          <!-- Order link -->
-          <UFormField v-else-if="editorKey === 'order-url'" label="Order URL" description="Where a customer goes to order this. Not the page it is shown on.">
-            <UInput v-model="form.order_url" type="url" placeholder="https://…" class="w-full" />
-          </UFormField>
-
-          <!-- Tags -->
-          <UFormField v-else-if="editorKey === 'tags'" label="Tags">
             <UInputTags
-              v-model="form.tags"
-              placeholder="Add a tag"
-              :max="PRODUCT_LIMITS.tags"
-              :max-length="PRODUCT_LIMITS.tag"
+              :model-value="option.values.map(value => value.value)"
+              placeholder="Add a value"
+              :max="PRODUCT_LIMITS.optionValues"
+              :max-length="PRODUCT_LIMITS.optionValue"
               delimiter=","
               add-on-blur
               add-on-paste
               class="w-full"
+              @update:model-value="setOptionValues(optionIndex, $event as string[])"
+            />
+          </div>
+          <UButton
+            v-if="form.options.length < PRODUCT_LIMITS.options"
+            label="Add an option" icon="i-lucide-plus" color="neutral" variant="soft"
+            @click="addOption"
+          />
+
+          <div v-if="form.variants.length > 1" class="space-y-2">
+            <p class="text-sm font-semibold text-highlighted">Combinations</p>
+            <div v-for="variant in form.variants" :key="variant.key" class="flex items-center gap-3 rounded-lg border border-default p-3">
+              <span class="min-w-0 flex-1 truncate text-sm text-highlighted">{{ variant.name }}</span>
+              <UInput v-model="variant.price_major" inputmode="decimal" :placeholder="`Amount (${currency})`" class="w-40" />
+            </div>
+          </div>
+        </div>
+
+        <!-- Order link -->
+        <UFormField v-else-if="editorKey === 'order-url'" label="Order URL" description="Where a customer goes to order this. Not the page it is shown on.">
+          <UInput v-model="form.order_url" type="url" placeholder="https://…" class="w-full" />
+        </UFormField>
+
+        <!-- Tags -->
+        <UFormField v-else-if="editorKey === 'tags'" label="Tags">
+          <UInputTags
+            v-model="form.tags"
+            placeholder="Add a tag"
+            :max="PRODUCT_LIMITS.tags"
+            :max-length="PRODUCT_LIMITS.tag"
+            delimiter=","
+            add-on-blur
+            add-on-paste
+            class="w-full"
+          />
+        </UFormField>
+
+        <!--
+          Attributes are your own defined facts — allergens, what to bring,
+          a cancellation policy. Each one is a definition you made once, so
+          the same attribute means the same thing on every product.
+        -->
+        <div v-else-if="editorKey === 'attributes'" class="space-y-3">
+          <p v-if="!definitions.length" class="text-base text-muted">
+            No attributes are defined yet. Define one in your catalog settings and it becomes available on every {{ presentation.itemLabel.toLowerCase() }}.
+          </p>
+          <UFormField
+            v-for="definition in definitions"
+            :key="definition.id"
+            :label="definition.name"
+            :description="definition.description ?? undefined"
+          >
+            <UInputTags
+              v-if="definition.value_type === 'list.single_line_text'"
+              :model-value="listValue(definition)"
+              placeholder="Add a value"
+              delimiter=","
+              add-on-blur
+              add-on-paste
+              class="w-full"
+              @update:model-value="form.metafields[metafieldKey(definition)] = $event as string[]"
+            />
+            <UTextarea
+              v-else-if="definition.value_type === 'multi_line_text'"
+              :model-value="textValue(definition)"
+              :rows="4"
+              class="w-full"
+              @update:model-value="form.metafields[metafieldKey(definition)] = $event"
+            />
+            <!-- A typed attribute is edited in its own type. A number typed
+                 into a text box arrives as a string the validator refuses,
+                 and a boolean has no text form at all. -->
+            <UInputNumber
+              v-else-if="definition.value_type === 'integer'"
+              :model-value="integerValue(definition)"
+              class="w-full"
+              @update:model-value="setIntegerMetafield(definition, $event)"
+            />
+            <UCheckbox
+              v-else-if="definition.value_type === 'boolean'"
+              :model-value="booleanValue(definition)"
+              :label="definition.name"
+              @update:model-value="form.metafields[metafieldKey(definition)] = $event === true"
+            />
+            <UInput
+              v-else
+              :model-value="textValue(definition)"
+              class="w-full"
+              @update:model-value="form.metafields[metafieldKey(definition)] = $event"
             />
           </UFormField>
+        </div>
 
-          <!--
-            Attributes are your own defined facts — allergens, what to bring,
-            a cancellation policy. Each one is a definition you made once, so
-            the same attribute means the same thing on every product.
-          -->
-          <div v-else-if="editorKey === 'attributes'" class="space-y-3">
-            <p v-if="!definitions.length" class="text-base text-muted">
-              No attributes are defined yet. Define one in your catalog settings and it becomes available on every {{ presentation.itemLabel.toLowerCase() }}.
-            </p>
-            <UFormField
-              v-for="definition in definitions"
-              :key="definition.id"
-              :label="definition.name"
-              :description="definition.description ?? undefined"
-            >
-              <UInputTags
-                v-if="definition.value_type === 'list.single_line_text'"
-                :model-value="listValue(definition)"
-                placeholder="Add a value"
-                delimiter=","
-                add-on-blur
-                add-on-paste
-                class="w-full"
-                @update:model-value="form.metafields[metafieldKey(definition)] = $event as string[]"
-              />
-              <UTextarea
-                v-else-if="definition.value_type === 'multi_line_text'"
-                :model-value="textValue(definition)"
-                :rows="4"
-                class="w-full"
-                @update:model-value="form.metafields[metafieldKey(definition)] = $event"
-              />
-              <!-- A typed attribute is edited in its own type. A number typed
-                   into a text box arrives as a string the validator refuses,
-                   and a boolean has no text form at all. -->
-              <UInputNumber
-                v-else-if="definition.value_type === 'integer'"
-                :model-value="integerValue(definition)"
-                class="w-full"
-                @update:model-value="setIntegerMetafield(definition, $event)"
-              />
-              <UCheckbox
-                v-else-if="definition.value_type === 'boolean'"
-                :model-value="booleanValue(definition)"
-                :label="definition.name"
-                @update:model-value="form.metafields[metafieldKey(definition)] = $event === true"
-              />
-              <UInput
-                v-else
-                :model-value="textValue(definition)"
-                class="w-full"
-                @update:model-value="form.metafields[metafieldKey(definition)] = $event"
-              />
+        <!--
+          Three separate switches, because they answer three different
+          questions. Turning off the sale switch does not hide the item, and
+          hiding it does not say it is sold out.
+        -->
+        <div v-else-if="editorKey === 'publication'" class="space-y-4">
+          <UCheckbox v-model="form.active" label="On sale" description="The merchant switch. Off means you are not selling it anywhere." />
+          <UCheckbox v-model="form.published" label="Published on this site" description="Whether the site shows it at all." />
+          <UCheckbox v-model="form.location_published" label="Shown at this location" description="Whether this branch lists it." />
+          <UCheckbox v-model="form.location_active" label="Sold at this location" description="Whether this branch takes orders for it." />
+        </div>
+
+        <!--
+          Booking capability. Adding it is what makes this bookable; removing
+          it takes its sessions and their bookings with it, so it asks first.
+        -->
+        <div v-else-if="editorKey === 'booking'" class="space-y-4">
+          <UCheckbox v-model="form.bookable" label="Takes bookings" description="Guests choose a session and reserve a place." />
+          <UAlert
+            v-if="!form.bookable && product?.booking"
+            color="warning"
+            variant="soft"
+            icon="i-lucide-triangle-alert"
+            description="Saving removes this product's schedule. It is refused while anything is booked."
+          />
+          <template v-if="form.bookable">
+            <UFormField label="Session length (minutes)">
+              <UInput v-model="form.booking_duration" inputmode="numeric" placeholder="120" class="w-full" />
             </UFormField>
-          </div>
+            <UFormField label="Places per session" description="Leave empty for no limit. Zero means no places at all.">
+              <UInput v-model="form.booking_capacity" inputmode="numeric" placeholder="10" class="w-full" />
+            </UFormField>
 
-          <!--
-            Three separate switches, because they answer three different
-            questions. Turning off the sale switch does not hide the item, and
-            hiding it does not say it is sold out.
-          -->
-          <div v-else-if="editorKey === 'publication'" class="space-y-4">
-            <UCheckbox v-model="form.active" label="On sale" description="The merchant switch. Off means you are not selling it anywhere." />
-            <UCheckbox v-model="form.published" label="Published on this site" description="Whether the site shows it at all." />
-            <UCheckbox v-model="form.location_published" label="Shown at this location" description="Whether this branch lists it." />
-            <UCheckbox v-model="form.location_active" label="Sold at this location" description="Whether this branch takes orders for it." />
-          </div>
-
-          <!--
-            Booking capability. Adding it is what makes this bookable; removing
-            it takes its sessions and their bookings with it, so it asks first.
-          -->
-          <div v-else-if="editorKey === 'booking'" class="space-y-4">
-            <UCheckbox v-model="form.bookable" label="Takes bookings" description="Guests choose a session and reserve a place." />
-            <UAlert
-              v-if="!form.bookable && product?.booking"
-              color="warning"
-              variant="soft"
-              icon="i-lucide-triangle-alert"
-              description="Saving removes this product's schedule. It is refused while anything is booked."
-            />
-            <template v-if="form.bookable">
-              <UFormField label="Session length (minutes)">
-                <UInput v-model="form.booking_duration" inputmode="numeric" placeholder="120" class="w-full" />
-              </UFormField>
-              <UFormField label="Places per session" description="Leave empty for no limit. Zero means no places at all.">
-                <UInput v-model="form.booking_capacity" inputmode="numeric" placeholder="10" class="w-full" />
-              </UFormField>
-
-              <!--
-                The weekly schedule at this branch. Each time is a slot the
-                merchant runs every week; sessions a guest can book are
-                generated from these, so this is where a class time is added,
-                moved or dropped.
-              -->
-              <div v-if="product?.booking" class="space-y-3 border-t border-default pt-4">
-                <div>
-                  <p class="text-sm font-medium">Weekly schedule</p>
-                  <p class="text-sm text-muted">Times this branch runs it, in the branch's own clock. Dropping a time cancels its future sessions that nobody has booked.</p>
-                </div>
-                <p v-if="scheduleLoading" class="text-sm text-muted">Loading the schedule…</p>
-                <div v-else class="space-y-3">
-                  <div v-for="day in WEEKDAYS" :key="day.value" class="flex flex-col gap-2 sm:flex-row sm:items-start">
-                    <p class="w-24 shrink-0 pt-2 text-sm font-medium">{{ day.label }}</p>
-                    <div class="flex-1 space-y-2">
-                      <div v-for="(slot, index) in slotsFor(day.value)" :key="`${day.value}-${index}`" class="flex items-center gap-2">
-                        <UInput v-model="slot.start_time" type="time" step="300" class="w-32" />
-                        <UInput v-model="slot.capacity" inputmode="numeric" :placeholder="form.booking_capacity || 'Default'" class="w-28" aria-label="Places for this time" />
-                        <UButton icon="i-lucide-x" color="neutral" variant="ghost" size="sm" aria-label="Remove this time" @click="removeSlot(slot)" />
-                      </div>
-                      <UButton icon="i-lucide-plus" color="neutral" variant="subtle" size="sm" label="Add a time" @click="addSlot(day.value)" />
+            <!--
+              The weekly schedule at this branch. Each time is a slot the
+              merchant runs every week; sessions a guest can book are
+              generated from these, so this is where a class time is added,
+              moved or dropped.
+            -->
+            <div v-if="product?.booking" class="space-y-3 border-t border-default pt-4">
+              <div>
+                <p class="text-sm font-medium">Weekly schedule</p>
+                <p class="text-sm text-muted">Times this branch runs it, in the branch's own clock. Dropping a time cancels its future sessions that nobody has booked.</p>
+              </div>
+              <p v-if="scheduleLoading" class="text-sm text-muted">Loading the schedule…</p>
+              <div v-else class="space-y-3">
+                <div v-for="day in WEEKDAYS" :key="day.value" class="flex flex-col gap-2 sm:flex-row sm:items-start">
+                  <p class="w-24 shrink-0 pt-2 text-sm font-medium">{{ day.label }}</p>
+                  <div class="flex-1 space-y-2">
+                    <div v-for="(slot, index) in slotsFor(day.value)" :key="`${day.value}-${index}`" class="flex items-center gap-2">
+                      <UInput v-model="slot.start_time" type="time" step="300" class="w-32" />
+                      <UInput v-model="slot.capacity" inputmode="numeric" :placeholder="form.booking_capacity || 'Default'" class="w-28" aria-label="Places for this time" />
+                      <UButton icon="i-lucide-x" color="neutral" variant="ghost" size="sm" aria-label="Remove this time" @click="removeSlot(slot)" />
                     </div>
+                    <UButton icon="i-lucide-plus" color="neutral" variant="subtle" size="sm" label="Add a time" @click="addSlot(day.value)" />
                   </div>
                 </div>
               </div>
-            </template>
-          </div>
+            </div>
+          </template>
         </div>
-      </template>
+      </div>
+    </template>
 
-      <template v-if="editorKey !== 'photo'" #footer>
-        <div class="flex shrink-0 items-center justify-between gap-4 border-t border-default px-4 py-3 sm:px-6">
-          <UButton color="neutral" variant="ghost" label="Cancel" @click="cancelEditor" />
-          <UButton :label="saveLabel || 'Save'" :loading="saving" :disabled="saveDisabled" @click="saveCurrentEditor" />
-        </div>
-      </template>
-    </UDashboardPanel>
-  </template>
+    <template v-if="editorKey !== 'photo'" #footer>
+      <DashboardPanelFooter :save-label="saveLabel" :loading="saving" :disabled="saveDisabled" @cancel="cancelEditor" @save="saveCurrentEditor" />
+    </template>
+  </UDashboardPanel>
 </template>
 
 <script setup lang="ts">
@@ -393,6 +376,7 @@ const sectionLabels: Record<SectionKey, string> = {
   'booking': 'Bookings',
 }
 
+const hasDetail = computed(() => frame.mode.value === 'pair')
 const detailKey = computed(() => frame.childSegment.value)
 const editorKey = computed<SectionKey>(() => (detailKey.value ?? 'photo') as SectionKey)
 

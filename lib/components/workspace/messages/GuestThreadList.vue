@@ -4,14 +4,13 @@
     :data-guest-thread-list-hydrated="listHydrated ? 'true' : 'false'"
   >
     <!--
-      The panel's own header. It holds still while the rows scroll under it,
-      the way a mail list does: the title row, then search in place of it, then
-      one row of filters that scrolls sideways rather than wrapping.
+      The list's controls. The title is the navbar's, like every other screen;
+      this row holds the filters, with search at its end, and the search field
+      takes the row's place while it is open — the way a mail list does.
     -->
-    <header class="shrink-0 border-b border-default px-4 pb-3 pt-4">
-      <div class="flex items-center gap-2">
+    <header class="shrink-0 px-4 py-3">
+      <div v-if="searchOpen" class="flex items-center gap-2">
         <UInput
-          v-if="searchOpen"
           v-model="search"
           type="search"
           icon="i-lucide-search"
@@ -20,27 +19,12 @@
           autofocus
           class="flex-1"
         />
-        <!-- 22px/500, measured on Airbnb's own panel heading. Search replaces
-             it rather than sitting beside it, the way theirs does. -->
-        <h1 v-else class="min-w-0 flex-1 truncate text-[22px] font-medium text-highlighted">
-          {{ pastOnly ? 'Past conversations' : 'Messages' }}
-        </h1>
-
         <UButton
-          v-if="searchOpen"
           color="neutral"
           variant="ghost"
           size="sm"
           label="Cancel"
           @click="closeSearch"
-        />
-        <UButton
-          v-else
-          color="neutral"
-          variant="ghost"
-          icon="i-lucide-search"
-          aria-label="Search"
-          @click="searchOpen = true"
         />
       </div>
 
@@ -48,7 +32,7 @@
         Airbnb's own control: the kind is a dropdown labelled by what is
         selected, and Unread sits beside it as a toggle. Both are 40px pills.
       -->
-      <div class="mt-3 flex items-center gap-2">
+      <div v-else class="flex items-center gap-2">
         <UDropdownMenu
           v-if="typeOptions.length"
           :items="typeMenuItems"
@@ -85,6 +69,15 @@
         >
           Unread
         </UButton>
+
+        <UButton
+          color="neutral"
+          variant="ghost"
+          icon="i-lucide-search"
+          aria-label="Search"
+          class="ml-auto"
+          @click="searchOpen = true"
+        />
       </div>
     </header>
 
@@ -126,8 +119,9 @@
         class="mx-3 flex items-start gap-3 rounded-xl px-3 py-3 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
         :class="thread.id === openThreadId ? 'bg-elevated' : 'hover:bg-elevated/60'"
       >
-        <!-- The picture leads. A thread whose location has no hero keeps the
-             same footprint so the rows do not reflow between them. -->
+        <!-- The picture leads: the location's hero, or the business's logo for
+             a thread that came to the business itself. A place with neither
+             keeps the same footprint so the rows do not reflow between them. -->
         <img
           v-if="thread.imageUrl"
           :src="thread.imageUrl"
@@ -147,11 +141,11 @@
             the picture to align against.
           -->
           <div v-if="occurrenceLine(thread)" class="flex items-baseline justify-between gap-3 text-xs text-muted">
-            <span class="truncate">{{ occurrenceLine(thread) }}</span>
+            <span class="min-w-0 flex-1 truncate">{{ occurrenceLine(thread) }}</span>
             <span class="shrink-0">{{ formatRelativeTime(thread.lastActivityAt) }}</span>
           </div>
           <div class="flex items-baseline justify-between gap-3">
-            <p class="min-w-0 truncate text-sm font-medium text-highlighted">{{ thread.guestName }}</p>
+            <p class="min-w-0 flex-1 truncate text-sm font-medium text-highlighted">{{ thread.guestName }}</p>
             <span v-if="!occurrenceLine(thread)" class="shrink-0 text-xs text-muted">{{ formatRelativeTime(thread.lastActivityAt) }}</span>
           </div>
           <p class="mt-0.5 line-clamp-2 text-sm leading-snug text-muted">{{ thread.preview?.text || 'New conversation' }}</p>
@@ -172,7 +166,8 @@
       <NuxtLink
         v-if="!loadingThreads && (pastOnly || threads.length > 0)"
         :to="{ path: listRoute, query: pastOnly ? withoutArchived : { ...route.query, archived: '' } }"
-        class="mt-2 flex items-center justify-between gap-3 border-t border-default px-4 py-4 text-sm font-medium text-default transition hover:bg-elevated/60"
+        class="flex items-center justify-between gap-3 px-4 py-4 text-sm font-medium text-default transition hover:bg-elevated/60"
+        :class="threads.length ? 'mt-2 border-t border-default' : ''"
       >
         <span>{{ pastOnly ? 'Current conversations' : 'Past conversations' }}</span>
         <UIcon name="i-lucide-chevron-right" class="size-4 shrink-0 text-muted" />

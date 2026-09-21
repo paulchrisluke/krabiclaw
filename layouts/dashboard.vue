@@ -60,7 +60,7 @@
       case; only an element that deliberately spans the viewport reaches them.
     -->
     <UDashboardGroup
-      :ui="{ base: ['z-40', showNavChrome ? 'md:top-(--kc-dashboard-top-nav) max-md:bottom-(--kc-dashboard-bottom-nav)' : 'top-(--kc-dashboard-top-nav)'].join(' ') }"
+      :ui="{ base: ['z-40', showNavChrome ? 'md:top-(--kc-dashboard-top-nav)' : 'top-(--kc-dashboard-top-nav)', showBottomNav ? 'max-md:bottom-(--kc-dashboard-bottom-nav)' : ''].join(' ') }"
     >
       <UDashboardSearch v-model:search-term="dashboardSearchTerm" :groups="dashboardSearchGroups" :loading="dashboardSearchLoading" :color-mode="false" />
 
@@ -68,7 +68,7 @@
     </UDashboardGroup>
 
     <nav
-      v-if="showNavChrome"
+      v-if="showBottomNav"
       class="fixed inset-x-0 bottom-0 z-30 flex h-(--kc-dashboard-bottom-nav) items-stretch border-t border-default bg-default pb-[env(safe-area-inset-bottom)] md:hidden"
       aria-label="Dashboard"
       data-testid="dashboard-mobile-nav"
@@ -370,6 +370,10 @@ const primaryNavItems = computed(() => mobileNavItems.value)
 // exist until there is one. Gating both together is what left an owner who
 // abandoned onboarding with no way to reach account settings or log out.
 const showNavChrome = computed(() => primaryNavItems.value.length > 0 && !isAccountRoute.value)
+// A leaf with Cancel/Save is a sheet on a phone: the tab bar is not there
+// under it, the way Airbnb's editor leaves cover theirs.
+const leafFooters = useDashboardLeafFooters()
+const showBottomNav = computed(() => showNavChrome.value && leafFooters.value === 0)
 const topNavHomeTo = computed(() => {
   const routeOrgSlug = typeof route.params.orgSlug === 'string' ? route.params.orgSlug : null
   return routeOrgSlug ? `/dashboard/${encodeURIComponent(routeOrgSlug)}` : '/dashboard'

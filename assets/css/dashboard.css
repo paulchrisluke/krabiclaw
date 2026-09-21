@@ -55,6 +55,18 @@
   }
 }
 
+/*
+ * A pair on a wide screen has one way back, on the left column, the way
+ * Airbnb's listing editor does. The right column is the leaf of the column
+ * beside it; its own Back would be a second arrow to the same place. Below lg
+ * the right column is the whole screen and keeps it.
+ */
+@media (width >= 64rem) {
+  .platform-theme [id^="dashboard-panel-"] ~ [id^="dashboard-panel-"] [data-testid="dashboard-navbar-back"] {
+    display: none;
+  }
+}
+
 .w-\(--width\) {
   width: var(--width);
 }

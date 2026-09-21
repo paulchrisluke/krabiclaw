@@ -38,7 +38,7 @@
       </template>
 
       <template #body>
-        <div class="mx-auto w-full" :class="wideDetail ? 'max-w-5xl' : 'max-w-2xl'">
+        <div class="mx-auto w-full max-w-2xl">
           <NuxtPage />
         </div>
       </template>
@@ -61,7 +61,6 @@ const { settingsPath, activeLabel } = useOrganizationSettingsNavigation()
 const frame = useEditorFrame(settingsPath)
 const hasDetail = computed(() => frame.mode.value === 'pair')
 const rendersStandalone = computed(() => route.matched.some(record => record.meta?.ownsChrome === true))
-const wideDetail = computed(() => route.meta.wideDetail === true)
 
 const { notificationsTo } = useDashboardMenu()
 

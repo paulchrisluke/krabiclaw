@@ -20,7 +20,7 @@
       :ui="{ body: 'p-0 sm:p-0 gap-0' }"
     >
       <template #header>
-        <UDashboardNavbar :title="navbarTitle" :toggle="false">
+        <UDashboardNavbar :title="pastOnly ? 'Past conversations' : 'Messages'" :toggle="false">
           <template #leading>
             <DashboardNavbarLeading />
           </template>
@@ -32,23 +32,11 @@
       </template>
     </UDashboardPanel>
 
-    <UDashboardPanel
-      id="site-messages-thread"
-      :class="hasDetail ? undefined : 'hidden lg:flex'"
-      :ui="{ body: 'p-0 sm:p-0 gap-0' }"
-    >
-      <template v-if="hasDetail" #header>
-        <UDashboardNavbar title="Conversation" :toggle="false">
-          <template #leading>
-            <DashboardNavbarLeading />
-          </template>
-        </UDashboardNavbar>
-      </template>
-
-      <template #body>
-        <NuxtPage v-if="hasDetail" />
-      </template>
-    </UDashboardPanel>
+    <!-- The open thread owns the other column, header and all. Until the list
+         has opened one on a wide screen, the column stands empty rather than
+         collapsing the list to full width and back. -->
+    <NuxtPage v-if="hasDetail" />
+    <UDashboardPanel v-else id="site-messages-thread" class="hidden lg:flex" />
   </template>
 </template>
 
@@ -67,11 +55,6 @@ const frame = useEditorFrame(messagesPath)
 const hasDetail = computed(() => frame.mode.value === 'pair')
 
 const pastOnly = computed(() => route.query.archived !== undefined)
-
-// The chrome names the place; the panel names itself.
-const dashboard = useDashboardSite()
-const siteName = computed(() => dashboard.site.value?.brand_name ?? 'Messages')
-const navbarTitle = computed(() => pastOnly.value ? 'Past conversations' : siteName.value)
 
 useSeoMeta({ title: 'Messages | KrabiClaw Dashboard', robots: 'noindex, nofollow' })
 </script>

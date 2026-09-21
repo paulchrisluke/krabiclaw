@@ -36,6 +36,19 @@ Walk these, in this order, on the phone viewport and at 1280:
 
 Shared primitives to fix once rather than per page: `EditorNavigationList.vue` (the row list; needs an inline-edit row mode so settings leaves can be the Personal information shape), the pair panels' footer (Cancel/Save), and the phone sheet (a leaf on a phone should be a sheet with Close, per the captures, not a page with Back).
 
+## Deferred by the owner to the next PR: search
+
+Inventoried 2026-09-21, nothing changed. Six controls take a query: the Menu's
+Search opens Nuxt UI's command palette over `/api/public/search?surface=dashboard`
+(AI Search; indexes docs, the KrabiClaw blog, FAQ and 15 fixed route entries —
+no tenant data, so "pizza" or a guest's name can never match; locally it 500s
+because `AI_SEARCH` is remote-only; its empty state leaks `dashboardSearch.title`).
+Messages searches guest name/email/phone only, not message bodies. People
+searches email (Better Auth `listUsers`). Media filters the loaded page. The rest
+are select-menu filters. Owner's direction: one global search over the business's
+own things rather than a search hand-rolled into each list; the help-centre
+search stays on the public site. Airbnb's host app has no global search.
+
 ## How the owner works (do not relearn this)
 
 - He watches CI. Push, state what landed, stop. Never poll or loop on a PR.
