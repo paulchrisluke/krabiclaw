@@ -14,6 +14,8 @@ import { checkModuleHasLiveData } from '~/server/utils/module-content-guard'
 import type { SiteVertical } from '~/utils/vertical-copy'
 import { buildSingleMediaPlacementQueries, hydrateMediaAssetRefs } from '~/server/utils/media-asset-manager'
 import { refreshSocialCard } from '~/server/utils/social-card'
+import { organizationAdapter } from '~/server/utils/member-access'
+import type { CloudflareEnv } from '~/server/utils/auth'
 
 type SetupEnv = Parameters<typeof createSystemSubdomain>[0]
 
@@ -484,7 +486,7 @@ async function attemptSiteUpdate(
 
 export async function updateSiteSettingsFields(
   db: D1Database,
-  env: SetupEnv,
+  env: SetupEnv & CloudflareEnv,
   siteId: string,
   organizationId: string,
   updates: UpdateSiteSettingsRequest,
@@ -569,7 +571,7 @@ export async function updateSiteSettingsFields(
       if (await isSystemSubdomainSpent(env, db, subdomain)) continue
 
       try {
-        return await attemptSiteUpdate(
+        const result = await attemptSiteUpdate(
           db,
           env,
           site,
@@ -579,6 +581,14 @@ export async function updateSiteSettingsFields(
           userId,
           subdomain
         )
+        // One business, one name. The organization Better Auth holds is that
+        // business, so it takes the brand name a guest sees rather than
+        // keeping a second name of its own.
+        if (result.status === 200) {
+          const adapter = await organizationAdapter(env)
+          await adapter.updateOrganization(organizationId, { name: updates.brand_name.trim() })
+        }
+        return result
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error)
         if (/UNIQUE constraint failed/i.test(message)) continue

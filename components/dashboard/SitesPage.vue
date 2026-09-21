@@ -1,392 +1,99 @@
 <template>
-  <UDashboardPanel id="org-overview">
+  <UDashboardPanel id="locations">
     <template #header>
-      <UDashboardNavbar title="Sites">
+      <UDashboardNavbar :title="locationsLabel">
         <template #right>
           <UButton
-            v-if="canManageOrganization"
-            :to="`/dashboard/${orgSlug}/sites/new`"
+            v-if="businessPaths"
+            :to="businessPaths.newLocation"
             icon="i-lucide-plus"
             color="neutral"
             variant="soft"
             square
-            aria-label="Add a site"
+            :aria-label="`Add a ${locationNoun}`"
           />
         </template>
       </UDashboardNavbar>
     </template>
 
     <template #body>
-      <!--
-        The skeleton uses the selector's own grid and card ratio. When it had its
-        own column rule and aspect, the page visibly jumped the moment the sites
-        loaded — a placeholder that does not reserve the real space is worse than
-        none.
-      -->
-      <div class="space-y-8">
-        <!-- Discard acts on the caller's own draft, so without that lookup the
-             page does not know which tile the control belongs to. It says so
-             rather than leaving the control silently missing. -->
-        <UAlert
-          v-if="draftLookupError"
-          color="error"
-          variant="soft"
-          title="Could not check your unfinished site"
-          :description="draftLookupError"
+      <UAlert v-if="locationsError" color="error" variant="soft" icon="i-lucide-triangle-alert" title="Could not load locations" :description="getErrorMessage(locationsError, 'Locations could not be loaded')" />
+      <div v-else-if="!locations.length" class="rounded-2xl border border-default bg-elevated px-6 py-20 text-center">
+        <UIcon name="i-lucide-map-pin" class="mx-auto size-6 text-muted" />
+        <h2 class="mt-5 text-base font-semibold text-highlighted">No {{ locationsLabel.toLowerCase() }} yet</h2>
+        <UButton
+          v-if="businessPaths"
+          :label="`Add your first ${locationNoun}`"
+          icon="i-lucide-plus"
+          class="mt-6"
+          :to="businessPaths.newLocation"
         />
-
-        <div v-if="sites.length === 0" class="rounded-2xl border border-default bg-elevated px-6 py-20 text-center">
-          <img
-            src="https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/de8b203b-a120-43c9-7ff2-5ebe40b66800/thumbnail"
-            alt=""
-            aria-hidden="true"
-            class="mx-auto size-28 object-contain"
-          >
-          <h2 class="mt-6 text-base font-semibold text-highlighted">No sites available</h2>
-          <p class="mt-1 text-sm text-muted">Your organization’s sites will appear here.</p>
-          <UButton
-            v-if="canManageOrganization"
-            label="Add your first site"
-            icon="i-lucide-plus"
-            class="mt-6"
-            :to="`/dashboard/${orgSlug}/sites/new`"
-          />
-        </div>
-
-        <!-- Every tile here is a site, and a site's tile shows its logo rather
-             than its social card, so the selector's default copy named the
-             wrong asset. -->
-        <DashboardSiteLocationSelector
-          v-else
-          :items="selectorItems"
-          missing-image-label="No logo"
-          missing-image-hint="Add a logo in site settings."
-        />
-
-        <!-- Locations Section -->
-        <div class="space-y-6">
-          <h3 class="text-lg font-semibold text-highlighted">Locations</h3>
-          
-          <div v-if="organizationLocationsPending" class="grid grid-cols-[repeat(auto-fill,minmax(min(100%,18rem),1fr))] gap-6">
-            <USkeleton v-for="i in 2" :key="i" class="aspect-[20/19] rounded-2xl" />
-          </div>
-
-          <UAlert
-            v-else-if="organizationLocationsError"
-            color="error"
-            variant="soft"
-            title="Could not load locations"
-            :description="organizationLocationsError"
-          />
-
-          <div
-            v-else-if="organizationLocations.length === 0"
-            class="rounded-2xl border border-default bg-elevated px-6 py-20 text-center"
-          >
-            <div class="mx-auto flex size-14 items-center justify-center rounded-full bg-muted">
-              <UIcon name="i-lucide-map-pin" class="size-6 text-muted" />
-            </div>
-            <h2 class="mt-5 text-base font-semibold text-highlighted">No locations available</h2>
-            <p class="mt-1 text-sm text-muted">Your organization's locations will appear here.</p>
-          </div>
-
-          <DashboardSiteLocationSelector
-            v-else
-            :items="locationSelectorItems"
-            missing-image-label="No hero photo"
-            missing-image-hint="Add one under this location's photos."
-          />
-        </div>
       </div>
+
+      <DashboardSiteLocationSelector
+        v-else
+        :items="tiles"
+        missing-image-label="No hero photo"
+        missing-image-hint="Add one under this location's photos."
+      />
     </template>
   </UDashboardPanel>
-
-  <!--
-    The refusal is shown here rather than as a toast: the endpoint refuses a
-    site that has gone live, a caller who is not its owner, and a delete that
-    left the site standing, and the owner needs to read that where they pressed
-    the button. The dialog stays open and the tile is untouched on every
-    refusal; it closes and the hub reloads only once the rows are actually gone.
-  -->
-  <UModal
-    v-model:open="discardOpen"
-    title="Discard this unfinished site?"
-    :description="discardDescription"
-  >
-    <template #body>
-      <UAlert
-        v-if="discardError"
-        color="error"
-        variant="soft"
-        :description="discardError"
-      />
-      <p v-else class="text-sm text-muted">
-        Its draft answers, its address and everything set up so far are deleted. This cannot be undone.
-      </p>
-    </template>
-
-    <template #footer>
-      <div class="flex w-full justify-end gap-2">
-        <UButton
-          color="neutral"
-          variant="ghost"
-          label="Keep it"
-          :disabled="draft.busy.value"
-          @click="discardOpen = false"
-        />
-        <UButton
-          color="error"
-          label="Discard site"
-          :loading="draft.busy.value"
-          @click="confirmDiscard"
-        />
-      </div>
-    </template>
-  </UModal>
 </template>
 
 <script setup lang="ts">
-import type { DropdownMenuItem } from '@nuxt/ui'
 import DashboardSiteLocationSelector, { type SiteLocationSelectorItem } from '~/components/dashboard/SiteLocationSelector.vue'
-import { useOnboardingDraft } from '~/composables/useOnboardingDraft'
 import { dashboardFetch } from '~/composables/dashboardFetch'
 import type { DashboardLocation } from '~/composables/useDashboardSite'
-import { tenantSiteOrigin } from '~/utils/tenant-site-origin'
-import { onMounted, ref } from 'vue'
-
-useSeoMeta({ title: 'Your sites | KrabiClaw', robots: 'noindex, nofollow' })
+import { getErrorMessage } from '~/utils/errors'
+import { resolveCmsCapabilities } from '~/config/cms-registry'
+import { resolvePublicTemplate } from '~/utils/template-registry'
+import { normalizeVertical, type SiteVertical } from '~/utils/vertical-copy'
 
 const route = useRoute()
-const config = useRuntimeConfig()
-const orgSlug = computed(() => String(route.params.orgSlug || ''))
 const dashboard = useDashboardSite()
-const draft = useOnboardingDraft()
+const { businessPaths } = useDashboardSiteLinks()
 
-const sites = computed(() => dashboard.sites.value)
-const organizationLocations = ref<DashboardLocation[]>([])
-const organizationLocationsPending = ref(false)
-const organizationLocationsError = ref<string | null>(null)
-type Site = (typeof sites.value)[number]
-const canManageOrganization = computed(() => ['owner', 'admin'].includes(dashboard.organization.value?.role ?? ''))
+const site = computed(() => dashboard.sites.value[0] ?? null)
 
-// The pending site the caller's own onboarding draft owns, if any. Discard is
-// offered on that site and on no other: the endpoint acts on the caller's
-// draft rather than on a site id, so offering it on a pending site belonging to
-// someone else's draft would delete the caller's draft somewhere else.
-const discardableSiteId = ref<string | null>(null)
-const draftLookupError = ref<string | null>(null)
-const discardSite = ref<Site | null>(null)
-const discardOpen = ref(false)
-const discardError = ref<string | null>(null)
-const discardDescription = computed(() => discardSite.value
-  ? `${siteLabel(discardSite.value)} is still in setup and was never published.`
-  : '')
+// This tab stands outside any site route, so the context carries no
+// locations; they are read for the whole organization.
+const orgSlug = computed(() => String(route.params.orgSlug || ''))
+const { data: locationsData, error: locationsError } = await useAsyncData(`dashboard-org-locations:${orgSlug.value}`, () =>
+  dashboardFetch<{ success: true; locations: DashboardLocation[] }>('/api/dashboard/locations', { orgSlug: orgSlug.value }, {
+    query: { organization: 'true' },
+    validate: (value): value is { success: true; locations: DashboardLocation[] } =>
+      isRecord(value) && value.success === true && Array.isArray(value.locations),
+  }), { watch: [orgSlug] })
+const locations = computed(() => locationsData.value?.locations ?? [])
 
-/**
- * A site has no photograph of itself, so its tile shows its logo, centred
- * rather than cropped. The generated social card cannot serve here: its name
- * and description are composed into a 1200x630 frame, and the tile crops to
- * near square, which cut the words off at both edges.
- */
-const selectorItems = computed<SiteLocationSelectorItem[]>(() => sites.value.map(site => ({
-  id: site.id,
-  label: siteLabel(site),
-  imageUrl: site.media?.find(item => item.slot === 'logo')?.public_url ?? null,
-  imageFit: 'contain' as const,
-  eyebrow: verticalLabel(site.vertical),
-  summary: addressSummary(site),
-  status: statusPill(site.onboarding_status),
-  actions: discardActions(site),
-  to: siteDashboardPath(site),
-})))
+// A professional services site calls these offices. The vocabulary comes from
+// the same capabilities the rest of the dashboard reads; it depends on the
+// vertical alone, so the site summary is enough.
+const capabilities = computed(() => {
+  const vertical = site.value?.vertical
+  if (!vertical) return null
+  return resolveCmsCapabilities(normalizeVertical(vertical) as SiteVertical, resolvePublicTemplate({ vertical }).slug, {})
+})
+const usesServiceAreaVocabulary = computed(() => capabilities.value?.locationVocabulary === 'office/service area')
+const locationsLabel = computed(() => (usesServiceAreaVocabulary.value ? 'Offices / Service Areas' : 'Locations'))
+const locationNoun = computed(() => (usesServiceAreaVocabulary.value ? 'office' : 'location'))
 
 /**
- * A site is named by its brand name and nothing else. The old chain fell
- * through to the subdomain and then to the row id, so a site missing its brand
- * name was listed under a UUID. It cannot render at all in that state —
- * tenant resolution refuses a site with no brand name — so the hub names the
- * absence instead of showing something that looks like a name.
+ * A location is identified by where it is, so the tile carries its address
+ * and its own hero photograph. The name belongs under the tile, in text.
  */
-function siteLabel(site: Site) {
-  return site.brand_name ?? 'Unnamed site'
-}
-
-/**
- * Location selector items for the organization directory with parent site context
- */
-const locationSelectorItems = computed<SiteLocationSelectorItem[]>(() => organizationLocations.value.map(location => ({
-  id: location.id,
-  label: location.title,
-  imageUrl: heroUrl(location),
-  imageFit: 'cover' as const,
-  eyebrow: '',
-  summary: locationAddressSummary(location),
-  parentSiteName: location.parent_site_name ?? undefined,
-  to: locationDashboardPath(location),
-})))
-
-function heroUrl(location: typeof organizationLocations.value[number]): string | null {
+const tiles = computed<SiteLocationSelectorItem[]>(() => locations.value.map((location) => {
   const hero = location.media.find(item => item.slot === 'hero')
-  if (!hero) return null
-  return hero.kind === 'video' ? hero.thumbnail_url : hero.public_url
-}
-
-function locationAddressSummary(location: typeof organizationLocations.value[number]): string {
   const lines = location.address?.addressLines?.filter(line => line.trim()) ?? []
-  return lines.length ? lines.join(', ') : 'Address not set'
-}
-
-function locationDashboardPath(location: typeof organizationLocations.value[number]): string {
-  if (!location.parent_site_slug) {
-    throw createError({ statusCode: 500, statusMessage: `Location ${location.id} has no parent site slug` })
+  return {
+    id: location.id,
+    label: location.title,
+    imageUrl: hero ? (hero.kind === 'video' ? hero.thumbnail_url : hero.public_url) : null,
+    eyebrow: '',
+    summary: lines.length ? lines.join(', ') : 'Address not set',
+    to: `${businessPaths.value?.site ?? ''}/locations/${location.slug}`,
   }
-  return `/dashboard/${orgSlug.value}/sites/${location.parent_site_slug}/locations/${location.slug}`
-}
+}))
 
-function verticalLabel(vertical: Site['vertical']) {
-  if (vertical === 'restaurant') return 'Restaurant'
-  if (vertical === 'experience') return 'Experiences'
-  if (vertical === 'service') return 'Professional services'
-  return 'Website'
-}
-
-/**
- * A site that has not finished onboarding wears a pill, the way an in-progress
- * listing sits in the same grid as the published ones. Read from
- * `onboarding_status`, never inferred from a missing subdomain: onboarding's
- * first save assigns the subdomain, so every pending site has one.
- */
-function statusPill(status: string | null): SiteLocationSelectorItem['status'] {
-  if (status === 'active') return undefined
-  if (status === 'pending') return { label: 'Setup in progress', color: 'warning' }
-  if (status === 'failed') return { label: 'Setup incomplete', color: 'error' }
-  // Not one of the three states the routing middleware knows. Say what the
-  // column actually holds rather than presenting the site as live.
-  return { label: `Unknown status: ${status ?? 'none'}`, color: 'error' }
-}
-
-/**
- * The address the tile claims. Only an active site has one: a pending site's
- * subdomain is reserved, not reachable — the tenant host redirects it to the
- * setup page for everyone but its owner — so advertising it as a working domain
- * is the tile telling the owner their site is live when it is not.
- *
- * Built from the free-site domain rather than a hardcoded `krabiclaw.com`,
- * because preview and staging address a tenant as `<sub>-preview.krabiclaw.com`
- * and local development as `<sub>.localhost:3001`.
- */
-function addressSummary(site: Site) {
-  if (site.onboarding_status !== 'active') return 'Not published yet'
-  if (!site.subdomain) return 'No address'
-  const origin = tenantSiteOrigin({
-    platformDomain: String(config.public.platformDomain),
-    freeSiteDomain: String(config.public.freeSiteDomain),
-    subdomain: site.subdomain,
-  })
-  return origin ? origin.replace(/^https?:\/\//, '') : 'No address'
-}
-
-function discardActions(site: Site): DropdownMenuItem[] | undefined {
-  if (!canManageOrganization.value) return undefined
-  if (site.onboarding_status === 'active') return undefined
-  if (site.id !== discardableSiteId.value) return undefined
-  return [{
-    label: 'Discard site',
-    icon: 'i-lucide-trash-2',
-    color: 'error',
-    onSelect: () => openDiscard(site),
-  }]
-}
-
-/**
- * The caller's own unfinished site resumes the flow at the unscoped
- * /dashboard/onboarding. The shell there restores the draft and redirects to
- * the step it stopped at, so there is no resume logic here. There is no
- * onboarding route under /dashboard/{orgSlug}, which is what the previous
- * branch pointed at.
- *
- * Only the caller's own. /dashboard/onboarding resumes whichever draft belongs
- * to whoever opens it, so sending every unfinished site there meant an admin
- * clicking a colleague's half-built site landed in their own draft — a
- * different site than the one they pressed. Anyone else's unfinished site
- * opens its dashboard, the same as a live one.
- */
-function siteDashboardPath(site: Site) {
-  if (site.onboarding_status !== 'active' && site.id === discardableSiteId.value) return '/dashboard/onboarding'
-  if (!site.subdomain) {
-    // Says what is actually true here: this branch is reached by any site that
-    // is not the caller's own discardable draft, live or not.
-    throw createError({ statusCode: 500, statusMessage: `Site ${site.id} has no subdomain to open` })
-  }
-  return `/dashboard/${orgSlug.value}/sites/${site.subdomain}`
-}
-
-function openDiscard(site: Site) {
-  discardSite.value = site
-  discardError.value = null
-  discardOpen.value = true
-}
-
-async function confirmDiscard() {
-  if (!await draft.discard()) {
-    discardError.value = draft.error.value
-    return
-  }
-  discardOpen.value = false
-  discardSite.value = null
-  discardableSiteId.value = null
-  await dashboard.refresh()
-  // The organization goes with the site when that site was its only one, and
-  // this route is then a hub for an organization that no longer exists. Hand it
-  // to the canonical entry router — which sends an owner with nothing left back
-  // into onboarding — rather than rendering an empty grid for a dead org.
-  if (!dashboard.organization.value) await navigateTo('/dashboard')
-}
-
-// Only asked when the hub is actually showing an unfinished site, so an
-// organization whose sites are all live pays nothing for it.
-watch(() => sites.value.some(site => site.onboarding_status !== 'active'), async (hasUnfinished) => {
-  if (!import.meta.client || !hasUnfinished || !canManageOrganization.value) return
-  if (discardableSiteId.value) return
-  try {
-    discardableSiteId.value = await draft.activeDraftSiteId()
-  } catch (cause) {
-    draftLookupError.value = cause instanceof Error ? cause.message : 'Something went wrong. Please try again.'
-  }
-}, { immediate: true })
-
-let locationsRequestToken = 0
-
-async function loadLocations() {
-  const currentSlug = orgSlug.value
-  if (!currentSlug) return
-  const token = ++locationsRequestToken
-  organizationLocationsPending.value = true
-  organizationLocationsError.value = null
-  try {
-    const scope = { orgSlug: currentSlug }
-    const response = await dashboardFetch<{ success: true; locations: DashboardLocation[] }>('/api/dashboard/locations', scope, {
-      query: { organization: 'true' },
-      validate: (value): value is { success: true; locations: DashboardLocation[] } =>
-        typeof value === 'object' && value !== null && 'success' in value && (value as { success: unknown }).success === true && 'locations' in value && Array.isArray((value as { locations: unknown }).locations),
-    })
-    if (token !== locationsRequestToken || orgSlug.value !== currentSlug) return
-    organizationLocations.value = response.locations
-  } catch (error) {
-    if (token !== locationsRequestToken || orgSlug.value !== currentSlug) return
-    organizationLocationsError.value = error instanceof Error ? error.message : 'Failed to load locations'
-  } finally {
-    if (token === locationsRequestToken) {
-      organizationLocationsPending.value = false
-    }
-  }
-}
-
-onMounted(() => {
-  void loadLocations()
-})
-
-watch(orgSlug, () => {
-  void loadLocations()
-})
+useSeoMeta({ title: () => `${locationsLabel.value} | KrabiClaw`, robots: 'noindex, nofollow' })
 </script>

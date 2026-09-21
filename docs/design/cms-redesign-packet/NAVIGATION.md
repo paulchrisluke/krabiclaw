@@ -81,61 +81,38 @@ Breaks:
 - **Leaves are chevron chains.** A value is three screens deep (list → row → field page), with helper paragraphs on each. Airbnb shows the value on the row and edits inline.
 - **Locations is an extra hop** from the site hub (card → list → location), while the Sites tab already reaches a location in one tap.
 
-## 3. Proposed hierarchy
+## 3. The hierarchy, as built
 
-Tab roots unchanged: **Today · Calendar · Sites · Messages · Menu**. Bottom bar on phones, top nav on `md+` with Menu as a slideover. Every non-root screen declares one parent; `DashboardNavbarLeading` already models this, only the targets change.
+**One business.** Every organization in production has exactly one site (six of six, 2026-09-21). Organization and site are the same thing for every customer, so the dashboard no longer has a layer for choosing between sites. Airbnb is account → listings; ours is business → locations.
 
-### Sites tab → `/sites`
-Site tiles and location tiles, as today (a location is one tap away, like a listing). `+` for a new site.
+Tab roots: **Today · Calendar · Locations · Messages · Menu**. Bottom bar on phones, top nav on `md+` with Menu as a slideover. Back is the browser's back everywhere below a root.
 
-### Site hub → `/sites/:site`   Back → Sites · gear → Settings
-Tabs, the way the listing editor splits *Your space* / *Arrival guide*:
+### Locations → `/sites`   tab root
+Airbnb's Listings: one tile per location with its hero photograph and address, `+` for a new one, one tap into a location. There is no site hub and no site index; `/sites/:siteSlug` on its own redirects here.
 
-- **Site**: Pages · Blog · Reviews and Q&A · Brand — one card per thing a visitor meets, stating its value.
-- **Locations**: location tiles · New location.
-
-The `locations/index.vue` page is deleted; the tab is the list. Brand stays a hub card because a visitor sees it. A leaf's Back returns to the hub with the tab it came from.
-
-### Site settings → `/sites/:site/settings`   title "Settings" · Back → Site hub
-Flat rows, value on the row:
-
-Domain · Languages · Currency · WhatsApp number · Search engines (visibility + verification, one leaf) · Google Analytics (measurement id) · Facebook publishing · Delete site
-
-Deleted: the nested "Search and analytics" list; the header Localize button on Brand (Languages is the row).
-
-### Location hub → `/sites/:site/locations/:loc`   Back → Site hub (Locations tab) · gear → Settings
+### Location hub → `/sites/:site/locations/:loc`   gear → Settings
 Cards unchanged: Photos · Name · Description · Hours · Address · Contact · Catalog · Posts · Reviews and Q&A · Reservations.
 
-### Location settings → `…/:loc/settings`   title "Settings" · Back → Location hub
-Status · Link (slug) · Languages (the header Localize button becomes this row) · Google Business Profile · WhatsApp number · Features
+### Location settings → `…/:loc/settings`   title "Settings"
+Status · Link · Languages (Localize) · Google Business Profile · WhatsApp number · Features
 
-Airbnb ends this list with *Remove listing*; we have no delete-location endpoint, so no row until there is one.
+### Menu → `/settings`   tab root · bell · avatar
+The business's own page, as Airbnb's Menu is the host's. Org switcher · Search · Insights card, then:
 
-### Menu → `/menu`   tab root · bell · avatar
-Org switcher · Search · Insights card, then rows:
+Pages · Blog · Reviews and Q&A · Brand · Website · Team · Billing · Payouts · **Log out**
 
-Organization (name, logo, slug) · Team (members) · Billing · Payouts (Stripe Connect), then **Log out** last, as on Airbnb's Menu.
+Pages, Blog and Reviews and Q&A open the site's lists. **Brand** is the guest-facing identity: name, logo, social sharing image, description, colour, font, contact, social profiles, Translations (Localize). **Website** is what a guest never sees: Domain · Languages · Currency · WhatsApp number · Search engines · Google Analytics · Facebook publishing · Delete site. Notifications and Insights live under Menu.
 
-Deleted from Menu: **Google** (it was a site picker in front of the two site-level rows Site settings already has); **ChatGPT** (a static page of MCP setup text — belongs in platform docs or marketing, removed from the CMS entirely); **Appearance** (a per-device preference, moves to Account).
+The **Organization** row is gone: the organization *is* the business, so its name follows the brand name on every brand-name save. Google (a site picker in front of Website's rows), ChatGPT (setup text for the docs) and Appearance (a per-device preference, now on Account) are gone too.
 
-`/settings` index is deleted. Leaves stay at `/settings/<leaf>`; their parent is Menu. On `lg` the pair is Menu-list left, leaf right, first leaf open by default, as Airbnb's Account settings does.
+### Account → `/account/profile`   title "Account settings"
+Display name · Login & security · WhatsApp number · Notifications · Appearance · **Log out**. Login & security holds email, password, Google, the signed-in devices (Better Auth sessions, each with its own Log out) and Delete account at the bottom.
 
-### Account → `/account/profile`   title "Account settings" · parent Menu (active org)
-Profile photo · Display name · Login & security · WhatsApp number · Notifications · Appearance · **Log out** last (Airbnb has Log out on both Menu and Profile; same here).
-
-**Login & security** replaces today's Sign in leaf and takes Airbnb's shape (`goal/airbnb/hosting/account-settings/login-and-security/`): a *Login* section with Email (verified state), Password (*Update*, using the existing reset flow), Google (connected state); a *Device history* section listing Better Auth sessions with the current one marked and *Log out* per row (`listSessions` / `revokeSession`, both already in Better Auth core, nothing new server-side); and **Delete account** at the bottom, behind its own confirmation.
-
-**Delete account** leaves the list. Today it sits directly above Log out, one mis-tap from the wrong irreversible action. It lives at the bottom of **Login & security**, where Airbnb keeps *Deactivate your account*.
-
-Deleted from Account: Billing (it is on Menu).
-
-### Notifications (bell) → `/notifications`   Back → Menu
-### Insights → `/insights`   Back → Menu
 ### Messages
-Production has 19 members: 8 owners, 9 admins, 2 editors. The two editors are WhatsApp phone identities (`phone-…@phone.krabiclaw.local`) on location teams; they have never signed in. The scoped role exists only to route WhatsApp messages to the right recipient. So: **no signed-in user is ever restricted to one location.** The location inbox page and the `scope="location"` branch of the thread list are deleted; the site inbox with its location filter is the one inbox below the org view. The `editor` role and team tables stay for WhatsApp routing, surfaced as Location settings → WhatsApp number and Account → Notifications.
+The site inbox is the one inbox below the organization. The two production editors are WhatsApp recipients who never sign in, so no signed-in user is scoped to one location and the location inbox is gone.
 
-### Back
-`DashboardNavbarLeading` used to take a declared destination, and four screens declared the wrong one. It now takes nothing: Back is `router.back()`, the browser's own previous entry, and only a tab with nothing behind it goes to `/dashboard`, which routes to Today. Airbnb pushes to a declared parent (section 1). The owner's decision, 2026-09-21, is the browser's back, for two reasons. First, a declared parent is a second navigation model beside the browser's, and four of ours were wrong; the browser's cannot be. Second, every screen below a tab root is reached only by tapping a row, card or tile on the screen above it, so the previous history entry *is* the parent in every path the dashboard offers. Cross-organization or cross-tab entries do not arise from in-app navigation: a tab switch is a new stack, and a deep link into another organization is a fresh load, which is exactly the case the `/dashboard` fallback covers. Reintroducing declared parents to guard against a history entry the app never produces would restore the machinery this change removed.
+### Taps from a tab root
+Locations → location → Hours → edit: 3, Airbnb's number. Menu → Pages → page: 2. Menu → Brand → Brand name → edit: 3.
 
 ## 4. Leaves
 
@@ -149,7 +126,7 @@ Ours: every settings row opens another page with one field and a paragraph of gu
 ## 5. Deletions
 
 - `pages/dashboard/[orgSlug]/settings/index.vue` (duplicate of Menu)
-- `pages/dashboard/[orgSlug]/sites/[siteSlug]/locations/index.vue` (becomes the Locations tab)
+- the site hub and site index (`sites/[siteSlug].vue` is a passthrough; `sites/index.vue` is the Locations tab); `sites/new.vue`; the org `general` page
 - `settings/search/*` nested list (three rows flatten into the settings list)
 - Localize header buttons on Brand and Location settings (rows instead)
 - Billing row on Account; ChatGPT, Google and Appearance rows on Menu (Appearance moves to Account)
@@ -161,7 +138,8 @@ Ours: every settings row opens another page with one field and a paragraph of gu
 - **People** on KrabiClaw's own site stays: it is the platform's impersonation tool, not a members list, and has no other door.
 - **Leaves that edit in place** (section 4) are the next PR. This one fixes the hierarchy, the routes and Back.
 
-- Org settings rows stay **flat on Menu** rather than behind one "Settings" row: fewer pages, and Menu is already the list.
+- **Organization = site = business.** No site hub, no site index, no second site. If a second site ever exists, the switcher in Menu's header is where it surfaces.
+- Rows stay **flat on Menu** rather than behind one "Settings" row: fewer pages, and Menu is already the list.
 - **Location-only dashboard access is removed**; everyone who signs in sees the whole site.
 - Bottom nav **stays** on Account and settings screens. Airbnb drops it there; keeping it is one code path.
 - Back is **the browser's back**, with `/dashboard` as the only fallback. The explicit target prop is deleted.

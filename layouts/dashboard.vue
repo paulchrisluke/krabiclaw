@@ -199,7 +199,6 @@ const organization = dashboard.organization
 const site = dashboard.site
 const sites = dashboard.sites
 const activeSiteId = dashboard.siteId
-const canManageOrganization = computed(() => ['owner', 'admin'].includes(organization.value?.role ?? ''))
 
 const organizations = computed<readonly AuthOrganization[]>(() => unref(organizationsState)?.data ?? [])
 const activeOrganizationId = computed(() => {
@@ -281,9 +280,6 @@ const scopeHeaderModel = computed<DashboardScopeHeaderModel>(() => {
         active: s.subdomain === activeSiteSlug.value,
         to: orgBase.value && s.subdomain ? `${orgBase.value}/sites/${s.subdomain}` : undefined
       })),
-      createAction: orgBase.value && canManageOrganization.value
-        ? { label: 'New Site', to: `${orgBase.value}/sites/new` }
-        : undefined
     }
   }
 
@@ -350,7 +346,7 @@ const mobileNavItems = computed<DashboardMobileNavItem[]>(() => {
   const items: DashboardMobileNavItem[] = [
     { key: 'today', label: 'Today', icon: 'i-lucide-bookmark', to: routeOrgBase, exact: true },
     { key: 'calendar', label: 'Calendar', icon: 'i-lucide-calendar-days', to: `${routeOrgBase}/calendar` },
-    { key: 'children', label: 'Sites', icon: 'i-lucide-globe', to: `${routeOrgBase}/sites` },
+    { key: 'locations', label: 'Locations', icon: 'i-lucide-map-pin', to: `${routeOrgBase}/sites` },
     { key: 'messages', label: 'Messages', icon: 'i-lucide-message-square', to: messagesTo },
   ]
   return withActiveItem(items)

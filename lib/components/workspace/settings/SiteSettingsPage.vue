@@ -500,7 +500,7 @@ const detailTitle = computed(() => detailKey.value ? detailTitles[detailKey.valu
 // The navbar names the level, not the open section — at `lg` the section's own
 // title is a heading on its pane, with the index list still beside it. Naming the
 // section twice made the navbar claim to be the page the pane was showing.
-const navbarTitle = computed(() => surface.value === 'brand' ? 'Brand' : 'Settings')
+const navbarTitle = computed(() => surface.value === 'brand' ? 'Brand' : 'Website')
 const showActions = computed(() => Boolean(detailKey.value && !['analytics', 'publishing', 'delete'].includes(detailKey.value)
   && (detailKey.value !== 'font' || supportsSiteFonts.value)))
 
