@@ -86,7 +86,6 @@
         <div v-else-if="editorKey === 'contact'" class="space-y-6">
           <UFormField label="Phone"><UInput v-model="detailsForm.phone" type="tel" size="xl" autofocus class="w-full" /></UFormField>
           <UFormField label="Email"><UInput v-model="detailsForm.email" type="email" size="xl" class="w-full" /></UFormField>
-          <UFormField label="Website URL"><UInput v-model="detailsForm.website_url" type="url" size="xl" class="w-full" /></UFormField>
         </div>
 
         <div v-else-if="editorKey === 'status'" class="space-y-6">
@@ -197,7 +196,6 @@ interface BusinessLocation {
   address: PostalAddress | null
   phone: string | null
   email: string | null
-  website_url: string | null
   maps_url: string | null
   google_review_url: string | null
   description: string | null
@@ -407,7 +405,6 @@ const detailsForm = reactive({
   slug: '',
   phone: '',
   email: '',
-  website_url: '',
   maps_url: '',
   google_review_url: '',
   google_place_id: '',
@@ -449,7 +446,6 @@ function fillDetailsForm(loc: BusinessLocation) {
   detailsForm.slug = loc.slug
   detailsForm.phone = loc.phone ?? ''
   detailsForm.email = loc.email ?? ''
-  detailsForm.website_url = loc.website_url ?? ''
   detailsForm.maps_url = loc.maps_url ?? ''
   detailsForm.google_review_url = loc.google_review_url ?? ''
   detailsForm.google_place_id = loc.google_place_id ?? ''
@@ -521,7 +517,7 @@ function editorSignature(key: string | null): string {
     case 'name': return JSON.stringify(detailsForm.title)
     case 'slug': return JSON.stringify(detailsForm.slug)
     case 'address': return JSON.stringify([detailsForm.addressLines, detailsForm.regionCode, detailsForm.locality, detailsForm.sublocality, detailsForm.administrativeArea, detailsForm.postalCode])
-    case 'contact': return JSON.stringify([detailsForm.phone, detailsForm.email, detailsForm.website_url])
+    case 'contact': return JSON.stringify([detailsForm.phone, detailsForm.email])
     case 'status': return JSON.stringify(detailsForm.status)
     case 'hours': return JSON.stringify(hoursForm.value)
     case 'description': return JSON.stringify([detailsForm.short_description, detailsForm.description, detailsForm.price_level])
@@ -546,7 +542,6 @@ const validationMessage = computed(() => {
   if (editorKey.value === 'slug' && !detailsForm.slug.trim()) return 'Enter a location slug.'
   if (editorKey.value === 'contact') {
     if (detailsForm.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(detailsForm.email)) return 'Enter a valid email address.'
-    if (!isValidUrl(detailsForm.website_url)) return 'Enter a complete website URL.'
   }
   if (editorKey.value === 'hours') {
     if (!hoursForm.value.timezone) return 'Choose the location timezone.'
@@ -684,7 +679,6 @@ async function saveCurrentEditor() {
     await patchLocation({
       phone: detailsForm.phone.trim() || null,
       email: detailsForm.email.trim() || null,
-      website_url: detailsForm.website_url.trim() || null,
     })
     return
   }

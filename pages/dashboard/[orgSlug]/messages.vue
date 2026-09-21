@@ -1,7 +1,7 @@
 <template>
   <UDashboardPanel id="org-messages">
     <template #header>
-      <UDashboardNavbar :title="businessName" :toggle="false" />
+      <UDashboardNavbar :title="pastOnly ? 'Past conversations' : 'Messages'" :toggle="false" />
     </template>
 
     <template #body>
@@ -22,9 +22,7 @@ import GuestThreadList from '~/lib/components/workspace/messages/GuestThreadList
 */
 definePageMeta({ layout: 'dashboard' })
 
-// The chrome names the place; the panel names itself. Both saying "Messages"
-// stacked two titles on the mobile screen.
-const dashboard = useDashboardSite()
-const businessName = computed(() => dashboard.organization.value?.name ?? 'Messages')
+const route = useRoute()
+const pastOnly = computed(() => route.query.archived !== undefined)
 useSeoMeta({ title: 'Messages | KrabiClaw', robots: 'noindex, nofollow' })
 </script>
