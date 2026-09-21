@@ -7,17 +7,7 @@
     <template #header>
       <UDashboardNavbar :title="navbarTitle" :toggle="false">
         <template #leading>
-          <DashboardNavbarLeading :to="levelBackTo" :label="levelBackLabel" />
-        </template>
-        <template v-if="surface === 'brand'" #right>
-          <DashboardResourceLocalization
-            :site-id="siteId"
-            resource-type="site"
-            :resource-id="siteId"
-            resource-label="brand"
-            :fields="brandLocalizationFields"
-            :language-settings-path="`${settingsPath}/localization`"
-          />
+          <DashboardNavbarLeading />
         </template>
       </UDashboardNavbar>
     </template>
@@ -28,10 +18,23 @@
           <USkeleton v-for="i in 4" :key="i" class="h-32 rounded-xl" />
         </div>
         <UAlert v-else-if="loadError" color="error" variant="soft" icon="i-lucide-triangle-alert" :description="loadError" />
-        <EditorNavigationList v-else :groups="navigationGroups" :active-item="activeNavigationId" />
+        <EditorNavigationList v-else :groups="navigationGroups" :active-item="activeNavigationId" @act="onRowAction" />
       </div>
     </template>
   </UDashboardPanel>
+
+  <!-- Translating the brand is a row on the Brand list; this is the sheet it opens. -->
+  <DashboardResourceLocalization
+    v-if="surface === 'brand'"
+    v-model:open="localizeOpen"
+    row-trigger
+    :site-id="siteId"
+    resource-type="site"
+    :resource-id="siteId"
+    resource-label="brand"
+    :fields="brandLocalizationFields"
+    :language-settings-path="`${settingsPath}/localization`"
+  />
 
   <!--
     The open setting is the other column: its own panel, its own header,
@@ -41,7 +44,7 @@
     <template #header>
       <UDashboardNavbar :title="detailTitle" :toggle="false">
         <template #leading>
-          <DashboardNavbarLeading :to="dismissTo" :label="navbarTitle" />
+          <DashboardNavbarLeading />
         </template>
       </UDashboardNavbar>
     </template>
@@ -49,28 +52,20 @@
     <template #body>
       <div class="mx-auto w-full max-w-2xl">
         <UAlert v-if="editorError" color="error" variant="soft" icon="i-lucide-circle-alert" :description="editorError" class="mb-6" />
-        <div v-if="detailKey === 'search-index'" class="space-y-3">
-          <p class="mb-8 text-base text-muted">Manage how the published site is discovered and measured.</p>
-          <EditorNavigationList :groups="[{ id: 'search', items: searchItems }]" :active-item="activeNavigationId" />
-        </div>
-
-        <div v-else-if="detailKey === 'name'" class="space-y-6">
+        <div v-if="detailKey === 'name'" class="space-y-6">
           <p class="mb-2 text-sm font-semibold text-muted">{{ nameCharactersRemaining }}/50 available</p>
           <UInput v-model="form.brand_name" size="xl" maxlength="50" autofocus class="w-full" />
         </div>
 
         <div v-else-if="detailKey === 'logo'" class="space-y-6">
-          <p class="text-base text-muted">Choose an image from the site media library or upload a new logo.</p>
           <MediaPicker v-model="form.logoAssetId" :site-id="siteId" accept="image" title="Select logo" />
         </div>
 
         <div v-else-if="detailKey === 'sharing-image'" class="space-y-6">
-          <p class="text-base text-muted">Choose the image used as the source for generated social sharing cards.</p>
           <MediaPicker v-model="form.socialShareAssetId" :site-id="siteId" accept="image" title="Select social sharing image" />
         </div>
 
         <div v-else-if="detailKey === 'description'" class="space-y-6">
-          <p class="text-base text-muted">A concise description shared across the site and its public metadata.</p>
           <div>
             <p class="mb-2 text-sm font-semibold text-muted">{{ descriptionCharactersRemaining }}/500 available</p>
             <UTextarea v-model="form.brand_description" :rows="10" maxlength="500" autofocus class="w-full" />
@@ -78,7 +73,6 @@
         </div>
 
         <div v-else-if="detailKey === 'color'" class="space-y-8">
-          <p class="text-base text-muted">Select the primary color used by the site theme.</p>
           <UColorPicker v-model="form.brand_color" format="hex" size="xl" class="w-full" />
           <UFormField label="Hex color">
             <UInput v-model="form.brand_color" maxlength="7" placeholder="#0f766e" size="xl" class="w-full" />
@@ -87,7 +81,6 @@
 
         <div v-else-if="detailKey === 'font'" class="space-y-6">
           <template v-if="supportsSiteFonts">
-            <p class="text-base text-muted">Choose the font for headings and text on the public website. Mali supports Thai and English. Default restores the template typography.</p>
             <UFormField label="Website font">
               <USelect v-model="form.font_preset" :items="SITE_FONT_OPTIONS" value-key="value" label-key="label" size="xl" class="w-full" />
             </UFormField>
@@ -100,21 +93,18 @@
         </div>
 
         <div v-else-if="detailKey === 'contact'" class="space-y-6">
-          <p class="text-base text-muted">This is the shared public contact address for the site.</p>
           <UFormField label="Contact email">
             <UInput v-model="form.contact_email" type="email" autocomplete="email" size="xl" autofocus class="w-full" />
           </UFormField>
         </div>
 
         <div v-else-if="detailKey === 'social'" class="space-y-6">
-          <p class="text-base text-muted">Add the brand-level profiles shown across the public site.</p>
           <UFormField label="Facebook"><UInput v-model="form.social_facebook_url" type="url" placeholder="https://facebook.com/..." size="xl" class="w-full" /></UFormField>
           <UFormField label="Instagram"><UInput v-model="form.social_instagram_url" type="url" placeholder="https://instagram.com/..." size="xl" class="w-full" /></UFormField>
           <UFormField label="TikTok"><UInput v-model="form.social_tiktok_url" type="url" placeholder="https://tiktok.com/@..." size="xl" class="w-full" /></UFormField>
         </div>
 
         <div v-else-if="detailKey === 'currency'" class="space-y-6">
-          <p class="text-base text-muted">The default currency used for site-wide prices and reporting.</p>
           <USelect :model-value="form.default_currency ?? undefined" :items="CURRENCY_OPTIONS" value-key="value" label-key="label" size="xl" class="w-full" placeholder="Select currency" @update:model-value="form.default_currency = $event ?? null" />
         </div>
 
@@ -210,35 +200,23 @@
             The number the business is reached on. Which channels a person
             wants is their own setting, at /dashboard/account/profile/notifications.
           -->
-          <p class="text-base text-muted">The WhatsApp number used when a location has no number of its own.</p>
-          <UFormField label="Site-wide WhatsApp number">
+          <UFormField label="Site-wide WhatsApp number" hint="Used when a location has no number of its own.">
             <UInput v-model="whatsappPhone" type="tel" placeholder="+66..." size="xl" class="w-full" />
           </UFormField>
         </div>
 
-        <div v-else-if="detailKey === 'analytics'" class="space-y-6">
-          <p class="text-base text-muted">Connect this site to a Google Analytics property.</p>
-          <UFormField label="Measurement ID" hint="Format: G-XXXXXXXXXX">
-            <UInput v-model="form.google_analytics_measurement_id" placeholder="G-XXXXXXXXXX" size="xl" autofocus class="w-full" />
-          </UFormField>
-        </div>
+        <SiteGoogleAnalyticsSettings v-else-if="detailKey === 'analytics'" :site-id="siteId" @changed="refreshSettings" />
 
-        <div v-else-if="detailKey === 'verification'" class="space-y-6">
-          <p class="text-base text-muted">Enter the verification token supplied by Google Search Console.</p>
-          <UFormField label="Google site verification token">
-            <UInput v-model="form.google_site_verification" size="xl" autofocus class="w-full" />
-          </UFormField>
-        </div>
-
-        <div v-else-if="detailKey === 'visibility'" class="space-y-8">
-          <p class="text-base text-muted">Control whether search engines may index the published site.</p>
+        <div v-else-if="detailKey === 'search'" class="space-y-8">
           <UCard variant="subtle">
             <USwitch v-model="searchIndexed" label="Visible to search engines" description="Allow the site to appear in search results." size="xl" />
           </UCard>
+          <UFormField label="Google Search Console verification token">
+            <UInput v-model="form.google_site_verification" size="xl" class="w-full" />
+          </UFormField>
         </div>
 
         <div v-else-if="detailKey === 'publishing'" class="space-y-6">
-          <p class="text-base text-muted">Connect the Facebook Page used to publish content for this site.</p>
           <UAlert v-if="!hasFacebookAccess" color="warning" variant="soft" icon="i-lucide-lock" title="Growth plan required" description="Upgrade this site to connect Facebook and Instagram publishing." />
           <UCard v-else variant="subtle">
             <div class="flex items-center justify-between gap-4">
@@ -267,8 +245,9 @@
 
 <script setup lang="ts">
 import DashboardResourceLocalization from '~/components/dashboard/DashboardResourceLocalization.vue'
+import SiteGoogleAnalyticsSettings from '~/components/dashboard/SiteGoogleAnalyticsSettings.vue'
 import MediaPicker from '~/lib/components/workspace/media/MediaPicker.vue'
-import EditorNavigationList from '~/components/dashboard/EditorNavigationList.vue'
+import EditorNavigationList, { type EditorNavigationItem } from '~/components/dashboard/EditorNavigationList.vue'
 import { CURRENCY_OPTIONS, isCurrencyCode, type CurrencyCode } from '~/shared/currencies'
 import { SITE_FONT_OPTIONS, MALI_FONT_CSS, isSiteFontPreset, resolveSiteFontPreset, siteFontStyles, type SiteFontPreset } from '~/shared/site-fonts'
 
@@ -389,7 +368,6 @@ interface SettingsPageResource {
   notifications: { success: boolean; notifications: { whatsapp_phone: string | null } }
   facebook: FacebookConnectionStatus
 }
-interface EditorNavigationItem { id: string; label: string; summary: string; icon: string; to: string }
 
 const isSettingsResponse = (value: unknown): value is { success: boolean; settings: SiteSettingsResponse } =>
   isRecord(value) && typeof value.success === 'boolean' && isRecord(value.settings)
@@ -403,36 +381,15 @@ const isFacebookStatus = (value: unknown): value is FacebookConnectionStatus =>
   isRecord(value) && typeof value.connected === 'boolean' && (value.facebook_page_name === undefined || typeof value.facebook_page_name === 'string')
 
 
-// Two different "up"s, and they are not the same destination.
-//
-// The navbar's back control leaves the *level* — the index column and everything
-// reachable from it. At `lg` that index is on screen beside the open section, so
-// leaving the level means leaving settings entirely.
-//
-// The sheet's close control leaves the open *section* and lands on the index it
-// was opened from. It only exists below `lg`, where that index is covered.
-//
-// Conflating them sent the navbar to the settings index while the settings index
-// was already the thing on screen.
-const levelBackTo = computed(() => isSearchLevel.value ? settingsPath.value : siteDashboardPath.value)
-const levelBackLabel = computed(() => isSearchLevel.value ? 'Site settings' : 'Site overview')
-const dismissTo = computed(() => {
-  if (isSearchLevel.value) return `${settingsPath.value}/search`
-  return surface.value === 'brand' ? brandPath.value : settingsPath.value
-})
 const routeSegments = frame.rest
-const firstSegment = computed(() => routeSegments.value[0] ?? null)
-const secondSegment = computed(() => routeSegments.value[1] ?? null)
-const detailKey = computed(() => surface.value === 'brand' ? firstSegment.value : firstSegment.value === 'search' ? secondSegment.value ?? 'search-index' : firstSegment.value)
+const detailKey = computed(() => routeSegments.value[0] ?? null)
 const validBrandKeys = new Set(['name', 'logo', 'sharing-image', 'description', 'color', 'font', 'contact', 'social'])
-const validSettingsKeys = new Set(['currency', 'notifications', 'search', 'publishing', 'localization', 'delete'])
-const validSearchKeys = new Set(['analytics', 'verification', 'visibility'])
+const validSettingsKeys = new Set(['currency', 'notifications', 'search', 'analytics', 'publishing', 'localization', 'delete'])
 const routeIsCanonical = computed(() => {
   const segments = routeSegments.value
-  if (surface.value === 'brand') return segments.length <= 1 && (!segments[0] || validBrandKeys.has(segments[0]))
   if (segments.length === 0) return true
-  if (segments.length === 1) return validSettingsKeys.has(segments[0]!)
-  return segments.length === 2 && segments[0] === 'search' && validSearchKeys.has(segments[1]!)
+  if (segments.length > 1) return false
+  return (surface.value === 'brand' ? validBrandKeys : validSettingsKeys).has(segments[0]!)
 })
 watchEffect(() => {
   if (!routeIsCanonical.value) throw createError({ statusCode: 404, statusMessage: 'Setting not found' })
@@ -465,7 +422,6 @@ interface SiteSettingsForm {
   brand_color: string
   font_preset: SiteFontPreset
   default_currency: CurrencyCode | null
-  google_analytics_measurement_id: string
   google_site_verification: string
   social_facebook_url: string
   social_instagram_url: string
@@ -473,7 +429,7 @@ interface SiteSettingsForm {
 }
 const form = reactive<SiteSettingsForm>({
   brand_name: '', brand_description: '', logoAssetId: null, socialShareAssetId: null, contact_email: '', brand_color: '', font_preset: 'default',
-  default_currency: null, google_analytics_measurement_id: '', google_site_verification: '',
+  default_currency: null, google_site_verification: '',
   social_facebook_url: '', social_instagram_url: '', social_tiktok_url: '',
 })
 // Only the specimen uses Mali. Never change the dashboard's typography.
@@ -510,53 +466,42 @@ const brandItems = computed<EditorNavigationItem[]>(() => [
   ...(supportsSiteFonts.value ? [{ id: 'font', label: 'Website font', summary: loadedSettings.value?.font_preset === 'mali' ? 'Mali (Thai and English)' : 'Default', icon: 'i-lucide-type', to: `${brandPath.value}/font` }] : []),
   { id: 'contact', label: 'Contact details', summary: explicitSummary(loadedSettings.value?.contact_email), icon: 'i-lucide-mail', to: `${brandPath.value}/contact` },
   { id: 'social', label: 'Social profiles', summary: socialSummary.value, icon: 'i-lucide-share-2', to: `${brandPath.value}/social` },
+  { id: 'translations', label: 'Translations', summary: 'Translate the brand name and description', icon: 'i-lucide-languages', action: { label: 'Localize' } },
 ])
+const localizeOpen = ref(false)
+function onRowAction(id: string) {
+  if (id === 'translations') localizeOpen.value = true
+}
+// Flat, values on the rows, the way Edit preferences reads: nothing a visitor
+// sees is here, and nothing here opens a second list.
 const settingsItems = computed<EditorNavigationItem[]>(() => [
   { id: 'domains', label: 'Domain', summary: domainSummary.value, icon: 'i-lucide-globe-2', to: `${settingsPath.value}/domains` },
-  { id: 'localization', label: 'Localization', summary: 'Languages and localized content', icon: 'i-lucide-languages', to: `${settingsPath.value}/localization` },
+  { id: 'localization', label: 'Languages', summary: 'Languages the site is published in', icon: 'i-lucide-languages', to: `${settingsPath.value}/localization` },
   { id: 'currency', label: 'Currency', summary: explicitSummary(loadedSettings.value?.default_currency), icon: 'i-lucide-coins', to: `${settingsPath.value}/currency` },
-  { id: 'notifications', label: 'Notifications', summary: notificationSummary.value, icon: 'i-lucide-bell', to: `${settingsPath.value}/notifications` },
-  { id: 'search', label: 'Search and analytics', summary: searchSummary.value, icon: 'i-lucide-chart-no-axes-combined', to: `${settingsPath.value}/search` },
+  { id: 'notifications', label: 'WhatsApp number', summary: notificationSummary.value, icon: 'i-lucide-bell', to: `${settingsPath.value}/notifications` },
+  { id: 'search', label: 'Search engines', summary: searchSummary.value, icon: 'i-lucide-scan-search', to: `${settingsPath.value}/search` },
+  { id: 'analytics', label: 'Google Analytics', summary: explicitSummary(loadedSettings.value?.google_analytics_measurement_id, 'Not connected'), icon: 'i-lucide-chart-no-axes-combined', to: `${settingsPath.value}/analytics` },
   { id: 'publishing', label: 'Facebook publishing', summary: facebookConnection.value?.connected ? explicitSummary(facebookConnection.value.facebook_page_name, 'Connected') : 'Not connected', icon: 'i-simple-icons-facebook', to: `${settingsPath.value}/publishing` },
-  // Deleting the workspace deletes the organization, so only an owner is
+  // Deleting the site deletes the organization, so only an owner is
   // offered it — the same permission Better Auth enforces on the delete itself.
   ...(isOwner.value
-    ? [{ id: 'delete', label: 'Delete workspace', summary: deletionScheduledAt.value ? `Scheduled for ${deletionDateLabel.value}` : 'Removes this site, its locations and its content', icon: 'i-lucide-trash-2', to: `${settingsPath.value}/delete` }]
+    ? [{ id: 'delete', label: 'Delete site', summary: deletionScheduledAt.value ? `Scheduled for ${deletionDateLabel.value}` : 'Removes this site, its locations and its content', icon: 'i-lucide-trash-2', to: `${settingsPath.value}/delete` }]
     : []),
 ])
-const searchItems = computed<EditorNavigationItem[]>(() => [
-  { id: 'analytics', label: 'Google Analytics', summary: explicitSummary(loadedSettings.value?.google_analytics_measurement_id, 'Not connected'), icon: 'i-lucide-chart-no-axes-combined', to: `${settingsPath.value}/search/analytics` },
-  { id: 'verification', label: 'Search verification', summary: loadedSettings.value?.google_site_verification ? 'Configured' : 'Not configured', icon: 'i-lucide-badge-check', to: `${settingsPath.value}/search/verification` },
-  { id: 'visibility', label: 'Search visibility', summary: searchSummary.value, icon: 'i-lucide-scan-search', to: `${settingsPath.value}/search/visibility` },
-])
-// Standing inside "Search and analytics" rather than on the settings index: the
-// pair re-roots here, so the index column lists the search sections and the back
-// control, navbar title and active row all belong to that level rather than the
-// one above it.
-const isSearchLevel = computed(() => surface.value !== 'brand' && firstSegment.value === 'search' && Boolean(secondSegment.value))
 
-const navigationGroups = computed(() => {
-  if (surface.value === 'brand') return [{ id: 'brand', items: brandItems.value }]
-  if (isSearchLevel.value) return [{ id: 'search', items: searchItems.value }]
-  return [
-    { id: 'site', label: 'Site', items: settingsItems.value.slice(0, 2) },
-    { id: 'connections', label: 'Connections', items: settingsItems.value.slice(2) },
-  ]
-})
-const activeNavigationId = computed(() => surface.value === 'brand' || isSearchLevel.value ? detailKey.value : firstSegment.value)
+const navigationGroups = computed(() => [surface.value === 'brand'
+  ? { id: 'brand', items: brandItems.value }
+  : { id: 'settings', items: settingsItems.value }])
+const activeNavigationId = detailKey
 const hasDetail = computed(() => routeSegments.value.length > 0)
-const detailTitles: Record<string, string> = { 'search-index': 'Search and analytics', name: 'Brand name', logo: 'Logo', 'sharing-image': 'Social sharing image', description: 'Description', color: 'Brand color', font: 'Website font', contact: 'Contact details', social: 'Social profiles', currency: 'Currency', notifications: 'Notifications', analytics: 'Google Analytics', verification: 'Search verification', visibility: 'Search visibility', publishing: 'Facebook publishing', localization: 'Localization' }
+const detailTitles: Record<string, string> = { name: 'Brand name', logo: 'Logo', 'sharing-image': 'Social sharing image', description: 'Description', color: 'Brand color', font: 'Website font', contact: 'Contact details', social: 'Social profiles', domains: 'Domain', currency: 'Currency', notifications: 'WhatsApp number', analytics: 'Google Analytics', search: 'Search engines', publishing: 'Facebook publishing', localization: 'Languages', delete: 'Delete site' }
 const detailTitle = computed(() => detailKey.value ? detailTitles[detailKey.value] : undefined)
 
 // The navbar names the level, not the open section — at `lg` the section's own
 // title is a heading on its pane, with the index list still beside it. Naming the
 // section twice made the navbar claim to be the page the pane was showing.
-const levelTitle = computed(() => {
-  if (surface.value === 'brand') return 'Brand'
-  return isSearchLevel.value ? 'Search and analytics' : 'Site Settings'
-})
-const navbarTitle = computed(() => levelTitle.value)
-const showActions = computed(() => Boolean(detailKey.value && !['search-index', 'publishing', 'delete'].includes(detailKey.value)
+const navbarTitle = computed(() => surface.value === 'brand' ? 'Brand' : 'Website')
+const showActions = computed(() => Boolean(detailKey.value && !['analytics', 'publishing', 'delete'].includes(detailKey.value)
   && (detailKey.value !== 'font' || supportsSiteFonts.value)))
 
 // Leaving a section resets its editor. This used to hang off the back button's
@@ -577,9 +522,7 @@ function editorSignature(key: string | null) {
     case 'social': return JSON.stringify([form.social_facebook_url, form.social_instagram_url, form.social_tiktok_url])
     case 'currency': return JSON.stringify(form.default_currency)
     case 'notifications': return whatsappPhone.value
-    case 'analytics': return JSON.stringify(form.google_analytics_measurement_id)
-    case 'verification': return JSON.stringify(form.google_site_verification)
-    case 'visibility': return JSON.stringify(searchIndexed.value)
+    case 'search': return JSON.stringify([searchIndexed.value, form.google_site_verification])
     case 'localization': return JSON.stringify(newLocale.value)
     default: return ''
   }
@@ -598,7 +541,6 @@ const validationMessage = computed(() => {
     case 'contact': return !form.contact_email.trim() || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.contact_email) ? null : 'Enter a valid email address.'
     case 'social': return [form.social_facebook_url, form.social_instagram_url, form.social_tiktok_url].every(isValidUrl) ? null : 'Enter complete http or https profile URLs.'
     case 'notifications': return null
-    case 'analytics': return !form.google_analytics_measurement_id.trim() || /^G-[A-Z0-9]+$/i.test(form.google_analytics_measurement_id.trim()) ? null : 'Enter a valid Google Analytics measurement ID.'
     case 'localization': return localizationSettings.value?.effective_plan !== 'growth' ? 'A Growth subscription is required.' : null
     default: return null
   }
@@ -619,7 +561,6 @@ function fillForm(settings: SiteSettingsResponse) {
   // A stored value that is not a supported code is not this form's to reinterpret:
   // showing it as USD invited the owner to save that over whatever is really there.
   form.default_currency = isCurrencyCode(settings.default_currency) ? settings.default_currency : null
-  form.google_analytics_measurement_id = settings.google_analytics_measurement_id ?? ''
   form.google_site_verification = settings.google_site_verification ?? ''
   form.social_facebook_url = settings.social_facebook_url ?? ''
   form.social_instagram_url = settings.social_instagram_url ?? ''
@@ -644,7 +585,7 @@ function errorMessage(error: unknown, fallback: string) {
 }
 
 const settingsResourceKey = computed(() => `dashboard-site-settings:${String(route.params.orgSlug)}:${String(route.params.siteSlug)}`)
-const { data: settingsResource, pending: settingsPending, error: settingsResourceError } = await useAsyncData<SettingsPageResource>(settingsResourceKey, async () => {
+const { data: settingsResource, pending: settingsPending, error: settingsResourceError, refresh: refreshSettings } = await useAsyncData<SettingsPageResource>(settingsResourceKey, async () => {
   const [settings, notifications, facebook] = await Promise.all([
     dashboardApi<{ success: boolean; settings: SiteSettingsResponse }>('/api/dashboard/settings', { validate: isSettingsResponse }),
     dashboardApi<{ success: boolean; notifications: { whatsapp_phone: string | null } }>(`/api/editor/sites/${siteId}/notifications`, { validate: isNotificationsResponse }),
@@ -666,7 +607,7 @@ watch(detailKey, () => resetDraft())
 
 function cancelEditor() {
   resetDraft()
-  const destination = surface.value === 'brand' ? brandPath.value : firstSegment.value === 'search' && secondSegment.value ? `${settingsPath.value}/search` : settingsPath.value
+  const destination = surface.value === 'brand' ? brandPath.value : settingsPath.value
   router.push(destination)
 }
 async function patchSettings(body: Record<string, unknown>) {
@@ -694,9 +635,7 @@ async function saveCurrentEditor() {
         await patchSettings({ default_currency: form.default_currency })
         break
       }
-      case 'analytics': await patchSettings({ google_analytics_measurement_id: form.google_analytics_measurement_id.trim() }); break
-      case 'verification': await patchSettings({ google_site_verification: form.google_site_verification.trim() }); break
-      case 'visibility': await patchSettings({ robots: searchIndexed.value ? 'index,follow' : 'noindex,nofollow' }); break
+      case 'search': await patchSettings({ robots: searchIndexed.value ? 'index,follow' : 'noindex,nofollow', google_site_verification: form.google_site_verification.trim() }); break
       case 'notifications': {
         const response = await dashboardApi<{ notifications: { whatsapp_phone: string | null } }>(`/api/editor/sites/${siteId}/notifications`, { method: 'PATCH', body: { whatsapp_phone: whatsappPhone.value.trim() }, validate: isNotificationsResponse })
         fillNotifications(response.notifications)

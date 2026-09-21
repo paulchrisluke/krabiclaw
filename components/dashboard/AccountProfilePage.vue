@@ -8,9 +8,9 @@
       :default-size="32"
     >
       <template #header>
-        <UDashboardNavbar title="Account" :toggle="false">
+        <UDashboardNavbar title="Account settings" :toggle="false">
           <template #leading>
-            <DashboardNavbarLeading to="/dashboard" label="Dashboard" />
+            <DashboardNavbarLeading />
           </template>
         </UDashboardNavbar>
       </template>
@@ -18,17 +18,9 @@
       <template #body>
         <div class="mx-auto w-full max-w-xl">
           <!--
-            One carded list of rows, the surface every other settings hub draws.
-            A row states its value and opens a level; Log out acts on the
-            session, so it carries a control instead of a chevron. Everything
-            else — whether an address is verified, how to reset a password —
-            lives one level down, where there is room for it.
+            The reference's Account settings: a row per section, and the fields
+            live inside the section as value rows that edit in place.
           -->
-          <NuxtLink :to="`${profilePath}/photo`" class="mb-6 flex items-center gap-4 no-underline">
-            <UAvatar :src="sessionData?.user?.image ?? undefined" icon="i-lucide-user" alt="" class="size-16" :ui="{ icon: 'size-8' }" />
-            <span class="text-sm font-semibold text-highlighted underline underline-offset-4">Change photo</span>
-          </NuxtLink>
-
           <EditorNavigationList :groups="groups" :active-item="openKey" @act="runRowAction" />
         </div>
       </template>
@@ -42,71 +34,154 @@
       <template #header>
         <UDashboardNavbar :title="detailTitle" :toggle="false">
           <template #leading>
-            <DashboardNavbarLeading :to="profilePath" label="Account" />
+            <DashboardNavbarLeading />
           </template>
         </UDashboardNavbar>
       </template>
 
       <template #body>
         <div class="mx-auto w-full max-w-2xl">
-          <UAlert
-            v-if="detailError"
-            color="error"
-            variant="soft"
-            icon="i-lucide-circle-alert"
-            :description="detailError"
-            class="mb-6"
-          />
-          <div v-if="openKey === 'photo'" class="space-y-6">
-            <UAvatar :src="photoPreview ?? sessionData?.user?.image ?? undefined" icon="i-lucide-user" alt="" class="size-32" :ui="{ icon: 'size-16' }" />
-            <UAlert v-if="photoError" color="error" variant="soft" icon="i-lucide-triangle-alert" :description="photoError" />
-            <UInput type="file" accept="image/*" size="xl" class="w-full" :disabled="photoSaving" @change="pickPhoto" />
-          </div>
-
-          <UFormField v-else-if="openKey === 'name'" label="Display name">
-            <UInput v-model="nameInput" size="xl" autofocus class="w-full" @input="nameTouched = true" @keydown.enter="saveDetail" />
-          </UFormField>
-
-          <div v-else-if="openKey === 'sign-in'" class="space-y-6">
-            <UFormField label="Email">
-              <UInput :model-value="sessionData?.user?.email" size="xl" readonly class="w-full" />
-            </UFormField>
-            <div class="flex flex-wrap gap-2">
-              <UBadge v-if="sessionData?.user?.emailVerified" color="success" variant="subtle" icon="i-lucide-check">Verified</UBadge>
-              <UBadge v-else color="warning" variant="subtle" icon="i-lucide-alert-triangle">Not verified</UBadge>
-              <UBadge v-if="googleStatus === 'connected'" color="neutral" variant="subtle" icon="i-simple-icons-google">Google</UBadge>
+          <div v-if="openKey === 'personal'" class="divide-y divide-default">
+            <!-- Photo -->
+            <div class="flex items-start justify-between gap-4 py-5">
+              <div class="flex min-w-0 items-center gap-4">
+                <UAvatar :src="photoPreview ?? sessionData?.user?.image ?? undefined" icon="i-lucide-user" alt="" class="size-16" :ui="{ icon: 'size-8' }" />
+                <div class="min-w-0">
+                  <p class="font-semibold text-highlighted">Photo</p>
+                  <p v-if="photoError" class="mt-1 text-sm text-error">{{ photoError }}</p>
+                  <UInput v-if="editing === 'photo'" type="file" accept="image/*" class="mt-3 w-full" :disabled="photoSaving" @change="pickPhoto" />
+                </div>
+              </div>
+              <UButton variant="link" color="neutral" class="shrink-0" :label="editing === 'photo' ? 'Cancel' : 'Edit'" @click="toggleEdit('photo')" />
             </div>
-            <NuxtLink to="/forgot-password" class="block text-sm font-semibold text-highlighted underline underline-offset-4">Reset password</NuxtLink>
+
+            <!-- Display name -->
+            <div class="py-5">
+              <div class="flex items-start justify-between gap-4">
+                <div class="min-w-0">
+                  <p class="font-semibold text-highlighted">Display name</p>
+                  <p v-if="editing !== 'name'" class="mt-1 text-sm" :class="sessionData?.user?.name ? 'text-muted' : 'italic text-dimmed'">{{ sessionData?.user?.name || 'Not provided' }}</p>
+                </div>
+                <UButton variant="link" color="neutral" class="shrink-0" :label="editing === 'name' ? 'Cancel' : sessionData?.user?.name ? 'Edit' : 'Add'" @click="toggleEdit('name')" />
+              </div>
+              <div v-if="editing === 'name'" class="mt-4 space-y-4">
+                <UInput v-model="nameInput" autofocus class="w-full" @input="nameTouched = true" @keydown.enter="saveNameInline" />
+                <p v-if="nameError" class="text-sm text-error">{{ nameError }}</p>
+                <UButton label="Save" :loading="nameSaving" :disabled="!nameDirty" @click="saveNameInline" />
+              </div>
+            </div>
+
+            <!-- WhatsApp number -->
+            <div class="py-5">
+              <div class="flex items-start justify-between gap-4">
+                <div class="min-w-0">
+                  <p class="font-semibold text-highlighted">WhatsApp number</p>
+                  <p v-if="editing !== 'phone'" class="mt-1 text-sm" :class="sessionData?.user?.phoneNumber ? 'text-muted' : 'italic text-dimmed'">
+                    {{ sessionData?.user?.phoneNumber || 'Not provided' }}
+                    <UBadge v-if="sessionData?.user?.phoneNumber" :color="sessionData?.user?.phoneNumberVerified ? 'success' : 'warning'" variant="subtle" size="sm" class="ms-2">{{ sessionData?.user?.phoneNumberVerified ? 'Verified' : 'Not verified' }}</UBadge>
+                  </p>
+                  <p class="mt-1 text-sm text-dimmed">Notifications and codes are sent over WhatsApp.</p>
+                </div>
+                <UButton variant="link" color="neutral" class="shrink-0" :label="editing === 'phone' ? 'Cancel' : sessionData?.user?.phoneNumber ? 'Edit' : 'Add'" @click="toggleEdit('phone')" />
+              </div>
+              <div v-if="editing === 'phone'" class="mt-4 space-y-4">
+                <UInput v-model="phoneInput" type="tel" placeholder="+66..." autofocus class="w-full" @input="phoneTouched = true" @keydown.enter="requestPhoneVerify" />
+                <p v-if="phoneError" class="text-sm text-error">{{ phoneError }}</p>
+                <UButton label="Verify and save" :loading="phoneSaving" :disabled="!phoneDirty || !phoneInput.trim()" @click="requestPhoneVerify" />
+              </div>
+            </div>
           </div>
 
-          <div v-else-if="openKey === 'phone'" class="space-y-6">
-            <UFormField label="WhatsApp number" hint="Notifications and codes are sent over WhatsApp only.">
-              <UInput v-model="phoneInput" size="xl" placeholder="+66..." autofocus class="w-full" @input="phoneTouched = true" @keydown.enter="saveDetail" />
-            </UFormField>
-            <UBadge v-if="sessionData?.user?.phoneNumber" :color="sessionData?.user?.phoneNumberVerified ? 'success' : 'warning'" variant="subtle">
-              {{ sessionData?.user?.phoneNumberVerified ? 'Verified' : 'Not verified' }}
-            </UBadge>
+          <!--
+            Login & security, laid out the way the reference does it: what you
+            sign in with, the devices signed in now, and account deletion at the
+            very bottom, behind its own confirmation and nowhere near Log out.
+          -->
+          <div v-else-if="openKey === 'login'" class="space-y-10">
+            <section>
+              <h2 class="text-lg font-semibold text-highlighted">Login</h2>
+              <div class="mt-2 divide-y divide-default">
+                <div class="flex items-start justify-between gap-4 py-4">
+                  <div class="min-w-0">
+                    <p class="font-semibold text-highlighted">Email</p>
+                    <p class="mt-1 truncate text-sm text-muted">{{ sessionData?.user?.email }}</p>
+                  </div>
+                  <UBadge v-if="sessionData?.user?.emailVerified" color="success" variant="subtle">Verified</UBadge>
+                  <UBadge v-else color="warning" variant="subtle">Not verified</UBadge>
+                </div>
+                <div class="flex items-start justify-between gap-4 py-4">
+                  <div>
+                    <p class="font-semibold text-highlighted">Password</p>
+                    <p class="mt-1 text-sm text-muted">Sent to your email as a reset link.</p>
+                  </div>
+                  <NuxtLink to="/forgot-password" class="shrink-0 text-sm font-semibold text-highlighted underline underline-offset-4">Update</NuxtLink>
+                </div>
+                <div class="flex items-start justify-between gap-4 py-4">
+                  <div>
+                    <p class="font-semibold text-highlighted">Google</p>
+                    <p class="mt-1 text-sm text-muted">{{ googleStatus === 'connected' ? 'Connected' : googleStatus === 'not-connected' ? 'Not connected' : googleStatus === 'error' ? 'Could not be checked' : '' }}</p>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section>
+              <h2 class="text-lg font-semibold text-highlighted">Device history</h2>
+              <UAlert v-if="sessionsError" color="error" variant="soft" icon="i-lucide-triangle-alert" :description="sessionsError" class="mt-3" />
+              <div v-else class="mt-2 divide-y divide-default">
+                <div v-for="device in sessions" :key="device.token" class="flex items-start justify-between gap-4 py-4">
+                  <div class="min-w-0">
+                    <p class="font-semibold text-highlighted">{{ describeDevice(device.userAgent) }}</p>
+                    <UBadge v-if="device.current" color="neutral" variant="subtle" size="sm" class="mt-1">Current session</UBadge>
+                    <p class="mt-1 text-sm text-muted">{{ device.ipAddress ? `${device.ipAddress} · ` : '' }}{{ formatExactDateTime(device.updatedAt, { includeTime: true }) }}</p>
+                  </div>
+                  <UButton
+                    v-if="!device.current"
+                    variant="link"
+                    color="neutral"
+                    label="Log out"
+                    :loading="revoking === device.token"
+                    @click="revokeDevice(device.token)"
+                  />
+                </div>
+              </div>
+            </section>
+
+            <section>
+              <h2 class="text-lg font-semibold text-highlighted">Delete account</h2>
+              <div class="mt-3 space-y-4">
+                <template v-if="deletionScheduledAt">
+                  <UAlert
+                    color="warning"
+                    variant="soft"
+                    icon="i-lucide-clock"
+                    title="Deletion scheduled"
+                    :description="`Everything is deleted on ${deletionDateLabel}. Your site stays online until then.`"
+                  />
+                  <UAlert v-if="deleteError" color="error" variant="soft" icon="i-lucide-triangle-alert" :description="deleteError" />
+                  <UButton color="neutral" variant="outline" label="Keep my account" :loading="deleting" @click="keepAccount" />
+                </template>
+                <template v-else>
+                  <p class="text-sm text-muted">Your account, organization, site, locations and menu data are deleted in {{ graceDays }} days. You can cancel until then.</p>
+                  <UAlert v-if="deleteError" color="error" variant="soft" icon="i-lucide-triangle-alert" :description="deleteError" />
+                  <UFormField label="Type DELETE to confirm">
+                    <UInput v-model="deleteConfirmText" placeholder="DELETE" :disabled="deleting" class="w-full" />
+                  </UFormField>
+                  <UButton color="error" variant="soft" label="Schedule deletion" :disabled="deleteConfirmText !== 'DELETE'" :loading="deleting" @click="confirmDeleteAccount" />
+                </template>
+              </div>
+            </section>
           </div>
 
-          <div v-else-if="openKey === 'delete'" class="space-y-4">
-            <template v-if="deletionScheduledAt">
-              <UAlert
-                color="warning"
-                variant="soft"
-                icon="i-lucide-clock"
-                title="Deletion scheduled"
-                :description="`Everything is deleted on ${deletionDateLabel}. Your site stays online until then.`"
-              />
-              <UAlert v-if="deleteError" color="error" variant="soft" icon="i-lucide-triangle-alert" :description="deleteError" />
-            </template>
-            <template v-else>
-              <p class="text-base text-muted">Your account, organization, site, locations and menu data are deleted in {{ graceDays }} days. You can cancel here until then.</p>
-              <UAlert v-if="deleteError" color="error" variant="soft" icon="i-lucide-triangle-alert" :description="deleteError" />
-              <UFormField label="Type DELETE to confirm">
-                <UInput v-model="deleteConfirmText" placeholder="DELETE" :disabled="deleting" autofocus class="w-full" @keydown.enter="saveDetail" />
-              </UFormField>
-            </template>
-          </div>
+          <URadioGroup
+            v-else-if="openKey === 'appearance'"
+            v-model="themeInput"
+            legend="Theme"
+            :items="THEME_OPTIONS"
+            value-key="value"
+            size="xl"
+            variant="card"
+          />
         </div>
       </template>
 
@@ -161,10 +236,7 @@
 // -nocheck
 import EditorNavigationList, { type EditorNavigationGroup } from '~/components/dashboard/EditorNavigationList.vue'
 import { authClient } from '~/lib/auth-client'
-import { dashboardOrganizationParentKey } from '~/lib/components/workspace/dashboard/dashboardScopeHeaderContext'
 
-
-const route = useRoute()
 
 // The frame comes first, and before any `await`: `useEditorFrame` provides and
 // injects, which Vue binds only while setup is still synchronous.
@@ -175,9 +247,8 @@ const session = authClient.useSession()
 const sessionData = computed(() => session.value.data)
 const refreshSession = () => session.value.refetch()
 
-const organizationParent = inject(dashboardOrganizationParentKey, null)
-const billingTo = computed(() => organizationParent?.value ? `${organizationParent.value.to}/settings/billing` : null)
-const { signOut } = authClient
+const { logOut } = useDashboardMenu()
+const { formatExactDateTime } = useHumanTime()
 
 // Whether this account can sign in with Google. It is shown in the Sign in
 // leaf beside the address, because that is the concern it belongs to — it was
@@ -198,12 +269,56 @@ onMounted(async () => {
   }
 })
 
-async function handleSignOut() {
-  // Preserve the current path across sign-out/sign-back-in.
-  const redirect = route.fullPath
-  await signOut()
-  await navigateTo({ path: '/login', query: { redirect } })
+// Device history: the sessions Better Auth holds for this user. The current
+// one is the token in hand; every other row can be logged out from here.
+interface DeviceSession { token: string; userAgent?: string | null; ipAddress?: string | null; updatedAt: string | Date }
+const sessions = ref<Array<DeviceSession & { current: boolean }>>([])
+const sessionsError = ref<string | null>(null)
+const revoking = ref<string | null>(null)
+
+async function loadSessions() {
+  const { data, error } = await authClient.listSessions()
+  if (error) {
+    sessionsError.value = error.message || 'Devices could not be loaded.'
+    return
+  }
+  const current = sessionData.value?.session?.token
+  sessions.value = ((data ?? []) as DeviceSession[])
+    .map(item => ({ ...item, current: item.token === current }))
+    .sort((a, b) => Number(b.current) - Number(a.current) || new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
 }
+
+async function revokeDevice(token: string) {
+  revoking.value = token
+  try {
+    const { error } = await authClient.revokeSession({ token })
+    if (error) throw new Error(error.message || 'Logging out that device failed.')
+    await loadSessions()
+  } catch (cause) {
+    sessionsError.value = cause instanceof Error ? cause.message : String(cause)
+  } finally {
+    revoking.value = null
+  }
+}
+
+function describeDevice(userAgent?: string | null) {
+  const ua = userAgent ?? ''
+  const os = /iPhone|iPad/.test(ua) ? 'iOS' : /Android/.test(ua) ? 'Android' : /Mac OS/.test(ua) ? 'macOS' : /Windows/.test(ua) ? 'Windows' : /Linux/.test(ua) ? 'Linux' : null
+  const browser = /Edg\//.test(ua) ? 'Edge' : /Chrome\//.test(ua) ? 'Chrome' : /Safari\//.test(ua) ? 'Safari' : /Firefox\//.test(ua) ? 'Firefox' : null
+  return [os, browser].filter(Boolean).join(' · ') || 'Unknown device'
+}
+
+// Appearance is a preference of the person, kept on this device.
+const { preference: themePreference, setPreference: setThemePreference } = usePlatformTheme()
+type ThemePreference = 'system' | 'light' | 'dark'
+const THEME_OPTIONS: { label: string; description: string; value: ThemePreference }[] = [
+  { label: 'System', description: 'Follow your device appearance.', value: 'system' },
+  { label: 'Light', description: 'Always use the light dashboard.', value: 'light' },
+  { label: 'Dark', description: 'Always use the dark dashboard.', value: 'dark' },
+]
+const themeInput = ref<ThemePreference>(themePreference.value)
+watch(themePreference, saved => { themeInput.value = saved })
+const themeDirty = computed(() => themeInput.value !== themePreference.value)
 // Photo
 //
 // Better Auth owns `user.image`, so the upload posts the file to our own route,
@@ -236,6 +351,7 @@ async function pickPhoto(event: Event) {
   // Separate from the upload: the photo is already stored by now, so a failed
   // refresh is a stale header, not a failed save, and must not read as one.
   await refreshSession()
+  editing.value = null
 }
 
 // Display Name
@@ -243,11 +359,22 @@ const nameInput = ref(sessionData.value?.user?.name || '')
 const nameDirty = computed(() => nameInput.value.trim() !== (sessionData.value?.user?.name || ''))
 const nameSaving = ref(false)
 const DETAIL_LABELS: Record<string, string> = {
-  photo: 'Photo',
-  name: 'Display name',
-  'sign-in': 'Sign in',
-  phone: 'WhatsApp number',
-  delete: 'Delete account',
+  personal: 'Personal information',
+  login: 'Login & security',
+  appearance: 'Appearance',
+}
+
+// Which Personal information row is open for editing. One at a time, the way
+// the reference expands one row and leaves the rest as they are.
+const editing = ref<'photo' | 'name' | 'phone' | null>(null)
+function toggleEdit(row: 'photo' | 'name' | 'phone') {
+  if (editing.value === row) {
+    cancelEdit()
+    editing.value = null
+    return
+  }
+  cancelEdit()
+  editing.value = row
 }
 const detailKey = computed(() => frame.childSegment.value)
 /**
@@ -255,8 +382,12 @@ const detailKey = computed(() => frame.childSegment.value)
  * the reference profile opens on its first section too. `has-detail` stays tied
  * to the route, so below `lg` a phone shows the index and no sheet to escape.
  */
-const openKey = computed(() => detailKey.value ?? 'name')
+const openKey = computed(() => detailKey.value ?? 'personal')
 const detailTitle = computed(() => DETAIL_LABELS[openKey.value])
+
+// The current token arrives with the session fetch; until it has, every
+// device would read as another device, with a Log out it must not have.
+watch(() => [openKey.value === 'login', sessionData.value?.session?.token] as const, ([open, token]) => { if (open && token) void loadSessions() }, { immediate: true })
 
 // An unsupported row 404s rather than opening an empty pane.
 watchEffect(() => {
@@ -279,76 +410,37 @@ const notificationSummary = computed(() => {
 
 const groups = computed<EditorNavigationGroup[]>(() => [
   {
-    id: 'profile',
-    label: 'Profile',
-    items: [
-      { id: 'name', label: 'Display name', summary: sessionData.value?.user?.name || 'Not set', placeholder: !sessionData.value?.user?.name, to: `${profilePath.value}/name` },
-      { id: 'sign-in', label: 'Sign in', summary: sessionData.value?.user?.email ?? '', to: `${profilePath.value}/sign-in` },
-      { id: 'phone', label: 'WhatsApp number', summary: sessionData.value?.user?.phoneNumber || 'Not set', placeholder: !sessionData.value?.user?.phoneNumber, to: `${profilePath.value}/phone` },
-    ],
-  },
-  {
-    id: 'notifications',
-    label: 'Notifications',
-    items: [
-      { id: 'notifications', label: 'Notifications', summary: notificationSummary.value, to: `${profilePath.value}/notifications` },
-    ],
-  },
-  {
     id: 'account',
-    label: 'Account',
     items: [
-      ...(billingTo.value
-        ? [{ id: 'billing', label: 'Billing', summary: organizationParent?.value?.label ?? '', to: billingTo.value }]
-        : []),
-      {
-        id: 'delete',
-        label: 'Delete account',
-        summary: deletionScheduledAt.value ? `Scheduled for ${deletionDateLabel.value}` : '',
-        to: `${profilePath.value}/delete`,
-      },
+      { id: 'personal', label: 'Personal information', summary: [sessionData.value?.user?.name, sessionData.value?.user?.phoneNumber].filter(Boolean).join(' · ') || 'Name, photo, WhatsApp number', to: `${profilePath.value}/personal` },
+      { id: 'login', label: 'Login & security', summary: sessionData.value?.user?.email ?? '', to: `${profilePath.value}/login` },
+      { id: 'notifications', label: 'Notifications', summary: notificationSummary.value, to: `${profilePath.value}/notifications` },
+      { id: 'appearance', label: 'Appearance', summary: `${themePreference.value.charAt(0).toUpperCase()}${themePreference.value.slice(1)} theme`, to: `${profilePath.value}/appearance` },
       { id: 'log-out', label: 'Log out', action: { label: 'Log out' } },
     ],
   },
 ])
 
 function runRowAction(id: string) {
-  if (id === 'log-out') return void handleSignOut()
+  if (id === 'log-out') logOut().catch(error => console.error('sign_out_failed', error))
 }
 
-// Photo saves on pick and Sign in only reads, so neither draws a commit bar.
-const hasCommit = computed(() => openKey.value !== 'photo' && openKey.value !== 'sign-in')
-
-const saving = computed(() => openKey.value === 'name' ? nameSaving.value
-  : openKey.value === 'phone' ? phoneSaving.value
-  : openKey.value === 'delete' ? deleting.value
-  : false)
-
-const saveDisabled = computed(() => openKey.value === 'name' ? !nameDirty.value
-  : openKey.value === 'phone' ? (!phoneDirty.value || !phoneInput.value.trim())
-  : openKey.value === 'delete' ? (!deletionScheduledAt.value && deleteConfirmText.value !== 'DELETE')
-  : true)
-
-const saveLabel = computed(() => openKey.value === 'phone' ? 'Verify and save'
-  : openKey.value === 'delete' ? (deletionScheduledAt.value ? 'Keep my account' : 'Schedule deletion')
-  : undefined)
+// Personal information and Login & security carry their own controls on
+// each row; only Appearance commits from the footer.
+const hasCommit = computed(() => openKey.value === 'appearance')
+const saving = computed(() => false)
+const saveDisabled = computed(() => !themeDirty.value)
+const saveLabel = computed(() => undefined)
 
 async function saveDetail() {
   if (saveDisabled.value) return
-  if (openKey.value === 'name') return void await saveNameAndClose()
-  if (openKey.value === 'phone') return void await requestPhoneVerify()
-  if (openKey.value === 'delete') return void await (deletionScheduledAt.value ? keepAccount() : confirmDeleteAccount())
+  setThemePreference(themeInput.value)
+  await navigateTo(profilePath.value)
 }
 
 const nameError = ref<string | null>(null)
 const phoneError = ref<string | null>(null)
 
-const detailError = computed(() => {
-  if (openKey.value === 'name') return nameError.value
-  if (openKey.value === 'phone') return phoneError.value
-  if (openKey.value === 'delete') return deleteError.value
-  return null
-})
 
 function closeDetail() {
   cancelEdit()
@@ -362,6 +454,7 @@ function cancelEdit() {
   phoneTouched.value = false
   nameError.value = null
   phoneError.value = null
+  themeInput.value = themePreference.value
   deleteConfirmText.value = ''
   deleteError.value = ''
 }
@@ -383,8 +476,8 @@ async function saveName() {
   }
 }
 
-async function saveNameAndClose() {
-  if (await saveName()) await navigateTo(profilePath.value)
+async function saveNameInline() {
+  if (await saveName()) editing.value = null
 }
 
 // The session resolves asynchronously, so nameInput starts as '' before
@@ -440,7 +533,7 @@ async function verifyPhone() {
     
     await refreshSession()
     verifyModalOpen.value = false
-    await navigateTo(profilePath.value)
+    editing.value = null
   } catch (_err) {
     verifyError.value = _err instanceof Error ? _err.message : String(_err)
   } finally {
@@ -545,5 +638,5 @@ async function keepAccount() {
   }
 }
 
-useSeoMeta({ title: 'Account | KrabiClaw Dashboard', robots: 'noindex, nofollow' })
+useSeoMeta({ title: 'Account settings | KrabiClaw Dashboard', robots: 'noindex, nofollow' })
 </script>

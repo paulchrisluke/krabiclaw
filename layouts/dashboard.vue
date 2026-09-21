@@ -199,7 +199,6 @@ const organization = dashboard.organization
 const site = dashboard.site
 const sites = dashboard.sites
 const activeSiteId = dashboard.siteId
-const canManageOrganization = computed(() => ['owner', 'admin'].includes(organization.value?.role ?? ''))
 
 const organizations = computed<readonly AuthOrganization[]>(() => unref(organizationsState)?.data ?? [])
 const activeOrganizationId = computed(() => {
@@ -241,6 +240,10 @@ const routeLocationSlug = computed(() => typeof route.params.locationSlug === 's
 const routeName = computed(() => typeof route.name === 'string' ? route.name : '')
 const isAccountRoute = computed(() => routeName.value.startsWith('dashboard-account'))
 const organizationLabel = computed(() => organization.value?.name ?? 'Organization')
+// The organization is the business, and the business's mark is its brand logo.
+const organizationAvatar = computed(() => organization.value?.logo
+  ?? mediaStillUrl(sites.value[0]?.media.find(item => item.slot === 'logo'))
+  ?? undefined)
 
 const siteLabel = computed(() => site.value?.brand_name ?? site.value?.subdomain ?? 'No site')
 const siteAvatar = (candidate: (typeof sites.value)[number] | undefined) => {
@@ -281,9 +284,6 @@ const scopeHeaderModel = computed<DashboardScopeHeaderModel>(() => {
         active: s.subdomain === activeSiteSlug.value,
         to: orgBase.value && s.subdomain ? `${orgBase.value}/sites/${s.subdomain}` : undefined
       })),
-      createAction: orgBase.value && canManageOrganization.value
-        ? { label: 'New Site', to: `${orgBase.value}/sites/new` }
-        : undefined
     }
   }
 
@@ -291,8 +291,8 @@ const scopeHeaderModel = computed<DashboardScopeHeaderModel>(() => {
     scope: 'organization',
     current: {
       label: organizationLabel.value,
-      avatar: organization.value?.logo ?? undefined,
-      icon: organization.value?.logo ? undefined : 'i-lucide-building-2'
+      avatar: organizationAvatar.value,
+      icon: organizationAvatar.value ? undefined : 'i-lucide-building-2'
     },
     parent: null,
     peers: organizations.value.map((org) => ({
@@ -311,7 +311,7 @@ const scopeHeaderModel = computed<DashboardScopeHeaderModel>(() => {
 provide(dashboardScopeHeaderModelKey, scopeHeaderModel)
 provide(dashboardOrganizationParentKey, computed(() => {
   const target = isAccountRoute.value ? accountOrganization.value : organization.value ?? accountOrganization.value
-  return target ? { label: target.name, to: `/dashboard/${encodeURIComponent(target.slug)}` } : null
+  return target ? { label: target.name, to: `/dashboard/${encodeURIComponent(target.slug)}/settings` } : null
 }))
 
 interface DashboardMobileNavItem {
@@ -346,17 +346,11 @@ const mobileNavItems = computed<DashboardMobileNavItem[]>(() => {
   const routeOrgBase = `/dashboard/${encodeURIComponent(routeOrgSlug)}`
   const routeSiteSlug = typeof route.params.siteSlug === 'string' ? route.params.siteSlug : null
   const routeSiteBase = routeSiteSlug ? `${routeOrgBase}/sites/${encodeURIComponent(routeSiteSlug)}` : null
-  const routeLocationSlug = typeof route.params.locationSlug === 'string' ? route.params.locationSlug : null
-  const routeLocationBase = routeSiteBase && routeLocationSlug
-    ? `${routeSiteBase}/locations/${encodeURIComponent(routeLocationSlug)}`
-    : null
-  const messagesTo = scope.value === 'location' && routeLocationBase
-    ? `${routeLocationBase}/messages`
-    : routeSiteBase ? `${routeSiteBase}/messages` : `${routeOrgBase}/messages`
+  const messagesTo = routeSiteBase ? `${routeSiteBase}/messages` : `${routeOrgBase}/messages`
   const items: DashboardMobileNavItem[] = [
     { key: 'today', label: 'Today', icon: 'i-lucide-bookmark', to: routeOrgBase, exact: true },
     { key: 'calendar', label: 'Calendar', icon: 'i-lucide-calendar-days', to: `${routeOrgBase}/calendar` },
-    { key: 'children', label: 'Sites', icon: 'i-lucide-globe', to: `${routeOrgBase}/sites` },
+    { key: 'locations', label: 'Locations', icon: 'i-lucide-map-pin', to: `${routeOrgBase}/sites` },
     { key: 'messages', label: 'Messages', icon: 'i-lucide-message-square', to: messagesTo },
   ]
   return withActiveItem(items)

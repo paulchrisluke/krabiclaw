@@ -1,10 +1,6 @@
-<template>
-  <div />
-</template>
-
 <script setup lang="ts">
-// The default child of the site hub. It renders nothing: with no section
-// chosen the shell gives the rail the full width, and where there is a pane
-// the hub has already opened its first section.
+// The site has no page of its own; its locations are the Locations tab.
 definePageMeta({ layout: 'dashboard' })
+const route = useRoute()
+await navigateTo(`/dashboard/${String(route.params.orgSlug)}/sites`, { replace: true })
 </script>

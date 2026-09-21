@@ -14,7 +14,7 @@ export default defineHandler(async (event) => {
 
   const connection = await getGoogleAnalyticsConnection(env, site.organization_id, site.id)
   if (!connection) {
-    return jsonResponse({ success: true, connection: null, ga4Properties: [], searchConsoleSites: [] })
+    return jsonResponse({ success: true, connection: null, ga4Properties: [], searchConsoleSites: [], ga4Error: null, searchConsoleError: null })
   }
 
   try {

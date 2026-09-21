@@ -3,7 +3,7 @@
     <template #header>
       <UDashboardNavbar :title="collection?.name ?? presentation.collectionLabel" :toggle="false">
         <template #leading>
-          <DashboardNavbarLeading :to="surfacePath" :label="presentation.collectionLabel" />
+          <DashboardNavbarLeading />
         </template>
       </UDashboardNavbar>
     </template>

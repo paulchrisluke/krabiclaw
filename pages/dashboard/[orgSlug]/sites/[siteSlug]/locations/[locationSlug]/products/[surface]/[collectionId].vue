@@ -14,7 +14,7 @@
       <template #header>
         <UDashboardNavbar :title="isNew ? `New ${presentation.collectionGroupLabel.toLowerCase()}` : collectionName" :toggle="false">
           <template #leading>
-            <DashboardNavbarLeading :to="surfacePath" :label="presentation.collectionLabel" />
+            <DashboardNavbarLeading />
           </template>
         </UDashboardNavbar>
       </template>
@@ -37,7 +37,7 @@
       <template #header>
         <UDashboardNavbar :title="COLLECTION_LABELS.name" :toggle="false">
           <template #leading>
-            <DashboardNavbarLeading :to="collectionPath" :label="presentation.collectionGroupLabel" />
+            <DashboardNavbarLeading />
           </template>
         </UDashboardNavbar>
       </template>
@@ -75,7 +75,7 @@
       <template #header>
         <UDashboardNavbar :title="collectionName" :toggle="false">
           <template #leading>
-            <DashboardNavbarLeading :to="surfacePath" :label="presentation.collectionLabel" />
+            <DashboardNavbarLeading />
           </template>
         </UDashboardNavbar>
       </template>

@@ -30,7 +30,7 @@
       <template #header>
         <UDashboardNavbar :title="isNew ? 'New post' : editor.form.title || 'Post'" :toggle="false">
           <template #leading>
-            <DashboardNavbarLeading :to="postsPath" label="Posts" />
+            <DashboardNavbarLeading />
           </template>
           <template v-if="post" #right>
             <DashboardResourceLocalization
@@ -69,7 +69,7 @@
       <template #header>
         <UDashboardNavbar :title="sectionLabels[editorKey]" :toggle="false">
           <template #leading>
-            <DashboardNavbarLeading :to="postPath" label="Post" />
+            <DashboardNavbarLeading />
           </template>
         </UDashboardNavbar>
       </template>

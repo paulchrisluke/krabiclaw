@@ -20,6 +20,9 @@ export interface CreateNotificationInput {
   targetUserId?: string | null
   title: string
   message?: string | null
+  /** The guest thread this is about; the dashboard composes its own link to it at read time. */
+  threadId?: string | null
+  /** A dashboard path or external URL for notifications that are not about a thread. */
   deepLink?: string | null
   /** Stable event identity. Replays reuse the notification instead of adding a second alert. */
   idempotencyKey?: string
@@ -67,7 +70,7 @@ export function buildCanonicalNotificationInsert(
     `,
     params: [id, input.scope === 'global' ? 'global' : 'organization', input.organizationId ?? null, input.siteId ?? null,
       input.locationId ?? null, input.sourceEntryId ?? null, input.targetUserId ?? null, input.message ?? null, input.template,
-      JSON.stringify({ visibility_scope: input.scope, severity: input.severity ?? 'info', title: input.title, deep_link: input.deepLink ?? null }),
+      JSON.stringify({ visibility_scope: input.scope, severity: input.severity ?? 'info', title: input.title, thread_id: input.threadId ?? null, deep_link: input.deepLink ?? null }),
       `notification:${input.idempotencyKey ?? id}`, now, now],
   }
 }

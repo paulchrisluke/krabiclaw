@@ -12,7 +12,6 @@
         :label="scopeModel?.current.label"
         color="neutral"
         variant="subtle"
-        size="lg"
         trailing-icon="i-lucide-chevron-down"
         class="w-full justify-start"
         :ui="{ label: 'truncate text-left', trailingIcon: 'ms-auto text-dimmed' }"
@@ -25,7 +24,6 @@
       icon="i-lucide-search"
       color="neutral"
       variant="subtle"
-      size="lg"
       class="w-full justify-start"
       @click="$emit('search')"
     />
@@ -47,7 +45,7 @@
       <p class="mt-1 text-sm text-muted">Traffic, sources and conversions across your sites.</p>
     </NuxtLink>
 
-    <EditorNavigationList :groups="groups" :active-item="activeItem" />
+    <EditorNavigationList :groups="groups" :active-item="activeItem" @act="onAct" />
   </div>
 </template>
 
@@ -57,10 +55,14 @@ import EditorNavigationList from '~/components/dashboard/EditorNavigationList.vu
 
 // Rendered by both the desktop slideover and the mobile menu page, off one
 // model, so the two surfaces cannot show different menus.
-const { groups, activeItem, scopeModel } = useDashboardMenu()
+const { groups, activeItem, scopeModel, logOut } = useDashboardMenu()
 const { orgPaths } = useDashboardSiteLinks()
 
-const insightsPath = computed(() => (orgPaths.value.org === '/dashboard' ? null : `${orgPaths.value.org}/insights`))
+const insightsPath = computed(() => (orgPaths.value.org === '/dashboard' ? null : `${orgPaths.value.settings}/insights`))
+
+function onAct(id: string) {
+  if (id === 'log-out') logOut().catch(error => console.error('sign_out_failed', error))
+}
 
 defineEmits<{ search: [] }>()
 

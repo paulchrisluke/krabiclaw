@@ -31,7 +31,7 @@
       <template #header>
         <UDashboardNavbar :title="recordTitle" :toggle="false">
           <template #leading>
-            <DashboardNavbarLeading :to="collectionPath" :label="noun.plural" />
+            <DashboardNavbarLeading />
           </template>
         </UDashboardNavbar>
       </template>
@@ -77,7 +77,7 @@
       <template #header>
         <UDashboardNavbar :title="detailTitle" :toggle="false">
           <template #leading>
-            <DashboardNavbarLeading :to="recordSections.length ? recordPath : collectionPath" label="Back" />
+            <DashboardNavbarLeading />
           </template>
         </UDashboardNavbar>
       </template>
