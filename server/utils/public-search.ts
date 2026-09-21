@@ -656,13 +656,14 @@ export async function buildWorkspaceDocuments(db: DbClient, siteId?: string | nu
   for (const row of threads ?? []) {
     const site = bySite.get(row.site_id)
     if (!site) continue
-    const payload = JSON.parse(row.payload_json) as { guest?: { name?: string; email?: string; phone?: string | null }; message?: string; notes?: string | null }
+    const payload = JSON.parse(row.payload_json) as { guest?: { name?: string; email?: string }; message?: string; notes?: string | null }
     const guest = payload.guest ?? {}
     const words = row.kind === 'contact' ? payload.message ?? '' : payload.notes ?? ''
     const about = row.product_name ?? row.location_title ?? ''
     records.push(doc(site, 'thread', row.id, {
       title: guest.name?.trim() || guest.email || 'Guest', path: `${base(site)}/messages/${row.id}`, snippet: words || about,
-      section: 'Messages', icon: 'message-circle', body: joinWords(guest.name, guest.email, guest.phone, row.kind, about, words),
+      // Name and email find the thread; the phone number stays out of the index.
+      section: 'Messages', icon: 'message-circle', body: joinWords(guest.name, guest.email, row.kind, about, words),
     }))
   }
 
