@@ -1,109 +1,87 @@
 <template>
   <!--
-    With no section open this record is the list's detail column, so it renders
-    its rows and nothing else. It becomes the index column only once a section
-    is open and the list above yields.
+    One panel either way: this level always owns a column and always titles it.
+    With no section open it is the whole screen; once one is open it is the
+    index column and the section takes the other.
   -->
-  <div v-if="frame.mode.value === 'index'" class="space-y-6">
-    <UAlert
-      v-if="errorMessage"
-      color="error"
-      variant="soft"
-      icon="i-lucide-triangle-alert"
-      :description="errorMessage"
-    />
-    <div class="flex justify-end gap-2">
-      <UButton v-if="isNew" :label="createActionLabel" :loading="saving" @click="startOrCreate" />
-      <DashboardResourceLocalization
-        v-else
-        :site-id="siteId"
-        resource-type="content_document"
-        :resource-id="qaId"
-        resource-label="question"
-        :fields="qaLocalizationFields"
-        :language-settings-path="siteLocalizationSettingsPath"
-      />
-    </div>
-    <EditorNavigationList :groups="navigationGroups" />
-  </div>
-
-  <template v-else>
-    <UDashboardPanel
-      id="site-qa-record"
-      :class="hasDetail ? 'hidden lg:flex' : undefined"
-      :default-size="hasDetail ? 32 : undefined"
-    >
-      <template #header>
-        <UDashboardNavbar :title="isNew ? 'New question' : form.question || 'Question'" :toggle="false">
-          <template #leading>
-            <DashboardNavbarLeading />
-          </template>
-          <template v-if="!isNew" #right>
-            <DashboardResourceLocalization
-              :site-id="siteId"
-              resource-type="content_document"
-              :resource-id="qaId"
-              resource-label="question"
-              :fields="qaLocalizationFields"
-              :language-settings-path="siteLocalizationSettingsPath"
-            />
-          </template>
-        </UDashboardNavbar>
-      </template>
-
-      <template #body>
-        <div class="mx-auto w-full" :class="hasDetail ? 'max-w-xl' : 'max-w-3xl'">
-          <UAlert
-            v-if="errorMessage"
-            class="mb-6"
-            color="error"
-            variant="soft"
-            icon="i-lucide-triangle-alert"
-            :description="errorMessage"
+  <UDashboardPanel
+    id="site-qa-record"
+    :class="hasDetail ? 'hidden lg:flex' : undefined"
+    :default-size="hasDetail ? 32 : undefined"
+  >
+    <template #header>
+      <UDashboardNavbar :title="isNew ? 'New question' : form.question || 'Question'" :toggle="false">
+        <template #leading>
+          <DashboardNavbarLeading />
+        </template>
+        <template v-if="!isNew" #right>
+          <DashboardResourceLocalization
+            :site-id="siteId"
+            resource-type="content_document"
+            :resource-id="qaId"
+            resource-label="question"
+            :fields="qaLocalizationFields"
+            :language-settings-path="siteLocalizationSettingsPath"
           />
-          <EditorNavigationList :groups="navigationGroups" :active-item="openKey" />
+        </template>
+      </UDashboardNavbar>
+    </template>
+
+    <template #body>
+      <div class="mx-auto w-full" :class="hasDetail ? 'max-w-xl' : 'max-w-3xl'">
+        <UAlert
+          v-if="errorMessage"
+          class="mb-6"
+          color="error"
+          variant="soft"
+          icon="i-lucide-triangle-alert"
+          :description="errorMessage"
+        />
+        <div v-if="isNew && !hasDetail" class="mb-6 flex justify-end">
+          <UButton :label="createActionLabel" :loading="saving" @click="startOrCreate" />
         </div>
-      </template>
-    </UDashboardPanel>
+        <EditorNavigationList :groups="navigationGroups" :active-item="openKey" />
+      </div>
+    </template>
+  </UDashboardPanel>
 
-    <!--
-      The open section is the other column: its own panel, its own header, and
-      the Save/Cancel pair in the panel's own footer slot.
-    -->
-    <UDashboardPanel v-if="hasDetail" id="site-qa-section">
-      <template #header>
-        <UDashboardNavbar :title="SECTION_LABELS[openKey]" :toggle="false">
-          <template #leading>
-            <DashboardNavbarLeading />
-          </template>
-        </UDashboardNavbar>
-      </template>
+  <!--
+    The open section is the other column: its own panel, its own header, and
+    the Save/Cancel pair in the panel's own footer slot.
+  -->
+  <UDashboardPanel v-if="hasDetail" id="site-qa-section">
+    <template #header>
+      <UDashboardNavbar :title="SECTION_LABELS[openKey]" :toggle="false">
+        <template #leading>
+          <DashboardNavbarLeading />
+        </template>
+      </UDashboardNavbar>
+    </template>
 
-      <template #body>
-        <div class="mx-auto w-full max-w-2xl">
-          <UFormField v-if="openKey === 'question'" label="Question" required>
-            <UTextarea v-model="form.question" :rows="4" autofocus class="w-full" />
-          </UFormField>
+    <template #body>
+      <div class="mx-auto w-full max-w-2xl">
+        <UFormField v-if="openKey === 'question'" label="Question" required>
+          <UTextarea v-model="form.question" :rows="4" autofocus class="w-full" />
+        </UFormField>
 
-          <UFormField v-else-if="openKey === 'answer'" label="Answer">
-            <UTextarea v-model="form.answer" :rows="10" autofocus class="w-full" />
-          </UFormField>
+        <UFormField v-else-if="openKey === 'answer'" label="Answer">
+          <UTextarea v-model="form.answer" :rows="10" autofocus class="w-full" />
+        </UFormField>
 
-          <div v-else-if="openKey === 'visibility'" class="space-y-4">
-            <p class="text-base text-muted">A published question appears on the page it is filed under.</p>
-            <UCheckbox v-model="form.published" label="Published" />
-          </div>
+        <div v-else-if="openKey === 'visibility'" class="space-y-4">
+          <p class="text-base text-muted">A published question appears on the page it is filed under.</p>
+          <UCheckbox v-model="form.published" label="Published" />
         </div>
-      </template>
+      </div>
+    </template>
 
-      <template #footer>
-        <div class="flex shrink-0 items-center justify-between gap-4 border-t border-default px-4 py-3 sm:px-6">
-          <UButton color="neutral" variant="ghost" label="Cancel" @click="closeDetail" />
-          <UButton :label="saveLabel || 'Save'" :loading="saving" :disabled="saveDisabled" @click="saveOpenSection" />
-        </div>
-      </template>
-    </UDashboardPanel>
-  </template>
+    <template #footer>
+      <div class="flex shrink-0 items-center justify-between gap-4 border-t border-default px-4 py-3 sm:px-6">
+        <UButton color="neutral" variant="ghost" label="Cancel" @click="closeDetail" />
+        <UButton :label="saveLabel || 'Save'" :loading="saving" :disabled="saveDisabled" @click="saveOpenSection" />
+      </div>
+    </template>
+  </UDashboardPanel>
 </template>
 
 <script setup lang="ts">

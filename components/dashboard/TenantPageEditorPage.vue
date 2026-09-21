@@ -1,59 +1,15 @@
 <template>
   <!--
-    With nothing below it open, the page is the Pages list's detail column, so
-    it renders its rows and nothing else — no panel, no navbar, no second pair.
-  -->
-  <div v-if="frame.mode.value === 'index'" class="space-y-6">
-    <UAlert
-      v-if="loadError"
-      color="error"
-      variant="soft"
-      icon="i-lucide-triangle-alert"
-      title="Page could not be loaded"
-      :description="loadError"
-    />
-    <template v-else>
-      <div v-if="pending" class="space-y-3">
-        <USkeleton v-for="index in 4" :key="index" class="h-20 rounded-2xl" />
-      </div>
-      <template v-else>
-        <div v-if="isNew" class="flex justify-end">
-          <UButton :label="createActionLabel" :loading="saving" @click="startOrCreate" />
-        </div>
-        <div v-else class="flex flex-wrap items-center justify-end gap-2">
-          <UButton
-            color="neutral"
-            variant="outline"
-            icon="i-lucide-external-link"
-            label="Preview"
-            :to="navigablePreviewUrl"
-            target="_blank"
-            :disabled="!navigablePreviewUrl"
-          />
-          <DashboardResourceLocalization
-            :site-id="siteId"
-            resource-type="content_document"
-            :resource-id="draft.page_id"
-            resource-label="page"
-            :fields="localizationFields"
-            :load-values="loadPageLocalization"
-            :save-values="savePageLocalization"
-            :language-settings-path="siteLocalizationSettingsPath"
-            :disabled="dirty"
-          />
-        </div>
-        <UAlert v-if="errorMessage" color="error" variant="soft" icon="i-lucide-triangle-alert" :description="errorMessage" />
-        <EditorNavigationList :groups="navigationGroups" />
-      </template>
-    </template>
-  </div>
-
-  <!--
     Something deeper than my own child is open — a section, a block, a record
     inside one. I draw no rail; the levels below me own both columns.
   -->
-  <TenantPageSections v-else-if="frame.mode.value === 'yield'" :site-id="siteId" :page-id="pageId" />
+  <TenantPageSections v-if="frame.mode.value === 'yield'" :site-id="siteId" :page-id="pageId" />
 
+  <!--
+    One panel either way: this level always owns a column and always titles it.
+    With no section open it is the whole screen; once one is open it is the
+    index column and the section takes the other.
+  -->
   <template v-else>
     <UDashboardPanel
       id="site-page"
@@ -70,8 +26,46 @@
 
       <template #body>
         <div class="mx-auto w-full" :class="hasDetail ? 'max-w-xl' : 'max-w-3xl'">
-          <UAlert v-if="errorMessage" class="mb-6" color="error" variant="soft" icon="i-lucide-triangle-alert" :description="errorMessage" />
-          <EditorNavigationList :groups="navigationGroups" :active-item="openKey" />
+          <UAlert
+            v-if="loadError"
+            color="error"
+            variant="soft"
+            icon="i-lucide-triangle-alert"
+            title="Page could not be loaded"
+            :description="loadError"
+          />
+          <div v-else-if="pending && !hasDetail" class="space-y-3">
+            <USkeleton v-for="index in 4" :key="index" class="h-20 rounded-2xl" />
+          </div>
+          <template v-else>
+            <div v-if="isNew && !hasDetail" class="mb-6 flex justify-end">
+              <UButton :label="createActionLabel" :loading="saving" @click="startOrCreate" />
+            </div>
+            <div v-else-if="!hasDetail" class="mb-6 flex flex-wrap items-center justify-end gap-2">
+              <UButton
+                color="neutral"
+                variant="outline"
+                icon="i-lucide-external-link"
+                label="Preview"
+                :to="navigablePreviewUrl"
+                target="_blank"
+                :disabled="!navigablePreviewUrl"
+              />
+              <DashboardResourceLocalization
+                :site-id="siteId"
+                resource-type="content_document"
+                :resource-id="draft.page_id"
+                resource-label="page"
+                :fields="localizationFields"
+                :load-values="loadPageLocalization"
+                :save-values="savePageLocalization"
+                :language-settings-path="siteLocalizationSettingsPath"
+                :disabled="dirty"
+              />
+            </div>
+            <UAlert v-if="errorMessage" class="mb-6" color="error" variant="soft" icon="i-lucide-triangle-alert" :description="errorMessage" />
+            <EditorNavigationList :groups="navigationGroups" :active-item="openKey" />
+          </template>
         </div>
       </template>
     </UDashboardPanel>

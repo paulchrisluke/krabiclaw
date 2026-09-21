@@ -22,15 +22,17 @@
         :description="surface.summary"
         variant="soft"
         :highlight="surface.id === openSurface"
-        :ui="{ container: 'p-5 sm:p-5', title: 'text-[15px]', description: 'mt-1' }"
+        :ui="{ container: 'min-w-0 p-5 sm:p-5', title: 'text-[15px]', description: 'mt-1' }"
       >
-        <div v-if="surface.previews.length" class="flex gap-2">
+        <!-- The strip takes the card's width and the pictures share it: four
+             thumbnails at 96px overran a phone and scrolled the whole column. -->
+        <div v-if="surface.previews.length" class="flex w-full gap-2">
           <img
             v-for="(preview, index) in surface.previews"
             :key="index"
             :src="preview"
             alt=""
-            class="aspect-[20/19] w-full max-w-24 rounded-xl object-cover"
+            class="aspect-[20/19] min-w-0 flex-1 max-w-24 rounded-xl object-cover"
             loading="lazy"
           >
         </div>

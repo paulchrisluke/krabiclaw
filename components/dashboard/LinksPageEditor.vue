@@ -1,17 +1,10 @@
 <template>
   <!--
-    With no section open the links page is the site hub's detail column, so it
-    renders its rows and nothing else — no panel, no navbar. It becomes the
-    index column only once a section is open.
+    One panel either way: this level always owns a column and always titles it.
+    With no section open it is the whole screen; once one is open it is the
+    index column and the section takes the other.
   -->
-  <div v-if="frame.mode.value === 'index'">
-    <div v-if="!editorReady" class="space-y-3">
-      <USkeleton v-for="index in 5" :key="index" class="h-20 rounded-2xl" />
-    </div>
-    <EditorNavigationList v-else :groups="navigationGroups" />
-  </div>
-
-  <template v-else-if="!itemId">
+  <template v-if="!itemId">
     <UDashboardPanel
       id="site-links"
       :class="hasDetail ? 'hidden lg:flex' : undefined"
@@ -60,7 +53,10 @@
 
       <template #body>
         <div class="mx-auto w-full" :class="hasDetail ? 'max-w-xl' : 'max-w-3xl'">
-          <EditorNavigationList :groups="navigationGroups" :active-item="editorKey" />
+          <div v-if="!editorReady" class="space-y-3">
+            <USkeleton v-for="index in 5" :key="index" class="h-20 rounded-2xl" />
+          </div>
+          <EditorNavigationList v-else :groups="navigationGroups" :active-item="editorKey" />
         </div>
       </template>
     </UDashboardPanel>
