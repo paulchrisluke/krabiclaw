@@ -33,15 +33,37 @@ KrabiClaw uses the native `AI_SEARCH` Workers namespace binding as the canonical
 
 ## Indexed corpus
 
-The platform knowledge index contains:
+One instance holds two kinds of document, told apart by metadata:
 
-- published platform docs
-- published platform blog posts
-- public help FAQs and route guidance
-- public platform pages such as home, pricing, features, and templates
-- authenticated dashboard destinations used by command search
+- The platform's own corpus, with no `site_id`: published platform docs and blog posts,
+  the help FAQ, and the public platform pages (home, pricing, features, templates).
+  Canonical metadata lives in [config/platform-knowledge.ts](../config/platform-knowledge.ts).
+- Each business's slice, carrying its `site_id`: its published blog (the `tenant_blog`
+  surface, read by its public site) and every record its dashboard can open — locations,
+  products and collections, Q&A, posts, pages, articles including drafts, guest threads,
+  members and media (the `dashboard` surface). `buildWorkspaceDocuments()` in
+  [server/utils/public-search.ts](../server/utils/public-search.ts) builds these; each
+  document carries the dashboard URL it opens at.
 
-Canonical metadata lives in [config/platform-knowledge.ts](../config/platform-knowledge.ts). Retrieval and rebuild logic live in [server/utils/public-search.ts](../server/utils/public-search.ts).
+The dashboard's command palette reads `/api/dashboard/search`, which checks the member's
+access to the site and filters the query to `surface = dashboard` and
+`site_id IN (<that site>, '')`, so a business sees its own records and the platform's
+guides and nothing else. Navigation rows in the palette come from the Menu's own
+navigation, not the index.
+
+## Keeping a business's slice current
+
+Every write to a site's data queues a "this site changed" row
+(`publicResourceCacheInvalidationQuery`, table `public_resource_cache_invalidations`) in the
+write's own batch: content documents, products and collections, locations, media, guest
+threads at intake, and Better Auth's member hooks. The drainer
+(`drainPublicResourceCacheInvalidations`) clears the site's caches and runs
+`syncSiteSearchIndex()`, which lists the site's own items (`items.list` with a
+`metadata_filter` on `site_id`), rebuilds its documents from D1, uploads the ones whose
+`content_hash` changed and deletes the ones that are gone. It runs right after every
+dashboard editor response and every mutating MCP tool call, and every two minutes from the
+scheduled task. A write therefore costs one list of the site's items plus one upload per
+changed record; Cloudflare indexes the upload asynchronously, usually within seconds.
 
 ## Rebuild flow
 
@@ -55,30 +77,15 @@ Required secret:
 
 - `PLATFORM_SEARCH_REINDEX_SECRET`
 
-The script calls:
+The script calls `POST /api/internal/search/reindex` once for the platform pass, which
+reconciles the platform corpus and returns the live site ids, and then once per site with
+`?site=<id>`, which runs that site's sync. One request per pass keeps each under the
+Workers request ceiling.
 
-- `POST /api/internal/search/reindex`
-
-That endpoint rebuilds the full corpus from the current DB plus static platform metadata, clears the existing AI Search items, uploads the new documents, and waits for indexing to finish.
-
-## Automatic refresh
-
-Article writes through MCP trigger a rebuild after the mutation completes (`schedulePlatformKnowledgeIndexRebuild()` in `server/utils/platform-search-rebuild.ts`). Platform MCP blog/doc mutations do the same. Failures on this in-request path are logged with `console.error` (visible in Workers Logs); they do not retry automatically.
-
-A rebuild only uploads items whose content or metadata actually changed. Each uploaded item
-carries a `content_hash` in its metadata, and an item whose stored hash still matches what
-the rebuild would send is left alone. A one-post edit therefore costs a handful of uploads
-rather than the whole corpus — re-uploading every item on every blog write is what exhausted
-AI Search's rate limit on preview (issue #917). Items whose indexing status is `error` are
-re-uploaded regardless of their hash.
-
-Production deploys and client imports that write articles directly do **not** go through that in-request hook, so production needs an explicit rebuild:
-
-- Production AI Search synchronization is an explicit final operation inside the production branch deployment job. Its result is retained with the production release evidence; direct deploy commands cannot invoke it.
-- Production CI (`.github/workflows/ci.yml`) syncs the `PLATFORM_SEARCH_REINDEX_SECRET` repo secret and runs a blocking "Rebuild AI Search index (production)" step. A failed production rebuild fails the deploy job instead of silently leaving production search stale.
-- Preview deploys intentionally do not rebuild AI Search. Staging deploys do not rebuild AI Search; staging is read-only.
-
-Any new script that writes articles or tenant blog fixtures directly (bypassing the dashboard/MCP write paths) must either call `POST /api/internal/search/reindex` itself or be followed by `yarn ai-search:sync` in whatever deploy/CI step runs it.
+Production CI (`.github/workflows/ci.yml`) syncs the `PLATFORM_SEARCH_REINDEX_SECRET` repo
+secret and runs a blocking rebuild step when a file that defines the indexed corpus or its
+rendering changed. A failed production rebuild fails the deploy job instead of silently
+leaving production search stale. Preview and staging deploys do not rebuild.
 
 ## Environment expectations
 

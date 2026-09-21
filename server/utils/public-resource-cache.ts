@@ -1,5 +1,7 @@
 import { execute, queryAll, type BatchQuery, type DbClient } from '~/server/db'
+import type { CloudflareEnv } from '~/server/utils/auth'
 import { purgeSiteKvCache } from '~/server/utils/edge-cache'
+import { syncSiteSearchIndex } from '~/server/utils/public-search'
 import { normalizeHost } from '~/server/utils/tenant-hosts'
 
 // KV read-through cache for public shell and page resource queries.
@@ -21,6 +23,12 @@ const CACHE_INVALIDATION_RETRY_AFTER_MS = 5 * 60 * 1000
 const CACHE_INVALIDATION_MAX_ATTEMPTS = 5
 const CACHE_INVALIDATION_TERMINAL_RETENTION_MS = 7 * 24 * 60 * 60 * 1000
 
+/**
+ * "This site changed." One row per write, in the write's own batch, so the
+ * record is atomic with the change. The drainer turns each row into whatever
+ * has to follow a change to the site: its caches are cleared and its slice of
+ * the search index is brought up to date.
+ */
 export function publicResourceCacheInvalidationQuery(
   siteId: string,
   reason: string,
@@ -34,12 +42,25 @@ export function publicResourceCacheInvalidationQuery(
   }
 }
 
+/** The same row for every site of an organization: a member changed, and members belong to the organization. */
+export function organizationSitesInvalidationQuery(organizationId: string, reason: string): BatchQuery {
+  return {
+    query: `INSERT INTO public_resource_cache_invalidations
+      (id, site_id, reason, status, attempt_count, created_at)
+      SELECT lower(hex(randomblob(16))), id, ?, 'pending', 0, ? FROM sites WHERE organization_id = ?`,
+    params: [reason, new Date().toISOString(), organizationId],
+  }
+}
+
+export type SiteChangeDrainEnv = Pick<CloudflareEnv, 'AI_SEARCH' | 'AI_SEARCH_INSTANCE_ID' | 'NUXT_PUBLIC_FREE_SITE_DOMAIN'>
+
 export async function drainPublicResourceCacheInvalidations(
   db: DbClient,
   kv: KVNamespace,
-  options: { limit?: number; now?: Date; siteId?: string; freeSiteDomain: string | null | undefined },
+  env: SiteChangeDrainEnv,
+  options: { limit?: number; now?: Date; siteId?: string },
 ): Promise<number> {
-  const freeSiteDomain = normalizeHost(options.freeSiteDomain)
+  const freeSiteDomain = normalizeHost(env.NUXT_PUBLIC_FREE_SITE_DOMAIN)
   if (!freeSiteDomain) throw new Error('NUXT_PUBLIC_FREE_SITE_DOMAIN is required')
   const now = options.now ?? new Date()
   const nowIso = now.toISOString()
@@ -68,6 +89,9 @@ export async function drainPublicResourceCacheInvalidations(
      LIMIT ?
   `, [CACHE_INVALIDATION_MAX_ATTEMPTS, staleClaimCutoff, ...(options.siteId ? [options.siteId] : []), options.limit ?? 50])
   let processed = 0
+  // Several rows for one site in one drain are one change to converge on: the
+  // site's slice is listed and diffed once, and the rest of its rows ride along.
+  const syncedSites = new Set<string>()
   for (const row of rows) {
     const claim = await execute(db, `
       UPDATE public_resource_cache_invalidations
@@ -79,6 +103,19 @@ export async function drainPublicResourceCacheInvalidations(
     const claimedAttemptCount = row.attempt_count + 1
     try {
       await purgeSiteCaches(db, kv, row.site_id, freeSiteDomain)
+      // A process without the binding has no index to keep: `nuxt dev`, where
+      // the binding is remote-only, and the test runtime. The served worker
+      // (`wrangler dev`) and every deploy have it and keep it.
+      if (env.AI_SEARCH && !import.meta.dev && !syncedSites.has(row.site_id)) {
+        const synced = await syncSiteSearchIndex(env as CloudflareEnv, db, row.site_id)
+        syncedSites.add(row.site_id)
+        // A bounded run that left uploads behind is not a failure to retry; it
+        // is more of the same change, so it goes back on the queue as a new row.
+        if (synced.pending > 0) {
+          const more = publicResourceCacheInvalidationQuery(row.site_id, 'search-sync-continue')
+          await execute(db, more.query, more.params ?? [])
+        }
+      }
       const finalized = await execute(db, `
         UPDATE public_resource_cache_invalidations
            SET status = 'processed', processed_at = ?, last_error = NULL

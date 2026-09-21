@@ -178,7 +178,6 @@ export interface ListGuestThreadsOptions {
   locationId?: string | null
   principal?: MemberAccessPrincipal | OrganizationMemberAccessPrincipal | null
   userId: string
-  search?: string | null
   type?: GuestThreadSubmissionType | null
   conversationState?: ConversationState | null
   unreadOnly?: boolean

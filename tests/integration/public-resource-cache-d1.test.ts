@@ -68,7 +68,7 @@ test('cache invalidation drain enforces the durable work lifecycle', async (t) =
     })
 
     await assert.rejects(
-      drainPublicResourceCacheInvalidations(db, kv, { freeSiteDomain: undefined }),
+      drainPublicResourceCacheInvalidations(db, kv, { NUXT_PUBLIC_FREE_SITE_DOMAIN: undefined }, {}),
       /NUXT_PUBLIC_FREE_SITE_DOMAIN is required/,
     )
     const row = await db.prepare(`
@@ -78,9 +78,7 @@ test('cache invalidation drain enforces the durable work lifecycle', async (t) =
 
     await kv.put('public~site~v3~page', 'public resource')
     await kv.put('html:site.krabiclaw.com:/', 'html')
-    assert.equal(await drainPublicResourceCacheInvalidations(db, kv, {
-      freeSiteDomain: 'https://krabiclaw.com',
-    }), 1)
+    assert.equal(await drainPublicResourceCacheInvalidations(db, kv, { NUXT_PUBLIC_FREE_SITE_DOMAIN: 'https://krabiclaw.com' }, {}), 1)
     assert.equal(await kv.get('public~site~v3~page'), null)
     assert.equal(await kv.get('html:site.krabiclaw.com:/'), null)
     const processed = await db.prepare(`
@@ -113,10 +111,7 @@ test('cache invalidation drain enforces the durable work lifecycle', async (t) =
       })
     }
 
-    assert.equal(await drainPublicResourceCacheInvalidations(db, failingKv, {
-      now,
-      freeSiteDomain: 'https://krabiclaw.com',
-    }), 0)
+    assert.equal(await drainPublicResourceCacheInvalidations(db, failingKv, { NUXT_PUBLIC_FREE_SITE_DOMAIN: 'https://krabiclaw.com' }, { now }), 0)
 
     const terminal = await db.prepare(`
       SELECT id, status, attempt_count, claimed_at, processed_at, last_error
@@ -167,7 +162,7 @@ test('a site write purges that site despite an older invalidation for another si
     { site_id: 'changed', status: 'pending', attempt_count: 0 },
     { site_id: 'site', status: 'pending', attempt_count: 0 },
   ])
-  assert.equal(await drainPublicResourceCacheInvalidations(db, kv, { freeSiteDomain: 'https://krabiclaw.com' }), 2)
+  assert.equal(await drainPublicResourceCacheInvalidations(db, kv, { NUXT_PUBLIC_FREE_SITE_DOMAIN: 'https://krabiclaw.com' }, {}), 2)
   assert.equal(await kv.get('public~site~v3~page'), null)
   assert.equal(await kv.get('html:site.krabiclaw.com:/'), null)
 })

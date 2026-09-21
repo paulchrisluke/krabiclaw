@@ -5,7 +5,17 @@ export type PlatformKnowledgeResultType =
   | 'faq'
   | 'route'
   | 'platform_page'
-  | 'dashboard_route'
+  // A business's own records, indexed for its dashboard's search and scoped
+  // to it by `site_id` at query time.
+  | 'product'
+  | 'collection'
+  | 'location'
+  | 'qa'
+  | 'post'
+  | 'page'
+  | 'thread'
+  | 'member'
+  | 'media'
 
 export type PlatformKnowledgeSurface =
   | 'public'
@@ -38,25 +48,6 @@ export interface PlatformKnowledgePageEntry {
   id: string
   title: string
   path: string
-  snippet: string
-  body: string
-  icon: string
-  section: string
-  keywords: string[]
-  surfaces: PlatformKnowledgeSurface[]
-}
-
-export interface DashboardRouteContext {
-  orgSlug?: string | null
-  siteSlug?: string | null
-  locationSlug?: string | null
-}
-
-export interface PlatformDashboardRouteEntry {
-  id: string
-  title: string
-  pathTemplate: string
-  fallbackPath: string
   snippet: string
   body: string
   icon: string
@@ -253,203 +244,3 @@ export const PLATFORM_KNOWLEDGE_PAGE_ENTRIES: PlatformKnowledgePageEntry[] = [
     surfaces: ['public', 'docs', 'blog', 'help', 'chowbot'],
   },
 ]
-
-export const PLATFORM_DASHBOARD_ROUTE_ENTRIES: PlatformDashboardRouteEntry[] = [
-  {
-    id: 'dashboard-overview',
-    title: 'Dashboard Overview',
-    pathTemplate: '/dashboard',
-    fallbackPath: '/dashboard',
-    snippet: 'Open the main dashboard overview and choose your workspace.',
-    body: 'Use the main dashboard overview to access organizations, sites, setup flows, and your top-level navigation.',
-    icon: 'layout-dashboard',
-    section: 'Dashboard',
-    keywords: ['dashboard', 'overview', 'home', 'workspace'],
-    surfaces: ['dashboard'],
-  },
-  {
-    id: 'org-settings-billing',
-    title: 'Billing Settings',
-    pathTemplate: '/dashboard/:orgSlug/settings/billing',
-    fallbackPath: '/dashboard',
-    snippet: 'Manage billing, plans, and payment status.',
-    body: 'Billing settings show plan details, billing actions, and payment management for the current organization.',
-    icon: 'credit-card',
-    section: 'Settings',
-    keywords: ['billing', 'plans', 'payments', 'subscription'],
-    surfaces: ['dashboard'],
-  },
-  {
-    id: 'org-settings-members',
-    title: 'Team',
-    pathTemplate: '/dashboard/:orgSlug/settings/members',
-    fallbackPath: '/dashboard',
-    snippet: 'Invite teammates and manage organization members.',
-    body: 'Member settings handles access control, team members, and role management.',
-    icon: 'users',
-    section: 'Settings',
-    keywords: ['members', 'team', 'invite', 'roles'],
-    surfaces: ['dashboard'],
-  },
-  {
-    id: 'site-locations',
-    title: 'Locations',
-    pathTemplate: '/dashboard/:orgSlug/sites',
-    fallbackPath: '/dashboard',
-    snippet: 'Every location of the business, and where a new one is added.',
-    body: 'The Locations tab lists every location as a tile; opening one edits what guests see for that location.',
-    icon: 'map-pin',
-    section: 'Site',
-    keywords: ['locations', 'branches', 'site directory'],
-    surfaces: ['dashboard'],
-  },
-  {
-    id: 'site-domains',
-    title: 'Domains',
-    pathTemplate: '/dashboard/:orgSlug/sites/:siteSlug/domains',
-    fallbackPath: '/dashboard',
-    snippet: 'Add and manage custom domains for the current site.',
-    body: 'The site Domains page connects custom domains, shows exact DNS records, checks validation status, and manages primary domain state.',
-    icon: 'globe',
-    section: 'Site',
-    keywords: ['domains', 'custom domain', 'dns', 'ssl', 'site domains'],
-    surfaces: ['dashboard'],
-  },
-  {
-    id: 'site-settings',
-    title: 'Site Settings',
-    pathTemplate: '/dashboard/:orgSlug/sites/:siteSlug/settings',
-    fallbackPath: '/dashboard',
-    snippet: 'Manage site-wide brand, navigation, footer, SEO, and notification defaults.',
-    body: 'Site settings owns configuration shared across the selected site, distinct from organization and location settings.',
-    icon: 'settings',
-    section: 'Site',
-    keywords: ['site settings', 'brand', 'seo', 'footer', 'notifications'],
-    surfaces: ['dashboard'],
-  },
-  {
-    id: 'location-overview',
-    title: 'Location Overview',
-    pathTemplate: '/dashboard/:orgSlug/sites/:siteSlug/locations/:locationSlug',
-    fallbackPath: '/dashboard',
-    snippet: 'Open the selected location overview.',
-    body: 'The location overview summarizes status, profile, integrations, and links without embedding the settings form.',
-    icon: 'map-pin',
-    section: 'Location',
-    keywords: ['location overview', 'branch', 'workspace'],
-    surfaces: ['dashboard'],
-  },
-  {
-    id: 'location-settings',
-    title: 'Location Settings',
-    pathTemplate: '/dashboard/:orgSlug/sites/:siteSlug/locations/:locationSlug/settings',
-    fallbackPath: '/dashboard',
-    snippet: 'Manage the selected location profile, address, hours, notifications, and integrations.',
-    body: 'Location settings contains only configuration owned by one location.',
-    icon: 'settings',
-    section: 'Location',
-    keywords: ['location settings', 'address', 'hours', 'google places', 'notifications'],
-    surfaces: ['dashboard'],
-  },
-  {
-    id: 'location-content',
-    title: 'Content Editor',
-    pathTemplate: '/dashboard/:orgSlug/sites/:siteSlug/locations/:locationSlug/content',
-    fallbackPath: '/dashboard',
-    snippet: 'Edit customer-facing content for the current location.',
-    body: 'The content editor covers page copy, sections, media-adjacent content, and live preview workflows.',
-    icon: 'file-pen',
-    section: 'Location',
-    keywords: ['content', 'editor', 'copy', 'pages'],
-    surfaces: ['dashboard'],
-  },
-  {
-    id: 'location-products',
-    title: 'Products',
-    pathTemplate: '/dashboard/:orgSlug/sites/:siteSlug/locations/:locationSlug/products',
-    fallbackPath: '/dashboard',
-    snippet: 'Manage location-owned Products and category structure.',
-    body: 'Products is where businesses edit items, prices, descriptions, Product ordering, and restaurant Menu presentation.',
-    icon: 'package',
-    section: 'Location',
-    keywords: ['products', 'menu', 'items', 'prices', 'offerings'],
-    surfaces: ['dashboard'],
-  },
-  {
-    id: 'location-experiences',
-    title: 'Experiences',
-    pathTemplate: '/dashboard/:orgSlug/sites/:siteSlug/locations/:locationSlug/experiences',
-    fallbackPath: '/dashboard',
-    snippet: 'Manage experience listings and bookable offerings.',
-    body: 'Experiences is where experience businesses manage bookable listings, descriptions, and related presentation content.',
-    icon: 'ticket',
-    section: 'Location',
-    keywords: ['experiences', 'bookings', 'offerings', 'activities'],
-    surfaces: ['dashboard'],
-  },
-  {
-    id: 'location-photos',
-    title: 'Photos',
-    pathTemplate: '/dashboard/:orgSlug/sites/:siteSlug/locations/:locationSlug/photos',
-    fallbackPath: '/dashboard',
-    snippet: 'Manage photo selections used on the site.',
-    body: 'Photos helps customers curate visible gallery imagery for the location.',
-    icon: 'camera',
-    section: 'Location',
-    keywords: ['photos', 'gallery', 'images'],
-    surfaces: ['dashboard'],
-  },
-  {
-    id: 'site-messages',
-    title: 'Site Messages',
-    pathTemplate: '/dashboard/:orgSlug/sites/:siteSlug/messages',
-    fallbackPath: '/dashboard',
-    snippet: 'Review guest work across the site.',
-    body: 'Site Messages aggregates accessible guest threads across contact messages, reservations, and experience bookings, including site-wide unassigned messages.',
-    icon: 'message-circle',
-    section: 'Operations',
-    keywords: ['inbox', 'submissions', 'messages', 'contact requests', 'guest threads'],
-    surfaces: ['dashboard'],
-  },
-  {
-    id: 'location-reservations',
-    title: 'Reservations',
-    pathTemplate: '/dashboard/:orgSlug/sites/:siteSlug/locations/:locationSlug/reservations',
-    fallbackPath: '/dashboard',
-    snippet: 'Set the reservation policy guests read before they book.',
-    body: 'Reservations is the location\'s booking policy: capacity per slot, notice, deposits, cancellation and rescheduling rules. Bookings themselves are on the Calendar.',
-    icon: 'calendar',
-    section: 'Location',
-    keywords: ['reservations', 'bookings', 'policy'],
-    surfaces: ['dashboard'],
-  },
-  {
-    id: 'location-analytics',
-    title: 'Location Analytics',
-    pathTemplate: '/dashboard/:orgSlug/sites/:siteSlug/locations/:locationSlug/analytics',
-    fallbackPath: '/dashboard',
-    snippet: 'Open analytics for the current location.',
-    body: 'Location analytics shows performance, traffic, and operational metrics for the selected location.',
-    icon: 'chart-bar',
-    section: 'Operations',
-    keywords: ['analytics', 'traffic', 'performance'],
-    surfaces: ['dashboard'],
-  },
-]
-
-export function resolveDashboardPath(pathTemplate: string, context: DashboardRouteContext = {}) {
-  const replacements: Record<string, string | null | undefined> = {
-    ':orgSlug': context.orgSlug,
-    ':siteSlug': context.siteSlug,
-    ':locationSlug': context.locationSlug,
-  }
-
-  let resolved = pathTemplate
-  for (const [token, value] of Object.entries(replacements)) {
-    if (!resolved.includes(token)) continue
-    if (!value) return null
-    resolved = resolved.replaceAll(token, value)
-  }
-
-  return resolved
-}

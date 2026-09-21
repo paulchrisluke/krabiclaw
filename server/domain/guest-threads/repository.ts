@@ -15,8 +15,6 @@ import { formatOperationalStatusLabel, formatThreadWhenLabel } from './status-la
 import { mediaStillUrl } from '~/shared/media-placement-contract'
 
 const SOURCE_GUEST_NAME_SQL = "json_extract(gt.payload_json, '$.guest.name')"
-const SOURCE_GUEST_EMAIL_SQL = "json_extract(gt.payload_json, '$.guest.email')"
-const SOURCE_GUEST_PHONE_SQL = "json_extract(gt.payload_json, '$.guest.phone')"
 /**
  * The operational record a thread refers to.
  *
@@ -237,11 +235,6 @@ export async function listGuestThreads(
       : ' AND (op.starts_at IS NULL OR op.starts_at >= ?)'
     params.push(new Date().toISOString())
   }
-  if (opts.search?.trim()) {
-    const like = `%${opts.search.trim().toLowerCase()}%`
-    where += ` AND (LOWER(${SOURCE_GUEST_NAME_SQL}) LIKE ? OR LOWER(COALESCE(${SOURCE_GUEST_EMAIL_SQL}, '')) LIKE ? OR LOWER(COALESCE(${SOURCE_GUEST_PHONE_SQL}, '')) LIKE ?)`
-    params.push(like, like, like)
-  }
 
   const limit = Math.max(1, Math.min(opts.limit ?? 100, 200))
 
@@ -366,11 +359,6 @@ export async function listOrganizationGuestThreads(
       ? ' AND op.starts_at < ?'
       : ' AND (op.starts_at IS NULL OR op.starts_at >= ?)'
     params.push(new Date().toISOString())
-  }
-  if (opts.search?.trim()) {
-    const like = `%${opts.search.trim().toLowerCase()}%`
-    where += ` AND (LOWER(${SOURCE_GUEST_NAME_SQL}) LIKE ? OR LOWER(COALESCE(${SOURCE_GUEST_EMAIL_SQL}, '')) LIKE ? OR LOWER(COALESCE(${SOURCE_GUEST_PHONE_SQL}, '')) LIKE ?)`
-    params.push(like, like, like)
   }
 
   const limit = Math.max(1, Math.min(opts.limit ?? 100, 200))

@@ -5,34 +5,15 @@
   >
     <!--
       The list's controls. The title is the navbar's, like every other screen;
-      this row holds the filters, with search at its end, and the search field
-      takes the row's place while it is open — the way a mail list does.
+      this row holds the filters, with search at its end. Search is the
+      dashboard's one search, opened from here the way it opens from the Menu.
     -->
     <header class="shrink-0 px-4 py-3">
-      <div v-if="searchOpen" class="flex items-center gap-2">
-        <UInput
-          v-model="search"
-          type="search"
-          icon="i-lucide-search"
-          aria-label="Search"
-          placeholder="Search all messages"
-          autofocus
-          class="flex-1"
-        />
-        <UButton
-          color="neutral"
-          variant="ghost"
-          size="sm"
-          label="Cancel"
-          @click="closeSearch"
-        />
-      </div>
-
       <!--
         Airbnb's own control: the kind is a dropdown labelled by what is
         selected, and Unread sits beside it as a toggle. Both are 40px pills.
       -->
-      <div v-else class="flex items-center gap-2">
+      <div class="flex items-center gap-2">
         <UDropdownMenu
           v-if="typeOptions.length"
           :items="typeMenuItems"
@@ -76,7 +57,7 @@
           icon="i-lucide-search"
           aria-label="Search"
           class="ml-auto"
-          @click="searchOpen = true"
+          @click="nuxtApp.hooks.callHook('dashboard:search:toggle')"
         />
       </div>
     </header>
@@ -223,6 +204,7 @@ const dashboard = useDashboardSite()
 const { formatRelativeTime } = useHumanTime()
 
 const route = useRoute()
+const nuxtApp = useNuxtApp()
 const router = useRouter()
 
 const isOrganizationScope = computed(() => props.scope === 'organization')
@@ -241,7 +223,7 @@ const openThreadId = computed(() => {
   return decodeURIComponent(route.path.slice(listRoute.value.length + 1).split('/')[0] ?? '') || null
 })
 
-// Filter, search and corpus live in the URL, so a filtered list is a link.
+// Filter and corpus live in the URL, so a filtered list is a link.
 const pastOnly = computed(() => route.query.archived !== undefined)
 const withoutArchived = computed(() => { const { archived: _archived, ...rest } = route.query; return rest })
 const activeType = computed<SubmissionType | null>(() => {
@@ -250,24 +232,13 @@ const activeType = computed<SubmissionType | null>(() => {
   return value === 'contact' || value === 'reservation' || value === 'booking' ? value : null
 })
 const unreadOnly = computed(() => route.query.unread === '1')
-const search = computed({
-  get: () => typeof route.query.query === 'string' ? route.query.query : '',
-  set: value => setQuery({ query: value || undefined }),
-})
-const searchOpen = ref(Boolean(route.query.query))
 
 function setQuery(patch: Record<string, string | undefined>) {
   void router.replace({ path: route.path, query: { ...route.query, ...patch } })
 }
 
-function closeSearch() {
-  searchOpen.value = false
-  setQuery({ query: undefined })
-}
-
 function clearFilters() {
   void router.replace({ path: route.path, query: {} })
-  searchOpen.value = false
 }
 
 const typeMenuItems = computed(() => [typeOptions.value.map(option => ({
@@ -350,11 +321,9 @@ const emptyDescription = computed(() => {
   return 'New guest conversations will appear here.'
 })
 
-let searchTimer: ReturnType<typeof setTimeout> | null = null
 let threadsRequestToken = 0
 
 const listQuery = computed(() => ({
-  search: typeof route.query.query === 'string' && route.query.query ? route.query.query : undefined,
   type: activeType.value ?? undefined,
   occurrence: pastOnly.value ? 'past' as const : 'upcoming' as const,
   unread: unreadOnly.value ? '1' as const : undefined,
@@ -476,13 +445,6 @@ function refreshThreads() {
   realtime.connect()
   void loadThreads()
 }
-
-watch(() => route.query.query, () => {
-  if (searchTimer) clearTimeout(searchTimer)
-  searchTimer = setTimeout(() => {
-    void loadThreads()
-  }, 250)
-})
 
 
 watch(realtime.event, (event) => {

@@ -20,7 +20,6 @@ import { getNotificationAccess } from '~/server/utils/notification-access'
 
 export interface DashboardGuestThreadListQuery {
   locationId?: string | null
-  search?: string | null
   type?: GuestThreadSubmissionType | null
   conversationState?: ConversationState | null
   unreadOnly?: boolean
@@ -50,7 +49,6 @@ export async function listDashboardGuestThreadsForPrincipal(
     locationId: query.locationId ?? null,
     principal,
     userId,
-    search: query.search ?? null,
     type: query.type ?? null,
     conversationState: query.conversationState ?? null,
     occurrence: query.occurrence ?? null,
@@ -138,7 +136,6 @@ export async function loadOrganizationGuestThreads(
     locationId: query.locationId ?? null,
     principal,
     userId,
-    search: query.search ?? null,
     type: query.type ?? null,
     conversationState: query.conversationState ?? null,
     occurrence: query.occurrence ?? null,

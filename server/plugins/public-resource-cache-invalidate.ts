@@ -1,5 +1,6 @@
-// Purges public resource KV entries after any
-// successful write from a dashboard editor route.
+// Drains the site-change queue after any successful write from a dashboard
+// editor route: the site's public caches are cleared and its slice of the
+// search index is brought up to date.
 //
 // This is a separate hook from edge-cache.ts's HTML-cache purge on purpose:
 // that one is only wired to the MCP route (server/api/mcp.post.ts), not the
@@ -21,7 +22,7 @@
 
 import type { HTTPEvent } from 'nitro/h3'
 import type { DbClient } from '~/server/db'
-import { drainPublicResourceCacheInvalidations } from '~/server/utils/public-resource-cache'
+import { drainPublicResourceCacheInvalidations, purgeSiteCaches, type SiteChangeDrainEnv } from '~/server/utils/public-resource-cache'
 import { definePlugin } from 'nitro';
 
 const EDITOR_SITES_PREFIX = '/api/editor/sites/'
@@ -40,27 +41,27 @@ export default definePlugin((nitroApp) => {
     const siteId = params && typeof params === 'object' && 'siteId' in params && typeof params.siteId === 'string' ? params.siteId : undefined
     if (!siteId) return
 
-    const runtimeEnv = request.runtime?.cloudflare?.env as {
+    const runtimeEnv = request.runtime?.cloudflare?.env as ({
       DB?: DbClient
       SITE_CACHE?: KVNamespace
-      NUXT_PUBLIC_FREE_SITE_DOMAIN?: string
-    } | undefined
+    } & SiteChangeDrainEnv) | undefined
     const kv = runtimeEnv?.SITE_CACHE
     if (!kv || !runtimeEnv?.DB) return
 
-    // Awaited inline rather than scheduled via waitUntil — response hooks
-    // run after the client has already received the response, but leaving this
-    // detached let the request be considered "done" by CI/tests before KV was
-    // actually cleared. Awaiting here doesn't block the client (response is
-    // already sent); it only blocks Nitro from marking the request lifecycle
-    // complete until the purge finishes.
+    // The site's own caches are cleared before this request is done with, so a
+    // read that follows the write cannot see what it replaced — CI reads public
+    // resources right after an edit. The queue drain, which also brings the
+    // site's search index up to date, outlives the response: a write's own
+    // response is not made to wait on a list of index items.
     try {
-      await drainPublicResourceCacheInvalidations(runtimeEnv.DB, kv, {
-        limit: 100,
-        freeSiteDomain: runtimeEnv.NUXT_PUBLIC_FREE_SITE_DOMAIN,
-      })
+      await purgeSiteCaches(runtimeEnv.DB, kv, siteId, runtimeEnv.NUXT_PUBLIC_FREE_SITE_DOMAIN)
     } catch (err: unknown) {
       console.warn('[public-resource-cache] purge failed:', String(err))
     }
+    const drained = drainPublicResourceCacheInvalidations(runtimeEnv.DB, kv, runtimeEnv, { limit: 100 })
+      .catch((err: unknown) => console.warn('[public-resource-cache] site change drain failed:', String(err)))
+    const waitUntil = request.runtime?.cloudflare?.context?.waitUntil
+    if (waitUntil) waitUntil.call(request.runtime?.cloudflare?.context, drained)
+    else await drained
   })
 })

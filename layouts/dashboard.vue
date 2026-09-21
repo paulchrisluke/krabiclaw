@@ -62,7 +62,18 @@
     <UDashboardGroup
       :ui="{ base: ['z-40', showNavChrome ? 'md:top-(--kc-dashboard-top-nav)' : 'top-(--kc-dashboard-top-nav)', showBottomNav ? 'max-md:bottom-(--kc-dashboard-bottom-nav)' : ''].join(' ') }"
     >
-      <UDashboardSearch v-model:search-term="dashboardSearchTerm" :groups="dashboardSearchGroups" :loading="dashboardSearchLoading" :color-mode="false" />
+      <UDashboardSearch
+        v-model:open="dashboardSearchOpen"
+        v-model:search-term="dashboardSearchTerm"
+        title="Search"
+        description="Search this business"
+        placeholder="Search…"
+        size="lg"
+        :fullscreen="isPhoneWidth"
+        :groups="dashboardSearchGroups"
+        :loading="dashboardSearchLoading"
+        :color-mode="false"
+      />
 
       <slot />
     </UDashboardGroup>
@@ -113,6 +124,7 @@ import { authClient } from '~/lib/auth-client'
 import { useAnalytics } from '~/composables/useAnalytics'
 import '~/assets/css/dashboard.css'
 import { mediaStillUrl } from '~/shared/media-placement-contract'
+import { useMediaQuery } from '@vueuse/core'
 
 // ─────────────────────────────────────────────────────────────────────────
 // Dashboard shell architecture.
@@ -152,6 +164,18 @@ const { trackDashboardVisited, setUserId } = useAnalytics()
 const impersonationError = ref<string | null>(null)
 const stoppingImpersonation = ref(false)
 const { searchTerm: dashboardSearchTerm, loading: dashboardSearchLoading, groups: dashboardSearchGroups } = useDashboardSearch()
+// The Menu's Search row and a list's search icon open the same palette ⌘K does.
+// Registered for this layout's lifetime only: a hook left behind by an earlier
+// mount toggled the palette a second time and cancelled the first.
+const dashboardSearchOpen = ref(false)
+// On a phone the palette is the screen, like every other sheet here; on a wide screen it is a card.
+const isPhoneWidth = useMediaQuery('(max-width: 767px)')
+const nuxtApp = useNuxtApp()
+let unhookSearchToggle: (() => void) | null = null
+onMounted(() => {
+  unhookSearchToggle = nuxtApp.hooks.hook('dashboard:search:toggle', () => { dashboardSearchOpen.value = !dashboardSearchOpen.value })
+})
+onBeforeUnmount(() => { unhookSearchToggle?.(); unhookSearchToggle = null })
 // This layout owns the context request. Nothing below it starts one.
 const context = useDashboardContextOwner()
 const dashboard = useDashboardSite()

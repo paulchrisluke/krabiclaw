@@ -1,5 +1,5 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
-import { rebuildPlatformKnowledgeIndex } from '~/server/utils/public-search'
+import { rebuildPlatformKnowledgeIndex, syncSiteSearchIndex } from '~/server/utils/public-search'
 import { validateInternalRequest } from '~/server/utils/internal-secret'
 
 export default defineHandler(async (event) => {
@@ -11,8 +11,13 @@ export default defineHandler(async (event) => {
   const validation = await validateInternalRequest(event, env)
   if (!validation.ok) return jsonResponse({ error: validation.error }, { status: validation.status })
 
+  // One request per pass keeps each under the Workers request ceiling: the
+  // platform pass returns the live site ids, and the caller syncs each site.
+  const site = getQuery(event).site
   try {
-    const result = await rebuildPlatformKnowledgeIndex(env, env.db)
+    const result = typeof site === 'string' && site
+      ? await syncSiteSearchIndex(env, env.db, site)
+      : await rebuildPlatformKnowledgeIndex(env, env.db)
     return jsonResponse({ ok: true, ...result })
   } catch (error) {
     console.error('Failed to rebuild platform knowledge index:', error)
@@ -24,3 +29,4 @@ export default defineHandler(async (event) => {
   }
 })
 import { defineHandler } from 'nitro';
+import { getQuery } from 'nitro/h3';

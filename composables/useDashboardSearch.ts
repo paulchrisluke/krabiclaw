@@ -5,41 +5,73 @@ interface SearchResponse {
   results: PublicSearchResult[]
 }
 
-const RESULT_GROUP_LABEL: Record<PublicSearchResult['type'], string> = {
-  doc: 'Guides',
+type PaletteGroup = CommandPaletteGroup
+
+const RESULT_GROUP_LABEL: Partial<Record<PublicSearchResult['type'], string>> = {
+  product: 'Catalog',
+  collection: 'Catalog',
+  location: 'Locations',
+  qa: 'Q&A',
+  post: 'Posts',
+  page: 'Pages',
   blog: 'Articles',
+  thread: 'Messages',
+  member: 'Team',
+  media: 'Photos',
+  doc: 'Guides',
   faq: 'Help answers',
-  route: 'Quick links',
-  platform_page: 'Pages',
-  dashboard_route: 'Dashboard',
 }
 
-/** Drives UDashboardSearch in layouts/dashboard.vue — debounced server-side search
- *  against /api/public/search (the same endpoint and result grouping the Saya/Blawby
- *  tenant search modal uses), scoped to the current org/site/location route context. */
+/**
+ * Drives UDashboardSearch in layouts/dashboard.vue: the dashboard's one search.
+ * The business's own records come from /api/dashboard/search (AI Search, one
+ * corpus, filtered to the site the palette is open on); the settings rows come
+ * from the same navigation the Menu shows, filtered in the palette itself.
+ */
 export function useDashboardSearch() {
   const dashboardApi = useDashboardApi()
-  const route = useRoute()
   const router = useRouter()
+  const dashboard = useDashboardSite()
+  const menu = useDashboardMenu()
   const searchTerm = ref('')
   const loading = ref(false)
-  const groups = ref<CommandPaletteGroup[]>([])
+  const results = shallowRef<PaletteGroup[]>([])
+
+  // The Menu's rows, for the palette's own filter to work through.
+  function navigationGroups(): PaletteGroup[] {
+    const groups: PaletteGroup[] = []
+    for (const group of menu.groups.value) {
+      const items: CommandPaletteItem[] = []
+      for (const item of group.items) {
+        const to = item.to
+        if (!to) continue
+        items.push({ id: item.id, label: item.label, suffix: item.summary, icon: item.icon, onSelect: () => { void router.push(to) } })
+      }
+      if (items.length) groups.push({ id: `nav-${group.id}`, label: group.label ?? 'Menu', items })
+    }
+    return groups
+  }
+
+  // The business's records from the server first, then the Menu's rows.
+  const groups = computed<PaletteGroup[]>(() => results.value.concat(navigationGroups()))
 
   let debounceHandle: ReturnType<typeof setTimeout> | null = null
   let requestSequence = 0
 
-  function groupResults(results: PublicSearchResult[]): CommandPaletteGroup[] {
+  function groupResults(rows: PublicSearchResult[]): PaletteGroup[] {
     const byLabel = new Map<string, CommandPaletteItem[]>()
-    for (const result of results) {
+    for (const result of rows) {
       const label = RESULT_GROUP_LABEL[result.type] ?? 'Results'
       const items = byLabel.get(label) ?? []
-      items.push({
+      const item: CommandPaletteItem = {
         id: result.id,
         label: result.title,
-        suffix: result.snippet,
-        icon: result.icon,
-        onSelect: () => { router.push(result.path) },
-      })
+        // A record with no words of its own repeats its title as its snippet; once is enough.
+        suffix: result.snippet === result.title ? undefined : result.snippet,
+        icon: `i-lucide-${result.icon}`,
+        onSelect: () => { void router.push(result.path) },
+      }
+      items.push(item)
       byLabel.set(label, items)
     }
     // Results are already server-filtered against searchTerm — ignoreFilter stops
@@ -54,9 +86,12 @@ export function useDashboardSearch() {
     activeController?.abort()
     activeController = null
     const normalized = searchTerm.value.trim()
-    if (!normalized) {
+    // The business's site: the route's where the route has one, otherwise the
+    // organization's own — the Menu and Messages are organization screens.
+    const site = dashboard.site.value ?? dashboard.sites.value[0] ?? null
+    if (!normalized || !site?.subdomain) {
       requestSequence += 1
-      groups.value = []
+      results.value = []
       loading.value = false
       return
     }
@@ -66,23 +101,17 @@ export function useDashboardSearch() {
     activeController = controller
     loading.value = true
     try {
-      const response = await dashboardApi<SearchResponse>('/api/public/search', {
+      const response = await dashboardApi<SearchResponse>('/api/dashboard/search', {
         signal: controller.signal,
         validate: validateApiShape({ results: 'array' }),
-        query: {
-          q: normalized,
-          surface: 'dashboard',
-          orgSlug: typeof route.params.orgSlug === 'string' ? route.params.orgSlug : '',
-          siteSlug: typeof route.params.siteSlug === 'string' ? route.params.siteSlug : '',
-          locationSlug: typeof route.params.locationSlug === 'string' ? route.params.locationSlug : '',
-        },
+        query: { q: normalized, site: site.subdomain },
       })
       if (requestId !== requestSequence) return
-      groups.value = groupResults(response.results ?? [])
+      results.value = groupResults(response.results ?? [])
     } catch (error) {
       if (requestId !== requestSequence) return
       console.error('Dashboard search failed:', error)
-      groups.value = []
+      results.value = []
     } finally {
       if (activeController === controller) activeController = null
       if (requestId === requestSequence) loading.value = false

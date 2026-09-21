@@ -10,7 +10,8 @@ import { cimd } from '@better-auth/cimd'
 import { fetchCimdMetadataResource } from '~/server/utils/cimd-metadata-fetch'
 import type { GenericEndpointContext } from '@better-auth/core'
 import { HTTPError, type H3Event } from 'nitro';
-import { createDb, execute, schema } from '~/server/db'
+import { createDb, execute, queryAll, schema } from '~/server/db'
+import { organizationSitesInvalidationQuery } from '~/server/utils/public-resource-cache'
 import { linkAnonymousCustomerToUser } from '~/server/utils/customers'
 import { sendWhatsAppOtp } from '~/server/utils/whatsapp'
 import { parsePhoneOrThrow } from '~/utils/phone'
@@ -263,6 +264,12 @@ export function createAuth(env: CloudflareEnv) {
   if (cached) return cached as ReturnType<typeof betterAuth>
 
   const db = d1 === env.DB && env.db ? env.db : createDb(d1)
+  // Members are indexed for the dashboard's search; a change to one is a change
+  // to every site of the organization. Never lets an auth write fail over it.
+  const recordMemberChange = async (organizationId: string) => {
+    const change = organizationSitesInvalidationQuery(organizationId, 'member-change')
+    await execute(db, change.query, change.params ?? []).catch((error: unknown) => console.error('member_search_invalidation_failed', error))
+  }
   const configuredOrganizationOptions = {
     ...organizationOptions,
     sendInvitationEmail: async (data: {
@@ -332,6 +339,13 @@ export function createAuth(env: CloudflareEnv) {
     }),
     databaseHooks: {
       user: {
+        update: {
+          after: async (user) => {
+            // A renamed member reads under the new name wherever they are a member.
+            const memberships = await queryAll<{ organizationId: string }>(db, 'SELECT "organizationId" FROM member WHERE "userId" = ?', [user.id])
+            for (const membership of memberships ?? []) await recordMemberChange(membership.organizationId)
+          }
+        },
         create: {
           after: async (user) => {
             if ((user as { isAnonymous?: boolean }).isAnonymous) return
@@ -355,8 +369,14 @@ export function createAuth(env: CloudflareEnv) {
       // Better Auth's org-plugin after-hooks only pass the affected row, not the
       // acting session, so member.update/delete events are attributed to no actor.
       member: {
+        create: {
+          after: async (member: MemberRow) => {
+            await recordMemberChange(member.organizationId)
+          }
+        },
         update: {
           after: async (member: MemberRow) => {
+            await recordMemberChange(member.organizationId)
             await fireOrganizationEventSafe({
               db,
               organizationId: member.organizationId,
@@ -369,6 +389,7 @@ export function createAuth(env: CloudflareEnv) {
         },
         delete: {
           after: async (member: MemberRow) => {
+            await recordMemberChange(member.organizationId)
             await fireOrganizationEventSafe({
               db,
               organizationId: member.organizationId,
