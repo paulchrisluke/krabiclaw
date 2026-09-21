@@ -536,6 +536,7 @@ async function notifyOwner(
       sourceEntryId: threadContext?.sourceEntryId ?? null,
       idempotencyKey: threadContext ? `notification:${threadContext.sourceEntryId}:${opts.template}` : undefined,
       title: opts.title,
+      threadId: threadContext?.guestThreadId ?? null,
       deepLink: opts.payload.deep_link || null,
     }),
     getOrgWhatsAppPhone(db, opts.organizationId, opts.siteId),
@@ -1261,6 +1262,7 @@ async function notifyGuestThreadReplyInner(
     locationId: opts.locationId ?? null,
     sourceEntryId: opts.sourceEntryId,
     title,
+    threadId: threadContext.guestThreadId,
     deepLink: payload.deep_link || null,
   })
 

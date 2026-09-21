@@ -18,17 +18,9 @@
       <template #body>
         <div class="mx-auto w-full max-w-xl">
           <!--
-            One carded list of rows, the surface every other settings hub draws.
-            A row states its value and opens a level; Log out acts on the
-            session, so it carries a control instead of a chevron. Everything
-            else — whether an address is verified, how to reset a password —
-            lives one level down, where there is room for it.
+            The reference's Account settings: a row per section, and the fields
+            live inside the section as value rows that edit in place.
           -->
-          <NuxtLink :to="`${profilePath}/photo`" class="mb-6 flex items-center gap-4 no-underline">
-            <UAvatar :src="sessionData?.user?.image ?? undefined" icon="i-lucide-user" alt="" class="size-16" :ui="{ icon: 'size-8' }" />
-            <span class="text-sm font-semibold text-highlighted underline underline-offset-4">Change photo</span>
-          </NuxtLink>
-
           <EditorNavigationList :groups="groups" :active-item="openKey" @act="runRowAction" />
         </div>
       </template>
@@ -49,23 +41,56 @@
 
       <template #body>
         <div class="mx-auto w-full max-w-2xl">
-          <UAlert
-            v-if="detailError"
-            color="error"
-            variant="soft"
-            icon="i-lucide-circle-alert"
-            :description="detailError"
-            class="mb-6"
-          />
-          <div v-if="openKey === 'photo'" class="space-y-6">
-            <UAvatar :src="photoPreview ?? sessionData?.user?.image ?? undefined" icon="i-lucide-user" alt="" class="size-32" :ui="{ icon: 'size-16' }" />
-            <UAlert v-if="photoError" color="error" variant="soft" icon="i-lucide-triangle-alert" :description="photoError" />
-            <UInput type="file" accept="image/*" size="xl" class="w-full" :disabled="photoSaving" @change="pickPhoto" />
-          </div>
+          <div v-if="openKey === 'personal'" class="divide-y divide-default">
+            <!-- Photo -->
+            <div class="flex items-start justify-between gap-4 py-5">
+              <div class="flex min-w-0 items-center gap-4">
+                <UAvatar :src="photoPreview ?? sessionData?.user?.image ?? undefined" icon="i-lucide-user" alt="" class="size-16" :ui="{ icon: 'size-8' }" />
+                <div class="min-w-0">
+                  <p class="font-semibold text-highlighted">Photo</p>
+                  <p v-if="photoError" class="mt-1 text-sm text-error">{{ photoError }}</p>
+                  <UInput v-if="editing === 'photo'" type="file" accept="image/*" class="mt-3 w-full" :disabled="photoSaving" @change="pickPhoto" />
+                </div>
+              </div>
+              <UButton variant="link" color="neutral" class="shrink-0" :label="editing === 'photo' ? 'Cancel' : 'Edit'" @click="toggleEdit('photo')" />
+            </div>
 
-          <UFormField v-else-if="openKey === 'name'" label="Display name">
-            <UInput v-model="nameInput" size="xl" autofocus class="w-full" @input="nameTouched = true" @keydown.enter="saveDetail" />
-          </UFormField>
+            <!-- Display name -->
+            <div class="py-5">
+              <div class="flex items-start justify-between gap-4">
+                <div class="min-w-0">
+                  <p class="font-semibold text-highlighted">Display name</p>
+                  <p v-if="editing !== 'name'" class="mt-1 text-sm" :class="sessionData?.user?.name ? 'text-muted' : 'italic text-dimmed'">{{ sessionData?.user?.name || 'Not provided' }}</p>
+                </div>
+                <UButton variant="link" color="neutral" class="shrink-0" :label="editing === 'name' ? 'Cancel' : sessionData?.user?.name ? 'Edit' : 'Add'" @click="toggleEdit('name')" />
+              </div>
+              <div v-if="editing === 'name'" class="mt-4 space-y-4">
+                <UInput v-model="nameInput" autofocus class="w-full" @input="nameTouched = true" @keydown.enter="saveNameInline" />
+                <p v-if="nameError" class="text-sm text-error">{{ nameError }}</p>
+                <UButton label="Save" :loading="nameSaving" :disabled="!nameDirty" @click="saveNameInline" />
+              </div>
+            </div>
+
+            <!-- WhatsApp number -->
+            <div class="py-5">
+              <div class="flex items-start justify-between gap-4">
+                <div class="min-w-0">
+                  <p class="font-semibold text-highlighted">WhatsApp number</p>
+                  <p v-if="editing !== 'phone'" class="mt-1 text-sm" :class="sessionData?.user?.phoneNumber ? 'text-muted' : 'italic text-dimmed'">
+                    {{ sessionData?.user?.phoneNumber || 'Not provided' }}
+                    <UBadge v-if="sessionData?.user?.phoneNumber" :color="sessionData?.user?.phoneNumberVerified ? 'success' : 'warning'" variant="subtle" size="sm" class="ms-2">{{ sessionData?.user?.phoneNumberVerified ? 'Verified' : 'Not verified' }}</UBadge>
+                  </p>
+                  <p class="mt-1 text-sm text-dimmed">Notifications and codes are sent over WhatsApp.</p>
+                </div>
+                <UButton variant="link" color="neutral" class="shrink-0" :label="editing === 'phone' ? 'Cancel' : sessionData?.user?.phoneNumber ? 'Edit' : 'Add'" @click="toggleEdit('phone')" />
+              </div>
+              <div v-if="editing === 'phone'" class="mt-4 space-y-4">
+                <UInput v-model="phoneInput" type="tel" placeholder="+66..." autofocus class="w-full" @input="phoneTouched = true" @keydown.enter="requestPhoneVerify" />
+                <p v-if="phoneError" class="text-sm text-error">{{ phoneError }}</p>
+                <UButton label="Verify and save" :loading="phoneSaving" :disabled="!phoneDirty || !phoneInput.trim()" @click="requestPhoneVerify" />
+              </div>
+            </div>
+          </div>
 
           <!--
             Login & security, laid out the way the reference does it: what you
@@ -146,15 +171,6 @@
                 </template>
               </div>
             </section>
-          </div>
-
-          <div v-else-if="openKey === 'phone'" class="space-y-6">
-            <UFormField label="WhatsApp number" hint="Notifications and codes are sent over WhatsApp only.">
-              <UInput v-model="phoneInput" size="xl" placeholder="+66..." autofocus class="w-full" @input="phoneTouched = true" @keydown.enter="saveDetail" />
-            </UFormField>
-            <UBadge v-if="sessionData?.user?.phoneNumber" :color="sessionData?.user?.phoneNumberVerified ? 'success' : 'warning'" variant="subtle">
-              {{ sessionData?.user?.phoneNumberVerified ? 'Verified' : 'Not verified' }}
-            </UBadge>
           </div>
 
           <URadioGroup
@@ -335,6 +351,7 @@ async function pickPhoto(event: Event) {
   // Separate from the upload: the photo is already stored by now, so a failed
   // refresh is a stale header, not a failed save, and must not read as one.
   await refreshSession()
+  editing.value = null
 }
 
 // Display Name
@@ -342,11 +359,22 @@ const nameInput = ref(sessionData.value?.user?.name || '')
 const nameDirty = computed(() => nameInput.value.trim() !== (sessionData.value?.user?.name || ''))
 const nameSaving = ref(false)
 const DETAIL_LABELS: Record<string, string> = {
-  photo: 'Photo',
-  name: 'Display name',
+  personal: 'Personal information',
   login: 'Login & security',
-  phone: 'WhatsApp number',
   appearance: 'Appearance',
+}
+
+// Which Personal information row is open for editing. One at a time, the way
+// the reference expands one row and leaves the rest as they are.
+const editing = ref<'photo' | 'name' | 'phone' | null>(null)
+function toggleEdit(row: 'photo' | 'name' | 'phone') {
+  if (editing.value === row) {
+    cancelEdit()
+    editing.value = null
+    return
+  }
+  cancelEdit()
+  editing.value = row
 }
 const detailKey = computed(() => frame.childSegment.value)
 /**
@@ -354,10 +382,12 @@ const detailKey = computed(() => frame.childSegment.value)
  * the reference profile opens on its first section too. `has-detail` stays tied
  * to the route, so below `lg` a phone shows the index and no sheet to escape.
  */
-const openKey = computed(() => detailKey.value ?? 'name')
+const openKey = computed(() => detailKey.value ?? 'personal')
 const detailTitle = computed(() => DETAIL_LABELS[openKey.value])
 
-watch(() => openKey.value === 'login', (open) => { if (open) void loadSessions() }, { immediate: true })
+// The current token arrives with the session fetch; until it has, every
+// device would read as another device, with a Log out it must not have.
+watch(() => [openKey.value === 'login', sessionData.value?.session?.token] as const, ([open, token]) => { if (open && token) void loadSessions() }, { immediate: true })
 
 // An unsupported row 404s rather than opening an empty pane.
 watchEffect(() => {
@@ -382,9 +412,8 @@ const groups = computed<EditorNavigationGroup[]>(() => [
   {
     id: 'account',
     items: [
-      { id: 'name', label: 'Display name', summary: sessionData.value?.user?.name || 'Not set', placeholder: !sessionData.value?.user?.name, to: `${profilePath.value}/name` },
+      { id: 'personal', label: 'Personal information', summary: [sessionData.value?.user?.name, sessionData.value?.user?.phoneNumber].filter(Boolean).join(' · ') || 'Name, photo, WhatsApp number', to: `${profilePath.value}/personal` },
       { id: 'login', label: 'Login & security', summary: sessionData.value?.user?.email ?? '', to: `${profilePath.value}/login` },
-      { id: 'phone', label: 'WhatsApp number', summary: sessionData.value?.user?.phoneNumber || 'Not set', placeholder: !sessionData.value?.user?.phoneNumber, to: `${profilePath.value}/phone` },
       { id: 'notifications', label: 'Notifications', summary: notificationSummary.value, to: `${profilePath.value}/notifications` },
       { id: 'appearance', label: 'Appearance', summary: `${themePreference.value.charAt(0).toUpperCase()}${themePreference.value.slice(1)} theme`, to: `${profilePath.value}/appearance` },
       { id: 'log-out', label: 'Log out', action: { label: 'Log out' } },
@@ -393,42 +422,25 @@ const groups = computed<EditorNavigationGroup[]>(() => [
 ])
 
 function runRowAction(id: string) {
-  if (id === 'log-out') return void logOut()
+  if (id === 'log-out') logOut().catch(error => console.error('sign_out_failed', error))
 }
 
-// Photo saves on pick, and Login & security carries its own controls, so
-// neither draws a commit bar.
-const hasCommit = computed(() => openKey.value !== 'photo' && openKey.value !== 'login')
-
-const saving = computed(() => openKey.value === 'name' ? nameSaving.value
-  : openKey.value === 'phone' ? phoneSaving.value
-  : false)
-
-const saveDisabled = computed(() => openKey.value === 'name' ? !nameDirty.value
-  : openKey.value === 'phone' ? (!phoneDirty.value || !phoneInput.value.trim())
-  : openKey.value === 'appearance' ? !themeDirty.value
-  : true)
-
-const saveLabel = computed(() => openKey.value === 'phone' ? 'Verify and save' : undefined)
+// Personal information and Login & security carry their own controls on
+// each row; only Appearance commits from the footer.
+const hasCommit = computed(() => openKey.value === 'appearance')
+const saving = computed(() => false)
+const saveDisabled = computed(() => !themeDirty.value)
+const saveLabel = computed(() => undefined)
 
 async function saveDetail() {
   if (saveDisabled.value) return
-  if (openKey.value === 'name') return void await saveNameAndClose()
-  if (openKey.value === 'phone') return void await requestPhoneVerify()
-  if (openKey.value === 'appearance') {
-    setThemePreference(themeInput.value)
-    return void await navigateTo(profilePath.value)
-  }
+  setThemePreference(themeInput.value)
+  await navigateTo(profilePath.value)
 }
 
 const nameError = ref<string | null>(null)
 const phoneError = ref<string | null>(null)
 
-const detailError = computed(() => {
-  if (openKey.value === 'name') return nameError.value
-  if (openKey.value === 'phone') return phoneError.value
-  return null
-})
 
 function closeDetail() {
   cancelEdit()
@@ -464,8 +476,8 @@ async function saveName() {
   }
 }
 
-async function saveNameAndClose() {
-  if (await saveName()) await navigateTo(profilePath.value)
+async function saveNameInline() {
+  if (await saveName()) editing.value = null
 }
 
 // The session resolves asynchronously, so nameInput starts as '' before
@@ -521,7 +533,7 @@ async function verifyPhone() {
     
     await refreshSession()
     verifyModalOpen.value = false
-    await navigateTo(profilePath.value)
+    editing.value = null
   } catch (_err) {
     verifyError.value = _err instanceof Error ? _err.message : String(_err)
   } finally {

@@ -240,6 +240,10 @@ const routeLocationSlug = computed(() => typeof route.params.locationSlug === 's
 const routeName = computed(() => typeof route.name === 'string' ? route.name : '')
 const isAccountRoute = computed(() => routeName.value.startsWith('dashboard-account'))
 const organizationLabel = computed(() => organization.value?.name ?? 'Organization')
+// The organization is the business, and the business's mark is its brand logo.
+const organizationAvatar = computed(() => organization.value?.logo
+  ?? mediaStillUrl(sites.value[0]?.media.find(item => item.slot === 'logo'))
+  ?? undefined)
 
 const siteLabel = computed(() => site.value?.brand_name ?? site.value?.subdomain ?? 'No site')
 const siteAvatar = (candidate: (typeof sites.value)[number] | undefined) => {
@@ -287,8 +291,8 @@ const scopeHeaderModel = computed<DashboardScopeHeaderModel>(() => {
     scope: 'organization',
     current: {
       label: organizationLabel.value,
-      avatar: organization.value?.logo ?? undefined,
-      icon: organization.value?.logo ? undefined : 'i-lucide-building-2'
+      avatar: organizationAvatar.value,
+      icon: organizationAvatar.value ? undefined : 'i-lucide-building-2'
     },
     parent: null,
     peers: organizations.value.map((org) => ({

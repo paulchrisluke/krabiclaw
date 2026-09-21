@@ -412,18 +412,6 @@ export const PLATFORM_DASHBOARD_ROUTE_ENTRIES: PlatformDashboardRouteEntry[] = [
     surfaces: ['dashboard'],
   },
   {
-    id: 'location-messages',
-    title: 'Location Messages',
-    pathTemplate: '/dashboard/:orgSlug/sites/:siteSlug/locations/:locationSlug/messages',
-    fallbackPath: '/dashboard',
-    snippet: 'Review submissions assigned to one location.',
-    body: 'Location Messages covers only guest threads assigned to the active location, without duplicating site-wide unassigned messages.',
-    icon: 'message-circle',
-    section: 'Operations',
-    keywords: ['inbox', 'submissions', 'messages', 'contact requests'],
-    surfaces: ['dashboard'],
-  },
-  {
     id: 'location-reservations',
     title: 'Reservations',
     pathTemplate: '/dashboard/:orgSlug/sites/:siteSlug/locations/:locationSlug/reservations',

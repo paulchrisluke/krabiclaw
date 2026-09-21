@@ -44,15 +44,15 @@
       />
     </section>
 
-    <!-- A request that failed is a state this surface shows; the record may well
-         still be there. A record that is not there 404s in the page instead. -->
+    <!-- A request that failed, or a conversation that is gone, is a state this
+         surface shows rather than a blank column. -->
     <UAlert
       v-else
       class="m-3"
       color="error"
       variant="soft"
-      title="Conversation could not be loaded"
-      :description="getErrorMessage(detailError, 'Guest thread request failed')"
+      :title="isNotFoundError(detailError) ? 'This conversation is no longer available' : 'Conversation could not be loaded'"
+      :description="isNotFoundError(detailError) ? 'It may have been deleted, or the link is from another business.' : getErrorMessage(detailError, 'Guest thread request failed')"
     />
   </div>
 </template>
@@ -110,12 +110,6 @@ const {
   pending: initialDetailPending,
   error: initialDetailError,
 } = await useGuestThread(threadIdRef)
-
-// A thread that is not there is not a page. Capability gating and missing
-// records 404 rather than rendering an editor frame around nothing.
-if (initialDetailError.value && isNotFoundError(initialDetailError.value)) {
-  throw createError({ statusCode: 404, statusMessage: 'Guest thread not found' })
-}
 
 watch([initialDetail, initialDetailPending, initialDetailError], ([data, pending, error]) => {
   loadingDetail.value = pending

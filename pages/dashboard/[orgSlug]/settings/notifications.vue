@@ -45,23 +45,28 @@
           <p class="text-sm text-muted">No notifications yet.</p>
         </div>
 
-        <div v-else class="divide-y divide-default border-y border-default">
+        <!--
+          A row is what the reference draws: a mark for what happened, the
+          title, one line under it, when. Unread is bold. Nothing else, and no
+          chevron; the row itself opens the thing.
+        -->
+        <div v-else class="divide-y divide-default">
           <button
             v-for="notification in notifications"
             :key="notification.id"
             type="button"
-            class="flex w-full items-start gap-3.5 py-4 text-left transition-colors hover:bg-elevated"
+            class="flex w-full items-start gap-4 py-5 text-left transition-colors hover:bg-elevated/60"
             @click="openNotification(notification)"
           >
-            <span class="mt-1.5 flex size-2 shrink-0">
-              <span class="size-2 rounded-full" :class="notification.read_at ? 'bg-muted' : severityDot(notification.severity)" />
+            <span class="flex size-12 shrink-0 items-center justify-center rounded-full bg-elevated">
+              <UIcon :name="iconFor(notification.template)" class="size-5" :class="notification.read_at ? 'text-muted' : 'text-highlighted'" />
             </span>
             <span class="min-w-0 flex-1">
-              <span class="block font-medium text-highlighted">{{ notification.title || 'Notification' }}</span>
-              <span v-if="notification.message" class="mt-0.5 block text-sm text-muted">{{ notification.message }}</span>
-              <span class="mt-1 block text-xs text-dimmed">{{ formatExactDateTime(notification.created_at, { includeTime: true }) }}</span>
+              <span class="block text-highlighted" :class="notification.read_at ? 'font-medium' : 'font-semibold'">{{ notification.title || 'Notification' }}</span>
+              <span v-if="notification.message" class="mt-0.5 line-clamp-2 block text-sm text-muted">{{ notification.message }}</span>
+              <span class="mt-1 block text-sm text-dimmed">{{ formatRelativeTime(notification.created_at) }}</span>
             </span>
-            <UIcon v-if="notification.deep_link" name="i-lucide-chevron-right" class="mt-1 size-4 shrink-0 text-dimmed" />
+            <span v-if="!notification.read_at" class="mt-2 size-2 shrink-0 rounded-full bg-primary" aria-label="Unread" />
           </button>
         </div>
       </div>
@@ -76,7 +81,7 @@ useSeoMeta({ title: 'Notifications | KrabiClaw Dashboard', robots: 'noindex, nof
 
 const dashboardApi = useDashboardApi()
 const realtime = useDashboardInvalidations()
-const { formatExactDateTime } = useHumanTime()
+const { formatRelativeTime } = useHumanTime()
 
 interface DashboardNotification {
   id: string
@@ -113,11 +118,13 @@ const loadError = shallowRef<unknown>(null)
 const realtimeFailed = computed(() => realtime.status.value === 'failed')
 let latestRequestId = 0
 
-function severityDot(severity: DashboardNotification['severity']) {
-  if (severity === 'error') return 'bg-error'
-  if (severity === 'warning') return 'bg-warning'
-  if (severity === 'success') return 'bg-success'
-  return 'bg-primary'
+/** The mark for what happened: a message, a booking, a review, a person. */
+function iconFor(template: string) {
+  if (/review/.test(template)) return 'i-lucide-star'
+  if (/reservation|booking/.test(template)) return 'i-lucide-calendar-check'
+  if (/reply|contact|msg|message/.test(template)) return 'i-lucide-message-square'
+  if (/signup|invite|member/.test(template)) return 'i-lucide-user-round'
+  return 'i-lucide-bell'
 }
 
 // A deep link is a dashboard path the server wrote, sometimes under another

@@ -7,7 +7,7 @@
       <USwitch v-model="draft.whatsapp" label="WhatsApp" :disabled="!phoneVerified || saving" size="lg" />
     </div>
 
-    <NuxtLink v-if="!phoneVerified" to="/dashboard/account/profile/phone" class="block text-sm text-muted underline underline-offset-2">
+    <NuxtLink v-if="!phoneVerified" to="/dashboard/account/profile/personal" class="block text-sm text-muted underline underline-offset-2">
       Add a WhatsApp number
     </NuxtLink>
 

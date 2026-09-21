@@ -205,7 +205,7 @@
           </UFormField>
         </div>
 
-        <SiteGoogleAnalyticsSettings v-else-if="detailKey === 'analytics'" :site-id="siteId" />
+        <SiteGoogleAnalyticsSettings v-else-if="detailKey === 'analytics'" :site-id="siteId" @changed="refreshSettings" />
 
         <div v-else-if="detailKey === 'search'" class="space-y-8">
           <UCard variant="subtle">
@@ -585,7 +585,7 @@ function errorMessage(error: unknown, fallback: string) {
 }
 
 const settingsResourceKey = computed(() => `dashboard-site-settings:${String(route.params.orgSlug)}:${String(route.params.siteSlug)}`)
-const { data: settingsResource, pending: settingsPending, error: settingsResourceError } = await useAsyncData<SettingsPageResource>(settingsResourceKey, async () => {
+const { data: settingsResource, pending: settingsPending, error: settingsResourceError, refresh: refreshSettings } = await useAsyncData<SettingsPageResource>(settingsResourceKey, async () => {
   const [settings, notifications, facebook] = await Promise.all([
     dashboardApi<{ success: boolean; settings: SiteSettingsResponse }>('/api/dashboard/settings', { validate: isSettingsResponse }),
     dashboardApi<{ success: boolean; notifications: { whatsapp_phone: string | null } }>(`/api/editor/sites/${siteId}/notifications`, { validate: isNotificationsResponse }),

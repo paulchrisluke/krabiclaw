@@ -45,6 +45,7 @@
 // Search Console site are picked from lists. The measurement id the public
 // site loads comes from the chosen property; nothing is typed by hand.
 const props = defineProps<{ siteId: string }>()
+const emit = defineEmits<{ /** The connection changed on the server; the list beside this leaf reads it too. */ changed: [] }>()
 
 const dashboardApi = useDashboardApi()
 const route = useRoute()
@@ -136,6 +137,7 @@ async function disconnectGoogle() {
   try {
     await dashboardApi(`/api/sites/${props.siteId}/integrations/google-analytics/disconnect`, { method: 'POST', validate: isSuccessResponse })
     await loadConnection()
+    emit('changed')
   } catch {
     pageError.value = 'Failed to disconnect'
   } finally {
@@ -154,6 +156,7 @@ async function saveSelection() {
       validate: isSuccessResponse,
     })
     await loadConnection()
+    emit('changed')
   } catch (err) {
     pageError.value = getErrorMessage(err, 'Failed to save the selection')
   } finally {

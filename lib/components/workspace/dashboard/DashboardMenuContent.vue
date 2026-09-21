@@ -12,7 +12,6 @@
         :label="scopeModel?.current.label"
         color="neutral"
         variant="subtle"
-        size="lg"
         trailing-icon="i-lucide-chevron-down"
         class="w-full justify-start"
         :ui="{ label: 'truncate text-left', trailingIcon: 'ms-auto text-dimmed' }"
@@ -25,7 +24,6 @@
       icon="i-lucide-search"
       color="neutral"
       variant="subtle"
-      size="lg"
       class="w-full justify-start"
       @click="$emit('search')"
     />
@@ -63,7 +61,7 @@ const { orgPaths } = useDashboardSiteLinks()
 const insightsPath = computed(() => (orgPaths.value.org === '/dashboard' ? null : `${orgPaths.value.settings}/insights`))
 
 function onAct(id: string) {
-  if (id === 'log-out') void logOut()
+  if (id === 'log-out') logOut().catch(error => console.error('sign_out_failed', error))
 }
 
 defineEmits<{ search: [] }>()

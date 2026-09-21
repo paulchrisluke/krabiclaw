@@ -14,9 +14,24 @@ interface NotificationRow {
   target_user_id: string | null
   title: string | null
   message: string | null
-  deep_link: string | null
+  thread_id: string | null
+  stored_link: string | null
+  organization_slug: string | null
+  site_slug: string | null
   created_at: string
   read_at: string | null
+}
+
+/**
+ * Where a notification opens. A thread notification names its thread and the
+ * link is composed here from the organization's and site's current slugs, so a
+ * route change or a rename never strands it. Anything else stores its own path.
+ */
+function deepLink(row: NotificationRow): string | null {
+  if (row.thread_id && row.organization_slug && row.site_slug) {
+    return `/dashboard/${encodeURIComponent(row.organization_slug)}/sites/${encodeURIComponent(row.site_slug)}/messages/${encodeURIComponent(row.thread_id)}`
+  }
+  return row.stored_link
 }
 
 export default defineHandler(async (event) => {
@@ -26,7 +41,11 @@ export default defineHandler(async (event) => {
 
   const [rows, count] = await Promise.all([
     queryAll<NotificationRow>(access.db, `
-      SELECT n.id, json_extract(n.payload_json, '$.visibility_scope') AS scope, n.event_name AS template, json_extract(n.payload_json, '$.severity') AS severity, n.organization_id, n.context_site_id AS site_id, n.location_id, n.target_user_id, json_extract(n.payload_json, '$.title') AS title, n.body AS message, json_extract(n.payload_json, '$.deep_link') AS deep_link, n.created_at, nr.read_at
+      SELECT n.id, json_extract(n.payload_json, '$.visibility_scope') AS scope, n.event_name AS template, json_extract(n.payload_json, '$.severity') AS severity, n.organization_id, n.context_site_id AS site_id, n.location_id, n.target_user_id, json_extract(n.payload_json, '$.title') AS title, n.body AS message,
+             json_extract(n.payload_json, '$.thread_id') AS thread_id, json_extract(n.payload_json, '$.deep_link') AS stored_link,
+             (SELECT slug FROM organization WHERE id = n.organization_id) AS organization_slug,
+             (SELECT subdomain FROM sites WHERE id = n.context_site_id) AS site_slug,
+             n.created_at, nr.read_at
       FROM activity_entries n
       LEFT JOIN (SELECT parent_id, MAX(occurred_at) AS read_at FROM activity_entries WHERE kind = 'acknowledgement' AND actor_user_id = ? GROUP BY parent_id) nr ON nr.parent_id = n.id
       WHERE ${access.whereSql}
@@ -40,6 +59,8 @@ export default defineHandler(async (event) => {
     `, [access.userId, ...access.whereParams]), ])
 
   return jsonResponse({
-    notifications: rows, unread_count: Number(count?.count ?? 0), })
+    notifications: rows.map(({ thread_id: _thread, stored_link: _link, organization_slug: _org, site_slug: _site, ...row }) => ({ ...row, deep_link: deepLink(rows.find(r => r.id === row.id)!) })),
+    unread_count: Number(count?.count ?? 0),
+  })
 })
 import { defineHandler } from 'nitro';
