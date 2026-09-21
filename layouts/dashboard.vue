@@ -68,6 +68,7 @@
         title="Search"
         description="Search this business"
         placeholder="Search…"
+        size="lg"
         :fullscreen="isPhoneWidth"
         :groups="dashboardSearchGroups"
         :loading="dashboardSearchLoading"
