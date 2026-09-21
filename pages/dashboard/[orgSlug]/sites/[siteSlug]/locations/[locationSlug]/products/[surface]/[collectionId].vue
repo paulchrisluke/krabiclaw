@@ -66,10 +66,7 @@
       </template>
 
       <template #footer>
-        <div class="flex shrink-0 items-center justify-between gap-4 border-t border-default px-4 py-3 sm:px-6">
-          <UButton color="neutral" variant="ghost" label="Cancel" @click="closeLeaf" />
-          <UButton :label="saveLabel || 'Save'" :loading="saving" :disabled="saveDisabled" @click="saveLeaf" />
-        </div>
+        <DashboardPanelFooter :save-label="saveLabel" :loading="saving" :disabled="saveDisabled" @cancel="closeLeaf" @save="saveLeaf" />
       </template>
     </UDashboardPanel>
 

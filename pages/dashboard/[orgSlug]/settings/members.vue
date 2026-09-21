@@ -55,15 +55,13 @@
       </template>
 
       <template #footer>
-        <div class="flex shrink-0 items-center justify-between gap-4 border-t border-default px-4 py-3 sm:px-6">
-          <UButton color="neutral" variant="ghost" label="Cancel" @click="closeInvite" />
-          <UButton
-            label="Send invite"
-            :loading="inviting"
-            :disabled="!inviteForm.email.trim() || (inviteForm.role === 'editor' && !inviteForm.siteId)"
-            @click="sendInvite"
-          />
-        </div>
+        <DashboardPanelFooter
+          save-label="Send invite"
+          :loading="inviting"
+          :disabled="!inviteForm.email.trim() || (inviteForm.role === 'editor' && !inviteForm.siteId)"
+          @cancel="closeInvite"
+          @save="sendInvite"
+        />
       </template>
     </UDashboardPanel>
   </template>

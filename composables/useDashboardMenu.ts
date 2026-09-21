@@ -2,6 +2,15 @@ import type { EditorNavigationGroup } from '~/components/dashboard/EditorNavigat
 import { dashboardScopeHeaderModelKey } from '~/lib/components/workspace/dashboard/dashboardScopeHeaderContext'
 import { authClient } from '~/lib/auth-client'
 
+/**
+ * How many Cancel/Save footers are mounted. While one is, a leaf is open as a
+ * sheet, and the phone's tab bar goes away under it. DashboardPanelFooter
+ * counts itself in and out; the layout reads the count.
+ */
+export function useDashboardLeafFooters() {
+  return useState<number>('dashboard-leaf-footers', () => 0)
+}
+
 export function useDashboardMenu() {
   const route = useRoute()
   const scopeHeaderModel = inject(dashboardScopeHeaderModelKey, null)

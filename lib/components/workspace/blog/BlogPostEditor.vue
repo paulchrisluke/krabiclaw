@@ -188,10 +188,7 @@
     </template>
 
     <template v-if="section !== 'share'" #footer>
-      <div class="flex shrink-0 items-center justify-between gap-4 border-t border-default px-4 py-3 sm:px-6">
-        <UButton color="neutral" variant="ghost" label="Cancel" @click="cancelSection" />
-        <UButton label="Save" :loading="savingExplicitly || publishing" @click="saveSection" />
-      </div>
+      <DashboardPanelFooter :loading="savingExplicitly || publishing" @cancel="cancelSection" @save="saveSection" />
     </template>
   </UDashboardPanel>
 </template>
