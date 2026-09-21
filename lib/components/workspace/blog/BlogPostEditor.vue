@@ -23,7 +23,7 @@
     <template #body>
       <!-- Inert while a write is in flight: the ids that come back are matched to the blocks that were sent. -->
       <div class="mx-auto w-full space-y-8" :class="hasDetail ? 'max-w-xl' : 'max-w-3xl'" :inert="publishing || saveState === 'saving'">
-        <p v-if="actionError" role="alert" class="rounded-lg border border-error/30 bg-error/10 px-4 py-2 text-sm text-error">{{ actionError }}</p>
+        <p v-if="actionError && !hasDetail" role="alert" class="rounded-lg border border-error/30 bg-error/10 px-4 py-2 text-sm text-error">{{ actionError }}</p>
 
         <EditorNavigationList v-if="hasDetail" :groups="settingsGroups" :active-item="section" />
         <div v-else-if="loadPending" class="grid min-h-64 place-items-center"><UIcon name="i-lucide-loader-circle" class="size-6 animate-spin" /></div>
@@ -106,7 +106,8 @@
       <!-- The fields bind to the loaded post; shown earlier they bind to a blank form the load then overwrites. -->
       <div v-if="loadPending" class="grid min-h-64 place-items-center"><UIcon name="i-lucide-loader-circle" class="size-6 animate-spin" /></div>
       <UAlert v-else-if="loadError" color="error" variant="soft" :description="loadError" />
-      <div v-else class="mx-auto w-full max-w-2xl">
+      <div v-else class="mx-auto w-full max-w-2xl space-y-6" :inert="savingExplicitly || publishing">
+      <p v-if="actionError" role="alert" class="rounded-lg border border-error/30 bg-error/10 px-4 py-2 text-sm text-error">{{ actionError }}</p>
       <template v-if="section === 'category'">
         <!-- KrabiClaw's own site publishes two collections; a category is the author's own word in both. -->
         <UFormField v-if="isPlatformTemplate" label="Collection" class="mb-4">
