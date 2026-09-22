@@ -28,7 +28,6 @@ export interface MediaPlacementKey {
 
 interface PlacementAuthInput {
   organizationId: string
-  siteId: string
   env: CloudflareEnv
   // Optional: the internal seeding paths have no caller to authorize. When it
   // is present it is a resolved principal, never loose role/organization fields.
@@ -115,7 +114,7 @@ async function authorizePlacementWrite(db: DbClient, input: PlacementAuthInput):
     // is the whole failure this check exists to prevent.
     if (
       input.principal.organizationId !== input.organizationId
-      || input.principal.siteId !== input.siteId
+      || input.principal.organizationId !== input.organizationId
     ) {
       throw new HTTPError({ statusCode: 403, statusMessage: 'Access denied' })
     }
@@ -128,11 +127,9 @@ async function authorizePlacementWrite(db: DbClient, input: PlacementAuthInput):
 // replace their local list wholesale rather than trying to reconcile it
 // against whatever they sent — the response, not the request, is the truth.
 async function canonicalPlacementState(db: DbClient, input: {
-  siteId: string
   placement: MediaPlacementKey
 }) {
   const items = (await getMediaPlacements(db, {
-    siteId: input.siteId,
     ownerType: input.placement.owner_type,
     ownerIds: [input.placement.owner_id],
     slot: input.placement.slot,
@@ -153,7 +150,6 @@ async function canonicalPlacementState(db: DbClient, input: {
 // attachMediaPlacement/removeMediaPlacement/reorderMediaPlacements for those.
 export async function setSingleMediaPlacement(db: DbClient, input: {
   organizationId: string
-  siteId: string
   env: CloudflareEnv
   // Optional: the internal seeding paths have no caller to authorize. When it
   // is present it is a resolved principal, never loose role/organization fields.
@@ -166,7 +162,6 @@ export async function setSingleMediaPlacement(db: DbClient, input: {
   const refs: MediaAssetRefInput[] = input.assetId ? [{ asset_id: input.assetId }] : []
   const media = await hydrateMediaAssetRefs(db, {
     organizationId: input.organizationId,
-    siteId: input.siteId,
     refs,
     allowedKinds: allowedKindsFor(input.placement),
     fieldName: 'asset_id',
@@ -177,7 +172,6 @@ export async function setSingleMediaPlacement(db: DbClient, input: {
 }
 
 export async function getMediaPlacements(db: DbClient, input: {
-  siteId: string
   ownerType: MediaPlacementOwnerType
   ownerIds: string[]
   slot?: string
@@ -187,7 +181,6 @@ export async function getMediaPlacements(db: DbClient, input: {
 
 async function refreshSocialCardForPlacement(db: DbClient, input: {
   env: CloudflareEnv
-  siteId: string
   placement: MediaPlacementKey
 }) {
   try {
@@ -215,7 +208,6 @@ async function refreshSocialCardForPlacement(db: DbClient, input: {
 // "make sure this is attached" behavior should treat 409 as success.
 export async function attachMediaPlacement(db: DbClient, input: {
   organizationId: string
-  siteId: string
   env: CloudflareEnv
   // Optional: the internal seeding paths have no caller to authorize. When it
   // is present it is a resolved principal, never loose role/organization fields.
@@ -230,28 +222,27 @@ export async function attachMediaPlacement(db: DbClient, input: {
   await requirePostMediaAllowed(db, input)
   const [asset] = await hydrateMediaAssetRefs(db, {
     organizationId: input.organizationId,
-    siteId: input.siteId,
     refs: [{ asset_id: input.assetId }],
     allowedKinds: allowedKindsFor(input.placement),
     fieldName: 'asset_id',
   })
   if (!asset) throw new HTTPError({ statusCode: 400, statusMessage: 'asset_id is required' })
   const now = new Date().toISOString()
-  const scopeParams = [input.organizationId, input.siteId, input.placement.owner_type, input.placement.owner_id, input.placement.slot]
+  const scopeParams = [input.organizationId, input.placement.owner_type, input.placement.owner_id, input.placement.slot]
   const owner = mediaPlacementOwnerQuery({ ...input, ownerType: input.placement.owner_type, ownerId: input.placement.owner_id })
   let results
   try {
     results = await executeBatch(db, [{
-      query: `INSERT INTO media_placements (id, organization_id, site_id, owner_type, owner_id, slot, asset_id, sort_order, status, created_at, updated_at)
+      query: `INSERT INTO media_placements (id, organization_id, owner_type, owner_id, slot, asset_id, sort_order, status, created_at, updated_at)
         SELECT ?, ?, ?, ?, ?, ?, ?,
-          COALESCE((SELECT MAX(sort_order) + 1 FROM media_placements WHERE organization_id = ? AND site_id = ? AND owner_type = ? AND owner_id = ? AND slot = ?), 0),
+          COALESCE((SELECT MAX(sort_order) + 1 FROM media_placements WHERE organization_id = ? AND owner_type = ? AND owner_id = ? AND slot = ?), 0),
           'active', ?, ?
-        WHERE (SELECT COUNT(*) FROM media_placements WHERE organization_id = ? AND site_id = ? AND owner_type = ? AND owner_id = ? AND slot = ?) < ?
+        WHERE (SELECT COUNT(*) FROM media_placements WHERE organization_id = ? AND owner_type = ? AND owner_id = ? AND slot = ?) < ?
           AND EXISTS (${owner.query})
-          AND EXISTS (SELECT 1 FROM media_assets WHERE id = ? AND organization_id = ? AND site_id = ? AND status = 'active')
+          AND EXISTS (SELECT 1 FROM media_assets WHERE id = ? AND organization_id = ? AND status = 'active')
           AND (? != 'content_document' OR ? NOT IN ('cover','gallery') OR EXISTS (
             SELECT 1 FROM content_documents d JOIN content_documents root ON root.id = COALESCE(d.root_id,d.id)
-             WHERE d.id = ? AND d.organization_id = ? AND d.site_id = ?
+             WHERE d.id = ? AND d.organization_id = ?
                AND (root.kind != 'social_post' OR (root.metadata_json ->> '$.post_type') != 'alert')))`,
       params: [
         crypto.randomUUID(), ...scopeParams, asset.asset_id,
@@ -260,8 +251,8 @@ export async function attachMediaPlacement(db: DbClient, input: {
         ...scopeParams,
         MAX_ORDERED_MEDIA_ASSETS,
         ...owner.params!,
-        asset.asset_id, input.organizationId, input.siteId,
-        input.placement.owner_type, input.placement.slot, input.placement.owner_id, input.organizationId, input.siteId,
+        asset.asset_id, input.organizationId,
+        input.placement.owner_type, input.placement.slot, input.placement.owner_id, input.organizationId,
       ],
     }])
   } catch (error) {
@@ -283,7 +274,6 @@ export async function attachMediaPlacement(db: DbClient, input: {
 // unmentioned assets keep their exact position.
 export async function removeMediaPlacement(db: DbClient, input: {
   organizationId: string
-  siteId: string
   env: CloudflareEnv
   // Optional: the internal seeding paths have no caller to authorize. When it
   // is present it is a resolved principal, never loose role/organization fields.
@@ -330,7 +320,6 @@ export interface MediaPlacementMove {
 // full passes, not a partial per-row update.
 export async function reorderMediaPlacements(db: DbClient, input: {
   organizationId: string
-  siteId: string
   env: CloudflareEnv
   // Optional: the internal seeding paths have no caller to authorize. When it
   // is present it is a resolved principal, never loose role/organization fields.
@@ -344,10 +333,10 @@ export async function reorderMediaPlacements(db: DbClient, input: {
   await authorizePlacementWrite(db, input)
   if (input.moves.length === 0) return canonicalPlacementState(db, input)
 
-  const scopeParams = [input.organizationId, input.siteId, input.placement.owner_type, input.placement.owner_id, input.placement.slot]
+  const scopeParams = [input.organizationId, input.placement.owner_type, input.placement.owner_id, input.placement.slot]
   const currentRows = await queryAll<{ asset_id: string }>(db, `
     SELECT asset_id FROM media_placements
-     WHERE organization_id = ? AND site_id = ? AND owner_type = ? AND owner_id = ? AND slot = ?
+     WHERE organization_id = ? AND owner_type = ? AND owner_id = ? AND slot = ?
      ORDER BY sort_order ASC
   `, scopeParams)
   const currentOrder = currentRows.map(row => row.asset_id)
@@ -382,19 +371,18 @@ export async function reorderMediaPlacements(db: DbClient, input: {
 
   const queries: BatchQuery[] = [buildMembershipGuardQuery({
     organizationId: input.organizationId,
-    siteId: input.siteId,
     placement: input.placement,
     expectedAssetIds: currentOrder,
   })]
   order.forEach((assetId) => {
     queries.push({
-      query: `UPDATE media_placements SET sort_order = (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM media_placements WHERE organization_id = ? AND site_id = ? AND owner_type = ? AND owner_id = ? AND slot = ?) WHERE organization_id = ? AND site_id = ? AND owner_type = ? AND owner_id = ? AND slot = ? AND asset_id = ?`,
+      query: `UPDATE media_placements SET sort_order = (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM media_placements WHERE organization_id = ? AND owner_type = ? AND owner_id = ? AND slot = ?) WHERE organization_id = ? AND owner_type = ? AND owner_id = ? AND slot = ? AND asset_id = ?`,
       params: [...scopeParams, ...scopeParams, assetId],
     })
   })
   order.forEach((assetId, index) => {
     queries.push({
-      query: `UPDATE media_placements SET sort_order = ?, updated_at = ? WHERE organization_id = ? AND site_id = ? AND owner_type = ? AND owner_id = ? AND slot = ? AND asset_id = ?`,
+      query: `UPDATE media_placements SET sort_order = ?, updated_at = ? WHERE organization_id = ? AND owner_type = ? AND owner_id = ? AND slot = ? AND asset_id = ?`,
       params: [index, new Date().toISOString(), ...scopeParams, assetId],
     })
   })
@@ -410,29 +398,28 @@ export async function reorderMediaPlacements(db: DbClient, input: {
 
 function buildMembershipGuardQuery(input: {
   organizationId: string
-  siteId: string
   placement: MediaPlacementKey
   expectedAssetIds: string[]
 }): BatchQuery {
-  const scopeParams = [input.organizationId, input.siteId, input.placement.owner_type, input.placement.owner_id, input.placement.slot]
+  const scopeParams = [input.organizationId, input.placement.owner_type, input.placement.owner_id, input.placement.slot]
   const expectedAssetIds = d1JsonStringSet(input.expectedAssetIds)
   const values = `SELECT value AS asset_id FROM json_each(?)`
   const now = new Date().toISOString()
   return {
-    query: `INSERT INTO media_placements (id, organization_id, site_id, owner_type, owner_id, slot, asset_id, sort_order, status, created_at, updated_at)
+    query: `INSERT INTO media_placements (id, organization_id, owner_type, owner_id, slot, asset_id, sort_order, status, created_at, updated_at)
       SELECT ?, ?, ?, ?, ?, ?, '__reorder_guard__', 0, '__reorder_guard__', ?, ?
        WHERE EXISTS (
-         SELECT asset_id FROM media_placements WHERE organization_id = ? AND site_id = ? AND owner_type = ? AND owner_id = ? AND slot = ?
+         SELECT asset_id FROM media_placements WHERE organization_id = ? AND owner_type = ? AND owner_id = ? AND slot = ?
          EXCEPT
          ${values}
        )
        OR EXISTS (
          ${values}
          EXCEPT
-         SELECT asset_id FROM media_placements WHERE organization_id = ? AND site_id = ? AND owner_type = ? AND owner_id = ? AND slot = ?
+         SELECT asset_id FROM media_placements WHERE organization_id = ? AND owner_type = ? AND owner_id = ? AND slot = ?
        )`,
     params: [
-      crypto.randomUUID(), input.organizationId, input.siteId, input.placement.owner_type, input.placement.owner_id, input.placement.slot, now, now,
+      crypto.randomUUID(), input.organizationId, input.placement.owner_type, input.placement.owner_id, input.placement.slot, now, now,
       ...scopeParams, expectedAssetIds,
       expectedAssetIds, ...scopeParams,
     ],
@@ -441,7 +428,6 @@ function buildMembershipGuardQuery(input: {
 
 async function requirePlacementOwner(db: DbClient, input: {
   organizationId: string
-  siteId: string
   placement: MediaPlacementKey
 }): Promise<string | null> {
   const owner = mediaPlacementOwnerQuery({ ...input, ownerType: input.placement.owner_type, ownerId: input.placement.owner_id })
