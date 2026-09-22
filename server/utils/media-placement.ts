@@ -84,7 +84,7 @@ function isUniqueConstraintError(error: unknown): boolean {
 }
 
 function allowedKindsFor(placement: MediaPlacementKey): Array<'image' | 'video' | 'file'> {
-  return placement.owner_type === 'site' && placement.slot === 'compliance_document' ? ['file'] : ['image', 'video']
+  return placement.owner_type === 'organization' && placement.slot === 'compliance_document' ? ['file'] : ['image', 'video']
 }
 
 async function requirePostMediaAllowed(db: DbClient, input: PlacementAuthInput): Promise<void> {
@@ -127,9 +127,11 @@ async function authorizePlacementWrite(db: DbClient, input: PlacementAuthInput):
 // replace their local list wholesale rather than trying to reconcile it
 // against whatever they sent — the response, not the request, is the truth.
 async function canonicalPlacementState(db: DbClient, input: {
+  organizationId: string
   placement: MediaPlacementKey
 }) {
   const items = (await getMediaPlacements(db, {
+    organizationId: input.organizationId,
     ownerType: input.placement.owner_type,
     ownerIds: [input.placement.owner_id],
     slot: input.placement.slot,

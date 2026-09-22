@@ -6,7 +6,6 @@ import { loadDashboardOrganizationAnalytics } from '~/server/utils/dashboard-org
 export default defineHandler(async (event) => {
   const query = getQuery(event)
   return jsonResponse(await loadDashboardOrganizationAnalytics(event, {
-    organizationId: typeof query.organizationId === 'string' && query.organizationId ? query.organizationId : undefined,
     startDate: typeof query.startDate === 'string' ? query.startDate : undefined,
     endDate: typeof query.endDate === 'string' ? query.endDate : undefined,
   }))

@@ -4,7 +4,7 @@ import { requireRequestedLocationAccess, requireRequestedOrganizationWideAccess 
 
 export default defineHandler(async (event) => {
   const query = getQuery(event) as { organizationId?: string; locationId?: string }
-  const { env, site } = query.locationId
+  const { env, organization } = query.locationId
     ? await requireRequestedLocationAccess(event, query.locationId, query.organizationId)
     : await requireRequestedOrganizationWideAccess(event, query.organizationId)
 
