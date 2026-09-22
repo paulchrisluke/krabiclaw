@@ -606,9 +606,9 @@ export const prices = sqliteTable("prices", {
 	check("prices_recurring_check", sql`(type = 'recurring' AND recurring_interval IS NOT NULL AND recurring_interval_count IS NOT NULL AND recurring_interval_count > 0) OR (type <> 'recurring' AND recurring_interval IS NULL AND recurring_interval_count IS NULL)`),
 ]);
 
-// Which sites publish a Product.
-// Row meaning: this site carries this Product in its catalog, published or not.
-// Site publication is independent of products.active and of
+// Which organizations publish a Product.
+// Row meaning: this organization carries this Product in its catalog, published or not.
+// Organization publication is independent of products.active and of
 //   product_locations.published. All three are distinct, separately tested
 //   states; none implies another.
 // Null semantics: no row means the site does not carry the Product at all —
@@ -1680,7 +1680,7 @@ export const session = sqliteTable("session", {
 
 
 
-export const site_redirects = sqliteTable("site_redirects", {
+export const organization_redirects = sqliteTable("organization_redirects", {
 	id: text().primaryKey(),
 	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
 	locale: text().notNull(),
@@ -1695,17 +1695,17 @@ export const site_redirects = sqliteTable("site_redirects", {
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 }, (table) => [
-	check("site_redirects_instants_check", sql`(created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)`),
-	unique("site_redirects_org_locale_from_path_unique").on(table.locale, table.from_path),
-	check("site_redirects_from_path_check", sql`from_path LIKE '/%'`),
-	check("site_redirects_redirect_to_path_check", sql`behavior != 'redirect' OR to_path IS NOT NULL`),
-	check("site_redirects_owner_check", sql`(owner_type IS NULL AND owner_id IS NULL) OR (owner_type IS NOT NULL AND owner_id IS NOT NULL)`),
-	index("site_redirects_organization_id_idx").on(table.organization_id),
-	index("site_redirects_owner_idx").on(table.owner_type, table.owner_id),
+	check("organization_redirects_instants_check", sql`(created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)`),
+	unique("organization_redirects_org_locale_from_path_unique").on(table.organization_id, table.locale, table.from_path),
+	check("organization_redirects_from_path_check", sql`from_path LIKE '/%'`),
+	check("organization_redirects_redirect_to_path_check", sql`behavior != 'redirect' OR to_path IS NOT NULL`),
+	check("organization_redirects_owner_check", sql`(owner_type IS NULL AND owner_id IS NULL) OR (owner_type IS NOT NULL AND owner_id IS NOT NULL)`),
+	index("organization_redirects_organization_id_idx").on(table.organization_id),
+	index("organization_redirects_owner_idx").on(table.owner_type, table.owner_id),
 ]);
 
 
-export const site_domains = sqliteTable("site_domains", {
+export const organization_domains = sqliteTable("organization_domains", {
 	id: text().primaryKey(),
 	organization_id: text().references(() => organization.id, { onDelete: "cascade" } ),
 	former_organization_id: text(),
@@ -1751,11 +1751,11 @@ export const site_domains = sqliteTable("site_domains", {
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 }, (table) => [
-	check("site_domains_instants_check", sql`(retired_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', retired_at, '+0 days') IS retired_at) AND (reconciliation_expires_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', reconciliation_expires_at, '+0 days') IS reconciliation_expires_at) AND (dns_last_resolved_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', dns_last_resolved_at, '+0 days') IS dns_last_resolved_at) AND (last_synced_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', last_synced_at, '+0 days') IS last_synced_at) AND (next_check_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', next_check_at, '+0 days') IS next_check_at) AND (activated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', activated_at, '+0 days') IS activated_at) AND (certificate_last_active_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', certificate_last_active_at, '+0 days') IS certificate_last_active_at) AND (renewal_issue_started_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', renewal_issue_started_at, '+0 days') IS renewal_issue_started_at) AND (renewal_notification_sent_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', renewal_notification_sent_at, '+0 days') IS renewal_notification_sent_at) AND (certificate_expires_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', certificate_expires_at, '+0 days') IS certificate_expires_at) AND (created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)`),
+	check("organization_domains_instants_check", sql`(retired_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', retired_at, '+0 days') IS retired_at) AND (reconciliation_expires_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', reconciliation_expires_at, '+0 days') IS reconciliation_expires_at) AND (dns_last_resolved_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', dns_last_resolved_at, '+0 days') IS dns_last_resolved_at) AND (last_synced_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', last_synced_at, '+0 days') IS last_synced_at) AND (next_check_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', next_check_at, '+0 days') IS next_check_at) AND (activated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', activated_at, '+0 days') IS activated_at) AND (certificate_last_active_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', certificate_last_active_at, '+0 days') IS certificate_last_active_at) AND (renewal_issue_started_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', renewal_issue_started_at, '+0 days') IS renewal_issue_started_at) AND (renewal_notification_sent_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', renewal_notification_sent_at, '+0 days') IS renewal_notification_sent_at) AND (certificate_expires_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', certificate_expires_at, '+0 days') IS certificate_expires_at) AND (created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)`),
 	check("organization_domains_owner_check", sql`(status = 'retired' AND type = 'subdomain' AND role = 'secondary' AND organization_id IS NULL AND former_organization_id IS NOT NULL AND retired_at IS NOT NULL) OR (status <> 'retired' AND organization_id IS NOT NULL AND former_organization_id IS NULL AND retired_at IS NULL AND successor_domain IS NULL)`),
-	check("site_domains_desired_state_check", sql`desired_state IN ('active', 'deleted') AND (desired_state <> 'deleted' OR type = 'custom')`),
-	check("site_domains_lease_check", sql`(reconciliation_token IS NULL) = (reconciliation_expires_at IS NULL)`),
-	check("site_domains_metadata_check", sql`metadata IS NULL OR (json_valid(metadata))`),
+	check("organization_domains_desired_state_check", sql`desired_state IN ('active', 'deleted') AND (desired_state <> 'deleted' OR type = 'custom')`),
+	check("organization_domains_lease_check", sql`(reconciliation_token IS NULL) = (reconciliation_expires_at IS NULL)`),
+	check("organization_domains_metadata_check", sql`metadata IS NULL OR (json_valid(metadata))`),
 	index("organization_domains_org_idx").on(table.organization_id),
 	uniqueIndex("idx_organization_domains_one_canonical").on(table.organization_id).where(sql`role = 'canonical' AND status = 'active'`),
 	uniqueIndex("organization_domains_one_active_subdomain").on(table.organization_id).where(sql`type = 'subdomain' AND status = 'active'`),
@@ -1764,7 +1764,7 @@ export const site_domains = sqliteTable("site_domains", {
 
 
 
-export const site_locales = sqliteTable("site_locales", {
+export const organization_locales = sqliteTable("organization_locales", {
 	id: text().primaryKey(),
 	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
 	locale: text().notNull(),
@@ -1776,11 +1776,11 @@ export const site_locales = sqliteTable("site_locales", {
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 }, (table) => [
-	check("site_locales_instants_check", sql`(activated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', activated_at, '+0 days') IS activated_at) AND (disabled_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', disabled_at, '+0 days') IS disabled_at) AND (created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)`),
-	unique("site_locales_organization_id_locale_unique").on(table.organization_id, table.locale),
-	uniqueIndex("idx_site_locales_one_source_per_org").on(table.organization_id).where(sql`is_source = 1`),
-	check("site_locales_status_check", sql`status IN ('published', 'disabled') AND (is_source = 0 OR status = 'published')`),
-	check("site_locales_english_source_check", sql`locale <> 'en' OR (is_source = 1 AND status = 'published')`),
+	check("organization_locales_instants_check", sql`(activated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', activated_at, '+0 days') IS activated_at) AND (disabled_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', disabled_at, '+0 days') IS disabled_at) AND (created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)`),
+	unique("organization_locales_organization_id_locale_unique").on(table.organization_id, table.locale),
+	uniqueIndex("idx_organization_locales_one_source_per_org").on(table.organization_id).where(sql`is_source = 1`),
+	check("organization_locales_status_check", sql`status IN ('published', 'disabled') AND (is_source = 0 OR status = 'published')`),
+	check("organization_locales_english_source_check", sql`locale <> 'en' OR (is_source = 1 AND status = 'published')`),
 ]);
 
 export const mcp_tool_call_events = sqliteTable("mcp_tool_call_events", {
@@ -2000,13 +2000,13 @@ export const content_documents = sqliteTable("content_documents", {
 	// that still has a canonical page is refused; the domain operation unbinds
 	// or deletes the page first, explicitly.
 	foreignKey({ columns: [table.organization_id, table.product_id], foreignColumns: [products.organization_id, products.id], name: "content_documents_product_scope_fk" }).onDelete("restrict"),
-	// At most one canonical product page per site per product. Scoped to root
-	// rows so locale representations are unaffected, and per site so two sites
-	// publishing one Product each get their own canonical page.
+	// At most one canonical product page per organization per product. Scoped to
+	// root rows so locale representations are unaffected, and per organization so
+	// two organizations publishing one Product each get their own canonical page.
 	uniqueIndex("content_documents_product_root_unique").on(table.organization_id, table.product_id).where(sql`row_role = 'root' AND product_id IS NOT NULL`),
 	unique("content_documents_scope_role_unique").on(table.organization_id, table.id, table.row_role, table.kind),
 	foreignKey({ columns: [table.organization_id, table.root_id, table.root_role, table.kind], foreignColumns: [table.organization_id, table.id, table.row_role, table.kind], name: "content_documents_root_scope_fk" }).onDelete("cascade"),
-	foreignKey({ columns: [table.organization_id, table.locale], foreignColumns: [site_locales.organization_id, site_locales.locale], name: "content_documents_locale_scope_fk" }).onDelete("cascade"),
+	foreignKey({ columns: [table.organization_id, table.locale], foreignColumns: [organization_locales.organization_id, organization_locales.locale], name: "content_documents_locale_scope_fk" }).onDelete("cascade"),
 	uniqueIndex("content_documents_root_locale_unique").on(table.root_id, table.locale).where(sql`row_role = 'representation'`),
 	uniqueIndex("content_documents_route_unique").on(table.organization_id, table.locale, table.path).where(sql`row_role IN ('root','representation') AND path IS NOT NULL`),
 	uniqueIndex("content_documents_slug_unique").on(table.organization_id, table.kind, table.locale, table.slug).where(sql`row_role IN ('root','representation') AND slug IS NOT NULL`),
@@ -2056,7 +2056,7 @@ export const resource_localizations = sqliteTable("resource_localizations", {
 	check("resource_localizations_instants_check", sql`(created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)`),
 	foreignKey({
 		columns: [table.organization_id, table.locale],
-		foreignColumns: [site_locales.organization_id, site_locales.locale],
+		foreignColumns: [organization_locales.organization_id, organization_locales.locale],
 		name: "resource_localizations_site_locale_fk",
 	}).onDelete("cascade"),
 	unique("resource_localizations_org_resource_locale_unique").on(

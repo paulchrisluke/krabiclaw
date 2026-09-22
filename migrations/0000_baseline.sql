@@ -332,7 +332,7 @@ CREATE TABLE `content_documents` (
 	FOREIGN KEY (`organization_id`,`location_id`) REFERENCES `business_locations`(`organization_id`,`id`) ON UPDATE no action ON DELETE cascade,
 	FOREIGN KEY (`organization_id`,`product_id`) REFERENCES `products`(`organization_id`,`id`) ON UPDATE no action ON DELETE restrict,
 	FOREIGN KEY (`organization_id`,`root_id`,`root_role`,`kind`) REFERENCES `content_documents`(`organization_id`,`id`,`row_role`,`kind`) ON UPDATE no action ON DELETE cascade,
-	FOREIGN KEY (`organization_id`,`locale`) REFERENCES `site_locales`(`organization_id`,`locale`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`organization_id`,`locale`) REFERENCES `organization_locales`(`organization_id`,`locale`) ON UPDATE no action ON DELETE cascade,
 	CONSTRAINT "content_documents_instants_check" CHECK((published_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', published_at, '+0 days') IS published_at) AND (first_published_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', first_published_at, '+0 days') IS first_published_at) AND (scheduled_for IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', scheduled_for, '+0 days') IS scheduled_for) AND (created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)),
 	CONSTRAINT "content_documents_metadata_check" CHECK(json_valid(metadata_json) AND json_type(metadata_json) IS 'object'),
 	CONSTRAINT "content_documents_role_check" CHECK((row_role = 'root' AND root_id IS NULL AND root_role IS NULL AND locale = 'en') OR (row_role = 'representation' AND root_id IS NOT NULL AND root_id <> id AND root_role = 'root' AND locale IS NOT NULL AND locale <> 'en' AND product_id IS NULL AND location_id IS NULL AND scope_path IS NULL AND status IS NULL AND visibility IS NULL AND source IS NULL AND author_id IS NULL AND published_at IS NULL AND first_published_at IS NULL AND scheduled_for IS NULL)),
@@ -872,6 +872,108 @@ CREATE UNIQUE INDEX `organization_slug_unique` ON `organization` (`slug`);--> st
 CREATE UNIQUE INDEX `organization_stripeCustomerId_unique` ON `organization` (`stripeCustomerId`);--> statement-breakpoint
 CREATE UNIQUE INDEX `organization_subdomain_unique` ON `organization` (`subdomain`);--> statement-breakpoint
 CREATE INDEX `organization_created_at_idx` ON `organization` (`createdAt`);--> statement-breakpoint
+CREATE TABLE `organization_domains` (
+	`id` text PRIMARY KEY NOT NULL,
+	`organization_id` text,
+	`former_organization_id` text,
+	`successor_domain` text,
+	`retired_at` text,
+	`reconciliation_token` text,
+	`reconciliation_expires_at` text,
+	`desired_state` text DEFAULT 'active' NOT NULL,
+	`domain` text NOT NULL,
+	`type` text NOT NULL,
+	`role` text DEFAULT 'secondary' NOT NULL,
+	`status` text DEFAULT 'pending' NOT NULL,
+	`cloudflare_hostname_id` text,
+	`cloudflare_hostname_status` text,
+	`cloudflare_ssl_status` text,
+	`ownership_validation_name` text,
+	`ownership_validation_type` text,
+	`ownership_validation_value` text,
+	`ssl_validation_name` text,
+	`ssl_validation_type` text,
+	`ssl_validation_value` text,
+	`ssl_validation_name_2` text,
+	`ssl_validation_type_2` text,
+	`ssl_validation_value_2` text,
+	`validation_strategy` text DEFAULT 'http_auto' NOT NULL,
+	`dcv_delegation_name` text,
+	`dcv_delegation_type` text,
+	`dcv_delegation_value` text,
+	`dns_target` text,
+	`dns_status` text DEFAULT 'pending' NOT NULL,
+	`dns_last_resolved_at` text,
+	`dns_resolved_target` text,
+	`last_synced_at` text,
+	`next_check_at` text,
+	`retry_count` integer DEFAULT 0 NOT NULL,
+	`activated_at` text,
+	`certificate_last_active_at` text,
+	`renewal_issue_started_at` text,
+	`renewal_notification_sent_at` text,
+	`certificate_expires_at` text,
+	`error_message` text,
+	`metadata` text,
+	`created_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
+	`updated_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
+	FOREIGN KEY (`organization_id`) REFERENCES `organization`(`id`) ON UPDATE no action ON DELETE cascade,
+	CONSTRAINT "organization_domains_instants_check" CHECK((retired_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', retired_at, '+0 days') IS retired_at) AND (reconciliation_expires_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', reconciliation_expires_at, '+0 days') IS reconciliation_expires_at) AND (dns_last_resolved_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', dns_last_resolved_at, '+0 days') IS dns_last_resolved_at) AND (last_synced_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', last_synced_at, '+0 days') IS last_synced_at) AND (next_check_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', next_check_at, '+0 days') IS next_check_at) AND (activated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', activated_at, '+0 days') IS activated_at) AND (certificate_last_active_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', certificate_last_active_at, '+0 days') IS certificate_last_active_at) AND (renewal_issue_started_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', renewal_issue_started_at, '+0 days') IS renewal_issue_started_at) AND (renewal_notification_sent_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', renewal_notification_sent_at, '+0 days') IS renewal_notification_sent_at) AND (certificate_expires_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', certificate_expires_at, '+0 days') IS certificate_expires_at) AND (created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)),
+	CONSTRAINT "organization_domains_owner_check" CHECK((status = 'retired' AND type = 'subdomain' AND role = 'secondary' AND organization_id IS NULL AND former_organization_id IS NOT NULL AND retired_at IS NOT NULL) OR (status <> 'retired' AND organization_id IS NOT NULL AND former_organization_id IS NULL AND retired_at IS NULL AND successor_domain IS NULL)),
+	CONSTRAINT "organization_domains_desired_state_check" CHECK(desired_state IN ('active', 'deleted') AND (desired_state <> 'deleted' OR type = 'custom')),
+	CONSTRAINT "organization_domains_lease_check" CHECK((reconciliation_token IS NULL) = (reconciliation_expires_at IS NULL)),
+	CONSTRAINT "organization_domains_metadata_check" CHECK(metadata IS NULL OR (json_valid(metadata)))
+);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `organization_domains_domain_unique` ON `organization_domains` (`domain`);--> statement-breakpoint
+CREATE UNIQUE INDEX `organization_domains_cloudflare_hostname_id_unique` ON `organization_domains` (`cloudflare_hostname_id`);--> statement-breakpoint
+CREATE INDEX `organization_domains_org_idx` ON `organization_domains` (`organization_id`);--> statement-breakpoint
+CREATE UNIQUE INDEX `idx_organization_domains_one_canonical` ON `organization_domains` (`organization_id`) WHERE role = 'canonical' AND status = 'active';--> statement-breakpoint
+CREATE UNIQUE INDEX `organization_domains_one_active_subdomain` ON `organization_domains` (`organization_id`) WHERE type = 'subdomain' AND status = 'active';--> statement-breakpoint
+CREATE INDEX `idx_organization_domains_reconcile` ON `organization_domains` (`status`,`next_check_at`);--> statement-breakpoint
+CREATE TABLE `organization_locales` (
+	`id` text PRIMARY KEY NOT NULL,
+	`organization_id` text NOT NULL,
+	`locale` text NOT NULL,
+	`label` text,
+	`is_source` integer DEFAULT 0 NOT NULL,
+	`status` text DEFAULT 'disabled' NOT NULL,
+	`activated_at` text,
+	`disabled_at` text,
+	`created_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
+	`updated_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
+	FOREIGN KEY (`organization_id`) REFERENCES `organization`(`id`) ON UPDATE no action ON DELETE cascade,
+	CONSTRAINT "organization_locales_instants_check" CHECK((activated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', activated_at, '+0 days') IS activated_at) AND (disabled_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', disabled_at, '+0 days') IS disabled_at) AND (created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)),
+	CONSTRAINT "organization_locales_status_check" CHECK(status IN ('published', 'disabled') AND (is_source = 0 OR status = 'published')),
+	CONSTRAINT "organization_locales_english_source_check" CHECK(locale <> 'en' OR (is_source = 1 AND status = 'published'))
+);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `idx_organization_locales_one_source_per_org` ON `organization_locales` (`organization_id`) WHERE is_source = 1;--> statement-breakpoint
+CREATE UNIQUE INDEX `organization_locales_organization_id_locale_unique` ON `organization_locales` (`organization_id`,`locale`);--> statement-breakpoint
+CREATE TABLE `organization_redirects` (
+	`id` text PRIMARY KEY NOT NULL,
+	`organization_id` text NOT NULL,
+	`locale` text NOT NULL,
+	`owner_type` text,
+	`owner_id` text,
+	`from_path` text NOT NULL,
+	`to_path` text,
+	`status_code` integer DEFAULT 301 NOT NULL,
+	`behavior` text DEFAULT 'redirect' NOT NULL,
+	`reason` text,
+	`source` text DEFAULT 'manual' NOT NULL,
+	`created_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
+	`updated_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
+	FOREIGN KEY (`organization_id`) REFERENCES `organization`(`id`) ON UPDATE no action ON DELETE cascade,
+	CONSTRAINT "organization_redirects_instants_check" CHECK((created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)),
+	CONSTRAINT "organization_redirects_from_path_check" CHECK(from_path LIKE '/%'),
+	CONSTRAINT "organization_redirects_redirect_to_path_check" CHECK(behavior != 'redirect' OR to_path IS NOT NULL),
+	CONSTRAINT "organization_redirects_owner_check" CHECK((owner_type IS NULL AND owner_id IS NULL) OR (owner_type IS NOT NULL AND owner_id IS NOT NULL))
+);
+--> statement-breakpoint
+CREATE INDEX `organization_redirects_organization_id_idx` ON `organization_redirects` (`organization_id`);--> statement-breakpoint
+CREATE INDEX `organization_redirects_owner_idx` ON `organization_redirects` (`owner_type`,`owner_id`);--> statement-breakpoint
+CREATE UNIQUE INDEX `organization_redirects_org_locale_from_path_unique` ON `organization_redirects` (`organization_id`,`locale`,`from_path`);--> statement-breakpoint
 CREATE TABLE `prices` (
 	`id` text PRIMARY KEY NOT NULL,
 	`organization_id` text NOT NULL,
@@ -1249,7 +1351,7 @@ CREATE TABLE `resource_localizations` (
 	`created_by_user_id` text NOT NULL,
 	`updated_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
 	`updated_by_user_id` text NOT NULL,
-	FOREIGN KEY (`organization_id`,`locale`) REFERENCES `site_locales`(`organization_id`,`locale`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`organization_id`,`locale`) REFERENCES `organization_locales`(`organization_id`,`locale`) ON UPDATE no action ON DELETE cascade,
 	CONSTRAINT "resource_localizations_instants_check" CHECK((created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)),
 	CONSTRAINT "resource_localizations_values_json_check" CHECK(json_valid(values_json) AND json_type(values_json) = 'object'),
 	CONSTRAINT "resource_localizations_non_english_check" CHECK(locale <> 'en'),
@@ -1361,108 +1463,6 @@ CREATE TABLE `session` (
 --> statement-breakpoint
 CREATE UNIQUE INDEX `session_token_unique` ON `session` (`token`);--> statement-breakpoint
 CREATE INDEX `session_userId_idx` ON `session` (`userId`);--> statement-breakpoint
-CREATE TABLE `site_domains` (
-	`id` text PRIMARY KEY NOT NULL,
-	`organization_id` text,
-	`former_organization_id` text,
-	`successor_domain` text,
-	`retired_at` text,
-	`reconciliation_token` text,
-	`reconciliation_expires_at` text,
-	`desired_state` text DEFAULT 'active' NOT NULL,
-	`domain` text NOT NULL,
-	`type` text NOT NULL,
-	`role` text DEFAULT 'secondary' NOT NULL,
-	`status` text DEFAULT 'pending' NOT NULL,
-	`cloudflare_hostname_id` text,
-	`cloudflare_hostname_status` text,
-	`cloudflare_ssl_status` text,
-	`ownership_validation_name` text,
-	`ownership_validation_type` text,
-	`ownership_validation_value` text,
-	`ssl_validation_name` text,
-	`ssl_validation_type` text,
-	`ssl_validation_value` text,
-	`ssl_validation_name_2` text,
-	`ssl_validation_type_2` text,
-	`ssl_validation_value_2` text,
-	`validation_strategy` text DEFAULT 'http_auto' NOT NULL,
-	`dcv_delegation_name` text,
-	`dcv_delegation_type` text,
-	`dcv_delegation_value` text,
-	`dns_target` text,
-	`dns_status` text DEFAULT 'pending' NOT NULL,
-	`dns_last_resolved_at` text,
-	`dns_resolved_target` text,
-	`last_synced_at` text,
-	`next_check_at` text,
-	`retry_count` integer DEFAULT 0 NOT NULL,
-	`activated_at` text,
-	`certificate_last_active_at` text,
-	`renewal_issue_started_at` text,
-	`renewal_notification_sent_at` text,
-	`certificate_expires_at` text,
-	`error_message` text,
-	`metadata` text,
-	`created_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
-	`updated_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
-	FOREIGN KEY (`organization_id`) REFERENCES `organization`(`id`) ON UPDATE no action ON DELETE cascade,
-	CONSTRAINT "site_domains_instants_check" CHECK((retired_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', retired_at, '+0 days') IS retired_at) AND (reconciliation_expires_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', reconciliation_expires_at, '+0 days') IS reconciliation_expires_at) AND (dns_last_resolved_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', dns_last_resolved_at, '+0 days') IS dns_last_resolved_at) AND (last_synced_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', last_synced_at, '+0 days') IS last_synced_at) AND (next_check_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', next_check_at, '+0 days') IS next_check_at) AND (activated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', activated_at, '+0 days') IS activated_at) AND (certificate_last_active_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', certificate_last_active_at, '+0 days') IS certificate_last_active_at) AND (renewal_issue_started_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', renewal_issue_started_at, '+0 days') IS renewal_issue_started_at) AND (renewal_notification_sent_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', renewal_notification_sent_at, '+0 days') IS renewal_notification_sent_at) AND (certificate_expires_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', certificate_expires_at, '+0 days') IS certificate_expires_at) AND (created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)),
-	CONSTRAINT "organization_domains_owner_check" CHECK((status = 'retired' AND type = 'subdomain' AND role = 'secondary' AND organization_id IS NULL AND former_organization_id IS NOT NULL AND retired_at IS NOT NULL) OR (status <> 'retired' AND organization_id IS NOT NULL AND former_organization_id IS NULL AND retired_at IS NULL AND successor_domain IS NULL)),
-	CONSTRAINT "site_domains_desired_state_check" CHECK(desired_state IN ('active', 'deleted') AND (desired_state <> 'deleted' OR type = 'custom')),
-	CONSTRAINT "site_domains_lease_check" CHECK((reconciliation_token IS NULL) = (reconciliation_expires_at IS NULL)),
-	CONSTRAINT "site_domains_metadata_check" CHECK(metadata IS NULL OR (json_valid(metadata)))
-);
---> statement-breakpoint
-CREATE UNIQUE INDEX `site_domains_domain_unique` ON `site_domains` (`domain`);--> statement-breakpoint
-CREATE UNIQUE INDEX `site_domains_cloudflare_hostname_id_unique` ON `site_domains` (`cloudflare_hostname_id`);--> statement-breakpoint
-CREATE INDEX `organization_domains_org_idx` ON `site_domains` (`organization_id`);--> statement-breakpoint
-CREATE UNIQUE INDEX `idx_organization_domains_one_canonical` ON `site_domains` (`organization_id`) WHERE role = 'canonical' AND status = 'active';--> statement-breakpoint
-CREATE UNIQUE INDEX `organization_domains_one_active_subdomain` ON `site_domains` (`organization_id`) WHERE type = 'subdomain' AND status = 'active';--> statement-breakpoint
-CREATE INDEX `idx_organization_domains_reconcile` ON `site_domains` (`status`,`next_check_at`);--> statement-breakpoint
-CREATE TABLE `site_locales` (
-	`id` text PRIMARY KEY NOT NULL,
-	`organization_id` text NOT NULL,
-	`locale` text NOT NULL,
-	`label` text,
-	`is_source` integer DEFAULT 0 NOT NULL,
-	`status` text DEFAULT 'disabled' NOT NULL,
-	`activated_at` text,
-	`disabled_at` text,
-	`created_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
-	`updated_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
-	FOREIGN KEY (`organization_id`) REFERENCES `organization`(`id`) ON UPDATE no action ON DELETE cascade,
-	CONSTRAINT "site_locales_instants_check" CHECK((activated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', activated_at, '+0 days') IS activated_at) AND (disabled_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', disabled_at, '+0 days') IS disabled_at) AND (created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)),
-	CONSTRAINT "site_locales_status_check" CHECK(status IN ('published', 'disabled') AND (is_source = 0 OR status = 'published')),
-	CONSTRAINT "site_locales_english_source_check" CHECK(locale <> 'en' OR (is_source = 1 AND status = 'published'))
-);
---> statement-breakpoint
-CREATE UNIQUE INDEX `idx_site_locales_one_source_per_org` ON `site_locales` (`organization_id`) WHERE is_source = 1;--> statement-breakpoint
-CREATE UNIQUE INDEX `site_locales_organization_id_locale_unique` ON `site_locales` (`organization_id`,`locale`);--> statement-breakpoint
-CREATE TABLE `site_redirects` (
-	`id` text PRIMARY KEY NOT NULL,
-	`organization_id` text NOT NULL,
-	`locale` text NOT NULL,
-	`owner_type` text,
-	`owner_id` text,
-	`from_path` text NOT NULL,
-	`to_path` text,
-	`status_code` integer DEFAULT 301 NOT NULL,
-	`behavior` text DEFAULT 'redirect' NOT NULL,
-	`reason` text,
-	`source` text DEFAULT 'manual' NOT NULL,
-	`created_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
-	`updated_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
-	FOREIGN KEY (`organization_id`) REFERENCES `organization`(`id`) ON UPDATE no action ON DELETE cascade,
-	CONSTRAINT "site_redirects_instants_check" CHECK((created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)),
-	CONSTRAINT "site_redirects_from_path_check" CHECK(from_path LIKE '/%'),
-	CONSTRAINT "site_redirects_redirect_to_path_check" CHECK(behavior != 'redirect' OR to_path IS NOT NULL),
-	CONSTRAINT "site_redirects_owner_check" CHECK((owner_type IS NULL AND owner_id IS NULL) OR (owner_type IS NOT NULL AND owner_id IS NOT NULL))
-);
---> statement-breakpoint
-CREATE INDEX `site_redirects_organization_id_idx` ON `site_redirects` (`organization_id`);--> statement-breakpoint
-CREATE INDEX `site_redirects_owner_idx` ON `site_redirects` (`owner_type`,`owner_id`);--> statement-breakpoint
-CREATE UNIQUE INDEX `site_redirects_org_locale_from_path_unique` ON `site_redirects` (`locale`,`from_path`);--> statement-breakpoint
 CREATE TABLE `stripe_catalog_mappings` (
 	`id` text PRIMARY KEY NOT NULL,
 	`organization_id` text NOT NULL,
