@@ -1443,22 +1443,99 @@ export const oauthRefreshToken = sqliteTable("oauthRefreshToken", {
 	confirmation: text(),
 });
 
+/**
+ * The business. One record, one name, one handle, one mark.
+ *
+ * This used to be two: an `organization` holding identity and membership, and a
+ * `sites` row beside it holding everything the business actually is. The two
+ * disagreed — `organization.name` read "Pottery House Owner" while the site
+ * rendered "Pottery House Krabi" — and the handle lived in three columns across
+ * them. `sites` is gone and its configuration is here, as Better Auth
+ * `additionalFields` (see organizationOptions in server/utils/auth.ts), which is
+ * the plugin's own extension point rather than a table bolted alongside it.
+ *
+ * `name` carries what `sites.brand_name` carried: the name the business's own
+ * website renders in `og:site_name`. There is no separate brand name.
+ */
 export const organization = sqliteTable("organization", {
 	id: text().primaryKey(),
 	name: text().notNull(),
 	slug: text().notNull().unique(),
-	logo: text(),
 	metadata: text(),
 	// Better Auth Stripe plugin organization customer field.
 	stripeCustomerId: text().unique(),
-	// Set when an owner asks for the organization to be deleted. Its sites keep
+	// Set when an owner asks for the organization to be deleted. It keeps
 	// serving through the grace period so the request can be cancelled; the
 	// deletion-sweep task deletes the organization once this instant has passed,
-	// and the foreign-key cascade takes its sites, domains and content with it.
+	// and the foreign-key cascade takes its domains and content with it.
 	deletionScheduledAt: integer({ mode: "timestamp" }),
 	createdAt: integer({ mode: "timestamp" }).default(sql`(unixepoch())`).notNull(),
-}, () => [
+
+	// ── Formerly `sites`. ────────────────────────────────────────────────────
+	// `sites.logo` never existed; the mark is the `logo` media placement. Better
+	// Auth's own `organization.logo` column is gone with it — nothing ever wrote
+	// it and it was NULL for every organization.
+	settings_json: text({ mode: "json" }).$type<SiteSettings>().default({ config: { default_timezone: 'UTC' } }).notNull(),
+	integrations_json: text({ mode: "json" }).$type<SiteIntegrations>().default({}).notNull(),
+	theme_id: text().default("saya-theme-v1").notNull(),
+	subdomain: text().unique(),
+	brand_description: text(),
+	contact_email: text(),
+	contact_phone: text(),
+	default_currency: text(),
+	status: text().default("active").notNull(),
+	onboarding_status: text().default("pending").notNull(),
+	url_structure: text().default("location_subdirectories").notNull(),
+	vertical: text().default("restaurant").notNull(),
+	last_published_at: text(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	updated_by: text(),
+	seo_title: text(),
+	seo_description: text(),
+	canonical_url: text(),
+	robots: text(),
+	// Brand-level social profiles, rendered in the site footer only. Distinct from a location's
+	// own facebook_url/instagram_url/tiktok_url on business_locations — the two never merge.
+	social_facebook_url: text(),
+	social_instagram_url: text(),
+	social_tiktok_url: text(),
+	// JSON { enabled?: ProductFeature[]; disabled?: ProductFeature[] } delta (config/cms-registry.ts)
+	// layered additively/subtractively on top of the vertical's own module defaults — NULL means
+	// "use vertical defaults as-is." Only real business modules (products/ordering/reservations/
+	// experiences/services) are ever stored here; content managers (blog/qa/reviews/posts/photos/
+	// media) are always-on and never appear in this column.
+	feature_overrides: text(),
+	analytics_data_start_at: text(),
+}, (table) => [
 	check("organization_slug_required_check", sql`trim(slug) <> ''`),
+	check("organization_instants_check", sql`(last_published_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', last_published_at, '+0 days') IS last_published_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at) AND (analytics_data_start_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', analytics_data_start_at, '+0 days') IS analytics_data_start_at)`),
+	check("organization_settings_json_check", sql`json_valid(settings_json) AND json_type(settings_json) IS 'object'`),
+	check("organization_integrations_json_check", sql`json_valid(integrations_json) AND json_type(integrations_json) IS 'object'`),
+	check("organization_config_brand_color_check", sql`json_type(settings_json, '$.config.brand_color') IS NULL OR json_type(settings_json, '$.config.brand_color') IS 'text'`),
+	check("organization_config_press_email_check", sql`json_type(settings_json, '$.config.press_email') IS NULL OR json_type(settings_json, '$.config.press_email') IS 'text'`),
+	check("organization_config_partnerships_email_check", sql`json_type(settings_json, '$.config.partnerships_email') IS NULL OR json_type(settings_json, '$.config.partnerships_email') IS 'text'`),
+	check("organization_config_catering_email_check", sql`json_type(settings_json, '$.config.catering_email') IS NULL OR json_type(settings_json, '$.config.catering_email') IS 'text'`),
+	check("organization_config_careers_email_check", sql`json_type(settings_json, '$.config.careers_email') IS NULL OR json_type(settings_json, '$.config.careers_email') IS 'text'`),
+	check("organization_config_google_site_verification_check", sql`json_type(settings_json, '$.config.google_site_verification') IS NULL OR json_type(settings_json, '$.config.google_site_verification') IS 'text'`),
+	check("organization_config_default_timezone_check", sql`json_type(settings_json, '$.config.default_timezone') IS 'text' AND length(json_extract(settings_json, '$.config.default_timezone')) > 0`),
+	check("organization_config_whatsapp_phone_check", sql`json_type(settings_json, '$.config.whatsapp_phone') IS NULL OR json_type(settings_json, '$.config.whatsapp_phone') IS 'text'`),
+	check("organization_consultation_metadata_check", sql`json_type(settings_json, '$.consultation.metadata_json') IS NULL OR json_type(settings_json, '$.consultation.metadata_json') IN ('null', 'object')`),
+	check("organization_compliance_metadata_check", sql`json_type(settings_json, '$.compliance.metadata_json') IS NULL OR json_type(settings_json, '$.compliance.metadata_json') IN ('null', 'object')`),
+	check("organization_theme_saya_check", sql`json_type(settings_json, '$.theme_by_template.saya') IS NULL OR (json_type(settings_json, '$.theme_by_template.saya') IS 'object' AND json_type(settings_json, '$.theme_by_template.saya.tokens') IS 'object' AND json_extract(settings_json, '$.theme_by_template.saya.status') IN ('active', 'disabled')) IS TRUE`),
+	check("organization_theme_blawby_check", sql`json_type(settings_json, '$.theme_by_template.blawby') IS NULL OR (json_type(settings_json, '$.theme_by_template.blawby') IS 'object' AND json_type(settings_json, '$.theme_by_template.blawby.tokens') IS 'object' AND json_extract(settings_json, '$.theme_by_template.blawby.status') IN ('active', 'disabled')) IS TRUE`),
+	check("organization_config_object_check", sql`json_type(settings_json, '$.config') IS NULL OR json_type(settings_json, '$.config') IS 'object'`),
+	check("organization_theme_by_template_object_check", sql`json_type(settings_json, '$.theme_by_template') IS NULL OR json_type(settings_json, '$.theme_by_template') IS 'object'`),
+	check("organization_consultation_object_check", sql`json_type(settings_json, '$.consultation') IS NULL OR json_type(settings_json, '$.consultation') IS 'object'`),
+	check("organization_compliance_object_check", sql`json_type(settings_json, '$.compliance') IS NULL OR json_type(settings_json, '$.compliance') IS 'object'`),
+	check("organization_consultation_check", sql`json_type(settings_json, '$.consultation') IS NULL OR (json_extract(settings_json, '$.consultation.mode') IN ('external_url', 'native_disabled') AND json_type(settings_json, '$.consultation.cta_label') IS 'text' AND json_extract(settings_json, '$.consultation.schedule_path') LIKE '/%' AND json_extract(settings_json, '$.consultation.confirmation_path') LIKE '/%' AND json_type(settings_json, '$.consultation.tracking_enabled') IN ('true', 'false')) IS TRUE`),
+	check("organization_compliance_check", sql`json_type(settings_json, '$.compliance') IS NULL OR (json_extract(settings_json, '$.compliance.address_visibility') IN ('visible', 'hidden') AND (json_extract(settings_json, '$.compliance.service_area_type') IS NULL OR json_extract(settings_json, '$.compliance.service_area_type') IN ('AdministrativeArea', 'City', 'Country', 'Place', 'State')) AND json_type(settings_json, '$.compliance.same_as') IN ('array', 'null') AND json_type(settings_json, '$.compliance.contact_points') IN ('array', 'null')) IS TRUE`),
+	check("organization_compliance_nonprofit_check", sql`json_extract(settings_json, '$.compliance.nonprofit_status') IS NULL OR json_extract(settings_json, '$.compliance.nonprofit_status') IN (${sql.raw([...NONPROFIT_STATUS_CANONICAL].map(value => `'${value}'`).join(', '))})`),
+	check("organization_facebook_integration_check", sql`json_type(integrations_json, '$.facebook') IS NULL OR (json_type(integrations_json, '$.facebook') IS 'object' AND json_type(integrations_json, '$.facebook.revision') IS 'text' AND json_extract(integrations_json, '$.facebook.kind') IN ('oauth') AND json_extract(integrations_json, '$.facebook.status') IN ('active', 'disabled', 'error')) IS TRUE`),
+	check("organization_google_integration_check", sql`json_type(integrations_json, '$.google') IS NULL OR (json_type(integrations_json, '$.google') IS 'object' AND json_type(integrations_json, '$.google.revision') IS 'text' AND json_extract(integrations_json, '$.google.kind') IN ('oauth', 'manual') AND json_extract(integrations_json, '$.google.status') IN ('active', 'disabled', 'error')) IS TRUE`),
+	check("organization_google_credentials_check", sql`json_type(integrations_json, '$.google') IS NULL OR (CASE json_extract(integrations_json, '$.google.kind') WHEN 'oauth' THEN json_type(integrations_json, '$.google.encrypted_access_token') IS 'text' AND json_type(integrations_json, '$.google.encrypted_refresh_token') IS 'text' WHEN 'manual' THEN json_type(integrations_json, '$.google.encrypted_access_token') IS NULL AND json_type(integrations_json, '$.google.encrypted_refresh_token') IS NULL END) IS TRUE`),
+	check("organization_facebook_credentials_check", sql`json_type(integrations_json, '$.facebook') IS NULL OR json_type(integrations_json, '$.facebook.encrypted_user_token') IS 'text'`),
+	check("organization_feature_overrides_check", sql`feature_overrides IS NULL OR (json_valid(feature_overrides) AND json_type(feature_overrides) IS 'object')`),
+	index("organization_created_at_idx").on(table.createdAt),
 ]);
 
 export const subscription = sqliteTable("subscription", {
