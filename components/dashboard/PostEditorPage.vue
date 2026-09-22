@@ -146,9 +146,6 @@ const TIMING_OPTIONS = [
 
 // ── Which leaf is open ──────────────────────────────────
 /** Creating asks only for what the contract will not accept a post without. */
-const NEW_SECTION_KEYS: readonly SectionKey[] = ['type', 'body', 'schedule']
-const EXISTING_SECTION_KEYS: readonly SectionKey[] = SECTION_KEYS.filter(key => key !== 'type')
-
 const sectionLabels = computed<Record<SectionKey, string>>(() => ({
   type: 'Post type',
   photo: 'Photo',
@@ -162,18 +159,6 @@ const sectionLabels = computed<Record<SectionKey, string>>(() => ({
 
 const detailKey = computed(() => level.child.value)
 const editorKey = computed<SectionKey>(() => (detailKey.value ?? (isNew.value ? 'type' : 'photo')) as SectionKey)
-
-const openSections = computed(() => (isNew.value ? NEW_SECTION_KEYS : EXISTING_SECTION_KEYS))
-// An unsupported route 404s rather than silently showing the first section. A
-// watcher, not a setup-time check: moving between leaves reuses this component.
-watchEffect(() => {
-  // A level on its way out after a navigation elsewhere answers about a route
-  // it is no longer part of, so it judges nothing.
-  if (level.stale.value) return
-  if (level.mode.value === 'yield' || (detailKey.value && !openSections.value.some(key => key === detailKey.value))) {
-    showError(createError({ statusCode: 404, statusMessage: 'Page not found' }))
-  }
-})
 
 // ── The post ────────────────────────────────────────────
 const isSinglePostResponse = (value: unknown): value is { post: ApiRecord } =>
@@ -398,6 +383,25 @@ const navigationGroups = computed<EditorNavigationGroup[]>(() => {
       items: [{ id: 'publishing', label: 'When it goes live', summary: publishingSummary(), to: `${postPath.value}/publishing` }],
     },
   ]
+})
+
+/**
+ * The sections this post actually has, read from the rows it offers rather than
+ * from a list of every section a post could ever have. An offer carries no call
+ * to action and a standard post no schedule, so `/posts/<id>/offer` on a
+ * standard post opened an editor for a field the contract has nowhere to put.
+ */
+const openSections = computed(() => navigationGroups.value.flatMap(group => group.items.map(item => item.id)))
+
+// An unsupported route 404s rather than silently showing the first section. A
+// watcher, not a setup-time check: moving between leaves reuses this component.
+watchEffect(() => {
+  // A level on its way out after a navigation elsewhere answers about a route
+  // it is no longer part of, so it judges nothing.
+  if (level.stale.value) return
+  if (level.mode.value === 'yield' || (detailKey.value && !openSections.value.includes(detailKey.value))) {
+    showError(createError({ statusCode: 404, statusMessage: 'Page not found' }))
+  }
 })
 
 // ── Save / cancel ───────────────────────────────────────

@@ -189,19 +189,7 @@ const sectionLabels: Record<SectionKey, string> = {
 const detailKey = computed(() => level.child.value)
 const editorKey = computed<SectionKey>(() => (detailKey.value ?? 'photo') as SectionKey)
 
-const NEW_SECTION_KEYS: readonly SectionKey[] = ['name']
 const isNew = computed(() => productId.value === 'new')
-const openSections = computed<readonly SectionKey[]>(() => (isNew.value ? NEW_SECTION_KEYS : SECTION_KEYS))
-
-// A watcher, not a setup-time check: moving between leaves reuses this component.
-watchEffect(() => {
-  // A level on its way out after a navigation elsewhere answers about a route
-  // it is no longer part of, so it judges nothing.
-  if (level.stale.value) return
-  if (level.mode.value === 'yield' || (detailKey.value && !openSections.value.some(key => key === detailKey.value))) {
-    showError(createError({ statusCode: 404, statusMessage: 'Page not found' }))
-  }
-})
 
 // ── Load ────────────────────────────────────────────────
 const collections = ref<Collection[]>([])
@@ -547,6 +535,23 @@ const navigationGroups = computed<EditorNavigationGroup[]>(() => {
       ],
     },
   ]
+})
+
+/**
+ * The sections this product actually has, read from the rows it offers rather
+ * than from a list of every section a product could ever have — a product being
+ * created has only its name, and the rows already say so.
+ */
+const openSections = computed(() => navigationGroups.value.flatMap(group => group.items.map(item => item.id)))
+
+// A watcher, not a setup-time check: moving between leaves reuses this component.
+watchEffect(() => {
+  // A level on its way out after a navigation elsewhere answers about a route
+  // it is no longer part of, so it judges nothing.
+  if (level.stale.value) return
+  if (level.mode.value === 'yield' || (detailKey.value && !openSections.value.includes(detailKey.value))) {
+    showError(createError({ statusCode: 404, statusMessage: 'Page not found' }))
+  }
 })
 
 // ── Save / cancel ───────────────────────────────────────
