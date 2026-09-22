@@ -528,8 +528,8 @@ async function notifyOwner(
       threadId: threadContext?.guestThreadId ?? null,
       deepLink: opts.payload.deep_link || null,
     }),
-    getOrgWhatsAppPhone(db, opts.organizationId, opts.organizationId),
-    opts.locationId ? getLocationNotificationPhone(db, opts.locationId, opts.organizationId, opts.organizationId) : null,
+    getOrgWhatsAppPhone(db, opts.organizationId),
+    opts.locationId ? getLocationNotificationPhone(db, opts.locationId, opts.organizationId) : null,
   ])
 
   const configuredTargets = [
@@ -1243,8 +1243,8 @@ async function notifyGuestThreadReplyInner(
     deepLink: payload.deep_link || null,
   })
 
-  const sitePhone = await getOrgWhatsAppPhone(db, opts.organizationId, opts.organizationId)
-  const locationPhone = opts.locationId ? await getLocationNotificationPhone(db, opts.locationId, opts.organizationId, opts.organizationId) : null
+  const sitePhone = await getOrgWhatsAppPhone(db, opts.organizationId)
+  const locationPhone = opts.locationId ? await getLocationNotificationPhone(db, opts.locationId, opts.organizationId) : null
   const candidatePhones: OwnerPhoneRecipient[] = [
     locationPhone ? { phone: locationPhone, requireSiteWide: false } : null,
     sitePhone && sitePhone !== locationPhone ? { phone: sitePhone, requireSiteWide: true } : null,

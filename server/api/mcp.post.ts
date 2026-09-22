@@ -228,7 +228,7 @@ function createTenantMcpServer(ctx: McpRequestContext): McpServer {
       ? [...new Set(visibleSurfaceTools.map((t) => t.requiredEntitlement).filter(Boolean) as string[])]
       : [];
     const activeEntitlements = siteCtx
-      ? await getActiveEntitlements(cfEnv, siteCtx.organizationId, entitlementKeys, siteCtx.organizationId)
+      ? await getActiveEntitlements(cfEnv, siteCtx.organizationId, entitlementKeys)
       : new Set<string>();
 
     // The role gate is the permission matrix now, so resolve it once per tool

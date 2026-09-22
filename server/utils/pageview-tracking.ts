@@ -139,7 +139,7 @@ export async function recordTenantPageview(db: AppDb, input: TenantPageviewInput
             THEN json_extract(analytics_summaries.payload_json, '$.attribution') ELSE json_extract(excluded.payload_json, '$.attribution') END,
           '$.last_touch_at', COALESCE(json_extract(excluded.payload_json, '$.last_touch_at'), json_extract(analytics_summaries.payload_json, '$.last_touch_at')))`,
       params: [
-        crypto.randomUUID(), input.organizationId, input.organizationId, input.sessionId,
+        crypto.randomUUID(), input.organizationId, input.sessionId,
         JSON.stringify({ visitor_id: input.visitorId, started_at: input.now, last_seen_at: input.now,
           landing_path: input.pagePath, duration_seconds: 0, attribution: initial, last_touch_at: touch ? input.now : null }),
         input.now, input.now,

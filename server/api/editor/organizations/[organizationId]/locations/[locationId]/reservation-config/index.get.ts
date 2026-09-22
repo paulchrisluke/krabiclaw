@@ -15,7 +15,7 @@ export default defineHandler(async (event) => {
     // A null config means this location does not take reservations. That is
     // the answer, not an empty policy to be filled with defaults.
     if (!config) return jsonResponse({ success: true, config: null, summary: null })
-    const locale = await getSourceLocale(db, organization.id, organizationId)
+    const locale = await getSourceLocale(db, organization.id)
     return jsonResponse({ success: true, config, summary: renderBookingPolicySummary(reservationPolicySummarySource(config), locale) })
   } catch (error) {
     rethrowHttpError(error)

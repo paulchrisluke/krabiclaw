@@ -26,7 +26,7 @@ export default defineHandler(async (event) => {
 
   if (!site) return jsonResponse({ error: 'Site not found or inactive' }, { status: 404 })
 
-  const { locales } = await listSiteLocales(db, site.organization_id, organizationId)
+  const { locales } = await listSiteLocales(db, site.organization_id)
   const publicLocales: PublicLocale[] = locales
     .filter(locale => locale.is_source || locale.status === 'published')
     .map(locale => ({

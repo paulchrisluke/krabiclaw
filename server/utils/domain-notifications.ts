@@ -103,7 +103,7 @@ export async function notifyDomainLifecycle(
   // site-and-billing mail nor whether that number is allowed to receive
   // anything for this organization, so a tenant who switched the category off
   // still got the WhatsApp.
-  const phone = await getOrgWhatsAppPhone(db, opts.organizationId, opts.organizationId)
+  const phone = await getOrgWhatsAppPhone(db, opts.organizationId)
   if (phone) {
     const recipient = await resolveAuthorizedWhatsAppRecipient(db, {
       env,

@@ -16,7 +16,7 @@ export default defineHandler(async (event) => {
     const config = await upsertLocationReservationConfig(db, {
       organizationId: organization.id, locationId, patch, actorId: session.user.id,
     })
-    const locale = await getSourceLocale(db, organization.id, organizationId)
+    const locale = await getSourceLocale(db, organization.id)
     return jsonResponse({ success: true, config, summary: renderBookingPolicySummary(reservationPolicySummarySource(config), locale) })
   } catch (error) {
     rethrowHttpError(error)

@@ -28,7 +28,6 @@ export async function handleLocationsTools(ctx: McpExecutorContext): Promise<unk
           location: await getLocation(
           site.db,
           site.organizationId,
-          site.organizationId,
             locationId,
           ),
           context: await mutationContextPayload(site, { locationId }),
@@ -39,7 +38,6 @@ export async function handleLocationsTools(ctx: McpExecutorContext): Promise<unk
       const updateFields = omit(args, ["location_id"]) as Record<string, unknown>;
       const result = await updateLocation(
         site.db,
-        site.organizationId,
         site.organizationId,
         locationId,
         updateFields as never,

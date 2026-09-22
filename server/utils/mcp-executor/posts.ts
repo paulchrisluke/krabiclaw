@@ -28,7 +28,6 @@ export async function handlePostsTools(ctx: McpExecutorContext): Promise<unknown
         const posts = (await listPosts(
           site.db,
           site.organizationId,
-          site.organizationId,
           optionalString(args, "status") ?? undefined,
           optionalString(args, "location_id") ?? undefined,
         )).map((post) => attachViewUrlToRecord(post, site, {}));
@@ -40,7 +39,6 @@ export async function handlePostsTools(ctx: McpExecutorContext): Promise<unknown
         const post = await getPost(
           site.db,
           site.organizationId,
-          site.organizationId,
           requiredString(args, "post_id"),
         );
         return {
@@ -51,7 +49,6 @@ export async function handlePostsTools(ctx: McpExecutorContext): Promise<unknown
       {
         const post = await asMcpValidationError(() => createPost(
           site.db,
-          site.organizationId,
           site.organizationId,
           omit(args, ["organization_id"]),
           site.userId,
@@ -79,7 +76,6 @@ export async function handlePostsTools(ctx: McpExecutorContext): Promise<unknown
       {
         const post = await asMcpValidationError(() => updatePost(
           site.db,
-          site.organizationId,
           site.organizationId,
           requiredString(args, "post_id"),
           omit(args, ["post_id", "organization_id"]),
@@ -128,7 +124,7 @@ export async function handlePostsTools(ctx: McpExecutorContext): Promise<unknown
           facebookConnection = await getFacebookPagesConnection(
             site.env as never,
             site.organizationId,
-            site.organizationId,
+            
           );
           if (!facebookConnection?.facebook_page_id || !facebookConnection.encrypted_page_token) {
             socialSkipReason = "not_connected";
@@ -143,7 +139,6 @@ export async function handlePostsTools(ctx: McpExecutorContext): Promise<unknown
           : null;
       const post = await publishPost(
         site.db,
-        site.organizationId,
         site.organizationId,
         postId,
         channels,
@@ -203,7 +198,6 @@ export async function handlePostsTools(ctx: McpExecutorContext): Promise<unknown
         post_id: postId,
         deleted: await deletePost(
           site.db,
-          site.organizationId,
           site.organizationId,
           postId,
         ),

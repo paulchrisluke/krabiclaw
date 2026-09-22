@@ -30,7 +30,7 @@ export default defineHandler(async (event) => {
   }
 
   const match = await findSubmissionByPhone(
-    db, parsePhoneOrThrow(from, { defaultCountry: 'TH' }), body.organizationId?.trim() || undefined, body.organizationId?.trim() || undefined, )
+    db, parsePhoneOrThrow(from, { defaultCountry: 'TH' }), body.organizationId?.trim() || undefined, )
   if (!match) {
     return jsonResponse({ error: 'Submission not found for phone' }, { status: 404 })
   }

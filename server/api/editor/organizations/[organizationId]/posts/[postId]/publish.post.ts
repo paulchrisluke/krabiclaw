@@ -38,7 +38,7 @@ export default defineHandler(async (event) => {
   let socialPublish: PostSocialPublish | null = null
   if (wantsSocial) {
     try {
-      const connection = await getFacebookPagesConnection(env, site.organization_id, organizationId)
+      const connection = await getFacebookPagesConnection(env, site.organization_id)
       socialPublish = connection?.facebook_page_id && connection.encrypted_page_token
         ? { kind: 'connected', pageId: connection.facebook_page_id, pageToken: connection.encrypted_page_token }
         : { kind: 'unavailable', reason: 'No Facebook Page connected.' }

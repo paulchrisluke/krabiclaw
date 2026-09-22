@@ -197,7 +197,7 @@ export default defineHandler(async (event) => {
     // The policy the guest is shown is the product's own attribute. There is
     // no site or location policy merged underneath it.
     getProduct(db, site.organization_id, product.id),
-    requestedLocale && /^[a-z]{2}(-[A-Z]{2})?$/.test(requestedLocale) ? requestedLocale : getSourceLocale(db, site.organization_id, organizationId),
+    requestedLocale && /^[a-z]{2}(-[A-Z]{2})?$/.test(requestedLocale) ? requestedLocale : getSourceLocale(db, site.organization_id),
     recordSubmissionConversionSafe(db, event, {
       organizationId: site.organization_id, eventName: 'booking_submit', stage: 'submitted',
       locationId: session.location_id, entityType: 'request', entityId: threadId,

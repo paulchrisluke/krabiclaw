@@ -186,7 +186,7 @@ export default defineHandler(async (event) => {
     requireLocationReservationConfig(db, { organizationId: site.organization_id, locationId: resolvedLocationId }),
     requestedLocale && /^[a-z]{2}(-[A-Z]{2})?$/.test(requestedLocale)
       ? requestedLocale
-      : getSourceLocale(db, site.organization_id, organizationId),
+      : getSourceLocale(db, site.organization_id),
     recordSubmissionConversionSafe(db, event, {
       organizationId: site.organization_id,
       eventName: 'reservation_submit',

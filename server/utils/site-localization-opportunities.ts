@@ -88,9 +88,9 @@ export async function getSiteLocalizationProgress(
   db: DbClient,
   input: { organizationId: string; locale: string },
 ): Promise<SiteLocalizationProgress> {
-  const source = await getPersistedSourceLocale(db, input.organizationId, input.organizationId)
+  const source = await getPersistedSourceLocale(db, input.organizationId)
   if (input.locale === source.locale) throw new Error('Localization progress requires an additional language')
-  const params = [input.locale, input.organizationId, input.organizationId]
+  const params = [input.locale, input.organizationId]
   const [site, locations, catalog, collections, posts, blog, qa, media, links, pages] = await Promise.all([
     queryAll<LocalizableRow>(db, `SELECT s.id, s.brand_name, s.brand_description, rl.values_json
       FROM organization s LEFT JOIN resource_localizations rl ON rl.resource_type = 'site' AND rl.resource_id = s.id AND rl.locale = ?

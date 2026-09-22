@@ -287,7 +287,7 @@ export async function handleContentTools(ctx: McpExecutorContext): Promise<unkno
       // asset must be this site's, an image block must carry its picture.
       const { blocks, placementQueries } = await prepareTenantBlogContentBlocks(
         site.db, [{ id, type: args.type as ContentBlockType, data: args.data as Record<string, unknown>, media: args.media as ContentBlockMedia[] | undefined, level: typeof args.level === 'number' ? args.level : null }],
-        site.organizationId, site.organizationId,
+        site.organizationId,
       )
       const block = blocks[0]!
       // One batch: the block and its media land together or not at all.
@@ -300,7 +300,7 @@ export async function handleContentTools(ctx: McpExecutorContext): Promise<unkno
       const document = await requireSiteDocument(ctx, existing.document_id)
       const { blocks, placementQueries } = await prepareTenantBlogContentBlocks(
         site.db, [{ id: blockId, type: existing.type, data: args.data as Record<string, unknown>, media: (args.media ?? existing.media) as ContentBlockMedia[], level: existing.level }],
-        site.organizationId, site.organizationId,
+        site.organizationId,
       )
       await replaceContentBlock(site.db, blockId, { data: blocks[0]!.data, expected_updated_at: requiredString(args, "expected_updated_at") }, { additionalQueriesAfter: placementQueries })
       return await contentBlocksChanged(ctx, document, `Replaced the ${existing.type} block.`)

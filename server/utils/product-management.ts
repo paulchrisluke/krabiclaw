@@ -763,7 +763,7 @@ async function planProduct(
   // down, rather than asking the same question for every product in it.
   const defaultCurrency = context.defaultCurrency !== undefined
     ? context.defaultCurrency
-    : context.organizationId ? await organizationDefaultCurrency(db, organizationId, context.organizationId) : null
+    : context.organizationId ? await organizationDefaultCurrency(db, organizationId) : null
   const declaredVariants = input.variants ?? []
   const resolved = resolveIds(options, variants)
   const plannedVariants: PlannedVariant[] = variants.map((variant, index) => ({

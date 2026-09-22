@@ -374,7 +374,7 @@ async function loadPublicPageSource(
     return i;
   };
 
-  const shellIndexes = appendPublicShellQueries(batchStmts, orgId, organizationId);
+  const shellIndexes = appendPublicShellQueries(batchStmts, orgId);
   if (needsLocations) idxLoc = shellIndexes.locations;
 
   if (includeProducts) {

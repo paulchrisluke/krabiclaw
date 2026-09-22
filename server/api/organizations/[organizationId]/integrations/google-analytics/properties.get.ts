@@ -12,13 +12,13 @@ export default defineHandler(async (event) => {
 
   const { env, organization } = await requireOrganizationAccess(event, organizationId)
 
-  const connection = await getGoogleAnalyticsConnection(env, organization.id, organization.id)
+  const connection = await getGoogleAnalyticsConnection(env, organization.id)
   if (!connection) {
     return jsonResponse({ success: true, connection: null, ga4Properties: [], searchConsoleSites: [], ga4Error: null, searchConsoleError: null })
   }
 
   try {
-    const accessToken = await getGoogleAnalyticsAccessToken(env, organization.id, organization.id)
+    const accessToken = await getGoogleAnalyticsAccessToken(env, organization.id)
     const [ga4Result, searchConsoleResult] = await Promise.allSettled([
       listGa4Properties(accessToken), listSearchConsoleSites(accessToken)
     ])

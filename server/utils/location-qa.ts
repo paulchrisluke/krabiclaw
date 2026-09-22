@@ -145,7 +145,7 @@ export async function createQa(db: DbClient, scope: QaScope, input: CreateQaInpu
     return { status: 400, data: { error: 'sort_order must be an integer' } }
   }
 
-  await getPersistedSourceLocale(db, scope.organizationId, scope.organizationId)
+  await getPersistedSourceLocale(db, scope.organizationId)
   const id = crypto.randomUUID()
   const pagePath = scope.locationId === null ? normalizePagePath(scope.pagePath) : null
   const scoped = scopeSql(scope.locationId, pagePath)

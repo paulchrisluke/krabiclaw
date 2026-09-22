@@ -25,7 +25,7 @@ export default defineHandler(async (event) => {
 
   const { env, db, organization } = await requireOrganizationAccess(event, organizationId)
 
-  const connection = await getGoogleAnalyticsConnection(env, organization.id, organization.id)
+  const connection = await getGoogleAnalyticsConnection(env, organization.id)
   if (!connection) {
     return jsonResponse({ error: 'No Google Analytics connection found for this site' }, { status: 404 })
   }
@@ -37,7 +37,7 @@ export default defineHandler(async (event) => {
   try {
     let measurementId: string | null = null
     if (ga4PropertyId) {
-      const accessToken = await getGoogleAnalyticsAccessToken(env, organization.id, organization.id)
+      const accessToken = await getGoogleAnalyticsAccessToken(env, organization.id)
       measurementId = await getGa4MeasurementId(accessToken, ga4PropertyId)
     }
 

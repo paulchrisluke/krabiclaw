@@ -90,7 +90,7 @@ export async function loadPublicShellSource(
   const { site } = await loadPublicBase(event, organizationId, { previewAuthorized })
   options.signal?.throwIfAborted()
   const shellQueries: BatchQuery[] = []
-  const shellIndexes = appendPublicShellQueries(shellQueries, site.organization_id, organizationId)
+  const shellIndexes = appendPublicShellQueries(shellQueries, site.organization_id)
   const shellResults = await executeBatch(db, shellQueries)
   options.signal?.throwIfAborted()
   const payload = {

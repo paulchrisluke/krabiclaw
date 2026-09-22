@@ -62,7 +62,7 @@ export default defineHandler(async (event) => {
 
   for (const connection of connections) {
     try {
-      const fbConnection = await getFacebookPagesConnection(env, connection.organization_id, connection.organization_id)
+      const fbConnection = await getFacebookPagesConnection(env, connection.organization_id)
       if (!fbConnection || !fbConnection.encrypted_page_token || !fbConnection.facebook_page_id) {
         results.push({
           organizationId: connection.organization_id, success: 0, errors: 0, skipped: 0, error: 'No valid Facebook connection or page selected', })

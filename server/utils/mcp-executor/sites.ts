@@ -33,7 +33,7 @@ export async function handleSitesTools(ctx: McpExecutorContext): Promise<unknown
         settings: await loadSettingsPayload(
           site.db,
           site.organizationId,
-          site.organizationId,
+          
         ),
       };
     case "update_site_settings": {
@@ -44,7 +44,6 @@ export async function handleSitesTools(ctx: McpExecutorContext): Promise<unknown
       const result = await updateSiteSettingsFields(
         site.db,
         site.env,
-        site.organizationId,
         site.organizationId,
         updates,
         site.userId
@@ -75,7 +74,6 @@ export async function handleSitesTools(ctx: McpExecutorContext): Promise<unknown
         site.db,
         site.env,
         site.organizationId,
-        site.organizationId,
         { default_currency: currency },
         site.userId,
       );
@@ -96,7 +94,6 @@ export async function handleSitesTools(ctx: McpExecutorContext): Promise<unknown
       const result = await updateSiteSettingsFields(
         site.db,
         site.env,
-        site.organizationId,
         site.organizationId,
         { brand_color: resolvedColor },
         site.userId,

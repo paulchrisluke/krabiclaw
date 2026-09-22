@@ -8,7 +8,7 @@ export default defineHandler(async (event) => {
 
   const { db, organization } = await requireOrganizationAccess(event, organizationId)
 
-  const notifications = await getNotificationsSettings(db, organization.id, organizationId)
+  const notifications = await getNotificationsSettings(db, organization.id)
   return jsonResponse({ success: true, notifications })
 })
 import { defineHandler } from 'nitro';
