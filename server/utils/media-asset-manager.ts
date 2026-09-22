@@ -161,7 +161,7 @@ export function buildMediaPlacementInsertQuery(input: MediaPlacementInsertInput)
   const owner = mediaPlacementOwnerQuery(input)
   return {
     query: `INSERT INTO media_placements (id, organization_id, owner_type, owner_id, slot, asset_id, sort_order, status, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, CASE WHEN EXISTS (${owner.query})
+      VALUES (?, ?, ?, ?, ?, CASE WHEN EXISTS (${owner.query})
         AND EXISTS (SELECT 1 FROM media_assets WHERE id = ? AND organization_id = ? AND (status = 'active' OR (status = 'pending' AND ? = 'review_request' AND ? = 'pending')))
         AND (? != 'content_document' OR ? NOT IN ('cover', 'gallery') OR EXISTS
         (SELECT 1 FROM content_documents d JOIN content_documents root ON root.id = COALESCE(d.root_id, d.id)
