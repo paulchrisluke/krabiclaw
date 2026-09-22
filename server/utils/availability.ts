@@ -494,10 +494,10 @@ export function sessionClaimQuery(input: {
   return {
     query: `
       INSERT INTO bookings (
-        id, organization_id, organization_id, product_id, product_session_id, product_variant_id,
+        id, organization_id, product_id, product_session_id, product_variant_id,
         customer_id, request_id, party_size, status, created_at, updated_at
       )
-      SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, 'confirmed', ?, ?
+      SELECT ?, ?, ?, ?, ?, ?, ?, ?, 'confirmed', ?, ?
       WHERE ${input.requireUndecided
         ? `EXISTS (SELECT 1 FROM requests WHERE id = ? AND organization_id = ? AND updated_at = ?)
            AND NOT EXISTS (SELECT 1 FROM activity_entries WHERE dedupe_key = ?) AND `

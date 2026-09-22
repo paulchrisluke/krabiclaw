@@ -417,10 +417,10 @@ export async function claimReservation(db: DbClient, input: {
   const claim: BatchQuery = {
     query: `
       INSERT INTO reservations (
-        id, organization_id, organization_id, location_id, customer_id, request_id,
+        id, organization_id, location_id, customer_id, request_id,
         timezone, starts_at, ends_at, party_size, status, created_at, updated_at
       )
-      SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+      SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
       WHERE EXISTS (
         SELECT 1 FROM location_reservation_configs c
         WHERE c.location_id = ? AND c.organization_id = ?

@@ -37,13 +37,12 @@ export async function recordUsageEvent(db: DbClient, input: UsageEventInput): Pr
 
   const result = await execute(db, `
     INSERT OR IGNORE INTO usage_events
-      (id, organization_id, organization_id, resource, source, provider, channel,
+      (id, organization_id, resource, source, provider, channel,
        session_id, quantity, unit, metadata_json, idempotency_key, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `, [
     crypto.randomUUID(),
     input.organizationId,
-    input.organizationId ?? null,
     input.resource,
     input.source,
     input.provider ?? null,

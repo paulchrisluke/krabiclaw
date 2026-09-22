@@ -41,13 +41,12 @@ export async function createBlogRedirect(db: D1Database, postId: string, organiz
   if (!post) throw new HTTPError({ statusCode: 400, statusMessage: 'Blog redirect scope must match its post' })
   const oldPath = tenantBlogPostPath({ themeId: post.theme_id }, oldSlug)
   const newPath = tenantBlogPostPath({ themeId: post.theme_id }, post.slug)
-  const result = await execute(db, `INSERT INTO organization_redirects
-    (id, organization_id, organization_id, locale, owner_type, owner_id, from_path, to_path, status_code, behavior, reason, source, created_at, updated_at)
-    VALUES (?, ?, ?, 'en', ?, ?, ?, ?, 301, 'redirect', ?, ?, ?, ?)
+  // The scope check is the SELECT above: the post was read under the caller's
+  // organization, so the redirect cannot be written against another tenant's.
+  await execute(db, `INSERT INTO organization_redirects
+    (id, organization_id, locale, owner_type, owner_id, from_path, to_path, status_code, behavior, reason, source, created_at, updated_at)
+    VALUES (?, ?, 'en', ?, ?, ?, ?, 301, 'redirect', ?, ?, ?, ?)
     ON CONFLICT(organization_id, locale, from_path) DO UPDATE SET owner_type = excluded.owner_type, owner_id = excluded.owner_id,
       to_path = excluded.to_path, status_code = 301, behavior = 'redirect', reason = excluded.reason, source = excluded.source, updated_at = excluded.updated_at`,
-  [crypto.randomUUID(), post.organization_id, organizationId, 'content_document', postId, oldPath, newPath, 'blog_slug_change', 'blog', now, now])
-  if (Number(result.meta.changes ?? 0) === 0) {
-    throw new HTTPError({ statusCode: 400, statusMessage: 'Blog redirect scope must match its post' })
-  }
+  [crypto.randomUUID(), post.organization_id, 'content_document', postId, oldPath, newPath, 'blog_slug_change', 'blog', now, now])
 }

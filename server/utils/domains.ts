@@ -263,8 +263,8 @@ export async function createSystemSubdomain(
   stmts.push(
     {
       sql: `INSERT INTO organization_domains
-        (id, organization_id, organization_id, domain, type, role, status, dns_status, dns_target, activated_at, created_at, updated_at)
-        VALUES (?, ?, ?, ?, 'subdomain', ?, 'active', 'valid', ?, ?, ?, ?)`,
+        (id, organization_id, domain, type, role, status, dns_status, dns_target, activated_at, created_at, updated_at)
+        VALUES (?, ?, ?, 'subdomain', ?, 'active', 'valid', ?, ?, ?, ?)`,
       values: [id, organizationId, domain, role, platformHostname(env), now, now, now],
     },
   )
@@ -716,9 +716,9 @@ export async function createCustomDomainPair(
     for (const entry of entries) {
       await execute(db, `
         INSERT INTO organization_domains
-        (id, organization_id, organization_id, domain, type, role, status, validation_strategy, dns_target, dns_status, created_at, updated_at)
-        VALUES (?, ?, ?, ?, 'custom', ?, 'pending', 'http_auto', ?, 'pending', ?, ?)
-      `, [entry.id, opts.organizationId, opts.organizationId, entry.domain, entry.role, env.CF_SAAS_CNAME_TARGET, now, now])
+        (id, organization_id, domain, type, role, status, validation_strategy, dns_target, dns_status, created_at, updated_at)
+        VALUES (?, ?, ?, 'custom', ?, 'pending', 'http_auto', ?, 'pending', ?, ?)
+      `, [entry.id, opts.organizationId, entry.domain, entry.role, env.CF_SAAS_CNAME_TARGET, now, now])
       insertedDomainIds.push(entry.id)
 
       await logDomainEvent(db, {

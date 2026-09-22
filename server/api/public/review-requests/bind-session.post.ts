@@ -34,7 +34,6 @@ export default defineHandler(async (event) => {
         WHERE id = ?
           AND token_hash = ?
           AND organization_id = ?
-          AND organization_id = ?
           AND customer_id = ?
           AND booking_type = ?
           AND booking_id = ?
@@ -46,15 +45,14 @@ export default defineHandler(async (event) => {
             OR user_id = ?
             OR anonymous_user_id = ?
           )`, params: [
-        sessionUser.isAnonymous ? null : sessionUser.id, sessionUser.isAnonymous ? sessionUser.id : null, now, result.request.id, result.request.token_hash, result.context.organization_id, result.context.organization_id, result.request.customer_id, result.request.booking_type, result.request.booking_id, now, sessionUser.id, sessionUser.id, ], }, {
+        sessionUser.isAnonymous ? null : sessionUser.id, sessionUser.isAnonymous ? sessionUser.id : null, now, result.request.id, result.request.token_hash, result.context.organization_id, result.request.customer_id, result.request.booking_type, result.request.booking_id, now, sessionUser.id, sessionUser.id, ], }, {
       query: `SELECT CASE WHEN changes() = 1 THEN NULL ELSE json(?) END`, params: ['review session binding lost its request-state guard'], }, {
       query: `UPDATE customers
         SET user_id = COALESCE(user_id, ?), updated_at = ?
         WHERE id = ?
           AND organization_id = ?
-          AND organization_id = ?
           AND (user_id IS NULL OR user_id = ?)`, params: [
-        sessionUser.id, now, result.request.customer_id, result.context.organization_id, result.context.organization_id, sessionUser.id, ], }, {
+        sessionUser.id, now, result.request.customer_id, result.context.organization_id, sessionUser.id, ], }, {
       query: `SELECT CASE WHEN changes() = 1 THEN NULL ELSE json(?) END`, params: ['review session binding lost its customer-state guard'], }, ])
 
   return jsonResponse({ success: true, requestId: result.request.id })

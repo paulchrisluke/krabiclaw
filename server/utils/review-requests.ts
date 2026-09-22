@@ -179,13 +179,12 @@ export async function createOrRotateReviewRequest(
 
   const insertResult = await execute(db, `
     INSERT OR IGNORE INTO review_requests (
-      id, organization_id, organization_id, location_id, customer_id, booking_type, booking_id,
+      id, organization_id, location_id, customer_id, booking_type, booking_id,
       token_hash, expires_at, send_count, created_at, updated_at
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
   `, [
     id,
-    context.organization_id,
     context.organization_id,
     context.location_id,
     context.customer_id,

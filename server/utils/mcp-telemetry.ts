@@ -136,17 +136,16 @@ export async function logMcpToolCallEvent(
       db,
       `
       INSERT INTO mcp_tool_call_events
-        (id, organization_id, organization_id, location_id, user_id, mcp_surface, request_id,
+        (id, organization_id, location_id, user_id, mcp_surface, request_id,
          method, tool_name, tool_domain, is_mutating, arguments_summary_json,
          result_summary_json, status, error_code, error_message,
          http_status, jsonrpc_error_code, jsonrpc_error_message, protocol_version,
          session_id_hash, oauth_client_id_hash, user_agent, cf_ray_id,
          catalog_fingerprint, unknown_tool_name, duration_ms)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `,
       [
         crypto.randomUUID(),
-        input.organizationId ?? null,
         input.organizationId ?? null,
         input.locationId ?? null,
         input.userId ?? null,

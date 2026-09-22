@@ -15,7 +15,6 @@ import { occurrenceKey } from '../../shared/bookings.ts'
 import { addLocalDays, localDateTimeToInstant, localNow } from '../../utils/timezone.ts'
 
 const ORG = 'org-sessions'
-const SITE = 'site-sessions'
 const LOCATION = 'loc-sessions'
 const PRODUCT = 'prod-class'
 const ACTOR = 'user-actor'
@@ -30,12 +29,11 @@ async function boot() {
   const db = await runtime.getD1Database('DB')
   const statements = await generateSQLiteMigration(await generateSQLiteDrizzleJson({}), await generateSQLiteDrizzleJson(schema))
   await db.batch(statements.map(statement => db.prepare(statement)))
-  await db.prepare("INSERT INTO organization (id, name, slug) VALUES (?, 'Sessions', 'sessions')").bind(ORG).run()
-  await db.prepare(`INSERT INTO sites (id, organization_id, slug, settings_json, integrations_json, theme_id, default_currency, status, onboarding_status, url_structure, vertical, created_at, updated_at)
-    VALUES (?, ?, 'sessions', '{"config":{"default_timezone":"Asia/Bangkok"}}', '{}', 'theme', 'THB', 'active', 'complete', 'flat', 'experience', ?, ?)`)
-    .bind(SITE, ORG, NOW, NOW).run()
-  await db.prepare(`INSERT INTO business_locations (id, organization_id, site_id, slug, title, status, timezone, created_at, updated_at)
-    VALUES (?, ?, ?, 'studio', 'Studio', 'active', 'Asia/Bangkok', ?, ?)`).bind(LOCATION, ORG, SITE, NOW, NOW).run()
+  await db.prepare(`INSERT INTO organization (id, name, slug, subdomain, settings_json, integrations_json, theme_id, default_currency, status, onboarding_status, url_structure, vertical, updated_at)
+    VALUES (?, 'Sessions', 'sessions', 'sessions', '{"config":{"default_timezone":"Asia/Bangkok"}}', '{}', 'theme', 'THB', 'active', 'complete', 'flat', 'experience', ?)`)
+    .bind(ORG, NOW).run()
+  await db.prepare(`INSERT INTO business_locations (id, organization_id, slug, title, status, timezone, created_at, updated_at)
+    VALUES (?, ?, 'studio', 'Studio', 'active', 'Asia/Bangkok', ?, ?)`).bind(LOCATION, ORG, NOW, NOW).run()
   await db.prepare(`INSERT INTO products (id, organization_id, name, slug, created_by, updated_by) VALUES (?, ?, 'Pottery Class', 'pottery-class', ?, ?)`)
     .bind(PRODUCT, ORG, ACTOR, ACTOR).run()
   for (const [id, name] of [['var-adult', 'Adult'], ['var-child', 'Child']]) {
@@ -167,10 +165,10 @@ test('concurrent claims cannot exceed capacity, and variants share one pool', { 
       .bind(ORG, PRODUCT, LOCATION, ACTOR, ACTOR).run()
 
     // Two ticket tiers, one seat pool: 3 adults + 2 children fills the class.
-    await claimSessionCapacity(db, { organizationId: ORG, siteId: SITE, productId: PRODUCT, sessionId: 'sess-1', productVariantId: 'var-adult', partySize: 3 })
-    await claimSessionCapacity(db, { organizationId: ORG, siteId: SITE, productId: PRODUCT, sessionId: 'sess-1', productVariantId: 'var-child', partySize: 2 })
+    await claimSessionCapacity(db, { organizationId: ORG, productId: PRODUCT, sessionId: 'sess-1', productVariantId: 'var-adult', partySize: 3 })
+    await claimSessionCapacity(db, { organizationId: ORG, productId: PRODUCT, sessionId: 'sess-1', productVariantId: 'var-child', partySize: 2 })
     await assert.rejects(
-      claimSessionCapacity(db, { organizationId: ORG, siteId: SITE, productId: PRODUCT, sessionId: 'sess-1', productVariantId: 'var-adult', partySize: 1 }),
+      claimSessionCapacity(db, { organizationId: ORG, productId: PRODUCT, sessionId: 'sess-1', productVariantId: 'var-adult', partySize: 1 }),
       CapacityUnavailableError,
       'a ticket tier does not get its own seat pool',
     )
@@ -178,7 +176,7 @@ test('concurrent claims cannot exceed capacity, and variants share one pool', { 
     // Concurrency: eight parties of one race for three seats.
     await db.prepare("UPDATE product_sessions SET capacity = 8 WHERE id = 'sess-1'").run()
     const outcomes = await Promise.allSettled(Array.from({ length: 8 }, () =>
-      claimSessionCapacity(db, { organizationId: ORG, siteId: SITE, productId: PRODUCT, sessionId: 'sess-1', productVariantId: 'var-adult', partySize: 1 })))
+      claimSessionCapacity(db, { organizationId: ORG, productId: PRODUCT, sessionId: 'sess-1', productVariantId: 'var-adult', partySize: 1 })))
     const granted = outcomes.filter(outcome => outcome.status === 'fulfilled').length
     assert.equal(granted, 3, `exactly the three remaining seats were granted, got ${granted}`)
     const claimed = await db.prepare("SELECT SUM(party_size) n FROM bookings WHERE product_session_id = 'sess-1' AND status = 'confirmed'").first<number>('n')
@@ -202,7 +200,7 @@ test('capacity cannot be reduced below seats already claimed, and a past session
     await db.prepare(`INSERT INTO product_sessions (id, organization_id, product_id, timezone, starts_at, ends_at, capacity, status, created_by, updated_by)
       VALUES ('sess-cap', ?, ?, 'Asia/Bangkok', '2099-01-05T07:00:00.000Z', '2099-01-05T09:00:00.000Z', 10, 'scheduled', ?, ?)`)
       .bind(ORG, PRODUCT, ACTOR, ACTOR).run()
-    await claimSessionCapacity(db, { organizationId: ORG, siteId: SITE, productId: PRODUCT, sessionId: 'sess-cap', productVariantId: 'var-adult', partySize: 6 })
+    await claimSessionCapacity(db, { organizationId: ORG, productId: PRODUCT, sessionId: 'sess-cap', productVariantId: 'var-adult', partySize: 6 })
     await assert.rejects(
       updateSession(db, { organizationId: ORG, sessionId: 'sess-cap', actorId: ACTOR, capacity: 4 }),
       /already has 6 seats claimed/, 'reducing capacity below claimed seats is refused, not silently oversold')
@@ -212,12 +210,12 @@ test('capacity cannot be reduced below seats already claimed, and a past session
       VALUES ('sess-past', ?, ?, 'Asia/Bangkok', '2020-01-05T07:00:00.000Z', '2020-01-05T09:00:00.000Z', 10, 'scheduled', ?, ?)`)
       .bind(ORG, PRODUCT, ACTOR, ACTOR).run()
     await assert.rejects(
-      claimSessionCapacity(db, { organizationId: ORG, siteId: SITE, productId: PRODUCT, sessionId: 'sess-past', productVariantId: 'var-adult', partySize: 1 }),
+      claimSessionCapacity(db, { organizationId: ORG, productId: PRODUCT, sessionId: 'sess-past', productVariantId: 'var-adult', partySize: 1 }),
       CapacityUnavailableError, 'a session in the past takes no bookings')
 
     await db.prepare("UPDATE product_sessions SET status = 'cancelled' WHERE id = 'sess-cap'").run()
     await assert.rejects(
-      claimSessionCapacity(db, { organizationId: ORG, siteId: SITE, productId: PRODUCT, sessionId: 'sess-cap', productVariantId: 'var-adult', partySize: 1 }),
+      claimSessionCapacity(db, { organizationId: ORG, productId: PRODUCT, sessionId: 'sess-cap', productVariantId: 'var-adult', partySize: 1 }),
       CapacityUnavailableError, 'a cancelled session takes no bookings')
   } finally { await runtime.dispose() }
 })

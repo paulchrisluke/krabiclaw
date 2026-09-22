@@ -138,13 +138,12 @@ export async function findOrCreateCustomer(
   try {
     await execute(db, `
       INSERT INTO customers (
-        id, organization_id, organization_id, user_id, name, email, email_normalized, email_hash,
+        id, organization_id, user_id, name, email, email_normalized, email_hash,
         phone, phone_normalized, phone_metadata_version, source, status, created_at, updated_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)
     `, [
       id,
-      input.organizationId,
       input.organizationId,
       input.userId ?? null,
       name,

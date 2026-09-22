@@ -184,10 +184,10 @@ export function googleReviewUpserts(scope: { organizationId: string; locationId:
   return reviews.map(review => {
     const reviewId = `gplaces-${locationId}-${review.google_review_id.replace(/\//g, '-')}`
     return {
-      query: `INSERT INTO reviews (id, organization_id, organization_id, location_id, google_review_id, author_name, rating, content,
+      query: `INSERT INTO reviews (id, organization_id, location_id, google_review_id, author_name, rating, content,
         original_review_date, original_reference, google_review_metadata, status, source, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'approved', 'google_places', ?, ?)
-        ON CONFLICT(organization_id, organization_id, location_id, google_review_id) DO UPDATE SET
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'approved', 'google_places', ?, ?)
+        ON CONFLICT(organization_id, location_id, google_review_id) DO UPDATE SET
           author_name = excluded.author_name, rating = excluded.rating, content = excluded.content,
           original_review_date = excluded.original_review_date, original_reference = excluded.original_reference,
           google_review_metadata = excluded.google_review_metadata, updated_at = excluded.updated_at`,

@@ -950,9 +950,9 @@ export async function createProduct(db: DbClient, input: {
   const writes = productWrites(input.organizationId, planned, definitions, input.actor, now, 'insert')
   if (input.publication && input.organizationId) {
     writes.push({
-      query: `INSERT INTO product_publications (organization_id, product_id, organization_id, published, created_at, updated_at, created_by, updated_by)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      params: [input.organizationId, planned.id, input.organizationId, input.publication.published ? 1 : 0, now, now, input.actor.actorId, input.actor.actorId],
+      query: `INSERT INTO product_publications (organization_id, product_id, published, created_at, updated_at, created_by, updated_by)
+              VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      params: [input.organizationId, planned.id, input.publication.published ? 1 : 0, now, now, input.actor.actorId, input.actor.actorId],
     })
     writes.push(publicResourceCacheInvalidationQuery(input.organizationId, 'product_created'))
   }
@@ -1012,9 +1012,9 @@ export async function planProductCreateWrites(db: DbClient, input: {
     queries.push(...productWrites(input.organizationId, planned, definitions, input.actor, input.now, 'insert'))
     if (input.publication && input.organizationId) {
       queries.push({
-        query: `INSERT INTO product_publications (organization_id, product_id, organization_id, published, created_at, updated_at, created_by, updated_by)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-        params: [input.organizationId, planned.id, input.organizationId, input.publication.published ? 1 : 0,
+        query: `INSERT INTO product_publications (organization_id, product_id, published, created_at, updated_at, created_by, updated_by)
+                VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        params: [input.organizationId, planned.id, input.publication.published ? 1 : 0,
           input.now, input.now, input.actor.actorId, input.actor.actorId],
       })
     }
@@ -1339,9 +1339,9 @@ export async function createCollection(db: DbClient, input: {
   const id = crypto.randomUUID()
   const now = new Date().toISOString()
   await executeBatch(db, [{
-    query: `INSERT INTO collections (id, organization_id, organization_id, location_id, name, slug, description, sort_order, created_at, updated_at, created_by, updated_by)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    params: [id, input.organizationId, input.collection.organization_id, input.collection.location_id ?? null, name, slug,
+    query: `INSERT INTO collections (id, organization_id, location_id, name, slug, description, sort_order, created_at, updated_at, created_by, updated_by)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    params: [id, input.organizationId, input.collection.location_id ?? null, name, slug,
       normalizeOptionalProductString(input.collection.description, 'description', PRODUCT_LIMITS.collectionDescription),
       input.collection.sort_order ?? 0, now, now, input.actor.actorId, input.actor.actorId],
   }, publicResourceCacheInvalidationQuery(input.collection.organization_id, 'collection_created')], { operation: 'Create collection' })
@@ -1566,10 +1566,10 @@ export async function reconcileProducts(db: DbClient, input: {
     // follows, and what makes "missing from this site's import" answerable.
     if (input.organizationId) {
       creates.push({
-        query: `INSERT INTO product_publications (organization_id, product_id, organization_id, published, created_at, updated_at, created_by, updated_by)
-                VALUES (?, ?, ?, 0, ?, ?, ?, ?)
+        query: `INSERT INTO product_publications (organization_id, product_id, published, created_at, updated_at, created_by, updated_by)
+                VALUES (?, ?, 0, ?, ?, ?, ?)
                 ON CONFLICT (product_id, organization_id) DO NOTHING`,
-        params: [input.organizationId, planned.id, input.organizationId, now, now, input.actor.actorId, input.actor.actorId],
+        params: [input.organizationId, planned.id, now, now, input.actor.actorId, input.actor.actorId],
       })
     }
     perProduct.push(creates)

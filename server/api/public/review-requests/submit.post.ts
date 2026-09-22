@@ -73,7 +73,6 @@ export default defineHandler(async (event) => {
     WHERE rr.id = ?
       AND rr.token_hash = ?
       AND rr.organization_id = ?
-      AND rr.organization_id = ?
       AND rr.customer_id = ?
       AND rr.booking_type = ?
       AND rr.booking_id = ?
@@ -87,7 +86,7 @@ export default defineHandler(async (event) => {
       )
   )`
   const requestGuardParams = [
-    result.request.id, tokenHash, result.context.organization_id, result.context.organization_id, result.request.customer_id, result.request.booking_type, result.request.booking_id, now, sessionUser.id, sessionUser.id, ]
+    result.request.id, tokenHash, result.context.organization_id, result.request.customer_id, result.request.booking_type, result.request.booking_id, now, sessionUser.id, sessionUser.id, ]
   const batch: BatchQuery[] = [
     batchAssertion(
       requestIsSubmittable, requestGuardParams, 'review request state changed during submission', ), batchAssertion(
@@ -95,20 +94,18 @@ export default defineHandler(async (event) => {
         SELECT 1 FROM requests
         WHERE id = ? AND kind = ?
           AND organization_id = ?
-          AND organization_id = ?
           AND customer_id = ?
           AND json_extract(payload_json, '$.review.submitted_at') IS NULL
           AND review_id IS NULL
       )`, [
-        result.request.booking_id, result.request.booking_type, result.context.organization_id, result.context.organization_id, result.request.customer_id, ], 'review booking state changed during submission', ), batchAssertion(
+        result.request.booking_id, result.request.booking_type, result.context.organization_id, result.request.customer_id, ], 'review booking state changed during submission', ), batchAssertion(
       `EXISTS (
         SELECT 1 FROM customers
         WHERE id = ?
           AND organization_id = ?
-          AND organization_id = ?
           AND (user_id IS NULL OR user_id = ?)
       )`, [
-        result.request.customer_id, result.context.organization_id, result.context.organization_id, sessionUser.id, ], 'review customer identity changed during submission', ), ]
+        result.request.customer_id, result.context.organization_id, sessionUser.id, ], 'review customer identity changed during submission', ), ]
 
   if (mediaCount) {
     batch.push(batchAssertion(
@@ -126,16 +123,15 @@ export default defineHandler(async (event) => {
   batch.push(
     {
       query: `INSERT INTO reviews (
-        id, organization_id, organization_id, location_id, product_id, customer_id, booking_id, booking_type, review_request_id, user_id, author_name, rating, title, content, status, source, ip_hash, user_agent, created_at, updated_at
+        id, organization_id, location_id, product_id, customer_id, booking_id, booking_type, review_request_id, user_id, author_name, rating, title, content, status, source, ip_hash, user_agent, created_at, updated_at
       )
-      SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', 'direct', ?, ?, ?, ?
+      SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', 'direct', ?, ?, ?, ?
       WHERE ${requestIsSubmittable}`, params: [
-        reviewId, result.context.organization_id, result.context.organization_id, result.context.location_id, result.context.product_id, result.request.customer_id, result.request.booking_id, result.request.booking_type, result.request.id, reviewUserId, authorName, rating, title, content, ipHash, userAgent, now, now, ...requestGuardParams, ], }, batchAssertion('changes() = 1', [], 'review insert lost its request-state guard'), {
+        reviewId, result.context.organization_id, result.context.location_id, result.context.product_id, result.request.customer_id, result.request.booking_id, result.request.booking_type, result.request.id, reviewUserId, authorName, rating, title, content, ipHash, userAgent, now, now, ...requestGuardParams, ], }, batchAssertion('changes() = 1', [], 'review insert lost its request-state guard'), {
       query: `UPDATE review_requests
         SET submitted_at = ?, user_id = COALESCE(user_id, ?), anonymous_user_id = COALESCE(anonymous_user_id, ?), updated_at = ?
         WHERE id = ?
           AND token_hash = ?
-          AND organization_id = ?
           AND organization_id = ?
           AND customer_id = ?
           AND booking_type = ?
@@ -150,18 +146,16 @@ export default defineHandler(async (event) => {
         SET payload_json = json_set(payload_json, '$.review.submitted_at', ?), review_id = ?, updated_at = ?
         WHERE id = ? AND kind = ?
           AND organization_id = ?
-          AND organization_id = ?
           AND customer_id = ?
           AND json_extract(payload_json, '$.review.submitted_at') IS NULL
           AND review_id IS NULL`, params: [
-        now, reviewId, now, result.request.booking_id, result.request.booking_type, result.context.organization_id, result.context.organization_id, result.request.customer_id, ], }, batchAssertion('changes() = 1', [], 'review booking submission compare-and-set failed'), {
+        now, reviewId, now, result.request.booking_id, result.request.booking_type, result.context.organization_id, result.request.customer_id, ], }, batchAssertion('changes() = 1', [], 'review booking submission compare-and-set failed'), {
       query: `UPDATE customers
         SET user_id = COALESCE(user_id, ?), updated_at = ?
         WHERE id = ?
           AND organization_id = ?
-          AND organization_id = ?
           AND (user_id IS NULL OR user_id = ?)`, params: [
-        sessionUser.id, now, result.request.customer_id, result.context.organization_id, result.context.organization_id, sessionUser.id, ], }, batchAssertion('changes() = 1', [], 'review customer update lost its scope guard'), )
+        sessionUser.id, now, result.request.customer_id, result.context.organization_id, sessionUser.id, ], }, batchAssertion('changes() = 1', [], 'review customer update lost its scope guard'), )
 
   if (mediaCount) {
     batch.push(
