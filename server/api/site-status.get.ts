@@ -12,22 +12,22 @@ export default defineHandler(async (event) => {
     }, { status: 500 })
   }
 
-  // Get site context from middleware
-  const siteId = event.context.siteId
+  // Get tenant context from middleware
+  const organizationId = event.context.organizationId
 
-  if (!siteId) {
+  if (!organizationId) {
     return jsonResponse({ 
-      error: 'No site context' 
+      error: 'No tenant context' 
     }, { status: 404 })
   }
 
   try {
     // Verify site is active
     const site = await queryFirst<{ onboarding_status: string; status: string }>(db, `
-      SELECT onboarding_status, status FROM sites
+      SELECT onboarding_status, status FROM organization
       WHERE id = ? AND status = 'active' AND onboarding_status = 'active'
       LIMIT 1
-    `, [siteId])
+    `, [organizationId])
 
     if (!site) {
       return jsonResponse({ 
