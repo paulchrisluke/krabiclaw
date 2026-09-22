@@ -549,6 +549,10 @@ watchEffect(() => {
   // A level on its way out after a navigation elsewhere answers about a route
   // it is no longer part of, so it judges nothing.
   if (level.stale.value) return
+  // Nor does it judge before the record arrives: until then the rows are a
+  // single "Loading" placeholder, and every real section read as unsupported —
+  // a cold load of `…/mi-1/price` 404'd a page that exists.
+  if (!isNew.value && !product.value) return
   if (level.mode.value === 'yield' || (detailKey.value && !openSections.value.includes(detailKey.value))) {
     showError(createError({ statusCode: 404, statusMessage: 'Page not found' }))
   }

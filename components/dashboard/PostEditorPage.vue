@@ -399,6 +399,10 @@ watchEffect(() => {
   // A level on its way out after a navigation elsewhere answers about a route
   // it is no longer part of, so it judges nothing.
   if (level.stale.value) return
+  // Nor before the record arrives: which sections a post has follows from its
+  // type, and until it loads the type is empty — so a cold load of an event's
+  // `/schedule` would read as a section the post does not have.
+  if (!isNew.value && !post.value) return
   if (level.mode.value === 'yield' || (detailKey.value && !openSections.value.includes(detailKey.value))) {
     showError(createError({ statusCode: 404, statusMessage: 'Page not found' }))
   }
