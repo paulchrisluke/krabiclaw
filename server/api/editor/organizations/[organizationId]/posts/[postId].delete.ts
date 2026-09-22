@@ -27,11 +27,11 @@ export default defineHandler(async (event) => {
     SELECT location_id FROM content_documents
     WHERE kind = 'social_post' AND row_role = 'root' AND id = ? AND organization_id = ? AND organization_id = ?
     LIMIT 1
-  `, [postId, site.organization_id, organizationId])
+  `, [postId, site.id, organizationId])
   if (!post) return jsonResponse({ error: 'Post not found' }, { status: 404 })
   await assertResourceAccess(db, { ...memberAccessPrincipal(site.membership, { env, event }), resourceLocationId: post.location_id })
 
-  await deletePost(db, site.organization_id, postId)
+  await deletePost(db, site.id, postId)
   return jsonResponse({ success: true })
 })
 import { defineHandler } from 'nitro';

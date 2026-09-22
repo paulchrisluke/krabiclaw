@@ -63,7 +63,7 @@ export default defineHandler(async (event) => {
   for (const connection of connections) {
     try {
       const fbConnection = await getFacebookPagesConnection(env, connection.organization_id)
-      if (!fbConnection || !fbConnection.encrypted_page_token || !fbConnection.facebook_page_id) {
+      if (!fbConnection || !fbConnection.encrypted_page_token || !fbConnection.page_id) {
         results.push({
           organizationId: connection.organization_id, success: 0, errors: 0, skipped: 0, error: 'No valid Facebook connection or page selected', })
         continue
@@ -74,7 +74,7 @@ export default defineHandler(async (event) => {
       let fbPlatformErrors = 0
       try {
         fbResult = await syncFacebookPosts(
-          env, connection.organization_id, fbConnection.encrypted_page_token, fbConnection.facebook_page_id, limit
+          env, connection.organization_id, fbConnection.encrypted_page_token, fbConnection.page_id, limit
         )
       } catch (fbErr) {
         console.error('Facebook sync failed for site:', connection.organization_id, fbErr)
@@ -85,7 +85,7 @@ export default defineHandler(async (event) => {
       let igResult = { success: 0, errors: 0, skipped: 0 }
       let igPlatformErrors = 0
       let igPlatformSkipped = 0
-      const igUserId = await getLinkedInstagramAccount(fbConnection.encrypted_page_token, fbConnection.facebook_page_id)
+      const igUserId = await getLinkedInstagramAccount(fbConnection.encrypted_page_token, fbConnection.page_id)
       if (igUserId) {
         try {
           igResult = await syncInstagramPosts(

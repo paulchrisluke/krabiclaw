@@ -8,14 +8,14 @@ export default defineHandler(async (event) => {
     ? await requireRequestedLocationAccess(event, query.locationId, query.organizationId)
     : await requireRequestedOrganizationWideAccess(event, query.organizationId)
 
-  const connection = await getFacebookPagesConnection(env, site.organization_id)
+  const connection = await getFacebookPagesConnection(env, site.id)
 
   if (!connection) {
     return jsonResponse({ connected: false })
   }
 
   return jsonResponse({
-    connected: true, facebook_user_id: connection.facebook_user_id, facebook_page_id: connection.facebook_page_id, facebook_page_name: connection.facebook_page_name, status: connection.status, created_at: connection.created_at, })
+    connected: true, facebook_user_id: connection.facebook_user_id, page_id: connection.page_id, page_name: connection.page_name, status: connection.status, created_at: connection.created_at, })
 })
 import { defineHandler } from 'nitro';
 import { getQuery } from 'nitro/h3';

@@ -28,7 +28,7 @@ export default defineHandler(async (event) => {
     }
 
     const config = {
-      ...await getConfig(db, site.organization_id), default_currency: site.default_currency, }
+      ...await getConfig(db, site.id), default_currency: site.default_currency, }
     return jsonResponse({
       success: true, config
     })

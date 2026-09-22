@@ -140,14 +140,14 @@ export async function loadPublicProductCollection(
      WHERE organization_id = ? AND organization_id = ? AND status = 'active'
        ${locationSlug ? 'AND slug = ?' : ''}
      ORDER BY title, id
-  `, [resolved.site.organization_id, organizationId, ...(locationSlug ? [locationSlug] : [])])
+  `, [resolved.site.id, organizationId, ...(locationSlug ? [locationSlug] : [])])
   if (locationSlug && locationRows.length !== 1) return null
   const locations = locationRows.filter(location => locationHasProducts(resolved.site, location))
   if (locationSlug && locations.length !== 1) return null
   // Location publication is the public gate here: a product carried by the
   // site but withheld at this branch is absent, not shown greyed out.
   const perLocation = await Promise.all(locations.map(location =>
-    listLocationProducts(db, { organizationId: resolved.site.organization_id, locationId: location.id, publishedOnSiteId: organizationId })))
+    listLocationProducts(db, { organizationId: resolved.site.id, locationId: location.id, publishedOnSiteId: organizationId })))
   const seen = new Set<string>()
   // The only place a Product is assigned to a surface: it takes bookings, so
   // it is an Experience, or it belongs to the vertical's own surface. Every
@@ -159,8 +159,8 @@ export async function loadPublicProductCollection(
     return productSurfaceOf(resolved.site.vertical, product) === routeKind
   }))
   const collections = (await Promise.all([
-    listCollections(db, { organizationId: resolved.site.organization_id, locationId: null }),
-    ...locations.map(location => listCollections(db, { organizationId: resolved.site.organization_id, locationId: location.id })),
+    listCollections(db, { organizationId: resolved.site.id, locationId: null }),
+    ...locations.map(location => listCollections(db, { organizationId: resolved.site.id, locationId: location.id })),
   ])).flat()
   return { ...resolved, locations, products, collections }
 }
@@ -179,7 +179,7 @@ export async function loadPublicProductDetail(
     const collection = await loadPublicProductCollection(db, organizationId, routeKind, previewAuthorized, locationSlug)
     const location = collection?.locations[0]
     if (!collection || !location) return null
-    const found = await getProductBySlug(db, collection.site.organization_id, productSlug)
+    const found = await getProductBySlug(db, collection.site.id, productSlug)
     // The product must be published on this site and actually offered at this
     // location: reaching it by slug alone would render a branch's page for
     // something the site withholds, or something that branch does not sell.
@@ -190,7 +190,7 @@ export async function loadPublicProductDetail(
     const [product] = await hydrateProductMedia(db, organizationId, [found])
     if (!product) return null
     const localeRepresentations = await listPublicLocaleRepresentations(env, db, {
-      organizationId: collection.site.organization_id,
+      organizationId: collection.site.id,
       
       sourcePath: collection.presentation.productPath(location.slug, product.slug),
       resource: { type: 'product', id: product.id },
@@ -206,14 +206,14 @@ export async function loadPublicProductDetail(
 
   const resolved = await loadProductSite(db, organizationId, routeKind, previewAuthorized)
   if (!resolved) return null
-  const localizations = await loadExactPublicLocalizations(env, db, resolved.site.organization_id, locale)
+  const localizations = await loadExactPublicLocalizations(env, db, resolved.site.id, locale)
   const localizedLocationPath = `/${locale}/locations/${locationSlug}`
   const locationId = resolveLocalizedRouteResourceId(localizations, 'business_location', localizedLocationPath)
   if (!locationId) return null
   const sourceLocation = await queryFirst<PublicProductLocation>(db, `
     SELECT id, slug, title, feature_overrides, address, phone, maps_url, latitude, longitude FROM business_locations
      WHERE organization_id = ?  AND id = ? AND status = 'active' LIMIT 1
-  `, [resolved.site.organization_id, locationId])
+  `, [resolved.site.id, locationId])
   if (!sourceLocation) return null
   const collection = await loadPublicProductCollection(db, organizationId, routeKind, previewAuthorized, sourceLocation.slug)
   const location = collection?.locations[0]
@@ -240,7 +240,7 @@ export async function loadPublicProductDetail(
     ? projectExactLocalizedResource('site', collection.site, siteLocalization)
     : { ...collection.site, name: '' }
   const localeRepresentations = await listPublicLocaleRepresentations(env, db, {
-    organizationId: collection.site.organization_id,
+    organizationId: collection.site.id,
     
     sourcePath: collection.presentation.productPath(location.slug, sourceProduct.slug),
     resource: { type: 'product', id: sourceProduct.id },
@@ -277,7 +277,7 @@ export async function loadPublicExperienceDetail(
 ): Promise<PublicProductDetail | null> {
   const resolved = await loadProductSite(db, organizationId, 'experiences', previewAuthorized)
   if (!resolved) return null
-  const found = await getProductBySlug(db, resolved.site.organization_id, productSlug)
+  const found = await getProductBySlug(db, resolved.site.id, productSlug)
   if (!found || !isExperience(found)) return null
   if (!found.publications.some(entry => entry.organization_id === organizationId && entry.published)) return null
   const offeredAt = new Set(found.locations.filter(entry => entry.published && entry.active).map(entry => entry.location_id))
@@ -286,7 +286,7 @@ export async function loadPublicExperienceDetail(
       FROM business_locations
      WHERE organization_id = ?  AND status = 'active'
      ORDER BY title, id
-  `, [resolved.site.organization_id])
+  `, [resolved.site.id])
   const locations = locationRows.filter(location => offeredAt.has(location.id) && locationHasProducts(resolved.site, location))
   if (locations.length !== 1) return null
   const location = locations[0]!
@@ -295,7 +295,7 @@ export async function loadPublicExperienceDetail(
   }
   // The localized reader names its location by the localized route the tenant
   // published for it, so hand it that route's slug rather than the source one.
-  const localizations = await loadExactPublicLocalizations(env, db, resolved.site.organization_id, locale)
+  const localizations = await loadExactPublicLocalizations(env, db, resolved.site.id, locale)
   const localizedRoute = localizations.find(item => item.resourceType === 'business_location' && item.resourceId === location.id)?.routePath
   const localizedLocationSlug = localizedRoute ? localizedRoute.split('/').filter(Boolean).at(-1) : null
   if (!localizedLocationSlug) return null
@@ -329,7 +329,7 @@ export async function loadPublicProductApiDetail(
   // The surface is the Product's own — an Experience answers here too, so its
   // reviews are read and written through the same location-scoped API as every
   // other Product's.
-  const product = await getProductBySlug(db, site.organization_id, productSlug)
+  const product = await getProductBySlug(db, site.id, productSlug)
   if (!product) return null
   return loadPublicProductDetail(env, db, organizationId, productSurfaceOf(site.vertical, product), previewAuthorized, locationSlug, productSlug, locale)
 }
@@ -356,6 +356,6 @@ export async function loadPublicProductReviews(
        AND content IS NOT NULL AND trim(content) <> ''
      ORDER BY COALESCE(original_review_date, created_at) DESC, id DESC
      LIMIT 50
-  `, [detail.site.organization_id, detail.site.id, detail.location.id, detail.product.id])
+  `, [detail.site.id, detail.site.id, detail.location.id, detail.product.id])
   return rows.map(row => ({ ...row, google_review_metadata: parseGoogleReviewMetadata(row.google_review_metadata) }))
 }

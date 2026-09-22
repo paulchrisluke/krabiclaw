@@ -90,7 +90,7 @@ export async function loadPublicShellSource(
   const { site } = await loadPublicBase(event, organizationId, { previewAuthorized })
   options.signal?.throwIfAborted()
   const shellQueries: BatchQuery[] = []
-  const shellIndexes = appendPublicShellQueries(shellQueries, site.organization_id)
+  const shellIndexes = appendPublicShellQueries(shellQueries, site.id)
   const shellResults = await executeBatch(db, shellQueries)
   options.signal?.throwIfAborted()
   const payload = {
@@ -100,7 +100,7 @@ export async function loadPublicShellSource(
     platformMessages: null as Record<string, string> | null,
   }
   if (locale && locale !== 'en') {
-    const entitlement = await assertPublicSiteLanguageEntitlement(env, db, site.organization_id, locale)
+    const entitlement = await assertPublicSiteLanguageEntitlement(env, db, site.id, locale)
     if (entitlement.source) throw new HTTPError({ statusCode: 404, statusMessage: 'English source routes are unprefixed' })
     if (!entitlement.platform_messages) {
       throw new HTTPError({ statusCode: 500, statusMessage: 'Published platform locale messages are unavailable' })
@@ -111,7 +111,7 @@ export async function loadPublicShellSource(
        FROM resource_localizations
        WHERE organization_id = ?  AND locale = ?
          AND resource_type IN ('site', 'business_location')
-    `, [site.organization_id, locale])
+    `, [site.id, locale])
     // The shell reads the site and its locations; neither carries metafields,
     // so no definition is in scope here.
     const localizations = indexStoredPublicLocalizations(localizedRows, new Map())

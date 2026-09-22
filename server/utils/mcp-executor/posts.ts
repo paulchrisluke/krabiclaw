@@ -126,7 +126,7 @@ export async function handlePostsTools(ctx: McpExecutorContext): Promise<unknown
             site.organizationId,
             
           );
-          if (!facebookConnection?.facebook_page_id || !facebookConnection.encrypted_page_token) {
+          if (!facebookConnection?.page_id || !facebookConnection.encrypted_page_token) {
             socialSkipReason = "not_connected";
           }
         }
@@ -134,8 +134,8 @@ export async function handlePostsTools(ctx: McpExecutorContext): Promise<unknown
 
       const socialPublish: PostSocialPublish | null = socialSkipReason
         ? { kind: 'unavailable', reason: socialSkipReason }
-        : facebookConnection?.facebook_page_id && facebookConnection.encrypted_page_token
-          ? { kind: 'connected', pageId: facebookConnection.facebook_page_id, pageToken: facebookConnection.encrypted_page_token }
+        : facebookConnection?.page_id && facebookConnection.encrypted_page_token
+          ? { kind: 'connected', pageId: facebookConnection.page_id, pageToken: facebookConnection.encrypted_page_token }
           : null;
       const post = await publishPost(
         site.db,

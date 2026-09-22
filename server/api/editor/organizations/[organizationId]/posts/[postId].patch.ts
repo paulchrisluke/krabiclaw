@@ -29,7 +29,7 @@ export default defineHandler(async (event) => {
   const site = await loadMemberOrganizationRow(event, db, env, organizationId, session.user.id)
   if (!site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
 
-  const existingPost = await getPost(db, site.organization_id, postId)
+  const existingPost = await getPost(db, site.id, postId)
   if (!existingPost) return jsonResponse({ error: 'Post not found' }, { status: 404 })
 
   const principal = memberAccessPrincipal(site.membership, { env, event })
@@ -42,7 +42,7 @@ export default defineHandler(async (event) => {
 
   let post
   try {
-    post = await updatePost(db, site.organization_id, postId, body, session.user.id, env)
+    post = await updatePost(db, site.id, postId, body, session.user.id, env)
   } catch (error) {
     if (error instanceof PostValidationError) {
       return jsonResponse({ error: error.message }, { status: error.statusCode })

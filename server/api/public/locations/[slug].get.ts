@@ -45,7 +45,7 @@ export default defineHandler(async (event) => {
         AND ma.organization_id = bl.organization_id AND ma.organization_id = bl.organization_id
       WHERE bl.organization_id = ? AND bl.organization_id = ? AND bl.slug = ? AND bl.status = 'active'
       LIMIT 1
-    `, [site.organization_id, organizationId, slug], )
+    `, [site.id, organizationId, slug], )
 
     if (!location) {
       return jsonResponse({

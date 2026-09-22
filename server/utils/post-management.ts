@@ -795,7 +795,7 @@ export async function getPublishedPostByPublicRoute(
   const site = await queryFirst<{ organization_id: string }>(db, 'SELECT organization_id FROM organization WHERE id = ? AND status = \'active\' LIMIT 1', [organizationId])
   if (!site) return null
 
-  const localizations = locale === 'en' ? [] : await loadExactPublicLocalizations(env, db, site.organization_id, locale)
+  const localizations = locale === 'en' ? [] : await loadExactPublicLocalizations(env, db, site.id, locale)
   const translated = locale === 'en' ? null : await queryFirst<{
     id: string; root_id: string; title: string | null; summary: string | null;
     seo_title: string | null; seo_description: string | null; metadata_json: string;
@@ -828,7 +828,7 @@ export async function getPublishedPostByPublicRoute(
   }
 
   const localeRepresentations = await listPublicLocaleRepresentations(env, db, {
-    organizationId: site.organization_id,
+    organizationId: site.id,
     
     sourcePath: sourcePost.public_path,
     documentId: sourcePost.id,

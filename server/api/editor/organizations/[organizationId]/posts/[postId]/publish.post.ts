@@ -30,7 +30,7 @@ export default defineHandler(async (event) => {
     SELECT location_id FROM content_documents
      WHERE kind = 'social_post' AND row_role = 'root' AND id = ? AND organization_id = ? AND organization_id = ?
      LIMIT 1
-  `, [postId, site.organization_id, organizationId])
+  `, [postId, site.id])
   if (!postScope) return jsonResponse({ error: 'Post not found' }, { status: 404 })
   await assertResourceAccess(db, { ...memberAccessPrincipal(site.membership, { env, event }), resourceLocationId: postScope.location_id })
 
@@ -38,9 +38,9 @@ export default defineHandler(async (event) => {
   let socialPublish: PostSocialPublish | null = null
   if (wantsSocial) {
     try {
-      const connection = await getFacebookPagesConnection(env, site.organization_id)
-      socialPublish = connection?.facebook_page_id && connection.encrypted_page_token
-        ? { kind: 'connected', pageId: connection.facebook_page_id, pageToken: connection.encrypted_page_token }
+      const connection = await getFacebookPagesConnection(env, site.id)
+      socialPublish = connection?.page_id && connection.encrypted_page_token
+        ? { kind: 'connected', pageId: connection.page_id, pageToken: connection.encrypted_page_token }
         : { kind: 'unavailable', reason: 'No Facebook Page connected.' }
     } catch (error) {
       console.error('[publish] getFacebookPagesConnection failed:', error)
@@ -48,7 +48,7 @@ export default defineHandler(async (event) => {
     }
   }
 
-  const post = await publishPost(db, site.organization_id, postId, channels, env, socialPublish)
+  const post = await publishPost(db, site.id, postId, channels, env, socialPublish)
   if (!post) return jsonResponse({ error: 'Post not found' }, { status: 404 })
   const socialErrors = Object.fromEntries(post.channels
     .filter(job => channels.includes(job.channel) && (job.status === 'failed' || job.status === 'skipped') && job.error)

@@ -358,7 +358,7 @@ export async function getPublicBlawbyDocumentData(
   const locale = options.locale?.trim() || 'en'
   const localizations = locale === 'en'
     ? []
-    : await loadExactPublicLocalizations(env, db, site.organization_id, locale)
+    : await loadExactPublicLocalizations(env, db, site.id, locale)
 
   const [shell, route] = await Promise.all([
     getPublicBlawbyShellData(db, organizationId, { locale, localizations }),
@@ -371,7 +371,7 @@ export async function getPublicBlawbyDocumentData(
   // Every route on this template is a page now, so locale representations
   // come from the document — there is no second resource kind to branch on.
   route.localeRepresentations = await listPublicLocaleRepresentations(env, db, {
-    organizationId: site.organization_id,
+    organizationId: site.id,
     
     sourcePath: pagePath ?? '/',
     documentId: route.page?.page_id,

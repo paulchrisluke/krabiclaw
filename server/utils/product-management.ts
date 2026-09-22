@@ -1289,7 +1289,7 @@ export async function setProductLocation(db: DbClient, input: {
               updated_at = excluded.updated_at, updated_by = excluded.updated_by`,
     params: [input.organizationId, input.productId, input.locationId, (input.active ?? true) ? 1 : 0, (input.published ?? false) ? 1 : 0,
       now, now, input.actor.actorId, input.actor.actorId],
-  }, publicResourceCacheInvalidationQuery(site.organization_id, 'product_location_changed')], { operation: 'Set product location' })
+  }, publicResourceCacheInvalidationQuery(site.id, 'product_location_changed')], { operation: 'Set product location' })
 }
 
 export async function removeProductLocation(db: DbClient, input: {
@@ -1299,7 +1299,7 @@ export async function removeProductLocation(db: DbClient, input: {
   if (!site) notFound('Location not found')
   await executeBatch(db, [
     { query: 'DELETE FROM product_locations WHERE organization_id = ? AND product_id = ? AND location_id = ?', params: [input.organizationId, input.productId, input.locationId] },
-    publicResourceCacheInvalidationQuery(site.organization_id, 'product_location_changed'),
+    publicResourceCacheInvalidationQuery(site.id, 'product_location_changed'),
   ], { operation: 'Remove product location' })
 }
 

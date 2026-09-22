@@ -10,7 +10,7 @@ export default defineHandler(async (event) => {
   try {
     const body = await readRequiredBody<TenantPageEditorInput>(event)
     return jsonResponse(await createTenantPage(db, {
-      organizationId: site.organization_id, userId, data: body, env, }), { status: 201 })
+      organizationId, userId, data: body, env, }), { status: 201 })
   } catch (error) {
     rethrowHttpError(error)
     return jsonResponse({ error: error instanceof Error ? error.message : 'Invalid tenant page' }, { status: 400 })

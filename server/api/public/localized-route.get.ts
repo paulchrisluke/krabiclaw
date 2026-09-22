@@ -18,5 +18,5 @@ export default defineHandler(async (event) => {
     SELECT organization_id FROM organization WHERE id = ? AND status = 'active' LIMIT 1
   `, [organizationId])
   if (!site) throw createError({ statusCode: 404, statusMessage: 'Site not found' })
-  return { route: await resolveLocalizedPublicRoute(env, db, site.organization_id, path) }
+  return { route: await resolveLocalizedPublicRoute(env, db, site.id, path) }
 })

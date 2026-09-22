@@ -39,7 +39,7 @@ export default defineHandler(async (event) => {
       collectionSiblings: siblingCollection
         ? selectProductCollectionSiblings(result.products, result.product, siblingCollection.id, priceSelection)
         : [],
-      metafieldDefinitions: await listMetafieldDefinitions(db, result.site.organization_id),
+      metafieldDefinitions: await listMetafieldDefinitions(db, result.organization.id),
       localeRepresentations: result.localeRepresentations,
     })
   } catch (error) {

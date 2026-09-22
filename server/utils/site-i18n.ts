@@ -37,11 +37,11 @@ export async function resolveSiteLocale(
   site: { id: string; organization_id: string },
   requestedLocale: unknown,
 ): Promise<SiteLocaleState> {
-  const sourceLocale = await getConfiguredSourceLocale(db, site.organization_id)
+  const sourceLocale = await getConfiguredSourceLocale(db, organizationId)
   const requested = requestedLocale === undefined || requestedLocale === null || requestedLocale === ''
     ? sourceLocale
     : assertExactCanonicalLocale(requestedLocale)
-  const entitlement = await assertSiteLanguageEntitlement(env, db, site.organization_id, site.id, requested)
+  const entitlement = await assertSiteLanguageEntitlement(env, db, organizationId, requested)
   return {
     requestedLocale: requested,
     sourceLocale,

@@ -20,7 +20,7 @@ interface ConnectionRow {
   revision: string | null
   id: string
   organization_id: string
-  facebook_page_id: string | null
+  page_id: string | null
   encrypted_user_token: string
   encrypted_page_token: string | null
 }
@@ -60,7 +60,7 @@ export default defineScheduledTask({
     const candidates = await queryAllPages<ConnectionRow>(db, `
       SELECT json_extract(s.integrations_json, '$.facebook.id') AS id, s.organization_id, s.id AS organization_id,
              json_extract(s.integrations_json, '$.facebook.revision') AS revision,
-             json_extract(s.integrations_json, '$.facebook.facebook_page_id') AS facebook_page_id,
+             json_extract(s.integrations_json, '$.facebook.page_id') AS page_id,
              json_extract(s.integrations_json, '$.facebook.encrypted_user_token') AS encrypted_user_token,
              json_extract(s.integrations_json, '$.facebook.encrypted_page_token') AS encrypted_page_token
       FROM organization s
@@ -94,7 +94,7 @@ export default defineScheduledTask({
         const activeToken = pageToken ?? userToken
 
         // Fall back to fetching pages from Graph API if page_id isn't stored
-        let pageId = conn.facebook_page_id
+        let pageId = conn.page_id
         if (!pageId) {
           const pages = await getFacebookPages(userToken)
           pageId = pages[0]?.id ?? null

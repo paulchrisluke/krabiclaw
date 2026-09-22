@@ -453,7 +453,7 @@ async function resolveTenantContext(db: DbClient, organizationId: string, env?: 
     [organizationId],
   )
   if (!site?.subdomain) return undefined
-  const organization = await findOrganizationById(env, site.organization_id)
+  const organization = await findOrganizationById(env, organization.id)
   if (!organization) return undefined
   return { orgSlug: organization.slug, siteSlug: site.subdomain }
 }

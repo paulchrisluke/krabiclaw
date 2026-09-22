@@ -50,7 +50,7 @@ export default defineHandler(async (event) => {
         AND ma.organization_id = bl.organization_id AND ma.organization_id = bl.organization_id
       WHERE bl.organization_id = ? AND bl.organization_id = ? AND bl.status = 'active'
       ORDER BY bl.title ASC
-    `, [site.organization_id, organizationId])
+    `, [site.id, organizationId])
 
     const parsedLocations = (locations || []).map((location: ApiValue) => {
       const { asset_id, media_public_url, media_thumbnail_url, media_kind, ...fields } = location

@@ -82,7 +82,7 @@ export default defineHandler(async (event) => {
 
   const consentAt = consentAcknowledged ? new Date().toISOString() : null
   const now = new Date().toISOString()
-  await executeBatch(db, requestInsertQueries({ id, kind: 'contact', organization_id: site.organization_id, location_id: assignedLocationId,
+  await executeBatch(db, requestInsertQueries({ id, kind: 'contact', organization_id: site.id, location_id: assignedLocationId,
     customer_id: null, review_id: null, conversation_state: 'needs_attention', resolved_at: null,
     payload: { guest: { name, email, phone: null }, subject: subject || topic || null, message, consent_at: consentAt, ip_hash: ipHash,
       source: source || null, route_context: routeContext || null, suggested_summary: suggestedSummary || null, agent_metadata: agentMetadata }, created_at: now, updated_at: now }))
@@ -90,15 +90,15 @@ export default defineHandler(async (event) => {
 
   try {
     await notifyContactSubmitted(env, db, {
-      organizationId: site.organization_id, locationId: assignedLocationId, siteName: site.name, contactId: id, guestName: name, email, subject: subject || topic || null, message, consentAcknowledged, })
+      organizationId: site.id, locationId: assignedLocationId, siteName: site.name, contactId: id, guestName: name, email, subject: subject || topic || null, message, consentAcknowledged, })
   } catch (error) {
     console.error('contact_notification_failed', {
-      organizationId: site.organization_id, contactId: id, error: error instanceof Error ? error.message : String(error)
+      organizationId: site.id, contactId: id, error: error instanceof Error ? error.message : String(error)
     })
   }
 
   await recordSubmissionConversionSafe(db, event, {
-    organizationId: site.organization_id,
+    organizationId: site.id,
     eventName: 'contact_submit',
     stage: 'submitted',
     locationId: assignedLocationId,

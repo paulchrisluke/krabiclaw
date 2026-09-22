@@ -39,7 +39,7 @@ export default defineHandler(async (event) => {
     await execute(db, `
       INSERT INTO reviews (id, organization_id, organization_id, location_id, product_id, author_name, rating, title, content, status, ip_hash, user_agent)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `, [id, resolved.site.organization_id, organizationId, resolved.location.id, resolved.product.id, author, rating, title, content, status, ipHash, userAgent])
+    `, [id, resolved.organization.id, organizationId, resolved.location.id, resolved.product.id, author, rating, title, content, status, ipHash, userAgent])
     return jsonResponse({ review: { id, product_id: resolved.product.id, author, rating, title, content, status }, message: 'Thanks. Your review is pending moderation.' }, { status: 201 })
   } catch (error) {
     rethrowHttpError(error)

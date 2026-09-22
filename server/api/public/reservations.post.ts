@@ -71,7 +71,7 @@ export default defineHandler(async (event) => {
     return jsonResponse({ error: 'Please choose a valid party size.' }, { status: 400 })
 
   const site = await queryFirst<{ id: string; organization_id: string; name?: string | null; public_url?: string | null }>(
-    db, `SELECT id, organization_id, name, (SELECT 'https://' || domain FROM organization_domains WHERE organization_id = organization.id AND role = 'canonical' AND status = 'active') AS public_url FROM organization WHERE id = ? AND status = ? LIMIT 1`, [organizationId, 'active'], )
+    db, `SELECT id, organization_id, name, (SELECT 'https://' || domain FROM organization_domains WHERE organization_id = site.id AND role = 'canonical' AND status = 'active') AS public_url FROM organization WHERE id = ? AND status = ? LIMIT 1`, [organizationId, 'active'], )
   if (!site) return jsonResponse({ error: 'Site not found' }, { status: 404 })
   const siteBaseUrl = site.public_url?.trim().replace(/\/$/, '')
   if (!siteBaseUrl) return jsonResponse({ error: 'Site public URL is not configured' }, { status: 500 })
@@ -85,11 +85,11 @@ export default defineHandler(async (event) => {
     db, 'SELECT title, opening_hours, max_capacity FROM business_locations WHERE id = ? AND organization_id = ? LIMIT 1', [resolvedLocationId, organizationId], )
   if (!location) return jsonResponse({ error: 'location_id must reference a location on this site' }, { status: 400 })
 
-  const reservationTimezone = await resolveLocationTimezone(db, site.organization_id, resolvedLocationId)
+  const reservationTimezone = await resolveLocationTimezone(db, site.id, resolvedLocationId)
   if (isDateBeforeTimezoneToday(date, reservationTimezone))
     return jsonResponse({ error: 'Please choose a valid future date.' }, { status: 400 })
 
-  const availability = await listReservationSlots(db, { organizationId: site.organization_id, locationId: resolvedLocationId, date })
+  const availability = await listReservationSlots(db, { organizationId: site.id, locationId: resolvedLocationId, date })
   const slot = availability.slots.find(entry => entry.time_slot === time)
   if (!slot) return jsonResponse({ error: 'Please choose a valid time — this location is closed at that time.' }, { status: 400 })
   if (slot.is_closed) return jsonResponse({ error: 'This time is closed for booking.' }, { status: 409 })
@@ -125,7 +125,7 @@ export default defineHandler(async (event) => {
   const userId = session?.user?.id || null
 
   const customerInput = {
-    organizationId: site.organization_id, name, email, phone, source: 'reservation', userId, } as const
+    organizationId: site.id, name, email, phone, source: 'reservation', userId, } as const
   const customer = await findOrCreateCustomer(db, customerInput)
 
   const now = new Date().toISOString()
@@ -138,14 +138,14 @@ export default defineHandler(async (event) => {
   const durationMinutes = 120
   try {
     await claimReservation(db, {
-      organizationId: site.organization_id, locationId: resolvedLocationId,
+      organizationId: site.id, locationId: resolvedLocationId,
       reservationId, requestId: id, customerId: customer.id,
       timezone: availability.timezone, startsAt: slot.starts_at,
       date, timeSlot: slot.time_slot,
       endsAt: new Date(Date.parse(slot.starts_at) + durationMinutes * 60_000).toISOString(),
       partySize,
       thread: requestInsertQueries({
-        id, kind: 'reservation', organization_id: site.organization_id,
+        id, kind: 'reservation', organization_id: site.id,
         location_id: resolvedLocationId, customer_id: customer.id, review_id: null,
         conversation_state: 'needs_attention', resolved_at: null, payload, created_at: now, updated_at: now,
       }, { query: 'SELECT 1 FROM reservations WHERE id = ?', params: [reservationId] }),
@@ -166,7 +166,7 @@ export default defineHandler(async (event) => {
   const [{ contactPhone, contactEmail }, ownerInboxUrl] = await Promise.all([
     resolveLocationContact(db, organizationId, resolvedLocationId),
     buildOwnerThreadInboxUrl(env, db, {
-      organizationId: site.organization_id,
+      organizationId: site.id,
       locationId: resolvedLocationId,
       threadId: id,
     }),
@@ -174,21 +174,21 @@ export default defineHandler(async (event) => {
 
   try {
     await notifyReservationCreated(env, db, {
-      organizationId: site.organization_id, siteName: site.name, locationId: resolvedLocationId, locationName: location.title, reservationId: id, guestName: name, email, phone, date, time, guests, requests, cancelUrl, contactPhone, contactEmail, ownerInboxUrl, })
+      organizationId: site.id, siteName: site.name, locationId: resolvedLocationId, locationName: location.title, reservationId: id, guestName: name, email, phone, date, time, guests, requests, cancelUrl, contactPhone, contactEmail, ownerInboxUrl, })
   } catch (error) {
     console.error('reservation_notification_failed', {
-      organizationId: site.organization_id, reservationId: id, error: error instanceof Error ? error.message : String(error)
+      organizationId: site.id, reservationId: id, error: error instanceof Error ? error.message : String(error)
     })
   }
 
   const requestedLocale = cleanString(body.locale, 10)
   const [policy, locale] = await Promise.all([
-    requireLocationReservationConfig(db, { organizationId: site.organization_id, locationId: resolvedLocationId }),
+    requireLocationReservationConfig(db, { organizationId: site.id, locationId: resolvedLocationId }),
     requestedLocale && /^[a-z]{2}(-[A-Z]{2})?$/.test(requestedLocale)
       ? requestedLocale
-      : getSourceLocale(db, site.organization_id),
+      : getSourceLocale(db, site.id),
     recordSubmissionConversionSafe(db, event, {
-      organizationId: site.organization_id,
+      organizationId: site.id,
       eventName: 'reservation_submit',
       stage: 'submitted',
       locationId: resolvedLocationId,

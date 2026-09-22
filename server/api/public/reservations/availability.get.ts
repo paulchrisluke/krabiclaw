@@ -42,7 +42,7 @@ export default defineHandler(async (event) => {
     // they closed it and is nobody else's business. The guest is told the slot
     // is closed; the reason stays in the dashboard.
     const calendar = await Promise.all(dates.map(async (day) => {
-      const { timezone, slots } = await listReservationSlots(db, { organizationId: site.organization_id, locationId: location.id, date: day })
+      const { timezone, slots } = await listReservationSlots(db, { organizationId: site.id, locationId: location.id, date: day })
       return {
         date: day,
         timezone,

@@ -34,7 +34,7 @@ export default defineHandler(async (event) => {
 
   let post
   try {
-    post = await createPost(db, site.organization_id, body, session.user.id, env)
+    post = await createPost(db, site.id, body, session.user.id, env)
   } catch (error) {
     if (error instanceof PostValidationError) {
       return jsonResponse({ error: error.message }, { status: error.statusCode })

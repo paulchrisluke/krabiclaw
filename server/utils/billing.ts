@@ -51,7 +51,7 @@ export async function getSiteBillingStatus(
     SELECT organization_id FROM organization WHERE id = ? LIMIT 1
   `, [organizationId])
   if (!site) throw new HTTPError({ statusCode: 404, statusMessage: 'Site not found' })
-  return getOrganizationBillingStatus(env, db, site.organization_id)
+  return getOrganizationBillingStatus(env, db, site.id)
 }
 
 export async function getOrganizationBillingStatus(
@@ -105,7 +105,7 @@ export async function hasSiteEntitlement(
     SELECT organization_id FROM organization WHERE id = ? LIMIT 1
   `, [organizationId])
   if (!site) return false
-  return (await getOrganizationEntitlements(env, site.organization_id))[key] === true
+  return (await getOrganizationEntitlements(env, site.id))[key] === true
 }
 
 export async function hasOrganizationEntitlement(

@@ -77,7 +77,7 @@ export default defineHandler(async (event) => {
       return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
     }
 
-    const orgId = site.organization_id
+    const orgId = site.id
 
     const locationProgress = await queryFirst<{ count: number; missing_address: number; missing_hours: number }>(db, `
       SELECT COUNT(*) AS count,

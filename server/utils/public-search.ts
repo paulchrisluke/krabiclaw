@@ -669,7 +669,7 @@ export async function buildWorkspaceDocuments(db: DbClient, organizationId?: str
 
   for (const row of members ?? []) {
     for (const site of sites) {
-      if (site.organization_id !== row.organization_id) continue
+      if (site.id !== row.organization_id) continue
       records.push(doc(site, 'member', row.id, {
         title: row.name?.trim() || row.email, path: `/dashboard/${site.org_slug}/settings/members`, snippet: `${row.email} · ${row.role}`,
         section: 'Team', icon: 'users', body: joinWords(row.name, row.email, row.role),

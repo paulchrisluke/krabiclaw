@@ -80,7 +80,7 @@ export default defineHandler(async (event) => {
         AND ma.organization_id = bl.organization_id AND ma.organization_id = bl.organization_id
       WHERE bl.organization_id = ? AND bl.organization_id = ? AND bl.status = 'active'
       ORDER BY bl.title ASC
-    `, [site.organization_id, organizationId])
+    `, [site.id, organizationId])
 
 
     const parsedLocations = locationRows.map((location) => {

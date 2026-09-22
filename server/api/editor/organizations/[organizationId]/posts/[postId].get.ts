@@ -19,7 +19,7 @@ export default defineHandler(async (event) => {
   const site = await loadMemberOrganizationRow(event, db, env, organizationId, session.user.id)
   if (!site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
 
-  const post = await getPost(db, site.organization_id, postId)
+  const post = await getPost(db, site.id, postId)
   if (!post) return jsonResponse({ error: 'Post not found' }, { status: 404 })
 
   await assertResourceAccess(db, { ...memberAccessPrincipal(site.membership, { env, event }), resourceLocationId: post.location_id ?? null })

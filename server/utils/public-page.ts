@@ -309,7 +309,7 @@ async function loadPublicPageSource(
   const { site } = await loadPublicBase(event, organizationId, { previewAuthorized: isPreviewAuthorized });
   options.signal?.throwIfAborted();
 
-  const orgId = site.organization_id;
+  const orgId = site.id;
   const localizedLocale = locale && locale !== 'en' ? locale : null
   let publicLocalizations: ExactPublicLocalization[] = []
   if (localizedLocale) {

@@ -70,7 +70,7 @@ export interface LocalizationSettings { effective_plan: string; languages: Local
 
 export interface LocalizationProgress { locale: string; completed: number; total: number; opportunities: Array<{ id: string; label: string; completed: number; total: number; path: string }> }
 
-export interface FacebookConnectionStatus { connected: boolean; facebook_page_name?: string }
+export interface FacebookConnectionStatus { connected: boolean; page_name?: string }
 
 /**
  * The site's settings draft and everything a leaf shows or does beside its
@@ -232,7 +232,7 @@ const isNotificationsResponse = (value: unknown): value is { success: boolean; n
   isRecord(value) && typeof value.success === 'boolean' && isRecord(value.notifications)
   && (value.notifications.whatsapp_phone === null || typeof value.notifications.whatsapp_phone === 'string')
 const isFacebookStatus = (value: unknown): value is FacebookConnectionStatus =>
-  isRecord(value) && typeof value.connected === 'boolean' && (value.facebook_page_name === undefined || typeof value.facebook_page_name === 'string')
+  isRecord(value) && typeof value.connected === 'boolean' && (value.page_name === undefined || typeof value.page_name === 'string')
 
 
 /** Which leaf is open, named by the route below this rail rather than counted here. */
@@ -325,7 +325,7 @@ const settingsItems = computed<EditorNavigationItem[]>(() => [
   { id: 'notifications', label: 'WhatsApp number', summary: notificationSummary.value, icon: 'i-lucide-bell', to: `${settingsPath.value}/notifications` },
   { id: 'search', label: 'Search engines', summary: searchSummary.value, icon: 'i-lucide-scan-search', to: `${settingsPath.value}/search` },
   { id: 'analytics', label: 'Google Analytics', summary: explicitSummary(loadedSettings.value?.google_analytics_measurement_id, 'Not connected'), icon: 'i-lucide-chart-no-axes-combined', to: `${settingsPath.value}/analytics` },
-  { id: 'publishing', label: 'Facebook publishing', summary: facebookConnection.value?.connected ? explicitSummary(facebookConnection.value.facebook_page_name, 'Connected') : 'Not connected', icon: 'i-simple-icons-facebook', to: `${settingsPath.value}/publishing` },
+  { id: 'publishing', label: 'Facebook publishing', summary: facebookConnection.value?.connected ? explicitSummary(facebookConnection.value.page_name, 'Connected') : 'Not connected', icon: 'i-simple-icons-facebook', to: `${settingsPath.value}/publishing` },
   // Deleting the site deletes the organization, so only an owner is
   // offered it — the same permission Better Auth enforces on the delete itself.
   ...(isOwner.value

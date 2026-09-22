@@ -36,7 +36,7 @@ export default defineHandler(async (event) => {
   const db = env.DB
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
 
-  const site = await queryFirst<{ id: string; organization_id: string; name: string | null; public_url: string | null }>(db, `SELECT id, organization_id, name, (SELECT 'https://' || domain FROM organization_domains WHERE organization_id = organization.id AND role = 'canonical' AND status = 'active') AS public_url FROM organization WHERE id = ? AND status = 'active' LIMIT 1`, [organizationId])
+  const site = await queryFirst<{ id: string; organization_id: string; name: string | null; public_url: string | null }>(db, `SELECT id, organization_id, name, (SELECT 'https://' || domain FROM organization_domains WHERE organization_id = site.id AND role = 'canonical' AND status = 'active') AS public_url FROM organization WHERE id = ? AND status = 'active' LIMIT 1`, [organizationId])
   if (!site) return jsonResponse({ error: 'Site not found' }, { status: 404 })
 
   const product = await queryFirst<{ id: string; name: string }>(db, `
@@ -87,7 +87,7 @@ export default defineHandler(async (event) => {
           WHERE pl.product_id = s.product_id AND pl.location_id = s.location_id
             AND pl.active = 1 AND pl.published = 1
        ))
-  `, [sessionId, product.id, site.organization_id, organizationId])
+  `, [sessionId, product.id, site.id, organizationId])
   if (!session) return jsonResponse({ error: 'That session is not open for booking' }, { status: 404 })
 
   // What is being bought is a variant. Adult and child seats, or a class and
@@ -99,7 +99,7 @@ export default defineHandler(async (event) => {
     SELECT id FROM product_variants
      WHERE product_id = ? AND organization_id = ? AND active = 1
      ORDER BY sort_order, id
-  `, [product.id, site.organization_id])
+  `, [product.id, site.id])
   if (variants.length === 0) return jsonResponse({ error: 'This product has no bookable option' }, { status: 409 })
   if (requestedVariantId && !variants.some(variant => variant.id === requestedVariantId)) {
     return jsonResponse({ error: 'That option is not available for this product' }, { status: 400 })
@@ -128,7 +128,7 @@ export default defineHandler(async (event) => {
   const cancellationTokenHash = await hashReservationCancelToken(cancellation.token)
   const authSession = await getAuthSession(event, env)
   const customerInput = {
-    organizationId: site.organization_id, name: guestName, email: guestEmail,
+    organizationId: site.id, name: guestName, email: guestEmail,
     phone: normalizedGuestPhone, source: 'booking', userId: authSession?.user?.id || null,
   } as const
   const customer = await findOrCreateCustomer(db, customerInput)
@@ -144,11 +144,11 @@ export default defineHandler(async (event) => {
     // raises nothing, so a thread written ahead of it would commit on its own.
     // The booking takes its request id once the thread exists.
     await claimSessionCapacity(db, {
-      organizationId: site.organization_id, productId: product.id, sessionId: session.id,
+      organizationId: site.id, productId: product.id, sessionId: session.id,
       productVariantId, partySize, customerId: customer.id, requestId: null,
       following: bookingId => [
         ...requestInsertQueries({
-          kind: 'booking', id: threadId, organization_id: site.organization_id,
+          kind: 'booking', id: threadId, organization_id: site.id,
           location_id: session.location_id, customer_id: customer.id, review_id: null,
           conversation_state: 'needs_attention', resolved_at: null, payload,
           created_at: now, updated_at: now,
@@ -177,29 +177,29 @@ export default defineHandler(async (event) => {
   try {
     const [{ contactPhone, contactEmail }, ownerInboxUrl] = await Promise.all([
       resolveLocationContact(db, organizationId, session.location_id),
-      buildOwnerThreadInboxUrl(env, db, { organizationId: site.organization_id, locationId: session.location_id ?? undefined, threadId }),
+      buildOwnerThreadInboxUrl(env, db, { organizationId: site.id, locationId: session.location_id ?? undefined, threadId }),
     ])
     const siteBaseUrl = site.public_url?.replace(/\/$/, '')
     const cancelUrl = siteBaseUrl ? `${siteBaseUrl}/bookings/cancel?id=${threadId}#${cancellation.token}` : null
     await notifyBookingCreated(env, db, {
-      organizationId: site.organization_id, siteName: site.name, locationId: session.location_id,
+      organizationId: site.id, siteName: site.name, locationId: session.location_id,
       bookingId: threadId, guestName, email: guestEmail, guestPhone: normalizedGuestPhone,
       productId: product.id, productTitle: product.name, startsAt: session.starts_at, timezone: session.timezone,
       partySize, notes: notes || null,
       cancelUrl, contactPhone, contactEmail, ownerInboxUrl,
     })
   } catch (error) {
-    console.error('booking_notification_failed', { organizationId: site.organization_id, threadId, error: error instanceof Error ? error.message : String(error) })
+    console.error('booking_notification_failed', { organizationId: site.id, threadId, error: error instanceof Error ? error.message : String(error) })
   }
 
   const requestedLocale = cleanString(body.locale, 10)
   const [full, locale] = await Promise.all([
     // The policy the guest is shown is the product's own attribute. There is
     // no site or location policy merged underneath it.
-    getProduct(db, site.organization_id, product.id),
-    requestedLocale && /^[a-z]{2}(-[A-Z]{2})?$/.test(requestedLocale) ? requestedLocale : getSourceLocale(db, site.organization_id),
+    getProduct(db, site.id, product.id),
+    requestedLocale && /^[a-z]{2}(-[A-Z]{2})?$/.test(requestedLocale) ? requestedLocale : getSourceLocale(db, site.id),
     recordSubmissionConversionSafe(db, event, {
-      organizationId: site.organization_id, eventName: 'booking_submit', stage: 'submitted',
+      organizationId: site.id, eventName: 'booking_submit', stage: 'submitted',
       locationId: session.location_id, entityType: 'request', entityId: threadId,
       pageType: 'product', pagePath: `/products/${slug}`,
     }),

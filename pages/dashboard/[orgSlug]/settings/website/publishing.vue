@@ -15,7 +15,7 @@
       <div class="flex items-center justify-between gap-4">
         <div>
           <p class="font-semibold text-highlighted">{{ editor.facebookConnection.value?.connected ? 'Connected' : 'Not connected' }}</p>
-          <p v-if="editor.facebookConnection.value?.facebook_page_name" class="mt-1 text-sm text-muted">{{ editor.facebookConnection.value.facebook_page_name }}</p>
+          <p v-if="editor.facebookConnection.value?.page_name" class="mt-1 text-sm text-muted">{{ editor.facebookConnection.value.page_name }}</p>
         </div>
         <UButton icon="i-simple-icons-facebook" :loading="editor.connectingFacebook.value" @click="editor.startFacebookConnect">{{ editor.facebookConnection.value?.connected ? 'Reconnect' : 'Connect' }}</UButton>
       </div>

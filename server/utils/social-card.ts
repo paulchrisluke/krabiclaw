@@ -336,7 +336,7 @@ export async function refreshSocialCard(input: {
         await deleteMediaAsset(db, env, current.asset_id, site.id, input.actorId ?? null)
       }
       await executeBatch(db, buildSingleMediaPlacementQueries({
-        organizationId: site.organization_id,
+        organizationId: site.id,
         placement: { owner_type: owner.owner_type, owner_id: owner.owner_id, slot: 'social_card' },
         media: [{ asset_id: uploaded.assetId }],
       }), { operation: 'replace social card placement' })

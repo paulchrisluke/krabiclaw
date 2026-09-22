@@ -359,7 +359,7 @@ export async function reconcileZarazAnalytics(
       FROM organization site
       JOIN organization_domains domain
         ON domain.organization_id = site.id
-       AND domain.organization_id = site.organization_id
+       AND domain.organization_id = organization.id
      WHERE site.status = 'active'
        AND site.onboarding_status = 'active'
        AND json_extract(site.integrations_json, '$.google.status') = 'active'
