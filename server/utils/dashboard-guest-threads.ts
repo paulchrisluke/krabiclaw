@@ -109,25 +109,19 @@ export async function loadOrganizationGuestThreads(
   query: OrganizationGuestThreadListQuery,
   scope?: { orgSlug?: string | null },
 ) {
-  const { db, env, organization, userId } = await getDashboardContext(event, {
+  const { db, env, organization } = await getDashboardContext(event, {
     requireOrganization: true,
-        organizationSlug: scope?.orgSlug,
+    organizationSlug: scope?.orgSlug,
   })
-  if (!organization) {
-    throw new HTTPError({ statusCode: 404, statusMessage: 'Organization not found' })
-  }
-  // The rows are filtered by team below, so this only asks whether the role
-  // takes part in guest operations at all.
+  const userId = organization.userId
+  // The rows are filtered by location scope below, so this only asks whether
+  // the role takes part in guest operations at all.
   await assertRoleAllows({ organizationId: organization.id, role: organization.role, permissions: { operations: ['read'] } })
 
-  const principal = {
-    userId,
-    role: organization.role,
-    organizationId: organization.id,
-    teamIds: isOrganizationWideRole(organization.role)
-      ? null
-      : await listUserOrganizationTeamIds({ env, organizationId: organization.id, userId, event }),
-  }
+  // The one principal. Assembling a second shape here — a role, an id and a
+  // team list the caller had gathered — is what let this list scope its rows
+  // by a rule the thread list did not use.
+  const principal = memberAccessPrincipal(organization, { env, event })
   const options = {
     organizationId: organization.id,
     locationId: query.locationId ?? null,

@@ -1,9 +1,8 @@
 import { execute, queryAll, queryFirst, type DbClient } from '~/server/db'
 import { d1JsonStringSet } from '~/server/db/d1-limits'
 import {
-  isOrganizationWideRole,
-  isScopedRole,
   listAccessibleLocationIds,
+  type MemberAccessPrincipal,
 } from '~/server/utils/member-access'
 import type {
   ConversationState,
@@ -104,7 +103,7 @@ export async function getGuestThreadOperationSummary(
     where += ' AND gt.location_id = ?'
     params.push(opts.locationId)
   }
-  if (opts.principal && 'organizationId' in opts.principal) {
+  if (opts.principal) {
     const accessibleLocationIds = await listAccessibleLocationIds(db, opts.principal)
     if (accessibleLocationIds !== null) {
       if (accessibleLocationIds.length === 0) {
@@ -119,17 +118,6 @@ export async function getGuestThreadOperationSummary(
         params.push(d1JsonStringSet(accessibleLocationIds))
       }
     }
-  } else if (opts.principal && isScopedRole(opts.principal.role)) {
-    const teamIds = opts.principal.teamIds ?? []
-    if (teamIds.length === 0) return { openThreads: 0, unreadThreads: 0, reservations: 0, experienceBookings: 0 }
-    const teamIdsJson = d1JsonStringSet(teamIds)
-    where += ` AND (
-      EXISTS (SELECT 1 FROM organization scoped_site WHERE scoped_site.id = gt.organization_id AND scoped_site.team_id IN (SELECT value FROM json_each(?)))
-      OR EXISTS (SELECT 1 FROM business_locations scoped_location WHERE scoped_location.id = gt.location_id AND scoped_location.team_id IN (SELECT value FROM json_each(?)))
-    )`
-    params.push(teamIdsJson, teamIdsJson)
-  } else if (opts.principal && !isOrganizationWideRole(opts.principal.role)) {
-    return { openThreads: 0, unreadThreads: 0, reservations: 0, experienceBookings: 0 }
   }
 
   const counts = await queryFirst<OperationSummary>(db, `
@@ -207,7 +195,7 @@ export async function listGuestThreads(
     where += ' AND gt.location_id = ?'
     params.push(opts.locationId)
   }
-  if (opts.principal && 'organizationId' in opts.principal) {
+  if (opts.principal) {
     const accessibleLocationIds = await listAccessibleLocationIds(db, opts.principal)
     if (accessibleLocationIds !== null) {
       if (accessibleLocationIds.length === 0) return []
@@ -316,33 +304,28 @@ export async function listOrganizationGuestThreads(
   db: DbClient,
   opts: Omit<ListGuestThreadsOptions, 'principal'> & {
     organizationId: string
-    principal: {
-      userId: string
-      role: string
-      organizationId: string
-      teamIds: string[] | null
-    }
+    principal: MemberAccessPrincipal
   },
 ): Promise<GuestThreadListItemViewModel[]> {
   const params: Array<string | number> = [opts.organizationId]
   let where = 'gt.organization_id = ?'
 
-  if (opts.organizationId) {
-    where += ' AND gt.organization_id = ?'
-    params.push(opts.organizationId)
-  }
   if (opts.locationId) {
     where += ' AND gt.location_id = ?'
     params.push(opts.locationId)
   }
-  if (isScopedRole(opts.principal.role)) {
-    const teamIds = opts.principal.teamIds ?? []
-    if (teamIds.length === 0) return []
-    const teamIdsJson = d1JsonStringSet(teamIds)
-    where += ` AND (s.team_id IN (SELECT value FROM json_each(?)) OR bl.team_id IN (SELECT value FROM json_each(?)))`
-    params.push(teamIdsJson, teamIdsJson)
-  } else if (!isOrganizationWideRole(opts.principal.role)) {
-    return []
+  // The same question the thread list asks, asked the same way. This used to
+  // read `teamIds` the caller had assembled and match them against a site team
+  // that no longer exists, which is a second answer to "which locations".
+  const accessibleLocationIds = await listAccessibleLocationIds(db, opts.principal)
+  if (accessibleLocationIds !== null) {
+    if (accessibleLocationIds.length === 0) return []
+    if (opts.locationId) {
+      if (!accessibleLocationIds.includes(opts.locationId)) return []
+    } else {
+      where += ` AND gt.location_id IN (SELECT value FROM json_each(?))`
+      params.push(d1JsonStringSet(accessibleLocationIds))
+    }
   }
   if (opts.type) {
     where += ' AND gt.kind = ?'

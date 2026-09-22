@@ -1,13 +1,6 @@
 import type { GuestRequest } from '~/server/domain/requests'
 import type { MemberAccessPrincipal } from '~/server/utils/member-access'
 
-export interface OrganizationMemberAccessPrincipal {
-  userId: string
-  role: string
-  organizationId: string
-  teamIds: string[] | null
-}
-
 export type GuestThreadEntryKind = 'submission' | 'message' | 'operation' | 'assignment' | 'resolution'
 export type GuestThreadActorKind = 'guest' | 'member' | 'system'
 export type GuestThreadChannel = 'web' | 'email' | 'whatsapp' | 'system'
@@ -174,7 +167,7 @@ export interface GuestThreadDetailViewModel {
 export interface ListGuestThreadsOptions {
   organizationId?: string | null
   locationId?: string | null
-  principal?: MemberAccessPrincipal | OrganizationMemberAccessPrincipal | null
+  principal?: MemberAccessPrincipal | null
   userId: string
   type?: GuestThreadSubmissionType | null
   conversationState?: ConversationState | null
