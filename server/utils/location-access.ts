@@ -12,7 +12,7 @@ import { getDashboardContext } from '~/server/utils/dashboard-context'
  * The tenant row plus the membership the request was authorized by.
  *
  * `id` is the organization id. There is no separate site id beside it any
- * more, and `name` is the business's own name — what `sites.brand_name` used
+ * more, and `name` is the business's own name — what `sites.name` used
  * to hold — rather than a second display name layered over the organization's.
  */
 export interface OrganizationAccessRow {

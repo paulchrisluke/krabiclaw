@@ -19,7 +19,7 @@ import { parsePostalAddress, type PostalAddress } from '~/utils/postal-address'
 interface PublicProductSiteRow {
   id: string
   organization_id: string
-  brand_name: string
+  name: string
   vertical: string
   theme_id: string
   feature_overrides: string | null
@@ -99,10 +99,10 @@ export interface PublicProductReview {
 // request: a site that has not finished onboarding is readable only with it.
 async function loadProductSite(db: DbClient, organizationId: string, routeKind: ProductSurface, previewAuthorized: boolean) {
   const site = await queryFirst<PublicProductSiteRow>(db, `
-    SELECT id, organization_id, brand_name, vertical, theme_id, feature_overrides, default_currency
+    SELECT id, organization_id, name, vertical, theme_id, feature_overrides, default_currency
       FROM organization
      WHERE id = ? AND status = 'active'${previewAuthorized ? '' : " AND onboarding_status = 'active'"}
-       AND brand_name IS NOT NULL AND trim(brand_name) <> ''
+       AND name IS NOT NULL AND trim(name) <> ''
      LIMIT 1
   `, [organizationId])
   if (!site) return null
@@ -238,7 +238,7 @@ export async function loadPublicProductDetail(
   const localizedLocation = projectExactLocalizedResource('business_location', location, locationLocalization)
   const localizedSite = siteLocalization
     ? projectExactLocalizedResource('site', collection.site, siteLocalization)
-    : { ...collection.site, brand_name: '' }
+    : { ...collection.site, name: '' }
   const localeRepresentations = await listPublicLocaleRepresentations(env, db, {
     organizationId: collection.site.organization_id,
     

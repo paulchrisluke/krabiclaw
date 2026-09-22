@@ -108,7 +108,7 @@ export async function getReviewBookingContext(
     json_extract(r.payload_json, '$.review.request_sent_at') AS review_request_sent_at,
     json_extract(r.payload_json, '$.review.reminder_sent_at') AS review_reminder_sent_at,
     json_extract(r.payload_json, '$.review.submitted_at') AS review_submitted_at, r.review_id,
-    s.brand_name AS site_name, (SELECT 'https://' || domain FROM organization_domains WHERE organization_id = s.id AND role = 'canonical' AND status = 'active') AS site_public_url,
+    s.name AS site_name, (SELECT 'https://' || domain FROM organization_domains WHERE organization_id = s.id AND role = 'canonical' AND status = 'active') AS site_public_url,
     s.subdomain AS site_subdomain, bl.slug AS location_slug, bl.title AS location_title, bl.google_place_id, bl.google_review_url,
     record.starts_at AS visit_starts_at, record.timezone AS visit_timezone, record.party_size, record.product_id
     FROM requests r JOIN organization s ON s.id = r.organization_id LEFT JOIN customers c ON c.id = r.customer_id LEFT JOIN business_locations bl ON bl.id = r.location_id

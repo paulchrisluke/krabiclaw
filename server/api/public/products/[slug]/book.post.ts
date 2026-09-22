@@ -36,7 +36,7 @@ export default defineHandler(async (event) => {
   const db = env.DB
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
 
-  const site = await queryFirst<{ id: string; organization_id: string; brand_name: string | null; public_url: string | null }>(db, `SELECT id, organization_id, brand_name, (SELECT 'https://' || domain FROM organization_domains WHERE organization_id = organization.id AND role = 'canonical' AND status = 'active') AS public_url FROM organization WHERE id = ? AND status = 'active' LIMIT 1`, [organizationId])
+  const site = await queryFirst<{ id: string; organization_id: string; name: string | null; public_url: string | null }>(db, `SELECT id, organization_id, name, (SELECT 'https://' || domain FROM organization_domains WHERE organization_id = organization.id AND role = 'canonical' AND status = 'active') AS public_url FROM organization WHERE id = ? AND status = 'active' LIMIT 1`, [organizationId])
   if (!site) return jsonResponse({ error: 'Site not found' }, { status: 404 })
 
   const product = await queryFirst<{ id: string; name: string }>(db, `
@@ -182,7 +182,7 @@ export default defineHandler(async (event) => {
     const siteBaseUrl = site.public_url?.replace(/\/$/, '')
     const cancelUrl = siteBaseUrl ? `${siteBaseUrl}/bookings/cancel?id=${threadId}#${cancellation.token}` : null
     await notifyBookingCreated(env, db, {
-      organizationId: site.organization_id, siteName: site.brand_name, locationId: session.location_id,
+      organizationId: site.organization_id, siteName: site.name, locationId: session.location_id,
       bookingId: threadId, guestName, email: guestEmail, guestPhone: normalizedGuestPhone,
       productId: product.id, productTitle: product.name, startsAt: session.starts_at, timezone: session.timezone,
       partySize, notes: notes || null,

@@ -20,7 +20,7 @@ if (presentation.locationCollectionSegment !== 'menu') throw createError({ statu
 const rawCurrency = config.value.default_currency
 if (!isCurrencyCode(rawCurrency)) throw createError({ statusCode: 500, statusMessage: 'Unsupported site currency' })
 const currency = rawCurrency
-const brandName = site.value?.brand_name
+const brandName = site.value?.name
 if (typeof brandName !== 'string' || brandName.trim().length === 0) throw createError({ statusCode: 500, statusMessage: 'Site brand is unavailable' })
 const productLocations = computed(() => locations.value.map(location => ({ id: location.id, slug: location.slug, title: location.title })))
 useSocialMetadata(() => ({ path: presentation.collectionPath, title: `${brandName} Menu`, description: `Full menu at ${brandName}.`, brand: { siteName: brandName } }))

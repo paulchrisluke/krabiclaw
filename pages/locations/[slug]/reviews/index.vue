@@ -128,11 +128,11 @@ definePageMeta({ layout: 'saya' })
 const { localePath, t } = useI18n()
 
 const route = useRoute()
-const { siteId, site } = useTenantSite()
-if (!siteId) throw createError({ statusCode: 404 })
+const { organizationId, site } = useTenantSite()
+if (!organizationId) throw createError({ statusCode: 404 })
 
 const slug = computed(() => String(route.params.slug))
-const siteName = computed(() => String((site as ApiValue)?.brand_name ?? '').trim())
+const siteName = computed(() => String((site as ApiValue)?.name ?? '').trim())
 
 const { location, reviewsAggregate, reviewsList, pending } = await usePublicPageData()
 if (!location.value) throw createError({ statusCode: 404, statusMessage: 'Location not found' })

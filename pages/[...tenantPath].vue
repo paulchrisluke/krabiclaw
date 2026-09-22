@@ -20,13 +20,13 @@ import { resolveTenantLocalePath } from '~/utils/tenant-locale-path'
 definePageMeta({ layout: false })
 
 const route = useRoute()
-const { isPlatform, siteId } = useTenantSite()
+const { isPlatform, organizationId } = useTenantSite()
 const { isBlawby } = usePublicTemplate()
 // An unclaimed path is a page document on whichever site resolved, KrabiClaw's
 // own included: its marketing pages are ordinary documents now, and this is the
 // route that serves the ones no named route owns (#903). A path with no
 // published document still 404s here — there is nothing to fall back to.
-if (!siteId) throw createError({ statusCode: 404, statusMessage: 'Page not found' })
+if (!organizationId) throw createError({ statusCode: 404, statusMessage: 'Page not found' })
 
 const segments = route.params.tenantPath
 const pagePath = computed(() => {
@@ -39,7 +39,7 @@ const isPublicLocalesResponse = (value: unknown): value is { locales: Array<{ co
   isRecord(value) && Array.isArray(value.locales) && value.locales.every(item => isRecord(item)
     && typeof item.code === 'string' && typeof item.status === 'string' && typeof item.is_source === 'boolean')
 const { data: publishedLocales, error: publishedLocalesError } = await useAsyncData(
-  `published-locales-${siteId}`,
+  `published-locales-${organizationId}`,
   async () => {
     if (import.meta.server) {
       if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Request context unavailable' })
@@ -53,7 +53,7 @@ const { data: publishedLocales, error: publishedLocalesError } = await useAsyncD
         SELECT locale FROM site_locales
          WHERE site_id = ? AND is_source = 0 AND status = 'published'
          ORDER BY locale
-      `, [siteId])
+      `, [organizationId])
       return rows.map(row => row.locale)
     }
     const response = await publicApiRequest(`/api/public/locales`, {
@@ -70,7 +70,7 @@ const tenantPagePath = computed(() => localePath.value.sourcePath)
 const isLocalizedRouteResponse = (value: unknown): value is { route: LocalizedPublicRoute } =>
   isRecord(value) && isRecord(value.route) && typeof value.route.locale === 'string'
 const localizedData = localeSegment.value
-  ? await useAsyncData<{ route: LocalizedPublicRoute }>(`localized-route-${siteId}-${pagePath.value}`, async () => {
+  ? await useAsyncData<{ route: LocalizedPublicRoute }>(`localized-route-${organizationId}-${pagePath.value}`, async () => {
       if (import.meta.server) {
         if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Request context unavailable' })
         const [{ cloudflareEnv }, { queryFirst }, { resolveLocalizedPublicRoute }] = await Promise.all([
@@ -81,7 +81,7 @@ const localizedData = localeSegment.value
         const env = cloudflareEnv(requestEvent)
         const db = env.db
         if (!db) throw createError({ statusCode: 503, statusMessage: 'Database unavailable' })
-        const currentSite = await queryFirst<{ organization_id: string }>(db, 'SELECT organization_id FROM sites WHERE id = ? AND status = \'active\' LIMIT 1', [siteId])
+        const currentSite = await queryFirst<{ organization_id: string }>(db, 'SELECT organization_id FROM sites WHERE id = ? AND status = \'active\' LIMIT 1', [organizationId])
         if (!currentSite) throw createError({ statusCode: 404, statusMessage: 'Site not found' })
         return { route: await resolveLocalizedPublicRoute(env, db, currentSite.organization_id, pagePath.value) }
       }

@@ -31,7 +31,7 @@ import type { CurrencyCode } from '~/shared/currencies'
 import type { SiteFontPreset } from '~/shared/site-fonts'
 
 export interface SiteSettingsForm {
-  brand_name: string
+  name: string
   brand_description: string
   logoAssetId: string | null
   socialShareAssetId: string | null
@@ -47,7 +47,7 @@ export interface SiteSettingsForm {
 
 export interface SiteSettingsResponse {
   theme?: string
-  brand_name?: string | null
+  name?: string | null
   brand_description?: string | null
   media?: Array<{ asset_id: string; slot: string; public_url?: string | null }>
   contact_email?: string | null
@@ -225,7 +225,7 @@ interface SettingsPageResource {
 
 const isSettingsResponse = (value: unknown): value is { success: boolean; settings: SiteSettingsResponse } =>
   isRecord(value) && typeof value.success === 'boolean' && isRecord(value.settings)
-  && (value.settings.brand_name === undefined || value.settings.brand_name === null || typeof value.settings.brand_name === 'string')
+  && (value.settings.name === undefined || value.settings.name === null || typeof value.settings.name === 'string')
   && (value.settings.font_preset === undefined || isSiteFontPreset(value.settings.font_preset))
   && (value.settings.default_currency === undefined || value.settings.default_currency === null || typeof value.settings.default_currency === 'string')
 const isNotificationsResponse = (value: unknown): value is { success: boolean; notifications: { whatsapp_phone: string | null } } =>
@@ -272,7 +272,7 @@ const supportsSiteFonts = computed(() => loadedSettings.value?.theme === 'saya')
 const loadedNotifications = ref<{ whatsapp_phone: string | null } | null>(null)
 const originalSignature = ref('')
 const form = reactive<SiteSettingsForm>({
-  brand_name: '', brand_description: '', logoAssetId: null, socialShareAssetId: null, contact_email: '', brand_color: '', font_preset: 'default',
+  name: '', brand_description: '', logoAssetId: null, socialShareAssetId: null, contact_email: '', brand_color: '', font_preset: 'default',
   default_currency: null, google_site_verification: '',
   social_facebook_url: '', social_instagram_url: '', social_tiktok_url: '',
 })
@@ -283,14 +283,14 @@ useHead(() => ({
     : [],
 }))
 const brandLocalizationFields = computed(() => [
-  { key: 'brand_name', label: 'Brand name', source: loadedSettings.value?.brand_name },
+  { key: 'name', label: 'Brand name', source: loadedSettings.value?.name },
   { key: 'brand_description', label: 'Description', source: loadedSettings.value?.brand_description, multiline: true, rows: 6 },
 ])
 const hasFacebookAccess = computed(() => dashboard.organization.value?.effective_plan === 'growth')
 const enableableCatalogOptions = computed(() => (localizationSettings.value?.available_catalogs ?? [])
   .filter(catalog => !localizationSettings.value?.languages.some(language => language.locale === catalog.locale && language.status !== 'disabled'))
   .map(catalog => ({ label: `${catalog.label} (${catalog.locale})`, value: catalog.locale })))
-const nameCharactersRemaining = computed(() => 50 - form.brand_name.length)
+const nameCharactersRemaining = computed(() => 50 - form.name.length)
 const descriptionCharactersRemaining = computed(() => 500 - form.brand_description.length)
 
 function explicitSummary(value: string | null | undefined, empty = 'Not set') { return value?.trim() || empty }
@@ -302,7 +302,7 @@ const socialSummary = computed(() => {
 const searchSummary = computed(() => loadedSettings.value?.robots === 'noindex,nofollow' ? 'Hidden from search engines' : 'Visible to search engines')
 const domainSummary = computed(() => dashboard.organization.value?.custom_domain || dashboard.organization.value?.public_url || 'Not connected')
 const brandItems = computed<EditorNavigationItem[]>(() => [
-  { id: 'name', label: 'Brand name', summary: explicitSummary(loadedSettings.value?.brand_name), icon: 'i-lucide-type', to: `${brandPath.value}/name` },
+  { id: 'name', label: 'Brand name', summary: explicitSummary(loadedSettings.value?.name), icon: 'i-lucide-type', to: `${brandPath.value}/name` },
   { id: 'logo', label: 'Logo', summary: loadedSettings.value?.media?.some(item => item.slot === 'logo') ? 'Logo selected' : 'Not set', icon: 'i-lucide-image', to: `${brandPath.value}/logo` },
   { id: 'sharing-image', label: 'Social sharing image', summary: loadedSettings.value?.media?.some(item => item.slot === 'social_share') ? 'Image selected' : 'Not set', icon: 'i-lucide-panels-top-left', to: `${brandPath.value}/sharing-image` },
   { id: 'description', label: 'Description', summary: explicitSummary(loadedSettings.value?.brand_description), icon: 'i-lucide-align-left', to: `${brandPath.value}/description` },
@@ -346,7 +346,7 @@ watch(() => route.path, (next, previous) => {
 
 function editorSignature(key: string | null) {
   switch (key) {
-    case 'name': return JSON.stringify(form.brand_name)
+    case 'name': return JSON.stringify(form.name)
     case 'logo': return JSON.stringify(form.logoAssetId)
     case 'sharing-image': return JSON.stringify(form.socialShareAssetId)
     case 'description': return JSON.stringify(form.brand_description)
@@ -369,7 +369,7 @@ const dirty = computed(() => editorSignature(detailKey.value) !== originalSignat
 const validationMessage = computed(() => {
   if (!dirty.value) return null
   switch (detailKey.value) {
-    case 'name': return form.brand_name.trim() ? null : 'Enter a brand name.'
+    case 'name': return form.name.trim() ? null : 'Enter a brand name.'
     case 'color': return !form.brand_color.trim() || /^#[0-9a-f]{6}$/i.test(form.brand_color) ? null : 'Enter a six-digit hex color.'
     case 'font': return supportsSiteFonts.value && isSiteFontPreset(form.font_preset) ? null : 'Choose a supported website font.'
     case 'contact': return !form.contact_email.trim() || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.contact_email) ? null : 'Enter a valid email address.'
@@ -385,7 +385,7 @@ const saveDisabled = computed(() => {
 
 function fillForm(settings: SiteSettingsResponse) {
   loadedSettings.value = settings
-  form.brand_name = settings.brand_name ?? ''
+  form.name = settings.name ?? ''
   form.brand_description = settings.brand_description ?? ''
   form.logoAssetId = settings.media?.find(item => item.slot === 'logo')?.asset_id ?? null
   form.socialShareAssetId = settings.media?.find(item => item.slot === 'social_share')?.asset_id ?? null
@@ -451,7 +451,7 @@ async function saveCurrentEditor() {
   editorError.value = null
   try {
     switch (detailKey.value) {
-      case 'name': await patchSettings({ brand_name: form.brand_name.trim() }); break
+      case 'name': await patchSettings({ name: form.name.trim() }); break
       case 'logo': await patchSettings({ media: [{ asset_id: form.logoAssetId, slot: 'logo' }] }); break
       case 'sharing-image': await patchSettings({ media: [{ asset_id: form.socialShareAssetId, slot: 'social_share' }] }); break
       case 'description': await patchSettings({ brand_description: form.brand_description }); break

@@ -122,7 +122,7 @@ async function loadBookingRow(
   // When, for how many and against what all live on the record the thread
   // refers to — a reservation or a booking — not on the thread. The thread
   // carries the conversation and the guest.
-  return queryFirst<BookingRow>(db, `SELECT r.id, r.organization_id, r.organization_id, s.subdomain AS site_slug, s.brand_name AS site_name, s.vertical,
+  return queryFirst<BookingRow>(db, `SELECT r.id, r.organization_id, r.organization_id, s.subdomain AS site_slug, s.name AS site_name, s.vertical,
     record.location_id, l.slug AS location_slug, l.title AS location_title,
     json_extract(r.payload_json, '$.guest.name') AS guest_name, json_extract(r.payload_json, '$.guest.email') AS guest_email, json_extract(r.payload_json, '$.guest.phone') AS guest_phone,
     NULL AS guest_image_url, record.party_size, record.starts_at, record.ends_at, record.timezone, record.status, json_extract(r.payload_json, '$.notes') AS requests,

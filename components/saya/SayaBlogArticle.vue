@@ -59,8 +59,8 @@ import { structuredComponentsFromBlocks } from '~/utils/blog-editor'
 import { resolveSocialImageUrl } from '~/utils/social-metadata'
 import type { PublicLocaleRepresentation } from '~/utils/public-resource-contracts'
 
-const { isTenant, siteId, site } = useTenantSite()
-if (!isTenant || !siteId) throw createError({ statusCode: 404 })
+const { isTenant, organizationId, site } = useTenantSite()
+if (!isTenant || !organizationId) throw createError({ statusCode: 404 })
 
 const { localePath, t } = useI18n()
 
@@ -114,7 +114,7 @@ const isPublicBlogResponse = (value: unknown): value is PublicBlogResponse =>
   ))
 
 const { data, pending, error } = await useAsyncData(
-  () => `tenant-blog-post-${siteId}-${locale}-${String(route.params.slug)}`,
+  () => `tenant-blog-post-${organizationId}-${locale}-${String(route.params.slug)}`,
   async () => {
     let post: TenantBlogPost | null | undefined
 
@@ -129,7 +129,7 @@ const { data, pending, error } = await useAsyncData(
       const db = env.db
       if (!db) throw createError({ statusCode: 500, statusMessage: 'Database not available' })
 
-      post = await getPublishedLocalizedSiteBlogPost(db, siteId, String(route.params.slug), locale, env, previewAuthorized.value) as TenantBlogPost | null
+      post = await getPublishedLocalizedSiteBlogPost(db, organizationId, String(route.params.slug), locale, env, previewAuthorized.value) as TenantBlogPost | null
     } else {
       let payload: PublicBlogResponse
       try {
@@ -178,8 +178,8 @@ const allPosts = computed(() => (sourceBlogData.blogList.value ?? []) as unknown
 const { categories } = useTenantBlogNav(allPosts)
 const relatedPosts = computed(() => allPosts.value.filter(item => item.slug !== post.value?.slug).slice(0, 4))
 const siteName = computed(() => locale === 'en'
-  ? (shell.site.value?.brand_name?.trim() ?? site?.brand_name?.trim() ?? '')
-  : (shell.site.value?.brand_name?.trim() ?? ''))
+  ? (shell.site.value?.name?.trim() ?? site?.name?.trim() ?? '')
+  : (shell.site.value?.name?.trim() ?? ''))
 const authorName = computed(() => post.value?.author?.name ?? null)
 const authorImage = computed(() => post.value?.author?.image ?? null)
 const readTime = computed(() => {

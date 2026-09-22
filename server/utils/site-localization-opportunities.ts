@@ -92,7 +92,7 @@ export async function getSiteLocalizationProgress(
   if (input.locale === source.locale) throw new Error('Localization progress requires an additional language')
   const params = [input.locale, input.organizationId]
   const [site, locations, catalog, collections, posts, blog, qa, media, links, pages] = await Promise.all([
-    queryAll<LocalizableRow>(db, `SELECT s.id, s.brand_name, s.brand_description, rl.values_json
+    queryAll<LocalizableRow>(db, `SELECT s.id, s.name, s.brand_description, rl.values_json
       FROM organization s LEFT JOIN resource_localizations rl ON rl.resource_type = 'site' AND rl.resource_id = s.id AND rl.locale = ?
         AND rl.organization_id = s.organization_id AND rl.organization_id = s.id
       WHERE s.organization_id = ? AND s.id = ?`, params),
@@ -168,7 +168,7 @@ export async function getSiteLocalizationProgress(
   ])
 
   const groups = [
-    { id: 'brand', label: 'Brand', result: progress(site, ['brand_name', 'brand_description']), path: () => 'brand/name', resourceType: 'site', resourceId: (row: LocalizableRow) => row.id },
+    { id: 'brand', label: 'Brand', result: progress(site, ['name', 'brand_description']), path: () => 'brand/name', resourceType: 'site', resourceId: (row: LocalizableRow) => row.id },
     { id: 'locations', label: 'Locations', result: progress(locations, ['title', 'address', 'description', 'short_description']), path: (row: LocalizableRow) => `locations/${row.location_slug}/settings`, resourceType: 'business_location', resourceId: (row: LocalizableRow) => row.id },
     // Which product attributes are translatable is the definition's own
     // declaration, so the field list is the columns plus whatever the tenant

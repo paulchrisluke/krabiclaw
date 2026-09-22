@@ -35,7 +35,7 @@ test('D1 claims fence concurrent sends and bound ambiguous provider retries', as
     await db.batch((await generateSQLiteMigration(await generateSQLiteDrizzleJson({}), await generateSQLiteDrizzleJson(schema))).map(statement => db.prepare(statement)))
     for (const statement of [
       "INSERT INTO organization (id, name, slug) VALUES ('org-proof', 'Proof', 'proof')",
-      "INSERT INTO sites (id, organization_id, slug, subdomain, brand_name) VALUES ('site-proof', 'org-proof', 'proof', 'proof', 'Proof')",
+      "INSERT INTO sites (id, organization_id, slug, subdomain, name) VALUES ('site-proof', 'org-proof', 'proof', 'proof', 'Proof')",
       "INSERT INTO user (id, name, email) VALUES ('user-proof', 'Proof Owner', 'owner@proof.example')",
       "INSERT INTO member (id, organizationId, userId, role) VALUES ('member-proof','org-proof','user-proof','owner')",
     ]) await db.prepare(statement).run()
@@ -330,7 +330,7 @@ test('D1 status-email retries preserve recorded content and reject superseded bo
     await db.batch((await generateSQLiteMigration(await generateSQLiteDrizzleJson({}), await generateSQLiteDrizzleJson(schema))).map(statement => db.prepare(statement)))
     for (const statement of [
       "INSERT INTO organization (id, name, slug) VALUES ('org-status', 'Proof', 'proof')",
-      "INSERT INTO sites (id, organization_id, slug, subdomain, brand_name) VALUES ('site-status', 'org-status', 'proof', 'proof', 'Proof')",
+      "INSERT INTO sites (id, organization_id, slug, subdomain, name) VALUES ('site-status', 'org-status', 'proof', 'proof', 'Proof')",
       "INSERT INTO user (id, name, email) VALUES ('user-status', 'Proof Owner', 'owner@proof.example')",
       "INSERT INTO business_locations (id, organization_id, site_id, slug, title) VALUES ('location-status', 'org-status', 'site-status', 'proof', 'Proof')",
     ]) await db.prepare(statement).run()
@@ -407,7 +407,7 @@ test('a booking move into a full session leaves the original booking exactly as 
     const laterEnd = at(60, 1)
     for (const statement of [
       "INSERT INTO organization (id, name, slug) VALUES ('org-move', 'Move', 'move')",
-      "INSERT INTO sites (id, organization_id, slug, subdomain, brand_name) VALUES ('site-move', 'org-move', 'move', 'move', 'Move')",
+      "INSERT INTO sites (id, organization_id, slug, subdomain, name) VALUES ('site-move', 'org-move', 'move', 'move', 'Move')",
       "INSERT INTO user (id, name, email) VALUES ('user-move', 'Owner', 'owner@move.example')",
       "INSERT INTO member (id, organizationId, userId, role) VALUES ('member-move','org-move','user-move','owner')",
       "INSERT INTO business_locations (id,organization_id,site_id,slug,title,timezone) VALUES ('loc-move','org-move','site-move','move','Move','Asia/Bangkok')",
@@ -469,7 +469,7 @@ test('a review request reads the visit from the record that holds it', async () 
     const now = new Date().toISOString()
     for (const statement of [
       "INSERT INTO organization (id, name, slug) VALUES ('org-review', 'Review', 'review')",
-      "INSERT INTO sites (id, organization_id, slug, subdomain, brand_name) VALUES ('site-review', 'org-review', 'review', 'review', 'Kikuzuki')",
+      "INSERT INTO sites (id, organization_id, slug, subdomain, name) VALUES ('site-review', 'org-review', 'review', 'review', 'Kikuzuki')",
       "INSERT INTO site_domains (id, organization_id, site_id, domain, role, status, type) VALUES ('domain-review','org-review','site-review','review.example','canonical','active','custom')",
       "INSERT INTO business_locations (id,organization_id,site_id,slug,title,timezone,max_capacity) VALUES ('loc-review','org-review','site-review','main','Main Room','Asia/Bangkok',40)",
       "INSERT INTO customers (id, organization_id, site_id, name, email, source) VALUES ('cust-review','org-review','site-review','Sivan','sivan@proof.example','reservation')",

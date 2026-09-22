@@ -23,7 +23,7 @@ const goods = computed(() => products.value.filter(product => !isExperience(prod
 if (pagePayload.value && goods.value.length === 0) throw createError({ statusCode: 404 })
 const currentLocation = location.value
 if (!currentLocation) throw createError({ statusCode: 404 })
-const brandName = site.value?.brand_name
+const brandName = site.value?.name
 if (typeof brandName !== 'string' || brandName.trim().length === 0) throw createError({ statusCode: 500, statusMessage: 'Site brand is unavailable' })
 const vertical = String(site.value?.vertical ?? '')
 const presentation = requireProductPresentation(vertical)

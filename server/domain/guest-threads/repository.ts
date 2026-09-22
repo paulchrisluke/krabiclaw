@@ -381,7 +381,7 @@ export async function listOrganizationGuestThreads(
       gt.*,
       ${SOURCE_GUEST_NAME_SQL} AS guest_name,
       bl.title AS location_title,
-      s.brand_name AS site_name,
+      s.name AS site_name,
       s.subdomain AS site_slug,
       (
         SELECT body FROM activity_entries

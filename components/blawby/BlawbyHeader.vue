@@ -5,7 +5,7 @@
       :content="site.banner_content"
       :phone="site.phone"
       :dismissible="site.banner_dismissible"
-      :storage-key="`blawby-banner:${site.brand_name}:${site.banner_content}`"
+      :storage-key="`blawby-banner:${site.name}:${site.banner_content}`"
     />
     <div class="blawby-container">
       <nav class="relative z-50 flex items-center justify-between gap-4 py-2" :aria-label="t('blawby.navigation.main')">
@@ -91,7 +91,7 @@ const { localePath, t } = useI18n()
 
 const { trackConsultationClick } = useSiteConversionTracking(() => props.consultation)
 const route = useRoute()
-const brandName = computed(() => props.site.brand_name || '')
+const brandName = computed(() => props.site.name || '')
 const logoUrl = computed(() => props.site.media.find(item => item.slot === 'logo')?.public_url || null)
 const headerCtaLabel = computed(() => props.consultation.cta_label)
 const headerOrder = ['/services', '/pricing', '/about', '/contact', '/blog', '/donate']

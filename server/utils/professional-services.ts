@@ -268,7 +268,7 @@ export async function getPublicThemeTokens(db: DbClient, organizationId: string,
 
 export async function getPublicBlawbyIdentity(db: DbClient, organizationId: string): Promise<PublicBlawbyIdentity> {
   const row = await queryFirst<ApiRecord>(db, `
-    SELECT s.brand_name, s.brand_description, s.contact_phone
+    SELECT s.name, s.brand_description, s.contact_phone
       FROM organization s
      WHERE s.id = ?
      LIMIT 1
@@ -276,7 +276,7 @@ export async function getPublicBlawbyIdentity(db: DbClient, organizationId: stri
   const socialMedia = (await loadPublicSocialMedia(db, organizationId, 'site', [organizationId])).get(organizationId)
 
   return {
-    brand_name: requiredText(row?.brand_name, `site ${organizationId}.brand_name`),
+    name: requiredText(row?.name, `site ${organizationId}.name`),
     brand_description: typeof row?.brand_description === 'string' ? row.brand_description : null,
     media: (socialMedia?.media ?? []).map(item => ({ asset_id: item.asset_id, slot: item.slot, public_url: item.public_url, thumbnail_url: item.thumbnail_url, kind: item.kind })),
     social_image: socialMedia?.social_image ?? null,
@@ -307,7 +307,7 @@ export async function getPublicBlawbyShellData(
   const identity = localizedRepresentation
     ? {
         ...sourceIdentity,
-        brand_name: typeof siteLocalization?.values.brand_name === 'string' ? siteLocalization.values.brand_name : '',
+        name: typeof siteLocalization?.values.name === 'string' ? siteLocalization.values.name : '',
         brand_description: typeof siteLocalization?.values.brand_description === 'string' ? siteLocalization.values.brand_description : null,
       }
     : sourceIdentity

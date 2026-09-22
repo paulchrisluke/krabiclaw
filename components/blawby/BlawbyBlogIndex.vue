@@ -38,10 +38,10 @@ const heroDescription = computed(() => Array.isArray(heroBlock.value?.subtitle) 
 
 const { canonicalUrl } = useSocialMetadata(() => ({
   path: '/blog',
-  title: page.value?.seo_title || `Articles | ${identity.value.brand_name}`,
+  title: page.value?.seo_title || `Articles | ${identity.value.name}`,
   description: page.value?.seo_description || page.value?.summary || '',
   brand: {
-    siteName: identity.value.brand_name,
+    siteName: identity.value.name,
   },
 }))
 const homeUrl = useSeoUrl(() => '/')

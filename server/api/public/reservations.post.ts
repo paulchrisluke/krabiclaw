@@ -70,8 +70,8 @@ export default defineHandler(async (event) => {
   if (!VALID_GUESTS.includes(guests))
     return jsonResponse({ error: 'Please choose a valid party size.' }, { status: 400 })
 
-  const site = await queryFirst<{ id: string; organization_id: string; brand_name?: string | null; public_url?: string | null }>(
-    db, `SELECT id, organization_id, brand_name, (SELECT 'https://' || domain FROM organization_domains WHERE organization_id = organization.id AND role = 'canonical' AND status = 'active') AS public_url FROM organization WHERE id = ? AND status = ? LIMIT 1`, [organizationId, 'active'], )
+  const site = await queryFirst<{ id: string; organization_id: string; name?: string | null; public_url?: string | null }>(
+    db, `SELECT id, organization_id, name, (SELECT 'https://' || domain FROM organization_domains WHERE organization_id = organization.id AND role = 'canonical' AND status = 'active') AS public_url FROM organization WHERE id = ? AND status = ? LIMIT 1`, [organizationId, 'active'], )
   if (!site) return jsonResponse({ error: 'Site not found' }, { status: 404 })
   const siteBaseUrl = site.public_url?.trim().replace(/\/$/, '')
   if (!siteBaseUrl) return jsonResponse({ error: 'Site public URL is not configured' }, { status: 500 })
@@ -174,7 +174,7 @@ export default defineHandler(async (event) => {
 
   try {
     await notifyReservationCreated(env, db, {
-      organizationId: site.organization_id, siteName: site.brand_name, locationId: resolvedLocationId, locationName: location.title, reservationId: id, guestName: name, email, phone, date, time, guests, requests, cancelUrl, contactPhone, contactEmail, ownerInboxUrl, })
+      organizationId: site.organization_id, siteName: site.name, locationId: resolvedLocationId, locationName: location.title, reservationId: id, guestName: name, email, phone, date, time, guests, requests, cancelUrl, contactPhone, contactEmail, ownerInboxUrl, })
   } catch (error) {
     console.error('reservation_notification_failed', {
       organizationId: site.organization_id, reservationId: id, error: error instanceof Error ? error.message : String(error)

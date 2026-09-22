@@ -38,7 +38,7 @@ test('a thread and the record it refers to commit and cancel as one', { timeout:
     await db.batch(statements.map(statement => db.prepare(statement)))
     await db.batch([
       `INSERT INTO organization (id,name,slug) VALUES ('${ORG}','Proof','proof')`,
-      `INSERT INTO sites (id,organization_id,slug,subdomain,brand_name) VALUES ('${SITE}','${ORG}','proof','proof','Proof')`,
+      `INSERT INTO sites (id,organization_id,slug,subdomain,name) VALUES ('${SITE}','${ORG}','proof','proof','Proof')`,
       `INSERT INTO user (id,name,email) VALUES ('${ACTOR}','Proof','owner@proof.example')`,
       `INSERT INTO business_locations (id,organization_id,site_id,slug,title,timezone) VALUES ('${LOCATION}','${ORG}','${SITE}','proof','Proof','Asia/Bangkok')`,
       `INSERT INTO products (id,organization_id,name,slug,created_by,updated_by) VALUES ('product-proof','${ORG}','Pottery Class','pottery-class','${ACTOR}','${ACTOR}')`,

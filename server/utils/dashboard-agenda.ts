@@ -93,7 +93,7 @@ interface SourceRow {
 
 interface CapabilitySiteRow {
   id: string
-  brand_name: string | null
+  name: string | null
   subdomain: string | null
   vertical: string
   theme_id: string
@@ -164,7 +164,7 @@ export async function listAgenda(
 
   const scoped = Boolean(query.principal && !isOrganizationWideRole(query.principal.membership.role))
   const allCapabilitySites = await queryAll<CapabilitySiteRow>(db, `
-    SELECT s.id, s.brand_name, s.subdomain, s.vertical, s.theme_id, s.feature_overrides
+    SELECT s.id, s.name, s.subdomain, s.vertical, s.theme_id, s.feature_overrides
     FROM organization s
     WHERE s.organization_id = ?
     ORDER BY s.created_at, s.id
@@ -200,7 +200,7 @@ export async function listAgenda(
   if (requestedKinds.size === 0) {
     return {
       items: [], availableKinds,
-      sites: capabilitySites.map(site => ({ id: site.id, label: site.brand_name ?? site.subdomain ?? site.id, slug: site.subdomain ?? site.id, vertical: site.vertical })),
+      sites: capabilitySites.map(site => ({ id: site.id, label: site.name ?? site.subdomain ?? site.id, slug: site.subdomain ?? site.id, vertical: site.vertical })),
       locations: [],
     }
   }
@@ -219,7 +219,7 @@ export async function listAgenda(
            CASE WHEN ${alias}.location_id IS NULL THEN json_extract(s.settings_json, '$.config.default_timezone') ELSE l.timezone END AS timezone,
            NULL AS guest_image_url,
            ${enrichment.resourceImage ?? `COALESCE(${locationMediaUrlSelect(alias)}, ${siteMediaUrlSelect(alias)})`} AS resource_image_url,
-           ${enrichment.resourceTitle ?? 'COALESCE(l.title, s.brand_name, s.subdomain, s.id)'} AS resource_title
+           ${enrichment.resourceTitle ?? 'COALESCE(l.title, s.name, s.subdomain, s.id)'} AS resource_title
     FROM ${kind === 'post' ? 'content_documents' : 'requests'} ${alias}
     JOIN organization s ON s.id = ${alias}.organization_id AND s.organization_id = ${alias}.organization_id
     LEFT JOIN business_locations l ON l.id = ${alias}.location_id AND l.organization_id = ${alias}.organization_id
@@ -242,7 +242,7 @@ export async function listAgenda(
       JOIN product_sessions agenda_session ON agenda_session.id = agenda_booking.product_session_id
       LEFT JOIN products agenda_product ON agenda_product.id = agenda_booking.product_id AND agenda_product.organization_id = agenda_booking.organization_id`,
     resourceImage: `COALESCE(${mediaUrlSelect('b', 'product', 'agenda_booking.product_id', ['gallery'])}, ${locationMediaUrlSelect('b')}, ${siteMediaUrlSelect('b')})`,
-    resourceTitle: 'COALESCE(agenda_product.name, l.title, s.brand_name, s.subdomain, s.id)',
+    resourceTitle: 'COALESCE(agenda_product.name, l.title, s.name, s.subdomain, s.id)',
   })} AND agenda_session.starts_at BETWEEN ? AND ?`, [...params(), broadFrom, broadTo]))
   // The class itself: one row per scheduled session in the window, titled by
   // its product, with seats taken over seats offered. Cancelled sessions stay
@@ -321,7 +321,7 @@ export async function listAgenda(
   }))
   return {
     items, availableKinds,
-    sites: capabilitySites.map(site => ({ id: site.id, label: site.brand_name ?? site.subdomain ?? site.id, slug: site.subdomain ?? site.id, vertical: site.vertical })),
+    sites: capabilitySites.map(site => ({ id: site.id, label: site.name ?? site.subdomain ?? site.id, slug: site.subdomain ?? site.id, vertical: site.vertical })),
     locations: locations.map(location => ({ id: location.id, organizationId: location.organization_id, title: location.title })),
   }
 }

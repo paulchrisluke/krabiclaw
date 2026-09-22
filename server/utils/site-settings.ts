@@ -32,7 +32,7 @@ interface SiteSettingsRow {
   id: string
   organization_id: string
   subdomain: string | null
-  brand_name: string | null
+  name: string | null
   vertical: string
   theme_id: string
 }
@@ -90,7 +90,7 @@ export async function loadSettingsPayload(
   const updatedSite = await queryFirst<FullSiteRow & { vertical: string; theme_id: string }>(db, `
     SELECT organization.id, organization.organization_id, subdomain, organization.status,
            (SELECT 'https://' || domain FROM organization_domains WHERE organization_id = organization.id AND role = 'canonical' AND status = 'active') AS public_url, COALESCE((SELECT status FROM organization_domains WHERE organization_id = organization.id AND type = 'custom' AND status NOT IN ('deleted', 'disabled') ORDER BY role = 'canonical' DESC, created_at, id LIMIT 1), 'none') AS custom_domain_status, default_currency,
-           brand_name, brand_description,
+           name, brand_description,
            mp.asset_id AS logo_media_id, ma.public_url AS logo_public_url,
            ma.thumbnail_url AS logo_thumbnail_url, ma.kind AS logo_kind,
            fmp.asset_id AS favicon_media_id, fma.public_url AS favicon_public_url,
@@ -146,7 +146,7 @@ export async function loadSettingsPayload(
 
     public_url: updatedSite.public_url,
     custom_domain_status: updatedSite.custom_domain_status,
-    brand_name: updatedSite.brand_name,
+    name: updatedSite.name,
     brand_description: updatedSite.brand_description,
     media: [
       ...(updatedSite.logo_media_id ? [{
@@ -270,9 +270,9 @@ async function attemptSiteUpdate(
     setParts.push("settings_json = json_set(settings_json, '$.config.font_preset', ?)")
     params.push(updates.font_preset)
   }
-  if (updates.brand_name !== undefined) {
-    setParts.push('brand_name = ?', 'subdomain = ?')
-    params.push(updates.brand_name, subdomain)
+  if (updates.name !== undefined) {
+    setParts.push('name = ?', 'subdomain = ?')
+    params.push(updates.name, subdomain)
   }
   if (updates.brand_description !== undefined) {
     setParts.push('brand_description = ?')
@@ -434,7 +434,7 @@ async function attemptSiteUpdate(
     values: [...params, organizationId],
   }
 
-  const isRename = updates.brand_name !== undefined && subdomain && subdomain !== site.subdomain
+  const isRename = updates.name !== undefined && subdomain && subdomain !== site.subdomain
   if (isRename && setParts.length > 0) {
     await createSystemSubdomain(env, db, organizationId, subdomain, { siteUpdate })
   } else if (setParts.length > 0) {
@@ -460,7 +460,7 @@ async function attemptSiteUpdate(
     await executeBatch(db, queries)
   }
 
-  const cardInputChanged = updates.brand_name !== undefined
+  const cardInputChanged = updates.name !== undefined
     || updates.brand_description !== undefined
     || updates.seo_title !== undefined
     || updates.seo_description !== undefined
@@ -495,7 +495,7 @@ export async function updateSiteSettingsFields(
   }
 
   const site = await queryFirst<SiteSettingsRow>(db, `
-    SELECT id, organization_id, subdomain, brand_name, vertical, theme_id
+    SELECT id, organization_id, subdomain, name, vertical, theme_id
     FROM organization
     WHERE id = ? AND organization_id = ?
     LIMIT 1
@@ -544,8 +544,8 @@ export async function updateSiteSettingsFields(
     updates.google_analytics_measurement_id,
   )
 
-  if (updates.brand_name !== undefined) {
-    const baseSlug = buildSlug(updates.brand_name)
+  if (updates.name !== undefined) {
+    const baseSlug = buildSlug(updates.name)
     if (!baseSlug) {
       return {
         status: 400,
@@ -587,7 +587,7 @@ export async function updateSiteSettingsFields(
       // subdomain collision and must not spend another attempt.
       if (result.status === 200) {
         const adapter = await organizationAdapter(env)
-        await adapter.updateOrganization(organizationId, { name: updates.brand_name.trim() })
+        await adapter.updateOrganization(organizationId, { name: updates.name.trim() })
       }
       return result
     }

@@ -14,7 +14,7 @@ export interface SiteSettings {
   status: 'active' | 'inactive' | 'suspended'
   public_url: string | null
   custom_domain_status: DomainStatus | 'none'
-  brand_name: string
+  name: string
   brand_description: string | null
   media: Array<{ asset_id: string; slot: string; public_url: string | null; thumbnail_url: string | null; kind: string }>
   contact_email: string | null
@@ -32,7 +32,7 @@ export interface SiteSettings {
 
 export interface UpdateSiteSettingsRequest {
   name?: string
-  brand_name?: string
+  name?: string
   brand_description?: string
   contact_email?: string
   brand_color?: string
@@ -67,7 +67,7 @@ export interface LaunchReadiness {
     site_identity: {
       ready: boolean
       items: {
-        brand_name: boolean
+        name: boolean
         subdomain: boolean
         theme: boolean
         status: boolean
@@ -77,7 +77,7 @@ export interface LaunchReadiness {
     brand_basics: {
       ready: boolean
       items: {
-        brand_name: boolean
+        name: boolean
         description: boolean
         contact_email: boolean
       }

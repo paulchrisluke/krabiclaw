@@ -119,11 +119,11 @@ export async function loadPublicShellSource(
     payload.locations = projectExactLocalizedCollection('business_location', payload.locations, localizations)
     const localizedSite = siteLocalization
       ? projectExactLocalizedResource('site', { ...payload.site, id: organizationId }, siteLocalization)
-      : { ...payload.site, id: organizationId, brand_name: null, brand_description: null }
+      : { ...payload.site, id: organizationId, name: null, brand_description: null }
     const { id: _localizedSiteId, ...localizedSiteValues } = localizedSite
     payload.site = localizedSiteValues
     const {
-      brand_name: _sourceBrandName,
+      name: _sourceBrandName,
       brand_description: _sourceBrandDescription,
       seo_title: _sourceSeoTitle,
       seo_description: _sourceSeoDescription,
@@ -131,9 +131,9 @@ export async function loadPublicShellSource(
     } = payload.config
     payload.config = {
       ...nonLocalizedConfig,
-      ...(typeof localizedSite.brand_name === 'string' ? {
-        brand_name: localizedSite.brand_name,
-        seo_title: localizedSite.brand_name,
+      ...(typeof localizedSite.name === 'string' ? {
+        name: localizedSite.name,
+        seo_title: localizedSite.name,
       } : {}),
       ...(typeof localizedSite.brand_description === 'string' ? {
         brand_description: localizedSite.brand_description,

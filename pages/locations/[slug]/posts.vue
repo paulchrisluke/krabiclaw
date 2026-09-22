@@ -47,11 +47,11 @@ const { localePath, t } = useI18n()
 definePageMeta({ layout: 'saya' })
 
 const route = useRoute()
-const { siteId, site } = useTenantSite()
-if (!siteId) throw createError({ statusCode: 404 })
+const { organizationId, site } = useTenantSite()
+if (!organizationId) throw createError({ statusCode: 404 })
 
 const slug = computed(() => String(route.params.slug))
-const siteName = computed(() => String((site as ApiValue)?.brand_name ?? '').trim())
+const siteName = computed(() => String((site as ApiValue)?.name ?? '').trim())
 
 const { location, postsList } = await usePublicPageData()
 // A slug naming no location is a URL that does not exist. Rendering the page

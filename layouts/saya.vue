@@ -185,10 +185,10 @@ const siteRobots = computed<RobotsIntent | null>(() => {
 
 useSocialMetadata(() => ({
   path: route.path,
-  title: config.value?.seo_title || config.value?.brand_name || resolvedSite.value?.brand_name || '',
+  title: config.value?.seo_title || config.value?.name || resolvedSite.value?.name || '',
   description: config.value?.seo_description || config.value?.brand_description || '',
   brand: {
-    siteName: config.value?.brand_name || resolvedSite.value?.brand_name || '',
+    siteName: config.value?.name || resolvedSite.value?.name || '',
   },
   robots: siteRobots.value,
 }))

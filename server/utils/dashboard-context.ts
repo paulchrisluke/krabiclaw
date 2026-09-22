@@ -19,7 +19,7 @@ import { parsePostalAddress } from '~/utils/postal-address'
  * These columns used to live on a `sites` row hanging off the organization, so
  * every dashboard request resolved a membership and then a second row to learn
  * what the business actually is. There is one row now, and `name` on the
- * membership carries what `brand_name` carried.
+ * membership carries what `sites.brand_name` carried.
  */
 export interface DashboardOrganizationConfig {
   theme_id: string

@@ -10,7 +10,7 @@
     @save="editor.save"
   >
     <p class="mb-2 text-sm font-semibold text-muted">{{ editor.nameCharactersRemaining.value }}/50 available</p>
-    <UInput v-model="editor.form.brand_name" size="xl" maxlength="50" autofocus class="w-full" />
+    <UInput v-model="editor.form.name" size="xl" maxlength="50" autofocus class="w-full" />
     <UAlert v-if="editor.validationMessage.value" class="mt-6" color="error" variant="soft" :description="editor.validationMessage.value" />
   </DashboardLeafPanel>
 </template>

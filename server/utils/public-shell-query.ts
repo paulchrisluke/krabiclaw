@@ -149,7 +149,7 @@ export function buildPublicShellPayload(
   config.default_currency = site.default_currency
   if (site.contact_email) config.contact_email = site.contact_email
   if (site.contact_phone) config.contact_phone = site.contact_phone
-  if (site.brand_name) config.brand_name = site.brand_name
+  if (site.name) config.name = site.name
   if (site.brand_description) config.brand_description = site.brand_description
   if (site.seo_title) config.seo_title = site.seo_title
   if (site.seo_description) config.seo_description = site.seo_description
@@ -164,7 +164,7 @@ export function buildPublicShellPayload(
   return {
     platformMessages: null,
     site: {
-      brand_name: site.brand_name,
+      name: site.name,
       brand_description: site.brand_description,
       vertical: site.vertical,
       media: site.media,

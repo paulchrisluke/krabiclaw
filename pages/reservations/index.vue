@@ -173,7 +173,7 @@ function formatTitleItalics(text: string | null | undefined): string {
 
 definePageMeta({ layout: 'saya' })
 
-const { site, siteId } = useTenantSite()
+const { site, organizationId } = useTenantSite()
 const route = useRoute()
 const { locale, t } = useI18n()
 const resCopy = computed(() => getVerticalCopy((site as ApiValue)?.vertical, locale.value))
@@ -328,7 +328,7 @@ const availabilityLoading = ref(false)
 let availabilityRequestId = 0
 
 async function loadAvailability() {
-  if (!siteId || !reservationForm.value.location_id) {
+  if (!organizationId || !reservationForm.value.location_id) {
     availabilityDates.value = []
     return
   }
@@ -374,7 +374,7 @@ async function handleContactSubmit(contactState: { name: string, email: string, 
 }
 
 async function handleReservation() {
-  if (submitting.value || !siteId || !timeSelection.value) return
+  if (submitting.value || !organizationId || !timeSelection.value) return
   reservationForm.value.date = timeSelection.value.day
   reservationForm.value.time = timeSelection.value.time
   reservationForm.value.guests = guests.value >= 8 ? '8+' : String(guests.value)
@@ -394,7 +394,7 @@ async function handleReservation() {
     })
     setBookingConfirmation({
       type: 'reservation',
-      siteId,
+      organizationId,
       siteName: brandName.value,
       guestName: reservationForm.value.name,
       // The guest picked a wall-clock slot at this location; the instant it
@@ -438,7 +438,7 @@ useBreadcrumbSchema([
   { name: 'Reservations', url: `/reservations` }
 ])
 
-const brandName = computed(() => String((site as ApiValue)?.brand_name ?? '').trim())
+const brandName = computed(() => String((site as ApiValue)?.name ?? '').trim())
 useSocialMetadata(() => ({
   path: '/reservations',
   title: `${brandName.value} | ${resCopy.value.reserveCta}`,

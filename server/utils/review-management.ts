@@ -7,7 +7,7 @@ export async function getPublicReview(db: DbClient, organizationId: string, loca
     SELECT r.id, r.author_name, r.rating, r.title, r.content,
            r.owner_reply, r.owner_reply_at, r.source, r.created_at, r.original_review_date, r.original_reference, r.google_review_metadata,
            r.helpful_count, bl.title AS location_title, bl.slug AS location_slug,
-           s.brand_name AS site_name
+           s.name AS site_name
     FROM reviews r
     JOIN business_locations bl ON bl.id = r.location_id
     JOIN organization s ON s.id = r.organization_id

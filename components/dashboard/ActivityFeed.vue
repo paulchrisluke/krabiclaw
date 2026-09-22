@@ -93,7 +93,7 @@ const filters = reactive({
 
 const siteOptions = computed(() => [
   { label: 'All sites', value: FILTER_ALL },
-  ...dashboard.sites.value.map(s => ({ label: s.brand_name ?? s.subdomain ?? s.id, value: s.id })),
+  ...dashboard.sites.value.map(s => ({ label: s.name ?? s.subdomain ?? s.id, value: s.id })),
 ])
 
 const eventTypeOptions = computed(() => [

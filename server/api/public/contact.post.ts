@@ -48,8 +48,8 @@ export default defineHandler(async (event) => {
   if (subject && !VALID_SUBJECTS.includes(subject))
     return jsonResponse({ error: 'Please choose a valid subject.' }, { status: 400 })
 
-  const site = await queryFirst<{ id: string; organization_id: string; brand_name?: string | null; vertical?: string | null; theme_id?: string | null }>(
-    db, 'SELECT id, organization_id, brand_name, vertical, theme_id FROM organization WHERE id = ? AND status = ? LIMIT 1', [organizationId, 'active'], )
+  const site = await queryFirst<{ id: string; organization_id: string; name?: string | null; vertical?: string | null; theme_id?: string | null }>(
+    db, 'SELECT id, organization_id, name, vertical, theme_id FROM organization WHERE id = ? AND status = ? LIMIT 1', [organizationId, 'active'], )
   if (!site) return jsonResponse({ error: 'Site not found' }, { status: 404 })
   const requiresConsent = siteSupportsBlawbyTemplate({ themeId: site.theme_id, vertical: site.vertical })
   const consentAcknowledged = body.consent === true
@@ -90,7 +90,7 @@ export default defineHandler(async (event) => {
 
   try {
     await notifyContactSubmitted(env, db, {
-      organizationId: site.organization_id, locationId: assignedLocationId, siteName: site.brand_name, contactId: id, guestName: name, email, subject: subject || topic || null, message, consentAcknowledged, })
+      organizationId: site.organization_id, locationId: assignedLocationId, siteName: site.name, contactId: id, guestName: name, email, subject: subject || topic || null, message, consentAcknowledged, })
   } catch (error) {
     console.error('contact_notification_failed', {
       organizationId: site.organization_id, contactId: id, error: error instanceof Error ? error.message : String(error)

@@ -29,7 +29,7 @@ async function boot() {
   await db.batch(statements.map(statement => db.prepare(statement)))
   await db.prepare("INSERT INTO organization (id, name, slug) VALUES (?, 'Org', 'org')").bind(ORG).run()
   await db.prepare("INSERT INTO user (id, name, email, emailVerified, createdAt, updatedAt) VALUES (?, 'Actor', 'actor@example.test', 0, 0, 0)").bind(ACTOR.actorId).run()
-  await db.prepare(`INSERT INTO sites (id, organization_id, slug, settings_json, integrations_json, theme_id, default_currency, status, onboarding_status, url_structure, vertical, brand_name, created_at, updated_at)
+  await db.prepare(`INSERT INTO sites (id, organization_id, slug, settings_json, integrations_json, theme_id, default_currency, status, onboarding_status, url_structure, vertical, name, created_at, updated_at)
     VALUES (?, ?, ?, '{"config":{"default_timezone":"Asia/Bangkok"}}', '{}', 'saya-theme-v1', 'THB', 'active', 'complete', 'flat', 'restaurant', 'Site A', ?, ?)`)
     .bind(SITE, ORG, SITE, NOW, NOW).run()
   await db.prepare("INSERT INTO site_locales (id, organization_id, site_id, locale, is_source, status) VALUES (?, ?, ?, 'en', 1, 'published')")

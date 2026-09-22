@@ -64,7 +64,7 @@ export async function loadDashboardEditorContext(event: H3Event, organizationId:
     context: {
       site: {
         id: site.id,
-        brand_name: site.brand_name,
+        name: site.name,
         subdomain: site.subdomain,
         status: site.status,
         onboarding_status: site.onboarding_status,

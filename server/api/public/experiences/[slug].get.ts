@@ -32,7 +32,7 @@ export default defineHandler(async (event) => {
       location: publicLocationPayload(result.location),
       currency: result.currency,
       vertical: result.site.vertical,
-      brandName: result.site.brand_name,
+      brandName: result.site.name,
       reviews,
       booking: result.booking,
       collectionName: siblingCollection?.name ?? '',

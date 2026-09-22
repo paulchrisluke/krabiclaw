@@ -47,7 +47,7 @@ test.beforeAll(async ({ playwright }, testInfo) => {
 
     await putLocalization(owner, 'site', siteId, {
       values: {
-        brand_name: 'Kikuzuki กระบี่ ประเทศไทย',
+        name: 'Kikuzuki กระบี่ ประเทศไทย',
         brand_description: 'อาหารญี่ปุ่นต้นตำรับในกระบี่',
       },
     })

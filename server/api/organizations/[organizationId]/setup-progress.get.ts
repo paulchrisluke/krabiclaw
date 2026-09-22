@@ -56,7 +56,7 @@ export default defineHandler(async (event) => {
       id: string
       organization_id: string
       organization_slug: string | null
-      brand_name: string | null
+      name: string | null
       brand_description: string | null
       has_logo: number
       contact_email: string | null
@@ -65,7 +65,7 @@ export default defineHandler(async (event) => {
       status: string
       last_published_at: string | null
     }>(db, `
-      SELECT s.id, s.organization_id, ? AS organization_slug, s.brand_name, s.brand_description,
+      SELECT s.id, s.organization_id, ? AS organization_slug, s.name, s.brand_description,
              EXISTS(SELECT 1 FROM media_placements mp JOIN media_assets ma ON ma.id = mp.asset_id AND ma.status = 'active' WHERE mp.owner_type = 'organization' AND mp.owner_id = s.id AND mp.slot = 'logo' AND mp.status = 'active') AS has_logo,
              s.contact_email, s.subdomain, (SELECT 'https://' || domain FROM organization_domains WHERE organization_id = s.id AND role = 'canonical' AND status = 'active') AS public_url, s.status, s.last_published_at
       FROM organization s

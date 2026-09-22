@@ -61,7 +61,7 @@ import type { RenderedBookingPolicySummaryItem } from '~/server/utils/reservatio
 
 definePageMeta({ layout: 'saya' })
 
-const { site, siteId } = useTenantSite()
+const { site, organizationId } = useTenantSite()
 const { reservationPolicyByLocation } = await usePublicPageData()
 const { locale } = useI18n()
 const resCopy = computed(() => getVerticalCopy((site as ApiValue)?.vertical, locale.value))
@@ -117,12 +117,12 @@ const menuCtaTo = computed(() => {
 })
 
 onMounted(async () => {
-  if (!siteId) {
+  if (!organizationId) {
     pending.value = false
     return
   }
 
-  const handoff = getBookingConfirmation(siteId)
+  const handoff = getBookingConfirmation(organizationId)
   if (handoff && handoff.type === 'reservation') {
     confirmation.value = handoff
     pending.value = false
@@ -141,8 +141,8 @@ onMounted(async () => {
       )
       confirmation.value = {
         type: 'reservation',
-        siteId,
-        siteName: String((site as ApiValue)?.brand_name ?? ''),
+        organizationId,
+        siteName: String((site as ApiValue)?.name ?? ''),
         guestName: res.booking.name,
         startsAt: res.booking.starts_at,
         timezone: res.booking.timezone,

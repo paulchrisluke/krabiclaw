@@ -46,7 +46,7 @@ async function seedOrganization(d1: D1Database, id: string) {
 }
 
 async function seedSite(d1: D1Database, siteId: string, organizationId: string) {
-  await d1.prepare('INSERT INTO sites (id, organization_id, slug, subdomain, brand_name) VALUES (?, ?, ?, ?, ?)')
+  await d1.prepare('INSERT INTO sites (id, organization_id, slug, subdomain, name) VALUES (?, ?, ?, ?, ?)')
     .bind(siteId, organizationId, siteId, siteId, `Site ${siteId}`).run()
 }
 

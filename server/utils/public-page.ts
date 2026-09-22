@@ -522,18 +522,18 @@ async function loadPublicPageSource(
     const siteLocalization = publicLocalizations.find(item => item.resourceType === 'site' && item.resourceId === organizationId)
     const localizedSite = siteLocalization
       ? projectExactLocalizedResource('site', site, siteLocalization)
-      : { ...site, brand_name: null, brand_description: null, seo_title: null, seo_description: null }
+      : { ...site, name: null, brand_description: null, seo_title: null, seo_description: null }
     const locations = projectExactLocalizedCollection('business_location', sourceShell.locations, publicLocalizations)
     const {
-      brand_name: _sourceBrandName,
+      name: _sourceBrandName,
       brand_description: _sourceBrandDescription,
       seo_title: _sourceSeoTitle,
       seo_description: _sourceSeoDescription,
       ...config
     } = sourceShell.config
-    if (localizedSite.brand_name) {
-      config.brand_name = localizedSite.brand_name
-      config.seo_title = localizedSite.brand_name
+    if (localizedSite.name) {
+      config.name = localizedSite.name
+      config.seo_title = localizedSite.name
     }
     if (localizedSite.brand_description) {
       config.brand_description = localizedSite.brand_description
@@ -543,7 +543,7 @@ async function loadPublicPageSource(
       ...sourceShell,
       site: {
         ...sourceShell.site,
-        brand_name: localizedSite.brand_name,
+        name: localizedSite.name,
         brand_description: localizedSite.brand_description,
       },
       locations,

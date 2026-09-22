@@ -261,9 +261,9 @@ function deliveryReceiptQuery(
 }
 
 async function getSiteBrandName(db: DbClient, organizationId: string): Promise<string> {
-  const row = await queryFirst<{ brand_name: string | null }>(db, 'SELECT brand_name FROM organization WHERE id = ? LIMIT 1', [organizationId])
-  if (!row?.brand_name?.trim()) throw new Error(`Site ${organizationId} has no configured brand name`)
-  return row.brand_name.trim()
+  const row = await queryFirst<{ name: string | null }>(db, 'SELECT name FROM organization WHERE id = ? LIMIT 1', [organizationId])
+  if (!row?.name?.trim()) throw new Error(`Site ${organizationId} has no configured brand name`)
+  return row.name.trim()
 }
 
 function operationSubject(action: string, fromName: string): string {

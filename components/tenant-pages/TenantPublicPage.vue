@@ -20,13 +20,13 @@ import { normalizeRobotsIntent } from '~/shared/robots-directive'
 import { normalizeTenantPagePath } from '~/utils/tenant-page-blocks'
 
 const props = defineProps<{ path: string; locale?: string | null }>()
-const { siteId, isPlatform, previewAuthorized, site } = useTenantSite()
+const { organizationId, isPlatform, previewAuthorized, site } = useTenantSite()
 const { isBlawby } = usePublicTemplate()
 const { locale: i18nLocale } = useI18n()
 // Page ownership is a resolved site, not a tenant type. KrabiClaw's own site is
 // a site row with page documents like any other, and requiring `isTenant` here
 // is what forced its marketing pages to be hardcoded components (#903).
-if (!siteId) throw createError({ statusCode: 404, statusMessage: 'Site context is unavailable' })
+if (!organizationId) throw createError({ statusCode: 404, statusMessage: 'Site context is unavailable' })
 
 // Preview authorization belongs to the site, resolved once from the preview
 // cookie by tenant resolution; the client's API call carries the same cookie.
@@ -45,7 +45,7 @@ const activeLocale = computed(() => {
  * the key is the only thing that distinguishes one page's read from another's.
  */
 const pagePath = computed(() => normalizeTenantPagePath(props.path))
-const key = computed(() => `tenant-page-${siteId}-${activeLocale.value}-${pagePath.value}-${preview ? 'preview' : 'published'}`)
+const key = computed(() => `tenant-page-${organizationId}-${activeLocale.value}-${pagePath.value}-${preview ? 'preview' : 'published'}`)
 const isPageResponse = (value: unknown): value is { success: true; page: PublicTenantPage } =>
   isRecord(value) && value.success === true && isRecord(value.page) && typeof value.page.path === 'string' && Array.isArray(value.page.blocks)
 
@@ -60,7 +60,7 @@ const { data, error, status, execute } = await useAsyncData(key, async () => {
     const env = cloudflareEnv(requestEvent)
     const db = env.db
     if (!db) throw createError({ statusCode: 503, statusMessage: 'Database not available' })
-    const page = await getPublicTenantPageForPath(env, db, siteId, pagePath.value, { locale: activeLocale.value, preview })
+    const page = await getPublicTenantPageForPath(env, db, organizationId, pagePath.value, { locale: activeLocale.value, preview })
     if (!page) throw createError({ statusCode: 404, statusMessage: 'Tenant page not found' })
     return { success: true as const, page }
   }
@@ -178,12 +178,12 @@ useProfessionalServiceSchema(() => {
 })
 useSocialMetadata(() => page.value && ({
   path: page.value.canonical_url || page.value.path,
-  title: page.value.seo_title || `${page.value.title} | ${site?.brand_name || ''}`,
+  title: page.value.seo_title || `${page.value.title} | ${site?.name || ''}`,
   description: page.value.seo_description || page.value.summary || '',
   robots: normalizeRobotsIntent(page.value.robots),
   // KrabiClaw's own brand name is the platform name, which useSocialMetadata
   // already states once for every platform surface; a tenant states its own.
-  ...(isPlatform ? {} : { brand: { siteName: site?.brand_name || '' } }),
+  ...(isPlatform ? {} : { brand: { siteName: site?.name || '' } }),
   socialImage: page.value.social_image,
 }))
 </script>

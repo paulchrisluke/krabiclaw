@@ -67,7 +67,7 @@ interface OwnerRecord {
 interface SiteRecord {
   organization_id: string
   id: string
-  brand_name: string | null
+  name: string | null
   brand_description: string | null
   theme_id: string
   vertical: string
@@ -122,7 +122,7 @@ async function loadOwner(db: DbClient, owner: SocialCardOwner): Promise<OwnerRec
   switch (owner.owner_type) {
     case 'organization':
       return await queryFirst<OwnerRecord>(db, `SELECT organization_id, id AS organization_id,
-        COALESCE(NULLIF(trim(seo_title), ''), NULLIF(trim(brand_name), '')) AS title,
+        COALESCE(NULLIF(trim(seo_title), ''), NULLIF(trim(name), '')) AS title,
         COALESCE(NULLIF(trim(seo_description), ''), NULLIF(trim(brand_description), '')) AS description,
         NULL AS label, NULL AS location FROM organization WHERE id = ? LIMIT 1`, [owner.owner_id]) ?? null
     case 'business_location':
@@ -157,7 +157,7 @@ async function loadOwner(db: DbClient, owner: SocialCardOwner): Promise<OwnerRec
 }
 
 async function loadOrganization(db: DbClient, organizationId: string): Promise<SiteRecord | null> {
-  return await queryFirst<SiteRecord>(db, `SELECT s.organization_id, s.id, s.brand_name, s.brand_description,
+  return await queryFirst<SiteRecord>(db, `SELECT s.organization_id, s.id, s.name, s.brand_description,
     s.theme_id, s.vertical
     FROM organization s WHERE s.id = ? LIMIT 1`, [organizationId]) ?? null
 }
@@ -280,7 +280,7 @@ export async function refreshSocialCard(input: {
     const site = await loadOrganization(db, ownerRecord.organization_id)
     if (!site) return await clearSocialCard(input, 'owner_not_found')
     const title = ownerRecord.title?.trim()
-    const siteName = site.brand_name?.trim() || null
+    const siteName = site.name?.trim() || null
     if (!title || !siteName) return await clearSocialCard(input, 'missing_content')
 
     const coverBlockId = await loadCoverBlockId(db, owner)

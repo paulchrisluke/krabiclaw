@@ -3,7 +3,7 @@
     <section class="relative isolate overflow-hidden bg-[var(--blawby-primary-dark)]" data-parity-section="schedule-hero">
       <div class="blawby-container relative z-20 py-24 text-center sm:py-32 lg:py-40 min-[1920px]:py-48 min-[2560px]:py-64">
         <div class="mx-auto max-w-4xl min-[1920px]:max-w-6xl min-[2560px]:max-w-7xl">
-          <p class="font-bold uppercase text-[var(--blawby-accent)]">{{ identity.brand_name }}</p>
+          <p class="font-bold uppercase text-[var(--blawby-accent)]">{{ identity.name }}</p>
           <h1 v-if="scheduleTitle.before || scheduleTitle.accent" class="blawby-display text-5xl font-medium text-white sm:text-7xl min-[1920px]:text-8xl min-[2560px]:text-9xl">
             {{ scheduleTitle.before }}<span v-if="scheduleTitle.accent" class="text-[var(--blawby-accent)]">{{ scheduleTitle.accent }}</span>{{ scheduleTitle.after }}
           </h1>
@@ -98,10 +98,10 @@ function trackConsultation(pageType: string, destination: string) {
 
 const { canonicalUrl } = useSocialMetadata(() => ({
   path: '/schedule',
-  title: page.value.seo_title || `Consultation | ${identity.value.brand_name}`,
+  title: page.value.seo_title || `Consultation | ${identity.value.name}`,
   description: page.value.seo_description || page.value.summary || '',
   brand: {
-    siteName: identity.value.brand_name,
+    siteName: identity.value.name,
   },
 }))
 const homeUrl = useSeoUrl(() => '/')

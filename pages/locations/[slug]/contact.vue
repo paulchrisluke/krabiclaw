@@ -179,9 +179,9 @@ definePageMeta({ layout: 'saya' })
 const { locale, localePath, t } = useI18n()
 
 const route = useRoute()
-const { siteId, site } = useTenantSite()
+const { organizationId, site } = useTenantSite()
 const locationCopy = computed(() => getVerticalCopy((site as ApiValue)?.vertical, locale.value))
-if (!siteId) throw createError({ statusCode: 404 })
+if (!organizationId) throw createError({ statusCode: 404 })
 
 const slug = computed(() => String(route.params.slug))
 
@@ -206,7 +206,7 @@ const extraNotes = computed(() => getContentField('extra.notes', '') ?? '')
 const sanitizedParkingInfo = computed(() => DOMPurify.sanitize(parkingInfo.value))
 const sanitizedExtraNotes = computed(() => DOMPurify.sanitize(extraNotes.value))
 
-const siteName = computed(() => String((site as ApiValue)?.brand_name ?? '').trim())
+const siteName = computed(() => String((site as ApiValue)?.name ?? '').trim())
 
 useSocialMetadata(() => ({
   path: `/locations/${slug.value}/contact`,

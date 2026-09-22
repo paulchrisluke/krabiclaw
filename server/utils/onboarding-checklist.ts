@@ -36,7 +36,7 @@ export const EMPTY_ONBOARDING_CHECKLIST: OnboardingChecklist = Object.freeze({
 
 interface ChecklistRow {
   vertical: string
-  brand_name: string | null
+  name: string | null
   business_info: number
   has_hero: number
   products: number
@@ -68,7 +68,7 @@ export async function loadOnboardingChecklist(
   const row = await queryFirst<ChecklistRow>(db, `
     SELECT
       s.vertical,
-      s.brand_name,
+      s.name,
       EXISTS(
         SELECT 1 FROM business_locations
         WHERE organization_id = s.id AND status = 'active' AND (
@@ -110,7 +110,7 @@ export async function loadOnboardingChecklist(
   return {
     success: true,
     vertical,
-    brandName: row.brand_name ?? brandName,
+    brandName: row.name ?? brandName,
     items: {
       business_info: Boolean(row.business_info),
       hero_image: heroIsReal,

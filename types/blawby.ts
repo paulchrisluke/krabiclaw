@@ -161,7 +161,7 @@ export interface PublicCompliance {
 }
 
 export interface PublicBlawbyIdentity {
-  brand_name: string
+  name: string
   brand_description: string | null
   media: Array<{ asset_id: string; slot: string; public_url: string | null; thumbnail_url: string | null; kind: string | null }>
   social_image: SocialImageSource | null

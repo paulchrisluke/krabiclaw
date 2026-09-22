@@ -1,6 +1,6 @@
 import type { Ref } from 'vue'
 
-export interface OrgSiteSummary { id: string; team_id: string | null; brand_name: string | null; subdomain: string | null }
+export interface OrgSiteSummary { id: string; team_id: string | null; name: string | null; subdomain: string | null }
 export interface OrgLocationSummary { id: string; team_id: string | null; title: string }
 
 const isSitesResponse = (value: unknown): value is { sites: OrgSiteSummary[] } =>
@@ -27,7 +27,7 @@ export function useOrganizationScopeOptions() {
   const sitesPending = ref(false)
   const sitesError = ref<string | null>(null)
   let sitesRequestId = 0
-  const siteOptions = computed(() => sites.value.map(site => ({ label: site.brand_name || site.subdomain || site.id, value: site.id })))
+  const siteOptions = computed(() => sites.value.map(site => ({ label: site.name || site.subdomain || site.id, value: site.id })))
 
   async function loadSites() {
     if (sites.value.length || sitesPending.value) return

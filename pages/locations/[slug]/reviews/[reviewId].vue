@@ -48,8 +48,8 @@ definePageMeta({ layout: 'saya' })
 
 const route = useRoute()
 const requestEvent = useRequestEvent()
-const { siteId } = useTenantSite()
-if (!siteId) throw createError({ statusCode: 404 })
+const { organizationId } = useTenantSite()
+if (!organizationId) throw createError({ statusCode: 404 })
 
 const slug = computed(() => String(route.params.slug))
 const reviewId = computed(() => String(route.params.reviewId))
@@ -72,7 +72,7 @@ const { data: review, pending, error } = await useAsyncData<ApiRecord>(
       const db = cloudflareEnv(requestEvent).db
       if (!db) throw createError({ statusCode: 500, statusMessage: 'Database not available' })
 
-      const result = await getPublicReview(db, String(siteId), slug.value, reviewId.value) as ApiRecord | null
+      const result = await getPublicReview(db, String(organizationId), slug.value, reviewId.value) as ApiRecord | null
       if (!result) throw createError({ statusCode: 404, statusMessage: 'Review not found' })
       return result
     }

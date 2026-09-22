@@ -208,8 +208,8 @@ interface ChangeEmailContent {
 async function deliverEmail(db: DbClient, env: ChangeEnv, thread: GuestThreadRow, entryId: string, content: ChangeEmailContent, status: 'requested' | 'accepted' | 'declined', proposal: z.infer<typeof proposalSchema>, noun: string) {
   const summary = await sourceSummary(db, thread)
   if (!summary.guestEmail) throw new HTTPError({ statusCode: 400, message: 'Guest email is required' })
-  const site = await queryFirst<{ brand_name: string }>(db, 'SELECT brand_name FROM organization WHERE id = ?', [thread.organization_id])
-  if (!site?.brand_name) throw new HTTPError({ statusCode: 409, message: 'Site name is not configured' })
+  const site = await queryFirst<{ name: string }>(db, 'SELECT name FROM organization WHERE id = ?', [thread.organization_id])
+  if (!site?.name) throw new HTTPError({ statusCode: 409, message: 'Site name is not configured' })
   const delivery = await createDeliveryReceipt(db, {
     entryId,
     channel: 'email',
@@ -221,11 +221,11 @@ async function deliverEmail(db: DbClient, env: ChangeEnv, thread: GuestThreadRow
     delivery,
     env,
     to: summary.guestEmail,
-    fromName: site.brand_name,
+    fromName: site.name,
     subject: content.subject,
     email: await renderNotificationEmail(bookingChangeProposalMessage({
       guestName: summary.guestName,
-      siteName: site.brand_name,
+      siteName: site.name,
       heading: content.subject,
       intro: content.intro,
       rows: content.rows ?? [],
@@ -238,7 +238,7 @@ async function deliverEmail(db: DbClient, env: ChangeEnv, thread: GuestThreadRow
   if (sent.status === 'failed') throw new HTTPError({ statusCode: 502, message: sent.error || 'Guest email could not be sent' })
   if (sent.status === 'unknown') throw new HTTPError({ statusCode: 504, message: sent.error || 'Guest email outcome is unknown' })
   await notifyBookingChangeOwner(env, db, {
-    organizationId: thread.organization_id, siteName: site.brand_name,
+    organizationId: thread.organization_id, siteName: site.name,
     locationId: (status === 'accepted' && proposal.after.kind === 'reservation' ? proposal.after.locationId : proposal.before.locationId) ?? '',
     threadId: thread.id, submissionType: thread.kind === 'reservation' ? 'reservation' : 'booking', submissionId: thread.id, sourceEntryId: entryId,
     guestName: summary.guestName, guestEmail: summary.guestEmail, status, noun,

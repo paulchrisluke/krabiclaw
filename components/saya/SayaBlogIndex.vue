@@ -33,11 +33,11 @@ interface TenantBlogPost {
   media?: Array<{ asset_id: string; slot: string; public_url: string | null; kind: string | null }>
 }
 
-const { siteId, site } = useTenantSite()
+const { organizationId, site } = useTenantSite()
 const { locale, t } = useI18n()
-if (!siteId) throw createError({ statusCode: 404 })
+if (!organizationId) throw createError({ statusCode: 404 })
 
-const siteName = computed(() => site?.brand_name?.trim() ?? '')
+const siteName = computed(() => site?.name?.trim() ?? '')
 
 const { blogList, error, pending } = await usePublicPageData()
 const posts = computed(() => (blogList.value ?? []) as unknown as TenantBlogPost[])

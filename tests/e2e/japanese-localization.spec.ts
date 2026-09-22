@@ -75,7 +75,7 @@ test('Japanese is a second secondary language and keeps its public shell through
 
 
     await expectStatus(await owner.put(`/api/editor/sites/${siteId}/localization/site/${siteId}/ja`, {
-      data: { values: { brand_name: '菊月 クラビ', brand_description: 'クラビの日本料理店' } },
+      data: { values: { name: '菊月 クラビ', brand_description: 'クラビの日本料理店' } },
     }), 200)
     await expectStatus(await owner.put(`/api/editor/sites/${siteId}/localization/business_location/loc-kikuzuki/ja`, {
       data: {

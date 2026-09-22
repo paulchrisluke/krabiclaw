@@ -12,7 +12,7 @@ export default defineHandler(async (event) => {
   const origin = resolvePublicOrigin(event)
   const isTenant = event.context.tenantType === 'tenant'
   const organizationId = isTenant ? String(event.context.organizationId || '') : ''
-  const siteName = (event.context.site as { brand_name?: string | null } | undefined)?.brand_name?.trim() || ''
+  const siteName = (event.context.site as { name?: string | null } | undefined)?.name?.trim() || ''
   if (isTenant && organizationId && !siteName) throw new HTTPError({ statusCode: 500, statusMessage: 'Tenant brand name is not configured' })
 
   if (isTenant && organizationId) {

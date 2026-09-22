@@ -21,7 +21,7 @@ const { site } = useTenantSite()
 
 const presentation = computed(() => resolveProductPresentation(site?.vertical))
 const homeCopy = computed(() => getVerticalCopy(site?.vertical, locale.value))
-const brandName = computed(() => String(site?.brand_name ?? '').trim())
+const brandName = computed(() => String(site?.name ?? '').trim())
 
 const items = computed(() => blockRecords(props.block.data.items).map((item) => {
   const media = blockRecords(item.media)[0] ?? null
