@@ -175,10 +175,12 @@ export default defineHandler(async (event) => {
   const url = event.url;
   const tenantPath = normalizedPath(url.pathname);
   if (tenantPath === "/api/auth" || tenantPath.startsWith("/api/auth/")) return;
-  // Public site APIs carry an explicit site ID and resolve that site through
-  // their canonical service. Host-based tenant resolution would duplicate the
-  // same database lookup without adding an authorization boundary.
-  if (tenantPath.startsWith("/api/public/sites/")) return;
+  // `/api/public/**` used to be skipped here because each of those routes
+  // carried its own site id in the path. That id was a second answer to "which
+  // tenant", arriving beside the host that already knew — and a route reachable
+  // with one tenant's id on another tenant's domain. The id is gone and the
+  // host is the only answer, so the public API resolves here like everything
+  // else and reads `event.context.organizationId`.
   const host = (event.req.headers.get("host")) || "";
   const env = cloudflareEnv(event);
 
