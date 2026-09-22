@@ -20,7 +20,7 @@ export default defineHandler(async (event) => {
   const limit = Math.min(Math.max(Number.parseInt(String(query.limit ?? '200'), 10) || 200, 1), 500)
 
   let sql = `
-    SELECT e.id, gt.kind AS submission_type, gt.id AS submission_id, gt.organization_id, gt.organization_id, e.actor_kind, e.channel, e.body, e.actor_user_id, e.dedupe_key, e.occurred_at, e.created_at
+    SELECT e.id, gt.kind AS submission_type, gt.id AS submission_id, gt.organization_id, e.actor_kind, e.channel, e.body, e.actor_user_id, e.dedupe_key, e.occurred_at, e.created_at
     FROM activity_entries e
     JOIN requests gt ON gt.id = e.request_id
     WHERE e.kind = 'message'

@@ -271,7 +271,7 @@ export const getFacebookPagesConnection = async (
   if (!env.DB) return null
 
   const connection = await queryFirst<FacebookPagesConnection>(env.DB, `
-    SELECT id AS organization_id, organization_id,
+    SELECT id AS organization_id,
            json_extract(integrations_json, '$.facebook.id') AS id,
            json_extract(integrations_json, '$.facebook.revision') AS revision,
            json_extract(integrations_json, '$.facebook.connected_by_user_id') AS connected_by_user_id,

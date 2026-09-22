@@ -490,7 +490,7 @@ export async function listMediaAssets(
   params.push(opts.limit ?? 50, opts.offset ?? 0)
   const results = await queryAll<MediaAsset>(
     db,
-    `SELECT ma.id, ma.organization_id, ma.organization_id, ma.kind, ma.provider, ma.source,
+    `SELECT ma.id, ma.organization_id, ma.kind, ma.provider, ma.source,
             ma.cloudflare_image_id, ma.r2_key,
             ma.public_url, ma.thumbnail_url, ma.mime_type, ma.file_name, ma.file_size,
             ma.width, ma.height, ma.duration, ma.alt_text, ma.category, ma.status, ma.created_by_user_id, ma.created_at, ma.updated_at

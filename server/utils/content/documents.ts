@@ -268,7 +268,7 @@ export function prepareContentDocumentDeletion(input: { organizationId: string }
 
 export async function getContentDocumentById(db: DbClient, documentId: string) {
   return await queryFirst<ContentDocumentRow>(db, `
-    SELECT id, organization_id, organization_id, kind, row_role, root_id, locale, created_at, updated_at
+    SELECT id, organization_id, kind, row_role, root_id, locale, created_at, updated_at
     FROM content_documents WHERE id = ? AND row_role IN ('root', 'representation')
   `, [documentId])
 }

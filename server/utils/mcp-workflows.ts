@@ -122,7 +122,7 @@ export async function listContactSubmissions(
     params.push(d1JsonStringSet(opts.locationIds))
   }
   return await queryAll<Record<string, unknown>>(db, `
-    SELECT id, organization_id, organization_id, location_id, json_extract(payload_json, '$.guest.name') AS name, json_extract(payload_json, '$.guest.email') AS email, json_extract(payload_json, '$.subject') AS subject, json_extract(payload_json, '$.message') AS message, created_at FROM requests
+    SELECT id, organization_id, location_id, json_extract(payload_json, '$.guest.name') AS name, json_extract(payload_json, '$.guest.email') AS email, json_extract(payload_json, '$.subject') AS subject, json_extract(payload_json, '$.message') AS message, created_at FROM requests
     WHERE kind = 'contact' AND organization_id = ?
       ${locationClause}
     ORDER BY created_at DESC
@@ -146,7 +146,7 @@ export async function listReservationSubmissions(
     params.push(`-${opts.sinceDays} days`)
   }
   const rows = await queryAll<Record<string, unknown> & { starts_at: string; timezone: string }>(db, `
-    SELECT rs.id, rs.organization_id, rs.organization_id, res.location_id, rs.customer_id, res.status, res.starts_at, res.timezone, CAST(res.party_size AS TEXT) || CASE json_extract(rs.payload_json, '$.party_size_is_minimum') WHEN 1 THEN '+' ELSE '' END AS guests, json_extract(rs.payload_json, '$.guest.name') AS name, json_extract(rs.payload_json, '$.guest.email') AS email, json_extract(rs.payload_json, '$.guest.phone') AS phone, json_extract(rs.payload_json, '$.notes') AS requests, rs.created_at, rs.updated_at, bl.title AS location_title
+    SELECT rs.id, rs.organization_id, res.location_id, rs.customer_id, res.status, res.starts_at, res.timezone, CAST(res.party_size AS TEXT) || CASE json_extract(rs.payload_json, '$.party_size_is_minimum') WHEN 1 THEN '+' ELSE '' END AS guests, json_extract(rs.payload_json, '$.guest.name') AS name, json_extract(rs.payload_json, '$.guest.email') AS email, json_extract(rs.payload_json, '$.guest.phone') AS phone, json_extract(rs.payload_json, '$.notes') AS requests, rs.created_at, rs.updated_at, bl.title AS location_title
     FROM requests rs
     JOIN reservations res ON res.request_id = rs.id
     LEFT JOIN business_locations bl ON bl.id = res.location_id

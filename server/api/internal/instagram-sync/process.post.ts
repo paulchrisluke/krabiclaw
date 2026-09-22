@@ -42,9 +42,9 @@ export default defineHandler(async (event) => {
     }
   }
 
-  // Query all sites with active Facebook Pages connections
+  // Every organization with an active Facebook Pages connection
   const connections = await queryAll<{ organization_id: string; }>(db, `
-    SELECT organization_id, id AS organization_id FROM organization
+    SELECT id AS organization_id FROM organization
     WHERE json_extract(integrations_json, '$.facebook.status') = 'active'
   `)
 

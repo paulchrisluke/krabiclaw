@@ -201,7 +201,7 @@ export const getGoogleAnalyticsConnection = async (
   }
 
   const connection = await queryFirst<GoogleAnalyticsConnection>(env.DB, `
-    SELECT id AS organization_id, organization_id,
+    SELECT id AS organization_id,
            json_extract(integrations_json, '$.google.id') AS id,
            json_extract(integrations_json, '$.google.revision') AS revision,
            json_extract(integrations_json, '$.google.connected_by_user_id') AS connected_by_user_id,

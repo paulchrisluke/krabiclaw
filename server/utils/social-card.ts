@@ -119,17 +119,17 @@ function errorMessage(error: unknown): string {
 async function loadOwner(db: DbClient, owner: SocialCardOwner): Promise<OwnerRecord | null> {
   switch (owner.owner_type) {
     case 'organization':
-      return await queryFirst<OwnerRecord>(db, `SELECT organization_id, id AS organization_id,
+      return await queryFirst<OwnerRecord>(db, `SELECT id AS organization_id,
         COALESCE(NULLIF(trim(seo_title), ''), NULLIF(trim(name), '')) AS title,
         COALESCE(NULLIF(trim(seo_description), ''), NULLIF(trim(brand_description), '')) AS description,
         NULL AS label, NULL AS location FROM organization WHERE id = ? LIMIT 1`, [owner.owner_id]) ?? null
     case 'business_location':
-      return await queryFirst<OwnerRecord>(db, `SELECT organization_id, organization_id,
+      return await queryFirst<OwnerRecord>(db, `SELECT organization_id,
         COALESCE(NULLIF(trim(seo_title), ''), title) AS title,
         COALESCE(NULLIF(trim(seo_description), ''), NULLIF(trim(short_description), ''), NULLIF(trim(description), '')) AS description,
         'Location' AS label, COALESCE(address ->> '$.sublocality', address ->> '$.locality') AS location FROM business_locations WHERE id = ? LIMIT 1`, [owner.owner_id]) ?? null
     case 'product':
-      return await queryFirst<OwnerRecord>(db, `SELECT p.organization_id, pub.organization_id,
+      return await queryFirst<OwnerRecord>(db, `SELECT p.organization_id,
         p.name AS title,
         NULLIF(trim(p.description), '') AS description,
         'Product' AS label, NULL AS location
@@ -138,7 +138,7 @@ async function loadOwner(db: DbClient, owner: SocialCardOwner): Promise<OwnerRec
           AND pub.organization_id = p.organization_id AND pub.published = 1
         WHERE p.id = ? LIMIT 1`, [owner.owner_id]) ?? null
     case 'content_document':
-      return await queryFirst<OwnerRecord>(db, `SELECT d.organization_id, d.organization_id,
+      return await queryFirst<OwnerRecord>(db, `SELECT d.organization_id,
         COALESCE(NULLIF(trim(d.seo_title), ''), NULLIF(trim(d.title), ''), NULLIF(trim(substr(d.summary, 1, 80)), '')) AS title,
         COALESCE(NULLIF(trim(d.seo_description), ''), NULLIF(trim(d.summary), '')) AS description,
         CASE d.kind WHEN 'article' THEN 'Article' WHEN 'social_post' THEN 'Update' END AS label,
@@ -147,10 +147,10 @@ async function loadOwner(db: DbClient, owner: SocialCardOwner): Promise<OwnerRec
         LEFT JOIN business_locations bl ON bl.id = root.location_id
         WHERE d.id = ? AND d.kind IN ('page','article','social_post') LIMIT 1`, [owner.owner_id]) ?? null
     case 'review':
-      return await queryFirst<OwnerRecord>(db, `SELECT organization_id, organization_id,
+      return await queryFirst<OwnerRecord>(db, `SELECT organization_id,
         COALESCE(NULLIF(trim(title), ''), 'Review by ' || COALESCE(NULLIF(trim(author_name), ''), 'a customer')) AS title,
         NULLIF(trim(content), '') AS description, 'Review' AS label, NULL AS location
-        FROM reviews WHERE id = ? AND organization_id IS NOT NULL AND organization_id IS NOT NULL LIMIT 1`, [owner.owner_id]) ?? null
+        FROM reviews WHERE id = ? AND organization_id IS NOT NULL LIMIT 1`, [owner.owner_id]) ?? null
   }
 }
 

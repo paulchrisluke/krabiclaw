@@ -28,7 +28,7 @@ export default defineHandler(async (event) => {
   const site = await loadMemberOrganizationRow(event, db, env, organizationId, session.user.id)
   if (!site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
 
-  const asset = await queryFirst<MediaAssetSiteRow>(db, `SELECT id, organization_id, organization_id FROM media_assets WHERE id = ? LIMIT 1`, [assetId]
+  const asset = await queryFirst<MediaAssetSiteRow>(db, `SELECT id, organization_id FROM media_assets WHERE id = ? LIMIT 1`, [assetId]
   )
   if (!asset) return jsonResponse({ error: 'Asset not found' }, { status: 404 })
   if (asset.organization_id !== organizationId) return jsonResponse({ error: 'Forbidden' }, { status: 403 })

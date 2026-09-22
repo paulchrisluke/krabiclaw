@@ -303,7 +303,7 @@ export async function listReservationSlots(db: DbClient, input: {
   excludeReservationId?: string | null
 }): Promise<{ timezone: string; slots: ReservationSlot[] }> {
   const location = await queryFirst<LocationHoursRow>(db, `
-    SELECT id, organization_id, organization_id, timezone, status, opening_hours, special_hours
+    SELECT id, organization_id, timezone, status, opening_hours, special_hours
       FROM business_locations WHERE organization_id = ? AND id = ?
   `, [input.organizationId, input.locationId])
   if (!location) throw new HTTPError({ statusCode: 404, statusMessage: 'Location not found' })

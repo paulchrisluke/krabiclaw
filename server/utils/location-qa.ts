@@ -80,7 +80,7 @@ export async function listQa(db: DbClient, organizationId: string, locationId: s
     ? { clause: 'root.id = ?', params: [qaId] as unknown[] }
     : scopeSql(locationId, pagePath)
   return queryAll<QaDocument>(db, `
-    SELECT p.id, p.organization_id, p.organization_id, root.location_id, root.scope_path AS page_path,
+    SELECT p.id, p.organization_id, root.location_id, root.scope_path AS page_path,
       p.title AS question, p.summary AS answer, (root.metadata_json ->> '$.question_author') AS question_author,
       (root.metadata_json ->> '$.question_date') AS question_date, (root.metadata_json ->> '$.answer_author') AS answer_author,
       (root.metadata_json ->> '$.answer_date') AS answer_date, (root.metadata_json ->> '$.is_owner_answer') AS is_owner_answer,

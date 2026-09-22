@@ -37,7 +37,7 @@ export interface CustomerRow {
 }
 
 const CUSTOMER_SELECT = `
-  SELECT id, organization_id, organization_id, user_id, stripe_customer_id, name, email,
+  SELECT id, organization_id, user_id, stripe_customer_id, name, email,
          email_normalized, email_hash, phone, phone_normalized, phone_metadata_version, source, status
   FROM customers
 `

@@ -182,7 +182,7 @@ export function groupCustomDomains(domains: DomainRecord[]): DomainGroup[] {
 
 export async function getDomainEvents(db: D1Database, domainId: string) {
   const events = await queryAll(db, `
-    SELECT id, organization_id, organization_id, event_name AS event_type, body AS message,
+    SELECT id, organization_id, event_name AS event_type, body AS message,
            actor_user_id AS actor_id, payload_json ->> '$.actorType' AS actor_type,
            payload_json ->> '$.entityId' AS domain_id,
            payload_json ->> '$.beforeState' AS before_state,

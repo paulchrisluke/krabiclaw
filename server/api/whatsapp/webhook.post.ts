@@ -136,7 +136,7 @@ async function resolveQuotedDelivery(
     location_id: string | null
     guest_email: string | null
   }>(db, `
-    SELECT gt.id AS request_id, gt.organization_id, gt.organization_id, gt.location_id,
+    SELECT gt.id AS request_id, gt.organization_id, gt.location_id,
            json_extract(gt.payload_json, '$.guest.email') AS guest_email
     FROM guest_thread_deliveries d
     JOIN activity_entries e ON e.id = d.entry_id
@@ -163,7 +163,7 @@ async function listRecentGuestDeliveryCandidates(db: D1Database, env: ApiRecord,
     guestName: string
     submissionType: string
   }>(db, `
-    SELECT gt.id AS threadId, gt.organization_id AS organizationId, gt.organization_id AS organizationId,
+    SELECT gt.id AS threadId, gt.organization_id AS organizationId,
            gt.location_id AS locationId, json_extract(gt.payload_json, '$.guest.name') AS guestName,
            gt.kind AS submissionType, MAX(d.created_at) AS createdAt
     FROM guest_thread_deliveries d

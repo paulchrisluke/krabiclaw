@@ -64,11 +64,11 @@ export default defineScheduledTask({
     // Better Auth's subscription table is the authority for paid scheduled
     // integrations; candidates are selected here and filtered against it below.
     const candidates = await queryAllPages<PlaceLocationRow>(db, `
-      SELECT bl.id, bl.organization_id, bl.organization_id, bl.title, bl.google_place_id
+      SELECT bl.id, bl.organization_id, bl.title, bl.google_place_id
       FROM business_locations bl
       WHERE bl.google_place_id IS NOT NULL
         AND bl.status = 'active'
-      ORDER BY bl.organization_id, bl.organization_id, bl.id
+      ORDER BY bl.organization_id, bl.id
     `, [])
     const locations = await filterEntitledRows(env as CloudflareEnv, candidates, 'google_places')
 

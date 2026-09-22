@@ -101,7 +101,7 @@ export async function getReviewBookingContext(
   bookingType: ReviewBookingType,
   bookingId: string,
 ): Promise<ReviewBookingContext | null> {
-  return queryFirst<ReviewBookingContext>(db, `SELECT r.kind AS booking_type, r.id AS booking_id, r.organization_id, r.organization_id, r.location_id, r.customer_id,
+  return queryFirst<ReviewBookingContext>(db, `SELECT r.kind AS booking_type, r.id AS booking_id, r.organization_id, r.location_id, r.customer_id,
     c.name AS customer_name, c.email AS customer_email, c.review_request_opted_out_at AS customer_opted_out_at,
     json_extract(r.payload_json, '$.guest.name') AS guest_name, json_extract(r.payload_json, '$.guest.email') AS guest_email, record.status,
     record.ends_at AS completed_at,
