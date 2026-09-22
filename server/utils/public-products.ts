@@ -206,7 +206,7 @@ export async function loadPublicProductDetail(
 
   const resolved = await loadProductSite(db, organizationId, routeKind, previewAuthorized)
   if (!resolved) return null
-  const localizations = await loadExactPublicLocalizations(env, db, resolved.site.organization_id, organizationId, locale)
+  const localizations = await loadExactPublicLocalizations(env, db, resolved.site.organization_id, locale)
   const localizedLocationPath = `/${locale}/locations/${locationSlug}`
   const locationId = resolveLocalizedRouteResourceId(localizations, 'business_location', localizedLocationPath)
   if (!locationId) return null
@@ -295,7 +295,7 @@ export async function loadPublicExperienceDetail(
   }
   // The localized reader names its location by the localized route the tenant
   // published for it, so hand it that route's slug rather than the source one.
-  const localizations = await loadExactPublicLocalizations(env, db, resolved.site.organization_id, organizationId, locale)
+  const localizations = await loadExactPublicLocalizations(env, db, resolved.site.organization_id, locale)
   const localizedRoute = localizations.find(item => item.resourceType === 'business_location' && item.resourceId === location.id)?.routePath
   const localizedLocationSlug = localizedRoute ? localizedRoute.split('/').filter(Boolean).at(-1) : null
   if (!localizedLocationSlug) return null

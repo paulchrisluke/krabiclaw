@@ -1335,7 +1335,7 @@ export async function createCollection(db: DbClient, input: {
   organizationId: string; collection: CreateCollectionInput; actor: Actor
 }): Promise<Collection> {
   const name = requireTrimmedProductString(input.collection.name, 'name', PRODUCT_LIMITS.collectionName)
-  const slug = await uniqueCollectionSlug(db, input.organizationId, input.collection.organization_id, input.collection.location_id ?? null, name)
+  const slug = await uniqueCollectionSlug(db, input.organizationId, input.collection.location_id ?? null, name)
   const id = crypto.randomUUID()
   const now = new Date().toISOString()
   await executeBatch(db, [{

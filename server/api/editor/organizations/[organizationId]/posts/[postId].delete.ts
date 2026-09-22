@@ -31,7 +31,7 @@ export default defineHandler(async (event) => {
   if (!post) return jsonResponse({ error: 'Post not found' }, { status: 404 })
   await assertResourceAccess(db, { ...memberAccessPrincipal(site.membership, { env, organizationId, event }), resourceLocationId: post.location_id })
 
-  await deletePost(db, site.organization_id, organizationId, postId)
+  await deletePost(db, site.organization_id, postId)
   return jsonResponse({ success: true })
 })
 import { defineHandler } from 'nitro';

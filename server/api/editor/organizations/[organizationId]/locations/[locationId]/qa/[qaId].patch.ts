@@ -25,7 +25,7 @@ export default defineHandler(async (event) => {
   }
 
   try {
-    const result = await updateLocationQa(db, organization.id, organizationId, locationId, qaId, {
+    const result = await updateLocationQa(db, organization.id, locationId, qaId, {
       question: body.question !== undefined ? cleanString(body.question, 500) : undefined, answer: body.answer !== undefined ? cleanString(body.answer, 2000) : undefined, question_author: body.question_author !== undefined ? cleanString(body.question_author, 120) : undefined, is_owner_answer: body.is_owner_answer, status: body.status !== undefined ? cleanString(body.status, 20) : undefined, sort_order: body.sort_order, })
     return jsonResponse(result)
   } catch (error) {

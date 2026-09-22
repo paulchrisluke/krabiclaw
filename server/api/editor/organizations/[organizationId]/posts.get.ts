@@ -27,7 +27,7 @@ export default defineHandler(async (event) => {
   // site-wide-scoped member may see that; a location-scoped editor must
   // filter to their own location.
   await assertResourceAccess(db, { ...memberAccessPrincipal(site.membership, { env, organizationId, event }), resourceLocationId: locationId ?? null })
-  const posts = await listPosts(db, site.organization_id, organizationId, status, locationId)
+  const posts = await listPosts(db, site.organization_id, status, locationId)
   return jsonResponse({ success: true, posts })
 })
 import { defineHandler } from 'nitro';

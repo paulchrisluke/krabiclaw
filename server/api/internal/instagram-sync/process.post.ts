@@ -74,7 +74,7 @@ export default defineHandler(async (event) => {
       let fbPlatformErrors = 0
       try {
         fbResult = await syncFacebookPosts(
-          env, connection.organization_id, connection.organization_id, fbConnection.encrypted_page_token, fbConnection.facebook_page_id, limit
+          env, connection.organization_id, fbConnection.encrypted_page_token, fbConnection.facebook_page_id, limit
         )
       } catch (fbErr) {
         console.error('Facebook sync failed for site:', connection.organization_id, fbErr)
@@ -89,7 +89,7 @@ export default defineHandler(async (event) => {
       if (igUserId) {
         try {
           igResult = await syncInstagramPosts(
-            env, connection.organization_id, connection.organization_id, fbConnection.encrypted_page_token, igUserId, limit
+            env, connection.organization_id, fbConnection.encrypted_page_token, igUserId, limit
           )
         } catch (igErr) {
           console.error('Instagram sync failed for site:', connection.organization_id, igErr)

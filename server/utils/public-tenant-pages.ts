@@ -476,7 +476,7 @@ export async function getPublicTenantPageForPath(
   if (!page) return null
   const localizations = page.locale === 'en'
     ? null
-    : options.localizations ?? await loadExactPublicLocalizations(env, db, page.organization_id, organizationId, page.locale)
+    : options.localizations ?? await loadExactPublicLocalizations(env, db, page.organization_id, page.locale)
   const [blocks, media, sourceLocale] = await Promise.all([
     hydrateBlocks(db, organizationId, page.path, page.locale, page.blocks, options.hydrationResources, localizations),
     loadPublicSocialMedia(db, organizationId, 'content_document', [page.id]),

@@ -208,7 +208,7 @@ export async function loadDashboardBookingDetails(
       ? getLocationReservationConfig(context.db, { organizationId: row.organization_id, locationId: row.location_id })
       : Promise.resolve(null),
     listInternalNotes(context.db, row.request_id),
-    resolveLocationTimezone(context.db, row.organization_id, row.organization_id, row.location_id),
+    resolveLocationTimezone(context.db, row.organization_id, row.location_id),
   ])
 
   return {

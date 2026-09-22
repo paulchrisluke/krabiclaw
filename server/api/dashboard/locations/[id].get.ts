@@ -13,7 +13,7 @@ export default defineHandler(async (event) => {
   const organizationId = organization.id
   await assertLocationAccess(db, { ...memberAccessPrincipal(organization, { env, organizationId: location.organization_id, event }), locationId })
 
-  const capabilitySummary = await resolveLocationCapabilitySummary(db, organizationId, location.organization_id, location.feature_overrides as string | null ?? null)
+  const capabilitySummary = await resolveLocationCapabilitySummary(db, organizationId, location.feature_overrides as string | null ?? null)
 
   return jsonResponse({ success: true, location: parseLocationPayload(location), ...capabilitySummary })
 })

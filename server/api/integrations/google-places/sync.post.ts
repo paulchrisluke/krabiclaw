@@ -32,7 +32,7 @@ export default defineHandler(async (event) => {
 
   try {
     const { place, reviewsUpserted } = await syncPlaceToLocation(
-      db, apiKey, organization.id, organization.id, locationId, location.google_place_id
+      db, apiKey, organization.id, locationId, location.google_place_id
     )
     await purgePublicResourceCacheSafe(env, organization.id)
 

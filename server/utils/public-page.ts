@@ -313,7 +313,7 @@ async function loadPublicPageSource(
   const localizedLocale = locale && locale !== 'en' ? locale : null
   let publicLocalizations: ExactPublicLocalization[] = []
   if (localizedLocale) {
-    publicLocalizations = await loadExactPublicLocalizations(env, db, orgId, organizationId, localizedLocale)
+    publicLocalizations = await loadExactPublicLocalizations(env, db, orgId, localizedLocale)
   }
 
   const localizedLocationId = localizedLocale && locationSlug

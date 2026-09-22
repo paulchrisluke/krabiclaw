@@ -10,7 +10,7 @@ export default defineHandler(async (event) => {
   if (!dashboardSite) return jsonResponse({ error: 'Site not found' }, { status: 404 })
   await assertOrganizationWideAccess(db, memberAccessPrincipal(organization, { env, organizationId: dashboardSite.id, event }))
 
-  const settings = await loadSettingsPayload(db, organization.id, dashboardSite.id)
+  const settings = await loadSettingsPayload(db, organization.id)
 
   return jsonResponse({
     success: true, settings

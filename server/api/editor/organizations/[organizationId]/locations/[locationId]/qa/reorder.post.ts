@@ -40,7 +40,7 @@ export default defineHandler(async (event) => {
   }
 
   try {
-    const result = await reorderLocationQa(db, organization.id, organizationId, locationId, updates)
+    const result = await reorderLocationQa(db, organization.id, locationId, updates)
     return jsonResponse(result)
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Q&A reorder failed'

@@ -33,7 +33,7 @@ export default defineHandler(async (event) => {
     }
 
     const result = await updateSiteSettingsFields(
-      db, env, site.id, organization.id, body, session.user.id, )
+      db, env, organization.id, body, session.user.id, )
 
     return jsonResponse(result.data, { status: result.status })
   } catch (error) {

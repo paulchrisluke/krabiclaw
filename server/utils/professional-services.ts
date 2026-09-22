@@ -358,7 +358,7 @@ export async function getPublicBlawbyDocumentData(
   const locale = options.locale?.trim() || 'en'
   const localizations = locale === 'en'
     ? []
-    : await loadExactPublicLocalizations(env, db, site.organization_id, organizationId, locale)
+    : await loadExactPublicLocalizations(env, db, site.organization_id, locale)
 
   const [shell, route] = await Promise.all([
     getPublicBlawbyShellData(db, organizationId, { locale, localizations }),

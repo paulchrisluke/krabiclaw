@@ -100,7 +100,7 @@ export async function loadPublicShellSource(
     platformMessages: null as Record<string, string> | null,
   }
   if (locale && locale !== 'en') {
-    const entitlement = await assertPublicSiteLanguageEntitlement(env, db, site.organization_id, organizationId, locale)
+    const entitlement = await assertPublicSiteLanguageEntitlement(env, db, site.organization_id, locale)
     if (entitlement.source) throw new HTTPError({ statusCode: 404, statusMessage: 'English source routes are unprefixed' })
     if (!entitlement.platform_messages) {
       throw new HTTPError({ statusCode: 500, statusMessage: 'Published platform locale messages are unavailable' })

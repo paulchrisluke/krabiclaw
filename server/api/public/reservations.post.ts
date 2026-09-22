@@ -85,7 +85,7 @@ export default defineHandler(async (event) => {
     db, 'SELECT title, opening_hours, max_capacity FROM business_locations WHERE id = ? AND organization_id = ? LIMIT 1', [resolvedLocationId, organizationId], )
   if (!location) return jsonResponse({ error: 'location_id must reference a location on this site' }, { status: 400 })
 
-  const reservationTimezone = await resolveLocationTimezone(db, site.organization_id, organizationId, resolvedLocationId)
+  const reservationTimezone = await resolveLocationTimezone(db, site.organization_id, resolvedLocationId)
   if (isDateBeforeTimezoneToday(date, reservationTimezone))
     return jsonResponse({ error: 'Please choose a valid future date.' }, { status: 400 })
 

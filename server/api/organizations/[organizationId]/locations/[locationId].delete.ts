@@ -13,7 +13,7 @@ export default defineHandler(async (event) => {
 
   const { env, db, organization } = await requireOrganizationAccess(event, organizationId, 'context')
   await assertRoleAllows({ organizationId: organization.id, role: organization.member_role, permissions: { locations: ['delete'] } })
-  const result = await deleteLocation(env, db, organization.id, organizationId, locationId)
+  const result = await deleteLocation(env, db, organization.id, locationId)
   if (result.status >= 400) {
     return jsonResponse(result.data, { status: result.status })
   }
