@@ -9,17 +9,9 @@
     :pending="pending"
     :error="loadError"
     :removing-id="removingId"
-    @add="openNew"
-    @open="open"
+    @add="navigateTo(`${level.path.value}/new`)"
     @remove="remove"
-  >
-    <template #item="{ item }">
-      <button type="button" class="block w-full text-left" @click="open(item)">
-        <p class="truncate text-sm font-medium text-highlighted">{{ item.title }}</p>
-        <p class="mt-1 truncate text-sm text-muted">{{ item.summary }}</p>
-      </button>
-    </template>
-  </DashboardListEditor>
+  />
   <UAlert v-if="deleteError" color="error" variant="soft" icon="i-lucide-circle-alert" :description="deleteError" />
   </div>
 </template>
@@ -31,10 +23,20 @@ import { isRecord } from '~/utils/api-clients'
 import { isTenantPageListResponse, tenantPageRows, type TenantPageListRow } from '~/composables/useTenantPageDraft'
 
 const route = useRoute()
+const router = useRouter()
 const dashboardApi = useDashboardApi()
 const siteId = await useDashboardSiteId()
-const sitePath = computed(() => `/dashboard/${String(route.params.orgSlug)}/sites/${String(route.params.siteSlug)}`)
-const pagesPath = computed(() => `${sitePath.value}/pages`)
+const level = useRouteLevel()
+
+/**
+ * The links page is a page in this list but a level of its own beside Pages,
+ * so its row is resolved from the route it is rather than by assembling the
+ * site's path a second time.
+ */
+const linksPath = computed(() => router.resolve({
+  name: 'dashboard-orgSlug-sites-siteSlug-links',
+  params: { orgSlug: route.params.orgSlug, siteSlug: route.params.siteSlug },
+}).path)
 
 const { data, pending, error, refresh } = await useAsyncData(
   `tenant-pages-${siteId}`,
@@ -44,21 +46,16 @@ const { data, pending, error, refresh } = await useAsyncData(
 
 const loadError = computed(() => (error.value ? getErrorMessage(error.value, 'Failed to load pages') : null))
 
-const listItems = computed(() => tenantPageRows(data.value?.pages ?? []))
-
-function openNew() {
-  void navigateTo(`${pagesPath.value}/new`)
-}
-
-function open(item: { id: string; recipe: string | null }) {
-  void navigateTo(item.recipe === 'links' ? `${sitePath.value}/links` : `${pagesPath.value}/${item.id}`)
-}
+const listItems = computed(() => tenantPageRows(data.value?.pages ?? []).map(row => ({
+  ...row,
+  to: row.recipe === 'links' ? linksPath.value : `${level.path.value}/${row.id}`,
+})))
 
 const removingId = ref<string | null>(null)
 const deleteError = ref<string | null>(null)
 
 /**
- * Remove a page and everything under it. The hub owns adding and removing a
+ * Remove a page and everything under it. The index owns adding and removing a
  * record; the leaf edits the one it was opened on (DESIGN.md).
  *
  * The server refuses the pages that may not go -- a system page, and a path the

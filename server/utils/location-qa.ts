@@ -181,10 +181,12 @@ export async function createQa(db: DbClient, scope: QaScope, input: CreateQaInpu
       page_path: pagePath,
       status,
       sort_order: sortOrder,
-      // A newly created question has no votes yet. It is stated rather than
-      // omitted: this is the same row shape the list returns, and the CMS
-      // validates it as one.
+      // A newly created question has no votes yet, and it is the tenant's own.
+      // Both are stated rather than omitted: this is the same row shape the
+      // list returns and the CMS validates it as one, so a missing `source`
+      // failed that check and no question could be created at all.
       upvote_count: 0,
+      source: 'manual',
       created: true,
     },
   }

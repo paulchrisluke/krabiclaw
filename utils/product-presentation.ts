@@ -1,5 +1,6 @@
 import type { Collection, Product, ProductPresentation, ProductSurface } from '~/server/types/products'
 import { normalizeVertical } from '~/utils/vertical-copy'
+import { isMediaCategory, type MediaCategory } from '~/shared/media-placement-contract'
 
 /**
  * Anything a guest books a seat on is an Experience, whatever the site sells
@@ -118,6 +119,51 @@ export function countCatalog(products: ReadonlyArray<Pick<Product, 'booking'>>):
  * is what filed bookable experiences as a menu section. The surfaces keep
  * their own words one level down.
  */
+/**
+ * The photo categories a vertical actually has. The column stores one of a
+ * fixed set, but which of them mean anything is the tenant's business: a law
+ * firm was offered "Food" and "Menu" filters because the list was written out
+ * by hand in the photos page.
+ *
+ * A category already stored on an asset is always offered, whatever the
+ * vertical — a site that changed vertical, or media added over MCP, must not
+ * have pictures that no filter can reach.
+ */
+// The tenant's word for each subject the column can hold. Keyed by the shared
+// list, so a category added there must be named here or this stops compiling.
+const PHOTO_CATEGORY_LABELS: Record<MediaCategory, string> = {
+  exterior: 'Exterior',
+  interior: 'Interior',
+  food: 'Food',
+  menu: 'Menu',
+  team: 'Team',
+  other: 'Other',
+  logo: 'Logo',
+  blog: 'Article',
+}
+
+/** Which subjects each vertical is offered. Only a restaurant plates food. */
+const PHOTO_CATEGORIES_BY_VERTICAL: Record<string, readonly MediaCategory[]> = {
+  restaurant: ['exterior', 'interior', 'food', 'menu', 'team', 'other'],
+  experience: ['exterior', 'interior', 'team', 'other'],
+  service: ['exterior', 'interior', 'team', 'other'],
+}
+
+export function photoCategories(
+  vertical: string | null | undefined,
+  stored: Iterable<string | null | undefined> = [],
+): Array<{ id: MediaCategory, label: string }> {
+  const forVertical = PHOTO_CATEGORIES_BY_VERTICAL[normalizeVertical(vertical)] ?? PHOTO_CATEGORIES_BY_VERTICAL.service!
+  const ids = [...forVertical]
+  // A subject already on an asset is always offered, whatever the vertical: a
+  // site that changed vertical, or media added over MCP, must not have pictures
+  // no filter can reach.
+  for (const category of stored) {
+    if (isMediaCategory(category) && !ids.includes(category)) ids.push(category)
+  }
+  return ids.map(id => ({ id, label: PHOTO_CATEGORY_LABELS[id] }))
+}
+
 export const CATALOG_LABEL = 'Catalog'
 
 /**

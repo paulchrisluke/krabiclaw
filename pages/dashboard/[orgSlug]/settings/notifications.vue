@@ -1,81 +1,72 @@
 <template>
-  <UDashboardPanel id="organization-notifications">
-    <template #header>
-      <UDashboardNavbar title="Notifications">
-        <template #leading>
-          <DashboardNavbarLeading />
-        </template>
-        <template #right>
-          <UButton
-            v-if="unreadCount > 0"
-            label="Mark all read"
-            color="neutral"
-            variant="ghost"
-            size="sm"
-            :loading="markingAll"
-            @click="markAllRead"
-          />
-        </template>
-      </UDashboardNavbar>
+  <DashboardIndexPanel id="organization-notifications" title="Notifications">
+    <template #right>
+      <UButton
+        v-if="unreadCount > 0"
+        label="Mark all read"
+        color="neutral"
+        variant="ghost"
+        size="sm"
+        :loading="markingAll"
+        @click="markAllRead"
+      />
     </template>
 
-    <template #body>
-      <div class="mx-auto w-full max-w-[var(--ws-page-narrow,45rem)]">
-        <UAlert
-          v-if="loadError || realtimeFailed"
-          color="warning"
-          variant="soft"
-          icon="i-lucide-wifi-off"
-          title="Notifications may be out of date"
-          :description="loadError ? 'Notifications could not be loaded.' : 'The live dashboard connection is unavailable.'"
-          class="mb-4"
-        >
-          <template #actions>
-            <UButton color="warning" variant="soft" size="xs" :loading="loading" @click="retryNotifications">
-              Refresh
-            </UButton>
-          </template>
-        </UAlert>
-        <div v-if="loading && notifications.length === 0" class="space-y-3">
-          <USkeleton v-for="index in 4" :key="index" class="h-16 rounded-lg" />
-        </div>
-
-        <div v-else-if="!loadError && !realtimeFailed && notifications.length === 0" class="py-16 text-center">
-          <UIcon name="i-lucide-bell-off" class="mx-auto mb-3 size-7 text-muted" />
-          <p class="text-sm text-muted">No notifications yet.</p>
-        </div>
-
-        <!--
-          A row is what the reference draws: a mark for what happened, the
-          title, one line under it, when. Unread is bold. Nothing else, and no
-          chevron; the row itself opens the thing.
-        -->
-        <div v-else class="divide-y divide-default">
-          <button
-            v-for="notification in notifications"
-            :key="notification.id"
-            type="button"
-            class="flex w-full items-start gap-4 py-5 text-left transition-colors hover:bg-elevated/60"
-            @click="openNotification(notification)"
-          >
-            <span class="flex size-12 shrink-0 items-center justify-center rounded-full bg-elevated">
-              <UIcon :name="iconFor(notification.template)" class="size-5" :class="notification.read_at ? 'text-muted' : 'text-highlighted'" />
-            </span>
-            <span class="min-w-0 flex-1">
-              <span class="block text-highlighted" :class="notification.read_at ? 'font-medium' : 'font-semibold'">{{ notification.title || 'Notification' }}</span>
-              <span v-if="notification.message" class="mt-0.5 line-clamp-2 block text-sm text-muted">{{ notification.message }}</span>
-              <span class="mt-1 block text-sm text-dimmed">{{ formatRelativeTime(notification.created_at) }}</span>
-            </span>
-            <span v-if="!notification.read_at" class="mt-2 size-2 shrink-0 rounded-full bg-primary" aria-label="Unread" />
-          </button>
-        </div>
+    <div class="mx-auto w-full max-w-[var(--ws-page-narrow,45rem)]">
+      <UAlert
+        v-if="loadError || realtimeFailed"
+        color="warning"
+        variant="soft"
+        icon="i-lucide-wifi-off"
+        title="Notifications may be out of date"
+        :description="loadError ? 'Notifications could not be loaded.' : 'The live dashboard connection is unavailable.'"
+        class="mb-4"
+      >
+        <template #actions>
+          <UButton color="warning" variant="soft" size="xs" :loading="loading" @click="retryNotifications">
+            Refresh
+          </UButton>
+        </template>
+      </UAlert>
+      <div v-if="loading && notifications.length === 0" class="space-y-3">
+        <USkeleton v-for="index in 4" :key="index" class="h-16 rounded-lg" />
       </div>
-    </template>
-  </UDashboardPanel>
+
+      <div v-else-if="!loadError && !realtimeFailed && notifications.length === 0" class="py-16 text-center">
+        <UIcon name="i-lucide-bell-off" class="mx-auto mb-3 size-7 text-muted" />
+        <p class="text-sm text-muted">No notifications yet.</p>
+      </div>
+
+      <!--
+        A row is what the reference draws: a mark for what happened, the
+        title, one line under it, when. Unread is bold. Nothing else, and no
+        chevron; the row itself opens the thing.
+      -->
+      <div v-else class="divide-y divide-default">
+        <button
+          v-for="notification in notifications"
+          :key="notification.id"
+          type="button"
+          class="flex w-full items-start gap-4 py-5 text-left transition-colors hover:bg-elevated/60"
+          @click="openNotification(notification)"
+        >
+          <span class="flex size-12 shrink-0 items-center justify-center rounded-full bg-elevated">
+            <UIcon :name="iconFor(notification.template)" class="size-5" :class="notification.read_at ? 'text-muted' : 'text-highlighted'" />
+          </span>
+          <span class="min-w-0 flex-1">
+            <span class="block text-highlighted" :class="notification.read_at ? 'font-medium' : 'font-semibold'">{{ notification.title || 'Notification' }}</span>
+            <span v-if="notification.message" class="mt-0.5 line-clamp-2 block text-sm text-muted">{{ notification.message }}</span>
+            <span class="mt-1 block text-sm text-dimmed">{{ formatRelativeTime(notification.created_at) }}</span>
+          </span>
+          <span v-if="!notification.read_at" class="mt-2 size-2 shrink-0 rounded-full bg-primary" aria-label="Unread" />
+        </button>
+      </div>
+    </div>
+  </DashboardIndexPanel>
 </template>
 
 <script setup lang="ts">
-definePageMeta({ layout: 'dashboard', ownsChrome: true })
+definePageMeta({ layout: 'dashboard' })
 
 useSeoMeta({ title: 'Notifications | KrabiClaw Dashboard', robots: 'noindex, nofollow' })
 

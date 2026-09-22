@@ -1,43 +1,36 @@
 <template>
-  <UDashboardPanel id="locations">
-    <template #header>
-      <UDashboardNavbar :title="locationsLabel">
-        <template #right>
-          <UButton
-            v-if="businessPaths"
-            :to="businessPaths.newLocation"
-            icon="i-lucide-plus"
-            color="neutral"
-            variant="soft"
-            square
-            :aria-label="`Add a ${locationNoun}`"
-          />
-        </template>
-      </UDashboardNavbar>
-    </template>
-
-    <template #body>
-      <UAlert v-if="locationsError" color="error" variant="soft" icon="i-lucide-triangle-alert" title="Could not load locations" :description="getErrorMessage(locationsError, 'Locations could not be loaded')" />
-      <div v-else-if="!locations.length" class="rounded-2xl border border-default bg-elevated px-6 py-20 text-center">
-        <UIcon name="i-lucide-map-pin" class="mx-auto size-6 text-muted" />
-        <h2 class="mt-5 text-base font-semibold text-highlighted">No {{ locationsLabel.toLowerCase() }} yet</h2>
-        <UButton
-          v-if="businessPaths"
-          :label="`Add your first ${locationNoun}`"
-          icon="i-lucide-plus"
-          class="mt-6"
-          :to="businessPaths.newLocation"
-        />
-      </div>
-
-      <DashboardSiteLocationSelector
-        v-else
-        :items="tiles"
-        missing-image-label="No hero photo"
-        missing-image-hint="Add one under this location's photos."
+  <DashboardIndexPanel id="locations" :title="locationsLabel">
+    <template #right>
+      <UButton
+        v-if="businessPaths"
+        :to="businessPaths.newLocation"
+        icon="i-lucide-plus"
+        color="neutral"
+        variant="soft"
+        square
+        :aria-label="`Add a ${locationNoun}`"
       />
     </template>
-  </UDashboardPanel>
+    <UAlert v-if="locationsError" color="error" variant="soft" icon="i-lucide-triangle-alert" title="Could not load locations" :description="getErrorMessage(locationsError, 'Locations could not be loaded')" />
+    <div v-else-if="!locations.length" class="rounded-2xl border border-default bg-elevated px-6 py-20 text-center">
+      <UIcon name="i-lucide-map-pin" class="mx-auto size-6 text-muted" />
+      <h2 class="mt-5 text-base font-semibold text-highlighted">No {{ locationsLabel.toLowerCase() }} yet</h2>
+      <UButton
+        v-if="businessPaths"
+        :label="`Add your first ${locationNoun}`"
+        icon="i-lucide-plus"
+        class="mt-6"
+        :to="businessPaths.newLocation"
+      />
+    </div>
+
+    <DashboardSiteLocationSelector
+      v-else
+      :items="tiles"
+      missing-image-label="No hero photo"
+      missing-image-hint="Add one under this location's photos."
+    />
+  </DashboardIndexPanel>
 </template>
 
 <script setup lang="ts">

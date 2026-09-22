@@ -1,13 +1,7 @@
 <template>
-  <UDashboardPanel id="org-messages">
-    <template #header>
-      <UDashboardNavbar :title="pastOnly ? 'Past conversations' : 'Messages'" :toggle="false" />
-    </template>
-
-    <template #body>
-      <GuestThreadList scope="organization" />
-    </template>
-  </UDashboardPanel>
+  <DashboardIndexPanel id="org-messages" :title="pastOnly ? 'Past conversations' : 'Messages'">
+    <GuestThreadList scope="organization" />
+  </DashboardIndexPanel>
 </template>
 
 <script setup lang="ts">

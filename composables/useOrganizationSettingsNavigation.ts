@@ -1,4 +1,5 @@
 import type { EditorNavigationGroup } from '~/components/dashboard/EditorNavigationList.vue'
+import { resolvePublicTemplate } from '~/utils/template-registry'
 
 // The rows on Menu. Every organization is one business with one site, so the
 // site's own things sit here beside the team and the billing: Menu is the
@@ -8,8 +9,21 @@ import type { EditorNavigationGroup } from '~/components/dashboard/EditorNavigat
 export function useOrganizationSettingsNavigation() {
   const route = useRoute()
   const { orgPaths, businessPaths } = useDashboardSiteLinks()
+  const dashboard = useDashboardSite()
 
   const settingsPath = computed(() => orgPaths.value.settings)
+
+  /**
+   * KrabiClaw runs on KrabiClaw, so its own business's Menu carries the one
+   * tool no tenant has: every account on the platform, and impersonation.
+   * Airbnb has no equivalent — internal admin tooling is not in the host's
+   * dashboard — so this row is a deliberate addition, not parity.
+   */
+  const isPlatformSite = computed(() => {
+    const site = dashboard.site.value
+    if (!site) return false
+    return resolvePublicTemplate({ themeId: site.theme_id, vertical: site.vertical }).slug === 'platform'
+  })
 
   const items = computed(() => {
     const business = businessPaths.value
@@ -24,8 +38,16 @@ export function useOrganizationSettingsNavigation() {
           ]
         : []),
       { id: 'members', label: 'Team', summary: 'People and access', to: `${settingsPath.value}/members` },
+      // "Team" is this organization's members; this is every account there is.
+      ...(isPlatformSite.value
+        ? [{ id: 'people', label: 'Platform accounts', summary: 'Every account, and impersonation', to: `${settingsPath.value}/people` }]
+        : []),
       { id: 'billing', label: 'Billing', summary: 'Plans and payments', to: `${settingsPath.value}/billing` },
       { id: 'connect', label: 'Payouts', summary: 'Stripe business onboarding', to: `${settingsPath.value}/connect` },
+      // The way to the account on a phone, where there is no header to carry an
+      // avatar. Airbnb's mobile Menu lists "Account settings" in the same place,
+      // second from last, above Log out (measured 2026-09-22).
+      { id: 'account', label: 'Account settings', summary: 'Your profile, login and notifications', to: orgPaths.value.accountProfile },
       { id: 'log-out', label: 'Log out', action: {} },
     ]
   })

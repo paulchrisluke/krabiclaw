@@ -1,0 +1,87 @@
+<template>
+  <DashboardLeafPanel id="account-login" title="Login & security" :footer="false">
+    <div class="space-y-10">
+      <section>
+        <h2 class="text-lg font-semibold text-highlighted">Login</h2>
+        <div class="mt-2 divide-y divide-default">
+          <div class="flex items-start justify-between gap-4 py-4">
+            <div class="min-w-0">
+              <p class="font-semibold text-highlighted">Email</p>
+              <p class="mt-1 truncate text-sm text-muted">{{ account.sessionData.value?.user?.email }}</p>
+            </div>
+            <UBadge v-if="account.sessionData.value?.user?.emailVerified" color="success" variant="subtle">Verified</UBadge>
+            <UBadge v-else color="warning" variant="subtle">Not verified</UBadge>
+          </div>
+          <div class="flex items-start justify-between gap-4 py-4">
+            <div>
+              <p class="font-semibold text-highlighted">Password</p>
+              <p class="mt-1 text-sm text-muted">Sent to your email as a reset link.</p>
+            </div>
+            <NuxtLink to="/forgot-password" class="shrink-0 text-sm font-semibold text-highlighted underline underline-offset-4">Update</NuxtLink>
+          </div>
+          <div class="flex items-start justify-between gap-4 py-4">
+            <div>
+              <p class="font-semibold text-highlighted">Google</p>
+              <p class="mt-1 text-sm text-muted">{{ account.googleStatus.value === 'connected' ? 'Connected' : account.googleStatus.value === 'not-connected' ? 'Not connected' : account.googleStatus.value === 'error' ? 'Could not be checked' : '' }}</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h2 class="text-lg font-semibold text-highlighted">Device history</h2>
+        <UAlert v-if="account.sessionsError.value" color="error" variant="soft" icon="i-lucide-triangle-alert" :description="account.sessionsError.value" class="mt-3" />
+        <div v-else class="mt-2 divide-y divide-default">
+          <div v-for="device in account.sessions.value" :key="device.token" class="flex items-start justify-between gap-4 py-4">
+            <div class="min-w-0">
+              <p class="font-semibold text-highlighted">{{ account.describeDevice(device.userAgent) }}</p>
+              <UBadge v-if="device.current" color="neutral" variant="subtle" size="sm" class="mt-1">Current session</UBadge>
+              <p class="mt-1 text-sm text-muted">{{ device.ipAddress ? `${device.ipAddress} · ` : '' }}{{ account.formatExactDateTime(device.updatedAt, { includeTime: true }) }}</p>
+            </div>
+            <UButton
+              v-if="!device.current"
+              variant="link"
+              color="neutral"
+              label="Log out"
+              :loading="account.revoking.value === device.token"
+              @click="account.revokeDevice(device.token)"
+            />
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h2 class="text-lg font-semibold text-highlighted">Delete account</h2>
+        <div class="mt-3 space-y-4">
+          <template v-if="account.deletionScheduledAt.value">
+            <UAlert
+              color="warning"
+              variant="soft"
+              icon="i-lucide-clock"
+              title="Deletion scheduled"
+              :description="`Everything is deleted on ${account.deletionDateLabel.value}. Your site stays online until then.`"
+            />
+            <UAlert v-if="account.deleteError.value" color="error" variant="soft" icon="i-lucide-triangle-alert" :description="account.deleteError.value" />
+            <UButton color="neutral" variant="outline" label="Keep my account" :loading="account.deleting.value" @click="account.keepAccount" />
+          </template>
+          <template v-else>
+            <p class="text-sm text-muted">Your account, organization, site, locations and menu data are deleted in {{ account.graceDays.value }} days. You can cancel until then.</p>
+            <UAlert v-if="account.deleteError.value" color="error" variant="soft" icon="i-lucide-triangle-alert" :description="account.deleteError.value" />
+            <UFormField label="Type DELETE to confirm">
+              <UInput v-model="account.deleteConfirmText.value" placeholder="DELETE" :disabled="account.deleting.value" class="w-full" />
+            </UFormField>
+            <UButton color="error" variant="soft" label="Schedule deletion" :disabled="account.deleteConfirmText.value !== 'DELETE'" :loading="account.deleting.value" @click="account.confirmDeleteAccount" />
+          </template>
+        </div>
+      </section>
+    </div>
+  </DashboardLeafPanel>
+</template>
+
+<script setup lang="ts">
+import { accountEditorKey } from '~/components/dashboard/AccountProfilePage.vue'
+
+definePageMeta({ layout: 'dashboard' })
+
+const account = inject(accountEditorKey)!
+</script>

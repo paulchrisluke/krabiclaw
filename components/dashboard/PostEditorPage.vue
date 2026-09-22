@@ -1,210 +1,33 @@
 <template>
-  <!--
-    One panel either way: this level always owns a column and always titles it.
-    With no section open it is the whole screen; once one is open it is the
-    index column and the section takes the other.
-  -->
-  <UDashboardPanel
-    id="location-post-detail"
-    :class="hasDetail ? 'hidden lg:flex' : undefined"
-    :default-size="hasDetail ? 32 : undefined"
-  >
-    <template #header>
-      <UDashboardNavbar :title="isNew ? 'New post' : editor.form.title || 'Post'" :toggle="false">
-        <template #leading>
-          <DashboardNavbarLeading />
-        </template>
-        <template v-if="post" #right>
-          <DashboardResourceLocalization
-            :site-id="siteId"
-            resource-type="content_document"
-            :resource-id="postId"
-            resource-label="post"
-            :fields="postLocalizationFields"
-            :route-path="localizedPostPath"
-            :language-settings-path="siteLocalizationSettingsPath"
-          />
-        </template>
-      </UDashboardNavbar>
+  <!-- A post: its rows are the things it holds, each a leaf below this level. -->
+  <DashboardIndexPanel id="location-post" :title="isNew ? 'New post' : editor.form.title || 'Post'" :auto-open="navigationGroups[0]?.items.find(item => item.to)?.to ?? null">
+    <template v-if="post" #right>
+      <DashboardResourceLocalization
+        :site-id="siteId"
+        resource-type="content_document"
+        :resource-id="postId"
+        resource-label="post"
+        :fields="postLocalizationFields"
+        :route-path="localizedPostPath"
+        :language-settings-path="siteLocalizationSettingsPath"
+      />
     </template>
 
-    <template #body>
-      <div class="mx-auto w-full" :class="hasDetail ? 'max-w-xl' : 'max-w-3xl'">
-        <UAlert
-          v-if="loadError"
-          color="error"
-          variant="soft"
-          icon="i-lucide-triangle-alert"
-          title="Post could not be loaded"
-          :description="loadError"
-        />
-        <template v-else>
-          <div v-if="isNew && !hasDetail" class="mb-6 flex justify-end">
-            <UButton :label="createActionLabel" :loading="editor.saving.value" @click="startOrCreate" />
-          </div>
-          <EditorNavigationList :groups="navigationGroups" :active-item="detailKey" />
-        </template>
+    <UAlert
+      v-if="loadError"
+      color="error"
+      variant="soft"
+      icon="i-lucide-triangle-alert"
+      title="Post could not be loaded"
+      :description="loadError"
+    />
+    <template v-else>
+      <div v-if="isNew" class="mb-6 flex justify-end">
+        <UButton :label="createActionLabel" :loading="editor.saving.value" @click="startOrCreate" />
       </div>
+      <EditorNavigationList :groups="navigationGroups" :active-item="level.child.value" />
     </template>
-  </UDashboardPanel>
-
-  <!--
-    The open section is the other column: its own panel, its own header,
-    and Save/Cancel in the panel's own footer slot.
-  -->
-  <UDashboardPanel v-if="hasDetail && !loadError" id="location-post-section">
-    <template #header>
-      <UDashboardNavbar :title="sectionLabels[editorKey]" :toggle="false">
-        <template #leading>
-          <DashboardNavbarLeading />
-        </template>
-      </UDashboardNavbar>
-    </template>
-
-    <template #body>
-      <div class="mx-auto w-full max-w-5xl">
-        <UAlert
-          v-if="editor.error.value"
-          color="error"
-          variant="soft"
-          icon="i-lucide-circle-alert"
-          :description="editor.error.value"
-          class="mb-6"
-        />
-        <!--
-          Post type. Only a post being created has it: the contract's shape
-          is chosen by the type, so an existing post cannot change it.
-        -->
-        <UFormField v-if="editorKey === 'type'" label="What are you posting?">
-          <URadioGroup
-            :model-value="postType"
-            :items="typeOptions"
-            :ui="{ fieldset: 'flex flex-wrap gap-4' }"
-            @update:model-value="setType(String($event))"
-          />
-        </UFormField>
-
-        <!-- Photo -->
-        <div v-else-if="editorKey === 'photo'" class="space-y-4">
-          <p class="text-base text-muted">The picture this post is recognised by, in the list and on your site.</p>
-          <PostMediaFields
-            v-model:media="editor.form.media"
-            :site-id="siteId"
-            :supports-media="supportsMedia"
-          />
-          <p v-if="supportsMedia" class="text-sm text-muted">Media saves with the post.</p>
-        </div>
-
-        <!-- Headline -->
-        <UFormField v-else-if="editorKey === 'headline'" label="Headline" description="Optional. Shown as the post's title on your site and in this list.">
-          <UInput v-model="editor.form.title" size="xl" autofocus placeholder="Add a headline" class="w-full" />
-        </UFormField>
-
-        <!-- Body -->
-        <UFormField v-else-if="editorKey === 'body'" label="Post" required>
-          <UTextarea
-            v-model="editor.form.body"
-            :rows="10"
-            autofocus
-            placeholder="What's new? Write it the way you'd say it to a guest."
-            size="xl"
-            class="w-full"
-          />
-        </UFormField>
-
-        <!-- Event schedule / offer period -->
-        <div v-else-if="editorKey === 'schedule' && editor.form.topic.event" class="space-y-6">
-          <p class="text-base text-muted">
-            {{ isOffer ? 'When the offer starts and stops.' : 'When it happens, and whether it repeats.' }}
-          </p>
-          <PostScheduleFields v-model="editor.form.topic.event" :is-offer="isOffer" />
-        </div>
-
-        <!-- Offer details -->
-        <div v-else-if="editorKey === 'offer' && editor.form.topic.offer" class="space-y-6">
-          <p class="text-base text-muted">What a guest needs in order to claim it.</p>
-          <UFormField label="Coupon code" description="Optional.">
-            <UInput :model-value="editor.form.topic.offer.coupon_code ?? ''" class="w-full" @update:model-value="setOffer('coupon_code', String($event))" />
-          </UFormField>
-          <UFormField label="Link to redeem online" description="Optional.">
-            <UInput :model-value="editor.form.topic.offer.redeem_online_url ?? ''" type="url" placeholder="https://" class="w-full" @update:model-value="setOffer('redeem_online_url', String($event))" />
-          </UFormField>
-          <UFormField label="Terms" description="Optional. Any restriction a guest should know before they arrive.">
-            <UTextarea :model-value="editor.form.topic.offer.terms_conditions ?? ''" :rows="4" class="w-full" @update:model-value="setOffer('terms_conditions', String($event))" />
-          </UFormField>
-        </div>
-
-        <!-- Call to action -->
-        <div v-else-if="editorKey === 'action'" class="space-y-6">
-          <p class="text-base text-muted">The button a guest sees under the post.</p>
-          <UFormField label="Button">
-            <USelect
-              :model-value="editor.form.topic.call_to_action?.action_type ?? 'none'"
-              :items="actionOptions"
-              value-key="value"
-              label-key="label"
-              class="w-full"
-              @update:model-value="setAction(String($event))"
-            />
-          </UFormField>
-          <p v-if="editor.form.topic.call_to_action?.action_type === 'call'" class="text-sm text-muted">
-            Calls the phone number saved on this location.
-          </p>
-          <UFormField v-else-if="editor.form.topic.call_to_action" label="Where it goes" required>
-            <UInput v-model="editor.form.topic.call_to_action.url" type="url" placeholder="https://" class="w-full" />
-          </UFormField>
-        </div>
-
-        <!-- Publishing -->
-        <div v-else-if="editorKey === 'publishing'" class="space-y-6">
-          <p v-if="postStatus === 'published'" class="text-base text-muted">
-            This post is already live, so it no longer has a publishing time to set.
-          </p>
-          <template v-else>
-            <p class="text-base text-muted">When this post goes live on your site.</p>
-            <UFormField label="When">
-              <USelect
-                :model-value="editor.form.topic.scheduled_for ? 'later' : 'now'"
-                :items="TIMING_OPTIONS"
-                value-key="value"
-                label-key="label"
-                class="w-full"
-                @update:model-value="setTiming(String($event))"
-              />
-            </UFormField>
-            <UFormField v-if="editor.form.topic.scheduled_for" label="Goes live (UTC)" required description="Must be in the future.">
-              <UInput
-                :model-value="instantDate(editor.form.topic.scheduled_for).toISOString().slice(0, -1)"
-                type="datetime-local"
-                step="any"
-                class="w-full"
-                @update:model-value="editor.form.topic.scheduled_for = $event ? scheduledLifecycleValue('Scheduled', String($event), 'UTC') : null"
-              />
-            </UFormField>
-          </template>
-
-          <div class="flex flex-wrap items-center gap-2 border-t border-default pt-4">
-            <UButton :loading="editor.publishing.value" label="Publish…" @click="openPublish" />
-            <UButton v-if="publicPath" :to="publicPath" target="_blank" size="sm" color="neutral" variant="soft" icon="i-lucide-external-link">
-              View public post
-            </UButton>
-          </div>
-        </div>
-
-        <!--
-          A real section that this post type does not have — /offer on an
-          update, say. Named rather than left as a blank pane with a live Save.
-        -->
-        <p v-else class="text-base text-muted">
-          {{ typeLabel }} posts have no {{ sectionLabels[editorKey].toLowerCase() }}.
-        </p>
-      </div>
-    </template>
-
-    <template v-if="editorKey !== 'photo'" #footer>
-      <DashboardPanelFooter :save-label="saveLabel" :loading="editor.saving.value" :disabled="saveDisabled" @cancel="cancelEditor" @save="saveCurrentEditor" />
-    </template>
-  </UDashboardPanel>
+  </DashboardIndexPanel>
 
   <!--
     Where the post goes out is a separate decision from what it says, so it is
@@ -237,15 +60,49 @@
   </DashboardListItemDialog>
 </template>
 
+<script lang="ts">
+import type { ComputedRef, InjectionKey, Ref } from 'vue'
+
+export const SECTION_KEYS = ['type', 'photo', 'headline', 'body', 'schedule', 'offer', 'action', 'publishing'] as const
+export type SectionKey = typeof SECTION_KEYS[number]
+
+/** The post's draft and what its leaves show or do beside their one field. */
+export interface PostEditor {
+  editor: ReturnType<typeof useLocationPostEditor>
+  siteId: string
+  isNew: ComputedRef<boolean>
+  sectionLabels: ComputedRef<Record<SectionKey, string>>
+  /** Whether this post's type has the section at all; a missing one is named rather than left blank. */
+  hasSection: (key: SectionKey) => boolean
+  typeLabel: ComputedRef<string>
+  postType: ComputedRef<string>
+  typeOptions: Array<{ label: string; value: string }>
+  setType: (value: string) => void
+  supportsMedia: ComputedRef<boolean>
+  isOffer: ComputedRef<boolean>
+  setOffer: (field: 'coupon_code' | 'redeem_online_url' | 'terms_conditions', value: string) => void
+  actionOptions: ComputedRef<Array<{ label: string; value: string }>>
+  setAction: (value: string) => void
+  timingOptions: Array<{ label: string; value: string }>
+  setTiming: (value: string) => void
+  postStatus: ComputedRef<'published' | 'scheduled' | null>
+  publicPath: ComputedRef<string | null>
+  openPublish: () => Promise<void>
+  saveLabel: Ref<string | undefined>
+  saveDisabled: Ref<boolean>
+  revert: () => void
+  save: () => Promise<void>
+}
+
+export const postEditorKey = Symbol('post-editor') as InjectionKey<PostEditor>
+</script>
+
 <script setup lang="ts">
 import EditorNavigationList, { type EditorNavigationGroup } from '~/components/dashboard/EditorNavigationList.vue'
 import DashboardListItemDialog from '~/components/dashboard/DashboardListItemDialog.vue'
 import DashboardResourceLocalization from '~/components/dashboard/DashboardResourceLocalization.vue'
-import PostMediaFields from '~/components/dashboard/PostMediaFields.vue'
-import PostScheduleFields from '~/components/dashboard/PostScheduleFields.vue'
 import { useLocationPostEditor } from '~/composables/useLocationPostEditor'
-import { instantDate, formatTimestamp } from '~/utils/timezone'
-import { scheduledLifecycleValue } from '~/utils/blog-editor'
+import { formatTimestamp } from '~/utils/timezone'
 import { CREATABLE_POST_TYPES, POST_ACTIONS, postEventDescription, type PostMutation } from '~/shared/posts'
 import {
   postActionComplete,
@@ -258,13 +115,8 @@ import { getErrorMessage, isNotFoundError } from '~/utils/errors'
 const route = useRoute()
 const dashboardApi = useDashboardApi()
 const postId = computed(() => String(route.params.postId ?? ''))
-// The path comes from the route this screen is mounted on, not from the
-// location selector: an unresolved selector left it empty, and an empty path is
-// a link to nowhere and, where it roots the editor frame, a frame rooted at ''.
-const locationPath = computed(() => `/dashboard/${String(route.params.orgSlug)}/sites/${String(route.params.siteSlug)}/locations/${String(route.params.locationSlug)}`)
-const postsPath = computed(() => `${locationPath.value}/posts`)
-const postPath = computed(() => `${postsPath.value}/${postId.value}`)
-const frame = useEditorFrame(postPath)
+const level = useRouteLevel()
+const postPath = level.path
 
 const siteId = await useDashboardSiteId()
 const dashboardLocation = useDashboardLocation()
@@ -293,13 +145,7 @@ const TIMING_OPTIONS = [
 ]
 
 // ── Which leaf is open ──────────────────────────────────
-const SECTION_KEYS = ['type', 'photo', 'headline', 'body', 'schedule', 'offer', 'action', 'publishing'] as const
-type SectionKey = typeof SECTION_KEYS[number]
-
 /** Creating asks only for what the contract will not accept a post without. */
-const NEW_SECTION_KEYS: readonly SectionKey[] = ['type', 'body', 'schedule']
-const EXISTING_SECTION_KEYS: readonly SectionKey[] = SECTION_KEYS.filter(key => key !== 'type')
-
 const sectionLabels = computed<Record<SectionKey, string>>(() => ({
   type: 'Post type',
   photo: 'Photo',
@@ -311,15 +157,8 @@ const sectionLabels = computed<Record<SectionKey, string>>(() => ({
   publishing: 'Publishing',
 }))
 
-const hasDetail = computed(() => frame.mode.value === 'pair')
-const detailKey = computed(() => frame.childSegment.value)
+const detailKey = computed(() => level.child.value)
 const editorKey = computed<SectionKey>(() => (detailKey.value ?? (isNew.value ? 'type' : 'photo')) as SectionKey)
-
-const openSections = computed(() => (isNew.value ? NEW_SECTION_KEYS : EXISTING_SECTION_KEYS))
-// An unsupported route 404s rather than silently showing the first section.
-if (frame.rest.value.length > 1 || (detailKey.value && !openSections.value.some(key => key === detailKey.value))) {
-  throw createError({ statusCode: 404, statusMessage: 'Page not found' })
-}
 
 // ── The post ────────────────────────────────────────────
 const isSinglePostResponse = (value: unknown): value is { post: ApiRecord } =>
@@ -434,7 +273,7 @@ const supportsMedia = computed(() => postType.value !== 'alert')
 
 const postStatus = computed(() => (post.value?.status === 'published' || post.value?.status === 'scheduled' ? post.value.status : null))
 
-// ── The hub ─────────────────────────────────────────────
+// ── The index ─────────────────────────────────────────────
 function mediaSummary(): string {
   if (!supportsMedia.value) return 'Alerts carry no media'
   const count = editor.form.media.length
@@ -546,6 +385,29 @@ const navigationGroups = computed<EditorNavigationGroup[]>(() => {
   ]
 })
 
+/**
+ * The sections this post actually has, read from the rows it offers rather than
+ * from a list of every section a post could ever have. An offer carries no call
+ * to action and a standard post no schedule, so `/posts/<id>/offer` on a
+ * standard post opened an editor for a field the contract has nowhere to put.
+ */
+const openSections = computed(() => navigationGroups.value.flatMap(group => group.items.map(item => item.id)))
+
+// An unsupported route 404s rather than silently showing the first section. A
+// watcher, not a setup-time check: moving between leaves reuses this component.
+watchEffect(() => {
+  // A level on its way out after a navigation elsewhere answers about a route
+  // it is no longer part of, so it judges nothing.
+  if (level.stale.value) return
+  // Nor before the record arrives: which sections a post has follows from its
+  // type, and until it loads the type is empty — so a cold load of an event's
+  // `/schedule` would read as a section the post does not have.
+  if (!isNew.value && !post.value) return
+  if (level.mode.value === 'yield' || (detailKey.value && !openSections.value.includes(detailKey.value))) {
+    showError(createError({ statusCode: 404, statusMessage: 'Page not found' }))
+  }
+})
+
 // ── Save / cancel ───────────────────────────────────────
 const sectionValid = computed(() => {
   if (editorKey.value === 'body') return Boolean(editor.form.body.trim())
@@ -578,19 +440,20 @@ async function commit() {
   if (isNew.value) {
     const created = await editor.save(null)
     if (!created?.id) return
-    await navigateTo(`${postsPath.value}/${String(created.id)}`)
+    // The record it became, not the `new` form it was, so Back from a saved
+    // post goes to the list and never to an empty Add screen.
+    await navigateTo(`${level.to.value}/${String(created.id)}`, { replace: true })
     // Once the post exists the draft is spent. Cleared after the navigation so
     // the watchers above, which stop with this component, cannot write it back.
     draft.value = blankDraft()
     return
   }
-  if (await editor.save(postId.value)) await navigateTo(postPath.value)
+  if (await editor.save(postId.value)) await level.close()
 }
 
-/** Dismissing a leaf discards its draft, matching the settings sheets. */
-async function cancelEditor() {
+/** A cancelled leaf puts the loaded post back before it closes. */
+function revert() {
   if (post.value) editor.loadFrom(post.value)
-  await navigateTo(postPath.value)
 }
 
 // ── Field writers ───────────────────────────────────────
@@ -692,5 +555,30 @@ function localizedPostPath(locale: string): string {
 useSeoMeta({
   title: () => `${isNew.value ? 'New post' : editor.form.title || 'Post'} | KrabiClaw Dashboard`,
   robots: 'noindex, nofollow',
+})
+provide(postEditorKey, {
+  editor,
+  siteId,
+  isNew,
+  sectionLabels,
+  hasSection: key => openSections.value.includes(key),
+  typeLabel,
+  postType,
+  typeOptions,
+  setType,
+  supportsMedia,
+  isOffer,
+  setOffer,
+  actionOptions,
+  setAction,
+  timingOptions: TIMING_OPTIONS,
+  setTiming,
+  postStatus,
+  publicPath,
+  openPublish,
+  saveLabel,
+  saveDisabled,
+  revert,
+  save: saveCurrentEditor,
 })
 </script>

@@ -1,9 +1,8 @@
 <template>
-  <QaEditorPage />
+  <!-- Nothing open: the question above is the screen. -->
+  <div />
 </template>
 
 <script setup lang="ts">
-import QaEditorPage from '~/components/dashboard/QaEditorPage.vue'
-
-definePageMeta({ layout: 'dashboard', ownsChrome: true })
+definePageMeta({ layout: 'dashboard' })
 </script>

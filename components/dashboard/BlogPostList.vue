@@ -12,7 +12,6 @@
       add-label="Write a post"
       :removing-id="removingId"
       @add="openNew"
-      @open="openExisting"
       @remove="removePost"
     >
       <template #filters>
@@ -20,12 +19,7 @@
       </template>
 
       <template #item="{ item }">
-        <button
-          type="button"
-          class="flex w-full items-center gap-4 text-left"
-          :data-testid="`blog-post-${item.id}`"
-          @click="openExisting(item)"
-        >
+        <span class="flex w-full items-center gap-4 text-left" :data-testid="`blog-post-${item.id}`">
           <!--
             The picture leads, and a post without one keeps the same footprint so
             the list does not reflow between rows that have one and rows that do not.
@@ -40,7 +34,7 @@
             <span class="block truncate text-sm font-semibold text-highlighted">{{ item.title }}</span>
             <span class="mt-1 block truncate text-sm text-muted">{{ item.summary }}</span>
           </span>
-        </button>
+        </span>
       </template>
     </DashboardListEditor>
 
@@ -94,7 +88,7 @@ const route = useRoute()
 const siteId = await useDashboardSiteId()
 const orgSlug = route.params.orgSlug as string
 const siteSlug = route.params.siteSlug as string
-const blogPath = `/dashboard/${orgSlug}/sites/${siteSlug}/blog`
+const level = useRouteLevel()
 
 const repository = tenantBlogRepository({ siteId, orgSlug, siteSlug })
 
@@ -140,6 +134,7 @@ const listItems = computed(() => visiblePosts.value.map(row => ({
   id: row.id,
   title: row.title.trim() || 'Untitled post',
   summary: postSummary(row),
+  to: `${level.path.value}/${row.id}`,
   row,
 })))
 
@@ -148,7 +143,7 @@ const STATUS_LABELS: Record<string, string> = { draft: 'Draft', scheduled: 'Sche
 /** Where it is in its life, then what it is filed under, then one date. */
 function postSummary(post: BlogPost): string {
   // Read from the status rather than treating anything unscheduled as live: a
-  // draft was announcing itself as published on the row and in the hub.
+  // draft was announcing itself as published on the row and in the index.
   const parts: string[] = [post.status ? STATUS_LABELS[post.status] ?? post.status : 'Live']
   // KrabiClaw's own site publishes two collections; the blog is implied everywhere else.
   if (post.collection && post.collection !== 'blog') parts.push(ARTICLE_COLLECTIONS[post.collection].label)
@@ -200,7 +195,7 @@ async function createPost() {
   try {
     const post = await repository.create({ title, content_blocks: initialBlogEditorBlocks() })
     newDialogOpen.value = false
-    await navigateTo(`${blogPath}/${post.id}`)
+    await navigateTo(`${level.path.value}/${post.id}`)
   } catch (cause) {
     createFailure.value = getErrorMessage(cause, 'Failed to create the post.')
   } finally {
@@ -208,10 +203,6 @@ async function createPost() {
   }
 }
 
-/** A post is its own screen, so opening one is navigation, not a sheet. */
-function openExisting(item: { id: string }) {
-  return navigateTo(`${blogPath}/${item.id}`)
-}
 
 /** Removal lives in the list's edit state, the way every other list does it. */
 async function removePost(item: { id: string }) {

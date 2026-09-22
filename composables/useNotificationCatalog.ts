@@ -10,7 +10,7 @@ export interface CatalogPreview {
 }
 
 /**
- * The rendered catalog, fetched once and shared by the hub and the leaf, so a
+ * The rendered catalog, fetched once and shared by the index and the leaf, so a
  * row's preview and the message it opens cannot disagree.
  */
 export async function useNotificationCatalog() {

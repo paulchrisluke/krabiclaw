@@ -1,182 +1,174 @@
 <template>
-  <UDashboardPanel id="site-domains">
-    <template #header>
-      <UDashboardNavbar title="Domains">
-        <template #leading>
-          <DashboardNavbarLeading />
-        </template>
-        <template #right>
-          <UButton icon="i-lucide-plus" size="sm" @click="openAddModal">Add domain</UButton>
-        </template>
-      </UDashboardNavbar>
+  <!-- A row of Website settings, so it closes back to it like its siblings; adding a domain is its own action, not a Save. -->
+  <DashboardLeafPanel id="site-domains" title="Domains" :footer="false">
+    <template #right>
+      <UButton icon="i-lucide-plus" size="sm" @click="openAddModal">Add domain</UButton>
     </template>
 
-    <template #body>
-      <div class="mx-auto max-w-5xl space-y-4">
-        <UCard>
-          <UAlert
-            v-if="actionError"
-            color="error"
-            variant="soft"
-            icon="i-lucide-circle-alert"
-            :description="actionError"
-            class="mb-4"
-          />
-          <UAlert
-            v-if="loadError"
-            color="error"
-            variant="soft"
-            title="Domains could not be loaded"
-            :description="loadError"
-            class="mb-4"
-          />
-          <div v-if="loading" class="space-y-3">
-            <USkeleton v-for="i in 3" :key="i" class="h-16 rounded-md" />
-          </div>
+    <div class="mx-auto max-w-5xl space-y-4">
+      <UCard>
+        <UAlert
+          v-if="actionError"
+          color="error"
+          variant="soft"
+          icon="i-lucide-circle-alert"
+          :description="actionError"
+          class="mb-4"
+        />
+        <UAlert
+          v-if="loadError"
+          color="error"
+          variant="soft"
+          title="Domains could not be loaded"
+          :description="loadError"
+          class="mb-4"
+        />
+        <div v-if="loading" class="space-y-3">
+          <USkeleton v-for="i in 3" :key="i" class="h-16 rounded-md" />
+        </div>
 
-          <UEmpty
-            v-else-if="!loadError && domainGroups.length === 0"
-            icon="i-lucide-globe"
-            title="No custom domains"
-            description="Add a paid-plan domain when you are ready to connect one."
-          />
+        <UEmpty
+          v-else-if="!loadError && domainGroups.length === 0"
+          icon="i-lucide-globe"
+          title="No custom domains"
+          description="Add a paid-plan domain when you are ready to connect one."
+        />
 
-          <div v-else class="divide-y divide-default">
-            <div
-              v-for="group in domainGroups"
-              :key="group.id"
-            >
-              <div class="flex flex-col gap-3 py-3 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between">
-                <UButton
-                  color="neutral"
-                  variant="ghost"
-                  class="-mx-2 min-w-0 justify-start px-2"
-                  :trailing-icon="expandedGroups[group.id] ? 'i-lucide-chevron-up' : 'i-lucide-chevron-down'"
-                  @click="toggleGroup(group.id)"
-                >
-                  <span class="flex min-w-0 flex-col items-start gap-1 text-left">
-                    <span class="flex min-w-0 items-center gap-2">
-                      <span class="truncate font-mono text-sm font-medium text-highlighted">{{ group.domain }}</span>
-                      <UBadge v-if="group.role === 'canonical'" label="Primary" color="primary" variant="soft" size="xs" />
-                    </span>
-                    <span v-if="group.www_domain_id" class="text-xs text-muted">www -> {{ group.root_domain }}</span>
-                  </span>
-                </UButton>
-
-                <div class="flex shrink-0 items-center gap-2">
-                  <UBadge :label="statusLabel(group.status)" :color="statusColor(group.status)" variant="soft" />
-                  <UButton
-                    v-if="primaryAction(group)"
-                    size="sm"
-                    :icon="primaryAction(group)?.icon"
-                    :color="primaryAction(group)?.color"
-                    :variant="primaryAction(group)?.variant"
-                    :loading="syncingGroupId === group.id || promotingGroupId === group.id"
-                    @click="runPrimaryAction(group)"
-                  >
-                    {{ primaryAction(group)?.label }}
-                  </UButton>
-                  <UDropdownMenu :items="domainMenuItems(group)" :content="{ align: 'end' }">
-                    <UButton icon="i-lucide-more-horizontal" color="neutral" variant="ghost" size="sm" aria-label="Domain actions" />
-                  </UDropdownMenu>
-                </div>
-              </div>
-
-              <div v-if="expandedGroups[group.id]">
-                <div class="space-y-3 pb-4">
-                  <UAlert
-                    v-if="group.warning || group.error"
-                    :color="group.error ? 'error' : 'warning'"
-                    variant="soft"
-                    :title="group.error ? 'Action required' : 'Needs attention'"
-                    :description="group.error || group.warning || undefined"
-                  />
-
-                  <UTable :data="group.records" :columns="recordColumns">
-                    <template #type-cell="{ row }">
-                      <UBadge :label="row.original.type" color="neutral" variant="soft" size="xs" />
-                    </template>
-                    <template #name-cell="{ row }">
-                      <code class="block break-all text-xs text-highlighted">{{ row.original.name }}</code>
-                    </template>
-                    <template #value-cell="{ row }">
-                      <code class="block max-w-full break-all text-xs text-muted">{{ row.original.value }}</code>
-                    </template>
-                    <template #actions-cell="{ row }">
-                      <UTooltip :text="copiedValue === row.original.value ? 'Copied' : 'Copy value'">
-                        <UButton
-                          :icon="copiedValue === row.original.value ? 'i-lucide-check' : 'i-lucide-copy'"
-                          :color="copiedValue === row.original.value ? 'success' : 'neutral'"
-                          variant="ghost"
-                          size="xs"
-                          @click="copy(row.original.value)"
-                        />
-                      </UTooltip>
-                    </template>
-                  </UTable>
-
-                  <div class="flex flex-col gap-2 text-xs text-muted sm:flex-row sm:items-center sm:justify-between">
-                    <span>{{ group.last_synced_at ? `Last checked ${formatDateTime(group.last_synced_at)}` : 'Not checked yet' }}</span>
-                    <UButton
-                      size="xs"
-                      color="neutral"
-                      variant="soft"
-                      icon="i-lucide-refresh-cw"
-                      :loading="syncingGroupId === group.id"
-                      @click="syncGroup(group)"
-                    >
-                      Check now
-                    </UButton>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </UCard>
-      </div>
-
-      <UModal v-model:open="addModalOpen" title="Add domain">
-        <template #body>
-          <UForm :state="addForm" class="space-y-4" @submit="addDomain">
-            <UFormField label="Domain" name="domain" :error="addError">
-              <UInput v-model="addForm.domain" placeholder="example.com" class="w-full" :disabled="adding" />
-            </UFormField>
-
-            <UAlert
-              v-if="liveCutoverWarning"
-              color="warning"
-              variant="soft"
-              title="This domain may already be live"
-              :description="liveCutoverWarning.message"
-            />
-
-            <UCheckbox
-              v-if="liveCutoverWarning"
-              v-model="addForm.acknowledge_live_cutover"
-              label="I understand changing DNS can interrupt the current site until validation finishes."
-            />
-
-            <div class="flex justify-end gap-2">
-              <UButton color="neutral" variant="ghost" :disabled="adding" @click="closeAddModal">Cancel</UButton>
+        <div v-else class="divide-y divide-default">
+          <div
+            v-for="group in domainGroups"
+            :key="group.id"
+          >
+            <div class="flex flex-col gap-3 py-3 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between">
               <UButton
-                type="submit"
-                :loading="adding"
-                :disabled="!addForm.domain.trim() || Boolean(liveCutoverWarning && !addForm.acknowledge_live_cutover)"
+                color="neutral"
+                variant="ghost"
+                class="-mx-2 min-w-0 justify-start px-2"
+                :trailing-icon="expandedGroups[group.id] ? 'i-lucide-chevron-up' : 'i-lucide-chevron-down'"
+                @click="toggleGroup(group.id)"
               >
-                Add domain
+                <span class="flex min-w-0 flex-col items-start gap-1 text-left">
+                  <span class="flex min-w-0 items-center gap-2">
+                    <span class="truncate font-mono text-sm font-medium text-highlighted">{{ group.domain }}</span>
+                    <UBadge v-if="group.role === 'canonical'" label="Primary" color="primary" variant="soft" size="xs" />
+                  </span>
+                  <span v-if="group.www_domain_id" class="text-xs text-muted">www -> {{ group.root_domain }}</span>
+                </span>
               </UButton>
+
+              <div class="flex shrink-0 items-center gap-2">
+                <UBadge :label="statusLabel(group.status)" :color="statusColor(group.status)" variant="soft" />
+                <UButton
+                  v-if="primaryAction(group)"
+                  size="sm"
+                  :icon="primaryAction(group)?.icon"
+                  :color="primaryAction(group)?.color"
+                  :variant="primaryAction(group)?.variant"
+                  :loading="syncingGroupId === group.id || promotingGroupId === group.id"
+                  @click="runPrimaryAction(group)"
+                >
+                  {{ primaryAction(group)?.label }}
+                </UButton>
+                <UDropdownMenu :items="domainMenuItems(group)" :content="{ align: 'end' }">
+                  <UButton icon="i-lucide-more-horizontal" color="neutral" variant="ghost" size="sm" aria-label="Domain actions" />
+                </UDropdownMenu>
+              </div>
             </div>
-          </UForm>
-        </template>
-      </UModal>
-    </template>
-  </UDashboardPanel>
+
+            <div v-if="expandedGroups[group.id]">
+              <div class="space-y-3 pb-4">
+                <UAlert
+                  v-if="group.warning || group.error"
+                  :color="group.error ? 'error' : 'warning'"
+                  variant="soft"
+                  :title="group.error ? 'Action required' : 'Needs attention'"
+                  :description="group.error || group.warning || undefined"
+                />
+
+                <UTable :data="group.records" :columns="recordColumns">
+                  <template #type-cell="{ row }">
+                    <UBadge :label="row.original.type" color="neutral" variant="soft" size="xs" />
+                  </template>
+                  <template #name-cell="{ row }">
+                    <code class="block break-all text-xs text-highlighted">{{ row.original.name }}</code>
+                  </template>
+                  <template #value-cell="{ row }">
+                    <code class="block max-w-full break-all text-xs text-muted">{{ row.original.value }}</code>
+                  </template>
+                  <template #actions-cell="{ row }">
+                    <UTooltip :text="copiedValue === row.original.value ? 'Copied' : 'Copy value'">
+                      <UButton
+                        :icon="copiedValue === row.original.value ? 'i-lucide-check' : 'i-lucide-copy'"
+                        :color="copiedValue === row.original.value ? 'success' : 'neutral'"
+                        variant="ghost"
+                        size="xs"
+                        @click="copy(row.original.value)"
+                      />
+                    </UTooltip>
+                  </template>
+                </UTable>
+
+                <div class="flex flex-col gap-2 text-xs text-muted sm:flex-row sm:items-center sm:justify-between">
+                  <span>{{ group.last_synced_at ? `Last checked ${formatDateTime(group.last_synced_at)}` : 'Not checked yet' }}</span>
+                  <UButton
+                    size="xs"
+                    color="neutral"
+                    variant="soft"
+                    icon="i-lucide-refresh-cw"
+                    :loading="syncingGroupId === group.id"
+                    @click="syncGroup(group)"
+                  >
+                    Check now
+                  </UButton>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </UCard>
+    </div>
+
+    <UModal v-model:open="addModalOpen" title="Add domain">
+      <template #body>
+        <UForm :state="addForm" class="space-y-4" @submit="addDomain">
+          <UFormField label="Domain" name="domain" :error="addError">
+            <UInput v-model="addForm.domain" placeholder="example.com" class="w-full" :disabled="adding" />
+          </UFormField>
+
+          <UAlert
+            v-if="liveCutoverWarning"
+            color="warning"
+            variant="soft"
+            title="This domain may already be live"
+            :description="liveCutoverWarning.message"
+          />
+
+          <UCheckbox
+            v-if="liveCutoverWarning"
+            v-model="addForm.acknowledge_live_cutover"
+            label="I understand changing DNS can interrupt the current site until validation finishes."
+          />
+
+          <div class="flex justify-end gap-2">
+            <UButton color="neutral" variant="ghost" :disabled="adding" @click="closeAddModal">Cancel</UButton>
+            <UButton
+              type="submit"
+              :loading="adding"
+              :disabled="!addForm.domain.trim() || Boolean(liveCutoverWarning && !addForm.acknowledge_live_cutover)"
+            >
+              Add domain
+            </UButton>
+          </div>
+        </UForm>
+      </template>
+    </UModal>
+  </DashboardLeafPanel>
 </template>
 
 <script setup lang="ts">
 import { formatTimestamp } from '~/utils/timezone'
 const dashboardApi = useDashboardApi()
-definePageMeta({ layout: 'dashboard', ownsChrome: true })
+definePageMeta({ layout: 'dashboard' })
 
 
 type DomainStatus = 'pending' | 'verifying' | 'active' | 'blocked' | 'failed' | 'disabled' | 'deleted'

@@ -12,7 +12,6 @@
       add-label="Write a post"
       :removing-id="removingId"
       @add="openNew"
-      @open="openExisting"
       @remove="removePost"
     >
       <template #filters>
@@ -20,12 +19,7 @@
       </template>
 
       <template #item="{ item }">
-        <button
-          type="button"
-          class="flex w-full items-center gap-4 text-left"
-          :data-testid="`post-${item.id}`"
-          @click="openExisting(item)"
-        >
+        <span class="flex w-full items-center gap-4 text-left" :data-testid="`post-${item.id}`">
           <!--
             The picture leads, and a post without one keeps the same footprint
             so the list does not reflow between rows that have one and rows
@@ -46,7 +40,7 @@
             -->
             <span class="mt-1 block truncate text-sm text-muted">{{ item.summary }}</span>
           </span>
-        </button>
+        </span>
       </template>
     </DashboardListEditor>
   </div>
@@ -65,12 +59,10 @@ const dashboardLocation = useDashboardLocation()
 
 const currentLocationId = computed(() => dashboardLocation.currentLocationId.value)
 const editor = useLocationPostEditor(siteId, currentLocationId)
-const route = useRoute()
 // The path comes from the route this screen is mounted on, not from the
 // location selector: an unresolved selector left it empty, and an empty path is
-// a link to nowhere and, where it roots the editor frame, a frame rooted at ''.
-const locationPath = computed(() => `/dashboard/${String(route.params.orgSlug)}/sites/${String(route.params.siteSlug)}/locations/${String(route.params.locationSlug)}`)
-const postsPath = computed(() => `${locationPath.value}/posts`)
+// a link to nowhere.
+const level = useRouteLevel()
 
 const TYPE_LABELS: Record<string, string> = {
   standard: 'Update',
@@ -121,6 +113,7 @@ const listItems = computed(() => visiblePosts.value.map(row => ({
   id: String(row.id),
   title: postTitle(row),
   summary: postSummary(row),
+  to: `${level.path.value}/${String(row.id)}`,
   row,
 })))
 
@@ -178,13 +171,9 @@ function formatDay(day: string) {
  *  event or an offer — the window it runs in are each a section of the record
  *  being made, rather than a dialog stacked over the list. */
 function openNew() {
-  return navigateTo(`${postsPath.value}/new`)
+  return navigateTo(`${level.path.value}/new`)
 }
 
-/** A post is its own screen, so opening one is navigation, not a sheet. */
-function openExisting(item: { id: string }) {
-  return navigateTo(`${postsPath.value}/${item.id}`)
-}
 
 /** Removal lives in the list's edit state, the way the menu does it. */
 async function removePost(item: { id: string }) {

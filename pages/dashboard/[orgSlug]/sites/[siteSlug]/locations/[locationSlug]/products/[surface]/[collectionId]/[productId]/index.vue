@@ -1,9 +1,8 @@
 <template>
-  <ProductEditorPage />
+  <!-- Nothing open: the product above is the screen. -->
+  <div />
 </template>
 
 <script setup lang="ts">
-import ProductEditorPage from '~/components/dashboard/ProductEditorPage.vue'
-
 definePageMeta({ layout: 'dashboard' })
 </script>

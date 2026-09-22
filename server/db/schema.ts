@@ -1,4 +1,5 @@
 import type { SiteSettings, SiteIntegrations } from '../../shared/site-settings'
+import type { MediaCategory } from '~/shared/media-placement-contract'
 import { sql } from "drizzle-orm"
 import { sqliteTable, integer, text, real, unique, uniqueIndex, index, check, foreignKey, primaryKey } from "drizzle-orm/sqlite-core"
 import type { AnySQLiteColumn } from "drizzle-orm/sqlite-core"
@@ -272,7 +273,7 @@ export const media_assets = sqliteTable("media_assets", {
 	duration: integer(),
 	alt_text: text(),
 	generation_key: text(),
-	category: text().$type<'exterior' | 'interior' | 'food' | 'menu' | 'team' | 'other' | 'logo' | 'blog'>(),
+	category: text().$type<MediaCategory>(),
 	status: text().$type<'pending' | 'active' | 'deleted' | 'failed'>().default("active").notNull(),
 	created_by_user_id: text().references(() => user.id, { onDelete: "set null" } ),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
@@ -281,6 +282,11 @@ export const media_assets = sqliteTable("media_assets", {
 	check("media_assets_instants_check", sql`(created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)`),
 	foreignKey({ columns: [table.organization_id, table.site_id], foreignColumns: [sites.organization_id, sites.id], name: "media_assets_site_scope_fk" }).onDelete("cascade"),
 	check("media_assets_video_thumbnail_check", sql`kind <> 'video' OR (thumbnail_url IS NOT NULL AND length(trim(thumbnail_url)) > 0)`),
+	// The subject vocabulary lived only in this file's `$type` and in the MCP
+	// tool's JSON schema, so the column itself accepted any string a writer
+	// invented. Which of these a business is offered is the dashboard's business
+	// — a law firm is not shown Food — but what may be stored is this table's.
+	check("media_assets_category_check", sql`category IS NULL OR category IN ('exterior', 'interior', 'food', 'menu', 'team', 'other', 'logo', 'blog')`),
 	uniqueIndex("media_assets_org_site_id_unique").on(table.organization_id, table.site_id, table.id),
 ]);
 

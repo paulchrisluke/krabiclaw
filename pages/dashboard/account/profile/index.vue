@@ -1,9 +1,8 @@
 <template>
-  <AccountProfilePage />
+  <!-- Nothing open: the account list above is the screen. -->
+  <div />
 </template>
 
 <script setup lang="ts">
-import AccountProfilePage from '~/components/dashboard/AccountProfilePage.vue'
-
-definePageMeta({ layout: 'dashboard', ownsChrome: true })
+definePageMeta({ layout: 'dashboard' })
 </script>

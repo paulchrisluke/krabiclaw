@@ -1,139 +1,97 @@
 <template>
   <!--
-    Something deeper than my own child is open — a section, a block, a record
-    inside one. I draw no rail; the levels below me own both columns.
+    The page: its rows are its sections list and the fields a page has of its
+    own. Each is a level below this one; the shell reads which is open.
   -->
-  <TenantPageSections v-if="frame.mode.value === 'yield'" :site-id="siteId" :page-id="pageId" />
-
-  <!--
-    One panel either way: this level always owns a column and always titles it.
-    With no section open it is the whole screen; once one is open it is the
-    index column and the section takes the other.
-  -->
-  <template v-else>
-    <UDashboardPanel
-      id="site-page"
-      :class="hasDetail ? 'hidden lg:flex' : undefined"
-      :default-size="hasDetail ? 32 : undefined"
-    >
-      <template #header>
-        <UDashboardNavbar :title="isNew ? 'New page' : draft.title || 'Page'" :toggle="false">
-          <template #leading>
-            <DashboardNavbarLeading />
-          </template>
-        </UDashboardNavbar>
-      </template>
-
-      <template #body>
-        <div class="mx-auto w-full" :class="hasDetail ? 'max-w-xl' : 'max-w-3xl'">
-          <UAlert
-            v-if="loadError"
-            color="error"
-            variant="soft"
-            icon="i-lucide-triangle-alert"
-            title="Page could not be loaded"
-            :description="loadError"
-          />
-          <div v-else-if="pending && !hasDetail" class="space-y-3">
-            <USkeleton v-for="index in 4" :key="index" class="h-20 rounded-2xl" />
-          </div>
-          <template v-else>
-            <div v-if="isNew && !hasDetail" class="mb-6 flex justify-end">
-              <UButton :label="createActionLabel" :loading="saving" @click="startOrCreate" />
-            </div>
-            <div v-else-if="!hasDetail" class="mb-6 flex flex-wrap items-center justify-end gap-2">
-              <UButton
-                color="neutral"
-                variant="outline"
-                icon="i-lucide-external-link"
-                label="Preview"
-                :to="navigablePreviewUrl"
-                target="_blank"
-                :disabled="!navigablePreviewUrl"
-              />
-              <DashboardResourceLocalization
-                :site-id="siteId"
-                resource-type="content_document"
-                :resource-id="draft.page_id"
-                resource-label="page"
-                :fields="localizationFields"
-                :load-values="loadPageLocalization"
-                :save-values="savePageLocalization"
-                :language-settings-path="siteLocalizationSettingsPath"
-                :disabled="dirty"
-              />
-            </div>
-            <UAlert v-if="errorMessage" class="mb-6" color="error" variant="soft" icon="i-lucide-triangle-alert" :description="errorMessage" />
-            <EditorNavigationList :groups="navigationGroups" :active-item="openKey" />
-          </template>
-        </div>
-      </template>
-    </UDashboardPanel>
-
-    <!--
-      The open level is the other column: its own panel, its own header,
-      and Save/Cancel in the panel's own footer slot.
-    -->
-    <UDashboardPanel v-if="hasDetail" id="site-page-detail">
-      <template #header>
-        <UDashboardNavbar :title="openLabel" :toggle="false">
-          <template #leading>
-            <DashboardNavbarLeading />
-          </template>
-        </UDashboardNavbar>
-      </template>
-
-      <template #body>
-        <div class="mx-auto w-full max-w-5xl">
-          <TenantPageSections v-if="openKey === 'sections'" :site-id="siteId" :page-id="pageId" />
-
-          <UFormField v-else-if="openKey === 'title'" label="Title" required>
-            <UInput v-model="draft.title" size="xl" maxlength="200" autofocus class="w-full" />
-          </UFormField>
-
-          <UFormField
-            v-else-if="openKey === 'summary'"
-            label="Summary"
-            description="A concise introduction used when the page needs one."
-          >
-            <UTextarea v-model="draft.summary" :rows="5" autoresize autofocus class="w-full" />
-          </UFormField>
-
-          <div v-else-if="openKey === 'search'" class="space-y-6">
-            <UFormField label="SEO title" description="Falls back to the page title.">
-              <UInput v-model="draft.seo_title" size="xl" maxlength="200" autofocus class="w-full" />
-            </UFormField>
-            <UFormField label="SEO description">
-              <UTextarea v-model="draft.seo_description" :rows="3" autoresize maxlength="500" class="w-full" />
-            </UFormField>
-            <UFormField label="Robots" description="Whether search engines may index and follow this page.">
-              <USelect :model-value="robotsValue" :items="ROBOTS_OPTIONS" value-key="value" label-key="label" size="xl" class="w-full" @update:model-value="draft.robots = String($event)" />
-            </UFormField>
-          </div>
-
-          <UFormField
-            v-else-if="openKey === 'canonical'"
-            label="Canonical URL"
-            description="An absolute URL on one of this site's active domains. Leave empty to use this page's own address."
-          >
-            <UInput v-model="draft.canonical_url" size="xl" placeholder="https://example.com/about" autofocus class="w-full" />
-          </UFormField>
-        </div>
-      </template>
-
-      <template #footer>
-        <DashboardPanelFooter :save-label="saveLabel" :loading="saving" :disabled="saveDisabled" @cancel="cancel" @save="saveOpenSection" />
-      </template>
-    </UDashboardPanel>
-  </template>
+  <DashboardIndexPanel id="site-page" :title="isNew ? 'New page' : draft.title || 'Page'" :auto-open="navigationGroups[0]?.items.find(item => item.to)?.to ?? null">
+    <UAlert
+      v-if="loadError"
+      color="error"
+      variant="soft"
+      icon="i-lucide-triangle-alert"
+      title="Page could not be loaded"
+      :description="loadError"
+    />
+    <div v-else-if="pending" class="space-y-3">
+      <USkeleton v-for="index in 4" :key="index" class="h-20 rounded-2xl" />
+    </div>
+    <template v-else>
+      <div v-if="isNew" class="mb-6 flex justify-end">
+        <UButton :label="createActionLabel" :loading="saving" @click="startOrCreate" />
+      </div>
+      <div v-else class="mb-6 flex flex-wrap items-center justify-end gap-2">
+        <UButton
+          color="neutral"
+          variant="outline"
+          icon="i-lucide-external-link"
+          label="Preview"
+          :to="navigablePreviewUrl"
+          target="_blank"
+          :disabled="!navigablePreviewUrl"
+        />
+        <DashboardResourceLocalization
+          :site-id="siteId"
+          resource-type="content_document"
+          :resource-id="draft.page_id"
+          resource-label="page"
+          :fields="localizationFields"
+          :load-values="loadPageLocalization"
+          :save-values="savePageLocalization"
+          :language-settings-path="siteLocalizationSettingsPath"
+          :disabled="dirty"
+        />
+      </div>
+      <UAlert v-if="errorMessage" class="mb-6" color="error" variant="soft" icon="i-lucide-triangle-alert" :description="errorMessage" />
+      <EditorNavigationList :groups="navigationGroups" :active-item="level.child.value" />
+    </template>
+  </DashboardIndexPanel>
 </template>
+
+<script lang="ts">
+import type { InjectionKey, Ref } from 'vue'
+import { ROBOTS_INTENTS, ROBOTS_INTENT_LABELS } from '~/shared/robots-directive'
+import {
+  isTenantPageListResponse,
+  isTenantPageResponse,
+  type TenantPageDraft,
+  type TenantPageListRow,
+  type TenantPageResponse,
+} from '~/composables/useTenantPageDraft'
+
+export const SECTION_LABELS = {
+  sections: 'Sections',
+  title: 'Title',
+  summary: 'Summary',
+  search: 'Search appearance',
+  canonical: 'Canonical URL',
+} as const
+export type SectionKey = keyof typeof SECTION_LABELS
+
+export const ROBOTS_OPTIONS = ROBOTS_INTENTS.map(value => ({ label: ROBOTS_INTENT_LABELS[value], value }))
+
+/**
+ * What a page's own leaves edit and how they commit. The draft itself is the
+ * keyed store in `useTenantPageDraft`; this adds the page level's save walk so
+ * a leaf's footer says `Create page` or `Save` for the same reasons the rows do.
+ */
+export interface TenantPageEditor {
+  draft: Ref<TenantPageDraft>
+  ready: Ref<boolean>
+  saving: Ref<boolean>
+  saveDisabled: Ref<boolean>
+  saveLabel: Ref<string | undefined>
+  errorMessage: Ref<string>
+  revert: () => void
+  save: () => Promise<void>
+}
+
+export const tenantPageEditorKey = Symbol('tenant-page-editor') as InjectionKey<TenantPageEditor>
+</script>
 
 <script setup lang="ts">
 import EditorNavigationList, { type EditorNavigationGroup } from '~/components/dashboard/EditorNavigationList.vue'
 import DashboardResourceLocalization from '~/components/dashboard/DashboardResourceLocalization.vue'
-import TenantPageSections from '~/components/dashboard/TenantPageSections.vue'
 import { getErrorMessage, isNotFoundError, showNotFound } from '~/utils/errors'
-import { ROBOTS_INTENTS, ROBOTS_INTENT_LABELS } from '~/shared/robots-directive'
 import { previewHrefForTenantPage } from '~/utils/tenant-page-editor-safety'
 import { tenantPageBlockLabel } from '~/utils/tenant-page-block-sections'
 import {
@@ -144,21 +102,13 @@ import {
   writeTenantPageLocalizedText,
   type TenantPageBlock,
 } from '~/utils/tenant-page-blocks'
-import {
-  isTenantPageListResponse,
-  isTenantPageResponse,
-  type TenantPageListRow,
-  type TenantPageResponse,
-} from '~/composables/useTenantPageDraft'
 
-// The frame comes first, and before any `await`: `useEditorFrame` provides and
-// injects, which Vue binds only while setup is still synchronous.
+// The level runs while setup is still synchronous: it injects the record the
+// `<RouterView>` above rendered, and an `await` before it would bind nothing.
+const level = useRouteLevel()
 const route = useRoute()
 const pageId = computed(() => String(route.params.pageId ?? ''))
-const pagesPath = computed(() => `/dashboard/${String(route.params.orgSlug)}/sites/${String(route.params.siteSlug)}/pages`)
-const recordPath = computed(() => `${pagesPath.value}/${pageId.value}`)
-const frame = useEditorFrame(recordPath)
-const hasDetail = computed(() => frame.mode.value === 'pair')
+const recordPath = level.path
 
 const siteId = await useDashboardSiteId()
 const dashboardApi = useDashboardApi()
@@ -176,30 +126,20 @@ const loadError = computed(() => (error.value && !isNotFoundError(error.value)
   ? getErrorMessage(error.value, 'Failed to load this page')
   : null))
 
-const SECTION_LABELS = {
-  sections: 'Sections',
-  title: 'Title',
-  summary: 'Summary',
-  search: 'Search appearance',
-  canonical: 'Canonical URL',
-} as const
-type SectionKey = keyof typeof SECTION_LABELS
-
-const openKey = computed<SectionKey>(() => (frame.childSegment.value ?? 'title') as SectionKey)
-const openLabel = computed(() => SECTION_LABELS[openKey.value])
+/** The open child, for the create walk; with nothing open the walk starts at Title. */
+const openKey = computed<SectionKey>(() => (level.child.value ?? 'title') as SectionKey)
 
 // An unsupported route 404s rather than quietly showing the first section. A
 // watcher, not a setup-time check: moving between leaves reuses this component.
 watchEffect(() => {
-  const open = frame.childSegment.value
+  // A level on its way out after a navigation elsewhere answers about a route
+  // it is no longer part of, so it judges nothing.
+  if (level.stale.value) return
+  const open = level.child.value
   if (open && !(open in SECTION_LABELS)) return showNotFound()
   // Only Sections has anything beneath it; the rest are leaves.
-  if (frame.rest.value.length > 1 && open !== 'sections') showNotFound()
+  if (level.mode.value === 'yield' && open !== 'sections') showNotFound()
 })
-
-const ROBOTS_OPTIONS = ROBOTS_INTENTS.map(value => ({ label: ROBOTS_INTENT_LABELS[value], value }))
-/** The stored directive, or nothing: an unrecognised value is not shown as one of the known ones. */
-const robotsValue = computed(() => ROBOTS_INTENTS.find(intent => intent === draft.value.robots))
 
 const saving = ref(false)
 const errorMessage = ref('')
@@ -300,7 +240,10 @@ async function save() {
   try {
     const created = isNew.value
     const page = await commit()
-    await navigateTo(created ? `${pagesPath.value}/${page.id}` : recordPath.value)
+    // A created page is the record it became, not the `new` form it was, so
+    // Back from it goes to Pages and never to an empty Add screen.
+    if (created) await navigateTo(`${level.to.value}/${page.id}`, { replace: true })
+    else await level.close()
   } catch (cause) {
     errorMessage.value = getErrorMessage(cause, 'Failed to save this page')
   } finally {
@@ -308,12 +251,22 @@ async function save() {
   }
 }
 
-/** Dismissing a leaf discards its draft and goes back one level. */
-function cancel() {
+/** A cancelled leaf puts the loaded page back before it closes. */
+function revertDraft() {
   errorMessage.value = ''
   revert()
-  void navigateTo(recordPath.value)
 }
+
+provide(tenantPageEditorKey, {
+  draft,
+  ready: computed(() => !pending.value),
+  saving,
+  saveDisabled,
+  saveLabel,
+  errorMessage,
+  revert: revertDraft,
+  save: saveOpenSection,
+})
 
 // ── Localization ────────────────────────────────────────
 // The page and its blocks are one document, so a translation is another variant

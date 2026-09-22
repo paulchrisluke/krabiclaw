@@ -16,7 +16,8 @@ import {
 import { isEditableMediaPlacement, isEditableMediaPlacementOwnerType, type EditableMediaPlacementOwnerType, type MediaPlacementOwnerType } from '~/shared/media-placement-contract'
 import { refreshSocialCard, socialCardRefreshOwnersForPlacement } from '~/server/utils/social-card'
 
-export { EDITABLE_MEDIA_PLACEMENT_OWNERS } from '~/shared/media-placement-contract'
+export { EDITABLE_MEDIA_PLACEMENT_OWNERS, MEDIA_CATEGORIES, WRITABLE_MEDIA_CATEGORIES, isMediaCategory } from '~/shared/media-placement-contract'
+export type { MediaCategory } from '~/shared/media-placement-contract'
 export type MediaPlacementItem = StoredMediaPlacementItem
 
 export interface MediaPlacementKey {

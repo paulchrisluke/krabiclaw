@@ -107,12 +107,28 @@
           @click="$emit('remove', item)"
         />
 
-        <div class="min-w-0 flex-1">
+        <!--
+          The row body is the way in, and it is a link: a row that navigated
+          from a click handler could not be opened in a new tab, showed the
+          reader no destination before they pressed it, and put a second copy
+          of the record's path in every list (DESIGN.md).
+
+          In the edit state it stops being one. Editing keeps the rows in place
+          and grows controls around them, so nothing navigates — a row that
+          still led somewhere would strand a half-finished reorder behind a tap
+          on the record's own name (DESIGN.md, "Reorder is a mode").
+        -->
+        <component
+          :is="rowLink(item) ? NuxtLink : 'div'"
+          :to="rowLink(item) ? item.to : undefined"
+          class="min-w-0 flex-1"
+          :class="rowLink(item) ? 'no-underline' : undefined"
+        >
           <slot name="item" :item="item">
             <p class="truncate text-sm font-medium text-highlighted">{{ item.title }}</p>
             <p v-if="item.summary" class="mt-1 line-clamp-2 text-sm text-muted">{{ item.summary }}</p>
           </slot>
-        </div>
+        </component>
 
         <div v-if="!readOnly && editing" class="flex shrink-0 items-center gap-1">
           <template v-if="reorderable">
@@ -138,13 +154,14 @@
             />
           </template>
           <UButton
+            v-if="item.to"
             icon="i-lucide-pencil"
             :aria-label="`Edit ${item.title}`"
             color="neutral"
             variant="ghost"
             size="sm"
             square
-            @click="$emit('open', item)"
+            :to="item.to"
           />
         </div>
       </li>
@@ -156,7 +173,7 @@
 // Generic so a caller can hang its own row on the item and read it straight off
 // the `#item` slot. Without it every custom row had to look its record back up
 // by id for each field it rendered, which is both noisy and quadratic.
-defineProps<{
+const props = defineProps<{
   items: T[]
   title: string
   description?: string
@@ -177,10 +194,19 @@ defineProps<{
 
 defineEmits<{
   add: []
-  open: [item: T]
   remove: [item: T]
   move: [item: T, direction: -1 | 1]
 }>()
+
+// Resolved rather than written in the template so one expression can choose
+// between a link and a plain row.
+const NuxtLink = resolveComponent('NuxtLink')
+
+/**
+ * The row body links only while the list is being browsed. In the edit state
+ * the row is the thing being acted on, and its pencil is the way in.
+ */
+const rowLink = (item: T) => Boolean(item.to) && !(editing.value && !props.readOnly)
 
 const editing = defineModel<boolean>('editing', { default: false })
 const selected = defineModel<string[]>('selected', { default: () => [] })
@@ -206,6 +232,11 @@ export interface ListEditorItem {
   id: string
   /** Names the row in the remove, reorder and open controls' labels. */
   title: string
+  /**
+   * The record's own URL. Set it and the row is a link to it; leave it off and
+   * the row is not a way in, which is what a list of media fields wants.
+   */
+  to?: string
   /** Set false for a row that may not be removed; its remove control is omitted. */
   removable?: boolean
   summary?: string | null

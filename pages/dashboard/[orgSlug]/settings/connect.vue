@@ -1,95 +1,98 @@
 <template>
-  <div class="space-y-4">
-    <UAlert
-      v-if="errorMessage"
-      color="error"
-      variant="soft"
-      icon="i-lucide-triangle-alert"
-      title="Stripe Connect is unavailable"
-      :description="errorMessage"
-    />
+  <!-- A row on Menu, with its own controls: nothing here saves from a footer. -->
+  <DashboardLeafPanel id="organization-payouts" title="Payouts" :footer="false">
+    <div class="space-y-4">
+      <UAlert
+        v-if="errorMessage"
+        color="error"
+        variant="soft"
+        icon="i-lucide-triangle-alert"
+        title="Stripe Connect is unavailable"
+        :description="errorMessage"
+      />
 
-    <UCard>
-      <template #header>
-        <div class="flex items-center justify-between gap-3">
-          <div>
-            <h2 class="font-semibold text-highlighted">Connect your business to Stripe</h2>
-            <p class="mt-1 text-sm text-muted">Stripe verifies your business through its hosted onboarding so payment capabilities can be enabled.</p>
+      <UCard>
+        <template #header>
+          <div class="flex items-center justify-between gap-3">
+            <div>
+              <h2 class="font-semibold text-highlighted">Connect your business to Stripe</h2>
+              <p class="mt-1 text-sm text-muted">Stripe verifies your business through its hosted onboarding so payment capabilities can be enabled.</p>
+            </div>
+            <UBadge v-if="account" :color="statusPresentation.color" variant="soft">
+              {{ statusPresentation.label }}
+            </UBadge>
           </div>
-          <UBadge v-if="account" :color="statusPresentation.color" variant="soft">
-            {{ statusPresentation.label }}
-          </UBadge>
+        </template>
+
+        <div v-if="loading" class="space-y-3" aria-label="Loading Stripe Connect status">
+          <USkeleton class="h-5 w-48" />
+          <USkeleton class="h-10 w-full" />
         </div>
-      </template>
 
-      <div v-if="loading" class="space-y-3" aria-label="Loading Stripe Connect status">
-        <USkeleton class="h-5 w-48" />
-        <USkeleton class="h-10 w-full" />
-      </div>
-
-      <div v-else-if="!account" class="space-y-5">
-        <UAlert
-          color="neutral"
-          variant="soft"
-          icon="i-lucide-shield-check"
-          title="Choose the business's registered country"
-          description="This cannot be changed after the Stripe account is created. KrabiClaw does not store the identity details you enter at Stripe."
-        />
-        <UFormField label="Business country" description="The country where the business is legally registered.">
-          <USelectMenu
-            v-model="selectedCountry"
-            :items="countryOptions"
-            value-key="value"
-            label-key="label"
-            :loading="countriesLoading"
-            placeholder="Select a country"
-            class="w-full sm:max-w-sm"
+        <div v-else-if="!account" class="space-y-5">
+          <UAlert
+            color="neutral"
+            variant="soft"
+            icon="i-lucide-shield-check"
+            title="Choose the business's registered country"
+            description="This cannot be changed after the Stripe account is created. KrabiClaw does not store the identity details you enter at Stripe."
           />
-        </UFormField>
-        <UButton :disabled="!selectedCountry" :loading="starting" icon="i-lucide-external-link" @click="startOnboarding">
-          Continue to Stripe
-        </UButton>
-      </div>
-
-      <div v-else class="space-y-5">
-        <p class="text-sm text-muted">{{ statusPresentation.description }}</p>
-
-        <div class="grid gap-3 sm:grid-cols-2">
-          <div class="rounded-lg border border-default p-3">
-            <p class="text-xs font-medium uppercase tracking-wide text-muted">Business country</p>
-            <p class="mt-1 text-sm font-medium text-highlighted">{{ account.country }}</p>
-          </div>
-          <div class="rounded-lg border border-default p-3">
-            <p class="text-xs font-medium uppercase tracking-wide text-muted">Card payments</p>
-            <p class="mt-1 text-sm font-medium capitalize text-highlighted">{{ cardPaymentsLabel }}</p>
-          </div>
-        </div>
-
-        <UAlert
-          v-if="account.requirements.length"
-          color="warning"
-          variant="soft"
-          icon="i-lucide-list-checks"
-          title="Stripe requirements"
-          :description="requirementsSummary"
-        />
-
-        <div class="flex flex-wrap gap-2">
-          <UButton
-            v-if="canContinueOnboarding"
-            :loading="starting"
-            icon="i-lucide-external-link"
-            @click="startOnboarding"
-          >
-            {{ account.status === 'creation_failed' ? 'Retry Stripe setup' : 'Continue Stripe onboarding' }}
-          </UButton>
-          <UButton v-if="account.stripeAccountId" color="neutral" variant="outline" :loading="refreshing" icon="i-lucide-refresh-cw" @click="refreshStatus">
-            Refresh status
+          <UFormField label="Business country" description="The country where the business is legally registered.">
+            <USelectMenu
+              v-model="selectedCountry"
+              :items="countryOptions"
+              value-key="value"
+              label-key="label"
+              :loading="countriesLoading"
+              placeholder="Select a country"
+              class="w-full sm:max-w-sm"
+            />
+          </UFormField>
+          <UButton :disabled="!selectedCountry" :loading="starting" icon="i-lucide-external-link" @click="startOnboarding">
+            Continue to Stripe
           </UButton>
         </div>
-      </div>
-    </UCard>
-  </div>
+
+        <div v-else class="space-y-5">
+          <p class="text-sm text-muted">{{ statusPresentation.description }}</p>
+
+          <div class="grid gap-3 sm:grid-cols-2">
+            <div class="rounded-lg border border-default p-3">
+              <p class="text-xs font-medium uppercase tracking-wide text-muted">Business country</p>
+              <p class="mt-1 text-sm font-medium text-highlighted">{{ account.country }}</p>
+            </div>
+            <div class="rounded-lg border border-default p-3">
+              <p class="text-xs font-medium uppercase tracking-wide text-muted">Card payments</p>
+              <p class="mt-1 text-sm font-medium capitalize text-highlighted">{{ cardPaymentsLabel }}</p>
+            </div>
+          </div>
+
+          <UAlert
+            v-if="account.requirements.length"
+            color="warning"
+            variant="soft"
+            icon="i-lucide-list-checks"
+            title="Stripe requirements"
+            :description="requirementsSummary"
+          />
+
+          <div class="flex flex-wrap gap-2">
+            <UButton
+              v-if="canContinueOnboarding"
+              :loading="starting"
+              icon="i-lucide-external-link"
+              @click="startOnboarding"
+            >
+              {{ account.status === 'creation_failed' ? 'Retry Stripe setup' : 'Continue Stripe onboarding' }}
+            </UButton>
+            <UButton v-if="account.stripeAccountId" color="neutral" variant="outline" :loading="refreshing" icon="i-lucide-refresh-cw" @click="refreshStatus">
+              Refresh status
+            </UButton>
+          </div>
+        </div>
+      </UCard>
+    </div>
+  </DashboardLeafPanel>
 </template>
 
 <script setup lang="ts">
