@@ -51,7 +51,14 @@
           @click="action.onSelect()"
         />
       </ClientOnly>
-      <DashboardAccountMenu />
+      <!--
+        From `md` up only. Airbnb's `/hosting` draws no header and no avatar at
+        all on a phone (measured at 390, 2026-09-22); the account is a row in
+        the Menu tab's list, which is where ours is too. On the account pages
+        this header is the only chrome, so an avatar here linked to the page the
+        reader was already on.
+      -->
+      <DashboardAccountMenu class="hidden md:inline-flex" />
       <UButton
         v-if="items.length"
         color="neutral"

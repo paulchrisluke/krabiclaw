@@ -230,12 +230,19 @@ const activeOrganizationId = computed(() => {
   return session?.activeOrganizationId ?? null
 })
 // The account pages are user-scoped, not organization-scoped, so they carry no
-// organization in the path. They used to carry one in the query string purely so
-// a back-link could render a label without a fetch; the top nav is the way back
-// now, and the session's active organization answers "back to which org?".
-const accountOrganization = computed(() => organizations.value.find(org => org.id === activeOrganizationId.value)
-  ?? organizations.value[0]
-  ?? null)
+// organization in the path, and the session's active organization answers
+// "back to which org?".
+//
+// Only that one. Falling back to the first organization the account belongs to
+// sent Back from Account into a business the person had never opened — it read
+// as an answer while being a guess. With no active organization there is no
+// parent, and the level renders no Back rather than a wrong one.
+//
+// Setting the active organization is #905's work, not this change's: it belongs
+// to `/api/post-login` and to explicit selection in the scope switcher, never to
+// a side effect of visiting an organization's route.
+const accountOrganization = computed(() => organizations.value.find(org => org.id === activeOrganizationId.value) ?? null)
+
 const impersonatedBy = computed(() => {
   const session = sessionData.value?.session as { impersonatedBy?: string } | undefined
   return session?.impersonatedBy
