@@ -409,7 +409,7 @@ export function attachCover(record: ApiRecord) {
   return attachCoverMedia(parseTags(record))
 }
 
-export interface ContentReviewContext { orgSlug: string; siteSlug: string }
+export interface ContentReviewContext { orgSlug: string }
 
 async function contentReviewUrls(
   record: ApiRecord,
@@ -420,7 +420,7 @@ async function contentReviewUrls(
 ) {
   const id = String(record.id ?? '')
   // Every site's articles, KrabiClaw's included, are edited in the shared dashboard CMS.
-  const adminEditUrl = context ? `/dashboard/${context.orgSlug}/sites/${context.siteSlug}/blog/${id}` : null
+  const adminEditUrl = context ? `/dashboard/${context.orgSlug}/blog/${id}` : null
   const isPublished = typeof record.status === 'string' ? record.status === 'published' : Boolean(record.published_at)
 
   // An unpublished article is previewed the same way everything unpublished is

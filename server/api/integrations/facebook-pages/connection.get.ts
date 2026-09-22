@@ -8,7 +8,7 @@ export default defineHandler(async (event) => {
     ? await requireRequestedLocationAccess(event, query.locationId, query.organizationId)
     : await requireRequestedOrganizationWideAccess(event, query.organizationId)
 
-  const connection = await getFacebookPagesConnection(env, site.id)
+  const connection = await getFacebookPagesConnection(env, organization.id)
 
   if (!connection) {
     return jsonResponse({ connected: false })

@@ -19,7 +19,7 @@ export default defineHandler(async (event) => {
   }
 
   try {
-    const { env, db, session, site } = await requireBlogAccess(event, organizationId);
+    const { env, db, session, organization } = await requireBlogAccess(event, organizationId);
 
     const result = await createBlogPost(db, session.user.id, body as PlatformBlogCreateInput, {
       organization_id: organizationId, }, env);

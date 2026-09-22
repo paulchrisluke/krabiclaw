@@ -9,7 +9,7 @@ export default defineHandler(async (event) => {
   const organizationId = getRouterParam(event, 'organizationId')
   const variantId = getRouterParam(event, 'variantId')
   if (!organizationId || !variantId) return jsonResponse({ error: 'Site and page IDs are required' }, { status: 400 })
-  const { env, db, site } = await requireTenantPageWriteAccess(event, organizationId)
+  const { env, db, organization } = await requireTenantPageWriteAccess(event, organizationId)
   try {
     const body = await readRequiredBody<{ expectedUpdatedAt?: string }>(event)
     if (typeof body.expectedUpdatedAt !== 'string' || !body.expectedUpdatedAt) {

@@ -8,7 +8,7 @@ export default defineHandler(async (event) => {
   const organizationId = getRouterParam(event, 'organizationId')
   const variantId = getRouterParam(event, 'variantId')
   if (!organizationId || !variantId) return jsonResponse({ error: 'Site and page IDs are required' }, { status: 400 })
-  const { env, db, site, userId } = await requireTenantPageWriteAccess(event, organizationId)
+  const { env, db, organization, userId } = await requireTenantPageWriteAccess(event, organizationId)
   try {
     const payload = await updateTenantPage(db, variantId, {
       userId, scope: { organizationId }, data: await readRequiredBody<TenantPageEditorInput>(event), env, })
