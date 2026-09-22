@@ -1,6 +1,6 @@
 import type { McpToolDefinition } from './shared'
 import { chatgptFileInput, mediaAssetObject, pageInfoObject, paginationInputSchema, resolvedMediaAssetObject, siteTool } from './shared'
-import { EDITABLE_MEDIA_PLACEMENT_OWNERS } from '~/server/utils/media-placement'
+import { EDITABLE_MEDIA_PLACEMENT_OWNERS, WRITABLE_MEDIA_CATEGORIES } from '~/server/utils/media-placement'
 
 const mediaPlacementObject = {
   type: 'object',
@@ -116,7 +116,7 @@ export const MEDIA_TOOLS: McpToolDefinition[] = [
       inputSchema: {
         file: chatgptFileInput,
         poster_file: { ...chatgptFileInput, description: 'Required poster/thumbnail image for video uploads. Invalid for non-video uploads.' },
-        category: { type: 'string', enum: ['exterior', 'interior', 'food', 'menu', 'team', 'other'], description: 'Optional visual subject used to organize the media library. It never assigns the asset to content.' },
+        category: { type: 'string', enum: [...WRITABLE_MEDIA_CATEGORIES], description: 'Optional visual subject used to organize the media library. It never assigns the asset to content.' },
         description: { type: 'string', description: 'Description of the media (stored as alt text).' },
       },
       required: ['file'],
@@ -143,7 +143,7 @@ export const MEDIA_TOOLS: McpToolDefinition[] = [
       inputSchema: {
         asset_id: { type: 'string' },
         alt_text: { type: 'string' },
-        category: { type: 'string', enum: ['exterior', 'interior', 'food', 'menu', 'team', 'other'] },
+        category: { type: 'string', enum: [...WRITABLE_MEDIA_CATEGORIES] },
         anyOf: [{ required: ['alt_text'] }, { required: ['category'] }],
       },
       required: ['asset_id'],

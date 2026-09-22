@@ -1,5 +1,6 @@
 import type { Collection, Product, ProductPresentation, ProductSurface } from '~/server/types/products'
 import { normalizeVertical } from '~/utils/vertical-copy'
+import { isMediaCategory, type MediaCategory } from '~/shared/media-placement-contract'
 
 /**
  * Anything a guest books a seat on is an Experience, whatever the site sells
@@ -128,16 +129,21 @@ export function countCatalog(products: ReadonlyArray<Pick<Product, 'booking'>>):
  * vertical — a site that changed vertical, or media added over MCP, must not
  * have pictures that no filter can reach.
  */
-const PHOTO_CATEGORY_LABELS: Record<string, string> = {
+// The tenant's word for each subject the column can hold. Keyed by the shared
+// list, so a category added there must be named here or this stops compiling.
+const PHOTO_CATEGORY_LABELS: Record<MediaCategory, string> = {
   exterior: 'Exterior',
   interior: 'Interior',
   food: 'Food',
   menu: 'Menu',
   team: 'Team',
   other: 'Other',
+  logo: 'Logo',
+  blog: 'Article',
 }
 
-const PHOTO_CATEGORIES_BY_VERTICAL: Record<string, readonly string[]> = {
+/** Which subjects each vertical is offered. Only a restaurant plates food. */
+const PHOTO_CATEGORIES_BY_VERTICAL: Record<string, readonly MediaCategory[]> = {
   restaurant: ['exterior', 'interior', 'food', 'menu', 'team', 'other'],
   experience: ['exterior', 'interior', 'team', 'other'],
   service: ['exterior', 'interior', 'team', 'other'],
@@ -146,13 +152,16 @@ const PHOTO_CATEGORIES_BY_VERTICAL: Record<string, readonly string[]> = {
 export function photoCategories(
   vertical: string | null | undefined,
   stored: Iterable<string | null | undefined> = [],
-): Array<{ id: string, label: string }> {
+): Array<{ id: MediaCategory, label: string }> {
   const forVertical = PHOTO_CATEGORIES_BY_VERTICAL[normalizeVertical(vertical)] ?? PHOTO_CATEGORIES_BY_VERTICAL.service!
   const ids = [...forVertical]
+  // A subject already on an asset is always offered, whatever the vertical: a
+  // site that changed vertical, or media added over MCP, must not have pictures
+  // no filter can reach.
   for (const category of stored) {
-    if (category && PHOTO_CATEGORY_LABELS[category] && !ids.includes(category)) ids.push(category)
+    if (isMediaCategory(category) && !ids.includes(category)) ids.push(category)
   }
-  return ids.map(id => ({ id, label: PHOTO_CATEGORY_LABELS[id]! }))
+  return ids.map(id => ({ id, label: PHOTO_CATEGORY_LABELS[id] }))
 }
 
 export const CATALOG_LABEL = 'Catalog'
