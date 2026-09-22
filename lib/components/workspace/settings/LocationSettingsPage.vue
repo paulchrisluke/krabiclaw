@@ -83,6 +83,10 @@ export type LocationEditorKey = typeof HUB_KEYS[number] | typeof SETTINGS_KEYS[n
  * every row to the location that happened to be open first.
  */
 export async function useLocationEditor(siteId: string, locationId: Ref<string | null>, key: LocationEditorKey | null, settingsPath: MaybeRefOrGetter<string> = '') {
+  // Captured before the first await: an await in setup leaves the active effect
+  // scope, so a watcher created after one is bound to nothing and never stops.
+  // Thirteen leaves call this, each leaving its watcher behind on unmount.
+  const scope = getCurrentScope()
   const settingsBase = computed(() => toValue(settingsPath))
   const route = useRoute()
   const dashboardApi = useDashboardApi()
@@ -587,7 +591,7 @@ export async function useLocationEditor(siteId: string, locationId: Ref<string |
     watch: [locationId],
   })
 
-  watch(
+  const watchLocationResource = () => watch(
     [locationSettingsResource, locationSettingsPending, locationSettingsError],
     ([resource, pending, resourceError]) => {
       loading.value = pending
@@ -604,8 +608,8 @@ export async function useLocationEditor(siteId: string, locationId: Ref<string |
     },
     { immediate: true },
   )
-
-
+  if (scope) scope.run(watchLocationResource)
+  else watchLocationResource()
 
   const loadLocationWorkspace = async () => {
     await refreshLocationWorkspace()

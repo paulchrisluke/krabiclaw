@@ -52,13 +52,15 @@
         />
       </ClientOnly>
       <!--
-        From `md` up only. Airbnb's `/hosting` draws no header and no avatar at
-        all on a phone (measured at 390, 2026-09-22); the account is a row in
-        the Menu tab's list, which is where ours is too. On the account pages
-        this header is the only chrome, so an avatar here linked to the page the
-        reader was already on.
+        Where there is a bottom nav to carry Menu — and Menu carries the account
+        row — this is `md` and up only: Airbnb's `/hosting` draws no header and
+        no avatar at all on a phone (measured at 390, 2026-09-22), and an avatar
+        beside the Menu route linked to the page the reader was already on.
+
+        On an unscoped route there are no nav items, no bottom nav, and this
+        header is the only chrome there is, so the avatar stays at every width.
       -->
-      <DashboardAccountMenu class="hidden md:inline-flex" />
+      <DashboardAccountMenu :class="items.length ? 'hidden md:inline-flex' : undefined" />
       <UButton
         v-if="items.length"
         color="neutral"
