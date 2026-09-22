@@ -342,9 +342,11 @@ const scopeHeaderModel = computed<DashboardScopeHeaderModel>(() => {
       avatar: org.logo ?? undefined,
       icon: org.logo ? undefined : 'i-lucide-building-2',
       active: org.id === organization.value?.id,
-      // The one already open is an ordinary link; switching is an action,
-      // because Better Auth has to be told before the dashboard is entered.
-      ...(org.id === organization.value?.id
+      // Which one is a plain link is the *session's* question, not the route's.
+      // A route can be open in an organization the session is not active in —
+      // that is the case #905 exists for — and comparing against the route left
+      // that peer as a link that never told Better Auth anything.
+      ...(org.id === activeOrganizationId.value
         ? { to: `/dashboard/${encodeURIComponent(org.slug)}` }
         : { onSelect: () => void selectOrganization(org) }),
     })),
@@ -360,8 +362,22 @@ const scopeHeaderModel = computed<DashboardScopeHeaderModel>(() => {
  * is what the account pages read to find their way back (#905).
  */
 const organizationSwitchError = ref<string | null>(null)
+// One activation at a time. Two quick presses raced: both called `setActive`,
+// and whichever resolved last decided the session while the other was already
+// navigating — the dashboard could open an organization the session left.
+const switchingOrganization = ref(false)
 async function selectOrganization(org: { id: string, slug: string }) {
+  if (switchingOrganization.value) return
+  switchingOrganization.value = true
   organizationSwitchError.value = null
+  try {
+    await activateOrganization(org)
+  } finally {
+    switchingOrganization.value = false
+  }
+}
+
+async function activateOrganization(org: { id: string, slug: string }) {
   const { error } = await authClient.organization.setActive({ organizationId: org.id })
   if (error) {
     // Staying put is the honest outcome: the session is still in the old
