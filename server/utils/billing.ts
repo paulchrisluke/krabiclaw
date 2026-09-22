@@ -47,9 +47,7 @@ export async function getSiteBillingStatus(
   db: DbClient,
   organizationId: string,
 ): Promise<SiteBillingStatus> {
-  const site = await queryFirst<{ organization_id: string }>(db, `
-    SELECT organization_id FROM organization WHERE id = ? LIMIT 1
-  `, [organizationId])
+  const site = await queryFirst<{ id: string }>(db, `SELECT id FROM organization WHERE id = ? LIMIT 1`, [organizationId])
   if (!site) throw new HTTPError({ statusCode: 404, statusMessage: 'Site not found' })
   return getOrganizationBillingStatus(env, db, site.id)
 }
@@ -101,9 +99,7 @@ export async function hasSiteEntitlement(
   organizationId: string,
   key: string,
 ): Promise<boolean> {
-  const site = await queryFirst<{ organization_id: string }>(db, `
-    SELECT organization_id FROM organization WHERE id = ? LIMIT 1
-  `, [organizationId])
+  const site = await queryFirst<{ id: string }>(db, `SELECT id FROM organization WHERE id = ? LIMIT 1`, [organizationId])
   if (!site) return false
   return (await getOrganizationEntitlements(env, site.id))[key] === true
 }

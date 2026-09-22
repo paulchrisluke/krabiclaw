@@ -32,7 +32,6 @@ export interface SiteSettings {
 
 export interface UpdateSiteSettingsRequest {
   name?: string
-  name?: string
   brand_description?: string
   contact_email?: string
   brand_color?: string

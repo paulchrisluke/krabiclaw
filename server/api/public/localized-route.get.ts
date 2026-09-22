@@ -14,9 +14,9 @@ export default defineHandler(async (event) => {
   const env = cloudflareEnv(event)
   const db = env.db
   if (!db) throw createError({ statusCode: 503, statusMessage: 'Database unavailable' })
-  const site = await queryFirst<{ organization_id: string }>(db, `
+  const site = await queryFirst<{ id: string }>(db, `
     SELECT organization_id FROM organization WHERE id = ? AND status = 'active' LIMIT 1
   `, [organizationId])
   if (!site) throw createError({ statusCode: 404, statusMessage: 'Site not found' })
-  return { route: await resolveLocalizedPublicRoute(env, db, site.id, path) }
+  return { route: await resolveLocalizedPublicRoute(env, db, organizationId, path) }
 })

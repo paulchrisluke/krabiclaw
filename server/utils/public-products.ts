@@ -323,7 +323,7 @@ export async function loadPublicProductApiDetail(
   productSlug: string,
   locale = 'en',
 ): Promise<PublicProductDetail | null> {
-  const site = await queryFirst<{ organization_id: string; vertical: string }>(db, `SELECT organization_id, vertical FROM organization WHERE id = ? AND status = 'active'${previewAuthorized ? '' : " AND onboarding_status = 'active'"} LIMIT 1`, [organizationId])
+  const site = await queryFirst<{ id: string; vertical: string }>(db, `SELECT id, vertical FROM organization WHERE id = ? AND status = 'active'${previewAuthorized ? '' : " AND onboarding_status = 'active'"} LIMIT 1`, [organizationId])
   const presentation = site ? resolveProductPresentation(site.vertical) : null
   if (!site || !presentation) return null
   // The surface is the Product's own — an Experience answers here too, so its

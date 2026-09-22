@@ -65,8 +65,8 @@ export async function getActiveBlawbySite(
   db: DbClient,
   organizationId: string,
   options: { previewAuthorized?: boolean } = {},
-): Promise<{ organization_id: string; vertical: string; theme_id: string } | null> {
-  const site = await queryFirst<{ organization_id: string; vertical: string; theme_id: string }>(db, `
+): Promise<{ id: string; vertical: string; theme_id: string } | null> {
+  const site = await queryFirst<{ id: string; vertical: string; theme_id: string }>(db, `
     SELECT organization_id, vertical, theme_id
       FROM organization
      WHERE id = ? AND status = 'active'${options.previewAuthorized ? '' : " AND onboarding_status = 'active'"}
@@ -358,7 +358,7 @@ export async function getPublicBlawbyDocumentData(
   const locale = options.locale?.trim() || 'en'
   const localizations = locale === 'en'
     ? []
-    : await loadExactPublicLocalizations(env, db, site.id, locale)
+    : await loadExactPublicLocalizations(env, db, organizationId, locale)
 
   const [shell, route] = await Promise.all([
     getPublicBlawbyShellData(db, organizationId, { locale, localizations }),
@@ -371,7 +371,7 @@ export async function getPublicBlawbyDocumentData(
   // Every route on this template is a page now, so locale representations
   // come from the document — there is no second resource kind to branch on.
   route.localeRepresentations = await listPublicLocaleRepresentations(env, db, {
-    organizationId: site.id,
+    organizationId: organizationId,
     
     sourcePath: pagePath ?? '/',
     documentId: route.page?.page_id,

@@ -110,7 +110,7 @@ export async function notifyDomainLifecycle(
       phone,
       organizationId: opts.organizationId,
       locationId: null,
-      requireSiteWide: true,
+      requireOrganizationWide: true,
     })
     const wanted = recipient ? await wantsNotification(db, recipient.userId, 'site_and_billing', 'whatsapp') : false
     if (!recipient) {

@@ -792,7 +792,7 @@ export async function getPublishedPostByPublicRoute(
   slug: string,
   locale: string,
 ) {
-  const site = await queryFirst<{ organization_id: string }>(db, 'SELECT organization_id FROM organization WHERE id = ? AND status = \'active\' LIMIT 1', [organizationId])
+  const site = await queryFirst<{ id: string }>(db, 'SELECT id FROM organization WHERE id = ? AND status = \'active\' LIMIT 1', [organizationId])
   if (!site) return null
 
   const localizations = locale === 'en' ? [] : await loadExactPublicLocalizations(env, db, site.id, locale)

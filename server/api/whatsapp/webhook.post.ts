@@ -148,7 +148,7 @@ async function resolveQuotedDelivery(
 
   const authorized = await isAuthorizedWhatsAppRecipient(db, {
     env: env as CloudflareEnv,
-    phone, organizationId: thread.organization_id, locationId: thread.location_id, requireSiteWide: false, })
+    phone, organizationId: thread.organization_id, locationId: thread.location_id, requireOrganizationWide: false, })
   if (!authorized) return null
 
   return { threadId: thread.request_id, organizationId: thread.organization_id, locationId: thread.location_id, guestEmail: thread.guest_email }

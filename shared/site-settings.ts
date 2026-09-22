@@ -4,7 +4,6 @@ export interface IntegrationVersion {
 
 export interface IntegrationOAuthState extends IntegrationVersion {
   organizationId: string
-  organizationId: string
   userId: string
   timestamp: number
 }

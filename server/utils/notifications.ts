@@ -239,7 +239,7 @@ export interface OwnerEmailRecipient {
 
 export interface OwnerPhoneRecipient {
   phone: string
-  requireSiteWide: boolean
+  requireOrganizationWide: boolean
 }
 
 /**
@@ -284,7 +284,7 @@ async function resolveOwnerRecipients(
       phone: target.phone,
       organizationId: opts.organizationId,
       locationId: opts.locationId ?? null,
-      requireSiteWide: target.requireSiteWide,
+      requireOrganizationWide: target.requireOrganizationWide,
     })
     if (!recipient) {
       console.error('whatsapp_delivery_blocked', {
@@ -533,8 +533,8 @@ async function notifyOwner(
   ])
 
   const configuredTargets = [
-    locationPhone ? { phone: locationPhone, requireSiteWide: false } : null,
-    sitePhone ? { phone: sitePhone, requireSiteWide: true } : null,
+    locationPhone ? { phone: locationPhone, requireOrganizationWide: false } : null,
+    sitePhone ? { phone: sitePhone, requireOrganizationWide: true } : null,
   ].filter(Boolean) as OwnerPhoneRecipient[]
   const targetByPhone = new Map<string, OwnerPhoneRecipient>()
   for (const target of configuredTargets) {
@@ -545,7 +545,7 @@ async function notifyOwner(
     // own location whenever the site reused their number.
     targetByPhone.set(target.phone, {
       phone: target.phone,
-      requireSiteWide: existing ? existing.requireSiteWide && target.requireSiteWide : target.requireSiteWide,
+      requireOrganizationWide: existing ? existing.requireOrganizationWide && target.requireOrganizationWide : target.requireOrganizationWide,
     })
   }
 
@@ -1246,8 +1246,8 @@ async function notifyGuestThreadReplyInner(
   const sitePhone = await getOrgWhatsAppPhone(db, opts.organizationId)
   const locationPhone = opts.locationId ? await getLocationNotificationPhone(db, opts.locationId, opts.organizationId) : null
   const candidatePhones: OwnerPhoneRecipient[] = [
-    locationPhone ? { phone: locationPhone, requireSiteWide: false } : null,
-    sitePhone && sitePhone !== locationPhone ? { phone: sitePhone, requireSiteWide: true } : null,
+    locationPhone ? { phone: locationPhone, requireOrganizationWide: false } : null,
+    sitePhone && sitePhone !== locationPhone ? { phone: sitePhone, requireOrganizationWide: true } : null,
   ].filter(Boolean) as OwnerPhoneRecipient[]
 
   const ownerMessage = guestReplyMessage({
