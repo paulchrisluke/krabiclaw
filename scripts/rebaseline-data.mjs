@@ -144,7 +144,7 @@ export const TRANSFORMS = [
 ]
 
 const LOCALIZED_OWNER_TABLES = {
-  site: 'sites', business_location: 'business_locations', product: 'products',
+  organization: 'organization', business_location: 'business_locations', product: 'products',
   collection: 'collections', media_asset: 'media_assets',
 }
 
@@ -154,13 +154,14 @@ export const TARGET_INVARIANT_QUERIES = {
   document_owner_scope: `WITH scope AS (${CONTENT_DOCUMENT_SCOPE_QUERY}) SELECT d.id FROM content_documents d WHERE (SELECT count(*) FROM scope s WHERE s.id = d.id) <> 1`,
   editorial_representation_scope: `SELECT d.id FROM content_documents d WHERE d.row_role = 'representation' AND NOT EXISTS (
     SELECT 1 FROM content_documents r WHERE r.id = d.root_id AND r.row_role = 'root' AND r.locale = 'en'
-      AND r.kind = d.kind AND r.organization_id = d.organization_id AND r.site_id = d.site_id)`,
-  english_source_locale: `SELECT s.id FROM sites s WHERE NOT EXISTS (SELECT 1 FROM site_locales l WHERE l.site_id = s.id AND l.organization_id = s.organization_id AND l.locale = 'en' AND l.is_source = 1)`,
+      AND r.kind = d.kind AND r.organization_id = d.organization_id)`,
+  english_source_locale: `SELECT o.id FROM organization o WHERE NOT EXISTS (SELECT 1 FROM site_locales l WHERE l.organization_id = o.id AND l.locale = 'en' AND l.is_source = 1)`,
   block_parent_scope: `SELECT b.id FROM content_blocks b WHERE b.parent_block_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM content_blocks p WHERE p.id = b.parent_block_id AND p.document_id = b.document_id)`,
-  // A Product belongs to the organization, so its localization is scoped by
-  // organization alone; every other localized resource is scoped by site too.
+  // Every localized resource is scoped by its organization. This used to add a
+  // site to that scope for all but Product, which was the same organization
+  // said twice.
   localized_resource_owner_scope: `SELECT r.id FROM resource_localizations r WHERE NOT (
-    ${Object.entries(LOCALIZED_OWNER_TABLES).map(([type, table]) => `(r.resource_type = '${type}' AND EXISTS (SELECT 1 FROM ${table} o WHERE o.id = r.resource_id AND o.organization_id = r.organization_id${type === 'site' ? ' AND o.id = r.site_id' : type === 'product' ? '' : ' AND o.site_id = r.site_id'}))`).join(' OR ')})`,
+    ${Object.entries(LOCALIZED_OWNER_TABLES).map(([type, table]) => `(r.resource_type = '${type}' AND EXISTS (SELECT 1 FROM ${table} o WHERE o.id = r.resource_id AND ${type === 'organization' ? 'o.id' : 'o.organization_id'} = r.organization_id))`).join(' OR ')})`,
   activity_request_scope: `SELECT e.id FROM activity_entries e WHERE e.scope_kind = 'request' AND NOT EXISTS (
     SELECT 1 FROM requests r WHERE r.id = e.request_id AND r.kind IN ('contact','reservation','booking'))`,
   // The retired model must leave no trace.
@@ -174,11 +175,11 @@ export const TARGET_INVARIANT_QUERIES = {
   price_location_scope: `SELECT p.id FROM prices p WHERE p.location_id IS NOT NULL AND NOT EXISTS (
     SELECT 1 FROM product_variants v JOIN product_locations pl ON pl.product_id = v.product_id AND pl.location_id = p.location_id
      WHERE v.id = p.product_variant_id)`,
-  // A page grid names pages published by the same site.
+  // A page grid names pages published by the same organization.
   page_grid_targets_exist: `SELECT b.id FROM content_blocks b, json_each(b.data_json, '$.page_ids') j
     WHERE b.type = 'page_grid' AND NOT EXISTS (
       SELECT 1 FROM content_documents d JOIN content_documents owner ON owner.id = b.document_id
-       WHERE d.id = j.value AND d.kind = 'page' AND d.row_role = 'root' AND d.site_id = owner.site_id)`,
+       WHERE d.id = j.value AND d.kind = 'page' AND d.row_role = 'root' AND d.organization_id = owner.organization_id)`,
   // A booking holds a seat at a real occurrence of the product it names.
   booking_session_scope: `SELECT b.id FROM bookings b WHERE NOT EXISTS (
     SELECT 1 FROM product_sessions s WHERE s.id = b.product_session_id AND s.product_id = b.product_id)`,
@@ -205,6 +206,10 @@ export function auditTargetInvariants(target) {
 // offerings in their rows. Every other table the baseline shares with the
 // source is copied, including tables that merely gained a column.
 const DERIVED_FROM_RETIRED_MODEL = new Set(['products', 'prices', 'media_placements', 'resource_localizations'])
+// The one table whose tenant lived only in `site_id`, so its rows cannot be
+// copied column-for-column — the organization has to be read off the site
+// first. deriveOrganizations inserts them.
+const DERIVED_FROM_SITES = new Set(['public_resource_cache_invalidations'])
 const RESERVATION_DURATION_MINUTES = 120
 const WEEKDAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday']
 const EMPTY_JSON = new Set(['[]', '{}', 'null'])
@@ -368,6 +373,125 @@ function deriveCatalog(stage, now, record) {
  * with the people, and placements at `items.<index>.image`. Nothing is
  * invented — every embedded asset already has the placement it names.
  */
+/**
+ * `sites` is gone: an organization and a site were the same business wearing two
+ * records, and the site's half is now the organization's own columns (#1050).
+ *
+ * The plain copy cannot do this. Those columns are new to `organization`, so a
+ * copy gives every tenant the schema's defaults — a blank settings_json, the
+ * `saya-theme-v1` theme, `restaurant` — silently replacing every tenant's real
+ * configuration with a plausible-looking one. They are read across from `sites`
+ * here instead, and the source `sites` row is the only place they exist.
+ *
+ * `organization.name` takes `sites.brand_name`. The organization's own name
+ * disagreed with it on four of six tenants and rendered nowhere a customer
+ * looks, while `brand_name` is what every tenant's website puts in og:site_name.
+ * One of them was wrong and it was not the one on the website.
+ */
+function deriveOrganizations(stage, record) {
+  const SITE_COLUMNS = [
+    'settings_json', 'integrations_json', 'theme_id', 'subdomain', 'brand_description',
+    'contact_email', 'contact_phone', 'default_currency', 'status', 'onboarding_status',
+    'url_structure', 'vertical', 'last_published_at', 'updated_at', 'updated_by',
+    'seo_title', 'seo_description', 'canonical_url', 'robots', 'social_facebook_url',
+    'social_instagram_url', 'social_tiktok_url', 'feature_overrides', 'analytics_data_start_at',
+  ]
+
+  // One site per organization is what the data has always held, and the whole
+  // change rests on it. A second site would mean one of them silently losing its
+  // configuration, so this fails rather than picking.
+  const doubled = stage.prepare(`SELECT organization_id, count(*) AS n FROM old.sites GROUP BY organization_id HAVING n > 1`).all()
+  assert(doubled.length === 0, `Organizations with more than one site cannot be collapsed: ${doubled.map(row => row.organization_id).join(', ')}`)
+  const orphanOrgs = stage.prepare(`SELECT id FROM main.organization WHERE id NOT IN (SELECT organization_id FROM old.sites)`).all()
+  assert(orphanOrgs.length === 0, `Organizations with no site have no configuration to carry: ${orphanOrgs.map(row => row.id).join(', ')}`)
+
+  const assignments = SITE_COLUMNS.map(name => `${qi(name)} = (SELECT s.${qi(name)} FROM old.sites s WHERE s.organization_id = main.organization.id)`)
+  assignments.push(`"name" = (SELECT s."brand_name" FROM old.sites s WHERE s.organization_id = main.organization.id)`)
+  record('organizations_absorb_their_site', stage.prepare(`UPDATE main.organization SET ${assignments.join(', ')}`).run().changes)
+
+  // Three tables scoped their rows by site alone and left organization_id NULL —
+  // analytics_events for 36,605 of them. Dropping site_id without reading the
+  // organization off it first is how those rows would lose their tenant.
+  for (const table of ['analytics_events', 'mcp_tool_call_events', 'activity_entries']) {
+    record(`${table}_take_their_organization_from_their_site`, stage.prepare(`
+      UPDATE main.${qi(table)} SET organization_id = (
+        SELECT s.organization_id FROM old.${qi(table)} t JOIN old.sites s ON s.id = t.site_id WHERE t.id = main.${qi(table)}.id
+      ) WHERE organization_id IS NULL`).run().changes)
+  }
+  // A row that never named a tenant still does not — an MCP call made before
+  // sign-in, a global activity entry. What must not happen is a row that DID
+  // name one arriving without it, which is the whole risk of dropping site_id.
+  for (const table of ['analytics_events', 'mcp_tool_call_events', 'activity_entries']) {
+    const stranded = stage.prepare(`
+      SELECT count(*) AS n FROM main.${qi(table)} t
+       WHERE t.organization_id IS NULL
+         AND EXISTS (SELECT 1 FROM old.${qi(table)} o WHERE o.id = t.id AND o.site_id IS NOT NULL)`).get().n
+    assert(stranded === 0, `${table}: ${stranded} rows named a site but have no organization after derivation`)
+  }
+
+  // The one table that carried a site and no organization, so its rows are
+  // inserted here with the organization read off the site rather than copied.
+  record('cache_invalidations_take_their_organization_from_their_site', stage.prepare(`
+    INSERT INTO main.public_resource_cache_invalidations
+      (id, organization_id, reason, status, attempt_count, claimed_at, processed_at, last_error, created_at)
+    SELECT c.id, s.organization_id, c.reason, c.status, c.attempt_count, c.claimed_at, c.processed_at, c.last_error, c.created_at
+      FROM old.public_resource_cache_invalidations c
+      JOIN old.sites s ON s.id = c.site_id`).run().changes)
+  const strandedInvalidations = stage.prepare(`
+    SELECT count(*) AS n FROM old.public_resource_cache_invalidations c
+     WHERE c.site_id NOT IN (SELECT id FROM old.sites)`).get().n
+  assert(strandedInvalidations === 0, `${strandedInvalidations} cache invalidations name a site that does not exist`)
+
+  // Same for a localization whose resource is the `site`: the resource is the
+  // organization, and resource_id named the site.
+  record('site_localizations_are_organization_localizations', stage.prepare(`
+    UPDATE main.resource_localizations SET resource_type = 'organization', resource_id = organization_id
+     WHERE resource_type = 'site'`).run().changes)
+
+  // A media placement owned by a `site` is owned by the organization. Its
+  // owner_id named the site, so it is re-pointed as well as renamed — a rename
+  // alone would leave every logo, favicon and social card owned by an id that
+  // no longer exists.
+  record('site_media_placements_are_organization_placements', stage.prepare(`
+    UPDATE main.media_placements SET owner_type = 'organization', owner_id = organization_id
+     WHERE owner_type = 'site'`).run().changes)
+
+  // `site` was the commonest activity scope. Those entries are organization
+  // entries now; the scope_kind CHECK no longer has a `site` to name.
+  record('site_scoped_activity_is_organization_scoped', stage.prepare(
+    `UPDATE main.activity_entries SET scope_kind = 'organization' WHERE scope_kind = 'site'`).run().changes)
+
+  // A team per site existed only because a site did. The membership it carried is
+  // real access, so it expands into that organization's location teams rather
+  // than being dropped — one active editor holds a site team and no location
+  // team, and would otherwise lose every location on the day this ships.
+  record('site_team_membership_expands_to_locations', stage.prepare(`
+    INSERT OR IGNORE INTO main.teamMember (id, teamId, userId, createdAt)
+    SELECT lower(hex(randomblob(16))), lt.id, tm.userId, tm.createdAt
+      FROM old.teamMember tm
+      JOIN old.team st ON st.id = tm.teamId AND st.id LIKE 'site:%'
+      JOIN old.business_locations bl ON bl.organization_id = st.organizationId
+      JOIN old.team lt ON lt.id = 'location:' || bl.id`).run().changes)
+  const unmapped = stage.prepare(`
+    SELECT tm.userId FROM old.teamMember tm JOIN old.team st ON st.id = tm.teamId AND st.id LIKE 'site:%'
+     WHERE NOT EXISTS (SELECT 1 FROM main.teamMember m JOIN main.team lt ON lt.id = m.teamId
+                        WHERE m.userId = tm.userId AND lt.organizationId = st.organizationId AND lt.id LIKE 'location:%')`).all()
+  assert(unmapped.length === 0, `Site-team members with nowhere to land: ${unmapped.map(row => row.userId).join(', ')}`)
+  // An invitation can name the team it grants. A *pending* one naming a site team
+  // would lose its scope the moment it were accepted, so that fails rather than
+  // being quietly widened; an accepted one is a historical record whose team is
+  // gone, and the membership it produced has already been expanded above.
+  const pendingSiteInvites = stage.prepare(`
+    SELECT email FROM main.invitation WHERE teamId LIKE 'site:%' AND status = 'pending'`).all()
+  assert(pendingSiteInvites.length === 0,
+    `Pending invitations scoped to a site team: ${pendingSiteInvites.map(row => row.email).join(', ')}`)
+  record('accepted_site_team_invitations_lose_their_team', stage.prepare(
+    `UPDATE main.invitation SET teamId = NULL WHERE teamId LIKE 'site:%'`).run().changes)
+
+  record('site_teams_removed', stage.prepare(`DELETE FROM main.team WHERE id LIKE 'site:%'`).run().changes)
+  stage.prepare(`DELETE FROM main.teamMember WHERE teamId NOT IN (SELECT id FROM main.team)`).run()
+}
+
 function deriveCanonicalContentBlocks(stage, record) {
   const rows = stage.prepare(`SELECT b.id, b.document_id, b.type, b.position, b.data_json, b.created_at, b.updated_at, d.locale
     FROM content_blocks b JOIN content_documents d ON d.id = b.document_id ORDER BY b.document_id, b.position`).all()
@@ -959,6 +1083,7 @@ export function rebaseline(sourcePath, targetPath, { payloadPath = null, without
     const names = tableNames(stage)
     const sourceTables = tableNames(source)
     const reshapes = sourceTables.includes('offerings')
+    const collapsesSites = sourceTables.includes('sites')
     // Tables and columns the current schema no longer has are retired features; their
     // rows are derived or dropped, and the manifest names them.
     manifest.retired_tables = sourceTables.filter(table => !names.includes(table))
@@ -966,7 +1091,7 @@ export function rebaseline(sourcePath, targetPath, { payloadPath = null, without
     manifest.added_columns = {}
     const derived = []
     for (const table of names) {
-      if (!sourceTables.includes(table) || (reshapes && DERIVED_FROM_RETIRED_MODEL.has(table))) { derived.push(table); continue }
+      if (!sourceTables.includes(table) || (reshapes && DERIVED_FROM_RETIRED_MODEL.has(table)) || (collapsesSites && DERIVED_FROM_SITES.has(table))) { derived.push(table); continue }
       const targetColumns = columns(stage, table)
       const sourceColumns = columns(source, table)
       const retired = sourceColumns.filter(name => !targetColumns.includes(name))
@@ -984,6 +1109,7 @@ export function rebaseline(sourcePath, targetPath, { payloadPath = null, without
     manifest.derived_tables = derived
     for (const table of names) manifest.tables.push({ table, source_rows: stage.prepare(`SELECT count(*) AS n FROM main.${qi(table)}`).get().n })
     if (reshapes) deriveCatalog(stage, now, (name, count) => { manifest.derived[name] = count })
+    if (collapsesSites) deriveOrganizations(stage, (name, count) => { manifest.derived[name] = count })
     for (const transform of TRANSFORMS) {
       // A transform that folds a retiring column reads it from the attached
       // source. A source that never had it — a newer export, or the baseline

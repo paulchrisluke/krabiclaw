@@ -1,5 +1,5 @@
 export const MEDIA_PLACEMENT_SLOTS = {
-  site: ['logo', 'logo_dark', 'favicon', 'social_share', 'social_card', 'compliance_document'],
+  organization: ['logo', 'logo_dark', 'favicon', 'social_share', 'social_card', 'compliance_document'],
   business_location: ['hero', 'gallery', 'social_card'],
   product: ['image', 'gallery', 'social_card'],
   content_document: ['cover', 'gallery', 'social_card'],
@@ -11,7 +11,7 @@ export const MEDIA_PLACEMENT_SLOTS = {
 export type MediaPlacementOwnerType = keyof typeof MEDIA_PLACEMENT_SLOTS
 
 export const EDITABLE_MEDIA_PLACEMENT_OWNERS = [
-  'site', 'business_location', 'product', 'content_document',
+  'organization', 'business_location', 'product', 'content_document',
   'content_block', 'review_request',
 ] as const satisfies readonly MediaPlacementOwnerType[]
 
@@ -35,7 +35,7 @@ const INDEXED_SLOTS = [
 const ORDERED_PLACEMENTS = new Set([
   'business_location:gallery', 'product:gallery', 'content_document:gallery',
   'content_block:gallery', 'review:gallery', 'review_request:gallery',
-  'site:compliance_document',
+  'organization:compliance_document',
 ])
 
 /**

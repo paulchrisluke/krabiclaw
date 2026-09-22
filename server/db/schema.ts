@@ -698,7 +698,7 @@ export const collections = sqliteTable("collections", {
 	foreignKey({ columns: [table.organization_id, table.location_id], foreignColumns: [business_locations.organization_id, business_locations.id], name: "collections_location_scope_fk" }).onDelete("cascade"),
 	unique("collections_org_id_unique").on(table.organization_id, table.id),
 	uniqueIndex("collections_org_slug_unique").on(table.slug).where(sql`location_id IS NULL`),
-	uniqueIndex("collections_location_slug_unique").on(table.location_id, table.slug).where(sql`location_id IS NOT NULL`),
+	uniqueIndex("collections_location_slug_unique").on(table.organization_id, table.location_id, table.slug).where(sql`location_id IS NOT NULL`),
 	index("collections_org_sort_idx").on(table.location_id, table.sort_order),
 	check("collections_name_not_blank_check", sql`trim(name) <> ''`),
 	check("collections_slug_check", sql`slug <> '' AND slug = lower(slug) AND slug NOT GLOB '*[^a-z0-9-]*' AND slug NOT LIKE '-%' AND slug NOT LIKE '%-' AND slug NOT LIKE '%--%'`),
@@ -1604,7 +1604,7 @@ export const review_requests = sqliteTable("review_requests", {
 	uniqueIndex("idx_review_requests_active_booking_unique")
 		.on(table.booking_type, table.booking_id)
 		.where(sql`revoked_at IS NULL AND submitted_at IS NULL`),
-	index("idx_review_requests_send_due").on(table.first_sent_at, table.reminder_sent_at, table.submitted_at, table.expires_at),
+	index("idx_review_requests_send_due").on(table.organization_id, table.first_sent_at, table.reminder_sent_at, table.submitted_at, table.expires_at),
 	index("review_requests_organization_id_idx").on(table.organization_id),
 ]);
 
@@ -2003,19 +2003,19 @@ export const content_documents = sqliteTable("content_documents", {
 	// At most one canonical product page per site per product. Scoped to root
 	// rows so locale representations are unaffected, and per site so two sites
 	// publishing one Product each get their own canonical page.
-	uniqueIndex("content_documents_product_root_unique").on(table.product_id).where(sql`row_role = 'root' AND product_id IS NOT NULL`),
+	uniqueIndex("content_documents_product_root_unique").on(table.organization_id, table.product_id).where(sql`row_role = 'root' AND product_id IS NOT NULL`),
 	unique("content_documents_scope_role_unique").on(table.organization_id, table.id, table.row_role, table.kind),
 	foreignKey({ columns: [table.organization_id, table.root_id, table.root_role, table.kind], foreignColumns: [table.organization_id, table.id, table.row_role, table.kind], name: "content_documents_root_scope_fk" }).onDelete("cascade"),
 	foreignKey({ columns: [table.organization_id, table.locale], foreignColumns: [site_locales.organization_id, site_locales.locale], name: "content_documents_locale_scope_fk" }).onDelete("cascade"),
 	uniqueIndex("content_documents_root_locale_unique").on(table.root_id, table.locale).where(sql`row_role = 'representation'`),
-	uniqueIndex("content_documents_route_unique").on(table.locale, table.path).where(sql`row_role IN ('root','representation') AND path IS NOT NULL`),
-	uniqueIndex("content_documents_slug_unique").on(table.kind, table.locale, table.slug).where(sql`row_role IN ('root','representation') AND slug IS NOT NULL`),
+	uniqueIndex("content_documents_route_unique").on(table.organization_id, table.locale, table.path).where(sql`row_role IN ('root','representation') AND path IS NOT NULL`),
+	uniqueIndex("content_documents_slug_unique").on(table.organization_id, table.kind, table.locale, table.slug).where(sql`row_role IN ('root','representation') AND slug IS NOT NULL`),
 	uniqueIndex("content_documents_links_org_unique").on(table.organization_id).where(sql`row_role = 'root' AND kind = 'page' AND json_extract(metadata_json, '$.recipe') = 'links'`),
 	index("content_documents_org_kind_status_idx").on(table.kind, table.row_role, table.status, table.sort_order),
 	index("content_documents_location_kind_status_idx").on(table.location_id, table.kind, table.row_role, table.status, table.sort_order),
 	index("content_documents_schedule_idx").on(table.kind, table.status, table.scheduled_for).where(sql`row_role = 'root' AND status = 'scheduled'`),
-	index("content_documents_facebook_post_idx").on(sql`(metadata_json ->> '$.channels.facebook.provider_post_id')`).where(sql`row_role = 'root' AND kind = 'social_post'`),
-	index("content_documents_instagram_post_idx").on(sql`(metadata_json ->> '$.channels.instagram.provider_post_id')`).where(sql`row_role = 'root' AND kind = 'social_post'`),
+	index("content_documents_facebook_post_idx").on(table.organization_id, sql`(metadata_json ->> '$.channels.facebook.provider_post_id')`).where(sql`row_role = 'root' AND kind = 'social_post'`),
+	index("content_documents_instagram_post_idx").on(table.organization_id, sql`(metadata_json ->> '$.channels.instagram.provider_post_id')`).where(sql`row_role = 'root' AND kind = 'social_post'`),
 	check("content_documents_metadata_check", sql`json_valid(metadata_json) AND json_type(metadata_json) IS 'object'`),
 	check("content_documents_role_check", sql`(row_role = 'root' AND root_id IS NULL AND root_role IS NULL AND locale = 'en') OR (row_role = 'representation' AND root_id IS NOT NULL AND root_id <> id AND root_role = 'root' AND locale IS NOT NULL AND locale <> 'en' AND product_id IS NULL AND location_id IS NULL AND scope_path IS NULL AND status IS NULL AND visibility IS NULL AND source IS NULL AND author_id IS NULL AND published_at IS NULL AND first_published_at IS NULL AND scheduled_for IS NULL)`),
 	check("content_documents_path_check", sql`path IS NULL OR (path LIKE '/%' AND path NOT LIKE '//%')`),
@@ -2103,6 +2103,9 @@ export const content_blocks = sqliteTable("content_blocks", {
 
 export const public_resource_cache_invalidations = sqliteTable("public_resource_cache_invalidations", {
 	id: text().primaryKey(),
+	// The only table that carried `site_id` and no `organization_id`, so this is
+	// the one place where the tenant is derived rather than already present.
+	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
 	reason: text().notNull(),
 	status: text().default("pending").notNull(),
 	attempt_count: integer().default(0).notNull(),
@@ -2113,7 +2116,7 @@ export const public_resource_cache_invalidations = sqliteTable("public_resource_
 }, (table) => [
 	check("public_resource_cache_invalidations_instants_check", sql`(claimed_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', claimed_at, '+0 days') IS claimed_at) AND (processed_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', processed_at, '+0 days') IS processed_at) AND (created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at)`),
 	index("public_resource_cache_invalidations_status_idx").on(table.status, table.created_at),
-	index("public_resource_cache_invalidations_org_idx").on(table.status),
+	index("public_resource_cache_invalidations_org_idx").on(table.organization_id, table.status),
 	check("public_resource_cache_invalidations_attempt_count_check", sql`attempt_count >= 0`),
 ]);
 
@@ -2141,8 +2144,8 @@ export const analytics_events = sqliteTable("analytics_events", {
   index("analytics_events_org_session_idx").on(table.kind, table.session_id),
   index("analytics_events_org_visitor_idx").on(table.kind, table.visitor_id),
   index("analytics_events_conversion_name_idx").on(table.kind, sql`(payload_json ->> '$.event_name')`, table.created_at),
-  index("analytics_events_conversion_entity_idx").on(sql`(payload_json ->> '$.entity_type')`, sql`(payload_json ->> '$.entity_id')`).where(sql`kind = 'conversion'`),
-  uniqueIndex("analytics_events_conversion_entity_unique").on(sql`(payload_json ->> '$.event_name')`, sql`(payload_json ->> '$.entity_type')`, sql`(payload_json ->> '$.entity_id')`).where(sql`kind = 'conversion' AND (payload_json ->> '$.entity_type') IS NOT NULL AND (payload_json ->> '$.entity_id') IS NOT NULL AND (payload_json ->> '$.event_name') IN ('contact_submit', 'reservation_submit', 'booking_submit')`),
+  index("analytics_events_conversion_entity_idx").on(table.organization_id, sql`(payload_json ->> '$.entity_type')`, sql`(payload_json ->> '$.entity_id')`).where(sql`kind = 'conversion'`),
+  uniqueIndex("analytics_events_conversion_entity_unique").on(table.organization_id, sql`(payload_json ->> '$.event_name')`, sql`(payload_json ->> '$.entity_type')`, sql`(payload_json ->> '$.entity_id')`).where(sql`kind = 'conversion' AND (payload_json ->> '$.entity_type') IS NOT NULL AND (payload_json ->> '$.entity_id') IS NOT NULL AND (payload_json ->> '$.event_name') IN ('contact_submit', 'reservation_submit', 'booking_submit')`),
 ]);
 
 export const analytics_summaries = sqliteTable("analytics_summaries", {
@@ -2174,10 +2177,10 @@ export const analytics_summaries = sqliteTable("analytics_summaries", {
   check("analytics_summaries_dimension_key_check", sql`kind != 'dimension_day' OR (json_valid(key) AND json_type(key) IS 'array' AND json_array_length(key) = 3
     AND json_type(key, '$[0]') IS 'text' AND (key ->> '$[0]') IN ('country', 'city', 'device', 'referrer')
     AND json_type(key, '$[1]') IS 'text' AND json_type(key, '$[2]') IS 'text')`),
-  uniqueIndex("analytics_summaries_grain_unique").on(table.kind, table.date, table.key),
-  index("analytics_summaries_session_started_idx").on(sql`(payload_json ->> '$.started_at')`).where(sql`kind = 'session'`),
-  index("analytics_summaries_session_seen_idx").on(sql`(payload_json ->> '$.last_seen_at')`).where(sql`kind = 'session'`),
-  index("analytics_summaries_session_visitor_idx").on(sql`(payload_json ->> '$.visitor_id')`, sql`(payload_json ->> '$.started_at')`).where(sql`kind = 'session'`),
+  uniqueIndex("analytics_summaries_grain_unique").on(table.organization_id, table.kind, table.date, table.key),
+  index("analytics_summaries_session_started_idx").on(table.organization_id, sql`(payload_json ->> '$.started_at')`).where(sql`kind = 'session'`),
+  index("analytics_summaries_session_seen_idx").on(table.organization_id, sql`(payload_json ->> '$.last_seen_at')`).where(sql`kind = 'session'`),
+  index("analytics_summaries_session_visitor_idx").on(table.organization_id, sql`(payload_json ->> '$.visitor_id')`, sql`(payload_json ->> '$.started_at')`).where(sql`kind = 'session'`),
 ]);
 
 

@@ -83,8 +83,8 @@ CREATE INDEX `analytics_events_org_kind_created_idx` ON `analytics_events` (`kin
 CREATE INDEX `analytics_events_org_session_idx` ON `analytics_events` (`kind`,`session_id`);--> statement-breakpoint
 CREATE INDEX `analytics_events_org_visitor_idx` ON `analytics_events` (`kind`,`visitor_id`);--> statement-breakpoint
 CREATE INDEX `analytics_events_conversion_name_idx` ON `analytics_events` (`kind`,(payload_json ->> '$.event_name'),`created_at`);--> statement-breakpoint
-CREATE INDEX `analytics_events_conversion_entity_idx` ON `analytics_events` ((payload_json ->> '$.entity_type'),(payload_json ->> '$.entity_id')) WHERE kind = 'conversion';--> statement-breakpoint
-CREATE UNIQUE INDEX `analytics_events_conversion_entity_unique` ON `analytics_events` ((payload_json ->> '$.event_name'),(payload_json ->> '$.entity_type'),(payload_json ->> '$.entity_id')) WHERE kind = 'conversion' AND (payload_json ->> '$.entity_type') IS NOT NULL AND (payload_json ->> '$.entity_id') IS NOT NULL AND (payload_json ->> '$.event_name') IN ('contact_submit', 'reservation_submit', 'booking_submit');--> statement-breakpoint
+CREATE INDEX `analytics_events_conversion_entity_idx` ON `analytics_events` (`organization_id`,(payload_json ->> '$.entity_type'),(payload_json ->> '$.entity_id')) WHERE kind = 'conversion';--> statement-breakpoint
+CREATE UNIQUE INDEX `analytics_events_conversion_entity_unique` ON `analytics_events` (`organization_id`,(payload_json ->> '$.event_name'),(payload_json ->> '$.entity_type'),(payload_json ->> '$.entity_id')) WHERE kind = 'conversion' AND (payload_json ->> '$.entity_type') IS NOT NULL AND (payload_json ->> '$.entity_id') IS NOT NULL AND (payload_json ->> '$.event_name') IN ('contact_submit', 'reservation_submit', 'booking_submit');--> statement-breakpoint
 CREATE TABLE `analytics_summaries` (
 	`id` text PRIMARY KEY NOT NULL,
 	`kind` text NOT NULL,
@@ -116,10 +116,10 @@ CREATE TABLE `analytics_summaries` (
     AND json_type(key, '$[1]') IS 'text' AND json_type(key, '$[2]') IS 'text'))
 );
 --> statement-breakpoint
-CREATE UNIQUE INDEX `analytics_summaries_grain_unique` ON `analytics_summaries` (`kind`,`date`,`key`);--> statement-breakpoint
-CREATE INDEX `analytics_summaries_session_started_idx` ON `analytics_summaries` ((payload_json ->> '$.started_at')) WHERE kind = 'session';--> statement-breakpoint
-CREATE INDEX `analytics_summaries_session_seen_idx` ON `analytics_summaries` ((payload_json ->> '$.last_seen_at')) WHERE kind = 'session';--> statement-breakpoint
-CREATE INDEX `analytics_summaries_session_visitor_idx` ON `analytics_summaries` ((payload_json ->> '$.visitor_id'),(payload_json ->> '$.started_at')) WHERE kind = 'session';--> statement-breakpoint
+CREATE UNIQUE INDEX `analytics_summaries_grain_unique` ON `analytics_summaries` (`organization_id`,`kind`,`date`,`key`);--> statement-breakpoint
+CREATE INDEX `analytics_summaries_session_started_idx` ON `analytics_summaries` (`organization_id`,(payload_json ->> '$.started_at')) WHERE kind = 'session';--> statement-breakpoint
+CREATE INDEX `analytics_summaries_session_seen_idx` ON `analytics_summaries` (`organization_id`,(payload_json ->> '$.last_seen_at')) WHERE kind = 'session';--> statement-breakpoint
+CREATE INDEX `analytics_summaries_session_visitor_idx` ON `analytics_summaries` (`organization_id`,(payload_json ->> '$.visitor_id'),(payload_json ->> '$.started_at')) WHERE kind = 'session';--> statement-breakpoint
 CREATE TABLE `bookings` (
 	`id` text PRIMARY KEY NOT NULL,
 	`organization_id` text NOT NULL,
@@ -264,7 +264,7 @@ CREATE TABLE `collections` (
 );
 --> statement-breakpoint
 CREATE UNIQUE INDEX `collections_org_slug_unique` ON `collections` (`slug`) WHERE location_id IS NULL;--> statement-breakpoint
-CREATE UNIQUE INDEX `collections_location_slug_unique` ON `collections` (`location_id`,`slug`) WHERE location_id IS NOT NULL;--> statement-breakpoint
+CREATE UNIQUE INDEX `collections_location_slug_unique` ON `collections` (`organization_id`,`location_id`,`slug`) WHERE location_id IS NOT NULL;--> statement-breakpoint
 CREATE INDEX `collections_org_sort_idx` ON `collections` (`location_id`,`sort_order`);--> statement-breakpoint
 CREATE UNIQUE INDEX `collections_org_id_unique` ON `collections` (`organization_id`,`id`);--> statement-breakpoint
 CREATE TABLE `content_blocks` (
@@ -358,16 +358,16 @@ CREATE TABLE `content_documents` (
 	CONSTRAINT "content_documents_channel_instagram_check" CHECK(kind <> 'social_post' OR row_role <> 'root' OR (json_type(metadata_json, '$.channels.instagram') IS NULL OR (json_type(metadata_json, '$.channels.instagram') IS 'object' AND json_type(metadata_json, '$.channels.instagram.created_at') IS 'text' AND (((metadata_json ->> '$.channels.instagram.status') = 'pending' AND (metadata_json ->> '$.channels.instagram.provider_post_id') IS NULL AND (metadata_json ->> '$.channels.instagram.published_at') IS NULL AND (metadata_json ->> '$.channels.instagram.error_message') IS NULL) OR ((metadata_json ->> '$.channels.instagram.status') = 'published' AND (metadata_json ->> '$.channels.instagram.provider_post_id') IS NOT NULL AND (metadata_json ->> '$.channels.instagram.published_at') IS NOT NULL AND (metadata_json ->> '$.channels.instagram.error_message') IS NULL) OR ((metadata_json ->> '$.channels.instagram.status') IN ('failed','skipped') AND (metadata_json ->> '$.channels.instagram.provider_post_id') IS NULL AND (metadata_json ->> '$.channels.instagram.published_at') IS NULL AND (metadata_json ->> '$.channels.instagram.error_message') IS NOT NULL))) IS 1))
 );
 --> statement-breakpoint
-CREATE UNIQUE INDEX `content_documents_product_root_unique` ON `content_documents` (`product_id`) WHERE row_role = 'root' AND product_id IS NOT NULL;--> statement-breakpoint
+CREATE UNIQUE INDEX `content_documents_product_root_unique` ON `content_documents` (`organization_id`,`product_id`) WHERE row_role = 'root' AND product_id IS NOT NULL;--> statement-breakpoint
 CREATE UNIQUE INDEX `content_documents_root_locale_unique` ON `content_documents` (`root_id`,`locale`) WHERE row_role = 'representation';--> statement-breakpoint
-CREATE UNIQUE INDEX `content_documents_route_unique` ON `content_documents` (`locale`,`path`) WHERE row_role IN ('root','representation') AND path IS NOT NULL;--> statement-breakpoint
-CREATE UNIQUE INDEX `content_documents_slug_unique` ON `content_documents` (`kind`,`locale`,`slug`) WHERE row_role IN ('root','representation') AND slug IS NOT NULL;--> statement-breakpoint
+CREATE UNIQUE INDEX `content_documents_route_unique` ON `content_documents` (`organization_id`,`locale`,`path`) WHERE row_role IN ('root','representation') AND path IS NOT NULL;--> statement-breakpoint
+CREATE UNIQUE INDEX `content_documents_slug_unique` ON `content_documents` (`organization_id`,`kind`,`locale`,`slug`) WHERE row_role IN ('root','representation') AND slug IS NOT NULL;--> statement-breakpoint
 CREATE UNIQUE INDEX `content_documents_links_org_unique` ON `content_documents` (`organization_id`) WHERE row_role = 'root' AND kind = 'page' AND json_extract(metadata_json, '$.recipe') = 'links';--> statement-breakpoint
 CREATE INDEX `content_documents_org_kind_status_idx` ON `content_documents` (`kind`,`row_role`,`status`,`sort_order`);--> statement-breakpoint
 CREATE INDEX `content_documents_location_kind_status_idx` ON `content_documents` (`location_id`,`kind`,`row_role`,`status`,`sort_order`);--> statement-breakpoint
 CREATE INDEX `content_documents_schedule_idx` ON `content_documents` (`kind`,`status`,`scheduled_for`) WHERE row_role = 'root' AND status = 'scheduled';--> statement-breakpoint
-CREATE INDEX `content_documents_facebook_post_idx` ON `content_documents` ((metadata_json ->> '$.channels.facebook.provider_post_id')) WHERE row_role = 'root' AND kind = 'social_post';--> statement-breakpoint
-CREATE INDEX `content_documents_instagram_post_idx` ON `content_documents` ((metadata_json ->> '$.channels.instagram.provider_post_id')) WHERE row_role = 'root' AND kind = 'social_post';--> statement-breakpoint
+CREATE INDEX `content_documents_facebook_post_idx` ON `content_documents` (`organization_id`,(metadata_json ->> '$.channels.facebook.provider_post_id')) WHERE row_role = 'root' AND kind = 'social_post';--> statement-breakpoint
+CREATE INDEX `content_documents_instagram_post_idx` ON `content_documents` (`organization_id`,(metadata_json ->> '$.channels.instagram.provider_post_id')) WHERE row_role = 'root' AND kind = 'social_post';--> statement-breakpoint
 CREATE UNIQUE INDEX `content_documents_scope_role_unique` ON `content_documents` (`organization_id`,`id`,`row_role`,`kind`);--> statement-breakpoint
 CREATE TABLE `customers` (
 	`id` text PRIMARY KEY NOT NULL,
@@ -1152,6 +1152,7 @@ CREATE UNIQUE INDEX `products_org_id_unique` ON `products` (`organization_id`,`i
 CREATE UNIQUE INDEX `products_org_slug_unique` ON `products` (`organization_id`,`slug`);--> statement-breakpoint
 CREATE TABLE `public_resource_cache_invalidations` (
 	`id` text PRIMARY KEY NOT NULL,
+	`organization_id` text NOT NULL,
 	`reason` text NOT NULL,
 	`status` text DEFAULT 'pending' NOT NULL,
 	`attempt_count` integer DEFAULT 0 NOT NULL,
@@ -1159,12 +1160,13 @@ CREATE TABLE `public_resource_cache_invalidations` (
 	`processed_at` text,
 	`last_error` text,
 	`created_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
+	FOREIGN KEY (`organization_id`) REFERENCES `organization`(`id`) ON UPDATE no action ON DELETE cascade,
 	CONSTRAINT "public_resource_cache_invalidations_instants_check" CHECK((claimed_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', claimed_at, '+0 days') IS claimed_at) AND (processed_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', processed_at, '+0 days') IS processed_at) AND (created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at)),
 	CONSTRAINT "public_resource_cache_invalidations_attempt_count_check" CHECK(attempt_count >= 0)
 );
 --> statement-breakpoint
 CREATE INDEX `public_resource_cache_invalidations_status_idx` ON `public_resource_cache_invalidations` (`status`,`created_at`);--> statement-breakpoint
-CREATE INDEX `public_resource_cache_invalidations_org_idx` ON `public_resource_cache_invalidations` (`status`);--> statement-breakpoint
+CREATE INDEX `public_resource_cache_invalidations_org_idx` ON `public_resource_cache_invalidations` (`organization_id`,`status`);--> statement-breakpoint
 CREATE TABLE `rate_limits` (
 	`key` text PRIMARY KEY NOT NULL,
 	`count` integer DEFAULT 0 NOT NULL,
@@ -1289,7 +1291,7 @@ CREATE TABLE `review_requests` (
 --> statement-breakpoint
 CREATE UNIQUE INDEX `review_requests_token_hash_unique` ON `review_requests` (`token_hash`);--> statement-breakpoint
 CREATE UNIQUE INDEX `idx_review_requests_active_booking_unique` ON `review_requests` (`booking_type`,`booking_id`) WHERE revoked_at IS NULL AND submitted_at IS NULL;--> statement-breakpoint
-CREATE INDEX `idx_review_requests_send_due` ON `review_requests` (`first_sent_at`,`reminder_sent_at`,`submitted_at`,`expires_at`);--> statement-breakpoint
+CREATE INDEX `idx_review_requests_send_due` ON `review_requests` (`organization_id`,`first_sent_at`,`reminder_sent_at`,`submitted_at`,`expires_at`);--> statement-breakpoint
 CREATE INDEX `review_requests_organization_id_idx` ON `review_requests` (`organization_id`);--> statement-breakpoint
 CREATE TABLE `reviews` (
 	`id` text PRIMARY KEY NOT NULL,

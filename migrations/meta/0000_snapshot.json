@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "33548411-f141-4b80-96dc-237308b951a0",
+  "id": "62adb895-fa60-444c-a23e-d64fded8ec25",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "account": {
@@ -551,6 +551,7 @@
         "analytics_events_conversion_entity_idx": {
           "name": "analytics_events_conversion_entity_idx",
           "columns": [
+            "organization_id",
             "(payload_json ->> '$.entity_type')",
             "(payload_json ->> '$.entity_id')"
           ],
@@ -560,6 +561,7 @@
         "analytics_events_conversion_entity_unique": {
           "name": "analytics_events_conversion_entity_unique",
           "columns": [
+            "organization_id",
             "(payload_json ->> '$.event_name')",
             "(payload_json ->> '$.entity_type')",
             "(payload_json ->> '$.entity_id')"
@@ -679,6 +681,7 @@
         "analytics_summaries_grain_unique": {
           "name": "analytics_summaries_grain_unique",
           "columns": [
+            "organization_id",
             "kind",
             "date",
             "key"
@@ -688,6 +691,7 @@
         "analytics_summaries_session_started_idx": {
           "name": "analytics_summaries_session_started_idx",
           "columns": [
+            "organization_id",
             "(payload_json ->> '$.started_at')"
           ],
           "isUnique": false,
@@ -696,6 +700,7 @@
         "analytics_summaries_session_seen_idx": {
           "name": "analytics_summaries_session_seen_idx",
           "columns": [
+            "organization_id",
             "(payload_json ->> '$.last_seen_at')"
           ],
           "isUnique": false,
@@ -704,6 +709,7 @@
         "analytics_summaries_session_visitor_idx": {
           "name": "analytics_summaries_session_visitor_idx",
           "columns": [
+            "organization_id",
             "(payload_json ->> '$.visitor_id')",
             "(payload_json ->> '$.started_at')"
           ],
@@ -1733,6 +1739,7 @@
         "collections_location_slug_unique": {
           "name": "collections_location_slug_unique",
           "columns": [
+            "organization_id",
             "location_id",
             "slug"
           ],
@@ -2226,6 +2233,7 @@
         "content_documents_product_root_unique": {
           "name": "content_documents_product_root_unique",
           "columns": [
+            "organization_id",
             "product_id"
           ],
           "isUnique": true,
@@ -2243,6 +2251,7 @@
         "content_documents_route_unique": {
           "name": "content_documents_route_unique",
           "columns": [
+            "organization_id",
             "locale",
             "path"
           ],
@@ -2252,6 +2261,7 @@
         "content_documents_slug_unique": {
           "name": "content_documents_slug_unique",
           "columns": [
+            "organization_id",
             "kind",
             "locale",
             "slug"
@@ -2301,6 +2311,7 @@
         "content_documents_facebook_post_idx": {
           "name": "content_documents_facebook_post_idx",
           "columns": [
+            "organization_id",
             "(metadata_json ->> '$.channels.facebook.provider_post_id')"
           ],
           "isUnique": false,
@@ -2309,6 +2320,7 @@
         "content_documents_instagram_post_idx": {
           "name": "content_documents_instagram_post_idx",
           "columns": [
+            "organization_id",
             "(metadata_json ->> '$.channels.instagram.provider_post_id')"
           ],
           "isUnique": false,
@@ -8003,6 +8015,13 @@
           "notNull": true,
           "autoincrement": false
         },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
         "reason": {
           "name": "reason",
           "type": "text",
@@ -8068,12 +8087,27 @@
         "public_resource_cache_invalidations_org_idx": {
           "name": "public_resource_cache_invalidations_org_idx",
           "columns": [
+            "organization_id",
             "status"
           ],
           "isUnique": false
         }
       },
-      "foreignKeys": {},
+      "foreignKeys": {
+        "public_resource_cache_invalidations_organization_id_organization_id_fk": {
+          "name": "public_resource_cache_invalidations_organization_id_organization_id_fk",
+          "tableFrom": "public_resource_cache_invalidations",
+          "tableTo": "organization",
+          "columnsFrom": [
+            "organization_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "checkConstraints": {
@@ -8911,6 +8945,7 @@
         "idx_review_requests_send_due": {
           "name": "idx_review_requests_send_due",
           "columns": [
+            "organization_id",
             "first_sent_at",
             "reminder_sent_at",
             "submitted_at",

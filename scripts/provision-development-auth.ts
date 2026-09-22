@@ -89,14 +89,17 @@ INSERT INTO member (id, organizationId, userId, role, createdAt)
 VALUES (${sqlString(`member-${fixture.id}-${membership.organizationId}`)}, ${sqlString(membership.organizationId)}, ${sqlString(fixture.id)}, ${sqlString(membership.role)}, unixepoch())
 ON CONFLICT(id) DO UPDATE SET role = excluded.role;
 `).join('')
-  const teamMemberships = (fixture.siteIds ?? []).map((siteId) => `
+  // Every location team of the named organization. A site team would be one row
+  // and is what this used to write; `sites` is gone, so site-wide reach is
+  // membership in each of that organization's locations.
+  const teamMemberships = (fixture.organizationIds ?? []).map((organizationId) => `
 INSERT OR IGNORE INTO team (id, name, organizationId, createdAt)
-SELECT 'site:' || id, COALESCE(brand_name, id), organization_id, unixepoch()
-FROM sites WHERE id = ${sqlString(siteId)};
-UPDATE sites SET team_id = COALESCE(team_id, 'site:' || id) WHERE id = ${sqlString(siteId)};
+SELECT 'location:' || id, COALESCE(title, id), organization_id, unixepoch()
+FROM business_locations WHERE organization_id = ${sqlString(organizationId)};
+UPDATE business_locations SET team_id = COALESCE(team_id, 'location:' || id) WHERE organization_id = ${sqlString(organizationId)};
 INSERT INTO teamMember (id, teamId, userId, membershipKey, createdAt)
-SELECT ${sqlString(`team-member-${fixture.id}-${siteId}`)}, team_id, ${sqlString(fixture.id)}, team_id || ':' || ${sqlString(fixture.id)}, unixepoch()
-FROM sites WHERE id = ${sqlString(siteId)} AND team_id IS NOT NULL
+SELECT ${sqlString(`team-member-${fixture.id}-`)} || bl.id, bl.team_id, ${sqlString(fixture.id)}, bl.team_id || ':' || ${sqlString(fixture.id)}, unixepoch()
+FROM business_locations bl WHERE bl.organization_id = ${sqlString(organizationId)} AND bl.team_id IS NOT NULL
 ON CONFLICT(id) DO UPDATE SET teamId = excluded.teamId, userId = excluded.userId, membershipKey = excluded.membershipKey;
 `).join('')
 
