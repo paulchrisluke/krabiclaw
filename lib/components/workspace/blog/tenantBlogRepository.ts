@@ -12,8 +12,8 @@ interface TenantBlogRepositoryOptions {
 }
 
 export function tenantBlogRepository({ siteId, orgSlug, siteSlug }: TenantBlogRepositoryOptions & { orgSlug: string; siteSlug: string }): BlogPostRepository {
-  const baseUrl = `/api/editor/sites/${siteId}/blog`
-  const dashboardBaseUrl = `/dashboard/${orgSlug}/sites/${siteSlug}/blog`
+  const baseUrl = `/api/editor/organizations/${siteId}/blog`
+  const dashboardBaseUrl = `/dashboard/${orgSlug}/blog`
   const scope = { orgSlug, siteSlug }
   return {
     listUrl: dashboardBaseUrl,
@@ -52,7 +52,7 @@ export function tenantBlogRepository({ siteId, orgSlug, siteSlug }: TenantBlogRe
 
     async publish(postId: string, input): Promise<BlogLifecycleState> {
       const response = await dashboardFetch<{ success: true; lifecycle: BlogLifecycleState }>(
-        `/api/editor/sites/${siteId}/blog/${postId}/publish`,
+        `/api/editor/organizations/${siteId}/blog/${postId}/publish`,
         scope,
         { method: 'POST', body: input, validate: isBlogLifecycleResponse },
       )

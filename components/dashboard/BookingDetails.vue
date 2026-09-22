@@ -286,7 +286,7 @@ const cancellationSummary = computed(() => booking.value?.policy?.items.find(ite
   ?? 'No cancellation terms have been configured.')
 const messageTo = computed(() => {
   if (!booking.value?.threadId) return null
-  return `/dashboard/${orgSlug.value}/sites/${booking.value.siteSlug}/locations/${booking.value.locationSlug}/messages/${booking.value.threadId}`
+  return `/dashboard/${orgSlug.value}/locations/${booking.value.locationSlug}/messages/${booking.value.threadId}`
 })
 const callTo = computed(() => booking.value?.guestPhone ? `tel:${booking.value.guestPhone}` : null)
 
@@ -504,7 +504,7 @@ async function runAction(action: string) {
   pendingAction.value = action
   actionError.value = null
   try {
-    await dashboardApi(`/api/dashboard/sites/${booking.value.siteId}/guest-threads/${booking.value.threadId}/operations/${action}`, {
+    await dashboardApi(`/api/dashboard/organizations/${booking.value.siteId}/guest-threads/${booking.value.threadId}/operations/${action}`, {
       method: 'POST',
       body: { idempotencyKey: actionAttempt.value.key, ...(note ? { body: note } : {}) },
       validate: (value: unknown): value is { thread: Record<string, unknown> } => isRecord(value) && isRecord(value.thread),

@@ -44,7 +44,7 @@ definePageMeta({ layout: 'dashboard' })
 const route = useRoute()
 const router = useRouter()
 const dashboardApi = useDashboardApi()
-const dashboard = useDashboardSite()
+const dashboard = useDashboardOrganization()
 const { trackSubscriptionCheckoutSuccess } = useAnalytics()
 const { startOrganizationCheckout, openBillingPortal } = useOrganizationSubscription()
 const { plans, displayPrice } = usePlans()
@@ -127,7 +127,7 @@ async function onRowAction(id: string) {
 // One business: the site the subscription is metadata on is the one this
 // dashboard is for.
 async function upgrade(plan: string) {
-  const siteId = dashboard.site.value?.id ?? dashboard.sites.value[0]?.id
+  const siteId = dashboard.organization.value?.id ?? dashboard.sites.value[0]?.id
   if (!siteId) throw new Error('Site context is unavailable')
   await startOrganizationCheckout(siteId, plan)
 }

@@ -54,7 +54,7 @@ import { getErrorMessage } from '~/utils/errors'
 
 // The posts index. Rendered by `posts.vue`, which owns the frame.
 const dashboardApi = useDashboardApi()
-const siteId = await useDashboardSiteId()
+const siteId = await useDashboardOrganizationId()
 const dashboardLocation = useDashboardLocation()
 
 const currentLocationId = computed(() => dashboardLocation.currentLocationId.value)
@@ -90,7 +90,7 @@ const { data, pending, error, refresh } = await useAsyncData(
   postsKey,
   async () => {
     if (!currentLocationId.value) throw createError({ statusCode: 404, statusMessage: 'Location not found' })
-    const response = await dashboardApi<{ posts: ApiRecord[] }>(`/api/editor/sites/${siteId}/posts`, {
+    const response = await dashboardApi<{ posts: ApiRecord[] }>(`/api/editor/organizations/${siteId}/posts`, {
       query: { location_id: currentLocationId.value },
       validate: isPostsResponse,
     })

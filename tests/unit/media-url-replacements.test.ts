@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 
 import { replaceMediaUrls } from '../../scripts/utils/media-url-replacements.mjs'
-import { SiteLinksValidationError, validateLinkDestination } from '../../server/utils/site-links.ts'
+import { SiteLinksValidationError, validateLinkDestination } from '../../server/utils/links-page.ts'
 
 test('replaces media URLs inside nested Markdown strings', () => {
   const source = 'https://images.example.test/legacy/image.webp'

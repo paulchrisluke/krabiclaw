@@ -1,6 +1,6 @@
 import { jsonResponse } from '~/server/utils/api-response'
 import { requireSiteAccess } from '~/server/utils/location-access'
-import { defaultLinksPage, getLinksPage } from '~/server/utils/site-links'
+import { defaultLinksPage, getLinksPage } from '~/server/utils/links-page'
 
 export default defineHandler(async (event) => {
   const organizationId = getRouterParam(event, 'organizationId')

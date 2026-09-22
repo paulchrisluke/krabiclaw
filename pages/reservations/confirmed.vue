@@ -136,7 +136,7 @@ onMounted(async () => {
   if (resId && token) {
     try {
       const res = await $fetch<{ booking: { name: string; starts_at: string; timezone: string; guests: string; location_id?: string | null } }>(
-        `/api/public/sites/${siteId}/booking-requests/${resId}`,
+        `/api/public/booking-requests/${resId}`,
         { headers: { Authorization: `Bearer ${token}` } },
       )
       confirmation.value = {

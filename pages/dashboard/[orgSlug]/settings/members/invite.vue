@@ -36,7 +36,7 @@ definePageMeta({ layout: 'dashboard' })
 
 const route = useRoute()
 const level = useRouteLevel()
-const dashboard = useDashboardSite()
+const dashboard = useDashboardOrganization()
 
 const isOwner = computed(() => dashboard.organization.value?.role === 'owner')
 const BASE_ROLE_OPTIONS = [

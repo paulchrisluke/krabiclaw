@@ -61,16 +61,16 @@ const dashboardApi = useDashboardApi()
 
 const qaId = computed(() => String(route.params.qaId ?? ''))
 const qaPath = computed(() => props.locationId
-  ? `/dashboard/${String(route.params.orgSlug)}/sites/${String(route.params.siteSlug)}/locations/${String(route.params.locationSlug)}/qa`
-  : `/dashboard/${String(route.params.orgSlug)}/sites/${String(route.params.siteSlug)}/qa`)
+  ? `/dashboard/${String(route.params.orgSlug)}/locations/${String(route.params.locationSlug)}/qa`
+  : `/dashboard/${String(route.params.orgSlug)}/qa`)
 const recordPath = computed(() => `${qaPath.value}/${qaId.value}`)
 const level = useRouteLevel()
 
-const siteId = await useDashboardSiteId()
+const siteId = await useDashboardOrganizationId()
 const isNew = computed(() => qaId.value === 'new')
 const qaEndpoint = computed(() => props.locationId
-  ? `/api/editor/sites/${siteId}/locations/${props.locationId}/qa`
-  : `/api/editor/sites/${siteId}/qa`)
+  ? `/api/editor/organizations/${siteId}/locations/${props.locationId}/qa`
+  : `/api/editor/organizations/${siteId}/qa`)
 
 const detailKey = computed(() => level.child.value)
 /** With nothing open the pane still shows the first section rather than empty space. */
@@ -130,7 +130,7 @@ const qaLocalizationFields = computed(() => [
   { key: 'title', label: 'Question', source: record.value?.question },
   { key: 'summary', label: 'Answer', source: record.value?.answer, multiline: true, rows: 4 },
 ])
-const siteLocalizationSettingsPath = computed(() => `/dashboard/${route.params.orgSlug}/sites/${route.params.siteSlug}/settings/localization`)
+const siteLocalizationSettingsPath = computed(() => `/dashboard/${route.params.orgSlug}/settings/localization`)
 
 const navigationGroups = computed<EditorNavigationGroup[]>(() => [
   {

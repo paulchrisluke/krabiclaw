@@ -85,7 +85,7 @@ import { mediaStillUrl } from '~/shared/media-placement-contract'
 // The blog index. Rendered by `blog.vue`, which owns the frame.
 const dashboardApi = useDashboardApi()
 const route = useRoute()
-const siteId = await useDashboardSiteId()
+const siteId = await useDashboardOrganizationId()
 const orgSlug = route.params.orgSlug as string
 const siteSlug = route.params.siteSlug as string
 const level = useRouteLevel()
@@ -112,7 +112,7 @@ const isPostsResponse = (value: unknown): value is { posts: BlogPost[] } =>
 const { data, pending, error, refresh } = await useAsyncData(
   `dashboard-blog-posts:${siteId}`,
   async () => {
-    const response = await dashboardApi<{ posts: BlogPost[] }>(`/api/editor/sites/${siteId}/blog/posts`, {
+    const response = await dashboardApi<{ posts: BlogPost[] }>(`/api/editor/organizations/${siteId}/blog/posts`, {
       validate: isPostsResponse,
     })
     return { posts: response.posts }

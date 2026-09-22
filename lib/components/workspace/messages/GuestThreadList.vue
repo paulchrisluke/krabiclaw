@@ -193,19 +193,19 @@ const props = defineProps<{
 }>()
 const emit = defineEmits<{ first: [target: { path: string; query: LocationQueryRaw } | null] }>()
 
-const dashboard = useDashboardSite()
+const dashboard = useDashboardOrganization()
 const { formatRelativeTime } = useHumanTime()
 
 const route = useRoute()
 const router = useRouter()
 
 const isOrganizationScope = computed(() => props.scope === 'organization')
-const siteId = computed(() => isOrganizationScope.value ? null : dashboard.siteId.value)
+const siteId = computed(() => isOrganizationScope.value ? null : dashboard.organizationId.value)
 
 const listRoute = computed(() => {
   const orgSlug = String(route.params.orgSlug)
   if (isOrganizationScope.value) return `/dashboard/${orgSlug}/messages`
-  return `/dashboard/${orgSlug}/sites/${String(route.params.siteSlug)}/messages`
+  return `/dashboard/${orgSlug}/messages`
 })
 
 // The open thread, for the selected row. It is the segment below this list, so
@@ -257,13 +257,13 @@ onMounted(() => {
 })
 
 const capabilities = computed(() => {
-  const vertical = dashboard.site.value?.vertical
+  const vertical = dashboard.organization.value?.vertical
   if (!vertical) return null
   try {
     const normalizedVertical = normalizeVertical(vertical) as SiteVertical
-    const template = resolvePublicTemplate({ themeId: dashboard.site.value?.theme_id, vertical }).slug
+    const template = resolvePublicTemplate({ themeId: dashboard.organization.value?.theme_id, vertical }).slug
     return resolveCmsCapabilities(normalizedVertical, template, {
-      site: parseCmsFeatureOverrideDelta(dashboard.site.value?.feature_overrides),
+      site: parseCmsFeatureOverrideDelta(dashboard.organization.value?.feature_overrides),
     })
   } catch {
     return null
@@ -283,7 +283,7 @@ const effectiveFeatureSet = computed(() => new Set<ProductFeature>([
   record it made — so these come from the product and booking vocabularies
   rather than a list of schema words kept here.
 */
-const vertical = computed(() => dashboard.site.value?.vertical ?? null)
+const vertical = computed(() => dashboard.organization.value?.vertical ?? null)
 const typeOptions = computed(() => {
   if (props.submissionTypeFilter) return []
   const kinds: SubmissionType[] = []
@@ -347,7 +347,7 @@ const {
     })
   }
   return await dashboardApi<{ threads: ThreadListItem[] }>(
-    `/api/dashboard/sites/${siteId.value}/guest-threads`,
+    `/api/dashboard/organizations/${siteId.value}/guest-threads`,
     {
       query: listQuery.value,
       validate: isThreadListResponse,
@@ -376,7 +376,7 @@ function threadRoute(thread: ThreadListItem) {
   if (!isOrganizationScope.value) return `${listRoute.value}/${encodeURIComponent(thread.id)}`
   if (!thread.siteSlug) throw createError({ statusCode: 500, statusMessage: 'Thread site route is unavailable' })
   const orgSlug = encodeURIComponent(String(route.params.orgSlug))
-  return `/dashboard/${orgSlug}/sites/${encodeURIComponent(thread.siteSlug)}/messages/${encodeURIComponent(thread.id)}`
+  return `/dashboard/${orgSlug}/messages/${encodeURIComponent(thread.id)}`
 }
 
 /**
@@ -400,7 +400,7 @@ async function loadThreads() {
         query: listQuery.value,
         validate: isThreadListResponse,
       })
-      : await dashboardApi<{ threads: ThreadListItem[] }>(`/api/dashboard/sites/${siteId.value}/guest-threads`, {
+      : await dashboardApi<{ threads: ThreadListItem[] }>(`/api/dashboard/organizations/${siteId.value}/guest-threads`, {
         query: listQuery.value,
         validate: isThreadListResponse,
       })

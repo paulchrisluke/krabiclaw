@@ -118,7 +118,7 @@ const postId = computed(() => String(route.params.postId ?? ''))
 const level = useRouteLevel()
 const postPath = level.path
 
-const siteId = await useDashboardSiteId()
+const siteId = await useDashboardOrganizationId()
 const dashboardLocation = useDashboardLocation()
 const isNew = computed(() => postId.value === 'new')
 
@@ -170,7 +170,7 @@ const { data, error } = await useAsyncData(
   computed(() => `dashboard-location-post:${siteId}:${postId.value}`),
   async () => isNew.value
     ? null
-    : await dashboardApi<{ post: ApiRecord }>(`/api/editor/sites/${siteId}/posts/${postId.value}`, {
+    : await dashboardApi<{ post: ApiRecord }>(`/api/editor/organizations/${siteId}/posts/${postId.value}`, {
       validate: isSinglePostResponse,
     }),
   { watch: [postId] },
@@ -541,7 +541,7 @@ const publicPath = computed(() => {
   return path ? String(path) : null
 })
 
-const siteLocalizationSettingsPath = computed(() => `/dashboard/${route.params.orgSlug}/sites/${route.params.siteSlug}/settings/localization`)
+const siteLocalizationSettingsPath = computed(() => `/dashboard/${route.params.orgSlug}/settings/localization`)
 const postLocalizationFields = computed(() => [
   { key: 'title', label: 'Title', source: post.value?.title },
   { key: 'body', label: 'Body', source: post.value?.body, multiline: true, rows: 6 },

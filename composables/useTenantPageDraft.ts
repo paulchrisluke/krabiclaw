@@ -193,12 +193,12 @@ export function useTenantPageDraft(siteId: string, pageId: string) {
     async () => {
       const [context, page] = await Promise.all([
         dashboardApi<{ context: { previewToken: string; site: { subdomain: string | null } } }>(
-          `/api/editor/sites/${siteId}/context`,
+          `/api/editor/organizations/${siteId}/context`,
           { validate: isEditorContextResponse },
         ),
         pageId === 'new'
           ? Promise.resolve(null)
-          : dashboardApi<{ page: TenantPageResponse }>(`/api/editor/sites/${siteId}/pages/${pageId}`, { validate: isTenantPageResponse }),
+          : dashboardApi<{ page: TenantPageResponse }>(`/api/editor/organizations/${siteId}/pages/${pageId}`, { validate: isTenantPageResponse }),
       ])
       return { context: context.context, page: page?.page ?? null }
     },
@@ -325,8 +325,8 @@ export function useTenantPageDraft(siteId: string, pageId: string) {
       expectedUpdatedAt: draft.value.id ? seededFrom.value : undefined,
     }
     const response = draft.value.id
-      ? await dashboardApi<{ page: TenantPageResponse }>(`/api/editor/sites/${siteId}/pages/${draft.value.id}`, { method: 'PATCH', body, validate: isTenantPageResponse })
-      : await dashboardApi<{ page: TenantPageResponse }>(`/api/editor/sites/${siteId}/pages`, { method: 'POST', body, validate: isTenantPageResponse })
+      ? await dashboardApi<{ page: TenantPageResponse }>(`/api/editor/organizations/${siteId}/pages/${draft.value.id}`, { method: 'PATCH', body, validate: isTenantPageResponse })
+      : await dashboardApi<{ page: TenantPageResponse }>(`/api/editor/organizations/${siteId}/pages`, { method: 'POST', body, validate: isTenantPageResponse })
     if (data.value) data.value = { ...data.value, page: response.page }
     seed(response.page)
     return response.page

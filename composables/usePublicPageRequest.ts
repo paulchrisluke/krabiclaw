@@ -261,5 +261,5 @@ export const buildPublicPageUrl = (
   if (params.blogSlug) qs.set("blogSlug", params.blogSlug);
   if (params.locale && params.locale !== 'en') qs.set('locale', params.locale)
   const q = qs.toString();
-  return `/api/public/sites/${siteId}/${resourceKind}${q ? `?${q}` : ""}`;
+  return `/api/public/${resourceKind}${q ? `?${q}` : ""}`;
 };

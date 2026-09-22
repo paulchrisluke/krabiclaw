@@ -136,7 +136,7 @@ const route = useRoute()
 const dashboardApi = useDashboardApi()
 const collectionId = computed(() => String(route.params.collectionId ?? route.params.categoryId ?? ''))
 const productId = computed(() => String(route.params.productId ?? ''))
-const locationPath = computed(() => `/dashboard/${String(route.params.orgSlug)}/sites/${String(route.params.siteSlug)}/locations/${String(route.params.locationSlug)}`)
+const locationPath = computed(() => `/dashboard/${String(route.params.orgSlug)}/locations/${String(route.params.locationSlug)}`)
 // The surface is the product's own, not the URL's: a dish saved as bookable is
 // an experience from that moment, and the rows it returns to have moved with
 // it. Until the row has loaded the URL is all there is to go on.
@@ -154,18 +154,18 @@ const collectionPath = computed(() => `${surfacePath.value}/${collectionId.value
 const itemPath = computed(() => `${collectionPath.value}/${productId.value}`)
 const level = useRouteLevel()
 
-const siteId = await useDashboardSiteId()
-const dashboard = useDashboardSite()
+const siteId = await useDashboardOrganizationId()
+const dashboard = useDashboardOrganization()
 const dashboardLocation = useDashboardLocation()
 
-const vertical = dashboard.site.value?.vertical
+const vertical = dashboard.organization.value?.vertical
 if (!vertical) throw createError({ statusCode: 500, statusMessage: 'Site vertical is not configured' })
 // The words follow the product: a class is an experience whatever the site
 // sells otherwise. Until the row has loaded, and for a product being created,
 // the screen speaks the vertical's own surface — it is not yet known to be
 // anything else.
 const presentation = computed(() => (product.value ? presentationForProduct(vertical, product.value) : requireProductPresentation(vertical)))
-const rawCurrency = dashboard.site.value?.default_currency
+const rawCurrency = dashboard.organization.value?.default_currency
 if (!isCurrencyCode(rawCurrency)) throw createError({ statusCode: 500, statusMessage: 'Unsupported site currency' })
 const currency = rawCurrency
 
@@ -229,7 +229,7 @@ async function load(options: { force?: boolean } = {}) {
   if (!id || isNew.value) {
     if (!isNew.value) return
     // A new item still needs the attribute vocabulary to render its form.
-    definitions.value = (await dashboardApi(`/api/editor/sites/${siteId}/metafield-definitions`, { validate: isDefinitionList })).definitions
+    definitions.value = (await dashboardApi(`/api/editor/organizations/${siteId}/metafield-definitions`, { validate: isDefinitionList })).definitions
     return
   }
   const key = `${id}:${productId.value}`
@@ -238,9 +238,9 @@ async function load(options: { force?: boolean } = {}) {
   loadError.value = null
   try {
     const [collectionResponse, productResponse, definitionResponse] = await Promise.all([
-      dashboardApi(`/api/editor/sites/${siteId}/collections?location_id=${encodeURIComponent(id)}`, { validate: isCollectionList }),
-      dashboardApi(`/api/editor/sites/${siteId}/locations/${encodeURIComponent(id)}/products/${encodeURIComponent(productId.value)}`, { validate: isOne }),
-      dashboardApi(`/api/editor/sites/${siteId}/metafield-definitions`, { validate: isDefinitionList }),
+      dashboardApi(`/api/editor/organizations/${siteId}/collections?location_id=${encodeURIComponent(id)}`, { validate: isCollectionList }),
+      dashboardApi(`/api/editor/organizations/${siteId}/locations/${encodeURIComponent(id)}/products/${encodeURIComponent(productId.value)}`, { validate: isOne }),
+      dashboardApi(`/api/editor/organizations/${siteId}/metafield-definitions`, { validate: isDefinitionList }),
     ])
     collections.value = collectionResponse.collections
     definitions.value = definitionResponse.definitions
@@ -662,7 +662,7 @@ async function commit() {
   saveError.value = null
   try {
     if (isNew.value) {
-      const created = await dashboardApi(`/api/editor/sites/${siteId}/products`, {
+      const created = await dashboardApi(`/api/editor/organizations/${siteId}/products`, {
         method: 'POST', body: payload(), validate: isOne,
       })
       // A newly created product is offered here and added to the collection the
@@ -670,7 +670,7 @@ async function commit() {
       // location relationship is not collection membership: without the second
       // write the product was absent from the very collection it was created
       // in.
-      await dashboardApi(`/api/editor/sites/${siteId}/products/${created.product.id}/locations/${id}`, {
+      await dashboardApi(`/api/editor/organizations/${siteId}/products/${created.product.id}/locations/${id}`, {
         method: 'PUT', body: { active: true, published: false }, validate: isRecord,
       })
       await addToCollection(created.product.id, id)
@@ -679,7 +679,7 @@ async function commit() {
       await navigateTo(`${collectionPath.value}/${created.product.id}`, { replace: true })
       return
     }
-    await dashboardApi(`/api/editor/sites/${siteId}/products/${productId.value}`, {
+    await dashboardApi(`/api/editor/organizations/${siteId}/products/${productId.value}`, {
       method: 'PATCH', body: payload(), validate: isOne,
     })
     if (editorKey.value === 'publication') await savePublication(id)
@@ -702,14 +702,14 @@ async function commit() {
  */
 async function addToCollection(newProductId: string, locationId: string) {
   if (!collectionId.value) return
-  const { products } = await dashboardApi(`/api/editor/sites/${siteId}/locations/${locationId}/products`, { validate: isProductList })
+  const { products } = await dashboardApi(`/api/editor/organizations/${siteId}/locations/${locationId}/products`, { validate: isProductList })
   const members = products
     .flatMap(row => row.collections
       .filter(entry => entry.collection_id === collectionId.value)
       .map(entry => ({ id: row.id, sort_order: entry.sort_order })))
     .sort((left, right) => left.sort_order - right.sort_order)
     .map(entry => entry.id)
-  await dashboardApi(`/api/editor/sites/${siteId}/collections/${collectionId.value}/products`, {
+  await dashboardApi(`/api/editor/organizations/${siteId}/collections/${collectionId.value}/products`, {
     method: 'PUT',
     body: { product_ids: [...members.filter(memberId => memberId !== newProductId), newProductId] },
     validate: isRecord,
@@ -718,10 +718,10 @@ async function addToCollection(newProductId: string, locationId: string) {
 
 /** Three switches, three writes. None of them implies another. */
 async function savePublication(id: string) {
-  await dashboardApi(`/api/editor/sites/${siteId}/products/${productId.value}/publication`, {
+  await dashboardApi(`/api/editor/organizations/${siteId}/products/${productId.value}/publication`, {
     method: 'PUT', body: { published: form.published }, validate: isRecord,
   })
-  await dashboardApi(`/api/editor/sites/${siteId}/products/${productId.value}/locations/${id}`, {
+  await dashboardApi(`/api/editor/organizations/${siteId}/products/${productId.value}/locations/${id}`, {
     method: 'PUT', body: { active: form.location_active, published: form.location_published }, validate: isRecord,
   })
 }
@@ -736,12 +736,12 @@ async function savePublication(id: string) {
 async function saveBooking() {
   if (!form.bookable) {
     if (!product.value?.booking) return
-    await dashboardApi(`/api/editor/sites/${siteId}/products/${productId.value}/booking`, {
+    await dashboardApi(`/api/editor/organizations/${siteId}/products/${productId.value}/booking`, {
       method: 'DELETE', validate: isRecord,
     })
     return
   }
-  await dashboardApi(`/api/editor/sites/${siteId}/products/${productId.value}/booking`, {
+  await dashboardApi(`/api/editor/organizations/${siteId}/products/${productId.value}/booking`, {
     method: 'PUT',
     body: {
       duration_minutes: Number(form.booking_duration) || null,
@@ -785,7 +785,7 @@ async function loadSchedule() {
   if (scheduleLoadedFor.value === key) return
   scheduleLoading.value = true
   try {
-    const { rules } = await dashboardApi(`/api/editor/sites/${siteId}/products/${productId.value}/availability?location_id=${encodeURIComponent(id)}`, { validate: isRuleList })
+    const { rules } = await dashboardApi(`/api/editor/organizations/${siteId}/products/${productId.value}/availability?location_id=${encodeURIComponent(id)}`, { validate: isRuleList })
     // The reader moved on while this loaded; that location's own load owns the draft.
     if (`${productId.value}:${locationId.value}` !== key) return
     schedule.value = rules.map(rule => ({ weekday: rule.weekday, start_time: rule.start_time, capacity: rule.capacity === null ? '' : String(rule.capacity) }))
@@ -803,7 +803,7 @@ async function saveSchedule() {
   const slots = schedule.value
     .filter(slot => slot.start_time.trim())
     .map(slot => ({ weekday: slot.weekday, start_time: slot.start_time.trim().slice(0, 5), capacity: slot.capacity.trim() ? Number(slot.capacity) : null }))
-  await dashboardApi(`/api/editor/sites/${siteId}/products/${productId.value}/availability`, {
+  await dashboardApi(`/api/editor/organizations/${siteId}/products/${productId.value}/availability`, {
     method: 'PUT', body: { location_id: id, slots }, validate: isRecord,
   })
   scheduleLoadedFor.value = null
@@ -821,7 +821,7 @@ function revert() {
 async function setPrimaryImage(assetId: string | null) {
   photoError.value = null
   try {
-    await dashboardApi(`/api/editor/sites/${siteId}/media/placements`, {
+    await dashboardApi(`/api/editor/organizations/${siteId}/media/placements`, {
       method: 'PUT',
       body: { placement: { owner_type: 'product', owner_id: productId.value, slot: 'image' }, asset_id: assetId },
       validate: isRecord,
@@ -860,7 +860,7 @@ const productLocalizationFields = computed(() => {
   return fields
 })
 
-const siteLocalizationSettingsPath = computed(() => `/dashboard/${route.params.orgSlug}/sites/${route.params.siteSlug}/settings/localization`)
+const siteLocalizationSettingsPath = computed(() => `/dashboard/${route.params.orgSlug}/settings/localization`)
 
 function isProductLocalizationResponse(value: unknown): value is { localization: { values: Record<string, unknown> } } {
   return isRecord(value) && isRecord(value.localization) && isRecord(value.localization.values)
@@ -869,7 +869,7 @@ function isProductLocalizationResponse(value: unknown): value is { localization:
 async function loadProductLocalization(locale: string): Promise<Record<string, unknown>> {
   try {
     const response = await dashboardApi<{ localization: { values: Record<string, unknown> } }>(
-      `/api/editor/sites/${siteId}/localization/product/${productId.value}/${encodeURIComponent(locale)}`,
+      `/api/editor/organizations/${siteId}/localization/product/${productId.value}/${encodeURIComponent(locale)}`,
       { validate: isProductLocalizationResponse },
     )
     const values = { ...response.localization.values }
@@ -896,7 +896,7 @@ async function saveProductLocalization(locale: string, submitted: Record<string,
     if (key.startsWith('metafield:')) metafields[key.slice('metafield:'.length)] = value
   }
   if (Object.keys(metafields).length) values.metafields = metafields
-  await dashboardApi(`/api/editor/sites/${siteId}/localization/product/${row.id}/${encodeURIComponent(locale)}`, {
+  await dashboardApi(`/api/editor/organizations/${siteId}/localization/product/${row.id}/${encodeURIComponent(locale)}`, {
     method: 'PUT',
     body: { values },
     validate: isProductLocalizationResponse,

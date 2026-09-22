@@ -370,7 +370,7 @@ const handleTenantContact = async () => {
 
   tenantSubmitting.value = true
   try {
-    await publicApiMutation<{ success: true }>(`/api/public/sites/${siteId}/contact`, {
+    await publicApiMutation<{ success: true }>(`/api/public/contact`, {
       method: 'POST',
       body: { ...tenantForm.value },
       validate: (value): value is { success: true } => isRecord(value) && value.success === true,

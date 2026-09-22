@@ -153,7 +153,7 @@ const emit = defineEmits<{
 }>()
 
 const ALL_MEDIA_KIND = 'all'
-const { uploading, error: mediaUploadError, upload: uploadMedia } = useMediaUpload(`/api/editor/sites/${props.siteId}`)
+const { uploading, error: mediaUploadError, upload: uploadMedia } = useMediaUpload(`/api/editor/organizations/${props.siteId}`)
 
 const assets = ref<MediaAsset[]>([])
 const loading = ref(false)
@@ -197,7 +197,7 @@ async function loadAssets() {
       params.set('ownerId', props.locationId)
       params.set('slot', 'gallery')
     }
-    const res = await dashboardApi<{ media: MediaAsset[] }>(`/api/editor/sites/${props.siteId}/media?${params}`, {
+    const res = await dashboardApi<{ media: MediaAsset[] }>(`/api/editor/organizations/${props.siteId}/media?${params}`, {
       signal: controller.signal,
       validate: isMediaResponse,
     })
@@ -291,7 +291,7 @@ const {
     params.set('slot', 'gallery')
   }
   return await dashboardApi<{ media: MediaAsset[] }>(
-    `/api/editor/sites/${props.siteId}/media?${params}`,
+    `/api/editor/organizations/${props.siteId}/media?${params}`,
     { validate: isMediaResponse },
   )
 }, { lazy: true })

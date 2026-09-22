@@ -110,7 +110,7 @@ const route = useRoute()
 const pageId = computed(() => String(route.params.pageId ?? ''))
 const recordPath = level.path
 
-const siteId = await useDashboardSiteId()
+const siteId = await useDashboardOrganizationId()
 const dashboardApi = useDashboardApi()
 
 const { data, error, pending, draft, dirty, revert, commit, isNew, previewUrl } = useTenantPageDraft(siteId, pageId.value)
@@ -145,7 +145,7 @@ const saving = ref(false)
 const errorMessage = ref('')
 
 const navigablePreviewUrl = computed(() => previewHrefForTenantPage(dirty.value, previewUrl.value))
-const siteLocalizationSettingsPath = computed(() => `/dashboard/${String(route.params.orgSlug)}/sites/${String(route.params.siteSlug)}/settings/localization`)
+const siteLocalizationSettingsPath = computed(() => `/dashboard/${String(route.params.orgSlug)}/settings/localization`)
 
 function preview(value: string, empty: string) {
   return value.trim() || empty
@@ -311,14 +311,14 @@ async function loadPageLocalization(locale: string): Promise<Record<string, unkn
   let variant: TenantPageResponse | null = null
   let blocks = createTenantPageTranslationBlocks(toRaw(source.blocks))
   const list = await dashboardApi<{ pages: TenantPageListRow[] }>(
-    `/api/editor/sites/${siteId}/pages?locale=${encodeURIComponent(locale)}`,
+    `/api/editor/organizations/${siteId}/pages?locale=${encodeURIComponent(locale)}`,
     { validate: isTenantPageListResponse },
   )
   const summary = list.pages.find(page => page.page_id === source.page_id)
   const values: Record<string, unknown> = {}
   if (summary) {
     const response = await dashboardApi<{ page: TenantPageResponse }>(
-      `/api/editor/sites/${siteId}/pages/${summary.id}`,
+      `/api/editor/organizations/${siteId}/pages/${summary.id}`,
       { validate: isTenantPageResponse },
     )
     variant = response.page
@@ -373,8 +373,8 @@ async function savePageLocalization(locale: string, submitted: Record<string, un
     expectedUpdatedAt: state.variant?.document.updated_at,
   }
   const response = state.variant
-    ? await dashboardApi<{ page: TenantPageResponse }>(`/api/editor/sites/${siteId}/pages/${state.variant.id}`, { method: 'PATCH', body, validate: isTenantPageResponse })
-    : await dashboardApi<{ page: TenantPageResponse }>(`/api/editor/sites/${siteId}/pages`, { method: 'POST', body, validate: isTenantPageResponse })
+    ? await dashboardApi<{ page: TenantPageResponse }>(`/api/editor/organizations/${siteId}/pages/${state.variant.id}`, { method: 'PATCH', body, validate: isTenantPageResponse })
+    : await dashboardApi<{ page: TenantPageResponse }>(`/api/editor/organizations/${siteId}/pages`, { method: 'POST', body, validate: isTenantPageResponse })
   localizationState = {
     locale,
     variant: response.page,

@@ -66,7 +66,7 @@ const { data, error } = await useAsyncData<PublicLinksPayload | null>(
       if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Request context unavailable' })
       const [{ cloudflareEnv }, { getPublicLinksPage }] = await Promise.all([
         import('~/server/utils/api-response'),
-        import('~/server/utils/site-links'),
+        import('~/server/utils/links-page'),
       ])
       const env = cloudflareEnv(requestEvent)
       const db = env.db
@@ -77,7 +77,7 @@ const { data, error } = await useAsyncData<PublicLinksPayload | null>(
       }
       return response
     }
-    return await publicApiRequest(`/api/public/sites/${encodeURIComponent(siteId)}/links-page?locale=${encodeURIComponent(locale)}`, {
+    return await publicApiRequest(`/api/public/links-page?locale=${encodeURIComponent(locale)}`, {
       signal,
       coalesceKey: `public-links-page-${siteId}-${locale}`,
       validate: isPublicLinksResponse,

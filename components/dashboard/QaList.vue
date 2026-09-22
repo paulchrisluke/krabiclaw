@@ -43,12 +43,12 @@ const props = defineProps<{ locationId?: string }>()
 
 const dashboardApi = useDashboardApi()
 const level = useRouteLevel()
-const siteId = await useDashboardSiteId()
+const siteId = await useDashboardOrganizationId()
 const selectedPagePath = ref('general')
 
 const qaEndpoint = computed(() => props.locationId
-  ? `/api/editor/sites/${siteId}/locations/${props.locationId}/qa`
-  : `/api/editor/sites/${siteId}/qa`)
+  ? `/api/editor/organizations/${siteId}/locations/${props.locationId}/qa`
+  : `/api/editor/organizations/${siteId}/qa`)
 
 // The three reads are independent, so they are issued together.
 const tenantPagesAsyncData = useAsyncData(
@@ -56,7 +56,7 @@ const tenantPagesAsyncData = useAsyncData(
   async () => {
     if (props.locationId) return []
     return await dashboardApi<Array<{ path: string; title: string }>>(
-      `/api/editor/sites/${siteId}/tenant-pages`,
+      `/api/editor/organizations/${siteId}/tenant-pages`,
       {
         validate: (value): value is Array<{ path: string; title: string }> =>
           Array.isArray(value)
@@ -75,7 +75,7 @@ const existingQaScopesAsyncData = useAsyncData(
   async () => {
     if (props.locationId) return []
     return await dashboardApi<Array<{ page_path: string | null }>>(
-      `/api/editor/sites/${siteId}/qa/scopes`,
+      `/api/editor/organizations/${siteId}/qa/scopes`,
       {
         validate: (value): value is Array<{ page_path: string | null }> =>
           Array.isArray(value)

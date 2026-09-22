@@ -114,7 +114,7 @@ async function commitGalleryAsset(index: number | 'new', assetId: string | null 
   try {
     if (index === 'new') {
       if (!assetId) { pendingNewGallerySlot.value = false; return }
-      const result = await dashboardApi(`/api/editor/sites/${props.siteId}/media/placements/attach`, {
+      const result = await dashboardApi(`/api/editor/organizations/${props.siteId}/media/placements/attach`, {
         method: 'POST',
         body: { placement: galleryPlacement.value, asset_id: assetId },
         validate: isMediaMutationResponse,
@@ -127,7 +127,7 @@ async function commitGalleryAsset(index: number | 'new', assetId: string | null 
     const existing = current[index]
     if (!existing) return
     if (!assetId) {
-      const result = await dashboardApi(`/api/editor/sites/${props.siteId}/media/placements/remove`, {
+      const result = await dashboardApi(`/api/editor/organizations/${props.siteId}/media/placements/remove`, {
         method: 'POST',
         body: { placement: galleryPlacement.value, asset_id: existing.asset_id },
         validate: isMediaMutationResponse,
@@ -142,7 +142,7 @@ async function commitGalleryAsset(index: number | 'new', assetId: string | null 
     // reorder the new asset back to this exact position. Each step's response
     // is applied immediately — if a later step throws, whatever already
     // committed server-side stays reflected here instead of going stale.
-    const attachResult = await dashboardApi(`/api/editor/sites/${props.siteId}/media/placements/attach`, {
+    const attachResult = await dashboardApi(`/api/editor/organizations/${props.siteId}/media/placements/attach`, {
       method: 'POST',
       body: { placement: galleryPlacement.value, asset_id: assetId },
       validate: isMediaMutationResponse,
@@ -154,7 +154,7 @@ async function commitGalleryAsset(index: number | 'new', assetId: string | null 
     // image and gained a misplaced one. This order fails towards two images in
     // the right order, which the editor can finish by hand.
     const anchor = current[index + 1]
-    const reordered = await dashboardApi(`/api/editor/sites/${props.siteId}/media/placements/reorder`, {
+    const reordered = await dashboardApi(`/api/editor/organizations/${props.siteId}/media/placements/reorder`, {
       method: 'POST',
       body: {
         placement: galleryPlacement.value,
@@ -163,7 +163,7 @@ async function commitGalleryAsset(index: number | 'new', assetId: string | null 
       validate: isMediaMutationResponse,
     })
     applyCanonicalGalleryMedia(reordered.media)
-    const removeResult = await dashboardApi(`/api/editor/sites/${props.siteId}/media/placements/remove`, {
+    const removeResult = await dashboardApi(`/api/editor/organizations/${props.siteId}/media/placements/remove`, {
       method: 'POST',
       body: { placement: galleryPlacement.value, asset_id: existing.asset_id },
       validate: isMediaMutationResponse,

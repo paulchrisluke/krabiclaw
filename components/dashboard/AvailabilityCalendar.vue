@@ -250,7 +250,7 @@ async function loadMonth(key: string, generation = requestGeneration.value): Pro
   const range = monthBounds(key)
   try {
     const response = await dashboardApi<AvailabilityCalendar>(
-      `/api/editor/sites/${props.siteId}/locations/${props.locationId}/reservation-availability`,
+      `/api/editor/organizations/${props.siteId}/locations/${props.locationId}/reservation-availability`,
       { query: { from: range.from, to: range.to }, validate: isCalendarResponse },
     )
     if (generation !== requestGeneration.value) return
@@ -440,7 +440,7 @@ async function saveSelection(): Promise<void> {
   saving.value = true
   saveError.value = null
   try {
-    await dashboardApi(`/api/editor/sites/${props.siteId}/locations/${props.locationId}/reservation-availability`, {
+    await dashboardApi(`/api/editor/organizations/${props.siteId}/locations/${props.locationId}/reservation-availability`, {
       method: 'PUT',
       body: { changes },
       validate: (value): value is { success: true } => isRecord(value) && value.success === true,

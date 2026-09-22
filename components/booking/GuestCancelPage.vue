@@ -94,7 +94,7 @@ interface GuestBookingView {
 
 const { data, pending } = await useAsyncData<{ success: true; booking: GuestBookingView }>(
   `guest-cancel-${requestId.value}`,
-  () => $fetch(`/api/public/sites/${siteId}/booking-requests/${requestId.value}`, {
+  () => $fetch(`/api/public/booking-requests/${requestId.value}`, {
     headers: { Authorization: `Bearer ${token.value}` },
   }),
   { immediate: Boolean(requestId.value) && Boolean(token.value) },
@@ -125,7 +125,7 @@ async function handleCancel() {
   loading.value = true
   cancelError.value = ''
   try {
-    await publicApiMutation<{ success: true }>(`/api/public/sites/${siteId}/booking-requests/${requestId.value}/cancel`, {
+    await publicApiMutation<{ success: true }>(`/api/public/booking-requests/${requestId.value}/cancel`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token.value}` },
       validate: (value): value is { success: true } => isRecord(value) && value.success === true,

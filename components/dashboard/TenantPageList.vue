@@ -25,7 +25,7 @@ import { isTenantPageListResponse, tenantPageRows, type TenantPageListRow } from
 const route = useRoute()
 const router = useRouter()
 const dashboardApi = useDashboardApi()
-const siteId = await useDashboardSiteId()
+const siteId = await useDashboardOrganizationId()
 const level = useRouteLevel()
 
 /**
@@ -34,13 +34,13 @@ const level = useRouteLevel()
  * site's path a second time.
  */
 const linksPath = computed(() => router.resolve({
-  name: 'dashboard-orgSlug-sites-siteSlug-links',
+  name: 'dashboard-orgSlug-links',
   params: { orgSlug: route.params.orgSlug, siteSlug: route.params.siteSlug },
 }).path)
 
 const { data, pending, error, refresh } = await useAsyncData(
   `tenant-pages-${siteId}`,
-  () => dashboardApi<{ pages: TenantPageListRow[] }>(`/api/editor/sites/${siteId}/pages`, { validate: isTenantPageListResponse }),
+  () => dashboardApi<{ pages: TenantPageListRow[] }>(`/api/editor/organizations/${siteId}/pages`, { validate: isTenantPageListResponse }),
   { lazy: true },
 )
 
@@ -66,7 +66,7 @@ async function remove(item: { id: string; updatedAt: string }) {
   removingId.value = item.id
   deleteError.value = null
   try {
-    await dashboardApi(`/api/editor/sites/${siteId}/pages/${item.id}`, {
+    await dashboardApi(`/api/editor/organizations/${siteId}/pages/${item.id}`, {
       method: 'DELETE',
       body: { expectedUpdatedAt: item.updatedAt },
       validate: isRecord,

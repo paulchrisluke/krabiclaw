@@ -82,7 +82,7 @@ const { data, error } = await useAsyncData(
       post = await getPublishedPostByPublicRoute(env, db, siteId, slug.value, locale.value) as PublicPost | null
     } else {
       const payload = await publicApiRequest<{ post: PublicPost }>(
-        `/api/public/sites/${siteId}/posts/${encodeURIComponent(slug.value)}`,
+        `/api/public/posts/${encodeURIComponent(slug.value)}`,
         { query: { locale: locale.value }, validate: isPublicPostResponse },
       )
       post = payload.post

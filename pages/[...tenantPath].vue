@@ -56,7 +56,7 @@ const { data: publishedLocales, error: publishedLocalesError } = await useAsyncD
       `, [siteId])
       return rows.map(row => row.locale)
     }
-    const response = await publicApiRequest(`/api/public/sites/${encodeURIComponent(siteId)}/locales`, {
+    const response = await publicApiRequest(`/api/public/locales`, {
       validate: isPublicLocalesResponse,
     })
     return response.locales.filter(item => !item.is_source && item.status === 'published').map(item => item.code)
@@ -85,7 +85,7 @@ const localizedData = localeSegment.value
         if (!currentSite) throw createError({ statusCode: 404, statusMessage: 'Site not found' })
         return { route: await resolveLocalizedPublicRoute(env, db, currentSite.organization_id, siteId, pagePath.value) }
       }
-      const endpoint: string = `/api/public/sites/${encodeURIComponent(siteId)}/localized-route`
+      const endpoint: string = `/api/public/localized-route`
       return await publicApiRequest(endpoint, {
         query: { path: pagePath.value },
         validate: isLocalizedRouteResponse,

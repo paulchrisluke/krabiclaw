@@ -74,7 +74,7 @@ const route = useRoute()
 
 const { eventLabel } = useSiteEventLabels()
 const { formatRelativeTime: timeAgo } = useHumanTime()
-const dashboard = useDashboardSite()
+const dashboard = useDashboardOrganization()
 const loadMoreError = ref<string | null>(null)
 
 type SiteEvent = import('~/server/utils/dashboard-events').DashboardEvent

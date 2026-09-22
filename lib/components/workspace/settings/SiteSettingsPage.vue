@@ -135,15 +135,15 @@ const dashboardApi = useDashboardApi()
 const route = useRoute()
 const editorError = ref<string | null>(null)
 const facebookError = ref('')
-const dashboard = useDashboardSite()
-const siteDashboardPath = computed(() => `/dashboard/${String(route.params.orgSlug)}/sites/${String(route.params.siteSlug)}`)
+const dashboard = useDashboardOrganization()
+const siteDashboardPath = computed(() => `/dashboard/${String(route.params.orgSlug)}`)
 const brandPath = computed(() => `${siteDashboardPath.value}/brand`)
 const settingsPath = computed(() => `${siteDashboardPath.value}/settings`)
 // The level runs while setup is still synchronous: it injects the record the
 // `<RouterView>` above rendered, and an `await` before it would bind nothing.
 const level = useRouteLevel()
 
-const siteId = await useDashboardSiteId()
+const siteId = await useDashboardOrganizationId()
 
 // Workspace deletion is scheduled, never immediate: the organization carries a
 // due instant and the deletion-sweep task performs the deletion once it passes.
@@ -286,7 +286,7 @@ const brandLocalizationFields = computed(() => [
   { key: 'brand_name', label: 'Brand name', source: loadedSettings.value?.brand_name },
   { key: 'brand_description', label: 'Description', source: loadedSettings.value?.brand_description, multiline: true, rows: 6 },
 ])
-const hasFacebookAccess = computed(() => dashboard.site.value?.effective_plan === 'growth')
+const hasFacebookAccess = computed(() => dashboard.organization.value?.effective_plan === 'growth')
 const enableableCatalogOptions = computed(() => (localizationSettings.value?.available_catalogs ?? [])
   .filter(catalog => !localizationSettings.value?.languages.some(language => language.locale === catalog.locale && language.status !== 'disabled'))
   .map(catalog => ({ label: `${catalog.label} (${catalog.locale})`, value: catalog.locale })))
@@ -300,7 +300,7 @@ const socialSummary = computed(() => {
   return count ? `${count} ${count === 1 ? 'profile' : 'profiles'} connected` : 'Not configured'
 })
 const searchSummary = computed(() => loadedSettings.value?.robots === 'noindex,nofollow' ? 'Hidden from search engines' : 'Visible to search engines')
-const domainSummary = computed(() => dashboard.site.value?.custom_domain || dashboard.site.value?.public_url || 'Not connected')
+const domainSummary = computed(() => dashboard.organization.value?.custom_domain || dashboard.organization.value?.public_url || 'Not connected')
 const brandItems = computed<EditorNavigationItem[]>(() => [
   { id: 'name', label: 'Brand name', summary: explicitSummary(loadedSettings.value?.brand_name), icon: 'i-lucide-type', to: `${brandPath.value}/name` },
   { id: 'logo', label: 'Logo', summary: loadedSettings.value?.media?.some(item => item.slot === 'logo') ? 'Logo selected' : 'Not set', icon: 'i-lucide-image', to: `${brandPath.value}/logo` },
@@ -422,7 +422,7 @@ const settingsResourceKey = computed(() => `dashboard-site-settings:${String(rou
 const { data: settingsResource, pending: settingsPending, error: settingsResourceError, refresh: refreshSettings } = await useAsyncData<SettingsPageResource>(settingsResourceKey, async () => {
   const [settings, notifications, facebook] = await Promise.all([
     dashboardApi<{ success: boolean; settings: SiteSettingsResponse }>('/api/dashboard/settings', { validate: isSettingsResponse }),
-    dashboardApi<{ success: boolean; notifications: { whatsapp_phone: string | null } }>(`/api/editor/sites/${siteId}/notifications`, { validate: isNotificationsResponse }),
+    dashboardApi<{ success: boolean; notifications: { whatsapp_phone: string | null } }>(`/api/editor/organizations/${siteId}/notifications`, { validate: isNotificationsResponse }),
     hasFacebookAccess.value ? dashboardApi<FacebookConnectionStatus>('/api/integrations/facebook-pages/connection', { query: { siteId }, validate: isFacebookStatus }) : Promise.resolve<FacebookConnectionStatus>({ connected: false }),
   ])
   return { settings, notifications, facebook }
@@ -466,7 +466,7 @@ async function saveCurrentEditor() {
       }
       case 'search': await patchSettings({ robots: searchIndexed.value ? 'index,follow' : 'noindex,nofollow', google_site_verification: form.google_site_verification.trim() }); break
       case 'notifications': {
-        const response = await dashboardApi<{ notifications: { whatsapp_phone: string | null } }>(`/api/editor/sites/${siteId}/notifications`, { method: 'PATCH', body: { whatsapp_phone: whatsappPhone.value.trim() }, validate: isNotificationsResponse })
+        const response = await dashboardApi<{ notifications: { whatsapp_phone: string | null } }>(`/api/editor/organizations/${siteId}/notifications`, { method: 'PATCH', body: { whatsapp_phone: whatsappPhone.value.trim() }, validate: isNotificationsResponse })
         fillNotifications(response.notifications)
         originalSignature.value = editorSignature(detailKey.value)
         break
@@ -503,7 +503,7 @@ async function loadLocalizationProgress() {
     .map(language => language.locale) ?? []
   try {
     localizationProgress.value = await Promise.all(locales.map(locale =>
-      dashboardApi<LocalizationProgress>(`/api/editor/sites/${siteId}/locales/${encodeURIComponent(locale)}/opportunities`, { validate: isLocalizationProgress })))
+      dashboardApi<LocalizationProgress>(`/api/editor/organizations/${siteId}/locales/${encodeURIComponent(locale)}/opportunities`, { validate: isLocalizationProgress })))
     localizationProgressError.value = null
   } catch (error) {
     localizationProgress.value = []
@@ -513,7 +513,7 @@ async function loadLocalizationProgress() {
 async function loadLocalizationSettings() {
   localizationLoading.value = true
   try {
-    localizationSettings.value = await dashboardApi<LocalizationSettings>(`/api/editor/sites/${siteId}/locales`, { validate: isLocalizationSettings })
+    localizationSettings.value = await dashboardApi<LocalizationSettings>(`/api/editor/organizations/${siteId}/locales`, { validate: isLocalizationSettings })
     await loadLocalizationProgress()
     localizationError.value = null
   } catch (error) { localizationError.value = errorMessage(error, 'Failed to load localization settings') }
@@ -536,15 +536,15 @@ async function enableLanguage(): Promise<boolean> {
   if (newLocale.value) {
     const selectedCatalog = localizationSettings.value?.available_catalogs.find(catalog => catalog.locale === newLocale.value)
     if (!selectedCatalog) return false
-    const success = await mutateLocalization(`/api/editor/sites/${siteId}/locales/${encodeURIComponent(newLocale.value)}/add`, 'POST', { label: selectedCatalog.label })
+    const success = await mutateLocalization(`/api/editor/organizations/${siteId}/locales/${encodeURIComponent(newLocale.value)}/add`, 'POST', { label: selectedCatalog.label })
     if (success) newLocale.value = ''
     return success
   }
   return false
 }
-async function publishLanguage(locale: string) { await mutateLocalization(`/api/editor/sites/${siteId}/locales/${encodeURIComponent(locale)}/publish`, 'POST') }
-async function disableLanguage(locale: string) { await mutateLocalization(`/api/editor/sites/${siteId}/locales/${encodeURIComponent(locale)}/disable`, 'POST') }
-async function deleteLanguage(locale: string) { if (window.confirm(`Permanently delete all ${locale} content for this site?`)) await mutateLocalization(`/api/editor/sites/${siteId}/locales/${encodeURIComponent(locale)}`, 'DELETE') }
+async function publishLanguage(locale: string) { await mutateLocalization(`/api/editor/organizations/${siteId}/locales/${encodeURIComponent(locale)}/publish`, 'POST') }
+async function disableLanguage(locale: string) { await mutateLocalization(`/api/editor/organizations/${siteId}/locales/${encodeURIComponent(locale)}/disable`, 'POST') }
+async function deleteLanguage(locale: string) { if (window.confirm(`Permanently delete all ${locale} content for this site?`)) await mutateLocalization(`/api/editor/organizations/${siteId}/locales/${encodeURIComponent(locale)}`, 'DELETE') }
 watch(detailKey, key => { if (key === 'localization' && !localizationSettings.value) loadLocalizationSettings() }, { immediate: true })
 provide(siteSettingsEditorKey, {
   form,

@@ -189,7 +189,7 @@ onMounted(() => {
 onBeforeUnmount(() => { unhookSearchToggle?.(); unhookSearchToggle = null })
 // This layout owns the context request. Nothing below it starts one.
 const context = useDashboardContextOwner()
-const dashboard = useDashboardSite()
+const dashboard = useDashboardOrganization()
 // The page renders once the result held is the one for the destination route.
 // A refresh keeps the same-scope result in place, so the page stays mounted; a
 // scope change holds the previous scope's result until the new one lands, so
@@ -231,9 +231,9 @@ const dashboardContextRequestId = computed(() =>
 const retryDashboardContext = () => context.refresh()
 
 const organization = dashboard.organization
-const site = dashboard.site
+const site = dashboard.organization
 const sites = dashboard.sites
-const activeSiteId = dashboard.siteId
+const activeSiteId = dashboard.organizationId
 
 const organizations = computed<readonly AuthOrganization[]>(() => unref(organizationsState)?.data ?? [])
 const activeOrganizationId = computed(() => {

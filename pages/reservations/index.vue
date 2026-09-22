@@ -338,7 +338,7 @@ async function loadAvailability() {
   try {
     const today = new Date()
     const dateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
-    const res = await $fetch<{ dates: RawDateAvailability[] }>(`/api/public/sites/${siteId}/reservations/availability`, {
+    const res = await $fetch<{ dates: RawDateAvailability[] }>(`/api/public/reservations/availability`, {
       query: { location_id: locationId, date: dateStr, days: 14 },
     })
     // Ignore stale responses from a location that was changed away from before this resolved
@@ -388,7 +388,7 @@ async function handleReservation() {
     // into "Failed to submit" — which the guest answers by booking a second one.
     const startsAt = localDateTimeToInstant(reservationForm.value.date, reservationForm.value.time, reservationTimezone.value).toISOString()
     const timezone = reservationTimezone.value
-    const res = await $fetch<{ id: string; cancellationToken: string; policy_summary?: ApiRecord | null }>(`/api/public/sites/${siteId}/reservations`, {
+    const res = await $fetch<{ id: string; cancellationToken: string; policy_summary?: ApiRecord | null }>(`/api/public/reservations`, {
       method: 'POST',
       body: reservationForm.value,
     })

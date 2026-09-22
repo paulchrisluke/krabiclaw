@@ -19,7 +19,7 @@ interface ConversionPayload {
 
 function nativeConversion(siteId: string, payload: ConversionPayload) {
   if (!import.meta.client) return
-  void fetch(`/api/public/sites/${siteId}/conversion-events`, {
+  void fetch(`/api/public/conversion-events`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(payload),

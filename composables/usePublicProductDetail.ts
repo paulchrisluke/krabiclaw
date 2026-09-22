@@ -136,8 +136,8 @@ export async function usePublicProductDetail(routeKind: ProductSurface) {
         }
       }
       const path = siteWideExperience
-        ? `/api/public/sites/${encodeURIComponent(siteId)}/experiences/${encodeURIComponent(productSlug)}`
-        : `/api/public/sites/${encodeURIComponent(siteId)}/locations/${encodeURIComponent(locationSlug)}/products/${encodeURIComponent(productSlug)}`
+        ? `/api/public/experiences/${encodeURIComponent(productSlug)}`
+        : `/api/public/locations/${encodeURIComponent(locationSlug)}/products/${encodeURIComponent(productSlug)}`
       return publicApiRequest(`${path}?locale=${encodeURIComponent(locale)}`, {
         signal,
         coalesceKey: `public-product-${siteId}-${locale}-${locationSlug}-${productSlug}`,

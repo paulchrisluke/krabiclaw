@@ -91,7 +91,7 @@ export async function useLocationEditor(siteId: string, locationId: Ref<string |
   const route = useRoute()
   const dashboardApi = useDashboardApi()
     const editorError = ref<string | null>(null)
-  const dashboard = useDashboardSite()
+  const dashboard = useDashboardOrganization()
 
 
 
@@ -111,7 +111,7 @@ export async function useLocationEditor(siteId: string, locationId: Ref<string |
   const locationEffectiveFeatures = ref<ProductFeature[]>([])
 
   const locationToggleableFeatures = computed<ProductFeature[]>(() => {
-    const site = dashboard.site.value
+    const site = dashboard.organization.value
     if (!site?.vertical) return []
     const template = resolvePublicTemplate({ themeId: site.theme_id, vertical: site.vertical as SiteVertical }).slug
     const configurableHere = new Set(toggleableModulesForScope(template, 'location'))
@@ -119,7 +119,7 @@ export async function useLocationEditor(siteId: string, locationId: Ref<string |
   })
 
   const locationFeatureLabels = computed<Map<ProductFeature, string>>(() => {
-    const site = dashboard.site.value
+    const site = dashboard.organization.value
     if (!site?.vertical) return new Map()
     const vertical = site.vertical as SiteVertical
     const template = resolvePublicTemplate({ themeId: site.theme_id, vertical }).slug
@@ -263,7 +263,7 @@ export async function useLocationEditor(siteId: string, locationId: Ref<string |
     status: 'active',
     notification_phone: '',
   })
-  const siteLocalizationSettingsPath = computed(() => `/dashboard/${route.params.orgSlug}/sites/${route.params.siteSlug}/settings/localization`)
+  const siteLocalizationSettingsPath = computed(() => `/dashboard/${route.params.orgSlug}/settings/localization`)
   const locationLocalizationFields = computed(() => [
     { key: 'title', label: 'Name', source: location.value?.title },
     { key: 'short_description', label: 'Short description', source: location.value?.short_description },
@@ -432,7 +432,7 @@ export async function useLocationEditor(siteId: string, locationId: Ref<string |
     editorError.value = null
     try {
       const response = await dashboardApi<{ success: true; config: LocationReservationConfig | null }>(
-        `/api/editor/sites/${siteId}/locations/${requestedLocationId}/reservation-config`,
+        `/api/editor/organizations/${siteId}/locations/${requestedLocationId}/reservation-config`,
         { method: 'PUT', body: reservationForm.value, validate: isReservationConfigResponse },
       )
       if (locationId.value !== requestedLocationId) return
@@ -453,7 +453,7 @@ export async function useLocationEditor(siteId: string, locationId: Ref<string |
     editorError.value = null
     try {
       await dashboardApi<{ success: true }>(
-        `/api/editor/sites/${siteId}/locations/${requestedLocationId}/reservation-config`,
+        `/api/editor/organizations/${siteId}/locations/${requestedLocationId}/reservation-config`,
         { method: 'DELETE', validate: (value: unknown): value is { success: true } => isRecord(value) && value.success === true },
       )
       if (locationId.value !== requestedLocationId) return
@@ -582,7 +582,7 @@ export async function useLocationEditor(siteId: string, locationId: Ref<string |
         { validate: isLocationResponse },
       ),
       dashboardApi<{ success: true; config: LocationReservationConfig | null }>(
-        `/api/editor/sites/${siteId}/locations/${requestedLocationId}/reservation-config`,
+        `/api/editor/organizations/${siteId}/locations/${requestedLocationId}/reservation-config`,
         { validate: isReservationConfigResponse },
       ),
     ])
@@ -633,7 +633,7 @@ import EditorNavigationList from '~/components/dashboard/EditorNavigationList.vu
 
 const level = useRouteLevel()
 const dashboardLocation = useDashboardLocation()
-const siteId = await useDashboardSiteId()
+const siteId = await useDashboardOrganizationId()
 const editor = await useLocationEditor(siteId, dashboardLocation.currentLocationId, null, level.path)
 
 const localizeOpen = ref(false)

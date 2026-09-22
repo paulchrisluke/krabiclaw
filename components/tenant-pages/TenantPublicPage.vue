@@ -66,8 +66,8 @@ const { data, error, status, execute } = await useAsyncData(key, async () => {
   }
   const query: Record<string, string> = { path: pagePath.value }
   const endpoint = activeLocale.value === 'en'
-    ? `/api/public/sites/${encodeURIComponent(siteId)}/pages`
-    : `/api/public/sites/${encodeURIComponent(siteId)}/localized-pages/${encodeURIComponent(activeLocale.value)}`
+    ? `/api/public/pages`
+    : `/api/public/localized-pages/${encodeURIComponent(activeLocale.value)}`
   return await publicApiRequest<{ success: true; page: PublicTenantPage }>(endpoint, {
     query,
     validate: isPageResponse,

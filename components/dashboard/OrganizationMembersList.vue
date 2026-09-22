@@ -225,7 +225,7 @@ const isMembersResponse = (
   && value.invitations.every(invitation => isRecord(invitation) && typeof invitation.id === 'string')
 
 const route = useRoute()
-const dashboard = useDashboardSite()
+const dashboard = useDashboardOrganization()
 const { orgPaths } = useDashboardSiteLinks()
 const membersPath = computed(() => `${orgPaths.value.settings}/members`)
 const membersKey = computed(() => organizationMembersKey(String(route.params.orgSlug ?? '')))

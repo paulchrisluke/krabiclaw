@@ -1,5 +1,5 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
-import { getPublicLinksPage } from '~/server/utils/site-links'
+import { getPublicLinksPage } from '~/server/utils/links-page'
 import { getQuery } from 'nitro/h3'
 
 export default defineHandler(async (event) => {

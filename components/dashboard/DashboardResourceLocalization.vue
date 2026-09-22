@@ -255,7 +255,7 @@ async function loadLanguages(): Promise<void> {
   markDraftClean()
   try {
     const response = await dashboardApi<{ languages: LanguageRow[] }>(
-      `/api/editor/sites/${props.siteId}/locales`,
+      `/api/editor/organizations/${props.siteId}/locales`,
       { validate: isLanguagesResponse },
     )
     const sources = response.languages.filter(item => Boolean(item.is_source) && item.status === 'published')
@@ -289,7 +289,7 @@ async function load(): Promise<void> {
   loading.value = true
   try {
     const response = props.loadValues ? null : await dashboardApi<LocalizationResponse>(
-      `/api/editor/sites/${props.siteId}/localization/${props.resourceType}/${props.resourceId}/${encodeURIComponent(requestedLocale)}`,
+      `/api/editor/organizations/${props.siteId}/localization/${props.resourceType}/${props.resourceId}/${encodeURIComponent(requestedLocale)}`,
       { validate: isLocalizationResponse },
     )
     const values = props.loadValues ? await props.loadValues(requestedLocale)
@@ -320,7 +320,7 @@ async function save(): Promise<void> {
       await props.saveValues(requestedLocale, values)
     } else {
       await dashboardApi(
-        `/api/editor/sites/${props.siteId}/localization/${props.resourceType}/${props.resourceId}/${encodeURIComponent(requestedLocale)}`,
+        `/api/editor/organizations/${props.siteId}/localization/${props.resourceType}/${props.resourceId}/${encodeURIComponent(requestedLocale)}`,
         {
           method: 'PUT',
           body: {

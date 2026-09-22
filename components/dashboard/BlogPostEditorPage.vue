@@ -52,17 +52,17 @@ import { getErrorMessage, isNotFoundError } from '~/utils/errors'
 const route = useRoute()
 const orgSlug = route.params.orgSlug as string
 const siteSlug = route.params.siteSlug as string
-const siteId = await useDashboardSiteId()
+const siteId = await useDashboardOrganizationId()
 const postId = String(route.params.postId || '')
 if (!postId) throw createError({ statusCode: 400, statusMessage: 'Post ID is required' })
 
-const blogPath = `/dashboard/${orgSlug}/sites/${siteSlug}/blog`
-const siteLocalizationSettingsPath = `/dashboard/${orgSlug}/sites/${siteSlug}/settings/localization`
+const blogPath = `/dashboard/${orgSlug}/blog`
+const siteLocalizationSettingsPath = `/dashboard/${orgSlug}/settings/localization`
 
 const { data: postResource, error: postError } = await useAsyncData(
   `dashboard-blog-post:${siteId}:${postId}`,
   () => dashboardFetch<{ post: BlogPost }>(
-    `/api/editor/sites/${siteId}/blog/${postId}`,
+    `/api/editor/organizations/${siteId}/blog/${postId}`,
     { orgSlug, siteSlug },
     { validate: isBlogPostResponse },
   ),
@@ -136,7 +136,7 @@ async function loadBlogLocalization(locale: string): Promise<Record<string, unkn
   let values: Record<string, unknown> = {}
   try {
     const response = await dashboardApi<BlogTranslationResponse>(
-      `/api/editor/sites/${siteId}/localization/content_document/${postId}/${encodeURIComponent(locale)}`,
+      `/api/editor/organizations/${siteId}/localization/content_document/${postId}/${encodeURIComponent(locale)}`,
       { validate: isBlogTranslationResponse },
     )
     values = { ...response.localization, 'metadata.category': response.localization.metadata.category,
@@ -183,7 +183,7 @@ async function saveBlogLocalization(locale: string, submitted: Record<string, un
   if (template !== 'saya' && template !== 'blawby' && template !== 'platform') throw new Error('Article template is missing or invalid.')
   const sourcePath = tenantBlogPostPath({ themeId: publicTemplateRegistry[template].themeId }, post.slug, post.collection ?? 'blog')
   const response = await dashboardApi<BlogTranslationResponse>(
-    `/api/editor/sites/${siteId}/localization/content_document/${postId}/${encodeURIComponent(locale)}`,
+    `/api/editor/organizations/${siteId}/localization/content_document/${postId}/${encodeURIComponent(locale)}`,
     {
       method: 'PUT',
       body: {

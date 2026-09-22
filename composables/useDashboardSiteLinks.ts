@@ -1,7 +1,7 @@
 import { computed } from 'vue'
 
 export function useDashboardSiteLinks() {
-  const dashboard = useDashboardSite()
+  const dashboard = useDashboardOrganization()
   const dashboardLocation = useDashboardLocation()
 
   const orgPaths = computed(() => {
@@ -27,7 +27,7 @@ export function useDashboardSiteLinks() {
     const organizationSlug = dashboard.scope.value?.orgSlug
     const subdomain = dashboard.sites.value[0]?.subdomain
     if (!organizationSlug || !subdomain) return null
-    const site = `/dashboard/${organizationSlug}/sites/${subdomain}`
+    const site = `/dashboard/${organizationSlug}`
     return {
       site,
       locations: `/dashboard/${organizationSlug}/sites`,
@@ -44,7 +44,7 @@ export function useDashboardSiteLinks() {
     const scope = dashboard.scope.value
     if (!scope?.siteSlug) return null
 
-    const site = `/dashboard/${scope.orgSlug}/sites/${scope.siteSlug}`
+    const site = `/dashboard/${scope.orgSlug}`
     const settings = `${site}/settings`
 
     return {

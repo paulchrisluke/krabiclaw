@@ -223,7 +223,7 @@ watch([() => props.modelValue, () => props.selectedSummary], async ([id]) => {
 
   try {
     const res = await dashboardApi<{ media: PickerMediaAsset[] }>(
-      `/api/editor/sites/${props.siteId}/media?id=${encodeURIComponent(id)}&limit=1`,
+      `/api/editor/organizations/${props.siteId}/media?id=${encodeURIComponent(id)}&limit=1`,
       { signal: controller.signal, validate: isPickerMediaResponse },
     )
 

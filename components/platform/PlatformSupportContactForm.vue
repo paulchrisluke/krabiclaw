@@ -126,7 +126,7 @@ async function handleSubmit() {
   submitting.value = true
   try {
     if (!siteId) throw new Error('This form is only available on the KrabiClaw site.')
-    await $fetch<unknown>(`/api/public/sites/${encodeURIComponent(siteId)}/contact`, {
+    await $fetch<unknown>(`/api/public/contact`, {
       method: 'POST',
       body: {
         name: form.value.name.trim(),

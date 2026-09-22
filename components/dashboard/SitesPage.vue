@@ -36,14 +36,14 @@
 <script setup lang="ts">
 import DashboardSiteLocationSelector, { type SiteLocationSelectorItem } from '~/components/dashboard/SiteLocationSelector.vue'
 import { dashboardFetch } from '~/composables/dashboardFetch'
-import type { DashboardLocation } from '~/composables/useDashboardSite'
+import type { DashboardLocation } from '~/composables/useDashboardOrganization'
 import { getErrorMessage } from '~/utils/errors'
 import { resolveCmsCapabilities } from '~/config/cms-registry'
 import { resolvePublicTemplate } from '~/utils/template-registry'
 import { normalizeVertical, type SiteVertical } from '~/utils/vertical-copy'
 
 const route = useRoute()
-const dashboard = useDashboardSite()
+const dashboard = useDashboardOrganization()
 const { businessPaths } = useDashboardSiteLinks()
 
 const site = computed(() => dashboard.sites.value[0] ?? null)
@@ -84,7 +84,7 @@ const tiles = computed<SiteLocationSelectorItem[]>(() => locations.value.map((lo
     imageUrl: hero ? (hero.kind === 'video' ? hero.thumbnail_url : hero.public_url) : null,
     eyebrow: '',
     summary: lines.length ? lines.join(', ') : 'Address not set',
-    to: `/dashboard/${orgSlug.value}/sites/${location.parent_site_slug}/locations/${location.slug}`,
+    to: `/dashboard/${orgSlug.value}/locations/${location.slug}`,
   }
 }))
 

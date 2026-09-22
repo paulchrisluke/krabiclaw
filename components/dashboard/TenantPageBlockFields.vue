@@ -60,7 +60,7 @@ const fields = computed(() => tenantPageBlockFieldsForSection(block.value, props
 const validationErrors = computed(() => validateTenantPageBlock(block.value))
 
 // ── Records a reference field may point at ──────────────
-const dashboard = useDashboardSite()
+const dashboard = useDashboardOrganization()
 
 const needsPages = computed(() => fields.value.some(entry => entry.field.reference === 'page'))
 const needsProducts = computed(() => fields.value.some(entry => entry.field.reference === 'product' || entry.field.reference === 'collection'))
@@ -75,19 +75,19 @@ const isProductsResponse = (value: unknown): value is { products: NamedRow[] } =
 
 const { data: pagesData } = await useAsyncData(
   () => `tenant-page-options-${props.siteId}`,
-  () => useDashboardApi()(`/api/editor/sites/${props.siteId}/pages`, { validate: isTenantPageListResponse }),
+  () => useDashboardApi()(`/api/editor/organizations/${props.siteId}/pages`, { validate: isTenantPageListResponse }),
   { immediate: needsPages.value, watch: [needsPages], default: () => null },
 )
 
 const { data: collectionsData } = await useAsyncData(
   () => `tenant-page-collections-${props.siteId}`,
-  () => useDashboardApi()(`/api/editor/sites/${props.siteId}/collections`, { validate: isCollectionsResponse }),
+  () => useDashboardApi()(`/api/editor/organizations/${props.siteId}/collections`, { validate: isCollectionsResponse }),
   { immediate: needsProducts.value, watch: [needsProducts], default: () => null },
 )
 
 const { data: productsData } = await useAsyncData(
   () => `tenant-page-products-${props.siteId}`,
-  () => useDashboardApi()(`/api/editor/sites/${props.siteId}/products`, { validate: isProductsResponse }),
+  () => useDashboardApi()(`/api/editor/organizations/${props.siteId}/products`, { validate: isProductsResponse }),
   { immediate: needsProducts.value, watch: [needsProducts], default: () => null },
 )
 

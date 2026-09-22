@@ -97,7 +97,7 @@ const requestEvent = useRequestEvent()
 // Preview authorization is the site's, resolved once by tenant resolution
 // from the preview cookie; the client's API call carries the same cookie.
 const previewAuthorized = computed(() => Boolean(requestEvent?.context.previewAuthorized))
-const postEndpoint = computed(() => `/api/public/sites/${siteId}/blog/${String(route.params.slug)}?locale=${encodeURIComponent(locale)}`)
+const postEndpoint = computed(() => `/api/public/blog/${String(route.params.slug)}?locale=${encodeURIComponent(locale)}`)
 
 interface PublicBlogResponse {
   post: TenantBlogPost | null

@@ -42,7 +42,7 @@ async function submitContact() {
   submitting.value = true
   submitMessage.value = ''
   try {
-    await publicApiMutation<{ success: true }>(`/api/public/sites/${siteId}/contact`, {
+    await publicApiMutation<{ success: true }>(`/api/public/contact`, {
       method: 'POST',
       body: form,
       validate: (value): value is { success: true } => isRecord(value) && value.success === true,

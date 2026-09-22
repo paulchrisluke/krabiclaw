@@ -77,7 +77,7 @@ const { data: review, pending, error } = await useAsyncData<ApiRecord>(
       return result
     }
 
-    const endpoint = `/api/public/sites/${siteId}/locations/${slug.value}/reviews/${reviewId.value}`
+    const endpoint = `/api/public/locations/${slug.value}/reviews/${reviewId.value}`
     const response = await publicApiRequest<{ review: ApiRecord }>(endpoint, {
       validate: (value): value is { review: ApiRecord } =>
         isRecord(value) && isRecord(value.review),
@@ -108,7 +108,7 @@ function openLightbox(index: number) {
 
 async function markHelpful() {
   const result = await publicApiMutation<{ helpful: boolean; helpfulCount: number }>(
-    `/api/public/sites/${siteId}/locations/${slug.value}/reviews/${reviewId.value}/helpful`,
+    `/api/public/locations/${slug.value}/reviews/${reviewId.value}/helpful`,
     {
       method: 'POST',
       validate: (value): value is { helpful: boolean; helpfulCount: number } =>

@@ -1,6 +1,6 @@
 import { jsonResponse, rethrowHttpError } from '~/server/utils/api-response'
 import { requireSiteAccess } from '~/server/utils/location-access'
-import { SiteLinksValidationError, upsertLinksPage, type LinkItemUpdateInput, type LinksPageUpdateInput } from '~/server/utils/site-links'
+import { SiteLinksValidationError, upsertLinksPage, type LinkItemUpdateInput, type LinksPageUpdateInput } from '~/server/utils/links-page'
 
 export default defineHandler(async (event) => {
   const organizationId = getRouterParam(event, 'organizationId')
