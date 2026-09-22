@@ -1,60 +1,30 @@
 <template>
-  <NuxtPage v-if="frame.mode.value === 'yield'" />
-
   <!--
-    Messages is a screen, not a section of the site hub: the list is the left
-    column and the conversation is the right one, the way every mail client and
-    Airbnb's own inbox reads. The right column is there whether or not a thread
-    is open — an empty conversation pane says "pick one", where a full-width
-    list followed by a jump to a full-width conversation says nothing.
+    Messages, a tab root: the list is the left column and the conversation the
+    right one, the way every mail client and Airbnb's own inbox reads. Where
+    there is a second column the newest thread opens into it on arrival; below
+    that width the list is the whole screen and a thread is somewhere you go.
+    A list panel is not a form: its rows run to the edge of the column.
   -->
-  <template v-else>
-    <!--
-      A list panel is not a form: its rows run to the edge of the column, so
-      both panels drop the body padding rather than a wrapper doing it for them.
-    -->
-    <UDashboardPanel
-      id="site-messages"
-      :class="hasDetail ? 'hidden lg:flex' : undefined"
-      :default-size="32"
-      :ui="{ body: 'p-0 sm:p-0 gap-0' }"
-    >
-      <template #header>
-        <UDashboardNavbar :title="pastOnly ? 'Past conversations' : 'Messages'" :toggle="false">
-          <template #leading>
-            <DashboardNavbarLeading />
-          </template>
-        </UDashboardNavbar>
-      </template>
-
-      <template #body>
-        <GuestThreadList scope="site" />
-      </template>
-    </UDashboardPanel>
-
-    <!-- The open thread owns the other column, header and all. Until the list
-         has opened one on a wide screen, the column stands empty rather than
-         collapsing the list to full width and back. -->
-    <NuxtPage v-if="hasDetail" />
-    <UDashboardPanel v-else id="site-messages-thread" class="hidden lg:flex" />
-  </template>
+  <DashboardIndexPanel
+    id="site-messages"
+    :title="pastOnly ? 'Past conversations' : 'Messages'"
+    :auto-open="firstThread"
+    :ui="{ body: 'p-0 sm:p-0 gap-0' }"
+  >
+    <GuestThreadList scope="site" @first="firstThread = $event" />
+  </DashboardIndexPanel>
 </template>
 
 <script setup lang="ts">
+import type { RouteLocationRaw } from 'vue-router'
 import GuestThreadList from '~/lib/components/workspace/messages/GuestThreadList.vue'
 
-definePageMeta({ layout: 'dashboard', ownsChrome: true })
+definePageMeta({ layout: 'dashboard' })
 
 const route = useRoute()
-
-// Both paths come from the route this page is mounted on, so the back link
-// cannot end up pointing nowhere while the page itself renders.
-const sitePath = computed(() => `/dashboard/${String(route.params.orgSlug)}/sites/${String(route.params.siteSlug)}`)
-const messagesPath = computed(() => `${sitePath.value}/messages`)
-const frame = useEditorFrame(messagesPath)
-const hasDetail = computed(() => frame.mode.value === 'pair')
-
 const pastOnly = computed(() => route.query.archived !== undefined)
+const firstThread = ref<RouteLocationRaw | null>(null)
 
 useSeoMeta({ title: 'Messages | KrabiClaw Dashboard', robots: 'noindex, nofollow' })
 </script>

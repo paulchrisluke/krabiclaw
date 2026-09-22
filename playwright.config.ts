@@ -18,27 +18,6 @@ const baseURL = previewUrl || `http://localhost:${port}`
 const localPrepared = process.env.PLAYWRIGHT_LOCAL_PREPARED === 'true'
 const captureServerLogs = process.env.PLAYWRIGHT_SERVER_LOGS === 'true' || !!process.env.CI
 const localDevRouteSecret = previewUrl ? '' : 'local-playwright-dev-route-secret'
-const shellQuote = (value: string) => `'${value.replaceAll("'", `'\\''`)}'`
-/**
- * Secrets the local Worker needs from the environment.
- *
- * `wrangler dev` reads none of the process environment, so anything the Worker
- * requires has to be handed over as a --var. Better Auth refuses to construct
- * without STRIPE_SECRET_KEY, which is why a suite that signs anyone in cannot
- * run against a Worker started without it.
- */
-const forwardedWorkerVars = [
-  'STRIPE_SECRET_KEY',
-  'STRIPE_WEBHOOK_SECRET',
-  'BETTER_AUTH_SECRET',
-  'CONNECTOR_TOKEN_ENCRYPTION_KEY',
-  'PREVIEW_SECRET',
-  'CF_ACCOUNT_ID',
-  'CLOUDFLARE_IMAGES_API_TOKEN',
-  'CLOUDFLARE_IMAGES_VARIANT_BASE',
-]
-const optionalWorkerVars = forwardedWorkerVars
-  .flatMap(name => process.env[name] ? ['--var', `${name}:${shellQuote(process.env[name]!)}`] : [])
 
 if (!previewUrl && !process.env.E2E_TEST_PASSWORD) {
   // Same shape as CI's generated password: the app's password policy requires an
@@ -50,6 +29,9 @@ if (!previewUrl) {
 }
 
 const localWorkerEnvironment = [
+  // Wrangler reads .env natively. Include the runner's environment so CI secrets
+  // and the local overrides below reach Worker bindings without a second list.
+  'CLOUDFLARE_INCLUDE_PROCESS_ENV=true',
   'EMAIL_DELIVERY_MODE=log_only',
   'WHATSAPP_DELIVERY_MODE=log_only',
   'EMAIL_REPLY_SECRET=local-playwright-email-reply-secret',
@@ -70,16 +52,6 @@ const localWorkerCommand = [
   `--host localhost:${port}`,
   '--var E2E_ALLOW_DEV_ROUTES:true',
   `--var E2E_DEV_ROUTE_SECRET:${localDevRouteSecret}`,
-  '--var EMAIL_DELIVERY_MODE:log_only',
-  '--var WHATSAPP_DELIVERY_MODE:log_only',
-  '--var EMAIL_REPLY_SECRET:local-playwright-email-reply-secret',
-  `--var BETTER_AUTH_URL:http://localhost:${port}`,
-  `--var NUXT_PUBLIC_PLATFORM_DOMAIN:http://localhost:${port}`,
-  `--var NUXT_PUBLIC_FREE_SITE_DOMAIN:http://localhost:${port}`,
-  '--var NUXT_PUBLIC_APP_NAME:KrabiClaw',
-  `--var NUXT_PUBLIC_SITE_URL:http://localhost:${port}`,
-  `--var NUXT_PUBLIC_HELP_URL:http://localhost:${port}/help`,
-  ...optionalWorkerVars,
 ].join(' ')
 
 export default defineConfig({

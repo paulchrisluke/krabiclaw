@@ -1,134 +1,127 @@
 <template>
-  <UDashboardPanel id="org-calendar">
-    <template #header>
-      <UDashboardNavbar title="Calendar">
-      </UDashboardNavbar>
-    </template>
-
-    <template #body>
-      <div class="mx-auto w-full max-w-[var(--ws-page-wide,90rem)] space-y-6 pb-24">
-        <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div class="space-y-3">
-            <div class="flex items-center gap-1">
-              <UButton icon="i-lucide-chevron-left" color="neutral" variant="ghost" square aria-label="Previous month" @click="moveMonth(-1)" />
-              <UButton label="Today" color="neutral" variant="soft" @click="goToday" />
-              <UButton icon="i-lucide-chevron-right" color="neutral" variant="ghost" square aria-label="Next month" @click="moveMonth(1)" />
-              <h2 class="ml-3 text-lg font-semibold text-highlighted">{{ monthLabel }}</h2>
-            </div>
-            <div class="flex gap-2" aria-label="Calendar view">
-              <UButton
-                label="Agenda"
-                :variant="calendarView === 'agenda' ? 'solid' : 'soft'"
-                :color="calendarView === 'agenda' ? 'primary' : 'neutral'"
-                @click="calendarView = 'agenda'"
-              />
-              <UButton
-                label="Availability"
-                :variant="calendarView === 'availability' ? 'solid' : 'soft'"
-                :color="calendarView === 'availability' ? 'primary' : 'neutral'"
-                @click="calendarView = 'availability'"
-              />
-            </div>
+  <DashboardIndexPanel id="org-calendar" title="Calendar">
+    <div class="mx-auto w-full max-w-[var(--ws-page-wide,90rem)] space-y-6 pb-24">
+      <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div class="space-y-3">
+          <div class="flex items-center gap-1">
+            <UButton icon="i-lucide-chevron-left" color="neutral" variant="ghost" square aria-label="Previous month" @click="moveMonth(-1)" />
+            <UButton label="Today" color="neutral" variant="soft" @click="goToday" />
+            <UButton icon="i-lucide-chevron-right" color="neutral" variant="ghost" square aria-label="Next month" @click="moveMonth(1)" />
+            <h2 class="ml-3 text-lg font-semibold text-highlighted">{{ monthLabel }}</h2>
           </div>
-          <div class="grid grid-cols-1 gap-3 sm:grid-cols-3 lg:w-[38rem]">
-            <UFormField label="Site">
-              <USelect v-model="filters.siteId" :items="siteOptions" class="w-full" />
-            </UFormField>
-            <UFormField label="Location">
-              <USelect v-model="filters.locationId" :items="locationOptions" :disabled="filters.siteId === FILTER_ALL" class="w-full" />
-            </UFormField>
-            <UFormField v-if="calendarView === 'agenda'" label="Kind">
-              <USelect v-model="filters.kind" :items="kindOptions" class="w-full" />
-            </UFormField>
+          <div class="flex gap-2" aria-label="Calendar view">
+            <UButton
+              label="Agenda"
+              :variant="calendarView === 'agenda' ? 'solid' : 'soft'"
+              :color="calendarView === 'agenda' ? 'primary' : 'neutral'"
+              @click="calendarView = 'agenda'"
+            />
+            <UButton
+              label="Availability"
+              :variant="calendarView === 'availability' ? 'solid' : 'soft'"
+              :color="calendarView === 'availability' ? 'primary' : 'neutral'"
+              @click="calendarView = 'availability'"
+            />
+          </div>
+        </div>
+        <div class="grid grid-cols-1 gap-3 sm:grid-cols-3 lg:w-[38rem]">
+          <UFormField label="Site">
+            <USelect v-model="filters.siteId" :items="siteOptions" class="w-full" />
+          </UFormField>
+          <UFormField label="Location">
+            <USelect v-model="filters.locationId" :items="locationOptions" :disabled="filters.siteId === FILTER_ALL" class="w-full" />
+          </UFormField>
+          <UFormField v-if="calendarView === 'agenda'" label="Kind">
+            <USelect v-model="filters.kind" :items="kindOptions" class="w-full" />
+          </UFormField>
+        </div>
+      </div>
+
+      <template v-if="calendarView === 'availability'">
+        <UAlert
+          v-if="filters.siteId === FILTER_ALL || filters.locationId === FILTER_ALL"
+          color="neutral"
+          variant="soft"
+          title="Choose a site and location"
+          description="Availability is managed for one location at a time."
+        />
+        <DashboardAvailabilityCalendar
+          v-else
+          :site-id="filters.siteId"
+          :location-id="filters.locationId"
+          :from="monthStart"
+          :to="monthEnd"
+          :owner-type="availabilityOwnerType"
+          :owner-id="availabilityOwnerId"
+        />
+      </template>
+
+      <template v-else>
+        <UAlert
+          v-if="agendaError"
+          color="error"
+          variant="soft"
+          title="Calendar could not be loaded"
+          :description="getErrorMessage(agendaError, 'Calendar request failed')"
+        />
+        <USkeleton v-if="loading && !agendaData" class="h-[38rem] w-full" />
+
+        <template v-else-if="agendaData && !agendaError">
+        <div data-testid="calendar-month-grid" class="hidden overflow-hidden rounded-lg border border-default lg:block">
+          <div class="grid grid-cols-7 border-b border-default bg-muted/30">
+            <div v-for="day in weekdayLabels" :key="day" class="px-3 py-2 text-xs font-semibold uppercase tracking-wide text-muted">{{ day }}</div>
+          </div>
+          <div class="grid grid-cols-7">
+            <a
+              v-for="cell in monthCells"
+              :key="cell.dayKey"
+              href="#calendar-day-list"
+              class="min-h-32 border-b border-r border-default p-2 text-left last:border-r-0"
+              :class="cell.inMonth ? 'bg-default' : 'bg-muted/20 text-dimmed'"
+              @click="selectedDay = cell.dayKey"
+            >
+              <span class="inline-flex size-7 items-center justify-center rounded-full text-xs font-medium" :class="cell.isToday ? 'bg-primary text-inverted' : ''">{{ cell.day }}</span>
+              <ul class="mt-1 space-y-1">
+                <li v-for="item in cell.items.slice(0, 3)" :key="item.id" class="flex min-w-0 items-center gap-1 rounded px-1.5 py-1 text-[11px]" :class="kindStyle(item.kind)">
+                  <UIcon :name="kindIcon(item.kind)" class="size-3 shrink-0" />
+                  <span class="truncate">{{ kindLabel(item.kind) }} · {{ item.title }}</span>
+                </li>
+                <li v-if="cell.items.length > 3" class="px-1.5 text-[11px] font-medium text-muted">+{{ cell.items.length - 3 }} more</li>
+              </ul>
+            </a>
           </div>
         </div>
 
-        <template v-if="calendarView === 'availability'">
-          <UAlert
-            v-if="filters.siteId === FILTER_ALL || filters.locationId === FILTER_ALL"
-            color="neutral"
-            variant="soft"
-            title="Choose a site and location"
-            description="Availability is managed for one location at a time."
-          />
-          <DashboardAvailabilityCalendar
-            v-else
-            :site-id="filters.siteId"
-            :location-id="filters.locationId"
-            :from="monthStart"
-            :to="monthEnd"
-            :owner-type="availabilityOwnerType"
-            :owner-id="availabilityOwnerId"
-          />
-        </template>
-
-        <template v-else>
-          <UAlert
-            v-if="agendaError"
-            color="error"
-            variant="soft"
-            title="Calendar could not be loaded"
-            :description="getErrorMessage(agendaError, 'Calendar request failed')"
-          />
-          <USkeleton v-if="loading && !agendaData" class="h-[38rem] w-full" />
-
-          <template v-else-if="agendaData && !agendaError">
-          <div data-testid="calendar-month-grid" class="hidden overflow-hidden rounded-lg border border-default lg:block">
-            <div class="grid grid-cols-7 border-b border-default bg-muted/30">
-              <div v-for="day in weekdayLabels" :key="day" class="px-3 py-2 text-xs font-semibold uppercase tracking-wide text-muted">{{ day }}</div>
-            </div>
-            <div class="grid grid-cols-7">
-              <a
-                v-for="cell in monthCells"
-                :key="cell.dayKey"
-                href="#calendar-day-list"
-                class="min-h-32 border-b border-r border-default p-2 text-left last:border-r-0"
-                :class="cell.inMonth ? 'bg-default' : 'bg-muted/20 text-dimmed'"
-                @click="selectedDay = cell.dayKey"
-              >
-                <span class="inline-flex size-7 items-center justify-center rounded-full text-xs font-medium" :class="cell.isToday ? 'bg-primary text-inverted' : ''">{{ cell.day }}</span>
-                <ul class="mt-1 space-y-1">
-                  <li v-for="item in cell.items.slice(0, 3)" :key="item.id" class="flex min-w-0 items-center gap-1 rounded px-1.5 py-1 text-[11px]" :class="kindStyle(item.kind)">
-                    <UIcon :name="kindIcon(item.kind)" class="size-3 shrink-0" />
-                    <span class="truncate">{{ kindLabel(item.kind) }} · {{ item.title }}</span>
-                  </li>
-                  <li v-if="cell.items.length > 3" class="px-1.5 text-[11px] font-medium text-muted">+{{ cell.items.length - 3 }} more</li>
-                </ul>
-              </a>
-            </div>
+        <section v-if="selectedDayItems.length" id="calendar-day-list" class="hidden scroll-mt-20 space-y-2 lg:block">
+          <h3 class="text-sm font-semibold text-highlighted">{{ dayLabel(selectedDay) }}</h3>
+          <div class="divide-y divide-default border-y border-default">
+            <AgendaRow v-for="item in selectedDayItems" :key="item.id" :item="item" />
           </div>
+        </section>
 
-          <section v-if="selectedDayItems.length" id="calendar-day-list" class="hidden scroll-mt-20 space-y-2 lg:block">
-            <h3 class="text-sm font-semibold text-highlighted">{{ dayLabel(selectedDay) }}</h3>
+        <div data-testid="calendar-mobile-list" class="space-y-8 lg:hidden">
+          <section v-for="group in mobileGroups" :id="`day-${group.dayKey}`" :key="group.dayKey" class="scroll-mt-20 space-y-2">
+            <h3 class="text-sm font-semibold text-highlighted">{{ dayLabel(group.dayKey) }}</h3>
             <div class="divide-y divide-default border-y border-default">
-              <AgendaRow v-for="item in selectedDayItems" :key="item.id" :item="item" />
+              <AgendaRow v-for="item in group.items" :key="item.id" :item="item" />
             </div>
           </section>
+        </div>
 
-          <div data-testid="calendar-mobile-list" class="space-y-8 lg:hidden">
-            <section v-for="group in mobileGroups" :id="`day-${group.dayKey}`" :key="group.dayKey" class="scroll-mt-20 space-y-2">
-              <h3 class="text-sm font-semibold text-highlighted">{{ dayLabel(group.dayKey) }}</h3>
-              <div class="divide-y divide-default border-y border-default">
-                <AgendaRow v-for="item in group.items" :key="item.id" :item="item" />
-              </div>
-            </section>
-          </div>
-
-          <div v-if="agendaData.items.length === 0" class="py-20 text-center">
-            <img
-              src="https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/bb1d388b-61f1-4027-5457-0909965c8300/thumbnail"
-              alt=""
-              aria-hidden="true"
-              class="mx-auto size-28 object-contain"
-            >
-            <p class="mt-6 text-base font-semibold text-highlighted">Nothing scheduled this month</p>
-            <p class="mt-1 text-sm text-muted">Try another month or adjust the filters.</p>
-          </div>
-          </template>
+        <div v-if="agendaData.items.length === 0" class="py-20 text-center">
+          <img
+            src="https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/bb1d388b-61f1-4027-5457-0909965c8300/thumbnail"
+            alt=""
+            aria-hidden="true"
+            class="mx-auto size-28 object-contain"
+          >
+          <p class="mt-6 text-base font-semibold text-highlighted">Nothing scheduled this month</p>
+          <p class="mt-1 text-sm text-muted">Try another month or adjust the filters.</p>
+        </div>
         </template>
-      </div>
-    </template>
-  </UDashboardPanel>
+      </template>
+    </div>
+  </DashboardIndexPanel>
 </template>
 
 <script setup lang="ts">

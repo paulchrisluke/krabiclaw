@@ -71,15 +71,10 @@ Do not add a package to `npmPreapprovedPackages` or disable the age gate in
 
 ### 2. Environment
 
-Copy `.env.example` to `.env` and fill in values. Required for local dev:
-
-```env
-BETTER_AUTH_SECRET=        # openssl rand -base64 32
-BETTER_AUTH_URL=http://localhost:3000
-CRON_SECRET=               # openssl rand -base64 32
-GOOGLE_CLIENT_ID=          # Google Cloud Console — OAuth client
-GOOGLE_CLIENT_SECRET=
-```
+Copy `.env.example` to `.env` and fill in the application secrets there. This is
+the single local configuration for Nuxt, Wrangler, setup scripts, and E2E tests.
+See [local development](docs/local-development.md) for setup and migrating an
+older `.dev.vars` file. No second secret file or symlink is needed.
 
 ### 3. Prepare local development
 
@@ -123,11 +118,11 @@ site's `subdomain`, not its `slug`. Kikuzuki therefore uses
 `/dashboard/kikuzuki-krabi-thailand/sites/kikuzuki`.
 
 For production-runtime browser verification, use the generated Worker locally.
-Wrangler reads `.env` and `.dev.vars` using its documented local-development
-behavior.
+Wrangler reads the same `.env` as Nuxt. Playwright also loads it and supplies
+test-specific local URLs and delivery settings to the Worker.
 
 ```bash
-yarn test:e2e:local --grep @smoke
+yarn test:e2e:local tests/e2e/tenant-rendering.spec.ts
 ```
 
 For a production-like local Worker:

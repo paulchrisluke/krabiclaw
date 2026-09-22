@@ -1,17 +1,15 @@
 <template>
-  <UDashboardPanel id="org-today">
-    <template #header>
-      <!--
-        Today keeps the navbar every other node has. The range switcher rides in
-        its centre slot rather than the body, so the page opens on content the
-        way the booking screens do.
-      -->
-      <!--
-        The title is announced but not drawn: the pills say which range is on
-        screen, and a "Today" heading beside a "Today" pill reads as two
-        different controls.
-      -->
-      <UDashboardNavbar title="Today" :toggle="false" :ui="{ title: 'sr-only', root: 'h-(--ui-header-height) shrink-0 flex items-center justify-between px-4 sm:px-6 gap-1.5', center: 'flex flex-1 items-center justify-center' }">
+  <DashboardIndexPanel
+    id="org-today"
+    title="Today"
+    :navbar-ui="{ title: 'sr-only', root: 'h-(--ui-header-height) shrink-0 flex items-center justify-between px-4 sm:px-6 gap-1.5', center: 'flex flex-1 items-center justify-center' }"
+  >
+    <!--
+      The title is announced but not drawn: the pills say which range is on
+      screen, and a "Today" heading beside a "Today" pill reads as two
+      different controls.
+    -->
+    <template #center>
         <div class="flex items-center gap-2">
           <UTabs
             v-model="rangeModel"
@@ -20,7 +18,7 @@
             size="xl"
             aria-label="Booking range"
           />
-
+  
           <UPopover v-model:open="filtersOpen" :content="{ align: 'end', side: 'bottom', sideOffset: 10 }">
             <UButton
               icon="i-lucide-sliders-horizontal"
@@ -30,7 +28,7 @@
               class="rounded-full"
               aria-label="Filter bookings"
             />
-
+  
             <template #content>
               <div class="w-72 space-y-4 p-4">
                 <div class="flex items-center justify-between gap-3">
@@ -50,83 +48,80 @@
             </template>
           </UPopover>
         </div>
-      </UDashboardNavbar>
     </template>
 
-    <template #body>
-      <div class="mx-auto w-full max-w-[var(--ws-page-reading,56rem)] pb-24">
-        <UAlert
-          v-if="realtime.status.value === 'failed'"
-          class="mb-6"
-          color="warning"
-          variant="soft"
-          icon="i-lucide-wifi-off"
-          title="Today's schedule may be out of date"
-          description="The live dashboard connection is unavailable."
-        >
-          <template #actions>
-            <UButton color="warning" variant="soft" size="xs" @click="retryRealtime">Refresh</UButton>
-          </template>
-        </UAlert>
-        <UAlert
-          v-if="activeError"
-          class="mb-6"
-          color="error"
-          variant="soft"
-          :title="`${activeLabel} could not be loaded`"
-          :description="getErrorMessage(activeError, `${activeLabel} request failed`)"
-        />
+    <div class="mx-auto w-full max-w-[var(--ws-page-reading,56rem)] pb-24">
+      <UAlert
+        v-if="realtime.status.value === 'failed'"
+        class="mb-6"
+        color="warning"
+        variant="soft"
+        icon="i-lucide-wifi-off"
+        title="Today's schedule may be out of date"
+        description="The live dashboard connection is unavailable."
+      >
+        <template #actions>
+          <UButton color="warning" variant="soft" size="xs" @click="retryRealtime">Refresh</UButton>
+        </template>
+      </UAlert>
+      <UAlert
+        v-if="activeError"
+        class="mb-6"
+        color="error"
+        variant="soft"
+        :title="`${activeLabel} could not be loaded`"
+        :description="getErrorMessage(activeError, `${activeLabel} request failed`)"
+      />
 
-        <h1 class="text-center text-2xl font-semibold text-highlighted">
-          {{ heading }}
-        </h1>
+      <h1 class="text-center text-2xl font-semibold text-highlighted">
+        {{ heading }}
+      </h1>
 
-        <div v-if="pending && !todayData" class="mt-6 space-y-4" aria-label="Loading today">
-          <USkeleton v-for="index in 4" :key="index" class="h-36 w-full rounded-2xl sm:h-40" />
+      <div v-if="pending && !todayData" class="mt-6 space-y-4" aria-label="Loading today">
+        <USkeleton v-for="index in 4" :key="index" class="h-36 w-full rounded-2xl sm:h-40" />
+      </div>
+
+      <template v-else>
+        <div v-if="visibleItems.length" class="mt-6 space-y-4">
+          <TodayAgendaCard
+            v-for="item in visibleItems"
+            :key="item.id"
+            :item="item"
+            :reference-day="referenceDay(item)"
+          />
         </div>
 
-        <template v-else>
-          <div v-if="visibleItems.length" class="mt-6 space-y-4">
-            <TodayAgendaCard
-              v-for="item in visibleItems"
-              :key="item.id"
-              :item="item"
-              :reference-day="referenceDay(item)"
-            />
-          </div>
-
-          <div v-else-if="!activeLoading && !activeError" class="py-24 text-center">
-            <img
-              src="https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/b2e34737-127b-4117-0666-814df0556800/thumbnail"
-              alt=""
-              aria-hidden="true"
-              class="mx-auto size-28 object-contain"
-            >
-            <p class="mt-6 text-base font-semibold text-highlighted">{{ emptyTitle }}</p>
-            <p class="mt-1 text-sm text-muted">{{ emptyDescription }}</p>
-          </div>
-
-          <div
-            v-if="hasMore"
-            :key="`${activeRange}-${filterSignature}`"
-            ref="loadMoreSentinel"
-            class="flex min-h-24 items-center justify-center"
-            aria-live="polite"
+        <div v-else-if="!activeLoading && !activeError" class="py-24 text-center">
+          <img
+            src="https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/b2e34737-127b-4117-0666-814df0556800/thumbnail"
+            alt=""
+            aria-hidden="true"
+            class="mx-auto size-28 object-contain"
           >
-            <UIcon v-if="activeLoading" name="i-lucide-loader-circle" class="size-6 animate-spin text-muted" />
-            <span v-else class="sr-only">Scroll to load more</span>
-          </div>
-        </template>
+          <p class="mt-6 text-base font-semibold text-highlighted">{{ emptyTitle }}</p>
+          <p class="mt-1 text-sm text-muted">{{ emptyDescription }}</p>
+        </div>
 
-        <!--
-          Triage is a band, not a badge on every row. Marking each card with its
-          status makes the operator read all of them to find the one waiting on
-          a reply; naming the count once, pinned, does not. It stays out of the
-          list so the cards keep the single shape they were redesigned for.
-        -->
-      </div>
-    </template>
-  </UDashboardPanel>
+        <div
+          v-if="hasMore"
+          :key="`${activeRange}-${filterSignature}`"
+          ref="loadMoreSentinel"
+          class="flex min-h-24 items-center justify-center"
+          aria-live="polite"
+        >
+          <UIcon v-if="activeLoading" name="i-lucide-loader-circle" class="size-6 animate-spin text-muted" />
+          <span v-else class="sr-only">Scroll to load more</span>
+        </div>
+      </template>
+
+      <!--
+        Triage is a band, not a badge on every row. Marking each card with its
+        status makes the operator read all of them to find the one waiting on
+        a reply; naming the count once, pinned, does not. It stays out of the
+        list so the cards keep the single shape they were redesigned for.
+      -->
+    </div>
+  </DashboardIndexPanel>
 </template>
 
 <script setup lang="ts">

@@ -11,7 +11,7 @@
       </UButton>
 
       <!-- Turning everything in a category off is rarely what someone wants;
-           the settings hub is one link away before they commit to it. -->
+           the settings index is one link away before they commit to it. -->
       <p v-if="state === 'ready'" class="text-sm text-muted">
         Or <NuxtLink to="/dashboard/account/profile/notifications" class="underline underline-offset-2">choose exactly what you receive</NuxtLink>.
       </p>

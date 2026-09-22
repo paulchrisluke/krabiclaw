@@ -38,6 +38,34 @@ const ORDERED_PLACEMENTS = new Set([
   'site:compliance_document',
 ])
 
+/**
+ * What a picture or video shows. One list, because it was previously written out
+ * in four places — the column's `$type`, the media manager's own union, and the
+ * MCP tool's JSON schema twice — and the column itself had no constraint at all,
+ * so any string a writer invented was stored. `media_assets_category_check`
+ * holds the same set in SQL, which is the database's own copy of it.
+ *
+ * Which of these a business is *offered* is a separate question, answered per
+ * vertical in `utils/product-presentation.ts`: a law firm is not shown Food.
+ */
+export const MEDIA_CATEGORIES = [
+  'exterior', 'interior', 'food', 'menu', 'team', 'other', 'logo', 'blog',
+] as const
+
+export type MediaCategory = typeof MEDIA_CATEGORIES[number]
+
+/**
+ * The subjects a writer may set. `logo` and `blog` are assigned by the surfaces
+ * that own those pictures, never chosen as a subject.
+ */
+export const WRITABLE_MEDIA_CATEGORIES = [
+  'exterior', 'interior', 'food', 'menu', 'team', 'other',
+] as const satisfies readonly MediaCategory[]
+
+export function isMediaCategory(value: unknown): value is MediaCategory {
+  return typeof value === 'string' && (MEDIA_CATEGORIES as readonly string[]).includes(value)
+}
+
 export const MAX_ORDERED_MEDIA_ASSETS = 50
 
 export function isSupportedMediaPlacement(placement: { owner_type: string; slot: string }) {

@@ -1,295 +1,147 @@
 <template>
   <!--
     One record, two places it is opened from: its own screen under Today, and
-    the detail column of the guest thread it belongs to. Neither chrome belongs
-    here — the route that mounted this drew it — so this is the record body and
-    the editor chain that hangs off `basePath`.
+    the detail column of the guest thread it belongs to. This is the summary;
+    the things that change it — the request, a note, the guest — are levels of
+    their own under the record's canonical URL, which both mounts link to.
   -->
-  <div class="flex min-h-0 flex-1 flex-col">
-      <div v-if="pending && !booking" class="space-y-4 p-5 sm:p-8">
-        <USkeleton v-for="index in 4" :key="index" class="h-40 rounded-2xl" />
-      </div>
-      <div v-else-if="error" class="p-5 sm:p-8">
-        <UAlert color="error" variant="soft" title="Booking details could not be loaded" :description="getErrorMessage(error, 'Booking request failed')" />
-      </div>
-      <template v-else>
-        <div class="min-h-0 flex-1 overflow-y-auto p-5 sm:p-8">
-          <UAlert
-            v-if="actionError"
-            class="mb-5"
-            color="error"
-            variant="soft"
-            icon="i-lucide-circle-alert"
-            :description="actionError"
-          />
-          <UAlert
-            v-if="realtime.status.value === 'failed'"
-            class="mb-5"
-            color="warning"
-            variant="soft"
-            icon="i-lucide-wifi-off"
-            title="Reservation details may be out of date"
-            description="The live dashboard connection is unavailable."
+  <!--
+    The provider owns its chrome: the levels below inject what this component
+    holds, and `<NuxtPage>` reaches them only from inside its own subtree. In
+    the thread's drawer there is no column to own, so it is the body alone.
+  -->
+  <component :is="embedded ? 'div' : DashboardIndexPanel" v-bind="chrome">
+    <div v-if="pending && !booking" class="space-y-4 p-5 sm:p-8">
+      <USkeleton v-for="index in 4" :key="index" class="h-40 rounded-2xl" />
+    </div>
+    <div v-else-if="error" class="p-5 sm:p-8">
+      <UAlert color="error" variant="soft" title="Booking details could not be loaded" :description="getErrorMessage(error, 'Booking request failed')" />
+    </div>
+    <template v-else>
+      <div class="min-h-0 flex-1 overflow-y-auto p-5 sm:p-8">
+        <UAlert
+          v-if="actionError"
+          class="mb-5"
+          color="error"
+          variant="soft"
+          icon="i-lucide-circle-alert"
+          :description="actionError"
+        />
+        <UAlert
+          v-if="realtime.status.value === 'failed'"
+          class="mb-5"
+          color="warning"
+          variant="soft"
+          icon="i-lucide-wifi-off"
+          title="Reservation details may be out of date"
+          description="The live dashboard connection is unavailable."
+        >
+          <template #actions>
+            <UButton color="warning" variant="soft" size="xs" @click="retryRealtime">Refresh</UButton>
+          </template>
+        </UAlert>
+        <template v-if="booking">
+          <div class="mx-auto w-full max-w-md">
+          <img
+            v-if="bookingImageUrl"
+            :src="bookingImageUrl"
+            alt=""
+            class="mb-6 aspect-[4/3] w-full rounded-xl object-cover"
           >
-            <template #actions>
-              <UButton color="warning" variant="soft" size="xs" @click="retryRealtime">Refresh</UButton>
-            </template>
-          </UAlert>
-          <!--
-            Change is a mode of this leaf, not a screen of its own: every row
-            edits the same staged draft and nothing here persists until the one
-            commit in the footer. That is why the field editors have no Save of
-            their own — a per-field commit bar would promise a write that never
-            happens.
-          -->
-          <div v-if="booking && isChangeMode" class="mx-auto w-full max-w-md">
-            <h1 class="text-[32px] font-semibold leading-tight text-highlighted">What do you want to change?</h1>
-            <p class="mt-2 text-base text-muted">
-              {{ firstName(booking.guestName) }} confirms the change before anything moves.
-            </p>
 
-            <div class="mt-6 flex items-center gap-4 border-t border-default pt-6">
-              <img v-if="changeLocation?.imageUrl" :src="changeLocation.imageUrl" alt="" class="size-14 shrink-0 rounded-xl object-cover">
-              <p class="min-w-0 flex-1 text-base font-medium text-highlighted">{{ changeLocation?.title }}</p>
-              <UButton
-                v-if="props.bookingType === 'reservation'"
-                :to="`${bookingPath}/change/location`"
-                icon="i-lucide-pencil"
-                aria-label="Change location"
-                color="neutral"
-                variant="soft"
-                square
-                class="shrink-0 rounded-full"
-              />
+          <h1 class="text-[32px] font-semibold leading-tight text-highlighted">{{ partyTitle }}</h1>
+          <p class="mt-1 text-base text-muted">{{ formattedDate }} <span aria-hidden="true">·</span> {{ booking.resourceTitle }}</p>
+
+          <div class="mt-6 space-y-2">
+            <UButton
+              :label="`Change ${noun}`"
+              color="neutral"
+              variant="soft"
+              block
+              class="h-12 justify-center rounded-xl text-base font-medium"
+              :to="`${editorPath}/change`"
+              @click="beginChange"
+            />
+            <UButton
+              v-if="messageTo"
+              label="Message guest"
+              color="neutral"
+              variant="soft"
+              block
+              class="h-12 justify-center rounded-xl text-base font-medium"
+              :to="messageTo"
+            />
+          </div>
+
+          <div class="mt-8 grid grid-cols-2 gap-4 border-t border-default pt-6">
+            <div>
+              <p class="text-base font-semibold text-highlighted">Date</p>
+              <p class="mt-1 text-base text-muted">{{ formattedDate }}</p>
             </div>
-
-            <div class="mt-2 border-t border-default">
-              <NuxtLink
-                v-for="field in changeFields"
-                :key="field.key"
-                :to="`${bookingPath}/change/${field.key}`"
-                class="flex items-center gap-4 border-b border-default py-4"
-                :aria-label="`Change ${field.label.toLowerCase()}`"
-              >
-                <span class="min-w-0 flex-1">
-                  <span class="block text-base font-medium text-highlighted">{{ field.label }}</span>
-                  <span class="block text-sm text-muted">{{ field.summary }}</span>
-                </span>
-                <UIcon name="i-lucide-chevron-right" class="size-5 shrink-0 text-muted" />
-              </NuxtLink>
+            <div>
+              <p class="text-base font-semibold text-highlighted">Time</p>
+              <p class="mt-1 text-base text-muted">{{ formattedTime }}</p>
             </div>
           </div>
-          <!--
-            Measured on Airbnb's reservation panel, which has no cards at all:
-            one picture, a 32px/600 title, full-width 48px actions at 12px
-            radius, a two-column label grid, then 74px disclosure rows. The
-            ringed rounded-2xl panels this replaces were ours, not theirs.
-          -->
-          <!--
-            One measure wherever it is mounted. Airbnb's reservation panel is a
-            375px column; letting this run to a full-width screen turned the
-            picture into a billboard and pushed the actions below the fold.
-          -->
-          <template v-else-if="booking">
-            <div class="mx-auto w-full max-w-md">
-            <img
-              v-if="bookingImageUrl"
-              :src="bookingImageUrl"
-              alt=""
-              class="mb-6 aspect-[4/3] w-full rounded-xl object-cover"
-            >
 
-            <h1 class="text-[32px] font-semibold leading-tight text-highlighted">{{ partyTitle }}</h1>
-            <p class="mt-1 text-base text-muted">{{ formattedDate }} <span aria-hidden="true">·</span> {{ booking.resourceTitle }}</p>
+          <div class="mt-6 border-t border-default pt-2">
+            <NuxtLink :to="`${editorPath}/guest`" class="flex items-center gap-4 py-4">
+              <UAvatar :src="booking.guestImageUrl || undefined" :alt="booking.guestName" size="md" class="shrink-0" />
+              <span class="min-w-0 flex-1">
+                <span class="block text-base font-medium text-highlighted">{{ booking.guestName }}</span>
+                <span class="block text-sm text-muted">{{ guestCountLabel }}</span>
+              </span>
+              <UIcon name="i-lucide-chevron-right" class="size-5 shrink-0 text-muted" />
+            </NuxtLink>
 
-            <div class="mt-6 space-y-2">
+            <div v-if="booking.requests" class="border-t border-default py-4">
+              <p class="text-base font-medium text-highlighted">Guest requests</p>
+              <p class="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-muted">{{ booking.requests }}</p>
+            </div>
+
+            <button type="button" class="flex w-full items-center gap-4 border-t border-default py-4 text-left" @click="policyOpen = true">
+              <span class="min-w-0 flex-1">
+                <span class="block text-base font-medium text-highlighted">Cancellation policy</span>
+                <span class="block text-sm text-muted">{{ cancellationSummary }}</span>
+              </span>
+              <UIcon name="i-lucide-chevron-right" class="size-5 shrink-0 text-muted" />
+            </button>
+
+            <NuxtLink :to="`${editorPath}/notes`" class="flex items-center gap-4 border-t border-default py-4">
+              <span class="min-w-0 flex-1">
+                <span class="block text-base font-medium text-highlighted">Your notes</span>
+                <span class="block text-sm text-muted">{{ notesSummary }}</span>
+              </span>
+              <UIcon name="i-lucide-chevron-right" class="size-5 shrink-0 text-muted" />
+            </NuxtLink>
+
+
+            <div class="flex items-center gap-4 border-t border-default py-4">
+              <span class="min-w-0 flex-1">
+                <span class="block text-base font-medium text-highlighted">{{ capitalize(noun) }} made</span>
+                <span class="block text-sm text-muted">{{ formatCreatedAt(booking.createdAt) }}</span>
+              </span>
+            </div>
+
+            <div v-if="availableActions.length" class="border-t border-default pt-4">
               <UButton
-                :label="`Change ${noun}`"
-                color="neutral"
-                variant="soft"
+                v-for="action in availableActions"
+                :key="action.value"
+                :label="action.label"
+                :color="action.color"
+                variant="ghost"
                 block
-                class="h-12 justify-center rounded-xl text-base font-medium"
-                :to="`${bookingPath}/change`"
-                @click="beginChange"
-              />
-              <UButton
-                v-if="messageTo"
-                label="Message guest"
-                color="neutral"
-                variant="soft"
-                block
-                class="h-12 justify-center rounded-xl text-base font-medium"
-                :to="messageTo"
+                class="h-12 justify-start rounded-xl text-base font-medium"
+                :loading="pendingAction === action.value"
+                @click="action.value === 'cancel' ? openCancel() : runAction(action.value)"
               />
             </div>
-
-            <div class="mt-8 grid grid-cols-2 gap-4 border-t border-default pt-6">
-              <div>
-                <p class="text-base font-semibold text-highlighted">Date</p>
-                <p class="mt-1 text-base text-muted">{{ formattedDate }}</p>
-              </div>
-              <div>
-                <p class="text-base font-semibold text-highlighted">Time</p>
-                <p class="mt-1 text-base text-muted">{{ formattedTime }}</p>
-              </div>
-            </div>
-
-            <div class="mt-6 border-t border-default pt-2">
-              <NuxtLink :to="`${bookingPath}/guest`" class="flex items-center gap-4 py-4">
-                <UAvatar :src="booking.guestImageUrl || undefined" :alt="booking.guestName" size="md" class="shrink-0" />
-                <span class="min-w-0 flex-1">
-                  <span class="block text-base font-medium text-highlighted">{{ booking.guestName }}</span>
-                  <span class="block text-sm text-muted">{{ guestCountLabel }}</span>
-                </span>
-                <UIcon name="i-lucide-chevron-right" class="size-5 shrink-0 text-muted" />
-              </NuxtLink>
-
-              <div v-if="booking.requests" class="border-t border-default py-4">
-                <p class="text-base font-medium text-highlighted">Guest requests</p>
-                <p class="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-muted">{{ booking.requests }}</p>
-              </div>
-
-              <button type="button" class="flex w-full items-center gap-4 border-t border-default py-4 text-left" @click="policyOpen = true">
-                <span class="min-w-0 flex-1">
-                  <span class="block text-base font-medium text-highlighted">Cancellation policy</span>
-                  <span class="block text-sm text-muted">{{ cancellationSummary }}</span>
-                </span>
-                <UIcon name="i-lucide-chevron-right" class="size-5 shrink-0 text-muted" />
-              </button>
-
-              <NuxtLink :to="`${bookingPath}/notes`" class="flex items-center gap-4 border-t border-default py-4">
-                <span class="min-w-0 flex-1">
-                  <span class="block text-base font-medium text-highlighted">Your notes</span>
-                  <span class="block text-sm text-muted">{{ notesSummary }}</span>
-                </span>
-                <UIcon name="i-lucide-chevron-right" class="size-5 shrink-0 text-muted" />
-              </NuxtLink>
-
-              <div v-if="booking.notes.length" class="border-t border-default py-2">
-                <NuxtLink
-                  v-for="note in booking.notes"
-                  :key="note.id"
-                  :to="`${bookingPath}/notes/${note.id}`"
-                  class="block py-2"
-                  :aria-label="`Edit note: ${note.body}`"
-                >
-                  <span class="block whitespace-pre-wrap text-sm text-highlighted">{{ note.body }}</span>
-                  <span class="block text-xs text-dimmed">{{ formatCreatedAt(note.createdAt) }}</span>
-                </NuxtLink>
-              </div>
-
-              <div class="flex items-center gap-4 border-t border-default py-4">
-                <span class="min-w-0 flex-1">
-                  <span class="block text-base font-medium text-highlighted">{{ capitalize(noun) }} made</span>
-                  <span class="block text-sm text-muted">{{ formatCreatedAt(booking.createdAt) }}</span>
-                </span>
-              </div>
-
-              <div v-if="availableActions.length" class="border-t border-default pt-4">
-                <UButton
-                  v-for="action in availableActions"
-                  :key="action.value"
-                  :label="action.label"
-                  :color="action.color"
-                  variant="ghost"
-                  block
-                  class="h-12 justify-start rounded-xl text-base font-medium"
-                  :loading="pendingAction === action.value"
-                  @click="action.value === 'cancel' ? openCancel() : runAction(action.value)"
-                />
-              </div>
-            </div>
-            </div>
-          </template>
-
-        <!--
-          In change mode the record keeps a footer of its own: these act on
-          the whole request, not on the one field the slideover is editing.
-        -->
-          <div v-if="booking && isChangeMode" class="mt-6 flex items-center justify-between gap-4 border-t border-default pt-4">
-          <UButton label="Cancel" color="neutral" variant="ghost" :to="bookingPath" @click="resetChangeDraft" />
-          <UButton label="Send request" :loading="changeSaving" :disabled="Boolean(editorField) || !changeValid || !changeDirty" @click="sendChangeRequest" />
           </div>
-        </div>
-      </template>
-
-      <!--
-        Editing one note or one changed field is an overlay, not a second
-        column: this record is mounted inside another panel's body, so it has
-        no column of its own to give away. Route-driven, so Back still closes it.
-      -->
-      <USlideover
-        :open="Boolean(detailTitle)"
-        :title="detailTitle"
-        @update:open="value => { if (!value) cancelEditor() }"
-      >
-        <template #body>
-          <UAlert
-            v-if="editorKey === 'notes' ? noteError : changeError"
-            class="mb-6"
-            color="error"
-            variant="soft"
-            icon="i-lucide-circle-alert"
-            :description="(editorKey === 'notes' ? noteError : changeError) ?? undefined"
-          />
-          <template v-if="booking">
-            <div v-if="editorKey === 'notes'" class="mx-auto w-full max-w-md space-y-6">
-              <p class="text-base text-muted">Only your team can see these notes.</p>
-              <UFormField label="Note">
-                <UTextarea v-model="noteDraft" :rows="10" maxlength="2000" autofocus class="w-full" placeholder="Add a note to yourself" />
-              </UFormField>
-            </div>
-            <div v-else-if="isChangeMode" class="mx-auto w-full max-w-md space-y-6">
-              <UFormField v-if="editorField === 'date'" label="Date">
-                <UInput v-model="changeDraft.bookingDate" type="date" size="xl" autofocus class="w-full" />
-              </UFormField>
-              <UFormField v-else-if="editorField === 'time'" label="Time">
-                <UInput v-model="changeDraft.bookingTime" type="time" size="xl" autofocus class="w-full" />
-              </UFormField>
-              <UFormField v-else-if="editorField === 'guests'" label="Guests">
-                <UInputNumber v-model="changeDraft.partySize" :min="1" :max="99" size="xl" class="w-full" />
-              </UFormField>
-              <UFormField v-else-if="editorField === 'location'" label="Location">
-                <USelect v-model="changeDraft.locationId" :items="booking.locations.map(location => ({ label: location.title, value: location.id }))" size="xl" class="w-full" />
-              </UFormField>
-              <p class="text-sm text-muted">Nothing is sent yet. Your guest sees every change at once when you send the request.</p>
-            </div>
-            <!--
-              Read-only guest details are a description list, not a form. Wrapping
-              them in UFormField emitted a <label> pointing at no control, which
-              reads as an editable field that ignores you.
-            -->
-            <div v-else-if="editorKey === 'guest'" class="mx-auto w-full max-w-md space-y-6">
-              <h3 class="text-[32px] font-semibold leading-tight text-highlighted">{{ booking.guestName }}</h3>
-              <dl class="space-y-4">
-                <div>
-                  <dt class="text-sm text-muted">Email</dt>
-                  <dd class="mt-1 break-words text-highlighted">{{ booking.guestEmail }}</dd>
-                </div>
-                <div v-if="booking.guestPhone">
-                  <dt class="text-sm text-muted">Phone</dt>
-                  <dd class="mt-1 text-highlighted">{{ booking.guestPhone }}</dd>
-                </div>
-              </dl>
-              <div class="flex gap-3">
-                <UButton :to="messageTo || undefined" label="Message" icon="i-lucide-message-circle" color="neutral" variant="soft" :disabled="!messageTo" />
-                <UButton :to="callTo || undefined" label="Call" icon="i-lucide-phone" color="neutral" variant="soft" :disabled="!callTo" />
-              </div>
-            </div>
-          </template>
+          </div>
         </template>
-
-        <template v-if="editorKey === 'notes' || Boolean(isChangeMode && editorField)" #footer>
-          <UButton color="neutral" variant="ghost" label="Cancel" @click="cancelEditor" />
-          <UButton
-            :label="isChangeMode && editorField ? 'Done' : 'Save'"
-            :loading="noteSaving || changeSaving"
-            :disabled="editorKey === 'notes' && (!noteDraft.trim() || noteDraft === selectedNote?.body)"
-            @click="commitEditor"
-          />
-        </template>
-      </USlideover>
-  </div>
+      </div>
+    </template>
+  </component>
 
   <DashboardListItemDialog v-model:open="policyOpen" :title="booking?.policy?.heading || 'Cancellation policy'" :show-actions="false">
     <div v-if="booking" class="space-y-4">
@@ -334,46 +186,78 @@
   </DashboardListItemDialog>
 </template>
 
+<script lang="ts">
+import type { ComputedRef, InjectionKey, Ref } from 'vue'
+import type { DashboardBookingDetails, DashboardBookingType } from '~/server/utils/dashboard-booking-details'
+
+export interface BookingChangeDraft { bookingDate: string; bookingTime: string; partySize: number; locationId: string; sourceUpdatedAt: string }
+export type BookingChangeField = 'date' | 'time' | 'guests' | 'location'
+
+/** The record and the drafts its levels edit: one change request, one note. */
+export interface BookingEditor {
+  bookingType: DashboardBookingType
+  booking: Ref<DashboardBookingDetails | null>
+  noun: ComputedRef<string>
+  messageTo: ComputedRef<string | null>
+  callTo: ComputedRef<string | null>
+  // the change request
+  changeDraft: Ref<BookingChangeDraft>
+  changeFields: ComputedRef<Array<{ key: string; label: string; summary: string }>>
+  changeLocation: ComputedRef<{ title: string; imageUrl?: string | null } | undefined>
+  changeDirty: ComputedRef<boolean>
+  changeValid: ComputedRef<boolean>
+  changeSaving: Ref<boolean>
+  changeError: Ref<string | null>
+  resetChangeDraft: () => void
+  /** Remembers the field's value so a cancelled field leaf can put it back. */
+  beginChangeField: (field: BookingChangeField) => void
+  cancelChangeField: (field: BookingChangeField) => void
+  sendChangeRequest: () => Promise<void>
+  firstName: (name: string) => string
+  // notes
+  noteDraft: Ref<string>
+  noteSaving: Ref<boolean>
+  noteError: Ref<string | null>
+  selectedNote: ComputedRef<{ id: string; body: string } | undefined>
+  /** Points the note draft at one note, or at a new one. */
+  openNote: (noteId: string | null) => void
+  saveNote: () => Promise<boolean>
+  formatCreatedAt: (value: string) => string
+}
+
+export const bookingEditorKey = Symbol('booking-editor') as InjectionKey<BookingEditor>
+</script>
+
 <script setup lang="ts">
 import { formatCalendarDate, formatTime, formatTimestamp } from '~/utils/timezone'
 import DashboardListItemDialog from '~/components/dashboard/DashboardListItemDialog.vue'
+import DashboardIndexPanel from '~/lib/components/workspace/dashboard/DashboardIndexPanel.vue'
 import { getErrorMessage } from '~/utils/errors'
-import type { DashboardBookingDetails, DashboardBookingType } from '~/server/utils/dashboard-booking-details'
 
 const props = defineProps<{
   bookingType: DashboardBookingType
   bookingId: string
-  /** Where this record lives in the URL. Its editor chain hangs off it. */
-  basePath: string
+  /** The record's canonical URL, which the rows that change it link into. */
+  editorPath: string
+  /** Mounted inside the guest thread's drawer, which already owns the column. */
+  embedded?: boolean
 }>()
 
 type ActionColor = 'success' | 'error' | 'neutral'
 
-const router = useRouter()
 const dashboardApi = useDashboardApi()
 const realtime = useDashboardInvalidations()
 const actionError = ref<string | null>(null)
-const bookingPath = computed(() => props.basePath)
-// `useEditorFrame` provides and injects, so it runs before any `await`, and it
-// owns the split of the route below this booking. The `route.params.editor`
-// derivation this replaces was a second copy of the composable's `rest`.
-const frame = useEditorFrame(bookingPath)
-const editorSegments = frame.rest
-const editorKey = computed(() => editorSegments.value[0] || '')
-const editorField = computed(() => editorSegments.value[1] || '')
-const isChangeMode = computed(() => editorKey.value === 'change')
-const selectedNote = computed(() => booking.value?.notes.find(note => note.id === editorField.value))
-const detailTitle = computed(() => editorKey.value === 'notes' ? editorField.value ? 'Edit note' : 'Add a note' : editorKey.value === 'guest' ? 'Guest details' : isChangeMode.value && editorField.value ? `Change ${editorField.value}` : undefined)
+const editorPath = computed(() => props.editorPath)
+// Owning the column means owning its header; inside the drawer it is a plain body.
+const chrome = computed(() => (props.embedded
+  ? { class: 'flex min-h-0 flex-1 flex-col' }
+  : { id: 'booking-details', title: pageTitle.value, ui: { body: 'p-0 sm:p-0' } }))
+/** Which note a leaf is editing, or none for a new one. */
+const openNoteId = ref<string | null>(null)
+const selectedNote = computed(() => booking.value?.notes.find(note => note.id === openNoteId.value))
 
-const { resource, booking, pending, error, presentation, noun, orgSlug, refresh: refreshDetails } = await useBookingDetails(props.bookingType, props.bookingId)
-const detailsKey = computed(() => `dashboard-booking:${orgSlug.value}:${props.bookingType}:${props.bookingId}`)
-watchEffect(() => {
-  const valid = editorSegments.value.length <= 2 && (!editorKey.value
-    || (editorKey.value === 'guest' && !editorField.value)
-    || (editorKey.value === 'notes' && (!editorField.value || Boolean(selectedNote.value)))
-    || (isChangeMode.value && (!editorField.value || ['date', 'time', 'guests', 'location'].includes(editorField.value))))
-  if (!valid && booking.value) throw createError({ statusCode: 404, statusMessage: 'Editor not found' })
-})
+const { resource, booking, pending, error, presentation, noun, pageTitle, orgSlug, refresh: refreshDetails } = await useBookingDetails(props.bookingType, props.bookingId)
 
 const formattedDate = computed(() => booking.value ? formatCalendarDate(booking.value.bookingDate, 'en') : '')
 const formattedTime = computed(() => {
@@ -457,29 +341,35 @@ const noteAttemptDraft = ref<string | null>(null)
 const noteError = ref<string | null>(null)
 const changeError = ref<string | null>(null)
 
-watch([detailsKey, () => selectedNote.value?.id, editorKey, editorField], () => {
+function openNote(noteId: string | null) {
+  openNoteId.value = noteId
   noteDraft.value = selectedNote.value?.body ?? ''
   noteRevisionId.value = selectedNote.value?.revisionId
   noteAttemptKey.value = null
   noteAttemptDraft.value = null
-}, { immediate: true })
-
-watch([booking, editorKey, editorField], ([currentBooking, key], previous) => {
-  // A field leaf is a route, so Nuxt may recreate this component while moving
-  // between it and the change hub. Keep the one staged draft in Nuxt state and
-  // only reseed it when it belongs to an older source revision, or when change
-  // mode is being entered afresh and the tenant should not inherit the edits
-  // they abandoned last time.
-  const entering = key === 'change' && previous !== undefined && previous[1] !== 'change'
-  if (currentBooking && key === 'change' && (entering || changeDraft.value.sourceUpdatedAt !== currentBooking.updatedAt)) resetChangeDraft()
-  if (key === 'change' && isChangeField(editorField.value)) changeFieldOriginal.value = changeDraft.value[draftKey(editorField.value)]
-}, { immediate: true })
-
-function isChangeField(value: string): value is 'date' | 'time' | 'guests' | 'location' {
-  return ['date', 'time', 'guests', 'location'].includes(value)
+  noteError.value = null
 }
 
-function draftKey(field: 'date' | 'time' | 'guests' | 'location') {
+// The staged change lives in Nuxt state so the change index and its field leaves,
+// each a route of its own, edit one draft. It is reseeded only when it belongs
+// to an older source revision.
+watch(booking, (currentBooking) => {
+  if (currentBooking && changeDraft.value.sourceUpdatedAt !== currentBooking.updatedAt) resetChangeDraft()
+}, { immediate: true })
+
+function beginChangeField(field: BookingChangeField) {
+  changeFieldOriginal.value = changeDraft.value[draftKey(field)]
+}
+
+function cancelChangeField(field: BookingChangeField) {
+  changeError.value = null
+  if (changeFieldOriginal.value === null) return
+  const key = draftKey(field)
+  if (key === 'partySize') changeDraft.value.partySize = Number(changeFieldOriginal.value)
+  else changeDraft.value[key] = String(changeFieldOriginal.value)
+}
+
+function draftKey(field: BookingChangeField) {
   return field === 'date' ? 'bookingDate' : field === 'time' ? 'bookingTime' : field === 'guests' ? 'partySize' : 'locationId'
 }
 
@@ -519,24 +409,6 @@ function formatCreatedAt(value: string) {
   return formatTimestamp(value, 'en', 'UTC', { dateStyle: 'medium' })
 }
 
-function closeEditor() {
-  return router.push(isChangeMode.value && editorField.value ? `${bookingPath.value}/change` : bookingPath.value)
-}
-
-function cancelEditor() {
-  noteError.value = null
-  changeError.value = null
-  if (isChangeMode.value && isChangeField(editorField.value) && changeFieldOriginal.value !== null) {
-    const key = draftKey(editorField.value)
-    if (key === 'partySize') changeDraft.value.partySize = Number(changeFieldOriginal.value)
-    else changeDraft.value[key] = String(changeFieldOriginal.value)
-  }
-  return closeEditor()
-}
-
-function commitEditor() {
-  return isChangeMode.value && editorField.value ? closeEditor() : saveNote()
-}
 
 function openCancel() {
   cancelNote.value = ''
@@ -558,7 +430,7 @@ watch(realtime.connectionEpoch, (epoch) => {
 })
 
 async function saveNote() {
-  if (!noteDraft.value.trim()) return
+  if (!noteDraft.value.trim()) return false
   if (noteAttemptDraft.value !== noteDraft.value) {
     noteAttemptKey.value = crypto.randomUUID()
     noteAttemptDraft.value = noteDraft.value
@@ -575,9 +447,10 @@ async function saveNote() {
       },
     )
     resource.value = response
-    await closeEditor()
+    return true
   } catch (cause) {
     noteError.value = getErrorMessage(cause, 'Note could not be saved')
+    return false
   } finally {
     noteSaving.value = false
   }
@@ -615,7 +488,7 @@ async function sendChangeRequest() {
     )
     resource.value = response
     resetChangeDraft()
-    await closeEditor()
+    await navigateTo(editorPath.value)
   } catch (cause) {
     changeError.value = getErrorMessage(cause, 'Change request could not be sent')
   } finally {
@@ -645,4 +518,30 @@ async function runAction(action: string) {
     pendingAction.value = null
   }
 }
+provide(bookingEditorKey, {
+  bookingType: props.bookingType,
+  booking,
+  noun,
+  messageTo,
+  callTo,
+  changeDraft,
+  changeFields,
+  changeLocation,
+  changeDirty,
+  changeValid,
+  changeSaving,
+  changeError,
+  resetChangeDraft,
+  beginChangeField,
+  cancelChangeField,
+  sendChangeRequest,
+  firstName,
+  noteDraft,
+  noteSaving,
+  noteError,
+  selectedNote,
+  openNote,
+  saveNote,
+  formatCreatedAt,
+})
 </script>

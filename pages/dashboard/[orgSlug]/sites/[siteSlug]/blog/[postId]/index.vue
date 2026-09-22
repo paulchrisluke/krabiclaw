@@ -1,9 +1,8 @@
 <template>
-  <BlogPostEditorPage />
+  <!-- Nothing open: the post above is the screen. -->
+  <div />
 </template>
 
 <script setup lang="ts">
-import BlogPostEditorPage from '~/components/dashboard/BlogPostEditorPage.vue'
-
-definePageMeta({ layout: 'dashboard', ownsChrome: true })
+definePageMeta({ layout: 'dashboard' })
 </script>

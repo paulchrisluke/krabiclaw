@@ -19,15 +19,6 @@
       />
     </UDropdownMenu>
 
-    <UButton
-      label="Search"
-      icon="i-lucide-search"
-      color="neutral"
-      variant="subtle"
-      class="w-full justify-start"
-      @click="$emit('search')"
-    />
-
     <!--
       Insights is organization-wide with its own site filter, so it belongs to
       the organization-scoped menu rather than to any one site.
@@ -64,7 +55,6 @@ function onAct(id: string) {
   if (id === 'log-out') logOut().catch(error => console.error('sign_out_failed', error))
 }
 
-defineEmits<{ search: [] }>()
 
 const scopeItems = computed<DropdownMenuItem[][]>(() => {
   const model = scopeModel.value

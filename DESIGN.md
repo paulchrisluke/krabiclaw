@@ -4,7 +4,8 @@
 
 The vocabulary the dashboard CMS is built from. It exists so a new screen is a
 choice between named, already-built patterns rather than a fresh invention, and
-so review can say "that is a hub, hubs do X" instead of arguing from taste.
+so review can say "that is an index, indexes do X" instead of arguing from
+taste.
 
 Airbnb's host tools are the reference. The goal is **parity of behaviour**, not
 pixel copying, and where Airbnb has no equivalent this document says so rather
@@ -21,8 +22,8 @@ produced the inconsistency the redesign exists to remove.
 Navigation questions are almost always one of these two, and confusing them is
 what produced the CMS's earlier inconsistency.
 
-**Chain** — how deep the content nests. Unbounded, driven by the domain: a hub
-may open another hub. `site > location > products > collection > dish` is five
+**Chain** — how deep the content nests. Unbounded, driven by the domain: an
+index may open another index. `site > location > products > collection > dish` is five
 levels and that is fine.
 
 **Presentation** — how one node renders. Exactly two renderings, chosen by
@@ -36,11 +37,16 @@ never limits how deep the chain goes.
 | Term | Meaning | Example |
 | --- | --- | --- |
 | **Root** | The scope switcher. Not editable content. | Organization, site |
-| **Hub** | A screen whose job is to route onward. Rows navigate, and each row previews its current value. | Location, Menu, one dish |
+| **Index** | A screen whose job is to route onward. Its rows are links, and each row previews its current value. | Location, Menu, one dish |
 | **Leaf** | A screen that edits **one concern** and commits. | A dish's price, a post's body |
 
-A hub may contain another hub. A leaf never contains navigation to a deeper
-editor — if you need one, the "leaf" is a hub and should be named as one.
+An index may contain another index. A leaf never contains navigation to a
+deeper editor — if you need one, the "leaf" is an index and should be named as
+one.
+
+There are two words here and they are the same two everywhere: **index** and
+**leaf**. Each is a kind of level, each has exactly one shell, and nothing in
+the dashboard is a third thing.
 
 Do not add a level to make a screen feel tidier. Add one when the child is a
 thing the owner names, orders, or deletes independently.
@@ -49,7 +55,7 @@ thing the owner names, orders, or deletes independently.
 
 **A leaf edits one concern.** One field, or one small set of controls that
 answer a single question. If a screen needs more than about three controls, it
-is not a leaf — it is a hub, and its fields belong one level deeper.
+is not a leaf — it is an index, and its fields belong one level deeper.
 
 This is the rule the CMS kept breaking. It is measured, not felt: count the
 controls. Airbnb's own leaves, at 1440px, are
@@ -107,8 +113,10 @@ is a canvas. Describing it is a field, and fields decompose.
 | `≥ lg` (1024) | Top nav | Pane beside the index |
 
 `md` swaps navigation chrome. `lg` swaps index/detail topology. One component
-owns both renderings of a node; there is no separate mobile screen and no
-JavaScript breakpoint.
+owns both renderings of a node, and there is no separate mobile screen. The
+topology itself is CSS; the single JavaScript breakpoint is
+`useDashboardPane()`, and it decides only whether an index opens a child on
+arrival — something CSS cannot express, because it is a navigation.
 
 **The two columns show the deepest two levels, not the first two.** Depth is
 unbounded, and opening a child re-roots the frame: the index column becomes the
@@ -121,34 +129,118 @@ level, never to the root.
 A fixed two-level frame is what forces a deep chain to collapse into one long
 pane, which is how the CMS grew its large forms.
 
+### A level is a file, and there are two kinds
+
+A URL segment is a level, and a level is one file under `pages/`. There are two
+kinds, and each has exactly one shell:
+
+| Kind | What it is | Shell | Controls |
+| --- | --- | --- | --- |
+| **index** | lists rows that link to its children; renders `<NuxtPage />` | `DashboardIndexPanel` | Back → parent |
+| **leaf** | edits one concern; has no children | `DashboardLeafPanel` | Close → parent · Cancel → parent · Save |
+
+Adding a screen is therefore: drop the file in its parent's directory, pick the
+shell, and if it lists, its rows link to `` `${level.path.value}/<child>` ``; if
+it edits, it injects the parent's draft key. Add one `back:` line only where
+Back is not the URL parent. Nothing else is required, and a screen that needs
+something else is a gap in this document rather than a one-off.
+
 ### How a level knows which column is its own
 
-`useEditorFrame(basePath)` answers it from the level's own base path and the
-current route. No level knows anything about its descendants, and no level
-counts a depth that is not its own.
+`useRouteLevel()` answers it, and it takes no arguments. Nested pages already
+say what contains what, so `route.matched` is the chain and a level finds its
+own place in it through `matchedRouteKey` — the record the `<RouterView>`
+rendering it provides. Nothing assembles a base path out of route params and
+slices the URL against it, and no level counts a depth that is not its own: the
+index column and the leaf beside it ask the same composable and get two
+different answers.
+
+Depth is counted in path segments rather than matched records, because a
+directory's `index.vue` is a second record at the same URL and is one level, not
+two.
 
 | Mode | When | What the level renders |
 | --- | --- | --- |
-| `index` | nothing below me is open | my content, as my parent's detail column |
+| `index` | nothing below me is open | my content, the full width of the frame |
 | `pair` | one of my children is open | my content as the index column, the child as the detail |
 | `yield` | something deeper than my child is open | nothing but the route beneath me |
 
-Two consequences that are easy to get wrong:
+**A level in `yield` renders no rail.** An ancestor that kept drawing its own
+index while a grandchild drew another pair put three columns on screen and left
+the leaf 348px of a 1280px window.
 
-- **A level in `yield` renders no rail.** An ancestor that kept drawing its own
-  index while a grandchild drew another pair put three columns on screen and
-  left the leaf 348px of a 1280px window.
-- **A level in `index` draws no panel or navbar.** The outermost level on screen
-  owns that chrome; a nested one would draw a second header inside the pane.
+Every level in a chain is a route parent, so it has a `<NuxtPage />` to put its
+child into. A directory's `index.vue` exists only where the bare URL has
+something of its own to show.
 
-Every level in a chain must be a route parent, so it has a `<NuxtPage />` to put
-its child into. The sibling `index.vue` beneath it renders nothing — with no
-child open, the parent is already showing its own content.
+`mode` is read by the two shells and by nothing else. A page carries no
+breakpoint, no `hidden lg:flex`, and no mode of its own — which is what keeps
+the two renderings of a node in one place instead of in every page that has
+children.
 
-Anything that fires when a level "has no detail" has to check for `index`
-specifically. The location hub opens its first section when it has nothing in
-its pane, and in `yield` that condition is also true — which threw the tenant
-out of whatever they had open, on every page load.
+### An index of leaves opens its first leaf; a list of records stands alone
+
+Measured on a live Airbnb host account at 1332px (2026-09-21):
+
+| Their screen | What it does | Ours |
+| --- | --- | --- |
+| `/hosting/listings` | one column, full width: heading, filters, a grid of records | every list of records |
+| `…/details` (the listing editor) | opens `photo-tour` on arrival and keeps a half-width column of rows beside it | every index whose rows are leaves |
+
+So an index whose children are **leaves** names its first leaf as `autoOpen`,
+and an index whose children are **records** names none: which a tenant meant to
+open is not something the screen can guess, and a record is a place, not a
+field. The pair splits down the middle, as Airbnb's does (80–660 of 1332).
+
+`autoOpen` is client-only and navigates with `replace`, so Back still leaves the
+index rather than landing on it again, and it is ignored when the target is the
+index's own URL — an index still loading offers itself as its first row, and
+taking that both went nowhere and used up the one open it gets. Below the pane
+width the index *is* the screen and nothing is chosen on the tenant's behalf.
+
+### Beside its index, a leaf carries only Save
+
+At two columns Airbnb's leaf has no Close and no Back of its own: the index's
+Back is the way out and Save is the only control it draws. Both Close and Cancel
+belong to the sheet the leaf becomes below `lg`, where it covers the list it came
+from and needs its own way back.
+
+One shell owns that, so a leaf states what it commits and nothing about width.
+
+### Where a level goes when it closes
+
+Back, Close and Cancel are **links** to `useRouteLevel().to`, a push to the
+level above. Nothing in the dashboard calls `router.back()`.
+
+Measured on a live Airbnb host account (2026-09-21): their in-app Back went to
+`/hosting/listings` while the previous history entry was the leaf that had just
+been cancelled — Back, Cancel and Close all pushed. The destination is a
+property of where you are, so a deep link, a reload, and a redirect after a save
+all answer the same thing, and a sheet you just closed can never become the
+place Back leads. Reading history is what produced the loop where closing a
+sheet and then pressing Back reopened it.
+
+The parent is the nearest matched record above with fewer path segments and no
+`meta.passthrough`. Where the dashboard is walked differently from the way the
+URL nests — the links page lives under `/sites/:siteSlug` but is reached from
+Pages — the page names its own parent: `definePageMeta({ back: '<route name>' })`.
+`grep -rn "back: '" pages/` is the complete list of exceptions, and there is no
+other way to declare one.
+
+A tab root has nothing above it, so it renders no Back at all.
+
+**The lit tab is the one this walk ends at.** Matching a tab's path as a prefix
+of the URL cannot answer it: the links page lives at `/sites/:siteSlug/links`,
+so the URL said Locations while every way out of it led to Menu. Walking up
+asks the same question Back asks, and both records at the deepest URL are asked
+for a declared parent, because a directory's `index.vue` is the record
+`matched` ends on and it is the directory that carries the `back:`.
+
+**A level whose own record has left `route.matched` is `stale`** — it is being
+torn down after a navigation elsewhere — and it answers nothing: no parent, no
+mode but `yield`, and no `autoOpen`. A guard that raises a 404 asks `stale`
+first. Reading the new route from an old level is what made a location index,
+unmounting on the way to Pages, replace the URL with a child of itself.
 
 ## Creating
 
@@ -157,7 +249,7 @@ accept it without — nothing more. Everything else is a section of the record
 once it exists and has an id to hang media, prices and translations on.
 
 It is a level, not a sheet: `Add` navigates to `new` in the record's own slot,
-which renders the record's hub with only the sections the contract needs. Its
+which renders the record's own index with only the sections the contract needs. Its
 commit names where it is going — `Start with Title`, then `Next: <section>`
 while any remain, and `Create <record>` on the last one — so the tenant reads
 what is left rather than a banner listing it. The commit creates the record and
@@ -179,7 +271,10 @@ Dismissing discards the draft.
 
 **List editor** (`DashboardListEditor`) — a list of records.
 
-- *Browse*: rows are the content, and the row body navigates or opens.
+- *Browse*: rows are the content, and the row body is a **link** to the
+  record's own URL. A row that navigates from a click handler cannot be opened
+  in a new tab, gives the reader no destination to see before pressing it, and
+  puts a second copy of the record's path in the list.
 - *Edit*: the same rows in place, grown controls. Nothing navigates, so a
   half-finished edit cannot be stranded behind a back button.
 - *Select* (`selectable`): edit mode swaps the per-row remove control for a
@@ -193,7 +288,7 @@ above, commit bar at the bottom, destructive action opposite the commit.
 
 It carries a leaf, which means it is subject to the leaf-size rule: a sheet is
 not a licence to stack a record's whole field set because it is not a route.
-A record with many fields opens a hub of rows; each row's sheet holds one
+A record with many fields opens an index of rows; each row's sheet holds one
 concern.
 
 A slideover is the same. Being an overlay rather than a route changes where a
@@ -237,6 +332,17 @@ list does not reflow between rows that have one and rows that do not.
 gating happens in `middleware/dashboard.global.ts` and throws a Nuxt 404. Never
 redirect and never render a fallback.
 
+The dashboard renders on the client, so a 404 is raised with `showError`, never
+with a bare `throw` in a page's setup. Measured 2026-09-21: a synchronous
+`throw createError` in a nested page's setup escapes during that page's own
+render and leaves a blank screen and a null vnode, while `showError` reaches
+Nuxt's error page. A guard that has to run again when the route changes belongs
+in a `watchEffect`, because moving between leaves reuses the component.
+
+A record the list does not contain is missing state, not an empty draft:
+`links/items/<unknown-id>` rendering a blank Link editor, with a Save that would
+write the list back unchanged, is the failure this rule exists to prevent.
+
 A missing record and a failed request are not the same event and do not get the
 same answer. A record that is not there is not a page, so it 404s. A request
 that failed is a state the surface shows, because the record may well still
@@ -248,6 +354,19 @@ one place that tells them apart.
 **Empty is a state, not a bug.** A collection with no Products, or a location
 with no collections, renders its own empty state. Containers that cannot be
 empty are a modelling error.
+
+## Where we deliberately differ from Airbnb
+
+Airbnb has no equivalent, so these are additions rather than parity, and each
+one says so where it lives:
+
+- **Platform accounts.** KrabiClaw runs on KrabiClaw, so its own business's Menu
+  carries a row no tenant sees: every account on the platform, and
+  impersonation. It is gated on the site's template being `platform`, and it
+  sits beside Team and Billing because it is about accounts rather than about a
+  site. Internal admin tooling is not in Airbnb's host dashboard at all.
+- **A URL at every level.** Airbnb stops one level below a hub; we keep one, so
+  every leaf is shareable and reloadable.
 
 ## Naming
 

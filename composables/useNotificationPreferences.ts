@@ -17,7 +17,7 @@ function isPreferenceMap(value: unknown): value is { preferences: NotificationPr
 /**
  * One copy of the signed-in account's notification preferences.
  *
- * The hub previews every category and the leaf edits one, so both read this
+ * The index previews every category and the leaf edits one, so both read this
  * rather than fetching their own: a save in the leaf has to change what the row
  * behind it says, and two fetches would let those disagree.
  */

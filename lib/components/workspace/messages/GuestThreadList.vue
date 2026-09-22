@@ -50,15 +50,6 @@
         >
           Unread
         </UButton>
-
-        <UButton
-          color="neutral"
-          variant="ghost"
-          icon="i-lucide-search"
-          aria-label="Search"
-          class="ml-auto"
-          @click="nuxtApp.hooks.callHook('dashboard:search:toggle')"
-        />
       </div>
     </header>
 
@@ -174,6 +165,7 @@
   </div>
 </template>
 <script setup lang="ts">
+import type { LocationQueryRaw } from 'vue-router'
 import { getErrorMessage } from '~/utils/errors'
 import {
   isThreadListResponse,
@@ -199,12 +191,12 @@ const props = defineProps<{
   /** Rendered somewhere other than the messages screen: it opens nothing on its own. */
   embedded?: boolean
 }>()
+const emit = defineEmits<{ first: [target: { path: string; query: LocationQueryRaw } | null] }>()
 
 const dashboard = useDashboardSite()
 const { formatRelativeTime } = useHumanTime()
 
 const route = useRoute()
-const nuxtApp = useNuxtApp()
 const router = useRouter()
 
 const isOrganizationScope = computed(() => props.scope === 'organization')
@@ -369,31 +361,12 @@ watch([initialThreads, initialThreadsPending, initialThreadsError], ([data, pend
   threads.value = data?.threads ?? []
 }, { immediate: true })
 
-/*
-  The list never sits beside an EMPTY column — but only where there is a column
-  beside it. Airbnb's /hosting/messages opens its newest thread on a wide
-  screen; below `lg` the list is the whole screen and the thread is somewhere
-  you go, so opening one on arrival would bounce the member straight back out
-  of the list they just closed a thread to reach.
-*/
-const pairedColumns = ref(false)
-onMounted(() => {
-  const query = window.matchMedia('(min-width: 64rem)')
-  pairedColumns.value = query.matches
-  const sync = (event: MediaQueryListEvent) => { pairedColumns.value = event.matches }
-  query.addEventListener('change', sync)
-  onBeforeUnmount(() => query.removeEventListener('change', sync))
-})
-
-watch([threads, openThreadId, pairedColumns], ([rows, open, paired]) => {
-  if (!paired || open || isOrganizationScope.value || props.embedded) return
-  // Only when the route actually is this list. Without it the watcher could
-  // fire while the router still held the previous route and carry that route's
-  // query into the replace, which is how a bare /messages landed in ?archived.
-  if (route.path !== listRoute.value) return
+// The newest thread, for the index above to open into its second column on
+// arrival. The list only says which; whether there is a column is the shell's.
+watch([threads, openThreadId], ([rows, open]) => {
+  if (open || isOrganizationScope.value || props.embedded) return
   const first = rows[0]
-  if (!first) return
-  void router.replace({ path: threadRoute(first), query: { ...route.query } })
+  emit('first', first ? { path: threadRoute(first), query: route.query } : null)
 }, { immediate: true })
 
 // A thread belongs to a site, and every read and mutation for one is

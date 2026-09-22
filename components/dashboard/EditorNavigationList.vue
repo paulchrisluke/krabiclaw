@@ -26,6 +26,30 @@
           @click="item.action ? $emit('act', item.id) : undefined"
         >
           <span class="min-w-0 flex-1">
+            <!-- The picture leads, in the row's own footprint (DESIGN.md). -->
+            <img
+              v-if="item.image"
+              :src="item.image"
+              alt=""
+              class="mb-3 aspect-[40/21] w-full rounded-xl object-cover"
+              loading="lazy"
+              decoding="async"
+            >
+            <!--
+              Several pictures share the row's width. Four thumbnails at a fixed
+              96px overran a phone and scrolled the whole column.
+            -->
+            <span v-else-if="item.images?.length" class="mb-3 flex w-full gap-2">
+              <img
+                v-for="(picture, at) in item.images"
+                :key="at"
+                :src="picture"
+                alt=""
+                class="aspect-[20/19] min-w-0 max-w-24 flex-1 rounded-xl object-cover"
+                loading="lazy"
+                decoding="async"
+              >
+            </span>
             <span class="block font-semibold text-highlighted">{{ item.label }}</span>
             <span
               v-if="item.summary && !item.card"
@@ -90,6 +114,10 @@ export interface EditorNavigationItem {
   to?: string
   /** Renders the summary as absent rather than as a value. */
   placeholder?: boolean
+  /** A picture that leads the row, in the row's own footprint. */
+  image?: string | null
+  /** Several pictures that lead the row, sharing its width. */
+  images?: readonly string[]
   /**
    * Renders the row as the card a reader will actually meet — the picture, the
    * headline and the line underneath it — rather than a summary naming the

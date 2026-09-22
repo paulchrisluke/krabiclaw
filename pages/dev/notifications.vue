@@ -5,5 +5,5 @@
 <script setup lang="ts">
 import NotificationCatalogPage from '~/components/dashboard/NotificationCatalogPage.vue'
 
-definePageMeta({ layout: 'dashboard', ownsChrome: true, auth: true })
+definePageMeta({ layout: 'dashboard', auth: true })
 </script>

@@ -1,51 +1,41 @@
 <template>
   <!--
-    With nothing below it open, the block is the Sections list's detail column:
-    its rows if it routes onward, its fields if it is one concern.
+    One section of the page. A block with several concerns is an index whose
+    rows are those concerns; a block with one concern is that concern, and is
+    the leaf itself. Which one is a property of the block's type.
   -->
-  <div v-if="frame.mode.value === 'index'" class="space-y-6">
-    <template v-if="isNew">
-      <UFormField label="Section type" required>
-        <USelect
-          :model-value="newType"
-          :items="typeOptions"
-          value-key="value"
-          label-key="label"
-          size="xl"
-          class="w-full"
-          placeholder="Choose a section type"
-          @update:model-value="chooseType($event)"
-        />
-      </UFormField>
-      <UAlert v-if="errorMessage" color="error" variant="soft" icon="i-lucide-triangle-alert" :description="errorMessage" />
-      <EditorNavigationList v-if="newBlock && navigationGroups.length" :groups="navigationGroups" />
-      <div v-if="newBlock" class="flex justify-end">
-        <UButton :label="createActionLabel" :loading="saving" @click="startOrCreate" />
-      </div>
-    </template>
-
-    <!--
-      A divider is the one block with nothing to edit. `block` has to be there
-      to say so: without it this branch described whatever the route pointed at
-      as a divider, including a section id that does not exist.
-    -->
+  <DashboardLeafPanel
+    v-if="isLeaf"
+    id="site-page-block"
+    :title="blockLabel"
+    :ready="ready || isNew"
+    :saving="saving"
+    :disabled="saveDisabled"
+    :save-label="saveLabel"
+    :error="errorMessage"
+    @cancel="revertDraft"
+    @save="saveOpenSection"
+  >
+    <UFormField v-if="isNew" label="Section type" required class="mb-6">
+      <USelect
+        :model-value="newType"
+        :items="typeOptions"
+        value-key="value"
+        label-key="label"
+        size="xl"
+        class="w-full"
+        placeholder="Choose a section type"
+        @update:model-value="chooseType($event)"
+      />
+    </UFormField>
     <UAlert
-      v-else-if="block && !sections.length"
+      v-if="block && !sections.length"
       color="neutral"
       variant="soft"
       icon="i-lucide-minus"
       title="Divider"
       description="This section draws a line between the sections around it. Reorder or remove it from the Sections list."
     />
-
-    <TenantPageBlockItemEditor
-      v-else-if="singleSection?.kind === 'list'"
-      :site-id="siteId"
-      :page-id="pageId"
-      :block-id="blockId"
-      :collection="singleSection.collection!"
-    />
-
     <TenantPageBlockFields
       v-else-if="singleSection && block"
       :site-id="siteId"
@@ -54,88 +44,31 @@
       :section-key="singleSection.key"
       @split-insert="splitMarkdown"
     />
+  </DashboardLeafPanel>
 
-    <EditorNavigationList v-else :groups="navigationGroups" />
-
-  </div>
-
-  <!-- Deeper than my own child: the record below owns both columns. -->
-  <TenantPageBlockItemEditor
-    v-else-if="frame.mode.value === 'yield'"
-    :site-id="siteId"
-    :page-id="pageId"
-    :block-id="blockId"
-    :collection="openCollection!"
-  />
-
-  <template v-else>
-    <UDashboardPanel
-      id="site-page-block"
-      :class="hasDetail ? 'hidden lg:flex' : undefined"
-      :default-size="hasDetail ? 32 : undefined"
-    >
-      <template #header>
-        <UDashboardNavbar :title="blockLabel" :toggle="false">
-          <template #leading>
-            <DashboardNavbarLeading />
-          </template>
-        </UDashboardNavbar>
-      </template>
-
-      <template #body>
-        <div class="mx-auto w-full" :class="hasDetail ? 'max-w-xl' : 'max-w-3xl'">
-          <UAlert v-if="errorMessage" class="mb-6" color="error" variant="soft" icon="i-lucide-triangle-alert" :description="errorMessage" />
-          <EditorNavigationList :groups="navigationGroups" :active-item="openSection?.key" />
-        </div>
-      </template>
-    </UDashboardPanel>
-
-    <!--
-      The open level is the other column: its own panel, its own header,
-      and Save/Cancel in the panel's own footer slot.
-    -->
-    <UDashboardPanel v-if="hasDetail" id="site-page-block-detail">
-      <template #header>
-        <UDashboardNavbar :title="openSection?.label" :toggle="false">
-          <template #leading>
-            <DashboardNavbarLeading />
-          </template>
-        </UDashboardNavbar>
-      </template>
-
-      <template #body>
-        <div class="mx-auto w-full max-w-5xl">
-          <TenantPageBlockItemEditor
-            v-if="openSection?.kind === 'list'"
-            :site-id="siteId"
-            :page-id="pageId"
-            :block-id="blockId"
-            :collection="openSection.collection!"
-          />
-          <TenantPageBlockFields
-            v-else-if="openSection && block"
-            :site-id="siteId"
-            :page-id="pageId"
-            :block-id="blockId"
-            :section-key="openSection.key"
-            @split-insert="splitMarkdown"
-          />
-        </div>
-      </template>
-
-      <template #footer>
-        <DashboardPanelFooter :save-label="saveLabel" :loading="saving" :disabled="saveDisabled" @cancel="cancel" @save="saveOpenSection" />
-      </template>
-    </UDashboardPanel>
-  </template>
+  <DashboardIndexPanel v-else id="site-page-block" :title="blockLabel" :auto-open="navigationGroups[0]?.items.find(item => item.to)?.to ?? null">
+    <UFormField v-if="isNew" label="Section type" required class="mb-6">
+      <USelect
+        :model-value="newType"
+        :items="typeOptions"
+        value-key="value"
+        label-key="label"
+        size="xl"
+        class="w-full"
+        placeholder="Choose a section type"
+        @update:model-value="chooseType($event)"
+      />
+    </UFormField>
+    <UAlert v-if="errorMessage" class="mb-6" color="error" variant="soft" icon="i-lucide-triangle-alert" :description="errorMessage" />
+    <div v-if="isNew && newBlock" class="mb-6 flex justify-end">
+      <UButton :label="createActionLabel" :loading="saving" @click="startOrCreate" />
+    </div>
+    <EditorNavigationList v-if="navigationGroups.length" :groups="navigationGroups" :active-item="level.child.value" />
+  </DashboardIndexPanel>
 </template>
 
-<script setup lang="ts">
-import EditorNavigationList, { type EditorNavigationGroup } from '~/components/dashboard/EditorNavigationList.vue'
-import TenantPageBlockFields from '~/components/dashboard/TenantPageBlockFields.vue'
-import TenantPageBlockItemEditor from '~/components/dashboard/TenantPageBlockItemEditor.vue'
-import { getErrorMessage, showNotFound } from '~/utils/errors'
-import { createTenantPageEditorData, tenantPageBlockSummary, validateTenantPageBlock } from '~/utils/tenant-page-editor'
+<script lang="ts">
+import type { ComputedRef, InjectionKey, Ref } from 'vue'
 import {
   TENANT_PAGE_BLOCK_REGISTRY,
   createTenantPageBlock,
@@ -143,77 +76,67 @@ import {
   type TenantPageBlock,
   type TenantPageBlockType,
 } from '~/utils/tenant-page-blocks'
-import {
-  TENANT_PAGE_RECORD_NOUNS,
-  tenantPageBlockLabel,
-  tenantPageBlockSections,
-  type TenantPageBlockSection,
-} from '~/utils/tenant-page-block-sections'
+import { TENANT_PAGE_RECORD_NOUNS, tenantPageBlockLabel, tenantPageBlockSections, type TenantPageBlockSection } from '~/utils/tenant-page-block-sections'
 
-const props = defineProps<{ siteId: string; pageId: string }>()
+/** The block and the way its leaves commit, for the section and record levels below it. */
+export interface TenantPageBlockEditor {
+  block: ComputedRef<TenantPageBlock | null>
+  sections: ComputedRef<readonly TenantPageBlockSection[]>
+  ready: Ref<boolean>
+  saving: Ref<boolean>
+  saveDisabled: Ref<boolean>
+  saveLabel: Ref<string | undefined>
+  errorMessage: Ref<string>
+  revert: () => void
+  save: () => void
+  splitMarkdown: (payload: { after: string; blockType: 'image' | 'faq' | 'how_to' }) => void
+}
 
-const route = useRoute()
-const sectionsPath = computed(() => `/dashboard/${String(route.params.orgSlug)}/sites/${String(route.params.siteSlug)}/pages/${props.pageId}/sections`)
-/** The path segment naming this block — its id, or `new` while it is being added. */
-const blockId = computed(() => {
-  const rest = route.path.startsWith(sectionsPath.value)
-    ? route.path.slice(sectionsPath.value.length).replace(/^\//, '').split('/').filter(Boolean)
-    : []
-  return rest[0] ?? ''
-})
-const blockPath = computed(() => `${sectionsPath.value}/${blockId.value}`)
-const frame = useEditorFrame(blockPath)
-const hasDetail = computed(() => frame.mode.value === 'pair')
+export const tenantPageBlockEditorKey = Symbol('tenant-page-block-editor') as InjectionKey<TenantPageBlockEditor>
+</script>
 
+<script setup lang="ts">
+import EditorNavigationList, { type EditorNavigationGroup } from '~/components/dashboard/EditorNavigationList.vue'
+import TenantPageBlockFields from '~/components/dashboard/TenantPageBlockFields.vue'
+import { getErrorMessage, showNotFound } from '~/utils/errors'
+import { createTenantPageEditorData, tenantPageBlockSummary, validateTenantPageBlock } from '~/utils/tenant-page-editor'
+
+const props = defineProps<{ siteId: string; pageId: string; blockId: string }>()
+
+const level = useRouteLevel()
 const { draft, dirty, ready, revert, commit } = useTenantPageDraft(props.siteId, props.pageId)
 const newBlock = useTenantPageNewBlock(props.siteId, props.pageId)
 
-const isNew = computed(() => blockId.value === 'new')
+const isNew = computed(() => props.blockId === 'new')
 const saving = ref(false)
 const errorMessage = ref('')
 
 const block = computed<TenantPageBlock | null>(() => (isNew.value
   ? newBlock.value
-  : draft.value.blocks.find(candidate => candidate.id === blockId.value) ?? null))
+  : draft.value.blocks.find(candidate => candidate.id === props.blockId) ?? null))
 
 const blockLabel = computed(() => (isNew.value ? 'New section' : block.value ? tenantPageBlockLabel(block.value.type) : 'Section'))
 const sections = computed<readonly TenantPageBlockSection[]>(() => (block.value ? tenantPageBlockSections(block.value) : []))
-/** A block with one section is that section; there is no row to open it with. */
+/** A block with one concern is that concern; there is no row to open it with. */
 const singleSection = computed(() => (sections.value.length === 1 ? sections.value[0]! : null))
+/** A divider, or a block of one non-list concern, is edited here rather than a level down. */
+const isLeaf = computed(() => !isNew.value && Boolean(block.value) && (!sections.value.length || (singleSection.value?.kind === 'leaf')))
 
-
-const openSegment = computed(() => frame.childSegment.value)
-const openSection = computed(() => sections.value.find(section => section.key === openSegment.value) ?? null)
-/** Which nested collection the route is inside, for the levels below this one. */
-const openCollection = computed(() => {
-  const segment = openSegment.value
-  if (!segment) return null
-  const asSection = sections.value.find(section => section.key === segment && section.kind === 'list')
-  if (asSection) return asSection.collection ?? null
-  // A single-section block is its own section, so its records hang directly off it.
-  return singleSection.value?.kind === 'list' && singleSection.value.collection === segment
-    ? singleSection.value.collection
-    : null
-})
-
-// An unsupported route 404s rather than quietly showing something else. A block
-// that is one section has no address for that section: the block is it — except
-// while it is being created, when that address is the step the walk sends the
-// author to, because the block's own level is still asking for a type.
+// A section that is not there is not a page; a level below a block that has
+// no such concern is not one either.
 watchEffect(() => {
   if (!ready.value && !isNew.value) return
-  const segment = openSegment.value
-  if (!segment) return
-  if (openCollection.value) return
-  if (!openSection.value) return showNotFound()
-  if (singleSection.value && !isNew.value) return showNotFound()
-  if (frame.rest.value.length > 1) showNotFound()
+  if (!isNew.value && !block.value) return showNotFound('Section not found')
+  const open = level.child.value
+  if (!open) return
+  const known = sections.value.some(section => section.key === open)
+    || (singleSection.value?.kind === 'list' && singleSection.value.collection === open)
+  if (!known) showNotFound()
 })
 
 const typeOptions = computed(() => Object.values(TENANT_PAGE_BLOCK_REGISTRY)
   .filter(definition => isTenantPageBlockAllowed(definition, draft.value.recipe, draft.value.page_type))
   .map(definition => ({ label: definition.label, value: definition.type })))
-
 const newType = computed(() => newBlock.value?.type)
 
 function chooseType(value: unknown) {
@@ -262,7 +185,7 @@ const navigationGroups = computed<EditorNavigationGroup[]>(() => {
     id: 'block',
     items: sections.value.map((section) => {
       const { summary, placeholder } = sectionSummary(section)
-      return { id: section.key, label: section.label, summary, placeholder, to: `${blockPath.value}/${section.key}` }
+      return { id: section.key, label: section.label, summary, placeholder, to: `${level.path.value}/${section.key}` }
     }),
   }]
 })
@@ -270,18 +193,17 @@ const navigationGroups = computed<EditorNavigationGroup[]>(() => {
 // ── Adding a section ────────────────────────────────────
 // The type, then whatever the block will not be accepted without. What "will not
 // be accepted" means is `validateTenantPageBlock` and nothing else.
-type WalkKey = string
-const walkLabels = computed<Record<WalkKey, string>>(() => {
-  const labels: Record<WalkKey, string> = { type: 'Type' }
+const walkLabels = computed<Record<string, string>>(() => {
+  const labels: Record<string, string> = { type: 'Type' }
   for (const section of sections.value) labels[section.key] = section.label
   return labels
 })
-const walkOrder = computed<WalkKey[]>(() => ['type', ...sections.value.map(section => section.key)])
+const walkOrder = computed<string[]>(() => ['type', ...sections.value.map(section => section.key)])
 const newBlockInvalid = computed(() => Boolean(newBlock.value && validateTenantPageBlock(newBlock.value).length))
-const openWalkKey = computed<WalkKey>(() => openSegment.value ?? 'type')
+const openWalkKey = computed(() => level.child.value ?? 'type')
 
 const { createActionLabel, saveLabel, saveDisabled: walkSaveDisabled, save: saveWalk, startOrCreate } = useCreateWalk({
-  recordPath: blockPath,
+  recordPath: level.path,
   isNew,
   openKey: openWalkKey,
   labels: walkLabels,
@@ -317,7 +239,8 @@ async function create() {
     const created = page.blocks.find(candidate => candidate.id === pending.id)
     if (!created) throw new Error('The section was not created.')
     newBlock.value = null
-    await navigateTo(`${sectionsPath.value}/${created.id}`)
+    // The section it became, not the `new` form it was.
+    await navigateTo(`${level.to.value}/${created.id}`, { replace: true })
   } catch (cause) {
     // The page was not written, so the draft must not keep pretending it was.
     revert()
@@ -327,12 +250,14 @@ async function create() {
   }
 }
 
+/** Saving from a leaf below this level commits the page and puts this level back. */
 async function save() {
   saving.value = true
   errorMessage.value = ''
   try {
     await commit()
-    await navigateTo(blockPath.value)
+    if (isLeaf.value) await navigateTo(level.to.value ?? '/dashboard')
+    else await level.close()
   } catch (cause) {
     errorMessage.value = getErrorMessage(cause, 'Failed to save this page')
   } finally {
@@ -340,15 +265,10 @@ async function save() {
   }
 }
 
-function cancel() {
+function revertDraft() {
   errorMessage.value = ''
-  if (isNew.value) {
-    newBlock.value = null
-    void navigateTo(sectionsPath.value)
-    return
-  }
-  revert()
-  void navigateTo(blockPath.value)
+  if (isNew.value) newBlock.value = null
+  else revert()
 }
 
 /**
@@ -373,7 +293,20 @@ function splitMarkdown(payload: { after: string; blockType: 'image' | 'faq' | 'h
 /** Leaving the add flow empties its draft, so the next Add starts blank. */
 onBeforeRouteLeave((to) => {
   if (!isNew.value) return
-  if (to.path === blockPath.value || to.path.startsWith(`${blockPath.value}/`)) return
+  if (to.path === level.path.value || to.path.startsWith(`${level.path.value}/`)) return
   newBlock.value = null
+})
+
+provide(tenantPageBlockEditorKey, {
+  block,
+  sections,
+  ready: computed(() => ready.value || isNew.value),
+  saving,
+  saveDisabled,
+  saveLabel,
+  errorMessage,
+  revert: revertDraft,
+  save: saveOpenSection,
+  splitMarkdown,
 })
 </script>

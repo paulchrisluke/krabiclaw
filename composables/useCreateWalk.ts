@@ -2,7 +2,7 @@ import type { MaybeRefOrGetter, Ref } from 'vue'
 
 /**
  * Creating a record walks the sections its endpoint will not accept empty, in
- * order, naming where it is going: `Start with Title` on the hub, `Next: Body`
+ * order, naming where it is going: `Start with Title` on the index, `Next: Body`
  * on a leaf while sections remain, `Create post` on the last one. The commit
  * runs once nothing is outstanding. An existing record saves the open section
  * outright, and is blocked only while that section itself is incomplete.

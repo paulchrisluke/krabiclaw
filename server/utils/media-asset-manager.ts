@@ -10,6 +10,7 @@ import {
   isSupportedMediaPlacement,
   isMediaPlacementOwnerType,
   MAX_ORDERED_MEDIA_ASSETS,
+  type MediaCategory,
   type MediaPlacementOwnerType,
 } from '~/shared/media-placement-contract'
 
@@ -42,7 +43,7 @@ export interface MediaAsset {
   height: number | null
   duration: number | null
   alt_text: string | null
-  category: 'exterior' | 'interior' | 'food' | 'menu' | 'team' | 'other' | 'logo' | 'blog' | null
+  category: MediaCategory | null
   status: 'pending' | 'active' | 'deleted' | 'failed'
   placement_updated_at?: string | null
   created_by_user_id: string | null

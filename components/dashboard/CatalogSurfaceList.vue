@@ -13,31 +13,8 @@
       :description="loadError"
     />
 
-    <UPageList v-else class="gap-3">
-      <UPageCard
-        v-for="surface in surfaces"
-        :key="surface.id"
-        :to="surface.to"
-        :title="surface.label"
-        :description="surface.summary"
-        variant="soft"
-        :highlight="surface.id === openSurface"
-        :ui="{ container: 'min-w-0 p-5 sm:p-5', title: 'text-[15px]', description: 'mt-1' }"
-      >
-        <!-- The strip takes the card's width and the pictures share it: four
-             thumbnails at 96px overran a phone and scrolled the whole column. -->
-        <div v-if="surface.previews.length" class="flex w-full gap-2">
-          <img
-            v-for="(preview, index) in surface.previews"
-            :key="index"
-            :src="preview"
-            alt=""
-            class="aspect-[20/19] min-w-0 flex-1 max-w-24 rounded-xl object-cover"
-            loading="lazy"
-          >
-        </div>
-      </UPageCard>
-    </UPageList>
+    <!-- The same rows every other index draws. -->
+    <EditorNavigationList v-else :groups="navigationGroups" :active-item="openSurface" />
   </section>
 </template>
 
@@ -50,6 +27,7 @@
 // the rows are derived from what the location carries, so there is nothing here
 // to add, rename, reorder or delete. That is why this level is a navigation
 // list and not a list editor.
+import EditorNavigationList, { type EditorNavigationGroup } from '~/components/dashboard/EditorNavigationList.vue'
 import { getErrorMessage } from '~/utils/errors'
 import {
   catalogLabel,
@@ -90,16 +68,19 @@ useSeoMeta({ title: () => `${catalogTitle.value} | KrabiClaw Dashboard`, robots:
 // One row per surface the catalog actually reaches, so a restaurant that sells
 // only food opens straight onto its Menu and never meets an Experiences row it
 // has nothing to put in. The card shows what the surface holds, the way the
-// location's own hub shows its photographs.
-const surfaces = computed(() => catalogSurfaces(vertical, counts.value).map((surface) => {
-  const words = presentationForSurface(vertical, surface)
-  const products = catalog.products.value.filter(product => productSurfaceOf(vertical, product) === surface)
-  return {
-    id: surface,
-    label: words.collectionLabel,
-    summary: catalogSummary(vertical, countCatalog(products)),
-    previews: products.flatMap(product => product.image?.public_url ?? []).slice(0, 4),
-    to: `${productsPath.value}/${surface}`,
-  }
-}))
+// location's own index shows its photographs.
+const navigationGroups = computed<EditorNavigationGroup[]>(() => [{
+  id: 'catalog',
+  items: catalogSurfaces(vertical, counts.value).map((surface) => {
+    const words = presentationForSurface(vertical, surface)
+    const products = catalog.products.value.filter(product => productSurfaceOf(vertical, product) === surface)
+    return {
+      id: surface,
+      label: words.collectionLabel,
+      summary: catalogSummary(vertical, countCatalog(products)),
+      images: products.flatMap(product => product.image?.public_url ?? []).slice(0, 4),
+      to: `${productsPath.value}/${surface}`,
+    }
+  }),
+}])
 </script>

@@ -108,6 +108,17 @@
     </nav>
     </div>
 
+    <!-- A refused organization switch stays on screen: the session did not move. -->
+    <UAlert
+      v-if="organizationSwitchError"
+      color="error"
+      variant="soft"
+      icon="i-lucide-circle-alert"
+      class="fixed inset-x-4 top-4 z-50 mx-auto max-w-md"
+      :description="organizationSwitchError"
+      :close="{ onClick: () => (organizationSwitchError = null) }"
+    />
+
     <DashboardMenuSlideover v-model:open="menuOpen" />
 
     <BillingServiceUpsellModal />
@@ -230,12 +241,19 @@ const activeOrganizationId = computed(() => {
   return session?.activeOrganizationId ?? null
 })
 // The account pages are user-scoped, not organization-scoped, so they carry no
-// organization in the path. They used to carry one in the query string purely so
-// a back-link could render a label without a fetch; the top nav is the way back
-// now, and the session's active organization answers "back to which org?".
-const accountOrganization = computed(() => organizations.value.find(org => org.id === activeOrganizationId.value)
-  ?? organizations.value[0]
-  ?? null)
+// organization in the path, and the session's active organization answers
+// "back to which org?".
+//
+// Only that one. Falling back to the first organization the account belongs to
+// sent Back from Account into a business the person had never opened — it read
+// as an answer while being a guess. With no active organization there is no
+// parent, and the level renders no Back rather than a wrong one.
+//
+// Setting the active organization is #905's work, not this change's: it belongs
+// to `/api/post-login` and to explicit selection in the scope switcher, never to
+// a side effect of visiting an organization's route.
+const accountOrganization = computed(() => organizations.value.find(org => org.id === activeOrganizationId.value) ?? null)
+
 const impersonatedBy = computed(() => {
   const session = sessionData.value?.session as { impersonatedBy?: string } | undefined
   return session?.impersonatedBy
@@ -324,13 +342,53 @@ const scopeHeaderModel = computed<DashboardScopeHeaderModel>(() => {
       avatar: org.logo ?? undefined,
       icon: org.logo ? undefined : 'i-lucide-building-2',
       active: org.id === organization.value?.id,
-      to: `/dashboard/${encodeURIComponent(org.slug)}`
+      // Which one is a plain link is the *session's* question, not the route's.
+      // A route can be open in an organization the session is not active in —
+      // that is the case #905 exists for — and comparing against the route left
+      // that peer as a link that never told Better Auth anything.
+      ...(org.id === activeOrganizationId.value
+        ? { to: `/dashboard/${encodeURIComponent(org.slug)}` }
+        : { onSelect: () => void selectOrganization(org) }),
     })),
     createAction: { label: 'New Organization', to: '/dashboard/onboarding' }
   }
 })
 
 
+
+/**
+ * Switching businesses activates the organization in Better Auth first, then
+ * navigates. Navigating first left the session pointing at the old one, which
+ * is what the account pages read to find their way back (#905).
+ */
+const organizationSwitchError = ref<string | null>(null)
+// One activation at a time. Two quick presses raced: both called `setActive`,
+// and whichever resolved last decided the session while the other was already
+// navigating — the dashboard could open an organization the session left.
+const switchingOrganization = ref(false)
+async function selectOrganization(org: { id: string, slug: string }) {
+  if (switchingOrganization.value) return
+  switchingOrganization.value = true
+  organizationSwitchError.value = null
+  try {
+    await activateOrganization(org)
+  } finally {
+    switchingOrganization.value = false
+  }
+}
+
+async function activateOrganization(org: { id: string, slug: string }) {
+  const { error } = await authClient.organization.setActive({ organizationId: org.id })
+  if (error) {
+    // Staying put is the honest outcome: the session is still in the old
+    // organization, so entering the new one would show a dashboard the session
+    // is not actually in.
+    organizationSwitchError.value = error.message || 'Could not switch organization'
+    return
+  }
+  await session.value.refetch()
+  await navigateTo(`/dashboard/${encodeURIComponent(org.slug)}`)
+}
 
 provide(dashboardScopeHeaderModelKey, scopeHeaderModel)
 provide(dashboardOrganizationParentKey, computed(() => {
@@ -344,27 +402,67 @@ interface DashboardMobileNavItem {
   icon: string
   to?: string
   active?: boolean
-  exact?: boolean
-}
-
-function isActivePath(path?: string, exact = false) {
-  if (!path) return false
-  return route.path === path || (!exact && route.path.startsWith(`${path}/`))
 }
 
 /**
- * Only the most specific matching item is active. Nav paths nest — a location's
- * Messages lives under the Locations path — so plain prefix matching lit up both
- * Messages and Locations at once. The longest matching path is the one the route
- * actually belongs to.
+ * Which tab the current route belongs to: the one reached by walking up from
+ * here the way Back does, following `meta.back` where a page declares a parent
+ * the URL does not nest under and cutting a segment otherwise.
+ *
+ * Prefix matching cannot answer this. The links page lives at
+ * `/sites/:siteSlug/links` but is reached from Pages, under Menu, so the URL
+ * said Locations while every way out of it led to Menu. Asking the same
+ * question Back asks means the lit tab is always the one the walk ends at.
  */
-function withActiveItem<T extends { to?: string; exact?: boolean }>(items: T[]): Array<T & { active: boolean }> {
-  const depths = items.map(item => isActivePath(item.to, item.exact) ? (item.to?.length ?? 0) : -1)
-  const deepest = Math.max(...depths)
-  return items.map((item, index) => ({ ...item, active: depths[index] === deepest && depths[index] >= 0 }))
+function tabRootPath(stops: readonly string[]): string | null {
+  let path = route.path
+  const seen = new Set<string>()
+  while (!seen.has(path)) {
+    // The walk ends at the first tab it reaches. Menu declares no parent of its
+    // own, so without this it kept cutting segments and every page under it lit
+    // Today.
+    if (stops.includes(path)) return path
+    seen.add(path)
+    const resolved = router.resolve(path)
+    // A directory's `index.vue` is a second record at the same URL and the same
+    // level, and it is the one `matched` ends on. Both are asked, so the `back:`
+    // its directory declares is not missed — which is what sent every page
+    // under Menu to Locations instead.
+    const depth = (candidate: string) => candidate.split('/').filter(Boolean).length
+    const deepest = Math.max(...resolved.matched.map(candidate => depth(candidate.path)))
+    const declared = resolved.matched
+      .filter(candidate => depth(candidate.path) === deepest && candidate.meta?.passthrough !== true)
+      .map(candidate => candidate.meta?.back)
+      .find(candidate => typeof candidate === 'string')
+    if (typeof declared === 'string') {
+      const target = router.getRoutes().find(candidate => candidate.name === declared)
+      const keys = target ? [...target.path.matchAll(/:(\w+)/g)].map(match => match[1]!) : []
+      if (target && keys.every(key => resolved.params[key] !== undefined)) {
+        path = router.resolve({ name: declared, params: Object.fromEntries(keys.map(key => [key, resolved.params[key]])) }).path
+        continue
+      }
+    }
+    const above = path.split('/').filter(Boolean).slice(0, -1)
+    // `/dashboard/:orgSlug` is Today, and there is nothing above it to walk to.
+    if (above.length < 2) break
+    path = `/${above.join('/')}`
+  }
+  return stops.includes(path) ? path : null
 }
 
-const mobileNavItems = computed<DashboardMobileNavItem[]>(() => {
+
+
+/**
+ * A tab is active when the walk above ends at it. Two tabs could otherwise
+ * claim one route, because their paths nest: a location's Messages lives under
+ * the Locations path.
+ */
+function withActiveItem<T extends { to?: string }>(items: T[], root: string | null): Array<T & { active: boolean }> {
+  return items.map(item => ({ ...item, active: Boolean(item.to) && item.to === root }))
+}
+
+/** The tabs themselves; which one is lit is answered after they are known. */
+const navTargets = computed<DashboardMobileNavItem[]>(() => {
   const routeOrgSlug = typeof route.params.orgSlug === 'string' ? route.params.orgSlug : null
   if (!routeOrgSlug) return []
   const routeOrgBase = `/dashboard/${encodeURIComponent(routeOrgSlug)}`
@@ -372,12 +470,12 @@ const mobileNavItems = computed<DashboardMobileNavItem[]>(() => {
   const routeSiteBase = routeSiteSlug ? `${routeOrgBase}/sites/${encodeURIComponent(routeSiteSlug)}` : null
   const messagesTo = routeSiteBase ? `${routeSiteBase}/messages` : `${routeOrgBase}/messages`
   const items: DashboardMobileNavItem[] = [
-    { key: 'today', label: 'Today', icon: 'i-lucide-bookmark', to: routeOrgBase, exact: true },
+    { key: 'today', label: 'Today', icon: 'i-lucide-bookmark', to: routeOrgBase },
     { key: 'calendar', label: 'Calendar', icon: 'i-lucide-calendar-days', to: `${routeOrgBase}/calendar` },
     { key: 'locations', label: 'Locations', icon: 'i-lucide-map-pin', to: `${routeOrgBase}/sites` },
     { key: 'messages', label: 'Messages', icon: 'i-lucide-message-square', to: messagesTo },
   ]
-  return withActiveItem(items)
+  return items
 })
 
 // The top nav (tablet and desktop, md and up) and the bottom bar (mobile, below
@@ -387,7 +485,14 @@ const mobileNavItems = computed<DashboardMobileNavItem[]>(() => {
 // it, because a slideover is the wrong control on a phone.
 const menuOpen = ref(false)
 const { menuPageTo } = useDashboardMenu()
-const primaryNavItems = computed(() => mobileNavItems.value)
+
+/** Every tab the walk may end at, Menu included. */
+const tabStops = computed(() => [
+  ...navTargets.value.map(item => item.to).filter((to): to is string => Boolean(to)),
+  menuPageTo.value,
+])
+const activeTabPath = computed(() => tabRootPath(tabStops.value))
+const primaryNavItems = computed(() => withActiveItem(navTargets.value, activeTabPath.value))
 // A signed-in owner always gets the header: the wordmark and the account menu
 // are user-scoped and need no organization. Only the nav links and the bottom
 // bar wait for an organization, because Today, Calendar, Sites and Messages do not
@@ -402,7 +507,9 @@ const topNavHomeTo = computed(() => {
   const routeOrgSlug = typeof route.params.orgSlug === 'string' ? route.params.orgSlug : null
   return routeOrgSlug ? `/dashboard/${encodeURIComponent(routeOrgSlug)}` : '/dashboard'
 })
-const isMenuPageActive = computed(() => isActivePath(menuPageTo.value))
+// Menu is lit by the same walk as the other tabs, so a page reached through it
+// — Pages, Blog, Website, and every level under them — lights Menu and nothing else.
+const isMenuPageActive = computed(() => activeTabPath.value === menuPageTo.value)
 
 
 

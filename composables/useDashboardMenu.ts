@@ -1,6 +1,7 @@
 import type { EditorNavigationGroup } from '~/components/dashboard/EditorNavigationList.vue'
 import { dashboardScopeHeaderModelKey } from '~/lib/components/workspace/dashboard/dashboardScopeHeaderContext'
 import { authClient } from '~/lib/auth-client'
+import { useMediaQuery } from '@vueuse/core'
 
 /**
  * How many Cancel/Save footers are mounted. While one is, a leaf is open as a
@@ -9,6 +10,16 @@ import { authClient } from '~/lib/auth-client'
  */
 export function useDashboardLeafFooters() {
   return useState<number>('dashboard-leaf-footers', () => 0)
+}
+
+/**
+ * Whether there is a second column. Tailwind's `lg`, the one width at which an
+ * index and its open child sit side by side and an index opens its first child
+ * on arrival rather than sitting beside an empty pane. One reading, shared by
+ * the two shells, so the redirect and the layout cannot disagree.
+ */
+export function useDashboardPane() {
+  return useMediaQuery('(min-width: 1024px)')
 }
 
 export function useDashboardMenu() {

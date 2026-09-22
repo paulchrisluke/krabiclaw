@@ -11,7 +11,24 @@ corepack yarn dev
 ```
 
 Copy `.env.example` to `.env` and fill the required application secrets before
-setup. `local:setup` is safe to repeat: it applies the migration chain, refreshes
+setup. `.env` is the single local configuration for Nuxt, Wrangler, setup scripts,
+and E2E tests; `.env.example` is the maintained template. Both `yarn dev` and
+`yarn dev:worker` use port 3000 by default.
+
+If an older checkout has `.dev.vars` or `.dev.vars.<environment>`, merge its
+needed values into `.env`, resolve conflicting values explicitly, then remove
+the old file. Do not symlink it: Wrangler gives `.dev.vars` precedence and skips
+`.env` loading when it exists. Keep local configuration in `.env` rather than
+environment-specific copies so Node scripts and the Worker use the same values.
+See [Cloudflare's local environment loading rules](https://developers.cloudflare.com/workers/local-development/environment-variables/).
+
+Playwright loads `.env` into its process and enables Wrangler's native process
+environment loading for its local Worker. Shell/CI values take precedence, and
+the runner supplies local URLs, test-route settings, and log-only delivery.
+There is no separate secret forwarding list to maintain. Deployed Worker
+secrets remain configured through Cloudflare and the release workflow.
+
+`local:setup` is safe to repeat: it applies the migration chain, refreshes
 the demo, Kikuzuki, Pottery House, and NCLS fixtures, provisions local auth, and
 verifies the resulting D1 database. Do not replace its steps with direct
 Wrangler writes or a hand-edited local database.

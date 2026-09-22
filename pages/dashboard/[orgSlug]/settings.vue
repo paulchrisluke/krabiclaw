@@ -1,67 +1,42 @@
 <template>
   <!--
-    Notifications, Insights and the members pair draw their own panels, so
-    this level only routes to them. Everything else is a leaf in the column
-    beside the Menu.
+    Menu: the business's own page, a tab root. Its rows are the site's lists
+    and settings, each a level below.
+
+    Search and the bell hang off it: the dashboard has one search and this is
+    where it lives.
+
+    The account is a row in the list below, not a control up here. Measured on
+    Airbnb at 390 (2026-09-22): their `/hosting` draws no header and no avatar
+    at all on a phone, and the account is reached as "Account settings" in the
+    Menu tab's own list. The header carries the avatar from `md` up, where
+    Airbnb's does too.
   -->
-  <NuxtPage v-if="rendersStandalone || frame.mode.value === 'yield'" />
-
-  <template v-else>
-    <UDashboardPanel
-      id="organization-settings"
-      :class="hasDetail ? 'hidden lg:flex' : undefined"
-      :default-size="hasDetail ? 32 : undefined"
-    >
-      <template #header>
-        <UDashboardNavbar title="Menu" :toggle="false">
-          <template #right>
-            <DashboardNotificationBell :to="notificationsTo" />
-            <DashboardAccountMenu />
-          </template>
-        </UDashboardNavbar>
-      </template>
-
-      <template #body>
-        <div class="mx-auto w-full" :class="hasDetail ? 'max-w-xl' : 'max-w-[var(--ws-page-narrow,45rem)]'">
-          <DashboardMenuContent @search="openSearch" />
-        </div>
-      </template>
-    </UDashboardPanel>
-
-    <UDashboardPanel v-if="hasDetail" id="organization-settings-detail">
-      <template #header>
-        <UDashboardNavbar :title="activeLabel" :toggle="false">
-          <template #leading>
-            <DashboardNavbarLeading />
-          </template>
-        </UDashboardNavbar>
-      </template>
-
-      <template #body>
-        <div class="mx-auto w-full max-w-2xl">
-          <NuxtPage />
-        </div>
-      </template>
-    </UDashboardPanel>
-  </template>
+  <DashboardIndexPanel id="organization-settings" title="Menu">
+    <template #right>
+      <UButton
+        icon="i-lucide-search"
+        aria-label="Search"
+        color="neutral"
+        variant="ghost"
+        square
+        data-testid="dashboard-search"
+        @click="openSearch"
+      />
+      <DashboardNotificationBell :to="notificationsTo" />
+    </template>
+    <DashboardMenuContent />
+  </DashboardIndexPanel>
 </template>
 
 <script setup lang="ts">
 import DashboardMenuContent from '~/lib/components/workspace/dashboard/DashboardMenuContent.vue'
 import DashboardNotificationBell from '~/lib/components/workspace/dashboard/DashboardNotificationBell.vue'
-import DashboardAccountMenu from '~/lib/components/workspace/dashboard/DashboardAccountMenu.vue'
 
 definePageMeta({ layout: 'dashboard' })
 useSeoMeta({ title: 'Menu | KrabiClaw Dashboard', robots: 'noindex, nofollow' })
 
-const route = useRoute()
 const nuxtApp = useNuxtApp()
-
-const { settingsPath, activeLabel } = useOrganizationSettingsNavigation()
-const frame = useEditorFrame(settingsPath)
-const hasDetail = computed(() => frame.mode.value === 'pair')
-const rendersStandalone = computed(() => route.matched.some(record => record.meta?.ownsChrome === true))
-
 const { notificationsTo } = useDashboardMenu()
 
 function openSearch() {

@@ -14,12 +14,21 @@
   >
     <template #actions>
       <div class="ms-auto flex items-center gap-1.5">
+        <UButton
+          icon="i-lucide-search"
+          aria-label="Search"
+          color="neutral"
+          variant="ghost"
+          square
+          data-testid="dashboard-search"
+          @click="openSearch"
+        />
         <DashboardNotificationBell :to="notificationsTo" />
       </div>
     </template>
 
     <template #body>
-      <DashboardMenuContent @search="openSearch" />
+      <DashboardMenuContent />
     </template>
   </USlideover>
 </template>
