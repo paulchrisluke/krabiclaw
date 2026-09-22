@@ -10,7 +10,7 @@ function stringQuery(value: unknown): string | undefined {
 }
 
 export default defineHandler(async (event) => {
-  const { env, db, organization } = await getDashboardContext(event, { requireSite: false })
+  const { env, db, organization } = await getDashboardContext(event, {})
   const query = getQuery(event)
   const from = stringQuery(query.from)
   const to = stringQuery(query.to)

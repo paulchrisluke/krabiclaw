@@ -5,7 +5,7 @@ import { listDashboardEvents } from '~/server/utils/dashboard-events'
 import { finalizeRequestMetrics } from '~/server/utils/request-metrics'
 
 export default defineHandler(async (event) => {
-  const { db, organization } = await getDashboardContext(event, { requireSite: false })
+  const { db, organization } = await getDashboardContext(event, {})
   // Every site and location in the organization, and `organizationId`/`locationId` below
   // are caller-supplied filters rather than scope constraints, so this is an
   // organization-wide read.

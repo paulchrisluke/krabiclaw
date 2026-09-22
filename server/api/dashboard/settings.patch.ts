@@ -18,12 +18,9 @@ export default defineHandler(async (event) => {
       { error: 'No update fields provided' }, { status: 400 }, )
   }
 
-  const { env, db, session, organization, site } = await getDashboardContext(event, { requireSite: true })
+  const { env, db, session, organization } = await getDashboardContext(event)
 
-  if (!site) {
-    return jsonResponse({ error: 'Site not found' }, { status: 404 })
-  }
-  await assertOrganizationWideAccess(db, memberAccessPrincipal(organization, { env, organizationId: site.id, event }))
+  await assertOrganizationWideAccess(db, memberAccessPrincipal(organization, { env, event }))
 
 
   try {

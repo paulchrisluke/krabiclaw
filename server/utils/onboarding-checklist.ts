@@ -59,7 +59,7 @@ export async function loadOnboardingChecklist(
     organizationId = organization.id
     brandName = organization.name
   } else {
-    const dashboard = await getDashboardContext(event, { requireSite: false, requireOrganization: false })
+    const dashboard = await getDashboardContext(event, { requireOrganization: false })
     if (!dashboard?.site) return EMPTY_ONBOARDING_CHECKLIST
     organizationId = dashboard.organization.id
     brandName = dashboard.organization.name

@@ -29,7 +29,7 @@ export default defineHandler(async (event) => {
   const memberId = String(getRouterParam(event, 'memberId') || '').trim()
   if (!memberId) return jsonResponse({ error: 'Member id is required' }, { status: 400 })
 
-  const { env, db, organization } = await getDashboardContext(event, { requireSite: false })
+  const { env, db, organization } = await getDashboardContext(event, {})
   if (!isOrganizationWideRole(organization.role)) {
     return jsonResponse({ error: 'Only owners and admins can change member roles' }, { status: 403 })
   }

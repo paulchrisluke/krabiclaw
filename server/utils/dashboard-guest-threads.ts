@@ -111,8 +111,7 @@ export async function loadOrganizationGuestThreads(
 ) {
   const { db, env, organization, userId } = await getDashboardContext(event, {
     requireOrganization: true,
-    requireSite: false,
-    organizationSlug: scope?.orgSlug,
+        organizationSlug: scope?.orgSlug,
   })
   if (!organization) {
     throw new HTTPError({ statusCode: 404, statusMessage: 'Organization not found' })

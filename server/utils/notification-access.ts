@@ -59,7 +59,7 @@ export function buildNotificationVisibilityFilter(principal: NotificationVisibil
 }
 
 export async function getNotificationAccess(event: H3Event) {
-  const context = await getDashboardContext(event, { requireSite: false, requireOrganization: false })
+  const context = await getDashboardContext(event, { requireOrganization: false })
   const platformAdmin = await hasPlatformEventPermission(event, context.env, { platform: ['access'] })
   const siteWideSiteIds: string[] = []
   const locationIds: string[] = []

@@ -33,10 +33,10 @@ interface EditorLocationRow {
 }
 
 export async function loadDashboardEditorContext(event: H3Event, organizationId: string) {
-  const { env, db, site } = await requireOrganizationAccess(event, organizationId, 'context')
-  if (!site.vertical) throw new HTTPError({ statusCode: 500, statusMessage: 'Site vertical is not configured' })
+  const { env, db, organization } = await requireOrganizationAccess(event, organizationId, 'context')
+  if (!organization.vertical) throw new HTTPError({ statusCode: 500, statusMessage: 'Organization vertical is not configured' })
 
-  const principal = memberAccessPrincipal(site.membership, { env, organizationId, event })
+  const principal = memberAccessPrincipal(organization.membership, { env, event })
   // requireOrganizationAccess(event, organizationId, 'context') has already run
   // assertOrganizationContextAccess with this exact principal (location-access.ts), so
   // asserting it again here only bought a second read of the same member row.
@@ -47,8 +47,8 @@ export async function loadDashboardEditorContext(event: H3Event, organizationId:
         FROM business_locations
        WHERE organization_id = ?  AND status = 'active'
        ORDER BY title ASC
-    `, [site.organization_id]),
-    getOrganizationEntitlements(env, site.organization_id),
+    `, [organization.id]),
+    getOrganizationEntitlements(env, organization.id),
   ])
   const locations = locationRows
     .filter(location => accessibleLocationIds === null || accessibleLocationIds.includes(location.id))
@@ -56,24 +56,24 @@ export async function loadDashboardEditorContext(event: H3Event, organizationId:
     throw new HTTPError({ statusCode: 500, statusMessage: 'PREVIEW_SECRET is required for editor previews' })
   }
   const previewToken = await createPreviewToken(env.PREVIEW_SECRET, organizationId, Date.now() + PREVIEW_TOKEN_TTL_MS)
-  const { vertical, template } = resolveSiteCmsCapabilities(site.vertical, site.theme_id, {
-    siteEnabledFeatures: site.feature_overrides,
+  const { vertical, template } = resolveSiteCmsCapabilities(organization.vertical, organization.theme_id, {
+    siteEnabledFeatures: organization.feature_overrides,
   })
   return {
     success: true as const,
     context: {
       site: {
-        id: site.id,
-        name: site.name,
-        subdomain: site.subdomain,
-        status: site.status,
-        onboarding_status: site.onboarding_status,
+        id: organization.id,
+        name: organization.name,
+        subdomain: organization.subdomain,
+        status: organization.status,
+        onboarding_status: organization.onboarding_status,
         vertical,
         template,
-        feature_overrides: site.feature_overrides,
+        feature_overrides: organization.feature_overrides,
         entitlements,
       },
-      organization: { id: site.organization_id, name: site.organization_name },
+      organization: { id: organization.id, name: organization.name },
       locations,
       scopes: [
         ...(accessibleLocationIds === null ? [{ id: null, label: 'Brand-wide', type: 'brand' as const }] : []),
@@ -81,7 +81,7 @@ export async function loadDashboardEditorContext(event: H3Event, organizationId:
       ],
       previewToken,
       editablePages: getEditablePages(vertical, template, {
-        site: parseCmsFeatureOverrideDelta(site.feature_overrides),
+        site: parseCmsFeatureOverrideDelta(organization.feature_overrides),
       }),
     },
   }
@@ -112,8 +112,8 @@ export async function loadDashboardMedia(
   organizationId: string,
   filters: DashboardMediaFilters = {},
 ) {
-  const { env, db, site } = await requireOrganizationAccess(event, organizationId, 'context')
-  const principal = memberAccessPrincipal(site.membership, { env, organizationId, event })
+  const { env, db, organization } = await requireOrganizationAccess(event, organizationId, 'context')
+  const principal = memberAccessPrincipal(organization.membership, { env, event })
   if (filters.id) {
     const asset = await getMediaAsset(db, filters.id, organizationId)
     if (asset) {
@@ -203,13 +203,12 @@ export async function loadDashboardLocationOverview(
   if (location.organization_id !== organizationId) {
     throw new HTTPError({ statusCode: 404, statusMessage: 'Location not found' })
   }
-  const principal = memberAccessPrincipal(organization, { env, organizationId, event })
+  const principal = memberAccessPrincipal(organization, { env, event })
   await assertLocationAccess(db, { ...principal, locationId })
   const [capabilities, catalog, reservationConfig, counts] = await Promise.all([
     resolveLocationCapabilitySummary(
       db,
       organization.id,
-      organizationId,
       location.feature_overrides as string | null ?? null,
     ),
     options.includeProducts
@@ -256,8 +255,8 @@ export async function loadDashboardProduct(
   locationId: string,
   productId: string,
 ) {
-  const { db, site } = await requireLocationAccess(event, organizationId, locationId)
-  const product = await getProduct(db, site.organization_id, productId)
+  const { db, organization } = await requireLocationAccess(event, organizationId, locationId)
+  const product = await getProduct(db, organization.id, productId)
   // The catalog is organization-owned, so being offered here is what makes
   // this location's editor the right place to open it.
   if (!product.locations.some(entry => entry.location_id === locationId)) {

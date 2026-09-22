@@ -11,8 +11,7 @@ export default defineHandler(async (event) => {
 
   if (organizationScoped) {
     const { env, db, organization, userId } = await getDashboardContext(event, {
-      requireSite: false,
-      requireOrganization: true,
+            requireOrganization: true,
     })
     if (!organization) {
       throw new HTTPError({ statusCode: 404, statusMessage: 'Organization not found' })

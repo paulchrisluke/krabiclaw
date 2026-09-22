@@ -3,7 +3,7 @@ import { getDashboardContext } from '~/server/utils/dashboard-context'
 import { isOperationalRole, isOrganizationWideRole, listResourceTeamAccess } from '~/server/utils/member-access'
 
 export default defineHandler(async (event) => {
-  const { env, db, organization, userId } = await getDashboardContext(event, { requireSite: false })
+  const { env, db, organization, userId } = await getDashboardContext(event, {})
   if (!isOperationalRole(organization.role)) {
     throw new HTTPError({ statusCode: 403, message: 'Dashboard realtime access denied' })
   }

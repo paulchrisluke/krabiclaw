@@ -23,8 +23,7 @@ export async function listDashboardLocationsResource(
   scope: { organizationSlug?: string; siteSlug?: string } = {},
 ) {
   const { env, db, organization, site } = await getDashboardContext(event, {
-    requireSite: true,
-    organizationSlug: scope.organizationSlug,
+        organizationSlug: scope.organizationSlug,
     siteSlug: scope.siteSlug,
   })
   if (!site) throw new HTTPError({ statusCode: 404, statusMessage: 'Site not found' })

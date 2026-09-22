@@ -101,8 +101,7 @@ interface BookingAccessContext {
 
 async function bookingContext(event: H3Event, organizationSlug?: string | null): Promise<BookingAccessContext> {
   const context = await getDashboardContext(event, {
-    requireSite: false,
-    organizationSlug,
+        organizationSlug,
   })
   if (!context.organization) throw new HTTPError({ statusCode: 404, message: 'Organization not found' })
   return {
