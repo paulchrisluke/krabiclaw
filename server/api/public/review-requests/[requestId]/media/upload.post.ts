@@ -88,8 +88,7 @@ export default defineHandler(async (event) => {
     const uploaded = await uploadResolvedMediaToAssetStore({
       db,
       env,
-      siteId: result.context.site_id,
-      organizationId: result.context.organization_id,
+      organizationId: result.context.site_id,
       userId: sessionUser.id,
       buffer: videoData,
       contentType: videoContentType,
@@ -110,7 +109,6 @@ export default defineHandler(async (event) => {
         buildMediaPlacementInsertQuery({
           id: mediaLinkId,
           organizationId: result.context.organization_id,
-          siteId: result.context.site_id,
           ownerType: 'review_request',
           ownerId: requestId,
           slot: 'gallery',

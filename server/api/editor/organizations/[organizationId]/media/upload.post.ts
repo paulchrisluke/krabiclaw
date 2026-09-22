@@ -27,10 +27,10 @@ function queryValue(value: unknown): string | null {
 
 export default defineHandler(async (event) => {
   try {
-    const siteId = getRouterParam(event, 'siteId')
-    if (!siteId) return jsonResponse({ error: 'Site ID required' }, { status: 400 })
+    const organizationId = getRouterParam(event, 'organizationId')
+    if (!organizationId) return jsonResponse({ error: 'Organization ID required' }, { status: 400 })
 
-    const { env, db, session, site } = await requireSiteAccess(event, siteId)
+    const { env, db, session, site } = await requireSiteAccess(event, organizationId)
 
     const query = getQuery(event)
     const rawCategory = queryValue(query.category)
@@ -65,8 +65,7 @@ export default defineHandler(async (event) => {
       const imageContentType = sniffMediaMimeType(imageData)
       if (!RESOLVED_MEDIA_IMAGE_TYPES.has(imageContentType)) return jsonResponse({ error: 'Unsupported image file type' }, { status: 415 })
       const uploaded = await uploadResolvedMediaToAssetStore({
-        db, env, siteId,
-        organizationId: site.organization_id,
+        db, env, organizationId,
         userId: session.user.id,
         buffer: imageData,
         contentType: imageContentType,
@@ -105,8 +104,7 @@ export default defineHandler(async (event) => {
     const uploaded = await uploadResolvedMediaToAssetStore({
       db,
       env,
-      siteId,
-      organizationId: site.organization_id,
+      organizationId,
       userId: session.user.id,
       buffer: videoData,
       contentType: videoContentType,

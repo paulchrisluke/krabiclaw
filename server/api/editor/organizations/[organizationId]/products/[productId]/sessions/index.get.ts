@@ -7,13 +7,13 @@ import { defineHandler } from 'nitro'
 import { getQuery, getRouterParam } from 'nitro/h3'
 
 export default defineHandler(async (event) => {
-  const siteId = getRouterParam(event, 'siteId')
+  const organizationId = getRouterParam(event, 'organizationId')
   const productId = getRouterParam(event, 'productId')
-  if (!siteId || !productId) return jsonResponse({ error: 'Site ID and product ID are required' }, { status: 400 })
+  if (!organizationId || !productId) return jsonResponse({ error: 'Site ID and product ID are required' }, { status: 400 })
   try {
-    const { db, site } = await requireSiteAccess(event, siteId)
+    const { db, site } = await requireSiteAccess(event, organizationId)
     // A product id in the path is not authorized by the site in the path.
-    await requireSiteProduct(db, { organizationId: site.organization_id, siteId, productId })
+    await requireSiteProduct(db, { organizationId: site.organization_id, productId })
     const query = getQuery(event)
     const from = typeof query.from === 'string' ? query.from : new Date().toISOString()
     const to = typeof query.to === 'string' ? query.to : new Date(Date.now() + 90 * 86_400_000).toISOString()
@@ -26,7 +26,7 @@ export default defineHandler(async (event) => {
     return jsonResponse({ success: true, sessions })
   } catch (error) {
     rethrowHttpError(error)
-    console.error('sessions_list_failed', { siteId, productId, error: error instanceof Error ? error.message : String(error) })
+    console.error('sessions_list_failed', { organizationId, productId, error: error instanceof Error ? error.message : String(error) })
     return jsonResponse({ error: 'Failed to list sessions' }, { status: 500 })
   }
 })

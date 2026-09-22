@@ -5,11 +5,11 @@ import { defineHandler } from 'nitro'
 import { getRouterParam } from 'nitro/h3'
 
 export default defineHandler(async (event) => {
-  const siteId = getRouterParam(event, 'siteId')
+  const organizationId = getRouterParam(event, 'organizationId')
   const collectionId = getRouterParam(event, 'collectionId')
-  if (!siteId || !collectionId) return jsonResponse({ error: 'Site ID and collection ID are required' }, { status: 400 })
+  if (!organizationId || !collectionId) return jsonResponse({ error: 'Site ID and collection ID are required' }, { status: 400 })
   try {
-    const { db, session, site } = await requireSiteAccess(event, siteId)
+    const { db, session, site } = await requireSiteAccess(event, organizationId)
     const body = await readStrictBody<{ product_ids: unknown }>(event, { product_ids: 'unknown' })
     if (!Array.isArray(body.product_ids) || body.product_ids.some(id => typeof id !== 'string' || !id.trim())) {
       return jsonResponse({ error: 'product_ids must contain non-empty product IDs' }, { status: 400 })
@@ -23,7 +23,7 @@ export default defineHandler(async (event) => {
     return jsonResponse({ success: true, products: await listCollectionProducts(db, { organizationId: site.organization_id, collectionId }) })
   } catch (error) {
     rethrowHttpError(error)
-    console.error('collection_products_failed', { siteId, collectionId, error: error instanceof Error ? error.message : String(error) })
+    console.error('collection_products_failed', { organizationId, collectionId, error: error instanceof Error ? error.message : String(error) })
     return jsonResponse({ error: 'Failed to set collection products' }, { status: 500 })
   }
 })

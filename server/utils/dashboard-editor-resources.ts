@@ -45,9 +45,9 @@ export async function loadDashboardEditorContext(event: H3Event, siteId: string)
     queryAll<EditorLocationRow>(db, `
       SELECT id, slug, title, status, feature_overrides
         FROM business_locations
-       WHERE organization_id = ? AND site_id = ? AND status = 'active'
+       WHERE organization_id = ?  AND status = 'active'
        ORDER BY title ASC
-    `, [site.organization_id, siteId]),
+    `, [site.organization_id]),
     getOrganizationEntitlements(env, site.organization_id),
   ])
   const locations = locationRows

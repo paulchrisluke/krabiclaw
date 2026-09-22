@@ -20,10 +20,10 @@ const REQUEST_HOURLY_LIMIT = 5
  * the thing they booked in the words that fit it.
  */
 export default defineHandler(async (event) => {
-  const siteId = getRouterParam(event, 'siteId')
+  const organizationId = event.context.organizationId as string | null | undefined
   const requestId = getRouterParam(event, 'requestId')
   const token = readBearerToken(event.req.headers.get('authorization'))
-  if (!siteId || !requestId || !token) {
+  if (!organizationId || !requestId || !token) {
     return jsonResponse({ error: 'Missing required parameters' }, { status: 400 })
   }
 
@@ -35,17 +35,17 @@ export default defineHandler(async (event) => {
   const hour = Math.floor(Date.now() / 3_600_000)
   const ipOk = await incrementHourlyRateLimit(db, `booking-cancel:ip:${clientIpHash}:${hour}`, import.meta.dev ? 1000 : IP_HOURLY_LIMIT, 3_600_000)
   if (!ipOk) return jsonResponse({ error: 'Too many cancellation attempts. Please try again later.' }, { status: 429 })
-  const requestOk = await incrementHourlyRateLimit(db, `booking-cancel:request:${siteId}:${requestId}:${hour}`, import.meta.dev ? 1000 : REQUEST_HOURLY_LIMIT, 3_600_000)
+  const requestOk = await incrementHourlyRateLimit(db, `booking-cancel:request:${organizationId}:${requestId}:${hour}`, import.meta.dev ? 1000 : REQUEST_HOURLY_LIMIT, 3_600_000)
   if (!requestOk) return jsonResponse({ error: 'Too many cancellation attempts. Please try again later.' }, { status: 429 })
 
-  const existing = await getGuestRequest(db, requestId, siteId)
+  const existing = await getGuestRequest(db, requestId, organizationId)
   if (!existing || existing.kind === 'contact') {
     return jsonResponse({ error: 'Booking not found or already cancelled' }, { status: 404 })
   }
 
   const tokenHash = await hashReservationCancelToken(token)
   const now = new Date().toISOString()
-  const cancelled = await cancelBookingRequest(db, { id: requestId, siteId, kind: existing.kind, tokenHash, now })
+  const cancelled = await cancelBookingRequest(db, { id: requestId, organizationId, kind: existing.kind, tokenHash, now })
   if (!cancelled) return jsonResponse({ error: 'Booking not found or already cancelled' }, { status: 404 })
 
   const request = cancelled.request
@@ -53,12 +53,12 @@ export default defineHandler(async (event) => {
   const summary = await requestSummary(db, request)
   await publishGuestInboxThreadEvent(env, db, { threadId: request.id, type: 'thread.changed' })
 
-  const site = await queryFirst<{ brand_name?: string | null }>(db, 'SELECT brand_name FROM sites WHERE id = ? LIMIT 1', [siteId])
+  const site = await queryFirst<{ brand_name?: string | null }>(db, 'SELECT brand_name FROM sites WHERE id = ? LIMIT 1', [organizationId])
 
   try {
     if (record.kind === 'booking') {
       await notifyBookingCancelled(env, db, {
-        organizationId: request.organization_id, siteId: request.site_id, siteName: site?.brand_name,
+        organizationId: request.organization_id, siteName: site?.brand_name,
         locationId: record.location_id, bookingId: request.id, guestName: request.payload.guest.name,
         email: request.payload.guest.email, guestPhone: request.payload.guest.phone,
         productTitle: record.product_name ?? summary.productTitle ?? '',
@@ -73,7 +73,7 @@ export default defineHandler(async (event) => {
       const localDate = `${String(parts.year).padStart(4, '0')}-${String(parts.month).padStart(2, '0')}-${String(parts.day).padStart(2, '0')}`
       const localTime = `${String(parts.hour).padStart(2, '0')}:${String(parts.minute).padStart(2, '0')}`
       await notifyReservationCancelled(env, db, {
-        organizationId: request.organization_id, siteId: request.site_id, siteName: site?.brand_name,
+        organizationId: request.organization_id, siteName: site?.brand_name,
         locationId: record.location_id, locationName: summary.locationTitle, reservationId: request.id,
         guestName: request.payload.guest.name, email: request.payload.guest.email, phone: request.payload.guest.phone,
         date: localDate, time: localTime,
@@ -83,7 +83,7 @@ export default defineHandler(async (event) => {
     }
   } catch (error) {
     console.error('booking_cancellation_notification_failed', {
-      organizationId: request.organization_id, siteId: request.site_id, requestId,
+      organizationId: request.organization_id, requestId,
       error: error instanceof Error ? error.message : String(error),
     })
   }

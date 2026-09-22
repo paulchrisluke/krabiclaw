@@ -7,12 +7,12 @@ import { BLAWBY_ROUTE_RECIPES, type BlawbyRouteRecipe } from '~/types/blawby'
 const RECIPES = new Set(BLAWBY_ROUTE_RECIPES)
 
 export default defineHandler(async (event) => {
-  const siteId = getRouterParam(event, 'siteId')
+  const organizationId = event.context.organizationId as string | null | undefined
   const query = getQuery(event)
   const recipe = typeof query.recipe === 'string' ? query.recipe as BlawbyRouteRecipe : null
   const slug = typeof query.slug === 'string' ? query.slug : null
   const locale = query.locale === undefined ? 'en' : query.locale
-  if (!siteId || !recipe || !RECIPES.has(recipe) || typeof locale !== 'string') {
+  if (!organizationId || !recipe || !RECIPES.has(recipe) || typeof locale !== 'string') {
     return apiErrorResponse(event, 400, 'BLAWBY_DOCUMENT_REQUIRED', 'Valid site ID and Blawby route recipe required')
   }
   if (recipe === 'article' && !slug) {
@@ -20,8 +20,8 @@ export default defineHandler(async (event) => {
   }
 
   try {
-    const previewAuthorized = await resolvePreviewAuthorization(event, siteId, previewSecretOf(cloudflareEnv(event)))
-    const document = await loadPublicBlawbyDocument(event, siteId, recipe, { slug, locale, previewAuthorized })
+    const previewAuthorized = await resolvePreviewAuthorization(event, organizationId, previewSecretOf(cloudflareEnv(event)))
+    const document = await loadPublicBlawbyDocument(event, organizationId, recipe, { slug, locale, previewAuthorized })
     return jsonResponse(finalizeRequestMetrics(event, 'public-blawby-document', document))
   } catch (error) {
     const typedError = error as {

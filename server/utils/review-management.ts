@@ -2,7 +2,7 @@ import { parseGoogleReviewMetadata } from '~/shared/google-review'
 import { queryFirst, type DbClient, type QueryResultRow } from '~/server/db'
 import { loadPublicSocialMedia } from '~/server/utils/public-social-image'
 
-export async function getPublicReview(db: DbClient, siteId: string, locationSlug: string, reviewId: string) {
+export async function getPublicReview(db: DbClient, organizationId: string, locationSlug: string, reviewId: string) {
   const review = await queryFirst<QueryResultRow>(db, `
     SELECT r.id, r.author_name, r.rating, r.title, r.content,
            r.owner_reply, r.owner_reply_at, r.source, r.created_at, r.original_review_date, r.original_reference, r.google_review_metadata,
@@ -10,16 +10,16 @@ export async function getPublicReview(db: DbClient, siteId: string, locationSlug
            s.brand_name AS site_name
     FROM reviews r
     JOIN business_locations bl ON bl.id = r.location_id
-    JOIN sites s ON s.id = r.site_id
+    JOIN sites s ON s.id = r.organization_id
     WHERE r.id = ?
-      AND r.site_id = ?
+      AND r.organization_id = ?
       AND bl.slug = ?
       AND r.status = 'approved'
     LIMIT 1
-  `, [reviewId, siteId, locationSlug])
+  `, [reviewId, organizationId, locationSlug])
   if (!review) return null
 
-  const socialMedia = (await loadPublicSocialMedia(db, siteId, 'review', [reviewId])).get(reviewId)
+  const socialMedia = (await loadPublicSocialMedia(db, organizationId, 'review', [reviewId])).get(reviewId)
 
   return {
     ...review,

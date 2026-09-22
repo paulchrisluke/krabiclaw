@@ -41,9 +41,9 @@ export async function loadExactPublicLocalizations(
   const rows = await queryAll<StoredPublicLocalizationRow>(db, `
     SELECT resource_type, resource_id, locale, values_json, route_path
       FROM resource_localizations
-     WHERE organization_id = ? AND site_id = ? AND locale = ?
+     WHERE organization_id = ?  AND locale = ?
      ORDER BY resource_type, resource_id
-  `, [organizationId, siteId, locale])
+  `, [organizationId, locale])
   // Which translated Product attributes are valid is the tenant's own
   // definition set, so the reader loads it rather than validating against a
   // list it does not have.

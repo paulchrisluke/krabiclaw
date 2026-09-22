@@ -17,7 +17,7 @@ import { defineHandler } from 'nitro'
 import { getRouterParam, getQuery } from 'nitro/h3'
 
 export default defineHandler(async (event) => {
-  const organizationId = event.context.organizationId
+  const organizationId = event.context.organizationId as string | null | undefined
   if (!organizationId) return jsonResponse({ error: 'Unknown tenant' }, { status: 404 })
 
   const slug = getRouterParam(event, 'slug')

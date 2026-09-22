@@ -13,13 +13,13 @@ import { getRouterParam } from 'nitro/h3'
  * their bookings with it.
  */
 export default defineHandler(async (event) => {
-  const siteId = getRouterParam(event, 'siteId')
+  const organizationId = getRouterParam(event, 'organizationId')
   const productId = getRouterParam(event, 'productId')
-  if (!siteId || !productId) return jsonResponse({ error: 'Site ID and product ID are required' }, { status: 400 })
+  if (!organizationId || !productId) return jsonResponse({ error: 'Site ID and product ID are required' }, { status: 400 })
   try {
-    const { db, session, site } = await requireSiteAccess(event, siteId)
+    const { db, session, site } = await requireSiteAccess(event, organizationId)
     // Authorizing the site does not authorize the product id in the path.
-    await requireSiteProduct(db, { organizationId: site.organization_id, siteId, productId })
+    await requireSiteProduct(db, { organizationId: site.organization_id, productId })
     const body = await readStrictBody<{ duration_minutes?: unknown; default_capacity?: unknown }>(event, { duration_minutes: 'unknown', default_capacity: 'unknown' })
     for (const field of ['duration_minutes', 'default_capacity'] as const) {
       const value = body[field]
@@ -40,7 +40,7 @@ export default defineHandler(async (event) => {
     return jsonResponse({ success: true, product_id: productId })
   } catch (error) {
     rethrowHttpError(error)
-    console.error('booking_config_failed', { siteId, productId, error: error instanceof Error ? error.message : String(error) })
+    console.error('booking_config_failed', { organizationId, productId, error: error instanceof Error ? error.message : String(error) })
     return jsonResponse({ error: 'Failed to set booking configuration' }, { status: 500 })
   }
 })

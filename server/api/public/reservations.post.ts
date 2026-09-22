@@ -29,8 +29,8 @@ const VALID_GUESTS = ['1', '2', '3', '4', '5', '6', '7', '8+']
 const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/
 
 export default defineHandler(async (event) => {
-  const siteId = getRouterParam(event, 'siteId')
-  if (!siteId) return jsonResponse({ error: 'Site ID required' }, { status: 400 })
+  const organizationId = event.context.organizationId as string | null | undefined
+  if (!organizationId) return jsonResponse({ error: 'Unknown tenant' }, { status: 404 })
 
   const env = cloudflareEnv(event)
   const db = env.db
@@ -71,7 +71,7 @@ export default defineHandler(async (event) => {
     return jsonResponse({ error: 'Please choose a valid party size.' }, { status: 400 })
 
   const site = await queryFirst<{ id: string; organization_id: string; brand_name?: string | null; public_url?: string | null }>(
-    db, `SELECT id, organization_id, brand_name, (SELECT 'https://' || domain FROM site_domains WHERE site_id = sites.id AND role = 'canonical' AND status = 'active') AS public_url FROM sites WHERE id = ? AND status = ? LIMIT 1`, [siteId, 'active'], )
+    db, `SELECT id, organization_id, brand_name, (SELECT 'https://' || domain FROM site_domains WHERE site_id = sites.id AND role = 'canonical' AND status = 'active') AS public_url FROM sites WHERE id = ? AND status = ? LIMIT 1`, [organizationId, 'active'], )
   if (!site) return jsonResponse({ error: 'Site not found' }, { status: 404 })
   const siteBaseUrl = site.public_url?.trim().replace(/\/$/, '')
   if (!siteBaseUrl) return jsonResponse({ error: 'Site public URL is not configured' }, { status: 500 })
@@ -82,10 +82,10 @@ export default defineHandler(async (event) => {
   const resolvedLocationId = locationId
 
   const location = await queryFirst<{ title: string | null; opening_hours: string | null; max_capacity: number | null }>(
-    db, 'SELECT title, opening_hours, max_capacity FROM business_locations WHERE id = ? AND site_id = ? LIMIT 1', [resolvedLocationId, siteId], )
+    db, 'SELECT title, opening_hours, max_capacity FROM business_locations WHERE id = ? AND site_id = ? LIMIT 1', [resolvedLocationId, organizationId], )
   if (!location) return jsonResponse({ error: 'location_id must reference a location on this site' }, { status: 400 })
 
-  const reservationTimezone = await resolveLocationTimezone(db, site.organization_id, siteId, resolvedLocationId)
+  const reservationTimezone = await resolveLocationTimezone(db, site.organization_id, organizationId, resolvedLocationId)
   if (isDateBeforeTimezoneToday(date, reservationTimezone))
     return jsonResponse({ error: 'Please choose a valid future date.' }, { status: 400 })
 
@@ -125,7 +125,7 @@ export default defineHandler(async (event) => {
   const userId = session?.user?.id || null
 
   const customerInput = {
-    organizationId: site.organization_id, siteId, name, email, phone, source: 'reservation', userId, } as const
+    organizationId: site.organization_id, name, email, phone, source: 'reservation', userId, } as const
   const customer = await findOrCreateCustomer(db, customerInput)
 
   const now = new Date().toISOString()
@@ -138,14 +138,14 @@ export default defineHandler(async (event) => {
   const durationMinutes = 120
   try {
     await claimReservation(db, {
-      organizationId: site.organization_id, siteId, locationId: resolvedLocationId,
+      organizationId: site.organization_id, locationId: resolvedLocationId,
       reservationId, requestId: id, customerId: customer.id,
       timezone: availability.timezone, startsAt: slot.starts_at,
       date, timeSlot: slot.time_slot,
       endsAt: new Date(Date.parse(slot.starts_at) + durationMinutes * 60_000).toISOString(),
       partySize,
       thread: requestInsertQueries({
-        id, kind: 'reservation', organization_id: site.organization_id, site_id: siteId,
+        id, kind: 'reservation', organization_id: site.organization_id, site_id: organizationId,
         location_id: resolvedLocationId, customer_id: customer.id, review_id: null,
         conversation_state: 'needs_attention', resolved_at: null, payload, created_at: now, updated_at: now,
       }, { query: 'SELECT 1 FROM reservations WHERE id = ?', params: [reservationId] }),
@@ -164,10 +164,9 @@ export default defineHandler(async (event) => {
 
   // Resolve contact info — location-specific when available, site-level fallback
   const [{ contactPhone, contactEmail }, ownerInboxUrl] = await Promise.all([
-    resolveLocationContact(db, siteId, resolvedLocationId),
+    resolveLocationContact(db, organizationId, resolvedLocationId),
     buildOwnerThreadInboxUrl(env, db, {
       organizationId: site.organization_id,
-      siteId,
       locationId: resolvedLocationId,
       threadId: id,
     }),
@@ -175,10 +174,10 @@ export default defineHandler(async (event) => {
 
   try {
     await notifyReservationCreated(env, db, {
-      organizationId: site.organization_id, siteId, siteName: site.brand_name, locationId: resolvedLocationId, locationName: location.title, reservationId: id, guestName: name, email, phone, date, time, guests, requests, cancelUrl, contactPhone, contactEmail, ownerInboxUrl, })
+      organizationId: site.organization_id, siteName: site.brand_name, locationId: resolvedLocationId, locationName: location.title, reservationId: id, guestName: name, email, phone, date, time, guests, requests, cancelUrl, contactPhone, contactEmail, ownerInboxUrl, })
   } catch (error) {
     console.error('reservation_notification_failed', {
-      organizationId: site.organization_id, siteId, reservationId: id, error: error instanceof Error ? error.message : String(error)
+      organizationId: site.organization_id, reservationId: id, error: error instanceof Error ? error.message : String(error)
     })
   }
 
@@ -187,10 +186,9 @@ export default defineHandler(async (event) => {
     requireLocationReservationConfig(db, { organizationId: site.organization_id, locationId: resolvedLocationId }),
     requestedLocale && /^[a-z]{2}(-[A-Z]{2})?$/.test(requestedLocale)
       ? requestedLocale
-      : getSourceLocale(db, site.organization_id, siteId),
+      : getSourceLocale(db, site.organization_id, organizationId),
     recordSubmissionConversionSafe(db, event, {
       organizationId: site.organization_id,
-      siteId,
       eventName: 'reservation_submit',
       stage: 'submitted',
       locationId: resolvedLocationId,

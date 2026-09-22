@@ -482,9 +482,9 @@ export async function getPublicTenantPageForPath(
     loadPublicSocialMedia(db, siteId, 'content_document', [page.id]),
     queryFirst<{ locale: string }>(db, `
       SELECT locale FROM site_locales
-       WHERE organization_id = ? AND site_id = ? AND is_source = 1
+       WHERE organization_id = ?  AND is_source = 1
        LIMIT 1
-    `, [page.organization_id, siteId]),
+    `, [page.organization_id]),
   ])
   const localizedMedia = page.locale === 'en'
     ? media.get(page.id) ?? { media: [], social_image: null }

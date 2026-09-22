@@ -493,8 +493,8 @@ async function recordGuestCancellation(
 
 async function getLocationNotificationPhone(db: DbClient, locationId: string, organizationId: string, siteId: string): Promise<string | null> {
   const row = await queryFirst<{ notification_phone: string | null }>(db, `
-    SELECT notification_phone FROM business_locations WHERE id = ? AND organization_id = ? AND site_id = ? LIMIT 1
-  `, [locationId, organizationId, siteId])
+    SELECT notification_phone FROM business_locations WHERE id = ? AND organization_id = ?  LIMIT 1
+  `, [locationId, organizationId])
   return row?.notification_phone ?? null
 }
 

@@ -260,7 +260,7 @@ export function renderTenantBlogMarkdown(post: TenantLlmBlogDetail, origin: stri
 const DOC_SUMMARY_SELECT = `SELECT id, title, slug, (metadata_json ->> '$.category') AS category, summary AS excerpt, canonical_url, seo_description, updated_at
      FROM content_documents
      WHERE kind = 'article' AND row_role = 'root' AND status = 'published' AND visibility = 'public'
-       AND (metadata_json ->> '$.collection') = 'docs' AND site_id = ?`
+       AND (metadata_json ->> '$.collection') = 'docs' AND organization_id = ?`
 
 function withDocPath<T extends { slug: string }>(row: T): T & { path: string } {
   return { ...row, path: collectionArticlePath('docs', row.slug) }
@@ -279,16 +279,16 @@ export async function listPublishedPlatformBlogPostsForLlm(db: DbClient, env: Cl
   return listPublishedTenantBlogPostsForLlm(db, (await getPlatformSite(db)).id, env, 'blog')
 }
 
-export async function listPublishedTenantBlogPostsForLlm(db: DbClient, siteId: string, env: CloudflareEnv, collection?: 'blog' | 'docs') {
+export async function listPublishedTenantBlogPostsForLlm(db: DbClient, organizationId: string, env: CloudflareEnv, collection?: 'blog' | 'docs') {
   const posts = await queryAll<TenantLlmBlogSummary & { author_id: string | null }>(
     db,
     `SELECT
       p.id, p.title, p.slug, p.summary AS excerpt, (p.metadata_json ->> '$.category') AS category, p.canonical_url, p.seo_description, p.published_at, p.updated_at, p.author_id
      FROM content_documents p
-     WHERE p.kind = 'article' AND p.row_role = 'root' AND p.status = 'published' AND p.site_id = ? AND p.visibility = 'public'
+     WHERE p.kind = 'article' AND p.row_role = 'root' AND p.status = 'published' AND p.organization_id = ? AND p.visibility = 'public'
        ${collection ? "AND (p.metadata_json ->> '$.collection') = ?" : ''}
      ORDER BY p.published_at DESC, p.updated_at DESC`,
-    collection ? [siteId, collection] : [siteId],
+    collection ? [organizationId, collection] : [organizationId],
   )
   const authors = await findAuthUsersByIds(env, posts.map(post => post.author_id))
   return posts.map(({ author_id: authorId, ...post }) => ({
@@ -308,15 +308,15 @@ export async function getPublishedPlatformDocBySlug(db: DbClient, slug: string):
   return { ...detail, content_blocks: contentBlocks }
 }
 
-export async function getPublishedTenantBlogPostBySlug(db: DbClient, siteId: string, slug: string, collection?: 'blog' | 'docs') {
+export async function getPublishedTenantBlogPostBySlug(db: DbClient, organizationId: string, slug: string, collection?: 'blog' | 'docs') {
   const detail = await queryFirst<Omit<TenantLlmBlogDetail, 'content_blocks'>>(
     db,
     `SELECT
       p.id, p.title, p.slug, p.summary AS excerpt, (p.metadata_json ->> '$.category') AS category, p.canonical_url, p.seo_description, p.published_at, p.updated_at
      FROM content_documents p
-     WHERE p.kind = 'article' AND p.row_role = 'root' AND p.slug = ? AND p.status = 'published' AND p.site_id = ? AND p.visibility = 'public'
+     WHERE p.kind = 'article' AND p.row_role = 'root' AND p.slug = ? AND p.status = 'published' AND p.organization_id = ? AND p.visibility = 'public'
        ${collection ? "AND (p.metadata_json ->> '$.collection') = ?" : ''}`,
-    collection ? [slug, siteId, collection] : [slug, siteId],
+    collection ? [slug, organizationId, collection] : [slug, organizationId],
   )
   if (!detail) return null
   const contentBlocks = await getContentBlocksForDocument(db, detail.id)

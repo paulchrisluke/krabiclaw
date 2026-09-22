@@ -8,9 +8,9 @@ import { loadMemberSiteRow } from '~/server/utils/location-access'
 
 
 export default defineHandler(async (event) => {
-  const siteId = getRouterParam(event, 'siteId')
+  const organizationId = getRouterParam(event, 'organizationId')
   const postId = getRouterParam(event, 'postId')
-  if (!siteId || !postId) return jsonResponse({ error: 'Site ID and Post ID required' }, { status: 400 })
+  if (!organizationId || !postId) return jsonResponse({ error: 'Site ID and Post ID required' }, { status: 400 })
 
   const env = cloudflareEnv(event)
   const db = env.DB
@@ -26,13 +26,13 @@ export default defineHandler(async (event) => {
     event: 'unknown', offer: 'unknown', call_to_action: 'unknown', alert_type: 'nullable-string',
   })
 
-  const site = await loadMemberSiteRow(event, db, env, siteId, session.user.id)
+  const site = await loadMemberSiteRow(event, db, env, organizationId, session.user.id)
   if (!site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
 
-  const existingPost = await getPost(db, site.organization_id, siteId, postId)
+  const existingPost = await getPost(db, site.organization_id, organizationId, postId)
   if (!existingPost) return jsonResponse({ error: 'Post not found' }, { status: 404 })
 
-  const principal = memberAccessPrincipal(site.membership, { env, siteId, event })
+  const principal = memberAccessPrincipal(site.membership, { env, organizationId, event })
   await assertResourceAccess(db, { ...principal, resourceLocationId: existingPost.location_id ?? null })
   // Moving the post to a different location is itself checked against the
   // target scope, not just the post's current one.
@@ -42,7 +42,7 @@ export default defineHandler(async (event) => {
 
   let post
   try {
-    post = await updatePost(db, site.organization_id, siteId, postId, body, session.user.id, env)
+    post = await updatePost(db, site.organization_id, organizationId, postId, body, session.user.id, env)
   } catch (error) {
     if (error instanceof PostValidationError) {
       return jsonResponse({ error: error.message }, { status: error.statusCode })

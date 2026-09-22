@@ -10,16 +10,16 @@ import { selectProductCollectionSiblings } from '~/utils/product-seo'
 import { listMetafieldDefinitions } from '~/server/utils/product-management'
 
 export default defineHandler(async (event) => {
-  const siteId = getRouterParam(event, 'siteId')
+  const organizationId = event.context.organizationId as string | null | undefined
   const slug = getRouterParam(event, 'slug')
-  if (!siteId || !slug) return jsonResponse({ error: 'Site and Experience slugs are required' }, { status: 400 })
+  if (!organizationId || !slug) return jsonResponse({ error: 'Site and Experience slugs are required' }, { status: 400 })
   try {
     const env = cloudflareEnv(event)
     const db = env.DB
     if (!db) return jsonResponse({ error: 'Database unavailable' }, { status: 503 })
     const locale = assertExactCanonicalLocale(getQuery(event).locale ?? 'en')
-    const previewAuthorized = await resolvePreviewAuthorization(event, siteId, previewSecretOf(cloudflareEnv(event)))
-    const result = await loadPublicExperienceDetail(env, db, siteId, previewAuthorized, slug, locale)
+    const previewAuthorized = await resolvePreviewAuthorization(event, organizationId, previewSecretOf(cloudflareEnv(event)))
+    const result = await loadPublicExperienceDetail(env, db, organizationId, previewAuthorized, slug, locale)
     if (!result) return jsonResponse({ error: 'Experience not found' }, { status: 404 })
     const reviews = await loadPublicProductReviews(db, result)
     // The collection this Experience belongs to on this site, in the site's own
@@ -44,7 +44,7 @@ export default defineHandler(async (event) => {
     })
   } catch (error) {
     rethrowHttpError(error)
-    console.error('public_experience_detail_failed', { siteId, slug, error: error instanceof Error ? error.message : String(error) })
+    console.error('public_experience_detail_failed', { organizationId, slug, error: error instanceof Error ? error.message : String(error) })
     return jsonResponse({ error: 'Failed to load Experience' }, { status: 500 })
   }
 })

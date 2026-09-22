@@ -4,11 +4,9 @@ import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getConfig } from '~/server/utils/site-config'
 
 export default defineHandler(async (event) => {
-  const siteId = getRouterParam(event, 'siteId')
+  const organizationId = event.context.organizationId as string | null | undefined
   
-  if (!siteId) {
-    return jsonResponse({ error: 'Site ID is required' }, { status: 400 })
-  }
+  if (!organizationId) return jsonResponse({ error: 'Unknown tenant' }, { status: 404 })
 
   const env = cloudflareEnv(event)
   const db = env.db
@@ -23,7 +21,7 @@ export default defineHandler(async (event) => {
       FROM sites
       WHERE id = ? AND status = 'active'
       LIMIT 1
-    `, [siteId]) ?? null
+    `, [organizationId]) ?? null
 
     if (!site) {
       return jsonResponse({ error: 'Site not found' }, { status: 404 })

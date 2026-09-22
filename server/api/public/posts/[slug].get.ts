@@ -2,9 +2,9 @@ import { apiErrorResponse, cloudflareEnv, jsonResponse } from '~/server/utils/ap
 import { getPublishedPostByPublicRoute } from '~/server/utils/post-management'
 
 export default defineHandler(async (event) => {
-  const siteId = getRouterParam(event, 'siteId')
+  const organizationId = event.context.organizationId as string | null | undefined
   const slug = getRouterParam(event, 'slug')
-  if (!siteId || !slug) return apiErrorResponse(event, 400, 'POST_PARAMS_REQUIRED', 'Site ID and post slug are required')
+  if (!organizationId || !slug) return apiErrorResponse(event, 400, 'POST_PARAMS_REQUIRED', 'Site ID and post slug are required')
 
   const env = cloudflareEnv(event)
   const db = env.db
@@ -12,7 +12,7 @@ export default defineHandler(async (event) => {
 
   const query = getQuery(event)
   const locale = typeof query.locale === 'string' ? query.locale : 'en'
-  const post = await getPublishedPostByPublicRoute(env, db, siteId, slug, locale)
+  const post = await getPublishedPostByPublicRoute(env, db, organizationId, slug, locale)
   if (!post) return apiErrorResponse(event, 404, 'POST_NOT_FOUND', 'Post not found')
 
   return jsonResponse({ success: true, post })

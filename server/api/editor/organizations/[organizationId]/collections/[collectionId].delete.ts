@@ -5,17 +5,17 @@ import { defineHandler } from 'nitro'
 import { getRouterParam } from 'nitro/h3'
 
 export default defineHandler(async (event) => {
-  const siteId = getRouterParam(event, 'siteId')
+  const organizationId = getRouterParam(event, 'organizationId')
   const collectionId = getRouterParam(event, 'collectionId')
-  if (!siteId || !collectionId) return jsonResponse({ error: 'Site ID and collection ID are required' }, { status: 400 })
+  if (!organizationId || !collectionId) return jsonResponse({ error: 'Site ID and collection ID are required' }, { status: 400 })
   try {
-    const { db, site } = await requireSiteAccess(event, siteId)
+    const { db, site } = await requireSiteAccess(event, organizationId)
     // Deleting a grouping never deletes what was grouped.
     await deleteCollection(db, { organizationId: site.organization_id, collectionId })
     return jsonResponse({ success: true, collection_id: collectionId })
   } catch (error) {
     rethrowHttpError(error)
-    console.error('collection_delete_failed', { siteId, collectionId, error: error instanceof Error ? error.message : String(error) })
+    console.error('collection_delete_failed', { organizationId, collectionId, error: error instanceof Error ? error.message : String(error) })
     return jsonResponse({ error: 'Failed to delete collection' }, { status: 500 })
   }
 })

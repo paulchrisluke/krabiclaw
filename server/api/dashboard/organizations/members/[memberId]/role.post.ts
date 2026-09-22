@@ -36,11 +36,11 @@ export default defineHandler(async (event) => {
 
   const body = await readBody(event).catch(() => null) as {
     role?: unknown
-    siteId?: unknown
+    organizationId?: unknown
     locationId?: unknown
   } | null
   const role = typeof body?.role === 'string' ? body.role.trim() : ''
-  const siteId = typeof body?.siteId === 'string' ? body.siteId.trim() : ''
+  const organizationId = typeof body?.organizationId === 'string' ? body.organizationId.trim() : ''
   const locationId = typeof body?.locationId === 'string' && body.locationId.trim() ? body.locationId.trim() : null
 
   if (!ALLOWED_ROLES.has(role)) {
@@ -49,7 +49,7 @@ export default defineHandler(async (event) => {
   if (role === 'owner' && organization.role !== 'owner') {
     return jsonResponse({ error: 'Only an owner can grant the owner role' }, { status: 403 })
   }
-  if (role === 'editor' && !siteId) {
+  if (role === 'editor' && !organizationId) {
     return jsonResponse({ error: 'Editors must be assigned to a site' }, { status: 400 })
   }
 
@@ -61,15 +61,15 @@ export default defineHandler(async (event) => {
   if (role === 'editor') {
     const site = await queryFirst<{ id: string }>(db, `
       SELECT id FROM sites WHERE id = ? AND organization_id = ? LIMIT 1
-    `, [siteId, organization.id])
-    if (!site) return jsonResponse({ error: 'siteId must reference a site in this organization' }, { status: 400 })
+    `, [organizationId, organization.id])
+    if (!site) return jsonResponse({ error: 'organizationId must reference a site in this organization' }, { status: 400 })
 
     if (locationId) {
       const location = await queryFirst<{ id: string }>(db, `
         SELECT id FROM business_locations
         WHERE id = ? AND site_id = ? AND organization_id = ?
         LIMIT 1
-      `, [locationId, siteId, organization.id])
+      `, [locationId, organizationId, organization.id])
       if (!location) return jsonResponse({ error: 'locationId must reference a location on that site' }, { status: 400 })
     }
   }
@@ -104,7 +104,7 @@ export default defineHandler(async (event) => {
   // to match.
   if (role === 'editor') {
     await addMemberResourceAccess(db, {
-      env, userId: target.userId, organizationId: organization.id, siteId, locationId, })
+      env, userId: target.userId, organizationId: organization.id, locationId, })
   } else if (isScopedRole(target.role)) {
     await removeAllMemberResourceAccess(db, { env, organizationId: organization.id, userId: target.userId })
   }

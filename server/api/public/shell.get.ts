@@ -5,10 +5,10 @@ import { loadPublicShell } from '~/server/utils/public-shell'
 import { finalizeRequestMetrics } from '~/server/utils/request-metrics'
 
 export default defineHandler(async (event) => {
-  const siteId = getRouterParam(event, 'siteId')
-  if (!siteId) throw new HTTPError({ statusCode: 400, statusMessage: 'siteId required' })
+  const organizationId = event.context.organizationId as string | null | undefined
+  if (!organizationId) throw new HTTPError({ statusCode: 400, statusMessage: 'organizationId required' })
   const query = getQuery(event)
-  const payload = await loadPublicShell(event, siteId, {
+  const payload = await loadPublicShell(event, organizationId, {
     locale: typeof query.locale === 'string' ? query.locale : undefined, })
   return jsonResponse(finalizeRequestMetrics(event, 'public-shell', payload))
 })

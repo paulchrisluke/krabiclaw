@@ -3,8 +3,8 @@ import { getPublicLinksPage } from '~/server/utils/site-links'
 import { getQuery } from 'nitro/h3'
 
 export default defineHandler(async (event) => {
-  const siteId = getRouterParam(event, 'siteId')
-  if (!siteId) return jsonResponse({ error: 'siteId required' }, { status: 400 })
+  const organizationId = event.context.organizationId as string | null | undefined
+  if (!organizationId) return jsonResponse({ error: 'organizationId required' }, { status: 400 })
 
   const env = cloudflareEnv(event)
   const db = env.db
@@ -12,7 +12,7 @@ export default defineHandler(async (event) => {
 
   const query = getQuery(event)
   const locale = typeof query.locale === 'string' ? query.locale : 'en'
-  const linksPage = await getPublicLinksPage(env, db, siteId, locale)
+  const linksPage = await getPublicLinksPage(env, db, organizationId, locale)
   if (!linksPage) return jsonResponse({ error: 'Links page not found' }, { status: 404 })
 
   return jsonResponse({ success: true, ...linksPage })

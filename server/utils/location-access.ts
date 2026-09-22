@@ -92,9 +92,9 @@ export async function requireLocationAccess(event: H3Event, siteId: string, loca
   const location = await queryFirst<LocationAccessRow>(db, `
     SELECT id
     FROM business_locations
-    WHERE id = ? AND organization_id = ? AND site_id = ?
+    WHERE id = ? AND organization_id = ? 
     LIMIT 1
-  `, [locationId, site.organization_id, siteId])
+  `, [locationId, site.organization_id])
 
   if (!location) {
     throw new HTTPError({ statusCode: 404, message: 'Location not found' })

@@ -93,8 +93,8 @@ async function requirePostMediaAllowed(db: DbClient, input: PlacementAuthInput):
   const document = await queryFirst<{ kind: string; post_type: string | null }>(db,
     `SELECT root.kind, root.metadata_json ->> '$.post_type' AS post_type
       FROM content_documents d JOIN content_documents root ON root.id = COALESCE(d.root_id, d.id)
-      WHERE d.id = ? AND d.organization_id = ? AND d.site_id = ?`,
-    [input.placement.owner_id, input.organizationId, input.siteId])
+      WHERE d.id = ? AND d.organization_id = ? `,
+    [input.placement.owner_id, input.organizationId])
   if (!document || (document.kind === 'social_post' && document.post_type === 'alert')) throw new HTTPError({ statusCode: 400, statusMessage: 'Alert posts do not accept media' })
 }
 
@@ -294,8 +294,8 @@ export async function removeMediaPlacement(db: DbClient, input: {
   await authorizePlacementWrite(db, input)
   await execute(db, `
     DELETE FROM media_placements
-     WHERE organization_id = ? AND site_id = ? AND owner_type = ? AND owner_id = ? AND slot = ? AND asset_id = ?
-  `, [input.organizationId, input.siteId, input.placement.owner_type, input.placement.owner_id, input.placement.slot, input.assetId])
+     WHERE organization_id = ?  AND owner_type = ? AND owner_id = ? AND slot = ? AND asset_id = ?
+  `, [input.organizationId, input.placement.owner_type, input.placement.owner_id, input.placement.slot, input.assetId])
   await refreshSocialCardForPlacement(db, input)
   return canonicalPlacementState(db, input)
 }

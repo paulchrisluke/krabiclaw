@@ -2,16 +2,16 @@ import { jsonResponse } from '~/server/utils/api-response'
 import { requireSiteAccess } from '~/server/utils/location-access'
 
 export default defineHandler(async (event) => {
-  const siteId = getRouterParam(event, 'siteId')
-  if (!siteId) return jsonResponse({ error: 'Site ID required' }, { status: 400 })
-  const { db } = await requireSiteAccess(event, siteId)
+  const organizationId = getRouterParam(event, 'organizationId')
+  if (!organizationId) return jsonResponse({ error: 'Organization ID required' }, { status: 400 })
+  const { db } = await requireSiteAccess(event, organizationId)
   
   const scopes = await db.prepare(`
     SELECT DISTINCT scope_path AS page_path
     FROM content_documents
     WHERE kind = 'qa' AND row_role = 'root' AND site_id = ? AND location_id IS NULL AND scope_path IS NOT NULL
     ORDER BY page_path ASC
-  `).bind(siteId).all()
+  `).bind(organizationId).all()
   
   return jsonResponse(scopes.results ?? [])
 })

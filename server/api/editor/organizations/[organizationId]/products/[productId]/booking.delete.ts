@@ -15,12 +15,12 @@ import { getRouterParam } from 'nitro/h3'
  * they are the record that it happened.
  */
 export default defineHandler(async (event) => {
-  const siteId = getRouterParam(event, 'siteId')
+  const organizationId = getRouterParam(event, 'organizationId')
   const productId = getRouterParam(event, 'productId')
-  if (!siteId || !productId) return jsonResponse({ error: 'Site ID and product ID are required' }, { status: 400 })
+  if (!organizationId || !productId) return jsonResponse({ error: 'Site ID and product ID are required' }, { status: 400 })
   try {
-    const { db, site } = await requireSiteAccess(event, siteId)
-    await requireSiteProduct(db, { organizationId: site.organization_id, siteId, productId })
+    const { db, site } = await requireSiteAccess(event, organizationId)
+    await requireSiteProduct(db, { organizationId: site.organization_id, productId })
     const booked = await queryFirst<{ n: number }>(db, `
       SELECT count(*) AS n FROM bookings WHERE organization_id = ? AND product_id = ?
     `, [site.organization_id, productId])
@@ -33,7 +33,7 @@ export default defineHandler(async (event) => {
     return jsonResponse({ success: true, product_id: productId })
   } catch (error) {
     rethrowHttpError(error)
-    console.error('booking_config_delete_failed', { siteId, productId, error: error instanceof Error ? error.message : String(error) })
+    console.error('booking_config_delete_failed', { organizationId, productId, error: error instanceof Error ? error.message : String(error) })
     return jsonResponse({ error: 'Failed to remove booking configuration' }, { status: 500 })
   }
 })

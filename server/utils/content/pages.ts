@@ -388,9 +388,9 @@ async function assertTenantPageRedirectWritable(
   const existing = await queryFirst<{ owner_id: string | null; source: string } | null>(db, `
     SELECT owner_id, source
       FROM site_redirects
-     WHERE site_id = ? AND organization_id = ? AND locale = ? AND from_path = ?
+      WHERE organization_id = ? AND locale = ? AND from_path = ?
      LIMIT 1
-  `, [input.siteId, input.organizationId, input.locale, formatTenantLocalePath(input.fromPath, input.locale)])
+  `, [ input.organizationId, input.locale, formatTenantLocalePath(input.fromPath, input.locale)])
   if (existing && (existing.owner_id !== input.variantId || existing.source !== 'tenant-pages')) {
     conflict('A manual tenant redirect already owns this path')
   }
@@ -424,9 +424,9 @@ async function prepareTenantPageRedirectFlatten(
   const incoming = await queryAll<{ from_path: string; source: string; behavior: string }>(db, `
     SELECT from_path, source, behavior
       FROM site_redirects
-     WHERE site_id = ? AND organization_id = ? AND locale = ? AND to_path = ?
+      WHERE organization_id = ? AND locale = ? AND to_path = ?
        AND behavior = 'redirect'
-  `, [input.siteId, input.organizationId, input.locale, formatTenantLocalePath(input.fromPath, input.locale)])
+  `, [ input.organizationId, input.locale, formatTenantLocalePath(input.fromPath, input.locale)])
   if (!input.toPath) {
     if (incoming.length) conflict('Cannot archive a page while another redirect points to it')
     return []
@@ -609,8 +609,8 @@ export async function createTenantPagesBatch(
   const existingRedirects = await queryAll<{ from_path: string }>(db, `
     SELECT from_path
       FROM site_redirects
-     WHERE site_id = ? AND organization_id = ? AND locale = ?
-  `, [input.siteId, input.organizationId, locale])
+      WHERE organization_id = ? AND locale = ?
+  `, [ input.organizationId, locale])
   const redirectPaths = new Set(existingRedirects.map(row => normalizeTenantPagePath(row.from_path)))
   const requestedPaths = new Set<string>()
   const queries: BatchQuery[] = []
@@ -709,9 +709,9 @@ export async function applyOnboardingTenantPages(
            v.created_at
       FROM content_documents v
       JOIN content_documents p ON p.id = COALESCE(v.root_id, v.id) AND p.row_role = 'root' AND p.kind = 'page'
-     WHERE v.row_role IN ('root','representation') AND v.kind = 'page' AND v.site_id = ? AND v.organization_id = ? AND v.locale = ?
+     WHERE v.row_role IN ('root','representation') AND v.kind = 'page'  AND v.organization_id = ? AND v.locale = ?
        AND v.path IN (SELECT value FROM json_each(?))
-  `, [input.siteId, input.organizationId, locale, d1JsonStringSet(paths)])
+  `, [ input.organizationId, locale, d1JsonStringSet(paths)])
   const existingByPath = new Map<string, OnboardingPageRepresentationRow>()
   for (const row of existingRows) {
     existingByPath.set(normalizeTenantPagePath(row.path), row)
@@ -803,9 +803,9 @@ export async function createTenantPage(db: DbClient, input: { organizationId: st
     ? await queryFirst<{ id: string; organization_id: string; site_id: string; page_type: TenantPageType; recipe: string | null } | null>(db, `
         SELECT id, organization_id, site_id, json_extract(metadata_json, '$.page_type') AS page_type, json_extract(metadata_json, '$.recipe') AS recipe
           FROM content_documents
-         WHERE row_role = 'root' AND kind = 'page' AND id = ? AND organization_id = ? AND site_id = ?
+         WHERE row_role = 'root' AND kind = 'page' AND id = ? AND organization_id = ? 
          LIMIT 1
-      `, [input.data.pageId, input.organizationId, input.siteId])
+      `, [input.data.pageId, input.organizationId])
     : null
   if (input.data.pageId && !existingPage) notFound('Tenant page parent not found')
   const localeRow = await queryFirst<{ is_source: number } | null>(db, `
@@ -914,9 +914,9 @@ export async function deleteTenantPage(db: DbClient, variantId: string, input: {
   const translations = row.locale === 'en'
     ? await queryAll<{ id: string; locale: string; path: string; updated_at: string }>(db, `
         SELECT id, locale, path, updated_at FROM content_documents
-         WHERE root_id = ? AND row_role = 'representation' AND site_id = ? AND organization_id = ?
+         WHERE root_id = ? AND row_role = 'representation'  AND organization_id = ?
          ORDER BY locale
-      `, [row.id, row.site_id, row.organization_id])
+      `, [row.id, row.organization_id])
     : []
   const removedLocales = translations.map(translation => translation.locale)
 

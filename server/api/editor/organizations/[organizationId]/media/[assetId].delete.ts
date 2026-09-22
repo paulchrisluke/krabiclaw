@@ -1,4 +1,4 @@
-// DELETE /api/editor/sites/[siteId]/media/[assetId]
+// DELETE /api/editor/sites/[organizationId]/media/[assetId]
 // Soft-deletes in DB and hard-deletes from Cloudflare Images or R2.
 import { cloudflareEnv, jsonResponse, rethrowHttpError } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
@@ -15,9 +15,9 @@ interface MediaAssetSiteRow {
 }
 
 export default defineHandler(async (event) => {
-  const siteId = getRouterParam(event, 'siteId')
+  const organizationId = getRouterParam(event, 'organizationId')
   const assetId = getRouterParam(event, 'assetId')
-  if (!siteId || !assetId) return jsonResponse({ error: 'Missing params' }, { status: 400 })
+  if (!organizationId || !assetId) return jsonResponse({ error: 'Missing params' }, { status: 400 })
 
   const env = cloudflareEnv(event)
   const db = env.DB
@@ -26,25 +26,25 @@ export default defineHandler(async (event) => {
   const session = await getAuthSession(event, env)
   if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
-  const site = await loadMemberSiteRow(event, db, env, siteId, session.user.id)
+  const site = await loadMemberSiteRow(event, db, env, organizationId, session.user.id)
   if (!site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
 
   const asset = await queryFirst<MediaAssetSiteRow>(db, `SELECT id, site_id, organization_id FROM media_assets WHERE id = ? LIMIT 1`, [assetId]
   )
   if (!asset) return jsonResponse({ error: 'Asset not found' }, { status: 404 })
-  if (asset.site_id !== siteId) return jsonResponse({ error: 'Forbidden' }, { status: 403 })
+  if (asset.site_id !== organizationId) return jsonResponse({ error: 'Forbidden' }, { status: 403 })
 
   try {
-    await assertResourceAccess(db, { ...memberAccessPrincipal(site.membership, { env, siteId, event }), resourceLocationId: null })
+    await assertResourceAccess(db, { ...memberAccessPrincipal(site.membership, { env, organizationId, event }), resourceLocationId: null })
 
-    await deleteMediaAsset(db, env, assetId, siteId, session.user.id)
+    await deleteMediaAsset(db, env, assetId, organizationId, session.user.id)
     return jsonResponse({ deleted: true })
   } catch (error) {
     rethrowHttpError(error)
     const normalizedError = error instanceof Error ? error : new Error('Unknown error')
     const hashedUserId = anonymizeId(session.user.id, env)
     console.error('media_delete_failed', {
-      siteId, assetId, hashedUserId, error: normalizedError.message
+      organizationId, assetId, hashedUserId, error: normalizedError.message
     })
     throw error
   }

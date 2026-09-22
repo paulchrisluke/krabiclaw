@@ -199,9 +199,9 @@ export async function executeMcpToolCall(
     const location = await queryFirst<{ id: string }>(site.db, `
       SELECT id
       FROM business_locations
-      WHERE id = ? AND organization_id = ? AND site_id = ?
+      WHERE id = ? AND organization_id = ? 
       LIMIT 1
-    `, [explicitLocationId, site.organizationId, site.siteId]);
+    `, [explicitLocationId, site.organizationId]);
     if (!location) {
       throw mcpProtocolError(MCP_ERROR.invalidParams, "Location not found for this site.");
     }

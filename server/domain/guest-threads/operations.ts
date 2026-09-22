@@ -35,7 +35,7 @@ export type OperationOutcome =
 
 export type ExecuteOperationInput = {
   threadId: string
-  siteId: string
+  organizationId: string
   action: string
   body?: string
   deliveryId?: string
@@ -66,9 +66,9 @@ interface SourceMutationPlan {
 async function loadThreadContext(
   db: DbClient,
   threadId: string,
-  siteId: string,
+  organizationId: string,
 ): Promise<ThreadContext | OperationOutcome> {
-  const thread = await getGuestRequest(db, threadId, siteId)
+  const thread = await getGuestRequest(db, threadId, organizationId)
   if (!thread) return { ok: false, status: 404, reason: 'thread_not_found' }
   return { thread, record: await getThreadOperationalRecord(db, thread.id) }
 }
@@ -98,7 +98,7 @@ async function successfulOutcome(
   context: ThreadContext,
   status: SuccessfulOperationOutcome['status'] = 200,
 ): Promise<SuccessfulOperationOutcome> {
-  const thread = await getGuestRequest(db, context.thread.id, context.thread.site_id)
+  const thread = await getGuestRequest(db, context.thread.id, context.thread.organization_id)
   const record = await getThreadOperationalRecord(db, context.thread.id)
   return {
     ok: true,
@@ -154,7 +154,7 @@ function operationEntryQuery(
              COALESCE((SELECT MAX(sequence) FROM activity_entries WHERE request_id = gt.id), 0) + 1,
              ?, ?
       FROM requests gt
-      WHERE gt.id = ? AND gt.site_id = ? AND gt.kind = ?
+      WHERE gt.id = ? AND gt.organization_id = ? AND gt.kind = ?
         -- Guarded on the state of the record that holds the seats, because the
         -- thread has no status of its own: two dashboards acting at once must
         -- not both write an entry for the same transition.
@@ -173,7 +173,7 @@ function operationEntryQuery(
       now,
       now,
       context.thread.id,
-      context.thread.site_id,
+      context.thread.organization_id,
       plan.kind,
       plan.beforeStatus,
       now,
@@ -260,9 +260,9 @@ function deliveryReceiptQuery(
   }
 }
 
-async function getSiteBrandName(db: DbClient, siteId: string): Promise<string> {
-  const row = await queryFirst<{ brand_name: string | null }>(db, 'SELECT brand_name FROM sites WHERE id = ? LIMIT 1', [siteId])
-  if (!row?.brand_name?.trim()) throw new Error(`Site ${siteId} has no configured brand name`)
+async function getSiteBrandName(db: DbClient, organizationId: string): Promise<string> {
+  const row = await queryFirst<{ brand_name: string | null }>(db, 'SELECT brand_name FROM sites WHERE id = ? LIMIT 1', [organizationId])
+  if (!row?.brand_name?.trim()) throw new Error(`Site ${organizationId} has no configured brand name`)
   return row.brand_name.trim()
 }
 
@@ -330,7 +330,7 @@ async function sendStatusUpdate(
   )) return conflict('Status update was superseded by a booking change')
   const summary = await requestSummary(db, context.thread)
   if (!summary.guestEmail) return { ok: false, status: 400, reason: 'no_guest_email' }
-  const fromName = await getSiteBrandName(db, context.thread.site_id)
+  const fromName = await getSiteBrandName(db, context.thread.organization_id)
   return await deliverGuestThreadEmail(db, {
     delivery,
     env: input.env,
@@ -371,7 +371,7 @@ async function executeSourceMutation(
   const deliveryId = deliveryDedupeKey(input)
   const now = new Date().toISOString()
   const subject = plan.requiresNotification
-    ? operationSubject(plan.action, await getSiteBrandName(db, context.thread.site_id))
+    ? operationSubject(plan.action, await getSiteBrandName(db, context.thread.organization_id))
     : null
   const queries = [
     operationEntryQuery(context, plan, input, entryId, dedupeKey, now, subject),
@@ -391,7 +391,7 @@ async function executeSourceMutation(
   if (plan.requiresNotification) {
     const delivery = await getDeliveryById(db, deliveryId)
     if (!delivery) throw new Error('Status update delivery receipt was not created')
-    const refreshed = await loadThreadContext(db, input.threadId, input.siteId)
+    const refreshed = await loadThreadContext(db, input.threadId, input.organizationId)
     if ('ok' in refreshed) return refreshed
     const outcome = await sendStatusUpdate(db, refreshed, input, applied, delivery)
     if ('ok' in outcome) return outcome
@@ -427,10 +427,10 @@ async function executeReply(
                  COALESCE((SELECT MAX(sequence) FROM activity_entries WHERE request_id = requests.id), 0) + 1,
                  ?, ?
           FROM requests
-          WHERE id = ? AND site_id = ?
+          WHERE id = ? AND organization_id = ?
           ON CONFLICT(dedupe_key) DO NOTHING
         `,
-        params: [entryId, input.actorUserId, body, dedupeKey, now, now, context.thread.id, context.thread.site_id],
+        params: [entryId, input.actorUserId, body, dedupeKey, now, now, context.thread.id, context.thread.organization_id],
       },
       {
         query: `
@@ -452,7 +452,7 @@ async function executeReply(
   const delivery = await getDeliveryById(db, deliveryKey)
   if (!delivery || delivery.entry_id !== entry.id) throw new Error('Reply delivery receipt does not match its ledger entry')
 
-  const fromName = await getSiteBrandName(db, context.thread.site_id)
+  const fromName = await getSiteBrandName(db, context.thread.organization_id)
   const outcome = await deliverGuestThreadEmail(db, {
     delivery,
     env: input.env,
@@ -498,7 +498,7 @@ async function retryDelivery(
 
   const summary = await requestSummary(db, context.thread)
   if (!summary.guestEmail) return { ok: false, status: 400, reason: 'no_guest_email' }
-  const fromName = await getSiteBrandName(db, context.thread.site_id)
+  const fromName = await getSiteBrandName(db, context.thread.organization_id)
   if (!entry.body) return conflict('Delivery entry has no email body')
   const retried = delivery.purpose === 'status_update'
     ? await sendStatusUpdate(db, context, input, entry, delivery)
@@ -528,7 +528,7 @@ async function retryDelivery(
 
 export async function executeGuestThreadOperation(db: DbClient, input: ExecuteOperationInput): Promise<OperationOutcome> {
   if (!input.idempotencyKey) return { ok: false, status: 400, reason: 'missing_idempotency_key' }
-  const context = await loadThreadContext(db, input.threadId, input.siteId)
+  const context = await loadThreadContext(db, input.threadId, input.organizationId)
   if ('ok' in context) return context
 
   if (input.action === 'reply') return await executeReply(db, context, input)

@@ -11,11 +11,11 @@ import { getRouterParam } from 'nitro/h3'
 // attach/remove/reorder routes in this same directory instead — a full
 // replace is the wrong operation for anything with more than one member.
 export default defineHandler(async (event) => {
-  const siteId = getRouterParam(event, 'siteId')
-  if (!siteId) return jsonResponse({ error: 'Site ID required' }, { status: 400 })
+  const organizationId = getRouterParam(event, 'organizationId')
+  if (!organizationId) return jsonResponse({ error: 'Organization ID required' }, { status: 400 })
 
   try {
-    const { env, db, site } = await requireSiteAccess(event, siteId)
+    const { env, db, site } = await requireSiteAccess(event, organizationId)
     const body = await readRequiredBody<{ placement?: unknown; asset_id?: unknown }>(event)
     if (body.asset_id !== null && (typeof body.asset_id !== 'string' || !body.asset_id.trim())) {
       return jsonResponse({ error: 'asset_id must be a non-empty string or null' }, { status: 400 })
@@ -27,15 +27,14 @@ export default defineHandler(async (event) => {
     const result = await setSingleMediaPlacement(db, {
       env,
       organizationId: site.organization_id,
-      siteId,
-      principal: memberAccessPrincipal(site.membership, { env, siteId, event }),
+      principal: memberAccessPrincipal(site.membership, { env, organizationId, event }),
       placement,
       assetId: typeof body.asset_id === 'string' ? body.asset_id.trim() : null,
     })
     return jsonResponse(result)
   } catch (error) {
     rethrowHttpError(error)
-    console.error('media_placement_update_failed', { siteId, error: error instanceof Error ? error.message : String(error) })
+    console.error('media_placement_update_failed', { organizationId, error: error instanceof Error ? error.message : String(error) })
     return jsonResponse({ error: 'Failed to update media placement' }, { status: 500 })
   }
 })

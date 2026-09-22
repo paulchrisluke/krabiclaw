@@ -308,10 +308,10 @@ export async function getPost(
     `
     SELECT p.id, p.organization_id, p.site_id, p.location_id, p.slug, p.title, p.seo_title, p.seo_description, p.status, p.visibility, p.scheduled_for, p.published_at, p.created_by, p.created_at, p.updated_at, p.summary AS body, (p.metadata_json ->> '$.post_type') AS post_type, json_extract(p.metadata_json, '$.event') AS event, json_extract(p.metadata_json, '$.offer') AS offer, json_extract(p.metadata_json, '$.call_to_action') AS call_to_action, (p.metadata_json ->> '$.alert_type') AS alert_type, bl.phone AS location_phone
     FROM content_documents p LEFT JOIN business_locations bl ON bl.id = p.location_id AND bl.site_id = p.site_id
-    WHERE p.kind = 'social_post' AND p.row_role = 'root' AND p.id = ? AND p.organization_id = ? AND p.site_id = ?
+    WHERE p.kind = 'social_post' AND p.row_role = 'root' AND p.id = ? AND p.organization_id = ? 
     LIMIT 1
   `,
-    [postId, organizationId, siteId],
+    [postId, organizationId],
   )
   if (!post) return null
 
@@ -406,8 +406,8 @@ export async function updatePost(
 ): Promise<Post | null> {
   const row = await queryFirst<PostRow>(
     db,
-    `SELECT id, organization_id, site_id, location_id, slug, title, seo_title, seo_description, status, visibility, scheduled_for, published_at, created_by, created_at, updated_at, summary AS body, (metadata_json ->> '$.post_type') AS post_type, json_extract(metadata_json, '$.event') AS event, json_extract(metadata_json, '$.offer') AS offer, json_extract(metadata_json, '$.call_to_action') AS call_to_action, (metadata_json ->> '$.alert_type') AS alert_type, NULL AS location_phone FROM content_documents WHERE kind = 'social_post' AND row_role = 'root' AND id = ? AND organization_id = ? AND site_id = ? LIMIT 1`,
-    [postId, organizationId, siteId],
+    `SELECT id, organization_id, site_id, location_id, slug, title, seo_title, seo_description, status, visibility, scheduled_for, published_at, created_by, created_at, updated_at, summary AS body, (metadata_json ->> '$.post_type') AS post_type, json_extract(metadata_json, '$.event') AS event, json_extract(metadata_json, '$.offer') AS offer, json_extract(metadata_json, '$.call_to_action') AS call_to_action, (metadata_json ->> '$.alert_type') AS alert_type, NULL AS location_phone FROM content_documents WHERE kind = 'social_post' AND row_role = 'root' AND id = ? AND organization_id = ?  LIMIT 1`,
+    [postId, organizationId],
   )
   if (!row) return null
   const existing = parsePostRow(row)
@@ -483,8 +483,8 @@ export async function publishPost(
 
   const existing = await queryFirst<PostRow>(
     db,
-    `SELECT id, organization_id, site_id, location_id, slug, title, seo_title, seo_description, status, visibility, scheduled_for, published_at, created_by, created_at, updated_at, summary AS body, (metadata_json ->> '$.post_type') AS post_type, json_extract(metadata_json, '$.event') AS event, json_extract(metadata_json, '$.offer') AS offer, json_extract(metadata_json, '$.call_to_action') AS call_to_action, (metadata_json ->> '$.alert_type') AS alert_type, NULL AS location_phone FROM content_documents WHERE kind = 'social_post' AND row_role = 'root' AND id = ? AND organization_id = ? AND site_id = ? LIMIT 1`,
-    [postId, organizationId, siteId],
+    `SELECT id, organization_id, site_id, location_id, slug, title, seo_title, seo_description, status, visibility, scheduled_for, published_at, created_by, created_at, updated_at, summary AS body, (metadata_json ->> '$.post_type') AS post_type, json_extract(metadata_json, '$.event') AS event, json_extract(metadata_json, '$.offer') AS offer, json_extract(metadata_json, '$.call_to_action') AS call_to_action, (metadata_json ->> '$.alert_type') AS alert_type, NULL AS location_phone FROM content_documents WHERE kind = 'social_post' AND row_role = 'root' AND id = ? AND organization_id = ?  LIMIT 1`,
+    [postId, organizationId],
   )
   if (!existing) return null
 

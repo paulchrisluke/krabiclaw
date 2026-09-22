@@ -10,8 +10,8 @@ interface PublicLocale {
 }
 
 export default defineHandler(async (event) => {
-  const siteId = getRouterParam(event, 'siteId')
-  if (!siteId) return jsonResponse({ error: 'Site ID is required' }, { status: 400 })
+  const organizationId = event.context.organizationId as string | null | undefined
+  if (!organizationId) return jsonResponse({ error: 'Unknown tenant' }, { status: 404 })
 
   const env = cloudflareEnv(event)
   const db = env.db
@@ -22,11 +22,11 @@ export default defineHandler(async (event) => {
     FROM sites
     WHERE id = ? AND status = 'active'
     LIMIT 1
-  `, [siteId])
+  `, [organizationId])
 
   if (!site) return jsonResponse({ error: 'Site not found or inactive' }, { status: 404 })
 
-  const { locales } = await listSiteLocales(db, site.organization_id, siteId)
+  const { locales } = await listSiteLocales(db, site.organization_id, organizationId)
   const publicLocales: PublicLocale[] = locales
     .filter(locale => locale.is_source || locale.status === 'published')
     .map(locale => ({

@@ -30,11 +30,11 @@ function isRecord(value: unknown): value is Record<string, unknown> {
  * override follows a change to the hours and an opened one does not.
  */
 export default defineHandler(async (event) => {
-  const siteId = getRouterParam(event, 'siteId')
+  const organizationId = getRouterParam(event, 'organizationId')
   const locationId = getRouterParam(event, 'locationId')
-  if (!siteId || !locationId) return jsonResponse({ error: 'Site ID and location ID are required' }, { status: 400 })
+  if (!organizationId || !locationId) return jsonResponse({ error: 'Site ID and location ID are required' }, { status: 400 })
   try {
-    const { db, session, site } = await requireLocationAccess(event, siteId, locationId)
+    const { db, session, site } = await requireLocationAccess(event, organizationId, locationId)
     await requireLocationReservationConfig(db, { organizationId: site.organization_id, locationId })
     const body = await readStrictBody<{ changes: unknown }>(event, { changes: 'unknown' })
     if (!Array.isArray(body.changes) || body.changes.length === 0) {
@@ -90,7 +90,7 @@ export default defineHandler(async (event) => {
     return jsonResponse({ success: true, location_id: locationId })
   } catch (error) {
     rethrowHttpError(error)
-    console.error('reservation_availability_write_failed', { siteId, locationId, error: error instanceof Error ? error.message : String(error) })
+    console.error('reservation_availability_write_failed', { organizationId, locationId, error: error instanceof Error ? error.message : String(error) })
     return jsonResponse({ error: 'Failed to save the reservation calendar' }, { status: 500 })
   }
 })

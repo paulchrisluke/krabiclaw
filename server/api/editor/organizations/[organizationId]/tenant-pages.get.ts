@@ -3,11 +3,11 @@ import { requireSiteAccess } from '~/server/utils/location-access'
 import { listTenantPages } from '~/server/utils/content/pages'
 
 export default defineHandler(async (event) => {
-  const siteId = getRouterParam(event, 'siteId')
-  if (!siteId) return jsonResponse({ error: 'Site ID required' }, { status: 400 })
-  const { db } = await requireSiteAccess(event, siteId)
+  const organizationId = getRouterParam(event, 'organizationId')
+  if (!organizationId) return jsonResponse({ error: 'Organization ID required' }, { status: 400 })
+  const { db } = await requireSiteAccess(event, organizationId)
   
-  const pages = await listTenantPages(db, siteId)
+  const pages = await listTenantPages(db, organizationId)
   return jsonResponse(pages.map(page => ({ path: page.path, title: page.title })))
 })
 import { defineHandler } from 'nitro';

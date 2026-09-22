@@ -109,9 +109,9 @@ export async function getPersistedSourceLocale(
   const rows = await queryAll<SiteLocaleRow>(db, `
     SELECT id, organization_id, site_id, locale, label, is_source, status, created_at, updated_at
       FROM site_locales
-     WHERE organization_id = ? AND site_id = ? AND is_source = 1
+     WHERE organization_id = ?  AND is_source = 1
      ORDER BY id
-  `, [organizationId, siteId])
+  `, [organizationId])
   const source = rows.length === 1 ? rows[0] : undefined
   if (!source || source.locale !== 'en' || source.status !== 'published' || !platformLocale(source.locale)) {
     throw new HTTPError({
@@ -132,9 +132,9 @@ export async function listSiteLocaleRecords(
   const rows = await queryAll<SiteLocaleRow>(db, `
     SELECT id, organization_id, site_id, locale, label, is_source, status, created_at, updated_at
       FROM site_locales
-     WHERE organization_id = ? AND site_id = ?
+     WHERE organization_id = ? 
      ORDER BY is_source DESC, locale ASC
-  `, [organizationId, siteId])
+  `, [organizationId])
   return rows.map(row => ({ ...row, is_source: Boolean(row.is_source) }))
 }
 
@@ -315,9 +315,9 @@ export async function getResourceLocalization(
     SELECT id, organization_id, site_id, resource_type, resource_id, locale, values_json, route_path,
            created_at, created_by_user_id, updated_at, updated_by_user_id
       FROM resource_localizations
-     WHERE organization_id = ? AND site_id = ? AND resource_type = ? AND resource_id = ? AND locale = ?
+     WHERE organization_id = ?  AND resource_type = ? AND resource_id = ? AND locale = ?
      LIMIT 1
-  `, [organizationId, siteId, resourceType, resourceId, locale])
+  `, [organizationId, resourceType, resourceId, locale])
   if (!row) localizationError(404, 'LOCALIZATION_NOT_FOUND', 'Localized representation was not found', { resource_type: resourceType, resource_id: resourceId, locale })
   return mapLocalization(row)
 }
@@ -371,20 +371,20 @@ export async function resolveLocalizedPublicRoute(
     const product = await queryFirst<{ id: string }>(db, `
       SELECT p.id FROM products p
         JOIN product_publications pub ON pub.product_id = p.id AND pub.organization_id = p.organization_id
-         AND pub.site_id = ? AND pub.published = 1
+          AND pub.published = 1
         JOIN product_locations pl ON pl.product_id = p.id AND pl.organization_id = p.organization_id
          AND pl.published = 1 AND pl.active = 1
         JOIN business_locations l ON l.id = pl.location_id AND l.site_id = ? AND l.slug = ?
        WHERE p.organization_id = ? AND p.slug = ? AND p.active = 1 LIMIT 1
-    `, [siteId, siteId, productRoute.locationSlug, organizationId, productRoute.productSlug])
+    `, [ siteId, productRoute.locationSlug, organizationId, productRoute.productSlug])
     if (!product) localizationError(404, 'LOCALIZATION_NOT_FOUND', 'Localized route was not found', { locale, route_path: routePath })
     const localized = await queryFirst<ResourceLocalizationRow>(db, `
       SELECT id, organization_id, site_id, resource_type, resource_id, locale, values_json, route_path,
              created_at, created_by_user_id, updated_at, updated_by_user_id
         FROM resource_localizations
-       WHERE organization_id = ? AND site_id = ? AND locale = ? AND resource_type = 'product' AND resource_id = ?
+       WHERE organization_id = ?  AND locale = ? AND resource_type = 'product' AND resource_id = ?
        LIMIT 1
-    `, [organizationId, siteId, locale, product.id])
+    `, [organizationId, locale, product.id])
     if (!localized) localizationError(404, 'LOCALIZATION_NOT_FOUND', 'Localized route was not found', { locale, route_path: routePath })
     const localization = mapLocalization(localized)
     return {
@@ -405,9 +405,9 @@ export async function resolveLocalizedPublicRoute(
     SELECT id, organization_id, site_id, resource_type, resource_id, locale, values_json, route_path,
            created_at, created_by_user_id, updated_at, updated_by_user_id
       FROM resource_localizations
-     WHERE organization_id = ? AND site_id = ? AND locale = ? AND route_path = ?
+     WHERE organization_id = ?  AND locale = ? AND route_path = ?
      LIMIT 1
-  `, [organizationId, siteId, locale, routePath])
+  `, [organizationId, locale, routePath])
   if (resource) {
     const localization = mapLocalization(resource)
     await assertCanonicalResourceExists(db, organizationId, siteId, localization.resource_type, localization.resource_id)
@@ -431,10 +431,10 @@ export async function resolveLocalizedPublicRoute(
   const documentPath = routePath.slice(locale.length + 1) || '/'
   const document = await queryFirst<{ id: string; root_id: string; kind: ContentDocumentKind }>(db, `
     SELECT d.id, d.root_id, d.kind FROM content_documents d JOIN content_documents root ON root.id = d.root_id
-     WHERE d.organization_id = ? AND d.site_id = ? AND d.locale = ? AND d.path = ?
+     WHERE d.organization_id = ?  AND d.locale = ? AND d.path = ?
        AND d.row_role = 'representation' AND root.row_role = 'root'
        AND (root.kind NOT IN ('article','social_post') OR root.status = 'published') LIMIT 1
-  `, [organizationId, siteId, locale, documentPath])
+  `, [organizationId, locale, documentPath])
   if (!document) localizationError(404, 'LOCALIZATION_NOT_FOUND', 'Localized route was not found', { locale, route_path: routePath })
   const { resolvePublicDocumentSourcePath } = await import('~/server/utils/public-locale-representations')
   return { locale, route_path: routePath, platform_messages: entitlement.platform_messages,
@@ -527,9 +527,9 @@ export async function putResourceLocalization(
   const existing = await queryFirst<{ id: string; route_path: string | null; created_at: string; created_by_user_id: string }>(db, `
     SELECT id, route_path, created_at, created_by_user_id
       FROM resource_localizations
-     WHERE organization_id = ? AND site_id = ? AND resource_type = ? AND resource_id = ? AND locale = ?
+     WHERE organization_id = ?  AND resource_type = ? AND resource_id = ? AND locale = ?
      LIMIT 1
-  `, [input.organizationId, input.siteId, resourceType, input.resourceId, locale])
+  `, [input.organizationId, resourceType, input.resourceId, locale])
   const id = existing?.id ?? crypto.randomUUID()
   const now = new Date().toISOString()
   const statements: BatchQuery[] = resourceLocalizationWriteQueries({
@@ -662,8 +662,8 @@ export async function deleteLocalization(
   if (source) localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', 'English source content cannot be deleted through localization')
   const row = await queryFirst<{ id: string }>(db, `
     SELECT id FROM resource_localizations
-     WHERE organization_id = ? AND site_id = ? AND resource_type = ? AND resource_id = ? AND locale = ? LIMIT 1
-  `, [input.organizationId, input.siteId, resourceType, input.resourceId, locale])
+     WHERE organization_id = ?  AND resource_type = ? AND resource_id = ? AND locale = ? LIMIT 1
+  `, [input.organizationId, resourceType, input.resourceId, locale])
   if (!row) localizationError(404, 'LOCALIZATION_NOT_FOUND', 'Localized representation was not found', { resource_type: resourceType, resource_id: input.resourceId, locale })
   const statements = resourceLocalizationDeletionQueries(resourceType, {
     query: 'SELECT resource_id FROM resource_localizations WHERE id = ?', params: [row.id],
@@ -704,13 +704,13 @@ export async function getProductCatalogLocalization(
     SELECT p.id, p.name, p.description,
            rl.id AS localization_id, rl.values_json, rl.route_path
       FROM products p
-      JOIN product_publications pub ON pub.product_id = p.id AND pub.organization_id = p.organization_id AND pub.site_id = ?
+      JOIN product_publications pub ON pub.product_id = p.id AND pub.organization_id = p.organization_id 
       LEFT JOIN resource_localizations rl
         ON rl.organization_id = p.organization_id AND rl.site_id = pub.site_id
        AND rl.resource_type = 'product' AND rl.resource_id = p.id AND rl.locale = ?
      WHERE p.organization_id = ?
      ORDER BY p.name, p.id
-  `, [siteId, locale, organizationId]), queryAll<{
+  `, [ locale, organizationId]), queryAll<{
     id: string
     location_id: string | null
     name: string
@@ -722,9 +722,9 @@ export async function getProductCatalogLocalization(
       LEFT JOIN resource_localizations rl
         ON rl.organization_id = c.organization_id AND rl.site_id = c.site_id
        AND rl.resource_type = 'collection' AND rl.resource_id = c.id AND rl.locale = ?
-     WHERE c.organization_id = ? AND c.site_id = ?
+     WHERE c.organization_id = ? 
      ORDER BY c.sort_order, c.id
-  `, [locale, organizationId, siteId])])
+  `, [locale, organizationId])])
   return {
     locale,
     collections: collectionRows.map(row => ({
@@ -789,8 +789,8 @@ export async function replaceResourceLocalizations(
   const existing = await queryAll<PriorLocalization & { resource_id: string }>(db, `
     SELECT id, resource_id, route_path, created_at, created_by_user_id
       FROM resource_localizations
-     WHERE organization_id = ? AND site_id = ? AND resource_type = ? AND locale = ?
-  `, [input.organizationId, input.siteId, resourceType, locale])
+     WHERE organization_id = ?  AND resource_type = ? AND locale = ?
+  `, [input.organizationId, resourceType, locale])
   const byResource = new Map(existing.map(row => [row.resource_id, row]))
   const now = new Date().toISOString()
   const statements: BatchQuery[] = []

@@ -107,19 +107,19 @@ export async function listPublicLocaleRepresentations(
             FROM content_documents v
             JOIN site_locales sl
               ON sl.organization_id = v.organization_id AND sl.site_id = v.site_id AND sl.locale = v.locale
-           WHERE v.organization_id = ? AND v.site_id = ? AND v.root_id = ? AND v.row_role = 'representation' AND v.locale <> 'en'
+           WHERE v.organization_id = ?  AND v.root_id = ? AND v.row_role = 'representation' AND v.locale <> 'en'
              AND sl.status = 'published'
            ORDER BY v.locale
-        `, [input.organizationId, input.siteId, input.documentId])
+        `, [input.organizationId, input.documentId])
       : input.publishedLocaleRoute
         ? await queryAll<{ locale: string; route_path: string }>(db, `
             SELECT sl.locale,
                    CASE WHEN ? = '/' THEN '/' || sl.locale ELSE '/' || sl.locale || ? END AS route_path
               FROM site_locales sl
-             WHERE sl.organization_id = ? AND sl.site_id = ? AND sl.locale <> ?
+             WHERE sl.organization_id = ?  AND sl.locale <> ?
                AND sl.status = 'published'
              ORDER BY sl.locale
-          `, [input.sourcePath, input.sourcePath, input.organizationId, input.siteId, sourceLocale.locale])
+          `, [input.sourcePath, input.sourcePath, input.organizationId, sourceLocale.locale])
         : []
 
   for (const candidate of candidates) {

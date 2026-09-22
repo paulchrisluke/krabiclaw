@@ -3,13 +3,13 @@ import { deleteLocationQa } from '~/server/utils/location-qa'
 import { requireLocationAccess } from '~/server/utils/location-access'
 
 export default defineHandler(async (event) => {
-  const siteId = getRouterParam(event, 'siteId')
+  const organizationId = getRouterParam(event, 'organizationId')
   const locationId = getRouterParam(event, 'locationId')
   const qaId = getRouterParam(event, 'qaId')
-  if (!siteId || !locationId || !qaId) return jsonResponse({ error: 'Missing params' }, { status: 400 })
+  if (!organizationId || !locationId || !qaId) return jsonResponse({ error: 'Missing params' }, { status: 400 })
 
-  const { db } = await requireLocationAccess(event, siteId, locationId)
-  const result = await deleteLocationQa(db, siteId, locationId, qaId)
+  const { db } = await requireLocationAccess(event, organizationId, locationId)
+  const result = await deleteLocationQa(db, organizationId, locationId, qaId)
   return jsonResponse(result.data, { status: result.status })
 })
 import { defineHandler } from 'nitro';

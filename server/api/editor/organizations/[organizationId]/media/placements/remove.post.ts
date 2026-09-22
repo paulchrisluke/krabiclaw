@@ -6,11 +6,11 @@ import { defineHandler } from 'nitro'
 import { getRouterParam } from 'nitro/h3'
 
 export default defineHandler(async (event) => {
-  const siteId = getRouterParam(event, 'siteId')
-  if (!siteId) return jsonResponse({ error: 'Site ID required' }, { status: 400 })
+  const organizationId = getRouterParam(event, 'organizationId')
+  if (!organizationId) return jsonResponse({ error: 'Organization ID required' }, { status: 400 })
 
   try {
-    const { env, db, site } = await requireSiteAccess(event, siteId)
+    const { env, db, site } = await requireSiteAccess(event, organizationId)
     const body = await readRequiredBody<{ placement?: unknown; asset_id?: unknown }>(event)
     if (typeof body.asset_id !== 'string' || !body.asset_id.trim()) {
       return jsonResponse({ error: 'asset_id is required' }, { status: 400 })
@@ -18,15 +18,14 @@ export default defineHandler(async (event) => {
     const result = await removeMediaPlacement(db, {
       env,
       organizationId: site.organization_id,
-      siteId,
-      principal: memberAccessPrincipal(site.membership, { env, siteId, event }),
+      principal: memberAccessPrincipal(site.membership, { env, organizationId, event }),
       placement: parseMediaPlacementKey(body.placement),
       assetId: body.asset_id,
     })
     return jsonResponse(result)
   } catch (error) {
     rethrowHttpError(error)
-    console.error('media_placement_remove_failed', { siteId, error: error instanceof Error ? error.message : String(error) })
+    console.error('media_placement_remove_failed', { organizationId, error: error instanceof Error ? error.message : String(error) })
     return jsonResponse({ error: 'Failed to remove media' }, { status: 500 })
   }
 })

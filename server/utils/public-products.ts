@@ -212,8 +212,8 @@ export async function loadPublicProductDetail(
   if (!locationId) return null
   const sourceLocation = await queryFirst<PublicProductLocation>(db, `
     SELECT id, slug, title, feature_overrides, address, phone, maps_url, latitude, longitude FROM business_locations
-     WHERE organization_id = ? AND site_id = ? AND id = ? AND status = 'active' LIMIT 1
-  `, [resolved.site.organization_id, siteId, locationId])
+     WHERE organization_id = ?  AND id = ? AND status = 'active' LIMIT 1
+  `, [resolved.site.organization_id, locationId])
   if (!sourceLocation) return null
   const collection = await loadPublicProductCollection(db, siteId, routeKind, previewAuthorized, sourceLocation.slug)
   const location = collection?.locations[0]
@@ -284,9 +284,9 @@ export async function loadPublicExperienceDetail(
   const locationRows = await queryAll<PublicProductLocation>(db, `
     SELECT id, slug, title, feature_overrides, address, phone, maps_url, latitude, longitude
       FROM business_locations
-     WHERE organization_id = ? AND site_id = ? AND status = 'active'
+     WHERE organization_id = ?  AND status = 'active'
      ORDER BY title, id
-  `, [resolved.site.organization_id, siteId])
+  `, [resolved.site.organization_id])
   const locations = locationRows.filter(location => offeredAt.has(location.id) && locationHasProducts(resolved.site, location))
   if (locations.length !== 1) return null
   const location = locations[0]!

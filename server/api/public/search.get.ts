@@ -12,7 +12,7 @@ export default defineHandler(async (event) => {
   const surface = typeof query.surface === 'string' ? query.surface : 'public'
   const validTypes = new Set<string>(PUBLIC_SEARCH_TYPES)
   const validSurfaces = new Set(['public', 'docs', 'blog', 'help', 'chowbot', 'tenant_blog'])
-  const isTenantRequest = event.context.tenantType === 'tenant' && Boolean(event.context.siteId)
+  const isTenantRequest = event.context.tenantType === 'tenant' && Boolean(event.context.organizationId)
 
   if (!q.trim()) {
     return jsonResponse({ error: 'q is required' }, { status: 400 })
@@ -48,7 +48,7 @@ export default defineHandler(async (event) => {
 
     const results = await searchPublicResources(env, q, {
       type: type as PublicSearchTypeFilter, surface: surface as 'public' | 'docs' | 'blog' | 'help' | 'chowbot' | 'tenant_blog', limit: 10,
-      siteId: isTenantRequest && surface === 'tenant_blog' ? String(event.context.siteId) : null, })
+      organizationId: isTenantRequest && surface === 'tenant_blog' ? String(event.context.organizationId) : null, })
     return jsonResponse({ query: q, surface, results })
   } catch (error) {
     console.error('Failed to run public search:', error)

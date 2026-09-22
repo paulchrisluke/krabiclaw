@@ -5,9 +5,9 @@ import { assertResourceAccess, memberAccessPrincipal } from '~/server/utils/memb
 import { loadMemberSiteRow } from '~/server/utils/location-access'
 
 export default defineHandler(async (event) => {
-  const siteId = getRouterParam(event, 'siteId')
+  const organizationId = getRouterParam(event, 'organizationId')
   const postId = getRouterParam(event, 'postId')
-  if (!siteId || !postId) return jsonResponse({ error: 'Site ID and Post ID required' }, { status: 400 })
+  if (!organizationId || !postId) return jsonResponse({ error: 'Site ID and Post ID required' }, { status: 400 })
 
   const env = cloudflareEnv(event)
   const db = env.DB
@@ -16,13 +16,13 @@ export default defineHandler(async (event) => {
   const session = await getAuthSession(event, env)
   if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
-  const site = await loadMemberSiteRow(event, db, env, siteId, session.user.id)
+  const site = await loadMemberSiteRow(event, db, env, organizationId, session.user.id)
   if (!site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
 
-  const post = await getPost(db, site.organization_id, siteId, postId)
+  const post = await getPost(db, site.organization_id, organizationId, postId)
   if (!post) return jsonResponse({ error: 'Post not found' }, { status: 404 })
 
-  await assertResourceAccess(db, { ...memberAccessPrincipal(site.membership, { env, siteId, event }), resourceLocationId: post.location_id ?? null })
+  await assertResourceAccess(db, { ...memberAccessPrincipal(site.membership, { env, organizationId, event }), resourceLocationId: post.location_id ?? null })
 
   return jsonResponse({ success: true, post })
 })

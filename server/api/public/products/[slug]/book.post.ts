@@ -28,15 +28,15 @@ import { getRouterParam } from 'nitro/h3'
  * check-then-write — the insert either takes the seats or takes none.
  */
 export default defineHandler(async (event) => {
-  const siteId = getRouterParam(event, 'siteId')
+  const organizationId = event.context.organizationId as string | null | undefined
   const slug = getRouterParam(event, 'slug')
-  if (!siteId || !slug) return jsonResponse({ error: 'siteId and slug required' }, { status: 400 })
+  if (!organizationId || !slug) return jsonResponse({ error: 'organizationId and slug required' }, { status: 400 })
 
   const env = cloudflareEnv(event)
   const db = env.DB
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
 
-  const site = await queryFirst<{ id: string; organization_id: string; brand_name: string | null; public_url: string | null }>(db, `SELECT id, organization_id, brand_name, (SELECT 'https://' || domain FROM site_domains WHERE site_id = sites.id AND role = 'canonical' AND status = 'active') AS public_url FROM sites WHERE id = ? AND status = 'active' LIMIT 1`, [siteId])
+  const site = await queryFirst<{ id: string; organization_id: string; brand_name: string | null; public_url: string | null }>(db, `SELECT id, organization_id, brand_name, (SELECT 'https://' || domain FROM site_domains WHERE site_id = sites.id AND role = 'canonical' AND status = 'active') AS public_url FROM sites WHERE id = ? AND status = 'active' LIMIT 1`, [organizationId])
   if (!site) return jsonResponse({ error: 'Site not found' }, { status: 404 })
 
   const product = await queryFirst<{ id: string; name: string }>(db, `
@@ -44,7 +44,7 @@ export default defineHandler(async (event) => {
       JOIN product_publications pub ON pub.product_id = p.id AND pub.organization_id = p.organization_id
       JOIN product_booking_configs cfg ON cfg.product_id = p.id
      WHERE pub.site_id = ? AND pub.published = 1 AND p.slug = ? AND p.active = 1 LIMIT 1
-  `, [siteId, slug])
+  `, [organizationId, slug])
   if (!product) return jsonResponse({ error: 'Product not found' }, { status: 404 })
 
   let body: Record<string, unknown>
@@ -87,7 +87,7 @@ export default defineHandler(async (event) => {
           WHERE pl.product_id = s.product_id AND pl.location_id = s.location_id
             AND pl.active = 1 AND pl.published = 1
        ))
-  `, [sessionId, product.id, site.organization_id, siteId])
+  `, [sessionId, product.id, site.organization_id, organizationId])
   if (!session) return jsonResponse({ error: 'That session is not open for booking' }, { status: 404 })
 
   // What is being bought is a variant. Adult and child seats, or a class and
@@ -128,7 +128,7 @@ export default defineHandler(async (event) => {
   const cancellationTokenHash = await hashReservationCancelToken(cancellation.token)
   const authSession = await getAuthSession(event, env)
   const customerInput = {
-    organizationId: site.organization_id, siteId, name: guestName, email: guestEmail,
+    organizationId: site.organization_id, name: guestName, email: guestEmail,
     phone: normalizedGuestPhone, source: 'booking', userId: authSession?.user?.id || null,
   } as const
   const customer = await findOrCreateCustomer(db, customerInput)
@@ -144,11 +144,11 @@ export default defineHandler(async (event) => {
     // raises nothing, so a thread written ahead of it would commit on its own.
     // The booking takes its request id once the thread exists.
     await claimSessionCapacity(db, {
-      organizationId: site.organization_id, siteId, productId: product.id, sessionId: session.id,
+      organizationId: site.organization_id, productId: product.id, sessionId: session.id,
       productVariantId, partySize, customerId: customer.id, requestId: null,
       following: bookingId => [
         ...requestInsertQueries({
-          kind: 'booking', id: threadId, organization_id: site.organization_id, site_id: siteId,
+          kind: 'booking', id: threadId, organization_id: site.organization_id, site_id: organizationId,
           location_id: session.location_id, customer_id: customer.id, review_id: null,
           conversation_state: 'needs_attention', resolved_at: null, payload,
           created_at: now, updated_at: now,
@@ -176,20 +176,20 @@ export default defineHandler(async (event) => {
   const whenLabel = new Intl.DateTimeFormat('en-US', { timeZone: session.timezone, dateStyle: 'medium', timeStyle: 'short' }).format(new Date(session.starts_at))
   try {
     const [{ contactPhone, contactEmail }, ownerInboxUrl] = await Promise.all([
-      resolveLocationContact(db, siteId, session.location_id),
-      buildOwnerThreadInboxUrl(env, db, { organizationId: site.organization_id, siteId, locationId: session.location_id ?? undefined, threadId }),
+      resolveLocationContact(db, organizationId, session.location_id),
+      buildOwnerThreadInboxUrl(env, db, { organizationId: site.organization_id, locationId: session.location_id ?? undefined, threadId }),
     ])
     const siteBaseUrl = site.public_url?.replace(/\/$/, '')
     const cancelUrl = siteBaseUrl ? `${siteBaseUrl}/bookings/cancel?id=${threadId}#${cancellation.token}` : null
     await notifyBookingCreated(env, db, {
-      organizationId: site.organization_id, siteId, siteName: site.brand_name, locationId: session.location_id,
+      organizationId: site.organization_id, siteName: site.brand_name, locationId: session.location_id,
       bookingId: threadId, guestName, email: guestEmail, guestPhone: normalizedGuestPhone,
       productId: product.id, productTitle: product.name, startsAt: session.starts_at, timezone: session.timezone,
       partySize, notes: notes || null,
       cancelUrl, contactPhone, contactEmail, ownerInboxUrl,
     })
   } catch (error) {
-    console.error('booking_notification_failed', { organizationId: site.organization_id, siteId, threadId, error: error instanceof Error ? error.message : String(error) })
+    console.error('booking_notification_failed', { organizationId: site.organization_id, threadId, error: error instanceof Error ? error.message : String(error) })
   }
 
   const requestedLocale = cleanString(body.locale, 10)
@@ -197,9 +197,9 @@ export default defineHandler(async (event) => {
     // The policy the guest is shown is the product's own attribute. There is
     // no site or location policy merged underneath it.
     getProduct(db, site.organization_id, product.id),
-    requestedLocale && /^[a-z]{2}(-[A-Z]{2})?$/.test(requestedLocale) ? requestedLocale : getSourceLocale(db, site.organization_id, siteId),
+    requestedLocale && /^[a-z]{2}(-[A-Z]{2})?$/.test(requestedLocale) ? requestedLocale : getSourceLocale(db, site.organization_id, organizationId),
     recordSubmissionConversionSafe(db, event, {
-      organizationId: site.organization_id, siteId, eventName: 'booking_submit', stage: 'submitted',
+      organizationId: site.organization_id, eventName: 'booking_submit', stage: 'submitted',
       locationId: session.location_id, entityType: 'request', entityId: threadId,
       pageType: 'product', pagePath: `/products/${slug}`,
     }),

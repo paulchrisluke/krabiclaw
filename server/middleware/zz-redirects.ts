@@ -72,24 +72,24 @@ async function resolveRetiredExperiencePath(event: H3Event, path: string) {
     return null
   }
   const db = cloudflareEnv(event).db
-  const siteId = event.context.siteId as string | null | undefined
-  if (!db || !siteId) return null
+  const organizationId = event.context.organizationId as string | null | undefined
+  if (!db || !organizationId) return null
   // Bookable is what moved: a dish or a piece of merchandise still lives at
   // its branch's URL, and only a product that takes bookings is an experience.
   const bookable = await queryFirst<{ slug: string } | null>(db, `
     SELECT p.slug FROM products p
-      JOIN product_publications pp ON pp.product_id = p.id AND pp.site_id = ? AND pp.published = 1
+      JOIN product_publications pp ON pp.product_id = p.id AND pp.organization_id = ? AND pp.published = 1
       JOIN product_booking_configs bc ON bc.product_id = p.id
      WHERE p.slug = ? AND p.active = 1
      LIMIT 1
-  `, [siteId, slug])
+  `, [organizationId, slug])
   if (!bookable) return null
   return EXPERIENCE_PRESENTATION.productPath('', bookable.slug)
 }
 
 async function resolveTenantRedirectForRequest(event: H3Event) {
-  const siteId = event.context.siteId as string | null | undefined
-  if (!siteId) return null
+  const organizationId = event.context.organizationId as string | null | undefined
+  if (!organizationId) return null
   const env = cloudflareEnv(event)
   const db = env.db
   if (!db) throw new HTTPError({ statusCode: 500, statusMessage: 'Database not available' })
@@ -99,18 +99,18 @@ async function resolveTenantRedirectForRequest(event: H3Event) {
   const localized = firstSegment && firstSegment !== 'en'
     ? await queryFirst<{ locale: string } | null>(db, `
         SELECT locale FROM site_locales
-         WHERE site_id = ? AND locale = ? AND status = 'published'
+         WHERE organization_id = ? AND locale = ? AND status = 'published'
          LIMIT 1
-      `, [siteId, firstSegment])
+      `, [organizationId, firstSegment])
     : null
   const locale = localized?.locale ?? 'en'
   const tenantPagePath = localized ? (path.slice(locale.length + 1) || '/') : path
 
   const exactPage = await queryFirst<{ id: string } | null>(db, `
     SELECT id FROM content_documents
-     WHERE kind = 'page' AND row_role IN ('root','representation') AND site_id = ? AND locale = ? AND path = ?
+     WHERE kind = 'page' AND row_role IN ('root','representation') AND organization_id = ? AND locale = ? AND path = ?
      LIMIT 1
-  `, [siteId, locale, tenantPagePath])
+  `, [organizationId, locale, tenantPagePath])
   if (exactPage) return null
 
   const localeRedirect = await queryFirst<{
@@ -120,9 +120,9 @@ async function resolveTenantRedirectForRequest(event: H3Event) {
   } | null>(db, `
     SELECT to_path AS toPath, status_code AS statusCode, behavior
       FROM site_redirects
-     WHERE site_id = ? AND locale = ? AND from_path = ?
+     WHERE organization_id = ? AND locale = ? AND from_path = ?
      LIMIT 1
-  `, [siteId, locale, path])
+  `, [organizationId, locale, path])
   if (localeRedirect) return localeRedirect
 
   return null
@@ -206,14 +206,14 @@ export default defineHandler(async (event) => {
   }
 
   if (event.req.method === 'GET') {
-    const platformSiteId = event.context.tenantType === TENANT_TYPES.PLATFORM ? event.context.siteId as string | null : null
+    const platformSiteId = event.context.tenantType === TENANT_TYPES.PLATFORM ? event.context.organizationId as string | null : null
     if (platformSiteId) {
       const db = cloudflareEnv(event).db
       if (db) {
         try {
           const redirected = await queryFirst<{ to_path: string } | null>(db, `
             SELECT to_path FROM site_redirects
-             WHERE site_id = ? AND locale = 'en' AND from_path = ? AND behavior = 'redirect' LIMIT 1
+             WHERE organization_id = ? AND locale = 'en' AND from_path = ? AND behavior = 'redirect' LIMIT 1
           `, [platformSiteId, normalizedPathname])
           if (redirected) return redirect(`${redirected.to_path}${url.search}${url.hash}`, 301)
         } catch (error) {

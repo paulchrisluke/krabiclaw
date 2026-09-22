@@ -9,16 +9,16 @@ import { getRouterParam, readBody } from 'nitro/h3'
 type ReviewStatus = 'pending'
 
 export default defineHandler(async (event) => {
-  const siteId = getRouterParam(event, 'siteId')
+  const organizationId = event.context.organizationId as string | null | undefined
   const locationSlug = getRouterParam(event, 'locationSlug')
   const productSlug = getRouterParam(event, 'productSlug')
-  if (!siteId || !locationSlug || !productSlug) return jsonResponse({ error: 'Site, location, and Product slugs are required' }, { status: 400 })
+  if (!organizationId || !locationSlug || !productSlug) return jsonResponse({ error: 'Site, location, and Product slugs are required' }, { status: 400 })
   try {
     const env = cloudflareEnv(event)
     const db = env.DB
     if (!db) return jsonResponse({ error: 'Database unavailable' }, { status: 503 })
-    const previewAuthorized = await resolvePreviewAuthorization(event, siteId, previewSecretOf(cloudflareEnv(event)))
-    const resolved = await loadPublicProductApiDetail(env, db, siteId, previewAuthorized, locationSlug, productSlug)
+    const previewAuthorized = await resolvePreviewAuthorization(event, organizationId, previewSecretOf(cloudflareEnv(event)))
+    const resolved = await loadPublicProductApiDetail(env, db, organizationId, previewAuthorized, locationSlug, productSlug)
     if (!resolved) return jsonResponse({ error: 'Product not found' }, { status: 404 })
     const body = await readBody(event) as ApiRecord
     const author = cleanString(body.author, 80)
@@ -39,11 +39,11 @@ export default defineHandler(async (event) => {
     await execute(db, `
       INSERT INTO reviews (id, organization_id, site_id, location_id, product_id, author_name, rating, title, content, status, ip_hash, user_agent)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `, [id, resolved.site.organization_id, siteId, resolved.location.id, resolved.product.id, author, rating, title, content, status, ipHash, userAgent])
+    `, [id, resolved.site.organization_id, organizationId, resolved.location.id, resolved.product.id, author, rating, title, content, status, ipHash, userAgent])
     return jsonResponse({ review: { id, product_id: resolved.product.id, author, rating, title, content, status }, message: 'Thanks. Your review is pending moderation.' }, { status: 201 })
   } catch (error) {
     rethrowHttpError(error)
-    console.error('public_product_review_create_failed', { siteId, locationSlug, productSlug, error: error instanceof Error ? error.message : String(error) })
+    console.error('public_product_review_create_failed', { organizationId, locationSlug, productSlug, error: error instanceof Error ? error.message : String(error) })
     return jsonResponse({ error: 'Failed to create Product review' }, { status: 500 })
   }
 })

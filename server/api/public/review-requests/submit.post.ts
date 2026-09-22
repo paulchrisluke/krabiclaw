@@ -177,7 +177,7 @@ export default defineHandler(async (event) => {
 
   try {
     await notifyReviewReceived(env, db, {
-      organizationId: result.context.organization_id, siteId: result.context.site_id, siteName: result.context.site_name, locationId: result.context.location_id, reviewId, authorName, rating, content, })
+      organizationId: result.context.organization_id, siteName: result.context.site_name, locationId: result.context.location_id, reviewId, authorName, rating, content, })
   } catch (error) {
     console.error('notifyReviewReceived_failed', {
       reviewId, error: error instanceof Error ? error.message : String(error), })

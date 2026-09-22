@@ -5,10 +5,10 @@ import { parseBlogLifecycleInput, updateBlogLifecycle } from "~/server/utils/con
 import { httpErrorDetails } from "~/server/utils/http-error";
 
 export default defineHandler(async (event) => {
-  const siteId = getRouterParam(event, "siteId");
+  const organizationId = getRouterParam(event, "organizationId");
   const postId = getRouterParam(event, "postId");
 
-  if (!siteId || Array.isArray(siteId)) {
+  if (!organizationId || Array.isArray(organizationId)) {
     return jsonResponse(
       { error: "Site ID is required" }, { status: 400 }, );
   }
@@ -19,9 +19,9 @@ export default defineHandler(async (event) => {
   }
 
   try {
-    const { db } = await requireBlogAccess(event, siteId);
+    const { db } = await requireBlogAccess(event, organizationId);
     const input = parseBlogLifecycleInput(await readBody(event) as unknown, "publish");
-    const lifecycle = await updateBlogLifecycle(db, postId, input, siteId);
+    const lifecycle = await updateBlogLifecycle(db, postId, input, organizationId);
 
     return jsonResponse(finalizeRequestMetrics(event, "editor-blog-publish", { success: true, lifecycle }));
   } catch (error) {

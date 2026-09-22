@@ -9,9 +9,9 @@ import { loadMemberSiteRow } from '~/server/utils/location-access'
 import { assertResourceAccess, memberAccessPrincipal } from '~/server/utils/member-access'
 
 export default defineHandler(async (event) => {
-  const siteId = getRouterParam(event, 'siteId')
+  const organizationId = getRouterParam(event, 'organizationId')
   const postId = getRouterParam(event, 'postId')
-  if (!siteId || !postId) return jsonResponse({ error: 'Site ID and Post ID required' }, { status: 400 })
+  if (!organizationId || !postId) return jsonResponse({ error: 'Site ID and Post ID required' }, { status: 400 })
 
   const env = cloudflareEnv(event)
   const db = env.DB
@@ -23,22 +23,22 @@ export default defineHandler(async (event) => {
   const body = await readRequiredBody<{ channels?: unknown }>(event)
   const channels = parsePublishChannels(body?.channels)
   if (!channels) return jsonResponse({ error: 'channels must be a non-empty array of site, facebook, or instagram' }, { status: 400 })
-  const site = await loadMemberSiteRow(event, db, env, siteId, session.user.id)
+  const site = await loadMemberSiteRow(event, db, env, organizationId, session.user.id)
   if (!site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
 
   const postScope = await queryFirst<{ location_id: string | null }>(db, `
     SELECT location_id FROM content_documents
      WHERE kind = 'social_post' AND row_role = 'root' AND id = ? AND organization_id = ? AND site_id = ?
      LIMIT 1
-  `, [postId, site.organization_id, siteId])
+  `, [postId, site.organization_id, organizationId])
   if (!postScope) return jsonResponse({ error: 'Post not found' }, { status: 404 })
-  await assertResourceAccess(db, { ...memberAccessPrincipal(site.membership, { env, siteId, event }), resourceLocationId: postScope.location_id })
+  await assertResourceAccess(db, { ...memberAccessPrincipal(site.membership, { env, organizationId, event }), resourceLocationId: postScope.location_id })
 
   const wantsSocial = channels.includes('facebook') || channels.includes('instagram')
   let socialPublish: PostSocialPublish | null = null
   if (wantsSocial) {
     try {
-      const connection = await getFacebookPagesConnection(env, site.organization_id, siteId)
+      const connection = await getFacebookPagesConnection(env, site.organization_id, organizationId)
       socialPublish = connection?.facebook_page_id && connection.encrypted_page_token
         ? { kind: 'connected', pageId: connection.facebook_page_id, pageToken: connection.encrypted_page_token }
         : { kind: 'unavailable', reason: 'No Facebook Page connected.' }
@@ -48,7 +48,7 @@ export default defineHandler(async (event) => {
     }
   }
 
-  const post = await publishPost(db, site.organization_id, siteId, postId, channels, env, socialPublish)
+  const post = await publishPost(db, site.organization_id, organizationId, postId, channels, env, socialPublish)
   if (!post) return jsonResponse({ error: 'Post not found' }, { status: 404 })
   const socialErrors = Object.fromEntries(post.channels
     .filter(job => channels.includes(job.channel) && (job.status === 'failed' || job.status === 'skipped') && job.error)

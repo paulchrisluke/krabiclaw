@@ -6,10 +6,10 @@ import { defineHandler } from 'nitro'
 import { getRouterParam } from 'nitro/h3'
 
 export default defineHandler(async (event) => {
-  const siteId = getRouterParam(event, 'siteId')
-  if (!siteId) return jsonResponse({ error: 'Site ID required' }, { status: 400 })
-  const { env, db, session } = await requireSiteAccess(event, siteId)
+  const organizationId = getRouterParam(event, 'organizationId')
+  if (!organizationId) return jsonResponse({ error: 'Organization ID required' }, { status: 400 })
+  const { env, db, session } = await requireSiteAccess(event, organizationId)
   const { after } = await readStrictBody<{ after?: string | null }>(event, { after: 'nullable-string' })
-  const { results, next_cursor } = await regenerateSiteSocialCards({ db, env, siteId, actorId: session.user.id, after })
+  const { results, next_cursor } = await regenerateSiteSocialCards({ db, env, organizationId, actorId: session.user.id, after })
   return jsonResponse({ results, next_cursor, summary: summarizeSocialCardRefreshResults(results) })
 })

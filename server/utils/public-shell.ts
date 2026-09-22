@@ -109,9 +109,9 @@ export async function loadPublicShellSource(
     const localizedRows = await queryAll<StoredPublicLocalizationRow>(db, `
       SELECT resource_type, resource_id, locale, values_json, route_path
        FROM resource_localizations
-       WHERE organization_id = ? AND site_id = ? AND locale = ?
+       WHERE organization_id = ?  AND locale = ?
          AND resource_type IN ('site', 'business_location')
-    `, [site.organization_id, siteId, locale])
+    `, [site.organization_id, locale])
     // The shell reads the site and its locations; neither carries metafields,
     // so no definition is in scope here.
     const localizations = indexStoredPublicLocalizations(localizedRows, new Map())

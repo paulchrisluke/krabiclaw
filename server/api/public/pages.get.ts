@@ -4,17 +4,17 @@ import { previewSecretOf, resolvePreviewAuthorization } from '~/server/utils/pre
 import { getPublicTenantPageForPath, listCanonicalTenantPages } from '~/server/utils/public-tenant-pages'
 
 export default defineHandler(async (event) => {
-  const siteId = getRouterParam(event, 'siteId')
-  if (!siteId) return apiErrorResponse(event, 400, 'SITE_ID_REQUIRED', 'Site ID is required')
+  const organizationId = event.context.organizationId as string | null | undefined
+  if (!organizationId) return apiErrorResponse(event, 400, 'SITE_ID_REQUIRED', 'Unknown tenant')
   const env = cloudflareEnv(event)
   const db = env.db
   if (!db) return apiErrorResponse(event, 503, 'DATABASE_UNAVAILABLE', 'Database unavailable')
   // A site that has not finished onboarding is served only to a holder of its
   // preview token, exactly as tenant resolution serves the pages themselves.
-  const preview = await resolvePreviewAuthorization(event, siteId, previewSecretOf(env))
+  const preview = await resolvePreviewAuthorization(event, organizationId, previewSecretOf(env))
   const site = await queryFirst<{ id: string }>(db, `
     SELECT id FROM sites WHERE id = ? AND status = 'active'${preview ? '' : " AND onboarding_status = 'active'"} LIMIT 1
-  `, [siteId])
+  `, [organizationId])
   if (!site) return apiErrorResponse(event, 404, 'SITE_NOT_FOUND', 'Site not found')
 
   const query = getQuery(event)
@@ -23,8 +23,8 @@ export default defineHandler(async (event) => {
 
   try {
     const pages = path
-      ? await getPublicTenantPageForPath(env, db, siteId, path, { locale, preview })
-      : await listCanonicalTenantPages(env, db, siteId, locale)
+      ? await getPublicTenantPageForPath(env, db, organizationId, path, { locale, preview })
+      : await listCanonicalTenantPages(env, db, organizationId, locale)
     if (path && !pages) return apiErrorResponse(event, 404, 'PAGE_NOT_FOUND', 'Tenant page not found')
     return jsonResponse({ success: true, page: path ? pages : undefined, pages: path ? undefined : pages, preview })
   } catch (error) {

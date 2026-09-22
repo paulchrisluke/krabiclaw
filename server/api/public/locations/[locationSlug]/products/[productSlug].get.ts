@@ -10,17 +10,17 @@ import { selectProductCollectionSiblings } from '~/utils/product-seo'
 import { listMetafieldDefinitions } from '~/server/utils/product-management'
 
 export default defineHandler(async (event) => {
-  const siteId = getRouterParam(event, 'siteId')
+  const organizationId = event.context.organizationId as string | null | undefined
   const locationSlug = getRouterParam(event, 'locationSlug')
   const productSlug = getRouterParam(event, 'productSlug')
-  if (!siteId || !locationSlug || !productSlug) return jsonResponse({ error: 'Site, location, and Product slugs are required' }, { status: 400 })
+  if (!organizationId || !locationSlug || !productSlug) return jsonResponse({ error: 'Site, location, and Product slugs are required' }, { status: 400 })
   try {
     const env = cloudflareEnv(event)
     const db = env.DB
     if (!db) return jsonResponse({ error: 'Database unavailable' }, { status: 503 })
     const locale = assertExactCanonicalLocale(getQuery(event).locale ?? 'en')
-    const previewAuthorized = await resolvePreviewAuthorization(event, siteId, previewSecretOf(cloudflareEnv(event)))
-    const result = await loadPublicProductApiDetail(env, db, siteId, previewAuthorized, locationSlug, productSlug, locale)
+    const previewAuthorized = await resolvePreviewAuthorization(event, organizationId, previewSecretOf(cloudflareEnv(event)))
+    const result = await loadPublicProductApiDetail(env, db, organizationId, previewAuthorized, locationSlug, productSlug, locale)
     if (!result) return jsonResponse({ error: 'Product not found' }, { status: 404 })
     const reviews = await loadPublicProductReviews(db, result)
     // The collection this product belongs to on this site, in the site's own
@@ -45,7 +45,7 @@ export default defineHandler(async (event) => {
     })
   } catch (error) {
     rethrowHttpError(error)
-    console.error('public_product_detail_failed', { siteId, locationSlug, productSlug, error: error instanceof Error ? error.message : String(error) })
+    console.error('public_product_detail_failed', { organizationId, locationSlug, productSlug, error: error instanceof Error ? error.message : String(error) })
     return jsonResponse({ error: 'Failed to load Product' }, { status: 500 })
   }
 })

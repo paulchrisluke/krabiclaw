@@ -405,10 +405,10 @@ async function loadPublicPageSource(
           AND ma.organization_id = mp.organization_id
           AND ma.site_id = mp.site_id
           AND ma.status = 'active'
-        WHERE mp.organization_id = ? AND mp.site_id = ?
+        WHERE mp.organization_id = ? 
           AND mp.owner_type = 'product' AND mp.slot IN ('image', 'gallery') AND mp.status = 'active'
         ORDER BY mp.owner_id, mp.slot, mp.sort_order, mp.id`,
-      [orgId, siteId],
+      [orgId],
     )
   }
 

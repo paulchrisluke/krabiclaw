@@ -5,13 +5,13 @@ import { updateTenantPage } from '~/server/utils/content/pages'
 import type { TenantPageEditorInput } from '~/server/utils/content/pages'
 
 export default defineHandler(async (event) => {
-  const siteId = getRouterParam(event, 'siteId')
+  const organizationId = getRouterParam(event, 'organizationId')
   const variantId = getRouterParam(event, 'variantId')
-  if (!siteId || !variantId) return jsonResponse({ error: 'Site and page IDs are required' }, { status: 400 })
-  const { env, db, site, userId } = await requireTenantPageWriteAccess(event, siteId)
+  if (!organizationId || !variantId) return jsonResponse({ error: 'Site and page IDs are required' }, { status: 400 })
+  const { env, db, site, userId } = await requireTenantPageWriteAccess(event, organizationId)
   try {
     const payload = await updateTenantPage(db, variantId, {
-      userId, scope: { siteId, organizationId: site.organization_id }, data: await readRequiredBody<TenantPageEditorInput>(event), env, })
+      userId, scope: { organizationId }, data: await readRequiredBody<TenantPageEditorInput>(event), env, })
     return jsonResponse(finalizeRequestMetrics(event, 'editor-tenant-page-update', payload))
   } catch (error) {
     rethrowHttpError(error)

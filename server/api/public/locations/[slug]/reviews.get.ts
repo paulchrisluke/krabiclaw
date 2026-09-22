@@ -1,4 +1,4 @@
-// GET /api/public/sites/[siteId]/locations/[slug]/reviews
+// GET /api/public/sites/[organizationId]/locations/[slug]/reviews
 import { queryAll, queryFirst } from '~/server/db'
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import {
@@ -6,9 +6,9 @@ import {
 import { attachReviewMedia } from '~/server/utils/site-reviews'
 
 export default defineHandler(async (event) => {
-  const siteId = getRouterParam(event, 'siteId')
+  const organizationId = event.context.organizationId as string | null | undefined
   const slug = getRouterParam(event, 'slug')
-  if (!siteId || !slug) return jsonResponse({ error: 'Missing params' }, { status: 400 })
+  if (!organizationId || !slug) return jsonResponse({ error: 'Missing params' }, { status: 400 })
 
   const env = cloudflareEnv(event)
   const db = env.db
@@ -16,7 +16,7 @@ export default defineHandler(async (event) => {
 
   const location = await queryFirst<{ id: string; rating: number | null; review_count: number | null; last_synced_at: string | null }>(
     db, `SELECT id, rating, review_count, last_synced_at FROM business_locations
-     WHERE site_id = ? AND slug = ? AND status = 'active' LIMIT 1`, [siteId, slug], )
+     WHERE site_id = ? AND slug = ? AND status = 'active' LIMIT 1`, [organizationId, slug], )
   if (!location) return jsonResponse({ error: 'Location not found' }, { status: 404 })
   const results = await queryAll<ApiValue>(
     db, `SELECT r.id, r.author_name, r.rating, r.title, r.content, r.owner_reply, r.owner_reply_at,
@@ -30,7 +30,7 @@ export default defineHandler(async (event) => {
      FROM reviews
      WHERE location_id = ? AND status = 'approved'`, [location.id], )
 
-  const reviews = await attachReviewMedia(db, siteId, (results ?? []) as Array<Record<string, unknown>>)
+  const reviews = await attachReviewMedia(db, organizationId, (results ?? []) as Array<Record<string, unknown>>)
 
   return jsonResponse({
     aggregate: buildPublicReviewAggregate(normalizePublicReviewAggregateRows(aggregateResults), location), reviews, })

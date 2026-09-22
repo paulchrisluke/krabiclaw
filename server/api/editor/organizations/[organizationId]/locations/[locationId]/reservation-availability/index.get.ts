@@ -16,11 +16,11 @@ const MAX_DAYS = 42
  * made a session look like a slot that could be "reopened".
  */
 export default defineHandler(async (event) => {
-  const siteId = getRouterParam(event, 'siteId')
+  const organizationId = getRouterParam(event, 'organizationId')
   const locationId = getRouterParam(event, 'locationId')
-  if (!siteId || !locationId) return jsonResponse({ error: 'Site ID and location ID are required' }, { status: 400 })
+  if (!organizationId || !locationId) return jsonResponse({ error: 'Site ID and location ID are required' }, { status: 400 })
   try {
-    const { db, site } = await requireLocationAccess(event, siteId, locationId)
+    const { db, site } = await requireLocationAccess(event, organizationId, locationId)
     const query = getQuery(event)
     const from = typeof query.from === 'string' ? query.from : null
     const to = typeof query.to === 'string' ? query.to : null
@@ -38,7 +38,7 @@ export default defineHandler(async (event) => {
     return jsonResponse({ success: true, from, to, days: calendar })
   } catch (error) {
     rethrowHttpError(error)
-    console.error('reservation_availability_read_failed', { siteId, locationId, error: error instanceof Error ? error.message : String(error) })
+    console.error('reservation_availability_read_failed', { organizationId, locationId, error: error instanceof Error ? error.message : String(error) })
     return jsonResponse({ error: 'Failed to read the reservation calendar' }, { status: 500 })
   }
 })

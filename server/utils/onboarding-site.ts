@@ -128,9 +128,9 @@ export async function ensureOnboardingSite(
   // refuses rather than picking.
   const locations = await queryAll<{ id: string; slug: string | null }>(db, `
     SELECT id, slug FROM business_locations
-    WHERE site_id = ? AND organization_id = ? AND status = 'active'
+     WHERE organization_id = ? AND status = 'active'
     ORDER BY created_at, id
-  `, [siteId, organizationId])
+  `, [ organizationId])
   if (locations.length !== 1) {
     return {
       status: 500,
@@ -273,9 +273,9 @@ export async function applyOnboardingDraftToSite(
   // leave two copies of every dish.
   const previouslyImported = await queryAll<{ id: string }>(db, `
     SELECT p.id FROM products p
-    JOIN product_publications pub ON pub.product_id = p.id AND pub.organization_id = p.organization_id AND pub.site_id = ?
+    JOIN product_publications pub ON pub.product_id = p.id AND pub.organization_id = p.organization_id 
     WHERE p.organization_id = ? AND p.source = 'import'
-  `, [siteId, organizationId])
+  `, [ organizationId])
   const batchQueries: BatchQuery[] = previouslyImported.length
     ? [
         ...resourceLocalizationDeletionQueries('product', { query: 'SELECT value FROM json_each(?)', params: [JSON.stringify(previouslyImported.map(row => row.id))] }),

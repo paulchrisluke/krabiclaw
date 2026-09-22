@@ -229,10 +229,10 @@ export async function createSystemSubdomain(
     db,
     `SELECT id, domain, role, created_at
        FROM site_domains
-      WHERE site_id = ? AND organization_id = ? AND type = 'subdomain' AND status = 'active'
+       WHERE organization_id = ? AND type = 'subdomain' AND status = 'active'
       ORDER BY created_at ASC
       LIMIT 1`,
-    [siteId, organizationId],
+    [ organizationId],
   )
 
   if (existing?.domain === domain) {

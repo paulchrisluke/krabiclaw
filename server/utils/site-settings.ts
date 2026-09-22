@@ -394,8 +394,8 @@ async function attemptSiteUpdate(
     // location's stale override must not block a legitimate site feature update.
     const overriddenLocations = await queryAll<{ title: string; feature_overrides: string }>(db, `
       SELECT title, feature_overrides FROM business_locations
-      WHERE site_id = ? AND organization_id = ? AND status = 'active' AND feature_overrides IS NOT NULL
-    `, [siteId, organizationId])
+       WHERE organization_id = ? AND status = 'active' AND feature_overrides IS NOT NULL
+    `, [ organizationId])
     const newEffectiveSet = new Set(newEffectiveFeatures)
     const brokenLocations = overriddenLocations
       .filter(loc => (parseCmsFeatureOverrideDelta(loc.feature_overrides)?.enabled ?? []).some(feature => !newEffectiveSet.has(feature)))

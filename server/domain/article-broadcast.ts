@@ -61,7 +61,7 @@ export async function findAnnounceableArticle(db: DbClient, now = new Date()): P
            cover_asset.public_url AS cover_public_url
       FROM content_documents p
       ${coverJoinSql('p')}
-     WHERE p.kind = 'article' AND p.row_role = 'root' AND p.site_id = ?
+     WHERE p.kind = 'article' AND p.row_role = 'root' AND p.organization_id = ?
        AND p.status = 'published' AND p.visibility = 'public'
        AND (p.metadata_json ->> '$.collection') = 'blog'
        AND p.first_published_at IS NOT NULL AND p.first_published_at >= ?

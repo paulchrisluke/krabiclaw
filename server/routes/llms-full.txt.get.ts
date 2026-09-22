@@ -12,14 +12,14 @@ export default defineHandler(async (event) => {
 
   const origin = resolvePublicOrigin(event)
   const isTenant = event.context.tenantType === 'tenant'
-  const siteId = isTenant ? String(event.context.siteId || '') : ''
+  const organizationId = isTenant ? String(event.context.organizationId || '') : ''
   const siteName = (event.context.site as { brand_name?: string | null } | undefined)?.brand_name?.trim() || ''
-  if (isTenant && siteId && !siteName) throw new HTTPError({ statusCode: 500, statusMessage: 'Tenant brand name is not configured' })
+  if (isTenant && organizationId && !siteName) throw new HTTPError({ statusCode: 500, statusMessage: 'Tenant brand name is not configured' })
 
-  if (isTenant && siteId) {
-    const postSummaries = await listPublishedTenantBlogPostsForLlm(db, siteId, env)
+  if (isTenant && organizationId) {
+    const postSummaries = await listPublishedTenantBlogPostsForLlm(db, organizationId, env)
     const posts = (await Promise.all(
-      (postSummaries ?? []).map((post) => getPublishedTenantBlogPostBySlug(db, siteId, post.slug)), )).filter((post): post is NonNullable<typeof post> => Boolean(post))
+      (postSummaries ?? []).map((post) => getPublishedTenantBlogPostBySlug(db, organizationId, post.slug)), )).filter((post): post is NonNullable<typeof post> => Boolean(post))
 
     return textResponse(buildLlmsFullTxt(origin, [], posts, {
       title: `${siteName} Blog Full LLM Context`, intro: `Full machine-readable export of ${siteName}'s published blog.`, includeDocs: false, renderBlog: (post, origin) => renderTenantBlogMarkdown(post, origin, { themeId: String(event.context.themeId ?? '') }), }))

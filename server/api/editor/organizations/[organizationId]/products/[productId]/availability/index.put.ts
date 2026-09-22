@@ -16,9 +16,9 @@ import { getRouterParam } from 'nitro/h3'
  * sessions already generated from it.
  */
 export default defineHandler(async (event) => {
-  const siteId = getRouterParam(event, 'siteId')
+  const organizationId = getRouterParam(event, 'organizationId')
   const productId = getRouterParam(event, 'productId')
-  if (!siteId || !productId) return jsonResponse({ error: 'Site ID and product ID are required' }, { status: 400 })
+  if (!organizationId || !productId) return jsonResponse({ error: 'Site ID and product ID are required' }, { status: 400 })
   try {
     const body = await readStrictBody<{ location_id: unknown; slots: unknown }>(event, { location_id: 'unknown', slots: 'unknown' })
     if (typeof body.location_id !== 'string' || !body.location_id) return jsonResponse({ error: 'location_id is required' }, { status: 400 })
@@ -31,10 +31,10 @@ export default defineHandler(async (event) => {
       if (slot.capacity !== null && slot.capacity !== undefined && typeof slot.capacity !== 'number') return jsonResponse({ error: 'capacity must be a number or null' }, { status: 400 })
       slots.push({ weekday: slot.weekday, start_time: slot.start_time, capacity: slot.capacity === undefined ? null : slot.capacity as number | null })
     }
-    const { db, session, site } = await requireLocationAccess(event, siteId, body.location_id)
+    const { db, session, site } = await requireLocationAccess(event, organizationId, body.location_id)
     // A product id in the path is not authorized by the site in the path.
-    await requireSiteProduct(db, { organizationId: site.organization_id, siteId, productId })
-    const location = await queryFirst<{ timezone: string | null }>(db, 'SELECT timezone FROM business_locations WHERE organization_id = ? AND site_id = ? AND id = ?', [site.organization_id, siteId, body.location_id])
+    await requireSiteProduct(db, { organizationId: site.organization_id, productId })
+    const location = await queryFirst<{ timezone: string | null }>(db, 'SELECT timezone FROM business_locations WHERE organization_id = ? AND site_id = ? AND id = ?', [site.organization_id, organizationId, body.location_id])
     if (!location) return jsonResponse({ error: 'Location not found' }, { status: 404 })
     if (!location.timezone) return jsonResponse({ error: 'Set the location\'s timezone before scheduling sessions' }, { status: 409 })
     const result = await replaceWeeklySchedule(db, {
@@ -44,7 +44,7 @@ export default defineHandler(async (event) => {
     return jsonResponse({ success: true, ...result })
   } catch (error) {
     rethrowHttpError(error)
-    console.error('availability_replace_failed', { siteId, productId, error: error instanceof Error ? error.message : String(error) })
+    console.error('availability_replace_failed', { organizationId, productId, error: error instanceof Error ? error.message : String(error) })
     return jsonResponse({ error: 'Failed to save the schedule' }, { status: 500 })
   }
 })

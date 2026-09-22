@@ -5,8 +5,8 @@ import { assertResourceAccess, memberAccessPrincipal } from '~/server/utils/memb
 import { loadMemberSiteRow } from '~/server/utils/location-access'
 
 export default defineHandler(async (event) => {
-  const siteId = getRouterParam(event, 'siteId')
-  if (!siteId) return jsonResponse({ error: 'Site ID required' }, { status: 400 })
+  const organizationId = getRouterParam(event, 'organizationId')
+  if (!organizationId) return jsonResponse({ error: 'Organization ID required' }, { status: 400 })
 
   const env = cloudflareEnv(event)
   const db = env.DB
@@ -15,7 +15,7 @@ export default defineHandler(async (event) => {
   const session = await getAuthSession(event, env)
   if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
-  const site = await loadMemberSiteRow(event, db, env, siteId, session.user.id)
+  const site = await loadMemberSiteRow(event, db, env, organizationId, session.user.id)
   if (!site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
 
   const query = getQuery(event)
@@ -26,8 +26,8 @@ export default defineHandler(async (event) => {
   // No location_id filter means "every post across the whole site" — only a
   // site-wide-scoped member may see that; a location-scoped editor must
   // filter to their own location.
-  await assertResourceAccess(db, { ...memberAccessPrincipal(site.membership, { env, siteId, event }), resourceLocationId: locationId ?? null })
-  const posts = await listPosts(db, site.organization_id, siteId, status, locationId)
+  await assertResourceAccess(db, { ...memberAccessPrincipal(site.membership, { env, organizationId, event }), resourceLocationId: locationId ?? null })
+  const posts = await listPosts(db, site.organization_id, organizationId, status, locationId)
   return jsonResponse({ success: true, posts })
 })
 import { defineHandler } from 'nitro';

@@ -3,9 +3,9 @@ import { createLocationQa } from '~/server/utils/location-qa'
 import { requireLocationAccess } from '~/server/utils/location-access'
 
 export default defineHandler(async (event) => {
-  const siteId = getRouterParam(event, 'siteId')
+  const organizationId = getRouterParam(event, 'organizationId')
   const locationId = getRouterParam(event, 'locationId')
-  if (!siteId || !locationId) return jsonResponse({ error: 'Missing params' }, { status: 400 })
+  if (!organizationId || !locationId) return jsonResponse({ error: 'Missing params' }, { status: 400 })
 
   const body = await readBody<{
     question?: string
@@ -15,8 +15,8 @@ export default defineHandler(async (event) => {
     sort_order?: number
   }>(event)
 
-  const { db, site } = await requireLocationAccess(event, siteId, locationId)
-  const result = await createLocationQa(db, site.organization_id, siteId, locationId, {
+  const { db, site } = await requireLocationAccess(event, organizationId, locationId)
+  const result = await createLocationQa(db, site.organization_id, organizationId, locationId, {
     question: body?.question ?? '', answer: body?.answer ?? null, question_author: body?.question_author ?? null, is_owner_answer: body?.is_owner_answer !== false, sort_order: body?.sort_order ?? 0, })
 
   return jsonResponse(result.data, { status: result.status })

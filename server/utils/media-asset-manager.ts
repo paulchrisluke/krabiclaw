@@ -382,10 +382,10 @@ export async function hydrateMediaAssetRefs(
   const rows = await queryAll<MediaAsset>(
     db,
     `SELECT * FROM media_assets
-      WHERE organization_id = ? AND site_id = ? AND status = 'active'
+      WHERE organization_id = ?  AND status = 'active'
         AND generation_key IS NULL
         AND id IN (SELECT value FROM json_each(?))`,
-    [input.organizationId, input.siteId, d1JsonStringSet(ids)],
+    [input.organizationId, d1JsonStringSet(ids)],
   )
   const byId = new Map((rows ?? []).map(row => [row.id, row]))
   const missing = ids.find(id => !byId.has(id))

@@ -120,9 +120,9 @@ export async function listLocationsForMcp(
   }>(db, `
     SELECT id, slug, title, COALESCE(address ->> '$.sublocality', address ->> '$.locality') AS place_name, status
     FROM business_locations
-    WHERE organization_id = ? AND site_id = ?
+    WHERE organization_id = ? 
     ORDER BY title ASC
-  `, [organizationId, siteId])
+  `, [organizationId])
 
   return results
 }

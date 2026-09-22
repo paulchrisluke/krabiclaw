@@ -13,8 +13,8 @@ import { getRouterParam, readBody } from 'nitro/h3'
 const VALID_SUBJECTS = ['general', 'press', 'partnerships', 'catering', 'careers']
 
 export default defineHandler(async (event) => {
-  const siteId = getRouterParam(event, 'siteId')
-  if (!siteId) return jsonResponse({ error: 'Site ID required' }, { status: 400 })
+  const organizationId = event.context.organizationId as string | null | undefined
+  if (!organizationId) return jsonResponse({ error: 'Unknown tenant' }, { status: 404 })
 
   const env = cloudflareEnv(event)
   const db = env.db
@@ -49,7 +49,7 @@ export default defineHandler(async (event) => {
     return jsonResponse({ error: 'Please choose a valid subject.' }, { status: 400 })
 
   const site = await queryFirst<{ id: string; organization_id: string; brand_name?: string | null; vertical?: string | null; theme_id?: string | null }>(
-    db, 'SELECT id, organization_id, brand_name, vertical, theme_id FROM sites WHERE id = ? AND status = ? LIMIT 1', [siteId, 'active'], )
+    db, 'SELECT id, organization_id, brand_name, vertical, theme_id FROM sites WHERE id = ? AND status = ? LIMIT 1', [organizationId, 'active'], )
   if (!site) return jsonResponse({ error: 'Site not found' }, { status: 404 })
   const requiresConsent = siteSupportsBlawbyTemplate({ themeId: site.theme_id, vertical: site.vertical })
   const consentAcknowledged = body.consent === true
@@ -58,7 +58,7 @@ export default defineHandler(async (event) => {
   }
 
   const assignment = await resolveContactSubmissionAssignment(db, {
-    siteId, locationId: locationIdInput || null, })
+    organizationId, locationId: locationIdInput || null, })
   if (assignment.error) return jsonResponse({ error: assignment.error }, { status: 400 })
   const { assignedLocationId } = assignment
 
@@ -82,7 +82,7 @@ export default defineHandler(async (event) => {
 
   const consentAt = consentAcknowledged ? new Date().toISOString() : null
   const now = new Date().toISOString()
-  await executeBatch(db, requestInsertQueries({ id, kind: 'contact', organization_id: site.organization_id, site_id: siteId, location_id: assignedLocationId,
+  await executeBatch(db, requestInsertQueries({ id, kind: 'contact', organization_id: site.organization_id, site_id: organizationId, location_id: assignedLocationId,
     customer_id: null, review_id: null, conversation_state: 'needs_attention', resolved_at: null,
     payload: { guest: { name, email, phone: null }, subject: subject || topic || null, message, consent_at: consentAt, ip_hash: ipHash,
       source: source || null, route_context: routeContext || null, suggested_summary: suggestedSummary || null, agent_metadata: agentMetadata }, created_at: now, updated_at: now }))
@@ -90,16 +90,15 @@ export default defineHandler(async (event) => {
 
   try {
     await notifyContactSubmitted(env, db, {
-      organizationId: site.organization_id, siteId, locationId: assignedLocationId, siteName: site.brand_name, contactId: id, guestName: name, email, subject: subject || topic || null, message, consentAcknowledged, })
+      organizationId: site.organization_id, locationId: assignedLocationId, siteName: site.brand_name, contactId: id, guestName: name, email, subject: subject || topic || null, message, consentAcknowledged, })
   } catch (error) {
     console.error('contact_notification_failed', {
-      organizationId: site.organization_id, siteId, contactId: id, error: error instanceof Error ? error.message : String(error)
+      organizationId: site.organization_id, contactId: id, error: error instanceof Error ? error.message : String(error)
     })
   }
 
   await recordSubmissionConversionSafe(db, event, {
     organizationId: site.organization_id,
-    siteId,
     eventName: 'contact_submit',
     stage: 'submitted',
     locationId: assignedLocationId,

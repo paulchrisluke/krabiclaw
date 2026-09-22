@@ -1,4 +1,4 @@
-// POST /api/editor/sites/[siteId]/locations/[locationId]/qa/reorder
+// POST /api/editor/sites/[organizationId]/locations/[locationId]/qa/reorder
 import { jsonResponse } from '~/server/utils/api-response'
 import { reorderLocationQa } from '~/server/utils/mcp-workflows'
 import { requireLocationAccess } from '~/server/utils/location-access'
@@ -23,11 +23,11 @@ function parseUpdates(value: unknown): ReorderUpdate[] | null {
 }
 
 export default defineHandler(async (event) => {
-  const siteId = getRouterParam(event, 'siteId')
+  const organizationId = getRouterParam(event, 'organizationId')
   const locationId = getRouterParam(event, 'locationId')
-  if (!siteId || !locationId) return jsonResponse({ error: 'Missing params' }, { status: 400 })
+  if (!organizationId || !locationId) return jsonResponse({ error: 'Missing params' }, { status: 400 })
 
-  const { db, site } = await requireLocationAccess(event, siteId, locationId)
+  const { db, site } = await requireLocationAccess(event, organizationId, locationId)
 
   const body = await readBody(event)
   if (typeof body !== 'object' || body === null || Array.isArray(body)) {
@@ -40,7 +40,7 @@ export default defineHandler(async (event) => {
   }
 
   try {
-    const result = await reorderLocationQa(db, site.organization_id, siteId, locationId, updates)
+    const result = await reorderLocationQa(db, site.organization_id, organizationId, locationId, updates)
     return jsonResponse(result)
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Q&A reorder failed'

@@ -3,15 +3,15 @@ import { requireSiteAccess } from '~/server/utils/location-access'
 import { defaultLinksPage, getLinksPage } from '~/server/utils/site-links'
 
 export default defineHandler(async (event) => {
-  const siteId = getRouterParam(event, 'siteId')
-  if (!siteId) return jsonResponse({ error: 'Site ID required' }, { status: 400 })
+  const organizationId = getRouterParam(event, 'organizationId')
+  if (!organizationId) return jsonResponse({ error: 'Organization ID required' }, { status: 400 })
 
-  const { db, site } = await requireSiteAccess(event, siteId)
-  const result = await getLinksPage(db, siteId)
+  const { db, site } = await requireSiteAccess(event, organizationId)
+  const result = await getLinksPage(db, organizationId)
 
   return jsonResponse({
     page: result.page ?? defaultLinksPage({
-      organizationId: site.organization_id, siteId, brandName: site.brand_name, }), items: result.items, })
+      organizationId: site.organization_id, brandName: site.brand_name, }), items: result.items, })
 })
 import { defineHandler } from 'nitro';
 import { getRouterParam } from 'nitro/h3';

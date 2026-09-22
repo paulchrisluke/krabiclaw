@@ -3,10 +3,10 @@ import { execute, queryFirst } from '~/server/db'
 import { getClientIp, hashClientIp, incrementHourlyRateLimit } from '~/server/utils/hourly-rate-limit'
 
 export default defineHandler(async (event) => {
-  const siteId = getRouterParam(event, 'siteId')
+  const organizationId = event.context.organizationId as string | null | undefined
   const slug = getRouterParam(event, 'slug')
   const reviewId = getRouterParam(event, 'reviewId')
-  if (!siteId || !slug || !reviewId) return jsonResponse({ error: 'Missing params' }, { status: 400 })
+  if (!organizationId || !slug || !reviewId) return jsonResponse({ error: 'Missing params' }, { status: 400 })
 
   const env = cloudflareEnv(event)
   const db = env.db
@@ -18,7 +18,7 @@ export default defineHandler(async (event) => {
     JOIN business_locations bl ON bl.id = r.location_id
     WHERE r.id = ? AND r.site_id = ? AND bl.slug = ? AND r.status = 'approved'
     LIMIT 1
-  `, [reviewId, siteId, slug])
+  `, [reviewId, organizationId, slug])
   if (!review) return jsonResponse({ error: 'Review not found' }, { status: 404 })
 
   const ipHash = await hashClientIp(getClientIp(event))

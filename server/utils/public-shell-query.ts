@@ -61,8 +61,8 @@ export function appendPublicShellQueries(
                   AND social_ma.status = 'active'
                   AND social_ma.organization_id = bl.organization_id
                   AND social_ma.site_id = bl.site_id
-               WHERE bl.organization_id = ? AND bl.site_id = ? AND bl.status = 'active'
-               ORDER BY bl.title ASC`, [organizationId, siteId]),
+               WHERE bl.organization_id = ?  AND bl.status = 'active'
+               ORDER BY bl.title ASC`, [organizationId]),
     config: push(`SELECT setting.key, setting.value
                 FROM sites s, json_each(s.settings_json, '$.config') setting
                WHERE s.organization_id = ? AND s.id = ?
@@ -70,9 +70,9 @@ export function appendPublicShellQueries(
               `, [organizationId, siteId]),
     locales: push(`SELECT locale, label, is_source, status
                 FROM site_locales
-               WHERE organization_id = ? AND site_id = ?
+               WHERE organization_id = ? 
                  AND (is_source = 1 OR status = 'published')
-               ORDER BY is_source DESC, locale ASC`, [organizationId, siteId]),
+               ORDER BY is_source DESC, locale ASC`, [organizationId]),
     // Where this site has something to show: the Product is published to the
     // site, offered and published at the location, and active itself. All three
     // are separate states (see product_publications / product_locations in
@@ -88,10 +88,10 @@ export function appendPublicShellQueries(
                               JOIN products p ON p.id = pl.product_id AND p.organization_id = pl.organization_id
                               JOIN product_publications pp ON pp.product_id = p.id AND pp.organization_id = p.organization_id
                               LEFT JOIN product_booking_configs bc ON bc.product_id = p.id AND bc.organization_id = p.organization_id
-                             WHERE pl.organization_id = ? AND pp.site_id = ? AND pp.published = 1
+                             WHERE pl.organization_id = ?  AND pp.published = 1
                                AND pl.published = 1 AND pl.active = 1 AND p.active = 1
                              GROUP BY pl.location_id
-                             ORDER BY pl.location_id`, [organizationId, siteId]),
+                             ORDER BY pl.location_id`, [organizationId]),
   }
 }
 

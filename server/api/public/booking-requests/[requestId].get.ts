@@ -15,10 +15,10 @@ import { getRouterParam } from 'nitro/h3'
  * precisely so the two could not disagree.
  */
 export default defineHandler(async (event) => {
-  const siteId = getRouterParam(event, 'siteId')
+  const organizationId = event.context.organizationId as string | null | undefined
   const requestId = getRouterParam(event, 'requestId')
   const token = readBearerToken(event.req.headers.get('authorization'))
-  if (!siteId || !requestId || !token) {
+  if (!organizationId || !requestId || !token) {
     return jsonResponse({ error: 'Missing required parameters' }, { status: 400 })
   }
 
@@ -34,10 +34,10 @@ export default defineHandler(async (event) => {
        AND json_extract(payload_json, '$.cancellation.used_at') IS NULL
        AND json_extract(payload_json, '$.cancellation.expires_at') > ?
      LIMIT 1
-  `, [requestId, siteId, tokenHash, new Date().toISOString()])
+  `, [requestId, organizationId, tokenHash, new Date().toISOString()])
   if (!spendable) return jsonResponse({ error: 'Booking not found' }, { status: 404 })
 
-  const request = await getGuestRequest(db, requestId, siteId)
+  const request = await getGuestRequest(db, requestId, organizationId)
   const record = request ? await getThreadOperationalRecord(db, request.id) : null
   if (!request || request.kind === 'contact' || !record) {
     return jsonResponse({ error: 'Booking not found' }, { status: 404 })

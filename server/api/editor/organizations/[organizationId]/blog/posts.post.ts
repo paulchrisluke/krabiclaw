@@ -5,10 +5,10 @@ import { httpErrorDetails } from "~/server/utils/http-error";
 import { finalizeRequestMetrics } from "~/server/utils/request-metrics";
 
 export default defineHandler(async (event) => {
-  const siteId = getRouterParam(event, "siteId");
+  const organizationId = getRouterParam(event, "organizationId");
   const body = await readBody(event);
 
-  if (!siteId || Array.isArray(siteId)) {
+  if (!organizationId || Array.isArray(organizationId)) {
     return jsonResponse(
       { error: "Site ID is required" }, { status: 400 }, );
   }
@@ -19,10 +19,10 @@ export default defineHandler(async (event) => {
   }
 
   try {
-    const { env, db, session, site } = await requireBlogAccess(event, siteId);
+    const { env, db, session, site } = await requireBlogAccess(event, organizationId);
 
     const result = await createBlogPost(db, session.user.id, body as PlatformBlogCreateInput, {
-      site_id: siteId, organization_id: site.organization_id, }, env);
+      site_id: organizationId, organization_id: site.organization_id, }, env);
 
     return jsonResponse(finalizeRequestMetrics(event, 'editor-blog-post-create', result));
   } catch (error) {

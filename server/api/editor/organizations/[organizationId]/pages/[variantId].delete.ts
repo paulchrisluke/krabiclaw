@@ -6,17 +6,17 @@ import { requireTenantPageWriteAccess } from '~/server/utils/tenant-pages-api'
 import { deleteTenantPage } from '~/server/utils/content/pages'
 
 export default defineHandler(async (event) => {
-  const siteId = getRouterParam(event, 'siteId')
+  const organizationId = getRouterParam(event, 'organizationId')
   const variantId = getRouterParam(event, 'variantId')
-  if (!siteId || !variantId) return jsonResponse({ error: 'Site and page IDs are required' }, { status: 400 })
-  const { env, db, site } = await requireTenantPageWriteAccess(event, siteId)
+  if (!organizationId || !variantId) return jsonResponse({ error: 'Site and page IDs are required' }, { status: 400 })
+  const { env, db, site } = await requireTenantPageWriteAccess(event, organizationId)
   try {
     const body = await readRequiredBody<{ expectedUpdatedAt?: string }>(event)
     if (typeof body.expectedUpdatedAt !== 'string' || !body.expectedUpdatedAt) {
       return jsonResponse({ error: 'expectedUpdatedAt is required' }, { status: 400 })
     }
     const payload = await deleteTenantPage(db, variantId, {
-      scope: { siteId, organizationId: site.organization_id }, expectedUpdatedAt: body.expectedUpdatedAt, env,
+      scope: { organizationId }, expectedUpdatedAt: body.expectedUpdatedAt, env,
     })
     return jsonResponse(finalizeRequestMetrics(event, 'editor-tenant-page-delete', payload))
   } catch (error) {

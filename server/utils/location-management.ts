@@ -295,14 +295,14 @@ async function loadLocation(
   // never shadow the row actually addressed by that id.
   const byId = await queryFirst<LocationRecord>(
     db,
-    `SELECT ${columns} FROM business_locations WHERE id = ? AND organization_id = ? AND site_id = ? LIMIT 1`,
-    [locationIdOrSlug, organizationId, siteId],
+    `SELECT ${columns} FROM business_locations WHERE id = ? AND organization_id = ?  LIMIT 1`,
+    [locationIdOrSlug, organizationId],
   );
   if (byId) return byId;
   return queryFirst<LocationRecord>(
     db,
-    `SELECT ${columns} FROM business_locations WHERE slug = ? AND organization_id = ? AND site_id = ? LIMIT 1`,
-    [locationIdOrSlug, organizationId, siteId],
+    `SELECT ${columns} FROM business_locations WHERE slug = ? AND organization_id = ?  LIMIT 1`,
+    [locationIdOrSlug, organizationId],
   );
 }
 

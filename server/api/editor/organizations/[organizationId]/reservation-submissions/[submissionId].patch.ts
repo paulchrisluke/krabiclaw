@@ -1,4 +1,4 @@
-// PATCH /api/editor/sites/[siteId]/reservation-submissions/[submissionId]
+// PATCH /api/editor/sites/[organizationId]/reservation-submissions/[submissionId]
 //
 // Delegates to the same canonical guest-thread operation service the dashboard inbox
 // uses (issue #442 Locked Decision #4), so both surfaces share one state-mutation +
@@ -14,9 +14,9 @@ import { publishDashboardInvalidation } from '~/server/cloudflare/guest-inbox-ev
 const STATUS_TO_ACTION = { cancelled: 'cancel' } as const
 
 export default defineHandler(async (event) => {
-  const siteId = getRouterParam(event, 'siteId')
+  const organizationId = getRouterParam(event, 'organizationId')
   const submissionId = getRouterParam(event, 'submissionId')
-  if (!siteId || !submissionId) return jsonResponse({ error: 'Missing params' }, { status: 400 })
+  if (!organizationId || !submissionId) return jsonResponse({ error: 'Missing params' }, { status: 400 })
 
   const env = cloudflareEnv(event)
   const db = env.DB
@@ -25,7 +25,7 @@ export default defineHandler(async (event) => {
   const session = await getAuthSession(event, env)
   if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
-  const site = await loadMemberSiteRow(event, db, env, siteId, session.user.id)
+  const site = await loadMemberSiteRow(event, db, env, organizationId, session.user.id)
   if (!site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
 
   // The table held is its own row: it carries the location and the status this
@@ -33,10 +33,10 @@ export default defineHandler(async (event) => {
   const submission = await queryFirst<{ location_id: string; status: string; updated_at: string }>(db, `
     SELECT res.location_id, res.status, r.updated_at
       FROM requests r JOIN reservations res ON res.request_id = r.id
-     WHERE r.kind = 'reservation' AND r.id = ? AND r.site_id = ? LIMIT 1`, [submissionId, siteId])
+     WHERE r.kind = 'reservation' AND r.id = ? AND r.site_id = ? LIMIT 1`, [submissionId, organizationId])
   if (!submission) return jsonResponse({ error: 'Reservation not found' }, { status: 404 })
 
-  await assertResourceAccess(db, { ...memberAccessPrincipal(site.membership, { env, siteId, event }), resourceLocationId: submission.location_id })
+  await assertResourceAccess(db, { ...memberAccessPrincipal(site.membership, { env, organizationId, event }), resourceLocationId: submission.location_id })
 
   const body = await readBody(event) as { status?: unknown }
   const status = cleanString(body.status, 20)
@@ -47,7 +47,7 @@ export default defineHandler(async (event) => {
 
 
   const outcome = await executeGuestThreadOperation(db, {
-    threadId: submissionId, siteId, action, actorUserId: session.user.id, env, idempotencyKey: `editor:reservation:${submissionId}:${submission.status}:${submission.updated_at}:${action}`, })
+    threadId: submissionId, organizationId, action, actorUserId: session.user.id, env, idempotencyKey: `editor:reservation:${submissionId}:${submission.status}:${submission.updated_at}:${action}`, })
 
   if (!outcome.ok) {
     if (outcome.reason === 'thread_not_found' || outcome.reason === 'source_not_found') {
@@ -60,7 +60,7 @@ export default defineHandler(async (event) => {
   }
 
   await publishDashboardInvalidation(env, {
-    eventId: crypto.randomUUID(), type: 'thread.changed', organizationId: outcome.thread.organization_id, siteId, locationId: outcome.thread.location_id, threadId: outcome.thread.id, occurredAt: new Date().toISOString(), })
+    eventId: crypto.randomUUID(), type: 'thread.changed', organizationId: outcome.thread.organization_id, locationId: outcome.thread.location_id, threadId: outcome.thread.id, occurredAt: new Date().toISOString(), })
 
   return jsonResponse({ updated: true, submission_id: submissionId, status })
 })

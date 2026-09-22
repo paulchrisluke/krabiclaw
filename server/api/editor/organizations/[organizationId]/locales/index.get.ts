@@ -5,8 +5,8 @@ import { requireSiteAccess } from '~/server/utils/location-access'
 import { getSiteLanguageSettings } from '~/server/utils/site-languages'
 
 export default defineHandler(async (event) => {
-  const siteId = getRouterParam(event, 'siteId')
-  if (!siteId) throw createError({ statusCode: 400, statusMessage: 'Site ID required' })
-  const { env, db, site } = await requireSiteAccess(event, siteId)
-  return await getSiteLanguageSettings(db, env, { organizationId: site.organization_id, siteId })
+  const organizationId = getRouterParam(event, 'organizationId')
+  if (!organizationId) throw createError({ statusCode: 400, statusMessage: 'Organization ID required' })
+  const { env, db, site } = await requireSiteAccess(event, organizationId)
+  return await getSiteLanguageSettings(db, env, { organizationId: site.organization_id })
 })

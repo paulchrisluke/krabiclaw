@@ -1,15 +1,15 @@
-// PATCH /api/editor/sites/[siteId]/locations/[locationId]/qa/[qaId]
+// PATCH /api/editor/sites/[organizationId]/locations/[locationId]/qa/[qaId]
 import { cleanString, jsonResponse } from '~/server/utils/api-response'
 import { updateLocationQa } from '~/server/utils/mcp-workflows'
 import { requireLocationAccess } from '~/server/utils/location-access'
 
 export default defineHandler(async (event) => {
-  const siteId = getRouterParam(event, 'siteId')
+  const organizationId = getRouterParam(event, 'organizationId')
   const locationId = getRouterParam(event, 'locationId')
   const qaId = getRouterParam(event, 'qaId')
-  if (!siteId || !locationId || !qaId) return jsonResponse({ error: 'Missing params' }, { status: 400 })
+  if (!organizationId || !locationId || !qaId) return jsonResponse({ error: 'Missing params' }, { status: 400 })
 
-  const { db, site } = await requireLocationAccess(event, siteId, locationId)
+  const { db, site } = await requireLocationAccess(event, organizationId, locationId)
 
   const rawBody = await readBody(event)
   if (typeof rawBody !== 'object' || rawBody === null || Array.isArray(rawBody)) {
@@ -25,7 +25,7 @@ export default defineHandler(async (event) => {
   }
 
   try {
-    const result = await updateLocationQa(db, site.organization_id, siteId, locationId, qaId, {
+    const result = await updateLocationQa(db, site.organization_id, organizationId, locationId, qaId, {
       question: body.question !== undefined ? cleanString(body.question, 500) : undefined, answer: body.answer !== undefined ? cleanString(body.answer, 2000) : undefined, question_author: body.question_author !== undefined ? cleanString(body.question_author, 120) : undefined, is_owner_answer: body.is_owner_answer, status: body.status !== undefined ? cleanString(body.status, 20) : undefined, sort_order: body.sort_order, })
     return jsonResponse(result)
   } catch (error) {

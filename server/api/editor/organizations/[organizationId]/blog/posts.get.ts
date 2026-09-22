@@ -3,16 +3,16 @@ import { loadDashboardBlogPosts } from '~/server/utils/dashboard-editor-resource
 import { httpErrorDetails } from "~/server/utils/http-error";
 
 export default defineHandler(async (event) => {
-  const siteId = getRouterParam(event, "siteId");
+  const organizationId = getRouterParam(event, "organizationId");
   const status = getQuery(event).status as string | undefined;
 
-  if (!siteId || Array.isArray(siteId)) {
+  if (!organizationId || Array.isArray(organizationId)) {
     return jsonResponse(
       { error: "Site ID is required" }, { status: 400 }, );
   }
 
   try {
-    return jsonResponse(await loadDashboardBlogPosts(event, siteId, status));
+    return jsonResponse(await loadDashboardBlogPosts(event, organizationId, status));
   } catch (error) {
     console.error("Failed to list blog posts:", error);
     const { message, statusCode } = httpErrorDetails(error, "Failed to list blog posts");

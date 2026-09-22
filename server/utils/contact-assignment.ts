@@ -19,15 +19,15 @@ export interface ContactSubmissionAssignment {
 export async function resolveContactSubmissionAssignment(
   db: DbClient,
   opts: {
-    siteId: string
+    organizationId: string
     locationId?: string | null
   },
 ): Promise<ContactSubmissionAssignment> {
   if (!opts.locationId) return { selectedLocation: null, assignedLocationId: null, error: null }
   const selectedLocation = await queryFirst<{ id: string; title: string }>(
     db,
-    'SELECT id, title FROM business_locations WHERE id = ? AND site_id = ? LIMIT 1',
-    [opts.locationId, opts.siteId],
+    'SELECT id, title FROM business_locations WHERE id = ? AND organization_id = ? LIMIT 1',
+    [opts.locationId, opts.organizationId],
   )
   if (!selectedLocation) {
     return {

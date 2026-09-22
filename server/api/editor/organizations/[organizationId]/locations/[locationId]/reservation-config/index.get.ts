@@ -6,20 +6,20 @@ import { defineHandler } from 'nitro'
 import { getRouterParam } from 'nitro/h3'
 
 export default defineHandler(async (event) => {
-  const siteId = getRouterParam(event, 'siteId')
+  const organizationId = getRouterParam(event, 'organizationId')
   const locationId = getRouterParam(event, 'locationId')
-  if (!siteId || !locationId) return jsonResponse({ error: 'Site ID and location ID are required' }, { status: 400 })
+  if (!organizationId || !locationId) return jsonResponse({ error: 'Site ID and location ID are required' }, { status: 400 })
   try {
-    const { db, site } = await requireLocationAccess(event, siteId, locationId)
+    const { db, site } = await requireLocationAccess(event, organizationId, locationId)
     const config = await getLocationReservationConfig(db, { organizationId: site.organization_id, locationId })
     // A null config means this location does not take reservations. That is
     // the answer, not an empty policy to be filled with defaults.
     if (!config) return jsonResponse({ success: true, config: null, summary: null })
-    const locale = await getSourceLocale(db, site.organization_id, siteId)
+    const locale = await getSourceLocale(db, site.organization_id, organizationId)
     return jsonResponse({ success: true, config, summary: renderBookingPolicySummary(reservationPolicySummarySource(config), locale) })
   } catch (error) {
     rethrowHttpError(error)
-    console.error('reservation_config_read_failed', { siteId, locationId, error: error instanceof Error ? error.message : String(error) })
+    console.error('reservation_config_read_failed', { organizationId, locationId, error: error instanceof Error ? error.message : String(error) })
     return jsonResponse({ error: 'Failed to read the reservation policy' }, { status: 500 })
   }
 })

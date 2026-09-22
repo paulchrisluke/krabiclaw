@@ -92,7 +92,7 @@ export function getR2KeyFromPublicUrl(env: ApiRecord, value: string): string | n
 }
 
 /** Generate a namespaced R2 key for a media asset. */
-export function buildR2Key(siteId: string, assetId: string, filename: string): string {
+export function buildR2Key(organizationId: string, assetId: string, filename: string): string {
   const sanitizeSegment = (value: string, label: string): string => {
     const trimmed = String(value).trim().replace(/^\/+|\/+$/g, '')
     if (!trimmed) throw new Error(`Invalid ${label}`)
@@ -102,7 +102,7 @@ export function buildR2Key(siteId: string, assetId: string, filename: string): s
     return trimmed
   }
 
-  const safeSiteId = sanitizeSegment(siteId, 'siteId')
+  const safeSiteId = sanitizeSegment(organizationId, 'organizationId')
   const safeAssetId = sanitizeSegment(assetId, 'assetId')
   const safeFilename = sanitizeSegment(filename, 'filename')
   const dotIndex = safeFilename.lastIndexOf('.')

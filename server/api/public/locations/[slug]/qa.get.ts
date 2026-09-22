@@ -1,18 +1,18 @@
-// GET /api/public/sites/[siteId]/locations/[slug]/qa
+// GET /api/public/sites/[organizationId]/locations/[slug]/qa
 import { queryAll, queryFirst } from '~/server/db'
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 
 export default defineHandler(async (event) => {
-  const siteId = getRouterParam(event, 'siteId')
+  const organizationId = event.context.organizationId as string | null | undefined
   const slug = getRouterParam(event, 'slug')
-  if (!siteId || !slug) return jsonResponse({ error: 'Missing params' }, { status: 400 })
+  if (!organizationId || !slug) return jsonResponse({ error: 'Missing params' }, { status: 400 })
 
   const env = cloudflareEnv(event)
   const db = env.db
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
 
   const location = await queryFirst<{ id: string }>(
-    db, `SELECT id FROM business_locations WHERE site_id = ? AND slug = ? AND status = 'active' LIMIT 1`, [siteId, slug], )
+    db, `SELECT id FROM business_locations WHERE site_id = ? AND slug = ? AND status = 'active' LIMIT 1`, [organizationId, slug], )
   if (!location) return jsonResponse({ error: 'Location not found' }, { status: 404 })
 
   const results = await queryAll(

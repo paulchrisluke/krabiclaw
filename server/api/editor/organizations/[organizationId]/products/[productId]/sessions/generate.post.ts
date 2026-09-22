@@ -13,13 +13,13 @@ import { getRouterParam } from 'nitro/h3'
  * happens twice, on a daylight-saving boundary.
  */
 export default defineHandler(async (event) => {
-  const siteId = getRouterParam(event, 'siteId')
+  const organizationId = getRouterParam(event, 'organizationId')
   const productId = getRouterParam(event, 'productId')
-  if (!siteId || !productId) return jsonResponse({ error: 'Site ID and product ID are required' }, { status: 400 })
+  if (!organizationId || !productId) return jsonResponse({ error: 'Site ID and product ID are required' }, { status: 400 })
   try {
-    const { db, session, site } = await requireSiteAccess(event, siteId)
+    const { db, session, site } = await requireSiteAccess(event, organizationId)
     // A product id in the path is not authorized by the site in the path.
-    await requireSiteProduct(db, { organizationId: site.organization_id, siteId, productId })
+    await requireSiteProduct(db, { organizationId: site.organization_id, productId })
     const body = await readStrictBody<{ through: unknown; from?: unknown }>(event, { through: 'unknown', from: 'unknown' })
     if (typeof body.through !== 'string') return jsonResponse({ error: 'through must be a YYYY-MM-DD date' }, { status: 400 })
     const result = await materializeSessions(db, {
@@ -30,7 +30,7 @@ export default defineHandler(async (event) => {
     return jsonResponse({ success: true, ...result })
   } catch (error) {
     rethrowHttpError(error)
-    console.error('sessions_generate_failed', { siteId, productId, error: error instanceof Error ? error.message : String(error) })
+    console.error('sessions_generate_failed', { organizationId, productId, error: error instanceof Error ? error.message : String(error) })
     return jsonResponse({ error: 'Failed to generate sessions' }, { status: 500 })
   }
 })

@@ -17,8 +17,8 @@ interface SiteLanguageRow {
 async function loadLanguage(db: DbClient, organizationId: string, siteId: string, locale: string) {
   return await queryFirst<SiteLanguageRow>(db, `
     SELECT id, locale, status, activated_at, disabled_at FROM site_locales
-     WHERE organization_id = ? AND site_id = ? AND locale = ?
-  `, [organizationId, siteId, locale])
+     WHERE organization_id = ?  AND locale = ?
+  `, [organizationId, locale])
 }
 
 /**
@@ -77,11 +77,11 @@ export async function publishSiteLanguage(
   const result = await execute(db, `
     UPDATE site_locales SET status = 'published',
       activated_at = COALESCE(activated_at, ?), disabled_at = NULL, updated_at = ?
-     WHERE organization_id = ? AND site_id = ? AND locale = ? AND is_source = 0
+     WHERE organization_id = ?  AND locale = ? AND is_source = 0
        AND (SELECT COUNT(*) FROM site_locales other
               WHERE other.organization_id = ? AND other.site_id = ? AND other.is_source = 0
                 AND other.status = 'published' AND other.locale <> ?) < 2
-  `, [now, now, input.organizationId, input.siteId, locale, input.organizationId, input.siteId, locale])
+  `, [now, now, input.organizationId, locale, input.organizationId, input.siteId, locale])
   if (result.meta?.changes !== 1) localizationError(409, 'LANGUAGE_ENTITLEMENT_REQUIRED', 'Language could not be published because two secondary languages are already published.')
   return await loadLanguage(db, input.organizationId, input.siteId, locale)
 }
@@ -94,7 +94,7 @@ export async function disableSiteLanguage(
   if (locale === 'en') localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', 'English cannot be disabled')
   const now = new Date().toISOString()
   await execute(db, `UPDATE site_locales SET status = 'disabled', disabled_at = COALESCE(disabled_at, ?), updated_at = ?
-    WHERE organization_id = ? AND site_id = ? AND locale = ? AND is_source = 0`, [now, now, input.organizationId, input.siteId, locale])
+    WHERE organization_id = ?  AND locale = ? AND is_source = 0`, [now, now, input.organizationId, locale])
   return await loadLanguage(db, input.organizationId, input.siteId, locale)
 }
 
@@ -107,7 +107,7 @@ export async function deleteDisabledSiteLanguageContent(
   const language = await loadLanguage(db, input.organizationId, input.siteId, locale)
   if (language && language.status !== 'disabled') localizationError(409, 'LOCALIZATION_VALIDATION_FAILED', 'Disable the language before permanently deleting its content', { locale })
   const documents = await queryAll<{ id: string }>(db, `SELECT id FROM content_documents
-    WHERE organization_id = ? AND site_id = ? AND locale = ? AND row_role = 'representation'`, [input.organizationId, input.siteId, locale])
+    WHERE organization_id = ?  AND locale = ? AND row_role = 'representation'`, [input.organizationId, locale])
   const statements = [
     { query: `UPDATE site_locales SET locale = NULL WHERE organization_id = ? AND site_id = ? AND locale = ? AND status <> 'disabled'`, params: [input.organizationId, input.siteId, locale] },
     { query: `DELETE FROM site_redirects WHERE organization_id = ? AND site_id = ? AND locale = ?`, params: [input.organizationId, input.siteId, locale] },
@@ -130,8 +130,8 @@ export async function getSiteLanguageSettings(
     getOrganizationBillingStatus(env, db, input.organizationId),
     queryAll(db, `
       SELECT locale, label, is_source, status FROM site_locales
-       WHERE organization_id = ? AND site_id = ?
-    `, [input.organizationId, input.siteId]),
+       WHERE organization_id = ? 
+    `, [input.organizationId]),
   ])
   const availableCatalogs = PLATFORM_LOCALES.filter(catalog => catalog.locale !== 'en')
     .map(({ locale, label, direction }) => ({ locale, label, direction }))

@@ -4,10 +4,10 @@ import { httpErrorDetails } from "~/server/utils/http-error";
 import { requireSiteAccess } from "~/server/utils/location-access";
 
 export default defineHandler(async (event) => {
-  const siteId = getRouterParam(event, "siteId");
+  const organizationId = getRouterParam(event, "organizationId");
   const postId = getRouterParam(event, "postId");
 
-  if (!siteId || Array.isArray(siteId)) {
+  if (!organizationId || Array.isArray(organizationId)) {
     return jsonResponse(
       { error: "Site ID is required" }, { status: 400 }, );
   }
@@ -18,9 +18,9 @@ export default defineHandler(async (event) => {
   }
 
   try {
-    const { db } = await requireSiteAccess(event, siteId);
+    const { db } = await requireSiteAccess(event, organizationId);
 
-    await deleteBlogPost(db, postId, siteId);
+    await deleteBlogPost(db, postId, organizationId);
 
     return jsonResponse({ success: true });
   } catch (error) {

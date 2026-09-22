@@ -567,8 +567,8 @@ export async function claimSessionCapacity(db: DbClient, input: {
 
   if (input.requestId) {
     const existing = await queryFirst<{ id: string }>(db, `
-      SELECT id FROM bookings WHERE organization_id = ? AND site_id = ? AND request_id = ?
-    `, [input.organizationId, input.siteId, input.requestId])
+      SELECT id FROM bookings WHERE organization_id = ?  AND request_id = ?
+    `, [input.organizationId, input.requestId])
     if (existing) return { bookingId: existing.id }
   }
 

@@ -19,8 +19,8 @@ function destinationHost(value: string): string | null {
 }
 
 export default defineHandler(async (event) => {
-  const siteId = getRouterParam(event, 'siteId')
-  if (!siteId) return jsonResponse({ error: 'siteId required' }, { status: 400 })
+  const organizationId = event.context.organizationId as string | null | undefined
+  if (!organizationId) return jsonResponse({ error: 'organizationId required' }, { status: 400 })
   const db = cloudflareEnv(event).db
   if (!db) return jsonResponse({ error: 'Database unavailable' }, { status: 503 })
   let body: ApiRecord
@@ -29,12 +29,12 @@ export default defineHandler(async (event) => {
   const eventName = cleanString(body.event_name, 80)
   if (!VALID_EVENTS.has(eventName)) return jsonResponse({ error: 'Invalid event_name' }, { status: 400 })
   const site = await queryFirst<{ id: string; organization_id: string; vertical: string | null }>(db,
-    `SELECT id, organization_id, vertical FROM sites WHERE id = ? AND status = 'active' AND onboarding_status = 'active' LIMIT 1`, [siteId])
+    `SELECT id, organization_id, vertical FROM sites WHERE id = ? AND status = 'active' AND onboarding_status = 'active' LIMIT 1`, [organizationId])
   if (!site || !normalizeVertical(site.vertical)) return jsonResponse({ error: 'Site not found' }, { status: 404 })
 
   const ipHash = await hashClientIp(getClientIp(event))
   const hour = new Date().toISOString().slice(0, 13)
-  if (!await incrementHourlyRateLimit(db, `rate:conversion:${siteId}:ip:${ipHash}:${hour}`, import.meta.dev ? 1000 : 120, HOUR_MS)) {
+  if (!await incrementHourlyRateLimit(db, `rate:conversion:${organizationId}:ip:${ipHash}:${hour}`, import.meta.dev ? 1000 : 120, HOUR_MS)) {
     return jsonResponse({ error: 'Too many events. Please try again later.' }, { status: 429 })
   }
 
@@ -55,12 +55,12 @@ export default defineHandler(async (event) => {
     if (pagePath && (!pagePath.startsWith('/') || pagePath.includes('?') || pagePath.includes('#'))) return jsonResponse({ error: 'Invalid page_path' }, { status: 400 })
     const pageId = cleanString(body.page_id, 120)
     if (pageId) {
-      const page = await queryFirst<{ id: string }>(db, "SELECT id FROM content_documents WHERE kind = 'page' AND id = ? AND site_id = ? LIMIT 1", [pageId, siteId])
+      const page = await queryFirst<{ id: string }>(db, "SELECT id FROM content_documents WHERE kind = 'page' AND id = ? AND site_id = ? LIMIT 1", [pageId, organizationId])
       if (!page) return jsonResponse({ error: 'Page not found' }, { status: 404 })
       entityType = 'content_document'; entityId = page.id
     }
     if (stage === 'external_booking_handoff') {
-      const consultation = await queryFirst<{ external_url: string | null }>(db, `SELECT (settings_json ->> '$.consultation.external_url') AS external_url FROM sites WHERE id = ? AND (settings_json ->> '$.consultation.mode') = 'external_url' LIMIT 1`, [siteId])
+      const consultation = await queryFirst<{ external_url: string | null }>(db, `SELECT (settings_json ->> '$.consultation.external_url') AS external_url FROM sites WHERE id = ? AND (settings_json ->> '$.consultation.mode') = 'external_url' LIMIT 1`, [organizationId])
       const host = consultation?.external_url ? destinationHost(consultation.external_url) : null
       if (!host) return jsonResponse({ error: 'Consultation destination is unavailable' }, { status: 404 })
       ctaDestination = host
@@ -82,7 +82,7 @@ export default defineHandler(async (event) => {
       JOIN product_publications pub ON pub.product_id = p.id AND pub.organization_id = p.organization_id AND pub.site_id = ? AND pub.published = 1
       JOIN product_locations pl ON pl.product_id = p.id AND pl.organization_id = p.organization_id AND pl.location_id = ? AND pl.published = 1 AND pl.active = 1
       JOIN business_locations bl ON bl.organization_id = p.organization_id AND bl.id = pl.location_id AND bl.site_id = ?
-      WHERE p.id = ? AND p.active = 1 AND p.order_url IS NOT NULL LIMIT 1`, [siteId, locationId, siteId, entityId])
+      WHERE p.id = ? AND p.active = 1 AND p.order_url IS NOT NULL LIMIT 1`, [organizationId, locationId, organizationId, entityId])
     if (!product || !destinationHost(product.order_url)) return jsonResponse({ error: 'Product not found' }, { status: 404 })
     const destinationHostname = new URL(product.order_url).hostname.toLowerCase()
     entityType = 'product'; ctaDestination = destinationHostname; pageType = 'product'; metadata = { product_id: product.id, destination_hostname: destinationHostname }
@@ -95,7 +95,7 @@ export default defineHandler(async (event) => {
       JOIN content_documents root ON root.id = COALESCE(d.root_id,d.id)
       JOIN content_blocks source ON source.id = COALESCE(b.source_block_id,b.id)
       WHERE b.id = ? AND d.site_id = ? AND b.type = 'cta' AND root.kind = 'page' AND root.row_role = 'root'
-        AND (root.metadata_json ->> '$.recipe') = 'links' AND (source.data_json ->> '$.status') = 'active' LIMIT 1`, [entityId, siteId])
+        AND (root.metadata_json ->> '$.recipe') = 'links' AND (source.data_json ->> '$.status') = 'active' LIMIT 1`, [entityId, organizationId])
     const host = link ? destinationHost(link.destination) : null
     if (!link || !host) return jsonResponse({ error: 'Link item not found' }, { status: 404 })
     entityType = 'content_block'; ctaDestination = host; pageType = 'links'; pagePath = link.page_path
@@ -111,7 +111,7 @@ export default defineHandler(async (event) => {
         FROM content_documents v JOIN content_documents root ON root.id = COALESCE(v.root_id,v.id)
        WHERE v.id = ? AND v.site_id = ? AND root.kind = 'page' AND root.row_role = 'root' AND (root.metadata_json ->> '$.recipe') = 'donate'
        LIMIT 1
-    `, [documentId, siteId])
+    `, [documentId, organizationId])
     if (!page) return jsonResponse({ error: 'Donation page not found' }, { status: 404 })
     const blocks = await queryAll<{ data_json: string }>(db, `SELECT cb.data_json FROM content_documents cd JOIN content_blocks cb ON cb.document_id = cd.id WHERE cd.id = ? AND cb.type = 'donation_choices'`, [documentId])
     const choices = blocks.flatMap((row) => {
@@ -139,7 +139,7 @@ export default defineHandler(async (event) => {
   }
 
   const result = await recordSiteConversionEvent(db, event, {
-    organizationId: site.organization_id, siteId, eventName: eventName as SiteConversionEventName,
+    organizationId: site.organization_id, eventName: eventName as SiteConversionEventName,
     stage, locationId, entityType, entityId, pageType, pagePath, ctaDestination, metadata,
   })
   return jsonResponse({ success: true, id: result.id }, { status: 201 })

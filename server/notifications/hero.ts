@@ -21,10 +21,10 @@ export interface HeroImage {
 
 async function firstPlacement(
   db: DbClient,
-  input: { siteId: string; ownerType: 'product' | 'business_location'; ownerId: string; slot: string },
+  input: { organizationId: string; ownerType: 'product' | 'business_location'; ownerId: string; slot: string },
 ): Promise<HeroImage | null> {
   const placements = await getMediaPlacements(db, {
-    siteId: input.siteId,
+    organizationId: input.organizationId,
     ownerType: input.ownerType,
     ownerIds: [input.ownerId],
     slot: input.slot,
@@ -38,15 +38,15 @@ async function firstPlacement(
 }
 
 /** An experience's cover. */
-export async function productHero(db: DbClient, siteId: string, productId: string | null | undefined): Promise<HeroImage | null> {
+export async function productHero(db: DbClient, organizationId: string, productId: string | null | undefined): Promise<HeroImage | null> {
   if (!productId) return null
-  return firstPlacement(db, { siteId, ownerType: 'product', ownerId: productId, slot: 'image' })
+  return firstPlacement(db, { organizationId, ownerType: 'product', ownerId: productId, slot: 'image' })
 }
 
 /** A location's hero, for a reservation with no product of its own. */
-export async function locationHero(db: DbClient, siteId: string, locationId: string | null | undefined): Promise<HeroImage | null> {
+export async function locationHero(db: DbClient, organizationId: string, locationId: string | null | undefined): Promise<HeroImage | null> {
   if (!locationId) return null
-  return firstPlacement(db, { siteId, ownerType: 'business_location', ownerId: locationId, slot: 'hero' })
+  return firstPlacement(db, { organizationId, ownerType: 'business_location', ownerId: locationId, slot: 'hero' })
 }
 
 /**

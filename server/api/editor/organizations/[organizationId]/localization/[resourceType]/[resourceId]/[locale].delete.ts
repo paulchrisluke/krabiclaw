@@ -7,14 +7,14 @@ import { isDemoOrg } from '~/server/utils/demo'
 import { hasPlatformEventPermission } from '~/server/utils/platform-admin-users'
 
 export default defineHandler(async (event) => {
-  const siteId = getRouterParam(event, 'siteId')
+  const organizationId = getRouterParam(event, 'organizationId')
   const resourceType = getRouterParam(event, 'resourceType')
   const resourceId = getRouterParam(event, 'resourceId')
   const locale = getRouterParam(event, 'locale')
-  if (!siteId || !resourceType || !resourceId || !locale) throw createError({ statusCode: 400, statusMessage: 'Site, resource, and locale route parameters are required' })
-  const { env, db, site } = await requireSiteAccess(event, siteId)
+  if (!organizationId || !resourceType || !resourceId || !locale) throw createError({ statusCode: 400, statusMessage: 'Site, resource, and locale route parameters are required' })
+  const { env, db, site } = await requireSiteAccess(event, organizationId)
   if (isDemoOrg(site.organization_id) && !(await hasPlatformEventPermission(event, env, { platform: ['access'] }))) {
     throw createError({ statusCode: 403, statusMessage: 'Demo site is read-only' })
   }
-  return await deleteLocalization(env, db, { organizationId: site.organization_id, siteId, resourceType, resourceId, locale })
+  return await deleteLocalization(env, db, { organizationId: site.organization_id, resourceType, resourceId, locale })
 })

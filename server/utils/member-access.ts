@@ -106,9 +106,9 @@ export async function findLocationInSite(
 ): Promise<{ id: string } | null> {
   return await queryFirst<{ id: string }>(db, `
     SELECT id FROM business_locations
-    WHERE id = ? AND site_id = ? AND organization_id = ?
+    WHERE id = ?  AND organization_id = ?
     LIMIT 1
-  `, [input.locationId, input.siteId, input.organizationId])
+  `, [input.locationId, input.organizationId])
 }
 
 export function isOrganizationWideRole(role: string): boolean {
@@ -470,14 +470,12 @@ export async function ensureLocationTeam(
     organizationId: input.organizationId,
     name: input.name?.trim() || `Location ${input.locationId}`,
   })
-  await execute(db, `UPDATE business_locations SET team_id = ?, updated_at = ? WHERE id = ? AND site_id = ? AND organization_id = ? AND (team_id IS NULL OR team_id != ?)`, [
+  await execute(db, `UPDATE business_locations SET team_id = ?, updated_at = ? WHERE id = ?  AND organization_id = ? AND (team_id IS NULL OR team_id != ?)`, [
     teamId,
     new Date().toISOString(),
     input.locationId,
-    input.siteId,
     input.organizationId,
-    teamId,
-  ])
+    teamId])
   return teamId
 }
 
@@ -518,9 +516,9 @@ export async function removeMemberResourceAccess(
     ? await queryFirst<{ team_id: string | null }>(db, `
         SELECT team_id
         FROM business_locations
-        WHERE id = ? AND site_id = ? AND organization_id = ?
+        WHERE id = ?  AND organization_id = ?
         LIMIT 1
-      `, [input.locationId, input.siteId, input.organizationId])
+      `, [input.locationId, input.organizationId])
     : await queryFirst<{ team_id: string | null }>(db, `
         SELECT team_id
         FROM sites
@@ -662,10 +660,10 @@ export async function assertSiteContextAccess(db: DbClient, input: MemberAccessP
   if (isOrganizationWideRole(access.role)) return
   if (!isScopedRole(access.role)) throw new HTTPError({ statusCode: 403, message: 'Access denied' })
   const rows = await queryAll<{ team_id: string | null }>(db, `
-    SELECT team_id FROM sites WHERE id = ? AND organization_id = ?
+    SELECT team_id FROM sites WHERE id = ? WHERE organization_id = ?
     UNION ALL
-    SELECT team_id FROM business_locations WHERE site_id = ? AND organization_id = ?
-  `, [input.siteId, input.organizationId, input.siteId, input.organizationId])
+    SELECT team_id FROM business_locations  AND organization_id = ?
+  `, [input.siteId, input.organizationId, input.organizationId])
   if (!rows.some(row => row.team_id && access.teamIds.has(row.team_id))) {
     throw new HTTPError({ statusCode: 404, message: 'Site not found or access denied' })
   }
@@ -682,8 +680,8 @@ export async function listAccessibleLocationIds(db: DbClient, input: MemberAcces
   if (site?.team_id && access.teamIds.has(site.team_id)) return null
   const rows = await queryAll<{ location_id: string; team_id: string | null }>(db, `
     SELECT id AS location_id, team_id FROM business_locations
-    WHERE site_id = ? AND organization_id = ?
-  `, [input.siteId, input.organizationId])
+     WHERE organization_id = ?
+  `, [ input.organizationId])
   return rows.filter(row => row.team_id && access.teamIds.has(row.team_id)).map(row => row.location_id)
 }
 

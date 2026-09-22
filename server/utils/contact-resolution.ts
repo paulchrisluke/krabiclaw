@@ -11,14 +11,14 @@ import { queryFirst, type DbClient } from '~/server/db'
  */
 export async function resolveLocationContact(
   db: DbClient,
-  siteId: string,
+  organizationId: string,
   locationId: string | null,
 ): Promise<{ contactPhone: string | null; contactEmail: string | null }> {
   if (!locationId) return { contactPhone: null, contactEmail: null }
   const location = await queryFirst<{ phone: string | null; email: string | null }>(
     db,
-    `SELECT phone, email FROM business_locations WHERE id = ? AND site_id = ? AND status = 'active' LIMIT 1`,
-    [locationId, siteId],
+    `SELECT phone, email FROM business_locations WHERE id = ? AND organization_id = ? AND status = 'active' LIMIT 1`,
+    [locationId, organizationId],
   )
   return { contactPhone: location?.phone ?? null, contactEmail: location?.email ?? null }
 }

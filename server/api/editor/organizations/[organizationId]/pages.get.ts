@@ -3,11 +3,11 @@ import { requireTenantPageWriteAccess } from '~/server/utils/tenant-pages-api'
 import { listTenantPages } from '~/server/utils/content/pages'
 
 export default defineHandler(async (event) => {
-  const siteId = getRouterParam(event, 'siteId')
-  if (!siteId) return jsonResponse({ error: 'Site ID required' }, { status: 400 })
-  const { db } = await requireTenantPageWriteAccess(event, siteId)
+  const organizationId = getRouterParam(event, 'organizationId')
+  if (!organizationId) return jsonResponse({ error: 'Organization ID required' }, { status: 400 })
+  const { db } = await requireTenantPageWriteAccess(event, organizationId)
   const locale = getQuery(event).locale
-  return jsonResponse({ pages: await listTenantPages(db, siteId, { locale: typeof locale === 'string' ? locale : null }) })
+  return jsonResponse({ pages: await listTenantPages(db, organizationId, { locale: typeof locale === 'string' ? locale : null }) })
 })
 import { defineHandler } from 'nitro';
 import { getQuery, getRouterParam  } from 'nitro/h3';

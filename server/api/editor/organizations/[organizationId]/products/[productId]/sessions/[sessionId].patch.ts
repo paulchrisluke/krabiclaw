@@ -14,14 +14,14 @@ import { getRouterParam } from 'nitro/h3'
  * regeneration will not undo it.
  */
 export default defineHandler(async (event) => {
-  const siteId = getRouterParam(event, 'siteId')
+  const organizationId = getRouterParam(event, 'organizationId')
   const productId = getRouterParam(event, 'productId')
   const sessionId = getRouterParam(event, 'sessionId')
-  if (!siteId || !productId || !sessionId) return jsonResponse({ error: 'Site, product and session IDs are required' }, { status: 400 })
+  if (!organizationId || !productId || !sessionId) return jsonResponse({ error: 'Site, product and session IDs are required' }, { status: 400 })
   try {
-    const { db, session: auth, site } = await requireSiteAccess(event, siteId)
+    const { db, session: auth, site } = await requireSiteAccess(event, organizationId)
     // A product id in the path is not authorized by the site in the path.
-    await requireSiteProduct(db, { organizationId: site.organization_id, siteId, productId })
+    await requireSiteProduct(db, { organizationId: site.organization_id, productId })
     const body = await readStrictBody<{ starts_at?: unknown; ends_at?: unknown; capacity?: unknown; status?: unknown }>(event, {
       starts_at: 'unknown', ends_at: 'unknown', capacity: 'unknown', status: 'unknown',
     })
@@ -44,7 +44,7 @@ export default defineHandler(async (event) => {
     return jsonResponse({ success: true, session_id: sessionId })
   } catch (error) {
     rethrowHttpError(error)
-    console.error('session_update_failed', { siteId, sessionId, error: error instanceof Error ? error.message : String(error) })
+    console.error('session_update_failed', { organizationId, sessionId, error: error instanceof Error ? error.message : String(error) })
     return jsonResponse({ error: 'Failed to update session' }, { status: 500 })
   }
 })

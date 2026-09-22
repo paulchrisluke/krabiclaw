@@ -1329,10 +1329,10 @@ export async function listCollections(db: DbClient, input: {
 }): Promise<Collection[]> {
   const rows = await queryAll<Row>(db, `
     SELECT * FROM collections
-    WHERE organization_id = ? AND site_id = ?
+    WHERE organization_id = ? 
       AND (? = 0 OR location_id IS ?)
     ORDER BY sort_order, name, id
-  `, [input.organizationId, input.siteId, input.locationId === undefined ? 0 : 1, input.locationId ?? null])
+  `, [input.organizationId, input.locationId === undefined ? 0 : 1, input.locationId ?? null])
   return rows.map(mapCollectionRow)
 }
 
@@ -1358,8 +1358,8 @@ async function uniqueCollectionSlug(db: DbClient, organizationId: string, siteId
   for (let attempt = 0; attempt < MAX_SLUG_SUFFIX_ATTEMPTS; attempt += 1) {
     const candidate = slugCandidate(base, attempt)
     const clash = await queryFirst<{ id: string }>(db, `
-      SELECT id FROM collections WHERE organization_id = ? AND site_id = ? AND location_id IS ? AND slug = ?
-    `, [organizationId, siteId, locationId, candidate])
+      SELECT id FROM collections WHERE organization_id = ?  AND location_id IS ? AND slug = ?
+    `, [organizationId, locationId, candidate])
     if (!clash) return candidate
   }
   conflict('Could not derive a unique collection slug')

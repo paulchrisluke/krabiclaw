@@ -1,4 +1,4 @@
-// PATCH /api/editor/sites/[siteId]/media/[assetId]
+// PATCH /api/editor/sites/[organizationId]/media/[assetId]
 // Update mutable asset metadata. Ownership is managed through media placements.
 import { queryFirst } from '~/server/db'
 import { cloudflareEnv, jsonResponse, rethrowHttpError } from '~/server/utils/api-response'
@@ -16,9 +16,9 @@ interface MediaAssetSiteRow {
 const VALID_CATEGORIES = new Set(['exterior', 'interior', 'food', 'menu', 'team', 'other'])
 
 export default defineHandler(async (event) => {
-  const siteId = getRouterParam(event, 'siteId')
+  const organizationId = getRouterParam(event, 'organizationId')
   const assetId = getRouterParam(event, 'assetId')
-  if (!siteId || !assetId) return jsonResponse({ error: 'Missing params' }, { status: 400 })
+  if (!organizationId || !assetId) return jsonResponse({ error: 'Missing params' }, { status: 400 })
 
   const env = cloudflareEnv(event)
   const db = env.DB
@@ -27,16 +27,16 @@ export default defineHandler(async (event) => {
   const session = await getAuthSession(event, env)
   if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
-  const site = await loadMemberSiteRow(event, db, env, siteId, session.user.id)
+  const site = await loadMemberSiteRow(event, db, env, organizationId, session.user.id)
   if (!site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
 
   try {
     const asset = await queryFirst<MediaAssetSiteRow>(
       db, `SELECT id, site_id, organization_id FROM media_assets WHERE id = ? LIMIT 1`, [assetId], )
     if (!asset) return jsonResponse({ error: 'Asset not found' }, { status: 404 })
-    if (asset.site_id !== siteId) return jsonResponse({ error: 'Forbidden' }, { status: 403 })
+    if (asset.site_id !== organizationId) return jsonResponse({ error: 'Forbidden' }, { status: 403 })
 
-    const principal = memberAccessPrincipal(site.membership, { env, siteId, event })
+    const principal = memberAccessPrincipal(site.membership, { env, organizationId, event })
     await assertResourceAccess(db, { ...principal, resourceLocationId: null })
 
     const body = await readBody(event)
@@ -62,7 +62,7 @@ export default defineHandler(async (event) => {
       updates.category = (category || null) as MediaAsset['category']
     }
 
-    const updated = await updateMediaAssetMetadata(db, assetId, siteId, updates)
+    const updated = await updateMediaAssetMetadata(db, assetId, organizationId, updates)
     if (!updated) return jsonResponse({ error: 'Asset not found' }, { status: 404 })
 
     return jsonResponse({ updated: true })
@@ -70,7 +70,7 @@ export default defineHandler(async (event) => {
     rethrowHttpError(error)
     const normalizedError = error instanceof Error ? error : new Error('Unknown error')
     console.error('media_patch_failed', {
-      siteId, assetId, userId: session.user.id, error: normalizedError.message
+      organizationId, assetId, userId: session.user.id, error: normalizedError.message
     })
     return jsonResponse({ error: 'Failed to update media asset' }, { status: 500 })
   }

@@ -36,11 +36,11 @@ interface LocationRow {
 }
 
 export default defineHandler(async (event) => {
-  const siteId = getRouterParam(event, 'siteId')
+  const organizationId = event.context.organizationId as string | null | undefined
 
-  if (!siteId) {
+  if (!organizationId) {
     return jsonResponse({
-      error: 'Site ID is required'
+      error: 'Unknown tenant'
     }, { status: 400 })
   }
 
@@ -58,7 +58,7 @@ export default defineHandler(async (event) => {
       SELECT id, organization_id, status FROM sites
       WHERE id = ? AND status = 'active'
       LIMIT 1
-    `, [siteId])
+    `, [organizationId])
 
     if (!site) {
       return jsonResponse({
@@ -80,7 +80,7 @@ export default defineHandler(async (event) => {
         AND ma.organization_id = bl.organization_id AND ma.site_id = bl.site_id
       WHERE bl.organization_id = ? AND bl.site_id = ? AND bl.status = 'active'
       ORDER BY bl.title ASC
-    `, [site.organization_id, siteId])
+    `, [site.organization_id, organizationId])
 
 
     const parsedLocations = locationRows.map((location) => {

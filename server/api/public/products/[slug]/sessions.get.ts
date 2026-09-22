@@ -18,9 +18,9 @@ import { getQuery, getRouterParam } from 'nitro/h3'
  * would be booked into a class they did not choose.
  */
 export default defineHandler(async (event) => {
-  const siteId = getRouterParam(event, 'siteId')
+  const organizationId = event.context.organizationId as string | null | undefined
   const slug = getRouterParam(event, 'slug')
-  if (!siteId || !slug) return jsonResponse({ error: 'siteId and slug required' }, { status: 400 })
+  if (!organizationId || !slug) return jsonResponse({ error: 'organizationId and slug required' }, { status: 400 })
   const env = cloudflareEnv(event)
   const db = env.DB
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
@@ -35,7 +35,7 @@ export default defineHandler(async (event) => {
       JOIN product_booking_configs cfg ON cfg.product_id = p.id
      WHERE pub.site_id = ? AND pub.published = 1 AND p.slug = ? AND p.active = 1
      LIMIT 1
-  `, [siteId, slug])
+  `, [organizationId, slug])
   if (!product) return jsonResponse({ error: 'Product not found' }, { status: 404 })
   if (!product.timezone) return jsonResponse({ error: 'This product is not on sale at any location' }, { status: 409 })
 
@@ -45,7 +45,7 @@ export default defineHandler(async (event) => {
     SELECT pl.location_id FROM product_locations pl
       JOIN business_locations l ON l.id = pl.location_id AND l.site_id = ? AND l.status = 'active'
      WHERE pl.product_id = ? AND pl.active = 1 AND pl.published = 1
-  `, [siteId, product.id])).map(row => row.location_id))
+  `, [organizationId, product.id])).map(row => row.location_id))
 
   const requestedLocation = typeof getQuery(event).location_id === 'string' ? String(getQuery(event).location_id) : null
   if (requestedLocation && !sellingLocations.has(requestedLocation)) {

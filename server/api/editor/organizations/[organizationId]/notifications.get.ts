@@ -3,12 +3,12 @@ import { getNotificationsSettings } from '~/server/utils/mcp-workflows'
 import { requireSiteAccess } from '~/server/utils/location-access'
 
 export default defineHandler(async (event) => {
-  const siteId = getRouterParam(event, 'siteId')
-  if (!siteId) return jsonResponse({ error: 'Site ID required' }, { status: 400 })
+  const organizationId = getRouterParam(event, 'organizationId')
+  if (!organizationId) return jsonResponse({ error: 'Organization ID required' }, { status: 400 })
 
-  const { db, site } = await requireSiteAccess(event, siteId)
+  const { db, site } = await requireSiteAccess(event, organizationId)
 
-  const notifications = await getNotificationsSettings(db, site.organization_id, siteId)
+  const notifications = await getNotificationsSettings(db, site.organization_id, organizationId)
   return jsonResponse({ success: true, notifications })
 })
 import { defineHandler } from 'nitro';

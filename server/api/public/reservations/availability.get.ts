@@ -16,8 +16,8 @@ const MAX_DAYS = 14
  * calendar that looks like a fully booked one.
  */
 export default defineHandler(async (event) => {
-  const siteId = getRouterParam(event, 'siteId')
-  if (!siteId) return jsonResponse({ error: 'siteId required' }, { status: 400 })
+  const organizationId = event.context.organizationId as string | null | undefined
+  if (!organizationId) return jsonResponse({ error: 'organizationId required' }, { status: 400 })
 
   const query = getQuery(event)
   const date = typeof query.date === 'string' ? query.date : null
@@ -30,9 +30,9 @@ export default defineHandler(async (event) => {
   const db = env.DB
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
 
-  const site = await queryFirst<{ id: string; organization_id: string }>(db, `SELECT id, organization_id FROM sites WHERE id = ? AND status = 'active' LIMIT 1`, [siteId])
+  const site = await queryFirst<{ id: string; organization_id: string }>(db, `SELECT id, organization_id FROM sites WHERE id = ? AND status = 'active' LIMIT 1`, [organizationId])
   if (!site) return jsonResponse({ error: 'Site not found' }, { status: 404 })
-  const location = await queryFirst<{ id: string }>(db, 'SELECT id FROM business_locations WHERE id = ? AND site_id = ? LIMIT 1', [locationId, siteId])
+  const location = await queryFirst<{ id: string }>(db, 'SELECT id FROM business_locations WHERE id = ? AND site_id = ? LIMIT 1', [locationId, organizationId])
   if (!location) return jsonResponse({ error: 'Location not found' }, { status: 404 })
 
   try {
@@ -55,7 +55,7 @@ export default defineHandler(async (event) => {
     return jsonResponse({ timezone: calendar[0]?.timezone ?? null, dates: calendar })
   } catch (error) {
     rethrowHttpError(error)
-    console.error('public_reservation_availability_failed', { siteId, locationId, error: error instanceof Error ? error.message : String(error) })
+    console.error('public_reservation_availability_failed', { organizationId, locationId, error: error instanceof Error ? error.message : String(error) })
     return jsonResponse({ error: 'Failed to load availability' }, { status: 500 })
   }
 })

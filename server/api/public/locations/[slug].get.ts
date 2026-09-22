@@ -4,10 +4,10 @@ import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { calculateMapEmbedUrl } from '~/server/utils/google-places'
 
 export default defineHandler(async (event) => {
-  const siteId = getRouterParam(event, 'siteId')
+  const organizationId = event.context.organizationId as string | null | undefined
   const slug = getRouterParam(event, 'slug')
 
-  if (!siteId || !slug) {
+  if (!organizationId || !slug) {
     return jsonResponse({
       error: 'Site ID and slug are required'
     }, { status: 400 })
@@ -28,7 +28,7 @@ export default defineHandler(async (event) => {
       SELECT id, organization_id, status, default_currency FROM sites
       WHERE id = ? AND status = 'active'
       LIMIT 1
-    `, [siteId], )
+    `, [organizationId], )
 
     if (!site) {
       return jsonResponse({
@@ -45,7 +45,7 @@ export default defineHandler(async (event) => {
         AND ma.organization_id = bl.organization_id AND ma.site_id = bl.site_id
       WHERE bl.organization_id = ? AND bl.site_id = ? AND bl.slug = ? AND bl.status = 'active'
       LIMIT 1
-    `, [site.organization_id, siteId, slug], )
+    `, [site.organization_id, organizationId, slug], )
 
     if (!location) {
       return jsonResponse({
