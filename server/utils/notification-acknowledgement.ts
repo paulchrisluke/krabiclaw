@@ -15,8 +15,8 @@ async function acknowledgeVisibleNotifications(
   const command = crypto.randomUUID()
   const now = new Date().toISOString()
   const result = await execute(db, `
-    INSERT INTO activity_entries (id, kind, scope_kind, organization_id, context_site_id, location_id, parent_id, actor_kind, actor_user_id, dedupe_key, occurred_at, created_at)
-    SELECT ? || ':' || n.id, 'acknowledgement', n.scope_kind, n.organization_id, n.context_site_id, n.location_id, n.id, 'member', ?, ? || ':' || n.id, ?, ?
+    INSERT INTO activity_entries (id, kind, scope_kind, organization_id, location_id, parent_id, actor_kind, actor_user_id, dedupe_key, occurred_at, created_at)
+    SELECT ? || ':' || n.id, 'acknowledgement', n.scope_kind, n.organization_id, n.location_id, n.id, 'member', ?, ? || ':' || n.id, ?, ?
     FROM activity_entries n WHERE n.kind = 'notification' AND ${selectionSql} AND ${visibility.whereSql}
     ON CONFLICT(dedupe_key) DO NOTHING
   `, [command, visibility.userId, `ack:${command}`, now, now, ...selectionParams, ...visibility.whereParams])

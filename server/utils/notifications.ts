@@ -35,7 +35,7 @@ import {
 } from '~/server/notifications/events'
 import type { CloudflareEnv } from '~/server/utils/auth'
 import { createCanonicalNotification } from '~/server/utils/notification-center'
-import { buildOwnerThreadInboxUrl, getPlatformDomain, resolveSiteLocationSlugs } from '~/server/utils/dashboard-notification-links'
+import { buildOwnerThreadInboxUrl, dashboardOrigin, getPlatformDomain, resolveDashboardSlugs } from '~/server/utils/dashboard-notification-links'
 import { claimDelivery, createDeliveryReceipt, getDeliveryClaimEligibility, recordDeliveryOutcome } from '~/server/domain/guest-threads/deliveries'
 import { appendEntry, findEntryByDedupeKey } from '~/server/domain/guest-threads/entries'
 import { publishGuestInboxThreadEvent } from '~/server/cloudflare/guest-inbox-events'
@@ -221,11 +221,11 @@ async function buildOwnerReviewsUrl(
   db: DbClient,
   opts: { organizationId: string; locationId?: string | null }
 ): Promise<string | null> {
-  const slugs = await resolveSiteLocationSlugs(env, db, opts)
+  const slugs = await resolveDashboardSlugs(env, db, opts)
   if (!slugs) return null
 
-  const site = `https://${getPlatformDomain(env)}/dashboard/${slugs.orgSlug}/sites/${slugs.siteSlug}`
-  return `${slugs.locationSlug ? `${site}/locations/${slugs.locationSlug}` : site}/qa?tab=reviews`
+  const base = dashboardOrigin(env, slugs)
+  return `${slugs.locationSlug ? `${base}/locations/${slugs.locationSlug}` : base}/qa?tab=reviews`
 }
 
 export interface OwnerEmailRecipient {
@@ -518,7 +518,7 @@ async function notifyOwner(
   const [, sitePhone, locationPhone] = await Promise.all([
     createCanonicalNotification(db, {
       publishEnv: env,
-      scope: 'site',
+      scope: 'organization',
       template: opts.template,
       organizationId: opts.organizationId,
       locationId: opts.locationId ?? null,
@@ -1233,7 +1233,7 @@ async function notifyGuestThreadReplyInner(
   const template = opts.inboundChannel === 'email' ? 'submission_reply_email' : 'submission_reply_whatsapp'
   await createCanonicalNotification(db, {
     publishEnv: env,
-    scope: 'site',
+    scope: 'organization',
     template,
     organizationId: opts.organizationId,
     locationId: opts.locationId ?? null,

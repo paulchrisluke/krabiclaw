@@ -13,7 +13,7 @@ import {
   listCollections,
   listLocationProducts,
   listMetafieldDefinitions,
-  listSiteProducts,
+  listOrganizationProducts,
   reconcileProducts,
   removeProductLocation,
   reorderCollections,
@@ -101,7 +101,7 @@ export async function handleProductsTools(ctx: McpExecutorContext) {
     // answer a request for fifty.
     case 'list_products': {
       const window = mcpPageWindow(args, { resource: 'products' })
-      const products = await listSiteProducts(site.db, { ...scope, publishedOnly: args.published_only === true, window })
+      const products = await listOrganizationProducts(site.db, { ...scope, publishedOnly: args.published_only === true, window })
       return productPage(products, window)
     }
     case 'list_location_products': {
@@ -110,7 +110,7 @@ export async function handleProductsTools(ctx: McpExecutorContext) {
       const window = mcpPageWindow(args, { resource: 'products' })
       const products = await listLocationProducts(site.db, {
         organizationId: site.organizationId, locationId, window,
-        ...(args.published_only === true ? { publishedOnSiteId: site.organizationId } : {}),
+        publishedOnly: args.published_only === true,
       })
       return productPage(products, window)
     }
@@ -213,7 +213,7 @@ export async function handleProductsTools(ctx: McpExecutorContext) {
         collection: await createCollection(site.db, {
           organizationId: site.organizationId,
           collection: {
-            organization_id: site.organizationId, location_id: locationId,
+            location_id: locationId,
             name: requiredString(args, 'name'),
             description: typeof args.description === 'string' ? args.description : null,
             sort_order: typeof args.sort_order === 'number' ? args.sort_order : undefined,

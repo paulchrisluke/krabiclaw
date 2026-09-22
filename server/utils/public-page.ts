@@ -16,7 +16,7 @@ import {
   normalizePublicReviewAggregateRows,
 } from "~/server/utils/public-review-aggregate";
 import { getPublicTenantPageForPath, type PublicTenantPage } from "~/server/utils/public-tenant-pages";
-import { listCollections, listSiteProducts } from '~/server/utils/product-management'
+import { listCollections, listOrganizationProducts } from '~/server/utils/product-management'
 import { previewSecretOf, resolvePreviewAuthorization } from "~/server/utils/preview-token";
 import {
   toResolvedMediaAsset,
@@ -637,7 +637,7 @@ async function loadPublicPageSource(
     // catalog has one reader and a projection that disagreed with it is
     // exactly the drift this replaces.
     const canonical = productIds.length
-      ? await listSiteProducts(db, { organizationId: orgId, publishedOnly: true })
+      ? await listOrganizationProducts(db, { organizationId: orgId, publishedOnly: true })
       : []
     const wanted = new Set(productIds)
     products = canonical.filter(product => wanted.has(product.id)).map((product) => {

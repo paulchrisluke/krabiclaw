@@ -22,7 +22,7 @@ export default defineHandler(async (event) => {
 
   const notifications = await queryAll(db, `
     SELECT id, organization_id, location_id, parent_id AS source_entry_id,
-           json_extract(payload_json, '$.visibility_scope') AS scope, json_extract(payload_json, '$.severity') AS severity, event_name AS template, json_extract(payload_json, '$.title') AS title, created_at
+           scope_kind AS scope, json_extract(payload_json, '$.severity') AS severity, event_name AS template, json_extract(payload_json, '$.title') AS title, created_at
     FROM activity_entries
     WHERE kind = 'notification'
       AND (? IS NULL OR organization_id = ?)

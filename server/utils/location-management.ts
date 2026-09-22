@@ -438,7 +438,6 @@ export async function createLocation(
           input.seo_title ?? null,
           input.seo_description ?? null,
           input.canonical_url ?? null,
-          normalizeLocationRobots(input.robots),
           normalizedEnabledFeatures,
           now,
           now,

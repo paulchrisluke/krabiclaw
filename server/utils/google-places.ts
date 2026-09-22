@@ -239,7 +239,6 @@ export async function syncPlaceToLocation(
     now,
     locationId,
     organizationId,
-    organizationId
   ] }, ...staleGoogleReviewDeletes({ organizationId, locationId }, place.reviews),
   ...googleReviewUpserts({ organizationId, locationId }, place.reviews, now)])
   const reviewsUpserted = results.slice(results.length - place.reviews.length).reduce((count, result) => count + Number(result.meta?.changes ?? 0), 0)

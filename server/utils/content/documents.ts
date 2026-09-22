@@ -372,7 +372,7 @@ function buildDocumentWriteBatch(
           WHERE source.id = ? AND source.type = ? AND source.source_block_id IS NULL AND root.id = ?
             AND root.row_role = 'root' AND root.kind = ?
             AND root.organization_id = ?
-        )`, params: [document.id, block.source_block_id, block.type, document.root_id, document.kind, document.organization_id, document.organization_id],
+        )`, params: [document.id, block.source_block_id, block.type, document.root_id, document.kind, document.organization_id],
     })),
     stalePlacementQuery,
     { query: `DELETE FROM media_placements WHERE owner_type = 'content_block' AND owner_id IN (

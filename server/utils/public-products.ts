@@ -146,7 +146,7 @@ export async function loadPublicProductCollection(
   // Location publication is the public gate here: a product carried by the
   // site but withheld at this branch is absent, not shown greyed out.
   const perLocation = await Promise.all(locations.map(location =>
-    listLocationProducts(db, { organizationId: resolved.site.id, locationId: location.id, publishedOnSiteId: organizationId })))
+    listLocationProducts(db, { organizationId: resolved.site.id, locationId: location.id, publishedOnly: true })))
   const seen = new Set<string>()
   // The only place a Product is assigned to a surface: it takes bookings, so
   // it is an Experience, or it belongs to the vertical's own surface. Every

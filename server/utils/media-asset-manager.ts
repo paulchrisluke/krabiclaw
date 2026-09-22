@@ -525,7 +525,7 @@ export async function activateMediaAsset(
 
 export async function updateMediaAssetAlt(db: DbClient, id: string, organizationId: string, altText: string): Promise<boolean> {
   const [result] = await executeBatch(db, [
-    { query: `UPDATE media_assets SET alt_text = ?, updated_at = ? WHERE id = ? `, params: [altText, new Date().toISOString(), id, organizationId] },
+    { query: `UPDATE media_assets SET alt_text = ?, updated_at = ? WHERE id = ? AND organization_id = ?`, params: [altText, new Date().toISOString(), id, organizationId] },
     publicResourceCacheInvalidationQuery(organizationId, 'media-update'),
   ])
   return Number(result?.meta?.changes ?? 0) > 0
@@ -653,7 +653,7 @@ export async function deleteMediaAsset(db: DbClient, env: MediaProviderEnv, id: 
   }
 
   const [result] = await executeBatch(db, [{
-    query: `UPDATE media_assets SET status = 'deleted', updated_at = ? WHERE id = ? AND status != 'deleted'`,
+    query: `UPDATE media_assets SET status = 'deleted', updated_at = ? WHERE id = ? AND organization_id = ? AND status != 'deleted'`,
     params: [new Date().toISOString(), pendingAsset.id, organizationId],
   }, {
     query: 'DELETE FROM media_placements WHERE organization_id = ? AND asset_id = ?',

@@ -1,6 +1,6 @@
 import { jsonResponse, rethrowHttpError } from '~/server/utils/api-response'
 import { requireOrganizationAccess } from '~/server/utils/location-access'
-import { listSiteProducts } from '~/server/utils/product-management'
+import { listOrganizationProducts } from '~/server/utils/product-management'
 import { defineHandler } from 'nitro'
 import { getRouterParam } from 'nitro/h3'
 
@@ -11,7 +11,7 @@ export default defineHandler(async (event) => {
     const { db, organization } = await requireOrganizationAccess(event, organizationId)
     // Everything this site carries, published or withheld: the editor decides
     // visibility, so it must be able to see what is currently hidden.
-    const products = await listSiteProducts(db, { organizationId: organization.id })
+    const products = await listOrganizationProducts(db, { organizationId: organization.id })
     return jsonResponse({ success: true, products, organization_id: organizationId })
   } catch (error) {
     rethrowHttpError(error)

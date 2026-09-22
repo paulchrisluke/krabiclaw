@@ -130,7 +130,7 @@ export async function recordTenantPageview(db: AppDb, input: TenantPageviewInput
     {
       query: `INSERT INTO analytics_summaries (
         id, kind, organization_id, date, key, payload_json, created_at, updated_at
-      ) SELECT ?, 'session', ?, ?, '', ?, ?, ?, ?
+      ) SELECT ?, 'session', ?, '', ?, ?, ?, ?
         WHERE changes() = 1
       ON CONFLICT(organization_id, kind, date, key) DO UPDATE SET updated_at = excluded.updated_at,
         payload_json = json_set(analytics_summaries.payload_json,

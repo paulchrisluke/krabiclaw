@@ -51,7 +51,7 @@ export async function notifyDomainLifecycle(
   const dashboardUrl = safeDashboardUrl(opts.dashboardUrl)
   await createCanonicalNotification(db, {
     publishEnv: env,
-    scope: 'site',
+    scope: 'organization',
     severity: opts.status === 'active' ? 'success' : 'warning',
     organizationId: opts.organizationId,
     title: opts.title,

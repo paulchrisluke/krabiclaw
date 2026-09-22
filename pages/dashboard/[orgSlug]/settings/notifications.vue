@@ -76,7 +76,7 @@ const { formatRelativeTime } = useHumanTime()
 
 interface DashboardNotification {
   id: string
-  scope: 'platform' | 'organization' | 'site'
+  scope: 'global' | 'organization'
   template: string
   severity: 'info' | 'success' | 'warning' | 'error'
   title: string | null

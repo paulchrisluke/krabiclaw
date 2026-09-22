@@ -12,28 +12,20 @@ export function getPlatformDomain(env: DashboardNotificationLinkEnv): string {
   return domain.replace(/^https?:\/\//, '').replace(/\/$/, '')
 }
 
-export interface SiteLocationSlugs {
+export interface DashboardSlugs {
   orgSlug: string
-  siteSlug: string
   locationSlug: string | null
 }
 
-// Thread deep links are scope-sensitive: site-wide records go to the site inbox,
-// while location-assigned records go to that location's inbox.
-export async function resolveSiteLocationSlugs(
+// Thread deep links are scope-sensitive: organization-wide records go to the
+// dashboard inbox, while location-assigned records go to that location's.
+export async function resolveDashboardSlugs(
   env: CloudflareEnv,
   db: DbClient,
   opts: { organizationId: string; locationId?: string | null },
-): Promise<SiteLocationSlugs | null> {
-  const [organization, site] = await Promise.all([
-    findOrganizationById(env, opts.organizationId),
-    queryFirst<{ site_slug: string | null }>(db, `
-      SELECT subdomain AS site_slug
-      FROM organization WHERE id = ?
-      LIMIT 1
-    `, [opts.organizationId]),
-  ])
-  if (!organization || !site?.site_slug) return null
+): Promise<DashboardSlugs | null> {
+  const organization = await findOrganizationById(env, opts.organizationId)
+  if (!organization) return null
 
   let locationSlug: string | null = null
   if (opts.locationId) {
@@ -44,16 +36,21 @@ export async function resolveSiteLocationSlugs(
     if (!locationSlug) return null
   }
 
-  return { orgSlug: organization.slug, siteSlug: site.site_slug, locationSlug }
+  return { orgSlug: organization.slug, locationSlug }
+}
+
+export function dashboardOrigin(env: DashboardNotificationLinkEnv, slugs: DashboardSlugs): string {
+  return `https://${getPlatformDomain(env)}/dashboard/${encodeURIComponent(slugs.orgSlug)}`
 }
 
 export function composeOwnerThreadInboxUrl(
   env: DashboardNotificationLinkEnv,
-  slugs: SiteLocationSlugs,
+  slugs: DashboardSlugs,
   threadId: string,
 ): string {
-  // One inbox per site: a thread opens there whichever location it belongs to.
-  return `https://${getPlatformDomain(env)}/dashboard/${encodeURIComponent(slugs.orgSlug)}/sites/${encodeURIComponent(slugs.siteSlug)}/messages/${encodeURIComponent(threadId)}`
+  // One inbox per organization: a thread opens there whichever location it
+  // belongs to.
+  return `${dashboardOrigin(env, slugs)}/messages/${encodeURIComponent(threadId)}`
 }
 
 export async function buildOwnerThreadInboxUrl(
@@ -61,6 +58,6 @@ export async function buildOwnerThreadInboxUrl(
   db: DbClient,
   opts: { organizationId: string; locationId?: string | null; threadId: string },
 ): Promise<string | null> {
-  const slugs = await resolveSiteLocationSlugs(env, db, opts)
+  const slugs = await resolveDashboardSlugs(env, db, opts)
   return slugs ? composeOwnerThreadInboxUrl(env, slugs, opts.threadId) : null
 }

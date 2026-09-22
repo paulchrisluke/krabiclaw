@@ -345,7 +345,7 @@ export async function listProducts(db: DbClient, organizationId: string): Promis
  * is asked for, and never returned: its presence is how the caller knows there
  * is another page.
  */
-export async function listSiteProducts(db: DbClient, input: {
+export async function listOrganizationProducts(db: DbClient, input: {
   organizationId: string; publishedOnly?: boolean; window?: { limit: number; offset: number }
 }): Promise<Product[]> {
   const rows = await queryAll<Row>(db, `
@@ -363,25 +363,24 @@ export async function listSiteProducts(db: DbClient, input: {
  * Products offered at one location. Membership is its own relationship, not a
  * price.
  *
- * `publishedOnSiteId` asks the public question, and it needs a site to ask it
- * of: a product is publicly visible at a location only when the site publishes
- * it *and* the location publishes it *and* the location offering is active.
- * Those are three separate switches, so a caller that wants the public answer
- * names the site rather than passing a bare flag that could only check two.
+ * `publishedOnly` asks the public question: a product is publicly visible at a
+ * location only when the organization publishes it *and* the location
+ * publishes it *and* the location offering is active. Those are three separate
+ * switches, which is why this is not the same as reading `pl.published`.
  */
 export async function listLocationProducts(db: DbClient, input: {
-  organizationId: string; locationId: string; publishedOnSiteId?: string; window?: { limit: number; offset: number }
+  organizationId: string; locationId: string; publishedOnly?: boolean; window?: { limit: number; offset: number }
 }): Promise<Product[]> {
-  const published = input.publishedOnSiteId !== undefined
+  const published = input.publishedOnly === true
   const rows = await queryAll<Row>(db, `
     SELECT ${PRODUCT_COLUMNS} FROM products p
     JOIN product_locations pl ON pl.product_id = p.id AND pl.organization_id = p.organization_id
     ${published ? `JOIN product_publications pub ON pub.product_id = p.id AND pub.organization_id = p.organization_id
-      AND pub.organization_id = ? AND pub.published = 1` : ''}
+      AND pub.published = 1` : ''}
     WHERE p.organization_id = ? AND pl.location_id = ?${published ? ' AND pl.published = 1 AND pl.active = 1' : ''}
     ORDER BY p.name, p.id
     ${input.window ? 'LIMIT ? OFFSET ?' : ''}
-  `, [...(published ? [input.publishedOnSiteId] : []), input.organizationId, input.locationId,
+  `, [input.organizationId, input.locationId,
     ...(input.window ? [input.window.limit + 1, input.window.offset] : [])])
   return hydrate(db, input.organizationId, rows.map(mapProductRow))
 }
@@ -1126,7 +1125,7 @@ async function planProductUpdate(db: DbClient, input: {
     { query: 'DELETE FROM product_metafields WHERE organization_id = ? AND product_id = ?', params: [organizationId, productId] },
     { query: 'DELETE FROM product_variant_option_values WHERE organization_id = ? AND product_id = ?', params: [organizationId, productId] },
     ...(writesPrices
-      ? [{ query: 'DELETE FROM prices WHERE organization_id = ? AND product_variant_id IN (SELECT id FROM product_variants WHERE organization_id = ? AND product_id = ?)', params: [organizationId, productId] }]
+      ? [{ query: 'DELETE FROM prices WHERE organization_id = ? AND product_variant_id IN (SELECT id FROM product_variants WHERE organization_id = ? AND product_id = ?)', params: [organizationId, organizationId, productId] }]
       : []),
     // Options, values and variants are UPSERTED, never dropped and recreated:
     // bookings reference variant identity, and recreating a variant under a
@@ -1344,7 +1343,7 @@ export async function createCollection(db: DbClient, input: {
     params: [id, input.organizationId, input.collection.location_id ?? null, name, slug,
       normalizeOptionalProductString(input.collection.description, 'description', PRODUCT_LIMITS.collectionDescription),
       input.collection.sort_order ?? 0, now, now, input.actor.actorId, input.actor.actorId],
-  }, publicResourceCacheInvalidationQuery(input.collection.organization_id, 'collection_created')], { operation: 'Create collection' })
+  }, publicResourceCacheInvalidationQuery(input.organizationId, 'collection_created')], { operation: 'Create collection' })
   const row = await queryFirst<Row>(db, 'SELECT * FROM collections WHERE organization_id = ? AND id = ?', [input.organizationId, id])
   return mapCollectionRow(row!)
 }

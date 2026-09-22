@@ -167,7 +167,6 @@ export interface SetProductLocationInput {
 }
 
 export interface CreateCollectionInput {
-  organization_id: string
   location_id?: string | null
   name: string
   description?: string | null

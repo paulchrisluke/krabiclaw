@@ -34,31 +34,30 @@ test('D1 claims fence concurrent sends and bound ambiguous provider retries', as
       NUXT_PUBLIC_PLATFORM_DOMAIN: 'https://proof.example', EMAIL_REPLY_SECRET: 'local-reply-proof', EMAIL_DELIVERY_MODE: 'log_only', WHATSAPP_DELIVERY_MODE: 'log_only' }
     await db.batch((await generateSQLiteMigration(await generateSQLiteDrizzleJson({}), await generateSQLiteDrizzleJson(schema))).map(statement => db.prepare(statement)))
     for (const statement of [
-      "INSERT INTO organization (id, name, slug) VALUES ('org-proof', 'Proof', 'proof')",
-      "INSERT INTO sites (id, organization_id, slug, subdomain, name) VALUES ('site-proof', 'org-proof', 'proof', 'proof', 'Proof')",
+      "INSERT INTO organization (id, name, slug, subdomain) VALUES ('org-proof', 'Proof', 'proof', 'proof')",
       "INSERT INTO user (id, name, email) VALUES ('user-proof', 'Proof Owner', 'owner@proof.example')",
       "INSERT INTO member (id, organizationId, userId, role) VALUES ('member-proof','org-proof','user-proof','owner')",
     ]) await db.prepare(statement).run()
     const now = new Date().toISOString()
-    const opening = requestInsertQueries({ id: 'contact-proof', kind: 'contact', organization_id: 'org-proof', site_id: 'site-proof', location_id: null, customer_id: null, review_id: null, conversation_state: 'needs_attention', resolved_at: null, payload: { guest: { name: 'Proof Guest', email: 'guest@proof.example', phone: null }, subject: null, message: 'Hello', consent_at: null, ip_hash: null }, created_at: now, updated_at: now })
+    const opening = requestInsertQueries({ id: 'contact-proof', kind: 'contact', organization_id: 'org-proof', location_id: null, customer_id: null, review_id: null, conversation_state: 'needs_attention', resolved_at: null, payload: { guest: { name: 'Proof Guest', email: 'guest@proof.example', phone: null }, subject: null, message: 'Hello', consent_at: null, ip_hash: null }, created_at: now, updated_at: now })
     await db.batch(opening.map(write => db.prepare(write.query).bind(...write.params)))
-    await notifyContactSubmitted(env, db, { organizationId: 'org-proof', siteId: 'site-proof', siteName: 'Proof', locationId: null,
+    await notifyContactSubmitted(env, db, { organizationId: 'org-proof', siteName: 'Proof', locationId: null,
       contactId: 'contact-proof', guestName: 'Proof Guest', email: 'guest@proof.example', subject: null, message: 'Hello' })
-    assert.equal((await listGuestThreads(db, 'site-proof', { userId: 'user-proof', unreadOnly: true }))[0]?.id, 'contact-proof')
+    assert.equal((await listGuestThreads(db, 'org-proof', { userId: 'user-proof', unreadOnly: true }))[0]?.id, 'contact-proof')
     assert.deepEqual((await db.prepare("SELECT d.purpose,d.status FROM guest_thread_deliveries d JOIN activity_entries e ON e.id=d.entry_id WHERE e.request_id='contact-proof' ORDER BY d.purpose").all()).results,
       [{ purpose: 'guest_acknowledgement', status: 'sent' }, { purpose: 'owner_alert', status: 'sent' }])
 
-    await db.prepare("INSERT INTO business_locations (id,organization_id,site_id,slug,title,timezone,max_capacity,opening_hours) VALUES ('booking-location','org-proof','site-proof','booking','Booking','Asia/Bangkok',10,?)")
+    await db.prepare("INSERT INTO business_locations (id,organization_id,slug,title,timezone,max_capacity,opening_hours) VALUES ('booking-location','org-proof','booking','Booking','Asia/Bangkok',10,?)")
       .bind(JSON.stringify({ periods: [{ open: { day: 1, hour: 16, minute: 0 }, close: { day: 1, hour: 22, minute: 0 } }] })).run()
-    const booking = requestInsertQueries({ id: 'change-proof', kind: 'reservation', organization_id: 'org-proof', site_id: 'site-proof', location_id: 'booking-location',
+    const booking = requestInsertQueries({ id: 'change-proof', kind: 'reservation', organization_id: 'org-proof', location_id: 'booking-location',
       customer_id: null, review_id: null, conversation_state: 'needs_attention', resolved_at: null,
       payload: threadPayloadForGuest({ name: 'Guest', email: 'guest@proof.example', phone: '+66812345678' }), created_at: now, updated_at: now })
     await db.batch(booking.map(write => db.prepare(write.query).bind(...write.params)))
     // The seats live on the reservation, not the thread: a change proposal is
     // read from and applied to this row.
     await upsertLocationReservationConfig(db, { organizationId: 'org-proof', locationId: 'booking-location', patch: { slot_capacity: 10 }, actorId: 'user-proof' })
-    await db.prepare(`INSERT INTO reservations (id,organization_id,site_id,location_id,request_id,timezone,starts_at,ends_at,party_size,status)
-      VALUES ('reservation-change-proof','org-proof','site-proof','booking-location','change-proof','Asia/Bangkok','2099-01-05T09:00:00.000Z','2099-01-05T11:00:00.000Z',1,'confirmed')`).run()
+    await db.prepare(`INSERT INTO reservations (id,organization_id,location_id,request_id,timezone,starts_at,ends_at,party_size,status)
+      VALUES ('reservation-change-proof','org-proof','booking-location','change-proof','Asia/Bangkok','2099-01-05T09:00:00.000Z','2099-01-05T11:00:00.000Z',1,'confirmed')`).run()
     const propose = async (key: string, partySize: number) => {
       const current = await getGuestRequest(db, 'change-proof')
       assert(current)
@@ -79,7 +78,7 @@ test('D1 claims fence concurrent sends and bound ambiguous provider retries', as
     await assert.rejects(respondToBookingChange(db, env, stale), /changed since the request/)
     const concurrent = await propose('concurrent-change', 4)
     const [decision, cancellation] = await Promise.allSettled([respondToBookingChange(db, env, concurrent), executeGuestThreadOperation(db, {
-      threadId: 'change-proof', siteId: 'site-proof', action: 'cancel', actorUserId: 'user-proof', idempotencyKey: 'owner-cancel', env })])
+      threadId: 'change-proof', action: 'cancel', actorUserId: 'user-proof', idempotencyKey: 'owner-cancel', env })])
     assert(cancellation.status === 'fulfilled' && cancellation.value.ok)
     if (decision.status === 'fulfilled') assert.equal(decision.value.status, 'accepted')
     else assert.match(String(decision.reason), /changed|no longer/)
@@ -159,8 +158,7 @@ test('D1 claims fence concurrent sends and bound ambiguous provider retries', as
 
     const accepted = await executeGuestThreadOperation(db, {
       threadId: 'contact-proof',
-      siteId: 'site-proof',
-      action: 'reply',
+            action: 'reply',
       actorUserId: 'user-proof',
       body: 'A held reply',
       idempotencyKey: operationKey,
@@ -170,8 +168,7 @@ test('D1 claims fence concurrent sends and bound ambiguous provider retries', as
 
     const acceptedRetry = await executeGuestThreadOperation(db, {
       threadId: 'contact-proof',
-      siteId: 'site-proof',
-      action: 'retry_delivery',
+            action: 'retry_delivery',
       actorUserId: 'user-proof',
       deliveryId,
       idempotencyKey: 'held-retry-proof',
@@ -182,8 +179,7 @@ test('D1 claims fence concurrent sends and bound ambiguous provider retries', as
     await recordDeliveryOutcome(db, { claim: heldClaim, status: 'sent', providerMessageId: 'provider-proof' })
     const replay = await executeGuestThreadOperation(db, {
       threadId: 'contact-proof',
-      siteId: 'site-proof',
-      action: 'reply',
+            action: 'reply',
       actorUserId: 'user-proof',
       body: 'A held reply',
       idempotencyKey: operationKey,
@@ -207,8 +203,7 @@ test('D1 claims fence concurrent sends and bound ambiguous provider retries', as
 
     const replayAfterResolve = await executeGuestThreadOperation(db, {
       threadId: 'contact-proof',
-      siteId: 'site-proof',
-      action: 'reply',
+            action: 'reply',
       actorUserId: 'user-proof',
       body: 'A held reply',
       idempotencyKey: operationKey,
@@ -253,8 +248,7 @@ test('D1 claims fence concurrent sends and bound ambiguous provider retries', as
 
     const delayedCompletion = await executeGuestThreadOperation(db, {
       threadId: 'contact-proof',
-      siteId: 'site-proof',
-      action: 'reply',
+            action: 'reply',
       actorUserId: 'user-proof',
       body: 'A delayed reply',
       idempotencyKey: delayedOperationKey,
@@ -296,8 +290,7 @@ test('D1 claims fence concurrent sends and bound ambiguous provider retries', as
 
     const retriedAfterResolve = await executeGuestThreadOperation(db, {
       threadId: 'contact-proof',
-      siteId: 'site-proof',
-      action: 'retry_delivery',
+            action: 'retry_delivery',
       actorUserId: 'user-proof',
       deliveryId: retryReceipt.id,
       idempotencyKey: 'retry-after-resolve-proof',
@@ -329,21 +322,20 @@ test('D1 status-email retries preserve recorded content and reject superseded bo
     const db = await runtime.getD1Database('DB')
     await db.batch((await generateSQLiteMigration(await generateSQLiteDrizzleJson({}), await generateSQLiteDrizzleJson(schema))).map(statement => db.prepare(statement)))
     for (const statement of [
-      "INSERT INTO organization (id, name, slug) VALUES ('org-status', 'Proof', 'proof')",
-      "INSERT INTO sites (id, organization_id, slug, subdomain, name) VALUES ('site-status', 'org-status', 'proof', 'proof', 'Proof')",
+      "INSERT INTO organization (id, name, slug, subdomain) VALUES ('org-status', 'Proof', 'proof', 'proof')",
       "INSERT INTO user (id, name, email) VALUES ('user-status', 'Proof Owner', 'owner@proof.example')",
-      "INSERT INTO business_locations (id, organization_id, site_id, slug, title) VALUES ('location-status', 'org-status', 'site-status', 'proof', 'Proof')",
+      "INSERT INTO business_locations (id, organization_id, slug, title) VALUES ('location-status', 'org-status', 'proof', 'Proof')",
     ]) await db.prepare(statement).run()
     const now = new Date().toISOString()
-    const opening = requestInsertQueries({ id: 'booking-status', kind: 'reservation', organization_id: 'org-status', site_id: 'site-status', location_id: 'location-status', customer_id: null, review_id: null, conversation_state: 'needs_attention', resolved_at: null, payload: threadPayloadForGuest({ name: 'Guest', email: 'guest@provider-proof.com', phone: '123' }), created_at: now, updated_at: now })
+    const opening = requestInsertQueries({ id: 'booking-status', kind: 'reservation', organization_id: 'org-status', location_id: 'location-status', customer_id: null, review_id: null, conversation_state: 'needs_attention', resolved_at: null, payload: threadPayloadForGuest({ name: 'Guest', email: 'guest@provider-proof.com', phone: '123' }), created_at: now, updated_at: now })
     await db.batch(opening.map(write => db.prepare(write.query).bind(...write.params)))
     // The instant and the zone the guest agreed to live on the reservation; the
     // confirmation email is formatted from them, never from a server clock.
-    await db.prepare(`INSERT INTO reservations (id,organization_id,site_id,location_id,request_id,timezone,starts_at,ends_at,party_size,status)
-      VALUES ('reservation-status','org-status','site-status','location-status','booking-status','Asia/Bangkok','2026-10-01T11:00:00.000Z','2026-10-01T13:00:00.000Z',2,'confirmed')`).run()
+    await db.prepare(`INSERT INTO reservations (id,organization_id,location_id,request_id,timezone,starts_at,ends_at,party_size,status)
+      VALUES ('reservation-status','org-status','location-status','booking-status','Asia/Bangkok','2026-10-01T11:00:00.000Z','2026-10-01T13:00:00.000Z',2,'confirmed')`).run()
 
     const input = {
-      threadId: 'booking-status', siteId: 'site-status', actorUserId: 'user-status',
+      threadId: 'booking-status', actorUserId: 'user-status',
       env: { EMAIL_DELIVERY_MODE: 'provider', RESEND_API_KEY: 'controlled-provider-only', NUXT_PUBLIC_PLATFORM_DOMAIN: 'proof.example' },
     }
     const cancel = { ...input, action: 'cancel', idempotencyKey: 'cancel-status' }
@@ -406,11 +398,10 @@ test('a booking move into a full session leaves the original booking exactly as 
     const later = at(60)
     const laterEnd = at(60, 1)
     for (const statement of [
-      "INSERT INTO organization (id, name, slug) VALUES ('org-move', 'Move', 'move')",
-      "INSERT INTO sites (id, organization_id, slug, subdomain, name) VALUES ('site-move', 'org-move', 'move', 'move', 'Move')",
+      "INSERT INTO organization (id, name, slug, subdomain) VALUES ('org-move', 'Move', 'move', 'move')",
       "INSERT INTO user (id, name, email) VALUES ('user-move', 'Owner', 'owner@move.example')",
       "INSERT INTO member (id, organizationId, userId, role) VALUES ('member-move','org-move','user-move','owner')",
-      "INSERT INTO business_locations (id,organization_id,site_id,slug,title,timezone) VALUES ('loc-move','org-move','site-move','move','Move','Asia/Bangkok')",
+      "INSERT INTO business_locations (id,organization_id,slug,title,timezone) VALUES ('loc-move','org-move','move','Move','Asia/Bangkok')",
       "INSERT INTO products (id, organization_id, name, slug, created_by, updated_by) VALUES ('prod-move','org-move','Class','class','user-move','user-move')",
       "INSERT INTO product_variants (id, organization_id, product_id, name, created_by, updated_by) VALUES ('var-move','org-move','prod-move','Adult','user-move','user-move')",
       "INSERT INTO product_booking_configs (product_id, organization_id, duration_minutes, default_capacity, created_by, updated_by) VALUES ('prod-move','org-move',60,4,'user-move','user-move')",
@@ -420,14 +411,14 @@ test('a booking move into a full session leaves the original booking exactly as 
       // The destination holds two seats and already has both taken.
       `INSERT INTO product_sessions (id,organization_id,product_id,location_id,timezone,starts_at,ends_at,capacity,status,created_by,updated_by) VALUES ('session-from','org-move','prod-move','loc-move','Asia/Bangkok','${soon}','${soonEnd}',4,'scheduled','user-move','user-move')`,
       `INSERT INTO product_sessions (id,organization_id,product_id,location_id,timezone,starts_at,ends_at,capacity,status,created_by,updated_by) VALUES ('session-to','org-move','prod-move','loc-move','Asia/Bangkok','${later}','${laterEnd}',2,'scheduled','user-move','user-move')`,
-      "INSERT INTO bookings (id,organization_id,site_id,product_id,product_session_id,product_variant_id,party_size,status) VALUES ('booking-other','org-move','site-move','prod-move','session-to','var-move',2,'confirmed')",
+      "INSERT INTO bookings (id,organization_id,product_id,product_session_id,product_variant_id,party_size,status) VALUES ('booking-other','org-move','prod-move','session-to','var-move',2,'confirmed')",
     ]) await db.prepare(statement).run()
-    const thread = requestInsertQueries({ id: 'move-proof', kind: 'booking', organization_id: 'org-move', site_id: 'site-move', location_id: 'loc-move',
+    const thread = requestInsertQueries({ id: 'move-proof', kind: 'booking', organization_id: 'org-move', location_id: 'loc-move',
       customer_id: null, review_id: null, conversation_state: 'needs_attention', resolved_at: null,
       payload: threadPayloadForGuest({ name: 'Guest', email: 'guest@move.example', phone: '+66812345678' }), created_at: now, updated_at: now })
     await db.batch(thread.map(write => db.prepare(write.query).bind(...write.params)))
-    await db.prepare(`INSERT INTO bookings (id,organization_id,site_id,product_id,product_session_id,product_variant_id,request_id,party_size,status)
-      VALUES ('booking-move','org-move','site-move','prod-move','session-from','var-move','move-proof',1,'confirmed')`).run()
+    await db.prepare(`INSERT INTO bookings (id,organization_id,product_id,product_session_id,product_variant_id,request_id,party_size,status)
+      VALUES ('booking-move','org-move','prod-move','session-from','var-move','move-proof',1,'confirmed')`).run()
 
     const current = await getGuestRequest(db, 'move-proof')
     assert(current)
@@ -468,23 +459,22 @@ test('a review request reads the visit from the record that holds it', async () 
     await db.batch((await generateSQLiteMigration(await generateSQLiteDrizzleJson({}), await generateSQLiteDrizzleJson(schema))).map(statement => db.prepare(statement)))
     const now = new Date().toISOString()
     for (const statement of [
-      "INSERT INTO organization (id, name, slug) VALUES ('org-review', 'Review', 'review')",
-      "INSERT INTO sites (id, organization_id, slug, subdomain, name) VALUES ('site-review', 'org-review', 'review', 'review', 'Kikuzuki')",
-      "INSERT INTO site_domains (id, organization_id, site_id, domain, role, status, type) VALUES ('domain-review','org-review','site-review','review.example','canonical','active','custom')",
-      "INSERT INTO business_locations (id,organization_id,site_id,slug,title,timezone,max_capacity) VALUES ('loc-review','org-review','site-review','main','Main Room','Asia/Bangkok',40)",
-      "INSERT INTO customers (id, organization_id, site_id, name, email, source) VALUES ('cust-review','org-review','site-review','Sivan','sivan@proof.example','reservation')",
+      "INSERT INTO organization (id, name, slug, subdomain) VALUES ('org-review', 'Kikuzuki', 'review', 'review')",
+      "INSERT INTO organization_domains (id, organization_id, domain, role, status, type) VALUES ('domain-review','org-review','review.example','canonical','active','custom')",
+      "INSERT INTO business_locations (id,organization_id,slug,title,timezone,max_capacity) VALUES ('loc-review','org-review','main','Main Room','Asia/Bangkok',40)",
+      "INSERT INTO customers (id, organization_id, name, email, source) VALUES ('cust-review','org-review','Sivan','sivan@proof.example','reservation')",
       // Better Auth's subscription table is the only store of plan entitlement.
       "INSERT INTO subscription (id, plan, referenceId, status, periodEnd) VALUES ('sub-review','growth','org-review','active',4102444800)",
     ]) await db.prepare(statement).run()
-    const thread = requestInsertQueries({ id: 'reservation-review', kind: 'reservation', organization_id: 'org-review', site_id: 'site-review', location_id: 'loc-review',
+    const thread = requestInsertQueries({ id: 'reservation-review', kind: 'reservation', organization_id: 'org-review', location_id: 'loc-review',
       customer_id: 'cust-review', review_id: null, conversation_state: 'resolved', resolved_at: now,
       payload: { ...threadPayloadForGuest({ name: 'Sivan', email: 'sivan@proof.example', phone: null }), completion: { at: now, source: 'auto' } }, created_at: now, updated_at: now })
     await db.batch(thread.map(write => db.prepare(write.query).bind(...write.params)))
     // The visit is the reservation's, in the reservation's zone. 13:00Z in
     // Asia/Bangkok is 8:00 PM, and nothing else in the system knows that.
     // Complete is the clock: confirmed, and an end that has passed.
-    await db.prepare(`INSERT INTO reservations (id,organization_id,site_id,location_id,customer_id,request_id,timezone,starts_at,ends_at,party_size,status)
-      VALUES ('res-review','org-review','site-review','loc-review','cust-review','reservation-review','Asia/Bangkok','2026-09-11T13:00:00.000Z','2026-09-11T15:00:00.000Z',6,'confirmed')`).run()
+    await db.prepare(`INSERT INTO reservations (id,organization_id,location_id,customer_id,request_id,timezone,starts_at,ends_at,party_size,status)
+      VALUES ('res-review','org-review','loc-review','cust-review','reservation-review','Asia/Bangkok','2026-09-11T13:00:00.000Z','2026-09-11T15:00:00.000Z',6,'confirmed')`).run()
 
     const context = await getReviewBookingContext(db, 'reservation', 'reservation-review')
     assert(context, 'the thread and its reservation resolve to one context')
