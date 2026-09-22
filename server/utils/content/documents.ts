@@ -21,13 +21,12 @@ export {
 } from '~/shared/content-registries'
 
 export type ContentDocumentRow = Pick<typeof content_documents.$inferSelect,
-  'id' | 'organization_id' | 'site_id' | 'kind' | 'created_at' | 'updated_at'
+  'id' | 'organization_id' | 'kind' | 'created_at' | 'updated_at'
 > & { row_role: 'root' | 'representation'; root_id: string | null; locale: string }
 
 interface ContentDocumentInputFields {
   id?: string
   organizationId: string
-  siteId: string
   kind: ContentDocumentKind
   title?: string | null
   slug?: string | null
@@ -204,9 +203,9 @@ export function renderContentBlocksToMarkdown(blocks: Array<Pick<ContentBlockRow
 
 export async function getContentRepresentation(db: DbClient, input: { rootId: string; locale?: string }) {
   return await queryFirst<ContentDocumentRow>(db, `
-    SELECT d.id, d.organization_id, d.site_id, d.kind, d.row_role, d.root_id, d.locale, d.created_at, d.updated_at
+    SELECT d.id, d.organization_id, d.kind, d.row_role, d.root_id, d.locale, d.created_at, d.updated_at
     FROM content_documents d
-    JOIN site_locales l ON l.organization_id = d.organization_id AND l.site_id = d.site_id AND l.locale = d.locale
+    JOIN site_locales l ON l.organization_id = d.organization_id AND l.locale = d.locale
     WHERE COALESCE(d.root_id, d.id) = ? AND d.row_role IN ('root', 'representation')
       AND (? IS NULL AND l.is_source = 1 OR d.locale = ?)
     LIMIT 1
@@ -221,14 +220,14 @@ export async function getContentRepresentation(db: DbClient, input: { rootId: st
  * so a stale delete aborts before a placement, a redirect or a document is
  * touched.
  */
-export function prepareContentDocumentDeletion(input: { organizationId: string; siteId: string } & ({ documentId: string; expectedUpdatedAt?: string; expectedRepresentations?: Array<{ id: string; updatedAt: string }> } | { locationId: string })): BatchQuery[] {
+export function prepareContentDocumentDeletion(input: { organizationId: string } & ({ documentId: string; expectedUpdatedAt?: string; expectedRepresentations?: Array<{ id: string; updatedAt: string }> } | { locationId: string })): BatchQuery[] {
   const document = 'documentId' in input
   const owned = document
-    ? 'SELECT id FROM content_documents WHERE (id = ? OR root_id = ?) AND organization_id = ? AND site_id = ?'
+    ? 'SELECT id FROM content_documents WHERE (id = ? OR root_id = ?) AND organization_id = ?'
     : `SELECT d.id FROM content_documents d LEFT JOIN content_documents root ON root.id = d.root_id
-       WHERE (d.location_id = ? OR root.location_id = ?) AND d.organization_id = ? AND d.site_id = ?`
+       WHERE (d.location_id = ? OR root.location_id = ?) AND d.organization_id = ?`
   const id = document ? input.documentId : input.locationId
-  const params = [id, id, input.organizationId, input.siteId]
+  const params = [id, id, input.organizationId]
   return [
     ...(document && input.expectedUpdatedAt !== undefined
       ? [assertDocumentSnapshotQuery(input.documentId, new Date().toISOString(), input.expectedUpdatedAt)]
@@ -257,19 +256,19 @@ export function prepareContentDocumentDeletion(input: { organizationId: string; 
       SELECT id FROM content_blocks WHERE document_id IN (${owned})
     )`, params },
     // Before the delete itself, whose result the caller reads as the last statement's.
-    publicResourceCacheInvalidationQuery(input.siteId, 'content-document-delete'),
+    publicResourceCacheInvalidationQuery(input.organizationId, 'content-document-delete'),
     // The same reach as every statement above it. `WHERE id = ?` deleted the
     // root and left its translations behind: content_documents has no foreign
     // key on root_id, so nothing cascaded, and each representation became a row
     // whose root no longer exists.
-    { query: `DELETE FROM content_documents WHERE ${document ? '(id = ? OR root_id = ?)' : '(location_id = ? OR root_id IN (SELECT id FROM content_documents WHERE location_id = ?))'} AND organization_id = ? AND site_id = ?`,
-      params: [id, id, input.organizationId, input.siteId] },
+    { query: `DELETE FROM content_documents WHERE ${document ? '(id = ? OR root_id = ?)' : '(location_id = ? OR root_id IN (SELECT id FROM content_documents WHERE location_id = ?))'} AND organization_id = ?`,
+      params: [id, id, input.organizationId] },
   ]
 }
 
 export async function getContentDocumentById(db: DbClient, documentId: string) {
   return await queryFirst<ContentDocumentRow>(db, `
-    SELECT id, organization_id, site_id, kind, row_role, root_id, locale, created_at, updated_at
+    SELECT id, organization_id, organization_id, kind, row_role, root_id, locale, created_at, updated_at
     FROM content_documents WHERE id = ? AND row_role IN ('root', 'representation')
   `, [documentId])
 }
@@ -372,8 +371,8 @@ function buildDocumentWriteBatch(
           SELECT 1 FROM content_blocks source JOIN content_documents root ON root.id = source.document_id
           WHERE source.id = ? AND source.type = ? AND source.source_block_id IS NULL AND root.id = ?
             AND root.row_role = 'root' AND root.kind = ?
-            AND root.organization_id = ? AND root.site_id = ?
-        )`, params: [document.id, block.source_block_id, block.type, document.root_id, document.kind, document.organization_id, document.site_id],
+            AND root.organization_id = ? AND root.organization_id = ?
+        )`, params: [document.id, block.source_block_id, block.type, document.root_id, document.kind, document.organization_id, document.organization_id],
     })),
     stalePlacementQuery,
     { query: `DELETE FROM media_placements WHERE owner_type = 'content_block' AND owner_id IN (
@@ -463,19 +462,19 @@ export function prepareContentDocumentWithBlocks(
 ) {
   const now = new Date().toISOString()
   const document: ContentDocumentRow = {
-    id: input.id ?? crypto.randomUUID(), organization_id: input.organizationId, site_id: input.siteId,
+    id: input.id ?? crypto.randomUUID(), organization_id: input.organizationId,
     kind: input.kind, row_role: input.rowRole, root_id: input.rowRole === 'representation' ? input.rootId : null, locale: input.locale,
     created_at: now, updated_at: now,
   }
   const root = input.rowRole === 'root' ? input : null
   const documentInsert: BatchQuery = {
     query: `INSERT INTO content_documents
-      (id, organization_id, site_id, kind, row_role, root_id, root_role, locale, title, slug, path, summary,
+      (id, organization_id, organization_id, kind, row_role, root_id, root_role, locale, title, slug, path, summary,
        seo_title, seo_description, seo_keywords, canonical_url, robots, metadata_json, created_by, updated_by,
        location_id, scope_path, status, visibility, sort_order, source, author_id, published_at, first_published_at, scheduled_for,
        created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    params: [document.id, input.organizationId, input.siteId, input.kind, input.rowRole, document.root_id,
+    params: [document.id, input.organizationId, input.kind, input.rowRole, document.root_id,
       input.rowRole === 'representation' ? 'root' : null, input.locale,
       input.title ?? null, input.slug ?? null, input.path ?? null, input.summary ?? null,
       input.seoTitle ?? null, input.seoDescription ?? null, input.seoKeywords ?? null,
@@ -500,7 +499,7 @@ export async function createContentDocumentWithBlocks(
   opts: Parameters<typeof prepareContentDocumentWithBlocks>[2] = {},
 ) {
   const prepared = prepareContentDocumentWithBlocks(input, blocks, opts)
-  await executeBatch(db, [...prepared.queries, publicResourceCacheInvalidationQuery(input.siteId, `${input.kind}-create`)])
+  await executeBatch(db, [...prepared.queries, publicResourceCacheInvalidationQuery(input.organizationId, `${input.kind}-create`)])
   const document = await getContentDocumentById(db, prepared.document.id)
   if (!document) throw new HTTPError({ statusCode: 500, statusMessage: 'Content document disappeared after synchronization' })
   return { document, body_markdown: prepared.body_markdown, blocks: prepared.blocks }
@@ -744,7 +743,7 @@ export async function updateContentDocument(
   const result = await writeDocumentBlocks(db, document, snapshots, {
     changes: input.changes, expectedDocument: { id: document.id, updatedAt: input.expected_updated_at },
     additionalQueriesBefore: input.additionalQueriesBefore,
-    additionalQueriesAfter: [...(input.additionalQueriesAfter ?? []), publicResourceCacheInvalidationQuery(document.site_id, `${document.kind}-update`)],
+    additionalQueriesAfter: [...(input.additionalQueriesAfter ?? []), publicResourceCacheInvalidationQuery(document.organization_id, `${document.kind}-update`)],
   })
   return { updated_at: result.updated_at }
 }

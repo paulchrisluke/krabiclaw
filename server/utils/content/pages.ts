@@ -218,6 +218,7 @@ async function tenantPagePlacementQueries(
   `, [d1JsonStringSet(blocks.map(block => block.id))])
   const existingBlockIds = new Set(existingRows.map(row => row.id))
   const existingPlacements = await getMediaPlacements(db, {
+    organizationId,
     ownerType: 'content_block',
     ownerIds: blocks.map(block => block.id),
   })
@@ -547,6 +548,7 @@ export async function getPublishedTenantPage(db: DbClient, organizationId: strin
 
 export async function resolvePublishedTenantPageIdentity(
   db: DbClient,
+  organizationId: string,
   path: string,
   locale?: string | null,
 ) {
@@ -625,12 +627,12 @@ export async function createTenantPagesBatch(
     const effectiveData: TenantPageEditorInput = { ...data, locale, path, pageType }
     const metadata = metadataForInput(effectiveData, locale, path)
     const blocks = normalizeTenantPageBlocks(effectiveData.blocks)
-    await assertTenantPageSupport(input.env, db, input.organizationId, input.organizationId, effectiveData, blocks)
+    await assertTenantPageSupport(input.env, db, input.organizationId, effectiveData, blocks)
 
     const pageId = effectiveData.id ?? crypto.randomUUID()
     const variantId = pageId
     const now = new Date().toISOString()
-    const placementQueries = await tenantPagePlacementQueries(db, input.organizationId, input.organizationId, blocks, now)
+    const placementQueries = await tenantPagePlacementQueries(db, input.organizationId, blocks, now)
     const prepared = prepareContentDocumentWithBlocks({
       id: variantId, rowRole: 'root', locale: 'en', organizationId: input.organizationId, kind: 'page',
       metadata: { page_type: metadata.pageType, recipe: metadata.recipe }, source: 'pages',
@@ -725,7 +727,7 @@ export async function applyOnboardingTenantPages(
     }
     const metadata = metadataForInput(effectiveData, locale, page.path)
     const blocks = normalizeTenantPageBlocks(page.blocks)
-    await assertTenantPageSupport(input.env, db, input.organizationId, input.organizationId, effectiveData, blocks)
+    await assertTenantPageSupport(input.env, db, input.organizationId, effectiveData, blocks)
 
     const document = {
       id: row.id,
@@ -739,7 +741,7 @@ export async function applyOnboardingTenantPages(
       updated_at: row.updated_at,
     }
     const now = new Date().toISOString()
-    const placementQueries = await tenantPagePlacementQueries(db, input.organizationId, input.organizationId, blocks, now)
+    const placementQueries = await tenantPagePlacementQueries(db, input.organizationId, blocks, now)
     const prepared = prepareContentDocumentUpdate(document, {
       blocks: blocksAsInputs(blocks), expected_updated_at: row.updated_at,
       changes: { path: page.path, title: metadata.title, summary: metadata.summary,
@@ -825,11 +827,11 @@ export async function createTenantPage(db: DbClient, input: { organizationId: st
   })
   const metadata = metadataForInput(effectiveData, locale, path)
   const blocks = normalizeTenantPageBlocks(effectiveData.blocks)
-  await assertTenantPageSupport(input.env, db, input.organizationId, input.organizationId, effectiveData, blocks)
+  await assertTenantPageSupport(input.env, db, input.organizationId, effectiveData, blocks)
   const pageId = existingPage?.id ?? effectiveData.id ?? crypto.randomUUID()
   const variantId = existingPage ? effectiveData.id ?? crypto.randomUUID() : pageId
   const now = new Date().toISOString()
-  const placementQueries = await tenantPagePlacementQueries(db, input.organizationId, input.organizationId, blocks, now)
+  const placementQueries = await tenantPagePlacementQueries(db, input.organizationId, blocks, now)
   const representation: ContentDocumentInput = {
     id: variantId, organizationId: input.organizationId, kind: 'page',
     // sort_order lives on the root document, so only the root branch states it.
@@ -940,6 +942,7 @@ export async function deleteTenantPage(db: DbClient, variantId: string, input: {
     ...prepareContentDocumentDeletion({
       documentId: row.id,
       organizationId: row.organization_id,
+      organizationId: row.site_id,
       expectedUpdatedAt: input.expectedUpdatedAt,
       expectedRepresentations: row.locale === 'en'
         ? translations.map(translation => ({ id: translation.id, updatedAt: translation.updated_at }))
@@ -997,12 +1000,13 @@ export async function updateTenantPage(db: DbClient, variantId: string, input: {
   const blocks = normalizeTenantPageBlocks(preserveOmittedBlockMedia(input.data.blocks, currentBlocks))
   await assertTenantPageSupport(input.env, db, row.organization_id, row.site_id, effectiveInput, blocks, { checkCustomPageEntitlement: row.page_type !== 'custom' && pageType === 'custom' })
   const now = new Date().toISOString()
-  const placementQueries = await tenantPagePlacementQueries(db, input.scope.organizationId, input.scope.organizationId, blocks, now)
+  const placementQueries = await tenantPagePlacementQueries(db, input.scope.organizationId, blocks, now)
   const pathChanged = path !== row.path
   if (pathChanged) {
     await assertTenantPageRedirectLocaleSafe(db, { organizationId: row.site_id, locale: row.locale, fromPath: row.path, variantId })
     await assertTenantPageRedirectWritable(db, {
       organizationId: row.site_id,
+      organizationId: row.organization_id,
       locale: row.locale,
       fromPath: row.path,
       variantId,
@@ -1012,6 +1016,7 @@ export async function updateTenantPage(db: DbClient, variantId: string, input: {
     ? [
         ...await prepareTenantPageRedirectFlatten(db, {
           organizationId: row.site_id,
+          organizationId: row.organization_id,
           locale: row.locale,
           fromPath: row.path,
           toPath: path,
