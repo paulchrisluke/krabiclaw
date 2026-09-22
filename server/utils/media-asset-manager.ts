@@ -308,6 +308,7 @@ type MediaPlacementRow = MediaAsset & {
 }
 
 export async function readMediaPlacements(db: DbClient, input: {
+  organizationId: string
   ownerType: MediaPlacementOwnerType
   ownerIds: string[]
   slot?: string
@@ -320,7 +321,7 @@ export async function readMediaPlacements(db: DbClient, input: {
     SELECT mp.id AS placement_id, mp.owner_type, mp.owner_id, mp.slot, mp.sort_order,
            ma.*
       FROM media_placements mp
-      JOIN media_assets ma ON ma.id = mp.asset_id AND ma.organization_id = mp.organization_id AND ma.organization_id = mp.organization_id
+      JOIN media_assets ma ON ma.id = mp.asset_id AND ma.organization_id = mp.organization_id
      WHERE mp.organization_id = ? AND mp.owner_type = ?
        AND mp.owner_id IN (SELECT value FROM json_each(?))
        ${input.slot ? 'AND mp.slot = ?' : ''}
@@ -665,7 +666,6 @@ export async function deleteMediaAsset(db: DbClient, env: MediaProviderEnv, id: 
   await fireOrganizationEventSafe({
     db,
     organizationId: pendingAsset.organization_id,
-    organizationId,
     locationId: null,
     actorId: deletedByUserId,
     eventType: 'media.deleted',

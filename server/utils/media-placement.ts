@@ -172,6 +172,7 @@ export async function setSingleMediaPlacement(db: DbClient, input: {
 }
 
 export async function getMediaPlacements(db: DbClient, input: {
+  organizationId: string
   ownerType: MediaPlacementOwnerType
   ownerIds: string[]
   slot?: string

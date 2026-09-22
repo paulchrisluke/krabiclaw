@@ -15,7 +15,7 @@ export default defineHandler(async (event) => {
     // Creating from a site's editor means that site carries the product. It
     // is NOT published by that act: publication is a separate, explicit state.
     await setProductPublication(db, {
-      organizationId: site.organization_id, productId: product.id, organizationId, published: false, actor: { actorId: session.user.id },
+      organizationId, productId: product.id, published: false, actor: { actorId: session.user.id },
     })
     return jsonResponse({ success: true, product, site_id: organizationId }, { status: 201 })
   } catch (error) {

@@ -15,7 +15,7 @@ export default defineHandler(async (event) => {
     const body = await readStrictBody<{ published: unknown }>(event, { published: 'unknown' })
     if (typeof body.published !== 'boolean') return jsonResponse({ error: 'published must be a boolean' }, { status: 400 })
     await setProductPublication(db, {
-      organizationId: site.organization_id, productId, organizationId, published: body.published, actor: { actorId: session.user.id },
+      organizationId, productId, published: body.published, actor: { actorId: session.user.id },
     })
     return jsonResponse({ success: true, product: await getProduct(db, site.organization_id, productId) })
   } catch (error) {

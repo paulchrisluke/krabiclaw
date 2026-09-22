@@ -58,7 +58,6 @@ export type SocialCardRefreshResult =
 
 interface OwnerRecord {
   organization_id: string
-  organization_id: string
   title: string | null
   description: string | null
   label: string | null
@@ -319,7 +318,6 @@ export async function refreshSocialCard(input: {
       db,
       env,
       organizationId: site.id,
-      organizationId: site.organization_id,
       userId: input.actorId ?? null,
       buffer: Uint8Array.from(png),
       contentType: 'image/png',
@@ -339,7 +337,6 @@ export async function refreshSocialCard(input: {
       }
       await executeBatch(db, buildSingleMediaPlacementQueries({
         organizationId: site.organization_id,
-        organizationId: site.id,
         placement: { owner_type: owner.owner_type, owner_id: owner.owner_id, slot: 'social_card' },
         media: [{ asset_id: uploaded.assetId }],
       }), { operation: 'replace social card placement' })
