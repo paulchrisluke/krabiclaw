@@ -108,6 +108,17 @@
     </nav>
     </div>
 
+    <!-- A refused organization switch stays on screen: the session did not move. -->
+    <UAlert
+      v-if="organizationSwitchError"
+      color="error"
+      variant="soft"
+      icon="i-lucide-circle-alert"
+      class="fixed inset-x-4 top-4 z-50 mx-auto max-w-md"
+      :description="organizationSwitchError"
+      :close="{ onClick: () => (organizationSwitchError = null) }"
+    />
+
     <DashboardMenuSlideover v-model:open="menuOpen" />
 
     <BillingServiceUpsellModal />
@@ -331,13 +342,37 @@ const scopeHeaderModel = computed<DashboardScopeHeaderModel>(() => {
       avatar: org.logo ?? undefined,
       icon: org.logo ? undefined : 'i-lucide-building-2',
       active: org.id === organization.value?.id,
-      to: `/dashboard/${encodeURIComponent(org.slug)}`
+      // The one already open is an ordinary link; switching is an action,
+      // because Better Auth has to be told before the dashboard is entered.
+      ...(org.id === organization.value?.id
+        ? { to: `/dashboard/${encodeURIComponent(org.slug)}` }
+        : { onSelect: () => void selectOrganization(org) }),
     })),
     createAction: { label: 'New Organization', to: '/dashboard/onboarding' }
   }
 })
 
 
+
+/**
+ * Switching businesses activates the organization in Better Auth first, then
+ * navigates. Navigating first left the session pointing at the old one, which
+ * is what the account pages read to find their way back (#905).
+ */
+const organizationSwitchError = ref<string | null>(null)
+async function selectOrganization(org: { id: string, slug: string }) {
+  organizationSwitchError.value = null
+  const { error } = await authClient.organization.setActive({ organizationId: org.id })
+  if (error) {
+    // Staying put is the honest outcome: the session is still in the old
+    // organization, so entering the new one would show a dashboard the session
+    // is not actually in.
+    organizationSwitchError.value = error.message || 'Could not switch organization'
+    return
+  }
+  await session.value.refetch()
+  await navigateTo(`/dashboard/${encodeURIComponent(org.slug)}`)
+}
 
 provide(dashboardScopeHeaderModelKey, scopeHeaderModel)
 provide(dashboardOrganizationParentKey, computed(() => {

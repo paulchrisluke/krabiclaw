@@ -3,8 +3,8 @@ import { HTTPError, defineHandler  } from 'nitro';
 // GET /api/post-login — server-side redirect after OAuth / sign-in.
 import { getQuery, redirect } from 'nitro/h3';
 import { cloudflareEnv } from '~/server/utils/api-response'
-import { getAuthSession } from '~/server/utils/auth'
-import { resolvePostLoginDestination } from '~/server/utils/post-login-routing'
+import { createAuth, getAuthSession } from '~/server/utils/auth'
+import { resolvePostLoginRoute } from '~/server/utils/post-login-routing'
 import { NEW_SALE_PLAN_ID } from '~/shared/billing-model'
 import { buildLoginUrl, buildPostLoginUrl, validatedInternalPath } from '~/shared/auth/return-target'
 
@@ -28,17 +28,40 @@ export default defineHandler(async (event) => {
 
   try {
     const sessionRecord = session.session as typeof session.session & { activeOrganizationId?: string | null }
-    const destination = await resolvePostLoginDestination(env, {
+    const route = await resolvePostLoginRoute(env, {
       userId: session.user.id,
       activeOrganizationId: typeof sessionRecord.activeOrganizationId === 'string' ? sessionRecord.activeOrganizationId : null,
     })
+
+    // One organization is activated here rather than on arrival: this handler
+    // holds the authenticated request headers, and routing first would leave
+    // the session with no active organization for the account pages to read.
+    if (route.kind === 'activate') {
+      // `createAuth` caches its instance as `unknown` and casts it back to the
+      // bare `betterAuth` type, which erases every plugin endpoint from `api`.
+      // The route exists — organization() is registered — so the shape is named
+      // here rather than restructuring the auth builder inside a routing change.
+      const auth = createAuth(env) as unknown as {
+        api: { setActiveOrganization: (input: { body: { organizationId: string }, headers: Headers }) => Promise<unknown> }
+      }
+      await auth.api.setActiveOrganization({
+        body: { organizationId: route.organizationId },
+        headers: event.req.headers,
+      })
+    }
+
     if (plan) {
-      if (destination === '/dashboard/onboarding') {
+      if (route.kind === 'onboard') {
         throw new HTTPError({ statusCode: 409, message: 'An organization is required before choosing a billing plan' })
       }
-      return redirect(`${destination}/settings/billing?plan=${encodeURIComponent(plan)}`, 302)
+      // The chooser carries the plan and returns through here, so the billing
+      // destination is decided in exactly one place.
+      if (route.kind === 'choose') {
+        return redirect(`${route.destination}?plan=${encodeURIComponent(plan)}`, 302)
+      }
+      return redirect(`${route.destination}/settings/billing?plan=${encodeURIComponent(plan)}`, 302)
     }
-    return redirect(destination, 302)
+    return redirect(route.destination, 302)
   } catch (error) {
     if (error instanceof HTTPError) throw error
     console.error('Failed to resolve organization slug in post-login:', error)
