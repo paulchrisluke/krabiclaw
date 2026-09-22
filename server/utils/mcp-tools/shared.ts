@@ -326,7 +326,7 @@ export const blogPostObject = {
   },
   required: [
     'id', 'title', 'slug', 'excerpt', 'collection', 'category', 'tags',
-    'seo_title', 'seo_description', 'seo_keywords', 'canonical_url', 'robots',
+    'seo_title', 'seo_description', 'seo_keywords', 'canonical_url',
     'published', 'published_at', 'status', 'visibility', 'scheduled_for',
     'created_at', 'updated_at', 'cover', 'admin_edit_url', 'edit_url',
     'public_path', 'public_url', 'preview_url', 'view_url',
@@ -367,7 +367,7 @@ export const blogPostSummaryObject = {
   },
   required: [
     'id', 'title', 'slug', 'excerpt', 'collection', 'category', 'tags',
-    'seo_title', 'seo_description', 'seo_keywords', 'canonical_url', 'robots',
+    'seo_title', 'seo_description', 'seo_keywords', 'canonical_url',
     'published', 'published_at', 'status', 'visibility', 'scheduled_for',
     'created_at', 'updated_at', 'cover', 'admin_edit_url', 'edit_url',
     'public_path', 'public_url', 'preview_url', 'view_url',

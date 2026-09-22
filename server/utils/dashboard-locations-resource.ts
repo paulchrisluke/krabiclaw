@@ -11,6 +11,7 @@ export interface DashboardLocationResource {
   id: string
   slug: string
   title: string
+  team_id: string | null
   status: string
   address: string | null | Record<string, unknown>
   phone: string | null
@@ -31,7 +32,7 @@ export async function listDashboardLocationsResource(
     ? `AND id IN (SELECT value FROM json_each(?))`
     : ''
   const locations = await queryAll<DashboardLocationResource>(db, `
-    SELECT id, slug, title, status, address, phone, email,
+    SELECT id, slug, title, team_id, status, address, phone, email,
            notification_phone
       FROM business_locations
      WHERE organization_id = ?

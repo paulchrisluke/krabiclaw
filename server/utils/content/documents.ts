@@ -371,7 +371,7 @@ function buildDocumentWriteBatch(
           SELECT 1 FROM content_blocks source JOIN content_documents root ON root.id = source.document_id
           WHERE source.id = ? AND source.type = ? AND source.source_block_id IS NULL AND root.id = ?
             AND root.row_role = 'root' AND root.kind = ?
-            AND root.organization_id = ? AND root.organization_id = ?
+            AND root.organization_id = ?
         )`, params: [document.id, block.source_block_id, block.type, document.root_id, document.kind, document.organization_id, document.organization_id],
     })),
     stalePlacementQuery,
@@ -469,16 +469,16 @@ export function prepareContentDocumentWithBlocks(
   const root = input.rowRole === 'root' ? input : null
   const documentInsert: BatchQuery = {
     query: `INSERT INTO content_documents
-      (id, organization_id, organization_id, kind, row_role, root_id, root_role, locale, title, slug, path, summary,
-       seo_title, seo_description, seo_keywords, canonical_url, robots, metadata_json, created_by, updated_by,
+      (id, organization_id, kind, row_role, root_id, root_role, locale, title, slug, path, summary,
+       seo_title, seo_description, seo_keywords, canonical_url, metadata_json, created_by, updated_by,
        location_id, scope_path, status, visibility, sort_order, source, author_id, published_at, first_published_at, scheduled_for,
        created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     params: [document.id, input.organizationId, input.kind, input.rowRole, document.root_id,
       input.rowRole === 'representation' ? 'root' : null, input.locale,
       input.title ?? null, input.slug ?? null, input.path ?? null, input.summary ?? null,
       input.seoTitle ?? null, input.seoDescription ?? null, input.seoKeywords ?? null,
-      input.canonicalUrl ?? null, input.robots ?? null, JSON.stringify(input.metadata ?? {}),
+      input.canonicalUrl ?? null, JSON.stringify(input.metadata ?? {}),
       input.createdBy ?? null, input.updatedBy ?? null,
       root?.locationId ?? null, root?.scopePath ?? null, root?.status ?? null, root?.visibility ?? null,
       root?.sortOrder ?? 0, root?.source ?? null, root?.authorId ?? null,

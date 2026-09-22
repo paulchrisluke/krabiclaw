@@ -25,9 +25,9 @@ export default defineHandler(async (event) => {
 
   const post = await queryFirst<{ location_id: string | null }>(db, `
     SELECT location_id FROM content_documents
-    WHERE kind = 'social_post' AND row_role = 'root' AND id = ? AND organization_id = ? AND organization_id = ?
+    WHERE kind = 'social_post' AND row_role = 'root' AND id = ? AND organization_id = ?
     LIMIT 1
-  `, [postId, site.id, organizationId])
+  `, [postId, organizationId])
   if (!post) return jsonResponse({ error: 'Post not found' }, { status: 404 })
   await assertResourceAccess(db, { ...memberAccessPrincipal(site.membership, { env, event }), resourceLocationId: post.location_id })
 

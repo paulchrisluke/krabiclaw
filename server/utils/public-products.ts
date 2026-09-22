@@ -136,7 +136,7 @@ export async function loadPublicProductCollection(
   const locationRows = await queryAll<PublicProductLocation>(db, `
     SELECT id, slug, title, feature_overrides, address, phone, maps_url, latitude, longitude
       FROM business_locations
-     WHERE organization_id = ? AND organization_id = ? AND status = 'active'
+     WHERE organization_id = ? AND status = 'active'
        ${locationSlug ? 'AND slug = ?' : ''}
      ORDER BY title, id
   `, [resolved.site.id, organizationId, ...(locationSlug ? [locationSlug] : [])])
@@ -348,7 +348,7 @@ export async function loadPublicProductReviews(
     SELECT id, author_name, rating, title, content, source, original_reference, google_review_metadata,
            original_review_date, created_at
      FROM reviews
-     WHERE organization_id = ? AND organization_id = ? AND status = 'approved'
+     WHERE organization_id = ? AND status = 'approved'
        AND location_id = ?
        AND (product_id = ? OR (product_id IS NULL AND source = 'google_places'))
        AND author_name IS NOT NULL AND trim(author_name) <> ''

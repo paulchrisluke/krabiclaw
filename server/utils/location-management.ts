@@ -168,7 +168,7 @@ async function resolveValidatedLocationFeatures(
     return { ok: false, status: 400, data: { error: "feature_overrides.enabled/disabled must be arrays of feature ids or null." } };
   }
   const parentSite = await queryFirst<{ vertical: string; theme_id: string; feature_overrides: string | null }>(db, `
-    SELECT vertical, theme_id, feature_overrides FROM organization WHERE id = ? AND organization_id = ? LIMIT 1
+    SELECT vertical, theme_id, feature_overrides FROM organization WHERE id = ? LIMIT 1
   `, [organizationId]);
   if (!parentSite) {
     return { ok: false, status: 404, data: { error: "Site not found." } };
@@ -220,7 +220,7 @@ export async function resolveLocationCapabilitySummary(
   locationFeatureOverridesRaw: string | null,
 ): Promise<LocationCapabilitySummary | null> {
   const site = await queryFirst<{ vertical: string; theme_id: string; feature_overrides: string | null }>(db, `
-    SELECT vertical, theme_id, feature_overrides FROM organization WHERE id = ? AND organization_id = ? LIMIT 1
+    SELECT vertical, theme_id, feature_overrides FROM organization WHERE id = ? LIMIT 1
   `, [organizationId]);
   if (!site) return null;
   const { parseCmsFeatureOverrideDelta } = await import("~/config/cms-registry");
@@ -285,7 +285,7 @@ async function loadLocation(
            rating, review_count, description, short_description, status,
            address, opening_hours, special_hours, categories, price_level,
            facebook_url, instagram_url, tiktok_url,
-           notification_phone, timezone, max_capacity, seo_title, seo_description, canonical_url, robots,
+           notification_phone, timezone, max_capacity, seo_title, seo_description, canonical_url,
            feature_overrides, created_at, updated_at`;
   // Check id first so a slug that happens to collide with another row's id can
   // never shadow the row actually addressed by that id.
@@ -402,13 +402,13 @@ export async function createLocation(
       statements.push({
         query: `
           INSERT INTO business_locations (
-            id, organization_id, organization_id, title, slug, phone, email, website_url, maps_url,
+            id, organization_id, title, slug, phone, email, website_url, maps_url,
             google_review_url, google_place_id, description, short_description, address, opening_hours, special_hours, rating, review_count,
             price_level, facebook_url, instagram_url, tiktok_url,
             notification_phone, timezone, max_capacity, status,
-            seo_title, seo_description, canonical_url, robots, feature_overrides, created_at, updated_at
+            seo_title, seo_description, canonical_url, feature_overrides, created_at, updated_at
           )
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, ?)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?)
         `,
         params: [
           id,
@@ -456,7 +456,7 @@ export async function createLocation(
         });
       } catch (teamError) {
         const compensating = [{
-          query: `DELETE FROM business_locations WHERE id = ? AND organization_id = ? AND organization_id = ?`,
+          query: `DELETE FROM business_locations WHERE id = ? AND organization_id = ?`,
           params: [id, organizationId],
         }];
         await executeBatch(db, compensating).catch((cleanupError) => {
@@ -695,7 +695,7 @@ export async function updateLocation(
       query: `
         UPDATE business_locations
         SET ${sets.join(", ")}
-        WHERE id = ? AND organization_id = ? AND organization_id = ?
+        WHERE id = ? AND organization_id = ?
       `,
       params: boundParams,
     });
@@ -782,23 +782,23 @@ export async function deleteLocation(
   const now = new Date().toISOString();
   const statements = [
     ...prepareContentDocumentDeletion({ locationId, organizationId}),
-    ...resourceLocalizationDeletionQueries('business_location', { query: 'SELECT id FROM business_locations WHERE id = ? AND organization_id = ? AND organization_id = ?', params: [locationId, organizationId] }),
+    ...resourceLocalizationDeletionQueries('business_location', { query: 'SELECT id FROM business_locations WHERE id = ? AND organization_id = ?', params: [locationId, organizationId] }),
     // Deleting a location does NOT delete the products it offered: the
     // catalog belongs to the organization and other locations may still sell
     // them. The membership row goes (cascaded by the foreign key) and the
     // product stays. Only the location's own media and redirects are removed.
-    { query: `DELETE FROM organization_redirects WHERE organization_id = ? AND organization_id = ? AND (
+    { query: `DELETE FROM organization_redirects WHERE organization_id = ? AND (
         (owner_type = 'business_location' AND owner_id = ?) OR
         (owner_type = 'review' AND owner_id IN (SELECT id FROM reviews WHERE location_id = ?))
       )`, params: [organizationId, locationId, locationId] },
-    { query: `DELETE FROM media_placements WHERE organization_id = ? AND organization_id = ? AND
+    { query: `DELETE FROM media_placements WHERE organization_id = ? AND
         owner_type = 'review' AND owner_id IN (SELECT id FROM reviews WHERE location_id = ?)
       `, params: [organizationId, locationId] },
-    { query: 'DELETE FROM reviews WHERE location_id = ? AND organization_id = ? AND organization_id = ?', params: [locationId, organizationId] },
+    { query: 'DELETE FROM reviews WHERE location_id = ? AND organization_id = ?', params: [locationId, organizationId] },
     {
       query: `
       DELETE FROM media_placements
-      WHERE organization_id = ? AND organization_id = ? AND owner_type = 'business_location' AND owner_id = ?
+      WHERE organization_id = ? AND owner_type = 'business_location' AND owner_id = ?
     `,
       params: [organizationId, locationId],
     },
@@ -807,20 +807,20 @@ export async function deleteLocation(
       UPDATE user_workspace_state
       SET location_id = NULL,
           updated_at = ?
-      WHERE organization_id = ? AND organization_id = ? AND location_id = ?
+      WHERE organization_id = ? AND location_id = ?
     `,
       params: [now, organizationId, locationId],
     },
     {
       query: `
-      DELETE FROM requests WHERE organization_id = ? AND organization_id = ? AND location_id = ? AND kind IN ('reservation', 'booking')
+      DELETE FROM requests WHERE organization_id = ? AND location_id = ? AND kind IN ('reservation', 'booking')
     `,
       params: [organizationId, locationId],
     },
     {
       query: `
       DELETE FROM business_locations
-      WHERE id = ? AND organization_id = ? AND organization_id = ?
+      WHERE id = ? AND organization_id = ?
     `,
       params: [locationId, organizationId],
     },

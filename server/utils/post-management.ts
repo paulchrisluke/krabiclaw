@@ -121,7 +121,7 @@ interface PublishedPostRow {
 }
 
 async function validatePostLocation(db: DbClient, organizationId: string, locationId: string | null, post: PostTopic) {
-  const location = locationId ? await queryFirst<{ phone: string | null }>(db, 'SELECT phone FROM business_locations WHERE id = ? AND organization_id = ? AND organization_id = ?', [locationId, organizationId]) : null
+  const location = locationId ? await queryFirst<{ phone: string | null }>(db, 'SELECT phone FROM business_locations WHERE id = ? AND organization_id = ?', [locationId, organizationId]) : null
   if (locationId && !location) throw new PostValidationError('location_id must belong to this site')
   if (post.call_to_action?.action_type === 'call' && !location?.phone) throw new PostValidationError('CALL requires a location with a phone number')
 }
@@ -276,7 +276,7 @@ export async function listPosts(
   let query = `
     SELECT p.id, p.organization_id, p.organization_id, p.location_id, p.slug, p.title, p.seo_title, p.seo_description, p.status, p.visibility, p.scheduled_for, p.published_at, p.created_by, p.created_at, p.updated_at, p.summary AS body, (p.metadata_json ->> '$.post_type') AS post_type, json_extract(p.metadata_json, '$.event') AS event, json_extract(p.metadata_json, '$.offer') AS offer, json_extract(p.metadata_json, '$.call_to_action') AS call_to_action, (p.metadata_json ->> '$.alert_type') AS alert_type, bl.phone AS location_phone
     FROM content_documents p LEFT JOIN business_locations bl ON bl.id = p.location_id AND bl.organization_id = p.organization_id
-    WHERE p.kind = 'social_post' AND p.row_role = 'root' AND p.organization_id = ? AND p.organization_id = ?
+    WHERE p.kind = 'social_post' AND p.row_role = 'root' AND p.organization_id = ?
   `
   const params: string[] = [organizationId]
   if (status) {
@@ -491,7 +491,7 @@ export async function publishPost(
               published_at = COALESCE(published_at, ?),
               first_published_at = CASE WHEN status = 'published' THEN first_published_at ELSE COALESCE(first_published_at, ?) END,
               updated_at = ?
-        WHERE kind = 'social_post' AND row_role = 'root' AND id = ? AND organization_id = ? AND organization_id = ? AND updated_at = ?`,
+        WHERE kind = 'social_post' AND row_role = 'root' AND id = ? AND organization_id = ? AND updated_at = ?`,
       params: [slug, now, now, now, postId, organizationId, existing.updated_at],
     }, publicResourceCacheInvalidationQuery(organizationId, 'post-publish')])
     if (Number(updateResult?.meta.changes ?? 0) === 0) return null

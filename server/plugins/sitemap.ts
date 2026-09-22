@@ -18,7 +18,7 @@ interface SitemapEntry {
 
 async function listPublishedTenantSitemapPages(db: DbClient, organizationId: string) {
   return await queryAll<{ path: string | null; lastmod: string | null; robots: string | null }>(db, `
-    SELECT v.path, v.updated_at AS lastmod, v.robots
+    SELECT v.path, v.updated_at AS lastmod
       FROM content_documents v
      WHERE v.organization_id = ? AND v.kind = 'page' AND v.row_role = 'root'
      ORDER BY lastmod ASC, path ASC
@@ -151,7 +151,7 @@ export default definePlugin((nitroApp) => {
            ORDER BY route_path
         `, [organizationId, candidate.locale]),
         queryAll<{ path: string; updated_at: string; robots: string | null }>(db, `
-          SELECT d.path, d.updated_at, d.robots FROM content_documents d
+          SELECT d.path, d.updated_at FROM content_documents d
             JOIN content_documents root ON root.id = d.root_id AND root.row_role = 'root'
            WHERE d.organization_id = ? AND d.locale = ? AND d.row_role = 'representation' AND d.path IS NOT NULL
              AND (root.robots IS NULL OR root.robots NOT LIKE '%noindex%')

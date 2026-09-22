@@ -16,9 +16,9 @@ export default defineHandler(async (event) => {
   try {
     const version = await queryFirst<IntegrationVersion>(db, `
       SELECT json_extract(integrations_json, '$.google.revision') AS revision
-        FROM organization WHERE id = ? AND organization_id = ?
-    `, [organization.id, organization.id])
-    if (!version) throw new Error('Site no longer belongs to this organization')
+        FROM organization WHERE id = ?
+    `, [organization.id])
+    if (!version) throw new Error('Organization no longer exists')
 
     const statePayload = {
       ...version, organizationId: organization.id, userId: session.user.id, timestamp: Date.now()

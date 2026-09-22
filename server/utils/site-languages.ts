@@ -46,8 +46,8 @@ export async function addSiteLanguage(
   // No public-slot count here: adding costs the site nothing until it is
   // published, and the limit belongs where the slot is actually taken.
   await execute(db, `
-    INSERT INTO organization_locales (id, organization_id, organization_id, locale, label, is_source, status, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, 0, 'disabled', ?, ?)
+    INSERT INTO organization_locales (id, organization_id, locale, label, is_source, status, created_at, updated_at)
+    VALUES (?, ?, ?, ?, 0, 'disabled', ?, ?)
     ON CONFLICT(organization_id, locale) DO UPDATE SET label = excluded.label, updated_at = excluded.updated_at
   `, [`locale::${input.organizationId}::${locale}`, input.organizationId, locale, catalog.label, now, now])
   return await loadLanguage(db, input.organizationId, locale)
@@ -79,7 +79,7 @@ export async function publishSiteLanguage(
       activated_at = COALESCE(activated_at, ?), disabled_at = NULL, updated_at = ?
      WHERE organization_id = ?  AND locale = ? AND is_source = 0
        AND (SELECT COUNT(*) FROM organization_locales other
-              WHERE other.organization_id = ? AND other.organization_id = ? AND other.is_source = 0
+              WHERE other.organization_id = ? AND other.is_source = 0
                 AND other.status = 'published' AND other.locale <> ?) < 2
   `, [now, now, input.organizationId, locale, input.organizationId, locale])
   if (result.meta?.changes !== 1) localizationError(409, 'LANGUAGE_ENTITLEMENT_REQUIRED', 'Language could not be published because two secondary languages are already published.')
@@ -109,11 +109,11 @@ export async function deleteDisabledSiteLanguageContent(
   const documents = await queryAll<{ id: string }>(db, `SELECT id FROM content_documents
     WHERE organization_id = ?  AND locale = ? AND row_role = 'representation'`, [input.organizationId, locale])
   const statements = [
-    { query: `UPDATE organization_locales SET locale = NULL WHERE organization_id = ? AND organization_id = ? AND locale = ? AND status <> 'disabled'`, params: [input.organizationId, locale] },
-    { query: `DELETE FROM organization_redirects WHERE organization_id = ? AND organization_id = ? AND locale = ?`, params: [input.organizationId, locale] },
+    { query: `UPDATE organization_locales SET locale = NULL WHERE organization_id = ? AND locale = ? AND status <> 'disabled'`, params: [input.organizationId, locale] },
+    { query: `DELETE FROM organization_redirects WHERE organization_id = ? AND locale = ?`, params: [input.organizationId, locale] },
     ...documents.flatMap(document => prepareContentDocumentDeletion({ documentId: document.id, organizationId: input.organizationId})),
-    { query: `DELETE FROM resource_localizations WHERE organization_id = ? AND organization_id = ? AND locale = ?`, params: [input.organizationId, locale] },
-    { query: `DELETE FROM organization_locales WHERE organization_id = ? AND organization_id = ? AND locale = ? AND is_source = 0 AND status = 'disabled'`, params: [input.organizationId, locale] },
+    { query: `DELETE FROM resource_localizations WHERE organization_id = ? AND locale = ?`, params: [input.organizationId, locale] },
+    { query: `DELETE FROM organization_locales WHERE organization_id = ? AND locale = ? AND is_source = 0 AND status = 'disabled'`, params: [input.organizationId, locale] },
   ]
   await executeBatch(db, statements, { operation: 'delete disabled language content' })
   return { deleted: true, locale }

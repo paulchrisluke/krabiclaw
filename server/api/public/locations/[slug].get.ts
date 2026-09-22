@@ -43,9 +43,9 @@ export default defineHandler(async (event) => {
       LEFT JOIN media_placements mp ON mp.organization_id = bl.organization_id AND mp.owner_type = 'business_location' AND mp.owner_id = bl.id AND mp.slot = 'hero' AND mp.sort_order = 0 AND mp.status = 'active'
       LEFT JOIN media_assets ma ON mp.asset_id = ma.id AND ma.status = 'active'
         AND ma.organization_id = bl.organization_id AND ma.organization_id = bl.organization_id
-      WHERE bl.organization_id = ? AND bl.organization_id = ? AND bl.slug = ? AND bl.status = 'active'
+      WHERE bl.organization_id = ? AND bl.slug = ? AND bl.status = 'active'
       LIMIT 1
-    `, [site.id, organizationId, slug], )
+    `, [organizationId, slug], )
 
     if (!location) {
       return jsonResponse({

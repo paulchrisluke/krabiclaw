@@ -47,7 +47,7 @@ const n = (value: unknown) => Number(value || 0)
 
 export async function resolveSiteAnalyticsContext(db: DbClient, organizationId: string): Promise<SiteContext> {
   const row = await queryFirst<{ organization_id: string; analytics_data_start_at: string | null; timezone: string | null }>(db, `
-    SELECT s.organization_id, s.analytics_data_start_at, json_extract(s.settings_json, '$.config.default_timezone') AS timezone
+    SELECT s.id AS organization_id, s.analytics_data_start_at, json_extract(s.settings_json, '$.config.default_timezone') AS timezone
     FROM organization s
     WHERE s.id = ? LIMIT 1
   `, [organizationId])
@@ -143,7 +143,7 @@ export async function aggregateSiteAnalyticsDate(db: DbClient, organizationId: s
   await executeBatch(db, [
     { query: "DELETE FROM analytics_summaries WHERE organization_id = ? AND date = ? AND kind IN ('page_day', 'dimension_day')", params: [organizationId, date] },
     {
-      query: `INSERT INTO analytics_summaries (id, kind, organization_id, organization_id, date, key, payload_json, created_at, updated_at)
+      query: `INSERT INTO analytics_summaries (id, kind, organization_id, date, key, payload_json, created_at, updated_at)
         SELECT lower(hex(randomblob(16))), kind, ?, ?, ?, key, payload_json, ?, ? FROM (${daySummariesSql}) WHERE true
         ON CONFLICT(organization_id, kind, date, key) DO UPDATE SET organization_id = excluded.organization_id,
           payload_json = excluded.payload_json, updated_at = excluded.updated_at`,

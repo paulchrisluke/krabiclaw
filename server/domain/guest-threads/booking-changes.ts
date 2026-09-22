@@ -172,8 +172,8 @@ async function validateDestination(db: DbClient, thread: GuestThreadRow, before:
 
   if (before.recordKind !== 'reservation') throw new HTTPError({ statusCode: 409, message: 'This conversation is a booking, not a reservation' })
   const location = await queryFirst<{ id: string; title: string; timezone: string | null }>(db,
-    'SELECT id, title, timezone FROM business_locations WHERE id = ? AND organization_id = ? AND organization_id = ?',
-    [after.locationId, thread.organization_id, thread.organization_id])
+    'SELECT id, title, timezone FROM business_locations WHERE id = ? AND organization_id = ?',
+    [after.locationId, thread.organization_id])
   if (!location) throw new HTTPError({ statusCode: 400, message: 'Choose a location belonging to this site' })
   if (!location.timezone) throw new HTTPError({ statusCode: 409, message: 'Set the location timezone before changing reservations' })
   const startsAt = localDateTimeToInstant(after.bookingDate, after.bookingTime, location.timezone, 'reject').toISOString()

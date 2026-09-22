@@ -166,8 +166,8 @@ export async function listAgenda(
   const allCapabilitySites = await queryAll<CapabilitySiteRow>(db, `
     SELECT s.id, s.name, s.subdomain, s.vertical, s.theme_id, s.feature_overrides
     FROM organization s
-    WHERE s.organization_id = ?
-    ORDER BY s.created_at, s.id
+    WHERE s.id = ?
+    ORDER BY s.id
   `, [organizationId])
   const accessibleLocationsBySite = new Map<string, string[] | null>()
   if (scoped && query.principal) {
@@ -221,7 +221,7 @@ export async function listAgenda(
            ${enrichment.resourceImage ?? `COALESCE(${locationMediaUrlSelect(alias)}, ${siteMediaUrlSelect(alias)})`} AS resource_image_url,
            ${enrichment.resourceTitle ?? 'COALESCE(l.title, s.name, s.subdomain, s.id)'} AS resource_title
     FROM ${kind === 'post' ? 'content_documents' : 'requests'} ${alias}
-    JOIN organization s ON s.id = ${alias}.organization_id AND s.organization_id = ${alias}.organization_id
+    JOIN organization s ON s.id = ${alias}.organization_id
     LEFT JOIN business_locations l ON l.id = ${alias}.location_id AND l.organization_id = ${alias}.organization_id
     
     ${enrichment.joins ?? ''}
@@ -264,7 +264,7 @@ export async function listAgenda(
     LEFT JOIN business_locations l ON l.id = agenda_session.location_id
     JOIN product_publications pub ON pub.product_id = agenda_session.product_id AND pub.organization_id = agenda_session.organization_id
       AND pub.published = 1 AND (agenda_session.location_id IS NULL OR pub.organization_id = l.organization_id)
-    JOIN organization s ON s.id = pub.organization_id AND s.organization_id = pub.organization_id
+    JOIN organization s ON s.id = pub.organization_id
     LEFT JOIN (SELECT b.product_session_id, SUM(b.party_size) AS claimed FROM bookings b WHERE ${CAPACITY_CONSUMING_SQL} GROUP BY b.product_session_id) agenda_claimed
       ON agenda_claimed.product_session_id = agenda_session.id
     WHERE agenda_session.organization_id = ? AND agenda_session.status = 'scheduled'

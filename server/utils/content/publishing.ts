@@ -510,7 +510,7 @@ export async function listPublicPlatformBlogPosts(db: DbClient, collection: Arti
   const sql = `
     SELECT
       p.id, p.title, p.slug, p.summary AS excerpt, (p.metadata_json ->> '$.collection') AS collection, (p.metadata_json ->> '$.category') AS category,
-      p.seo_description, p.seo_keywords, p.canonical_url, p.robots, p.published_at, p.updated_at, p.sort_order, ${COVER_SELECT}
+      p.seo_description, p.seo_keywords, p.canonical_url, p.published_at, p.updated_at, p.sort_order, ${COVER_SELECT}
     FROM content_documents p
     ${coverJoinSql('p')}
     WHERE p.kind = 'article' AND p.row_role = 'root' AND p.status = 'published' AND p.organization_id = ? AND p.visibility = 'public'
@@ -525,7 +525,7 @@ export async function listPublicPlatformBlogPosts(db: DbClient, collection: Arti
 export async function listBlogPosts(db: DbClient, organizationId: string, status?: string | null, env?: CloudflareEnv) {
   let sql = `SELECT
       p.id, p.title, p.slug, p.summary AS excerpt, (p.metadata_json ->> '$.collection') AS collection, (p.metadata_json ->> '$.category') AS category, json_extract(p.metadata_json, '$.tags') AS tags_metadata, p.status, p.visibility, p.scheduled_for,
-      p.seo_title, p.seo_description, p.seo_keywords, p.canonical_url, p.robots,
+      p.seo_title, p.seo_description, p.seo_keywords, p.canonical_url,
       ${COVER_SELECT},
       p.published_at, p.created_at, p.updated_at
     FROM content_documents p
@@ -552,7 +552,7 @@ export async function getBlogPost(db: DbClient, postIdOrSlug: string, organizati
     `SELECT
        p.id, p.title, p.slug, p.summary AS excerpt, (p.metadata_json ->> '$.collection') AS collection, (p.metadata_json ->> '$.category') AS category, json_extract(p.metadata_json, '$.tags') AS tags_metadata, p.status, p.visibility, p.scheduled_for,
        p.first_published_at, (p.metadata_json ->> '$.slug_manually_overridden') AS slug_manually_overridden,
-       p.seo_title, p.seo_description, p.seo_keywords, p.canonical_url, p.robots,
+       p.seo_title, p.seo_description, p.seo_keywords, p.canonical_url,
        ${COVER_SELECT},
        p.organization_id, p.kind, p.row_role, p.root_id, p.locale,
        p.published_at, p.created_at, p.updated_at
@@ -603,7 +603,7 @@ export async function getPublicSiteBlogPost(db: DbClient, organizationId: string
   const post = await queryFirst<ApiRecord>(db, `
     SELECT
       p.id, p.title, p.slug, p.summary AS excerpt, (p.metadata_json ->> '$.category') AS category, json_extract(p.metadata_json, '$.tags') AS tags_metadata, p.seo_title, p.seo_description, p.seo_keywords,
-      p.canonical_url, p.robots, p.visibility,
+      p.canonical_url, p.visibility,
       p.published_at, p.created_at, p.updated_at,
       p.author_id,
       ${COVER_SELECT}

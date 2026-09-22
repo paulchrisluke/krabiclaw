@@ -256,10 +256,10 @@ export const storeFacebookPagesConnection = async (
     UPDATE organization SET integrations_json = json_set(integrations_json, '$.facebook',
       json_set(json(?),
         '$.created_at', COALESCE(json_extract(integrations_json, '$.facebook.created_at'), ?)))
-    WHERE id = ? AND organization_id = ?
+    WHERE id = ?
       AND json_extract(integrations_json, '$.facebook.revision') IS ?
   `, [payload, now, organizationId, expected.revision])
-  if (result.meta?.changes !== 1) throw new Error('Site ownership or facebook connection changed during authorization')
+  if (result.meta?.changes !== 1) throw new Error('The facebook connection changed during authorization')
 
   return connectionId
 }
@@ -285,8 +285,7 @@ export const getFacebookPagesConnection = async (
            json_extract(integrations_json, '$.facebook.status') AS status,
            json_extract(integrations_json, '$.facebook.created_at') AS created_at,
            json_extract(integrations_json, '$.facebook.updated_at') AS updated_at
-      FROM organization
-     WHERE organization_id = ? AND id = ?
+      FROM organization WHERE id = ?
        AND json_extract(integrations_json, '$.facebook.kind') = 'oauth'
        AND json_extract(integrations_json, '$.facebook.status') = 'active'
      LIMIT 1

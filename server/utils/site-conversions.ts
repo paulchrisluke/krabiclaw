@@ -46,8 +46,8 @@ export async function recordSiteConversionEvent(db: DbClient, event: H3Event, in
   const sessionId = getOrCreateSessionId(event)
   const visitorId = getOrCreateVisitorId(event)
   const session = await queryFirst<{ attribution: string }>(db, `INSERT INTO analytics_summaries (
-    id, kind, organization_id, organization_id, date, key, payload_json, created_at, updated_at
-  ) VALUES (?, 'session', ?, ?, '', ?, ?, ?, ?)
+    id, kind, organization_id, date, key, payload_json, created_at, updated_at
+  ) VALUES (?, 'session', ?, '', ?, ?, ?, ?)
   ON CONFLICT(organization_id, kind, date, key) DO UPDATE SET
     payload_json = json_set(analytics_summaries.payload_json, '$.last_seen_at', excluded.updated_at), updated_at = excluded.updated_at
   RETURNING json_extract(payload_json, '$.attribution') attribution`, [
@@ -62,8 +62,8 @@ export async function recordSiteConversionEvent(db: DbClient, event: H3Event, in
   const id = crypto.randomUUID()
   const ipHash = await hashIp(getClientIp(event))
   await execute(db, `INSERT OR IGNORE INTO analytics_events (
-    id, kind, organization_id, organization_id, session_id, visitor_id, location_id, page_path, payload_json, created_at
-  ) VALUES (?, 'conversion', ?, ?, ?, ?, ?, ?, ?, ?)`, [
+    id, kind, organization_id, session_id, visitor_id, location_id, page_path, payload_json, created_at
+  ) VALUES (?, 'conversion', ?, ?, ?, ?, ?, ?, ?)`, [
     id, input.organizationId, sessionId, visitorId, input.locationId ?? null, input.pagePath ?? null,
     JSON.stringify({ event_name: input.eventName, stage: input.stage, entity_type: input.entityType ?? null,
       entity_id: input.entityId ?? null, page_type: input.pageType ?? null, cta_destination: input.ctaDestination ?? null,

@@ -160,7 +160,7 @@ export async function createQa(db: DbClient, scope: QaScope, input: CreateQaInpu
     additionalQueriesAfter: explicitSortOrder === null ? [{
       query: `UPDATE content_documents SET sort_order = (
         SELECT COALESCE(MAX(sort_order), -1) + 1 FROM content_documents
-        WHERE row_role = 'root' AND kind = 'qa' AND organization_id = ? AND organization_id = ? AND ${scoped.clause} AND id <> ?
+        WHERE row_role = 'root' AND kind = 'qa' AND organization_id = ? AND ${scoped.clause} AND id <> ?
       ) WHERE id = ?`,
       params: [scope.organizationId, scope.organizationId, ...scoped.params, id, id],
     }] : [],
@@ -236,7 +236,7 @@ export async function updateQa(db: DbClient, scope: QaScope, qaId: string, updat
   const result = await execute(db, `
     UPDATE content_documents
     SET ${sets.join(', ')}
-    WHERE row_role = 'root' AND kind = 'qa' AND source = 'manual' AND id = ? AND organization_id = ? AND organization_id = ? AND ${scoped.clause}
+    WHERE row_role = 'root' AND kind = 'qa' AND source = 'manual' AND id = ? AND organization_id = ? AND ${scoped.clause}
   `, params)
   if (!Number(result.meta.changes ?? 0)) throw new Error('Q&A not found')
   return { updated: true, qa_id: qaId }
@@ -245,7 +245,7 @@ export async function updateQa(db: DbClient, scope: QaScope, qaId: string, updat
 export async function deleteQa(db: DbClient, scope: QaScope, qaId: string) {
   const scoped = scopeSql(scope.locationId, scope.pagePath)
   const params = [qaId, scope.organizationId, scope.organizationId, ...scoped.params]
-  const where = `row_role = 'root' AND kind = 'qa' AND source = 'manual' AND id = ? AND organization_id = ? AND organization_id = ? AND ${scoped.clause}`
+  const where = `row_role = 'root' AND kind = 'qa' AND source = 'manual' AND id = ? AND organization_id = ? AND ${scoped.clause}`
   const document = await queryFirst<{ id: string }>(db, `SELECT id FROM content_documents WHERE ${where}`, params)
   if (!document) return { status: 404, data: { error: 'Q&A not found' } }
   const results = await executeBatch(db, prepareContentDocumentDeletion({ documentId: qaId, organizationId: scope.organizationId}))
@@ -269,7 +269,7 @@ export async function reorderQa(
   const validation = await queryFirst<{ valid_count: number }>(db, `
     SELECT COUNT(*) AS valid_count
     FROM content_documents
-    WHERE row_role = 'root' AND kind = 'qa' AND id IN (SELECT value FROM json_each(?)) AND organization_id = ? AND organization_id = ? AND ${scoped.clause}
+    WHERE row_role = 'root' AND kind = 'qa' AND id IN (SELECT value FROM json_each(?)) AND organization_id = ? AND ${scoped.clause}
   `, [d1JsonStringSet(updates.map(update => update.id)), scope.organizationId, scope.organizationId, ...scoped.params])
   if (Number(validation?.valid_count ?? 0) !== updates.length) {
     throw new Error('Q&A reorder contains records outside the requested scope')
@@ -280,7 +280,7 @@ export async function reorderQa(
     query: `
       UPDATE content_documents
       SET sort_order = ?, updated_at = ?
-      WHERE row_role = 'root' AND kind = 'qa' AND source = 'manual' AND id = ? AND organization_id = ? AND organization_id = ? AND ${scoped.clause}
+      WHERE row_role = 'root' AND kind = 'qa' AND source = 'manual' AND id = ? AND organization_id = ? AND ${scoped.clause}
     `,
     params: [update.sort_order, now, update.id, scope.organizationId, scope.organizationId, ...scoped.params],
   })))

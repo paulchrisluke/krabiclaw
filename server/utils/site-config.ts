@@ -36,7 +36,7 @@ export const getConfig = async (
            social_facebook_url AS social_facebook,
            social_instagram_url AS social_instagram,
            social_tiktok_url AS social_tiktok
-      FROM organization WHERE organization_id = ? AND id = ?
+      FROM organization WHERE id = ?
   `, [organizationId])
   if (!row) throw new HTTPError({ statusCode: 404, statusMessage: 'Site not found' })
   const config: SiteConfig = {}
@@ -58,7 +58,7 @@ export const resolveLocationTimezone = async (
   locationId: string | null,
 ): Promise<string> => {
   const location = await queryFirst<{ timezone: string | null }>(db,
-    'SELECT timezone FROM business_locations WHERE id = ? AND organization_id = ? AND organization_id = ?',
+    'SELECT timezone FROM business_locations WHERE id = ? AND organization_id = ?',
     [locationId, organizationId])
   if (!location?.timezone) throw new HTTPError({ statusCode: 409, statusMessage: 'Set the location timezone before offering bookings' })
   return location.timezone
@@ -97,7 +97,7 @@ export const setConfig = async (
       SELECT json_extract(integrations_json, '$.google.kind') AS kind,
              json_extract(integrations_json, '$.google.ga4_measurement_id') AS measurement_id,
              json_extract(integrations_json, '$.google.revision') AS revision
-        FROM organization WHERE organization_id = ? AND id = ?
+        FROM organization WHERE id = ?
     `, [organizationId])
     if (!current) throw new HTTPError({ statusCode: 404, statusMessage: 'Site not found' })
     if (current.kind === 'oauth') {
@@ -108,7 +108,7 @@ export const setConfig = async (
       UPDATE organization SET integrations_json = json_set(integrations_json, '$.google',
         json_object('kind', 'manual', 'status', ?, 'ga4_measurement_id', ?, 'revision', ?,
           'updated_at', strftime('%Y-%m-%dT%H:%M:%fZ', 'now')))
-      WHERE organization_id = ? AND id = ? AND json_extract(integrations_json, '$.google.revision') IS ?
+      WHERE id = ? AND json_extract(integrations_json, '$.google.revision') IS ?
     `, [value ? 'active' : 'disabled', value || null, crypto.randomUUID(), organizationId, current.revision])
     if (result.meta?.changes !== 1) throw new HTTPError({ statusCode: 409, statusMessage: 'Google Analytics settings changed. Reload before saving.' })
     return
@@ -117,7 +117,7 @@ export const setConfig = async (
     db,
     `UPDATE organization SET settings_json = json_set(settings_json, ?, ?),
        updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
-     WHERE organization_id = ? AND id = ?`,
+     WHERE id = ?`,
     ['$.config.' + key, value, organizationId],
   )
   if (result.meta?.changes !== 1) throw new HTTPError({ statusCode: 409, statusMessage: 'Site ownership changed. Reload before saving.' })
@@ -134,7 +134,7 @@ export const deleteConfig = async (
     db,
     `UPDATE organization SET settings_json = json_remove(settings_json, ?),
        updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
-     WHERE organization_id = ? AND id = ?`,
+     WHERE id = ?`,
     ['$.config.' + key, organizationId],
   )
   if (result.meta?.changes !== 1) throw new HTTPError({ statusCode: 409, statusMessage: 'Site ownership changed. Reload before saving.' })

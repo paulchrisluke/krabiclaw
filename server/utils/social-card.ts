@@ -155,7 +155,7 @@ async function loadOwner(db: DbClient, owner: SocialCardOwner): Promise<OwnerRec
 }
 
 async function loadOrganization(db: DbClient, organizationId: string): Promise<SiteRecord | null> {
-  return await queryFirst<SiteRecord>(db, `SELECT s.organization_id, s.id, s.name, s.brand_description,
+  return await queryFirst<SiteRecord>(db, `SELECT s.id, s.name, s.brand_description,
     s.theme_id, s.vertical
     FROM organization s WHERE s.id = ? LIMIT 1`, [organizationId]) ?? null
 }

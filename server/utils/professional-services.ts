@@ -67,7 +67,7 @@ export async function getActiveBlawbySite(
   options: { previewAuthorized?: boolean } = {},
 ): Promise<{ id: string; vertical: string; theme_id: string } | null> {
   const site = await queryFirst<{ id: string; vertical: string; theme_id: string }>(db, `
-    SELECT organization_id, vertical, theme_id
+    SELECT id, vertical, theme_id
       FROM organization
      WHERE id = ? AND status = 'active'${options.previewAuthorized ? '' : " AND onboarding_status = 'active'"}
      LIMIT 1
@@ -226,7 +226,7 @@ export async function getPublicCompliance(db: DbClient, organizationId: string):
      WHERE mp.organization_id = ? AND mp.owner_type = 'organization' AND mp.owner_id = ?
        AND mp.slot = 'compliance_document' AND mp.status = 'active'
      ORDER BY mp.sort_order
-  `, [organizationId])
+  `, [organizationId, organizationId])
   return {
     entity_name: typeof row.entity_name === 'string' ? row.entity_name : null,
     dba_name: typeof row.dba_name === 'string' ? row.dba_name : null,

@@ -194,7 +194,7 @@ export async function loadDashboardBookingDetails(
   await assertBookingAccess(context, row)
 
   const allowedLocationIds = await listAccessibleLocationIds(context.db, memberAccessPrincipal(context.organization, { env: context.env}))
-  const locations = await queryAll<{ id: string; title: string }>(context.db, 'SELECT id, title FROM business_locations WHERE organization_id = ? AND organization_id = ? ORDER BY title', [row.organization_id, row.organization_id])
+  const locations = await queryAll<{ id: string; title: string }>(context.db, 'SELECT id, title FROM business_locations WHERE organization_id = ? ORDER BY title', [row.organization_id])
   const visibleLocations = locations.filter(location => (allowedLocationIds === null || allowedLocationIds.includes(location.id)) && (input.type === 'reservation' || location.id === row.location_id))
   const locationMedia = await loadPublicSocialMedia(context.db, row.organization_id, 'business_location', visibleLocations.map(location => location.id))
 

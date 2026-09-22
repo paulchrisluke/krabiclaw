@@ -183,10 +183,10 @@ export const storeGoogleAnalyticsConnection = async (
       json_set(json_patch(CASE WHEN json_extract(integrations_json, '$.google.kind') = 'oauth' AND json_extract(integrations_json, '$.google.provider_account_email') = ?
                              THEN json_extract(integrations_json, '$.google') ELSE '{}' END, json(?)),
         '$.created_at', COALESCE(json_extract(integrations_json, '$.google.created_at'), ?)))
-    WHERE id = ? AND organization_id = ?
+    WHERE id = ?
       AND json_extract(integrations_json, '$.google.revision') IS ?
   `, [connection.provider_account_email, payload, now, organizationId, expected.revision])
-  if (result.meta?.changes !== 1) throw new Error('Site ownership or google connection changed during authorization')
+  if (result.meta?.changes !== 1) throw new Error('The google connection changed during authorization')
 
   return connectionId
 }
@@ -217,8 +217,7 @@ export const getGoogleAnalyticsConnection = async (
            json_extract(integrations_json, '$.google.expires_at') AS expires_at,
            json_extract(integrations_json, '$.google.created_at') AS created_at,
            json_extract(integrations_json, '$.google.updated_at') AS updated_at
-      FROM organization
-     WHERE organization_id = ? AND id = ?
+      FROM organization WHERE id = ?
        AND json_extract(integrations_json, '$.google.kind') = 'oauth'
        AND json_extract(integrations_json, '$.google.status') = 'active'
      LIMIT 1

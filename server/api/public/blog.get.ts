@@ -39,7 +39,7 @@ export default defineHandler(async (event) => {
     SELECT
       p.id, p.title, p.slug, p.summary AS excerpt, (p.metadata_json ->> '$.collection') AS collection,
       (p.metadata_json ->> '$.category') AS category, p.seo_description, p.seo_keywords,
-      p.canonical_url, p.robots, p.published_at, p.updated_at, p.sort_order, ${COVER_SELECT}
+      p.canonical_url, p.published_at, p.updated_at, p.sort_order, ${COVER_SELECT}
     FROM content_documents p
     ${coverJoinSql('p')}
     WHERE p.kind = 'article' AND p.row_role = 'root' AND p.status = 'published'

@@ -47,7 +47,7 @@ export function loadPublicBase(
     try {
       const row = await queryFirst<Omit<PublicBase['site'], 'media'> & { media_json: string }>(
         db,
-        `SELECT s.id, s.organization_id, s.default_currency, s.contact_email, s.contact_phone, s.name, s.vertical,
+        `SELECT s.id, s.default_currency, s.contact_email, s.contact_phone, s.name, s.vertical,
                 s.theme_id, s.feature_overrides,
                 s.brand_description,
                 (SELECT json_group_array(json_object(
@@ -55,7 +55,7 @@ export function loadPublicBase(
                   'thumbnail_url', ma.thumbnail_url, 'kind', ma.kind
                 )) FROM media_placements mp JOIN media_assets ma ON ma.id = mp.asset_id AND ma.status = 'active'
                   WHERE mp.organization_id = s.id AND mp.owner_type = 'organization' AND mp.owner_id = s.id AND mp.status = 'active') AS media_json,
-                s.seo_title, s.seo_description, s.canonical_url, s.robots,
+                s.seo_title, s.seo_description, s.canonical_url,
                 s.social_facebook_url, s.social_instagram_url, s.social_tiktok_url,
                 json_extract(s.settings_json, '$.config.default_timezone') AS default_timezone
            FROM organization s

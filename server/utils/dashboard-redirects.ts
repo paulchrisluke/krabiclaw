@@ -17,8 +17,7 @@ export async function getDashboardSiteRouteContext(
     resolveUserOrganization(env, { userId, organizationId }),
     queryFirst<{ site_slug: string | null }>(db, `
     SELECT subdomain AS site_slug
-    FROM organization
-    WHERE organization_id = ? AND id = ?
+    FROM organization WHERE id = ?
     LIMIT 1
   `, [organizationId]),
   ])

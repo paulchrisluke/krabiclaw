@@ -1,4 +1,3 @@
-import { queryFirst } from '~/server/db'
 import { HTTPError, defineHandler  } from 'nitro';
 
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
@@ -70,7 +69,7 @@ export default defineHandler(async (event) => {
 
   const session = await getAuthSession(event, env)
   if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
-  if (!body?.organizationId || !body.organizationId || !isStripeGa4IntentAction(body.action)) {
+  if (!body?.organizationId || !isStripeGa4IntentAction(body.action)) {
     return jsonResponse({ error: 'organizationId, and a valid action are required' }, { status: 400 })
   }
   if (body.effectiveTiming && body.effectiveTiming !== 'immediate' && body.effectiveTiming !== 'period_end') {
@@ -88,11 +87,6 @@ export default defineHandler(async (event) => {
   } catch {
     return jsonResponse({ error: 'Only organization owners can manage billing' }, { status: 403 })
   }
-
-  const site = await queryFirst<{ id: string }>(env.DB, `
-    SELECT id FROM organization WHERE id = ? AND organization_id = ? LIMIT 1
-  `, [body.organizationId, organization.id])
-  if (!site) return jsonResponse({ error: 'Site not found or does not belong to this organization' }, { status: 404 })
 
   const subscriptionId = optionalString(body.subscriptionId)
   if (subscriptionId) {

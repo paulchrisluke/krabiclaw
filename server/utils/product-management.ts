@@ -351,7 +351,7 @@ export async function listSiteProducts(db: DbClient, input: {
   const rows = await queryAll<Row>(db, `
     SELECT ${PRODUCT_COLUMNS} FROM products p
     JOIN product_publications pub ON pub.product_id = p.id AND pub.organization_id = p.organization_id
-    WHERE p.organization_id = ? AND pub.organization_id = ? AND (? = 0 OR pub.published = 1)
+    WHERE p.organization_id = ? AND (? = 0 OR pub.published = 1)
     ORDER BY p.name, p.id
     ${input.window ? 'LIMIT ? OFFSET ?' : ''}
   `, [input.organizationId, input.publishedOnly ? 1 : 0,
@@ -520,7 +520,7 @@ async function organizationDefaultCurrency(db: DbClient, organizationId: string)
   // context the caller must supply the currency on the price itself; there is
   // no platform default standing in for a merchant's decision.
   if (!organizationId) invalid('currency is required when no site context is given')
-  const site = await queryFirst<{ default_currency: string }>(db, 'SELECT default_currency FROM organization WHERE id = ? AND organization_id = ?', [organizationId])
+  const site = await queryFirst<{ default_currency: string }>(db, 'SELECT default_currency FROM organization WHERE id = ?', [organizationId])
   if (!site) notFound('Site not found')
   if (!isCurrencyCode(site.default_currency)) throw new Error(`Site ${organizationId} has an unsupported default currency`)
   return site.default_currency

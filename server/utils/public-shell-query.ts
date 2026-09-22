@@ -43,7 +43,7 @@ export function appendPublicShellQueries(
                      bl.review_count, bl.status,
                      bl.description, bl.short_description,
                      bl.last_synced_at, bl.seo_title, bl.seo_description,
-                     bl.canonical_url, bl.robots, bl.feature_overrides, mp.asset_id AS asset_id,
+                     bl.canonical_url, bl.feature_overrides, mp.asset_id AS asset_id,
                      ma.public_url AS media_public_url, ma.thumbnail_url AS media_thumbnail_url, ma.kind AS media_kind,
                      social_mp.asset_id AS social_asset_id, social_ma.public_url AS social_public_url,
                      social_ma.thumbnail_url AS social_thumbnail_url, social_ma.kind AS social_kind

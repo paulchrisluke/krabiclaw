@@ -167,7 +167,7 @@ function normalizeDetail(place: RawPlace): PlaceDetails {
 export function staleGoogleReviewDeletes(scope: { organizationId: string; locationId: string }, reviews: PlaceReview[]) {
   const stale = `
       SELECT id FROM reviews
-      WHERE organization_id = ? AND organization_id = ? AND location_id = ?
+      WHERE organization_id = ? AND location_id = ?
         AND source = 'google_places'
         AND (google_review_id IS NULL OR google_review_id NOT IN (SELECT value FROM json_each(?)))`
   const params = [scope.organizationId, scope.organizationId, scope.locationId, JSON.stringify(reviews.map(review => review.google_review_id))]
@@ -222,7 +222,7 @@ export async function syncPlaceToLocation(
       google_place_id = COALESCE(?, google_place_id),
       last_synced_at = ?,
       updated_at = ?
-    WHERE id = ? AND organization_id = ? AND organization_id = ?
+    WHERE id = ? AND organization_id = ?
   `, params: [
     place.phone,
     place.websiteUrl,

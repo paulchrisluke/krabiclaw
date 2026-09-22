@@ -21,9 +21,9 @@ export default defineHandler(async (event) => {
 
   const location = await queryFirst<{ id: string; google_place_id: string | null }>(db, `
     SELECT id, google_place_id FROM business_locations
-    WHERE id = ? AND organization_id = ? AND organization_id = ?
+    WHERE id = ? AND organization_id = ?
     LIMIT 1
-  `, [locationId, organization.id, organization.id])
+  `, [locationId, organization.id])
 
   if (!location) return jsonResponse({ error: 'Location not found' }, { status: 404 })
   if (!location.google_place_id) {

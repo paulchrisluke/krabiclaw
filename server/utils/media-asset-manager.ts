@@ -130,12 +130,12 @@ export function mediaPlacementOwnerQuery(input: {
   if (input.ownerType === 'content_block') return {
     query: `SELECT root.location_id FROM content_blocks cb JOIN content_documents owner ON owner.id = cb.document_id
       JOIN content_documents root ON root.id = COALESCE(owner.root_id, owner.id)
-      WHERE cb.id = ? AND owner.organization_id = ? AND owner.organization_id = ?`, params,
+      WHERE cb.id = ? AND owner.organization_id = ?`, params,
   }
   if (input.ownerType === 'content_document') return {
     query: `SELECT root.location_id FROM content_documents owner
       JOIN content_documents root ON root.id = COALESCE(owner.root_id, owner.id)
-      WHERE owner.id = ? AND owner.organization_id = ? AND owner.organization_id = ?`, params,
+      WHERE owner.id = ? AND owner.organization_id = ?`, params,
   }
   // A product is organization-owned and reaches a site through its publication.
   // Its locations are a many relationship (product_locations), so there is no
@@ -165,7 +165,7 @@ export function buildMediaPlacementInsertQuery(input: MediaPlacementInsertInput)
         AND EXISTS (SELECT 1 FROM media_assets WHERE id = ? AND organization_id = ? AND (status = 'active' OR (status = 'pending' AND ? = 'review_request' AND ? = 'pending')))
         AND (? != 'content_document' OR ? NOT IN ('cover', 'gallery') OR EXISTS
         (SELECT 1 FROM content_documents d JOIN content_documents root ON root.id = COALESCE(d.root_id, d.id)
-          WHERE d.id = ? AND d.organization_id = ? AND d.organization_id = ?
+          WHERE d.id = ? AND d.organization_id = ?
           AND (root.kind != 'social_post' OR (root.metadata_json ->> '$.post_type') != 'alert'))) THEN ? ELSE NULL END, ?, ?, ?, ?)`,
     params: [input.id ?? crypto.randomUUID(), input.organizationId, input.ownerType, input.ownerId, input.slot,
       ...owner.params!, input.assetId, input.organizationId, input.ownerType, input.status ?? 'active',
@@ -430,9 +430,9 @@ export function buildMediaAssetInsertQuery(data: CreateInput, now = new Date().t
       cloudflare_image_id, r2_key,
       public_url, thumbnail_url, mime_type, file_name, file_size,
       width, height, duration, alt_text, category, status, created_by_user_id, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     params: [
-      data.id, data.organization_id, data.organization_id, data.kind, data.provider, data.source,
+      data.id, data.organization_id, data.kind, data.provider, data.source,
       data.generation_key ?? null,
       data.cloudflare_image_id ?? null, data.r2_key ?? null,
       data.public_url ?? null, data.thumbnail_url ?? null,
@@ -468,7 +468,7 @@ export async function createMediaAsset(db: DbClient, data: CreateInput): Promise
 export async function getMediaAsset(db: DbClient, id: string, organizationId: string): Promise<MediaAsset | null> {
   return await queryFirst<MediaAsset>(
     db,
-    `SELECT * FROM media_assets WHERE id = ? LIMIT 1`,
+    `SELECT * FROM media_assets WHERE id = ? AND organization_id = ? LIMIT 1`,
     [id, organizationId],
   ) ?? null
 }
@@ -620,14 +620,14 @@ export async function deleteMediaAsset(db: DbClient, env: MediaProviderEnv, id: 
   }>(db, `
     SELECT id, provider, cloudflare_image_id, r2_key, organization_id, created_by_user_id, source
     FROM media_assets
-    WHERE id = ? AND status != 'deleted'
+    WHERE id = ? AND organization_id = ? AND status != 'deleted'
   `, [id, organizationId]) ?? null
 
   if (!pendingAsset) {
     throw new HTTPError({ statusCode: 404, statusMessage: 'Media asset not found' })
   }
   const sourcePlacements = pendingAsset.source === 'generated' ? [] : await queryAll<{ owner_type: string; owner_id: string; slot: string }>(db,
-    'SELECT owner_type, owner_id, slot FROM media_placements WHERE asset_id = ? ', [id, organizationId])
+    'SELECT owner_type, owner_id, slot FROM media_placements WHERE asset_id = ? AND organization_id = ?', [id, organizationId])
 
   const references = await getMediaStorageReferenceState(db, {
     assetId: pendingAsset.id,

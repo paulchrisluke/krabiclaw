@@ -316,7 +316,7 @@ export interface TenantPageScope {
 async function getPageRepresentation(db: DbClient, variantId: string, scope?: TenantPageScope): Promise<PageRepresentationRow | null> {
   return await queryFirst<PageRepresentationRow | null>(db, [
     'SELECT v.id, COALESCE(v.root_id, v.id) AS page_id, v.organization_id, v.locale, v.path,',
-    '       v.title, v.summary, v.seo_title, v.seo_description, v.canonical_url, v.robots,',
+    '       v.title, v.summary, v.seo_title, v.seo_description, v.canonical_url,',
     `       json_extract(p.metadata_json, '$.page_type') AS page_type, json_extract(p.metadata_json, '$.recipe') AS recipe, p.sort_order, v.updated_at`,
     `  FROM content_documents v JOIN content_documents p ON p.id = COALESCE(v.root_id, v.id) AND p.row_role = 'root' AND p.kind = 'page'`,
     ` WHERE v.row_role IN ('root','representation') AND v.kind = 'page' AND v.id = ? AND (? IS NULL OR v.organization_id = ?) LIMIT 1`,
@@ -486,7 +486,7 @@ export async function listTenantPages(db: DbClient, organizationId: string, opts
   const locale = await resolveLocale(db, organizationId, opts.locale)
   const rows = await queryAll<PageRepresentationRow>(db, [
     'SELECT v.id, COALESCE(v.root_id, v.id) AS page_id, v.organization_id, v.locale, v.path,',
-    '       v.title, v.summary, v.seo_title, v.seo_description, v.canonical_url, v.robots,',
+    '       v.title, v.summary, v.seo_title, v.seo_description, v.canonical_url,',
     `       json_extract(p.metadata_json, '$.page_type') AS page_type, json_extract(p.metadata_json, '$.recipe') AS recipe, p.sort_order, v.updated_at`,
     `  FROM content_documents v JOIN content_documents p ON p.id = COALESCE(v.root_id, v.id) AND p.row_role = 'root' AND p.kind = 'page'`,
     ` WHERE v.row_role IN ('root','representation') AND v.kind = 'page' AND v.organization_id = ? AND v.locale = ? ORDER BY p.sort_order ASC, v.title ASC`,
@@ -533,7 +533,7 @@ export async function getPublishedTenantPage(db: DbClient, organizationId: strin
   const normalizedPath = normalizeTenantPagePath(path)
   const selectPublished = async (candidateLocale: string) => await queryFirst<PageRepresentationRow | null>(db, [
     'SELECT v.id, COALESCE(v.root_id, v.id) AS page_id, v.organization_id, v.locale, v.path,',
-    '       v.title, v.summary, v.seo_title, v.seo_description, v.canonical_url, v.robots,',
+    '       v.title, v.summary, v.seo_title, v.seo_description, v.canonical_url,',
     `       json_extract(p.metadata_json, '$.page_type') AS page_type, json_extract(p.metadata_json, '$.recipe') AS recipe, p.sort_order, v.updated_at`,
     `  FROM content_documents v JOIN content_documents p ON p.id = COALESCE(v.root_id, v.id) AND p.row_role = 'root' AND p.kind = 'page'`,
     " WHERE v.row_role IN ('root','representation') AND v.kind = 'page' AND v.organization_id = ? AND v.locale = ? AND v.path = ? LIMIT 1",
@@ -634,7 +634,7 @@ export async function createTenantPagesBatch(
       id: variantId, rowRole: 'root', locale: 'en', organizationId: input.organizationId, kind: 'page',
       metadata: { page_type: metadata.pageType, recipe: metadata.recipe }, source: 'pages',
       path, title: metadata.title, summary: metadata.summary, seoTitle: metadata.seoTitle, seoDescription: metadata.seoDescription,
-      canonicalUrl: metadata.canonicalUrl, robots: metadata.robots, createdBy: input.userId, updatedBy: input.userId,
+      canonicalUrl: metadata.canonicalUrl, createdBy: input.userId, updatedBy: input.userId,
     }, blocksAsInputs(blocks), {
       additionalQueriesAfter: placementQueries,
     })
@@ -692,7 +692,7 @@ export async function applyOnboardingTenantPages(
   const existingRows = await queryAll<OnboardingPageRepresentationRow>(db, `
     SELECT v.id, COALESCE(v.root_id, v.id) AS page_id, v.organization_id, v.locale,
            v.path, v.title, v.summary, v.seo_title,
-           v.seo_description, v.canonical_url, v.robots, json_extract(p.metadata_json, '$.page_type') AS page_type, json_extract(p.metadata_json, '$.recipe') AS recipe,
+           v.seo_description, v.canonical_url, json_extract(p.metadata_json, '$.page_type') AS page_type, json_extract(p.metadata_json, '$.recipe') AS recipe,
            p.sort_order, v.updated_at,
            v.created_at
       FROM content_documents v
@@ -838,7 +838,7 @@ export async function createTenantPage(db: DbClient, input: { organizationId: st
       ...(typeof effectiveData.sortOrder === 'number' ? { sortOrder: effectiveData.sortOrder } : {}),
     }),
     path, title: metadata.title, summary: metadata.summary, seoTitle: metadata.seoTitle, seoDescription: metadata.seoDescription,
-    canonicalUrl: metadata.canonicalUrl, robots: metadata.robots, createdBy: input.userId, updatedBy: input.userId,
+    canonicalUrl: metadata.canonicalUrl, createdBy: input.userId, updatedBy: input.userId,
   }
   await createContentDocumentWithBlocks(db, representation, blocksAsInputs(blocks), {
     additionalQueriesAfter: [...placementQueries, publicResourceCacheInvalidationQuery(input.organizationId, 'tenant-page-create')],
@@ -1021,8 +1021,8 @@ export async function updateTenantPage(db: DbClient, variantId: string, input: {
       ]
     : []
   const updateVariant: BatchQuery = {
-    query: 'UPDATE content_documents SET path = ?, title = ?, summary = ?, seo_title = ?, seo_description = ?, canonical_url = ?, robots = ?, updated_by = ? WHERE id = ? AND organization_id = ?',
-    params: [path, metadata.title, metadata.summary, metadata.seoTitle, metadata.seoDescription, metadata.canonicalUrl, metadata.robots, input.userId, variantId, input.scope.organizationId],
+    query: 'UPDATE content_documents SET path = ?, title = ?, summary = ?, seo_title = ?, seo_description = ?, canonical_url = ? = ?, updated_by = ? WHERE id = ? AND organization_id = ?',
+    params: [path, metadata.title, metadata.summary, metadata.seoTitle, metadata.seoDescription, metadata.canonicalUrl, input.userId, variantId, input.scope.organizationId],
   }
   const updatePage: BatchQuery = {
     query: `UPDATE content_documents SET metadata_json = json_set(metadata_json, '$.page_type', ?, '$.recipe', ?),
@@ -1047,7 +1047,7 @@ export async function updateTenantPage(db: DbClient, variantId: string, input: {
 export async function listPublishedTenantPagePaths(db: DbClient, organizationId: string, locale?: string | null) {
   const resolvedLocale = await resolveLocale(db, organizationId, locale)
   return await queryAll<{ id: string; path: string; title: string; summary: string | null; sort_order: number; updated_at: string; robots: string | null }>(db, `
-    SELECT v.id, v.path, v.title, v.summary, p.sort_order, v.updated_at, v.robots
+    SELECT v.id, v.path, v.title, v.summary, p.sort_order, v.updated_at
       FROM content_documents v JOIN content_documents p ON p.id = COALESCE(v.root_id, v.id)
      WHERE v.row_role IN ('root','representation') AND v.kind = 'page' AND v.organization_id = ? AND v.locale = ?
      ORDER BY v.path ASC

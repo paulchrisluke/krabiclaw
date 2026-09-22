@@ -198,7 +198,7 @@ export function defaultLinksPage(input: { organizationId: string; name?: string 
 
 export async function getLinksPage(db: DbClient, organizationId: string, locale = 'en'): Promise<{ page: SiteLinksPage | null; items: SiteLinkItem[] }> {
   const pageRow = await queryFirst<ApiRecord>(db, `
-    SELECT d.id, d.organization_id, d.path, d.title, root.robots, d.seo_title,
+    SELECT d.id, d.organization_id, d.path, d.title, d.seo_title,
            d.seo_description, d.created_at, d.updated_at, d.updated_by
       FROM content_documents d JOIN content_documents root ON root.id = COALESCE(d.root_id, d.id)
      WHERE d.organization_id = ? AND d.locale = ? AND root.kind = 'page' AND root.row_role = 'root'
@@ -319,14 +319,14 @@ export async function upsertLinksPage(db: DbClient, input: {
     id: item.id, type: 'cta' as const, data: { label: item.label, url: item.destination,
       status: item.status, updated_by: input.updatedBy ?? null },
   }))
-  const copy = { title, robots, seo_title: nullableString(input.page.seo_title, 200),
+  const copy = { title, seo_title: nullableString(input.page.seo_title, 200),
     seo_description: nullableString(input.page.seo_description, 500), updated_by: input.updatedBy ?? null }
   if (current.page) {
     await updateContentDocument(db, current.page.id, { expected_updated_at: input.expectedUpdatedAt ?? current.page.updated_at,
       changes: copy, blocks })
   } else {
     await createContentDocumentWithBlocks(db, { id: pageId, organizationId: input.organizationId,
-      kind: 'page', rowRole: 'root', locale: 'en', path: '/links', title, robots,
+      kind: 'page', rowRole: 'root', locale: 'en', path: '/links', title,
       seoTitle: copy.seo_title, seoDescription: copy.seo_description, updatedBy: input.updatedBy,
       metadata: { recipe: 'links', page_type: 'custom' } }, blocks)
   }

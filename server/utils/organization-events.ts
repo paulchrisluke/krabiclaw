@@ -34,12 +34,12 @@ export async function fireOrganizationEvent(params: FireOrganizationEventParams)
   const actorKind = actorType === 'cloudflare' ? 'cloudflare' : actorId ? 'member' : 'system'
   await execute(db, `
     INSERT INTO activity_entries
-      (id, kind, scope_kind, organization_id, organization_id, location_id, actor_kind, actor_user_id,
+      (id, kind, scope_kind, organization_id, location_id, actor_kind, actor_user_id,
        event_name, body, payload_json, occurred_at, created_at, dedupe_key)
-    VALUES (?, 'audit', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `, [id, organizationId ? 'site' : 'organization', organizationId ? null : organizationId ?? null, locationId ?? null,
+    VALUES (?, 'audit', 'organization', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `, [id, organizationId, locationId ?? null,
     actorKind, actorId ?? null, eventType, message ?? null,
-    JSON.stringify({ sourceOrganizationId: organizationId, entityType: entityType ?? null, entityId: entityId ?? null, actorType: actorType ?? actorKind,
+    JSON.stringify({ entityType: entityType ?? null, entityId: entityId ?? null, actorType: actorType ?? actorKind,
       beforeState: beforeState ?? null, afterState: afterState ?? null, metadata: metadata ?? null }),
     new Date().toISOString(), new Date().toISOString(), 'audit:' + id])
 }

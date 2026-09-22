@@ -58,7 +58,7 @@ export default defineScheduledTask({
     // Better Auth's subscription table is the authority for paid scheduled
     // integrations; candidates are selected here and filtered against it below.
     const candidates = await queryAllPages<ConnectionRow>(db, `
-      SELECT json_extract(s.integrations_json, '$.facebook.id') AS id, s.organization_id, s.id AS organization_id,
+      SELECT json_extract(s.integrations_json, '$.facebook.id') AS id, s.id AS organization_id,
              json_extract(s.integrations_json, '$.facebook.revision') AS revision,
              json_extract(s.integrations_json, '$.facebook.page_id') AS page_id,
              json_extract(s.integrations_json, '$.facebook.encrypted_user_token') AS encrypted_user_token,
@@ -118,7 +118,7 @@ export default defineScheduledTask({
         await execute(db, `
           UPDATE organization SET integrations_json = json_set(integrations_json, '$.facebook.status', 'error',
             '$.facebook.updated_at', ?, '$.facebook.revision', ?)
-          WHERE id = ? AND organization_id = ? AND json_extract(integrations_json, '$.facebook.revision') IS ?
+          WHERE id = ? AND json_extract(integrations_json, '$.facebook.revision') IS ?
         `, [new Date().toISOString(), crypto.randomUUID(), conn.organization_id, conn.revision])
           .catch(updateErr => console.error(`[instagram-sync-process] failed to persist error status for connection ${conn.id}:`, updateErr))
       }

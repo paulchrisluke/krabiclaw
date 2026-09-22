@@ -30,7 +30,6 @@ export class SiteSettingsNotFoundError extends Error {
 
 interface SiteSettingsRow {
   id: string
-  organization_id: string
   subdomain: string | null
   name: string | null
   vertical: string
@@ -88,7 +87,7 @@ export async function loadSettingsPayload(
   organizationId: string,
 ) {
   const updatedSite = await queryFirst<FullSiteRow & { vertical: string; theme_id: string }>(db, `
-    SELECT organization.id, organization.id, subdomain, organization.status,
+    SELECT organization.id, subdomain, organization.status,
            (SELECT 'https://' || domain FROM organization_domains WHERE organization_id = organization.id AND role = 'canonical' AND status = 'active') AS public_url, COALESCE((SELECT status FROM organization_domains WHERE organization_id = organization.id AND type = 'custom' AND status NOT IN ('deleted', 'disabled') ORDER BY role = 'canonical' DESC, created_at, id LIMIT 1), 'none') AS custom_domain_status, default_currency,
            name, brand_description,
            mp.asset_id AS logo_media_id, ma.public_url AS logo_public_url,
@@ -98,7 +97,7 @@ export async function loadSettingsPayload(
            smp.asset_id AS social_share_media_id, sma.public_url AS social_share_public_url,
            sma.thumbnail_url AS social_share_thumbnail_url, sma.kind AS social_share_kind,
            contact_email,
-           seo_title, seo_description, canonical_url, robots,
+           seo_title, seo_description, canonical_url,
            social_facebook_url, social_instagram_url, social_tiktok_url,
            feature_overrides, last_published_at, organization.created_at, organization.updated_at,
            vertical, theme_id
@@ -112,7 +111,7 @@ export async function loadSettingsPayload(
     LEFT JOIN media_placements smp ON smp.organization_id = organization.id AND smp.owner_type = 'organization'
       AND smp.owner_id = organization.id AND smp.slot = 'social_share' AND smp.sort_order = 0 AND smp.status = 'active'
     LEFT JOIN media_assets sma ON sma.id = smp.asset_id AND sma.status = 'active'
-    WHERE organization.id = ? AND organization.id = ?
+    WHERE organization.id = ?
     LIMIT 1
   `, [organizationId])
 
@@ -139,7 +138,6 @@ export async function loadSettingsPayload(
 
   return {
     id: updatedSite.id,
-    organization_id: updatedSite.organization_id,
     subdomain: updatedSite.subdomain,
     theme: resolvePublicTemplate({ themeId: updatedSite.theme_id }).slug,
     status: updatedSite.status,
@@ -429,7 +427,7 @@ async function attemptSiteUpdate(
     sql: `
     UPDATE organization
     SET ${setParts.join(', ')}
-    WHERE id = ? AND organization_id = ?
+    WHERE id = ?
   `,
     values: [...params, organizationId],
   }
@@ -495,9 +493,9 @@ export async function updateSiteSettingsFields(
   }
 
   const site = await queryFirst<SiteSettingsRow>(db, `
-    SELECT id, organization_id, subdomain, name, vertical, theme_id
+    SELECT id, subdomain, name, vertical, theme_id
     FROM organization
-    WHERE id = ? AND organization_id = ?
+    WHERE id = ?
     LIMIT 1
   `, [organizationId])
 

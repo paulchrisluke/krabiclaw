@@ -78,9 +78,9 @@ export default defineHandler(async (event) => {
       LEFT JOIN media_placements mp ON mp.organization_id = bl.organization_id AND mp.owner_type = 'business_location' AND mp.owner_id = bl.id AND mp.slot = 'hero' AND mp.sort_order = 0 AND mp.status = 'active'
       LEFT JOIN media_assets ma ON mp.asset_id = ma.id AND ma.status = 'active'
         AND ma.organization_id = bl.organization_id AND ma.organization_id = bl.organization_id
-      WHERE bl.organization_id = ? AND bl.organization_id = ? AND bl.status = 'active'
+      WHERE bl.organization_id = ? AND bl.status = 'active'
       ORDER BY bl.title ASC
-    `, [site.id, organizationId])
+    `, [organizationId])
 
 
     const parsedLocations = locationRows.map((location) => {

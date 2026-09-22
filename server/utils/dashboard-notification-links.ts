@@ -29,10 +29,9 @@ export async function resolveSiteLocationSlugs(
     findOrganizationById(env, opts.organizationId),
     queryFirst<{ site_slug: string | null }>(db, `
       SELECT subdomain AS site_slug
-      FROM organization
-      WHERE organization_id = ? AND id = ?
+      FROM organization WHERE id = ?
       LIMIT 1
-    `, [opts.organizationId, opts.organizationId]),
+    `, [opts.organizationId]),
   ])
   if (!organization || !site?.site_slug) return null
 

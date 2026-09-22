@@ -40,7 +40,7 @@ export default defineHandler(async (event) => {
 
   const [rows, count] = await Promise.all([
     queryAll<NotificationRow>(access.db, `
-      SELECT n.id, json_extract(n.payload_json, '$.visibility_scope') AS scope, n.event_name AS template, json_extract(n.payload_json, '$.severity') AS severity, n.organization_id, n.context_site_id AS organization_id, n.location_id, n.target_user_id, json_extract(n.payload_json, '$.title') AS title, n.body AS message,
+      SELECT n.id, json_extract(n.payload_json, '$.visibility_scope') AS scope, n.event_name AS template, json_extract(n.payload_json, '$.severity') AS severity, n.organization_id, n.n.location_id, n.target_user_id, json_extract(n.payload_json, '$.title') AS title, n.body AS message,
              json_extract(n.payload_json, '$.thread_id') AS thread_id, json_extract(n.payload_json, '$.deep_link') AS stored_link,
              (SELECT slug FROM organization WHERE id = n.organization_id) AS organization_slug,
              (SELECT subdomain FROM organization WHERE id = n.context_site_id) AS site_slug,

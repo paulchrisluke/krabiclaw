@@ -34,7 +34,7 @@ export default defineHandler(async (event) => {
     const { db, session, organization } = await requireLocationAccess(event, organizationId, body.location_id)
     // A product id in the path is not authorized by the site in the path.
     await requireSiteProduct(db, { organizationId: organization.id, productId })
-    const location = await queryFirst<{ timezone: string | null }>(db, 'SELECT timezone FROM business_locations WHERE organization_id = ? AND organization_id = ? AND id = ?', [organization.id, organizationId, body.location_id])
+    const location = await queryFirst<{ timezone: string | null }>(db, 'SELECT timezone FROM business_locations WHERE organization_id = ? AND id = ?', [organization.id, body.location_id])
     if (!location) return jsonResponse({ error: 'Location not found' }, { status: 404 })
     if (!location.timezone) return jsonResponse({ error: 'Set the location\'s timezone before scheduling sessions' }, { status: 409 })
     const result = await replaceWeeklySchedule(db, {

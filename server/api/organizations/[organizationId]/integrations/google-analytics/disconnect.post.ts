@@ -15,10 +15,10 @@ export default defineHandler(async (event) => {
     UPDATE organization SET integrations_json = json_set(integrations_json, '$.google',
       json_object('kind', 'manual', 'status', 'disabled', 'revision', ?,
         'updated_at', strftime('%Y-%m-%dT%H:%M:%fZ', 'now')))
-    WHERE organization_id = ? AND id = ?
-  `, [crypto.randomUUID(), organization.id, organization.id])
+    WHERE id = ?
+  `, [crypto.randomUUID(), organization.id])
 
-  if (result.meta?.changes !== 1) return jsonResponse({ error: 'Site ownership changed. Reload before disconnecting.' }, { status: 409 })
+  if (result.meta?.changes !== 1) return jsonResponse({ error: 'Organization changed. Reload before disconnecting.' }, { status: 409 })
 
   try {
     await reconcileZarazAnalytics(env, db)

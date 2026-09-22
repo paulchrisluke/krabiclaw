@@ -254,7 +254,7 @@ export async function createSystemSubdomain(
         sql: `UPDATE organization_domains
                 SET role = 'secondary', status = 'retired', former_site_id = organization_id, successor_domain = ?, retired_at = ?,
                     organization_id = NULL, organization_id = NULL, updated_at = ?
-              WHERE id = ? AND organization_id = ? AND organization_id = ? AND status = 'active'`,
+              WHERE id = ? AND organization_id = ? AND status = 'active'`,
         values: [domain, now, now, existing.id, organizationId],
       },
     )
