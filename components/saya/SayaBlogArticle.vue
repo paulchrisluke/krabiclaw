@@ -121,7 +121,7 @@ const { data, pending, error } = await useAsyncData(
     if (import.meta.server) {
       if (!requestEvent) throw createError({ statusCode: 404, statusMessage: 'Post not found' })
 
-      const [{ cloudflareEnv }, { getPublishedLocalizedSiteBlogPost }] = await Promise.all([
+      const [{ cloudflareEnv }, { getPublishedBlogPost }] = await Promise.all([
         import('~/server/utils/api-response'),
         import('~/server/utils/content/publishing'),
       ])
@@ -129,7 +129,7 @@ const { data, pending, error } = await useAsyncData(
       const db = env.db
       if (!db) throw createError({ statusCode: 500, statusMessage: 'Database not available' })
 
-      post = await getPublishedLocalizedSiteBlogPost(db, organizationId, String(route.params.slug), locale, env, previewAuthorized.value) as TenantBlogPost | null
+      post = await getPublishedBlogPost(db, organizationId, String(route.params.slug), locale, env, previewAuthorized.value) as TenantBlogPost | null
     } else {
       let payload: PublicBlogResponse
       try {

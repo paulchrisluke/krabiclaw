@@ -467,39 +467,6 @@ async function resolveTenantContext(db: DbClient, organizationId: string, env?: 
  * request, which was causing the page to 404 on posts the API itself
  * served fine.
  */
-/** One published KrabiClaw article, by slug within its collection. */
-export async function getPublishedBlogPost(db: DbClient, slug: string, env: CloudflareEnv, previewAuthorized = false, collection: ArticleCollection = 'blog') {
-  const platformSite = await getPlatformSite(db)
-  const platformSiteId = platformSite.id
-  const post = await queryFirst<ApiRecord>(db, `
-    SELECT
-      p.id, p.title, p.slug, p.summary AS excerpt, (p.metadata_json ->> '$.collection') AS collection, (p.metadata_json ->> '$.category') AS category, json_extract(p.metadata_json, '$.tags') AS tags_metadata, p.seo_title, p.seo_description, p.seo_keywords,
-      p.canonical_url, p.robots, p.visibility, p.sort_order,
-      p.published_at, p.created_at, p.updated_at,
-      p.author_id,
-      ${COVER_SELECT}
-    FROM content_documents p
-    ${coverJoinSql('p')}
-    WHERE p.kind = 'article' AND p.row_role = 'root' AND p.slug = ? AND (p.metadata_json ->> '$.collection') = ? AND p.organization_id = ?
-      ${previewAuthorized ? "AND p.status IN ('draft', 'scheduled', 'published')" : "AND p.status = 'published'"}
-  `, [slug, collection, platformSiteId])
-
-  if (!post) return null
-
-  const rawContentBlocks = await getContentBlocksForDocument(db, String(post.id))
-  if (!rawContentBlocks) throw new HTTPError({ statusCode: 500, statusMessage: 'Blog content document is missing' })
-  const contentBlocks = await attachPageQa(db, platformSiteId, tenantBlogPostPath({ themeId: PLATFORM_TEMPLATE.themeId }, slug, collection), rawContentBlocks)
-  const socialMedia = (await loadPublicSocialMedia(db, platformSiteId, 'content_document', [String(post.id)])).get(String(post.id))
-  const { author_id: authorId, ...postRecord } = post
-  const authors = await findAuthUsersByIds(env, [authorId as string | null])
-  const author = typeof authorId === 'string' ? authors.get(authorId) ?? null : null
-  return {
-    ...attachCover({ ...postRecord, content_blocks: contentBlocks }),
-    media: socialMedia?.media ?? [],
-    social_image: socialMedia?.social_image ?? null,
-    author: author ? { id: author.id, name: author.name, image: author.image } : null,
-  }
-}
 
 /**
  * Shared by the public docs API route and the docs page's SSR data fetch.
@@ -670,7 +637,8 @@ export async function getPublicSiteBlogPost(db: DbClient, organizationId: string
   }
 }
 
-export async function getPublishedLocalizedSiteBlogPost(
+/** One published article, by slug, in the locale asked for. */
+export async function getPublishedBlogPost(
   db: DbClient,
   organizationId: string,
   slug: string,
@@ -870,7 +838,7 @@ export async function updateBlogPost(
     changes.slug = requestedSlug
     if (input.slug !== undefined || input.reset_slug_override) metadata.slug_manually_overridden = slugMutation.manuallyOverridden ? 1 : 0
   } else if (input.reset_slug_override) metadata.slug_manually_overridden = 0
-  for (const field of ['seo_title', 'seo_description', 'seo_keywords', 'canonical_url', 'robots', 'visibility'] as const) {
+  for (const field of ['seo_title', 'seo_description', 'seo_keywords', 'canonical_url', 'visibility'] as const) {
     if (input[field] !== undefined) changes[field] = input[field]
   }
   if (input.excerpt !== undefined) changes.summary = input.excerpt

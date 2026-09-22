@@ -18,7 +18,6 @@ import { parsePostalAddress, type PostalAddress } from '~/utils/postal-address'
 
 interface PublicProductSiteRow {
   id: string
-  organization_id: string
   name: string
   vertical: string
   theme_id: string

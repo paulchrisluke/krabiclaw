@@ -10,7 +10,7 @@
 // preview authorization, so this route no longer resolves a preview token of
 // its own the way the id-carrying route had to.
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
-import { getPublishedLocalizedBlogPost } from '~/server/utils/content/publishing'
+import { getPublishedBlogPost } from '~/server/utils/content/publishing'
 import { assertExactCanonicalLocale } from '~/server/utils/localization'
 import { isArticleCollection } from '~/utils/article-collections'
 import { defineHandler } from 'nitro'
@@ -35,14 +35,13 @@ export default defineHandler(async (event) => {
   const db = env.db
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
 
-  const post = await getPublishedLocalizedBlogPost(
+  const post = await getPublishedBlogPost(
     db,
     organizationId,
     slug,
     locale,
     env,
     Boolean(event.context.previewAuthorized),
-    collection,
   )
   if (!post) return jsonResponse({ error: 'Post not found' }, { status: 404 })
 

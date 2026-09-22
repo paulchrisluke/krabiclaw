@@ -98,7 +98,7 @@ export interface ContentBlockInput {
 type ContentBlockWriteInput = Omit<ContentBlockSnapshot, 'id'> & { id?: string; updated_at?: string | null }
 
 export type ContentDocumentChanges = Partial<Pick<typeof content_documents.$inferInsert,
-  'title' | 'slug' | 'path' | 'summary' | 'seo_title' | 'seo_description' | 'seo_keywords' | 'canonical_url' | 'robots'
+  'title' | 'slug' | 'path' | 'summary' | 'seo_title' | 'seo_description' | 'seo_keywords' | 'canonical_url'
   | 'status' | 'visibility' | 'sort_order' | 'location_id' | 'source' | 'scope_path' | 'published_at' | 'first_published_at' | 'scheduled_for' | 'updated_by'
 >> & { metadata?: Record<string, unknown> }
 
@@ -396,7 +396,7 @@ function buildDocumentWriteBatch(
   const assignments = ['updated_at = ?']
   const values: unknown[] = [now]
   const changedColumns = ['title', 'slug', 'path', 'summary', 'seo_title', 'seo_description', 'seo_keywords',
-    'canonical_url', 'robots', 'status', 'visibility', 'sort_order', 'location_id', 'source', 'scope_path',
+    'canonical_url', 'status', 'visibility', 'sort_order', 'location_id', 'source', 'scope_path',
     'published_at', 'first_published_at', 'scheduled_for', 'updated_by'] as const
   for (const column of changedColumns) {
     if (opts.changes?.[column] !== undefined) {

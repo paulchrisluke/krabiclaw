@@ -104,7 +104,11 @@ const { data, pending, error } = await useAsyncData(
       const db = env.db
       if (!db) throw createError({ statusCode: 500, statusMessage: 'Database not available' })
 
-      post = await getPublishedBlogPost(db, String(route.params.slug), env, previewAuthorized.value) as BlogPost | null
+      // The platform is an ordinary tenant: the host resolved it, so the
+      // article is read for that organization like any other's.
+      const organizationId = requestEvent.context.organizationId as string | null | undefined
+      if (!organizationId) throw createError({ statusCode: 404, statusMessage: 'Article not found' })
+      post = await getPublishedBlogPost(db, organizationId, String(route.params.slug), 'en', env, previewAuthorized.value) as BlogPost | null
     } else {
       let payload: { post?: BlogPost }
       try {

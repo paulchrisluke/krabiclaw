@@ -4,7 +4,7 @@ import { HTTPError } from 'nitro';
 import type { CloudflareEnv } from '~/server/utils/auth'
 import { parseSocialImageSource } from '~/utils/social-metadata'
 import { listSiteReviews } from '~/server/utils/site-reviews'
-import { getPublishedLocalizedSiteBlogPost } from '~/server/utils/content/publishing'
+import { getPublishedBlogPost } from '~/server/utils/content/publishing'
 import { COVER_SELECT, attachCoverMedia, coverJoinSql } from '~/server/utils/content/cover'
 import {
   loadExactPublicLocalizations,
@@ -497,7 +497,7 @@ export async function getPublicBlawbyRouteData(
     needsReviews ? listSiteReviews(db, organizationId, { publishedOnly: true }) : Promise.resolve([]),
     postLimit ? listPublicBlogSummaries(db, organizationId, postLimit, options.locale ?? 'en') : Promise.resolve([]),
     recipe === 'article' && options.slug
-      ? getPublishedLocalizedSiteBlogPost(db, organizationId, options.slug, options.locale ?? 'en', env, options.previewAuthorized)
+      ? getPublishedBlogPost(db, organizationId, options.slug, options.locale ?? 'en', env, options.previewAuthorized)
       : Promise.resolve(null),
   ])
   let posts = initialPosts
