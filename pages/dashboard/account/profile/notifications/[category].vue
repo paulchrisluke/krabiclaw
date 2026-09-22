@@ -27,10 +27,22 @@ interface CategoryEditor {
 }
 
 const route = useRoute()
-const value = String(route.params.category ?? '')
-const category = isNotificationCategory(value) ? value : null
-// Raised, not thrown: the dashboard renders on the client, where a throw in a nested page's setup leaves a blank screen (DESIGN.md).
-if (!category) showError(createError({ statusCode: 404, statusMessage: 'Page not found' }))
+const level = useRouteLevel()
+
+// Moving from one category to the next reuses this page, so the category is
+// read from the route every time rather than once at setup — read once, the
+// title and the switches stayed on whichever category opened first.
+const category = computed(() => {
+  const value = String(route.params.category ?? '')
+  return isNotificationCategory(value) ? value : null
+})
+
+// Raised, not thrown: the dashboard renders on the client, where a throw in a
+// nested page's setup leaves a blank screen (DESIGN.md).
+watchEffect(() => {
+  if (level.stale.value) return
+  if (!category.value) showError(createError({ statusCode: 404, statusMessage: 'Page not found' }))
+})
 
 // The switches live in the component and the Cancel/Save row in the leaf's
 // footer, the way every other leaf commits.

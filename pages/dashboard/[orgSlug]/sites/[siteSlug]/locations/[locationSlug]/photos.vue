@@ -148,6 +148,7 @@ interface MediaAsset {
   placement_updated_at?: string | null
 }
 
+const dashboard = useDashboardSite()
 const dashboardLocation = useDashboardLocation()
 const siteId = await useDashboardSiteId()
 const siteApiBase = `/api/editor/sites/${siteId}`
@@ -179,15 +180,12 @@ const isMediaResponse = (value: unknown): value is { media: MediaAsset[] } =>
     && typeof asset.kind === 'string',
   )
 
-const categoryItems = [
+// The categories this business has, not every category the column can store:
+// a law firm was being offered Food and Menu.
+const categoryItems = computed(() => [
   { id: 'all', label: 'All categories' },
-  { id: 'exterior', label: 'Exterior' },
-  { id: 'interior', label: 'Interior' },
-  { id: 'food', label: 'Food' },
-  { id: 'menu', label: 'Menu' },
-  { id: 'team', label: 'Team' },
-  { id: 'other', label: 'Other' }
-]
+  ...photoCategories(dashboard.site.value?.vertical, assets.value.map(asset => asset.category)),
+])
 
 const filteredAssets = computed(() => {
   if (categoryFilter.value === 'all') return assets.value
@@ -200,7 +198,7 @@ const gridItems = computed(() => filteredAssets.value.map(row => ({
   row,
 })))
 
-const assignableCategories = computed(() => categoryItems.filter(item => item.id !== 'all'))
+const assignableCategories = computed(() => categoryItems.value.filter(item => item.id !== 'all'))
 
 // The photo's own screen: what it is, where it belongs, and the way to take it
 // off this location. It replaces a tag dropdown and a delete cross that both
@@ -238,7 +236,7 @@ async function detachOpenPhoto() {
 }
 
 function categoryLabel(category: string | null) {
-  return categoryItems.find(item => item.id === (category || 'other'))?.label ?? 'Other'
+  return categoryItems.value.find(item => item.id === (category || 'other'))?.label ?? 'Other'
 }
 
 async function loadPhotos() {
