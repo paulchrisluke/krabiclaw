@@ -20,13 +20,11 @@ export interface DashboardLocationResource {
 
 export async function listDashboardLocationsResource(
   event: H3Event,
-  scope: { organizationSlug?: string; siteSlug?: string } = {},
+  scope: { organizationSlug?: string } = {},
 ) {
-  const { env, db, organization, site } = await getDashboardContext(event, {
-        organizationSlug: scope.organizationSlug,
-    siteSlug: scope.siteSlug,
+  const { env, db, organization } = await getDashboardContext(event, {
+    organizationSlug: scope.organizationSlug,
   })
-  if (!site) throw new HTTPError({ statusCode: 404, statusMessage: 'Site not found' })
   const accessibleLocationIds = await listAccessibleLocationIds(db, memberAccessPrincipal(organization, { env, event }))
   if (accessibleLocationIds?.length === 0) return { success: true as const, locations: [] }
   const locationFilter = accessibleLocationIds
@@ -36,10 +34,10 @@ export async function listDashboardLocationsResource(
     SELECT id, slug, title, status, address, phone, email,
            notification_phone
       FROM business_locations
-     WHERE organization_id = ? AND organization_id = ?
+     WHERE organization_id = ?
        ${locationFilter}
      ORDER BY title ASC
-  `, [organization.id, site.id, ...(accessibleLocationIds ? [d1JsonStringSet(accessibleLocationIds)] : [])])
+  `, [organization.id, ...(accessibleLocationIds ? [d1JsonStringSet(accessibleLocationIds)] : [])])
   return {
     success: true as const,
     locations: locations.map(location => ({

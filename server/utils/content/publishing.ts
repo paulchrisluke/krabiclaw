@@ -447,15 +447,15 @@ async function resolveTenantContext(db: DbClient, organizationId: string, env?: 
   if (!organizationId) return undefined
   if (!env) throw new Error('CloudflareEnv is required to resolve tenant organization context')
   // The dashboard addresses a site by its subdomain, not by `organization.slug`.
-  const site = await queryFirst<{ subdomain: string | null; organization_id: string }>(
+  const tenant = await queryFirst<{ subdomain: string | null }>(
     db,
-    'SELECT subdomain, organization_id FROM organization WHERE id = ? LIMIT 1',
+    'SELECT subdomain FROM organization WHERE id = ? LIMIT 1',
     [organizationId],
   )
-  if (!site?.subdomain) return undefined
-  const organization = await findOrganizationById(env, organization.id)
+  if (!tenant?.subdomain) return undefined
+  const organization = await findOrganizationById(env, organizationId)
   if (!organization) return undefined
-  return { orgSlug: organization.slug, siteSlug: site.subdomain }
+  return { orgSlug: organization.slug }
 }
 
 /**

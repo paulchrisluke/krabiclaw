@@ -19,21 +19,19 @@ import { resolvePublicTemplate } from '~/utils/template-registry'
 import { mediaStillUrl } from '~/shared/media-placement-contract'
 
 const SOCIAL_CARD_OWNERS = {
-  organization: { table: 'organization', organization: 'o.id', filter: "o.status = 'active'", slots: ['social_share'] },
-  business_location: { table: 'business_locations', site: 'o.organization_id', filter: "o.status = 'active'", slots: ['hero', 'gallery'] },
-  // A Product belongs to the organization and reaches a site through a
-  // publication, so its site match is that row rather than a column.
+  organization: { table: 'organization', tenant: 'o.id', filter: "o.status = 'active'", slots: ['social_share'] },
+  business_location: { table: 'business_locations', tenant: 'o.organization_id', filter: "o.status = 'active'", slots: ['hero', 'gallery'] },
   product: {
     table: 'products',
-    site: "(SELECT pub.organization_id FROM product_publications pub WHERE pub.product_id = o.id AND pub.organization_id = o.organization_id AND pub.published = 1)",
+    tenant: 'o.organization_id',
     filter: 'o.active = 1',
     slots: ['image', 'gallery'],
   },
   // Articles and docs keep their picture in the leading image block, read
   // through `loadCoverBlockId`; `cover` is the social post's own slot.
-  content_document: { table: 'content_documents', site: 'o.organization_id', filter: "o.kind IN ('page','article','social_post') AND EXISTS (SELECT 1 FROM content_documents root WHERE root.id = COALESCE(o.root_id, o.id) AND (root.kind = 'page' OR root.status = 'published')) AND (o.kind != 'page' OR o.path != '/')", slots: ['cover', 'gallery'] },
-  review: { table: 'reviews', site: 'o.organization_id', filter: "o.status = 'approved' AND o.organization_id IS NOT NULL", slots: ['portrait', 'gallery'] },
-} satisfies Record<string, { table: string; site: string; filter: string; slots: string[] }>
+  content_document: { table: 'content_documents', tenant: 'o.organization_id', filter: "o.kind IN ('page','article','social_post') AND EXISTS (SELECT 1 FROM content_documents root WHERE root.id = COALESCE(o.root_id, o.id) AND (root.kind = 'page' OR root.status = 'published')) AND (o.kind != 'page' OR o.path != '/')", slots: ['cover', 'gallery'] },
+  review: { table: 'reviews', tenant: 'o.organization_id', filter: "o.status = 'approved' AND o.organization_id IS NOT NULL", slots: ['portrait', 'gallery'] },
+} satisfies Record<string, { table: string; tenant: string; filter: string; slots: string[] }>
 
 export type SocialCardOwner = { owner_type: keyof typeof SOCIAL_CARD_OWNERS; owner_id: string }
 
@@ -44,7 +42,7 @@ export async function listSocialCardOwners(db: DbClient, input: { organizationId
     if (remaining === 0) break
     owners.push(...await queryAll<SocialCardOwner & { cursor: string }>(db, `SELECT '${ownerType}' AS owner_type, o.id AS owner_id, '${ownerType}:' || o.id AS cursor
       FROM ${source.table} o WHERE ${source.filter}
-        AND (? IS NULL OR ${source.site} = ?) AND (? IS NULL OR '${ownerType}:' || o.id > ?)
+        AND (? IS NULL OR ${source.tenant} = ?) AND (? IS NULL OR '${ownerType}:' || o.id > ?)
       ORDER BY o.id LIMIT ?`, [input.organizationId ?? null, input.organizationId ?? null, input.after ?? null, input.after ?? null, remaining]))
   }
   return owners

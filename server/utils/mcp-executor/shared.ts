@@ -623,7 +623,7 @@ export async function normalizeWorkspaceArguments(
       {
         organizationId: hasSite ? String(args.organization_id) : null,
         locationId: hasLocation ? String(args.location_id) : null,
-        requireSite: supportsSite || needsLocation,
+        requireOrganization: supportsSite || needsLocation,
         requireLocation: needsLocation,
       },
     );
@@ -631,8 +631,8 @@ export async function normalizeWorkspaceArguments(
     rethrowWorkspaceError(error);
   }
 
-  if (!hasSite && supportsSite && workspace.site) {
-    args.organization_id = workspace.site.id;
+  if (!hasSite && supportsSite && workspace.organization) {
+    args.organization_id = workspace.organization.id;
   }
   if (!hasLocation && supportsLocation && workspace.location && needsLocation) {
     args.location_id = workspace.location.id;
