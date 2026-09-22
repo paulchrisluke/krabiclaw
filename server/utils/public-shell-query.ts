@@ -64,7 +64,7 @@ export function appendPublicShellQueries(
     config: push(`SELECT setting.key, setting.value
                 FROM organization s, json_each(s.settings_json, '$.config') setting
                WHERE s.id = ?
-                 AND setting.key IN ('brand_color', 'font_preset', 'press_email', 'partnerships_email', 'catering_email', 'careers_email', 'google_site_verification', 'default_timezone')
+                 AND setting.key IN ('brand_color', 'font_preset', 'press_email', 'partnerships_email', 'catering_email', 'careers_email', 'default_timezone')
               `, [organizationId]),
     locales: push(`SELECT locale, label, is_source, status
                 FROM organization_locales
@@ -136,7 +136,6 @@ export function buildPublicShellPayload(
       seo_title: location.seo_title ?? null,
       seo_description: location.seo_description ?? null,
       canonical_url: location.canonical_url ?? null,
-      robots: location.robots ?? null,
     }
   })
   const configRows = (results[indexes.config]?.results ?? []) as Array<{ key: string, value: string }>
@@ -153,7 +152,7 @@ export function buildPublicShellPayload(
   if (site.seo_title) config.seo_title = site.seo_title
   if (site.seo_description) config.seo_description = site.seo_description
   if (site.canonical_url) config.canonical_url = site.canonical_url
-  if (site.robots) config.robots = site.robots
+  if (site.search_console_verification) config.search_console_verification = site.search_console_verification
   // Real, writable site-scope columns — the single source for footer social icons. Never
   // derived from site_link_items (a link's destination and a footer profile are unrelated).
   if (site.social_facebook_url) config.social_facebook = site.social_facebook_url
@@ -172,11 +171,10 @@ export function buildPublicShellPayload(
     },
     locations,
     config,
-    googleBusiness: {
+    googleMaps: {
       business: null,
       reviews: [],
       media: [],
-      posts: [],
       syncedAt: null,
     },
     locales: ((results[indexes.locales]?.results ?? []) as Array<{

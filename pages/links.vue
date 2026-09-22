@@ -40,7 +40,6 @@
 import { TENANT_TYPES } from '~/utils/tenant-routing'
 import { ApiClientError, publicApiRequest } from '~/utils/api-clients'
 import { isPublicLinksPayload, isPublicLinksResponse, type PublicLinksItem, type PublicLinksPayload } from '~/utils/public-links-contract'
-import { normalizeRobotsIntent } from '~/shared/robots-directive'
 
 definePageMeta({ layout: false })
 
@@ -144,7 +143,7 @@ useSocialMetadata(() => ({
   path: '/links',
   title: linksPage.value?.page.seo_title || linksPage.value?.page.title || brandName.value,
   description: linksPage.value?.page.seo_description || linksPage.value?.site.brand_description || '',
-  robots: normalizeRobotsIntent(linksPage.value?.page.robots) ?? 'noindex,follow',
+  discoverability: 'unlisted',
   brand: { siteName: brandName.value },
 }))
 </script>

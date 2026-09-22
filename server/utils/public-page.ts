@@ -548,8 +548,8 @@ async function loadPublicPageSource(
       },
       locations,
       config,
-      googleBusiness: {
-        ...sourceShell.googleBusiness,
+      googleMaps: {
+        ...sourceShell.googleMaps,
         business: null,
       },
     }

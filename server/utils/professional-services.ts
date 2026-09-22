@@ -23,6 +23,7 @@ import {
 import { listPublishedTenantPagePaths } from '~/server/utils/content/pages'
 import { isBlawbyShellOnlyRouteRecipe } from '~/types/blawby'
 import type {
+import { publicTenantVisibilitySql } from '~/server/utils/public-base'
   PublicBlawbyData,
   PublicBlawbyIdentity,
   PublicBlawbyRouteData,
@@ -69,7 +70,7 @@ export async function getActiveBlawbySite(
   const site = await queryFirst<{ id: string; vertical: string; theme_id: string }>(db, `
     SELECT id, vertical, theme_id
       FROM organization
-     WHERE id = ? AND status = 'active'${options.previewAuthorized ? '' : " AND onboarding_status = 'active'"}
+     WHERE id = ? AND ${publicTenantVisibilitySql('organization', options.previewAuthorized)}
      LIMIT 1
   `, [organizationId])
 

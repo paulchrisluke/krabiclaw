@@ -45,7 +45,6 @@
 </template>
 
 <script setup lang="ts">
-import { NON_INDEXABLE_ROBOTS_INTENT } from '~/shared/robots-directive'
 import { authClient } from '~/lib/auth-client'
 import { buildPostLoginUrl, validatedInternalPath } from '~/shared/auth/return-target'
 
@@ -56,7 +55,7 @@ useSocialMetadata({
   path: '/signup',
   title: 'Create your account',
   description: 'Create a free KrabiClaw account and build your business site through ChatGPT.',
-  robots: NON_INDEXABLE_ROBOTS_INTENT,
+  discoverability: 'private',
 })
 
 const route = useRoute()

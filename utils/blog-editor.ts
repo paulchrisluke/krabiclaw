@@ -1,6 +1,5 @@
 import { instantDate, isValidInstant, localDateTimeToInstant } from './timezone'
 import { PUBLICATION_CONTENT_BLOCK_LOCALIZED_FIELDS, expandContentFieldPath, readContentFieldValue, type PublicationContentBlockType } from '~/shared/content-registries'
-import { normalizeRobotsIntent } from '~/shared/robots-directive'
 
 export type BlogVisibility = 'listed' | 'unlisted'
 
@@ -148,7 +147,6 @@ export function resolveBlogSeo(input: {
   publicPath?: string
   siteName?: string | null
   descriptionMaxLength?: number
-  robots?: string | null
 }) {
   const path = input.publicPath || `${(input.pathPrefix || '/blog').replace(/\/$/, '')}/${encodeURIComponent(input.slug)}`
   const maxLength = input.descriptionMaxLength ?? 160
@@ -160,7 +158,6 @@ export function resolveBlogSeo(input: {
     title: input.seoTitle?.trim() || input.title.trim(),
     description,
     canonicalUrl: input.canonicalUrl?.trim() || new URL(path, input.baseUrl).toString(),
-    robots: normalizeRobotsIntent(input.robots),
   }
 }
 

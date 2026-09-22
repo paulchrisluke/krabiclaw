@@ -16,7 +16,6 @@ import { publicApiRequest, isRecord } from '~/utils/api-clients'
 import type { PublicTenantPage } from '~/server/utils/public-tenant-pages'
 import type { PublicLocaleRepresentation } from '~/utils/public-resource-contracts'
 import type { PublicBlawbyIdentity, PublicCompliance } from '~/types/blawby'
-import { normalizeRobotsIntent } from '~/shared/robots-directive'
 import { normalizeTenantPagePath } from '~/utils/tenant-page-blocks'
 
 const props = defineProps<{ path: string; locale?: string | null }>()
@@ -180,7 +179,6 @@ useSocialMetadata(() => page.value && ({
   path: page.value.canonical_url || page.value.path,
   title: page.value.seo_title || `${page.value.title} | ${site?.name || ''}`,
   description: page.value.seo_description || page.value.summary || '',
-  robots: normalizeRobotsIntent(page.value.robots),
   // KrabiClaw's own brand name is the platform name, which useSocialMetadata
   // already states once for every platform surface; a tenant states its own.
   ...(isPlatform ? {} : { brand: { siteName: site?.name || '' } }),

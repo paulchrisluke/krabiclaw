@@ -103,6 +103,11 @@ export function useSocialMetadata(input: MaybeRefOrGetter<PageSocialMetadataInpu
       brand,
       pageType: value.socialType || value.pageType || 'website',
       canonicalUrl,
+      // A preview is the owner looking at their own unpublished work on the
+      // real host. Whatever the page would otherwise say about itself, nothing
+      // reached this way is Google's to keep — and deciding it here means no
+      // page can be added that forgets to.
+      discoverability: tenant.previewAuthorized ? 'private' : value.discoverability,
     }
     const sourceImage = Object.hasOwn(value, 'socialImage')
       ? value.socialImage ?? null

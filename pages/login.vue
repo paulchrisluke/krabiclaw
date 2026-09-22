@@ -26,7 +26,6 @@
 </template>
 
 <script setup lang="ts">
-import { NON_INDEXABLE_ROBOTS_INTENT } from '~/shared/robots-directive'
 import { authClient } from '~/lib/auth-client'
 import { buildPostLoginUrl, validatedInternalPath } from '~/shared/auth/return-target'
 
@@ -37,7 +36,7 @@ useSocialMetadata({
   path: '/login',
   title: 'Sign in',
   description: 'Sign in to your KrabiClaw account to manage your site, bookings and content.',
-  robots: NON_INDEXABLE_ROBOTS_INTENT,
+  discoverability: 'private',
 })
 
 const route = useRoute()

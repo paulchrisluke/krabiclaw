@@ -29,8 +29,8 @@ const { organizationId, site } = useTenantSite()
 if (!organizationId) throw createError({ statusCode: 404 })
 const { localePath, t } = useI18n()
 
-const { googleBusiness, qaList, locations } = await usePublicPageData()
-const siteName = computed(() => site?.name?.trim() || googleBusiness.value?.business?.title?.trim() || '')
+const { googleMaps, qaList, locations } = await usePublicPageData()
+const siteName = computed(() => site?.name?.trim() || googleMaps.value?.business?.title?.trim() || '')
 
 useSocialMetadata(() => ({
   path: '/qa',
