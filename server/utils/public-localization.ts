@@ -33,10 +33,9 @@ export async function loadExactPublicLocalizations(
   env: CloudflareEnv,
   db: DbClient,
   organizationId: string,
-  siteId: string,
   locale: string,
 ): Promise<ExactPublicLocalization[]> {
-  const entitlement = await assertPublicSiteLanguageEntitlement(env, db, organizationId, siteId, locale)
+  const entitlement = await assertPublicSiteLanguageEntitlement(env, db, organizationId, locale)
   if (entitlement.source) throw new HTTPError({ statusCode: 404, statusMessage: 'Primary-language routes are unprefixed' })
   const rows = await queryAll<StoredPublicLocalizationRow>(db, `
     SELECT resource_type, resource_id, locale, values_json, route_path
@@ -100,13 +99,13 @@ export function projectExactLocalizedResource<T extends { id: string }>(
     value,
   ]))
   const titleField: Partial<Record<LocalizedResourceType, string>> = {
-    site: 'brand_name',
+    organization: 'name',
     business_location: 'title',
     product: 'name',
     collection: 'name',
   }
   const descriptionField: Partial<Record<LocalizedResourceType, string>> = {
-    site: 'brand_description',
+    organization: 'brand_description',
     business_location: 'description',
     product: 'description',
     collection: 'description',
