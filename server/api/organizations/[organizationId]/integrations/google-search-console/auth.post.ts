@@ -11,26 +11,27 @@ export default defineHandler(async (event) => {
   const organizationId = getRouterParam(event, 'organizationId')
   if (!organizationId) return jsonResponse({ error: 'Organization ID is required' }, { status: 400 })
 
-  const { env, db, session, organization } = await requireOrganizationAccess(event, organizationId)
+  const { env, db, session, organization} = await requireOrganizationAccess(event, organizationId)
 
   const hmacSecret = env.CONNECTOR_TOKEN_ENCRYPTION_KEY as string | undefined
   if (!hmacSecret) return jsonResponse({ error: 'Server misconfiguration: encryption key not set' }, { status: 500 })
 
   const current = await queryFirst<{ revision: string | null }>(db, `
     SELECT json_extract(integrations_json, '$.google_credential.revision') AS revision
-      FROM organization WHERE id = ?
-  `, [organization.id])
-  if (!current) return jsonResponse({ error: 'Organization not found' }, { status: 404 })
+      FROM sites WHERE id = ? AND organization_id = ?
+  `, [organization.id, site.organization_id])
+  if (!current) return jsonResponse({ error: 'Site not found' }, { status: 404 })
 
   const state = await signOAuthState(hmacSecret, {
     revision: current.revision,
-    product: 'analytics',
+    product: 'search-console',
     organizationId: organization.id,
+    organizationId: site.organization_id,
     userId: session.user.id,
     timestamp: Date.now(),
   })
 
-  return jsonResponse({ success: true, authUrl: googleAuthUrl(env, 'analytics', state) })
+  return jsonResponse({ success: true, authUrl: googleAuthUrl(env, 'search-console', state) })
 })
 import { defineHandler } from 'nitro';
 import { getRouterParam } from 'nitro/h3';

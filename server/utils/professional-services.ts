@@ -22,8 +22,8 @@ import {
 } from '~/server/utils/public-tenant-pages'
 import { listPublishedTenantPagePaths } from '~/server/utils/content/pages'
 import { isBlawbyShellOnlyRouteRecipe } from '~/types/blawby'
-import type {
 import { publicTenantVisibilitySql } from '~/server/utils/public-base'
+import type {
   PublicBlawbyData,
   PublicBlawbyIdentity,
   PublicBlawbyRouteData,

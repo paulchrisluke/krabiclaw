@@ -12,6 +12,7 @@ const GRAPH_BASE = `https://graph.facebook.com/${GRAPH_API_VERSION}`
 
 export interface FacebookEnv {
   DB: D1Database
+  SITE_CACHE?: KVNamespace
   FACEBOOK_APP_ID?: string
   FACEBOOK_APP_SECRET?: string
   FACEBOOK_REDIRECT_URI?: string
@@ -19,7 +20,7 @@ export interface FacebookEnv {
   CONNECTOR_TOKEN_ENCRYPTION_KEY?: string
 }
 
-export interface FacebookPagesConnection extends Omit<FacebookIntegration, 'kind' | 'revision'>, IntegrationVersion {
+export interface FacebookPagesConnection extends Omit<FacebookIntegration, 'revision'>, IntegrationVersion {
   organization_id: string
 }
 
@@ -248,7 +249,7 @@ export const storeFacebookPagesConnection = async (
 
   const { organization_id: organizationId, ...providerState } = connection
   const payload = JSON.stringify({
-    ...providerState, id: connectionId, kind: 'oauth', revision: crypto.randomUUID(),
+    ...providerState, id: connectionId, revision: crypto.randomUUID(),
     encrypted_user_token: encryptedUserToken,
     encrypted_page_token: encryptedPageToken, updated_at: now,
   })
@@ -286,7 +287,6 @@ export const getFacebookPagesConnection = async (
            json_extract(integrations_json, '$.facebook.created_at') AS created_at,
            json_extract(integrations_json, '$.facebook.updated_at') AS updated_at
       FROM organization WHERE id = ?
-       AND json_extract(integrations_json, '$.facebook.kind') = 'oauth'
        AND json_extract(integrations_json, '$.facebook.status') = 'active'
      LIMIT 1
   `, [organizationId])
@@ -536,4 +536,131 @@ export const syncFacebookPosts = async (
   }
 
   return { success, errors, skipped }
+}
+
+/**
+ * Tells Meta to forget this app's authorization for the connected user. Best
+ * effort at the call site: a token Meta has already invalidated, or a user who
+ * revoked from their own Facebook settings, must not stop the connection being
+ * released here.
+ */
+export const revokeFacebookAuthorization = async (
+  facebookUserId: string,
+  userToken: string,
+): Promise<void> => {
+  const params = new URLSearchParams({ access_token: userToken })
+  const response = await fetch(`${GRAPH_BASE}/${facebookUserId}/permissions?${params.toString()}`, {
+    method: 'DELETE',
+  })
+  if (!response.ok) {
+    throw new Error(`Facebook authorization revoke failed: ${(await response.text()).slice(0, 200)}`)
+  }
+}
+
+/**
+ * Meta signs the payload it posts to the deauthorize and data-deletion
+ * callbacks rather than authenticating the request any other way, so verifying
+ * this signature *is* the authorization check for those endpoints.
+ *
+ * `payload.user_id` is the Meta user whose authorization ended. Returns null
+ * when the signature does not verify, which the callers answer as a refusal —
+ * an unsigned caller must never be able to disconnect a tenant's integration.
+ */
+export const parseMetaSignedRequest = async (
+  signedRequest: string,
+  appSecret: string,
+): Promise<{ user_id?: string; algorithm?: string; issued_at?: number } | null> => {
+  const [encodedSignature, encodedPayload] = signedRequest.split('.')
+  if (!encodedSignature || !encodedPayload) return null
+
+  const base64UrlDecode = (value: string): ArrayBuffer => {
+    const padded = value.replace(/-/g, '+').replace(/_/g, '/')
+    const binary = atob(padded.padEnd(padded.length + ((4 - (padded.length % 4)) % 4), '='))
+    const buffer = new ArrayBuffer(binary.length)
+    const bytes = new Uint8Array(buffer)
+    for (let at = 0; at < binary.length; at++) bytes[at] = binary.charCodeAt(at)
+    return buffer
+  }
+
+  let signature: ArrayBuffer
+  let payloadBytes: ArrayBuffer
+  try {
+    signature = base64UrlDecode(encodedSignature)
+    payloadBytes = new TextEncoder().encode(encodedPayload).buffer as ArrayBuffer
+  } catch {
+    return null
+  }
+
+  const key = await crypto.subtle.importKey(
+    'raw', new TextEncoder().encode(appSecret), { name: 'HMAC', hash: 'SHA-256' }, false, ['verify'],
+  )
+  if (!(await crypto.subtle.verify('HMAC', key, signature, payloadBytes))) return null
+
+  try {
+    const payload = JSON.parse(new TextDecoder().decode(base64UrlDecode(encodedPayload))) as {
+      user_id?: string
+      algorithm?: string
+      issued_at?: number
+    }
+    // Meta only ever signs HMAC-SHA256; anything else is a payload this
+    // verification did not actually cover.
+    return payload.algorithm && payload.algorithm.toUpperCase() !== 'HMAC-SHA256' ? null : payload
+  } catch {
+    return null
+  }
+}
+
+/**
+ * A Facebook connection always names a Page — the schema requires it — so the
+ * Page has to be chosen before anything is stored. When the authorization
+ * returns more than one, the tokens wait here between the callback and the
+ * tenant's choice: encrypted, in the cache namespace, under an opaque handle,
+ * for ten minutes.
+ *
+ * The handle travels in the redirect URL and the tokens never do, and there is
+ * no half-connected row for a tenant to find, because a Page nobody picked is
+ * not a connection.
+ */
+const PENDING_SELECTION_TTL_SECONDS = 600
+const pendingSelectionKey = (handle: string) => `facebook-page-selection:${handle}`
+
+export interface PendingPageSelection {
+  siteId: string
+  organizationId: string
+  userId: string
+  facebookUserId: string
+  userToken: string
+  revision: string | null
+  pages: FacebookPage[]
+}
+
+export const storePendingPageSelection = async (
+  env: FacebookEnv,
+  selection: PendingPageSelection,
+): Promise<string> => {
+  if (!env.SITE_CACHE) throw new Error('Cache namespace unavailable for Facebook page selection')
+  const handle = crypto.randomUUID()
+  const sealed = await encryptSecret(JSON.stringify(selection), encryptionEnv(env))
+  await env.SITE_CACHE.put(pendingSelectionKey(handle), sealed, {
+    expirationTtl: PENDING_SELECTION_TTL_SECONDS,
+  })
+  return handle
+}
+
+export const readPendingPageSelection = async (
+  env: FacebookEnv,
+  handle: string,
+): Promise<PendingPageSelection | null> => {
+  if (!env.SITE_CACHE) return null
+  const sealed = await env.SITE_CACHE.get(pendingSelectionKey(handle))
+  if (!sealed) return null
+  try {
+    return JSON.parse(await decryptSecret(sealed, encryptionEnv(env))) as PendingPageSelection
+  } catch {
+    return null
+  }
+}
+
+export const clearPendingPageSelection = async (env: FacebookEnv, handle: string): Promise<void> => {
+  await env.SITE_CACHE?.delete(pendingSelectionKey(handle))
 }

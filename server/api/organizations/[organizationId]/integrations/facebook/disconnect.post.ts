@@ -9,7 +9,7 @@ export default defineHandler(async (event) => {
   if (!organizationId) return jsonResponse({ error: 'Organization ID is required' }, { status: 400 })
 
   const { env, organization} = await requireOrganizationAccess(event, organizationId)
-  const result = await releaseIntegration(env, organization.id, 'google-analytics')
+  const result = await releaseIntegration(env, organization.id, 'facebook')
 
   return jsonResponse({ success: true, ...result })
 })
