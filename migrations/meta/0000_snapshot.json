@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "4bd80cd5-a2af-49c9-b26e-a0655b0efc3b",
+  "id": "ea3bc552-f130-44a9-b802-ee4a33dd3725",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "account": {
@@ -1399,13 +1399,6 @@
           "notNull": false,
           "autoincrement": false
         },
-        "robots": {
-          "name": "robots",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
         "team_id": {
           "name": "team_id",
           "type": "text",
@@ -2197,13 +2190,6 @@
           "notNull": false,
           "autoincrement": false
         },
-        "robots": {
-          "name": "robots",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
         "metadata_json": {
           "name": "metadata_json",
           "type": "text",
@@ -2487,7 +2473,7 @@
         },
         "content_documents_article_visibility_check": {
           "name": "content_documents_article_visibility_check",
-          "value": "kind NOT IN ('article','social_post') OR row_role <> 'root' OR (visibility IN ('public','unlisted')) IS 1"
+          "value": "kind NOT IN ('article','social_post') OR row_role <> 'root' OR (visibility IN ('listed','unlisted')) IS 1"
         },
         "content_documents_qa_state_check": {
           "name": "content_documents_qa_state_check",
@@ -5731,13 +5717,6 @@
           "autoincrement": false,
           "default": "'restaurant'"
         },
-        "last_published_at": {
-          "name": "last_published_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
         "updated_at": {
           "name": "updated_at",
           "type": "text",
@@ -5769,13 +5748,6 @@
         },
         "canonical_url": {
           "name": "canonical_url",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "robots": {
-          "name": "robots",
           "type": "text",
           "primaryKey": false,
           "notNull": false,
@@ -5857,7 +5829,7 @@
         },
         "organization_instants_check": {
           "name": "organization_instants_check",
-          "value": "(last_published_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', last_published_at, '+0 days') IS last_published_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at) AND (analytics_data_start_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', analytics_data_start_at, '+0 days') IS analytics_data_start_at)"
+          "value": "(updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at) AND (analytics_data_start_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', analytics_data_start_at, '+0 days') IS analytics_data_start_at)"
         },
         "organization_settings_json_check": {
           "name": "organization_settings_json_check",
@@ -5886,10 +5858,6 @@
         "organization_config_careers_email_check": {
           "name": "organization_config_careers_email_check",
           "value": "json_type(settings_json, '$.config.careers_email') IS NULL OR json_type(settings_json, '$.config.careers_email') IS 'text'"
-        },
-        "organization_config_google_site_verification_check": {
-          "name": "organization_config_google_site_verification_check",
-          "value": "json_type(settings_json, '$.config.google_site_verification') IS NULL OR json_type(settings_json, '$.config.google_site_verification') IS 'text'"
         },
         "organization_config_default_timezone_check": {
           "name": "organization_config_default_timezone_check",
@@ -5943,21 +5911,25 @@
           "name": "organization_compliance_nonprofit_check",
           "value": "json_extract(settings_json, '$.compliance.nonprofit_status') IS NULL OR json_extract(settings_json, '$.compliance.nonprofit_status') IN ('https://schema.org/Nonprofit501c1', 'https://schema.org/Nonprofit501c2', 'https://schema.org/Nonprofit501c3', 'https://schema.org/Nonprofit501c4', 'https://schema.org/Nonprofit501c5', 'https://schema.org/Nonprofit501c6', 'https://schema.org/Nonprofit501c7', 'https://schema.org/Nonprofit501c8', 'https://schema.org/Nonprofit501c9', 'https://schema.org/Nonprofit501c10', 'https://schema.org/Nonprofit501c11', 'https://schema.org/Nonprofit501c12', 'https://schema.org/Nonprofit501c13', 'https://schema.org/Nonprofit501c14', 'https://schema.org/Nonprofit501c15', 'https://schema.org/Nonprofit501c16', 'https://schema.org/Nonprofit501c17', 'https://schema.org/Nonprofit501c18', 'https://schema.org/Nonprofit501c19', 'https://schema.org/Nonprofit501c20', 'https://schema.org/Nonprofit501c21', 'https://schema.org/Nonprofit501c22', 'https://schema.org/Nonprofit501c23', 'https://schema.org/Nonprofit501c24', 'https://schema.org/Nonprofit501c25', 'https://schema.org/Nonprofit501c26', 'https://schema.org/Nonprofit501c27', 'https://schema.org/Nonprofit501c28', 'https://schema.org/NonprofitANBI', 'https://schema.org/NonprofitSBBI')"
         },
-        "organization_facebook_integration_check": {
-          "name": "organization_facebook_integration_check",
-          "value": "json_type(integrations_json, '$.facebook') IS NULL OR (json_type(integrations_json, '$.facebook') IS 'object' AND json_type(integrations_json, '$.facebook.revision') IS 'text' AND json_extract(integrations_json, '$.facebook.kind') IN ('oauth') AND json_extract(integrations_json, '$.facebook.status') IN ('active', 'disabled', 'error')) IS TRUE"
+        "organization_google_credential_check": {
+          "name": "organization_google_credential_check",
+          "value": "json_type(integrations_json, '$.google_credential') IS NULL OR (json_type(integrations_json, '$.google_credential') IS 'object' AND json_type(integrations_json, '$.google_credential.revision') IS 'text' AND json_extract(integrations_json, '$.google_credential.status') IN ('active', 'disabled', 'error') AND json_type(integrations_json, '$.google_credential.encrypted_access_token') IS 'text' AND json_type(integrations_json, '$.google_credential.encrypted_refresh_token') IS 'text' AND json_type(integrations_json, '$.google_credential.scopes') IS 'text' AND json_type(integrations_json, '$.google_credential.provider_account_email') IS 'text') IS TRUE"
         },
-        "organization_google_integration_check": {
-          "name": "organization_google_integration_check",
-          "value": "json_type(integrations_json, '$.google') IS NULL OR (json_type(integrations_json, '$.google') IS 'object' AND json_type(integrations_json, '$.google.revision') IS 'text' AND json_extract(integrations_json, '$.google.kind') IN ('oauth', 'manual') AND json_extract(integrations_json, '$.google.status') IN ('active', 'disabled', 'error')) IS TRUE"
+        "organization_google_analytics_check": {
+          "name": "organization_google_analytics_check",
+          "value": "json_type(integrations_json, '$.google_analytics') IS NULL OR (json_type(integrations_json, '$.google_analytics') IS 'object' AND json_type(integrations_json, '$.google_analytics.revision') IS 'text' AND json_extract(integrations_json, '$.google_analytics.status') IN ('active', 'disabled', 'error') AND json_type(integrations_json, '$.google_analytics.measurement_id') IS 'text') IS TRUE"
         },
-        "organization_google_credentials_check": {
-          "name": "organization_google_credentials_check",
-          "value": "json_type(integrations_json, '$.google') IS NULL OR (CASE json_extract(integrations_json, '$.google.kind') WHEN 'oauth' THEN json_type(integrations_json, '$.google.encrypted_access_token') IS 'text' AND json_type(integrations_json, '$.google.encrypted_refresh_token') IS 'text' WHEN 'manual' THEN json_type(integrations_json, '$.google.encrypted_access_token') IS NULL AND json_type(integrations_json, '$.google.encrypted_refresh_token') IS NULL END) IS TRUE"
+        "organization_google_search_console_check": {
+          "name": "organization_google_search_console_check",
+          "value": "json_type(integrations_json, '$.google_search_console') IS NULL OR (json_type(integrations_json, '$.google_search_console') IS 'object' AND json_type(integrations_json, '$.google_search_console.revision') IS 'text' AND json_extract(integrations_json, '$.google_search_console.status') IN ('active', 'disabled', 'error') AND json_type(integrations_json, '$.google_search_console.site_url') IS 'text') IS TRUE"
         },
-        "organization_facebook_credentials_check": {
-          "name": "organization_facebook_credentials_check",
-          "value": "json_type(integrations_json, '$.facebook') IS NULL OR json_type(integrations_json, '$.facebook.encrypted_user_token') IS 'text'"
+        "organization_facebook_check": {
+          "name": "organization_facebook_check",
+          "value": "json_type(integrations_json, '$.facebook') IS NULL OR (json_type(integrations_json, '$.facebook') IS 'object' AND json_type(integrations_json, '$.facebook.revision') IS 'text' AND json_extract(integrations_json, '$.facebook.status') IN ('active', 'disabled', 'error') AND json_type(integrations_json, '$.facebook.encrypted_user_token') IS 'text' AND json_type(integrations_json, '$.facebook.page_id') IS 'text' AND json_type(integrations_json, '$.facebook.page_name') IS 'text') IS TRUE"
+        },
+        "organization_instagram_check": {
+          "name": "organization_instagram_check",
+          "value": "json_type(integrations_json, '$.instagram') IS NULL OR (json_type(integrations_json, '$.instagram') IS 'object' AND json_type(integrations_json, '$.instagram.revision') IS 'text' AND json_extract(integrations_json, '$.instagram.status') IN ('active', 'disabled', 'error') AND json_type(integrations_json, '$.instagram.encrypted_access_token') IS 'text' AND json_type(integrations_json, '$.instagram.instagram_user_id') IS 'text') IS TRUE"
         },
         "organization_feature_overrides_check": {
           "name": "organization_feature_overrides_check",

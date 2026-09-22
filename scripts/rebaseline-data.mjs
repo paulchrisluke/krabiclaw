@@ -62,6 +62,17 @@ const digest = (rows, names) => hash(rows.map(row => JSON.stringify(names.map(na
  * Each is idempotent on its own result.
  */
 export const TRANSFORMS = [
+  // `public` said the same thing `status = 'published'` already said. What the
+  // column actually decides is whether the document appears in its index, so it
+  // says that: an unlisted article is just as public, it is simply not listed.
+  { name: 'article_visibility_is_listed_or_unlisted', sql: `UPDATE content_documents SET visibility = 'listed'
+    WHERE visibility = 'public'` },
+  // Google verifies a property through Search Console now, which the
+  // integration carries. The meta tag this held was a second place to say the
+  // same thing, and nothing read it once the OAuth connection existed.
+  { name: 'google_site_verification_removed', sql: `UPDATE organization
+    SET settings_json = json_remove(settings_json, '$.config.google_site_verification')
+    WHERE json_type(settings_json, '$.config.google_site_verification') IS NOT NULL` },
   // A booking or reservation is confirmed or cancelled, and done is the clock:
   // confirmed with an end that has passed. `pending` waited on a host approval
   // nobody gives — reservations already wrote `confirmed` outright while
@@ -155,7 +166,7 @@ export const TARGET_INVARIANT_QUERIES = {
   editorial_representation_scope: `SELECT d.id FROM content_documents d WHERE d.row_role = 'representation' AND NOT EXISTS (
     SELECT 1 FROM content_documents r WHERE r.id = d.root_id AND r.row_role = 'root' AND r.locale = 'en'
       AND r.kind = d.kind AND r.organization_id = d.organization_id)`,
-  english_source_locale: `SELECT o.id FROM organization o WHERE NOT EXISTS (SELECT 1 FROM site_locales l WHERE l.organization_id = o.id AND l.locale = 'en' AND l.is_source = 1)`,
+  english_source_locale: `SELECT o.id FROM organization o WHERE NOT EXISTS (SELECT 1 FROM organization_locales l WHERE l.organization_id = o.id AND l.locale = 'en' AND l.is_source = 1)`,
   block_parent_scope: `SELECT b.id FROM content_blocks b WHERE b.parent_block_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM content_blocks p WHERE p.id = b.parent_block_id AND p.document_id = b.document_id)`,
   // Every localized resource is scoped by its organization. This used to add a
   // site to that scope for all but Product, which was the same organization
@@ -183,6 +194,12 @@ export const TARGET_INVARIANT_QUERIES = {
   // A booking holds a seat at a real occurrence of the product it names.
   booking_session_scope: `SELECT b.id FROM bookings b WHERE NOT EXISTS (
     SELECT 1 FROM product_sessions s WHERE s.id = b.product_session_id AND s.product_id = b.product_id)`,
+  // `visibility` says whether a document is listed in its index, and those are
+  // the only two answers. The CHECK covers root articles and social posts; this
+  // covers every row, so a value stranded on a kind the CHECK does not reach is
+  // still caught.
+  document_visibility_is_listed_or_unlisted: `SELECT id FROM content_documents
+    WHERE visibility IS NOT NULL AND visibility NOT IN ('listed', 'unlisted')`,
 }
 
 export function auditTargetInvariants(target) {
@@ -210,6 +227,14 @@ const DERIVED_FROM_RETIRED_MODEL = new Set(['products', 'prices', 'media_placeme
 // copied column-for-column — the organization has to be read off the site
 // first. deriveOrganizations inserts them.
 const DERIVED_FROM_SITES = new Set(['public_resource_cache_invalidations'])
+// Three tables were named after the row they hung off rather than the tenant
+// they belong to. The rows are unchanged; only the table name is, so the copy
+// reads them from their old name.
+const RENAMED_FROM_SITES = new Map([
+  ['organization_locales', 'site_locales'],
+  ['organization_domains', 'site_domains'],
+  ['organization_redirects', 'site_redirects'],
+])
 const RESERVATION_DURATION_MINUTES = 120
 const WEEKDAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday']
 const EMPTY_JSON = new Set(['[]', '{}', 'null'])
@@ -392,8 +417,8 @@ function deriveOrganizations(stage, record) {
   const SITE_COLUMNS = [
     'settings_json', 'integrations_json', 'theme_id', 'subdomain', 'brand_description',
     'contact_email', 'contact_phone', 'default_currency', 'status', 'onboarding_status',
-    'url_structure', 'vertical', 'last_published_at', 'updated_at', 'updated_by',
-    'seo_title', 'seo_description', 'canonical_url', 'robots', 'social_facebook_url',
+    'url_structure', 'vertical', 'updated_at', 'updated_by',
+    'seo_title', 'seo_description', 'canonical_url', 'social_facebook_url',
     'social_instagram_url', 'social_tiktok_url', 'feature_overrides', 'analytics_data_start_at',
   ]
 
@@ -490,6 +515,144 @@ function deriveOrganizations(stage, record) {
 
   record('site_teams_removed', stage.prepare(`DELETE FROM main.team WHERE id LIKE 'site:%'`).run().changes)
   stage.prepare(`DELETE FROM main.teamMember WHERE teamId NOT IN (SELECT id FROM main.team)`).run()
+}
+
+/**
+ * One integration key per connected product.
+ *
+ * `integrations_json` held a single `google` object discriminated by a `kind`
+ * of 'oauth' or 'manual'. That one row answered three questions — which Google
+ * account, which GA4 property, which Search Console site — so a tenant who had
+ * only pasted a measurement id was stored as a credential with no credentials
+ * in it, and a CHECK existed solely to assert that contradiction was allowed.
+ *
+ * The credential is now its own key and each product that uses it is its own
+ * key beside it. Instagram gets no key here: nothing in the old shape carried
+ * an Instagram token, and inventing one from the Facebook connection would be
+ * claiming an authorization the tenant never granted. Existing tenants connect
+ * Instagram explicitly.
+ */
+function deriveIntegrations(stage, now, record) {
+  const rows = stage.prepare(`SELECT id, integrations_json FROM main.organization
+    WHERE integrations_json IS NOT NULL AND integrations_json <> '{}'`).all()
+  const update = stage.prepare(`UPDATE main.organization SET integrations_json = ? WHERE id = ?`)
+  let rewritten = 0
+  let credentials = 0
+  let analytics = 0
+  let searchConsole = 0
+  let facebook = 0
+  let manualAnalytics = 0
+  let manualDropped = 0
+
+  for (const row of rows) {
+    const source = JSON.parse(row.integrations_json)
+    const next = {}
+
+    if (source.facebook) {
+      const { kind: _kind, facebook_page_id: pageId, facebook_page_name: pageName, ...rest } = source.facebook
+      // The CHECK requires both, so a connection that names no page is not a
+      // connection this shape can hold. It is dropped rather than written with
+      // an invented page.
+      if (pageId && pageName) {
+        next.facebook = { ...rest, page_id: pageId, page_name: pageName }
+        facebook += 1
+      }
+    }
+
+    const google = source.google
+    if (google && google.kind === 'oauth') {
+      const revision = google.revision ?? crypto.randomUUID()
+      if (google.encrypted_access_token && google.encrypted_refresh_token && google.provider_account_email) {
+        next.google_credential = {
+          revision,
+          id: google.id,
+          ...(google.connected_by_user_id ? { connected_by_user_id: google.connected_by_user_id } : {}),
+          provider_account_email: google.provider_account_email,
+          encrypted_access_token: google.encrypted_access_token,
+          encrypted_refresh_token: google.encrypted_refresh_token,
+          scopes: google.scopes ?? '',
+          status: google.status,
+          ...(google.expires_at ? { expires_at: google.expires_at } : {}),
+          created_at: google.created_at,
+          updated_at: google.updated_at,
+        }
+        credentials += 1
+      }
+      // A property with no measurement id cannot be checked, and a key with
+      // neither is a key describing nothing: omitted outright.
+      if (google.ga4_measurement_id) {
+        next.google_analytics = {
+          revision,
+          ...(google.ga4_property_id ? { property_id: google.ga4_property_id } : {}),
+          ...(google.ga4_property_name ? { property_name: google.ga4_property_name } : {}),
+          measurement_id: google.ga4_measurement_id,
+          status: google.status,
+          created_at: google.created_at,
+          updated_at: google.updated_at,
+        }
+        analytics += 1
+      }
+      if (google.search_console_site_url) {
+        next.google_search_console = {
+          revision,
+          site_url: google.search_console_site_url,
+          verified: true,
+          status: google.status,
+          created_at: google.created_at,
+          updated_at: google.updated_at,
+        }
+        searchConsole += 1
+      }
+    } else if (google && google.kind === 'manual') {
+      // The pasted measurement id is what keeps this tenant's Zaraz tracking
+      // alive, so it survives as analytics with no credential behind it. A
+      // disabled one was already not tracking and becomes no key at all.
+      if (google.status === 'active' && google.ga4_measurement_id) {
+        next.google_analytics = {
+          revision: google.revision ?? crypto.randomUUID(),
+          measurement_id: google.ga4_measurement_id,
+          status: 'active',
+          created_at: google.updated_at ?? now,
+          updated_at: google.updated_at ?? now,
+        }
+        manualAnalytics += 1
+        analytics += 1
+      } else {
+        manualDropped += 1
+      }
+    }
+
+    const serialized = JSON.stringify(next)
+    if (serialized !== row.integrations_json) {
+      update.run(serialized, row.id)
+      rewritten += 1
+    }
+  }
+
+  record('integrations_rewritten', rewritten)
+  record('integrations_google_credential', credentials)
+  record('integrations_google_analytics', analytics)
+  record('integrations_google_analytics_from_manual', manualAnalytics)
+  record('integrations_google_search_console', searchConsole)
+  record('integrations_facebook', facebook)
+  record('integrations_manual_google_dropped', manualDropped)
+
+  // Nothing may still carry the old shape.
+  const legacy = stage.prepare(`SELECT id FROM main.organization
+    WHERE json_type(integrations_json, '$.google') IS NOT NULL
+       OR json_type(integrations_json, '$.facebook.kind') IS NOT NULL
+       OR json_type(integrations_json, '$.facebook.facebook_page_id') IS NOT NULL`).all()
+  assert(legacy.length === 0, `Organizations still carrying the old integration shape: ${legacy.map(r => r.id).join(', ')}`)
+
+  // Every surviving key must satisfy the CHECK the baseline declares for it.
+  const invalid = stage.prepare(`SELECT id FROM main.organization WHERE NOT (
+      (json_type(integrations_json, '$.google_credential') IS NULL OR (json_type(integrations_json, '$.google_credential.revision') IS 'text' AND json_extract(integrations_json, '$.google_credential.status') IN ('active','disabled','error') AND json_type(integrations_json, '$.google_credential.encrypted_access_token') IS 'text' AND json_type(integrations_json, '$.google_credential.encrypted_refresh_token') IS 'text' AND json_type(integrations_json, '$.google_credential.scopes') IS 'text' AND json_type(integrations_json, '$.google_credential.provider_account_email') IS 'text'))
+  AND (json_type(integrations_json, '$.google_analytics') IS NULL OR (json_type(integrations_json, '$.google_analytics.revision') IS 'text' AND json_extract(integrations_json, '$.google_analytics.status') IN ('active','disabled','error') AND json_type(integrations_json, '$.google_analytics.measurement_id') IS 'text'))
+  AND (json_type(integrations_json, '$.google_search_console') IS NULL OR (json_type(integrations_json, '$.google_search_console.revision') IS 'text' AND json_extract(integrations_json, '$.google_search_console.status') IN ('active','disabled','error') AND json_type(integrations_json, '$.google_search_console.site_url') IS 'text'))
+  AND (json_type(integrations_json, '$.facebook') IS NULL OR (json_type(integrations_json, '$.facebook.revision') IS 'text' AND json_extract(integrations_json, '$.facebook.status') IN ('active','disabled','error') AND json_type(integrations_json, '$.facebook.encrypted_user_token') IS 'text' AND json_type(integrations_json, '$.facebook.page_id') IS 'text' AND json_type(integrations_json, '$.facebook.page_name') IS 'text'))
+  AND (json_type(integrations_json, '$.instagram') IS NULL)
+  )`).all()
+  assert(invalid.length === 0, `Organizations whose rewritten integrations fail their CHECK: ${invalid.map(r => r.id).join(', ')}`)
 }
 
 function deriveCanonicalContentBlocks(stage, record) {
@@ -977,16 +1140,16 @@ function deriveSlugRedirects(stage, now, record) {
       (SELECT l.slug FROM old.business_locations l WHERE l.id = m.location_id) AS location_slug,
       (SELECT s.vertical FROM old.sites s WHERE s.id = m.site_id) AS vertical
     FROM temp.product_map m JOIN products p ON p.id = m.new_id WHERE m.redirect_from IS NOT NULL`).all()
-  const insert = stage.prepare(`INSERT INTO site_redirects (id, organization_id, site_id, locale, owner_type, owner_id, from_path, to_path, status_code, behavior, reason, source, created_at, updated_at)
-    VALUES (?, ?, ?, 'en', NULL, NULL, ?, ?, 301, 'redirect', ?, 'rebaseline', ?, ?)`)
+  const insert = stage.prepare(`INSERT INTO organization_redirects (id, organization_id, locale, owner_type, owner_id, from_path, to_path, status_code, behavior, reason, source, created_at, updated_at)
+    VALUES (?, ?, 'en', NULL, NULL, ?, ?, 301, 'redirect', ?, 'rebaseline', ?, ?)`)
   for (const row of rows) {
     const segment = row.vertical === 'restaurant' ? 'menu' : 'products'
     const from = `/locations/${row.location_slug}/${segment}/${row.redirect_from}`
-    insert.run(`redirect-${hash(from).slice(0, 16)}`, row.organization_id, row.site_id, from,
+    insert.run(`redirect-${hash(from).slice(0, 16)}`, row.organization_id, from,
       `/locations/${row.location_slug}/${segment}/${row.new_slug}`,
       'Product slug qualified by location: two location rows disagreed on authored copy', now, now)
   }
-  record('site_redirects', rows.length)
+  record('organization_redirects', rows.length)
 }
 
 function sqlLiteral(value) {
@@ -1086,14 +1249,21 @@ export function rebaseline(sourcePath, targetPath, { payloadPath = null, without
     const collapsesSites = sourceTables.includes('sites')
     // Tables and columns the current schema no longer has are retired features; their
     // rows are derived or dropped, and the manifest names them.
-    manifest.retired_tables = sourceTables.filter(table => !names.includes(table))
+    const renamedSources = new Set([...RENAMED_FROM_SITES].filter(([target]) => names.includes(target)).map(([, from]) => from))
+    manifest.retired_tables = sourceTables.filter(table => !names.includes(table) && !renamedSources.has(table))
+    manifest.renamed_tables = {}
     manifest.retired_columns = {}
     manifest.added_columns = {}
     const derived = []
     for (const table of names) {
-      if (!sourceTables.includes(table) || (reshapes && DERIVED_FROM_RETIRED_MODEL.has(table)) || (collapsesSites && DERIVED_FROM_SITES.has(table))) { derived.push(table); continue }
+      // A renamed table is read from whichever name the source actually carries.
+      const renamedFrom = RENAMED_FROM_SITES.get(table)
+      const sourceTable = sourceTables.includes(table)
+        ? table
+        : renamedFrom && sourceTables.includes(renamedFrom) ? renamedFrom : null
+      if (!sourceTable || (reshapes && DERIVED_FROM_RETIRED_MODEL.has(table)) || (collapsesSites && DERIVED_FROM_SITES.has(table))) { derived.push(table); continue }
       const targetColumns = columns(stage, table)
-      const sourceColumns = columns(source, table)
+      const sourceColumns = columns(source, sourceTable)
       const retired = sourceColumns.filter(name => !targetColumns.includes(name))
       if (retired.length) manifest.retired_columns[table] = retired
       // A column the current schema added takes its own default. One that is NOT NULL
@@ -1104,12 +1274,16 @@ export function rebaseline(sourcePath, targetPath, { payloadPath = null, without
       assert(unfillable.length === 0, `${table}: current schema requires ${unfillable.map(column => column.name).join(', ')}, which the source cannot supply`)
       if (added.length) manifest.added_columns[table] = added.map(column => column.name)
       const shared = targetColumns.filter(name => sourceColumns.includes(name))
-      stage.prepare(`INSERT INTO main.${qi(table)} (${shared.map(qi).join(',')}) SELECT ${shared.map(qi).join(',')} FROM old.${qi(table)}`).run()
+      stage.prepare(`INSERT INTO main.${qi(table)} (${shared.map(qi).join(',')}) SELECT ${shared.map(qi).join(',')} FROM old.${qi(sourceTable)}`).run()
+      if (sourceTable !== table) manifest.renamed_tables[table] = sourceTable
     }
     manifest.derived_tables = derived
     for (const table of names) manifest.tables.push({ table, source_rows: stage.prepare(`SELECT count(*) AS n FROM main.${qi(table)}`).get().n })
     if (reshapes) deriveCatalog(stage, now, (name, count) => { manifest.derived[name] = count })
     if (collapsesSites) deriveOrganizations(stage, (name, count) => { manifest.derived[name] = count })
+    // After the organization has absorbed its site's integrations_json: this
+    // reshapes what that column holds.
+    deriveIntegrations(stage, now, (name, count) => { manifest.derived[name] = count })
     for (const transform of TRANSFORMS) {
       // A transform that folds a retiring column reads it from the attached
       // source. A source that never had it — a newer export, or the baseline

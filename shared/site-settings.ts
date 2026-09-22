@@ -9,14 +9,60 @@ export interface IntegrationOAuthState extends IntegrationVersion {
   timestamp: number
 }
 
+/**
+ * One Google account, connected once.
+ *
+ * The credential used to live inside a single `google` integration that also
+ * carried the GA4 property and the Search Console url, discriminated by a
+ * `kind` of 'oauth' or 'manual'. That made one row answer three questions, so a
+ * tenant who had only pasted a measurement id was represented as a credential
+ * with no credentials in it. The credential is its own key now, and each Google
+ * product that uses it is its own key beside it.
+ */
+export interface GoogleCredential {
+  revision: string
+  id: string
+  connected_by_user_id?: string
+  provider_account_email: string
+  encrypted_access_token: string
+  encrypted_refresh_token: string
+  /** Union of the scopes granted across every connected Google product. */
+  scopes: string
+  status: 'active' | 'disabled' | 'error'
+  expires_at?: string
+  created_at: string
+  updated_at: string
+}
+
+export interface GoogleAnalyticsIntegration {
+  revision: string
+  /** Absent on a site whose measurement id predates the OAuth property picker. */
+  property_id?: string
+  property_name?: string
+  measurement_id: string
+  status: 'active' | 'disabled' | 'error'
+  created_at: string
+  updated_at: string
+}
+
+export interface GoogleSearchConsoleIntegration {
+  revision: string
+  site_url: string
+  verified: boolean
+  /** Retained only while Google still requires the meta tag to be served. */
+  verification_token?: string
+  status: 'active' | 'disabled' | 'error'
+  created_at: string
+  updated_at: string
+}
+
 export interface FacebookIntegration {
-  kind: 'oauth'
   revision: string
   id: string
   connected_by_user_id: string
   facebook_user_id: string
-  facebook_page_id?: string
-  facebook_page_name?: string
+  page_id: string
+  page_name: string
   encrypted_user_token: string
   encrypted_page_token?: string
   user_token_expires_at?: string
@@ -26,36 +72,26 @@ export interface FacebookIntegration {
   updated_at: string
 }
 
-export interface GoogleOAuthIntegration {
-  kind: 'oauth'
+export interface InstagramIntegration {
   revision: string
   id: string
-  connected_by_user_id?: string
-  provider_account_email: string
+  connected_by_user_id: string
+  instagram_user_id: string
+  username: string
   encrypted_access_token: string
-  encrypted_refresh_token: string
-  scopes: string
-  ga4_property_id?: string
-  ga4_property_name?: string
-  ga4_measurement_id?: string
-  search_console_site_url?: string
+  token_expires_at?: string
+  scopes?: string
   status: 'active' | 'disabled' | 'error'
-  expires_at?: string
   created_at: string
   updated_at: string
 }
 
-export interface GoogleManualIntegration {
-  kind: 'manual'
-  status: 'active' | 'disabled'
-  revision: string
-  ga4_measurement_id?: string | null
-  updated_at: string
-}
-
 export interface SiteIntegrations {
+  google_credential?: GoogleCredential
+  google_analytics?: GoogleAnalyticsIntegration
+  google_search_console?: GoogleSearchConsoleIntegration
   facebook?: FacebookIntegration
-  google?: GoogleOAuthIntegration | GoogleManualIntegration
+  instagram?: InstagramIntegration
 }
 
 export interface SiteSettings {
@@ -66,7 +102,6 @@ export interface SiteSettings {
     partnerships_email?: string
     catering_email?: string
     careers_email?: string
-    google_site_verification?: string
     default_timezone?: string
     whatsapp_phone?: string
   }

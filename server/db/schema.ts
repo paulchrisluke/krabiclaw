@@ -87,7 +87,6 @@ export const business_locations = sqliteTable("business_locations", {
 	seo_title: text(),
 	seo_description: text(),
 	canonical_url: text(),
-	robots: text(),
 	// Better Auth Team scoping this location to non-org-wide editors. A location
 	// *has* a team; it is not one — `team` is five fields describing a grouping of
 	// members, and this table is the place itself. Owners/admins are org-wide and
@@ -1472,13 +1471,11 @@ export const organization = sqliteTable("organization", {
 	onboarding_status: text().default("pending").notNull(),
 	url_structure: text().default("location_subdirectories").notNull(),
 	vertical: text().default("restaurant").notNull(),
-	last_published_at: text(),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	updated_by: text(),
 	seo_title: text(),
 	seo_description: text(),
 	canonical_url: text(),
-	robots: text(),
 	// Brand-level social profiles, rendered in the site footer only. Distinct from a location's
 	// own facebook_url/instagram_url/tiktok_url on business_locations — the two never merge.
 	social_facebook_url: text(),
@@ -1493,7 +1490,10 @@ export const organization = sqliteTable("organization", {
 	analytics_data_start_at: text(),
 }, (table) => [
 	check("organization_slug_required_check", sql`trim(slug) <> ''`),
-	check("organization_instants_check", sql`(last_published_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', last_published_at, '+0 days') IS last_published_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at) AND (analytics_data_start_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', analytics_data_start_at, '+0 days') IS analytics_data_start_at)`),
+	// `createdAt` is Better Auth's integer unixepoch, not a text instant, so it
+	// is not checked here. `last_published_at` was, and is gone: `updated_at` is
+	// the row's modification time and nothing else recorded a publish.
+	check("organization_instants_check", sql`(updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at) AND (analytics_data_start_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', analytics_data_start_at, '+0 days') IS analytics_data_start_at)`),
 	check("organization_settings_json_check", sql`json_valid(settings_json) AND json_type(settings_json) IS 'object'`),
 	check("organization_integrations_json_check", sql`json_valid(integrations_json) AND json_type(integrations_json) IS 'object'`),
 	check("organization_config_brand_color_check", sql`json_type(settings_json, '$.config.brand_color') IS NULL OR json_type(settings_json, '$.config.brand_color') IS 'text'`),
@@ -1501,7 +1501,6 @@ export const organization = sqliteTable("organization", {
 	check("organization_config_partnerships_email_check", sql`json_type(settings_json, '$.config.partnerships_email') IS NULL OR json_type(settings_json, '$.config.partnerships_email') IS 'text'`),
 	check("organization_config_catering_email_check", sql`json_type(settings_json, '$.config.catering_email') IS NULL OR json_type(settings_json, '$.config.catering_email') IS 'text'`),
 	check("organization_config_careers_email_check", sql`json_type(settings_json, '$.config.careers_email') IS NULL OR json_type(settings_json, '$.config.careers_email') IS 'text'`),
-	check("organization_config_google_site_verification_check", sql`json_type(settings_json, '$.config.google_site_verification') IS NULL OR json_type(settings_json, '$.config.google_site_verification') IS 'text'`),
 	check("organization_config_default_timezone_check", sql`json_type(settings_json, '$.config.default_timezone') IS 'text' AND length(json_extract(settings_json, '$.config.default_timezone')) > 0`),
 	check("organization_config_whatsapp_phone_check", sql`json_type(settings_json, '$.config.whatsapp_phone') IS NULL OR json_type(settings_json, '$.config.whatsapp_phone') IS 'text'`),
 	check("organization_consultation_metadata_check", sql`json_type(settings_json, '$.consultation.metadata_json') IS NULL OR json_type(settings_json, '$.consultation.metadata_json') IN ('null', 'object')`),
@@ -1515,10 +1514,15 @@ export const organization = sqliteTable("organization", {
 	check("organization_consultation_check", sql`json_type(settings_json, '$.consultation') IS NULL OR (json_extract(settings_json, '$.consultation.mode') IN ('external_url', 'native_disabled') AND json_type(settings_json, '$.consultation.cta_label') IS 'text' AND json_extract(settings_json, '$.consultation.schedule_path') LIKE '/%' AND json_extract(settings_json, '$.consultation.confirmation_path') LIKE '/%' AND json_type(settings_json, '$.consultation.tracking_enabled') IN ('true', 'false')) IS TRUE`),
 	check("organization_compliance_check", sql`json_type(settings_json, '$.compliance') IS NULL OR (json_extract(settings_json, '$.compliance.address_visibility') IN ('visible', 'hidden') AND (json_extract(settings_json, '$.compliance.service_area_type') IS NULL OR json_extract(settings_json, '$.compliance.service_area_type') IN ('AdministrativeArea', 'City', 'Country', 'Place', 'State')) AND json_type(settings_json, '$.compliance.same_as') IN ('array', 'null') AND json_type(settings_json, '$.compliance.contact_points') IN ('array', 'null')) IS TRUE`),
 	check("organization_compliance_nonprofit_check", sql`json_extract(settings_json, '$.compliance.nonprofit_status') IS NULL OR json_extract(settings_json, '$.compliance.nonprofit_status') IN (${sql.raw([...NONPROFIT_STATUS_CANONICAL].map(value => `'${value}'`).join(', '))})`),
-	check("organization_facebook_integration_check", sql`json_type(integrations_json, '$.facebook') IS NULL OR (json_type(integrations_json, '$.facebook') IS 'object' AND json_type(integrations_json, '$.facebook.revision') IS 'text' AND json_extract(integrations_json, '$.facebook.kind') IN ('oauth') AND json_extract(integrations_json, '$.facebook.status') IN ('active', 'disabled', 'error')) IS TRUE`),
-	check("organization_google_integration_check", sql`json_type(integrations_json, '$.google') IS NULL OR (json_type(integrations_json, '$.google') IS 'object' AND json_type(integrations_json, '$.google.revision') IS 'text' AND json_extract(integrations_json, '$.google.kind') IN ('oauth', 'manual') AND json_extract(integrations_json, '$.google.status') IN ('active', 'disabled', 'error')) IS TRUE`),
-	check("organization_google_credentials_check", sql`json_type(integrations_json, '$.google') IS NULL OR (CASE json_extract(integrations_json, '$.google.kind') WHEN 'oauth' THEN json_type(integrations_json, '$.google.encrypted_access_token') IS 'text' AND json_type(integrations_json, '$.google.encrypted_refresh_token') IS 'text' WHEN 'manual' THEN json_type(integrations_json, '$.google.encrypted_access_token') IS NULL AND json_type(integrations_json, '$.google.encrypted_refresh_token') IS NULL END) IS TRUE`),
-	check("organization_facebook_credentials_check", sql`json_type(integrations_json, '$.facebook') IS NULL OR json_type(integrations_json, '$.facebook.encrypted_user_token') IS 'text'`),
+	// One key per connected product, each checked on its own. A single `google`
+	// key discriminated by `kind` used to answer three questions at once, so a
+	// tenant who had only pasted a measurement id was stored as a credential with
+	// no credentials in it, and the CASE below it existed to say so.
+	check("organization_google_credential_check", sql`json_type(integrations_json, '$.google_credential') IS NULL OR (json_type(integrations_json, '$.google_credential') IS 'object' AND json_type(integrations_json, '$.google_credential.revision') IS 'text' AND json_extract(integrations_json, '$.google_credential.status') IN ('active', 'disabled', 'error') AND json_type(integrations_json, '$.google_credential.encrypted_access_token') IS 'text' AND json_type(integrations_json, '$.google_credential.encrypted_refresh_token') IS 'text' AND json_type(integrations_json, '$.google_credential.scopes') IS 'text' AND json_type(integrations_json, '$.google_credential.provider_account_email') IS 'text') IS TRUE`),
+	check("organization_google_analytics_check", sql`json_type(integrations_json, '$.google_analytics') IS NULL OR (json_type(integrations_json, '$.google_analytics') IS 'object' AND json_type(integrations_json, '$.google_analytics.revision') IS 'text' AND json_extract(integrations_json, '$.google_analytics.status') IN ('active', 'disabled', 'error') AND json_type(integrations_json, '$.google_analytics.measurement_id') IS 'text') IS TRUE`),
+	check("organization_google_search_console_check", sql`json_type(integrations_json, '$.google_search_console') IS NULL OR (json_type(integrations_json, '$.google_search_console') IS 'object' AND json_type(integrations_json, '$.google_search_console.revision') IS 'text' AND json_extract(integrations_json, '$.google_search_console.status') IN ('active', 'disabled', 'error') AND json_type(integrations_json, '$.google_search_console.site_url') IS 'text') IS TRUE`),
+	check("organization_facebook_check", sql`json_type(integrations_json, '$.facebook') IS NULL OR (json_type(integrations_json, '$.facebook') IS 'object' AND json_type(integrations_json, '$.facebook.revision') IS 'text' AND json_extract(integrations_json, '$.facebook.status') IN ('active', 'disabled', 'error') AND json_type(integrations_json, '$.facebook.encrypted_user_token') IS 'text' AND json_type(integrations_json, '$.facebook.page_id') IS 'text' AND json_type(integrations_json, '$.facebook.page_name') IS 'text') IS TRUE`),
+	check("organization_instagram_check", sql`json_type(integrations_json, '$.instagram') IS NULL OR (json_type(integrations_json, '$.instagram') IS 'object' AND json_type(integrations_json, '$.instagram.revision') IS 'text' AND json_extract(integrations_json, '$.instagram.status') IN ('active', 'disabled', 'error') AND json_type(integrations_json, '$.instagram.encrypted_access_token') IS 'text' AND json_type(integrations_json, '$.instagram.instagram_user_id') IS 'text') IS TRUE`),
 	check("organization_feature_overrides_check", sql`feature_overrides IS NULL OR (json_valid(feature_overrides) AND json_type(feature_overrides) IS 'object')`),
 	index("organization_created_at_idx").on(table.createdAt),
 ]);
@@ -1987,7 +1991,6 @@ export const content_documents = sqliteTable("content_documents", {
 	seo_description: text(),
 	seo_keywords: text(),
 	canonical_url: text(),
-	robots: text(),
 	metadata_json: text().default('{}').notNull(),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
@@ -2025,7 +2028,11 @@ export const content_documents = sqliteTable("content_documents", {
 	check("content_documents_qa_scope_check", sql`kind <> 'qa' OR row_role <> 'root' OR ((location_id IS NULL OR scope_path IS NULL) AND (scope_path IS NULL OR scope_path LIKE '/%'))`),
 	check("content_documents_publication_check", sql`row_role <> 'root' OR kind NOT IN ('article', 'social_post') OR (status IN ('draft','published','scheduled')) IS 1`),
 	check("content_documents_social_schedule_check", sql`kind <> 'social_post' OR row_role <> 'root' OR ((status = 'draft' AND scheduled_for IS NULL AND published_at IS NULL) OR (status = 'scheduled' AND scheduled_for IS NOT NULL AND published_at IS NULL) OR (status = 'published' AND scheduled_for IS NULL AND published_at IS NOT NULL))`),
-	check("content_documents_article_visibility_check", sql`kind NOT IN ('article','social_post') OR row_role <> 'root' OR (visibility IN ('public','unlisted')) IS 1`),
+	// 'listed' and 'unlisted' say whether the document appears in its index. The
+	// value used to be 'public', which read as a second answer to "is this
+	// published" beside `status` — an unlisted document is just as public, it is
+	// simply not listed.
+	check("content_documents_article_visibility_check", sql`kind NOT IN ('article','social_post') OR row_role <> 'root' OR (visibility IN ('listed','unlisted')) IS 1`),
 	check("content_documents_qa_state_check", sql`kind <> 'qa' OR row_role <> 'root' OR ((status IN ('published','hidden')) IS 1 AND (source IN ('manual','import','template')) IS 1)`),
 	check("content_documents_qa_counts_check", sql`kind <> 'qa' OR row_role <> 'root' OR ((json_type(metadata_json, '$.is_owner_answer') = 'integer' AND json_type(metadata_json, '$.upvote_count') = 'integer') IS 1)`),
 	check("content_documents_copy_required_check", sql`row_role <> 'root' OR ((kind NOT IN ('page','article','qa') OR title IS NOT NULL) AND (kind <> 'article' OR slug IS NOT NULL) AND (kind <> 'social_post' OR summary IS NOT NULL))`),
