@@ -349,7 +349,7 @@ export function createAuth(env: CloudflareEnv) {
         create: {
           after: async (user) => {
             if ((user as { isAnonymous?: boolean }).isAnonymous) return
-            // Organizations are created on demand — either by site-creation.ts
+            // Organizations are created on demand — either by organization-provisioning.ts
             // (first site) or by an admin/invitation flow the user is joining.
             // Signup itself must not assume why the user is here: they may be
             // accepting an invitation into an existing org, in which case a

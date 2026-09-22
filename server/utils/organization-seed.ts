@@ -1,5 +1,5 @@
-// Seed only structural records for a newly created site. Customer-facing copy
-// must be supplied by the owner or an approved import.
+// Seed only structural records for a newly created organization. Customer-facing
+// copy must be supplied by the owner or an approved import.
 // All records use source='template' so ChowBot can identify and reference them.
 
 import { getVerticalCopy, type SiteVertical } from "~/utils/vertical-copy";
@@ -10,25 +10,24 @@ function uid(prefix: string) {
   return `${prefix}-${crypto.randomUUID()}`;
 }
 
-export async function seedNewSite(
+export async function seedNewOrganization(
   db: DbClient,
   params: {
     env: CloudflareEnv;
     organizationId: string;
-    siteId: string;
     name: string;
     vertical: SiteVertical;
   },
 ): Promise<string> {
   if (!db) throw new Error("Database not configured");
 
-  const { env, organizationId, siteId, name, vertical } = params;
+  const { env, organizationId, name, vertical } = params;
 
-  // Reuse existing location on resume (site may have failed mid-seed)
+  // Reuse existing location on resume (provisioning may have failed mid-seed)
   const existing = await queryFirst<{ id: string }>(
     db,
-    "SELECT id FROM business_locations WHERE site_id = ? AND slug = ? LIMIT 1",
-    [siteId, "main"],
+    "SELECT id FROM business_locations WHERE organization_id = ? AND slug = ? LIMIT 1",
+    [organizationId, "main"],
   );
   const locationId = existing?.id ?? uid("loc");
 
@@ -37,24 +36,16 @@ export async function seedNewSite(
   statements.push({
     query: `
     INSERT OR IGNORE INTO business_locations
-      (id, organization_id, site_id, slug, title, rating, review_count, status)
-    VALUES (?, ?, ?, 'main', ?, 0, 0, 'active')
+      (id, organization_id, slug, title, rating, review_count, status)
+    VALUES (?, ?, 'main', ?, 0, 0, 'active')
   `,
-    params: [locationId, organizationId, siteId, name],
+    params: [locationId, organizationId, name],
   });
 
 
   // ── Canonical tenant pages (structural records only) ──────────────────────
-  const templatePageContent: Array<[string, string, string, string?]> = []
-
   await executeBatch(db, statements);
 
-  const pageRows = new Map<string, Array<[string, string, string, string?]>>();
-  for (const row of templatePageContent) {
-    const rows = pageRows.get(row[0]) ?? [];
-    rows.push(row);
-    pageRows.set(row[0], rows);
-  }
   // `title` is the page's name as a person reads it — its document title and,
   // for every page but the home page, its heading. The key beside it is an
   // identifier, and using it as the title is what wrote 'about' and 'contact'
@@ -91,8 +82,7 @@ export async function seedNewSite(
     }
     trustedSystemPage: boolean
   }> = []
-  for (const [page, definition] of templatePages) {
-    const rows = pageRows.get(page) ?? [];
+  for (const definition of templatePages.values()) {
     const blocks: Array<{ id: string; type: string; position: number; data: Record<string, unknown> }> = [
       {
         id: uid('block'),
@@ -110,13 +100,6 @@ export async function seedNewSite(
         },
       },
     ];
-    for (const [field, content, type] of rows.map(row => [row[1], row[2], row[3]] as const)) {
-      if (field === 'hero.title' || field === 'hero.subtitle') continue;
-      blocks.push({
-        id: uid('block'), type: type === 'richtext' || type === 'textarea' ? 'markdown' : 'heading', position: blocks.length,
-        data: { field, ...(type === 'richtext' || type === 'textarea' ? { markdown: content } : { text: content, level: 2 }) },
-      });
-    }
     pagesToCreate.push({
       trustedSystemPage: definition.pageType === 'system',
       data: {
@@ -125,12 +108,12 @@ export async function seedNewSite(
       },
     })
   }
-  await createTenantPagesBatch(db, { env, organizationId, siteId, pages: pagesToCreate })
+  await createTenantPagesBatch(db, { env, organizationId, pages: pagesToCreate })
 
   // ── Consultation settings (professional services only) ────────────────────
   // The Blawby shell reads settings_json.$.consultation on every route and
   // refuses to render without it (getPublicConsultationSettings throws
-  // CONSULTATION_SETTINGS_MISSING), so a professional-service site is not
+  // CONSULTATION_SETTINGS_MISSING), so a professional-service tenant is not
   // renderable until this exists. Nothing here is customer-facing copy the
   // owner has to write: the mode is the honest "no external scheduler has been
   // connected", the two paths are the template's own routes (/schedule is
@@ -141,16 +124,16 @@ export async function seedNewSite(
   if (vertical === "service") {
     const configured = await queryFirst<{ present: number }>(
       db,
-      "SELECT json_type(settings_json, '$.consultation') IS NOT NULL AS present FROM sites WHERE id = ? LIMIT 1",
-      [siteId],
+      "SELECT json_type(settings_json, '$.consultation') IS NOT NULL AS present FROM organization WHERE id = ? LIMIT 1",
+      [organizationId],
     );
     if (!configured?.present) {
-      // Consultation settings live on the site, read back by
+      // Consultation settings live on the organization, read back by
       // server/utils/professional-services.ts. The editor that used to wrap
       // this write went with the offerings model; the setting did not.
       await executeBatch(db, [{
-        query: `UPDATE sites SET settings_json = json_set(COALESCE(settings_json, '{}'), '$.consultation', json(?)), updated_at = ?
-                 WHERE id = ? AND organization_id = ?`,
+        query: `UPDATE organization SET settings_json = json_set(COALESCE(settings_json, '{}'), '$.consultation', json(?)), updated_at = ?
+                 WHERE id = ?`,
         params: [
           JSON.stringify({
             mode: "native_disabled",
@@ -163,7 +146,6 @@ export async function seedNewSite(
             metadata: {},
           }),
           new Date().toISOString(),
-          siteId,
           organizationId,
         ],
       }], { operation: 'Seed consultation settings' });

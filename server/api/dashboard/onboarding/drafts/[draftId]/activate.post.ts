@@ -12,8 +12,8 @@ import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { execute, queryFirst } from '~/server/db'
 import { parseOnboardingDraftPayload } from '~/server/utils/onboarding-drafts'
-import { applyOnboardingDraftToSite, ensureOnboardingSite } from '~/server/utils/onboarding-site'
-import { activateSite } from '~/server/utils/site-creation'
+import { applyOnboardingDraft, ensureOnboardingTarget } from '~/server/utils/onboarding-apply'
+import { activateOrganization } from '~/server/utils/organization-provisioning'
 import { activateSessionOrganization } from '~/server/utils/session-organization'
 import { refreshSocialCard } from '~/server/utils/social-card'
 import { purgePublicResourceCacheSafe } from '~/server/utils/public-resource-cache'
@@ -79,17 +79,17 @@ export default defineHandler(async (event) => {
     return jsonResponse({ error: 'Draft is no longer active (concurrent activation)' }, { status: 409 })
   }
 
-  // Reopening is the only safe answer to a failure before the site is live. A
+  // Reopening is the only safe answer to a failure before the tenant is live. A
   // draft left at 'committing' is invisible to everything that matters: resume,
   // discard and the next save all look for an 'active' draft, so the owner can
-  // neither continue nor start over while the pending site keeps their address.
+  // neither continue nor start over while the pending tenant keeps their address.
   const reopenDraft = () => execute(db,
     `UPDATE onboarding_drafts SET status = 'active', updated_at = ? WHERE id = ?`,
     [new Date().toISOString(), draftId])
 
-  let site: Awaited<ReturnType<typeof ensureOnboardingSite>>
+  let target: Awaited<ReturnType<typeof ensureOnboardingTarget>>
   try {
-    site = await ensureOnboardingSite(env, db, session.user.id, {
+    target = await ensureOnboardingTarget(env, db, session.user.id, {
       id: draft.id,
       organization_id: draft.organization_id,
       name: draft.name,
@@ -100,40 +100,40 @@ export default defineHandler(async (event) => {
     await reopenDraft()
     throw error
   }
-  if ('error' in site) {
+  if ('error' in target) {
     await reopenDraft()
-    return jsonResponse({ error: site.error }, { status: site.status })
+    return jsonResponse({ error: target.error }, { status: target.status })
   }
 
-  const { organizationId, siteId, subdomain } = site.target
+  const { organizationId, subdomain } = target.target
   let committed = false
 
   try {
-    const applied = await applyOnboardingDraftToSite(env, db, {
+    const applied = await applyOnboardingDraft(env, db, {
       userId: session.user.id,
-      target: site.target,
+      target: target.target,
       payload,
       defaultCurrency,
       timezone,
     })
-    // The site is not live yet. A refused answer reopens the draft so the owner
+    // The tenant is not live yet. A refused answer reopens the draft so the owner
     // can correct it, rather than leaving them on a draft they cannot advance.
     if ('error' in applied) {
       await reopenDraft()
       return jsonResponse({ error: applied.error }, { status: applied.status })
     }
     const { locationSlug } = applied
-    await activateSite(db, siteId)
+    await activateOrganization(db, organizationId)
 
     const now = new Date().toISOString()
     await execute(db, `
       UPDATE onboarding_drafts
-      SET status = 'committed', committed_site_id = ?, committed_at = ?, updated_at = ?
+      SET status = 'committed', committed_at = ?, updated_at = ?
       WHERE id = ?
-    `, [siteId, now, now, draftId])
+    `, [now, now, draftId])
     committed = true
 
-    // Activation must not fail the launch: the site is live either way, and the
+    // Activation must not fail the launch: the tenant is live either way, and the
     // dashboard resolves an organization for the session on its next request.
     await activateSessionOrganization(event, env, organizationId).catch((error: unknown) => {
       console.error('onboarding_activate_session_organization_failed', {
@@ -141,37 +141,37 @@ export default defineHandler(async (event) => {
       })
     })
 
-    // The homepage and its media are live now: generate the site card once so
+    // The homepage and its media are live now: generate the social card once so
     // its first real card uses the homepage hero. Deliberately one owner —
     // everything else is picked up by the social-card-backfill task.
     try {
-      await refreshSocialCard({ db, env, owner: { owner_type: 'site', owner_id: siteId }, actorId: session.user.id })
+      await refreshSocialCard({ db, env, owner: { owner_type: 'organization', owner_id: organizationId }, actorId: session.user.id })
     } catch (cardError) {
-      console.error('onboarding_activate_site_card_failed', { siteId, error: cardError instanceof Error ? cardError.message : String(cardError) })
+      console.error('onboarding_activate_social_card_failed', { organizationId, error: cardError instanceof Error ? cardError.message : String(cardError) })
     }
 
     const waitUntil = event.req.runtime?.cloudflare?.context?.waitUntil
     if (typeof waitUntil === 'function') {
-      waitUntil.call(event.req.runtime?.cloudflare?.context, purgePublicResourceCacheSafe(env, siteId))
+      waitUntil.call(event.req.runtime?.cloudflare?.context, purgePublicResourceCacheSafe(env, organizationId))
     } else {
-      await purgePublicResourceCacheSafe(env, siteId)
+      await purgePublicResourceCacheSafe(env, organizationId)
     }
 
     const orgRow = await resolveUserOrganization(env, { userId: session.user.id, organizationId })
     if (!orgRow) throw new HTTPError({ statusCode: 500, statusMessage: 'Activated organization not found' })
 
     return jsonResponse({
-      success: true, siteId, orgSlug: orgRow.slug, siteSlug: subdomain, locationSlug,
+      success: true, organizationId, orgSlug: orgRow.slug, subdomain, locationSlug,
     })
   } catch (error) {
-    console.error('onboarding_activate_failed', { draftId, siteId, committed, error })
+    console.error('onboarding_activate_failed', { draftId, organizationId, committed, error })
     if (committed) {
-      // The site is live and the draft is closed. Only the tail — the social
+      // The tenant is live and the draft is closed. Only the tail — the social
       // card, the cache purge, the organization read-back — failed, and
-      // reopening the draft here would offer to create the site a second time.
+      // reopening the draft here would offer to provision it a second time.
       return jsonResponse({
         error: 'Your site is live, but finishing touches failed. Open your dashboard to continue.',
-        siteId,
+        organizationId,
       }, { status: 500 })
     }
     // Still pending: reopen the draft so the owner can try again from where

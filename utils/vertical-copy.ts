@@ -5,7 +5,7 @@ export type SiteVertical =
 
 // The single canonical list of app-level verticals a tenant can be created
 // or migrated with. This is the one place that enumerates every supported
-// value — server/utils/site-creation.ts's VALID_VERTICALS re-exports this
+// value — server/utils/organization-provisioning.ts's VALID_VERTICALS re-exports this
 // rather than redeclaring its own array, and any UI vertical picker should
 // import this (or ALL_VERTICALS) instead of hand-writing a local
 // 'restaurant' | 'experience' union that silently omits new verticals.
