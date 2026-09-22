@@ -35,11 +35,8 @@
                   <p class="font-semibold text-highlighted">Filters</p>
                   <UButton v-if="hasActiveFilters" label="Clear" color="neutral" variant="ghost" size="xs" @click="clearFilters" />
                 </div>
-                <UFormField label="Site">
-                  <USelect v-model="filters.siteId" :items="siteOptions" class="w-full" />
-                </UFormField>
                 <UFormField label="Location">
-                  <USelect v-model="filters.locationId" :items="locationOptions" :disabled="filters.siteId === FILTER_ALL" class="w-full" />
+                  <USelect v-model="filters.locationId" :items="locationOptions" class="w-full" />
                 </UFormField>
                 <UFormField label="Booking type">
                   <USelect v-model="filters.kind" :items="kindOptions" class="w-full" />
@@ -151,7 +148,7 @@ const dashboardApi = useDashboardApi()
 const realtime = useDashboardInvalidations()
 const orgSlug = computed(() => String(route.params.orgSlug ?? ''))
 const todayKey = computed(() => `dashboard-today-${orgSlug.value}`)
-const filters = reactive({ siteId: FILTER_ALL, locationId: FILTER_ALL, kind: FILTER_ALL })
+const filters = reactive({ locationId: FILTER_ALL, kind: FILTER_ALL })
 const filtersOpen = ref(false)
 
 const isNullableString = (value: unknown): value is string | null => value === null || typeof value === 'string'
@@ -164,7 +161,6 @@ const isAgendaItem = (value: unknown): value is AgendaItem =>
   && typeof value.timeZone === 'string'
   && typeof value.title === 'string'
   && typeof value.status === 'string'
-  && typeof value.siteId === 'string'
   && isNullableString(value.guestImageUrl)
   && isNullableString(value.resourceImageUrl)
   && isNullableString(value.resourceTitle)
@@ -181,7 +177,6 @@ const isSite = (value: unknown): value is AgendaSite =>
 const isLocation = (value: unknown): value is AgendaLocation =>
   isRecord(value)
   && typeof value.id === 'string'
-  && typeof value.siteId === 'string'
   && typeof value.title === 'string'
 
 const isTodayResponse = (value: unknown): value is TodayAgendaPayload =>
@@ -228,11 +223,10 @@ const resolvedUtcDay = computed(() => resolvedAt.value.slice(0, 10))
 // UTC range, then classify each item against its own location's local day.
 const upcomingCursor = ref(addDays(resolvedUtcDay.value, -1))
 const upcomingHorizon = computed(() => addDays(resolvedUtcDay.value, UPCOMING_HORIZON_DAYS + 1))
-const filterSignature = computed(() => `${filters.siteId}:${filters.locationId}:${filters.kind}`)
+const filterSignature = computed(() => `${filters.locationId}:${filters.kind}`)
 
 const filteredTodayItems = computed(() => (todayData.value?.items ?? []).filter(item =>
-  (filters.siteId === FILTER_ALL || item.siteId === filters.siteId)
-  && (filters.locationId === FILTER_ALL || item.locationId === filters.locationId)
+  (filters.locationId === FILTER_ALL || item.locationId === filters.locationId)
   && (filters.kind === FILTER_ALL || item.kind === filters.kind)))
 const allRangeItems = computed(() => activeRange.value === 'today' ? filteredTodayItems.value : upcomingItems.value)
 const rangeItems = computed(() => activeRange.value === 'today'
@@ -245,14 +239,12 @@ const hasMore = computed(() => activeRange.value === 'today'
 const activeLoading = computed(() => activeRange.value === 'today' ? pending.value : upcomingLoading.value)
 const activeError = computed(() => activeRange.value === 'today' ? todayError.value : upcomingError.value)
 const activeLabel = computed(() => activeRange.value === 'today' ? 'Today' : 'Upcoming')
-const hasActiveFilters = computed(() => filters.siteId !== FILTER_ALL || filters.locationId !== FILTER_ALL || filters.kind !== FILTER_ALL)
+const hasActiveFilters = computed(() => filters.locationId !== FILTER_ALL || filters.kind !== FILTER_ALL)
 // Derived from the sites and kinds in scope rather than from the loaded items,
 // so the heading reads the same before anything has arrived and does not change
 // noun as a page of Upcoming loads.
 const presentation = computed(() => {
-  const sites = filters.siteId === FILTER_ALL
-    ? todayData.value?.sites ?? []
-    : (todayData.value?.sites ?? []).filter(site => site.id === filters.siteId)
+  const sites = todayData.value?.sites ?? []
   const scoped: AgendaKind[] = filters.kind === FILTER_ALL
     ? todayData.value?.availableKinds ?? BOOKING_KINDS
     : [filters.kind as AgendaKind]
@@ -274,15 +266,9 @@ const emptyDescription = computed(() => hasActiveFilters.value
     ? 'There are no arrivals scheduled for today.'
     : 'New arrivals will appear here as they are booked.')
 
-const siteOptions = computed(() => [
-  { label: 'All sites', value: FILTER_ALL },
-  ...(todayData.value?.sites ?? []).map(site => ({ label: site.label, value: site.id })),
-])
 const locationOptions = computed(() => [
   { label: 'All locations', value: FILTER_ALL },
-  ...(todayData.value?.locations ?? [])
-    .filter(location => location.siteId === filters.siteId)
-    .map(location => ({ label: location.title, value: location.id })),
+  ...(todayData.value?.locations ?? []).map(location => ({ label: location.title, value: location.id })),
 ])
 const kindOptions = computed(() => [
   { label: 'All booking types', value: FILTER_ALL },
@@ -297,7 +283,6 @@ async function selectRange(range: TodayRange) {
 }
 
 function clearFilters() {
-  filters.siteId = FILTER_ALL
   filters.locationId = FILTER_ALL
   filters.kind = FILTER_ALL
 }
@@ -324,7 +309,6 @@ async function loadUpcoming() {
         query: {
           from,
           to,
-          siteId: filters.siteId !== FILTER_ALL ? filters.siteId : undefined,
           locationId: filters.locationId !== FILTER_ALL ? filters.locationId : undefined,
           kinds: filters.kind !== FILTER_ALL ? filters.kind : 'reservation, booking',
         },
@@ -383,7 +367,6 @@ function minDate(left: string, right: string): string {
   return left < right ? left : right
 }
 
-watch(() => filters.siteId, () => { filters.locationId = FILTER_ALL })
 watch(filterSignature, async () => {
   todayVisibleCount.value = PAGE_SIZE
   upcomingItems.value = []

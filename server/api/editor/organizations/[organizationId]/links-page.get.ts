@@ -11,7 +11,7 @@ export default defineHandler(async (event) => {
 
   return jsonResponse({
     page: result.page ?? defaultLinksPage({
-      organizationId: organization.id, brandName: organization.name, }), items: result.items, })
+      organizationId: organization.id, name: organization.name, }), items: result.items, })
 })
 import { defineHandler } from 'nitro';
 import { getRouterParam } from 'nitro/h3';

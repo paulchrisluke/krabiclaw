@@ -78,7 +78,7 @@ const props = defineProps<{
 const dashboard = useDashboardOrganization()
 const actionError = ref<string | null>(null)
 
-const siteId = computed(() => dashboard.organizationId.value)
+const organizationId = computed(() => dashboard.organizationId.value)
 
 const loadingDetail = ref(false)
 const detailError = ref<unknown>(null)
@@ -181,13 +181,13 @@ function clearAttemptMapKey(keys: Ref<Record<string, string>>, name: string) {
  * reading two different versions of the same thread.
  */
 async function loadThreadDetail(options: { clearDraft?: boolean } = {}) {
-  if (!dashboardScope.value || !siteId.value) return
+  if (!dashboardScope.value || !organizationId.value) return
   const requestToken = ++detailRequestToken
   loadingDetail.value = true
   detailError.value = null
   try {
     const res = await dashboardApi<{ thread: ThreadDetail }>(
-      `/api/dashboard/organizations/${siteId.value}/guest-threads/${props.threadId}`,
+      `/api/dashboard/organizations/${organizationId.value}/guest-threads/${props.threadId}`,
       { validate: isThreadDetailResponse },
     )
     if (requestToken !== detailRequestToken) return
@@ -214,7 +214,7 @@ async function sendReply() {
   actionError.value = null
   try {
     await dashboardApi<{ thread: ThreadDetail }>(
-      `/api/dashboard/organizations/${siteId.value}/guest-threads/${props.threadId}/operations/reply`,
+      `/api/dashboard/organizations/${organizationId.value}/guest-threads/${props.threadId}/operations/reply`,
       {
         method: 'POST',
         body: { body: replyDraft.value, idempotencyKey },
@@ -239,7 +239,7 @@ async function retryDelivery(deliveryId: string) {
   actionError.value = null
   try {
     await dashboardApi<{ thread: ThreadDetail }>(
-      `/api/dashboard/organizations/${siteId.value}/guest-threads/${props.threadId}/operations/retry_delivery`,
+      `/api/dashboard/organizations/${organizationId.value}/guest-threads/${props.threadId}/operations/retry_delivery`,
       {
         method: 'POST',
         body: { deliveryId, idempotencyKey },
@@ -257,7 +257,7 @@ async function retryDelivery(deliveryId: string) {
 
 watch(realtime.event, (event) => {
   if (!event || !('threadId' in event)) return
-  if (siteId.value && event.siteId !== siteId.value) return
+  if (organizationId.value && event.organizationId !== organizationId.value) return
   if (event.threadId === props.threadId) void loadThreadDetail()
 })
 

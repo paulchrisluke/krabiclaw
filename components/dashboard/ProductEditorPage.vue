@@ -3,7 +3,7 @@
   <DashboardIndexPanel id="product" :title="form.name || presentation.itemLabel" :auto-open="navigationGroups[0]?.items.find(item => item.to)?.to ?? null">
     <template v-if="product" #right>
       <DashboardResourceLocalization
-      :site-id="siteId"
+      :site-id="organizationId"
       resource-type="product"
       :resource-id="productId"
       :resource-label="presentation.itemLabel.toLowerCase()"
@@ -88,7 +88,7 @@ export interface ProductEditor {
   product: Ref<Product | null>
   presentation: ComputedRef<{ itemLabel: string }>
   currency: string
-  siteId: string
+  organizationId: string
   locationId: ComputedRef<string | null>
   definitions: Ref<MetafieldDefinition[]>
   isNew: ComputedRef<boolean>
@@ -154,7 +154,7 @@ const collectionPath = computed(() => `${surfacePath.value}/${collectionId.value
 const itemPath = computed(() => `${collectionPath.value}/${productId.value}`)
 const level = useRouteLevel()
 
-const siteId = await useDashboardOrganizationId()
+const organizationId = await useDashboardOrganizationId()
 const dashboard = useDashboardOrganization()
 const dashboardLocation = useDashboardLocation()
 
@@ -229,7 +229,7 @@ async function load(options: { force?: boolean } = {}) {
   if (!id || isNew.value) {
     if (!isNew.value) return
     // A new item still needs the attribute vocabulary to render its form.
-    definitions.value = (await dashboardApi(`/api/editor/organizations/${siteId}/metafield-definitions`, { validate: isDefinitionList })).definitions
+    definitions.value = (await dashboardApi(`/api/editor/organizations/${organizationId}/metafield-definitions`, { validate: isDefinitionList })).definitions
     return
   }
   const key = `${id}:${productId.value}`
@@ -238,9 +238,9 @@ async function load(options: { force?: boolean } = {}) {
   loadError.value = null
   try {
     const [collectionResponse, productResponse, definitionResponse] = await Promise.all([
-      dashboardApi(`/api/editor/organizations/${siteId}/collections?location_id=${encodeURIComponent(id)}`, { validate: isCollectionList }),
-      dashboardApi(`/api/editor/organizations/${siteId}/locations/${encodeURIComponent(id)}/products/${encodeURIComponent(productId.value)}`, { validate: isOne }),
-      dashboardApi(`/api/editor/organizations/${siteId}/metafield-definitions`, { validate: isDefinitionList }),
+      dashboardApi(`/api/editor/organizations/${organizationId}/collections?location_id=${encodeURIComponent(id)}`, { validate: isCollectionList }),
+      dashboardApi(`/api/editor/organizations/${organizationId}/locations/${encodeURIComponent(id)}/products/${encodeURIComponent(productId.value)}`, { validate: isOne }),
+      dashboardApi(`/api/editor/organizations/${organizationId}/metafield-definitions`, { validate: isDefinitionList }),
     ])
     collections.value = collectionResponse.collections
     definitions.value = definitionResponse.definitions
@@ -310,7 +310,7 @@ function loadForm(row: Product) {
   }))
   form.metafields = { ...row.metafields }
   form.active = row.active
-  form.published = row.publications.find(entry => entry.site_id === siteId)?.published ?? false
+  form.published = row.publications.find(entry => entry.organization_id === organizationId)?.published ?? false
   const here = row.locations.find(entry => entry.location_id === locationId.value)
   form.location_active = here?.active ?? true
   form.location_published = here?.published ?? false
@@ -662,7 +662,7 @@ async function commit() {
   saveError.value = null
   try {
     if (isNew.value) {
-      const created = await dashboardApi(`/api/editor/organizations/${siteId}/products`, {
+      const created = await dashboardApi(`/api/editor/organizations/${organizationId}/products`, {
         method: 'POST', body: payload(), validate: isOne,
       })
       // A newly created product is offered here and added to the collection the
@@ -670,7 +670,7 @@ async function commit() {
       // location relationship is not collection membership: without the second
       // write the product was absent from the very collection it was created
       // in.
-      await dashboardApi(`/api/editor/organizations/${siteId}/products/${created.product.id}/locations/${id}`, {
+      await dashboardApi(`/api/editor/organizations/${organizationId}/products/${created.product.id}/locations/${id}`, {
         method: 'PUT', body: { active: true, published: false }, validate: isRecord,
       })
       await addToCollection(created.product.id, id)
@@ -679,7 +679,7 @@ async function commit() {
       await navigateTo(`${collectionPath.value}/${created.product.id}`, { replace: true })
       return
     }
-    await dashboardApi(`/api/editor/organizations/${siteId}/products/${productId.value}`, {
+    await dashboardApi(`/api/editor/organizations/${organizationId}/products/${productId.value}`, {
       method: 'PATCH', body: payload(), validate: isOne,
     })
     if (editorKey.value === 'publication') await savePublication(id)
@@ -702,14 +702,14 @@ async function commit() {
  */
 async function addToCollection(newProductId: string, locationId: string) {
   if (!collectionId.value) return
-  const { products } = await dashboardApi(`/api/editor/organizations/${siteId}/locations/${locationId}/products`, { validate: isProductList })
+  const { products } = await dashboardApi(`/api/editor/organizations/${organizationId}/locations/${locationId}/products`, { validate: isProductList })
   const members = products
     .flatMap(row => row.collections
       .filter(entry => entry.collection_id === collectionId.value)
       .map(entry => ({ id: row.id, sort_order: entry.sort_order })))
     .sort((left, right) => left.sort_order - right.sort_order)
     .map(entry => entry.id)
-  await dashboardApi(`/api/editor/organizations/${siteId}/collections/${collectionId.value}/products`, {
+  await dashboardApi(`/api/editor/organizations/${organizationId}/collections/${collectionId.value}/products`, {
     method: 'PUT',
     body: { product_ids: [...members.filter(memberId => memberId !== newProductId), newProductId] },
     validate: isRecord,
@@ -718,10 +718,10 @@ async function addToCollection(newProductId: string, locationId: string) {
 
 /** Three switches, three writes. None of them implies another. */
 async function savePublication(id: string) {
-  await dashboardApi(`/api/editor/organizations/${siteId}/products/${productId.value}/publication`, {
+  await dashboardApi(`/api/editor/organizations/${organizationId}/products/${productId.value}/publication`, {
     method: 'PUT', body: { published: form.published }, validate: isRecord,
   })
-  await dashboardApi(`/api/editor/organizations/${siteId}/products/${productId.value}/locations/${id}`, {
+  await dashboardApi(`/api/editor/organizations/${organizationId}/products/${productId.value}/locations/${id}`, {
     method: 'PUT', body: { active: form.location_active, published: form.location_published }, validate: isRecord,
   })
 }
@@ -736,12 +736,12 @@ async function savePublication(id: string) {
 async function saveBooking() {
   if (!form.bookable) {
     if (!product.value?.booking) return
-    await dashboardApi(`/api/editor/organizations/${siteId}/products/${productId.value}/booking`, {
+    await dashboardApi(`/api/editor/organizations/${organizationId}/products/${productId.value}/booking`, {
       method: 'DELETE', validate: isRecord,
     })
     return
   }
-  await dashboardApi(`/api/editor/organizations/${siteId}/products/${productId.value}/booking`, {
+  await dashboardApi(`/api/editor/organizations/${organizationId}/products/${productId.value}/booking`, {
     method: 'PUT',
     body: {
       duration_minutes: Number(form.booking_duration) || null,
@@ -785,7 +785,7 @@ async function loadSchedule() {
   if (scheduleLoadedFor.value === key) return
   scheduleLoading.value = true
   try {
-    const { rules } = await dashboardApi(`/api/editor/organizations/${siteId}/products/${productId.value}/availability?location_id=${encodeURIComponent(id)}`, { validate: isRuleList })
+    const { rules } = await dashboardApi(`/api/editor/organizations/${organizationId}/products/${productId.value}/availability?location_id=${encodeURIComponent(id)}`, { validate: isRuleList })
     // The reader moved on while this loaded; that location's own load owns the draft.
     if (`${productId.value}:${locationId.value}` !== key) return
     schedule.value = rules.map(rule => ({ weekday: rule.weekday, start_time: rule.start_time, capacity: rule.capacity === null ? '' : String(rule.capacity) }))
@@ -803,7 +803,7 @@ async function saveSchedule() {
   const slots = schedule.value
     .filter(slot => slot.start_time.trim())
     .map(slot => ({ weekday: slot.weekday, start_time: slot.start_time.trim().slice(0, 5), capacity: slot.capacity.trim() ? Number(slot.capacity) : null }))
-  await dashboardApi(`/api/editor/organizations/${siteId}/products/${productId.value}/availability`, {
+  await dashboardApi(`/api/editor/organizations/${organizationId}/products/${productId.value}/availability`, {
     method: 'PUT', body: { location_id: id, slots }, validate: isRecord,
   })
   scheduleLoadedFor.value = null
@@ -821,7 +821,7 @@ function revert() {
 async function setPrimaryImage(assetId: string | null) {
   photoError.value = null
   try {
-    await dashboardApi(`/api/editor/organizations/${siteId}/media/placements`, {
+    await dashboardApi(`/api/editor/organizations/${organizationId}/media/placements`, {
       method: 'PUT',
       body: { placement: { owner_type: 'product', owner_id: productId.value, slot: 'image' }, asset_id: assetId },
       validate: isRecord,
@@ -869,7 +869,7 @@ function isProductLocalizationResponse(value: unknown): value is { localization:
 async function loadProductLocalization(locale: string): Promise<Record<string, unknown>> {
   try {
     const response = await dashboardApi<{ localization: { values: Record<string, unknown> } }>(
-      `/api/editor/organizations/${siteId}/localization/product/${productId.value}/${encodeURIComponent(locale)}`,
+      `/api/editor/organizations/${organizationId}/localization/product/${productId.value}/${encodeURIComponent(locale)}`,
       { validate: isProductLocalizationResponse },
     )
     const values = { ...response.localization.values }
@@ -896,7 +896,7 @@ async function saveProductLocalization(locale: string, submitted: Record<string,
     if (key.startsWith('metafield:')) metafields[key.slice('metafield:'.length)] = value
   }
   if (Object.keys(metafields).length) values.metafields = metafields
-  await dashboardApi(`/api/editor/organizations/${siteId}/localization/product/${row.id}/${encodeURIComponent(locale)}`, {
+  await dashboardApi(`/api/editor/organizations/${organizationId}/localization/product/${row.id}/${encodeURIComponent(locale)}`, {
     method: 'PUT',
     body: { values },
     validate: isProductLocalizationResponse,
@@ -909,7 +909,7 @@ provide(productEditorKey, {
   product,
   presentation,
   currency,
-  siteId,
+  organizationId,
   locationId,
   definitions,
   isNew,

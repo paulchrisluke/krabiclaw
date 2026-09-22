@@ -24,12 +24,9 @@
             />
           </div>
         </div>
-        <div class="grid grid-cols-1 gap-3 sm:grid-cols-3 lg:w-[38rem]">
-          <UFormField label="Site">
-            <USelect v-model="filters.siteId" :items="siteOptions" class="w-full" />
-          </UFormField>
+        <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:w-[26rem]">
           <UFormField label="Location">
-            <USelect v-model="filters.locationId" :items="locationOptions" :disabled="filters.siteId === FILTER_ALL" class="w-full" />
+            <USelect v-model="filters.locationId" :items="locationOptions" class="w-full" />
           </UFormField>
           <UFormField v-if="calendarView === 'agenda'" label="Kind">
             <USelect v-model="filters.kind" :items="kindOptions" class="w-full" />
@@ -39,15 +36,14 @@
 
       <template v-if="calendarView === 'availability'">
         <UAlert
-          v-if="filters.siteId === FILTER_ALL || filters.locationId === FILTER_ALL"
+          v-if="filters.locationId === FILTER_ALL"
           color="neutral"
           variant="soft"
-          title="Choose a site and location"
+          title="Choose a location"
           description="Availability is managed for one location at a time."
         />
         <DashboardAvailabilityCalendar
           v-else
-          :site-id="filters.siteId"
           :location-id="filters.locationId"
           :from="monthStart"
           :to="monthEnd"
@@ -140,10 +136,9 @@ const dashboardApi = useDashboardApi()
 const orgSlug = computed(() => String(route.params.orgSlug ?? ''))
 const currentMonth = ref(new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), 1)))
 const routeKind = typeof route.query.kinds === 'string' && ['reservation', 'booking', 'session', 'post'].includes(route.query.kinds) ? route.query.kinds : FILTER_ALL
-const routeSiteId = typeof route.query.siteId === 'string' ? route.query.siteId : FILTER_ALL
 const routeLocationId = typeof route.query.locationId === 'string' ? route.query.locationId : FILTER_ALL
 const calendarView = ref(route.query.view === 'availability' ? 'availability' : 'agenda')
-const filters = reactive({ siteId: routeSiteId, locationId: routeLocationId, kind: routeKind })
+const filters = reactive({ locationId: routeLocationId, kind: routeKind })
 const agendaData = ref<AgendaPayload | null>(null)
 const agendaError = ref<unknown>(null)
 const loading = ref(false)
@@ -164,7 +159,6 @@ const monthEnd = computed(() => new Date(Date.UTC(currentMonth.value.getUTCFullY
 const monthLabel = computed(() => formatCalendarDate(currentMonth.value.toISOString().slice(0, 10), 'en', { month: 'long', year: 'numeric' }))
 const query = computed(() => ({
   from: monthStart.value, to: monthEnd.value,
-  siteId: filters.siteId !== FILTER_ALL ? filters.siteId : undefined,
   locationId: filters.locationId !== FILTER_ALL ? filters.locationId : undefined,
   kinds: filters.kind !== FILTER_ALL ? [filters.kind as AgendaKind] : undefined,
 }))
@@ -176,9 +170,9 @@ const isAgendaItem = (value: unknown): value is AgendaItem =>
   isRecord(value) && typeof value.id === 'string' && typeof value.kind === 'string'
   && typeof value.startsAt === 'string' && typeof value.dayKey === 'string'
   && typeof value.timeZone === 'string' && typeof value.title === 'string'
-  && typeof value.status === 'string' && typeof value.siteId === 'string' && typeof value.to === 'string'
+  && typeof value.status === 'string' && typeof value.to === 'string'
 const isSite = (value: unknown): value is AgendaSite => isRecord(value) && typeof value.id === 'string' && typeof value.label === 'string' && typeof value.slug === 'string'
-const isLocation = (value: unknown): value is AgendaLocation => isRecord(value) && typeof value.id === 'string' && typeof value.siteId === 'string' && typeof value.title === 'string'
+const isLocation = (value: unknown): value is AgendaLocation => isRecord(value) && typeof value.id === 'string' && typeof value.title === 'string'
 const isAgendaPayload = (value: unknown): value is AgendaPayload =>
   isRecord(value) && Array.isArray(value.items) && value.items.every(isAgendaItem)
   && Array.isArray(value.availableKinds) && value.availableKinds.every(kind => ['reservation', 'booking', 'session', 'post'].includes(String(kind)))
@@ -211,15 +205,11 @@ watch(requestKey, async (key) => {
   }
 })
 
-watch(() => filters.siteId, (_, previousSiteId) => {
-  if (previousSiteId !== undefined) filters.locationId = FILTER_ALL
-})
-watch([() => filters.siteId, () => filters.locationId, calendarView], ([siteId, locationId, view]) => {
+watch([() => filters.locationId, calendarView], ([locationId, view]) => {
   void router.replace({
     query: {
       ...route.query,
       view: view === 'availability' ? view : undefined,
-      siteId: siteId === FILTER_ALL ? undefined : siteId,
       locationId: locationId === FILTER_ALL ? undefined : locationId,
       ownerType: undefined,
       ownerId: undefined,
@@ -230,8 +220,7 @@ watch(() => filters.kind, async kind => {
   await router.replace({ query: { ...route.query, kinds: kind === FILTER_ALL ? undefined : kind } })
 })
 
-const siteOptions = computed(() => [{ label: 'All sites', value: FILTER_ALL }, ...(agendaData.value?.sites ?? []).map(site => ({ label: site.label, value: site.id }))])
-const locationOptions = computed(() => [{ label: 'All locations', value: FILTER_ALL }, ...(agendaData.value?.locations ?? []).filter(location => location.siteId === filters.siteId).map(location => ({ label: location.title, value: location.id }))])
+const locationOptions = computed(() => [{ label: 'All locations', value: FILTER_ALL }, ...(agendaData.value?.locations ?? []).map(location => ({ label: location.title, value: location.id }))])
 const kindOptions = computed(() => [{ label: 'All kinds', value: FILTER_ALL }, ...(agendaData.value?.availableKinds ?? []).map(kind => ({ label: kindLabel(kind), value: kind }))])
 const itemsByDay = computed(() => {
   const groups = new Map<string, AgendaItem[]>()

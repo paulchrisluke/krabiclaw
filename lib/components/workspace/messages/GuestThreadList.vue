@@ -200,7 +200,7 @@ const route = useRoute()
 const router = useRouter()
 
 const isOrganizationScope = computed(() => props.scope === 'organization')
-const siteId = computed(() => isOrganizationScope.value ? null : dashboard.organizationId.value)
+const organizationId = computed(() => isOrganizationScope.value ? null : dashboard.organizationId.value)
 
 const listRoute = computed(() => {
   const orgSlug = String(route.params.orgSlug)
@@ -324,7 +324,7 @@ const listQuery = computed(() => ({
 const initialThreadsKey = computed(() => [
   'dashboard-guest-threads',
   String(route.params.orgSlug ?? ''),
-  siteId.value ?? 'org',
+  organizationId.value ?? 'org',
   props.scope,
   isOrganizationScope.value ? 'org' : 'site',
   activeType.value ?? 'all',
@@ -347,7 +347,7 @@ const {
     })
   }
   return await dashboardApi<{ threads: ThreadListItem[] }>(
-    `/api/dashboard/organizations/${siteId.value}/guest-threads`,
+    `/api/dashboard/organizations/${organizationId.value}/guest-threads`,
     {
       query: listQuery.value,
       validate: isThreadListResponse,
@@ -400,7 +400,7 @@ async function loadThreads() {
         query: listQuery.value,
         validate: isThreadListResponse,
       })
-      : await dashboardApi<{ threads: ThreadListItem[] }>(`/api/dashboard/organizations/${siteId.value}/guest-threads`, {
+      : await dashboardApi<{ threads: ThreadListItem[] }>(`/api/dashboard/organizations/${organizationId.value}/guest-threads`, {
         query: listQuery.value,
         validate: isThreadListResponse,
       })
@@ -422,7 +422,7 @@ function refreshThreads() {
 
 watch(realtime.event, (event) => {
   if (!event || !('threadId' in event)) return
-  if (siteId.value && event.siteId !== siteId.value) return
+  if (organizationId.value && event.organizationId !== organizationId.value) return
   void loadThreads()
 })
 

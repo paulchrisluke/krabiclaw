@@ -110,7 +110,7 @@ const { data: article, pending, error } = await useAsyncData(`docs-article-${pat
     ])
     const env = cloudflareEnv(requestEvent)
     if (!env.db) throw createError({ statusCode: 503, statusMessage: 'Documentation is temporarily unavailable' })
-    loaded = await getPublishedBlogPost(env.db, slug.value, env, undefined, 'docs') as DocsArticleDetail | null
+    loaded = await getPublishedBlogPost(env.db, organizationId, slug.value, 'en', env) as DocsArticleDetail | null
   } else {
     const response = await publicApiRequest<{ post: DocsArticleDetail }>(
       `/api/public/blog/${encodeURIComponent(slug.value)}?collection=docs`,
