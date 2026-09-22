@@ -20,7 +20,7 @@ interface ConnectionRow {
   revision: string | null
   id: string
   organization_id: string
-  site_id: string
+  organization_id: string
   facebook_page_id: string | null
   encrypted_user_token: string
   encrypted_page_token: string | null
@@ -29,7 +29,7 @@ interface ConnectionRow {
 interface SyncConnectionResult {
   connection_id: string
   organization_id: string
-  site_id: string
+  organization_id: string
   facebook: { success: number; errors: number; skipped: number } | null
   instagram: { success: number; errors: number; skipped: number } | null
   error?: string
@@ -60,12 +60,12 @@ export default defineScheduledTask({
     // Better Auth's subscription table is the authority for paid scheduled
     // integrations; candidates are selected here and filtered against it below.
     const candidates = await queryAllPages<ConnectionRow>(db, `
-      SELECT json_extract(s.integrations_json, '$.facebook.id') AS id, s.organization_id, s.id AS site_id,
+      SELECT json_extract(s.integrations_json, '$.facebook.id') AS id, s.organization_id, s.id AS organization_id,
              json_extract(s.integrations_json, '$.facebook.revision') AS revision,
              json_extract(s.integrations_json, '$.facebook.facebook_page_id') AS facebook_page_id,
              json_extract(s.integrations_json, '$.facebook.encrypted_user_token') AS encrypted_user_token,
              json_extract(s.integrations_json, '$.facebook.encrypted_page_token') AS encrypted_page_token
-      FROM sites s
+      FROM organization s
       WHERE json_extract(s.integrations_json, '$.facebook.status') = 'active'
         OR (json_extract(s.integrations_json, '$.facebook.status') = 'error' AND json_extract(s.integrations_json, '$.facebook.updated_at') < strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-1 hour'))
       ORDER BY s.organization_id, s.id
@@ -83,7 +83,7 @@ export default defineScheduledTask({
       const connResult: SyncConnectionResult = {
         connection_id: conn.id,
         organization_id: conn.organization_id,
-        site_id: conn.site_id,
+        
         facebook: null,
         instagram: null,
       }
@@ -105,11 +105,11 @@ export default defineScheduledTask({
         if (!pageId) {
           connResult.error = 'no_resolvable_page'
         } else if (pageId) {
-          connResult.facebook = await syncFacebookPosts(env, conn.organization_id, conn.site_id, activeToken, pageId)
+          connResult.facebook = await syncFacebookPosts(env, conn.organization_id, conn.organization_id, activeToken, pageId)
 
           const igUserId = await getLinkedInstagramAccount(activeToken, pageId)
           if (igUserId) {
-            connResult.instagram = await syncInstagramPosts(env, conn.organization_id, conn.site_id, activeToken, igUserId)
+            connResult.instagram = await syncInstagramPosts(env, conn.organization_id, conn.organization_id, activeToken, igUserId)
           }
         }
       } catch (err) {
@@ -118,10 +118,10 @@ export default defineScheduledTask({
 
         // Surface the error in the dashboard connection status; retry after 1h via updated_at
         await execute(db, `
-          UPDATE sites SET integrations_json = json_set(integrations_json, '$.facebook.status', 'error',
+          UPDATE organization SET integrations_json = json_set(integrations_json, '$.facebook.status', 'error',
             '$.facebook.updated_at', ?, '$.facebook.revision', ?)
           WHERE id = ? AND organization_id = ? AND json_extract(integrations_json, '$.facebook.revision') IS ?
-        `, [new Date().toISOString(), crypto.randomUUID(), conn.site_id, conn.organization_id, conn.revision])
+        `, [new Date().toISOString(), crypto.randomUUID(), conn.organization_id, conn.organization_id, conn.revision])
           .catch(updateErr => console.error(`[instagram-sync-process] failed to persist error status for connection ${conn.id}:`, updateErr))
       }
 

@@ -198,8 +198,8 @@ async function hydrate(db: DbClient, organizationId: string, products: Product[]
       JOIN product_variants v ON v.id = pr.product_variant_id AND v.organization_id = pr.organization_id
       WHERE pr.organization_id = ? AND v.product_id IN (SELECT value FROM json_each(?))
       ORDER BY pr.product_variant_id, pr.valid_from_at, pr.id`, params: [organizationId, ids] },
-    { query: `SELECT product_id, site_id, published FROM product_publications
-      WHERE organization_id = ? AND product_id IN (SELECT value FROM json_each(?)) ORDER BY site_id`, params: [organizationId, ids] },
+    { query: `SELECT product_id, organization_id, published FROM product_publications
+      WHERE organization_id = ? AND product_id IN (SELECT value FROM json_each(?)) ORDER BY organization_id`, params: [organizationId, ids] },
     { query: `SELECT product_id, location_id, active, published FROM product_locations
       WHERE organization_id = ? AND product_id IN (SELECT value FROM json_each(?)) ORDER BY location_id`, params: [organizationId, ids] },
     { query: `SELECT product_id, collection_id, sort_order FROM collection_products
@@ -274,7 +274,7 @@ async function hydrate(db: DbClient, organizationId: string, products: Product[]
   }
 
   for (const row of publicationRows) {
-    byId.get(String(row.product_id))?.publications.push({ site_id: String(row.site_id), published: Number(row.published) === 1 })
+    byId.get(String(row.product_id))?.publications.push({ organization_id: String(row.organization_id), published: Number(row.published) === 1 })
   }
   for (const row of locationRows) {
     byId.get(String(row.product_id))?.locations.push({
@@ -299,9 +299,9 @@ async function hydrate(db: DbClient, organizationId: string, products: Product[]
  * so the caller must say which site's imagery it wants. There is no "the
  * product's image" independent of a site, and no default site is assumed.
  */
-export async function hydrateProductMedia(db: DbClient, siteId: string, products: Product[]): Promise<Product[]> {
+export async function hydrateProductMedia(db: DbClient, organizationId: string, products: Product[]): Promise<Product[]> {
   if (!products.length) return products
-  const placements = await loadPublicSocialMedia(db, siteId, 'product', products.map(product => product.id))
+  const placements = await loadPublicSocialMedia(db, organizationId, 'product', products.map(product => product.id))
   return products.map((product) => {
     const socialMedia = placements.get(product.id) ?? { media: [], social_image: null }
     return {
@@ -346,15 +346,15 @@ export async function listProducts(db: DbClient, organizationId: string): Promis
  * is another page.
  */
 export async function listSiteProducts(db: DbClient, input: {
-  organizationId: string; siteId: string; publishedOnly?: boolean; window?: { limit: number; offset: number }
+  organizationId: string; publishedOnly?: boolean; window?: { limit: number; offset: number }
 }): Promise<Product[]> {
   const rows = await queryAll<Row>(db, `
     SELECT ${PRODUCT_COLUMNS} FROM products p
     JOIN product_publications pub ON pub.product_id = p.id AND pub.organization_id = p.organization_id
-    WHERE p.organization_id = ? AND pub.site_id = ? AND (? = 0 OR pub.published = 1)
+    WHERE p.organization_id = ? AND pub.organization_id = ? AND (? = 0 OR pub.published = 1)
     ORDER BY p.name, p.id
     ${input.window ? 'LIMIT ? OFFSET ?' : ''}
-  `, [input.organizationId, input.siteId, input.publishedOnly ? 1 : 0,
+  `, [input.organizationId, input.organizationId, input.publishedOnly ? 1 : 0,
     ...(input.window ? [input.window.limit + 1, input.window.offset] : [])])
   return hydrate(db, input.organizationId, rows.map(mapProductRow))
 }
@@ -377,7 +377,7 @@ export async function listLocationProducts(db: DbClient, input: {
     SELECT ${PRODUCT_COLUMNS} FROM products p
     JOIN product_locations pl ON pl.product_id = p.id AND pl.organization_id = p.organization_id
     ${published ? `JOIN product_publications pub ON pub.product_id = p.id AND pub.organization_id = p.organization_id
-      AND pub.site_id = ? AND pub.published = 1` : ''}
+      AND pub.organization_id = ? AND pub.published = 1` : ''}
     WHERE p.organization_id = ? AND pl.location_id = ?${published ? ' AND pl.published = 1 AND pl.active = 1' : ''}
     ORDER BY p.name, p.id
     ${input.window ? 'LIMIT ? OFFSET ?' : ''}
@@ -432,11 +432,11 @@ export async function listCollectionProducts(db: DbClient, input: {
  * own site can name another tenant's product and have a write land on it.
  */
 export async function requireSiteProduct(db: DbClient, input: {
-  organizationId: string; siteId: string; productId: string
+  organizationId: string; productId: string
 }): Promise<Product> {
   const product = await getProduct(db, input.organizationId, input.productId).catch(() => null)
   if (!product) notFound()
-  if (!product.publications.some(entry => entry.site_id === input.siteId)) {
+  if (!product.publications.some(entry => entry.organization_id === input.organizationId)) {
     notFound('This site does not carry that product')
   }
   return product
@@ -515,14 +515,14 @@ async function loadProductSlugs(db: DbClient, organizationId: string): Promise<M
   return new Map(rows.map(row => [row.slug, row.id]))
 }
 
-async function organizationDefaultCurrency(db: DbClient, organizationId: string, siteId?: string): Promise<CurrencyCode> {
+async function organizationDefaultCurrency(db: DbClient, organizationId: string): Promise<CurrencyCode> {
   // Currency comes from an explicit site when the caller has one. With no site
   // context the caller must supply the currency on the price itself; there is
   // no platform default standing in for a merchant's decision.
-  if (!siteId) invalid('currency is required when no site context is given')
-  const site = await queryFirst<{ default_currency: string }>(db, 'SELECT default_currency FROM sites WHERE id = ? AND organization_id = ?', [siteId, organizationId])
+  if (!organizationId) invalid('currency is required when no site context is given')
+  const site = await queryFirst<{ default_currency: string }>(db, 'SELECT default_currency FROM organization WHERE id = ? AND organization_id = ?', [organizationId, organizationId])
   if (!site) notFound('Site not found')
-  if (!isCurrencyCode(site.default_currency)) throw new Error(`Site ${siteId} has an unsupported default currency`)
+  if (!isCurrencyCode(site.default_currency)) throw new Error(`Site ${organizationId} has an unsupported default currency`)
   return site.default_currency
 }
 
@@ -739,7 +739,7 @@ async function planProduct(
   organizationId: string,
   input: CreateProductInput,
   context: {
-    siteId?: string
+    organizationId?: string
     existingId?: string
     defaultCurrency?: CurrencyCode | null
     takenSlugs?: Set<string>
@@ -763,7 +763,7 @@ async function planProduct(
   // down, rather than asking the same question for every product in it.
   const defaultCurrency = context.defaultCurrency !== undefined
     ? context.defaultCurrency
-    : context.siteId ? await organizationDefaultCurrency(db, organizationId, context.siteId) : null
+    : context.organizationId ? await organizationDefaultCurrency(db, organizationId, context.organizationId) : null
   const declaredVariants = input.variants ?? []
   const resolved = resolveIds(options, variants)
   const plannedVariants: PlannedVariant[] = variants.map((variant, index) => ({
@@ -938,27 +938,26 @@ function assertVariantPricesConsistent(planned: PlannedProduct): void {
 
 export async function createProduct(db: DbClient, input: {
   organizationId: string
-  siteId?: string
   product: CreateProductInput
   actor: Actor
-  /** Publish it on `siteId` in the same batch — see planProductCreateWrites. */
+  /** Publish it on `organizationId` in the same batch — see planProductCreateWrites. */
   publication?: { published: boolean }
 }): Promise<Product> {
   const definitions = await loadMetafieldDefinitions(db, input.organizationId)
-  const planned = await planProduct(db, input.organizationId, input.product, { siteId: input.siteId })
+  const planned = await planProduct(db, input.organizationId, input.product, { organizationId: input.organizationId })
   assertVariantPricesConsistent(planned)
   const now = new Date().toISOString()
   const writes = productWrites(input.organizationId, planned, definitions, input.actor, now, 'insert')
-  if (input.publication && input.siteId) {
+  if (input.publication && input.organizationId) {
     writes.push({
-      query: `INSERT INTO product_publications (organization_id, product_id, site_id, published, created_at, updated_at, created_by, updated_by)
+      query: `INSERT INTO product_publications (organization_id, product_id, organization_id, published, created_at, updated_at, created_by, updated_by)
               VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      params: [input.organizationId, planned.id, input.siteId, input.publication.published ? 1 : 0, now, now, input.actor.actorId, input.actor.actorId],
+      params: [input.organizationId, planned.id, input.organizationId, input.publication.published ? 1 : 0, now, now, input.actor.actorId, input.actor.actorId],
     })
-    writes.push(publicResourceCacheInvalidationQuery(input.siteId, 'product_created'))
+    writes.push(publicResourceCacheInvalidationQuery(input.organizationId, 'product_created'))
   }
   await executeBatch(db, writes, { operation: 'Create product' })
-  await fireOrganizationEventSafe({ db, organizationId: input.organizationId, siteId: input.siteId ?? null, actorId: input.actor.actorId, eventType: 'product.created', entityType: 'product', entityId: planned.id })
+  await fireOrganizationEventSafe({ db, organizationId: input.organizationId, actorId: input.actor.actorId, eventType: 'product.created', entityType: 'product', entityId: planned.id })
   return getProduct(db, input.organizationId, planned.id)
 }
 
@@ -973,12 +972,11 @@ export async function createProduct(db: DbClient, input: {
  */
 export async function planProductCreateWrites(db: DbClient, input: {
   organizationId: string
-  siteId?: string
   products: CreateProductInput[]
   actor: Actor
   now: string
   /**
-   * Publish the new products on `siteId` as part of the same batch.
+   * Publish the new products on `organizationId` as part of the same batch.
    *
    * A caller that writes its own publication rows leaves this out. One that
    * wants the site to carry what it just created says so here, rather than
@@ -1001,7 +999,7 @@ export async function planProductCreateWrites(db: DbClient, input: {
       product_variants: input.products.flatMap(product => (product.variants ?? []).map(variant => variant.id).filter((id): id is string => Boolean(id))),
     }),
   ])
-  const defaultCurrency = input.siteId ? await organizationDefaultCurrency(db, input.organizationId, input.siteId) : null
+  const defaultCurrency = input.organizationId ? await organizationDefaultCurrency(db, input.organizationId, input.organizationId) : null
   const queries: BatchQuery[] = []
   const ids: string[] = []
   // Slugs are derived sequentially and the set carries what this batch has
@@ -1009,14 +1007,14 @@ export async function planProductCreateWrites(db: DbClient, input: {
   // batch both take the same free slug.
   const taken = new Set<string>()
   for (const product of input.products) {
-    const planned = await planProduct(db, input.organizationId, product, { siteId: input.siteId, defaultCurrency, takenSlugs: taken, knownSlugs, idOwners })
+    const planned = await planProduct(db, input.organizationId, product, { organizationId: input.organizationId, defaultCurrency, takenSlugs: taken, knownSlugs, idOwners })
     assertVariantPricesConsistent(planned)
     queries.push(...productWrites(input.organizationId, planned, definitions, input.actor, input.now, 'insert'))
-    if (input.publication && input.siteId) {
+    if (input.publication && input.organizationId) {
       queries.push({
-        query: `INSERT INTO product_publications (organization_id, product_id, site_id, published, created_at, updated_at, created_by, updated_by)
+        query: `INSERT INTO product_publications (organization_id, product_id, organization_id, published, created_at, updated_at, created_by, updated_by)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-        params: [input.organizationId, planned.id, input.siteId, input.publication.published ? 1 : 0,
+        params: [input.organizationId, planned.id, input.organizationId, input.publication.published ? 1 : 0,
           input.now, input.now, input.actor.actorId, input.actor.actorId],
       })
     }
@@ -1024,20 +1022,19 @@ export async function planProductCreateWrites(db: DbClient, input: {
   }
   // One site, one invalidation: a hundred products landing together change
   // that site's public projection once.
-  if (input.publication && input.siteId) queries.push(publicResourceCacheInvalidationQuery(input.siteId, 'products_created'))
+  if (input.publication && input.organizationId) queries.push(publicResourceCacheInvalidationQuery(input.organizationId, 'products_created'))
   return { ids, queries }
 }
 
 export async function createProductsBatch(db: DbClient, input: {
   organizationId: string
-  siteId?: string
   products: CreateProductInput[]
   actor: Actor
   publication?: { published: boolean }
 }): Promise<Product[]> {
   const { ids, queries } = await planProductCreateWrites(db, { ...input, now: new Date().toISOString() })
   await executeBatch(db, queries, { operation: 'Create products' })
-  await fireOrganizationEventSafe({ db, organizationId: input.organizationId, siteId: input.siteId ?? null, actorId: input.actor.actorId, eventType: 'product.created', entityType: 'product', metadata: { product_count: ids.length } })
+  await fireOrganizationEventSafe({ db, organizationId: input.organizationId, actorId: input.actor.actorId, eventType: 'product.created', entityType: 'product', metadata: { product_count: ids.length } })
   const rows = await queryAll<Row>(db, `SELECT ${PRODUCT_COLUMNS} FROM products p WHERE p.organization_id = ? AND p.id IN (SELECT value FROM json_each(?))`, [input.organizationId, d1JsonArray(ids)])
   return hydrate(db, input.organizationId, rows.map(mapProductRow))
 }
@@ -1065,7 +1062,6 @@ export async function createProductsBatch(db: DbClient, input: {
  */
 async function planProductUpdate(db: DbClient, input: {
   organizationId: string
-  siteId?: string
   current: Product
   patch: UpdateProductInput
   actor: Actor
@@ -1107,7 +1103,7 @@ async function planProductUpdate(db: DbClient, input: {
     metafields: patch.metafields ?? current.metafields,
   }
   const planned = await planProduct(db, organizationId, merged, {
-    siteId: input.siteId, existingId: productId, defaultCurrency: input.defaultCurrency,
+    organizationId: input.organizationId, existingId: productId, defaultCurrency: input.defaultCurrency,
     takenSlugs: input.takenSlugs, idOwners: input.idOwners, knownSlugs: input.knownSlugs,
   })
   // A patch that does not rename keeps the slug it has: a public path is not
@@ -1172,7 +1168,6 @@ async function bookedRemovals(db: DbClient, organizationId: string, products: Ar
 
 export async function updateProduct(db: DbClient, input: {
   organizationId: string
-  siteId?: string
   productId: string
   patch: UpdateProductInput
   actor: Actor
@@ -1181,7 +1176,7 @@ export async function updateProduct(db: DbClient, input: {
   const definitions = await loadMetafieldDefinitions(db, input.organizationId)
   const now = new Date().toISOString()
   const { writes, keptVariants } = await planProductUpdate(db, {
-    organizationId: input.organizationId, siteId: input.siteId, current, patch: input.patch, actor: input.actor, now, definitions,
+    organizationId: input.organizationId, current, patch: input.patch, actor: input.actor, now, definitions,
     cacheInvalidations: await productCacheInvalidations(db, input.organizationId, input.productId, 'product_updated'),
   })
 
@@ -1206,8 +1201,8 @@ export async function updateProduct(db: DbClient, input: {
 export async function deleteProduct(db: DbClient, input: {
   organizationId: string; productId: string
 }): Promise<void> {
-  const bound = await queryAll<{ site_id: string; id: string }>(db, `
-    SELECT site_id, id FROM content_documents WHERE organization_id = ? AND product_id = ?
+  const bound = await queryAll<{ organization_id: string; id: string }>(db, `
+    SELECT organization_id, id FROM content_documents WHERE organization_id = ? AND product_id = ?
   `, [input.organizationId, input.productId])
   // The canonical page foreign key is RESTRICT, so say why rather than letting
   // D1 return a constraint error the merchant cannot act on.
@@ -1240,12 +1235,12 @@ export async function deleteProduct(db: DbClient, input: {
  * while looking correct.
  */
 async function productCacheInvalidations(db: DbClient, organizationId: string, productId: string, reason: string): Promise<BatchQuery[]> {
-  const sites = await queryAll<{ site_id: string }>(db, `
-    SELECT site_id FROM product_publications WHERE organization_id = ? AND product_id = ?
+  const sites = await queryAll<{ organization_id: string }>(db, `
+    SELECT organization_id FROM product_publications WHERE organization_id = ? AND product_id = ?
     UNION
-    SELECT site_id FROM content_documents WHERE organization_id = ? AND product_id = ?
+    SELECT organization_id FROM content_documents WHERE organization_id = ? AND product_id = ?
   `, [organizationId, productId, organizationId, productId])
-  return sites.map(row => publicResourceCacheInvalidationQuery(row.site_id, reason))
+  return sites.map(row => publicResourceCacheInvalidationQuery(row.organization_id, reason))
 }
 
 // ---------------------------------------------------------------------------
@@ -1261,30 +1256,30 @@ async function productCacheInvalidations(db: DbClient, organizationId: string, p
  * disabled product is not unpublished.
  */
 export async function setProductPublication(db: DbClient, input: {
-  organizationId: string; productId: string; siteId: string; published: boolean; actor: Actor
+  organizationId: string; productId: string; organizationId: string; published: boolean; actor: Actor
 }): Promise<void> {
   const now = new Date().toISOString()
   await executeBatch(db, [{
-    query: `INSERT INTO product_publications (organization_id, product_id, site_id, published, created_at, updated_at, created_by, updated_by)
+    query: `INSERT INTO product_publications (organization_id, product_id, organization_id, published, created_at, updated_at, created_by, updated_by)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT (product_id, site_id) DO UPDATE SET published = excluded.published, updated_at = excluded.updated_at, updated_by = excluded.updated_by`,
-    params: [input.organizationId, input.productId, input.siteId, input.published ? 1 : 0, now, now, input.actor.actorId, input.actor.actorId],
-  }, publicResourceCacheInvalidationQuery(input.siteId, 'product_publication_changed')], { operation: 'Set product publication' })
+            ON CONFLICT (product_id, organization_id) DO UPDATE SET published = excluded.published, updated_at = excluded.updated_at, updated_by = excluded.updated_by`,
+    params: [input.organizationId, input.productId, input.organizationId, input.published ? 1 : 0, now, now, input.actor.actorId, input.actor.actorId],
+  }, publicResourceCacheInvalidationQuery(input.organizationId, 'product_publication_changed')], { operation: 'Set product publication' })
 }
 
 export async function removeProductPublication(db: DbClient, input: {
-  organizationId: string; productId: string; siteId: string
+  organizationId: string; productId: string; organizationId: string
 }): Promise<void> {
   await executeBatch(db, [
-    { query: 'DELETE FROM product_publications WHERE organization_id = ? AND product_id = ? AND site_id = ?', params: [input.organizationId, input.productId, input.siteId] },
-    publicResourceCacheInvalidationQuery(input.siteId, 'product_publication_changed'),
+    { query: 'DELETE FROM product_publications WHERE organization_id = ? AND product_id = ? AND organization_id = ?', params: [input.organizationId, input.productId, input.organizationId] },
+    publicResourceCacheInvalidationQuery(input.organizationId, 'product_publication_changed'),
   ], { operation: 'Remove product publication' })
 }
 
 export async function setProductLocation(db: DbClient, input: {
   organizationId: string; productId: string; locationId: string; active?: boolean; published?: boolean; actor: Actor
 }): Promise<void> {
-  const site = await queryFirst<{ site_id: string }>(db, 'SELECT site_id FROM business_locations WHERE organization_id = ? AND id = ?', [input.organizationId, input.locationId])
+  const site = await queryFirst<{ organization_id: string }>(db, 'SELECT organization_id FROM business_locations WHERE organization_id = ? AND id = ?', [input.organizationId, input.locationId])
   if (!site) notFound('Location not found')
   const now = new Date().toISOString()
   await executeBatch(db, [{
@@ -1294,17 +1289,17 @@ export async function setProductLocation(db: DbClient, input: {
               updated_at = excluded.updated_at, updated_by = excluded.updated_by`,
     params: [input.organizationId, input.productId, input.locationId, (input.active ?? true) ? 1 : 0, (input.published ?? false) ? 1 : 0,
       now, now, input.actor.actorId, input.actor.actorId],
-  }, publicResourceCacheInvalidationQuery(site.site_id, 'product_location_changed')], { operation: 'Set product location' })
+  }, publicResourceCacheInvalidationQuery(site.organization_id, 'product_location_changed')], { operation: 'Set product location' })
 }
 
 export async function removeProductLocation(db: DbClient, input: {
   organizationId: string; productId: string; locationId: string
 }): Promise<void> {
-  const site = await queryFirst<{ site_id: string }>(db, 'SELECT site_id FROM business_locations WHERE organization_id = ? AND id = ?', [input.organizationId, input.locationId])
+  const site = await queryFirst<{ organization_id: string }>(db, 'SELECT organization_id FROM business_locations WHERE organization_id = ? AND id = ?', [input.organizationId, input.locationId])
   if (!site) notFound('Location not found')
   await executeBatch(db, [
     { query: 'DELETE FROM product_locations WHERE organization_id = ? AND product_id = ? AND location_id = ?', params: [input.organizationId, input.productId, input.locationId] },
-    publicResourceCacheInvalidationQuery(site.site_id, 'product_location_changed'),
+    publicResourceCacheInvalidationQuery(site.organization_id, 'product_location_changed'),
   ], { operation: 'Remove product location' })
 }
 
@@ -1314,7 +1309,7 @@ export async function removeProductLocation(db: DbClient, input: {
 
 function mapCollectionRow(row: Row): Collection {
   return {
-    id: String(row.id), site_id: String(row.site_id),
+    id: String(row.id), organization_id: String(row.organization_id),
     location_id: row.location_id === null ? null : String(row.location_id),
     name: String(row.name), slug: String(row.slug),
     description: row.description === null ? null : String(row.description),
@@ -1325,7 +1320,7 @@ function mapCollectionRow(row: Row): Collection {
 }
 
 export async function listCollections(db: DbClient, input: {
-  organizationId: string; siteId: string; locationId?: string | null
+  organizationId: string; locationId?: string | null
 }): Promise<Collection[]> {
   const rows = await queryAll<Row>(db, `
     SELECT * FROM collections
@@ -1340,21 +1335,21 @@ export async function createCollection(db: DbClient, input: {
   organizationId: string; collection: CreateCollectionInput; actor: Actor
 }): Promise<Collection> {
   const name = requireTrimmedProductString(input.collection.name, 'name', PRODUCT_LIMITS.collectionName)
-  const slug = await uniqueCollectionSlug(db, input.organizationId, input.collection.site_id, input.collection.location_id ?? null, name)
+  const slug = await uniqueCollectionSlug(db, input.organizationId, input.collection.organization_id, input.collection.location_id ?? null, name)
   const id = crypto.randomUUID()
   const now = new Date().toISOString()
   await executeBatch(db, [{
-    query: `INSERT INTO collections (id, organization_id, site_id, location_id, name, slug, description, sort_order, created_at, updated_at, created_by, updated_by)
+    query: `INSERT INTO collections (id, organization_id, organization_id, location_id, name, slug, description, sort_order, created_at, updated_at, created_by, updated_by)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    params: [id, input.organizationId, input.collection.site_id, input.collection.location_id ?? null, name, slug,
+    params: [id, input.organizationId, input.collection.organization_id, input.collection.location_id ?? null, name, slug,
       normalizeOptionalProductString(input.collection.description, 'description', PRODUCT_LIMITS.collectionDescription),
       input.collection.sort_order ?? 0, now, now, input.actor.actorId, input.actor.actorId],
-  }, publicResourceCacheInvalidationQuery(input.collection.site_id, 'collection_created')], { operation: 'Create collection' })
+  }, publicResourceCacheInvalidationQuery(input.collection.organization_id, 'collection_created')], { operation: 'Create collection' })
   const row = await queryFirst<Row>(db, 'SELECT * FROM collections WHERE organization_id = ? AND id = ?', [input.organizationId, id])
   return mapCollectionRow(row!)
 }
 
-async function uniqueCollectionSlug(db: DbClient, organizationId: string, siteId: string, locationId: string | null, base: string): Promise<string> {
+async function uniqueCollectionSlug(db: DbClient, organizationId: string, locationId: string | null, base: string): Promise<string> {
   for (let attempt = 0; attempt < MAX_SLUG_SUFFIX_ATTEMPTS; attempt += 1) {
     const candidate = slugCandidate(base, attempt)
     const clash = await queryFirst<{ id: string }>(db, `
@@ -1380,19 +1375,19 @@ export async function updateCollection(db: DbClient, input: {
       input.patch.sort_order ?? Number(existing.sort_order), now, input.actor.actorId,
       input.organizationId, input.collectionId,
     ],
-  }, publicResourceCacheInvalidationQuery(String(existing.site_id), 'collection_updated')], { operation: 'Update collection' })
+  }, publicResourceCacheInvalidationQuery(String(existing.organization_id), 'collection_updated')], { operation: 'Update collection' })
   const row = await queryFirst<Row>(db, 'SELECT * FROM collections WHERE organization_id = ? AND id = ?', [input.organizationId, input.collectionId])
   return mapCollectionRow(row!)
 }
 
 export async function deleteCollection(db: DbClient, input: { organizationId: string; collectionId: string }): Promise<void> {
-  const existing = await queryFirst<{ site_id: string }>(db, 'SELECT site_id FROM collections WHERE organization_id = ? AND id = ?', [input.organizationId, input.collectionId])
+  const existing = await queryFirst<{ organization_id: string }>(db, 'SELECT organization_id FROM collections WHERE organization_id = ? AND id = ?', [input.organizationId, input.collectionId])
   if (!existing) notFound('Collection not found')
   // Membership cascades; the products themselves are untouched. Deleting a
   // grouping is not deleting what was grouped.
   await executeBatch(db, [
     { query: 'DELETE FROM collections WHERE organization_id = ? AND id = ?', params: [input.organizationId, input.collectionId] },
-    publicResourceCacheInvalidationQuery(existing.site_id, 'collection_deleted'),
+    publicResourceCacheInvalidationQuery(existing.organization_id, 'collection_deleted'),
   ], { operation: 'Delete collection' })
 }
 
@@ -1411,7 +1406,7 @@ export async function setCollectionProducts(db: DbClient, input: {
     invalid(`a collection may hold at most ${PRODUCT_LIMITS.collectionProducts} products`)
   }
   if (new Set(input.productIds).size !== input.productIds.length) invalid('product_ids must be unique')
-  const collection = await queryFirst<{ site_id: string }>(db, 'SELECT site_id FROM collections WHERE organization_id = ? AND id = ?', [input.organizationId, input.collectionId])
+  const collection = await queryFirst<{ organization_id: string }>(db, 'SELECT organization_id FROM collections WHERE organization_id = ? AND id = ?', [input.organizationId, input.collectionId])
   if (!collection) notFound('Collection not found')
   const now = new Date().toISOString()
   await executeBatch(db, [
@@ -1421,14 +1416,14 @@ export async function setCollectionProducts(db: DbClient, input: {
               VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       params: [input.organizationId, input.collectionId, productId, index, now, now, input.actor.actorId, input.actor.actorId],
     })),
-    publicResourceCacheInvalidationQuery(collection.site_id, 'collection_membership_changed'),
+    publicResourceCacheInvalidationQuery(collection.organization_id, 'collection_membership_changed'),
   ], { operation: 'Set collection products' })
 }
 
 export async function reorderCollections(db: DbClient, input: {
-  organizationId: string; siteId: string; locationId?: string | null; collectionIds: string[]; actor: Actor
+  organizationId: string; locationId?: string | null; collectionIds: string[]; actor: Actor
 }): Promise<void> {
-  const existing = await listCollections(db, { organizationId: input.organizationId, siteId: input.siteId, locationId: input.locationId })
+  const existing = await listCollections(db, { organizationId: input.organizationId, locationId: input.locationId })
   const intended = new Set(input.collectionIds)
   // A partial order would leave the unnamed collections at whatever position
   // they had, which is not an order anyone chose.
@@ -1441,7 +1436,7 @@ export async function reorderCollections(db: DbClient, input: {
       query: 'UPDATE collections SET sort_order = ?, updated_at = ?, updated_by = ? WHERE organization_id = ? AND id = ?',
       params: [index, now, input.actor.actorId, input.organizationId, collectionId],
     })),
-    publicResourceCacheInvalidationQuery(input.siteId, 'collection_reordered'),
+    publicResourceCacheInvalidationQuery(input.organizationId, 'collection_reordered'),
   ], { operation: 'Reorder collections' })
 }
 
@@ -1510,24 +1505,23 @@ async function listProductsByIds(db: DbClient, organizationId: string, ids: stri
  * named products, plus the site the reconcile itself speaks for, which is
  * where anything it creates lands.
  */
-async function reconcileCacheSites(db: DbClient, organizationId: string, productIds: string[], siteId?: string): Promise<string[]> {
-  const sites = new Set<string>(siteId ? [siteId] : [])
+async function reconcileCacheSites(db: DbClient, organizationId: string, productIds: string[], organizationId?: string): Promise<string[]> {
+  const sites = new Set<string>(organizationId ? [organizationId] : [])
   if (productIds.length > 0) {
-    const rows = await queryAll<{ site_id: string }>(db, `
-      SELECT site_id FROM product_publications
+    const rows = await queryAll<{ organization_id: string }>(db, `
+      SELECT organization_id FROM product_publications
        WHERE organization_id = ? AND product_id IN (SELECT value FROM json_each(?))
       UNION
-      SELECT site_id FROM content_documents
+      SELECT organization_id FROM content_documents
        WHERE organization_id = ? AND product_id IN (SELECT value FROM json_each(?))
     `, [organizationId, d1JsonArray(productIds), organizationId, d1JsonArray(productIds)])
-    for (const row of rows) sites.add(String(row.site_id))
+    for (const row of rows) sites.add(String(row.organization_id))
   }
   return [...sites]
 }
 
 export async function reconcileProducts(db: DbClient, input: {
   organizationId: string
-  siteId?: string
   products: ReconcileProductInput[]
   actor: Actor
   deactivateMissing?: boolean
@@ -1551,14 +1545,14 @@ export async function reconcileProducts(db: DbClient, input: {
     loadProductSlugs(db, input.organizationId),
     listProductsByIds(db, input.organizationId, requestedIds),
   ])
-  const defaultCurrency = input.siteId ? await organizationDefaultCurrency(db, input.organizationId, input.siteId) : null
+  const defaultCurrency = input.organizationId ? await organizationDefaultCurrency(db, input.organizationId, input.organizationId) : null
   const idOwners = await loadSuppliedIdOwners(db, {
     product_options: input.products.flatMap(entry => (entry.options ?? []).map(option => option.id).filter((id): id is string => Boolean(id))),
     product_option_values: input.products.flatMap(entry => (entry.options ?? []).flatMap(option => (option.values ?? []).map(value => typeof value === 'string' ? null : value.id)).filter((id): id is string => Boolean(id))),
     product_variants: input.products.flatMap(entry => (entry.variants ?? []).map(variant => variant.id).filter((id): id is string => Boolean(id))),
   })
   const byId = new Map(existingProducts.map(product => [product.id, product]))
-  const cacheSites = await reconcileCacheSites(db, input.organizationId, requestedIds, input.siteId)
+  const cacheSites = await reconcileCacheSites(db, input.organizationId, requestedIds, input.organizationId)
 
   const taken = new Set<string>()
   const now = new Date().toISOString()
@@ -1575,7 +1569,7 @@ export async function reconcileProducts(db: DbClient, input: {
     const current = productId ? byId.get(productId) : undefined
     if (current) {
       const planned = await planProductUpdate(db, {
-        organizationId: input.organizationId, siteId: input.siteId, current, patch: rest, actor: input.actor, now,
+        organizationId: input.organizationId, current, patch: rest, actor: input.actor, now,
         definitions, defaultCurrency, takenSlugs: taken, idOwners, knownSlugs,
         // One invalidation per site at the end of the batch, not one per product.
         cacheInvalidations: [],
@@ -1586,19 +1580,19 @@ export async function reconcileProducts(db: DbClient, input: {
       continue
     }
     const planned = await planProduct(db, input.organizationId, rest, {
-      siteId: input.siteId, existingId: productId, defaultCurrency, takenSlugs: taken, idOwners, knownSlugs,
+      organizationId: input.organizationId, existingId: productId, defaultCurrency, takenSlugs: taken, idOwners, knownSlugs,
     })
     assertVariantPricesConsistent(planned)
     const creates = productWrites(input.organizationId, planned, definitions, input.actor, now, 'insert')
     // The site that reconciles its catalog carries what the reconcile creates,
     // withheld until someone publishes it — the same rule batch creation
     // follows, and what makes "missing from this site's import" answerable.
-    if (input.siteId) {
+    if (input.organizationId) {
       creates.push({
-        query: `INSERT INTO product_publications (organization_id, product_id, site_id, published, created_at, updated_at, created_by, updated_by)
+        query: `INSERT INTO product_publications (organization_id, product_id, organization_id, published, created_at, updated_at, created_by, updated_by)
                 VALUES (?, ?, ?, 0, ?, ?, ?, ?)
-                ON CONFLICT (product_id, site_id) DO NOTHING`,
-        params: [input.organizationId, planned.id, input.siteId, now, now, input.actor.actorId, input.actor.actorId],
+                ON CONFLICT (product_id, organization_id) DO NOTHING`,
+        params: [input.organizationId, planned.id, input.organizationId, now, now, input.actor.actorId, input.actor.actorId],
       })
     }
     perProduct.push(creates)
@@ -1619,7 +1613,7 @@ export async function reconcileProducts(db: DbClient, input: {
   if (oversized >= 0) {
     invalid(`products[${oversized}] needs ${perProduct[oversized]!.length} statements to rewrite, more than the ${MAX_D1_BATCH_STATEMENTS} one transaction can carry`)
   }
-  perProduct.push(cacheSites.map(siteId => publicResourceCacheInvalidationQuery(siteId, 'products_reconciled')))
+  perProduct.push(cacheSites.map(organizationId => publicResourceCacheInvalidationQuery(organizationId, 'products_reconciled')))
 
   // Whole products per batch, so a boundary never falls inside one.
   let batch: BatchQuery[] = []
@@ -1636,8 +1630,8 @@ export async function reconcileProducts(db: DbClient, input: {
   // only for that site's catalog: an organization's other sites keep theirs.
   const deactivated: string[] = []
   if (input.deactivateMissing) {
-    const scope = input.siteId
-      ? { clause: 'AND EXISTS (SELECT 1 FROM product_publications pub WHERE pub.product_id = products.id AND pub.site_id = ?)', params: [input.siteId] }
+    const scope = input.organizationId
+      ? { clause: 'AND EXISTS (SELECT 1 FROM product_publications pub WHERE pub.product_id = products.id AND pub.organization_id = ?)', params: [input.organizationId] }
       : { clause: '', params: [] as string[] }
     const missing = await queryAll<{ id: string }>(db, `
       SELECT id FROM products

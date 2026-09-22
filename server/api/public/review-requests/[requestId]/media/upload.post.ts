@@ -88,7 +88,7 @@ export default defineHandler(async (event) => {
     const uploaded = await uploadResolvedMediaToAssetStore({
       db,
       env,
-      organizationId: result.context.site_id,
+      organizationId: result.context.organization_id,
       userId: sessionUser.id,
       buffer: videoData,
       contentType: videoContentType,
@@ -126,7 +126,7 @@ export default defineHandler(async (event) => {
             sessionUser.isAnonymous ? null : sessionUser.id, sessionUser.isAnonymous ? sessionUser.id : null, now, requestId, ], }, ])
     } catch (linkError) {
       try {
-        await deleteMediaAsset(db, env, uploaded.assetId, result.context.site_id, sessionUser.id)
+        await deleteMediaAsset(db, env, uploaded.assetId, result.context.organization_id, sessionUser.id)
       } catch (cleanupError) {
         throw new AggregateError([linkError, cleanupError], 'Review video could not be linked or cleaned up')
       }

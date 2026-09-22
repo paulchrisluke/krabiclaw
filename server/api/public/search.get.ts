@@ -24,8 +24,8 @@ export default defineHandler(async (event) => {
     return jsonResponse({ error: 'surface must be one of public, docs, blog, help, chowbot, tenant_blog' }, { status: 400 })
   }
   // tenant_blog is a single shared corpus across every tenant, scoped by
-  // site_id at query time — without a resolved tenant site there is no safe
-  // site_id to scope by, and returning unscoped results would leak every
+  // organization_id at query time — without a resolved tenant site there is no safe
+  // organization_id to scope by, and returning unscoped results would leak every
   // other tenant's blog posts.
   if (surface === 'tenant_blog' && !isTenantRequest) {
     return jsonResponse({ error: 'tenant_blog surface requires a tenant site' }, { status: 400 })

@@ -13,9 +13,9 @@ export default defineHandler(async (event) => {
 
   const context = await getDashboardContext(event, { requireSite: true })
   if (!context.organization || !context.site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
-  await assertSiteContextAccess(context.db, memberAccessPrincipal(context.organization, { env: context.env, siteId: context.site.id }))
+  await assertSiteContextAccess(context.db, memberAccessPrincipal(context.organization, { env: context.env, organizationId: context.site.id }))
 
-  const results = await searchPublicResources(context.env, q, { surface: 'dashboard', siteId: context.site.id, limit: 10 })
+  const results = await searchPublicResources(context.env, q, { surface: 'dashboard', organizationId: context.site.id, limit: 10 })
   return jsonResponse({ query: q, results })
 })
 import { defineHandler } from 'nitro';

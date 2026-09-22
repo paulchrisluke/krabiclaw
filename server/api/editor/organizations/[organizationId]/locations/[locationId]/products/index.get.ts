@@ -15,7 +15,7 @@ export default defineHandler(async (event) => {
     // public reader attaches them — a list that said "no photo" for a product
     // with a live cover was the editor lying about the customer's page.
     const products = await hydrateProductMedia(db, organizationId, await listLocationProducts(db, { organizationId: site.organization_id, locationId }))
-    return jsonResponse({ success: true, products, site_id: organizationId, location_id: locationId })
+    return jsonResponse({ success: true, products, organization_id: organizationId, location_id: locationId })
   } catch (error) {
     rethrowHttpError(error)
     console.error('location_products_list_failed', { organizationId, locationId, error: error instanceof Error ? error.message : String(error) })

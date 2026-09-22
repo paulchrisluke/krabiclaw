@@ -46,7 +46,7 @@ export default defineHandler(async (event) => {
 
   try {
     const existing = await queryFirst(db, `
-      SELECT id FROM sites
+      SELECT id FROM organization
       WHERE subdomain = ?
       LIMIT 1
     `, [subdomain.toLowerCase()])

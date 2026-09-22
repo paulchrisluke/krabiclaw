@@ -55,7 +55,7 @@ export default defineHandler(async (event) => {
 
   try {
     const site = await queryFirst<SiteRow>(db, `
-      SELECT id, organization_id, status FROM sites
+      SELECT id, organization_id, status FROM organization
       WHERE id = ? AND status = 'active'
       LIMIT 1
     `, [organizationId])
@@ -75,10 +75,10 @@ export default defineHandler(async (event) => {
     }>(db, `
       SELECT bl.id, bl.slug, bl.title, bl.address, bl.phone, bl.website_url, bl.maps_url, bl.latitude, bl.longitude, bl.opening_hours, bl.rating, bl.review_count, bl.status, bl.last_synced_at, ma.id AS asset_id, ma.public_url AS media_public_url, ma.kind AS media_kind, ma.thumbnail_url AS media_thumbnail_url
       FROM business_locations bl
-      LEFT JOIN media_placements mp ON mp.site_id = bl.site_id AND mp.owner_type = 'business_location' AND mp.owner_id = bl.id AND mp.slot = 'hero' AND mp.sort_order = 0 AND mp.status = 'active'
+      LEFT JOIN media_placements mp ON mp.organization_id = bl.organization_id AND mp.owner_type = 'business_location' AND mp.owner_id = bl.id AND mp.slot = 'hero' AND mp.sort_order = 0 AND mp.status = 'active'
       LEFT JOIN media_assets ma ON mp.asset_id = ma.id AND ma.status = 'active'
-        AND ma.organization_id = bl.organization_id AND ma.site_id = bl.site_id
-      WHERE bl.organization_id = ? AND bl.site_id = ? AND bl.status = 'active'
+        AND ma.organization_id = bl.organization_id AND ma.organization_id = bl.organization_id
+      WHERE bl.organization_id = ? AND bl.organization_id = ? AND bl.status = 'active'
       ORDER BY bl.title ASC
     `, [site.organization_id, organizationId])
 

@@ -16,7 +16,7 @@ export default defineHandler(async (event) => {
     SELECT r.id, r.helpful_count
     FROM reviews r
     JOIN business_locations bl ON bl.id = r.location_id
-    WHERE r.id = ? AND r.site_id = ? AND bl.slug = ? AND r.status = 'approved'
+    WHERE r.id = ? AND r.organization_id = ? AND bl.slug = ? AND r.status = 'approved'
     LIMIT 1
   `, [reviewId, organizationId, slug])
   if (!review) return jsonResponse({ error: 'Review not found' }, { status: 404 })

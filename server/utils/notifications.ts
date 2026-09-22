@@ -64,7 +64,6 @@ interface NotificationEnv extends CloudflareEnv {
 
 interface SiteContext {
   organizationId: string
-  siteId: string
   siteName?: string | null
 }
 
@@ -193,7 +192,6 @@ async function buildOwnerInboxUrl(
   db: DbClient,
   opts: {
     organizationId: string
-    siteId: string
     locationId?: string | null
     tab: 'contact' | 'reservations' | 'bookings'
     submissionId: string
@@ -201,12 +199,11 @@ async function buildOwnerInboxUrl(
 ): Promise<string | null> {
   const submissionType = opts.tab === 'contact' ? 'contact' : opts.tab === 'reservations' ? 'reservation' : 'booking'
   try {
-    const thread = await getGuestRequest(db, opts.submissionId, opts.siteId, submissionType)
+    const thread = await getGuestRequest(db, opts.submissionId, opts.organizationId, submissionType)
     if (!thread) throw new Error('Submission not found')
     await publishGuestInboxThreadEvent(env, db, { threadId: thread.id, type: 'thread.created' })
     return await buildOwnerThreadInboxUrl(env, db, {
       organizationId: opts.organizationId,
-      siteId: opts.siteId,
       locationId: opts.locationId,
       threadId: thread.id,
     })
@@ -222,7 +219,7 @@ async function buildOwnerInboxUrl(
 async function buildOwnerReviewsUrl(
   env: NotificationEnv,
   db: DbClient,
-  opts: { organizationId: string; siteId: string; locationId?: string | null }
+  opts: { organizationId: string; locationId?: string | null }
 ): Promise<string | null> {
   const slugs = await resolveSiteLocationSlugs(env, db, opts)
   if (!slugs) return null
@@ -263,7 +260,6 @@ async function resolveOwnerRecipients(
   db: DbClient,
   opts: {
     organizationId: string
-    siteId: string
     locationId?: string | null
     category: NotificationCategory
     candidatePhones: OwnerPhoneRecipient[]
@@ -287,14 +283,12 @@ async function resolveOwnerRecipients(
       env,
       phone: target.phone,
       organizationId: opts.organizationId,
-      siteId: opts.siteId,
       locationId: opts.locationId ?? null,
       requireSiteWide: target.requireSiteWide,
     })
     if (!recipient) {
       console.error('whatsapp_delivery_blocked', {
         organizationId: opts.organizationId,
-        siteId: opts.siteId,
         locationId: opts.locationId ?? null,
         reason: 'recipient_access_pending',
       })
@@ -309,7 +303,7 @@ async function resolveOwnerRecipients(
 async function sendEmailNotification(
   env: NotificationEnv,
   db: DbClient,
-  opts: Omit<SiteContext, 'siteId'> & { siteId: string | null } & {
+  opts: Omit<SiteContext, 'organizationId'> & { organizationId: string | null } & {
     locationId?: string | null
     to: string
     replyTo?: string | null
@@ -369,7 +363,6 @@ async function sendEmailNotification(
   if (result.status === 'sent') {
     console.info(provider === 'log_only' ? 'email_delivery_log_only' : 'email_delivery_sent', {
       organizationId: opts.organizationId,
-      siteId: opts.siteId,
       template: opts.template,
       recipient: hashEmail(opts.to),
       title: opts.title,
@@ -379,7 +372,6 @@ async function sendEmailNotification(
   }
   console.error('email_delivery_failed', {
     organizationId: opts.organizationId,
-    siteId: opts.siteId,
     template: opts.template,
     status: result.status,
     error: result.error,
@@ -393,7 +385,6 @@ async function sendWhatsAppThreadNotification(
   db: DbClient,
   opts: {
     organizationId: string
-    siteId: string
     locationId?: string | null
     toPhone: string
     template: WhatsAppTemplate
@@ -470,7 +461,6 @@ async function recordGuestCancellation(
     submissionType: 'reservation' | 'booking'
     submissionId: string
     organizationId: string
-    siteId: string
     subject: string
     body: string
     wasConfirmed: boolean
@@ -491,7 +481,7 @@ async function recordGuestCancellation(
   return { guestThreadId: thread.id, sourceEntryId: entry.id }
 }
 
-async function getLocationNotificationPhone(db: DbClient, locationId: string, organizationId: string, siteId: string): Promise<string | null> {
+async function getLocationNotificationPhone(db: DbClient, locationId: string, organizationId: string): Promise<string | null> {
   const row = await queryFirst<{ notification_phone: string | null }>(db, `
     SELECT notification_phone FROM business_locations WHERE id = ? AND organization_id = ?  LIMIT 1
   `, [locationId, organizationId])
@@ -531,7 +521,6 @@ async function notifyOwner(
       scope: 'site',
       template: opts.template,
       organizationId: opts.organizationId,
-      siteId: opts.siteId,
       locationId: opts.locationId ?? null,
       sourceEntryId: threadContext?.sourceEntryId ?? null,
       idempotencyKey: threadContext ? `notification:${threadContext.sourceEntryId}:${opts.template}` : undefined,
@@ -539,8 +528,8 @@ async function notifyOwner(
       threadId: threadContext?.guestThreadId ?? null,
       deepLink: opts.payload.deep_link || null,
     }),
-    getOrgWhatsAppPhone(db, opts.organizationId, opts.siteId),
-    opts.locationId ? getLocationNotificationPhone(db, opts.locationId, opts.organizationId, opts.siteId) : null,
+    getOrgWhatsAppPhone(db, opts.organizationId, opts.organizationId),
+    opts.locationId ? getLocationNotificationPhone(db, opts.locationId, opts.organizationId, opts.organizationId) : null,
   ])
 
   const configuredTargets = [
@@ -564,7 +553,6 @@ async function notifyOwner(
   // Public contact emails are guest-facing data and must not double as notification routing.
   const recipients = await resolveOwnerRecipients(env, db, {
     organizationId: opts.organizationId,
-    siteId: opts.siteId,
     locationId: opts.locationId ?? null,
     category: opts.message.category,
     candidatePhones: [...targetByPhone.values()],
@@ -597,7 +585,6 @@ async function notifyOwner(
     await Promise.allSettled(recipients.phones.map(async target => {
       const sendOptions = {
         organizationId: opts.organizationId,
-        siteId: opts.siteId,
         locationId: opts.locationId ?? null,
         toPhone: target.phone,
         template: opts.whatsappTemplate!,
@@ -634,7 +621,6 @@ export async function notifyReservationCreated(
       ? opts.ownerInboxUrl
       : buildOwnerInboxUrl(env, db, {
           organizationId: opts.organizationId,
-          siteId: opts.siteId,
           locationId: opts.locationId,
           tab: 'reservations',
           submissionId: opts.reservationId,
@@ -656,7 +642,7 @@ export async function notifyReservationCreated(
     deep_link: inboxUrl ?? '',
   }
 
-  const hero = await resolveHero(() => locationHero(db, opts.siteId, opts.locationId))
+  const hero = await resolveHero(() => locationHero(db, opts.organizationId, opts.locationId))
   const ownerMessage = reservationCreatedMessage({
     guestName: opts.guestName, guestEmail: opts.email, guestPhone: opts.phone ?? null,
     date: prettyDate, time: prettyTime, partySize: opts.guests,
@@ -716,7 +702,6 @@ export async function notifyReservationCancelled(
   const platformDomain = getPlatformDomain(env)
   const inboxUrl = await buildOwnerInboxUrl(env, db, {
     organizationId: opts.organizationId,
-    siteId: opts.siteId,
     locationId: opts.locationId,
     tab: 'reservations',
     submissionId: opts.reservationId,
@@ -754,7 +739,6 @@ export async function notifyReservationCancelled(
     submissionType: 'reservation',
     submissionId: opts.reservationId,
     organizationId: opts.organizationId,
-    siteId: opts.siteId,
     subject: guestCancelTitle,
     body: guestEmail.text,
     wasConfirmed: confirmed,
@@ -803,7 +787,6 @@ export async function notifyContactSubmitted(
   const replyTo = await buildReplyToAddress(env, 'contact', opts.contactId)
   const inboxUrl = await buildOwnerInboxUrl(env, db, {
     organizationId: opts.organizationId,
-    siteId: opts.siteId,
     locationId: opts.locationId,
     tab: 'contact',
     submissionId: opts.contactId,
@@ -877,7 +860,6 @@ export async function notifyReviewReceived(
   const restaurant = siteName(opts)
   const reviewsUrl = await buildOwnerReviewsUrl(env, db, {
     organizationId: opts.organizationId,
-    siteId: opts.siteId,
     locationId: opts.locationId,
   })
 
@@ -978,7 +960,6 @@ export async function notifyBookingCreated(
       ? opts.ownerInboxUrl
       : buildOwnerInboxUrl(env, db, {
           organizationId: opts.organizationId,
-          siteId: opts.siteId,
           locationId: opts.locationId,
           tab: 'bookings',
           submissionId: opts.bookingId,
@@ -999,7 +980,7 @@ export async function notifyBookingCreated(
     deep_link: inboxUrl ?? '',
   }
 
-  const hero = await resolveHero(() => productHero(db, opts.siteId, opts.productId))
+  const hero = await resolveHero(() => productHero(db, opts.organizationId, opts.productId))
   const ownerMessage = bookingCreatedMessage({
     guestName: opts.guestName, guestEmail: opts.email, guestPhone: opts.guestPhone ?? null,
     date: prettyDate, time: prettyTime, partySize: String(opts.partySize),
@@ -1062,7 +1043,6 @@ export async function notifyBookingCancelled(
   const platformDomain = getPlatformDomain(env)
   const inboxUrl = await buildOwnerInboxUrl(env, db, {
     organizationId: opts.organizationId,
-    siteId: opts.siteId,
     locationId: opts.locationId,
     tab: 'bookings',
     submissionId: opts.bookingId,
@@ -1099,7 +1079,6 @@ export async function notifyBookingCancelled(
     submissionType: 'booking',
     submissionId: opts.bookingId,
     organizationId: opts.organizationId,
-    siteId: opts.siteId,
     subject: guestCancelTitle,
     body: guestEmail.text,
     wasConfirmed: confirmed,
@@ -1235,7 +1214,6 @@ async function notifyGuestThreadReplyInner(
   const threadContext = { guestThreadId: opts.threadId, sourceEntryId: opts.sourceEntryId }
   const replyUrl = await buildOwnerThreadInboxUrl(env, db, {
     organizationId: opts.organizationId,
-    siteId: opts.siteId,
     locationId: opts.locationId,
     threadId: opts.threadId,
   })
@@ -1258,7 +1236,6 @@ async function notifyGuestThreadReplyInner(
     scope: 'site',
     template,
     organizationId: opts.organizationId,
-    siteId: opts.siteId,
     locationId: opts.locationId ?? null,
     sourceEntryId: opts.sourceEntryId,
     title,
@@ -1266,8 +1243,8 @@ async function notifyGuestThreadReplyInner(
     deepLink: payload.deep_link || null,
   })
 
-  const sitePhone = await getOrgWhatsAppPhone(db, opts.organizationId, opts.siteId)
-  const locationPhone = opts.locationId ? await getLocationNotificationPhone(db, opts.locationId, opts.organizationId, opts.siteId) : null
+  const sitePhone = await getOrgWhatsAppPhone(db, opts.organizationId, opts.organizationId)
+  const locationPhone = opts.locationId ? await getLocationNotificationPhone(db, opts.locationId, opts.organizationId, opts.organizationId) : null
   const candidatePhones: OwnerPhoneRecipient[] = [
     locationPhone ? { phone: locationPhone, requireSiteWide: false } : null,
     sitePhone && sitePhone !== locationPhone ? { phone: sitePhone, requireSiteWide: true } : null,
@@ -1284,7 +1261,6 @@ async function notifyGuestThreadReplyInner(
 
   const recipients = await resolveOwnerRecipients(env, db, {
     organizationId: opts.organizationId,
-    siteId: opts.siteId,
     locationId: opts.locationId ?? null,
     category: ownerMessage.category,
     candidatePhones,
@@ -1293,7 +1269,6 @@ async function notifyGuestThreadReplyInner(
   const emailResults = recipients.email
     ? await Promise.allSettled([sendEmailNotification(env, db, {
       organizationId: opts.organizationId,
-      siteId: opts.siteId,
       siteName: opts.siteName ?? null,
       locationId: opts.locationId ?? null,
       to: recipients.email.to,
@@ -1320,7 +1295,6 @@ async function notifyGuestThreadReplyInner(
       if (!delivery) throw new Error('Guest reply delivery context is missing')
       await sendWhatsAppThreadNotification(env, db, {
         organizationId: opts.organizationId,
-        siteId: opts.siteId,
         locationId: opts.locationId ?? null,
         toPhone,
         template: 'guest_thread_reply_whatsapp',
@@ -1366,7 +1340,6 @@ export async function notifyOrganizationInvited(
 
   await sendEmailNotification(env, db, {
     organizationId: opts.organizationId,
-    siteId: null,
     to: opts.email,
     template: 'organization_invited',
     title: `You're invited to join ${opts.organizationName}`,

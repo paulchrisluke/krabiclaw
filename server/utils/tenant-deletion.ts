@@ -158,7 +158,7 @@ export async function cancelAccountDeletion(env: CloudflareEnv, userId: string):
  */
 async function ownedImageIds(
   db: DbClient,
-  scope: { column: 'organization_id' | 'site_id'; value: string },
+  scope: { column: 'organization_id' | 'organization_id'; value: string },
 ): Promise<string[]> {
   const owned = await queryAll<{ cloudflare_image_id: string }>(db, `
     SELECT DISTINCT cloudflare_image_id FROM media_assets
@@ -270,7 +270,7 @@ export async function deleteAbandonedDraftTenant(
   if (membership?.role !== 'owner') return { refused: 'not_owner' }
 
   const site = await queryFirst<{ id: string; onboarding_status: string }>(db, `
-    SELECT id, onboarding_status FROM sites WHERE organization_id = ? AND subdomain = ? LIMIT 1
+    SELECT id, onboarding_status FROM organization WHERE organization_id = ? AND subdomain = ? LIMIT 1
   `, [organizationId, subdomain])
   // Only an activated site is live. A site whose onboarding failed is not, and
   // refusing it as live told the owner their site was published while its tile
@@ -278,17 +278,17 @@ export async function deleteAbandonedDraftTenant(
   if (site && site.onboarding_status === 'active') return { refused: 'site_is_live' }
 
   const others = await queryFirst<{ n: number }>(db, `
-    SELECT count(*) AS n FROM sites WHERE organization_id = ? AND id IS NOT ?
+    SELECT count(*) AS n FROM organization WHERE organization_id = ? AND id IS NOT ?
   `, [organizationId, site ? site.id : null])
   const members = await listOrganizationMembers(env, organizationId)
 
   if ((others?.n ?? 0) === 0 && members.length === 1) {
     await deleteOrganizationNow(env, organizationId)
     const survivor = await queryFirst<{ id: string }>(db, `
-      SELECT id FROM sites WHERE organization_id = ? LIMIT 1
+      SELECT id FROM organization WHERE organization_id = ? LIMIT 1
     `, [organizationId])
     if (survivor) {
-      console.error('tenant_deletion_draft_cascade_incomplete', { organizationId, siteId: survivor.id })
+      console.error('tenant_deletion_draft_cascade_incomplete', { organizationId, })
       return { refused: 'delete_incomplete' }
     }
     return { removed: 'organization' }
@@ -297,10 +297,10 @@ export async function deleteAbandonedDraftTenant(
   // The organization stands: it has another site or another member. Only this
   // site's own resources go.
   if (!site) return { removed: 'nothing' }
-  for (const imageId of await ownedImageIds(db, { column: 'site_id', value: site.id })) {
+  for (const imageId of await ownedImageIds(db, { column: 'organization_id', value: site.id })) {
     await deleteImage(env, imageId).catch((error: unknown) => {
       console.error('tenant_deletion_image_release_failed', {
-        siteId: site.id, imageId, error: error instanceof Error ? error.message : String(error),
+        organizationId: site.id, imageId, error: error instanceof Error ? error.message : String(error),
       })
     })
   }
@@ -308,16 +308,16 @@ export async function deleteAbandonedDraftTenant(
   // As above: the site's own guest records are released before the site, so
   // the deletion does not depend on which cascade SQLite resolves first.
   await executeBatch(db, [
-    { query: 'DELETE FROM bookings WHERE site_id = ?', params: [site.id] },
-    { query: 'DELETE FROM reservations WHERE site_id = ?', params: [site.id] },
+    { query: 'DELETE FROM bookings WHERE organization_id = ?', params: [site.id] },
+    { query: 'DELETE FROM reservations WHERE organization_id = ?', params: [site.id] },
   ], { operation: 'Release site guest records' })
-  await execute(db, 'DELETE FROM sites WHERE id = ?', [site.id])
+  await execute(db, 'DELETE FROM organization WHERE id = ?', [site.id])
   // Read the row back rather than counting changes: a cascade makes
   // meta.changes the number of rows the whole tree lost (15 for a seeded
   // onboarding site), so it says nothing about this one row.
-  const survivor = await queryFirst<{ id: string }>(db, 'SELECT id FROM sites WHERE id = ? LIMIT 1', [site.id])
+  const survivor = await queryFirst<{ id: string }>(db, 'SELECT id FROM organization WHERE id = ? LIMIT 1', [site.id])
   if (survivor) {
-    console.error('tenant_deletion_draft_site_not_removed', { organizationId, siteId: site.id })
+    console.error('tenant_deletion_draft_site_not_removed', { organizationId, })
     return { refused: 'delete_incomplete' }
   }
   return { removed: 'site' }

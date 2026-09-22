@@ -58,14 +58,14 @@ export function getCloudflareGeo(event: H3Event): CloudflareGeo {
   return country && country !== 'XX' ? { country } : {}
 }
 
-export async function resolveLocationIdFromPath(db: AppDb, siteId: string, pagePath: string): Promise<string | null> {
+export async function resolveLocationIdFromPath(db: AppDb, organizationId: string, pagePath: string): Promise<string | null> {
   const slug = pagePath.match(/^\/locations\/([^/]+)/)?.[1]
   if (!slug) return null
-  return (await queryFirst<{ id: string }>(db, 'SELECT id FROM business_locations WHERE site_id = ? AND slug = ? LIMIT 1', [siteId, slug]))?.id ?? null
+  return (await queryFirst<{ id: string }>(db, 'SELECT id FROM business_locations WHERE organization_id = ? AND slug = ? LIMIT 1', [organizationId, slug]))?.id ?? null
 }
 
-export async function resolvePageviewTenantPageIdentity(db: AppDb, siteId: string, pagePath: string, locale?: string | null) {
-  return await resolveCanonicalTenantPageIdentity(db, siteId, pagePath, locale)
+export async function resolvePageviewTenantPageIdentity(db: AppDb, organizationId: string, pagePath: string, locale?: string | null) {
+  return await resolveCanonicalTenantPageIdentity(db, organizationId, pagePath, locale)
 }
 
 export function isKnownTenantPublicPath(
@@ -82,15 +82,14 @@ export function isKnownTenantPublicPath(
   )
 }
 
-export async function getSiteInternalHosts(db: AppDb, siteId: string, currentHost: string): Promise<string[]> {
-  const rows = await queryAll<{ domain: string }>(db, `SELECT domain FROM site_domains WHERE site_id = ? AND status = 'active'`, [siteId])
+export async function getSiteInternalHosts(db: AppDb, organizationId: string, currentHost: string): Promise<string[]> {
+  const rows = await queryAll<{ domain: string }>(db, `SELECT domain FROM organization_domains WHERE organization_id = ? AND status = 'active'`, [organizationId])
   return [currentHost.toLowerCase(), ...rows.map(row => String(row.domain || '').toLowerCase())]
 }
 
 export interface TenantPageviewInput {
   eventId: string
   organizationId: string
-  siteId: string
   pagePath: string
   locale: string | null
   referrerHost: string | null
@@ -119,10 +118,10 @@ export async function recordTenantPageview(db: AppDb, input: TenantPageviewInput
   await executeBatch(db, [
     {
       query: `INSERT OR IGNORE INTO analytics_events (
-        id, kind, site_id, location_id, page_path, session_id, visitor_id, payload_json, created_at
+        id, kind, organization_id, location_id, page_path, session_id, visitor_id, payload_json, created_at
       ) VALUES (?, 'pageview', ?, ?, ?, ?, ?, ?, ?)`,
       params: [
-        input.eventId, input.siteId, input.locationId, input.pagePath, input.sessionId, input.visitorId,
+        input.eventId, input.organizationId, input.locationId, input.pagePath, input.sessionId, input.visitorId,
         JSON.stringify({ page_id: input.pageId, page_type: input.pageType, recipe: input.recipe,
           locale: input.locale, revision_id: null, referrer: input.referrerHost, user_agent: input.userAgent,
           ip_hash: input.ipHash, country: input.country, region: input.region, city: input.city }), input.now,
@@ -130,17 +129,17 @@ export async function recordTenantPageview(db: AppDb, input: TenantPageviewInput
     },
     {
       query: `INSERT INTO analytics_summaries (
-        id, kind, organization_id, site_id, date, key, payload_json, created_at, updated_at
+        id, kind, organization_id, organization_id, date, key, payload_json, created_at, updated_at
       ) SELECT ?, 'session', ?, ?, '', ?, ?, ?, ?
         WHERE changes() = 1
-      ON CONFLICT(site_id, kind, date, key) DO UPDATE SET updated_at = excluded.updated_at,
+      ON CONFLICT(organization_id, kind, date, key) DO UPDATE SET updated_at = excluded.updated_at,
         payload_json = json_set(analytics_summaries.payload_json,
           '$.last_seen_at', json_extract(excluded.payload_json, '$.last_seen_at'),
           '$.attribution', CASE WHEN json_extract(excluded.payload_json, '$.last_touch_at') IS NULL
             THEN json_extract(analytics_summaries.payload_json, '$.attribution') ELSE json_extract(excluded.payload_json, '$.attribution') END,
           '$.last_touch_at', COALESCE(json_extract(excluded.payload_json, '$.last_touch_at'), json_extract(analytics_summaries.payload_json, '$.last_touch_at')))`,
       params: [
-        crypto.randomUUID(), input.organizationId, input.siteId, input.sessionId,
+        crypto.randomUUID(), input.organizationId, input.organizationId, input.sessionId,
         JSON.stringify({ visitor_id: input.visitorId, started_at: input.now, last_seen_at: input.now,
           landing_path: input.pagePath, duration_seconds: 0, attribution: initial, last_touch_at: touch ? input.now : null }),
         input.now, input.now,
@@ -150,39 +149,39 @@ export async function recordTenantPageview(db: AppDb, input: TenantPageviewInput
 }
 
 export async function updateTenantPageviewDuration(db: AppDb, input: {
-  eventId: string; siteId: string; sessionId: string; durationSeconds: number; now: string
+  eventId: string; organizationId: string; sessionId: string; durationSeconds: number; now: string
 }): Promise<void> {
   await executeBatch(db, [
     {
-      query: `UPDATE analytics_events SET duration_seconds = ? WHERE kind = 'pageview' AND id = ? AND site_id = ? AND session_id = ?`,
-      params: [input.durationSeconds, input.eventId, input.siteId, input.sessionId],
+      query: `UPDATE analytics_events SET duration_seconds = ? WHERE kind = 'pageview' AND id = ? AND organization_id = ? AND session_id = ?`,
+      params: [input.durationSeconds, input.eventId, input.organizationId, input.sessionId],
     },
     {
       query: `UPDATE analytics_summaries SET payload_json = json_set(payload_json,
-        '$.duration_seconds', COALESCE((SELECT SUM(duration_seconds) FROM analytics_events WHERE kind = 'pageview' AND site_id = ? AND session_id = ?), 0),
-        '$.last_seen_at', ?), updated_at = ? WHERE kind = 'session' AND site_id = ? AND key = ? AND changes() = 1`,
-      params: [input.siteId, input.sessionId, input.now, input.now, input.siteId, input.sessionId],
+        '$.duration_seconds', COALESCE((SELECT SUM(duration_seconds) FROM analytics_events WHERE kind = 'pageview' AND organization_id = ? AND session_id = ?), 0),
+        '$.last_seen_at', ?), updated_at = ? WHERE kind = 'session' AND organization_id = ? AND key = ? AND changes() = 1`,
+      params: [input.organizationId, input.sessionId, input.now, input.now, input.organizationId, input.sessionId],
     },
   ], { operation: 'update exact tenant pageview duration' })
 }
 
 export async function recordPlatformPageview(db: AppDb, input: {
-  eventId: string; siteId: string; pagePath: string; referrerHost: string | null; userAgent: string; ipHash: string;
+  eventId: string; organizationId: string; pagePath: string; referrerHost: string | null; userAgent: string; ipHash: string;
   sessionId: string; visitorId: string; country: string | null; region: string | null; city: string | null; now: string
 }): Promise<void> {
   await execute(db, `INSERT OR IGNORE INTO analytics_events (
-    id, kind, site_id, page_path, session_id, visitor_id, payload_json, created_at
+    id, kind, organization_id, page_path, session_id, visitor_id, payload_json, created_at
   ) VALUES (?, 'pageview', ?, ?, ?, ?, ?, ?)`, [
-    input.eventId, input.siteId, input.pagePath, input.sessionId, input.visitorId,
+    input.eventId, input.organizationId, input.pagePath, input.sessionId, input.visitorId,
     JSON.stringify({ referrer: input.referrerHost, user_agent: input.userAgent, ip_hash: input.ipHash,
       country: input.country, region: input.region, city: input.city }), input.now,
   ])
 }
 
 export async function updatePlatformPageviewDuration(db: AppDb, input: {
-  eventId: string; siteId: string; sessionId: string; durationSeconds: number
+  eventId: string; organizationId: string; sessionId: string; durationSeconds: number
 }): Promise<void> {
-  await execute(db, `UPDATE analytics_events SET duration_seconds = ? WHERE kind = 'pageview' AND site_id = ? AND id = ? AND session_id = ?`, [
-    input.durationSeconds, input.siteId, input.eventId, input.sessionId,
+  await execute(db, `UPDATE analytics_events SET duration_seconds = ? WHERE kind = 'pageview' AND organization_id = ? AND id = ? AND session_id = ?`, [
+    input.durationSeconds, input.organizationId, input.eventId, input.sessionId,
   ])
 }

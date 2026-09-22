@@ -98,7 +98,7 @@ async function resolveTenantRedirectForRequest(event: H3Event) {
   const firstSegment = path.split('/')[1] || ''
   const localized = firstSegment && firstSegment !== 'en'
     ? await queryFirst<{ locale: string } | null>(db, `
-        SELECT locale FROM site_locales
+        SELECT locale FROM organization_locales
          WHERE organization_id = ? AND locale = ? AND status = 'published'
          LIMIT 1
       `, [organizationId, firstSegment])
@@ -119,7 +119,7 @@ async function resolveTenantRedirectForRequest(event: H3Event) {
     behavior: string
   } | null>(db, `
     SELECT to_path AS toPath, status_code AS statusCode, behavior
-      FROM site_redirects
+      FROM organization_redirects
      WHERE organization_id = ? AND locale = ? AND from_path = ?
      LIMIT 1
   `, [organizationId, locale, path])
@@ -212,7 +212,7 @@ export default defineHandler(async (event) => {
       if (db) {
         try {
           const redirected = await queryFirst<{ to_path: string } | null>(db, `
-            SELECT to_path FROM site_redirects
+            SELECT to_path FROM organization_redirects
              WHERE organization_id = ? AND locale = 'en' AND from_path = ? AND behavior = 'redirect' LIMIT 1
           `, [platformSiteId, normalizedPathname])
           if (redirected) return redirect(`${redirected.to_path}${url.search}${url.hash}`, 301)

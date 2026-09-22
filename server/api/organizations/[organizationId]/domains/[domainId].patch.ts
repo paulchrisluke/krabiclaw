@@ -10,7 +10,6 @@ interface DomainPatchBody {
 
 interface SiteDomainRow {
   id: string
-  site_id: string
   organization_id: string
   domain: string
   type: 'custom' | 'subdomain'
@@ -56,8 +55,8 @@ export default defineHandler(async (event) => {
 
       const existing = await queryFirst<SiteDomainRow>(db, `
         SELECT *
-        FROM site_domains
-        WHERE id = ? AND site_id = ? AND type = 'custom'
+        FROM organization_domains
+        WHERE id = ? AND organization_id = ? AND type = 'custom'
         LIMIT 1
       `, [domainId, organizationId])
       if (!existing) {
@@ -65,21 +64,21 @@ export default defineHandler(async (event) => {
       }
 
       const priorCanonical = await queryFirst<SiteDomainRow>(db, `
-        SELECT * FROM site_domains WHERE site_id = ? AND role = 'canonical' LIMIT 1
+        SELECT * FROM organization_domains WHERE organization_id = ? AND role = 'canonical' LIMIT 1
       `, [organizationId])
 
       try {
         await execute(db, `
-          UPDATE site_domains
+          UPDATE organization_domains
           SET status = 'disabled', role = 'secondary', updated_at = ?, next_check_at = NULL, reconciliation_token = NULL, reconciliation_expires_at = NULL
-          WHERE id = ? AND site_id = ? AND type = 'custom'
+          WHERE id = ? AND organization_id = ? AND type = 'custom'
         `, [now, domainId, organizationId])
 
         if (existing.role === 'canonical') {
           promotedDomain = await queryFirst<SiteDomainRow>(db, `
             SELECT *
-            FROM site_domains
-            WHERE site_id = ?
+            FROM organization_domains
+            WHERE organization_id = ?
               AND type = 'custom'
               AND status = 'active'
               AND id != ?
@@ -89,7 +88,7 @@ export default defineHandler(async (event) => {
 
           if (promotedDomain) {
             await execute(db, `
-              UPDATE site_domains
+              UPDATE organization_domains
               SET role = 'canonical', updated_at = ?
               WHERE id = ?
             `, [now, promotedDomain.id])
@@ -98,7 +97,7 @@ export default defineHandler(async (event) => {
       } catch (error) {
         if (priorCanonical) {
           await execute(db, `
-            UPDATE site_domains
+            UPDATE organization_domains
             SET role = 'canonical', updated_at = ?
             WHERE id = ?
           `, [now, priorCanonical.id])
@@ -107,8 +106,8 @@ export default defineHandler(async (event) => {
       }
 
       const domain = await queryFirst<SiteDomainRow>(db, `
-        SELECT * FROM site_domains
-        WHERE id = ? AND site_id = ? AND type = 'custom'
+        SELECT * FROM organization_domains
+        WHERE id = ? AND organization_id = ? AND type = 'custom'
         LIMIT 1
       `, [domainId, organizationId])
 

@@ -18,9 +18,9 @@ export default defineHandler(async (event) => {
     const { db } = await requireSiteAccess(event, organizationId, 'context')
     const site = await queryFirst<{ organization_id: string }>(db, `
       SELECT id, organization_id, theme_id, vertical, brand_name, slug, subdomain,
-             (SELECT domain FROM site_domains WHERE site_id = sites.id AND role = 'canonical' AND status = 'active' AND type = 'custom') AS custom_domain, status, created_at, updated_at,
+             (SELECT domain FROM organization_domains WHERE organization_id = sites.id AND role = 'canonical' AND status = 'active' AND type = 'custom') AS custom_domain, status, created_at, updated_at,
              onboarding_status
-      FROM sites
+      FROM organization
       WHERE id = ?
       LIMIT 1
     `, [organizationId])

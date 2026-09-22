@@ -71,7 +71,7 @@ export default defineHandler(async (event) => {
     return jsonResponse({ error: 'Please choose a valid party size.' }, { status: 400 })
 
   const site = await queryFirst<{ id: string; organization_id: string; brand_name?: string | null; public_url?: string | null }>(
-    db, `SELECT id, organization_id, brand_name, (SELECT 'https://' || domain FROM site_domains WHERE site_id = sites.id AND role = 'canonical' AND status = 'active') AS public_url FROM sites WHERE id = ? AND status = ? LIMIT 1`, [organizationId, 'active'], )
+    db, `SELECT id, organization_id, brand_name, (SELECT 'https://' || domain FROM organization_domains WHERE organization_id = sites.id AND role = 'canonical' AND status = 'active') AS public_url FROM organization WHERE id = ? AND status = ? LIMIT 1`, [organizationId, 'active'], )
   if (!site) return jsonResponse({ error: 'Site not found' }, { status: 404 })
   const siteBaseUrl = site.public_url?.trim().replace(/\/$/, '')
   if (!siteBaseUrl) return jsonResponse({ error: 'Site public URL is not configured' }, { status: 500 })
@@ -82,7 +82,7 @@ export default defineHandler(async (event) => {
   const resolvedLocationId = locationId
 
   const location = await queryFirst<{ title: string | null; opening_hours: string | null; max_capacity: number | null }>(
-    db, 'SELECT title, opening_hours, max_capacity FROM business_locations WHERE id = ? AND site_id = ? LIMIT 1', [resolvedLocationId, organizationId], )
+    db, 'SELECT title, opening_hours, max_capacity FROM business_locations WHERE id = ? AND organization_id = ? LIMIT 1', [resolvedLocationId, organizationId], )
   if (!location) return jsonResponse({ error: 'location_id must reference a location on this site' }, { status: 400 })
 
   const reservationTimezone = await resolveLocationTimezone(db, site.organization_id, organizationId, resolvedLocationId)
@@ -145,7 +145,7 @@ export default defineHandler(async (event) => {
       endsAt: new Date(Date.parse(slot.starts_at) + durationMinutes * 60_000).toISOString(),
       partySize,
       thread: requestInsertQueries({
-        id, kind: 'reservation', organization_id: site.organization_id, site_id: organizationId,
+        id, kind: 'reservation', organization_id: site.organization_id,
         location_id: resolvedLocationId, customer_id: customer.id, review_id: null,
         conversation_state: 'needs_attention', resolved_at: null, payload, created_at: now, updated_at: now,
       }, { query: 'SELECT 1 FROM reservations WHERE id = ?', params: [reservationId] }),

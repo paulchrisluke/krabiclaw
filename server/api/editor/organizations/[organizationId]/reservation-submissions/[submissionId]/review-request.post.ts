@@ -13,7 +13,7 @@ export default defineHandler(async (event) => {
   const submission = await queryFirst<{ id: string; location_id: string }>(db, `
     SELECT rs.id, rs.location_id
     FROM requests rs
-    WHERE rs.kind = 'reservation' AND rs.id = ? AND rs.site_id = ?
+    WHERE rs.kind = 'reservation' AND rs.id = ? AND rs.organization_id = ?
     LIMIT 1
   `, [submissionId, organizationId])
   if (!submission) return jsonResponse({ error: 'Reservation not found or access denied' }, { status: 404 })

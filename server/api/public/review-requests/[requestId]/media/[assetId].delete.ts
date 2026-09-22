@@ -27,15 +27,15 @@ export default defineHandler(async (event) => {
     SELECT mp.id, ma.status AS asset_status
       FROM media_placements mp JOIN media_assets ma ON ma.id = mp.asset_id
      WHERE mp.owner_type = 'review_request' AND mp.owner_id = ? AND mp.asset_id = ?
-       AND mp.site_id = ? LIMIT 1
-  `, [requestId, assetId, result.context.site_id])
+       AND mp.organization_id = ? LIMIT 1
+  `, [requestId, assetId, result.context.organization_id])
   if (!placement) return jsonResponse({ error: 'Review media not found' }, { status: 404 })
   const claim = await execute(db, 'DELETE FROM media_placements WHERE id = ? AND owner_type = ? AND owner_id = ? AND asset_id = ?', [placement.id, 'review_request', requestId, assetId])
   if (Number(claim?.meta?.changes ?? 0) !== 1) {
     return jsonResponse({ deleted: true, asset_id: assetId })
   }
   if (placement.asset_status !== 'deleted') {
-    await deleteMediaAsset(db, env, assetId, result.context.site_id, userId)
+    await deleteMediaAsset(db, env, assetId, result.context.organization_id, userId)
   }
   return jsonResponse({ deleted: true, asset_id: assetId })
 })

@@ -164,13 +164,13 @@ function normalizeDetail(place: RawPlace): PlaceDetails {
  * times (2026-09-13) because earlier syncs kept everything ever imported.
  * There is no fuller inventory to preserve: this response is the inventory.
  */
-export function staleGoogleReviewDeletes(scope: { organizationId: string; siteId: string; locationId: string }, reviews: PlaceReview[]) {
+export function staleGoogleReviewDeletes(scope: { organizationId: string; locationId: string }, reviews: PlaceReview[]) {
   const stale = `
       SELECT id FROM reviews
-      WHERE organization_id = ? AND site_id = ? AND location_id = ?
+      WHERE organization_id = ? AND organization_id = ? AND location_id = ?
         AND source = 'google_places'
         AND (google_review_id IS NULL OR google_review_id NOT IN (SELECT value FROM json_each(?)))`
-  const params = [scope.organizationId, scope.siteId, scope.locationId, JSON.stringify(reviews.map(review => review.google_review_id))]
+  const params = [scope.organizationId, scope.organizationId, scope.locationId, JSON.stringify(reviews.map(review => review.google_review_id))]
   // A review's media placements (author portrait) have no foreign key to the
   // review, so they go first, by the same predicate.
   return [
@@ -179,19 +179,19 @@ export function staleGoogleReviewDeletes(scope: { organizationId: string; siteId
   ]
 }
 
-export function googleReviewUpserts(scope: { organizationId: string; siteId: string; locationId: string }, reviews: PlaceReview[], now: string) {
-  const { organizationId, siteId, locationId } = scope
+export function googleReviewUpserts(scope: { organizationId: string; locationId: string }, reviews: PlaceReview[], now: string) {
+  const { organizationId, organizationId, locationId } = scope
   return reviews.map(review => {
     const reviewId = `gplaces-${locationId}-${review.google_review_id.replace(/\//g, '-')}`
     return {
-      query: `INSERT INTO reviews (id, organization_id, site_id, location_id, google_review_id, author_name, rating, content,
+      query: `INSERT INTO reviews (id, organization_id, organization_id, location_id, google_review_id, author_name, rating, content,
         original_review_date, original_reference, google_review_metadata, status, source, created_at, updated_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'approved', 'google_places', ?, ?)
-        ON CONFLICT(organization_id, site_id, location_id, google_review_id) DO UPDATE SET
+        ON CONFLICT(organization_id, organization_id, location_id, google_review_id) DO UPDATE SET
           author_name = excluded.author_name, rating = excluded.rating, content = excluded.content,
           original_review_date = excluded.original_review_date, original_reference = excluded.original_reference,
           google_review_metadata = excluded.google_review_metadata, updated_at = excluded.updated_at`,
-      params: [reviewId, organizationId, siteId, locationId, review.google_review_id, review.author_name, review.rating, review.content,
+      params: [reviewId, organizationId, organizationId, locationId, review.google_review_id, review.author_name, review.rating, review.content,
         review.original_review_date, review.original_reference, JSON.stringify(review.google_review_metadata), now, now],
     }
   })
@@ -201,7 +201,6 @@ export async function syncPlaceToLocation(
   db: D1Database,
   apiKey: string,
   organizationId: string,
-  siteId: string,
   locationId: string,
   placeId: string
 ): Promise<{ place: PlaceDetails; reviewsUpserted: number }> {
@@ -223,7 +222,7 @@ export async function syncPlaceToLocation(
       google_place_id = COALESCE(?, google_place_id),
       last_synced_at = ?,
       updated_at = ?
-    WHERE id = ? AND organization_id = ? AND site_id = ?
+    WHERE id = ? AND organization_id = ? AND organization_id = ?
   `, params: [
     place.phone,
     place.websiteUrl,
@@ -240,9 +239,9 @@ export async function syncPlaceToLocation(
     now,
     locationId,
     organizationId,
-    siteId
-  ] }, ...staleGoogleReviewDeletes({ organizationId, siteId, locationId }, place.reviews),
-  ...googleReviewUpserts({ organizationId, siteId, locationId }, place.reviews, now)])
+    organizationId
+  ] }, ...staleGoogleReviewDeletes({ organizationId, locationId }, place.reviews),
+  ...googleReviewUpserts({ organizationId, locationId }, place.reviews, now)])
   const reviewsUpserted = results.slice(results.length - place.reviews.length).reduce((count, result) => count + Number(result.meta?.changes ?? 0), 0)
 
   return { place, reviewsUpserted }

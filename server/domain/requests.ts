@@ -36,7 +36,7 @@ const threadPayload = z.object({
 })
 
 const threadScope = z.object({
-  id: z.string(), organization_id: z.string(), site_id: z.string(), location_id: z.string().nullable(),
+  id: z.string(), organization_id: z.string(),  location_id: z.string().nullable(),
   customer_id: z.string().nullable(), review_id: z.string().nullable(),
   conversation_state: z.enum(['needs_attention', 'waiting_on_guest', 'resolved']), resolved_at: z.string().nullable(),
   created_at: z.string(), updated_at: z.string(),
@@ -76,8 +76,8 @@ export function parseGuestRequest(row: Record<string, unknown>): GuestRequest {
   return guestRequestSchema.parse({ ...row, payload: JSON.parse(row.payload_json) })
 }
 
-export async function getGuestRequest(db: DbClient, id: string, siteId?: string, kind?: GuestRequestKind): Promise<GuestRequest | null> {
-  const row = await queryFirst<Record<string, unknown>>(db, `SELECT * FROM requests WHERE id = ? AND kind IN ('contact', 'reservation', 'booking')${siteId ? ' AND site_id = ?' : ''}${kind ? ' AND kind = ?' : ''}`, [id, ...(siteId ? [siteId] : []), ...(kind ? [kind] : [])])
+export async function getGuestRequest(db: DbClient, id: string, organizationId?: string, kind?: GuestRequestKind): Promise<GuestRequest | null> {
+  const row = await queryFirst<Record<string, unknown>>(db, `SELECT * FROM requests WHERE id = ? AND kind IN ('contact', 'reservation', 'booking')${organizationId ? ' AND organization_id = ?' : ''}${kind ? ' AND kind = ?' : ''}`, [id, ...(organizationId ? [organizationId] : []), ...(kind ? [kind] : [])])
   return row ? parseGuestRequest(row) : null
 }
 
@@ -115,20 +115,20 @@ export async function getThreadOperationalRecord(db: DbClient, requestId: string
  * Carrying the claim's existence into this insert is what ties them together.
  */
 export function requestInsertQueries(request: GuestRequest, claimedBy?: BatchQuery): BatchQuery[] {
-  const values = [request.id, request.kind, request.organization_id, request.site_id, request.location_id, request.customer_id, request.review_id,
+  const values = [request.id, request.kind, request.organization_id, request.organization_id, request.location_id, request.customer_id, request.review_id,
     request.conversation_state, request.resolved_at, JSON.stringify(request.payload), request.created_at, request.updated_at]
   return [{
     query: claimedBy
-      ? `INSERT INTO requests (id, kind, organization_id, site_id, location_id, customer_id, review_id, conversation_state, resolved_at, payload_json, created_at, updated_at)
+      ? `INSERT INTO requests (id, kind, organization_id, organization_id, location_id, customer_id, review_id, conversation_state, resolved_at, payload_json, created_at, updated_at)
       SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? WHERE EXISTS (${claimedBy.query})`
-      : `INSERT INTO requests (id, kind, organization_id, site_id, location_id, customer_id, review_id, conversation_state, resolved_at, payload_json, created_at, updated_at)
+      : `INSERT INTO requests (id, kind, organization_id, organization_id, location_id, customer_id, review_id, conversation_state, resolved_at, payload_json, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     params: claimedBy ? [...values, ...(claimedBy.params ?? [])] : values,
   }, {
     query: `INSERT INTO activity_entries (id, request_id, kind, scope_kind, actor_kind, channel, payload_json, dedupe_key, sequence, occurred_at, created_at)
       SELECT ?, id, 'submission', 'request', 'guest', 'web', json_object('kind', kind), ?, 1, created_at, created_at FROM requests WHERE id = ? AND changes() = 1`,
     params: [crypto.randomUUID(), `request:${request.id}:submission`, request.id],
-  }, publicResourceCacheInvalidationQuery(request.site_id, 'guest-thread-create')]
+  }, publicResourceCacheInvalidationQuery(request.organization_id, 'guest-thread-create')]
 }
 
 interface GuestThreadInput { name: string; email: string; phone?: string | null; notes?: string | null; ipHash?: string | null; partySizeIsMinimum?: boolean }
@@ -168,7 +168,7 @@ export async function requestSummary(db: DbClient, request: GuestRequest) {
   const labels = await queryFirst<{ location_title: string | null }>(db, 'SELECT title AS location_title FROM business_locations WHERE id = ?', [request.location_id])
   return {
     guestName: request.payload.guest.name, guestEmail: request.payload.guest.email, guestPhone: request.payload.guest.phone,
-    organizationId: request.organization_id, siteId: request.site_id, locationId: request.location_id,
+    organizationId: request.organization_id, locationId: request.location_id,
     locationTitle: labels?.location_title ?? null, productTitle: record?.product_name ?? null,
     contextLabel: requestPreview(request, record), createdAt: request.created_at,
     operationalStatus: record?.status ?? null,
@@ -183,9 +183,9 @@ export async function requestSummary(db: DbClient, request: GuestRequest) {
  * record is what releases the seats — the thread holds none.
  */
 export async function cancelBookingRequest(db: DbClient, input: {
-  id: string; siteId: string; kind: BookingRequest['kind']; tokenHash: string; now: string
+  id: string; organizationId: string; kind: BookingRequest['kind']; tokenHash: string; now: string
 }): Promise<{ request: BookingRequest; record: ThreadOperationalRecord; wasConfirmed: boolean } | null> {
-  const current = await getGuestRequest(db, input.id, input.siteId, input.kind)
+  const current = await getGuestRequest(db, input.id, input.organizationId, input.kind)
   if (!current || current.kind === 'contact') return null
   const record = await getThreadOperationalRecord(db, current.id)
   if (record?.status !== 'confirmed' || isBookingComplete(record, input.now)) return null
@@ -200,19 +200,19 @@ export async function cancelBookingRequest(db: DbClient, input: {
     {
       query: `UPDATE requests SET
           payload_json = json_set(payload_json, '$.cancellation.used_at', ?), updated_at = ?
-        WHERE id = ? AND site_id = ? AND kind = ?
+        WHERE id = ? AND organization_id = ? AND kind = ?
           AND json_extract(payload_json, '$.cancellation.token_hash') = ?
           AND json_extract(payload_json, '$.cancellation.used_at') IS NULL
           AND json_extract(payload_json, '$.cancellation.expires_at') > ?
           AND EXISTS (SELECT 1 FROM ${table} WHERE id = ? AND status = ?) RETURNING *`,
-      params: [input.now, input.now, input.id, input.siteId, input.kind, input.tokenHash, input.now, record.id, record.status],
+      params: [input.now, input.now, input.id, input.organizationId, input.kind, input.tokenHash, input.now, record.id, record.status],
     },
     {
       query: `UPDATE ${table} SET status = 'cancelled', cancelled_at = ?, cancellation_reason = 'guest_cancelled', updated_at = ?
         WHERE id = ? AND status = ?
-          AND EXISTS (SELECT 1 FROM requests WHERE id = ? AND site_id = ?
+          AND EXISTS (SELECT 1 FROM requests WHERE id = ? AND organization_id = ?
             AND json_extract(payload_json, '$.cancellation.used_at') = ?)`,
-      params: [input.now, input.now, record.id, record.status, input.id, input.siteId, input.now],
+      params: [input.now, input.now, record.id, record.status, input.id, input.organizationId, input.now],
     },
   ], { operation: 'Cancel booking request' })
 

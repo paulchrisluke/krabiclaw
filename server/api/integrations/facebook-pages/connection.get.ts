@@ -3,10 +3,10 @@ import { getFacebookPagesConnection } from '../../../utils/facebook-pages'
 import { requireRequestedLocationAccess, requireRequestedSiteWideAccess } from '~/server/utils/location-access'
 
 export default defineHandler(async (event) => {
-  const query = getQuery(event) as { siteId?: string; locationId?: string }
+  const query = getQuery(event) as { organizationId?: string; locationId?: string }
   const { env, site } = query.locationId
-    ? await requireRequestedLocationAccess(event, query.locationId, query.siteId)
-    : await requireRequestedSiteWideAccess(event, query.siteId)
+    ? await requireRequestedLocationAccess(event, query.locationId, query.organizationId)
+    : await requireRequestedSiteWideAccess(event, query.organizationId)
 
   const connection = await getFacebookPagesConnection(env, site.organization_id, site.id)
 

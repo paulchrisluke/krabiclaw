@@ -54,7 +54,6 @@ export interface ThreadSummaryProjection {
   guestEmail: string | null
   guestPhone: string | null
   organizationId: string
-  siteId: string
   locationId: string | null
   locationTitle: string | null
   contextLabel: string
@@ -96,7 +95,7 @@ export interface ThreadDetailSourceModel {
 
 export interface GuestThreadListItemViewModel {
   id: string
-  siteId?: string
+  organizationId?: string
   siteSlug?: string | null
   guestName: string
   submissionType: GuestThreadSubmissionType
@@ -174,7 +173,6 @@ export interface GuestThreadDetailViewModel {
 
 export interface ListGuestThreadsOptions {
   organizationId?: string | null
-  siteId?: string | null
   locationId?: string | null
   principal?: MemberAccessPrincipal | OrganizationMemberAccessPrincipal | null
   userId: string

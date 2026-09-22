@@ -29,7 +29,7 @@ export default defineHandler(async (event) => {
   const tokenHash = await hashReservationCancelToken(token)
   const spendable = await queryFirst<{ id: string }>(db, `
     SELECT id FROM requests
-     WHERE id = ? AND site_id = ? AND kind IN ('reservation', 'booking')
+     WHERE id = ? AND organization_id = ? AND kind IN ('reservation', 'booking')
        AND json_extract(payload_json, '$.cancellation.token_hash') = ?
        AND json_extract(payload_json, '$.cancellation.used_at') IS NULL
        AND json_extract(payload_json, '$.cancellation.expires_at') > ?

@@ -29,7 +29,7 @@ export default defineHandler(async (event) => {
   const eventName = cleanString(body.event_name, 80)
   if (!VALID_EVENTS.has(eventName)) return jsonResponse({ error: 'Invalid event_name' }, { status: 400 })
   const site = await queryFirst<{ id: string; organization_id: string; vertical: string | null }>(db,
-    `SELECT id, organization_id, vertical FROM sites WHERE id = ? AND status = 'active' AND onboarding_status = 'active' LIMIT 1`, [organizationId])
+    `SELECT id, organization_id, vertical FROM organization WHERE id = ? AND status = 'active' AND onboarding_status = 'active' LIMIT 1`, [organizationId])
   if (!site || !normalizeVertical(site.vertical)) return jsonResponse({ error: 'Site not found' }, { status: 404 })
 
   const ipHash = await hashClientIp(getClientIp(event))
@@ -55,12 +55,12 @@ export default defineHandler(async (event) => {
     if (pagePath && (!pagePath.startsWith('/') || pagePath.includes('?') || pagePath.includes('#'))) return jsonResponse({ error: 'Invalid page_path' }, { status: 400 })
     const pageId = cleanString(body.page_id, 120)
     if (pageId) {
-      const page = await queryFirst<{ id: string }>(db, "SELECT id FROM content_documents WHERE kind = 'page' AND id = ? AND site_id = ? LIMIT 1", [pageId, organizationId])
+      const page = await queryFirst<{ id: string }>(db, "SELECT id FROM content_documents WHERE kind = 'page' AND id = ? AND organization_id = ? LIMIT 1", [pageId, organizationId])
       if (!page) return jsonResponse({ error: 'Page not found' }, { status: 404 })
       entityType = 'content_document'; entityId = page.id
     }
     if (stage === 'external_booking_handoff') {
-      const consultation = await queryFirst<{ external_url: string | null }>(db, `SELECT (settings_json ->> '$.consultation.external_url') AS external_url FROM sites WHERE id = ? AND (settings_json ->> '$.consultation.mode') = 'external_url' LIMIT 1`, [organizationId])
+      const consultation = await queryFirst<{ external_url: string | null }>(db, `SELECT (settings_json ->> '$.consultation.external_url') AS external_url FROM organization WHERE id = ? AND (settings_json ->> '$.consultation.mode') = 'external_url' LIMIT 1`, [organizationId])
       const host = consultation?.external_url ? destinationHost(consultation.external_url) : null
       if (!host) return jsonResponse({ error: 'Consultation destination is unavailable' }, { status: 404 })
       ctaDestination = host
@@ -79,9 +79,9 @@ export default defineHandler(async (event) => {
     // check one tenant's page could report a click at another tenant's branch.
     const product = await queryFirst<{ id: string; order_url: string }>(db, `
       SELECT p.id, p.order_url FROM products p
-      JOIN product_publications pub ON pub.product_id = p.id AND pub.organization_id = p.organization_id AND pub.site_id = ? AND pub.published = 1
+      JOIN product_publications pub ON pub.product_id = p.id AND pub.organization_id = p.organization_id AND pub.organization_id = ? AND pub.published = 1
       JOIN product_locations pl ON pl.product_id = p.id AND pl.organization_id = p.organization_id AND pl.location_id = ? AND pl.published = 1 AND pl.active = 1
-      JOIN business_locations bl ON bl.organization_id = p.organization_id AND bl.id = pl.location_id AND bl.site_id = ?
+      JOIN business_locations bl ON bl.organization_id = p.organization_id AND bl.id = pl.location_id AND bl.organization_id = ?
       WHERE p.id = ? AND p.active = 1 AND p.order_url IS NOT NULL LIMIT 1`, [organizationId, locationId, organizationId, entityId])
     if (!product || !destinationHost(product.order_url)) return jsonResponse({ error: 'Product not found' }, { status: 404 })
     const destinationHostname = new URL(product.order_url).hostname.toLowerCase()
@@ -94,7 +94,7 @@ export default defineHandler(async (event) => {
       FROM content_blocks b JOIN content_documents d ON d.id = b.document_id
       JOIN content_documents root ON root.id = COALESCE(d.root_id,d.id)
       JOIN content_blocks source ON source.id = COALESCE(b.source_block_id,b.id)
-      WHERE b.id = ? AND d.site_id = ? AND b.type = 'cta' AND root.kind = 'page' AND root.row_role = 'root'
+      WHERE b.id = ? AND d.organization_id = ? AND b.type = 'cta' AND root.kind = 'page' AND root.row_role = 'root'
         AND (root.metadata_json ->> '$.recipe') = 'links' AND (source.data_json ->> '$.status') = 'active' LIMIT 1`, [entityId, organizationId])
     const host = link ? destinationHost(link.destination) : null
     if (!link || !host) return jsonResponse({ error: 'Link item not found' }, { status: 404 })
@@ -109,7 +109,7 @@ export default defineHandler(async (event) => {
     const page = await queryFirst<{ id: string; page_id: string; path: string }>(db, `
       SELECT v.id, root.id AS page_id, v.path
         FROM content_documents v JOIN content_documents root ON root.id = COALESCE(v.root_id,v.id)
-       WHERE v.id = ? AND v.site_id = ? AND root.kind = 'page' AND root.row_role = 'root' AND (root.metadata_json ->> '$.recipe') = 'donate'
+       WHERE v.id = ? AND v.organization_id = ? AND root.kind = 'page' AND root.row_role = 'root' AND (root.metadata_json ->> '$.recipe') = 'donate'
        LIMIT 1
     `, [documentId, organizationId])
     if (!page) return jsonResponse({ error: 'Donation page not found' }, { status: 404 })

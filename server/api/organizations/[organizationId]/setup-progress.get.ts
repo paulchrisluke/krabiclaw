@@ -67,8 +67,8 @@ export default defineHandler(async (event) => {
     }>(db, `
       SELECT s.id, s.organization_id, ? AS organization_slug, s.brand_name, s.brand_description,
              EXISTS(SELECT 1 FROM media_placements mp JOIN media_assets ma ON ma.id = mp.asset_id AND ma.status = 'active' WHERE mp.owner_type = 'site' AND mp.owner_id = s.id AND mp.slot = 'logo' AND mp.status = 'active') AS has_logo,
-             s.contact_email, s.subdomain, (SELECT 'https://' || domain FROM site_domains WHERE site_id = s.id AND role = 'canonical' AND status = 'active') AS public_url, s.status, s.last_published_at
-      FROM sites s
+             s.contact_email, s.subdomain, (SELECT 'https://' || domain FROM organization_domains WHERE organization_id = s.id AND role = 'canonical' AND status = 'active') AS public_url, s.status, s.last_published_at
+      FROM organization s
       WHERE s.id = ? AND s.organization_id = ?
       LIMIT 1
     `, [siteAccess.organization_slug, organizationId, siteAccess.organization_id])
@@ -83,13 +83,13 @@ export default defineHandler(async (event) => {
       SELECT COUNT(*) AS count,
              SUM(CASE WHEN NULLIF(trim(address), '') IS NULL AND NULLIF(trim(city), '') IS NULL THEN 1 ELSE 0 END) AS missing_address,
              SUM(CASE WHEN opening_hours IS NULL THEN 1 ELSE 0 END) AS missing_hours
-      FROM business_locations WHERE organization_id = ? AND site_id = ? AND status = 'active'
+      FROM business_locations WHERE organization_id = ? AND organization_id = ? AND status = 'active'
     `, [orgId, organizationId])
 
     const productsResult = await queryFirst<{ count: number }>(db, `
       SELECT COUNT(DISTINCT p.id) as count
       FROM products p
-      JOIN product_publications pub ON pub.product_id = p.id AND pub.organization_id = p.organization_id AND pub.site_id = ? AND pub.published = 1
+      JOIN product_publications pub ON pub.product_id = p.id AND pub.organization_id = p.organization_id AND pub.organization_id = ? AND pub.published = 1
       WHERE p.organization_id = ? AND p.active = 1
     `, [organizationId, orgId])
     const productCount = productsResult?.count ?? 0
@@ -97,7 +97,7 @@ export default defineHandler(async (event) => {
     const photoCountResult = await queryFirst<{ count: number }>(db, `
       SELECT COUNT(*) AS count FROM media_placements mp
       JOIN media_assets ma ON ma.id = mp.asset_id AND ma.kind = 'image' AND ma.status = 'active'
-      WHERE mp.organization_id = ? AND mp.site_id = ? AND mp.owner_type = 'business_location' AND mp.slot = 'gallery' AND mp.status = 'active'
+      WHERE mp.organization_id = ? AND mp.organization_id = ? AND mp.owner_type = 'business_location' AND mp.slot = 'gallery' AND mp.status = 'active'
     `, [orgId, organizationId])
     const photoCount = photoCountResult?.count ?? 0
 
@@ -105,7 +105,7 @@ export default defineHandler(async (event) => {
       SELECT v.id
       FROM content_documents v
       JOIN content_blocks b ON b.document_id = v.id
-      WHERE v.kind = 'page' AND v.row_role = 'root' AND v.site_id = ? AND v.organization_id = ? AND v.path = '/about'
+      WHERE v.kind = 'page' AND v.row_role = 'root' AND v.organization_id = ? AND v.organization_id = ? AND v.path = '/about'
         AND b.type = 'markdown'
         AND length(COALESCE(json_extract(b.data_json, '$.markdown'), '')) > 0
       LIMIT 1

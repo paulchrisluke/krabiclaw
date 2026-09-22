@@ -10,10 +10,10 @@ export default defineHandler(async (event) => {
   if (!organizationId) return jsonResponse({ error: 'Site ID is required' }, { status: 400 })
   try {
     const { db, session, site } = await requireSiteAccess(event, organizationId)
-    const body = await readRequiredBody<Omit<CreateCollectionInput, 'site_id'>>(event)
+    const body = await readRequiredBody<Omit<CreateCollectionInput, 'organization_id'>>(event)
     const collection = await createCollection(db, {
       organizationId: site.organization_id,
-      collection: { ...body, site_id: organizationId },
+      collection: { ...body, organization_id: organizationId },
       actor: { actorId: session.user.id },
     })
     return jsonResponse({ success: true, collection }, { status: 201 })

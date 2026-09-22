@@ -23,24 +23,24 @@ export interface SiteLocationSlugs {
 export async function resolveSiteLocationSlugs(
   env: CloudflareEnv,
   db: DbClient,
-  opts: { organizationId: string; siteId: string; locationId?: string | null },
+  opts: { organizationId: string; locationId?: string | null },
 ): Promise<SiteLocationSlugs | null> {
   const [organization, site] = await Promise.all([
     findOrganizationById(env, opts.organizationId),
     queryFirst<{ site_slug: string | null }>(db, `
       SELECT subdomain AS site_slug
-      FROM sites
+      FROM organization
       WHERE organization_id = ? AND id = ?
       LIMIT 1
-    `, [opts.organizationId, opts.siteId]),
+    `, [opts.organizationId, opts.organizationId]),
   ])
   if (!organization || !site?.site_slug) return null
 
   let locationSlug: string | null = null
   if (opts.locationId) {
     const location = await queryFirst<{ slug: string }>(db, `
-        SELECT slug FROM business_locations WHERE id = ? AND site_id = ? LIMIT 1
-      `, [opts.locationId, opts.siteId])
+        SELECT slug FROM business_locations WHERE id = ? AND organization_id = ? LIMIT 1
+      `, [opts.locationId, opts.organizationId])
     locationSlug = location?.slug ?? null
     if (!locationSlug) return null
   }
@@ -60,7 +60,7 @@ export function composeOwnerThreadInboxUrl(
 export async function buildOwnerThreadInboxUrl(
   env: DashboardNotificationLinkEnv & CloudflareEnv,
   db: DbClient,
-  opts: { organizationId: string; siteId: string; locationId?: string | null; threadId: string },
+  opts: { organizationId: string; locationId?: string | null; threadId: string },
 ): Promise<string | null> {
   const slugs = await resolveSiteLocationSlugs(env, db, opts)
   return slugs ? composeOwnerThreadInboxUrl(env, slugs, opts.threadId) : null

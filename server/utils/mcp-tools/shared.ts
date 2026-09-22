@@ -739,7 +739,7 @@ export const workspaceContextObject = {
     organization_id: { type: ['string', 'null'] },
     organization_name: { type: ['string', 'null'] },
     organization_slug: { type: ['string', 'null'] },
-    site_id: { type: ['string', 'null'] },
+    
     site_name: { type: ['string', 'null'] },
     site_subdomain: { type: ['string', 'null'] },
     site_public_url: { type: ['string', 'null'] },
@@ -762,8 +762,8 @@ export const organizationListItemObject = {
 
 // ---
 
-export const siteIdSchema = {
-  site_id: { type: 'string', description: 'Internal KrabiClaw site ID from get_workspace_context or list_sites, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.' },
+export const organizationIdSchema = {
+  organization_id: { type: 'string', description: 'Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.' },
 }
 
 export function siteTool(definition: Omit<RawMcpToolDefinition, 'inputSchema' | 'outputSchema'> & {
@@ -773,7 +773,7 @@ export function siteTool(definition: Omit<RawMcpToolDefinition, 'inputSchema' | 
 }): McpToolDefinition {
   const { oneOf, anyOf, allOf, ...propertyDefs } = definition.inputSchema ?? {}
   const properties = {
-    ...siteIdSchema,
+    ...organizationIdSchema,
     ...propertyDefs,
   }
   const required = [...(definition.required ?? [])]
@@ -882,7 +882,7 @@ export const EXPECTED_TOOL_ANNOTATIONS = {
   list_site_locales: R,
   list_site_qa: R,
   list_site_reviews: R,
-  list_sites: R,
+  list_organizations: R,
   list_tenant_pages: R,
   publish_blog_post: D,
   publish_post: D,

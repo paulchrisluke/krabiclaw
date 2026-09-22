@@ -14,14 +14,14 @@ export async function handleSitesTools(ctx: McpExecutorContext): Promise<unknown
         const siteRecord = await getSiteForMcp(
           site.db,
           site.env,
-          site.siteId,
+          site.organizationId,
           site.userId,
         );
         const workspace = await resolveMcpWorkspace(
           site.db,
           site.env,
           site.userId,
-          { siteId: site.siteId },
+          { organizationId: site.organizationId },
         );
         return {
           site: siteRecord,
@@ -33,7 +33,7 @@ export async function handleSitesTools(ctx: McpExecutorContext): Promise<unknown
         settings: await loadSettingsPayload(
           site.db,
           site.organizationId,
-          site.siteId,
+          site.organizationId,
         ),
       };
     case "update_site_settings": {
@@ -44,7 +44,7 @@ export async function handleSitesTools(ctx: McpExecutorContext): Promise<unknown
       const result = await updateSiteSettingsFields(
         site.db,
         site.env,
-        site.siteId,
+        site.organizationId,
         site.organizationId,
         updates,
         site.userId
@@ -56,7 +56,7 @@ export async function handleSitesTools(ctx: McpExecutorContext): Promise<unknown
         {
           ok: true,
           entity: "site_settings",
-          id: site.siteId,
+          id: site.organizationId,
           changed_fields: Object.keys(updates),
           updated_at: settingsResult.updated_at,
           context: updateSettingsContext,
@@ -74,7 +74,7 @@ export async function handleSitesTools(ctx: McpExecutorContext): Promise<unknown
       const result = await updateSiteSettingsFields(
         site.db,
         site.env,
-        site.siteId,
+        site.organizationId,
         site.organizationId,
         { default_currency: currency },
         site.userId,
@@ -96,7 +96,7 @@ export async function handleSitesTools(ctx: McpExecutorContext): Promise<unknown
       const result = await updateSiteSettingsFields(
         site.db,
         site.env,
-        site.siteId,
+        site.organizationId,
         site.organizationId,
         { brand_color: resolvedColor },
         site.userId,

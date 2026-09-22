@@ -18,10 +18,9 @@ export async function publishGuestInboxThreadEvent(
   const thread = await queryFirst<{
     id: string
     organization_id: string
-    site_id: string
     location_id: string | null
   }>(db, `
-    SELECT id, organization_id, site_id, location_id
+    SELECT id, organization_id, organization_id, location_id
     FROM requests
     WHERE id = ?
     LIMIT 1
@@ -31,7 +30,6 @@ export async function publishGuestInboxThreadEvent(
     eventId: crypto.randomUUID(),
     type: input.type,
     organizationId: thread.organization_id,
-    siteId: thread.site_id,
     locationId: thread.location_id,
     threadId: thread.id,
     occurredAt: new Date().toISOString(),

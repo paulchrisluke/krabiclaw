@@ -19,7 +19,7 @@ export default defineHandler(async (event) => {
 
   const site = await queryFirst<{ id: string; organization_id: string }>(db, `
     SELECT id, organization_id
-    FROM sites
+    FROM organization
     WHERE id = ? AND status = 'active'
     LIMIT 1
   `, [organizationId])

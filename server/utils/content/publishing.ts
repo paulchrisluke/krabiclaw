@@ -449,7 +449,7 @@ async function resolveTenantContext(db: DbClient, organizationId: string, env?: 
   // The dashboard addresses a site by its subdomain, not by `sites.slug`.
   const site = await queryFirst<{ subdomain: string | null; organization_id: string }>(
     db,
-    'SELECT subdomain, organization_id FROM sites WHERE id = ? LIMIT 1',
+    'SELECT subdomain, organization_id FROM organization WHERE id = ? LIMIT 1',
     [organizationId],
   )
   if (!site?.subdomain) return undefined
@@ -615,7 +615,7 @@ export async function getBlogPost(db: DbClient, postIdOrSlug: string, organizati
   const [context, site] = await Promise.all([resolveTenantContext(db, organizationId, env), loadSiteTemplate(db, organizationId)])
   const publicPath = slug ? tenantBlogPostPath(site.template, slug, articleCollectionOf(postFields.collection)) : null
   const editorThemeTokenRow = await queryFirst<{ tokens_json: string | null } | null>(db, `
-    SELECT json_extract(settings_json, ? || '.tokens') AS tokens_json FROM sites
+    SELECT json_extract(settings_json, ? || '.tokens') AS tokens_json FROM organization
      WHERE id = ? AND json_extract(settings_json, ? || '.status') = 'active'
      LIMIT 1
   `, ['$.theme_by_template.' + site.template.slug, organizationId, '$.theme_by_template.' + site.template.slug])
@@ -679,7 +679,7 @@ export async function getPublishedLocalizedSiteBlogPost(
   previewAuthorized = false,
 ) {
   const site = await queryFirst<{ organization_id: string; vertical: string }>(db, `
-    SELECT organization_id, vertical FROM sites WHERE id = ? AND status = 'active' LIMIT 1
+    SELECT organization_id, vertical FROM organization WHERE id = ? AND status = 'active' LIMIT 1
   `, [organizationId])
   if (!site) return null
   const prefix = normalizeVertical(site.vertical) === 'service' ? 'article' : 'blog'

@@ -14,8 +14,8 @@ export default defineHandler(async (event) => {
 
   const domain = await queryFirst<{ id: string; domain: string }>(db, `
     SELECT *
-    FROM site_domains
-    WHERE id = ? AND site_id = ? AND type = 'custom'
+    FROM organization_domains
+    WHERE id = ? AND organization_id = ? AND type = 'custom'
     LIMIT 1
   `, [domainId, organizationId])
   if (!domain) return jsonResponse({ error: 'Domain not found' }, { status: 404 })

@@ -26,9 +26,8 @@ export function normalizeLocale(value: unknown): string | null {
 export async function getConfiguredSourceLocale(
   db: DbClient,
   organizationId: string,
-  siteId: string,
 ): Promise<'en'> {
-  const source = await getPersistedSourceLocale(db, organizationId, siteId)
+  const source = await getPersistedSourceLocale(db, organizationId, organizationId)
   return source.locale as 'en'
 }
 

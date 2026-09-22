@@ -36,10 +36,10 @@ export interface PublicBase {
 
 export function loadPublicBase(
   event: H3Event,
-  siteId: string,
+  organizationId: string,
   options: { previewAuthorized?: boolean } = {},
 ): Promise<PublicBase> {
-  const key = `public-base:${siteId}:${options.previewAuthorized ? 'preview' : 'public'}`
+  const key = `public-base:${organizationId}:${options.previewAuthorized ? 'preview' : 'public'}`
   return oncePerRequest(event, key, async () => {
     const startedAt = performance.now()
     const db = cloudflareEnv(event).DB
@@ -54,14 +54,14 @@ export function loadPublicBase(
                   'asset_id', ma.id, 'slot', mp.slot, 'public_url', ma.public_url,
                   'thumbnail_url', ma.thumbnail_url, 'kind', ma.kind
                 )) FROM media_placements mp JOIN media_assets ma ON ma.id = mp.asset_id AND ma.status = 'active'
-                  WHERE mp.site_id = s.id AND mp.owner_type = 'site' AND mp.owner_id = s.id AND mp.status = 'active') AS media_json,
+                  WHERE mp.organization_id = s.id AND mp.owner_type = 'site' AND mp.owner_id = s.id AND mp.status = 'active') AS media_json,
                 s.seo_title, s.seo_description, s.canonical_url, s.robots,
                 s.social_facebook_url, s.social_instagram_url, s.social_tiktok_url,
                 json_extract(s.settings_json, '$.config.default_timezone') AS default_timezone
-           FROM sites s
+           FROM organization s
           WHERE s.id = ? AND s.status = 'active'${options.previewAuthorized ? '' : " AND s.onboarding_status = 'active'"}
           LIMIT 1`,
-        [siteId],
+        [organizationId],
       )
       if (!row) throw new HTTPError({ statusCode: 404, statusMessage: 'Site not found' })
       const { media_json: mediaJson, ...site } = row

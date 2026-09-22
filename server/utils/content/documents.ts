@@ -205,7 +205,7 @@ export async function getContentRepresentation(db: DbClient, input: { rootId: st
   return await queryFirst<ContentDocumentRow>(db, `
     SELECT d.id, d.organization_id, d.kind, d.row_role, d.root_id, d.locale, d.created_at, d.updated_at
     FROM content_documents d
-    JOIN site_locales l ON l.organization_id = d.organization_id AND l.locale = d.locale
+    JOIN organization_locales l ON l.organization_id = d.organization_id AND l.locale = d.locale
     WHERE COALESCE(d.root_id, d.id) = ? AND d.row_role IN ('root', 'representation')
       AND (? IS NULL AND l.is_source = 1 OR d.locale = ?)
     LIMIT 1
@@ -247,8 +247,8 @@ export function prepareContentDocumentDeletion(input: { organizationId: string }
     // Deleting a location removes every document scoped to it, so one
     // document's timestamp says nothing about the set; the union above is what
     // keeps a caller from passing one there and believing it was honoured.
-    { query: `DELETE FROM site_redirects WHERE owner_type = 'content_document' AND owner_id IN (${owned})`, params },
-    { query: `DELETE FROM site_redirects WHERE owner_type = 'content_block' AND owner_id IN (
+    { query: `DELETE FROM organization_redirects WHERE owner_type = 'content_document' AND owner_id IN (${owned})`, params },
+    { query: `DELETE FROM organization_redirects WHERE owner_type = 'content_block' AND owner_id IN (
       SELECT id FROM content_blocks WHERE document_id IN (${owned})
     )`, params },
     { query: `DELETE FROM media_placements WHERE owner_type = 'content_document' AND owner_id IN (${owned})`, params },

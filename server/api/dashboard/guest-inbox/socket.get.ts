@@ -17,7 +17,7 @@ export default defineHandler(async (event) => {
     : await listResourceTeamAccess(db, { env, userId, organizationId: organization.id })
   const allowedSiteIds = resourceAccess
     .filter(access => access.locationId === null)
-    .map(access => access.siteId)
+    .map(access => access.organizationId)
   const allowedLocationIds = resourceAccess
     .flatMap(access => access.locationId ? [access.locationId] : [])
 

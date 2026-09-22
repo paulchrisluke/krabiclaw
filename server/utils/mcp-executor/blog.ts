@@ -177,11 +177,11 @@ export async function handleBlogTools(ctx: McpExecutorContext): Promise<unknown>
       {
         const posts = (await listBlogPosts(
           site.db,
-          site.siteId,
+          site.organizationId,
           optionalString(args, "status"),
           site.env,
         )).map((post) => toBlogPostSummary(post, site));
-        const { items, page_info } = paginateMcpCollection(posts, args, { resource: `blog-posts:${site.siteId}` });
+        const { items, page_info } = paginateMcpCollection(posts, args, { resource: `blog-posts:${site.organizationId}` });
         return { posts: items, page_info };
       }
     case "get_blog_post":
@@ -189,7 +189,7 @@ export async function handleBlogTools(ctx: McpExecutorContext): Promise<unknown>
         const post = await getBlogPost(
           site.db,
           requiredString(args, "post_id"),
-          site.siteId,
+          site.organizationId,
           site.env,
         );
         return {
@@ -201,7 +201,7 @@ export async function handleBlogTools(ctx: McpExecutorContext): Promise<unknown>
         site.db,
         site.userId,
         args as never,
-        { site_id: site.siteId, organization_id: site.organizationId },
+        { organization_id: site.organizationId, },
         site.env,
       );
       return renderStructuredResponse(
@@ -214,8 +214,8 @@ export async function handleBlogTools(ctx: McpExecutorContext): Promise<unknown>
       const result = await updateBlogPost(
         site.db,
         requiredString(args, "post_id"),
-        omit(args, ["post_id", "site_id"]) as never,
-        site.siteId,
+        omit(args, ["post_id", "organization_id"]) as never,
+        site.organizationId,
         site.env,
       );
       return renderStructuredResponse(
@@ -237,8 +237,8 @@ export async function handleBlogTools(ctx: McpExecutorContext): Promise<unknown>
         ...(Object.prototype.hasOwnProperty.call(args, 'scheduled_for')
           ? { scheduled_for: normalizedScheduledFor as string | null }
           : {}),
-      }, site.siteId)
-      const result = await getBlogPost(site.db, postId, site.siteId, site.env)
+      }, site.organizationId)
+      const result = await getBlogPost(site.db, postId, site.organizationId, site.env)
       return renderStructuredResponse(
         { post: projectBlogPostForMcp(result, site) },
         `${result.status === 'scheduled' ? 'Rescheduled' : 'Published'} blog article "${result.title}".`,
@@ -246,7 +246,7 @@ export async function handleBlogTools(ctx: McpExecutorContext): Promise<unknown>
     }
     case "delete_blog_post": {
       const postId = requiredString(args, "post_id");
-      await deleteBlogPost(site.db, postId, site.siteId);
+      await deleteBlogPost(site.db, postId, site.organizationId);
       return { post_id: postId, deleted: true };
     }
     default:

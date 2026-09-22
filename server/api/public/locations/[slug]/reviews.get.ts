@@ -16,7 +16,7 @@ export default defineHandler(async (event) => {
 
   const location = await queryFirst<{ id: string; rating: number | null; review_count: number | null; last_synced_at: string | null }>(
     db, `SELECT id, rating, review_count, last_synced_at FROM business_locations
-     WHERE site_id = ? AND slug = ? AND status = 'active' LIMIT 1`, [organizationId, slug], )
+     WHERE organization_id = ? AND slug = ? AND status = 'active' LIMIT 1`, [organizationId, slug], )
   if (!location) return jsonResponse({ error: 'Location not found' }, { status: 404 })
   const results = await queryAll<ApiValue>(
     db, `SELECT r.id, r.author_name, r.rating, r.title, r.content, r.owner_reply, r.owner_reply_at,

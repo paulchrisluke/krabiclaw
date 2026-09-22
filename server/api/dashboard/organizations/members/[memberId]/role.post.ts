@@ -60,14 +60,14 @@ export default defineHandler(async (event) => {
 
   if (role === 'editor') {
     const site = await queryFirst<{ id: string }>(db, `
-      SELECT id FROM sites WHERE id = ? AND organization_id = ? LIMIT 1
+      SELECT id FROM organization WHERE id = ? AND organization_id = ? LIMIT 1
     `, [organizationId, organization.id])
     if (!site) return jsonResponse({ error: 'organizationId must reference a site in this organization' }, { status: 400 })
 
     if (locationId) {
       const location = await queryFirst<{ id: string }>(db, `
         SELECT id FROM business_locations
-        WHERE id = ? AND site_id = ? AND organization_id = ?
+        WHERE id = ? AND organization_id = ? AND organization_id = ?
         LIMIT 1
       `, [locationId, organizationId, organization.id])
       if (!location) return jsonResponse({ error: 'locationId must reference a location on that site' }, { status: 400 })

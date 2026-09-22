@@ -9,7 +9,7 @@ export default defineHandler(async (event) => {
   const scopes = await db.prepare(`
     SELECT DISTINCT scope_path AS page_path
     FROM content_documents
-    WHERE kind = 'qa' AND row_role = 'root' AND site_id = ? AND location_id IS NULL AND scope_path IS NOT NULL
+    WHERE kind = 'qa' AND row_role = 'root' AND organization_id = ? AND location_id IS NULL AND scope_path IS NOT NULL
     ORDER BY page_path ASC
   `).bind(organizationId).all()
   

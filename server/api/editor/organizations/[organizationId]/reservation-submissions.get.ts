@@ -17,7 +17,7 @@ export default defineHandler(async (event) => {
 
   if (locationId) {
     const location = await queryFirst<{ id: string }>(
-      db, `SELECT id FROM business_locations WHERE id = ? AND site_id = ? LIMIT 1`, [locationId, organizationId], )
+      db, `SELECT id FROM business_locations WHERE id = ? AND organization_id = ? LIMIT 1`, [locationId, organizationId], )
     if (!location) return jsonResponse({ error: 'location_id must reference a location on this site' }, { status: 400 })
   }
   await assertResourceAccess(db, { ...memberAccessPrincipal(site.membership, { env, organizationId, event }), resourceLocationId: locationId })

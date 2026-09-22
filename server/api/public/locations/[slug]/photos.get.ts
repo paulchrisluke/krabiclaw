@@ -14,7 +14,7 @@ export default defineHandler(async (event) => {
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
 
   const location = await queryFirst<{ id: string }>(
-    db, `SELECT id FROM business_locations WHERE site_id = ? AND slug = ? AND status = 'active' LIMIT 1`, [organizationId, slug], )
+    db, `SELECT id FROM business_locations WHERE organization_id = ? AND slug = ? AND status = 'active' LIMIT 1`, [organizationId, slug], )
   if (!location) return jsonResponse({ error: 'Location not found' }, { status: 404 })
 
   const placements = await getMediaPlacements(db, { organizationId, ownerType: 'business_location', ownerIds: [location.id], slot: 'gallery' })

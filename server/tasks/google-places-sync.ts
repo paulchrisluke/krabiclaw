@@ -19,7 +19,6 @@ interface SyncTaskContext {
 interface PlaceLocationRow {
   id: string
   organization_id: string
-  site_id: string
   title: string
   google_place_id: string
 }
@@ -28,7 +27,6 @@ interface PlacesSyncResult {
   location_id: string
   title: string
   organization_id: string
-  site_id: string
   reviews_upserted: number
   error?: string
 }
@@ -66,11 +64,11 @@ export default defineScheduledTask({
     // Better Auth's subscription table is the authority for paid scheduled
     // integrations; candidates are selected here and filtered against it below.
     const candidates = await queryAllPages<PlaceLocationRow>(db, `
-      SELECT bl.id, bl.organization_id, bl.site_id, bl.title, bl.google_place_id
+      SELECT bl.id, bl.organization_id, bl.organization_id, bl.title, bl.google_place_id
       FROM business_locations bl
       WHERE bl.google_place_id IS NOT NULL
         AND bl.status = 'active'
-      ORDER BY bl.organization_id, bl.site_id, bl.id
+      ORDER BY bl.organization_id, bl.organization_id, bl.id
     `, [])
     const locations = await filterEntitledRows(env as CloudflareEnv, candidates, 'google_places')
 
@@ -86,13 +84,11 @@ export default defineScheduledTask({
         location_id: loc.id,
         title: loc.title,
         organization_id: loc.organization_id,
-        site_id: loc.site_id,
         reviews_upserted: 0,
       }
 
       await recordUsageEvent(db, {
         organizationId: loc.organization_id,
-        siteId: loc.site_id,
         resource: 'scheduled_task',
         source: 'google_places_sync',
         provider: 'krabiclaw',
@@ -108,7 +104,7 @@ export default defineScheduledTask({
           db,
           apiKey,
           loc.organization_id,
-          loc.site_id,
+          loc.organization_id,
           loc.id,
           loc.google_place_id
         )
@@ -121,7 +117,6 @@ export default defineScheduledTask({
       if (!locResult.error) {
         await recordUsageEvent(db, {
           organizationId: loc.organization_id,
-          siteId: loc.site_id,
           resource: 'maps_api',
           source: 'scheduled_task',
           provider: 'google',

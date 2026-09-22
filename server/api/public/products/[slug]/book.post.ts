@@ -36,14 +36,14 @@ export default defineHandler(async (event) => {
   const db = env.DB
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
 
-  const site = await queryFirst<{ id: string; organization_id: string; brand_name: string | null; public_url: string | null }>(db, `SELECT id, organization_id, brand_name, (SELECT 'https://' || domain FROM site_domains WHERE site_id = sites.id AND role = 'canonical' AND status = 'active') AS public_url FROM sites WHERE id = ? AND status = 'active' LIMIT 1`, [organizationId])
+  const site = await queryFirst<{ id: string; organization_id: string; brand_name: string | null; public_url: string | null }>(db, `SELECT id, organization_id, brand_name, (SELECT 'https://' || domain FROM organization_domains WHERE organization_id = sites.id AND role = 'canonical' AND status = 'active') AS public_url FROM organization WHERE id = ? AND status = 'active' LIMIT 1`, [organizationId])
   if (!site) return jsonResponse({ error: 'Site not found' }, { status: 404 })
 
   const product = await queryFirst<{ id: string; name: string }>(db, `
     SELECT p.id, p.name FROM products p
       JOIN product_publications pub ON pub.product_id = p.id AND pub.organization_id = p.organization_id
       JOIN product_booking_configs cfg ON cfg.product_id = p.id
-     WHERE pub.site_id = ? AND pub.published = 1 AND p.slug = ? AND p.active = 1 LIMIT 1
+     WHERE pub.organization_id = ? AND pub.published = 1 AND p.slug = ? AND p.active = 1 LIMIT 1
   `, [organizationId, slug])
   if (!product) return jsonResponse({ error: 'Product not found' }, { status: 404 })
 
@@ -83,7 +83,7 @@ export default defineHandler(async (event) => {
        -- for it, whatever the site and the product itself still say.
        AND (s.location_id IS NULL OR EXISTS (
          SELECT 1 FROM product_locations pl
-           JOIN business_locations l ON l.id = pl.location_id AND l.site_id = ? AND l.status = 'active'
+           JOIN business_locations l ON l.id = pl.location_id AND l.organization_id = ? AND l.status = 'active'
           WHERE pl.product_id = s.product_id AND pl.location_id = s.location_id
             AND pl.active = 1 AND pl.published = 1
        ))
@@ -148,7 +148,7 @@ export default defineHandler(async (event) => {
       productVariantId, partySize, customerId: customer.id, requestId: null,
       following: bookingId => [
         ...requestInsertQueries({
-          kind: 'booking', id: threadId, organization_id: site.organization_id, site_id: organizationId,
+          kind: 'booking', id: threadId, organization_id: site.organization_id,
           location_id: session.location_id, customer_id: customer.id, review_id: null,
           conversation_state: 'needs_attention', resolved_at: null, payload,
           created_at: now, updated_at: now,

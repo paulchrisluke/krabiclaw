@@ -45,11 +45,11 @@ export function getStripe(env: BillingEnv): Stripe {
 export async function getSiteBillingStatus(
   env: CloudflareEnv,
   db: DbClient,
-  siteId: string,
+  organizationId: string,
 ): Promise<SiteBillingStatus> {
   const site = await queryFirst<{ organization_id: string }>(db, `
-    SELECT organization_id FROM sites WHERE id = ? LIMIT 1
-  `, [siteId])
+    SELECT organization_id FROM organization WHERE id = ? LIMIT 1
+  `, [organizationId])
   if (!site) throw new HTTPError({ statusCode: 404, statusMessage: 'Site not found' })
   return getOrganizationBillingStatus(env, db, site.organization_id)
 }
@@ -98,12 +98,12 @@ export async function getOrganizationBillingStatus(
 export async function hasSiteEntitlement(
   env: CloudflareEnv,
   db: DbClient,
-  siteId: string,
+  organizationId: string,
   key: string,
 ): Promise<boolean> {
   const site = await queryFirst<{ organization_id: string }>(db, `
-    SELECT organization_id FROM sites WHERE id = ? LIMIT 1
-  `, [siteId])
+    SELECT organization_id FROM organization WHERE id = ? LIMIT 1
+  `, [organizationId])
   if (!site) return false
   return (await getOrganizationEntitlements(env, site.organization_id))[key] === true
 }

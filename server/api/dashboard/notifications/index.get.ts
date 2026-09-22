@@ -9,7 +9,7 @@ interface NotificationRow {
   template: string
   severity: 'info' | 'success' | 'warning' | 'error'
   organization_id: string | null
-  site_id: string | null
+  organization_id: string | null
   location_id: string | null
   target_user_id: string | null
   title: string | null
@@ -41,10 +41,10 @@ export default defineHandler(async (event) => {
 
   const [rows, count] = await Promise.all([
     queryAll<NotificationRow>(access.db, `
-      SELECT n.id, json_extract(n.payload_json, '$.visibility_scope') AS scope, n.event_name AS template, json_extract(n.payload_json, '$.severity') AS severity, n.organization_id, n.context_site_id AS site_id, n.location_id, n.target_user_id, json_extract(n.payload_json, '$.title') AS title, n.body AS message,
+      SELECT n.id, json_extract(n.payload_json, '$.visibility_scope') AS scope, n.event_name AS template, json_extract(n.payload_json, '$.severity') AS severity, n.organization_id, n.context_site_id AS organization_id, n.location_id, n.target_user_id, json_extract(n.payload_json, '$.title') AS title, n.body AS message,
              json_extract(n.payload_json, '$.thread_id') AS thread_id, json_extract(n.payload_json, '$.deep_link') AS stored_link,
              (SELECT slug FROM organization WHERE id = n.organization_id) AS organization_slug,
-             (SELECT subdomain FROM sites WHERE id = n.context_site_id) AS site_slug,
+             (SELECT subdomain FROM organization WHERE id = n.context_site_id) AS site_slug,
              n.created_at, nr.read_at
       FROM activity_entries n
       LEFT JOIN (SELECT parent_id, MAX(occurred_at) AS read_at FROM activity_entries WHERE kind = 'acknowledgement' AND actor_user_id = ? GROUP BY parent_id) nr ON nr.parent_id = n.id

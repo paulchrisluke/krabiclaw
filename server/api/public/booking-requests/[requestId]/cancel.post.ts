@@ -53,7 +53,7 @@ export default defineHandler(async (event) => {
   const summary = await requestSummary(db, request)
   await publishGuestInboxThreadEvent(env, db, { threadId: request.id, type: 'thread.changed' })
 
-  const site = await queryFirst<{ brand_name?: string | null }>(db, 'SELECT brand_name FROM sites WHERE id = ? LIMIT 1', [organizationId])
+  const site = await queryFirst<{ brand_name?: string | null }>(db, 'SELECT brand_name FROM organization WHERE id = ? LIMIT 1', [organizationId])
 
   try {
     if (record.kind === 'booking') {

@@ -129,8 +129,8 @@ async function releaseLock(db: D1Database, zoneId: string, generation: number): 
     [new Date().toISOString(), 'lease:zaraz:' + zoneId, generation])
 }
 
-function tenantKey(siteId: string): string {
-  return `${TENANT_KEY_PREFIX}${siteId}`
+function tenantKey(organizationId: string): string {
+  return `${TENANT_KEY_PREFIX}${organizationId}`
 }
 
 function escapeRegex(value: string): string {
@@ -267,17 +267,17 @@ export function upsertPlatformZarazAnalytics(
 
 export function upsertTenantZarazAnalytics(
   config: ZarazConfig,
-  input: { siteId: string; measurementId: string | null | undefined; hostnames: string[] },
+  input: { organizationId: string; measurementId: string | null | undefined; hostnames: string[] },
 ) {
   if (!input.measurementId || !input.hostnames.length) return
   config.triggers ||= {}
   config.tools ||= {}
   configureZarazConsentManagement(config)
   config.historyChange = true
-  const key = tenantKey(input.siteId)
-  config.triggers[key] = makeHostBlockTrigger(`Block non-tenant hosts (${input.siteId})`, input.hostnames)
+  const key = tenantKey(input.organizationId)
+  config.triggers[key] = makeHostBlockTrigger(`Block non-tenant hosts (${input.organizationId})`, input.hostnames)
   upsertGa4Tool(config, key, {
-    name: `Tenant GA4 (${input.siteId})`,
+    name: `Tenant GA4 (${input.organizationId})`,
     measurementId: input.measurementId,
     triggerKey: key,
     existing: config.tools[key],
@@ -301,7 +301,7 @@ function removeUndesiredAnalyticsConfig(config: ZarazConfig, desiredKeys: Set<st
 }
 
 interface ActiveTenantAnalyticsRow {
-  site_id: string
+  organization_id: string
   ga4_measurement_id: string
   domain: string
 }
@@ -313,7 +313,7 @@ export interface ZarazAnalyticsReconciliationResult {
 }
 
 export interface ZarazAnalyticsTenant {
-  siteId: string
+  organizationId: string
   measurementId: string
   hostnames: string[]
 }
@@ -329,7 +329,7 @@ export function reconcileZarazAnalyticsConfig(
   config.triggers ||= {}
   config.tools ||= {}
   const before = JSON.stringify(config)
-  const desiredKeys = new Set(input.tenants.map(tenant => tenantKey(tenant.siteId)))
+  const desiredKeys = new Set(input.tenants.map(tenant => tenantKey(tenant.organizationId)))
   if (input.platformMeasurementId && input.platformHostnames.length) desiredKeys.add(PLATFORM_KEY)
 
   upsertPlatformZarazAnalytics(config, {
@@ -353,12 +353,12 @@ export async function reconcileZarazAnalytics(
   db: D1Database,
 ): Promise<ZarazAnalyticsReconciliationResult> {
   const rows = await queryAll<ActiveTenantAnalyticsRow>(db, `
-    SELECT site.id AS site_id,
+    SELECT site.id AS organization_id,
            json_extract(site.integrations_json, '$.google.ga4_measurement_id') AS ga4_measurement_id,
            domain.domain
-      FROM sites site
-      JOIN site_domains domain
-        ON domain.site_id = site.id
+      FROM organization site
+      JOIN organization_domains domain
+        ON domain.organization_id = site.id
        AND domain.organization_id = site.organization_id
      WHERE site.status = 'active'
        AND site.onboarding_status = 'active'
@@ -374,12 +374,12 @@ export async function reconcileZarazAnalytics(
     hostnames: string[]
   }>()
   for (const row of rows) {
-    const existing = tenants.get(row.site_id)
+    const existing = tenants.get(row.organization_id)
     if (existing) {
       existing.hostnames.push(row.domain.toLowerCase())
       continue
     }
-    tenants.set(row.site_id, {
+    tenants.set(row.organization_id, {
       measurementId: row.ga4_measurement_id,
       hostnames: [row.domain.toLowerCase()],
     })
@@ -391,8 +391,8 @@ export async function reconcileZarazAnalytics(
     const result = reconcileZarazAnalyticsConfig(config, {
       platformMeasurementId: env.GA4_MEASUREMENT_ID,
       platformHostnames: platformAnalyticsHostnames(env),
-      tenants: [...tenants.entries()].map(([siteId, tenant]) => ({
-        siteId,
+      tenants: [...tenants.entries()].map(([organizationId, tenant]) => ({
+        organizationId,
         measurementId: tenant.measurementId,
         hostnames: [...new Set(tenant.hostnames)].sort(),
       })),

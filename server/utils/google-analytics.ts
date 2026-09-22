@@ -33,7 +33,6 @@ const googleJson = async <T>(url: string, accessToken: string): Promise<T> => {
 
 export interface GoogleAnalyticsConnection extends Omit<GoogleOAuthIntegration, 'kind' | 'revision'>, IntegrationVersion {
   organization_id: string
-  site_id: string
 }
 
 export interface Ga4Property {
@@ -126,7 +125,6 @@ export const storeGoogleAnalyticsConnection = async (
   env: GoogleAnalyticsEnv,
   connection: {
     organization_id: string
-    site_id: string
     connected_by_user_id: string
     provider_account_email: string
     encrypted_access_token: string
@@ -141,27 +139,27 @@ export const storeGoogleAnalyticsConnection = async (
     throw new Error('Database not available')
   }
 
-  const connectionId = `ga-connection-${connection.organization_id}-${connection.site_id}`
+  const connectionId = `ga-connection-${connection.organization_id}-${connection.organization_id}`
   const now = new Date().toISOString()
   const tokenEnv = encryptionEnv(env)
 
   const encryptedAccessToken = await encryptSecret(connection.encrypted_access_token, tokenEnv)
   const encryptedRefreshToken = await encryptSecret(connection.encrypted_refresh_token, tokenEnv)
 
-  const { organization_id: organizationId, site_id: siteId, ...providerState } = connection
+  const { organization_id: organizationId, ...providerState } = connection
   const payload = JSON.stringify({
     ...providerState, id: connectionId, kind: 'oauth', revision: crypto.randomUUID(),
     encrypted_access_token: encryptedAccessToken,
     encrypted_refresh_token: encryptedRefreshToken, updated_at: now,
   })
   const result = await execute(env.DB, `
-    UPDATE sites SET integrations_json = json_set(integrations_json, '$.google',
+    UPDATE organization SET integrations_json = json_set(integrations_json, '$.google',
       json_set(json_patch(CASE WHEN json_extract(integrations_json, '$.google.kind') = 'oauth' AND json_extract(integrations_json, '$.google.provider_account_email') = ?
                              THEN json_extract(integrations_json, '$.google') ELSE '{}' END, json(?)),
         '$.created_at', COALESCE(json_extract(integrations_json, '$.google.created_at'), ?)))
     WHERE id = ? AND organization_id = ?
       AND json_extract(integrations_json, '$.google.revision') IS ?
-  `, [connection.provider_account_email, payload, now, siteId, organizationId, expected.revision])
+  `, [connection.provider_account_email, payload, now, organizationId, organizationId, expected.revision])
   if (result.meta?.changes !== 1) throw new Error('Site ownership or google connection changed during authorization')
 
   return connectionId
@@ -171,14 +169,14 @@ export const storeGoogleAnalyticsConnection = async (
 export const getGoogleAnalyticsConnection = async (
   env: GoogleAnalyticsEnv,
   organizationId: string,
-  siteId: string
+  organizationId: string
 ): Promise<GoogleAnalyticsConnection | null> => {
   if (!env.DB) {
     return null
   }
 
   const connection = await queryFirst<GoogleAnalyticsConnection>(env.DB, `
-    SELECT id AS site_id, organization_id,
+    SELECT id AS organization_id, organization_id,
            json_extract(integrations_json, '$.google.id') AS id,
            json_extract(integrations_json, '$.google.revision') AS revision,
            json_extract(integrations_json, '$.google.connected_by_user_id') AS connected_by_user_id,
@@ -194,12 +192,12 @@ export const getGoogleAnalyticsConnection = async (
            json_extract(integrations_json, '$.google.expires_at') AS expires_at,
            json_extract(integrations_json, '$.google.created_at') AS created_at,
            json_extract(integrations_json, '$.google.updated_at') AS updated_at
-      FROM sites
+      FROM organization
      WHERE organization_id = ? AND id = ?
        AND json_extract(integrations_json, '$.google.kind') = 'oauth'
        AND json_extract(integrations_json, '$.google.status') = 'active'
      LIMIT 1
-  `, [organizationId, siteId])
+  `, [organizationId, organizationId])
 
   if (!connection) {
     return null
@@ -216,9 +214,9 @@ export const getGoogleAnalyticsConnection = async (
 export const getGoogleAnalyticsAccessToken = async (
   env: GoogleAnalyticsEnv,
   organizationId: string,
-  siteId: string
+  organizationId: string
 ): Promise<string> => {
-  const connection = await getGoogleAnalyticsConnection(env, organizationId, siteId)
+  const connection = await getGoogleAnalyticsConnection(env, organizationId, organizationId)
   if (!connection) {
     throw new Error('No Google Analytics connection found for this site.')
   }

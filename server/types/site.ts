@@ -9,7 +9,7 @@ export type { CurrencyCode }
 export interface SiteSettings {
   id: string
   organization_id: string
-  site_id: string
+  organization_id: string
   subdomain: string
   theme: string
   status: 'active' | 'inactive' | 'suspended'
@@ -60,7 +60,7 @@ export interface UpdateSiteSettingsRequest {
 }
 
 export interface LaunchReadiness {
-  site_id: string
+  organization_id: string
   overall_ready: boolean
   missing_critical: number
   missing_optional: number

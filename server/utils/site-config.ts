@@ -21,7 +21,7 @@ export interface SiteConfig {
 export const getConfig = async (
   db: DbClient,
   organizationId: string,
-  siteId: string
+  organizationId: string
 ): Promise<SiteConfig> => {
   const row = await queryFirst<Record<keyof SiteConfig | 'font_preset_type', unknown>>(db, `
     SELECT json_extract(settings_json, '$.config.brand_color') AS brand_color,
@@ -37,8 +37,8 @@ export const getConfig = async (
            social_facebook_url AS social_facebook,
            social_instagram_url AS social_instagram,
            social_tiktok_url AS social_tiktok
-      FROM sites WHERE organization_id = ? AND id = ?
-  `, [organizationId, siteId])
+      FROM organization WHERE organization_id = ? AND id = ?
+  `, [organizationId, organizationId])
   if (!row) throw new HTTPError({ statusCode: 404, statusMessage: 'Site not found' })
   const config: SiteConfig = {}
   for (const key of ["brand_color","press_email","partnerships_email","catering_email","careers_email","google_analytics_measurement_id","google_site_verification","default_timezone","social_facebook","social_instagram","social_tiktok"] as const) {
@@ -56,12 +56,11 @@ export const getConfig = async (
 export const resolveLocationTimezone = async (
   db: DbClient,
   organizationId: string,
-  siteId: string,
   locationId: string | null,
 ): Promise<string> => {
   const location = await queryFirst<{ timezone: string | null }>(db,
-    'SELECT timezone FROM business_locations WHERE id = ? AND organization_id = ? AND site_id = ?',
-    [locationId, organizationId, siteId])
+    'SELECT timezone FROM business_locations WHERE id = ? AND organization_id = ? AND organization_id = ?',
+    [locationId, organizationId, organizationId])
   if (!location?.timezone) throw new HTTPError({ statusCode: 409, statusMessage: 'Set the location timezone before offering bookings' })
   return location.timezone
 }
@@ -84,14 +83,13 @@ export const isTimeSlotInPast = (date: string, time: string, timezone: string, n
 export const setConfig = async (
   db: DbClient,
   organizationId: string,
-  siteId: string,
   key: keyof SiteConfig,
   value: string
 ) => {
   if (key === 'font_preset' && !isSiteFontPreset(value)) throw new HTTPError({ statusCode: 422, statusMessage: 'Unsupported site font preset' })
   if (key === 'default_timezone' && !isValidTimezone(value)) throw new HTTPError({ statusCode: 422, statusMessage: 'A valid analytics timezone is required' })
   if (key === 'social_facebook' || key === 'social_instagram' || key === 'social_tiktok') {
-    const result = await execute(db, `UPDATE sites SET ${key}_url = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE organization_id = ? AND id = ?`, [value || null, organizationId, siteId])
+    const result = await execute(db, `UPDATE organization SET ${key}_url = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE organization_id = ? AND id = ?`, [value || null, organizationId, organizationId])
     if (result.meta?.changes !== 1) throw new HTTPError({ statusCode: 409, statusMessage: 'Site ownership changed. Reload before saving.' })
     return
   }
@@ -100,28 +98,28 @@ export const setConfig = async (
       SELECT json_extract(integrations_json, '$.google.kind') AS kind,
              json_extract(integrations_json, '$.google.ga4_measurement_id') AS measurement_id,
              json_extract(integrations_json, '$.google.revision') AS revision
-        FROM sites WHERE organization_id = ? AND id = ?
-    `, [organizationId, siteId])
+        FROM organization WHERE organization_id = ? AND id = ?
+    `, [organizationId, organizationId])
     if (!current) throw new HTTPError({ statusCode: 404, statusMessage: 'Site not found' })
     if (current.kind === 'oauth') {
       if ((current.measurement_id ?? '') === value) return
       throw new HTTPError({ statusCode: 409, statusMessage: 'Disconnect Google Analytics before setting a manual measurement ID' })
     }
     const result = await execute(db, `
-      UPDATE sites SET integrations_json = json_set(integrations_json, '$.google',
+      UPDATE organization SET integrations_json = json_set(integrations_json, '$.google',
         json_object('kind', 'manual', 'status', ?, 'ga4_measurement_id', ?, 'revision', ?,
           'updated_at', strftime('%Y-%m-%dT%H:%M:%fZ', 'now')))
       WHERE organization_id = ? AND id = ? AND json_extract(integrations_json, '$.google.revision') IS ?
-    `, [value ? 'active' : 'disabled', value || null, crypto.randomUUID(), organizationId, siteId, current.revision])
+    `, [value ? 'active' : 'disabled', value || null, crypto.randomUUID(), organizationId, organizationId, current.revision])
     if (result.meta?.changes !== 1) throw new HTTPError({ statusCode: 409, statusMessage: 'Google Analytics settings changed. Reload before saving.' })
     return
   }
   const result = await execute(
     db,
-    `UPDATE sites SET settings_json = json_set(settings_json, ?, ?),
+    `UPDATE organization SET settings_json = json_set(settings_json, ?, ?),
        updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
      WHERE organization_id = ? AND id = ?`,
-    ['$.config.' + key, value, organizationId, siteId],
+    ['$.config.' + key, value, organizationId, organizationId],
   )
   if (result.meta?.changes !== 1) throw new HTTPError({ statusCode: 409, statusMessage: 'Site ownership changed. Reload before saving.' })
 }
@@ -129,17 +127,16 @@ export const setConfig = async (
 export const deleteConfig = async (
   db: DbClient,
   organizationId: string,
-  siteId: string,
   key: keyof SiteConfig
 ) => {
   if (key === 'default_timezone') throw new HTTPError({ statusCode: 422, statusMessage: 'The analytics timezone cannot be removed' })
-  if (key === 'google_analytics_measurement_id' || key === 'social_facebook' || key === 'social_instagram' || key === 'social_tiktok') return setConfig(db, organizationId, siteId, key, '')
+  if (key === 'google_analytics_measurement_id' || key === 'social_facebook' || key === 'social_instagram' || key === 'social_tiktok') return setConfig(db, organizationId, organizationId, key, '')
   const result = await execute(
     db,
-    `UPDATE sites SET settings_json = json_remove(settings_json, ?),
+    `UPDATE organization SET settings_json = json_remove(settings_json, ?),
        updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
      WHERE organization_id = ? AND id = ?`,
-    ['$.config.' + key, organizationId, siteId],
+    ['$.config.' + key, organizationId, organizationId],
   )
   if (result.meta?.changes !== 1) throw new HTTPError({ statusCode: 409, statusMessage: 'Site ownership changed. Reload before saving.' })
 }

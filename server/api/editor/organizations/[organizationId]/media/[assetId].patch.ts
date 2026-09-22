@@ -9,7 +9,6 @@ import { loadMemberSiteRow } from '~/server/utils/location-access'
 
 interface MediaAssetSiteRow {
   id: string
-  site_id: string
   organization_id: string
 }
 
@@ -32,9 +31,9 @@ export default defineHandler(async (event) => {
 
   try {
     const asset = await queryFirst<MediaAssetSiteRow>(
-      db, `SELECT id, site_id, organization_id FROM media_assets WHERE id = ? LIMIT 1`, [assetId], )
+      db, `SELECT id, organization_id, organization_id FROM media_assets WHERE id = ? LIMIT 1`, [assetId], )
     if (!asset) return jsonResponse({ error: 'Asset not found' }, { status: 404 })
-    if (asset.site_id !== organizationId) return jsonResponse({ error: 'Forbidden' }, { status: 403 })
+    if (asset.organization_id !== organizationId) return jsonResponse({ error: 'Forbidden' }, { status: 403 })
 
     const principal = memberAccessPrincipal(site.membership, { env, organizationId, event })
     await assertResourceAccess(db, { ...principal, resourceLocationId: null })

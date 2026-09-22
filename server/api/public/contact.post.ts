@@ -49,7 +49,7 @@ export default defineHandler(async (event) => {
     return jsonResponse({ error: 'Please choose a valid subject.' }, { status: 400 })
 
   const site = await queryFirst<{ id: string; organization_id: string; brand_name?: string | null; vertical?: string | null; theme_id?: string | null }>(
-    db, 'SELECT id, organization_id, brand_name, vertical, theme_id FROM sites WHERE id = ? AND status = ? LIMIT 1', [organizationId, 'active'], )
+    db, 'SELECT id, organization_id, brand_name, vertical, theme_id FROM organization WHERE id = ? AND status = ? LIMIT 1', [organizationId, 'active'], )
   if (!site) return jsonResponse({ error: 'Site not found' }, { status: 404 })
   const requiresConsent = siteSupportsBlawbyTemplate({ themeId: site.theme_id, vertical: site.vertical })
   const consentAcknowledged = body.consent === true
@@ -82,7 +82,7 @@ export default defineHandler(async (event) => {
 
   const consentAt = consentAcknowledged ? new Date().toISOString() : null
   const now = new Date().toISOString()
-  await executeBatch(db, requestInsertQueries({ id, kind: 'contact', organization_id: site.organization_id, site_id: organizationId, location_id: assignedLocationId,
+  await executeBatch(db, requestInsertQueries({ id, kind: 'contact', organization_id: site.organization_id, location_id: assignedLocationId,
     customer_id: null, review_id: null, conversation_state: 'needs_attention', resolved_at: null,
     payload: { guest: { name, email, phone: null }, subject: subject || topic || null, message, consent_at: consentAt, ip_hash: ipHash,
       source: source || null, route_context: routeContext || null, suggested_summary: suggestedSummary || null, agent_metadata: agentMetadata }, created_at: now, updated_at: now }))

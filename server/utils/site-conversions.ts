@@ -20,7 +20,6 @@ const TAXONOMY: Record<SiteConversionEventName, { stages: ConversionStage[]; ent
 
 export interface SiteConversionInput {
   organizationId: string
-  siteId: string
   eventName: SiteConversionEventName
   stage: ConversionStage
   locationId?: string | null
@@ -47,12 +46,12 @@ export async function recordSiteConversionEvent(db: DbClient, event: H3Event, in
   const sessionId = getOrCreateSessionId(event)
   const visitorId = getOrCreateVisitorId(event)
   const session = await queryFirst<{ attribution: string }>(db, `INSERT INTO analytics_summaries (
-    id, kind, organization_id, site_id, date, key, payload_json, created_at, updated_at
+    id, kind, organization_id, organization_id, date, key, payload_json, created_at, updated_at
   ) VALUES (?, 'session', ?, ?, '', ?, ?, ?, ?)
-  ON CONFLICT(site_id, kind, date, key) DO UPDATE SET
+  ON CONFLICT(organization_id, kind, date, key) DO UPDATE SET
     payload_json = json_set(analytics_summaries.payload_json, '$.last_seen_at', excluded.updated_at), updated_at = excluded.updated_at
   RETURNING json_extract(payload_json, '$.attribution') attribution`, [
-    crypto.randomUUID(), input.organizationId, input.siteId, sessionId,
+    crypto.randomUUID(), input.organizationId, input.organizationId, sessionId,
     JSON.stringify({ visitor_id: visitorId, started_at: now, last_seen_at: now,
       landing_path: input.pagePath?.startsWith('/') ? input.pagePath : '/', duration_seconds: 0,
       attribution: { source: 'Direct', medium: '(none)', campaign: null, term: null, content: null,
@@ -63,9 +62,9 @@ export async function recordSiteConversionEvent(db: DbClient, event: H3Event, in
   const id = crypto.randomUUID()
   const ipHash = await hashIp(getClientIp(event))
   await execute(db, `INSERT OR IGNORE INTO analytics_events (
-    id, kind, organization_id, site_id, session_id, visitor_id, location_id, page_path, payload_json, created_at
+    id, kind, organization_id, organization_id, session_id, visitor_id, location_id, page_path, payload_json, created_at
   ) VALUES (?, 'conversion', ?, ?, ?, ?, ?, ?, ?, ?)`, [
-    id, input.organizationId, input.siteId, sessionId, visitorId, input.locationId ?? null, input.pagePath ?? null,
+    id, input.organizationId, input.organizationId, sessionId, visitorId, input.locationId ?? null, input.pagePath ?? null,
     JSON.stringify({ event_name: input.eventName, stage: input.stage, entity_type: input.entityType ?? null,
       entity_id: input.entityId ?? null, page_type: input.pageType ?? null, cta_destination: input.ctaDestination ?? null,
       attribution: JSON.parse(session.attribution), attributed_at: now, metadata: input.metadata ?? null,
@@ -79,7 +78,7 @@ export async function recordSubmissionConversionSafe(db: DbClient, event: H3Even
     await recordSiteConversionEvent(db, event, input)
   } catch (error) {
     console.error('site_conversion_write_failed', {
-      siteId: input.siteId,
+      organizationId: input.organizationId,
       eventName: input.eventName,
       entityId: input.entityId,
       error: error instanceof Error ? error.message : String(error),

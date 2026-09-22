@@ -23,7 +23,7 @@ export default defineHandler(async (event) => {
   if (!site) {
     return jsonResponse({ error: 'Site not found' }, { status: 404 })
   }
-  await assertSiteWideAccess(db, memberAccessPrincipal(organization, { env, siteId: site.id, event }))
+  await assertSiteWideAccess(db, memberAccessPrincipal(organization, { env, organizationId: site.id, event }))
 
 
   try {

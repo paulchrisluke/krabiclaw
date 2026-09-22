@@ -49,7 +49,6 @@ export async function sendReviewRequestForBooking(
   try {
     const sent = await notifyReviewRequest(env, db, {
       organizationId: context.organization_id,
-      siteId: context.site_id,
       siteName: context.site_name,
       locationId: context.location_id,
       requestId: request.id,

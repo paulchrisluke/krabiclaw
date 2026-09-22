@@ -10,7 +10,7 @@ import { mcpProtocolError, MCP_ERROR } from "~/server/utils/mcp-protocol";
 import {
   resolveMcpWorkspace,
   type McpLocationSummary,
-  type McpSiteSummary,
+  type McpOrganizationSummary,
 } from "~/server/utils/mcp-context";
 import { sniffMediaMimeType, VIDEO_MIME_TYPES, MAX_VIDEO_BYTES, MAX_IMAGE_BYTES, R2_IMAGE_MIME_TYPES, RESOLVED_MEDIA_IMAGE_TYPES } from "~/server/utils/media-mime";
 import { assertMarkdownSize, decodeMarkdownText, resolveMarkdownMimeType } from "~/server/utils/markdown-document";
@@ -105,11 +105,11 @@ export function validateImageBuffer(
 
 export async function requireActiveImageAsset(
   db: D1Database,
-  siteId: string,
+  organizationId: string,
   assetId: string,
   fieldName: string,
 ) {
-  const asset = await getMediaAsset(db, assetId, siteId);
+  const asset = await getMediaAsset(db, assetId, organizationId);
   if (!asset || asset.status !== "active" || asset.kind !== "image") {
     throw mcpProtocolError(
       MCP_ERROR.invalidParams,
@@ -121,11 +121,11 @@ export async function requireActiveImageAsset(
 
 export async function requireActiveVideoAsset(
   db: D1Database,
-  siteId: string,
+  organizationId: string,
   assetId: string,
   fieldName: string,
 ) {
-  const asset = await getMediaAsset(db, assetId, siteId);
+  const asset = await getMediaAsset(db, assetId, organizationId);
   if (!asset || asset.status !== "active" || asset.kind !== "video") {
     throw mcpProtocolError(
       MCP_ERROR.invalidParams,
@@ -426,17 +426,15 @@ export async function resolveUserUploadedMediaFile(
 
 export function workspaceContextPayload(
   organization: Awaited<ReturnType<typeof resolveMcpWorkspace>>["organization"],
-  site: McpSiteSummary | null,
   location: McpLocationSummary | null,
 ) {
   return {
-    organization_id: organization?.id ?? site?.organization_id ?? null,
-    organization_name: organization?.name ?? site?.organization_name ?? null,
-    organization_slug: organization?.slug ?? site?.organization_slug ?? null,
-    site_id: site?.id ?? null,
-    site_name: site?.brand_name ?? site?.subdomain ?? null,
-    site_subdomain: site?.subdomain ?? null,
-    site_public_url: resolveSitePublicOrigin(site),
+    organization_id: organization?.id ?? null,
+    organization_name: organization?.name ?? null,
+    organization_slug: organization?.slug ?? null,
+    site_name: organization?.name ?? organization?.subdomain ?? null,
+    site_subdomain: organization?.subdomain ?? null,
+    site_public_url: resolveSitePublicOrigin(organization),
     location_id: location?.id ?? null,
     location_slug: location?.slug ?? null,
     location_title: location?.title ?? null,
@@ -451,7 +449,7 @@ function normalizeAbsoluteUrl(value: string | null | undefined): string | null {
 }
 
 export function resolveSitePublicOrigin(
-  site: Pick<McpSiteSummary, 'public_url'> | { publicUrl?: string | null } | null | undefined,
+  site: Pick<McpOrganizationSummary, 'public_url'> | { publicUrl?: string | null } | null | undefined,
 ): string | null {
   if (!site) return null
   return normalizeAbsoluteUrl('public_url' in site ? site.public_url : site.publicUrl)
@@ -510,22 +508,6 @@ export function workspaceOrganizationsPayload(
   }));
 }
 
-export function workspaceSitesPayload(
-  workspace: Awaited<ReturnType<typeof resolveMcpWorkspace>>,
-) {
-  return workspace.sites.map((site) => ({
-    id: site.id,
-    organizationId: site.organization_id,
-    organizationName: site.organization_name,
-    name: site.brand_name ?? site.subdomain ?? site.id,
-    subdomain: site.subdomain ?? "",
-    orgSlug: site.organization_slug ?? "",
-    publicUrl: resolveSitePublicOrigin(site),
-    status: site.status ?? "inactive",
-    active: site.id === workspace.site?.id,
-  }));
-}
-
 export function workspaceLocationsPayload(
   workspace: Awaited<ReturnType<typeof resolveMcpWorkspace>>,
 ) {
@@ -544,8 +526,7 @@ export async function mutationContextPayload(
 ) {
   const context = await queryFirst<{
     organization_id: string;
-    site_id: string;
-    brand_name: string | null;
+    name: string;
     subdomain: string | null;
     custom_domain: string | null;
     public_url: string | null;
@@ -553,37 +534,32 @@ export async function mutationContextPayload(
     location_slug: string | null;
     location_title: string | null;
   }>(site.db, `
-    SELECT s.organization_id,
-           s.id AS site_id,
-           s.brand_name,
-           s.subdomain,
-           (SELECT domain FROM site_domains WHERE site_id = s.id AND role = 'canonical' AND status = 'active' AND type = 'custom') AS custom_domain,
-           (SELECT 'https://' || domain FROM site_domains WHERE site_id = s.id AND role = 'canonical' AND status = 'active') AS public_url,
+    SELECT o.id AS organization_id,
+           o.name,
+           o.subdomain,
+           (SELECT domain FROM organization_domains WHERE organization_id = o.id AND role = 'canonical' AND status = 'active' AND type = 'custom') AS custom_domain,
+           (SELECT 'https://' || domain FROM organization_domains WHERE organization_id = o.id AND role = 'canonical' AND status = 'active') AS public_url,
            location.id AS location_id,
            location.slug AS location_slug,
            location.title AS location_title
-    FROM sites s
+    FROM organization o
     LEFT JOIN business_locations location
       ON location.id = ?
-     AND location.organization_id = s.organization_id
-     AND location.site_id = s.id
-    WHERE s.id = ?
-      AND s.organization_id = ?
+     AND location.organization_id = o.id
+    WHERE o.id = ?
     LIMIT 1
   `, [
     options.locationId ?? null,
-    site.siteId,
     options.organizationId ?? site.organizationId,
   ]);
-  if (!context) throw new Error('MCP site context is unavailable.');
+  if (!context) throw new Error('MCP organization context is unavailable.');
   const organization = await findOrganizationById(site.env, context.organization_id)
   if (!organization) throw new Error('MCP organization context is unavailable.')
   return {
     organization_id: context.organization_id,
     organization_name: organization.name,
     organization_slug: organization.slug,
-    site_id: context.site_id,
-    site_name: context.brand_name ?? context.subdomain,
+    site_name: context.name,
     site_subdomain: context.subdomain,
     site_public_url: resolveSitePublicOrigin(context),
     location_id: context.location_id,
@@ -615,7 +591,7 @@ export async function normalizeWorkspaceArguments(
 ) {
   const args = { ...rawArguments };
 
-  if (["get_workspace_context", "set_workspace_context", "list_sites"].includes(toolName)) {
+  if (["get_workspace_context", "set_workspace_context", "list_organizations"].includes(toolName)) {
     return args;
   }
 
@@ -623,10 +599,10 @@ export async function normalizeWorkspaceArguments(
     schema.properties && typeof schema.properties === "object"
       ? (schema.properties as Record<string, unknown>)
       : {};
-  const supportsSite = "site_id" in properties;
+  const supportsSite = "organization_id" in properties;
   const supportsLocation = "location_id" in properties;
   const needsLocation = toolRequiresArgument(schema, "location_id");
-  const hasSite = typeof args.site_id === "string" && args.site_id.trim();
+  const hasSite = typeof args.organization_id === "string" && args.organization_id.trim();
   const hasLocation = typeof args.location_id === "string" && args.location_id.trim();
 
   if (!supportsSite && !needsLocation) {
@@ -645,7 +621,7 @@ export async function normalizeWorkspaceArguments(
       user.env,
       user.userId,
       {
-        siteId: hasSite ? String(args.site_id) : null,
+        organizationId: hasSite ? String(args.organization_id) : null,
         locationId: hasLocation ? String(args.location_id) : null,
         requireSite: supportsSite || needsLocation,
         requireLocation: needsLocation,
@@ -656,7 +632,7 @@ export async function normalizeWorkspaceArguments(
   }
 
   if (!hasSite && supportsSite && workspace.site) {
-    args.site_id = workspace.site.id;
+    args.organization_id = workspace.site.id;
   }
   if (!hasLocation && supportsLocation && workspace.location && needsLocation) {
     args.location_id = workspace.location.id;
@@ -919,16 +895,16 @@ export function assertDomainSuccess(result: {
 }
 
 export function normalizeSiteCreationData(data: Record<string, unknown>) {
-  const siteId = typeof data.siteId === "string" ? data.siteId : "";
-  if (!siteId.trim()) {
+  const organizationId = typeof data.organizationId === "string" ? data.organizationId : "";
+  if (!organizationId.trim()) {
     throw mcpProtocolError(
       MCP_ERROR.invalidParams,
-      "Critical identifier siteId is empty or missing in site creation response",
+      "Critical identifier organizationId is empty or missing in site creation response",
     );
   }
   return {
     ...data,
-    siteId,
+    organizationId,
   };
 }
 
@@ -936,7 +912,7 @@ export function normalizeSiteCreationData(data: Record<string, unknown>) {
 export const NOT_HANDLED = Symbol('mcp-executor-not-handled')
 
 // Only toolName/args/site are read by domain handlers —
-// event/tool/rawArguments/normalizedArguments/siteId exist for the MCP protocol
+// event/tool/rawArguments/normalizedArguments/organizationId exist for the MCP protocol
 // caller (executeMcpToolCall) and are optional so non-MCP callers (ChowBot, see
 // mcp-executor/chowbot-adapter.ts) can build a context without an H3Event or a
 // resolved MCP tool-catalog entry.
@@ -946,7 +922,7 @@ export interface McpExecutorContext {
   rawArguments?: Record<string, unknown>
   normalizedArguments?: Record<string, unknown>
   tool?: ReturnType<typeof getMcpTool>
-  siteId?: string
+  organizationId?: string
   site: McpSiteContext
   args: Record<string, unknown>
 }

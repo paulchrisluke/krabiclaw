@@ -11,7 +11,6 @@ import { recordStripeGa4Intent } from '~/server/utils/stripe-ga4-intents'
 
 interface AnalyticsIntentRequest {
   organizationId?: string
-  siteId?: string
   subscriptionId?: string | null
   action?: string
   gaClientId?: string | null
@@ -71,8 +70,8 @@ export default defineHandler(async (event) => {
 
   const session = await getAuthSession(event, env)
   if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
-  if (!body?.organizationId || !body.siteId || !isStripeGa4IntentAction(body.action)) {
-    return jsonResponse({ error: 'organizationId, siteId, and a valid action are required' }, { status: 400 })
+  if (!body?.organizationId || !body.organizationId || !isStripeGa4IntentAction(body.action)) {
+    return jsonResponse({ error: 'organizationId, organizationId, and a valid action are required' }, { status: 400 })
   }
   if (body.effectiveTiming && body.effectiveTiming !== 'immediate' && body.effectiveTiming !== 'period_end') {
     return jsonResponse({ error: 'Invalid effective timing' }, { status: 400 })
@@ -91,8 +90,8 @@ export default defineHandler(async (event) => {
   }
 
   const site = await queryFirst<{ id: string }>(env.DB, `
-    SELECT id FROM sites WHERE id = ? AND organization_id = ? LIMIT 1
-  `, [body.siteId, organization.id])
+    SELECT id FROM organization WHERE id = ? AND organization_id = ? LIMIT 1
+  `, [body.organizationId, organization.id])
   if (!site) return jsonResponse({ error: 'Site not found or does not belong to this organization' }, { status: 404 })
 
   const subscriptionId = optionalString(body.subscriptionId)
@@ -121,7 +120,7 @@ export default defineHandler(async (event) => {
 
   await updateStripeAttribution(env, organization.id, session.user.id, body, action)
   const intent = await recordStripeGa4Intent(env.DB, {
-    organizationId: organization.id, userId: session.user.id, stripeSubscriptionId: subscriptionId, action, siteId: body.siteId, clientId, sessionId, sessionCapturedAt, previousPriceId: optionalString(body.previousPriceId), newPriceId: optionalString(body.newPriceId), effectiveTiming: body.effectiveTiming, source: body.source ?? 'browser', })
+    organizationId: organization.id, userId: session.user.id, stripeSubscriptionId: subscriptionId, action, clientId, sessionId, sessionCapturedAt, previousPriceId: optionalString(body.previousPriceId), newPriceId: optionalString(body.newPriceId), effectiveTiming: body.effectiveTiming, source: body.source ?? 'browser', })
   return jsonResponse({ success: true, intentId: intent.id })
 })
 import { readBody } from 'nitro/h3';

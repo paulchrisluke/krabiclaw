@@ -12,7 +12,7 @@ export default defineHandler(async (event) => {
     // Everything this site carries, published or withheld: the editor decides
     // visibility, so it must be able to see what is currently hidden.
     const products = await listSiteProducts(db, { organizationId: site.organization_id })
-    return jsonResponse({ success: true, products, site_id: organizationId })
+    return jsonResponse({ success: true, products, organization_id: organizationId })
   } catch (error) {
     rethrowHttpError(error)
     console.error('products_list_failed', { organizationId, error: error instanceof Error ? error.message : String(error) })

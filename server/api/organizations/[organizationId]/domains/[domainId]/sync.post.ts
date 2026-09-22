@@ -8,7 +8,7 @@ import { buildDashboardUrl } from '~/server/utils/dashboard-links'
 
 interface DomainRecordRow {
   id: string
-  site_id: string
+  organization_id: string
 }
 
 export default defineHandler(async (event) => {
@@ -21,18 +21,18 @@ export default defineHandler(async (event) => {
   const { env, db, session, site } = await requireSiteAccess(event, organizationId)
 
   const domainRecord = await queryFirst<DomainRecordRow>(db, `
-    SELECT id, site_id
-    FROM site_domains
+    SELECT id, organization_id
+    FROM organization_domains
     WHERE id = ?
     LIMIT 1
   `, [domainId])
-  if (!domainRecord || domainRecord.site_id !== site.id) {
+  if (!domainRecord || domainRecord.organization_id !== site.id) {
     return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
   }
 
   try {
     const domain = await syncDomainWithCloudflare(env, db, domainId, site.member_role as 'owner' | 'admin' | 'editor', session.user.id, undefined, { forceRevalidation: true })
-    if (domain.site_id !== site.id) {
+    if (domain.organization_id !== site.id) {
       return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
     }
 

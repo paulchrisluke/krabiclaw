@@ -17,6 +17,6 @@ export default defineHandler(async (event) => {
   if (!from || !to) throw new HTTPError({ statusCode: 400, statusMessage: 'from and to are required' })
   const requestedKinds = stringQuery(query.kinds)?.split(',').map(kind => kind.trim()).filter((kind): kind is AgendaKind => AGENDA_KINDS.includes(kind as AgendaKind))
   const payload = await listAgenda(db, organization.id, {
-    from, to, siteId: stringQuery(query.siteId), locationId: stringQuery(query.locationId), kinds: requestedKinds, organizationSlug: organization.slug, principal: { env, membership: organization }, })
+    from, to, organizationId: stringQuery(query.organizationId), locationId: stringQuery(query.locationId), kinds: requestedKinds, organizationSlug: organization.slug, principal: { env, membership: organization }, })
   return jsonResponse(finalizeRequestMetrics(event, 'dashboard-agenda', payload))
 })

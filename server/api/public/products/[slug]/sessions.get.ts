@@ -33,7 +33,7 @@ export default defineHandler(async (event) => {
       FROM products p
       JOIN product_publications pub ON pub.product_id = p.id AND pub.organization_id = p.organization_id
       JOIN product_booking_configs cfg ON cfg.product_id = p.id
-     WHERE pub.site_id = ? AND pub.published = 1 AND p.slug = ? AND p.active = 1
+     WHERE pub.organization_id = ? AND pub.published = 1 AND p.slug = ? AND p.active = 1
      LIMIT 1
   `, [organizationId, slug])
   if (!product) return jsonResponse({ error: 'Product not found' }, { status: 404 })
@@ -43,7 +43,7 @@ export default defineHandler(async (event) => {
   // this product does not offer its occurrences either.
   const sellingLocations = new Set((await queryAll<{ location_id: string }>(db, `
     SELECT pl.location_id FROM product_locations pl
-      JOIN business_locations l ON l.id = pl.location_id AND l.site_id = ? AND l.status = 'active'
+      JOIN business_locations l ON l.id = pl.location_id AND l.organization_id = ? AND l.status = 'active'
      WHERE pl.product_id = ? AND pl.active = 1 AND pl.published = 1
   `, [organizationId, product.id])).map(row => row.location_id))
 

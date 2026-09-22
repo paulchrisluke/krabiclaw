@@ -7,8 +7,8 @@ import { hasSiteEntitlement } from '~/server/utils/billing'
 import { requireRequestedSiteWideAccess } from '~/server/utils/location-access'
 
 export default defineHandler(async (event) => {
-  const body = await readBody(event) as { siteId?: string } | undefined
-  const { env, db, session, site } = await requireRequestedSiteWideAccess(event, body?.siteId)
+  const body = await readBody(event) as { organizationId?: string } | undefined
+  const { env, db, session, site } = await requireRequestedSiteWideAccess(event, body?.organizationId)
 
   const allowed = await hasSiteEntitlement(env, db, site.id, 'managed_service')
   if (!allowed) {
@@ -21,12 +21,12 @@ export default defineHandler(async (event) => {
 
   const version = await queryFirst<IntegrationVersion>(db, `
       SELECT json_extract(integrations_json, '$.facebook.revision') AS revision
-        FROM sites WHERE id = ? AND organization_id = ?
+        FROM organization WHERE id = ? AND organization_id = ?
     `, [site.id, site.organization_id])
   if (!version) throw new Error('Site no longer belongs to this organization')
 
   const state = await signOAuthState(env.CONNECTOR_TOKEN_ENCRYPTION_KEY as string, {
-    ...version, siteId: site.id, organizationId: site.organization_id, userId: session.user.id, timestamp: Date.now(), })
+    ...version, organizationId: site.id, userId: session.user.id, timestamp: Date.now(), })
 
   const authUrl = getFacebookAuthUrl(env, state)
   return jsonResponse({ success: true, authUrl })

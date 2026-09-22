@@ -5,11 +5,11 @@ import { syncSiteSearchIndex } from '~/server/utils/public-search'
 import { normalizeHost } from '~/server/utils/tenant-hosts'
 
 // KV read-through cache for public shell and page resource queries.
-// Mirrors edge-cache.ts's HTML cache shape, but keyed by siteId + resource
-// params instead of host + pathname — public resources are looked up by siteId
+// Mirrors edge-cache.ts's HTML cache shape, but keyed by organizationId + resource
+// params instead of host + pathname — public resources are looked up by organizationId
 // directly, not by tenant hostname, so no hostname resolution is needed here.
 //
-// Cache key: public~<siteId>~v3~<contract>~<page>~<location>~<datasets>~<blogSlug>~<locale>,
+// Cache key: public~<organizationId>~v3~<contract>~<page>~<location>~<datasets>~<blogSlug>~<locale>,
 // each field percent-encoded (mirrors composables/usePublicPageRequest.ts's
 // usePublicPageKey(), minus `token` — cached entries are never preview/draft-authorized,
 // see the preview authorization guard in the shell and page services).
@@ -30,13 +30,13 @@ const CACHE_INVALIDATION_TERMINAL_RETENTION_MS = 7 * 24 * 60 * 60 * 1000
  * the search index is brought up to date.
  */
 export function publicResourceCacheInvalidationQuery(
-  siteId: string,
+  organizationId: string,
   reason: string,
 ): BatchQuery {
-  const values = [crypto.randomUUID(), siteId, reason, new Date().toISOString()]
+  const values = [crypto.randomUUID(), organizationId, reason, new Date().toISOString()]
   return {
     query: `INSERT INTO public_resource_cache_invalidations
-      (id, site_id, reason, status, attempt_count, created_at)
+      (id, organization_id, reason, status, attempt_count, created_at)
       VALUES (?, ?, ?, 'pending', 0, ?)`,
     params: values,
   }
@@ -46,8 +46,8 @@ export function publicResourceCacheInvalidationQuery(
 export function organizationSitesInvalidationQuery(organizationId: string, reason: string): BatchQuery {
   return {
     query: `INSERT INTO public_resource_cache_invalidations
-      (id, site_id, reason, status, attempt_count, created_at)
-      SELECT lower(hex(randomblob(16))), id, ?, 'pending', 0, ? FROM sites WHERE organization_id = ?`,
+      (id, organization_id, reason, status, attempt_count, created_at)
+      SELECT lower(hex(randomblob(16))), id, ?, 'pending', 0, ? FROM organization WHERE organization_id = ?`,
     params: [reason, new Date().toISOString(), organizationId],
   }
 }
@@ -58,7 +58,7 @@ export async function drainPublicResourceCacheInvalidations(
   db: DbClient,
   kv: KVNamespace,
   env: SiteChangeDrainEnv,
-  options: { limit?: number; now?: Date; siteId?: string },
+  options: { limit?: number; now?: Date; organizationId?: string },
 ): Promise<number> {
   const freeSiteDomain = normalizeHost(env.NUXT_PUBLIC_FREE_SITE_DOMAIN)
   if (!freeSiteDomain) throw new Error('NUXT_PUBLIC_FREE_SITE_DOMAIN is required')
@@ -69,25 +69,25 @@ export async function drainPublicResourceCacheInvalidations(
   await execute(db, `
     DELETE FROM public_resource_cache_invalidations
      WHERE status IN ('processed', 'failed') AND processed_at < ?
-       ${options.siteId ? 'AND site_id = ?' : ''}
-  `, [terminalRetentionCutoff, ...(options.siteId ? [options.siteId] : [])])
+       ${options.organizationId ? 'AND organization_id = ?' : ''}
+  `, [terminalRetentionCutoff, ...(options.organizationId ? [options.organizationId] : [])])
   await execute(db, `
     UPDATE public_resource_cache_invalidations
        SET status = 'failed', claimed_at = NULL, processed_at = ?,
            last_error = COALESCE(last_error, 'Retry limit reached')
      WHERE attempt_count >= ?
        AND (status = 'pending' OR (status = 'processing' AND (claimed_at IS NULL OR claimed_at < ?)))
-       ${options.siteId ? 'AND site_id = ?' : ''}
-  `, [nowIso, CACHE_INVALIDATION_MAX_ATTEMPTS, staleClaimCutoff, ...(options.siteId ? [options.siteId] : [])])
-  const rows = await queryAll<{ id: string; site_id: string; attempt_count: number }>(db, `
-    SELECT id, site_id, attempt_count
+       ${options.organizationId ? 'AND organization_id = ?' : ''}
+  `, [nowIso, CACHE_INVALIDATION_MAX_ATTEMPTS, staleClaimCutoff, ...(options.organizationId ? [options.organizationId] : [])])
+  const rows = await queryAll<{ id: string; organization_id: string; attempt_count: number }>(db, `
+    SELECT id, organization_id, attempt_count
       FROM public_resource_cache_invalidations
      WHERE attempt_count < ?
        AND (status = 'pending' OR (status = 'processing' AND (claimed_at IS NULL OR claimed_at < ?)))
-       ${options.siteId ? 'AND site_id = ?' : ''}
+       ${options.organizationId ? 'AND organization_id = ?' : ''}
      ORDER BY created_at ASC
      LIMIT ?
-  `, [CACHE_INVALIDATION_MAX_ATTEMPTS, staleClaimCutoff, ...(options.siteId ? [options.siteId] : []), options.limit ?? 50])
+  `, [CACHE_INVALIDATION_MAX_ATTEMPTS, staleClaimCutoff, ...(options.organizationId ? [options.organizationId] : []), options.limit ?? 50])
   let processed = 0
   // Several rows for one site in one drain are one change to converge on: the
   // site's slice is listed and diffed once, and the rest of its rows ride along.
@@ -102,17 +102,17 @@ export async function drainPublicResourceCacheInvalidations(
     if (Number(claim.meta?.changes ?? 0) !== 1) continue
     const claimedAttemptCount = row.attempt_count + 1
     try {
-      await purgeSiteCaches(db, kv, row.site_id, freeSiteDomain)
+      await purgeSiteCaches(db, kv, row.organization_id, freeSiteDomain)
       // A process without the binding has no index to keep: `nuxt dev`, where
       // the binding is remote-only, and the test runtime. The served worker
       // (`wrangler dev`) and every deploy have it and keep it.
-      if (env.AI_SEARCH && !import.meta.dev && !syncedSites.has(row.site_id)) {
-        const synced = await syncSiteSearchIndex(env as CloudflareEnv, db, row.site_id)
-        syncedSites.add(row.site_id)
+      if (env.AI_SEARCH && !import.meta.dev && !syncedSites.has(row.organization_id)) {
+        const synced = await syncSiteSearchIndex(env as CloudflareEnv, db, row.organization_id)
+        syncedSites.add(row.organization_id)
         // A bounded run that left uploads behind is not a failure to retry; it
         // is more of the same change, so it goes back on the queue as a new row.
         if (synced.pending > 0) {
-          const more = publicResourceCacheInvalidationQuery(row.site_id, 'search-sync-continue')
+          const more = publicResourceCacheInvalidationQuery(row.organization_id, 'search-sync-continue')
           await execute(db, more.query, more.params ?? [])
         }
       }
@@ -151,14 +151,14 @@ const encodeKeyField = (value: string | null | undefined): string =>
   encodeURIComponent(value ?? '').replace(/~/g, '%7E')
 
 export function buildPublicBlawbyDocumentCacheKey(
-  siteId: string,
+  organizationId: string,
   recipe: string,
   slug?: string | null,
   locale = 'en',
 ): string {
   return [
     'public',
-    encodeKeyField(siteId),
+    encodeKeyField(organizationId),
     'v3',
     'blawby-document',
     encodeKeyField(recipe),
@@ -167,10 +167,10 @@ export function buildPublicBlawbyDocumentCacheKey(
   ].join('~')
 }
 
-export function buildPublicResourceCacheKey(siteId: string, params: PublicResourceCacheParams): string {
+export function buildPublicResourceCacheKey(organizationId: string, params: PublicResourceCacheParams): string {
   return [
     'public',
-    encodeKeyField(siteId),
+    encodeKeyField(organizationId),
     'v3',
     params.contract,
     encodeKeyField(params.page),
@@ -209,20 +209,20 @@ export async function putPublicResourceCache(
  * the drainer wraps it in claiming and retries, and a write path calls it
  * directly so what it just wrote cannot be read back stale.
  */
-export async function purgeSiteCaches(db: DbClient, kv: KVNamespace, siteId: string, freeSiteDomainInput?: string | null): Promise<void> {
+export async function purgeSiteCaches(db: DbClient, kv: KVNamespace, organizationId: string, freeSiteDomainInput?: string | null): Promise<void> {
   const freeSiteDomain = normalizeHost(freeSiteDomainInput)
   const [domains, sites] = await Promise.all([
-    queryAll<{ domain: string }>(db, "SELECT domain FROM site_domains WHERE site_id = ? AND status = 'active'", [siteId]),
-    queryAll<{ subdomain: string | null }>(db, 'SELECT subdomain FROM sites WHERE id = ? LIMIT 1', [siteId]),
+    queryAll<{ domain: string }>(db, "SELECT domain FROM organization_domains WHERE organization_id = ? AND status = 'active'", [organizationId]),
+    queryAll<{ subdomain: string | null }>(db, 'SELECT subdomain FROM organization WHERE id = ? LIMIT 1', [organizationId]),
   ])
   const hostnames = new Set<string>(domains.map(domain => domain.domain))
   const subdomain = sites[0]?.subdomain
   if (subdomain && freeSiteDomain) hostnames.add(`${subdomain}.${freeSiteDomain}`)
-  await Promise.all([purgePublicResourceCache(kv, siteId), purgeSiteKvCache(kv, [...hostnames])])
+  await Promise.all([purgePublicResourceCache(kv, organizationId), purgeSiteKvCache(kv, [...hostnames])])
 }
 
-export async function purgePublicResourceCache(kv: KVNamespace, siteId: string): Promise<void> {
-  const prefix = `public~${encodeKeyField(siteId)}~`
+export async function purgePublicResourceCache(kv: KVNamespace, organizationId: string): Promise<void> {
+  const prefix = `public~${encodeKeyField(organizationId)}~`
   const deletions: Promise<void>[] = []
   let cursor: string | undefined
   do {
@@ -242,7 +242,7 @@ export async function purgePublicResourceCache(kv: KVNamespace, siteId: string):
  */
 export async function purgePublicResourceCacheSafe(
   env: unknown,
-  siteId: string,
+  organizationId: string,
 ): Promise<void> {
   const maybeEnv = env as {
     DB?: DbClient
@@ -260,13 +260,13 @@ export async function purgePublicResourceCacheSafe(
   // queued row is what makes every other worker converge.
   const purgePromise = maybeEnv.DB
     ? (async () => {
-        const invalidation = publicResourceCacheInvalidationQuery(siteId, 'write-through-purge')
+        const invalidation = publicResourceCacheInvalidationQuery(organizationId, 'write-through-purge')
         await Promise.all([
           execute(maybeEnv.DB!, invalidation.query, invalidation.params),
-          purgeSiteCaches(maybeEnv.DB!, kv, siteId, maybeEnv.NUXT_PUBLIC_FREE_SITE_DOMAIN),
+          purgeSiteCaches(maybeEnv.DB!, kv, organizationId, maybeEnv.NUXT_PUBLIC_FREE_SITE_DOMAIN),
         ])
       })()
-    : purgePublicResourceCache(kv, siteId)
+    : purgePublicResourceCache(kv, organizationId)
 
   const waitUntil = maybeEnv?.ctx?.waitUntil
   if (typeof waitUntil === 'function') {

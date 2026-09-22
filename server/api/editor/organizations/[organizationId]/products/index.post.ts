@@ -17,7 +17,7 @@ export default defineHandler(async (event) => {
     await setProductPublication(db, {
       organizationId, productId: product.id, published: false, actor: { actorId: session.user.id },
     })
-    return jsonResponse({ success: true, product, site_id: organizationId }, { status: 201 })
+    return jsonResponse({ success: true, product, organization_id: organizationId }, { status: 201 })
   } catch (error) {
     rethrowHttpError(error)
     console.error('product_create_failed', { organizationId, error: error instanceof Error ? error.message : String(error) })

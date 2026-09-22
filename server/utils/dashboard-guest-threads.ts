@@ -27,7 +27,7 @@ export interface DashboardGuestThreadListQuery {
 }
 
 export interface OrganizationGuestThreadListQuery extends DashboardGuestThreadListQuery {
-  siteId?: string | null
+  organizationId?: string | null
 }
 
 /**
@@ -41,7 +41,7 @@ export interface OrganizationGuestThreadListQuery extends DashboardGuestThreadLi
  */
 export async function listDashboardGuestThreadsForPrincipal(
   db: DbClient,
-  siteId: string,
+  organizationId: string,
   input: { principal: MemberAccessPrincipal; userId: string; query: DashboardGuestThreadListQuery },
 ) {
   const { principal, userId, query } = input
@@ -55,38 +55,38 @@ export async function listDashboardGuestThreadsForPrincipal(
     unreadOnly: query.unreadOnly ?? false,
   }
   const [threads, summary] = await Promise.all([
-    listGuestThreads(db, siteId, options),
-    getGuestThreadOperationSummary(db, siteId, options),
+    listGuestThreads(db, organizationId, options),
+    getGuestThreadOperationSummary(db, organizationId, options),
   ])
   return { threads, summary }
 }
 
 export async function loadDashboardGuestThreads(
   event: H3Event,
-  siteId: string,
+  organizationId: string,
   query: DashboardGuestThreadListQuery,
 ) {
-  const { env, db, session, site } = await requireSiteAccess(event, siteId, 'context')
-  const principal = memberAccessPrincipal(site.membership, { env, siteId, event })
+  const { env, db, session, site } = await requireSiteAccess(event, organizationId, 'context')
+  const principal = memberAccessPrincipal(site.membership, { env, organizationId, event })
   if (query.locationId) {
     await assertMemberScope(db, { ...principal, locationId: query.locationId })
   }
-  return listDashboardGuestThreadsForPrincipal(db, siteId, { principal, userId: session.user.id, query })
+  return listDashboardGuestThreadsForPrincipal(db, organizationId, { principal, userId: session.user.id, query })
 }
 
 export async function loadDashboardGuestThread(
   event: H3Event,
-  siteId: string,
+  organizationId: string,
   threadId: string,
 ) {
-  const { db, env, site } = await requireSiteAccess(event, siteId, 'context')
-  const thread = await getGuestRequest(db, threadId, siteId)
+  const { db, env, site } = await requireSiteAccess(event, organizationId, 'context')
+  const thread = await getGuestRequest(db, threadId, organizationId)
   if (!thread) {
     throw new HTTPError({ statusCode: 404, statusMessage: 'Thread not found' })
   }
-  await assertMemberScope(db, { ...memberAccessPrincipal(site.membership, { env, siteId, event }), locationId: thread.location_id })
+  await assertMemberScope(db, { ...memberAccessPrincipal(site.membership, { env, organizationId, event }), locationId: thread.location_id })
 
-  const detail = await getGuestThreadDetail(db, threadId, siteId)
+  const detail = await getGuestThreadDetail(db, threadId, organizationId)
   if (!detail) {
     throw new HTTPError({ statusCode: 404, statusMessage: 'Thread not found' })
   }
@@ -97,7 +97,6 @@ export async function loadDashboardGuestThread(
     await publishNotificationInvalidation(env, {
       type: 'notification.read',
       organizationId: thread.organization_id,
-      siteId: thread.site_id,
       locationId: thread.location_id,
       targetUserId: notificationAccess.userId,
     })
@@ -132,7 +131,6 @@ export async function loadOrganizationGuestThreads(
   }
   const options = {
     organizationId: organization.id,
-    siteId: query.siteId ?? null,
     locationId: query.locationId ?? null,
     principal,
     userId,
@@ -143,7 +141,7 @@ export async function loadOrganizationGuestThreads(
   }
   const [threads, summary] = await Promise.all([
     listOrganizationGuestThreads(db, options),
-    getGuestThreadOperationSummary(db, options.siteId, options),
+    getGuestThreadOperationSummary(db, options.organizationId, options),
   ])
   return { threads, summary }
 }

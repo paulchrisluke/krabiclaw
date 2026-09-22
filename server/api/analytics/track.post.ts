@@ -59,9 +59,9 @@ export default defineHandler(async (event) => {
     const tenantType = event.context.tenantType
     const isTenant = tenantType === TENANT_TYPES.TENANT
     const isPlatform = tenantType === TENANT_TYPES.PLATFORM
-    const siteId = typeof event.context.siteId === 'string' ? event.context.siteId : ''
     const organizationId = typeof event.context.organizationId === 'string' ? event.context.organizationId : ''
-    if ((!isTenant && !isPlatform) || (isTenant && (!siteId || !organizationId))) {
+    const organizationId = typeof event.context.organizationId === 'string' ? event.context.organizationId : ''
+    if ((!isTenant && !isPlatform) || (isTenant && (!organizationId || !organizationId))) {
       return jsonResponse({ error: 'Active tenant or platform context is required' }, { status: 400 })
     }
     const userAgent = (event.req.headers.get('user-agent') || '').slice(0, 1024)
@@ -84,7 +84,7 @@ export default defineHandler(async (event) => {
     const ipHash = await hashIp(getClientIp(event))
     const now = new Date().toISOString()
     const windowEndsAt = new Date(Date.now() + RATE_LIMIT_WINDOW_SECONDS * 1000).toISOString()
-    const rateKey = `analytics-track:${isPlatform ? 'platform' : siteId}:${ipHash}`
+    const rateKey = `analytics-track:${isPlatform ? 'platform' : organizationId}:${ipHash}`
     await execute(db, `INSERT INTO rate_limits (key, count, updated_at, expires_at)
       VALUES (?, 1, ?, ?)
       ON CONFLICT(key) DO UPDATE SET
@@ -103,9 +103,9 @@ export default defineHandler(async (event) => {
         return jsonResponse({ error: 'A valid analytics session is required' }, { status: 400 })
       }
       if (isTenant) {
-        await updateTenantPageviewDuration(db, { eventId: body.eventId, siteId, sessionId, durationSeconds: durationSeconds!, now })
+        await updateTenantPageviewDuration(db, { eventId: body.eventId, organizationId, sessionId, durationSeconds: durationSeconds!, now })
       } else {
-        await updatePlatformPageviewDuration(db, { eventId: body.eventId, siteId, sessionId, durationSeconds: durationSeconds! })
+        await updatePlatformPageviewDuration(db, { eventId: body.eventId, organizationId, sessionId, durationSeconds: durationSeconds! })
       }
       return jsonResponse({ ok: true })
     }
@@ -120,7 +120,7 @@ export default defineHandler(async (event) => {
     if (isPlatform) {
       await recordPlatformPageview(db, {
         eventId: body.eventId,
-        siteId,
+        organizationId,
         pagePath,
         referrerHost,
         userAgent,
@@ -134,9 +134,9 @@ export default defineHandler(async (event) => {
       })
     } else {
       const [locationId, page, internalHosts] = await Promise.all([
-        resolveLocationIdFromPath(db, siteId, pagePath),
-        resolvePageviewTenantPageIdentity(db, siteId, pagePath, locale),
-        getSiteInternalHosts(db, siteId, event.url.hostname),
+        resolveLocationIdFromPath(db, organizationId, pagePath),
+        resolvePageviewTenantPageIdentity(db, organizationId, pagePath, locale),
+        getSiteInternalHosts(db, organizationId, event.url.hostname),
       ])
       const site = event.context.site as { theme?: string | null; vertical?: string | null } | undefined
       if (!page && !isKnownTenantPublicPath(pagePath, {
@@ -148,7 +148,7 @@ export default defineHandler(async (event) => {
       await recordTenantPageview(db, {
         eventId: body.eventId,
         organizationId,
-        siteId,
+        
         pagePath,
         locale,
         referrerHost,

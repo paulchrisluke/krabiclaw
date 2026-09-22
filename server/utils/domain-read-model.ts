@@ -2,13 +2,13 @@ import { queryAll } from '~/server/db'
 import { rootDomainForPair } from '~/server/utils/domain-shared'
 import type { DomainRecord, DomainRole, DomainStatus } from '~/server/utils/domains'
 
-export async function getSiteDomains(db: D1Database, siteId: string): Promise<DomainRecord[]> {
+export async function getSiteDomains(db: D1Database, organizationId: string): Promise<DomainRecord[]> {
   const domains = await queryAll<DomainRecord>(db, `
     SELECT *
-    FROM site_domains
-    WHERE site_id = ? AND status != 'deleted'
+    FROM organization_domains
+    WHERE organization_id = ? AND status != 'deleted'
     ORDER BY type ASC, role ASC, created_at ASC
-  `, [siteId])
+  `, [organizationId])
 
   return domains || []
 }
@@ -182,7 +182,7 @@ export function groupCustomDomains(domains: DomainRecord[]): DomainGroup[] {
 
 export async function getDomainEvents(db: D1Database, domainId: string) {
   const events = await queryAll(db, `
-    SELECT id, organization_id, site_id, event_name AS event_type, body AS message,
+    SELECT id, organization_id, organization_id, event_name AS event_type, body AS message,
            actor_user_id AS actor_id, payload_json ->> '$.actorType' AS actor_type,
            payload_json ->> '$.entityId' AS domain_id,
            payload_json ->> '$.beforeState' AS before_state,
@@ -197,8 +197,8 @@ export async function getDomainEvents(db: D1Database, domainId: string) {
   return events || []
 }
 
-export async function getSiteDomainsDashboardPayload(db: D1Database, siteId: string) {
-  const domains = await getSiteDomains(db, siteId)
+export async function getSiteDomainsDashboardPayload(db: D1Database, organizationId: string) {
+  const domains = await getSiteDomains(db, organizationId)
   const enriched = []
   for (const domain of domains) {
     enriched.push({

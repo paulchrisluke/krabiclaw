@@ -6,7 +6,7 @@ import type { JSONWebKeySet, JWTPayload } from 'jose'
 import { createAuth, getAuthSession, type CloudflareEnv } from '~/server/utils/auth'
 import { hasPlatformEventPermission } from '~/server/utils/platform-admin-users'
 import { queryFirst } from '~/server/db'
-import { assertSiteWideAccess, isOrganizationWideRole, resolveOrganizationMembership, memberAccessPrincipal, type ResolvedMembership, roleAllows, type OrganizationPermissions } from '~/server/utils/member-access'
+import { assertOrganizationWideAccess, isOrganizationWideRole, resolveOrganizationMembership, memberAccessPrincipal, type ResolvedMembership, roleAllows, type OrganizationPermissions } from '~/server/utils/member-access'
 import { getOrganizationEntitlements } from '~/server/utils/billing-access'
 import { cloudflareEnv } from '~/server/utils/api-response'
 
@@ -43,7 +43,6 @@ export interface McpUserContext {
 }
 
 export interface McpSiteContext extends McpUserContext {
-  siteId: string
   organizationId: string
   organizationSlug?: string
   subdomain?: string | null
@@ -335,67 +334,64 @@ function ensureForbiddenScopesAbsent(scopes: string[], forbiddenScopes?: string[
   }
 }
 
-// siteId accepts the site's id, subdomain, or active domain — all three are exact,
-// unambiguous identifiers (unlike a free-text business name), so resolving them
-// directly here removes a list-then-match round trip for every site-scoped tool.
+// `organization` accepts the organization's id, subdomain, or active domain —
+// all three are exact, unambiguous identifiers (unlike a free-text business
+// name), so resolving them directly here removes a list-then-match round trip
+// for every tenant-scoped tool.
 export async function requireMcpSite(
   event: H3Event,
-  siteId: string,
+  organization: string,
   minimumRole: McpToolRole = 'editor',
   authenticatedUser?: McpUserContext,
 ): Promise<McpSiteContext> {
   const user = authenticatedUser ?? await requireMcpUser(event)
 
-  type SiteRow = { id: string; organization_id: string; subdomain: string | null; custom_domain: string | null; public_url: string | null }
-  const siteByColumn = async (column: 'id' | 'subdomain' | 'domain') =>
-    queryFirst<SiteRow>(
+  type TenantRow = { id: string; subdomain: string | null; custom_domain: string | null; public_url: string | null }
+  const tenantByColumn = async (column: 'id' | 'subdomain' | 'domain') =>
+    queryFirst<TenantRow>(
       user.db,
       `
-      SELECT s.id, s.organization_id, s.subdomain, (SELECT domain FROM site_domains WHERE site_id = s.id AND role = 'canonical' AND status = 'active' AND type = 'custom') AS custom_domain, (SELECT 'https://' || domain FROM site_domains WHERE site_id = s.id AND role = 'canonical' AND status = 'active') AS public_url
-      FROM sites s
-      WHERE ${column === 'domain' ? "EXISTS (SELECT 1 FROM site_domains WHERE site_id = s.id AND domain = ? AND status = 'active')" : `s.${column} = ?`}
+      SELECT o.id, o.subdomain, (SELECT domain FROM organization_domains WHERE organization_id = o.id AND role = 'canonical' AND status = 'active' AND type = 'custom') AS custom_domain, (SELECT 'https://' || domain FROM organization_domains WHERE organization_id = o.id AND role = 'canonical' AND status = 'active') AS public_url
+      FROM organization o
+      WHERE ${column === 'domain' ? "EXISTS (SELECT 1 FROM organization_domains WHERE organization_id = o.id AND domain = ? AND status = 'active')" : `o.${column} = ?`}
       LIMIT 1
     `,
-      [siteId],
+      [organization],
     )
 
   // Check id first, then subdomain, then active domain — see note above on
   // why an OR across all three columns is ambiguous.
-  const site = await siteByColumn('id')
-    ?? await siteByColumn('subdomain')
-    ?? await siteByColumn('domain')
+  const site = await tenantByColumn('id')
+    ?? await tenantByColumn('subdomain')
+    ?? await tenantByColumn('domain')
 
-  if (!site?.organization_id) {
-    throw new HTTPError({ statusCode: 404, statusMessage: 'Site not found or access denied' })
+  if (!site) {
+    throw new HTTPError({ statusCode: 404, statusMessage: 'Organization not found or access denied' })
   }
   const membership = await resolveOrganizationMembership(user.env, {
-    organizationId: site.organization_id,
+    organizationId: site.id,
     userId: user.userId,
   })
-  if (!membership) throw new HTTPError({ statusCode: 404, statusMessage: 'Site not found or access denied' })
+  if (!membership) throw new HTTPError({ statusCode: 404, statusMessage: 'Organization not found or access denied' })
 
   const role = normalizeRole(membership.role)
-  if (!role || !await roleSatisfies(site.organization_id, membership.role, minimumRole)) {
+  if (!role || !await roleSatisfies(site.id, membership.role, minimumRole)) {
     throw new HTTPError({ statusCode: 403, statusMessage: 'Insufficient permissions' })
   }
 
-  // MCP tools operate on a whole site at this auth layer, so an editor needs
-  // the site's resource team membership to use any MCP tool at all. A
-  // location-only editor is rejected here rather than silently getting
-  // whole-site access. This is strictly a tightening versus the prior
-  // role-name-only check: it was already impossible for a location-scoped
-  // role to satisfy `minimumRole: 'editor'` before this change (that role
-  // name didn't normalize to a valid McpToolRole), so no existing MCP user
-  // loses access — only the never-actually-reachable case is now enforced
-  // explicitly instead of accidentally.
+  // MCP tools operate on the whole tenant at this auth layer, so anything short
+  // of an organization-wide role is refused here rather than silently getting
+  // tenant-wide access. A location-scoped editor could never satisfy
+  // `minimumRole: 'editor'` anyway (that role name does not normalize to a
+  // valid McpToolRole), so no existing MCP user loses access — the
+  // never-actually-reachable case is now enforced explicitly.
   if (!isOrganizationWideRole(role)) {
-    await assertSiteWideAccess(user.db, memberAccessPrincipal(membership, { env: user.env, siteId: site.id }))
+    await assertOrganizationWideAccess(user.db, memberAccessPrincipal(membership, { env: user.env }))
   }
 
   return {
     ...user,
-    siteId: site.id,
-    organizationId: site.organization_id,
+    organizationId: site.id,
     organizationSlug: membership.organizationSlug || undefined,
     subdomain: site.subdomain ?? null,
     customDomain: site.custom_domain ?? null,
@@ -409,11 +405,11 @@ export async function requireMcpSite(
 
 export async function getVisibleSiteContext(
   event: H3Event,
-  siteId: string,
-): Promise<{ role: McpToolRole; organizationId: string; siteId: string } | null> {
+  organization: string,
+): Promise<{ role: McpToolRole; organizationId: string } | null> {
   try {
-    const site = await requireMcpSite(event, siteId, 'editor')
-    return { role: site.role, organizationId: site.organizationId, siteId: site.siteId }
+    const site = await requireMcpSite(event, organization, 'editor')
+    return { role: site.role, organizationId: site.organizationId }
   } catch (error) {
     const statusCode = typeof (error as { statusCode?: unknown })?.statusCode === 'number'
       ? Number((error as { statusCode: number }).statusCode)
@@ -427,7 +423,7 @@ export async function getVisibleSiteContext(
   }
 }
 
-export async function getActiveEntitlements(env: CloudflareEnv, organizationId: string, keys: string[], _siteId?: string): Promise<Set<string>> {
+export async function getActiveEntitlements(env: CloudflareEnv, organizationId: string, keys: string[]): Promise<Set<string>> {
   if (!keys.length) return new Set()
   const entitlements = await getOrganizationEntitlements(env, organizationId)
   return new Set(keys.filter(key => entitlements[key] === true))

@@ -29,7 +29,6 @@ export interface PublicShellQueryIndexes {
 export function appendPublicShellQueries(
   queries: BatchQuery[],
   organizationId: string,
-  siteId: string,
 ): PublicShellQueryIndexes {
   const push = (query: string, params: unknown[]) => {
     const index = queries.length
@@ -49,27 +48,27 @@ export function appendPublicShellQueries(
                      social_mp.asset_id AS social_asset_id, social_ma.public_url AS social_public_url,
                      social_ma.thumbnail_url AS social_thumbnail_url, social_ma.kind AS social_kind
                 FROM business_locations bl
-                LEFT JOIN media_placements mp ON mp.site_id = bl.site_id AND mp.owner_type = 'business_location' AND mp.owner_id = bl.id AND mp.slot = 'hero' AND mp.sort_order = 0 AND mp.status = 'active'
+                LEFT JOIN media_placements mp ON mp.organization_id = bl.organization_id AND mp.owner_type = 'business_location' AND mp.owner_id = bl.id AND mp.slot = 'hero' AND mp.sort_order = 0 AND mp.status = 'active'
                 LEFT JOIN media_assets ma ON mp.asset_id = ma.id
                   AND ma.status = 'active'
                   AND ma.organization_id = bl.organization_id
-                  AND ma.site_id = bl.site_id
-                LEFT JOIN media_placements social_mp ON social_mp.site_id = bl.site_id
+                  AND ma.organization_id = bl.organization_id
+                LEFT JOIN media_placements social_mp ON social_mp.organization_id = bl.organization_id
                   AND social_mp.owner_type = 'business_location' AND social_mp.owner_id = bl.id
                   AND social_mp.slot = 'social_card' AND social_mp.sort_order = 0 AND social_mp.status = 'active'
                 LEFT JOIN media_assets social_ma ON social_mp.asset_id = social_ma.id
                   AND social_ma.status = 'active'
                   AND social_ma.organization_id = bl.organization_id
-                  AND social_ma.site_id = bl.site_id
+                  AND social_ma.organization_id = bl.organization_id
                WHERE bl.organization_id = ?  AND bl.status = 'active'
                ORDER BY bl.title ASC`, [organizationId]),
     config: push(`SELECT setting.key, setting.value
-                FROM sites s, json_each(s.settings_json, '$.config') setting
+                FROM organization s, json_each(s.settings_json, '$.config') setting
                WHERE s.organization_id = ? AND s.id = ?
                  AND setting.key IN ('brand_color', 'font_preset', 'press_email', 'partnerships_email', 'catering_email', 'careers_email', 'google_site_verification', 'default_timezone')
-              `, [organizationId, siteId]),
+              `, [organizationId, organizationId]),
     locales: push(`SELECT locale, label, is_source, status
-                FROM site_locales
+                FROM organization_locales
                WHERE organization_id = ? 
                  AND (is_source = 1 OR status = 'published')
                ORDER BY is_source DESC, locale ASC`, [organizationId]),

@@ -37,7 +37,7 @@ export default defineHandler(async (event) => {
     const status: ReviewStatus = 'pending'
     const userAgent = cleanString(event.req.headers.get('User-Agent'), 300)
     await execute(db, `
-      INSERT INTO reviews (id, organization_id, site_id, location_id, product_id, author_name, rating, title, content, status, ip_hash, user_agent)
+      INSERT INTO reviews (id, organization_id, organization_id, location_id, product_id, author_name, rating, title, content, status, ip_hash, user_agent)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [id, resolved.site.organization_id, organizationId, resolved.location.id, resolved.product.id, author, rating, title, content, status, ipHash, userAgent])
     return jsonResponse({ review: { id, product_id: resolved.product.id, author, rating, title, content, status }, message: 'Thanks. Your review is pending moderation.' }, { status: 201 })

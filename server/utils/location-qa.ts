@@ -6,7 +6,6 @@ import { d1JsonStringSet } from '../db/d1-limits.ts'
 
 export interface QaScope {
   organizationId: string
-  siteId: string
   locationId: string | null
   pagePath?: string | null
 }
@@ -32,7 +31,6 @@ export interface UpdateQaInput {
 export interface QaDocument {
   id: string
   organization_id: string
-  site_id: string
   location_id: string | null
   page_path: string | null
   question: string
@@ -77,21 +75,21 @@ function stringOrNull(value: unknown, maxLength: number) {
  * it has read it, so an id lookup replaces the scope clause rather than
  * narrowing it. Without an id this behaves exactly as before.
  */
-export async function listQa(db: DbClient, siteId: string, locationId: string | null, publishedOnly = false, pagePath?: string | null, locale = 'en', qaId?: string | null) {
+export async function listQa(db: DbClient, organizationId: string, locationId: string | null, publishedOnly = false, pagePath?: string | null, locale = 'en', qaId?: string | null) {
   const scope = qaId
     ? { clause: 'root.id = ?', params: [qaId] as unknown[] }
     : scopeSql(locationId, pagePath)
   return queryAll<QaDocument>(db, `
-    SELECT p.id, p.organization_id, p.site_id, root.location_id, root.scope_path AS page_path,
+    SELECT p.id, p.organization_id, p.organization_id, root.location_id, root.scope_path AS page_path,
       p.title AS question, p.summary AS answer, (root.metadata_json ->> '$.question_author') AS question_author,
       (root.metadata_json ->> '$.question_date') AS question_date, (root.metadata_json ->> '$.answer_author') AS answer_author,
       (root.metadata_json ->> '$.answer_date') AS answer_date, (root.metadata_json ->> '$.is_owner_answer') AS is_owner_answer,
       (root.metadata_json ->> '$.upvote_count') AS upvote_count, root.source, root.status, root.sort_order, p.created_at, p.updated_at
     FROM content_documents root JOIN content_documents p ON COALESCE(p.root_id,p.id) = root.id AND p.locale = ?
-    WHERE root.row_role = 'root' AND root.kind = 'qa' AND root.site_id = ?
+    WHERE root.row_role = 'root' AND root.kind = 'qa' AND root.organization_id = ?
       AND ${scope.clause.replace(/\b(location_id|scope_path)\b/g, 'root.$1')}${publishedOnly ? " AND root.status = 'published'" : ''}
     ORDER BY root.sort_order, is_owner_answer DESC, upvote_count DESC, p.created_at
-  `, [locale, siteId, ...scope.params])
+  `, [locale, organizationId, ...scope.params])
 }
 
 export function faqBlockSource(block: { type: string; data: Record<string, unknown> }): FaqBlockSource | null {
@@ -100,8 +98,8 @@ export function faqBlockSource(block: { type: string; data: Record<string, unkno
 }
 
 /** The published records a FAQ block with `source` lists on `pagePath`. */
-export function listFaqBlockQa(db: DbClient, siteId: string, pagePath: string, source: FaqBlockSource, locale = 'en') {
-  return listQa(db, siteId, null, true, source === 'page_qa' ? pagePath : null, locale)
+export function listFaqBlockQa(db: DbClient, organizationId: string, pagePath: string, source: FaqBlockSource, locale = 'en') {
+  return listQa(db, organizationId, null, true, source === 'page_qa' ? pagePath : null, locale)
 }
 
 export function faqItems(rows: QaDocument[]) {
@@ -114,12 +112,12 @@ export function faqItems(rows: QaDocument[]) {
  * surface renders the same items.
  */
 export async function attachPageQa<T extends { type: string; data: Record<string, unknown> }>(
-  db: DbClient, siteId: string, pagePath: string, blocks: T[], locale = 'en',
+  db: DbClient, organizationId: string, pagePath: string, blocks: T[], locale = 'en',
 ): Promise<T[]> {
   const sources = new Set(blocks.map(faqBlockSource).filter((source): source is FaqBlockSource => source !== null))
   if (!sources.size) return blocks
   const itemsBySource = new Map(await Promise.all([...sources].map(async source =>
-    [source, faqItems(await listFaqBlockQa(db, siteId, pagePath, source, locale))] as const)))
+    [source, faqItems(await listFaqBlockQa(db, organizationId, pagePath, source, locale))] as const)))
   return blocks.map((block) => {
     const source = faqBlockSource(block)
     return source ? { ...block, data: { ...block.data, items: itemsBySource.get(source) } } : block
@@ -147,12 +145,12 @@ export async function createQa(db: DbClient, scope: QaScope, input: CreateQaInpu
     return { status: 400, data: { error: 'sort_order must be an integer' } }
   }
 
-  await getPersistedSourceLocale(db, scope.organizationId, scope.siteId)
+  await getPersistedSourceLocale(db, scope.organizationId, scope.organizationId)
   const id = crypto.randomUUID()
   const pagePath = scope.locationId === null ? normalizePagePath(scope.pagePath) : null
   const scoped = scopeSql(scope.locationId, pagePath)
   await createContentDocumentWithBlocks(db, {
-    id, rowRole: 'root', kind: 'qa', locale: 'en', organizationId: scope.organizationId, siteId: scope.siteId,
+    id, rowRole: 'root', kind: 'qa', locale: 'en', organizationId: scope.organizationId,
     locationId: scope.locationId, scopePath: pagePath, status, source: 'manual', sortOrder: explicitSortOrder ?? 0,
     title: question, summary: answer,
     metadata: { question_author: stringOrNull(input.question_author, 120),
@@ -162,9 +160,9 @@ export async function createQa(db: DbClient, scope: QaScope, input: CreateQaInpu
     additionalQueriesAfter: explicitSortOrder === null ? [{
       query: `UPDATE content_documents SET sort_order = (
         SELECT COALESCE(MAX(sort_order), -1) + 1 FROM content_documents
-        WHERE row_role = 'root' AND kind = 'qa' AND organization_id = ? AND site_id = ? AND ${scoped.clause} AND id <> ?
+        WHERE row_role = 'root' AND kind = 'qa' AND organization_id = ? AND organization_id = ? AND ${scoped.clause} AND id <> ?
       ) WHERE id = ?`,
-      params: [scope.organizationId, scope.siteId, ...scoped.params, id, id],
+      params: [scope.organizationId, scope.organizationId, ...scoped.params, id, id],
     }] : [],
   })
   const inserted = await queryFirst<{ sort_order: number }>(db, 'SELECT sort_order FROM content_documents WHERE id = ?', [id])
@@ -234,11 +232,11 @@ export async function updateQa(db: DbClient, scope: QaScope, qaId: string, updat
   if (sets.length === 1) throw new Error('No update fields provided')
 
   const scoped = scopeSql(scope.locationId, scope.pagePath)
-  params.push(qaId, scope.organizationId, scope.siteId, ...scoped.params)
+  params.push(qaId, scope.organizationId, scope.organizationId, ...scoped.params)
   const result = await execute(db, `
     UPDATE content_documents
     SET ${sets.join(', ')}
-    WHERE row_role = 'root' AND kind = 'qa' AND source = 'manual' AND id = ? AND organization_id = ? AND site_id = ? AND ${scoped.clause}
+    WHERE row_role = 'root' AND kind = 'qa' AND source = 'manual' AND id = ? AND organization_id = ? AND organization_id = ? AND ${scoped.clause}
   `, params)
   if (!Number(result.meta.changes ?? 0)) throw new Error('Q&A not found')
   return { updated: true, qa_id: qaId }
@@ -246,11 +244,11 @@ export async function updateQa(db: DbClient, scope: QaScope, qaId: string, updat
 
 export async function deleteQa(db: DbClient, scope: QaScope, qaId: string) {
   const scoped = scopeSql(scope.locationId, scope.pagePath)
-  const params = [qaId, scope.organizationId, scope.siteId, ...scoped.params]
-  const where = `row_role = 'root' AND kind = 'qa' AND source = 'manual' AND id = ? AND organization_id = ? AND site_id = ? AND ${scoped.clause}`
+  const params = [qaId, scope.organizationId, scope.organizationId, ...scoped.params]
+  const where = `row_role = 'root' AND kind = 'qa' AND source = 'manual' AND id = ? AND organization_id = ? AND organization_id = ? AND ${scoped.clause}`
   const document = await queryFirst<{ id: string }>(db, `SELECT id FROM content_documents WHERE ${where}`, params)
   if (!document) return { status: 404, data: { error: 'Q&A not found' } }
-  const results = await executeBatch(db, prepareContentDocumentDeletion({ documentId: qaId, organizationId: scope.organizationId, siteId: scope.siteId }))
+  const results = await executeBatch(db, prepareContentDocumentDeletion({ documentId: qaId, organizationId: scope.organizationId}))
   if (!Number(results.at(-1)?.meta.changes ?? 0)) return { status: 404, data: { error: 'Q&A not found' } }
   return { status: 200, data: { qa_id: qaId, deleted: true } }
 }
@@ -271,8 +269,8 @@ export async function reorderQa(
   const validation = await queryFirst<{ valid_count: number }>(db, `
     SELECT COUNT(*) AS valid_count
     FROM content_documents
-    WHERE row_role = 'root' AND kind = 'qa' AND id IN (SELECT value FROM json_each(?)) AND organization_id = ? AND site_id = ? AND ${scoped.clause}
-  `, [d1JsonStringSet(updates.map(update => update.id)), scope.organizationId, scope.siteId, ...scoped.params])
+    WHERE row_role = 'root' AND kind = 'qa' AND id IN (SELECT value FROM json_each(?)) AND organization_id = ? AND organization_id = ? AND ${scoped.clause}
+  `, [d1JsonStringSet(updates.map(update => update.id)), scope.organizationId, scope.organizationId, ...scoped.params])
   if (Number(validation?.valid_count ?? 0) !== updates.length) {
     throw new Error('Q&A reorder contains records outside the requested scope')
   }
@@ -282,9 +280,9 @@ export async function reorderQa(
     query: `
       UPDATE content_documents
       SET sort_order = ?, updated_at = ?
-      WHERE row_role = 'root' AND kind = 'qa' AND source = 'manual' AND id = ? AND organization_id = ? AND site_id = ? AND ${scoped.clause}
+      WHERE row_role = 'root' AND kind = 'qa' AND source = 'manual' AND id = ? AND organization_id = ? AND organization_id = ? AND ${scoped.clause}
     `,
-    params: [update.sort_order, now, update.id, scope.organizationId, scope.siteId, ...scoped.params],
+    params: [update.sort_order, now, update.id, scope.organizationId, scope.organizationId, ...scoped.params],
   })))
   const changed = results.reduce((sum, result) => sum + Number(result.meta.changes ?? 0), 0)
   if (changed !== updates.length) {
@@ -293,21 +291,20 @@ export async function reorderQa(
   return { updated: updates.length }
 }
 
-export const listLocationQa = (db: DbClient, siteId: string, locationId: string) => listQa(db, siteId, locationId)
+export const listLocationQa = (db: DbClient, organizationId: string, locationId: string) => listQa(db, organizationId, locationId)
 
 export function createLocationQa(
   db: DbClient,
   organizationId: string,
-  siteId: string,
   locationId: string,
   input: CreateQaInput,
 ) {
-  return createQa(db, { organizationId, siteId, locationId }, input)
+  return createQa(db, { organizationId, locationId }, input)
 }
 
-export function deleteLocationQa(db: DbClient, siteId: string, locationId: string, qaId: string) {
-  return queryFirst<{ organization_id: string }>(db, 'SELECT organization_id FROM sites WHERE id = ?', [siteId])
+export function deleteLocationQa(db: DbClient, organizationId: string, locationId: string, qaId: string) {
+  return queryFirst<{ organization_id: string }>(db, 'SELECT organization_id FROM organization WHERE id = ?', [organizationId])
     .then(site => site
-      ? deleteQa(db, { organizationId: site.organization_id, siteId, locationId }, qaId)
+      ? deleteQa(db, { organizationId: site.organization_id, locationId }, qaId)
       : { status: 404, data: { error: 'Q&A not found' } })
 }

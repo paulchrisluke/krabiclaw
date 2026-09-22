@@ -19,7 +19,6 @@ export type DashboardBookingType = 'reservation' | 'booking'
 interface BookingRow {
   id: string
   organization_id: string
-  site_id: string
   site_slug: string
   site_name: string
   vertical: string
@@ -55,7 +54,7 @@ export interface DashboardBookingNote {
 export interface DashboardBookingDetails {
   id: string
   type: DashboardBookingType
-  siteId: string
+  organizationId: string
   siteSlug: string
   siteName: string
   vertical: string
@@ -123,14 +122,14 @@ async function loadBookingRow(
   // When, for how many and against what all live on the record the thread
   // refers to — a reservation or a booking — not on the thread. The thread
   // carries the conversation and the guest.
-  return queryFirst<BookingRow>(db, `SELECT r.id, r.organization_id, r.site_id, s.subdomain AS site_slug, s.brand_name AS site_name, s.vertical,
+  return queryFirst<BookingRow>(db, `SELECT r.id, r.organization_id, r.organization_id, s.subdomain AS site_slug, s.brand_name AS site_name, s.vertical,
     record.location_id, l.slug AS location_slug, l.title AS location_title,
     json_extract(r.payload_json, '$.guest.name') AS guest_name, json_extract(r.payload_json, '$.guest.email') AS guest_email, json_extract(r.payload_json, '$.guest.phone') AS guest_phone,
     NULL AS guest_image_url, record.party_size, record.starts_at, record.ends_at, record.timezone, record.status, json_extract(r.payload_json, '$.notes') AS requests,
     record.product_id AS experience_id, record.product_name AS experience_title, record.product_session_id AS session_id,
     r.id AS request_id, r.created_at, r.updated_at
     FROM requests r
-    JOIN sites s ON s.id = r.site_id
+    JOIN organization s ON s.id = r.organization_id
     JOIN (
       SELECT b.request_id, b.status, b.party_size, ps.starts_at, ps.ends_at, ps.timezone, ps.location_id, b.product_id, p.name AS product_name, ps.id AS product_session_id
         FROM bookings b JOIN product_sessions ps ON ps.id = b.product_session_id JOIN products p ON p.id = b.product_id
@@ -143,7 +142,7 @@ async function loadBookingRow(
 
 async function assertBookingAccess(context: BookingAccessContext, row: BookingRow) {
   await assertResourceAccess(context.db, {
-    ...memberAccessPrincipal(context.organization, { env: context.env, siteId: row.site_id }),
+    ...memberAccessPrincipal(context.organization, { env: context.env, organizationId: row.organization_id }),
     resourceLocationId: row.location_id,
   })
 }
@@ -165,11 +164,11 @@ function mediaImage(media: PublicSocialMedia | undefined): string | null {
 
 async function loadResourceImage(db: DbClient, row: BookingRow, type: DashboardBookingType) {
   if (type === 'booking' && row.experience_id) {
-    const experience = await loadPublicSocialMedia(db, row.site_id, 'product', [row.experience_id])
+    const experience = await loadPublicSocialMedia(db, row.organization_id, 'product', [row.experience_id])
     const image = mediaImage(experience.get(row.experience_id))
     if (image) return image
   }
-  const location = await loadPublicSocialMedia(db, row.site_id, 'business_location', [row.location_id])
+  const location = await loadPublicSocialMedia(db, row.organization_id, 'business_location', [row.location_id])
   return mediaImage(location.get(row.location_id))
 }
 
@@ -195,10 +194,10 @@ export async function loadDashboardBookingDetails(
   if (!row) throw new HTTPError({ statusCode: 404, message: 'Booking not found' })
   await assertBookingAccess(context, row)
 
-  const allowedLocationIds = await listAccessibleLocationIds(context.db, memberAccessPrincipal(context.organization, { env: context.env, siteId: row.site_id }))
-  const locations = await queryAll<{ id: string; title: string }>(context.db, 'SELECT id, title FROM business_locations WHERE organization_id = ? AND site_id = ? ORDER BY title', [row.organization_id, row.site_id])
+  const allowedLocationIds = await listAccessibleLocationIds(context.db, memberAccessPrincipal(context.organization, { env: context.env, organizationId: row.organization_id }))
+  const locations = await queryAll<{ id: string; title: string }>(context.db, 'SELECT id, title FROM business_locations WHERE organization_id = ? AND organization_id = ? ORDER BY title', [row.organization_id, row.organization_id])
   const visibleLocations = locations.filter(location => (allowedLocationIds === null || allowedLocationIds.includes(location.id)) && (input.type === 'reservation' || location.id === row.location_id))
-  const locationMedia = await loadPublicSocialMedia(context.db, row.site_id, 'business_location', visibleLocations.map(location => location.id))
+  const locationMedia = await loadPublicSocialMedia(context.db, row.organization_id, 'business_location', visibleLocations.map(location => location.id))
 
   const [resourceImageUrl, resolvedPolicy, notes, timeZone] = await Promise.all([
     loadResourceImage(context.db, row, input.type),
@@ -209,13 +208,13 @@ export async function loadDashboardBookingDetails(
       ? getLocationReservationConfig(context.db, { organizationId: row.organization_id, locationId: row.location_id })
       : Promise.resolve(null),
     listInternalNotes(context.db, row.request_id),
-    resolveLocationTimezone(context.db, row.organization_id, row.site_id, row.location_id),
+    resolveLocationTimezone(context.db, row.organization_id, row.organization_id, row.location_id),
   ])
 
   return {
     id: row.id,
     type: input.type,
-    siteId: row.site_id,
+    organizationId: row.organization_id,
     siteSlug: row.site_slug,
     siteName: row.site_name,
     vertical: row.vertical,
@@ -262,7 +261,7 @@ export async function requestDashboardBookingChange(
   await assertBookingAccess(context, row)
   if (!input.body || typeof input.body !== 'object' || !('idempotencyKey' in input.body) || typeof input.body.idempotencyKey !== 'string' || !input.body.idempotencyKey || input.body.idempotencyKey.length > 100) throw new HTTPError({ statusCode: 400, message: 'Request key is required' })
   const threadId = row.id
-  const thread = await getGuestRequest(context.db, row.id, row.site_id, input.type)
+  const thread = await getGuestRequest(context.db, row.id, row.organization_id, input.type)
   if (!thread) throw new HTTPError({ statusCode: 404, message: 'Booking not found' })
   await requestBookingChange(context.db, context.env, thread, context.userId, input.body, input.body.idempotencyKey)
   await publishGuestInboxThreadEvent(context.env, context.db, { threadId: threadId, type: 'thread.changed' })

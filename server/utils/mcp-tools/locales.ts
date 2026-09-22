@@ -8,7 +8,7 @@ const localizedValuesSchema = {
   additionalProperties: true,
 } as const
 
-const localizationIdentity = { id: { type: 'string' }, organization_id: { type: 'string' }, site_id: { type: 'string' },
+const localizationIdentity = { id: { type: 'string' }, organization_id: { type: 'string' }, 
   locale: { type: 'string' }, created_at: { type: 'string' }, updated_at: { type: 'string' } } as const
 const localizationObject = { oneOf: [
   { type: 'object', properties: { ...localizationIdentity, resource_type: { type: 'string', enum: [...LOCALIZED_RESOURCE_TYPES] },

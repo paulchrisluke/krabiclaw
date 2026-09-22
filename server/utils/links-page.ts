@@ -367,7 +367,6 @@ export async function deleteLinkItem(db: DbClient, input: {
   if (!current.page) throw new SiteLinksValidationError('Links page not found.')
   return await upsertLinksPage(db, {
     organizationId: input.organizationId,
-    organizationId: input.organizationId,
     page: current.page,
     items: current.items.filter(item => item.id !== input.itemId),
     expectedUpdatedAt: current.page.updated_at,
