@@ -1256,22 +1256,22 @@ async function productCacheInvalidations(db: DbClient, organizationId: string, p
  * disabled product is not unpublished.
  */
 export async function setProductPublication(db: DbClient, input: {
-  organizationId: string; productId: string; organizationId: string; published: boolean; actor: Actor
+  organizationId: string; productId: string; published: boolean; actor: Actor
 }): Promise<void> {
   const now = new Date().toISOString()
   await executeBatch(db, [{
-    query: `INSERT INTO product_publications (organization_id, product_id, organization_id, published, created_at, updated_at, created_by, updated_by)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    query: `INSERT INTO product_publications (organization_id, product_id, published, created_at, updated_at, created_by, updated_by)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT (product_id, organization_id) DO UPDATE SET published = excluded.published, updated_at = excluded.updated_at, updated_by = excluded.updated_by`,
-    params: [input.organizationId, input.productId, input.organizationId, input.published ? 1 : 0, now, now, input.actor.actorId, input.actor.actorId],
+    params: [input.organizationId, input.productId, input.published ? 1 : 0, now, now, input.actor.actorId, input.actor.actorId],
   }, publicResourceCacheInvalidationQuery(input.organizationId, 'product_publication_changed')], { operation: 'Set product publication' })
 }
 
 export async function removeProductPublication(db: DbClient, input: {
-  organizationId: string; productId: string; organizationId: string
+  organizationId: string; productId: string
 }): Promise<void> {
   await executeBatch(db, [
-    { query: 'DELETE FROM product_publications WHERE organization_id = ? AND product_id = ? AND organization_id = ?', params: [input.organizationId, input.productId, input.organizationId] },
+    { query: 'DELETE FROM product_publications WHERE organization_id = ? AND product_id = ?', params: [input.organizationId, input.productId] },
     publicResourceCacheInvalidationQuery(input.organizationId, 'product_publication_changed'),
   ], { operation: 'Remove product publication' })
 }
@@ -1498,28 +1498,6 @@ async function listProductsByIds(db: DbClient, organizationId: string, ids: stri
   return hydrate(db, organizationId, rows.map(mapProductRow))
 }
 
-/**
- * The sites whose public projection this reconcile changes.
- *
- * One question for the whole batch: every site already carrying one of the
- * named products, plus the site the reconcile itself speaks for, which is
- * where anything it creates lands.
- */
-async function reconcileCacheSites(db: DbClient, organizationId: string, productIds: string[], organizationId?: string): Promise<string[]> {
-  const sites = new Set<string>(organizationId ? [organizationId] : [])
-  if (productIds.length > 0) {
-    const rows = await queryAll<{ organization_id: string }>(db, `
-      SELECT organization_id FROM product_publications
-       WHERE organization_id = ? AND product_id IN (SELECT value FROM json_each(?))
-      UNION
-      SELECT organization_id FROM content_documents
-       WHERE organization_id = ? AND product_id IN (SELECT value FROM json_each(?))
-    `, [organizationId, d1JsonArray(productIds), organizationId, d1JsonArray(productIds)])
-    for (const row of rows) sites.add(String(row.organization_id))
-  }
-  return [...sites]
-}
-
 export async function reconcileProducts(db: DbClient, input: {
   organizationId: string
   products: ReconcileProductInput[]
@@ -1552,7 +1530,6 @@ export async function reconcileProducts(db: DbClient, input: {
     product_variants: input.products.flatMap(entry => (entry.variants ?? []).map(variant => variant.id).filter((id): id is string => Boolean(id))),
   })
   const byId = new Map(existingProducts.map(product => [product.id, product]))
-  const cacheSites = await reconcileCacheSites(db, input.organizationId, requestedIds, input.organizationId)
 
   const taken = new Set<string>()
   const now = new Date().toISOString()
@@ -1613,7 +1590,9 @@ export async function reconcileProducts(db: DbClient, input: {
   if (oversized >= 0) {
     invalid(`products[${oversized}] needs ${perProduct[oversized]!.length} statements to rewrite, more than the ${MAX_D1_BATCH_STATEMENTS} one transaction can carry`)
   }
-  perProduct.push(cacheSites.map(organizationId => publicResourceCacheInvalidationQuery(organizationId, 'products_reconciled')))
+  // One tenant, so one projection to invalidate: this used to ask which sites
+  // carried the named products, a question with only one possible answer now.
+  perProduct.push([publicResourceCacheInvalidationQuery(input.organizationId, 'products_reconciled')])
 
   // Whole products per batch, so a boundary never falls inside one.
   let batch: BatchQuery[] = []

@@ -20,7 +20,6 @@ interface ConnectionRow {
   revision: string | null
   id: string
   organization_id: string
-  organization_id: string
   facebook_page_id: string | null
   encrypted_user_token: string
   encrypted_page_token: string | null
@@ -28,7 +27,6 @@ interface ConnectionRow {
 
 interface SyncConnectionResult {
   connection_id: string
-  organization_id: string
   organization_id: string
   facebook: { success: number; errors: number; skipped: number } | null
   instagram: { success: number; errors: number; skipped: number } | null

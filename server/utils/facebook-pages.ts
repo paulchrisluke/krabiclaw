@@ -267,7 +267,6 @@ export const storeFacebookPagesConnection = async (
 export const getFacebookPagesConnection = async (
   env: FacebookEnv,
   organizationId: string,
-  organizationId: string
 ): Promise<FacebookPagesConnection | null> => {
   if (!env.DB) return null
 

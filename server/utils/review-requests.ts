@@ -7,7 +7,6 @@ export type CompletionSource = 'manual' | 'auto'
 export interface ReviewRequestRow {
   id: string
   organization_id: string
-  organization_id: string
   location_id: string | null
   customer_id: string
   booking_type: ReviewBookingType
@@ -30,7 +29,6 @@ export interface ReviewRequestRow {
 export interface ReviewBookingContext {
   booking_type: ReviewBookingType
   booking_id: string
-  organization_id: string
   organization_id: string
   location_id: string | null
   /** The product a booking was for; a reservation has none. */

@@ -21,7 +21,6 @@ export interface SiteConfig {
 export const getConfig = async (
   db: DbClient,
   organizationId: string,
-  organizationId: string
 ): Promise<SiteConfig> => {
   const row = await queryFirst<Record<keyof SiteConfig | 'font_preset_type', unknown>>(db, `
     SELECT json_extract(settings_json, '$.config.brand_color') AS brand_color,
@@ -89,8 +88,8 @@ export const setConfig = async (
   if (key === 'font_preset' && !isSiteFontPreset(value)) throw new HTTPError({ statusCode: 422, statusMessage: 'Unsupported site font preset' })
   if (key === 'default_timezone' && !isValidTimezone(value)) throw new HTTPError({ statusCode: 422, statusMessage: 'A valid analytics timezone is required' })
   if (key === 'social_facebook' || key === 'social_instagram' || key === 'social_tiktok') {
-    const result = await execute(db, `UPDATE organization SET ${key}_url = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE organization_id = ? AND id = ?`, [value || null, organizationId])
-    if (result.meta?.changes !== 1) throw new HTTPError({ statusCode: 409, statusMessage: 'Site ownership changed. Reload before saving.' })
+    const result = await execute(db, `UPDATE organization SET ${key}_url = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?`, [value || null, organizationId])
+    if (result.meta?.changes !== 1) throw new HTTPError({ statusCode: 409, statusMessage: 'Organization not found. Reload before saving.' })
     return
   }
   if (key === 'google_analytics_measurement_id') {

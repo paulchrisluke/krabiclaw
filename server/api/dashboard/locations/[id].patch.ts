@@ -14,9 +14,12 @@ export default defineHandler(async (event) => {
   if (!locationId) return jsonResponse({ error: 'Location ID required' }, { status: 400 })
 
   const { env, db, session, organization, location: locationContext } = await getDashboardLocationContext(event, locationId)
-  const organizationId = organization.id
+  // The location's own organization, not the one the session happens to be in:
+  // the context resolved both, and authorizing against the session's while
+  // reading the location's is how a request reaches another tenant's row.
   const organizationId = locationContext.organization_id
-  await assertMemberScope(db, { ...memberAccessPrincipal(organization, { env, organizationId, event }), locationId })
+  if (organizationId !== organization.id) return jsonResponse({ error: 'Location not found' }, { status: 404 })
+  await assertMemberScope(db, { ...memberAccessPrincipal(organization, { env, event }), locationId })
 
   const body = await readBody<Record<string, unknown>>(event)
   if (typeof body !== 'object' || body === null) {

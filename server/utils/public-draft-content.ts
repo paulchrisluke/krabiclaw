@@ -3,7 +3,6 @@ import type { PublicTenantPage } from '~/server/utils/public-tenant-pages'
 export interface PublicDraftSiteContent {
   id: string
   organization_id: string
-  organization_id: string
   location_id?: string
   page: string
   field: string

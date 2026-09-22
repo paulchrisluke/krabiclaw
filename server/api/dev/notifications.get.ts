@@ -11,7 +11,6 @@ export default defineHandler(async (event) => {
 
   const query = getQuery(event)
   const organizationId = typeof query.organization_id === 'string' ? query.organization_id : null
-  const organizationId = typeof query.organization_id === 'string' ? query.organization_id : null
   const locationId = typeof query.location_id === 'string' ? query.location_id : null
   const since = typeof query.since === 'string' ? query.since : null
   const limit = Math.min(Math.max(Number.parseInt(String(query.limit ?? '200'), 10) || 200, 1), 500)

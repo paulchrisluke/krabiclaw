@@ -396,7 +396,6 @@ export async function sendWhatsAppNotification(
 export async function getOrgWhatsAppPhone(
   db: DbClient,
   organizationId: string,
-  organizationId: string
 ): Promise<string | null> {
   const row = await queryFirst<{ value: string }>(db, `
     SELECT json_extract(settings_json, '$.config.whatsapp_phone') AS value FROM organization WHERE organization_id = ? AND id = ?

@@ -86,7 +86,6 @@ function buildSlug(value: string): string {
 export async function loadSettingsPayload(
   db: DbClient,
   organizationId: string,
-  organizationId: string
 ) {
   const updatedSite = await queryFirst<FullSiteRow & { vertical: string; theme_id: string }>(db, `
     SELECT organization.id, organization.organization_id, subdomain, organization.status,

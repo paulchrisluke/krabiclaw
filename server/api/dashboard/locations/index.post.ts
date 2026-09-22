@@ -68,15 +68,9 @@ export default defineHandler(async (event) => {
   const session = await getAuthSession(event, env)
   if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
-  const dashboard = await getDashboardContext(event, { requireSite: true })
-  if (!dashboard?.site) {
-    return jsonResponse({ error: 'No site found. Complete onboarding first.' }, { status: 400 })
-  }
-
-  const { site, organization } = dashboard
-  const organizationId = site.id as string
-  const organizationId = organization?.id as string
-  await assertOrganizationWideAccess(db, memberAccessPrincipal(organization, { env, organizationId, event }))
+  const { organization } = await getDashboardContext(event)
+  const organizationId = organization.id
+  await assertOrganizationWideAccess(db, memberAccessPrincipal(organization, { env, event }))
 
   const body = await readBody(event) as {
     mapsUrl?: unknown

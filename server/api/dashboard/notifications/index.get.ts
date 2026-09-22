@@ -9,7 +9,6 @@ interface NotificationRow {
   template: string
   severity: 'info' | 'success' | 'warning' | 'error'
   organization_id: string | null
-  organization_id: string | null
   location_id: string | null
   target_user_id: string | null
   title: string | null

@@ -169,7 +169,6 @@ export const storeGoogleAnalyticsConnection = async (
 export const getGoogleAnalyticsConnection = async (
   env: GoogleAnalyticsEnv,
   organizationId: string,
-  organizationId: string
 ): Promise<GoogleAnalyticsConnection | null> => {
   if (!env.DB) {
     return null
@@ -214,7 +213,6 @@ export const getGoogleAnalyticsConnection = async (
 export const getGoogleAnalyticsAccessToken = async (
   env: GoogleAnalyticsEnv,
   organizationId: string,
-  organizationId: string
 ): Promise<string> => {
   const connection = await getGoogleAnalyticsConnection(env, organizationId)
   if (!connection) {

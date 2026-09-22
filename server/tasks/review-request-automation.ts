@@ -14,7 +14,6 @@ interface ReviewRequestTaskContext {
 interface SendDueRow {
   id: string
   organization_id: string
-  organization_id: string
   booking_type: ReviewBookingType
 }
 

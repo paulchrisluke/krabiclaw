@@ -34,18 +34,15 @@ export async function getSiteForMcp(
   userId: string,
 ) {
   const site = await queryFirst<Record<string, unknown>>(db, `
-      SELECT s.id, s.organization_id, s.theme_id, s.brand_name, s.slug, s.subdomain,
-             (SELECT domain FROM organization_domains WHERE organization_id = s.id AND role = 'canonical' AND status = 'active' AND type = 'custom') AS custom_domain, (SELECT 'https://' || domain FROM organization_domains WHERE organization_id = s.id AND role = 'canonical' AND status = 'active') AS public_url, s.status, s.created_at, s.updated_at, s.onboarding_status
+      SELECT s.id, s.name, s.theme_id, s.slug, s.subdomain,
+             (SELECT domain FROM organization_domains WHERE organization_id = s.id AND role = 'canonical' AND status = 'active' AND type = 'custom') AS custom_domain, (SELECT 'https://' || domain FROM organization_domains WHERE organization_id = s.id AND role = 'canonical' AND status = 'active') AS public_url, s.status, s.updated_at, s.onboarding_status
       FROM organization s
       WHERE s.id = ?
       LIMIT 1
     `, [organizationId]);
 
-  const organizationId = typeof site?.organization_id === 'string' ? site.organization_id : ''
-  const membership = organizationId
-    ? await resolveOrganizationMembership(env, { organizationId, userId })
-    : null
-  if (!site || !membership) throw new Error("Site not found or access denied");
+  const membership = await resolveOrganizationMembership(env, { organizationId, userId })
+  if (!site || !membership) throw new Error("Organization not found or access denied");
   return site;
 }
 

@@ -90,7 +90,6 @@ export type McpToolCallStatus = "success" | "error" | "auth_required" | "blocked
 export interface LogMcpToolCallEventInput {
   env?: ApiRecord | null;
   organizationId?: string | null;
-  organizationId?: string | null;
   locationId?: string | null;
   userId?: string | null;
   mcpSurface?: "client" | "public_help";

@@ -60,7 +60,6 @@ export default defineHandler(async (event) => {
     const isTenant = tenantType === TENANT_TYPES.TENANT
     const isPlatform = tenantType === TENANT_TYPES.PLATFORM
     const organizationId = typeof event.context.organizationId === 'string' ? event.context.organizationId : ''
-    const organizationId = typeof event.context.organizationId === 'string' ? event.context.organizationId : ''
     if ((!isTenant && !isPlatform) || (isTenant && (!organizationId || !organizationId))) {
       return jsonResponse({ error: 'Active tenant or platform context is required' }, { status: 400 })
     }

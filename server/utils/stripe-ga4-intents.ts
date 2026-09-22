@@ -7,7 +7,6 @@ export interface StripeGa4Intent {
   userId: string
   stripeSubscriptionId: string | null
   action: StripeGa4IntentAction
-  organizationId: string | null
   clientId: string | null
   sessionId: string | null
   sessionCapturedAt: number | null
@@ -28,7 +27,6 @@ export interface CreateStripeGa4IntentInput {
   userId: string
   stripeSubscriptionId?: string | null
   action: StripeGa4IntentAction
-  organizationId?: string | null
   clientId?: string | null
   sessionId?: string | null
   sessionCapturedAt?: number | null
@@ -86,17 +84,16 @@ export async function recordStripeGa4Intent(
 
   await execute(db, `
     INSERT INTO stripe_ga4_subscription_intents
-      (id, organization_id, user_id, stripe_subscription_id, action, organization_id,
+      (id, organization_id, user_id, stripe_subscription_id, action,
        client_id, session_id, session_captured_at, previous_price_id, new_price_id,
        effective_timing, source, status, expires_at, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `, [
     row.id,
     row.organizationId,
     row.userId,
     row.stripeSubscriptionId,
     row.action,
-    row.organizationId,
     row.clientId,
     row.sessionId,
     row.sessionCapturedAt,
@@ -144,7 +141,6 @@ interface StripeGa4IntentRow {
   userId: string
   stripeSubscriptionId: string | null
   action: StripeGa4IntentAction
-  organizationId: string | null
   clientId: string | null
   sessionId: string | null
   sessionCapturedAt: number | null
@@ -166,7 +162,6 @@ const INTENT_SELECT = `
          user_id AS userId,
          stripe_subscription_id AS stripeSubscriptionId,
          action,
-         organization_id AS organizationId,
          client_id AS clientId,
          session_id AS sessionId,
          session_captured_at AS sessionCapturedAt,
