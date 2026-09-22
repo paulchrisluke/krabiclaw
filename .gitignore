@@ -36,6 +36,7 @@ pr_body.txt
 
 # AI tool local state (like .claude/ — never commit)
 /.agents/skills/
+/.claude/worktrees/
 .codex/*
 !.codex/config.toml
 !.codex/hooks/
