@@ -30,6 +30,7 @@ export class SiteSettingsNotFoundError extends Error {
 
 interface SiteSettingsRow {
   id: string
+  status: string
   subdomain: string | null
   name: string | null
   vertical: string
@@ -37,7 +38,6 @@ interface SiteSettingsRow {
 }
 
 interface FullSiteRow extends SiteSettingsRow {
-  status: string
   public_url: string | null
   custom_domain_status: string | null
   default_currency: string | null
@@ -183,7 +183,6 @@ export async function loadSettingsPayload(
     catering_email: siteConfig.catering_email || '',
     careers_email: siteConfig.careers_email || '',
     google_analytics_measurement_id: siteConfig.google_analytics_measurement_id || '',
-    google_site_verification: siteConfig.google_site_verification || '',
     created_at: updatedSite.created_at,
     updated_at: updatedSite.updated_at,
   }
@@ -215,7 +214,7 @@ async function updateNonSiteConfigFields(
     }
   }
 
-  for (const key of ['press_email', 'partnerships_email', 'catering_email', 'careers_email', 'google_analytics_measurement_id', 'google_site_verification'] as const) {
+  for (const key of ['press_email', 'partnerships_email', 'catering_email', 'careers_email'] as const) {
     if (updates[key] !== undefined) {
       const value = updates[key]
       if (value) {
@@ -229,19 +228,6 @@ async function updateNonSiteConfigFields(
   return null
 }
 
-async function syncAnalyticsSettingToZaraz(
-  db: D1Database,
-  env: SetupEnv,
-  organizationId: string,
-  measurementId: unknown
-) {
-  if (measurementId === undefined) return
-
-  // The setting is only in effect once the tracking configuration carries it, so
-  // this failure belongs to the save that asked for it.
-  await reconcileZarazAnalytics(env, db)
-}
-
 async function attemptSiteUpdate(
   db: D1Database,
   env: SetupEnv,
@@ -253,6 +239,8 @@ async function attemptSiteUpdate(
 ): Promise<SiteSettingsUpdateResult> {
   const setParts: string[] = []
   const params: Array<string | null> = []
+  // Extra WHERE terms the UPDATE must still satisfy at the moment it runs.
+  const guards: string[] = []
   const siteMedia = updates.media
 
   if (updates.font_preset !== undefined) {
@@ -296,6 +284,21 @@ async function attemptSiteUpdate(
     }
     setParts.push('default_currency = ?')
     params.push(currency)
+  }
+  if (updates.status !== undefined) {
+    // Draft and Live are the tenant's to move between. 'suspended' is the
+    // platform's hold, so the tenant neither sets it nor clears it. The read
+    // answers plainly; the guard on the UPDATE is what a suspension landing
+    // between the two cannot outrun.
+    if (updates.status !== 'active' && updates.status !== 'inactive') {
+      return { status: 400, data: { error: 'Website status must be active or inactive' } }
+    }
+    if (site.status === 'suspended') {
+      return { status: 409, data: { error: 'This website is suspended. Contact support to restore it.' } }
+    }
+    setParts.push('status = ?')
+    params.push(updates.status)
+    guards.push("status <> 'suspended'")
   }
   if (updates.seo_title !== undefined) {
     setParts.push('seo_title = ?')
@@ -414,9 +417,20 @@ async function attemptSiteUpdate(
     sql: `
     UPDATE organization
     SET ${setParts.join(', ')}
-    WHERE id = ?
+    WHERE id = ?${guards.map(guard => ` AND ${guard}`).join('')}
   `,
     values: [...params, organizationId],
+  }
+
+  // A guard that matched nothing means the row no longer answers to this
+  // write — a suspended tenant being told to go Live. Reporting success would
+  // leave the owner believing they published it.
+  if (guards.length > 0 && setParts.length > 0) {
+    const guarded = await queryFirst<{ status: string }>(db,
+      'SELECT status FROM organization WHERE id = ? LIMIT 1', [organizationId])
+    if (guarded?.status === 'suspended') {
+      return { status: 409, data: { error: 'This website is suspended. Contact support to restore it.' } }
+    }
   }
 
   const isRename = updates.name !== undefined && subdomain && subdomain !== site.subdomain
@@ -432,6 +446,17 @@ async function attemptSiteUpdate(
   // All settings callers use this mutation path; refresh both public resource
   // and HTML caches when typography changes, including a reset to Default.
   if (updates.font_preset !== undefined) await purgePublicResourceCacheNow(env, organizationId)
+
+  // Zaraz serves analytics only for tenants that are Live, so taking one to
+  // Draft has to withdraw its tag rather than leave it collecting from a
+  // website the owner believes is unpublished.
+  if (updates.status !== undefined) {
+    try {
+      await reconcileZarazAnalytics(env, db)
+    } catch (error) {
+      console.error('zaraz_reconciliation_failed', { organizationId, error })
+    }
+  }
 
   if (siteMedia !== undefined && siteMedia.length > 0) {
     const targetSlots = new Set(siteMedia.map(item => item.slot))
@@ -480,7 +505,7 @@ export async function updateSiteSettingsFields(
   }
 
   const site = await queryFirst<SiteSettingsRow>(db, `
-    SELECT id, subdomain, name, vertical, theme_id
+    SELECT id, status, subdomain, name, vertical, theme_id
     FROM organization
     WHERE id = ?
     LIMIT 1
@@ -522,13 +547,6 @@ export async function updateSiteSettingsFields(
 
   const configError = await updateNonSiteConfigFields(db, organizationId, updates)
   if (configError) return configError
-  await syncAnalyticsSettingToZaraz(
-    db,
-    env,
-    organizationId,
-    updates.google_analytics_measurement_id,
-  )
-
   if (updates.name !== undefined) {
     const baseSlug = buildSlug(updates.name)
     if (!baseSlug) {

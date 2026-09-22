@@ -24,7 +24,6 @@ export interface SiteSettings {
   // render rather than showing an amount in a currency nobody picked.
   default_currency: CurrencyCode | null
   google_analytics_measurement_id?: string
-  google_site_verification?: string
   created_at: string
   updated_at: string
 }
@@ -40,8 +39,6 @@ export interface UpdateSiteSettingsRequest {
   partnerships_email?: string
   catering_email?: string
   careers_email?: string
-  google_analytics_measurement_id?: string
-  google_site_verification?: string
   seo_title?: string | null
   seo_description?: string | null
   canonical_url?: string | null

@@ -13,10 +13,17 @@ export interface SiteConfig {
   partnerships_email?: string
   catering_email?: string
   careers_email?: string
+  /**
+   * Read-only here. It is the Google Analytics integration's measurement id,
+   * and choosing a GA4 property is the one thing that writes it — which is why
+   * it is absent from WritableSiteConfigKey below.
+   */
   google_analytics_measurement_id?: string
-  google_site_verification?: string
   default_timezone?: string
 }
+
+/** The settings a caller may set. `google_analytics_measurement_id` is not one. */
+export type WritableSiteConfigKey = Exclude<keyof SiteConfig, 'google_analytics_measurement_id'>
 
 export const getConfig = async (
   db: DbClient,
@@ -31,7 +38,6 @@ export const getConfig = async (
            json_extract(settings_json, '$.config.catering_email') AS catering_email,
            json_extract(settings_json, '$.config.careers_email') AS careers_email,
            CASE WHEN json_extract(integrations_json, '$.google_analytics.status') = 'active' THEN json_extract(integrations_json, '$.google_analytics.measurement_id') END AS google_analytics_measurement_id,
-           json_extract(settings_json, '$.config.google_site_verification') AS google_site_verification,
            json_extract(settings_json, '$.config.default_timezone') AS default_timezone,
            social_facebook_url AS social_facebook,
            social_instagram_url AS social_instagram,
@@ -40,7 +46,7 @@ export const getConfig = async (
   `, [organizationId])
   if (!row) throw new HTTPError({ statusCode: 404, statusMessage: 'Site not found' })
   const config: SiteConfig = {}
-  for (const key of ["brand_color","press_email","partnerships_email","catering_email","careers_email","google_analytics_measurement_id","google_site_verification","default_timezone","social_facebook","social_instagram","social_tiktok"] as const) {
+  for (const key of ["brand_color","press_email","partnerships_email","catering_email","careers_email","default_timezone","social_facebook","social_instagram","social_tiktok"] as const) {
     const value = row[key]
     if (value == null) continue
     if (typeof value !== 'string') throw new Error('Invalid stored site setting: ' + key)
@@ -82,7 +88,7 @@ export const isTimeSlotInPast = (date: string, time: string, timezone: string, n
 export const setConfig = async (
   db: DbClient,
   organizationId: string,
-  key: keyof SiteConfig,
+  key: WritableSiteConfigKey,
   value: string
 ) => {
   if (key === 'font_preset' && !isSiteFontPreset(value)) throw new HTTPError({ statusCode: 422, statusMessage: 'Unsupported site font preset' })
@@ -90,38 +96,6 @@ export const setConfig = async (
   if (key === 'social_facebook' || key === 'social_instagram' || key === 'social_tiktok') {
     const result = await execute(db, `UPDATE organization SET ${key}_url = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?`, [value || null, organizationId])
     if (result.meta?.changes !== 1) throw new HTTPError({ statusCode: 409, statusMessage: 'Organization not found. Reload before saving.' })
-    return
-  }
-  if (key === 'google_analytics_measurement_id') {
-    // The credential and the product that uses it are separate keys now, so
-    // "connected through OAuth" is the presence of google_credential rather
-    // than a `kind` discriminator on one merged object.
-    const current = await queryFirst<{ connected: number; measurement_id: string | null; revision: string | null }>(db, `
-      SELECT json_type(integrations_json, '$.google_credential') IS NOT NULL AS connected,
-             json_extract(integrations_json, '$.google_analytics.measurement_id') AS measurement_id,
-             json_extract(integrations_json, '$.google_analytics.revision') AS revision
-        FROM organization WHERE id = ?
-    `, [organizationId])
-    if (!current) throw new HTTPError({ statusCode: 404, statusMessage: 'Organization not found' })
-    if (current.connected) {
-      if ((current.measurement_id ?? '') === value) return
-      throw new HTTPError({ statusCode: 409, statusMessage: 'Disconnect Google Analytics before setting a manual measurement ID' })
-    }
-    // A key with no measurement id describes nothing, and the CHECK requires
-    // one, so clearing the id removes the key rather than nulling the field.
-    const result = value
-      ? await execute(db, `
-        UPDATE organization SET integrations_json = json_set(integrations_json, '$.google_analytics',
-          json_object('revision', ?, 'status', 'active', 'measurement_id', ?,
-            'created_at', COALESCE(json_extract(integrations_json, '$.google_analytics.created_at'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
-            'updated_at', strftime('%Y-%m-%dT%H:%M:%fZ', 'now')))
-        WHERE id = ? AND json_extract(integrations_json, '$.google_analytics.revision') IS ?
-      `, [crypto.randomUUID(), value, organizationId, current.revision])
-      : await execute(db, `
-        UPDATE organization SET integrations_json = json_remove(integrations_json, '$.google_analytics')
-        WHERE id = ? AND json_extract(integrations_json, '$.google_analytics.revision') IS ?
-      `, [organizationId, current.revision])
-    if (result.meta?.changes !== 1) throw new HTTPError({ statusCode: 409, statusMessage: 'Google Analytics settings changed. Reload before saving.' })
     return
   }
   const result = await execute(
@@ -137,10 +111,10 @@ export const setConfig = async (
 export const deleteConfig = async (
   db: DbClient,
   organizationId: string,
-  key: keyof SiteConfig
+  key: WritableSiteConfigKey
 ) => {
   if (key === 'default_timezone') throw new HTTPError({ statusCode: 422, statusMessage: 'The analytics timezone cannot be removed' })
-  if (key === 'google_analytics_measurement_id' || key === 'social_facebook' || key === 'social_instagram' || key === 'social_tiktok') return setConfig(db, organizationId, key, '')
+  if (key === 'social_facebook' || key === 'social_instagram' || key === 'social_tiktok') return setConfig(db, organizationId, key, '')
   const result = await execute(
     db,
     `UPDATE organization SET settings_json = json_remove(settings_json, ?),
