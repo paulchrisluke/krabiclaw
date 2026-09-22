@@ -103,11 +103,11 @@ export default defineScheduledTask({
         if (!pageId) {
           connResult.error = 'no_resolvable_page'
         } else if (pageId) {
-          connResult.facebook = await syncFacebookPosts(env, conn.organization_id, conn.organization_id, activeToken, pageId)
+          connResult.facebook = await syncFacebookPosts(env, conn.organization_id, activeToken, pageId)
 
           const igUserId = await getLinkedInstagramAccount(activeToken, pageId)
           if (igUserId) {
-            connResult.instagram = await syncInstagramPosts(env, conn.organization_id, conn.organization_id, activeToken, igUserId)
+            connResult.instagram = await syncInstagramPosts(env, conn.organization_id, activeToken, igUserId)
           }
         }
       } catch (err) {
@@ -119,7 +119,7 @@ export default defineScheduledTask({
           UPDATE organization SET integrations_json = json_set(integrations_json, '$.facebook.status', 'error',
             '$.facebook.updated_at', ?, '$.facebook.revision', ?)
           WHERE id = ? AND organization_id = ? AND json_extract(integrations_json, '$.facebook.revision') IS ?
-        `, [new Date().toISOString(), crypto.randomUUID(), conn.organization_id, conn.organization_id, conn.revision])
+        `, [new Date().toISOString(), crypto.randomUUID(), conn.organization_id, conn.revision])
           .catch(updateErr => console.error(`[instagram-sync-process] failed to persist error status for connection ${conn.id}:`, updateErr))
       }
 

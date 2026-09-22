@@ -104,9 +104,8 @@ export default defineScheduledTask({
           db,
           apiKey,
           loc.organization_id,
-          loc.organization_id,
           loc.id,
-          loc.google_place_id
+          loc.google_place_id,
         )
         locResult.reviews_upserted = reviewsUpserted
       } catch (err) {

@@ -63,7 +63,7 @@ const { data: postResource, error: postError } = await useAsyncData(
   `dashboard-blog-post:${siteId}:${postId}`,
   () => dashboardFetch<{ post: BlogPost }>(
     `/api/editor/organizations/${siteId}/blog/${postId}`,
-    { orgSlug, siteSlug },
+    { orgSlug },
     { validate: isBlogPostResponse },
   ),
   { lazy: true },

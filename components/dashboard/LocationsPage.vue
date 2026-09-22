@@ -46,7 +46,7 @@ const route = useRoute()
 const dashboard = useDashboardOrganization()
 const { businessPaths } = useDashboardSiteLinks()
 
-const site = computed(() => dashboard.sites.value[0] ?? null)
+const site = computed(() => dashboard.organization.value)
 
 // This tab stands outside any site route, so the context carries no
 // locations; they are read for the whole organization.

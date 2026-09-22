@@ -504,7 +504,7 @@ async function runAction(action: string) {
   pendingAction.value = action
   actionError.value = null
   try {
-    await dashboardApi(`/api/dashboard/organizations/${booking.value.siteId}/guest-threads/${booking.value.threadId}/operations/${action}`, {
+    await dashboardApi(`/api/dashboard/organizations/${booking.value.organizationId}/guest-threads/${booking.value.threadId}/operations/${action}`, {
       method: 'POST',
       body: { idempotencyKey: actionAttempt.value.key, ...(note ? { body: note } : {}) },
       validate: (value: unknown): value is { thread: Record<string, unknown> } => isRecord(value) && isRecord(value.thread),

@@ -88,7 +88,7 @@ export function useDashboardSearch() {
     const normalized = searchTerm.value.trim()
     // The business's site: the route's where the route has one, otherwise the
     // organization's own — the Menu and Messages are organization screens.
-    const site = dashboard.organization.value ?? dashboard.sites.value[0] ?? null
+    const site = dashboard.organization.value
     if (!normalized || !site?.subdomain) {
       requestSequence += 1
       results.value = []

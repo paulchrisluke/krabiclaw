@@ -131,7 +131,7 @@ export async function usePublicProductDetail(routeKind: ProductSurface) {
                 currency: detail.currency, location_id: detail.location.id, at: new Date().toISOString(),
               })
             : [],
-          metafieldDefinitions: await listMetafieldDefinitions(db, detail.site.organization_id),
+          metafieldDefinitions: await listMetafieldDefinitions(db, detail.site.id),
           localeRepresentations: detail.localeRepresentations,
         }
       }
