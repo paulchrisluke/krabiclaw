@@ -88,7 +88,7 @@ export async function loadSettingsPayload(
   organizationId: string,
 ) {
   const updatedSite = await queryFirst<FullSiteRow & { vertical: string; theme_id: string }>(db, `
-    SELECT organization.id, organization.organization_id, subdomain, organization.status,
+    SELECT organization.id, organization.id, subdomain, organization.status,
            (SELECT 'https://' || domain FROM organization_domains WHERE organization_id = organization.id AND role = 'canonical' AND status = 'active') AS public_url, COALESCE((SELECT status FROM organization_domains WHERE organization_id = organization.id AND type = 'custom' AND status NOT IN ('deleted', 'disabled') ORDER BY role = 'canonical' DESC, created_at, id LIMIT 1), 'none') AS custom_domain_status, default_currency,
            name, brand_description,
            mp.asset_id AS logo_media_id, ma.public_url AS logo_public_url,
@@ -112,7 +112,7 @@ export async function loadSettingsPayload(
     LEFT JOIN media_placements smp ON smp.organization_id = organization.id AND smp.owner_type = 'organization'
       AND smp.owner_id = organization.id AND smp.slot = 'social_share' AND smp.sort_order = 0 AND smp.status = 'active'
     LEFT JOIN media_assets sma ON sma.id = smp.asset_id AND sma.status = 'active'
-    WHERE organization.id = ? AND organization.organization_id = ?
+    WHERE organization.id = ? AND organization.id = ?
     LIMIT 1
   `, [organizationId])
 

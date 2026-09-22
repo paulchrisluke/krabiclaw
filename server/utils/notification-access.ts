@@ -68,7 +68,7 @@ export async function getNotificationAccess(event: H3Event) {
       SELECT id FROM organization WHERE organization_id = ?
     `, [context.organization.id])
     await Promise.all(sites.map(async (site) => {
-      const accessibleLocationIds = await listAccessibleLocationIds(context.db, memberAccessPrincipal(context.organization!, { env: context.env, organizationId: site.id }))
+      const accessibleLocationIds = await listAccessibleLocationIds(context.db, memberAccessPrincipal(context.organization!, { env: context.env}))
       if (accessibleLocationIds === null) siteWideSiteIds.push(site.id)
       else locationIds.push(...accessibleLocationIds)
     }))

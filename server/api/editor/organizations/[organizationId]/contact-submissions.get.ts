@@ -9,7 +9,7 @@ export default defineHandler(async (event) => {
   if (!organizationId) return jsonResponse({ error: 'Organization ID required' }, { status: 400 })
 
   const { env, db, organization } = await requireOrganizationAccess(event, organizationId, 'context')
-  const locationIds = await listAccessibleLocationIds(db, memberAccessPrincipal(organization.membership, { env, organizationId, event }))
+  const locationIds = await listAccessibleLocationIds(db, memberAccessPrincipal(organization.membership, { env, event }))
 
   const submissions = await listContactSubmissions(db, organizationId, { locationIds })
   return jsonResponse({ submissions })

@@ -39,7 +39,7 @@ export default defineHandler(async (event) => {
       return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
     }
 
-    await assertOrganizationWideAccess(db, memberAccessPrincipal(siteAccess.membership, { env, organizationId, event }))
+    await assertOrganizationWideAccess(db, memberAccessPrincipal(siteAccess.membership, { env, event }))
 
     const settings = await loadSettingsPayload(db, siteAccess.organization_id)
     return jsonResponse({ success: true, settings })

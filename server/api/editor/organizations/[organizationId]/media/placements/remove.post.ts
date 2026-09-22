@@ -18,7 +18,7 @@ export default defineHandler(async (event) => {
     const result = await removeMediaPlacement(db, {
       env,
       organizationId: organization.id,
-      principal: memberAccessPrincipal(organization.membership, { env, organizationId, event }),
+      principal: memberAccessPrincipal(organization.membership, { env, event }),
       placement: parseMediaPlacementKey(body.placement),
       assetId: body.asset_id,
     })

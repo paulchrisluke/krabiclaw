@@ -62,7 +62,7 @@ export default defineHandler(async (event) => {
     // what authorizes: the state only has to agree with it.
     const siteAccess = await loadMemberOrganizationRow(event, db, env, organizationId, userId)
     if (!siteAccess || siteAccess.organization_id !== organizationId) throw new Error('Access denied')
-    await assertOrganizationWideAccess(db, memberAccessPrincipal(siteAccess.membership, { env, organizationId, event }))
+    await assertOrganizationWideAccess(db, memberAccessPrincipal(siteAccess.membership, { env, event }))
 
     // System-user access tokens from FLB never expire — no long-lived exchange needed
     const systemUserToken = await exchangeFacebookCode(env, code)

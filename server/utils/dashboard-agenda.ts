@@ -174,7 +174,7 @@ export async function listAgenda(
     await Promise.all(allCapabilitySites.map(async (site) => {
       accessibleLocationsBySite.set(site.id, await listAccessibleLocationIds(
         db,
-        memberAccessPrincipal(query.principal!.membership, { env: query.principal!.env, organizationId: site.id }),
+        memberAccessPrincipal(query.principal!.membership, { env: query.principal!.env}),
       ))
     }))
   }

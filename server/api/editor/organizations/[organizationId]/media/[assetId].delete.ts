@@ -34,7 +34,7 @@ export default defineHandler(async (event) => {
   if (asset.organization_id !== organizationId) return jsonResponse({ error: 'Forbidden' }, { status: 403 })
 
   try {
-    await assertResourceAccess(db, { ...memberAccessPrincipal(site.membership, { env, organizationId, event }), resourceLocationId: null })
+    await assertResourceAccess(db, { ...memberAccessPrincipal(site.membership, { env, event }), resourceLocationId: null })
 
     await deleteMediaAsset(db, env, assetId, organizationId, session.user.id)
     return jsonResponse({ deleted: true })

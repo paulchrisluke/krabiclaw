@@ -181,7 +181,7 @@ async function listRecentGuestDeliveryCandidates(db: D1Database, env: ApiRecord,
       userId,
     })
     if (!membership) return null
-    const locationIds = await listAccessibleLocationIds(db, memberAccessPrincipal(membership, { env: env as CloudflareEnv, organizationId: row.organizationId }))
+    const locationIds = await listAccessibleLocationIds(db, memberAccessPrincipal(membership, { env: env as CloudflareEnv}))
     return locationIds === null || Boolean(row.locationId && locationIds.includes(row.locationId)) ? row : null
   }))).filter((row): row is NonNullable<typeof row> => Boolean(row)).slice(0, 5)
   return authorizedRows.map((r) => ({

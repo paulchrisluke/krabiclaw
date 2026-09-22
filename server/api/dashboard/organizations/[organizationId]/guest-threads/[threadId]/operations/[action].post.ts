@@ -25,7 +25,7 @@ export default defineHandler(async (event) => {
 
   const thread = await getGuestRequest(db, threadId, organizationId)
   if (!thread) return jsonResponse({ error: 'Thread not found' }, { status: 404 })
-  await assertMemberScope(db, { ...memberAccessPrincipal(organization.membership, { env, organizationId, event }), locationId: thread.location_id })
+  await assertMemberScope(db, { ...memberAccessPrincipal(organization.membership, { env, event }), locationId: thread.location_id })
 
   const body = await readBody<unknown>(event).catch(() => null)
   const replyBody = body && typeof body === 'object' && 'body' in body && typeof body.body === 'string' ? body.body : undefined

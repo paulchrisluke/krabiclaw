@@ -15,7 +15,7 @@ export default defineHandler(async (event) => {
     const result = await reorderMediaPlacements(db, {
       env,
       organizationId: organization.id,
-      principal: memberAccessPrincipal(organization.membership, { env, organizationId, event }),
+      principal: memberAccessPrincipal(organization.membership, { env, event }),
       placement: parseMediaPlacementKey(body.placement),
       moves: parseMediaPlacementMoves(body.moves),
     })

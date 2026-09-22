@@ -27,7 +27,7 @@ export default defineHandler(async (event) => {
     const result = await setSingleMediaPlacement(db, {
       env,
       organizationId: organization.id,
-      principal: memberAccessPrincipal(organization.membership, { env, organizationId, event }),
+      principal: memberAccessPrincipal(organization.membership, { env, event }),
       placement,
       assetId: typeof body.asset_id === 'string' ? body.asset_id.trim() : null,
     })
