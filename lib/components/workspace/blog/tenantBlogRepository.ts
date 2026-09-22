@@ -8,13 +8,13 @@ import {
 import { dashboardFetch } from '~/composables/dashboardFetch'
 
 interface TenantBlogRepositoryOptions {
-  siteId: string
+  organizationId: string
 }
 
-export function tenantBlogRepository({ siteId, orgSlug, siteSlug }: TenantBlogRepositoryOptions & { orgSlug: string; siteSlug: string }): BlogPostRepository {
-  const baseUrl = `/api/editor/organizations/${siteId}/blog`
+export function tenantBlogRepository({ organizationId, orgSlug }: TenantBlogRepositoryOptions & { orgSlug: string }): BlogPostRepository {
+  const baseUrl = `/api/editor/organizations/${organizationId}/blog`
   const dashboardBaseUrl = `/dashboard/${orgSlug}/blog`
-  const scope = { orgSlug, siteSlug }
+  const scope = { orgSlug }
   return {
     listUrl: dashboardBaseUrl,
     editUrl: postId => `${dashboardBaseUrl}/${postId}`,
@@ -52,7 +52,7 @@ export function tenantBlogRepository({ siteId, orgSlug, siteSlug }: TenantBlogRe
 
     async publish(postId: string, input): Promise<BlogLifecycleState> {
       const response = await dashboardFetch<{ success: true; lifecycle: BlogLifecycleState }>(
-        `/api/editor/organizations/${siteId}/blog/${postId}/publish`,
+        `/api/editor/organizations/${organizationId}/blog/${postId}/publish`,
         scope,
         { method: 'POST', body: input, validate: isBlogLifecycleResponse },
       )

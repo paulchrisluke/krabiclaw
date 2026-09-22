@@ -742,7 +742,7 @@ export async function applyOnboardingTenantPages(
       blocks: blocksAsInputs(blocks), expected_updated_at: row.updated_at,
       changes: { path: page.path, title: metadata.title, summary: metadata.summary,
         seo_title: metadata.seoTitle, seo_description: metadata.seoDescription, canonical_url: metadata.canonicalUrl,
-        robots: metadata.robots, updated_by: input.userId,
+        updated_by: input.userId,
         metadata: { page_type: metadata.pageType, recipe: metadata.recipe } },
       additionalQueriesAfter: placementQueries,
     })

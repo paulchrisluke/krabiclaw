@@ -13,7 +13,7 @@
     <div class="space-y-4">
       <p class="text-base text-muted">The picture guests recognise this by, in the list and on your site.</p>
       <DashboardCoverPhotoField
-        :site-id="p.siteId"
+        :organization-id="p.organizationId"
         :location-id="p.locationId.value"
         :model-value="p.form.image_asset_id"
         :preview-url="p.product.value?.image?.public_url ?? null"

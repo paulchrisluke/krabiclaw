@@ -246,8 +246,8 @@ const copiedValue = ref<string | null>(null)
 const actionError = ref<string | null>(null)
 const dashboard = useDashboardOrganization()
 
-const siteId = computed(() => dashboard.organization.value?.id ?? null)
-if (!siteId.value) {
+const organizationId = computed(() => dashboard.organization.value?.id ?? null)
+if (!organizationId.value) {
   throw createError({ statusCode: 404, statusMessage: 'Site not found' })
 }
 
@@ -278,12 +278,12 @@ const recordColumns = [
 ]
 
 async function loadDomains({ background = false }: { background?: boolean } = {}) {
-  if (!siteId.value) return
+  if (!organizationId.value) return
   if (!background) loading.value = true
   loadError.value = null
   try {
     const response = await dashboardApi<DomainsResponse>(
-      `/api/sites/${siteId.value}/domains`,
+      `/api/sites/${organizationId.value}/domains`,
       { validate: isDomainsResponse },
     )
     domainGroups.value = response.domain_groups
@@ -311,11 +311,11 @@ function closeAddModal() {
 }
 
 async function addDomain() {
-  if (!siteId.value || !addForm.domain.trim()) return
+  if (!organizationId.value || !addForm.domain.trim()) return
   adding.value = true
   addError.value = ''
   try {
-    const response = await dashboardApi<AddDomainResponse>(`/api/sites/${siteId.value}/domains`, {
+    const response = await dashboardApi<AddDomainResponse>(`/api/sites/${organizationId.value}/domains`, {
       method: 'POST',
       body: {
         domain: addForm.domain.trim(),
@@ -332,7 +332,7 @@ async function addDomain() {
     domainGroups.value = mergeGroups(domainGroups.value, response.domain_groups ?? [])
     const newGroup = response.domain_groups?.[0]
     if (newGroup) expandedGroups.value[newGroup.id] = true
-    trackDomainConnected(addForm.domain.trim(), siteId.value)
+    trackDomainConnected(addForm.domain.trim(), organizationId.value)
     closeAddModal()
   } catch (error) {
     const data = error instanceof ApiClientError && isRecord(error.data) ? error.data : {}
@@ -420,11 +420,11 @@ async function runPrimaryAction(group: DomainGroup) {
 }
 
 async function syncGroup(group: DomainGroup) {
-  if (!siteId.value || !group.primary_domain_id) return
+  if (!organizationId.value || !group.primary_domain_id) return
   syncingGroupId.value = group.id
   actionError.value = null
   try {
-    await dashboardApi(`/api/sites/${siteId.value}/domains/${group.primary_domain_id}/sync`, {
+    await dashboardApi(`/api/sites/${organizationId.value}/domains/${group.primary_domain_id}/sync`, {
       method: 'POST',
       validate: (value): value is { success: true; domain: ApiRecord } =>
         isRecord(value) && value.success === true && isRecord(value.domain),
@@ -438,11 +438,11 @@ async function syncGroup(group: DomainGroup) {
 }
 
 async function makePrimary(group: DomainGroup) {
-  if (!siteId.value || !group.primary_domain_id) return
+  if (!organizationId.value || !group.primary_domain_id) return
   promotingGroupId.value = group.id
   actionError.value = null
   try {
-    await dashboardApi(`/api/sites/${siteId.value}/domains/${group.primary_domain_id}`, {
+    await dashboardApi(`/api/sites/${organizationId.value}/domains/${group.primary_domain_id}`, {
       method: 'PATCH',
       body: { role: 'canonical' },
       validate: (value): value is { success: true; domain: ApiRecord } =>
@@ -457,13 +457,13 @@ async function makePrimary(group: DomainGroup) {
 }
 
 async function deleteGroup(group: DomainGroup) {
-  if (!siteId.value || !group.primary_domain_id || deletingGroupId.value) return
+  if (!organizationId.value || !group.primary_domain_id || deletingGroupId.value) return
   if (!confirm(`Remove ${group.domain} from this site?`)) return
   deletingGroupId.value = group.id
   actionError.value = null
   try {
     for (const domain of group.domains.filter((domain) => domain.type === 'custom')) {
-      await dashboardApi(`/api/sites/${siteId.value}/domains/${domain.id}`, {
+      await dashboardApi(`/api/sites/${organizationId.value}/domains/${domain.id}`, {
         method: 'DELETE',
         validate: (value): value is { success: true } =>
           isRecord(value) && value.success === true,

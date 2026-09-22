@@ -54,11 +54,11 @@ import { getErrorMessage } from '~/utils/errors'
 
 // The posts index. Rendered by `posts.vue`, which owns the frame.
 const dashboardApi = useDashboardApi()
-const siteId = await useDashboardOrganizationId()
+const organizationId = await useDashboardOrganizationId()
 const dashboardLocation = useDashboardLocation()
 
 const currentLocationId = computed(() => dashboardLocation.currentLocationId.value)
-const editor = useLocationPostEditor(siteId, currentLocationId)
+const editor = useLocationPostEditor(organizationId, currentLocationId)
 // The path comes from the route this screen is mounted on, not from the
 // location selector: an unresolved selector left it empty, and an empty path is
 // a link to nowhere.
@@ -85,12 +85,12 @@ const isPostsResponse = (value: unknown): value is { posts: ApiRecord[] } =>
   && Array.isArray(value.posts)
   && value.posts.every(post => isRecord(post) && typeof post.id === 'string' && typeof post.status === 'string')
 
-const postsKey = computed(() => `dashboard-location-posts:${siteId}:${currentLocationId.value ?? 'missing'}`)
+const postsKey = computed(() => `dashboard-location-posts:${organizationId}:${currentLocationId.value ?? 'missing'}`)
 const { data, pending, error, refresh } = await useAsyncData(
   postsKey,
   async () => {
     if (!currentLocationId.value) throw createError({ statusCode: 404, statusMessage: 'Location not found' })
-    const response = await dashboardApi<{ posts: ApiRecord[] }>(`/api/editor/organizations/${siteId}/posts`, {
+    const response = await dashboardApi<{ posts: ApiRecord[] }>(`/api/editor/organizations/${organizationId}/posts`, {
       query: { location_id: currentLocationId.value },
       validate: isPostsResponse,
     })

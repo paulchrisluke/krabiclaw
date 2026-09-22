@@ -63,7 +63,7 @@
             <div v-if="editingRoleMemberId === member.id" class="flex flex-col gap-4 sm:flex-row sm:items-end">
               <UFormField label="Site" description="Which site can this editor access?" class="flex-1">
                 <USelect
-                  v-model="memberRoleForm.siteId"
+                  v-model="memberRoleForm.organizationId"
                   :items="siteOptions"
                   :loading="sitesPending"
                   placeholder="Select a site"
@@ -75,7 +75,7 @@
                   v-model="memberRoleForm.locationId"
                   :items="memberRoleLocationOptions"
                   :loading="memberRoleLocationsPending"
-                  :disabled="!memberRoleForm.siteId"
+                  :disabled="!memberRoleForm.organizationId"
                   placeholder="Whole site"
                   class="w-full"
                 />
@@ -86,7 +86,7 @@
                   color="primary"
                   size="sm"
                   :loading="roleUpdatingId === member.id"
-                  :disabled="!memberRoleForm.siteId"
+                  :disabled="!memberRoleForm.organizationId"
                   @click="submitEditorRoleChange(member)"
                 />
                 <UButton label="Cancel" color="neutral" variant="ghost" size="sm" @click="cancelRoleEdit" />
@@ -282,13 +282,13 @@ const memberError = ref<string | null>(null)
 const pendingInvitationError = ref<string | null>(null)
 
 const editingRoleMemberId = ref<string | null>(null)
-const memberRoleForm = reactive({ siteId: '', locationId: '' })
+const memberRoleForm = reactive({ organizationId: '', locationId: '' })
 const scope = useOrganizationScopeOptions()
 const { siteOptions, sitesPending } = scope
-const memberRoleLocations = scope.locationsFor(computed(() => memberRoleForm.siteId))
+const memberRoleLocations = scope.locationsFor(computed(() => memberRoleForm.organizationId))
 const memberRoleLocationOptions = memberRoleLocations.options
 const memberRoleLocationsPending = memberRoleLocations.pending
-watch(() => memberRoleForm.siteId, () => { memberRoleForm.locationId = '' })
+watch(() => memberRoleForm.organizationId, () => { memberRoleForm.locationId = '' })
 watch(memberRoleLocations.error, (message) => {
   if (!message) return
   roleUpdateError.value = message
@@ -305,7 +305,7 @@ const roleUpdateErrorMemberId = ref<string | null>(null)
 
 function cancelRoleEdit() {
   editingRoleMemberId.value = null
-  memberRoleForm.siteId = ''
+  memberRoleForm.organizationId = ''
   memberRoleForm.locationId = ''
 }
 
@@ -315,7 +315,7 @@ function onRoleSelected(member: MemberRow, role: string) {
   if (role === member.role) return
   if (role === 'editor') {
     editingRoleMemberId.value = member.id
-    memberRoleForm.siteId = ''
+    memberRoleForm.organizationId = ''
     memberRoleForm.locationId = ''
     void scope.loadSites()
     return
@@ -324,21 +324,21 @@ function onRoleSelected(member: MemberRow, role: string) {
 }
 
 async function submitEditorRoleChange(member: MemberRow) {
-  if (!memberRoleForm.siteId) return
+  if (!memberRoleForm.organizationId) return
   await submitRoleChange(member, 'editor', {
-    siteId: memberRoleForm.siteId,
+    organizationId: memberRoleForm.organizationId,
     locationId: memberRoleForm.locationId || null,
   })
 }
 
-async function submitRoleChange(member: MemberRow, role: string, scope?: { siteId: string; locationId: string | null }) {
+async function submitRoleChange(member: MemberRow, role: string, scope?: { organizationId: string; locationId: string | null }) {
   roleUpdatingId.value = member.id
   roleUpdateError.value = null
   roleUpdateErrorMemberId.value = null
   try {
     await dashboardApi(`/api/dashboard/organizations/members/${member.id}/role`, {
       method: 'POST',
-      body: { role, siteId: scope?.siteId, locationId: scope?.locationId },
+      body: { role, organizationId: scope?.organizationId, locationId: scope?.locationId },
       validate: (value): value is { success: true } => isRecord(value) && value.success === true,
     })
     cancelRoleEdit()

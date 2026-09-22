@@ -49,7 +49,7 @@
             <template #image-editor="{ block, index }">
               <component
                 :is="mediaPickerComponent"
-                :site-id="siteId"
+                :organization-id="organizationId"
                 :model-value="block.media?.find(item => item.slot === 'media')?.asset_id || ''"
                 accept="image"
                 @change="changeImage(index, $event)"
@@ -130,8 +130,8 @@ import { cloneEditorBlocks, generatedExcerpt, initialBlogEditorBlocks, normalize
 import { getErrorMessage } from '~/utils/errors'
 import { resolveSocialImageUrl } from '~/utils/social-metadata'
 
-const props = withDefaults(defineProps<{ repository: BlogPostRepository; initialPost?: BlogPost | null; deferLoad?: boolean; postId?: string; siteId?: string; isEdit?: boolean; backUrl?: string; backLabel?: string; panelId?: string; mediaPickerComponent: Component }>(), {
-  initialPost: null, deferLoad: false, postId: undefined, siteId: '', isEdit: false, backUrl: '/dashboard', backLabel: 'Posts', panelId: 'blog-post-editor',
+const props = withDefaults(defineProps<{ repository: BlogPostRepository; initialPost?: BlogPost | null; deferLoad?: boolean; postId?: string; organizationId?: string; isEdit?: boolean; backUrl?: string; backLabel?: string; panelId?: string; mediaPickerComponent: Component }>(), {
+  initialPost: null, deferLoad: false, postId: undefined, organizationId: '', isEdit: false, backUrl: '/dashboard', backLabel: 'Posts', panelId: 'blog-post-editor',
 })
 const route = useRoute()
 const postId = computed(() => props.postId || String(route.params.postId || ''))

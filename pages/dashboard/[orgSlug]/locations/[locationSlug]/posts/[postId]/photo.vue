@@ -18,7 +18,7 @@
       <p class="text-base text-muted">The picture this post is recognised by, in the list and on your site.</p>
       <PostMediaFields
         v-model:media="post.editor.form.media"
-        :site-id="post.siteId"
+        :organization-id="post.organizationId"
         :supports-media="post.supportsMedia.value"
       />
       <p v-if="post.supportsMedia.value" class="text-sm text-muted">Media saves with the post.</p>

@@ -10,7 +10,7 @@
     @cancel="editor.revert"
     @save="editor.save"
   >
-    <SiteGoogleAnalyticsSettings :site-id="editor.siteId" @changed="editor.refreshSettings" />
+    <SiteGoogleAnalyticsSettings :organization-id="editor.organizationId" @changed="editor.refreshSettings" />
     <UAlert v-if="editor.validationMessage.value" class="mt-6" color="error" variant="soft" :description="editor.validationMessage.value" />
   </DashboardLeafPanel>
 </template>

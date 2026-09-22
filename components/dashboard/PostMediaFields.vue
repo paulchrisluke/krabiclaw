@@ -4,7 +4,7 @@
     <template v-if="supportsMedia">
       <UFormField label="Photo">
         <DashboardCoverPhotoField
-          :site-id="siteId"
+          :organization-id="organizationId"
           :model-value="coverMediaId"
           :preview-url="coverPreviewUrl"
           preview-alt="Post photo"
@@ -18,7 +18,7 @@
       <UFormField label="More photos and videos" help="Guests swipe through these after the cover.">
         <DashboardMediaGalleryField
           :items="galleryItems"
-          :site-id="siteId"
+          :organization-id="organizationId"
           :cover-first="false"
           @add="addGalleryItem"
           @remove="(index: number) => removeGalleryItem(index)"
@@ -41,10 +41,10 @@ import DashboardMediaGalleryField from '~/components/dashboard/DashboardMediaGal
 const media = defineModel<PostMediaItem[]>('media', { default: () => [] })
 
 withDefaults(defineProps<{
-  siteId?: string
+  organizationId?: string
   /** An alert's contract shape rejects media outright, so the fields are absent. */
   supportsMedia?: boolean
-}>(), { siteId: '', supportsMedia: true })
+}>(), { organizationId: '', supportsMedia: true })
 
 const coverMedia = computed(() => media.value.find(item => item.slot === 'cover') ?? null)
 const coverMediaId = computed({

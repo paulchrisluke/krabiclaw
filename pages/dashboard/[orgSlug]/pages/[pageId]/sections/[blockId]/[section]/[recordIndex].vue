@@ -20,7 +20,7 @@
     @save="editor.save"
   >
     <TenantPageBlockItemEditor
-      :site-id="siteId"
+      :organization-id="organizationId"
       :page-id="pageId"
       :block-id="blockId"
       :collection="collection"
@@ -45,7 +45,7 @@ const editor = inject(tenantPageBlockEditorKey)!
 const pageId = String(route.params.pageId ?? '')
 const blockId = String(route.params.blockId ?? '')
 const key = String(route.params.section ?? '')
-const siteId = await useDashboardOrganizationId()
+const organizationId = await useDashboardOrganizationId()
 
 const collection = computed<TenantPageBlockCollection>(() => {
   const section = editor.sections.value.find(candidate => candidate.key === key)
@@ -55,7 +55,7 @@ const recordIndex = computed(() => {
   const value = Number(route.params.recordIndex)
   return Number.isInteger(value) && value >= 0 ? value : -1
 })
-const records = useTenantPageBlockRecords(siteId, pageId, blockId, collection, recordIndex)
+const records = useTenantPageBlockRecords(organizationId, pageId, blockId, collection, recordIndex)
 
 // A record that is not there is not a page, and neither is a concern it does not have.
 watchEffect(() => {

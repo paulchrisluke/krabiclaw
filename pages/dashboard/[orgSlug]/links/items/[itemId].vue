@@ -7,7 +7,7 @@
   <DashboardIndexPanel id="site-links-item" :title="isNew ? 'New link' : itemForm.label || 'Link'" :auto-open="navigationGroups[0]?.items.find(item => item.to)?.to ?? null">
     <template v-if="record" #right>
       <DashboardResourceLocalization
-        :site-id="editor.siteId"
+        :organization-id="editor.organizationId"
         resource-type="content_block"
         :resource-id="record.id"
         resource-label="link"
@@ -95,7 +95,7 @@ const localizationFields = computed(() => [
  * because a shared one carried an unsaved edit from one link into the next.
  */
 const emptyDraft = (): LinkItemDraft => ({ label: '', destination: '', status: 'active' })
-const itemForm = useState(`links-item-draft-${editor.siteId}-${itemId.value}`, emptyDraft).value
+const itemForm = useState(`links-item-draft-${editor.organizationId}-${itemId.value}`, emptyDraft).value
 
 /**
  * `new` is one key for every link ever added here, so leaving that screen has

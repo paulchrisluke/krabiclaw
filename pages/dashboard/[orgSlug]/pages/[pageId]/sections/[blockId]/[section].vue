@@ -38,7 +38,7 @@
   >
     <TenantPageBlockFields
       v-if="section && editor.block.value"
-      :site-id="siteId"
+      :organization-id="organizationId"
       :page-id="pageId"
       :block-id="blockId"
       :section-key="section.key"
@@ -62,7 +62,7 @@ const editor = inject(tenantPageBlockEditorKey)!
 const pageId = String(route.params.pageId ?? '')
 const blockId = String(route.params.blockId ?? '')
 const key = String(route.params.section ?? '')
-const siteId = await useDashboardOrganizationId()
+const organizationId = await useDashboardOrganizationId()
 
 const section = computed(() => editor.sections.value.find(candidate => candidate.key === key) ?? null)
 /** Set when this concern is a list of records: by its section, or because a one-section block hangs its records straight off itself. */
@@ -73,6 +73,6 @@ const collection = computed<TenantPageBlockCollection | null>(() => {
 })
 
 const editing = ref(false)
-const records = useTenantPageBlockRecords(siteId, pageId, blockId, collection)
+const records = useTenantPageBlockRecords(organizationId, pageId, blockId, collection)
 const listItems = computed(() => records.listItems.value.map(item => ({ ...item, to: `${level.path.value}/${item.id}` })))
 </script>

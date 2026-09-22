@@ -10,7 +10,7 @@
     @save="editor.save"
   >
     <TenantPageBlockItemEditor
-      :site-id="siteId"
+      :organization-id="organizationId"
       :page-id="pageId"
       :block-id="blockId"
       :collection="collection"
@@ -33,13 +33,13 @@ const pageId = String(route.params.pageId ?? '')
 const blockId = String(route.params.blockId ?? '')
 const key = String(route.params.section ?? '')
 const field = String(route.params.field ?? '')
-const siteId = await useDashboardOrganizationId()
+const organizationId = await useDashboardOrganizationId()
 
 const collection = computed<TenantPageBlockCollection>(() => {
   const section = editor.sections.value.find(candidate => candidate.key === key)
   return (section?.kind === 'list' ? section.collection : key) as TenantPageBlockCollection
 })
 const recordIndex = computed(() => Number(route.params.recordIndex))
-const records = useTenantPageBlockRecords(siteId, pageId, blockId, collection, recordIndex)
+const records = useTenantPageBlockRecords(organizationId, pageId, blockId, collection, recordIndex)
 const title = computed(() => records.recordSections.value.find(section => section.key === field)?.label ?? records.recordTitle.value)
 </script>

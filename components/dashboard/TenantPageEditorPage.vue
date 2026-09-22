@@ -30,7 +30,7 @@
           :disabled="!navigablePreviewUrl"
         />
         <DashboardResourceLocalization
-          :site-id="siteId"
+          :organization-id="organizationId"
           resource-type="content_document"
           :resource-id="draft.page_id"
           resource-label="page"
@@ -110,10 +110,10 @@ const route = useRoute()
 const pageId = computed(() => String(route.params.pageId ?? ''))
 const recordPath = level.path
 
-const siteId = await useDashboardOrganizationId()
+const organizationId = await useDashboardOrganizationId()
 const dashboardApi = useDashboardApi()
 
-const { data, error, pending, draft, dirty, revert, commit, isNew, previewUrl } = useTenantPageDraft(siteId, pageId.value)
+const { data, error, pending, draft, dirty, revert, commit, isNew, previewUrl } = useTenantPageDraft(organizationId, pageId.value)
 
 // A page that is not there is not a page. A request that failed is a state this
 // surface shows, because the page may well still exist.
@@ -311,14 +311,14 @@ async function loadPageLocalization(locale: string): Promise<Record<string, unkn
   let variant: TenantPageResponse | null = null
   let blocks = createTenantPageTranslationBlocks(toRaw(source.blocks))
   const list = await dashboardApi<{ pages: TenantPageListRow[] }>(
-    `/api/editor/organizations/${siteId}/pages?locale=${encodeURIComponent(locale)}`,
+    `/api/editor/organizations/${organizationId}/pages?locale=${encodeURIComponent(locale)}`,
     { validate: isTenantPageListResponse },
   )
   const summary = list.pages.find(page => page.page_id === source.page_id)
   const values: Record<string, unknown> = {}
   if (summary) {
     const response = await dashboardApi<{ page: TenantPageResponse }>(
-      `/api/editor/organizations/${siteId}/pages/${summary.id}`,
+      `/api/editor/organizations/${organizationId}/pages/${summary.id}`,
       { validate: isTenantPageResponse },
     )
     variant = response.page
@@ -373,8 +373,8 @@ async function savePageLocalization(locale: string, submitted: Record<string, un
     expectedUpdatedAt: state.variant?.document.updated_at,
   }
   const response = state.variant
-    ? await dashboardApi<{ page: TenantPageResponse }>(`/api/editor/organizations/${siteId}/pages/${state.variant.id}`, { method: 'PATCH', body, validate: isTenantPageResponse })
-    : await dashboardApi<{ page: TenantPageResponse }>(`/api/editor/organizations/${siteId}/pages`, { method: 'POST', body, validate: isTenantPageResponse })
+    ? await dashboardApi<{ page: TenantPageResponse }>(`/api/editor/organizations/${organizationId}/pages/${state.variant.id}`, { method: 'PATCH', body, validate: isTenantPageResponse })
+    : await dashboardApi<{ page: TenantPageResponse }>(`/api/editor/organizations/${organizationId}/pages`, { method: 'POST', body, validate: isTenantPageResponse })
   localizationState = {
     locale,
     variant: response.page,

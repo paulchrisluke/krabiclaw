@@ -3,7 +3,7 @@
   <DashboardIndexPanel id="product" :title="form.name || presentation.itemLabel" :auto-open="navigationGroups[0]?.items.find(item => item.to)?.to ?? null">
     <template v-if="product" #right>
       <DashboardResourceLocalization
-      :site-id="organizationId"
+      :organization-id="organizationId"
       resource-type="product"
       :resource-id="productId"
       :resource-label="presentation.itemLabel.toLowerCase()"

@@ -9,7 +9,7 @@
     @cancel="editor.revert"
     @save="editor.save"
   >
-    <MediaPicker v-model="editor.form.logoAssetId" :site-id="editor.siteId" accept="image" title="Select logo" />
+    <MediaPicker v-model="editor.form.logoAssetId" :organization-id="editor.organizationId" accept="image" title="Select logo" />
     <UAlert v-if="editor.validationMessage.value" class="mt-6" color="error" variant="soft" :description="editor.validationMessage.value" />
   </DashboardLeafPanel>
 </template>

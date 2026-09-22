@@ -44,6 +44,7 @@
         />
         <DashboardAvailabilityCalendar
           v-else
+          :organization-id="organizationId"
           :location-id="filters.locationId"
           :from="monthStart"
           :to="monthEnd"
@@ -134,6 +135,7 @@ const route = useRoute()
 const router = useRouter()
 const dashboardApi = useDashboardApi()
 const orgSlug = computed(() => String(route.params.orgSlug ?? ''))
+const organizationId = computed(() => useDashboardOrganization().organizationId.value ?? '')
 const currentMonth = ref(new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), 1)))
 const routeKind = typeof route.query.kinds === 'string' && ['reservation', 'booking', 'session', 'post'].includes(route.query.kinds) ? route.query.kinds : FILTER_ALL
 const routeLocationId = typeof route.query.locationId === 'string' ? route.query.locationId : FILTER_ALL

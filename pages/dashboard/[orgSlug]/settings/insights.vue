@@ -271,7 +271,7 @@
 
       <div v-else-if="tab === 'opportunities'" class="space-y-6">
         <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          <UCard v-for="site in setup" :key="site.siteId" variant="soft">
+          <UCard v-for="site in setup" :key="site.organizationId" variant="soft">
             <template #header>
               <div class="flex items-baseline justify-between gap-3">
                 <h2 class="min-w-0 truncate font-semibold text-highlighted">{{ site.label }}</h2>
@@ -344,7 +344,7 @@ interface InsightsReviews {
   recent: Array<{ id: string; author: string; rating: number; title: string | null; content: string | null; createdAt: string }>
 }
 interface InsightsSetup {
-  siteId: string
+  organizationId: string
   label: string
   completed: number
   total: number
@@ -352,7 +352,7 @@ interface InsightsSetup {
 }
 interface InsightsResponse {
   sites: InsightsSite[]
-  siteId: string | null
+  organizationId: string | null
   report: AnalyticsResponse
   reviews: InsightsReviews
   setup: InsightsSetup[]
@@ -388,7 +388,7 @@ const sites = ref<InsightsSite[]>([])
 const reviews = ref<InsightsResponse['reviews']>({ total: 0, average: null, distribution: [], recent: [] })
 const setup = ref<InsightsResponse['setup']>([])
 // Deep-linked from a site's own overview; null means every site in the org.
-const selectedSiteId = ref<string | null>(typeof route.query.siteId === 'string' && route.query.siteId ? route.query.siteId : null)
+const selectedSiteId = ref<string | null>(typeof route.query.organizationId === 'string' && route.query.organizationId ? route.query.organizationId : null)
 
 const presets: Array<{ key: PresetKey; label: string }> = [
   { key: 'last_52_weeks', label: 'Last 52 weeks' },
@@ -445,14 +445,14 @@ const isInsightsResponse = (value: unknown): value is InsightsResponse =>
   isRecord(value)
   && Array.isArray(value.sites)
   && value.sites.every(site => isRecord(site) && typeof site.id === 'string' && typeof site.label === 'string')
-  && (value.siteId === null || typeof value.siteId === 'string')
+  && (value.organizationId === null || typeof value.organizationId === 'string')
   && isAnalyticsResponse(value.report)
   && isRecord(value.reviews)
   && typeof value.reviews.total === 'number'
   && Array.isArray(value.reviews.distribution)
   && Array.isArray(value.reviews.recent)
   && Array.isArray(value.setup)
-  && value.setup.every(entry => isRecord(entry) && typeof entry.siteId === 'string' && Array.isArray(entry.items))
+  && value.setup.every(entry => isRecord(entry) && typeof entry.organizationId === 'string' && Array.isArray(entry.items))
 
 const initialRange = { ...range }
 let latestManualRequestId = 0
@@ -460,7 +460,7 @@ let latestManualRequestId = 0
 /** One read for the filter's options and the figures, so they cannot disagree. */
 async function fetchInsights(query: { startDate?: string; endDate?: string }) {
   return await dashboardApi<InsightsResponse>('/api/dashboard/analytics', {
-    query: { ...query, ...(selectedSiteId.value ? { siteId: selectedSiteId.value } : {}) },
+    query: { ...query, ...(selectedSiteId.value ? { organizationId: selectedSiteId.value } : {}) },
     validate: isInsightsResponse,
   })
 }
@@ -481,7 +481,7 @@ watch([insightsResource, analyticsPending, analyticsResourceError], ([resource, 
   }
   if (resource) {
     sites.value = resource.sites
-    selectedSiteId.value = resource.siteId
+    selectedSiteId.value = resource.organizationId
     analytics.value = resource.report
     Object.assign(range, { startDate: resource.report.period.startDate, endDate: resource.report.period.endDate })
     reviews.value = resource.reviews
@@ -490,11 +490,11 @@ watch([insightsResource, analyticsPending, analyticsResourceError], ([resource, 
   }
 }, { immediate: true })
 
-function selectSite(siteId: string | null) {
-  if (selectedSiteId.value === siteId) return
-  selectedSiteId.value = siteId
+function selectSite(organizationId: string | null) {
+  if (selectedSiteId.value === organizationId) return
+  selectedSiteId.value = organizationId
   // Keeps the filter in the URL so a deep link and a reload agree.
-  void navigateTo({ query: siteId ? { ...route.query, siteId } : { ...route.query, siteId: undefined } }, { replace: true })
+  void navigateTo({ query: organizationId ? { ...route.query, organizationId } : { ...route.query, organizationId: undefined } }, { replace: true })
   loadAnalytics()
 }
 
@@ -548,7 +548,7 @@ async function loadAnalytics() {
     const response = await fetchInsights({ startDate: range.startDate, endDate: range.endDate })
     if (requestId !== latestManualRequestId) return
     sites.value = response.sites
-    selectedSiteId.value = response.siteId
+    selectedSiteId.value = response.organizationId
     analytics.value = response.report
     Object.assign(range, { startDate: response.report.period.startDate, endDate: response.report.period.endDate })
     reviews.value = response.reviews

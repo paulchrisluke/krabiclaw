@@ -39,7 +39,7 @@ import {
 } from '~/utils/product-presentation'
 
 const route = useRoute()
-const siteId = await useDashboardOrganizationId()
+const organizationId = await useDashboardOrganizationId()
 const dashboard = useDashboardOrganization()
 const dashboardLocation = useDashboardLocation()
 
@@ -54,7 +54,7 @@ const locationPath = computed(() => `/dashboard/${String(route.params.orgSlug)}/
 const productsPath = computed(() => `${locationPath.value}/products`)
 const openSurface = computed(() => String(route.params.surface ?? '') || null)
 
-const catalog = useLocationProductCatalog(siteId, locationId)
+const catalog = useLocationProductCatalog(organizationId, locationId)
 // A skeleton means "there is nothing to show yet", not "a refetch is in
 // flight". Keyed on `pending` alone, a server render that had the rows in hand
 // still drew the placeholder, and the client hydrated the real list over it --

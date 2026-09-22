@@ -1,4 +1,4 @@
-import type { IntegrationVersion, GoogleOAuthIntegration } from '~/shared/site-settings'
+import type { IntegrationVersion } from '~/shared/site-settings'
 import type { D1Database } from '@cloudflare/workers-types'
 import { execute, queryFirst } from '~/server/db'
 import { encryptSecret, decryptSecret, encryptionEnv } from './encryption'
@@ -31,7 +31,33 @@ const googleJson = async <T>(url: string, accessToken: string): Promise<T> => {
   return (await response.json()) as T
 }
 
-export interface GoogleAnalyticsConnection extends Omit<GoogleOAuthIntegration, 'kind' | 'revision'>, IntegrationVersion {
+/**
+ * The single `$.google` integration this module still reads and writes.
+ *
+ * #1053 splits that key into `google_credential`, `google_analytics` and
+ * `google_search_console`, and the schema on this branch already declares the
+ * new shape — so this module's SQL no longer matches what it stores. The shape
+ * is declared here rather than imported so the type it depended on could be
+ * deleted; rewriting the reads and writes is #1053's app half.
+ */
+interface LegacyGoogleOAuthIntegration {
+  id: string
+  connected_by_user_id?: string
+  provider_account_email: string
+  encrypted_access_token: string
+  encrypted_refresh_token: string
+  scopes: string
+  ga4_property_id?: string
+  ga4_property_name?: string
+  ga4_measurement_id?: string
+  search_console_site_url?: string
+  status: 'active' | 'disabled' | 'error'
+  expires_at?: string
+  created_at: string
+  updated_at: string
+}
+
+export interface GoogleAnalyticsConnection extends LegacyGoogleOAuthIntegration, IntegrationVersion {
   organization_id: string
 }
 

@@ -74,9 +74,12 @@ export default defineHandler(async (event) => {
     }
 
     const firstPage = pages[0]
+    if (!firstPage) {
+      return new Response(null, { status: 302, headers: { Location: await settingsRedirect('no_pages') } })
+    }
 
     await storeFacebookPagesConnection(env, {
-      organization_id: organizationId, connected_by_user_id: userId, facebook_user_id: userInfo.id, page_id: firstPage?.id, page_name: firstPage?.name, encrypted_user_token: systemUserToken, encrypted_page_token: firstPage?.access_token, user_token_expires_at: undefined, scopes: undefined, status: 'active', }, stateData)
+      organization_id: organizationId, connected_by_user_id: userId, facebook_user_id: userInfo.id, page_id: firstPage.id, page_name: firstPage.name, encrypted_user_token: systemUserToken, encrypted_page_token: firstPage?.access_token, user_token_expires_at: undefined, scopes: undefined, status: 'active', }, stateData)
 
     return new Response(null, {
       status: 302, headers: { Location: await settingsRedirect('connected') }, })

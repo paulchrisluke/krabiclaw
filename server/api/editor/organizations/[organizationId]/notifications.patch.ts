@@ -21,7 +21,7 @@ export default defineHandler(async (event) => {
     return jsonResponse({ error: 'WhatsApp notifications require a Growth plan or higher.' }, { status: 403 })
   }
 
-  const notifications = await updateNotificationsSettings(db, organization.id, organizationId, body.whatsapp_phone)
+  const notifications = await updateNotificationsSettings(db, organization.id, body.whatsapp_phone)
   return jsonResponse({ success: true, notifications })
 })
 import { defineHandler } from 'nitro';

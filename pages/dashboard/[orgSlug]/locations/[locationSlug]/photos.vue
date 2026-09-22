@@ -150,8 +150,8 @@ interface MediaAsset {
 
 const dashboard = useDashboardOrganization()
 const dashboardLocation = useDashboardLocation()
-const siteId = await useDashboardOrganizationId()
-const siteApiBase = `/api/editor/organizations/${siteId}`
+const organizationId = await useDashboardOrganizationId()
+const siteApiBase = `/api/editor/organizations/${organizationId}`
 const locationId = computed(() => dashboardLocation.currentLocationId.value)
 const assets = ref<MediaAsset[]>([])
 const attachableAssets = ref<MediaAsset[]>([])
@@ -392,7 +392,7 @@ async function detachMany(ids: string[]) {
 }
 
 
-const photosKey = computed(() => `dashboard-location-photos:${siteId}:${locationId.value ?? 'missing'}`)
+const photosKey = computed(() => `dashboard-location-photos:${organizationId}:${locationId.value ?? 'missing'}`)
 const { data: photosResource, pending: photosPending, error: photosError } = await useAsyncData(
   photosKey,
   async () => {

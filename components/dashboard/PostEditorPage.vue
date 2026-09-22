@@ -3,7 +3,7 @@
   <DashboardIndexPanel id="location-post" :title="isNew ? 'New post' : editor.form.title || 'Post'" :auto-open="navigationGroups[0]?.items.find(item => item.to)?.to ?? null">
     <template v-if="post" #right>
       <DashboardResourceLocalization
-        :site-id="siteId"
+        :organization-id="organizationId"
         resource-type="content_document"
         :resource-id="postId"
         resource-label="post"
@@ -69,7 +69,7 @@ export type SectionKey = typeof SECTION_KEYS[number]
 /** The post's draft and what its leaves show or do beside their one field. */
 export interface PostEditor {
   editor: ReturnType<typeof useLocationPostEditor>
-  siteId: string
+  organizationId: string
   isNew: ComputedRef<boolean>
   sectionLabels: ComputedRef<Record<SectionKey, string>>
   /** Whether this post's type has the section at all; a missing one is named rather than left blank. */
@@ -118,12 +118,12 @@ const postId = computed(() => String(route.params.postId ?? ''))
 const level = useRouteLevel()
 const postPath = level.path
 
-const siteId = await useDashboardOrganizationId()
+const organizationId = await useDashboardOrganizationId()
 const dashboardLocation = useDashboardLocation()
 const isNew = computed(() => postId.value === 'new')
 
 const currentLocationId = computed(() => dashboardLocation.currentLocationId.value)
-const editor = useLocationPostEditor(siteId, currentLocationId)
+const editor = useLocationPostEditor(organizationId, currentLocationId)
 
 const TYPE_LABELS: Record<string, string> = {
   standard: 'Update',
@@ -167,10 +167,10 @@ const isFacebookResponse = (value: unknown): value is { connected: boolean } =>
   isRecord(value) && typeof value.connected === 'boolean'
 
 const { data, error } = await useAsyncData(
-  computed(() => `dashboard-location-post:${siteId}:${postId.value}`),
+  computed(() => `dashboard-location-post:${organizationId}:${postId.value}`),
   async () => isNew.value
     ? null
-    : await dashboardApi<{ post: ApiRecord }>(`/api/editor/organizations/${siteId}/posts/${postId.value}`, {
+    : await dashboardApi<{ post: ApiRecord }>(`/api/editor/organizations/${organizationId}/posts/${postId.value}`, {
       validate: isSinglePostResponse,
     }),
   { watch: [postId] },
@@ -240,7 +240,7 @@ function seedTopic(type: NewPostType): PostMutation {
  * whenever it does not belong to the location now selected.
  */
 const blankDraft = () => ({ location_id: currentLocationId.value, topic: seedTopic('standard'), body: '' })
-const draft = useState(`location-post-draft-${siteId}-${postId.value}`, blankDraft)
+const draft = useState(`location-post-draft-${organizationId}-${postId.value}`, blankDraft)
 
 if (isNew.value) {
   if (draft.value.location_id !== currentLocationId.value) draft.value = blankDraft()
@@ -558,7 +558,7 @@ useSeoMeta({
 })
 provide(postEditorKey, {
   editor,
-  siteId,
+  organizationId,
   isNew,
   sectionLabels,
   hasSection: key => openSections.value.includes(key),

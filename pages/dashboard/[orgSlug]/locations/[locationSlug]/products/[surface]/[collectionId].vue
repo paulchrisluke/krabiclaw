@@ -21,7 +21,7 @@ export interface CollectionEditor {
   form: { name: string }
   isNew: ComputedRef<boolean>
   collectionId: ComputedRef<string>
-  siteId: string
+  organizationId: string
   groupLabel: string
   hasRecord: ComputedRef<boolean>
   saving: Ref<boolean>
@@ -64,12 +64,12 @@ const presentation = presentationForSurface(vertical, surface)
 const level = useRouteLevel()
 const collectionPath = level.path
 
-const siteId = await useDashboardOrganizationId()
+const organizationId = await useDashboardOrganizationId()
 
 const locationId = computed(() => dashboardLocation.currentLocation.value?.id ?? null)
 
 // The same catalog the list reads, so the Name leaf's draft costs no request.
-const catalog = useLocationProductCatalog(siteId, locationId)
+const catalog = useLocationProductCatalog(organizationId, locationId)
 const collection = computed(() => catalog.collections.value.find(row => row.id === collectionId.value) ?? null)
 
 // ── The collection record ───────────────────────────────
@@ -88,7 +88,7 @@ watchEffect(() => {
 // One draft, so it survives the remount between this collection's sections. The
 // key cannot carry the collection id — it is read once at setup while Nuxt
 // reuses this page across collections — so the watch below re-seeds it instead.
-const form = useState(`collection-draft-${siteId}`, () => ({ name: '' })).value
+const form = useState(`collection-draft-${organizationId}`, () => ({ name: '' })).value
 watch(collection, (row) => { if (row) form.name = row.name }, { immediate: true })
 // Nuxt reuses this page across collections; a record that has not arrived leaves nothing behind.
 watch(collectionId, () => { form.name = collection.value?.name ?? '' })
@@ -127,7 +127,7 @@ async function commit() {
     // location; a site-wide one is created from the site's own catalog screen.
     // Renaming one needs no location at all, so only the create asks for it —
     // and says so rather than returning quietly and leaving Save looking done.
-    const endpoint = `/api/editor/organizations/${siteId}/collections`
+    const endpoint = `/api/editor/organizations/${organizationId}/collections`
     if (isNew.value) {
       const location = locationId.value
       if (!location) throw createError({ statusCode: 404, statusMessage: 'Location not found' })
@@ -164,7 +164,7 @@ provide(collectionEditorKey, {
   form,
   isNew,
   collectionId,
-  siteId,
+  organizationId,
   groupLabel: presentation.collectionGroupLabel,
   hasRecord: computed(() => Boolean(collection.value)),
   saving,

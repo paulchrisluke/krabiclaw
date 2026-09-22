@@ -100,9 +100,11 @@ export default defineHandler(async (event) => {
   }
 
   // Better Auth's role column is now authoritative — reconcile our
-  // app-specific site/location Teams scoping (which it has no concept of)
-  // to match.
+  // app-specific location Teams scoping (which it has no concept of) to match.
+  // An editor is scoped to locations, so one has to be named: there is no
+  // tenant-wide team to fall back to.
   if (role === 'editor') {
+    if (!locationId) return jsonResponse({ error: 'locationId is required to scope an editor' }, { status: 400 })
     await addMemberResourceAccess(db, {
       env, userId: target.userId, organizationId: organization.id, locationId, })
   } else if (isScopedRole(target.role)) {

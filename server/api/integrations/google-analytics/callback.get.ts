@@ -59,7 +59,7 @@ export default defineHandler(async (event) => {
     // rather than proving membership in one. The site row's own membership is
     // what authorizes: the state only has to agree with it.
     const access = await loadMemberOrganizationRow(event, env.DB, env, organizationId, userId)
-    if (!access || access.organization_id !== organizationId) throw new Error('Access denied')
+    if (!access || access.id !== organizationId) throw new Error('Access denied')
     await assertOrganizationWideAccess(env.DB, memberAccessPrincipal(access.membership, { env, event }))
     const tokenData = await exchangeGoogleAnalyticsCode(env, code)
 

@@ -22,6 +22,6 @@ import { useLocationEditor } from '~/lib/components/workspace/settings/LocationS
 definePageMeta({ layout: 'dashboard' })
 
 const dashboardLocation = useDashboardLocation()
-const siteId = await useDashboardOrganizationId()
-const editor = await useLocationEditor(siteId, dashboardLocation.currentLocationId, 'slug')
+const organizationId = await useDashboardOrganizationId()
+const editor = await useLocationEditor(organizationId, dashboardLocation.currentLocationId, 'slug')
 </script>

@@ -85,12 +85,11 @@ import { mediaStillUrl } from '~/shared/media-placement-contract'
 // The blog index. Rendered by `blog.vue`, which owns the frame.
 const dashboardApi = useDashboardApi()
 const route = useRoute()
-const siteId = await useDashboardOrganizationId()
+const organizationId = await useDashboardOrganizationId()
 const orgSlug = route.params.orgSlug as string
-const siteSlug = route.params.siteSlug as string
 const level = useRouteLevel()
 
-const repository = tenantBlogRepository({ siteId, orgSlug, siteSlug })
+const repository = tenantBlogRepository({ organizationId, orgSlug })
 
 // A post's life in order, so the tabs read as the pipeline they are. Drafts
 // exist as a status now, and a post created from this list starts as one.
@@ -110,9 +109,9 @@ const isPostsResponse = (value: unknown): value is { posts: BlogPost[] } =>
   && value.posts.every(post => isRecord(post) && typeof post.id === 'string' && typeof post.title === 'string')
 
 const { data, pending, error, refresh } = await useAsyncData(
-  `dashboard-blog-posts:${siteId}`,
+  `dashboard-blog-posts:${organizationId}`,
   async () => {
-    const response = await dashboardApi<{ posts: BlogPost[] }>(`/api/editor/organizations/${siteId}/blog/posts`, {
+    const response = await dashboardApi<{ posts: BlogPost[] }>(`/api/editor/organizations/${organizationId}/blog/posts`, {
       validate: isPostsResponse,
     })
     return { posts: response.posts }

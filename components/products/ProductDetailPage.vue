@@ -381,7 +381,7 @@ import { PUBLIC_BOOKING_WINDOW_DAYS } from '~/shared/bookings'
 import { getErrorMessage } from '~/utils/errors'
 
 const props = defineProps<{
-  siteId: string
+  organizationId: string
   vertical: string
   product: Product
   location: PublicProductLocationPayload
@@ -758,7 +758,7 @@ async function submitBooking(contact: ContactFormState) {
     )
     setBookingConfirmation({
       type: 'booking',
-      siteId: props.siteId,
+      organizationId: props.organizationId,
       siteName: props.location.title,
       guestName: contact.name,
       startsAt: session.starts_at,

@@ -91,7 +91,7 @@
     <UModal v-model:open="addOpen" :title="addLabel" :ui="{ content: 'max-w-2xl' }">
       <template #body>
         <MediaLibraryGrid
-          :site-id="siteId"
+          :organization-id="organizationId"
           :accept="accept"
           :location-id="locationId"
           @select="onPicked"
@@ -122,7 +122,7 @@ export interface ManagedPhoto {
 const props = withDefaults(defineProps<{
   /** Ordered; the first is the cover. */
   photos: ManagedPhoto[]
-  siteId: string
+  organizationId: string
   title: string
   /** Photos are the point of the surface, so tiles stay large in a narrow pane. */
   gridClass?: string

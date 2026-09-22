@@ -82,7 +82,7 @@ import { collectionsOnSurface, isCatalogSurface, presentationForSurface, product
 
 const route = useRoute()
 const dashboardApi = useDashboardApi()
-const siteId = await useDashboardOrganizationId()
+const organizationId = await useDashboardOrganizationId()
 const dashboard = useDashboardOrganization()
 const dashboardLocation = useDashboardLocation()
 
@@ -103,7 +103,7 @@ const locationId = computed(() => dashboardLocation.currentLocation.value?.id ??
 // a link to nowhere and, where it roots the editor frame, a frame rooted at ''.
 const level = useRouteLevel()
 
-const catalog = useLocationProductCatalog(siteId, locationId)
+const catalog = useLocationProductCatalog(organizationId, locationId)
 const collections = catalog.collections
 const pending = catalog.pending
 
@@ -210,7 +210,7 @@ async function commitOrder(): Promise<string[] | null> {
   orderError.value = null
   try {
     // The complete intended membership and order for this collection.
-    await dashboardApi(`/api/editor/organizations/${siteId}/collections/${collectionId.value}/products`, {
+    await dashboardApi(`/api/editor/organizations/${organizationId}/collections/${collectionId.value}/products`, {
       method: 'PUT',
       body: { product_ids: order },
       validate: isRecord,
@@ -260,10 +260,10 @@ async function moveSelected() {
     const targetOrder = [...targetPositions.keys()]
       .sort((left, right) => targetPositions.get(left)! - targetPositions.get(right)!)
       .concat(selected.value.filter(id => !targetPositions.has(id)))
-    await dashboardApi(`/api/editor/organizations/${siteId}/collections/${collectionId.value}/products`, {
+    await dashboardApi(`/api/editor/organizations/${organizationId}/collections/${collectionId.value}/products`, {
       method: 'PUT', body: { product_ids: remaining }, validate: isRecord,
     })
-    await dashboardApi(`/api/editor/organizations/${siteId}/collections/${moveTargetId.value}/products`, {
+    await dashboardApi(`/api/editor/organizations/${organizationId}/collections/${moveTargetId.value}/products`, {
       method: 'PUT', body: { product_ids: targetOrder }, validate: isRecord,
     })
     moveDialogOpen.value = false

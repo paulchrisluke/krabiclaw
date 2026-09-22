@@ -34,12 +34,12 @@ import {
 const props = defineProps<{ locationId?: string }>()
 
 const dashboardApi = useDashboardApi()
-const siteId = await useDashboardOrganizationId()
+const organizationId = await useDashboardOrganizationId()
 
 const { data, pending, error } = await useAsyncData(
-  () => props.locationId ? `dashboard-location-reviews-${siteId}-${props.locationId}` : `dashboard-site-reviews-${siteId}`,
+  () => props.locationId ? `dashboard-location-reviews-${organizationId}-${props.locationId}` : `dashboard-site-reviews-${organizationId}`,
   () => dashboardApi<{ reviews: SiteTestimonial[] }>(
-    `/api/editor/organizations/${siteId}/reviews`,
+    `/api/editor/organizations/${organizationId}/reviews`,
     { query: props.locationId ? { location_id: props.locationId } : undefined, validate: isTestimonialsResponse },
   ),
   // Nuxt blocks navigation on useAsyncData by default; the client does not

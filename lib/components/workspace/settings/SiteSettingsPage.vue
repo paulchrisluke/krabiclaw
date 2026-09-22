@@ -16,9 +16,9 @@
     v-if="surface === 'brand'"
     v-model:open="localizeOpen"
     row-trigger
-    :site-id="siteId"
+    :organization-id="organizationId"
     resource-type="site"
-    :resource-id="siteId"
+    :resource-id="organizationId"
     resource-label="brand"
     :fields="brandLocalizationFields"
     :language-settings-path="`${settingsPath}/localization`"
@@ -79,7 +79,7 @@ export interface FacebookConnectionStatus { connected: boolean; page_name?: stri
  */
 export interface SiteSettingsEditor {
   form: Reactive<SiteSettingsForm>
-  siteId: string
+  organizationId: string
   siteDashboardPath: ComputedRef<string>
   loading: Ref<boolean>
   saving: Ref<boolean>
@@ -143,7 +143,7 @@ const settingsPath = computed(() => `${siteDashboardPath.value}/settings`)
 // `<RouterView>` above rendered, and an `await` before it would bind nothing.
 const level = useRouteLevel()
 
-const siteId = await useDashboardOrganizationId()
+const organizationId = await useDashboardOrganizationId()
 
 // Workspace deletion is scheduled, never immediate: the organization carries a
 // due instant and the deletion-sweep task performs the deletion once it passes.
@@ -422,8 +422,8 @@ const settingsResourceKey = computed(() => `dashboard-site-settings:${String(rou
 const { data: settingsResource, pending: settingsPending, error: settingsResourceError, refresh: refreshSettings } = await useAsyncData<SettingsPageResource>(settingsResourceKey, async () => {
   const [settings, notifications, facebook] = await Promise.all([
     dashboardApi<{ success: boolean; settings: SiteSettingsResponse }>('/api/dashboard/settings', { validate: isSettingsResponse }),
-    dashboardApi<{ success: boolean; notifications: { whatsapp_phone: string | null } }>(`/api/editor/organizations/${siteId}/notifications`, { validate: isNotificationsResponse }),
-    hasFacebookAccess.value ? dashboardApi<FacebookConnectionStatus>('/api/integrations/facebook-pages/connection', { query: { siteId }, validate: isFacebookStatus }) : Promise.resolve<FacebookConnectionStatus>({ connected: false }),
+    dashboardApi<{ success: boolean; notifications: { whatsapp_phone: string | null } }>(`/api/editor/organizations/${organizationId}/notifications`, { validate: isNotificationsResponse }),
+    hasFacebookAccess.value ? dashboardApi<FacebookConnectionStatus>('/api/integrations/facebook-pages/connection', { query: { organizationId }, validate: isFacebookStatus }) : Promise.resolve<FacebookConnectionStatus>({ connected: false }),
   ])
   return { settings, notifications, facebook }
 }, { lazy: true })
@@ -466,7 +466,7 @@ async function saveCurrentEditor() {
       }
       case 'search': await patchSettings({ robots: searchIndexed.value ? 'index,follow' : 'noindex,nofollow', google_site_verification: form.google_site_verification.trim() }); break
       case 'notifications': {
-        const response = await dashboardApi<{ notifications: { whatsapp_phone: string | null } }>(`/api/editor/organizations/${siteId}/notifications`, { method: 'PATCH', body: { whatsapp_phone: whatsappPhone.value.trim() }, validate: isNotificationsResponse })
+        const response = await dashboardApi<{ notifications: { whatsapp_phone: string | null } }>(`/api/editor/organizations/${organizationId}/notifications`, { method: 'PATCH', body: { whatsapp_phone: whatsappPhone.value.trim() }, validate: isNotificationsResponse })
         fillNotifications(response.notifications)
         originalSignature.value = editorSignature(detailKey.value)
         break
@@ -503,7 +503,7 @@ async function loadLocalizationProgress() {
     .map(language => language.locale) ?? []
   try {
     localizationProgress.value = await Promise.all(locales.map(locale =>
-      dashboardApi<LocalizationProgress>(`/api/editor/organizations/${siteId}/locales/${encodeURIComponent(locale)}/opportunities`, { validate: isLocalizationProgress })))
+      dashboardApi<LocalizationProgress>(`/api/editor/organizations/${organizationId}/locales/${encodeURIComponent(locale)}/opportunities`, { validate: isLocalizationProgress })))
     localizationProgressError.value = null
   } catch (error) {
     localizationProgress.value = []
@@ -513,7 +513,7 @@ async function loadLocalizationProgress() {
 async function loadLocalizationSettings() {
   localizationLoading.value = true
   try {
-    localizationSettings.value = await dashboardApi<LocalizationSettings>(`/api/editor/organizations/${siteId}/locales`, { validate: isLocalizationSettings })
+    localizationSettings.value = await dashboardApi<LocalizationSettings>(`/api/editor/organizations/${organizationId}/locales`, { validate: isLocalizationSettings })
     await loadLocalizationProgress()
     localizationError.value = null
   } catch (error) { localizationError.value = errorMessage(error, 'Failed to load localization settings') }
@@ -536,19 +536,19 @@ async function enableLanguage(): Promise<boolean> {
   if (newLocale.value) {
     const selectedCatalog = localizationSettings.value?.available_catalogs.find(catalog => catalog.locale === newLocale.value)
     if (!selectedCatalog) return false
-    const success = await mutateLocalization(`/api/editor/organizations/${siteId}/locales/${encodeURIComponent(newLocale.value)}/add`, 'POST', { label: selectedCatalog.label })
+    const success = await mutateLocalization(`/api/editor/organizations/${organizationId}/locales/${encodeURIComponent(newLocale.value)}/add`, 'POST', { label: selectedCatalog.label })
     if (success) newLocale.value = ''
     return success
   }
   return false
 }
-async function publishLanguage(locale: string) { await mutateLocalization(`/api/editor/organizations/${siteId}/locales/${encodeURIComponent(locale)}/publish`, 'POST') }
-async function disableLanguage(locale: string) { await mutateLocalization(`/api/editor/organizations/${siteId}/locales/${encodeURIComponent(locale)}/disable`, 'POST') }
-async function deleteLanguage(locale: string) { if (window.confirm(`Permanently delete all ${locale} content for this site?`)) await mutateLocalization(`/api/editor/organizations/${siteId}/locales/${encodeURIComponent(locale)}`, 'DELETE') }
+async function publishLanguage(locale: string) { await mutateLocalization(`/api/editor/organizations/${organizationId}/locales/${encodeURIComponent(locale)}/publish`, 'POST') }
+async function disableLanguage(locale: string) { await mutateLocalization(`/api/editor/organizations/${organizationId}/locales/${encodeURIComponent(locale)}/disable`, 'POST') }
+async function deleteLanguage(locale: string) { if (window.confirm(`Permanently delete all ${locale} content for this site?`)) await mutateLocalization(`/api/editor/organizations/${organizationId}/locales/${encodeURIComponent(locale)}`, 'DELETE') }
 watch(detailKey, key => { if (key === 'localization' && !localizationSettings.value) loadLocalizationSettings() }, { immediate: true })
 provide(siteSettingsEditorKey, {
   form,
-  siteId,
+  organizationId,
   siteDashboardPath,
   loading,
   saving,

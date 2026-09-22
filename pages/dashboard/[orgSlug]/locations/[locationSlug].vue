@@ -84,7 +84,7 @@ const dashboardLocation = useDashboardLocation()
 const level = useRouteLevel()
 const locationPath = level.path
 
-const siteId = await useDashboardOrganizationId()
+const organizationId = await useDashboardOrganizationId()
 
 const locationId = computed(() => dashboardLocation.currentLocationId.value)
 
@@ -197,13 +197,13 @@ const isOverviewResponse = (value: unknown): value is LocationOverviewResource =
   && (value.reservationConfig === null || isRecord(value.reservationConfig))
   && isRecord(value.counts) && typeof value.counts.photos === 'number'
 
-const overviewKey = computed(() => `dashboard-location-overview:${siteId}:${locationId.value}`)
+const overviewKey = computed(() => `dashboard-location-overview:${organizationId}:${locationId.value}`)
 const { data: overview, pending: overviewPending, error: overviewError } = await useAsyncData<LocationOverviewResource>(overviewKey, async () => {
   const requestedLocationId = locationId.value
   if (!requestedLocationId) throw createError({ statusCode: 404, statusMessage: 'Location not found' })
   const shouldIncludeProducts = includeProducts.value
   return await dashboardApi<LocationOverviewResource>(
-    `/api/dashboard/organizations/${siteId}/locations/${requestedLocationId}/overview`,
+    `/api/dashboard/organizations/${organizationId}/locations/${requestedLocationId}/overview`,
     { query: { includeProducts: String(shouldIncludeProducts) }, validate: isOverviewResponse },
   )
 }, {

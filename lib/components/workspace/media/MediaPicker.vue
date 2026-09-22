@@ -64,7 +64,7 @@
   >
     <template #body>
       <MediaLibraryGrid
-        :site-id="siteId"
+        :organization-id="organizationId"
         :selected-id="pendingAsset?.asset_id ?? modelValue"
         :accept="accept"
         :location-id="locationId"
@@ -86,7 +86,7 @@
 import { mediaStillUrl } from '~/shared/media-placement-contract'
 const dashboardApi = useDashboardApi()
 const props = defineProps<{
-  siteId: string
+  organizationId: string
   modelValue?: string | null
   /**
    * What the caller already knows about `modelValue`'s asset. A page block owns
@@ -223,7 +223,7 @@ watch([() => props.modelValue, () => props.selectedSummary], async ([id]) => {
 
   try {
     const res = await dashboardApi<{ media: PickerMediaAsset[] }>(
-      `/api/editor/organizations/${props.siteId}/media?id=${encodeURIComponent(id)}&limit=1`,
+      `/api/editor/organizations/${props.organizationId}/media?id=${encodeURIComponent(id)}&limit=1`,
       { signal: controller.signal, validate: isPickerMediaResponse },
     )
 
@@ -251,7 +251,7 @@ function open() {
   if (props.disabled) return
   pendingAsset.value = null
   isOpen.value = true
-  trackMediaLibraryViewed(props.siteId)
+  trackMediaLibraryViewed(props.organizationId)
 }
 
 function onSelect(asset: PickerMediaAsset) {
@@ -278,9 +278,9 @@ function onUploaded(asset: PickerMediaAsset) {
     alt_text: assetAlt(asset),
   }
   if (kind === 'image') {
-    trackImageUploaded(props.siteId, size, 'cloudflare_images')
+    trackImageUploaded(props.organizationId, size, 'cloudflare_images')
   } else {
-    trackVideoUploaded(props.siteId, size, 'cloudflare_r2')
+    trackVideoUploaded(props.organizationId, size, 'cloudflare_r2')
   }
 }
 

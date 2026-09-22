@@ -178,7 +178,7 @@ const siteOriginFor = (subdomain: string) => tenantSiteOrigin({
 })
 
 const previewLocations = computed(() => state.value.preview
-  ? [{ id: state.value.preview.siteId, slug: state.value.preview.subdomainCandidate, title: state.value.preview.draftName }]
+  ? [{ id: state.value.preview.organizationId, slug: state.value.preview.subdomainCandidate, title: state.value.preview.draftName }]
   : [])
 
 const siteDomain = computed(() => {
@@ -252,7 +252,7 @@ const mobilePreviewOpenForViewport = computed({
 watch(() => state.value.preview?.previewToken, (token) => {
   if (!token) return
   previewReloadToken.value = Date.now()
-  selectedLocationId.value = state.value.preview?.siteId ?? null
+  selectedLocationId.value = state.value.preview?.organizationId ?? null
   if (isMobilePreviewViewport.value && !hasAutoOpenedMobilePreview.value) {
     hasAutoOpenedMobilePreview.value = true
     mobilePreviewOpen.value = true

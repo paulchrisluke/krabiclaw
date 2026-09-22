@@ -110,14 +110,14 @@ export function useOnboardingDraft() {
         },
         validate: (value): value is Record<string, unknown> => isRecord(value),
       })
-      if (res.success !== true || typeof res.draftId !== 'string' || typeof res.siteId !== 'string'
+      if (res.success !== true || typeof res.draftId !== 'string' || typeof res.organizationId !== 'string'
         || typeof res.previewToken !== 'string' || typeof res.draftName !== 'string'
         || typeof res.subdomainCandidate !== 'string') {
         throw new Error(typeof res.error === 'string' ? res.error : 'Could not save your answers. Please try again.')
       }
       state.value.draftId = res.draftId
       state.value.preview = {
-        draftId: res.draftId, siteId: res.siteId, previewToken: res.previewToken,
+        draftId: res.draftId, organizationId: res.organizationId, previewToken: res.previewToken,
         draftName: res.draftName, subdomainCandidate: res.subdomainCandidate,
       }
       return true
@@ -205,7 +205,7 @@ export function useOnboardingDraft() {
         siteSlug: typeof res.siteSlug === 'string' ? res.siteSlug : null,
         locationSlug: typeof res.locationSlug === 'string' ? res.locationSlug : null,
       }
-      if (typeof res.siteId === 'string') trackSiteCreated(res.siteId)
+      if (typeof res.organizationId === 'string') trackSiteCreated(res.organizationId)
       return true
     } catch (cause) {
       error.value = cause instanceof Error ? cause.message : 'Something went wrong. Please try again.'
@@ -268,7 +268,7 @@ export function useOnboardingDraft() {
       validate: (value): value is Record<string, unknown> => isRecord(value),
     })
     const draft = isRecord(res.draft) ? res.draft : null
-    return draft && typeof draft.siteId === 'string' ? draft.siteId : null
+    return draft && typeof draft.organizationId === 'string' ? draft.organizationId : null
   }
 
   /**
@@ -358,10 +358,10 @@ export function useOnboardingDraft() {
           : [])
         : []
 
-      if (typeof draft.siteId === 'string' && typeof draft.previewToken === 'string' && typeof draft.subdomainCandidate === 'string') {
+      if (typeof draft.organizationId === 'string' && typeof draft.previewToken === 'string' && typeof draft.subdomainCandidate === 'string') {
         state.value.preview = {
           draftId: draft.draftId,
-          siteId: draft.siteId,
+          organizationId: draft.organizationId,
           previewToken: draft.previewToken,
           draftName: typeof draft.draftName === 'string' ? draft.draftName : state.value.details.name,
           subdomainCandidate: draft.subdomainCandidate,

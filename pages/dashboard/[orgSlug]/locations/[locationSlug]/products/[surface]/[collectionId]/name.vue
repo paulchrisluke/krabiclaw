@@ -15,7 +15,7 @@
     <DashboardResourceLocalization
       v-if="!c.isNew.value && c.hasRecord.value"
       class="mt-6"
-      :site-id="c.siteId"
+      :organization-id="c.organizationId"
       resource-type="collection"
       :resource-id="c.collectionId.value"
       :resource-label="c.groupLabel.toLowerCase()"

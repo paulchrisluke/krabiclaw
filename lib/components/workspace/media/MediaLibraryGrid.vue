@@ -118,7 +118,7 @@ import { getErrorMessage } from '~/utils/errors'
 import { mediaStillUrl } from '~/shared/media-placement-contract'
 const dashboardApi = useDashboardApi()
 const props = defineProps<{
-  siteId: string
+  organizationId: string
   selectedId?: string | null
   accept?: 'image' | 'video' | 'any'
   locationId?: string | null
@@ -153,7 +153,7 @@ const emit = defineEmits<{
 }>()
 
 const ALL_MEDIA_KIND = 'all'
-const { uploading, error: mediaUploadError, upload: uploadMedia } = useMediaUpload(`/api/editor/organizations/${props.siteId}`)
+const { uploading, error: mediaUploadError, upload: uploadMedia } = useMediaUpload(`/api/editor/organizations/${props.organizationId}`)
 
 const assets = ref<MediaAsset[]>([])
 const loading = ref(false)
@@ -197,7 +197,7 @@ async function loadAssets() {
       params.set('ownerId', props.locationId)
       params.set('slot', 'gallery')
     }
-    const res = await dashboardApi<{ media: MediaAsset[] }>(`/api/editor/organizations/${props.siteId}/media?${params}`, {
+    const res = await dashboardApi<{ media: MediaAsset[] }>(`/api/editor/organizations/${props.organizationId}/media?${params}`, {
       signal: controller.signal,
       validate: isMediaResponse,
     })
@@ -273,7 +273,7 @@ async function upload(file: File) {
 }
 
 const initialMediaKey = computed(() =>
-  `dashboard-media-library:${props.siteId}:${props.locationId ?? 'site'}:${kindFilter.value}`,
+  `dashboard-media-library:${props.organizationId}:${props.locationId ?? 'site'}:${kindFilter.value}`,
 )
 const {
   data: initialMedia,
@@ -291,7 +291,7 @@ const {
     params.set('slot', 'gallery')
   }
   return await dashboardApi<{ media: MediaAsset[] }>(
-    `/api/editor/organizations/${props.siteId}/media?${params}`,
+    `/api/editor/organizations/${props.organizationId}/media?${params}`,
     { validate: isMediaResponse },
   )
 }, { lazy: true })

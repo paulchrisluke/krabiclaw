@@ -13,7 +13,7 @@
     :repository="repository"
     :initial-post="postResource?.post ?? null"
     defer-load
-    :site-id="siteId"
+    :organization-id="organizationId"
     :back-url="blogPath"
     back-label="Blog"
     panel-id="site-blog-post"
@@ -22,7 +22,7 @@
   >
     <template #actions>
       <DashboardResourceLocalization
-        :site-id="siteId"
+        :organization-id="organizationId"
         resource-type="content_document"
         :resource-id="postId"
         resource-label="post"
@@ -51,8 +51,7 @@ import { getErrorMessage, isNotFoundError } from '~/utils/errors'
 // own panel and navbar because it is the outermost level on screen.
 const route = useRoute()
 const orgSlug = route.params.orgSlug as string
-const siteSlug = route.params.siteSlug as string
-const siteId = await useDashboardOrganizationId()
+const organizationId = await useDashboardOrganizationId()
 const postId = String(route.params.postId || '')
 if (!postId) throw createError({ statusCode: 400, statusMessage: 'Post ID is required' })
 
@@ -60,9 +59,9 @@ const blogPath = `/dashboard/${orgSlug}/blog`
 const siteLocalizationSettingsPath = `/dashboard/${orgSlug}/settings/localization`
 
 const { data: postResource, error: postError } = await useAsyncData(
-  `dashboard-blog-post:${siteId}:${postId}`,
+  `dashboard-blog-post:${organizationId}:${postId}`,
   () => dashboardFetch<{ post: BlogPost }>(
-    `/api/editor/organizations/${siteId}/blog/${postId}`,
+    `/api/editor/organizations/${organizationId}/blog/${postId}`,
     { orgSlug },
     { validate: isBlogPostResponse },
   ),
@@ -80,7 +79,7 @@ const loadError = computed(() => (postError.value && !isNotFoundError(postError.
   ? getErrorMessage(postError.value, 'Failed to load this post')
   : null))
 
-const repository = tenantBlogRepository({ siteId, orgSlug, siteSlug })
+const repository = tenantBlogRepository({ organizationId, orgSlug })
 
 const dashboardApi = useDashboardApi()
 type BlogTranslationResponse = { localization: Record<string, unknown> & { metadata: Record<string, unknown>; updated_at: string; content_blocks: BlogEditorBlock[] } }
@@ -136,7 +135,7 @@ async function loadBlogLocalization(locale: string): Promise<Record<string, unkn
   let values: Record<string, unknown> = {}
   try {
     const response = await dashboardApi<BlogTranslationResponse>(
-      `/api/editor/organizations/${siteId}/localization/content_document/${postId}/${encodeURIComponent(locale)}`,
+      `/api/editor/organizations/${organizationId}/localization/content_document/${postId}/${encodeURIComponent(locale)}`,
       { validate: isBlogTranslationResponse },
     )
     values = { ...response.localization, 'metadata.category': response.localization.metadata.category,
@@ -183,7 +182,7 @@ async function saveBlogLocalization(locale: string, submitted: Record<string, un
   if (template !== 'saya' && template !== 'blawby' && template !== 'platform') throw new Error('Article template is missing or invalid.')
   const sourcePath = tenantBlogPostPath({ themeId: publicTemplateRegistry[template].themeId }, post.slug, post.collection ?? 'blog')
   const response = await dashboardApi<BlogTranslationResponse>(
-    `/api/editor/organizations/${siteId}/localization/content_document/${postId}/${encodeURIComponent(locale)}`,
+    `/api/editor/organizations/${organizationId}/localization/content_document/${postId}/${encodeURIComponent(locale)}`,
     {
       method: 'PUT',
       body: {
