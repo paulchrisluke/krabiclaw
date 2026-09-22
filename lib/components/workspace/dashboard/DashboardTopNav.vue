@@ -35,18 +35,6 @@
     </nav>
 
     <div class="flex items-center justify-end gap-3">
-      <!-- The dashboard's one search, the same palette ⌘K opens. -->
-      <UButton
-        v-if="items.length"
-        icon="i-lucide-search"
-        aria-label="Search"
-        color="neutral"
-        variant="soft"
-        square
-        class="rounded-full"
-        data-testid="dashboard-top-nav-search"
-        @click="nuxtApp.hooks.callHook('dashboard:search:toggle')"
-      />
       <!-- Page-level controls sit to the left of the account menu. A page
            registers one with useDashboardTopNavAction(); see that composable
            for why a slot cannot reach here. -->
@@ -88,7 +76,6 @@ import DashboardAccountMenu from './DashboardAccountMenu.vue'
 import { useDashboardTopNavActions } from '~/composables/useDashboardTopNavActions'
 
 const topNavActions = useDashboardTopNavActions()
-const nuxtApp = useNuxtApp()
 
 export interface DashboardTopNavItem {
   key: string

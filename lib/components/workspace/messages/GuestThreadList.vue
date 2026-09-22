@@ -50,15 +50,6 @@
         >
           Unread
         </UButton>
-
-        <UButton
-          color="neutral"
-          variant="ghost"
-          icon="i-lucide-search"
-          aria-label="Search"
-          class="ml-auto"
-          @click="nuxtApp.hooks.callHook('dashboard:search:toggle')"
-        />
       </div>
     </header>
 
@@ -206,7 +197,6 @@ const dashboard = useDashboardSite()
 const { formatRelativeTime } = useHumanTime()
 
 const route = useRoute()
-const nuxtApp = useNuxtApp()
 const router = useRouter()
 
 const isOrganizationScope = computed(() => props.scope === 'organization')

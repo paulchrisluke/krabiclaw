@@ -355,6 +355,19 @@ one place that tells them apart.
 with no collections, renders its own empty state. Containers that cannot be
 empty are a modelling error.
 
+## Where we deliberately differ from Airbnb
+
+Airbnb has no equivalent, so these are additions rather than parity, and each
+one says so where it lives:
+
+- **Platform accounts.** KrabiClaw runs on KrabiClaw, so its own business's Menu
+  carries a row no tenant sees: every account on the platform, and
+  impersonation. It is gated on the site's template being `platform`, and it
+  sits beside Team and Billing because it is about accounts rather than about a
+  site. Internal admin tooling is not in Airbnb's host dashboard at all.
+- **A URL at every level.** Airbnb stops one level below a hub; we keep one, so
+  every leaf is shareable and reloadable.
+
 ## Naming
 
 Use the tenant's vocabulary, not the schema's. `ProductPresentation` maps the

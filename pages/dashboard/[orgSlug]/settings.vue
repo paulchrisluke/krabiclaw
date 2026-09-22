@@ -1,21 +1,32 @@
 <template>
   <!--
     Menu: the business's own page, a tab root. Its rows are the site's lists
-    and settings, each a level below; the bell and the account hang off it.
+    and settings, each a level below.
+
+    Search and the bell hang off it, and nothing else: the dashboard has one
+    search and this is where it lives. The account avatar is in the header at
+    every width, so drawing one here put two of the same control on screen.
   -->
   <DashboardIndexPanel id="organization-settings" title="Menu">
     <template #right>
+      <UButton
+        icon="i-lucide-search"
+        aria-label="Search"
+        color="neutral"
+        variant="ghost"
+        square
+        data-testid="dashboard-search"
+        @click="openSearch"
+      />
       <DashboardNotificationBell :to="notificationsTo" />
-      <DashboardAccountMenu />
     </template>
-    <DashboardMenuContent @search="openSearch" />
+    <DashboardMenuContent />
   </DashboardIndexPanel>
 </template>
 
 <script setup lang="ts">
 import DashboardMenuContent from '~/lib/components/workspace/dashboard/DashboardMenuContent.vue'
 import DashboardNotificationBell from '~/lib/components/workspace/dashboard/DashboardNotificationBell.vue'
-import DashboardAccountMenu from '~/lib/components/workspace/dashboard/DashboardAccountMenu.vue'
 
 definePageMeta({ layout: 'dashboard' })
 useSeoMeta({ title: 'Menu | KrabiClaw Dashboard', robots: 'noindex, nofollow' })

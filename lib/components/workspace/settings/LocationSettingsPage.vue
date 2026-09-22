@@ -77,7 +77,13 @@ export type LocationEditorKey = typeof HUB_KEYS[number] | typeof SETTINGS_KEYS[n
  * that one concern. Loads share one `useAsyncData` key per location, so the
  * rail and the leaf beside it are one request.
  */
-export async function useLocationEditor(siteId: string, locationId: Ref<string | null>, key: LocationEditorKey | null, settingsPath = '') {
+/**
+ * `settingsPath` stays a source rather than a string: this component is reused
+ * as the route moves between locations, so a path read once at setup froze
+ * every row to the location that happened to be open first.
+ */
+export async function useLocationEditor(siteId: string, locationId: Ref<string | null>, key: LocationEditorKey | null, settingsPath: MaybeRefOrGetter<string> = '') {
+  const settingsBase = computed(() => toValue(settingsPath))
   const route = useRoute()
   const dashboardApi = useDashboardApi()
     const editorError = ref<string | null>(null)
@@ -312,12 +318,12 @@ export async function useLocationEditor(siteId: string, locationId: Ref<string |
   const navigationGroups = computed(() => [{
     id: 'settings',
     items: [
-      { id: 'status', label: 'Status', summary: statusSummary.value, to: `${settingsPath}/status` },
-      { id: 'slug', label: 'Link', summary: slugSummary.value, to: `${settingsPath}/slug` },
+      { id: 'status', label: 'Status', summary: statusSummary.value, to: `${settingsBase.value}/status` },
+      { id: 'slug', label: 'Link', summary: slugSummary.value, to: `${settingsBase.value}/slug` },
       { id: 'languages', label: 'Languages', summary: 'Translate the name, description and address', action: { label: 'Localize' } },
-      { id: 'discovery', label: 'Google Business Profile', summary: discoverySummary.value, to: `${settingsPath}/discovery` },
-      { id: 'notifications', label: 'WhatsApp number', summary: notificationSummary.value, to: `${settingsPath}/notifications` },
-      { id: 'features', label: 'Features', summary: featureSummary.value, to: `${settingsPath}/features` },
+      { id: 'discovery', label: 'Google Business Profile', summary: discoverySummary.value, to: `${settingsBase.value}/discovery` },
+      { id: 'notifications', label: 'WhatsApp number', summary: notificationSummary.value, to: `${settingsBase.value}/notifications` },
+      { id: 'features', label: 'Features', summary: featureSummary.value, to: `${settingsBase.value}/features` },
     ],
   }])
 
@@ -624,7 +630,7 @@ import EditorNavigationList from '~/components/dashboard/EditorNavigationList.vu
 const level = useRouteLevel()
 const dashboardLocation = useDashboardLocation()
 const siteId = await useDashboardSiteId()
-const editor = await useLocationEditor(siteId, dashboardLocation.currentLocationId, null, level.path.value)
+const editor = await useLocationEditor(siteId, dashboardLocation.currentLocationId, null, level.path)
 
 const localizeOpen = ref(false)
 function onRowAction(id: string) {

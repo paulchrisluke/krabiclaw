@@ -112,12 +112,17 @@
           from a click handler could not be opened in a new tab, showed the
           reader no destination before they pressed it, and put a second copy
           of the record's path in every list (DESIGN.md).
+
+          In the edit state it stops being one. Editing keeps the rows in place
+          and grows controls around them, so nothing navigates — a row that
+          still led somewhere would strand a half-finished reorder behind a tap
+          on the record's own name (DESIGN.md, "Reorder is a mode").
         -->
         <component
-          :is="item.to ? NuxtLink : 'div'"
-          :to="item.to"
+          :is="rowLink(item) ? NuxtLink : 'div'"
+          :to="rowLink(item) ? item.to : undefined"
           class="min-w-0 flex-1"
-          :class="item.to ? 'no-underline' : undefined"
+          :class="rowLink(item) ? 'no-underline' : undefined"
         >
           <slot name="item" :item="item">
             <p class="truncate text-sm font-medium text-highlighted">{{ item.title }}</p>
@@ -168,7 +173,7 @@
 // Generic so a caller can hang its own row on the item and read it straight off
 // the `#item` slot. Without it every custom row had to look its record back up
 // by id for each field it rendered, which is both noisy and quadratic.
-defineProps<{
+const props = defineProps<{
   items: T[]
   title: string
   description?: string
@@ -196,6 +201,12 @@ defineEmits<{
 // Resolved rather than written in the template so one expression can choose
 // between a link and a plain row.
 const NuxtLink = resolveComponent('NuxtLink')
+
+/**
+ * The row body links only while the list is being browsed. In the edit state
+ * the row is the thing being acted on, and its pencil is the way in.
+ */
+const rowLink = (item: T) => Boolean(item.to) && !(editing.value && !props.readOnly)
 
 const editing = defineModel<boolean>('editing', { default: false })
 const selected = defineModel<string[]>('selected', { default: () => [] })
