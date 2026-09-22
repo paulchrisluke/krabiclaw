@@ -20,46 +20,32 @@ export function useDashboardSiteLinks() {
   })
 
   /**
-   * The business's site. Every organization has exactly one, so its paths are
-   * known from any dashboard route, not only from under `/sites/:siteSlug`.
+   * The business's own screens. There used to be two builders here — one keyed
+   * on the site's subdomain, one on a `siteSlug` route param — producing nearly
+   * the same paths from the same organization. The tenant is the organization,
+   * so there is one.
    */
   const businessPaths = computed(() => {
     const organizationSlug = dashboard.scope.value?.orgSlug
-    const subdomain = dashboard.sites.value[0]?.subdomain
-    if (!organizationSlug || !subdomain) return null
+    if (!organizationSlug) return null
     const site = `/dashboard/${organizationSlug}`
+    const settings = `${site}/settings`
     return {
       site,
-      locations: `/dashboard/${organizationSlug}/sites`,
+      locations: `${site}/locations`,
       newLocation: `${site}/locations/new`,
       pages: `${site}/pages`,
       blog: `${site}/blog`,
       qa: `${site}/qa`,
       brand: `${site}/brand`,
-      settings: `${site}/settings`,
-    }
-  })
-
-  const sitePaths = computed(() => {
-    const scope = dashboard.scope.value
-    if (!scope?.siteSlug) return null
-
-    const site = `/dashboard/${scope.orgSlug}`
-    const settings = `${site}/settings`
-
-    return {
-      site,
-      pages: `${site}/pages`,
-      qa: `${site}/qa`,
       inbox: `${site}/messages`,
-      locations: `${site}/locations`,
-      domains: `${settings}/domains`,
+      domains: `${settings}/website/domains`,
       settings,
     }
   })
 
   const locationPaths = computed(() => {
-    const site = sitePaths.value
+    const site = businessPaths.value
     const locationSlug = dashboardLocation.currentLocationSlug.value
     if (!site || !locationSlug) return null
 
@@ -79,7 +65,6 @@ export function useDashboardSiteLinks() {
   return {
     orgPaths,
     businessPaths,
-    sitePaths,
     locationPaths,
   }
 }

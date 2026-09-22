@@ -34,7 +34,7 @@ export async function getConfiguredSourceLocale(
 export async function resolveSiteLocale(
   env: CloudflareEnv,
   db: DbClient,
-  site: { id: string; organization_id: string },
+  organizationId: string,
   requestedLocale: unknown,
 ): Promise<SiteLocaleState> {
   const sourceLocale = await getConfiguredSourceLocale(db, organizationId)

@@ -273,7 +273,7 @@ export async function getPublicBlawbyIdentity(db: DbClient, organizationId: stri
      WHERE s.id = ?
      LIMIT 1
   `, [organizationId])
-  const socialMedia = (await loadPublicSocialMedia(db, organizationId, 'site', [organizationId])).get(organizationId)
+  const socialMedia = (await loadPublicSocialMedia(db, organizationId, 'organization', [organizationId])).get(organizationId)
 
   return {
     name: requiredText(row?.name, `site ${organizationId}.name`),
@@ -293,7 +293,7 @@ export async function getPublicBlawbyShellData(
 ): Promise<PublicBlawbyShellData> {
   const locale = options.locale?.trim() || 'en'
   const localizations = options.localizations ?? []
-  const siteLocalization = localizations.find(item => item.resourceType === 'site' && item.resourceId === organizationId) ?? null
+  const siteLocalization = localizations.find(item => item.resourceType === 'organization' && item.resourceId === organizationId) ?? null
   // Navigation is the site's published pages. A practice area is one of them,
   // so there is no separate link list to keep in step with the page list.
   const [sourceIdentity, sourceConsultation, sourceCompliance, themeTokens, pageLinks] = await Promise.all([

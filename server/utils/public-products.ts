@@ -225,7 +225,7 @@ export async function loadPublicProductDetail(
   const sourceProduct = collection.products.find(product => product.slug === productSlug)
   const locationLocalization = localizations.find(item => item.resourceType === 'business_location' && item.resourceId === location.id)
   const productLocalization = localizations.find(item => item.resourceType === 'product' && item.resourceId === sourceProduct?.id)
-  const siteLocalization = localizations.find(item => item.resourceType === 'site' && item.resourceId === organizationId)
+  const siteLocalization = localizations.find(item => item.resourceType === 'organization' && item.resourceId === organizationId)
   if (!sourceProduct || !locationLocalization || !productLocalization) return null
   const localizedProduct = projectExactLocalizedResource('product', sourceProduct, productLocalization)
   const product = {
@@ -237,7 +237,7 @@ export async function loadPublicProductDetail(
   }
   const localizedLocation = projectExactLocalizedResource('business_location', location, locationLocalization)
   const localizedSite = siteLocalization
-    ? projectExactLocalizedResource('site', collection.site, siteLocalization)
+    ? projectExactLocalizedResource('organization', collection.site, siteLocalization)
     : { ...collection.site, name: '' }
   const localeRepresentations = await listPublicLocaleRepresentations(env, db, {
     organizationId: collection.site.id,

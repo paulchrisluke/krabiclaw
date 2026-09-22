@@ -2,7 +2,7 @@
 // `/contact/confirmed` page via sessionStorage — same-tab only, mirrors useBookingHandoff.
 
 export interface ContactConfirmation {
-  siteId: string
+  organizationId: string
   siteName: string
   guestName: string
   subject?: string | null
@@ -15,13 +15,13 @@ export function setContactConfirmation(payload: ContactConfirmation) {
   sessionStorage.setItem(STORAGE_KEY, JSON.stringify(payload))
 }
 
-export function getContactConfirmation(currentSiteId: string): ContactConfirmation | null {
+export function getContactConfirmation(currentOrganizationId: string): ContactConfirmation | null {
   if (!import.meta.client) return null
   const raw = sessionStorage.getItem(STORAGE_KEY)
   if (!raw) return null
   try {
     const parsed = JSON.parse(raw) as ContactConfirmation
-    if (parsed.siteId !== currentSiteId) return null
+    if (parsed.organizationId !== currentOrganizationId) return null
     return parsed
   } catch {
     return null

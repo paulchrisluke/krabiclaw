@@ -3,7 +3,7 @@ export interface IntegrationVersion {
 }
 
 export interface IntegrationOAuthState extends IntegrationVersion {
-  siteId: string
+  organizationId: string
   organizationId: string
   userId: string
   timestamp: number

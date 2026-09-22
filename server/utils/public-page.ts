@@ -519,9 +519,9 @@ async function loadPublicPageSource(
   const sourceShell = buildPublicShellPayload(site, batchResults, shellIndexes)
   const shell = (() => {
     if (!localizedLocale) return sourceShell
-    const siteLocalization = publicLocalizations.find(item => item.resourceType === 'site' && item.resourceId === organizationId)
+    const siteLocalization = publicLocalizations.find(item => item.resourceType === 'organization' && item.resourceId === organizationId)
     const localizedSite = siteLocalization
-      ? projectExactLocalizedResource('site', site, siteLocalization)
+      ? projectExactLocalizedResource('organization', site, siteLocalization)
       : { ...site, name: null, brand_description: null, seo_title: null, seo_description: null }
     const locations = projectExactLocalizedCollection('business_location', sourceShell.locations, publicLocalizations)
     const {

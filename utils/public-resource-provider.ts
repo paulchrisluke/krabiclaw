@@ -1,5 +1,5 @@
 export interface PublicResourceProviderOptions {
-  siteId: string | null
+  organizationId: string | null
   resourceKind: 'shell' | 'page'
   url: string
   query: Record<string, string | undefined>

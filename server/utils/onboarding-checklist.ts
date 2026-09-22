@@ -55,12 +55,12 @@ export async function loadOnboardingChecklist(
   let organizationId: string
   let brandName: string | null
   if (querySiteId) {
-    const { organization } = await requireOrganizationAccess(event, querySiteId, 'site-wide')
+    const { organization } = await requireOrganizationAccess(event, querySiteId)
     organizationId = organization.id
     brandName = organization.name
   } else {
     const dashboard = await getDashboardContext(event, { requireOrganization: false })
-    if (!dashboard?.site) return EMPTY_ONBOARDING_CHECKLIST
+    if (!dashboard.organization) return EMPTY_ONBOARDING_CHECKLIST
     organizationId = dashboard.organization.id
     brandName = dashboard.organization.name
   }
