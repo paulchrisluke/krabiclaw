@@ -44,10 +44,15 @@ export default defineHandler(async (event) => {
       const auth = createAuth(env) as unknown as {
         api: { setActiveOrganization: (input: { body: { organizationId: string }, headers: Headers }) => Promise<unknown> }
       }
-      await auth.api.setActiveOrganization({
+      // Routing without activating is the failure #905 names, so a refusal
+      // stops here rather than entering an organization the session is not in.
+      const activated = await auth.api.setActiveOrganization({
         body: { organizationId: route.organizationId },
         headers: event.req.headers,
       })
+      if (!activated) {
+        throw new HTTPError({ statusCode: 502, message: 'Could not activate the organization for this session' })
+      }
     }
 
     if (plan) {
