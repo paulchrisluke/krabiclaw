@@ -61,7 +61,7 @@ export default defineHandler(async (event) => {
     // rather than proving membership in one. The site row's own membership is
     // what authorizes: the state only has to agree with it.
     const siteAccess = await loadMemberOrganizationRow(event, db, env, organizationId, userId)
-    if (!siteAccess || siteAccess.organization_id !== organizationId) throw new Error('Access denied')
+    if (!siteAccess || siteAccess.id !== organizationId) throw new Error('Access denied')
     await assertOrganizationWideAccess(db, memberAccessPrincipal(siteAccess.membership, { env, event }))
 
     // System-user access tokens from FLB never expire — no long-lived exchange needed

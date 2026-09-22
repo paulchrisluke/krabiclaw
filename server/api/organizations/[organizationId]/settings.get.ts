@@ -41,7 +41,7 @@ export default defineHandler(async (event) => {
 
     await assertOrganizationWideAccess(db, memberAccessPrincipal(siteAccess.membership, { env, event }))
 
-    const settings = await loadSettingsPayload(db, siteAccess.organization_id)
+    const settings = await loadSettingsPayload(db, siteAccess.id)
     return jsonResponse({ success: true, settings })
 
   } catch (error) {
