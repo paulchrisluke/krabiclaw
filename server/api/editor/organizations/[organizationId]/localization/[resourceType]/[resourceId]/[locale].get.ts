@@ -1,7 +1,7 @@
 import { defineHandler } from 'nitro'
 import { getRouterParam } from 'nitro/h3'
 
-import { requireSiteAccess } from '~/server/utils/location-access'
+import { requireOrganizationAccess } from '~/server/utils/location-access'
 import { getLocalizationForAuthoring } from '~/server/utils/localization'
 
 export default defineHandler(async (event) => {
@@ -10,6 +10,6 @@ export default defineHandler(async (event) => {
   const resourceId = getRouterParam(event, 'resourceId')
   const locale = getRouterParam(event, 'locale')
   if (!organizationId || !resourceType || !resourceId || !locale) throw createError({ statusCode: 400, statusMessage: 'Site, resource, and locale route parameters are required' })
-  const { env, db, site } = await requireSiteAccess(event, organizationId)
-  return { localization: await getLocalizationForAuthoring(env, db, site.organization_id, organizationId, resourceType, resourceId, locale) }
+  const { env, db, organization } = await requireOrganizationAccess(event, organizationId)
+  return { localization: await getLocalizationForAuthoring(env, db, organization.id, organizationId, resourceType, resourceId, locale) }
 })

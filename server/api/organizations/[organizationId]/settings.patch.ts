@@ -5,7 +5,7 @@ import { updateSiteSettingsFields } from '~/server/utils/site-settings'
 import type { UpdateSiteSettingsRequest } from '~/server/types/site'
 import { defineHandler } from 'nitro'
 import {  getRouterParam, readBody } from 'nitro/h3';
-import { requireSiteAccess } from '~/server/utils/location-access'
+import { requireOrganizationAccess } from '~/server/utils/location-access'
 import { hasPlatformEventPermission } from '~/server/utils/platform-admin-users'
 
 export default defineHandler(async (event) => {
@@ -23,18 +23,18 @@ export default defineHandler(async (event) => {
     }, { status: 400 })
   }
 
-  const { env, db, session, site } = await requireSiteAccess(event, organizationId)
+  const { env, db, session, organization } = await requireOrganizationAccess(event, organizationId)
 
 
   try {
     // Demo org is read-only for everyone except platform admins
     const isPlatformAdmin = await hasPlatformEventPermission(event, env, { platform: ['access'] })
-    if (isDemoOrg(site.organization_id) && !isPlatformAdmin) {
+    if (isDemoOrg(organization.id) && !isPlatformAdmin) {
       return jsonResponse({ error: 'Demo site is read-only' }, { status: 403 })
     }
 
     const result = await updateSiteSettingsFields(
-      db, env, organizationId, site.organization_id, body, session.user.id
+      db, env, organizationId, organization.id, body, session.user.id
     )
 
     return jsonResponse(result.data, { status: result.status })

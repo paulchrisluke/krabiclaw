@@ -446,7 +446,7 @@ async function contentReviewUrls(
 async function resolveTenantContext(db: DbClient, organizationId: string, env?: CloudflareEnv): Promise<ContentReviewContext | undefined> {
   if (!organizationId) return undefined
   if (!env) throw new Error('CloudflareEnv is required to resolve tenant organization context')
-  // The dashboard addresses a site by its subdomain, not by `sites.slug`.
+  // The dashboard addresses a site by its subdomain, not by `organization.slug`.
   const site = await queryFirst<{ subdomain: string | null; organization_id: string }>(
     db,
     'SELECT subdomain, organization_id FROM organization WHERE id = ? LIMIT 1',

@@ -34,8 +34,8 @@ export default defineHandler(async (event) => {
   const locationId = getRouterParam(event, 'locationId')
   if (!organizationId || !locationId) return jsonResponse({ error: 'Site ID and location ID are required' }, { status: 400 })
   try {
-    const { db, session, site } = await requireLocationAccess(event, organizationId, locationId)
-    await requireLocationReservationConfig(db, { organizationId: site.organization_id, locationId })
+    const { db, session, organization } = await requireLocationAccess(event, organizationId, locationId)
+    await requireLocationReservationConfig(db, { organizationId: organization.id, locationId })
     const body = await readStrictBody<{ changes: unknown }>(event, { changes: 'unknown' })
     if (!Array.isArray(body.changes) || body.changes.length === 0) {
       return jsonResponse({ error: 'At least one change is required' }, { status: 400 })
@@ -70,7 +70,7 @@ export default defineHandler(async (event) => {
       ? {
           query: `DELETE FROM location_reservation_overrides
                    WHERE organization_id = ? AND location_id = ? AND override_date = ? AND time_slot IS ?`,
-          params: [site.organization_id, locationId, change.override_date, change.time_slot ?? null],
+          params: [organization.id, locationId, change.override_date, change.time_slot ?? null],
         }
       : {
           query: `INSERT INTO location_reservation_overrides
@@ -84,7 +84,7 @@ export default defineHandler(async (event) => {
                     : 'ON CONFLICT (location_id, override_date, time_slot) WHERE time_slot IS NOT NULL DO UPDATE SET'}
                     status = excluded.status, capacity = excluded.capacity, note = excluded.note,
                     updated_at = excluded.updated_at, updated_by = excluded.updated_by`,
-          params: [crypto.randomUUID(), site.organization_id, locationId, change.override_date, change.time_slot ?? null,
+          params: [crypto.randomUUID(), organization.id, locationId, change.override_date, change.time_slot ?? null,
             change.status, change.capacity ?? null, change.note?.trim() || null, now, now, session.user.id, session.user.id],
         }), { operation: 'Set reservation availability' })
     return jsonResponse({ success: true, location_id: locationId })

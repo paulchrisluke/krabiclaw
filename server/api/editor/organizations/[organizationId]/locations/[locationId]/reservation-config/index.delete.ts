@@ -9,10 +9,10 @@ export default defineHandler(async (event) => {
   const locationId = getRouterParam(event, 'locationId')
   if (!organizationId || !locationId) return jsonResponse({ error: 'Site ID and location ID are required' }, { status: 400 })
   try {
-    const { db, site } = await requireLocationAccess(event, organizationId, locationId)
+    const { db, organization } = await requireLocationAccess(event, organizationId, locationId)
     // Stops the location taking reservations, and removes its date overrides.
     // Existing reservations keep their own records.
-    await deleteLocationReservationConfig(db, { organizationId: site.organization_id, locationId })
+    await deleteLocationReservationConfig(db, { organizationId: organization.id, locationId })
     return jsonResponse({ success: true, location_id: locationId })
   } catch (error) {
     rethrowHttpError(error)

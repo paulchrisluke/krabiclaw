@@ -354,7 +354,7 @@ export async function listSiteProducts(db: DbClient, input: {
     WHERE p.organization_id = ? AND pub.organization_id = ? AND (? = 0 OR pub.published = 1)
     ORDER BY p.name, p.id
     ${input.window ? 'LIMIT ? OFFSET ?' : ''}
-  `, [input.organizationId, input.organizationId, input.publishedOnly ? 1 : 0,
+  `, [input.organizationId, input.publishedOnly ? 1 : 0,
     ...(input.window ? [input.window.limit + 1, input.window.offset] : [])])
   return hydrate(db, input.organizationId, rows.map(mapProductRow))
 }
@@ -520,7 +520,7 @@ async function organizationDefaultCurrency(db: DbClient, organizationId: string)
   // context the caller must supply the currency on the price itself; there is
   // no platform default standing in for a merchant's decision.
   if (!organizationId) invalid('currency is required when no site context is given')
-  const site = await queryFirst<{ default_currency: string }>(db, 'SELECT default_currency FROM organization WHERE id = ? AND organization_id = ?', [organizationId, organizationId])
+  const site = await queryFirst<{ default_currency: string }>(db, 'SELECT default_currency FROM organization WHERE id = ? AND organization_id = ?', [organizationId])
   if (!site) notFound('Site not found')
   if (!isCurrencyCode(site.default_currency)) throw new Error(`Site ${organizationId} has an unsupported default currency`)
   return site.default_currency
@@ -999,7 +999,7 @@ export async function planProductCreateWrites(db: DbClient, input: {
       product_variants: input.products.flatMap(product => (product.variants ?? []).map(variant => variant.id).filter((id): id is string => Boolean(id))),
     }),
   ])
-  const defaultCurrency = input.organizationId ? await organizationDefaultCurrency(db, input.organizationId, input.organizationId) : null
+  const defaultCurrency = input.organizationId ? await organizationDefaultCurrency(db, input.organizationId) : null
   const queries: BatchQuery[] = []
   const ids: string[] = []
   // Slugs are derived sequentially and the set carries what this batch has
@@ -1126,7 +1126,7 @@ async function planProductUpdate(db: DbClient, input: {
     { query: 'DELETE FROM product_metafields WHERE organization_id = ? AND product_id = ?', params: [organizationId, productId] },
     { query: 'DELETE FROM product_variant_option_values WHERE organization_id = ? AND product_id = ?', params: [organizationId, productId] },
     ...(writesPrices
-      ? [{ query: 'DELETE FROM prices WHERE organization_id = ? AND product_variant_id IN (SELECT id FROM product_variants WHERE organization_id = ? AND product_id = ?)', params: [organizationId, organizationId, productId] }]
+      ? [{ query: 'DELETE FROM prices WHERE organization_id = ? AND product_variant_id IN (SELECT id FROM product_variants WHERE organization_id = ? AND product_id = ?)', params: [organizationId, productId] }]
       : []),
     // Options, values and variants are UPSERTED, never dropped and recreated:
     // bookings reference variant identity, and recreating a variant under a
@@ -1545,7 +1545,7 @@ export async function reconcileProducts(db: DbClient, input: {
     loadProductSlugs(db, input.organizationId),
     listProductsByIds(db, input.organizationId, requestedIds),
   ])
-  const defaultCurrency = input.organizationId ? await organizationDefaultCurrency(db, input.organizationId, input.organizationId) : null
+  const defaultCurrency = input.organizationId ? await organizationDefaultCurrency(db, input.organizationId) : null
   const idOwners = await loadSuppliedIdOwners(db, {
     product_options: input.products.flatMap(entry => (entry.options ?? []).map(option => option.id).filter((id): id is string => Boolean(id))),
     product_option_values: input.products.flatMap(entry => (entry.options ?? []).flatMap(option => (option.values ?? []).map(value => typeof value === 'string' ? null : value.id)).filter((id): id is string => Boolean(id))),

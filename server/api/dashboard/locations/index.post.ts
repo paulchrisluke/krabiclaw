@@ -11,7 +11,7 @@ import { purgePublicResourceCacheSafe } from '~/server/utils/public-resource-cac
 import { executeBatch, queryFirst, type DbClient } from '~/server/db'
 import { parsePhone } from '~/utils/phone'
 import { postalAddressFromAnswers } from '~/utils/postal-address'
-import { assertSiteWideAccess, memberAccessPrincipal } from '~/server/utils/member-access'
+import { assertOrganizationWideAccess, memberAccessPrincipal } from '~/server/utils/member-access'
 
 type SetupEnv = Parameters<typeof createLocation>[0]
 
@@ -76,7 +76,7 @@ export default defineHandler(async (event) => {
   const { site, organization } = dashboard
   const organizationId = site.id as string
   const organizationId = organization?.id as string
-  await assertSiteWideAccess(db, memberAccessPrincipal(organization, { env, organizationId, event }))
+  await assertOrganizationWideAccess(db, memberAccessPrincipal(organization, { env, organizationId, event }))
 
   const body = await readBody(event) as {
     mapsUrl?: unknown
@@ -108,7 +108,7 @@ export default defineHandler(async (event) => {
     const slug = await uniqueLocationSlug(db, organizationId, baseSlug)
 
     const result = await createLocation(
-      env as SetupEnv, db, organizationId, organizationId, {
+      env as SetupEnv, db, organizationId, {
         title: typeof details?.name === 'string' && details.name.trim() ? details.name.trim() : name, slug, address: detailsAddress(details), phone: typeof details?.phone === 'string' && details.phone.trim() ? details.phone.trim() : null, website_url: typeof details?.websiteUrl === 'string' && details.websiteUrl.trim() ? details.websiteUrl.trim() : null, opening_hours: parseOpeningHours(details?.openingHours ?? null), special_hours: parseSpecialHours(details?.specialHours ?? null), notification_phone: notificationPhone.value, timezone: typeof details?.timezone === 'string' && details.timezone.trim() ? details.timezone.trim() : null, }, session.user.id, )
 
     if (result.status !== 200 && result.status !== 201) {
@@ -157,7 +157,7 @@ export default defineHandler(async (event) => {
   const slug = await uniqueLocationSlug(db, organizationId, baseSlug)
 
   const result = await createLocation(
-    env as SetupEnv, db, organizationId, organizationId, {
+    env as SetupEnv, db, organizationId, {
       title: typeof details?.name === 'string' && details.name.trim() ? details.name.trim() : place.name, slug, phone: typeof details?.phone === 'string' && details.phone.trim()
         ? details.phone.trim()
         : place.phone ?? null, maps_url: place.mapsUrl ?? null, google_place_id: place.placeId, website_url: typeof details?.websiteUrl === 'string' && details.websiteUrl.trim()

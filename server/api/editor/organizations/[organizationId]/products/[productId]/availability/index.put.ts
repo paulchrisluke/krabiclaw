@@ -31,14 +31,14 @@ export default defineHandler(async (event) => {
       if (slot.capacity !== null && slot.capacity !== undefined && typeof slot.capacity !== 'number') return jsonResponse({ error: 'capacity must be a number or null' }, { status: 400 })
       slots.push({ weekday: slot.weekday, start_time: slot.start_time, capacity: slot.capacity === undefined ? null : slot.capacity as number | null })
     }
-    const { db, session, site } = await requireLocationAccess(event, organizationId, body.location_id)
+    const { db, session, organization } = await requireLocationAccess(event, organizationId, body.location_id)
     // A product id in the path is not authorized by the site in the path.
-    await requireSiteProduct(db, { organizationId: site.organization_id, productId })
-    const location = await queryFirst<{ timezone: string | null }>(db, 'SELECT timezone FROM business_locations WHERE organization_id = ? AND organization_id = ? AND id = ?', [site.organization_id, organizationId, body.location_id])
+    await requireSiteProduct(db, { organizationId: organization.id, productId })
+    const location = await queryFirst<{ timezone: string | null }>(db, 'SELECT timezone FROM business_locations WHERE organization_id = ? AND organization_id = ? AND id = ?', [organization.id, organizationId, body.location_id])
     if (!location) return jsonResponse({ error: 'Location not found' }, { status: 404 })
     if (!location.timezone) return jsonResponse({ error: 'Set the location\'s timezone before scheduling sessions' }, { status: 409 })
     const result = await replaceWeeklySchedule(db, {
-      organizationId: site.organization_id, productId, locationId: body.location_id,
+      organizationId: organization.id, productId, locationId: body.location_id,
       timezone: location.timezone, slots, actorId: session.user.id,
     })
     return jsonResponse({ success: true, ...result })

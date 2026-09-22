@@ -1,5 +1,5 @@
-import { loadMemberSiteRow } from '~/server/utils/location-access'
-import { assertSiteWideAccess, memberAccessPrincipal } from '~/server/utils/member-access'
+import { loadMemberOrganizationRow } from '~/server/utils/location-access'
+import { assertOrganizationWideAccess, memberAccessPrincipal } from '~/server/utils/member-access'
 import type { IntegrationOAuthState } from '~/shared/site-settings'
 import { defineHandler } from 'nitro';
 import { cloudflareEnv } from '~/server/utils/api-response'
@@ -31,7 +31,7 @@ export default defineHandler(async (event) => {
     return new Response(null, { status: 302, headers: { Location: '/dashboard?ga=error' } })
   }
 
-  const { organizationId, organizationId, userId, timestamp } = stateData
+  const { organizationId, userId, timestamp } = stateData
 
   if (!organizationId || !organizationId || !userId || Date.now() - timestamp > 10 * 60 * 1000) {
     return new Response(null, { status: 302, headers: { Location: '/dashboard?ga=expired' } })
@@ -42,7 +42,7 @@ export default defineHandler(async (event) => {
     if (!db) return `/dashboard?ga=${status}`
 
     try {
-      const context = await getDashboardSiteRouteContext(db, env, userId, organizationId, organizationId)
+      const context = await getDashboardSiteRouteContext(db, env, userId, organizationId)
       if (!context) return `/dashboard?ga=${status}`
       const encodedOrgSlug = encodeURIComponent(context.organizationSlug)
       return `/dashboard/${encodedOrgSlug}/sites/${encodeURIComponent(context.siteSlug)}/settings/analytics?ga=${status}`
@@ -58,9 +58,9 @@ export default defineHandler(async (event) => {
     // `organizationId` arrives in the OAuth state, so it names an organization
     // rather than proving membership in one. The site row's own membership is
     // what authorizes: the state only has to agree with it.
-    const access = await loadMemberSiteRow(event, env.DB, env, organizationId, userId)
+    const access = await loadMemberOrganizationRow(event, env.DB, env, organizationId, userId)
     if (!access || access.organization_id !== organizationId) throw new Error('Access denied')
-    await assertSiteWideAccess(env.DB, memberAccessPrincipal(access.membership, { env, organizationId, event }))
+    await assertOrganizationWideAccess(env.DB, memberAccessPrincipal(access.membership, { env, organizationId, event }))
     const tokenData = await exchangeGoogleAnalyticsCode(env, code)
 
     const userInfoResponse = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {

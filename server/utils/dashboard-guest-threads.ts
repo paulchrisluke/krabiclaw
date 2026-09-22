@@ -11,7 +11,7 @@ import type {
   ConversationState,
   GuestThreadSubmissionType,
 } from '~/server/domain/guest-threads/types'
-import { requireSiteAccess } from '~/server/utils/location-access'
+import { requireOrganizationAccess } from '~/server/utils/location-access'
 import { assertMemberScope, isOrganizationWideRole, listUserOrganizationTeamIds, memberAccessPrincipal, assertRoleAllows } from '~/server/utils/member-access'
 import { publishNotificationInvalidation } from '~/server/cloudflare/guest-inbox-events'
 import { getDashboardContext } from '~/server/utils/dashboard-context'
@@ -66,8 +66,8 @@ export async function loadDashboardGuestThreads(
   organizationId: string,
   query: DashboardGuestThreadListQuery,
 ) {
-  const { env, db, session, site } = await requireSiteAccess(event, organizationId, 'context')
-  const principal = memberAccessPrincipal(site.membership, { env, organizationId, event })
+  const { env, db, session, organization } = await requireOrganizationAccess(event, organizationId, 'context')
+  const principal = memberAccessPrincipal(organization.membership, { env, organizationId, event })
   if (query.locationId) {
     await assertMemberScope(db, { ...principal, locationId: query.locationId })
   }
@@ -79,12 +79,12 @@ export async function loadDashboardGuestThread(
   organizationId: string,
   threadId: string,
 ) {
-  const { db, env, site } = await requireSiteAccess(event, organizationId, 'context')
+  const { db, env, organization } = await requireOrganizationAccess(event, organizationId, 'context')
   const thread = await getGuestRequest(db, threadId, organizationId)
   if (!thread) {
     throw new HTTPError({ statusCode: 404, statusMessage: 'Thread not found' })
   }
-  await assertMemberScope(db, { ...memberAccessPrincipal(site.membership, { env, organizationId, event }), locationId: thread.location_id })
+  await assertMemberScope(db, { ...memberAccessPrincipal(organization.membership, { env, organizationId, event }), locationId: thread.location_id })
 
   const detail = await getGuestThreadDetail(db, threadId, organizationId)
   if (!detail) {

@@ -2,7 +2,7 @@ import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { listPosts } from '~/server/utils/post-management'
 import { assertResourceAccess, memberAccessPrincipal } from '~/server/utils/member-access'
-import { loadMemberSiteRow } from '~/server/utils/location-access'
+import { loadMemberOrganizationRow } from '~/server/utils/location-access'
 
 export default defineHandler(async (event) => {
   const organizationId = getRouterParam(event, 'organizationId')
@@ -15,7 +15,7 @@ export default defineHandler(async (event) => {
   const session = await getAuthSession(event, env)
   if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
-  const site = await loadMemberSiteRow(event, db, env, organizationId, session.user.id)
+  const site = await loadMemberOrganizationRow(event, db, env, organizationId, session.user.id)
   if (!site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
 
   const query = getQuery(event)

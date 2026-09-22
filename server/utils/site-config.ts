@@ -38,7 +38,7 @@ export const getConfig = async (
            social_instagram_url AS social_instagram,
            social_tiktok_url AS social_tiktok
       FROM organization WHERE organization_id = ? AND id = ?
-  `, [organizationId, organizationId])
+  `, [organizationId])
   if (!row) throw new HTTPError({ statusCode: 404, statusMessage: 'Site not found' })
   const config: SiteConfig = {}
   for (const key of ["brand_color","press_email","partnerships_email","catering_email","careers_email","google_analytics_measurement_id","google_site_verification","default_timezone","social_facebook","social_instagram","social_tiktok"] as const) {
@@ -60,7 +60,7 @@ export const resolveLocationTimezone = async (
 ): Promise<string> => {
   const location = await queryFirst<{ timezone: string | null }>(db,
     'SELECT timezone FROM business_locations WHERE id = ? AND organization_id = ? AND organization_id = ?',
-    [locationId, organizationId, organizationId])
+    [locationId, organizationId])
   if (!location?.timezone) throw new HTTPError({ statusCode: 409, statusMessage: 'Set the location timezone before offering bookings' })
   return location.timezone
 }
@@ -89,7 +89,7 @@ export const setConfig = async (
   if (key === 'font_preset' && !isSiteFontPreset(value)) throw new HTTPError({ statusCode: 422, statusMessage: 'Unsupported site font preset' })
   if (key === 'default_timezone' && !isValidTimezone(value)) throw new HTTPError({ statusCode: 422, statusMessage: 'A valid analytics timezone is required' })
   if (key === 'social_facebook' || key === 'social_instagram' || key === 'social_tiktok') {
-    const result = await execute(db, `UPDATE organization SET ${key}_url = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE organization_id = ? AND id = ?`, [value || null, organizationId, organizationId])
+    const result = await execute(db, `UPDATE organization SET ${key}_url = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE organization_id = ? AND id = ?`, [value || null, organizationId])
     if (result.meta?.changes !== 1) throw new HTTPError({ statusCode: 409, statusMessage: 'Site ownership changed. Reload before saving.' })
     return
   }
@@ -99,7 +99,7 @@ export const setConfig = async (
              json_extract(integrations_json, '$.google.ga4_measurement_id') AS measurement_id,
              json_extract(integrations_json, '$.google.revision') AS revision
         FROM organization WHERE organization_id = ? AND id = ?
-    `, [organizationId, organizationId])
+    `, [organizationId])
     if (!current) throw new HTTPError({ statusCode: 404, statusMessage: 'Site not found' })
     if (current.kind === 'oauth') {
       if ((current.measurement_id ?? '') === value) return
@@ -110,7 +110,7 @@ export const setConfig = async (
         json_object('kind', 'manual', 'status', ?, 'ga4_measurement_id', ?, 'revision', ?,
           'updated_at', strftime('%Y-%m-%dT%H:%M:%fZ', 'now')))
       WHERE organization_id = ? AND id = ? AND json_extract(integrations_json, '$.google.revision') IS ?
-    `, [value ? 'active' : 'disabled', value || null, crypto.randomUUID(), organizationId, organizationId, current.revision])
+    `, [value ? 'active' : 'disabled', value || null, crypto.randomUUID(), organizationId, current.revision])
     if (result.meta?.changes !== 1) throw new HTTPError({ statusCode: 409, statusMessage: 'Google Analytics settings changed. Reload before saving.' })
     return
   }
@@ -119,7 +119,7 @@ export const setConfig = async (
     `UPDATE organization SET settings_json = json_set(settings_json, ?, ?),
        updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
      WHERE organization_id = ? AND id = ?`,
-    ['$.config.' + key, value, organizationId, organizationId],
+    ['$.config.' + key, value, organizationId],
   )
   if (result.meta?.changes !== 1) throw new HTTPError({ statusCode: 409, statusMessage: 'Site ownership changed. Reload before saving.' })
 }
@@ -130,13 +130,13 @@ export const deleteConfig = async (
   key: keyof SiteConfig
 ) => {
   if (key === 'default_timezone') throw new HTTPError({ statusCode: 422, statusMessage: 'The analytics timezone cannot be removed' })
-  if (key === 'google_analytics_measurement_id' || key === 'social_facebook' || key === 'social_instagram' || key === 'social_tiktok') return setConfig(db, organizationId, organizationId, key, '')
+  if (key === 'google_analytics_measurement_id' || key === 'social_facebook' || key === 'social_instagram' || key === 'social_tiktok') return setConfig(db, organizationId, key, '')
   const result = await execute(
     db,
     `UPDATE organization SET settings_json = json_remove(settings_json, ?),
        updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
      WHERE organization_id = ? AND id = ?`,
-    ['$.config.' + key, organizationId, organizationId],
+    ['$.config.' + key, organizationId],
   )
   if (result.meta?.changes !== 1) throw new HTTPError({ statusCode: 409, statusMessage: 'Site ownership changed. Reload before saving.' })
 }

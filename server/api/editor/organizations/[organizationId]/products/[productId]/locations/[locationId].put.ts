@@ -12,9 +12,9 @@ export default defineHandler(async (event) => {
   try {
     // Location access, not site access: a location editor may say whether this
     // branch offers the product without gaining rights over the product itself.
-    const { db, session, site } = await requireLocationAccess(event, organizationId, locationId)
+    const { db, session, organization } = await requireLocationAccess(event, organizationId, locationId)
     // A product id in the path is not authorized by the site in the path.
-    await requireSiteProduct(db, { organizationId: site.organization_id, productId })
+    await requireSiteProduct(db, { organizationId: organization.id, productId })
     const body = await readStrictBody<{ active?: unknown; published?: unknown }>(event, { active: 'unknown', published: 'unknown' })
     for (const field of ['active', 'published'] as const) {
       if (body[field] !== undefined && typeof body[field] !== 'boolean') {
@@ -22,11 +22,11 @@ export default defineHandler(async (event) => {
       }
     }
     await setProductLocation(db, {
-      organizationId: site.organization_id, productId, locationId,
+      organizationId: organization.id, productId, locationId,
       active: body.active as boolean | undefined, published: body.published as boolean | undefined,
       actor: { actorId: session.user.id },
     })
-    return jsonResponse({ success: true, product: await getProduct(db, site.organization_id, productId) })
+    return jsonResponse({ success: true, product: await getProduct(db, organization.id, productId) })
   } catch (error) {
     rethrowHttpError(error)
     console.error('product_location_failed', { organizationId, productId, locationId, error: error instanceof Error ? error.message : String(error) })

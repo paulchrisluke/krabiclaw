@@ -4,7 +4,7 @@ import {
 } from '~/server/utils/google-analytics'
 import { execute } from '~/server/db'
 import { reconcileZarazAnalytics } from '~/server/utils/zaraz-analytics'
-import { requireSiteAccess } from '~/server/utils/location-access'
+import { requireOrganizationAccess } from '~/server/utils/location-access'
 
 interface SelectBody {
   ga4_property_id?: string | null
@@ -23,9 +23,9 @@ export default defineHandler(async (event) => {
     return jsonResponse({ error: 'Invalid request body' }, { status: 400 })
   }
 
-  const { env, db, site } = await requireSiteAccess(event, organizationId)
+  const { env, db, organization } = await requireOrganizationAccess(event, organizationId)
 
-  const connection = await getGoogleAnalyticsConnection(env, site.organization_id, site.id)
+  const connection = await getGoogleAnalyticsConnection(env, organization.id, organization.id)
   if (!connection) {
     return jsonResponse({ error: 'No Google Analytics connection found for this site' }, { status: 404 })
   }
@@ -37,12 +37,12 @@ export default defineHandler(async (event) => {
   try {
     let measurementId: string | null = null
     if (ga4PropertyId) {
-      const accessToken = await getGoogleAnalyticsAccessToken(env, site.organization_id, site.id)
+      const accessToken = await getGoogleAnalyticsAccessToken(env, organization.id, organization.id)
       measurementId = await getGa4MeasurementId(accessToken, ga4PropertyId)
     }
 
     const result = await execute(db, `
-      UPDATE sites SET integrations_json = json_set(integrations_json,
+      UPDATE organization SET integrations_json = json_set(integrations_json,
         '$.google.ga4_property_id', ?, '$.google.ga4_property_name', ?,
         '$.google.ga4_measurement_id', ?, '$.google.search_console_site_url', ?,
         '$.google.updated_at', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), '$.google.revision', ?)
@@ -50,7 +50,7 @@ export default defineHandler(async (event) => {
         AND json_extract(integrations_json, '$.google.kind') = 'oauth'
         AND json_extract(integrations_json, '$.google.revision') IS ?
     `, [ga4PropertyId, ga4PropertyName, measurementId, searchConsoleSiteUrl, crypto.randomUUID(),
-      site.id, site.organization_id, connection.revision])
+      organization.id, organization.id, connection.revision])
     if (result.meta?.changes !== 1) {
       return jsonResponse({ error: 'Google Analytics connection changed. Reload before selecting a property.' }, { status: 409 })
     }
@@ -58,7 +58,7 @@ export default defineHandler(async (event) => {
     try {
       await reconcileZarazAnalytics(env, db)
     } catch (error) {
-      console.error('zaraz_reconciliation_failed', { organizationId: site.id, error })
+      console.error('zaraz_reconciliation_failed', { organizationId: organization.id, error })
     }
 
     return jsonResponse({ success: true, ga4_measurement_id: measurementId })

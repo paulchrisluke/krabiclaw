@@ -255,7 +255,7 @@ export async function createSystemSubdomain(
                 SET role = 'secondary', status = 'retired', former_site_id = organization_id, successor_domain = ?, retired_at = ?,
                     organization_id = NULL, organization_id = NULL, updated_at = ?
               WHERE id = ? AND organization_id = ? AND organization_id = ? AND status = 'active'`,
-        values: [domain, now, now, existing.id, organizationId, organizationId],
+        values: [domain, now, now, existing.id, organizationId],
       },
     )
   }
@@ -265,7 +265,7 @@ export async function createSystemSubdomain(
       sql: `INSERT INTO organization_domains
         (id, organization_id, organization_id, domain, type, role, status, dns_status, dns_target, activated_at, created_at, updated_at)
         VALUES (?, ?, ?, ?, 'subdomain', ?, 'active', 'valid', ?, ?, ?, ?)`,
-      values: [id, organizationId, organizationId, domain, role, platformHostname(env), now, now, now],
+      values: [id, organizationId, domain, role, platformHostname(env), now, now, now],
     },
   )
 

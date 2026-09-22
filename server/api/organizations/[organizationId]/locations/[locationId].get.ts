@@ -42,14 +42,14 @@ export default defineHandler(async (event) => {
   }
 
   try {
-    const { db, site } = await requireLocationAccess(event, organizationId, locationId)
+    const { db, organization } = await requireLocationAccess(event, organizationId, locationId)
 
     const location = await queryFirst<LocationRow>(db, `
       SELECT bl.id, bl.slug, bl.title, bl.address, bl.phone, bl.website_url, bl.maps_url, bl.latitude, bl.longitude, bl.opening_hours, bl.categories, bl.description, bl.short_description, bl.email, bl.price_level, bl.facebook_url, bl.instagram_url, bl.tiktok_url, bl.google_place_id, bl.rating, bl.review_count, bl.status, bl.last_synced_at, bl.created_at, bl.updated_at
       FROM business_locations bl
       WHERE bl.id = ? AND bl.organization_id = ? AND bl.organization_id = ?
       LIMIT 1
-    `, [locationId, site.organization_id, organizationId])
+    `, [locationId, organization.id, organizationId])
 
     if (!location) {
       return jsonResponse({ error: 'Location not found' }, { status: 404 })

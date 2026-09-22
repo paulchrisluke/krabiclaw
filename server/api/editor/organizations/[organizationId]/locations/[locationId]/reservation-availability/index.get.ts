@@ -20,7 +20,7 @@ export default defineHandler(async (event) => {
   const locationId = getRouterParam(event, 'locationId')
   if (!organizationId || !locationId) return jsonResponse({ error: 'Site ID and location ID are required' }, { status: 400 })
   try {
-    const { db, site } = await requireLocationAccess(event, organizationId, locationId)
+    const { db, organization } = await requireLocationAccess(event, organizationId, locationId)
     const query = getQuery(event)
     const from = typeof query.from === 'string' ? query.from : null
     const to = typeof query.to === 'string' ? query.to : null
@@ -33,7 +33,7 @@ export default defineHandler(async (event) => {
     }
     const calendar = await Promise.all(days.map(async date => ({
       date,
-      ...await listReservationSlots(db, { organizationId: site.organization_id, locationId, date, includePast: true }),
+      ...await listReservationSlots(db, { organizationId: organization.id, locationId, date, includePast: true }),
     })))
     return jsonResponse({ success: true, from, to, days: calendar })
   } catch (error) {

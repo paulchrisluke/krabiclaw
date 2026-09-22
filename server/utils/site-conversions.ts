@@ -51,7 +51,7 @@ export async function recordSiteConversionEvent(db: DbClient, event: H3Event, in
   ON CONFLICT(organization_id, kind, date, key) DO UPDATE SET
     payload_json = json_set(analytics_summaries.payload_json, '$.last_seen_at', excluded.updated_at), updated_at = excluded.updated_at
   RETURNING json_extract(payload_json, '$.attribution') attribution`, [
-    crypto.randomUUID(), input.organizationId, input.organizationId, sessionId,
+    crypto.randomUUID(), input.organizationId, sessionId,
     JSON.stringify({ visitor_id: visitorId, started_at: now, last_seen_at: now,
       landing_path: input.pagePath?.startsWith('/') ? input.pagePath : '/', duration_seconds: 0,
       attribution: { source: 'Direct', medium: '(none)', campaign: null, term: null, content: null,
@@ -64,7 +64,7 @@ export async function recordSiteConversionEvent(db: DbClient, event: H3Event, in
   await execute(db, `INSERT OR IGNORE INTO analytics_events (
     id, kind, organization_id, organization_id, session_id, visitor_id, location_id, page_path, payload_json, created_at
   ) VALUES (?, 'conversion', ?, ?, ?, ?, ?, ?, ?, ?)`, [
-    id, input.organizationId, input.organizationId, sessionId, visitorId, input.locationId ?? null, input.pagePath ?? null,
+    id, input.organizationId, sessionId, visitorId, input.locationId ?? null, input.pagePath ?? null,
     JSON.stringify({ event_name: input.eventName, stage: input.stage, entity_type: input.entityType ?? null,
       entity_id: input.entityId ?? null, page_type: input.pageType ?? null, cta_destination: input.ctaDestination ?? null,
       attribution: JSON.parse(session.attribution), attributed_at: now, metadata: input.metadata ?? null,

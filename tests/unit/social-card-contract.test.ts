@@ -40,10 +40,10 @@ test('a page prefers its own media and never its neighbours', () => {
   assert.equal(selectSocialCardPlacements([
     placedAsset('site', 'site-1', 'logo', 'site-logo'),
     placedAsset('site', 'site-1', 'social_share', 'site-share'),
-  ], { owner_type: 'site', owner_id: 'site-1' }, 'site-1').source?.asset_id, 'site-share')
+  ], { owner_type: 'organization', owner_id: 'site-1' }, 'site-1').source?.asset_id, 'site-share')
   assert.equal(selectSocialCardPlacements([
     placedAsset('site', 'site-1', 'logo', 'site-logo'),
-  ], { owner_type: 'site', owner_id: 'site-1' }, 'site-1').source, null)
+  ], { owner_type: 'organization', owner_id: 'site-1' }, 'site-1').source, null)
   const video = { ...placedAsset('content_document', 'post-1', 'cover', 'video-1'), kind: 'video' as const, thumbnail_url: 'https://img.example/poster.png' }
   assert.equal(selectSocialCardPlacements([video], { owner_type: 'content_document', owner_id: 'post-1' }, 'site-1').source?.thumbnail_url, video.thumbnail_url)
   assert.equal(selectSocialCardPlacements([{ ...video, thumbnail_url: null }], { owner_type: 'content_document', owner_id: 'post-1' }, 'site-1').source, null)

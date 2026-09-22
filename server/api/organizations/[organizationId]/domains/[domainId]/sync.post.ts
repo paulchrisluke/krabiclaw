@@ -3,7 +3,7 @@ import { queryFirst } from '~/server/db'
 import { syncDomainWithCloudflare } from '~/server/utils/domains'
 import { domainInstructions } from '~/server/utils/domain-read-model'
 import { notifyDomainLifecycle } from '~/server/utils/domain-notifications'
-import { requireSiteAccess } from '~/server/utils/location-access'
+import { requireOrganizationAccess } from '~/server/utils/location-access'
 import { buildDashboardUrl } from '~/server/utils/dashboard-links'
 
 interface DomainRecordRow {
@@ -18,7 +18,7 @@ export default defineHandler(async (event) => {
     return jsonResponse({ error: 'Site ID and domain ID are required' }, { status: 400 })
   }
 
-  const { env, db, session, site } = await requireSiteAccess(event, organizationId)
+  const { env, db, session, organization } = await requireOrganizationAccess(event, organizationId)
 
   const domainRecord = await queryFirst<DomainRecordRow>(db, `
     SELECT id, organization_id
@@ -26,19 +26,19 @@ export default defineHandler(async (event) => {
     WHERE id = ?
     LIMIT 1
   `, [domainId])
-  if (!domainRecord || domainRecord.organization_id !== site.id) {
+  if (!domainRecord || domainRecord.organization_id !== organization.id) {
     return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
   }
 
   try {
-    const domain = await syncDomainWithCloudflare(env, db, domainId, site.member_role as 'owner' | 'admin' | 'editor', session.user.id, undefined, { forceRevalidation: true })
-    if (domain.organization_id !== site.id) {
+    const domain = await syncDomainWithCloudflare(env, db, domainId, organization.member_role as 'owner' | 'admin' | 'editor', session.user.id, undefined, { forceRevalidation: true })
+    if (domain.organization_id !== organization.id) {
       return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
     }
 
     await notifyDomainLifecycle(env, db, {
-      organizationId: site.organization_id, domain: domain.domain, status: domain.status, title: `Domain synced: ${domain.domain}`, message: `${domain.domain} is now ${domain.status}.`, dashboardUrl: buildDashboardUrl({
-        env, organizationId: site.organization_id, organizationSlug: site.organization_slug, subdomain: site.subdomain, }, 'site.domains')
+      organizationId: organization.id, domain: domain.domain, status: domain.status, title: `Domain synced: ${domain.domain}`, message: `${domain.domain} is now ${domain.status}.`, dashboardUrl: buildDashboardUrl({
+        env, organizationId: organization.id, organizationSlug: organization.slug, subdomain: organization.subdomain, }, 'site.domains')
     })
     return jsonResponse({ success: true, domain: { ...domain, instructions: domainInstructions(domain) } })
   } catch (error) {

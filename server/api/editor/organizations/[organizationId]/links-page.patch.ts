@@ -1,12 +1,12 @@
 import { jsonResponse, rethrowHttpError } from '~/server/utils/api-response'
-import { requireSiteAccess } from '~/server/utils/location-access'
+import { requireOrganizationAccess } from '~/server/utils/location-access'
 import { SiteLinksValidationError, upsertLinksPage, type LinkItemUpdateInput, type LinksPageUpdateInput } from '~/server/utils/links-page'
 
 export default defineHandler(async (event) => {
   const organizationId = getRouterParam(event, 'organizationId')
   if (!organizationId) return jsonResponse({ error: 'Organization ID required' }, { status: 400 })
 
-  const { db, site, session } = await requireSiteAccess(event, organizationId)
+  const { db, organization, session } = await requireOrganizationAccess(event, organizationId)
 
   try {
     const body = await readBody<{ page?: LinksPageUpdateInput; items?: LinkItemUpdateInput[] }>(event)
@@ -17,7 +17,7 @@ export default defineHandler(async (event) => {
       return jsonResponse({ error: 'Invalid links page payload' }, { status: 400 })
     }
     const result = await upsertLinksPage(db, {
-      organizationId: site.organization_id, page: body.page ?? {}, items: body.items, updatedBy: session.user.id, })
+      organizationId: organization.id, page: body.page ?? {}, items: body.items, updatedBy: session.user.id, })
     return jsonResponse(result)
   } catch (error) {
     rethrowHttpError(error)

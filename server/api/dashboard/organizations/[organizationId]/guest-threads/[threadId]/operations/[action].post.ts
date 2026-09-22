@@ -7,7 +7,7 @@ import { getRouterParam, readBody } from 'nitro/h3'
 // flows through here. The inbox must never call source-specific editor endpoints
 // directly.
 import { jsonResponse } from '~/server/utils/api-response'
-import { requireSiteAccess } from '~/server/utils/location-access'
+import { requireOrganizationAccess } from '~/server/utils/location-access'
 import { assertMemberScope, memberAccessPrincipal } from '~/server/utils/member-access'
 import { getCloudflareWaitUntil } from '~/server/utils/mcp-route-helpers'
 import { getGuestThreadDetail } from '~/server/domain/guest-threads/detail'
@@ -21,11 +21,11 @@ export default defineHandler(async (event) => {
   if (!organizationId || !threadId || !action) return jsonResponse({ error: 'Missing params' }, { status: 400 })
   if (!GUEST_THREAD_ACTIONS.has(action)) return jsonResponse({ error: `Unknown action "${action}"` }, { status: 400 })
 
-  const { env, db, session, site } = await requireSiteAccess(event, organizationId, 'context')
+  const { env, db, session, organization } = await requireOrganizationAccess(event, organizationId, 'context')
 
   const thread = await getGuestRequest(db, threadId, organizationId)
   if (!thread) return jsonResponse({ error: 'Thread not found' }, { status: 404 })
-  await assertMemberScope(db, { ...memberAccessPrincipal(site.membership, { env, organizationId, event }), locationId: thread.location_id })
+  await assertMemberScope(db, { ...memberAccessPrincipal(organization.membership, { env, organizationId, event }), locationId: thread.location_id })
 
   const body = await readBody<unknown>(event).catch(() => null)
   const replyBody = body && typeof body === 'object' && 'body' in body && typeof body.body === 'string' ? body.body : undefined

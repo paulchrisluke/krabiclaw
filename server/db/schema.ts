@@ -1439,7 +1439,7 @@ export const oauthRefreshToken = sqliteTable("oauthRefreshToken", {
  * `additionalFields` (see organizationOptions in server/utils/auth.ts), which is
  * the plugin's own extension point rather than a table bolted alongside it.
  *
- * `name` carries what `sites.brand_name` carried: the name the business's own
+ * `name` carries what `organization.brand_name` carried: the name the business's own
  * website renders in `og:site_name`. There is no separate brand name.
  */
 export const organization = sqliteTable("organization", {

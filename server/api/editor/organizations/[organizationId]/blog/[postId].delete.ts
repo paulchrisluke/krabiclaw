@@ -1,7 +1,7 @@
 import { jsonResponse } from "~/server/utils/api-response";
 import { deleteBlogPost } from "~/server/utils/content/publishing";
 import { httpErrorDetails } from "~/server/utils/http-error";
-import { requireSiteAccess } from "~/server/utils/location-access";
+import { requireOrganizationAccess } from "~/server/utils/location-access";
 
 export default defineHandler(async (event) => {
   const organizationId = getRouterParam(event, "organizationId");
@@ -18,7 +18,7 @@ export default defineHandler(async (event) => {
   }
 
   try {
-    const { db } = await requireSiteAccess(event, organizationId);
+    const { db } = await requireOrganizationAccess(event, organizationId);
 
     await deleteBlogPost(db, postId, organizationId);
 

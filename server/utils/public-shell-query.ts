@@ -66,7 +66,7 @@ export function appendPublicShellQueries(
                 FROM organization s, json_each(s.settings_json, '$.config') setting
                WHERE s.organization_id = ? AND s.id = ?
                  AND setting.key IN ('brand_color', 'font_preset', 'press_email', 'partnerships_email', 'catering_email', 'careers_email', 'google_site_verification', 'default_timezone')
-              `, [organizationId, organizationId]),
+              `, [organizationId]),
     locales: push(`SELECT locale, label, is_source, status
                 FROM organization_locales
                WHERE organization_id = ? 

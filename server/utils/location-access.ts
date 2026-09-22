@@ -157,9 +157,7 @@ export async function requireRequestedOrganizationWideAccess(event: H3Event, exp
     db: context.db,
     session: context.session,
     organization: {
-      ...context.tenant,
-      slug: context.organization.slug,
-      name: context.organization.name,
+      ...context.organization,
       user_id: context.session.user.id,
       member_role: context.organization.role,
       membership: context.organization,
@@ -190,9 +188,7 @@ export async function requireRequestedLocationAccess(event: H3Event, locationId:
     db: context.db,
     session: context.session,
     organization: {
-      ...context.tenant,
-      slug: context.organization.slug,
-      name: context.organization.name,
+      ...context.organization,
       user_id: context.session.user.id,
       member_role: context.organization.role,
       membership: context.organization,

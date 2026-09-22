@@ -29,7 +29,7 @@ export interface FireOrganizationEventParams {
 }
 
 export async function fireOrganizationEvent(params: FireOrganizationEventParams): Promise<void> {
-  const { db, organizationId, organizationId, locationId, actorId, eventType, entityType, entityId, metadata, actorType, message, beforeState, afterState } = params
+  const { db, organizationId, locationId, actorId, eventType, entityType, entityId, metadata, actorType, message, beforeState, afterState } = params
   const id = crypto.randomUUID()
   const actorKind = actorType === 'cloudflare' ? 'cloudflare' : actorId ? 'member' : 'system'
   await execute(db, `
@@ -37,7 +37,7 @@ export async function fireOrganizationEvent(params: FireOrganizationEventParams)
       (id, kind, scope_kind, organization_id, organization_id, location_id, actor_kind, actor_user_id,
        event_name, body, payload_json, occurred_at, created_at, dedupe_key)
     VALUES (?, 'audit', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `, [id, organizationId ? 'site' : 'organization', organizationId ? null : organizationId, organizationId ?? null, locationId ?? null,
+  `, [id, organizationId ? 'site' : 'organization', organizationId ? null : organizationId ?? null, locationId ?? null,
     actorKind, actorId ?? null, eventType, message ?? null,
     JSON.stringify({ sourceOrganizationId: organizationId, entityType: entityType ?? null, entityId: entityId ?? null, actorType: actorType ?? actorKind,
       beforeState: beforeState ?? null, afterState: afterState ?? null, metadata: metadata ?? null }),

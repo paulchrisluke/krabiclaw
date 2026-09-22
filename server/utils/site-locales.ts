@@ -4,9 +4,9 @@ import { getPersistedSourceLocale, listSiteLocaleRecords } from '~/server/utils/
 export type SiteLocaleStatus = 'published' | 'disabled'
 
 export async function getSourceLocale(db: DbClient, organizationId: string): Promise<'en'> {
-  const source = await getPersistedSourceLocale(db, organizationId, organizationId)
+  const source = await getPersistedSourceLocale(db, organizationId)
   return source.locale as 'en'
 }
 export async function listSiteLocales(db: DbClient, organizationId: string) {
-  return { locales: await listSiteLocaleRecords(db, organizationId, organizationId) }
+  return { locales: await listSiteLocaleRecords(db, organizationId) }
 }

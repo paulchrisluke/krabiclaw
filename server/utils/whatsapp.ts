@@ -401,7 +401,7 @@ export async function getOrgWhatsAppPhone(
   const row = await queryFirst<{ value: string }>(db, `
     SELECT json_extract(settings_json, '$.config.whatsapp_phone') AS value FROM organization WHERE organization_id = ? AND id = ?
     LIMIT 1
-  `, [organizationId, organizationId])
+  `, [organizationId])
   return row?.value ?? null
 }
 
@@ -580,13 +580,13 @@ export async function setOrgWhatsAppPhone(
   if (!phone) {
     await execute(db, `
       UPDATE organization SET settings_json = json_remove(settings_json, '$.config.whatsapp_phone') WHERE organization_id = ? AND id = ?
-    `, [organizationId, organizationId])
+    `, [organizationId])
   } else {
     const normalized = parsePhoneOrThrow(phone, { defaultCountry: 'TH' })
     const now = new Date().toISOString()
     await execute(db, `
       UPDATE organization SET settings_json = json_set(settings_json, '$.config.whatsapp_phone', ?), updated_at = ?
       WHERE organization_id = ? AND id = ?
-    `, [normalized, now, organizationId, organizationId])
+    `, [normalized, now, organizationId])
   }
 }

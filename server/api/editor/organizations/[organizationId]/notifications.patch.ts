@@ -2,7 +2,7 @@ import {  getRouterParam , readBody  } from 'nitro/h3';
 import { jsonResponse } from '~/server/utils/api-response'
 import { updateNotificationsSettings } from '~/server/utils/mcp-workflows'
 import { hasSiteEntitlement } from '~/server/utils/billing'
-import { requireSiteAccess } from '~/server/utils/location-access'
+import { requireOrganizationAccess } from '~/server/utils/location-access'
 
 // The site's WhatsApp business number. Which channels a person wants to be
 // reached on is per-account and lives at /api/user/notification-preferences.
@@ -15,13 +15,13 @@ export default defineHandler(async (event) => {
     return jsonResponse({ error: 'whatsapp_phone is required' }, { status: 400 })
   }
 
-  const { env, db, site } = await requireSiteAccess(event, organizationId)
+  const { env, db, organization } = await requireOrganizationAccess(event, organizationId)
 
   if (body.whatsapp_phone.trim() && !(await hasSiteEntitlement(env, db, organizationId, 'messaging'))) {
     return jsonResponse({ error: 'WhatsApp notifications require a Growth plan or higher.' }, { status: 403 })
   }
 
-  const notifications = await updateNotificationsSettings(db, site.organization_id, organizationId, body.whatsapp_phone)
+  const notifications = await updateNotificationsSettings(db, organization.id, organizationId, body.whatsapp_phone)
   return jsonResponse({ success: true, notifications })
 })
 import { defineHandler } from 'nitro';

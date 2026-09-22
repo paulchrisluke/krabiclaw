@@ -521,7 +521,7 @@ export function sessionClaimQuery(input: {
       ON CONFLICT (id) DO NOTHING
     `,
     params: [
-      input.bookingId, input.organizationId, input.organizationId, input.productId, input.sessionId, input.productVariantId,
+      input.bookingId, input.organizationId, input.productId, input.sessionId, input.productVariantId,
       input.customerId ?? null, input.requestId ?? null, input.partySize, input.now, input.now,
       ...(input.requireUndecided
         ? [input.requireUndecided.requestId, input.requireUndecided.organizationId, input.requireUndecided.updatedAt, input.requireUndecided.decisionDedupeKey]

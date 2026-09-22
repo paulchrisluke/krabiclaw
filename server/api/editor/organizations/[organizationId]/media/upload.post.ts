@@ -1,7 +1,7 @@
 import { defineHandler } from 'nitro';
 import { getQuery, getRouterParam } from 'nitro/h3';
 import { jsonResponse, rethrowHttpError } from '~/server/utils/api-response'
-import { requireSiteAccess } from '~/server/utils/location-access'
+import { requireOrganizationAccess } from '~/server/utils/location-access'
 import { uploadResolvedMediaToAssetStore } from '~/server/utils/media-upload'
 import { sniffMediaMimeType, VIDEO_MIME_TYPES, MAX_VIDEO_BYTES, POSTER_IMAGE_MIME_TYPES, MAX_POSTER_BYTES, RESOLVED_MEDIA_IMAGE_TYPES, MAX_IMAGE_BYTES } from '~/server/utils/media-mime'
 
@@ -30,7 +30,7 @@ export default defineHandler(async (event) => {
     const organizationId = getRouterParam(event, 'organizationId')
     if (!organizationId) return jsonResponse({ error: 'Organization ID required' }, { status: 400 })
 
-    const { env, db, session, site } = await requireSiteAccess(event, organizationId)
+    const { env, db, session, organization } = await requireOrganizationAccess(event, organizationId)
 
     const query = getQuery(event)
     const rawCategory = queryValue(query.category)

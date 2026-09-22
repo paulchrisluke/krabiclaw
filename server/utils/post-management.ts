@@ -121,7 +121,7 @@ interface PublishedPostRow {
 }
 
 async function validatePostLocation(db: DbClient, organizationId: string, locationId: string | null, post: PostTopic) {
-  const location = locationId ? await queryFirst<{ phone: string | null }>(db, 'SELECT phone FROM business_locations WHERE id = ? AND organization_id = ? AND organization_id = ?', [locationId, organizationId, organizationId]) : null
+  const location = locationId ? await queryFirst<{ phone: string | null }>(db, 'SELECT phone FROM business_locations WHERE id = ? AND organization_id = ? AND organization_id = ?', [locationId, organizationId]) : null
   if (locationId && !location) throw new PostValidationError('location_id must belong to this site')
   if (post.call_to_action?.action_type === 'call' && !location?.phone) throw new PostValidationError('CALL requires a location with a phone number')
 }
@@ -278,7 +278,7 @@ export async function listPosts(
     FROM content_documents p LEFT JOIN business_locations bl ON bl.id = p.location_id AND bl.organization_id = p.organization_id
     WHERE p.kind = 'social_post' AND p.row_role = 'root' AND p.organization_id = ? AND p.organization_id = ?
   `
-  const params: string[] = [organizationId, organizationId]
+  const params: string[] = [organizationId]
   if (status) {
     query += ` AND p.status = ?`
     params.push(status)
@@ -332,7 +332,7 @@ export async function createPost(
   env: DomainEnv,
 ): Promise<Post> {
   const data = parsePostInput(input)
-  await validatePostLocation(db, organizationId, organizationId, data.location_id ?? null, data)
+  await validatePostLocation(db, organizationId, data.location_id ?? null, data)
   const id = crypto.randomUUID()
   const status = data.scheduled_for ? 'scheduled' : 'draft'
   const title = cleanString(data.title)
@@ -357,7 +357,7 @@ export async function createPost(
         status, visibility: data.visibility ?? 'public', source: 'manual', scheduledFor: data.scheduled_for ?? null, createdBy,
         metadata: { post_type: data.post_type, call_to_action: data.call_to_action, event: data.event,
           offer: data.offer, alert_type: data.alert_type, channels: {} },
-      }, [], { additionalQueriesAfter: postMediaPlacementQueries(organizationId, organizationId, id, media) })
+      }, [], { additionalQueriesAfter: postMediaPlacementQueries(organizationId, id, media) })
 
       break
     } catch (err) {
@@ -370,7 +370,7 @@ export async function createPost(
     }
   }
 
-  const createdPost = await getPost(db, organizationId, organizationId, id)
+  const createdPost = await getPost(db, organizationId, id)
   if (!createdPost) throw new Error('Post not found after creation')
   await fireOrganizationEventSafe({
     db,
@@ -407,7 +407,7 @@ export async function updatePost(
   const existing = parsePostRow(row)
   const data = parsePostInput(input, existing)
   if (data.media !== undefined) throw new PostValidationError('Update post media through media placements')
-  await validatePostLocation(db, organizationId, organizationId, data.location_id === undefined ? existing.location_id : data.location_id, data)
+  await validatePostLocation(db, organizationId, data.location_id === undefined ? existing.location_id : data.location_id, data)
   if (data.post_type === 'alert' && (await getPostMediaByPostIds(db, organizationId, [postId])).get(postId)?.media.length) throw new PostValidationError('Remove post media before changing the topic to alert')
 
   const now = new Date().toISOString()
@@ -451,7 +451,7 @@ export async function updatePost(
     }
   }
 
-  const updated = await getPost(db, organizationId, organizationId, postId)
+  const updated = await getPost(db, organizationId, postId)
   await refreshSocialCard({ db, env, owner: { owner_type: 'content_document', owner_id: postId }, actorId: _updatedBy })
   return updated
 }
@@ -492,14 +492,14 @@ export async function publishPost(
               first_published_at = CASE WHEN status = 'published' THEN first_published_at ELSE COALESCE(first_published_at, ?) END,
               updated_at = ?
         WHERE kind = 'social_post' AND row_role = 'root' AND id = ? AND organization_id = ? AND organization_id = ? AND updated_at = ?`,
-      params: [slug, now, now, now, postId, organizationId, organizationId, existing.updated_at],
+      params: [slug, now, now, now, postId, organizationId, existing.updated_at],
     }, publicResourceCacheInvalidationQuery(organizationId, 'post-publish')])
     if (Number(updateResult?.meta.changes ?? 0) === 0) return null
   }
 
   const publishedChannels = channels.filter(channel => channel === 'site')
 
-  const post = await getPost(db, organizationId, organizationId, postId)
+  const post = await getPost(db, organizationId, postId)
   if (post && channels.includes('site') && existing.status !== 'published') {
     await fireOrganizationEventSafe({
       db,
@@ -533,7 +533,7 @@ export async function publishPost(
     await publishPostChannel(db, postId, channel, post, socialCapability)
   }
 
-  return await getPost(db, organizationId, organizationId, postId)
+  return await getPost(db, organizationId, postId)
 }
 
 async function claimPostChannelState(db: DbClient, postId: string, channel: PostChannelState['channel'], now: string): Promise<boolean> {

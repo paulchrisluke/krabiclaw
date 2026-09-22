@@ -1,6 +1,6 @@
 import type { UpdateProductInput } from '~/server/types/products'
 import { jsonResponse, readRequiredBody, rethrowHttpError } from '~/server/utils/api-response'
-import { requireSiteAccess } from '~/server/utils/location-access'
+import { requireOrganizationAccess } from '~/server/utils/location-access'
 import { requireSiteProduct, updateProduct } from '~/server/utils/product-management'
 import { defineHandler } from 'nitro'
 import { getRouterParam } from 'nitro/h3'
@@ -10,14 +10,14 @@ export default defineHandler(async (event) => {
   const productId = getRouterParam(event, 'productId')
   if (!organizationId || !productId) return jsonResponse({ error: 'Site ID and product ID are required' }, { status: 400 })
   try {
-    const { db, session, site } = await requireSiteAccess(event, organizationId)
+    const { db, session, organization } = await requireOrganizationAccess(event, organizationId)
     // Authorizing this site does not authorize a product id in the path: the
     // catalog is organization-wide, and an editor scoped to one site must not
     // reach another site's product through it.
-    await requireSiteProduct(db, { organizationId: site.organization_id, productId })
+    await requireSiteProduct(db, { organizationId: organization.id, productId })
     const body = await readRequiredBody<UpdateProductInput>(event)
     const product = await updateProduct(db, {
-      organizationId: site.organization_id, productId, patch: body, actor: { actorId: session.user.id },
+      organizationId: organization.id, productId, patch: body, actor: { actorId: session.user.id },
     })
     return jsonResponse({ success: true, product })
   } catch (error) {

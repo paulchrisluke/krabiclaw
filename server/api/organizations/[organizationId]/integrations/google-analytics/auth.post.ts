@@ -3,7 +3,7 @@ import type { IntegrationVersion } from '~/shared/site-settings'
 import { jsonResponse } from '~/server/utils/api-response'
 import { getGoogleAnalyticsAuthUrl } from '~/server/utils/google-analytics'
 import { signOAuthState } from '~/server/utils/encryption'
-import { requireSiteAccess } from '~/server/utils/location-access'
+import { requireOrganizationAccess } from '~/server/utils/location-access'
 
 export default defineHandler(async (event) => {
   const organizationId = getRouterParam(event, 'organizationId')
@@ -11,17 +11,17 @@ export default defineHandler(async (event) => {
     return jsonResponse({ error: 'Organization ID is required' }, { status: 400 })
   }
 
-  const { env, db, session, site } = await requireSiteAccess(event, organizationId)
+  const { env, db, session, organization } = await requireOrganizationAccess(event, organizationId)
 
   try {
     const version = await queryFirst<IntegrationVersion>(db, `
       SELECT json_extract(integrations_json, '$.google.revision') AS revision
         FROM organization WHERE id = ? AND organization_id = ?
-    `, [site.id, site.organization_id])
+    `, [organization.id, organization.id])
     if (!version) throw new Error('Site no longer belongs to this organization')
 
     const statePayload = {
-      ...version, organizationId: site.id, userId: session.user.id, timestamp: Date.now()
+      ...version, organizationId: organization.id, userId: session.user.id, timestamp: Date.now()
     }
 
     const hmacSecret = env.CONNECTOR_TOKEN_ENCRYPTION_KEY as string | undefined

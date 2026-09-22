@@ -192,7 +192,7 @@ export async function organizationAdapter(env: CloudflareEnv): Promise<Organizat
  * for the life of one request.
  *
  * A dashboard render resolves the same membership twice: getDashboardContext
- * looks the organization up by slug, loadMemberSiteRow looks it up by id, and
+ * looks the organization up by slug, loadMemberOrganizationRow looks it up by id, and
  * each then reads the same member row for the same user. Neither can change
  * mid-request. Pass the event and the second resolution is free; without one
  * (scheduled jobs, tenant deletion) they read as before.

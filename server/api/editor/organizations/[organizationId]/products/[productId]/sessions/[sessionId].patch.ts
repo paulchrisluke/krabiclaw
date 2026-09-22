@@ -1,5 +1,5 @@
 import { jsonResponse, readStrictBody, rethrowHttpError } from '~/server/utils/api-response'
-import { requireSiteAccess } from '~/server/utils/location-access'
+import { requireOrganizationAccess } from '~/server/utils/location-access'
 import { requireSiteProduct } from '~/server/utils/product-management'
 import { updateSession } from '~/server/utils/availability'
 import { PRODUCT_SESSION_STATUSES, type ProductSessionStatus } from '~/shared/bookings'
@@ -19,9 +19,9 @@ export default defineHandler(async (event) => {
   const sessionId = getRouterParam(event, 'sessionId')
   if (!organizationId || !productId || !sessionId) return jsonResponse({ error: 'Site, product and session IDs are required' }, { status: 400 })
   try {
-    const { db, session: auth, site } = await requireSiteAccess(event, organizationId)
+    const { db, session: auth, organization } = await requireOrganizationAccess(event, organizationId)
     // A product id in the path is not authorized by the site in the path.
-    await requireSiteProduct(db, { organizationId: site.organization_id, productId })
+    await requireSiteProduct(db, { organizationId: organization.id, productId })
     const body = await readStrictBody<{ starts_at?: unknown; ends_at?: unknown; capacity?: unknown; status?: unknown }>(event, {
       starts_at: 'unknown', ends_at: 'unknown', capacity: 'unknown', status: 'unknown',
     })
@@ -35,7 +35,7 @@ export default defineHandler(async (event) => {
       return jsonResponse({ error: 'capacity must be a non-negative integer or null' }, { status: 400 })
     }
     await updateSession(db, {
-      organizationId: site.organization_id, sessionId, actorId: auth.user.id,
+      organizationId: organization.id, sessionId, actorId: auth.user.id,
       startsAt: typeof body.starts_at === 'string' ? body.starts_at : undefined,
       endsAt: typeof body.ends_at === 'string' ? body.ends_at : undefined,
       capacity: body.capacity === undefined ? undefined : (body.capacity as number | null),

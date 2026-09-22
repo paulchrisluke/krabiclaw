@@ -1,7 +1,7 @@
 import { jsonResponse, readRequiredBody } from '~/server/utils/api-response'
 import { execute, queryFirst } from '~/server/db'
 import { setCanonicalDomain } from '~/server/utils/domains'
-import { requireSiteAccess } from '~/server/utils/location-access'
+import { requireOrganizationAccess } from '~/server/utils/location-access'
 
 interface DomainPatchBody {
   role?: 'canonical'
@@ -40,11 +40,11 @@ export default defineHandler(async (event) => {
     return jsonResponse({ error: 'Unsupported role value' }, { status: 400 })
   }
 
-  const { db, session, site } = await requireSiteAccess(event, organizationId)
+  const { db, session, organization } = await requireOrganizationAccess(event, organizationId)
 
   try {
     if (body.role === 'canonical') {
-      const actorRole = site.member_role as 'owner' | 'admin' | 'editor'
+      const actorRole = organization.member_role as 'owner' | 'admin' | 'editor'
       const domain = await setCanonicalDomain(db, organizationId, domainId, actorRole, session.user.id)
       return jsonResponse({ success: true, domain })
     }

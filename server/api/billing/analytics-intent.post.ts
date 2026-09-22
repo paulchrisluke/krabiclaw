@@ -71,7 +71,7 @@ export default defineHandler(async (event) => {
   const session = await getAuthSession(event, env)
   if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
   if (!body?.organizationId || !body.organizationId || !isStripeGa4IntentAction(body.action)) {
-    return jsonResponse({ error: 'organizationId, organizationId, and a valid action are required' }, { status: 400 })
+    return jsonResponse({ error: 'organizationId, and a valid action are required' }, { status: 400 })
   }
   if (body.effectiveTiming && body.effectiveTiming !== 'immediate' && body.effectiveTiming !== 'period_end') {
     return jsonResponse({ error: 'Invalid effective timing' }, { status: 400 })

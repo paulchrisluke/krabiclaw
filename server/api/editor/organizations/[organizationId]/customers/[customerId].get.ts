@@ -1,13 +1,13 @@
 import { jsonResponse } from '~/server/utils/api-response'
 import { queryAll, queryFirst } from '~/server/db'
-import { requireSiteAccess } from '~/server/utils/location-access'
+import { requireOrganizationAccess } from '~/server/utils/location-access'
 
 export default defineHandler(async (event) => {
   const organizationId = getRouterParam(event, 'organizationId')
   const customerId = getRouterParam(event, 'customerId')
   if (!organizationId || !customerId) return jsonResponse({ error: 'Missing params' }, { status: 400 })
 
-  const { db } = await requireSiteAccess(event, organizationId)
+  const { db } = await requireOrganizationAccess(event, organizationId)
 
   const customer = await queryFirst<ApiRecord>(db, `
     SELECT id, name, email, phone, source, status, user_id, stripe_customer_id, review_request_opted_out_at, created_at, updated_at

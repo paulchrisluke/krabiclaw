@@ -2,7 +2,7 @@ import { jsonResponse } from '~/server/utils/api-response'
 import {
   getGoogleAnalyticsAccessToken, getGoogleAnalyticsConnection, listGa4Properties, listSearchConsoleSites
 } from '~/server/utils/google-analytics'
-import { requireSiteAccess } from '~/server/utils/location-access'
+import { requireOrganizationAccess } from '~/server/utils/location-access'
 
 export default defineHandler(async (event) => {
   const organizationId = getRouterParam(event, 'organizationId')
@@ -10,15 +10,15 @@ export default defineHandler(async (event) => {
     return jsonResponse({ error: 'Organization ID is required' }, { status: 400 })
   }
 
-  const { env, site } = await requireSiteAccess(event, organizationId)
+  const { env, organization } = await requireOrganizationAccess(event, organizationId)
 
-  const connection = await getGoogleAnalyticsConnection(env, site.organization_id, site.id)
+  const connection = await getGoogleAnalyticsConnection(env, organization.id, organization.id)
   if (!connection) {
     return jsonResponse({ success: true, connection: null, ga4Properties: [], searchConsoleSites: [], ga4Error: null, searchConsoleError: null })
   }
 
   try {
-    const accessToken = await getGoogleAnalyticsAccessToken(env, site.organization_id, site.id)
+    const accessToken = await getGoogleAnalyticsAccessToken(env, organization.id, organization.id)
     const [ga4Result, searchConsoleResult] = await Promise.allSettled([
       listGa4Properties(accessToken), listSearchConsoleSites(accessToken)
     ])

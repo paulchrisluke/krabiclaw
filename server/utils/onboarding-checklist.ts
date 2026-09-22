@@ -4,7 +4,7 @@ import type { H3Event } from 'nitro'
 import { queryFirst } from '~/server/db'
 import { cloudflareEnv } from '~/server/utils/api-response'
 import { getDashboardContext } from '~/server/utils/dashboard-context'
-import { requireSiteAccess } from '~/server/utils/location-access'
+import { requireOrganizationAccess } from '~/server/utils/location-access'
 import { SERVICE_PAGE_SQL } from '~/server/utils/module-content-guard'
 import { normalizeVertical } from '~/utils/vertical-copy'
 
@@ -55,14 +55,14 @@ export async function loadOnboardingChecklist(
   let organizationId: string
   let brandName: string | null
   if (querySiteId) {
-    const { site } = await requireSiteAccess(event, querySiteId, 'site-wide')
-    organizationId = site.id
-    brandName = site.brand_name
+    const { organization } = await requireOrganizationAccess(event, querySiteId, 'site-wide')
+    organizationId = organization.id
+    brandName = organization.name
   } else {
     const dashboard = await getDashboardContext(event, { requireSite: false, requireOrganization: false })
     if (!dashboard?.site) return EMPTY_ONBOARDING_CHECKLIST
-    organizationId = dashboard.site.id
-    brandName = dashboard.site.brand_name
+    organizationId = dashboard.organization.id
+    brandName = dashboard.organization.name
   }
 
   const row = await queryFirst<ChecklistRow>(db, `

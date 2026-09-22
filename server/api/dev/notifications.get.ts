@@ -32,7 +32,7 @@ export default defineHandler(async (event) => {
       AND (? IS NULL OR created_at >= ?)
     ORDER BY created_at DESC
     LIMIT ?
-  `, [organizationId, organizationId, organizationId, locationId, locationId, since, since, limit])
+  `, [organizationId, locationId, locationId, since, since, limit])
   const deliveries = await queryAll(db, `
     SELECT d.id, e.request_id, d.entry_id, d.channel, d.provider, d.purpose,
            d.status, d.provider_message_id, d.error, d.created_at, d.updated_at

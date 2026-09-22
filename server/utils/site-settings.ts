@@ -89,8 +89,8 @@ export async function loadSettingsPayload(
   organizationId: string
 ) {
   const updatedSite = await queryFirst<FullSiteRow & { vertical: string; theme_id: string }>(db, `
-    SELECT sites.id, sites.organization_id, subdomain, sites.status,
-           (SELECT 'https://' || domain FROM organization_domains WHERE organization_id = sites.id AND role = 'canonical' AND status = 'active') AS public_url, COALESCE((SELECT status FROM organization_domains WHERE organization_id = sites.id AND type = 'custom' AND status NOT IN ('deleted', 'disabled') ORDER BY role = 'canonical' DESC, created_at, id LIMIT 1), 'none') AS custom_domain_status, default_currency,
+    SELECT organization.id, organization.organization_id, subdomain, organization.status,
+           (SELECT 'https://' || domain FROM organization_domains WHERE organization_id = organization.id AND role = 'canonical' AND status = 'active') AS public_url, COALESCE((SELECT status FROM organization_domains WHERE organization_id = organization.id AND type = 'custom' AND status NOT IN ('deleted', 'disabled') ORDER BY role = 'canonical' DESC, created_at, id LIMIT 1), 'none') AS custom_domain_status, default_currency,
            brand_name, brand_description,
            mp.asset_id AS logo_media_id, ma.public_url AS logo_public_url,
            ma.thumbnail_url AS logo_thumbnail_url, ma.kind AS logo_kind,
@@ -101,27 +101,27 @@ export async function loadSettingsPayload(
            contact_email,
            seo_title, seo_description, canonical_url, robots,
            social_facebook_url, social_instagram_url, social_tiktok_url,
-           feature_overrides, last_published_at, sites.created_at, sites.updated_at,
+           feature_overrides, last_published_at, organization.created_at, organization.updated_at,
            vertical, theme_id
     FROM organization
-    LEFT JOIN media_placements mp ON mp.organization_id = sites.id AND mp.owner_type = 'site'
-      AND mp.owner_id = sites.id AND mp.slot = 'logo' AND mp.sort_order = 0 AND mp.status = 'active'
+    LEFT JOIN media_placements mp ON mp.organization_id = organization.id AND mp.owner_type = 'organization'
+      AND mp.owner_id = organization.id AND mp.slot = 'logo' AND mp.sort_order = 0 AND mp.status = 'active'
     LEFT JOIN media_assets ma ON ma.id = mp.asset_id AND ma.status = 'active'
-    LEFT JOIN media_placements fmp ON fmp.organization_id = sites.id AND fmp.owner_type = 'site'
-      AND fmp.owner_id = sites.id AND fmp.slot = 'favicon' AND fmp.sort_order = 0 AND fmp.status = 'active'
+    LEFT JOIN media_placements fmp ON fmp.organization_id = organization.id AND fmp.owner_type = 'organization'
+      AND fmp.owner_id = organization.id AND fmp.slot = 'favicon' AND fmp.sort_order = 0 AND fmp.status = 'active'
     LEFT JOIN media_assets fma ON fma.id = fmp.asset_id AND fma.status = 'active'
-    LEFT JOIN media_placements smp ON smp.organization_id = sites.id AND smp.owner_type = 'site'
-      AND smp.owner_id = sites.id AND smp.slot = 'social_share' AND smp.sort_order = 0 AND smp.status = 'active'
+    LEFT JOIN media_placements smp ON smp.organization_id = organization.id AND smp.owner_type = 'organization'
+      AND smp.owner_id = organization.id AND smp.slot = 'social_share' AND smp.sort_order = 0 AND smp.status = 'active'
     LEFT JOIN media_assets sma ON sma.id = smp.asset_id AND sma.status = 'active'
-    WHERE sites.id = ? AND sites.organization_id = ?
+    WHERE organization.id = ? AND organization.organization_id = ?
     LIMIT 1
-  `, [organizationId, organizationId])
+  `, [organizationId])
 
   if (!updatedSite) {
     throw new SiteSettingsNotFoundError()
   }
 
-  const siteConfig = await getConfig(db, organizationId, organizationId)
+  const siteConfig = await getConfig(db, organizationId)
 
   let toggleableFeatures: readonly ProductFeature[] = []
   let effectiveFeatures: readonly ProductFeature[] = []
@@ -206,9 +206,9 @@ async function updateNonSiteConfigFields(
 ): Promise<SiteSettingsUpdateResult | null> {
   if (updates.brand_color !== undefined) {
     if (updates.brand_color) {
-      await setConfig(db, organizationId, organizationId, 'brand_color', updates.brand_color)
+      await setConfig(db, organizationId, 'brand_color', updates.brand_color)
     } else {
-      await deleteConfig(db, organizationId, organizationId, 'brand_color')
+      await deleteConfig(db, organizationId, 'brand_color')
     }
   }
 
@@ -229,9 +229,9 @@ async function updateNonSiteConfigFields(
     if (updates[key] !== undefined) {
       const value = updates[key]
       if (value) {
-        await setConfig(db, organizationId, organizationId, key, value)
+        await setConfig(db, organizationId, key, value)
       } else {
-        await deleteConfig(db, organizationId, organizationId, key)
+        await deleteConfig(db, organizationId, key)
       }
     }
   }
@@ -409,7 +409,7 @@ async function attemptSiteUpdate(
   }
 
   if (setParts.length === 0 && siteMedia === undefined) {
-    const settings = await loadSettingsPayload(db, organizationId, organizationId)
+    const settings = await loadSettingsPayload(db, organizationId)
     return {
       status: 200,
       data: {
@@ -432,12 +432,12 @@ async function attemptSiteUpdate(
     SET ${setParts.join(', ')}
     WHERE id = ? AND organization_id = ?
   `,
-    values: [...params, organizationId, organizationId],
+    values: [...params, organizationId],
   }
 
   const isRename = updates.brand_name !== undefined && subdomain && subdomain !== site.subdomain
   if (isRename && setParts.length > 0) {
-    await createSystemSubdomain(env, db, organizationId, organizationId, subdomain, { siteUpdate })
+    await createSystemSubdomain(env, db, organizationId, subdomain, { siteUpdate })
   } else if (setParts.length > 0) {
     const result = await execute(db, siteUpdate.sql, siteUpdate.values)
     if (!result.success) {
@@ -454,7 +454,7 @@ async function attemptSiteUpdate(
     const queries = [...targetSlots].flatMap(slot => buildSingleMediaPlacementQueries({
       organizationId,
       
-      placement: { owner_type: 'site', owner_id: organizationId, slot },
+      placement: { owner_type: 'organization', owner_id: organizationId, slot },
       media: siteMedia.filter(item => item.slot === slot && item.asset_id).map(item => ({ asset_id: String(item.asset_id) })),
       now,
     }))
@@ -467,10 +467,10 @@ async function attemptSiteUpdate(
     || updates.seo_description !== undefined
     || siteMedia?.some(item => item.slot === 'logo' || item.slot === 'social_share') === true
   if (cardInputChanged) {
-    await refreshSocialCard({ db, env, owner: { owner_type: 'site', owner_id: organizationId }, actorId: userId })
+    await refreshSocialCard({ db, env, owner: { owner_type: 'organization', owner_id: organizationId }, actorId: userId })
   }
 
-  const settings = await loadSettingsPayload(db, organizationId, organizationId)
+  const settings = await loadSettingsPayload(db, organizationId)
   return {
     status: 200,
     data: {
@@ -500,7 +500,7 @@ export async function updateSiteSettingsFields(
     FROM organization
     WHERE id = ? AND organization_id = ?
     LIMIT 1
-  `, [organizationId, organizationId])
+  `, [organizationId])
 
   if (!site) {
     return {
@@ -536,7 +536,7 @@ export async function updateSiteSettingsFields(
     }
   }
 
-  const configError = await updateNonSiteConfigFields(db, organizationId, organizationId, updates)
+  const configError = await updateNonSiteConfigFields(db, organizationId, updates)
   if (configError) return configError
   await syncAnalyticsSettingToZaraz(
     db,
@@ -573,7 +573,6 @@ export async function updateSiteSettingsFields(
           env,
           site,
           organizationId,
-          organizationId,
           updates,
           userId,
           subdomain
@@ -604,7 +603,6 @@ export async function updateSiteSettingsFields(
     db,
     env,
     site,
-    organizationId,
     organizationId,
     updates,
     userId,

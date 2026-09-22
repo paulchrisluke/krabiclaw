@@ -2,14 +2,14 @@ import { jsonResponse } from '~/server/utils/api-response'
 import { queryFirst } from '~/server/db'
 import { sendReviewRequestForBooking } from '~/server/utils/review-request-delivery'
 import { assertResourceAccess, memberAccessPrincipal } from '~/server/utils/member-access'
-import { requireSiteAccess } from '~/server/utils/location-access'
+import { requireOrganizationAccess } from '~/server/utils/location-access'
 
 export default defineHandler(async (event) => {
   const organizationId = getRouterParam(event, 'organizationId')
   const submissionId = getRouterParam(event, 'submissionId')
   if (!organizationId || !submissionId) return jsonResponse({ error: 'Missing params' }, { status: 400 })
 
-  const { env, db, site } = await requireSiteAccess(event, organizationId, 'context')
+  const { env, db, organization } = await requireOrganizationAccess(event, organizationId, 'context')
   const submission = await queryFirst<{ id: string; location_id: string }>(db, `
     SELECT rs.id, rs.location_id
     FROM requests rs
@@ -18,7 +18,7 @@ export default defineHandler(async (event) => {
   `, [submissionId, organizationId])
   if (!submission) return jsonResponse({ error: 'Reservation not found or access denied' }, { status: 404 })
 
-  await assertResourceAccess(db, { ...memberAccessPrincipal(site.membership, { env, organizationId, event }), resourceLocationId: submission.location_id })
+  await assertResourceAccess(db, { ...memberAccessPrincipal(organization.membership, { env, organizationId, event }), resourceLocationId: submission.location_id })
 
   const body = await readBody(event) as { kind?: string } | undefined
   const kind = body?.kind === 'reminder' ? 'reminder' : 'first'

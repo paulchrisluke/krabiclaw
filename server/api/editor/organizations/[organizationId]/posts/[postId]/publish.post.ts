@@ -5,7 +5,7 @@ import { getAuthSession } from '~/server/utils/auth'
 import { publishPost, type PostPublishChannel, type PostSocialPublish } from '~/server/utils/post-management'
 import { getFacebookPagesConnection } from '~/server/utils/facebook-pages'
 import { queryFirst } from '~/server/db'
-import { loadMemberSiteRow } from '~/server/utils/location-access'
+import { loadMemberOrganizationRow } from '~/server/utils/location-access'
 import { assertResourceAccess, memberAccessPrincipal } from '~/server/utils/member-access'
 
 export default defineHandler(async (event) => {
@@ -23,7 +23,7 @@ export default defineHandler(async (event) => {
   const body = await readRequiredBody<{ channels?: unknown }>(event)
   const channels = parsePublishChannels(body?.channels)
   if (!channels) return jsonResponse({ error: 'channels must be a non-empty array of site, facebook, or instagram' }, { status: 400 })
-  const site = await loadMemberSiteRow(event, db, env, organizationId, session.user.id)
+  const site = await loadMemberOrganizationRow(event, db, env, organizationId, session.user.id)
   if (!site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
 
   const postScope = await queryFirst<{ location_id: string | null }>(db, `

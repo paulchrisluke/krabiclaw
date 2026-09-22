@@ -6,7 +6,7 @@
 import { cleanString, cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { assertResourceAccess, memberAccessPrincipal } from '~/server/utils/member-access'
-import { loadMemberSiteRow } from '~/server/utils/location-access'
+import { loadMemberOrganizationRow } from '~/server/utils/location-access'
 import { queryFirst } from '~/server/db'
 import { executeGuestThreadOperation } from '~/server/domain/guest-threads/operations'
 import { publishDashboardInvalidation } from '~/server/cloudflare/guest-inbox-events'
@@ -25,7 +25,7 @@ export default defineHandler(async (event) => {
   const session = await getAuthSession(event, env)
   if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
-  const site = await loadMemberSiteRow(event, db, env, organizationId, session.user.id)
+  const site = await loadMemberOrganizationRow(event, db, env, organizationId, session.user.id)
   if (!site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
 
   // The table held is its own row: it carries the location and the status this

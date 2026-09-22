@@ -437,7 +437,7 @@ export async function claimReservation(db: DbClient, input: {
       ON CONFLICT (id) DO NOTHING
     `,
     params: [
-      input.reservationId, input.organizationId, input.organizationId, input.locationId, input.customerId, null,
+      input.reservationId, input.organizationId, input.locationId, input.customerId, null,
       input.timezone, input.startsAt, input.endsAt, input.partySize, 'confirmed', now, now,
       input.locationId, input.organizationId,
       input.date, input.timeSlot,

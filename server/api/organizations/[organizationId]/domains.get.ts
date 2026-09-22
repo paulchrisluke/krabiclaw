@@ -1,12 +1,12 @@
 import { jsonResponse } from '~/server/utils/api-response'
 import { getSiteDomainsDashboardPayload } from '~/server/utils/domain-read-model'
-import { requireSiteAccess } from '~/server/utils/location-access'
+import { requireOrganizationAccess } from '~/server/utils/location-access'
 
 export default defineHandler(async (event) => {
   const organizationId = getRouterParam(event, 'organizationId')
   if (!organizationId) return jsonResponse({ error: 'Organization ID is required' }, { status: 400 })
 
-  const { db } = await requireSiteAccess(event, organizationId)
+  const { db } = await requireOrganizationAccess(event, organizationId)
 
   const payload = await getSiteDomainsDashboardPayload(db, organizationId)
 

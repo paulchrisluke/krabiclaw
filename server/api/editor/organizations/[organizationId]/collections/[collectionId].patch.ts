@@ -1,5 +1,5 @@
 import { jsonResponse, readRequiredBody, rethrowHttpError } from '~/server/utils/api-response'
-import { requireSiteAccess } from '~/server/utils/location-access'
+import { requireOrganizationAccess } from '~/server/utils/location-access'
 import { updateCollection } from '~/server/utils/product-management'
 import type { UpdateCollectionInput } from '~/server/types/products'
 import { defineHandler } from 'nitro'
@@ -10,10 +10,10 @@ export default defineHandler(async (event) => {
   const collectionId = getRouterParam(event, 'collectionId')
   if (!organizationId || !collectionId) return jsonResponse({ error: 'Site ID and collection ID are required' }, { status: 400 })
   try {
-    const { db, session, site } = await requireSiteAccess(event, organizationId)
+    const { db, session, organization } = await requireOrganizationAccess(event, organizationId)
     const body = await readRequiredBody<UpdateCollectionInput>(event)
     const collection = await updateCollection(db, {
-      organizationId: site.organization_id, collectionId, patch: body, actor: { actorId: session.user.id },
+      organizationId: organization.id, collectionId, patch: body, actor: { actorId: session.user.id },
     })
     return jsonResponse({ success: true, collection })
   } catch (error) {

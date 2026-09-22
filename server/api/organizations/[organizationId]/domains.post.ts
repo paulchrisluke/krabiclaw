@@ -1,5 +1,5 @@
 import { jsonResponse } from '~/server/utils/api-response'
-import { requireSiteAccess } from '~/server/utils/location-access'
+import { requireOrganizationAccess } from '~/server/utils/location-access'
 import {
   createCustomDomainPair, inspectDomainResolution, validateCustomDomain
 } from '~/server/utils/domains'
@@ -23,8 +23,8 @@ export default defineHandler(async (event) => {
   const includeWww = body.include_www !== false
   if (!requestedDomain) return jsonResponse({ error: 'Domain is required' }, { status: 400 })
 
-  const { env, db, session, site } = await requireSiteAccess(event, organizationId)
-  const actorType = site.member_role as 'owner' | 'admin' | 'editor'
+  const { env, db, session, organization } = await requireOrganizationAccess(event, organizationId)
+  const actorType = organization.member_role as 'owner' | 'admin' | 'editor'
 
 
   if (!(await hasSiteEntitlement(env, db, organizationId, 'custom_domains'))) {
@@ -48,10 +48,10 @@ export default defineHandler(async (event) => {
     })
 
     const dashboardUrl = buildDashboardUrl({
-      env, organizationId: site.organization_id, organizationSlug: site.organization_slug, subdomain: site.subdomain, }, 'site.domains')
+      env, organizationId: organization.id, organizationSlug: organization.slug, subdomain: organization.subdomain, }, 'site.domains')
     for (const domain of domains) {
       await notifyDomainLifecycle(env, db, {
-        organizationId: site.organization_id, domain: domain.domain, status: domain.status, title: `Domain added: ${domain.domain}`, message: `DNS configuration is required for ${domain.domain}. Follow the dashboard instructions to complete setup.`, dashboardUrl
+        organizationId: organization.id, domain: domain.domain, status: domain.status, title: `Domain added: ${domain.domain}`, message: `DNS configuration is required for ${domain.domain}. Follow the dashboard instructions to complete setup.`, dashboardUrl
       })
     }
 

@@ -147,7 +147,7 @@ export async function aggregateSiteAnalyticsDate(db: DbClient, organizationId: s
         SELECT lower(hex(randomblob(16))), kind, ?, ?, ?, key, payload_json, ?, ? FROM (${daySummariesSql}) WHERE true
         ON CONFLICT(organization_id, kind, date, key) DO UPDATE SET organization_id = excluded.organization_id,
           payload_json = excluded.payload_json, updated_at = excluded.updated_at`,
-      params: [context.organizationId, organizationId, date, now, now, organizationId, start, end],
+      params: [context.organizationId, date, now, now, organizationId, start, end],
     },
   ], { operation: `aggregate analytics for ${organizationId} ${date}` })
 }

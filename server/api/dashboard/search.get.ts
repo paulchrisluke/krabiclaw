@@ -1,6 +1,6 @@
 import { jsonResponse } from '~/server/utils/api-response'
 import { getDashboardContext } from '~/server/utils/dashboard-context'
-import { assertSiteContextAccess, memberAccessPrincipal } from '~/server/utils/member-access'
+import { assertOrganizationContextAccess, memberAccessPrincipal } from '~/server/utils/member-access'
 import { searchPublicResources } from '~/server/utils/public-search'
 
 // The dashboard's one search: a member's own business, scoped to the site the
@@ -13,7 +13,7 @@ export default defineHandler(async (event) => {
 
   const context = await getDashboardContext(event, { requireSite: true })
   if (!context.organization || !context.site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
-  await assertSiteContextAccess(context.db, memberAccessPrincipal(context.organization, { env: context.env, organizationId: context.site.id }))
+  await assertOrganizationContextAccess(context.db, memberAccessPrincipal(context.organization, { env: context.env, organizationId: context.site.id }))
 
   const results = await searchPublicResources(context.env, q, { surface: 'dashboard', organizationId: context.site.id, limit: 10 })
   return jsonResponse({ query: q, results })

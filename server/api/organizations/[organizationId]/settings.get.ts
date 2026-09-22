@@ -1,8 +1,8 @@
 // GET site settings
 import { cloudflareEnv, jsonResponse, rethrowHttpError } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
-import { assertSiteWideAccess, memberAccessPrincipal } from '~/server/utils/member-access'
-import { loadMemberSiteRow } from '~/server/utils/location-access'
+import { assertOrganizationWideAccess, memberAccessPrincipal } from '~/server/utils/member-access'
+import { loadMemberOrganizationRow } from '~/server/utils/location-access'
 import { loadSettingsPayload } from '~/server/utils/site-settings'
 import { defineHandler } from 'nitro'
 import { getRouterParam } from 'nitro/h3'
@@ -34,12 +34,12 @@ export default defineHandler(async (event) => {
   }
 
   try {
-    const siteAccess = await loadMemberSiteRow(event, db, env, organizationId, session.user.id)
+    const siteAccess = await loadMemberOrganizationRow(event, db, env, organizationId, session.user.id)
     if (!siteAccess) {
       return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
     }
 
-    await assertSiteWideAccess(db, memberAccessPrincipal(siteAccess.membership, { env, organizationId, event }))
+    await assertOrganizationWideAccess(db, memberAccessPrincipal(siteAccess.membership, { env, organizationId, event }))
 
     const settings = await loadSettingsPayload(db, siteAccess.organization_id, organizationId)
     return jsonResponse({ success: true, settings })

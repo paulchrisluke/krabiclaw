@@ -53,7 +53,7 @@ const PLACE_IMAGE_SQL = `
   LEFT JOIN media_placements mp_hero ON mp_hero.owner_type = 'business_location' AND mp_hero.owner_id = gt.location_id
     AND mp_hero.slot = 'hero' AND mp_hero.status = 'active'
   LEFT JOIN media_assets ma_hero ON ma_hero.id = mp_hero.asset_id AND ma_hero.status = 'active'
-  LEFT JOIN media_placements mp_logo ON gt.location_id IS NULL AND mp_logo.owner_type = 'site' AND mp_logo.owner_id = gt.organization_id
+  LEFT JOIN media_placements mp_logo ON gt.location_id IS NULL AND mp_logo.owner_type = 'organization' AND mp_logo.owner_id = gt.organization_id
     AND mp_logo.slot = 'logo' AND mp_logo.status = 'active'
   LEFT JOIN media_assets ma_logo ON ma_logo.id = mp_logo.asset_id AND ma_logo.status = 'active'`
 

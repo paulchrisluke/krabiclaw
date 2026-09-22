@@ -1,5 +1,5 @@
 import { jsonResponse, rethrowHttpError } from '~/server/utils/api-response'
-import { requireSiteAccess } from '~/server/utils/location-access'
+import { requireOrganizationAccess } from '~/server/utils/location-access'
 import { deleteCollection } from '~/server/utils/product-management'
 import { defineHandler } from 'nitro'
 import { getRouterParam } from 'nitro/h3'
@@ -9,9 +9,9 @@ export default defineHandler(async (event) => {
   const collectionId = getRouterParam(event, 'collectionId')
   if (!organizationId || !collectionId) return jsonResponse({ error: 'Site ID and collection ID are required' }, { status: 400 })
   try {
-    const { db, site } = await requireSiteAccess(event, organizationId)
+    const { db, organization } = await requireOrganizationAccess(event, organizationId)
     // Deleting a grouping never deletes what was grouped.
-    await deleteCollection(db, { organizationId: site.organization_id, collectionId })
+    await deleteCollection(db, { organizationId: organization.id, collectionId })
     return jsonResponse({ success: true, collection_id: collectionId })
   } catch (error) {
     rethrowHttpError(error)

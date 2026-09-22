@@ -1,11 +1,11 @@
 import { jsonResponse } from '~/server/utils/api-response'
 import { createQa } from '~/server/utils/location-qa'
-import { requireSiteAccess } from '~/server/utils/location-access'
+import { requireOrganizationAccess } from '~/server/utils/location-access'
 
 export default defineHandler(async (event) => {
   const organizationId = getRouterParam(event, 'organizationId')
   if (!organizationId) return jsonResponse({ error: 'Organization ID required' }, { status: 400 })
-  const { db, site } = await requireSiteAccess(event, organizationId)
+  const { db, organization } = await requireOrganizationAccess(event, organizationId)
   const body = await readBody<{
     question?: string
     answer?: string | null
@@ -16,7 +16,7 @@ export default defineHandler(async (event) => {
     page_path?: string | null
   }>(event)
   const result = await createQa(db, {
-    organizationId: site.organization_id, locationId: null, pagePath: typeof body?.page_path === 'string' ? String(body.page_path) : null, }, {
+    organizationId: organization.id, locationId: null, pagePath: typeof body?.page_path === 'string' ? String(body.page_path) : null, }, {
     question: body?.question ?? '', answer: body?.answer, question_author: body?.question_author, is_owner_answer: body?.is_owner_answer, sort_order: body?.sort_order, status: body?.status, })
   return jsonResponse(result.data, { status: result.status })
 })

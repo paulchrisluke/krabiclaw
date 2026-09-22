@@ -169,7 +169,7 @@ async function resolveValidatedLocationFeatures(
   }
   const parentSite = await queryFirst<{ vertical: string; theme_id: string; feature_overrides: string | null }>(db, `
     SELECT vertical, theme_id, feature_overrides FROM organization WHERE id = ? AND organization_id = ? LIMIT 1
-  `, [organizationId, organizationId]);
+  `, [organizationId]);
   if (!parentSite) {
     return { ok: false, status: 404, data: { error: "Site not found." } };
   }
@@ -221,7 +221,7 @@ export async function resolveLocationCapabilitySummary(
 ): Promise<LocationCapabilitySummary | null> {
   const site = await queryFirst<{ vertical: string; theme_id: string; feature_overrides: string | null }>(db, `
     SELECT vertical, theme_id, feature_overrides FROM organization WHERE id = ? AND organization_id = ? LIMIT 1
-  `, [organizationId, organizationId]);
+  `, [organizationId]);
   if (!site) return null;
   const { parseCmsFeatureOverrideDelta } = await import("~/config/cms-registry");
   try {
@@ -262,7 +262,7 @@ export async function getLocation(
   organizationId: string,
   locationIdOrSlug: string,
 ) {
-  const row = await loadLocation(db, organizationId, organizationId, locationIdOrSlug)
+  const row = await loadLocation(db, organizationId, locationIdOrSlug)
   if (!row) return null
   const { getMediaPlacements } = await import('~/server/utils/media-placement')
   const placements = await getMediaPlacements(db, { organizationId, ownerType: 'business_location', ownerIds: [row.id] })
@@ -359,7 +359,7 @@ export async function createLocation(
   // Same validation/semantics as updateLocation's feature_overrides handling: undefined/omitted
   // means "inherit the parent site's effective features" (stored as NULL); no locationId is
   // passed since a location being created has no existing content for the live-data guard to check.
-  const featuresResult = await resolveValidatedLocationFeatures(db, organizationId, organizationId, input.feature_overrides);
+  const featuresResult = await resolveValidatedLocationFeatures(db, organizationId, input.feature_overrides);
   if (!featuresResult.ok) {
     return { status: featuresResult.status, data: featuresResult.data };
   }
@@ -413,7 +413,6 @@ export async function createLocation(
         params: [
           id,
           organizationId,
-          organizationId,
           title,
           slug,
           input.phone ?? null,
@@ -458,14 +457,14 @@ export async function createLocation(
       } catch (teamError) {
         const compensating = [{
           query: `DELETE FROM business_locations WHERE id = ? AND organization_id = ? AND organization_id = ?`,
-          params: [id, organizationId, organizationId],
+          params: [id, organizationId],
         }];
         await executeBatch(db, compensating).catch((cleanupError) => {
           console.error("Failed to roll back orphaned location after team provisioning failure:", cleanupError);
         });
         throw teamError;
       }
-      const location = await loadLocation(db, organizationId, organizationId, id);
+      const location = await loadLocation(db, organizationId, id);
       await fireOrganizationEventSafe({
         db,
         organizationId,
@@ -508,7 +507,7 @@ export async function updateLocation(
   userId: string,
   env?: CloudflareEnv,
 ) {
-  const existing = await loadLocation(db, organizationId, organizationId, locationIdOrSlug);
+  const existing = await loadLocation(db, organizationId, locationIdOrSlug);
   if (!existing) {
     return { status: 404, data: { error: "Location not found." } };
   }
@@ -528,7 +527,7 @@ export async function updateLocation(
   if (input.robots !== undefined && !parseRobotsIntent(input.robots).ok) {
     return { status: 400, data: { error: `robots must be one of: ${ROBOTS_INTENTS.join(", ")}` } };
   }
-  const updateFeaturesResult = await resolveValidatedLocationFeatures(db, organizationId, organizationId, input.feature_overrides, locationId);
+  const updateFeaturesResult = await resolveValidatedLocationFeatures(db, organizationId, input.feature_overrides, locationId);
   if (!updateFeaturesResult.ok) {
     return { status: updateFeaturesResult.status, data: updateFeaturesResult.data };
   }
@@ -709,12 +708,11 @@ export async function updateLocation(
       const slug = attempt === 0 ? slugBase : `${slugBase}-${attempt + 1}`;
       const boundParams = [...params];
       boundParams[slugParamIndex] = slug;
-      boundParams.push(locationId, organizationId, organizationId);
+      boundParams.push(locationId, organizationId);
       try {
         await runUpdate(boundParams);
         const location = await loadLocation(
           db,
-          organizationId,
           organizationId,
           locationId,
         );
@@ -750,9 +748,9 @@ export async function updateLocation(
     };
   }
 
-  params.push(locationId, organizationId, organizationId);
+  params.push(locationId, organizationId);
   await runUpdate(params);
-  const location = await loadLocation(db, organizationId, organizationId, locationId);
+  const location = await loadLocation(db, organizationId, locationId);
   await fireOrganizationEventSafe({
     db,
     organizationId,
@@ -776,7 +774,7 @@ export async function deleteLocation(
   organizationId: string,
   locationIdOrSlug: string,
 ) {
-  const existing = await loadLocation(db, organizationId, organizationId, locationIdOrSlug);
+  const existing = await loadLocation(db, organizationId, locationIdOrSlug);
   if (!existing) {
     return { status: 404, data: { error: "Location not found." } };
   }
@@ -784,7 +782,7 @@ export async function deleteLocation(
   const now = new Date().toISOString();
   const statements = [
     ...prepareContentDocumentDeletion({ locationId, organizationId}),
-    ...resourceLocalizationDeletionQueries('business_location', { query: 'SELECT id FROM business_locations WHERE id = ? AND organization_id = ? AND organization_id = ?', params: [locationId, organizationId, organizationId] }),
+    ...resourceLocalizationDeletionQueries('business_location', { query: 'SELECT id FROM business_locations WHERE id = ? AND organization_id = ? AND organization_id = ?', params: [locationId, organizationId] }),
     // Deleting a location does NOT delete the products it offered: the
     // catalog belongs to the organization and other locations may still sell
     // them. The membership row goes (cascaded by the foreign key) and the
@@ -792,17 +790,17 @@ export async function deleteLocation(
     { query: `DELETE FROM organization_redirects WHERE organization_id = ? AND organization_id = ? AND (
         (owner_type = 'business_location' AND owner_id = ?) OR
         (owner_type = 'review' AND owner_id IN (SELECT id FROM reviews WHERE location_id = ?))
-      )`, params: [organizationId, organizationId, locationId, locationId] },
+      )`, params: [organizationId, locationId, locationId] },
     { query: `DELETE FROM media_placements WHERE organization_id = ? AND organization_id = ? AND
         owner_type = 'review' AND owner_id IN (SELECT id FROM reviews WHERE location_id = ?)
-      `, params: [organizationId, organizationId, locationId] },
-    { query: 'DELETE FROM reviews WHERE location_id = ? AND organization_id = ? AND organization_id = ?', params: [locationId, organizationId, organizationId] },
+      `, params: [organizationId, locationId] },
+    { query: 'DELETE FROM reviews WHERE location_id = ? AND organization_id = ? AND organization_id = ?', params: [locationId, organizationId] },
     {
       query: `
       DELETE FROM media_placements
       WHERE organization_id = ? AND organization_id = ? AND owner_type = 'business_location' AND owner_id = ?
     `,
-      params: [organizationId, organizationId, locationId],
+      params: [organizationId, locationId],
     },
     {
       query: `
@@ -811,20 +809,20 @@ export async function deleteLocation(
           updated_at = ?
       WHERE organization_id = ? AND organization_id = ? AND location_id = ?
     `,
-      params: [now, organizationId, organizationId, locationId],
+      params: [now, organizationId, locationId],
     },
     {
       query: `
       DELETE FROM requests WHERE organization_id = ? AND organization_id = ? AND location_id = ? AND kind IN ('reservation', 'booking')
     `,
-      params: [organizationId, organizationId, locationId],
+      params: [organizationId, locationId],
     },
     {
       query: `
       DELETE FROM business_locations
       WHERE id = ? AND organization_id = ? AND organization_id = ?
     `,
-      params: [locationId, organizationId, organizationId],
+      params: [locationId, organizationId],
     },
   ];
 

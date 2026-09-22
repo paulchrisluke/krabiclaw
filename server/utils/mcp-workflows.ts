@@ -54,11 +54,11 @@ export async function getNotificationsSettings(
   organizationId: string,
 ) {
   const [whatsappPhone, channelsRow] = await Promise.all([
-    getOrgWhatsAppPhone(db, organizationId, organizationId),
+    getOrgWhatsAppPhone(db, organizationId),
     queryFirst<{ value: string }>(
       db,
       `SELECT json_extract(settings_json, '$.config.owner_notification_channels') AS value FROM organization WHERE organization_id = ? AND id = ? LIMIT 1`,
-      [organizationId, organizationId],
+      [organizationId],
     ),
   ])
   // Mirrors the send-time default in server/utils/notifications.ts getOwnerNotificationChannels:
@@ -91,10 +91,10 @@ export async function updateNotificationsSettings(
   const trimmedPhone = whatsappPhone?.trim()
   // Explicit null or empty string means clear the phone
   if (whatsappPhone !== undefined) {
-    ops.push(setOrgWhatsAppPhone(db, organizationId, organizationId, trimmedPhone || ''))
+    ops.push(setOrgWhatsAppPhone(db, organizationId, trimmedPhone || ''))
   }
   if (channels) {
-    const defaultPhone = trimmedPhone || await getOrgWhatsAppPhone(db, organizationId, organizationId)
+    const defaultPhone = trimmedPhone || await getOrgWhatsAppPhone(db, organizationId)
     const validChannels = channels.filter(c => c === 'whatsapp' || c === 'email')
     // Filter out whatsapp if no phone is available
     const channelsToPersist = defaultPhone ? validChannels : validChannels.filter(c => c !== 'whatsapp')
@@ -104,12 +104,12 @@ export async function updateNotificationsSettings(
       execute(
         db,
         `UPDATE organization SET settings_json = json_set(settings_json, '$.config.owner_notification_channels', json(?)) WHERE organization_id = ? AND id = ?`,
-        [value, organizationId, organizationId],
+        [value, organizationId],
       )
     )
   }
   await Promise.all(ops)
-  return await getNotificationsSettings(db, organizationId, organizationId)
+  return await getNotificationsSettings(db, organizationId)
 }
 
 export async function listContactSubmissions(

@@ -1,6 +1,6 @@
 import { jsonResponse } from '~/server/utils/api-response'
 import { queryFirst } from '~/server/db'
-import { requireSiteAccess } from '~/server/utils/location-access'
+import { requireOrganizationAccess } from '~/server/utils/location-access'
 import { deleteCustomDomain } from '~/server/utils/domains'
 import { notifyDomainLifecycle } from '~/server/utils/domain-notifications'
 import { buildDashboardUrl } from '~/server/utils/dashboard-links'
@@ -10,7 +10,7 @@ export default defineHandler(async (event) => {
   const domainId = getRouterParam(event, 'domainId')
   if (!organizationId || !domainId) return jsonResponse({ error: 'Site ID and domain ID are required' }, { status: 400 })
 
-  const { env, db, session, site } = await requireSiteAccess(event, organizationId)
+  const { env, db, session, organization } = await requireOrganizationAccess(event, organizationId)
 
   const domain = await queryFirst<{ id: string; domain: string }>(db, `
     SELECT *
@@ -21,10 +21,10 @@ export default defineHandler(async (event) => {
   if (!domain) return jsonResponse({ error: 'Domain not found' }, { status: 404 })
 
   try {
-    await deleteCustomDomain(env, db, domainId, site.member_role as 'owner' | 'admin' | 'editor', session.user.id)
+    await deleteCustomDomain(env, db, domainId, organization.member_role as 'owner' | 'admin' | 'editor', session.user.id)
     await notifyDomainLifecycle(env, db, {
-      organizationId: site.organization_id, domain: domain.domain, status: 'deleted', title: `Domain deleted: ${domain.domain}`, message: `${domain.domain} has been removed from KrabiClaw.`, dashboardUrl: buildDashboardUrl({
-        env, organizationId: site.organization_id, organizationSlug: site.organization_slug, subdomain: site.subdomain, }, 'site.domains')
+      organizationId: organization.id, domain: domain.domain, status: 'deleted', title: `Domain deleted: ${domain.domain}`, message: `${domain.domain} has been removed from KrabiClaw.`, dashboardUrl: buildDashboardUrl({
+        env, organizationId: organization.id, organizationSlug: organization.slug, subdomain: organization.subdomain, }, 'site.domains')
     })
     return jsonResponse({ success: true })
   } catch (error) {

@@ -1,5 +1,5 @@
 import { jsonResponse, rethrowHttpError } from '~/server/utils/api-response'
-import { requireSiteAccess } from '~/server/utils/location-access'
+import { requireOrganizationAccess } from '~/server/utils/location-access'
 import { requireSiteProduct } from '~/server/utils/product-management'
 import { executeBatch, queryFirst } from '~/server/db'
 import { defineHandler } from 'nitro'
@@ -19,16 +19,16 @@ export default defineHandler(async (event) => {
   const productId = getRouterParam(event, 'productId')
   if (!organizationId || !productId) return jsonResponse({ error: 'Site ID and product ID are required' }, { status: 400 })
   try {
-    const { db, site } = await requireSiteAccess(event, organizationId)
-    await requireSiteProduct(db, { organizationId: site.organization_id, productId })
+    const { db, organization } = await requireOrganizationAccess(event, organizationId)
+    await requireSiteProduct(db, { organizationId: organization.id, productId })
     const booked = await queryFirst<{ n: number }>(db, `
       SELECT count(*) AS n FROM bookings WHERE organization_id = ? AND product_id = ?
-    `, [site.organization_id, productId])
+    `, [organization.id, productId])
     if ((booked?.n ?? 0) > 0) {
       return jsonResponse({ error: 'This product has bookings. Cancel them, or leave bookings on and turn the product off instead.' }, { status: 409 })
     }
     await executeBatch(db, [
-      { query: 'DELETE FROM product_booking_configs WHERE organization_id = ? AND product_id = ?', params: [site.organization_id, productId] },
+      { query: 'DELETE FROM product_booking_configs WHERE organization_id = ? AND product_id = ?', params: [organization.id, productId] },
     ], { operation: 'Remove product booking config' })
     return jsonResponse({ success: true, product_id: productId })
   } catch (error) {

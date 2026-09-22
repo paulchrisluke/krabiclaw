@@ -180,7 +180,7 @@ export function staleGoogleReviewDeletes(scope: { organizationId: string; locati
 }
 
 export function googleReviewUpserts(scope: { organizationId: string; locationId: string }, reviews: PlaceReview[], now: string) {
-  const { organizationId, organizationId, locationId } = scope
+  const { organizationId, locationId } = scope
   return reviews.map(review => {
     const reviewId = `gplaces-${locationId}-${review.google_review_id.replace(/\//g, '-')}`
     return {
@@ -191,7 +191,7 @@ export function googleReviewUpserts(scope: { organizationId: string; locationId:
           author_name = excluded.author_name, rating = excluded.rating, content = excluded.content,
           original_review_date = excluded.original_review_date, original_reference = excluded.original_reference,
           google_review_metadata = excluded.google_review_metadata, updated_at = excluded.updated_at`,
-      params: [reviewId, organizationId, organizationId, locationId, review.google_review_id, review.author_name, review.rating, review.content,
+      params: [reviewId, organizationId, locationId, review.google_review_id, review.author_name, review.rating, review.content,
         review.original_review_date, review.original_reference, JSON.stringify(review.google_review_metadata), now, now],
     }
   })

@@ -27,7 +27,7 @@ export async function getConfiguredSourceLocale(
   db: DbClient,
   organizationId: string,
 ): Promise<'en'> {
-  const source = await getPersistedSourceLocale(db, organizationId, organizationId)
+  const source = await getPersistedSourceLocale(db, organizationId)
   return source.locale as 'en'
 }
 

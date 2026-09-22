@@ -11,12 +11,12 @@ export default defineHandler(async (event) => {
   const locationId = getRouterParam(event, 'locationId')
   if (!organizationId || !locationId) return jsonResponse({ error: 'Site ID and location ID are required' }, { status: 400 })
   try {
-    const { db, session, site } = await requireLocationAccess(event, organizationId, locationId)
+    const { db, session, organization } = await requireLocationAccess(event, organizationId, locationId)
     const patch = await validateLocationReservationConfigPatch(await readRequiredBody<Record<string, unknown>>(event))
     const config = await upsertLocationReservationConfig(db, {
-      organizationId: site.organization_id, locationId, patch, actorId: session.user.id,
+      organizationId: organization.id, locationId, patch, actorId: session.user.id,
     })
-    const locale = await getSourceLocale(db, site.organization_id, organizationId)
+    const locale = await getSourceLocale(db, organization.id, organizationId)
     return jsonResponse({ success: true, config, summary: renderBookingPolicySummary(reservationPolicySummarySource(config), locale) })
   } catch (error) {
     rethrowHttpError(error)

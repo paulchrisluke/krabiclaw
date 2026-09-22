@@ -223,10 +223,10 @@ export async function getPublicCompliance(db: DbClient, organizationId: string):
            mp.slot
       FROM media_placements mp
       JOIN media_assets ma ON ma.id = mp.asset_id AND ma.status = 'active'
-     WHERE mp.organization_id = ? AND mp.owner_type = 'site' AND mp.owner_id = ?
+     WHERE mp.organization_id = ? AND mp.owner_type = 'organization' AND mp.owner_id = ?
        AND mp.slot = 'compliance_document' AND mp.status = 'active'
      ORDER BY mp.sort_order
-  `, [organizationId, organizationId])
+  `, [organizationId])
   return {
     entity_name: typeof row.entity_name === 'string' ? row.entity_name : null,
     dba_name: typeof row.dba_name === 'string' ? row.dba_name : null,

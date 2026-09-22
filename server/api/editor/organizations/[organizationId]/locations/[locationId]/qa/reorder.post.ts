@@ -27,7 +27,7 @@ export default defineHandler(async (event) => {
   const locationId = getRouterParam(event, 'locationId')
   if (!organizationId || !locationId) return jsonResponse({ error: 'Missing params' }, { status: 400 })
 
-  const { db, site } = await requireLocationAccess(event, organizationId, locationId)
+  const { db, organization } = await requireLocationAccess(event, organizationId, locationId)
 
   const body = await readBody(event)
   if (typeof body !== 'object' || body === null || Array.isArray(body)) {
@@ -40,7 +40,7 @@ export default defineHandler(async (event) => {
   }
 
   try {
-    const result = await reorderLocationQa(db, site.organization_id, organizationId, locationId, updates)
+    const result = await reorderLocationQa(db, organization.id, organizationId, locationId, updates)
     return jsonResponse(result)
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Q&A reorder failed'

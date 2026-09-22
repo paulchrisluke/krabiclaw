@@ -4,7 +4,7 @@ import type { H3Event } from 'nitro'
 import { queryAll, queryFirst, type DbClient } from '~/server/db'
 import { getOrganizationEntitlements } from '~/server/utils/billing-access'
 import { listLocationQa } from '~/server/utils/location-qa'
-import { requireLocationAccess, requireSiteAccess } from '~/server/utils/location-access'
+import { requireLocationAccess, requireOrganizationAccess } from '~/server/utils/location-access'
 import {
   assertLocationAccess,
   assertResourceAccess,
@@ -33,12 +33,12 @@ interface EditorLocationRow {
 }
 
 export async function loadDashboardEditorContext(event: H3Event, organizationId: string) {
-  const { env, db, site } = await requireSiteAccess(event, organizationId, 'context')
+  const { env, db, site } = await requireOrganizationAccess(event, organizationId, 'context')
   if (!site.vertical) throw new HTTPError({ statusCode: 500, statusMessage: 'Site vertical is not configured' })
 
   const principal = memberAccessPrincipal(site.membership, { env, organizationId, event })
-  // requireSiteAccess(event, organizationId, 'context') has already run
-  // assertSiteContextAccess with this exact principal (location-access.ts), so
+  // requireOrganizationAccess(event, organizationId, 'context') has already run
+  // assertOrganizationContextAccess with this exact principal (location-access.ts), so
   // asserting it again here only bought a second read of the same member row.
   const accessibleLocationIds = await listAccessibleLocationIds(db, principal)
   const [locationRows, entitlements] = await Promise.all([
@@ -112,7 +112,7 @@ export async function loadDashboardMedia(
   organizationId: string,
   filters: DashboardMediaFilters = {},
 ) {
-  const { env, db, site } = await requireSiteAccess(event, organizationId, 'context')
+  const { env, db, site } = await requireOrganizationAccess(event, organizationId, 'context')
   const principal = memberAccessPrincipal(site.membership, { env, organizationId, event })
   if (filters.id) {
     const asset = await getMediaAsset(db, filters.id, organizationId)

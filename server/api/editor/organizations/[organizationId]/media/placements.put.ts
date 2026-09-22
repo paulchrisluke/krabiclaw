@@ -1,6 +1,6 @@
 import { memberAccessPrincipal } from '~/server/utils/member-access'
 import { jsonResponse, readRequiredBody, rethrowHttpError } from '~/server/utils/api-response'
-import { requireSiteAccess } from '~/server/utils/location-access'
+import { requireOrganizationAccess } from '~/server/utils/location-access'
 import { parseMediaPlacementKey, setSingleMediaPlacement } from '~/server/utils/media-placement'
 import { isSingleMediaPlacement } from '~/shared/media-placement-contract'
 import { defineHandler } from 'nitro'
@@ -15,7 +15,7 @@ export default defineHandler(async (event) => {
   if (!organizationId) return jsonResponse({ error: 'Organization ID required' }, { status: 400 })
 
   try {
-    const { env, db, site } = await requireSiteAccess(event, organizationId)
+    const { env, db, organization } = await requireOrganizationAccess(event, organizationId)
     const body = await readRequiredBody<{ placement?: unknown; asset_id?: unknown }>(event)
     if (body.asset_id !== null && (typeof body.asset_id !== 'string' || !body.asset_id.trim())) {
       return jsonResponse({ error: 'asset_id must be a non-empty string or null' }, { status: 400 })
@@ -26,8 +26,8 @@ export default defineHandler(async (event) => {
     }
     const result = await setSingleMediaPlacement(db, {
       env,
-      organizationId: site.organization_id,
-      principal: memberAccessPrincipal(site.membership, { env, organizationId, event }),
+      organizationId: organization.id,
+      principal: memberAccessPrincipal(organization.membership, { env, organizationId, event }),
       placement,
       assetId: typeof body.asset_id === 'string' ? body.asset_id.trim() : null,
     })

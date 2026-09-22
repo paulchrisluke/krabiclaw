@@ -1,5 +1,5 @@
 import type { H3Event } from 'nitro'
-import { requireSiteAccess } from '~/server/utils/location-access'
+import { requireOrganizationAccess } from '~/server/utils/location-access'
 
 export async function requireTenantPageWriteAccess(event: H3Event, organizationId: string) {
   // Site-wide access, asserted once. This used to ask for context access and then
@@ -8,6 +8,6 @@ export async function requireTenantPageWriteAccess(event: H3Event, organizationI
   // team *or* any of its locations' teams, site-wide requires the site's team —
   // so anything the context check would refuse, this refuses too, with the same
   // 404.
-  const { env, db, site, session } = await requireSiteAccess(event, organizationId)
+  const { env, db, organization, session } = await requireOrganizationAccess(event, organizationId)
   return { env, db, site, userId: session.user.id }
 }

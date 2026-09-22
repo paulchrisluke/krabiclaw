@@ -159,7 +159,7 @@ export const storeGoogleAnalyticsConnection = async (
         '$.created_at', COALESCE(json_extract(integrations_json, '$.google.created_at'), ?)))
     WHERE id = ? AND organization_id = ?
       AND json_extract(integrations_json, '$.google.revision') IS ?
-  `, [connection.provider_account_email, payload, now, organizationId, organizationId, expected.revision])
+  `, [connection.provider_account_email, payload, now, organizationId, expected.revision])
   if (result.meta?.changes !== 1) throw new Error('Site ownership or google connection changed during authorization')
 
   return connectionId
@@ -197,7 +197,7 @@ export const getGoogleAnalyticsConnection = async (
        AND json_extract(integrations_json, '$.google.kind') = 'oauth'
        AND json_extract(integrations_json, '$.google.status') = 'active'
      LIMIT 1
-  `, [organizationId, organizationId])
+  `, [organizationId])
 
   if (!connection) {
     return null
@@ -216,7 +216,7 @@ export const getGoogleAnalyticsAccessToken = async (
   organizationId: string,
   organizationId: string
 ): Promise<string> => {
-  const connection = await getGoogleAnalyticsConnection(env, organizationId, organizationId)
+  const connection = await getGoogleAnalyticsConnection(env, organizationId)
   if (!connection) {
     throw new Error('No Google Analytics connection found for this site.')
   }

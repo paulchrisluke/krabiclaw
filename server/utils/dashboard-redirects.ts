@@ -20,7 +20,7 @@ export async function getDashboardSiteRouteContext(
     FROM organization
     WHERE organization_id = ? AND id = ?
     LIMIT 1
-  `, [organizationId, organizationId]),
+  `, [organizationId]),
   ])
 
   if (!organization || !site?.site_slug) return null

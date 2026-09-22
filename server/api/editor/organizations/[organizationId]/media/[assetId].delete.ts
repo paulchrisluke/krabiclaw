@@ -5,7 +5,7 @@ import { getAuthSession } from '~/server/utils/auth'
 import { deleteMediaAsset } from '~/server/utils/media-asset-manager'
 import { anonymizeId } from '~/server/utils/platform-telemetry'
 import { assertResourceAccess, memberAccessPrincipal } from '~/server/utils/member-access'
-import { loadMemberSiteRow } from '~/server/utils/location-access'
+import { loadMemberOrganizationRow } from '~/server/utils/location-access'
 import { queryFirst } from '~/server/db'
 
 interface MediaAssetSiteRow {
@@ -25,7 +25,7 @@ export default defineHandler(async (event) => {
   const session = await getAuthSession(event, env)
   if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
-  const site = await loadMemberSiteRow(event, db, env, organizationId, session.user.id)
+  const site = await loadMemberOrganizationRow(event, db, env, organizationId, session.user.id)
   if (!site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
 
   const asset = await queryFirst<MediaAssetSiteRow>(db, `SELECT id, organization_id, organization_id FROM media_assets WHERE id = ? LIMIT 1`, [assetId]

@@ -3,7 +3,7 @@ import { cloudflareEnv, jsonResponse, readStrictBody } from '~/server/utils/api-
 import { getAuthSession } from '~/server/utils/auth'
 import { PostValidationError, getPost, updatePost } from '~/server/utils/post-management'
 import { assertResourceAccess, memberAccessPrincipal } from '~/server/utils/member-access'
-import { loadMemberSiteRow } from '~/server/utils/location-access'
+import { loadMemberOrganizationRow } from '~/server/utils/location-access'
 
 
 
@@ -26,7 +26,7 @@ export default defineHandler(async (event) => {
     event: 'unknown', offer: 'unknown', call_to_action: 'unknown', alert_type: 'nullable-string',
   })
 
-  const site = await loadMemberSiteRow(event, db, env, organizationId, session.user.id)
+  const site = await loadMemberOrganizationRow(event, db, env, organizationId, session.user.id)
   if (!site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
 
   const existingPost = await getPost(db, site.organization_id, organizationId, postId)

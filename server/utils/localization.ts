@@ -761,7 +761,7 @@ export async function replaceResourceLocalizations(
   })
   const ids = parsed.map(item => item.resourceId)
   if (new Set(ids).size !== ids.length) localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', 'Resource IDs must be unique')
-  const canonical = await queryAll<{ id: string }>(db, canonicalResourceQuery(resourceType, 'all'), [input.organizationId, input.organizationId])
+  const canonical = await queryAll<{ id: string }>(db, canonicalResourceQuery(resourceType, 'all'), [input.organizationId])
   const found = new Set(canonical.map(row => row.id))
   const missing = ids.filter(id => !found.has(id))
   if (missing.length) localizationError(404, 'LOCALIZATION_NOT_FOUND', 'One or more canonical resources were not found', { resource_type: resourceType, resource_ids: missing })

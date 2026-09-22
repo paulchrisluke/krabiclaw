@@ -1,10 +1,10 @@
 import { jsonResponse } from '~/server/utils/api-response'
-import { requireSiteAccess } from '~/server/utils/location-access'
+import { requireOrganizationAccess } from '~/server/utils/location-access'
 
 export default defineHandler(async (event) => {
   const organizationId = getRouterParam(event, 'organizationId')
   if (!organizationId) return jsonResponse({ error: 'Organization ID required' }, { status: 400 })
-  const { db } = await requireSiteAccess(event, organizationId)
+  const { db } = await requireOrganizationAccess(event, organizationId)
   
   const scopes = await db.prepare(`
     SELECT DISTINCT scope_path AS page_path

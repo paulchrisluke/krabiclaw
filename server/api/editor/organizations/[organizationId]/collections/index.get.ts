@@ -1,5 +1,5 @@
 import { jsonResponse, rethrowHttpError } from '~/server/utils/api-response'
-import { requireSiteAccess } from '~/server/utils/location-access'
+import { requireOrganizationAccess } from '~/server/utils/location-access'
 import { listCollections } from '~/server/utils/product-management'
 import { defineHandler } from 'nitro'
 import { getQuery, getRouterParam } from 'nitro/h3'
@@ -8,13 +8,13 @@ export default defineHandler(async (event) => {
   const organizationId = getRouterParam(event, 'organizationId')
   if (!organizationId) return jsonResponse({ error: 'Site ID is required' }, { status: 400 })
   try {
-    const { db, site } = await requireSiteAccess(event, organizationId)
+    const { db, organization } = await requireOrganizationAccess(event, organizationId)
     const query = getQuery(event)
     // Omitting location_id lists every collection on the site; passing it —
     // including the empty string for site-wide — narrows to that scope. The
     // two are different questions, so neither stands in for the other.
     const locationId = query.location_id === undefined ? undefined : (String(query.location_id) || null)
-    const collections = await listCollections(db, { organizationId: site.organization_id, locationId })
+    const collections = await listCollections(db, { organizationId: organization.id, locationId })
     return jsonResponse({ success: true, collections })
   } catch (error) {
     rethrowHttpError(error)

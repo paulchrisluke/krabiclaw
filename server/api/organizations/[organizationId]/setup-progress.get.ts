@@ -2,8 +2,8 @@
 // Returns the ordered 10-step setup journey for the site overview card.
 import { cloudflareEnv, jsonResponse, rethrowHttpError } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
-import { assertSiteWideAccess, memberAccessPrincipal } from '~/server/utils/member-access'
-import { loadMemberSiteRow } from '~/server/utils/location-access'
+import { assertOrganizationWideAccess, memberAccessPrincipal } from '~/server/utils/member-access'
+import { loadMemberOrganizationRow } from '~/server/utils/location-access'
 import { queryFirst } from '~/server/db'
 
 export interface SetupStep {
@@ -45,12 +45,12 @@ export default defineHandler(async (event) => {
   }
 
   try {
-    const siteAccess = await loadMemberSiteRow(event, db, env, organizationId, session.user.id)
+    const siteAccess = await loadMemberOrganizationRow(event, db, env, organizationId, session.user.id)
     if (!siteAccess) {
       return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
     }
 
-    await assertSiteWideAccess(db, memberAccessPrincipal(siteAccess.membership, { env, organizationId, event }))
+    await assertOrganizationWideAccess(db, memberAccessPrincipal(siteAccess.membership, { env, organizationId, event }))
 
     const site = await queryFirst<{
       id: string
@@ -66,7 +66,7 @@ export default defineHandler(async (event) => {
       last_published_at: string | null
     }>(db, `
       SELECT s.id, s.organization_id, ? AS organization_slug, s.brand_name, s.brand_description,
-             EXISTS(SELECT 1 FROM media_placements mp JOIN media_assets ma ON ma.id = mp.asset_id AND ma.status = 'active' WHERE mp.owner_type = 'site' AND mp.owner_id = s.id AND mp.slot = 'logo' AND mp.status = 'active') AS has_logo,
+             EXISTS(SELECT 1 FROM media_placements mp JOIN media_assets ma ON ma.id = mp.asset_id AND ma.status = 'active' WHERE mp.owner_type = 'organization' AND mp.owner_id = s.id AND mp.slot = 'logo' AND mp.status = 'active') AS has_logo,
              s.contact_email, s.subdomain, (SELECT 'https://' || domain FROM organization_domains WHERE organization_id = s.id AND role = 'canonical' AND status = 'active') AS public_url, s.status, s.last_published_at
       FROM organization s
       WHERE s.id = ? AND s.organization_id = ?
