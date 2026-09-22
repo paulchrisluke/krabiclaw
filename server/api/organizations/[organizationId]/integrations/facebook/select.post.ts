@@ -51,5 +51,4 @@ export default defineHandler(async (event) => {
   return jsonResponse({ success: true, page_id: page.id, page_name: page.name })
 })
 import { defineHandler } from 'nitro';
-import { readBody } from 'nitro/h3';
-import { getRouterParam } from 'nitro/h3';
+import { getRouterParam, readBody } from 'nitro/h3';

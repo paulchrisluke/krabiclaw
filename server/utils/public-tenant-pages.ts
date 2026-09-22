@@ -34,7 +34,6 @@ export interface PublicTenantPage {
   seo_title: string | null
   seo_description: string | null
   canonical_url: string | null
-  robots: string | null
   page_type: string
   recipe: string | null
   sort_order: number
@@ -446,7 +445,6 @@ function mapPage(
     seo_title: page.seo_title,
     seo_description: page.seo_description,
     canonical_url: page.canonical_url,
-    robots: page.robots,
     page_type: page.page_type,
     recipe: page.recipe,
     sort_order: page.sort_order,

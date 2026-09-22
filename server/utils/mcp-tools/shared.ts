@@ -4,7 +4,6 @@ import { openingHoursSchema, specialHoursSchema } from '~/shared/reservation-hou
 import type { McpToolRole } from '~/server/utils/mcp-auth'
 import { SUPPORTED_CURRENCIES } from '~/shared/currencies'
 import { PUBLICATION_CONTENT_BLOCK_TYPES } from '~/shared/content-registries'
-import { ROBOTS_INTENTS } from '~/shared/robots-directive'
 import { RESERVATION_STATUSES } from '~/shared/bookings'
 
 export interface McpToolDefinition {
@@ -54,7 +53,6 @@ export const pageInfoObject = {
 
 // --- reusable schema fragments ---
 
-export const ROBOTS_DIRECTIVE_ENUM = [...ROBOTS_INTENTS]
 
 /** SEO override fields shared across location/Product/experience/site tools. */
 export function seoOverrideFieldsSchema() {
@@ -62,7 +60,6 @@ export function seoOverrideFieldsSchema() {
     seo_title: { type: ['string', 'null'], description: 'Optional SEO title override. Falls back to the computed default if unset.' },
     seo_description: { type: ['string', 'null'], description: 'Optional SEO meta description override. Falls back to the computed default if unset.' },
     canonical_url: { type: ['string', 'null'], description: 'Optional canonical URL override. Leave unset for the default self-referencing canonical.' },
-    robots: { type: ['string', 'null'], enum: [...ROBOTS_DIRECTIVE_ENUM, null], description: 'Search engine indexing directive. Leave unset for the default index,follow.' },
   }
 }
 
@@ -115,7 +112,6 @@ export const locationObject = {
     seo_title: { type: ['string', 'null'] },
     seo_description: { type: ['string', 'null'] },
     canonical_url: { type: ['string', 'null'] },
-    robots: { type: ['string', 'null'] },
     media: {
       type: 'array',
       items: {
@@ -307,7 +303,6 @@ export const blogPostObject = {
     seo_description: { type: ['string', 'null'] },
     seo_keywords: { type: ['string', 'null'] },
     canonical_url: { type: ['string', 'null'] },
-    robots: { type: ['string', 'null'] },
     published: { type: 'boolean' },
     published_at: { type: ['string', 'null'] },
     status: { type: 'string', enum: ['draft', 'published', 'scheduled'] },
@@ -349,7 +344,6 @@ export const blogPostSummaryObject = {
     seo_description: { type: ['string', 'null'] },
     seo_keywords: { type: ['string', 'null'] },
     canonical_url: { type: ['string', 'null'] },
-    robots: { type: ['string', 'null'] },
     published: { type: 'boolean' },
     published_at: { type: ['string', 'null'] },
     status: { type: 'string', enum: ['draft', 'published', 'scheduled'] },

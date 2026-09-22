@@ -43,5 +43,4 @@ export default defineHandler(async (event) => {
   }
 })
 import { defineHandler } from 'nitro';
-import { readBody } from 'nitro/h3';
-import { getRouterParam } from 'nitro/h3';
+import { getRouterParam, readBody } from 'nitro/h3';

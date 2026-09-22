@@ -49,7 +49,6 @@
 
 <script lang="ts">
 import type { InjectionKey, Ref } from 'vue'
-import { ROBOTS_INTENTS, ROBOTS_INTENT_LABELS } from '~/shared/robots-directive'
 import {
   isTenantPageListResponse,
   isTenantPageResponse,
@@ -66,8 +65,6 @@ export const SECTION_LABELS = {
   canonical: 'Canonical URL',
 } as const
 export type SectionKey = keyof typeof SECTION_LABELS
-
-export const ROBOTS_OPTIONS = ROBOTS_INTENTS.map(value => ({ label: ROBOTS_INTENT_LABELS[value], value }))
 
 /**
  * What a page's own leaves edit and how they commit. The draft itself is the
@@ -158,8 +155,7 @@ const sectionsSummary = computed(() => {
 })
 
 const searchSummary = computed(() => {
-  const robots = ROBOTS_INTENT_LABELS[draft.value.robots as keyof typeof ROBOTS_INTENT_LABELS]
-  return draft.value.seo_title.trim() || robots || 'Falls back to the page title'
+  return draft.value.seo_title.trim() || 'Falls back to the page title'
 })
 
 /**
@@ -365,7 +361,6 @@ async function savePageLocalization(locale: string, submitted: Record<string, un
     seoTitle: null,
     seoDescription: null,
     canonicalUrl: null,
-    robots: source.robots || null,
     pageType: source.page_type,
     recipe: source.recipe || null,
     sortOrder: source.sort_order,
