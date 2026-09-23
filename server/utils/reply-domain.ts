@@ -5,13 +5,11 @@ interface ReplyDomainEnv {
 export function getReplyDomain(env: ReplyDomainEnv): string {
   const rawPlatformDomain = env.NUXT_PUBLIC_PLATFORM_DOMAIN?.trim()
   if (!rawPlatformDomain) throw new Error('NUXT_PUBLIC_PLATFORM_DOMAIN is required')
-  let platformDomain = rawPlatformDomain.replace(/^https?:\/\//, '').replace(/\/$/, '')
-
-  try {
-    platformDomain = new URL(/^https?:\/\//i.test(rawPlatformDomain) ? rawPlatformDomain : `https://${rawPlatformDomain}`).hostname
-  } catch {
-    platformDomain = platformDomain.replace(/:\d+$/, '')
-  }
+  // This hostname becomes the reply-to address on outgoing mail, so a configured
+  // domain that will not parse is a misconfiguration to report, not something to
+  // approximate by stripping whatever looked like a port.
+  const platformDomainUrl = new URL(/^https?:\/\//i.test(rawPlatformDomain) ? rawPlatformDomain : `https://${rawPlatformDomain}`)
+  let platformDomain = platformDomainUrl.hostname
 
   if (!platformDomain) throw new Error('NUXT_PUBLIC_PLATFORM_DOMAIN is invalid')
 

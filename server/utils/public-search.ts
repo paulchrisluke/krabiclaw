@@ -481,14 +481,13 @@ interface WorkspaceOrganizationRow {
 
 const WORKSPACE_SITE_SQL = `JOIN organization s ON s.status = 'active' AND s.subdomain IS NOT NULL`
 
+// An absent column is an empty list; a stored value that will not parse is a
+// corrupt row, and reading both as [] dropped documents out of the index with
+// nothing anywhere saying they were missing.
 function parseStringList(value: string | null | undefined): string[] {
   if (!value) return []
-  try {
-    const parsed = JSON.parse(value) as unknown
-    return Array.isArray(parsed) ? parsed.filter((entry): entry is string => typeof entry === 'string') : []
-  } catch {
-    return []
-  }
+  const parsed = JSON.parse(value) as unknown
+  return Array.isArray(parsed) ? parsed.filter((entry): entry is string => typeof entry === 'string') : []
 }
 
 function joinWords(...parts: Array<string | null | undefined>) {
