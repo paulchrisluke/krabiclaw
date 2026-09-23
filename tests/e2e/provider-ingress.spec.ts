@@ -56,15 +56,24 @@ test('compact signed email reply persists once and rejects a changed address', a
   const name = `E5 ${randomUUID().slice(0, 12)}`
   const submitted = await fetchPhase('create contact', '/api/public/contact', {
     method: 'POST',
+    // The public routes resolve their tenant from the host, and this runs against
+    // the platform's, so the tenant is named rather than inferred.
+    headers: { 'x-preview-tenant': 'demo' },
     data: { name, email: 'paulchrisluke@gmail.com', message: 'Please confirm the continuity check.', subject: 'general' },
   })
   expect(submitted.status(), await submitted.text()).toBe(201)
   await test.step('authenticate owner and select organization', () => loginAs(request, baseURL!, 'user-e2e-demo-owner'), { timeout: 30_000 })
-  const listed = await fetchPhase('find contact thread', '/api/dashboard/organizations/org-demo/guest-threads', { params: { search: name } })
+  const listed = await fetchPhase('find contact thread', '/api/dashboard/organizations/org-demo/guest-threads', {})
   expect(listed.status(), await listed.text()).toBe(200)
-  const { threads } = await listed.json()
-  expect(threads).toHaveLength(1)
-  const detailUrl = `/api/dashboard/organizations/org-demo/guest-threads/${threads[0].id}`
+  const { threads } = await listed.json() as { threads: Array<{ id: string; guestName: string }> }
+  // This passed `search: name` and asserted the whole inbox held one thread. The
+  // route takes location_id, type, conversation_state, unread and occurrence and
+  // has never taken a search, so the filter was dropped and the assertion only
+  // held while org-demo happened to contain exactly one thread. It picks out the
+  // thread this test created, by the unique name it created it with.
+  const own = threads.filter(thread => thread.guestName === name)
+  expect(own, `no guest thread named ${name} in org-demo's ${threads.length} threads`).toHaveLength(1)
+  const detailUrl = `/api/dashboard/organizations/org-demo/guest-threads/${own[0]!.id}`
   const initialResponse = await fetchPhase('read initial entries', detailUrl, {})
   expect(initialResponse.status(), await initialResponse.text()).toBe(200)
   const { thread: initial } = await initialResponse.json()
