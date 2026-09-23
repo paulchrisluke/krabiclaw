@@ -270,7 +270,7 @@ export async function listAgenda(
       ${query.organizationId ? 'AND pub.organization_id = ?' : ''}
       ${query.locationId ? 'AND agenda_session.location_id = ?' : ''}
       AND agenda_session.starts_at BETWEEN ? AND ?
-  `, [new Date().toISOString(), ...params(), broadFrom, broadTo]))
+  `, [...params(), broadFrom, broadTo]))
   if (requestedKinds.has('post')) sourceQueries.push(queryAll(db, `${commonSelect('p', 'post', `CASE p.status WHEN 'published' THEN p.published_at WHEN 'scheduled' THEN p.scheduled_for END AS starts_at, NULL AS ends_at,
     NULLIF(COALESCE(NULLIF(p.title, ''), json_extract(p.metadata_json, '$.event.title')), '') AS title, json_extract(p.metadata_json, '$.post_type') AS subtitle, NULL AS party_size, p.status`, {
     resourceImage: `COALESCE(${mediaUrlSelect('p', 'content_document', 'p.id', ['cover'])}, ${locationMediaUrlSelect('p')}, ${siteMediaUrlSelect('p')})`,
