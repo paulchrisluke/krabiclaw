@@ -30,7 +30,7 @@ export const getConfig = async (
            json_extract(settings_json, '$.config.partnerships_email') AS partnerships_email,
            json_extract(settings_json, '$.config.catering_email') AS catering_email,
            json_extract(settings_json, '$.config.careers_email') AS careers_email,
-           CASE WHEN json_extract(integrations_json, '$.google.status') = 'active' THEN json_extract(integrations_json, '$.google.ga4_measurement_id') END AS google_analytics_measurement_id,
+           CASE WHEN json_extract(integrations_json, '$.google_analytics.status') = 'active' THEN json_extract(integrations_json, '$.google_analytics.measurement_id') END AS google_analytics_measurement_id,
            json_extract(settings_json, '$.config.google_site_verification') AS google_site_verification,
            json_extract(settings_json, '$.config.default_timezone') AS default_timezone,
            social_facebook_url AS social_facebook,
@@ -93,23 +93,34 @@ export const setConfig = async (
     return
   }
   if (key === 'google_analytics_measurement_id') {
-    const current = await queryFirst<{ kind: string | null; measurement_id: string | null; revision: string | null }>(db, `
-      SELECT json_extract(integrations_json, '$.google.kind') AS kind,
-             json_extract(integrations_json, '$.google.ga4_measurement_id') AS measurement_id,
-             json_extract(integrations_json, '$.google.revision') AS revision
+    // The credential and the product that uses it are separate keys now, so
+    // "connected through OAuth" is the presence of google_credential rather
+    // than a `kind` discriminator on one merged object.
+    const current = await queryFirst<{ connected: number; measurement_id: string | null; revision: string | null }>(db, `
+      SELECT json_type(integrations_json, '$.google_credential') IS NOT NULL AS connected,
+             json_extract(integrations_json, '$.google_analytics.measurement_id') AS measurement_id,
+             json_extract(integrations_json, '$.google_analytics.revision') AS revision
         FROM organization WHERE id = ?
     `, [organizationId])
-    if (!current) throw new HTTPError({ statusCode: 404, statusMessage: 'Site not found' })
-    if (current.kind === 'oauth') {
+    if (!current) throw new HTTPError({ statusCode: 404, statusMessage: 'Organization not found' })
+    if (current.connected) {
       if ((current.measurement_id ?? '') === value) return
       throw new HTTPError({ statusCode: 409, statusMessage: 'Disconnect Google Analytics before setting a manual measurement ID' })
     }
-    const result = await execute(db, `
-      UPDATE organization SET integrations_json = json_set(integrations_json, '$.google',
-        json_object('kind', 'manual', 'status', ?, 'ga4_measurement_id', ?, 'revision', ?,
-          'updated_at', strftime('%Y-%m-%dT%H:%M:%fZ', 'now')))
-      WHERE id = ? AND json_extract(integrations_json, '$.google.revision') IS ?
-    `, [value ? 'active' : 'disabled', value || null, crypto.randomUUID(), organizationId, current.revision])
+    // A key with no measurement id describes nothing, and the CHECK requires
+    // one, so clearing the id removes the key rather than nulling the field.
+    const result = value
+      ? await execute(db, `
+        UPDATE organization SET integrations_json = json_set(integrations_json, '$.google_analytics',
+          json_object('revision', ?, 'status', 'active', 'measurement_id', ?,
+            'created_at', COALESCE(json_extract(integrations_json, '$.google_analytics.created_at'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+            'updated_at', strftime('%Y-%m-%dT%H:%M:%fZ', 'now')))
+        WHERE id = ? AND json_extract(integrations_json, '$.google_analytics.revision') IS ?
+      `, [crypto.randomUUID(), value, organizationId, current.revision])
+      : await execute(db, `
+        UPDATE organization SET integrations_json = json_remove(integrations_json, '$.google_analytics')
+        WHERE id = ? AND json_extract(integrations_json, '$.google_analytics.revision') IS ?
+      `, [organizationId, current.revision])
     if (result.meta?.changes !== 1) throw new HTTPError({ statusCode: 409, statusMessage: 'Google Analytics settings changed. Reload before saving.' })
     return
   }

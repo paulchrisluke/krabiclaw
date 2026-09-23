@@ -353,20 +353,19 @@ export async function reconcileZarazAnalytics(
   db: D1Database,
 ): Promise<ZarazAnalyticsReconciliationResult> {
   const rows = await queryAll<ActiveTenantAnalyticsRow>(db, `
-    SELECT site.id AS organization_id,
-           json_extract(site.integrations_json, '$.google.ga4_measurement_id') AS ga4_measurement_id,
+    SELECT o.id AS organization_id,
+           json_extract(o.integrations_json, '$.google_analytics.measurement_id') AS ga4_measurement_id,
            domain.domain
-      FROM organization site
+      FROM organization o
       JOIN organization_domains domain
-        ON domain.organization_id = site.id
-       AND domain.organization_id = organization.id
-     WHERE site.status = 'active'
-       AND site.onboarding_status = 'active'
-       AND json_extract(site.integrations_json, '$.google.status') = 'active'
+        ON domain.organization_id = o.id
+     WHERE o.status = 'active'
+       AND o.onboarding_status = 'active'
+       AND json_extract(o.integrations_json, '$.google_analytics.status') = 'active'
        AND domain.status = 'active'
-       AND json_extract(site.integrations_json, '$.google.ga4_measurement_id') IS NOT NULL
-       AND json_extract(site.integrations_json, '$.google.ga4_measurement_id') <> ''
-     ORDER BY site.id, domain.domain
+       AND json_extract(o.integrations_json, '$.google_analytics.measurement_id') IS NOT NULL
+       AND json_extract(o.integrations_json, '$.google_analytics.measurement_id') <> ''
+     ORDER BY o.id, domain.domain
   `)
 
   const tenants = new Map<string, {

@@ -71,7 +71,7 @@ export default defineHandler(async (event) => {
     return jsonResponse({ error: 'Please choose a valid party size.' }, { status: 400 })
 
   const site = await queryFirst<{ id: string; name?: string | null; public_url?: string | null }>(
-    db, `SELECT id, name, (SELECT 'https://' || domain FROM organization_domains WHERE organization_id = site.id AND role = 'canonical' AND status = 'active') AS public_url FROM organization WHERE id = ? AND status = ? LIMIT 1`, [organizationId, 'active'], )
+    db, `SELECT id, name, (SELECT 'https://' || domain FROM organization_domains WHERE organization_id = organization.id AND role = 'canonical' AND status = 'active') AS public_url FROM organization WHERE id = ? AND status = ? LIMIT 1`, [organizationId, 'active'], )
   if (!site) return jsonResponse({ error: 'Site not found' }, { status: 404 })
   const siteBaseUrl = site.public_url?.trim().replace(/\/$/, '')
   if (!siteBaseUrl) return jsonResponse({ error: 'Site public URL is not configured' }, { status: 500 })

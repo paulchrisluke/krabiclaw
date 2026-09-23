@@ -30,7 +30,9 @@ test('organization settings and workspace patches preserve independent owners an
     assert.equal((await getConfig(db, 'org')).social_facebook, undefined)
     await setConfig(db, 'org', 'google_analytics_measurement_id', 'G-TEST')
     assert.equal((await getConfig(db, 'org')).google_analytics_measurement_id, 'G-TEST')
-    await db.prepare("UPDATE organization SET integrations_json=json_set(integrations_json,'$.google',json(?)) WHERE id='org'").bind(JSON.stringify({ kind: 'oauth', status: 'active', revision: 'v1', encrypted_access_token: 'private-canary', encrypted_refresh_token: 'private-canary-refresh', ga4_measurement_id: 'G-OAUTH' })).run()
+    // The credential and the product that uses it are separate keys: a manual
+    // measurement id is refused because google_credential is present.
+    await db.prepare("UPDATE organization SET integrations_json=json_patch(integrations_json,json(?)) WHERE id='org'").bind(JSON.stringify({ google_credential: {"revision": "v1", "status": "active", "provider_account_email": "owner@example.test", "encrypted_access_token": "private-canary", "encrypted_refresh_token": "private-canary-refresh", "scopes": "analytics.readonly", "created_at": "2026-01-01T00:00:00.000Z", "updated_at": "2026-01-01T00:00:00.000Z"}, google_analytics: {"revision": "v1", "status": "active", "measurement_id": "G-OAUTH", "created_at": "2026-01-01T00:00:00.000Z", "updated_at": "2026-01-01T00:00:00.000Z"} })).run()
     assert.equal(JSON.stringify(await getConfig(db, 'org')).includes('private-canary'), false)
     await assert.rejects(setConfig(db, 'org', 'google_analytics_measurement_id', 'G-OTHER'))
     await setConfig(db, 'org', 'google_analytics_measurement_id', 'G-OAUTH')

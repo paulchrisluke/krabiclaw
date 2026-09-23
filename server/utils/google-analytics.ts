@@ -173,18 +173,22 @@ export const storeGoogleAnalyticsConnection = async (
   const encryptedRefreshToken = await encryptSecret(connection.encrypted_refresh_token, tokenEnv)
 
   const { organization_id: organizationId, ...providerState } = connection
+  // The credential is its own key: the products that use it (google_analytics,
+  // google_search_console) are written by the property picker, not here.
+  const { ga4_property_id: _p, ga4_property_name: _n, ga4_measurement_id: _m,
+    search_console_site_url: _s, ...credentialState } = providerState as Record<string, unknown>
   const payload = JSON.stringify({
-    ...providerState, id: connectionId, kind: 'oauth', revision: crypto.randomUUID(),
+    ...credentialState, id: connectionId, revision: crypto.randomUUID(),
     encrypted_access_token: encryptedAccessToken,
     encrypted_refresh_token: encryptedRefreshToken, updated_at: now,
   })
   const result = await execute(env.DB, `
-    UPDATE organization SET integrations_json = json_set(integrations_json, '$.google',
-      json_set(json_patch(CASE WHEN json_extract(integrations_json, '$.google.kind') = 'oauth' AND json_extract(integrations_json, '$.google.provider_account_email') = ?
-                             THEN json_extract(integrations_json, '$.google') ELSE '{}' END, json(?)),
-        '$.created_at', COALESCE(json_extract(integrations_json, '$.google.created_at'), ?)))
+    UPDATE organization SET integrations_json = json_set(integrations_json, '$.google_credential',
+      json_set(json_patch(CASE WHEN json_extract(integrations_json, '$.google_credential.provider_account_email') = ?
+                             THEN json_extract(integrations_json, '$.google_credential') ELSE '{}' END, json(?)),
+        '$.created_at', COALESCE(json_extract(integrations_json, '$.google_credential.created_at'), ?)))
     WHERE id = ?
-      AND json_extract(integrations_json, '$.google.revision') IS ?
+      AND json_extract(integrations_json, '$.google_credential.revision') IS ?
   `, [connection.provider_account_email, payload, now, organizationId, expected.revision])
   if (result.meta?.changes !== 1) throw new Error('The google connection changed during authorization')
 
@@ -202,24 +206,23 @@ export const getGoogleAnalyticsConnection = async (
 
   const connection = await queryFirst<GoogleAnalyticsConnection>(env.DB, `
     SELECT id AS organization_id,
-           json_extract(integrations_json, '$.google.id') AS id,
-           json_extract(integrations_json, '$.google.revision') AS revision,
-           json_extract(integrations_json, '$.google.connected_by_user_id') AS connected_by_user_id,
-           json_extract(integrations_json, '$.google.provider_account_email') AS provider_account_email,
-           json_extract(integrations_json, '$.google.encrypted_access_token') AS encrypted_access_token,
-           json_extract(integrations_json, '$.google.encrypted_refresh_token') AS encrypted_refresh_token,
-           json_extract(integrations_json, '$.google.scopes') AS scopes,
-           json_extract(integrations_json, '$.google.ga4_property_id') AS ga4_property_id,
-           json_extract(integrations_json, '$.google.ga4_property_name') AS ga4_property_name,
-           json_extract(integrations_json, '$.google.ga4_measurement_id') AS ga4_measurement_id,
-           json_extract(integrations_json, '$.google.search_console_site_url') AS search_console_site_url,
-           json_extract(integrations_json, '$.google.status') AS status,
-           json_extract(integrations_json, '$.google.expires_at') AS expires_at,
-           json_extract(integrations_json, '$.google.created_at') AS created_at,
-           json_extract(integrations_json, '$.google.updated_at') AS updated_at
+           json_extract(integrations_json, '$.google_credential.id') AS id,
+           json_extract(integrations_json, '$.google_credential.revision') AS revision,
+           json_extract(integrations_json, '$.google_credential.connected_by_user_id') AS connected_by_user_id,
+           json_extract(integrations_json, '$.google_credential.provider_account_email') AS provider_account_email,
+           json_extract(integrations_json, '$.google_credential.encrypted_access_token') AS encrypted_access_token,
+           json_extract(integrations_json, '$.google_credential.encrypted_refresh_token') AS encrypted_refresh_token,
+           json_extract(integrations_json, '$.google_credential.scopes') AS scopes,
+           json_extract(integrations_json, '$.google_analytics.property_id') AS ga4_property_id,
+           json_extract(integrations_json, '$.google_analytics.property_name') AS ga4_property_name,
+           json_extract(integrations_json, '$.google_analytics.measurement_id') AS ga4_measurement_id,
+           json_extract(integrations_json, '$.google_search_console.site_url') AS search_console_site_url,
+           json_extract(integrations_json, '$.google_credential.status') AS status,
+           json_extract(integrations_json, '$.google_credential.expires_at') AS expires_at,
+           json_extract(integrations_json, '$.google_credential.created_at') AS created_at,
+           json_extract(integrations_json, '$.google_credential.updated_at') AS updated_at
       FROM organization WHERE id = ?
-       AND json_extract(integrations_json, '$.google.kind') = 'oauth'
-       AND json_extract(integrations_json, '$.google.status') = 'active'
+       AND json_extract(integrations_json, '$.google_credential.status') = 'active'
      LIMIT 1
   `, [organizationId])
 

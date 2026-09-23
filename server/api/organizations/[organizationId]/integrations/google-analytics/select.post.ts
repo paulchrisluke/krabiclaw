@@ -41,16 +41,27 @@ export default defineHandler(async (event) => {
       measurementId = await getGa4MeasurementId(accessToken, ga4PropertyId)
     }
 
+    // Each Google product the credential serves is its own key, so the picker
+    // writes two objects rather than four fields on one. The guard stays on the
+    // credential's revision: that is what the connection is.
+    const now = new Date().toISOString()
+    const revision = crypto.randomUUID()
     const result = await execute(db, `
-      UPDATE organization SET integrations_json = json_set(integrations_json,
-        '$.google.ga4_property_id', ?, '$.google.ga4_property_name', ?,
-        '$.google.ga4_measurement_id', ?, '$.google.search_console_site_url', ?,
-        '$.google.updated_at', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), '$.google.revision', ?)
-      WHERE id = ? AND organization_id = ?
-        AND json_extract(integrations_json, '$.google.kind') = 'oauth'
-        AND json_extract(integrations_json, '$.google.revision') IS ?
-    `, [ga4PropertyId, ga4PropertyName, measurementId, searchConsoleSiteUrl, crypto.randomUUID(),
-      organization.id, organization.id, connection.revision])
+      UPDATE organization SET integrations_json = json_set(
+        CASE WHEN ? IS NULL THEN json_remove(integrations_json, '$.google_search_console')
+             ELSE json_set(integrations_json, '$.google_search_console',
+               json_object('revision', ?, 'site_url', ?, 'verified', json('true'), 'status', 'active',
+                 'created_at', COALESCE(json_extract(integrations_json, '$.google_search_console.created_at'), ?),
+                 'updated_at', ?)) END,
+        '$.google_analytics', json_object('revision', ?, 'status', 'active',
+          'property_id', ?, 'property_name', ?, 'measurement_id', ?,
+          'created_at', COALESCE(json_extract(integrations_json, '$.google_analytics.created_at'), ?),
+          'updated_at', ?))
+      WHERE id = ?
+        AND json_extract(integrations_json, '$.google_credential.revision') IS ?
+    `, [searchConsoleSiteUrl, revision, searchConsoleSiteUrl, now, now,
+      revision, ga4PropertyId, ga4PropertyName, measurementId, now, now,
+      organization.id, connection.revision])
     if (result.meta?.changes !== 1) {
       return jsonResponse({ error: 'Google Analytics connection changed. Reload before selecting a property.' }, { status: 409 })
     }
