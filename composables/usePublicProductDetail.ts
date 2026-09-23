@@ -55,7 +55,8 @@ function isPublicProductDetailPayload(value: unknown): value is PublicProductDet
       && typeof session.ends_at === 'string'
       && typeof session.timezone === 'string'
       && (session.remaining === null || typeof session.remaining === 'number')
-      && typeof session.is_full === 'boolean')
+      && typeof session.is_full === 'boolean'
+      && typeof session.created_at === 'string')
     && Array.isArray(value.reviews)
     && value.reviews.every(review => isRecord(review)
       && typeof review.id === 'string'

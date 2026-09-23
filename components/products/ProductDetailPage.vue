@@ -843,10 +843,11 @@ const schemaPlace = computed(() => ({
 /**
  * The seat on one occurrence, priced the way the page prices it.
  *
- * `validThrough` is the session's own start: a seat can be claimed until the
- * class begins and not after. There is no `validFrom` because nothing records
- * when a session went on sale — it is bookable from the moment the row exists,
- * which is not a date this page holds.
+ * A seat is on sale from the moment its occurrence exists — `created_at` on the
+ * session row — until the class begins. Both ends are recorded facts, so the
+ * markup states the window rather than the instant the page happened to render:
+ * a `new Date()` here would differ between the server and the hydrated client
+ * and change on every request.
  */
 function sessionOffer(session: PublicProductSession) {
   const price = offer.value
@@ -858,6 +859,7 @@ function sessionOffer(session: PublicProductSession) {
     availability: isAvailable.value && !session.is_full
       ? 'https://schema.org/InStock'
       : 'https://schema.org/SoldOut',
+    validFrom: session.created_at,
     validThrough: session.starts_at,
     url: canonicalProductUrl.value,
   }

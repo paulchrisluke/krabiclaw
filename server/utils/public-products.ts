@@ -77,6 +77,8 @@ export interface PublicProductSession {
   timezone: string
   remaining: number | null
   is_full: boolean
+  /** When this occurrence was scheduled, and so when its seats went on sale. */
+  created_at: string
 }
 
 export interface PublicProductDetail extends PublicProductCollection {
@@ -384,6 +386,7 @@ export async function loadPublicProductSessions(
       timezone: session.timezone,
       remaining: session.remaining,
       is_full: session.is_full,
+      created_at: session.created_at,
     }))
 }
 
