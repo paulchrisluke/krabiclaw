@@ -628,12 +628,7 @@ async function persistCloudflareState(
 
   const after = await queryFirst<DomainRecord>(db, `SELECT * FROM organization_domains WHERE id = ?`, [domainId]) as DomainRecord
 
-  if (before.status !== after.status && (before.status === 'active' || after.status === 'active')) {
-    // Reconciliation rewrites the analytics configuration this domain change
-    // invalidates. Swallowing it left the tenant's tracking pointing at the
-    // domain they had just stopped using, with the change reported as applied.
-    await (await import('~/server/utils/zaraz-analytics')).reconcileZarazAnalytics(env, db)
-  }
+  const zarazNeedsReconcile = before.status !== after.status && (before.status === 'active' || after.status === 'active')
 
   if (!before || before.status !== after.status || before.cloudflare_ssl_status !== after.cloudflare_ssl_status) {
     await logDomainEvent(db, {
@@ -664,9 +659,22 @@ async function persistCloudflareState(
   // organization_domains rows for this site — callers still inserting other domain
   // rows for the same batch (createCustomDomainPair) must defer this until
   // after those inserts are done, so the candidate rows already exist.
-  if (options.skipPromotion) return after
-  if (after.status === 'active') await promoteCanonicalIfReady(db, after.organization_id)
-  else await queueReconciliation(db, domainId, after.next_check_at || undefined)
+  if (!options.skipPromotion) {
+    if (after.status === 'active') await promoteCanonicalIfReady(db, after.organization_id)
+    else await queueReconciliation(db, domainId, after.next_check_at || undefined)
+  }
+
+  // Last, and deliberately so. Reconciliation rewrites the analytics configuration
+  // this domain change invalidates, and a failure is raised rather than swallowed —
+  // but the status transition committed in the batch above, and every step between
+  // there and here is derived from it and runs exactly once. Raising before them
+  // stranded the domain: the next reconcile reads before.status === after.status
+  // and reruns none of it, an active domain has next_check_at NULL so nothing
+  // reschedules, and inside createCustomDomainPair the throw reached a cleanup
+  // that deleted the hostnames just provisioned.
+  if (zarazNeedsReconcile) {
+    await (await import('~/server/utils/zaraz-analytics')).reconcileZarazAnalytics(env, db)
+  }
 
   return after
 }
@@ -929,9 +937,6 @@ export async function deleteCustomDomain(
   `, [now, domainId, token])
   if (deleted.meta?.changes !== 1) throw new Error('Domain deletion was superseded')
 
-  if (domain.status === 'active') {
-    await (await import('~/server/utils/zaraz-analytics')).reconcileZarazAnalytics(env, db)
-  }
   await logDomainEvent(db, {
     organizationId: domain.organization_id,
     domainId,
@@ -941,6 +946,14 @@ export async function deleteCustomDomain(
     message: `${domain.domain} deleted`,
   })
   await promoteCanonicalIfReady(db, domain.organization_id)
+
+  // Same ordering as reconcileDomain, for the same reason: the row is already
+  // 'deleted', so a second call answers "Domain not found" and never reaches
+  // here again. Raising before the promotion left the site with no canonical
+  // domain at all, which is worse than the analytics it was protecting.
+  if (domain.status === 'active') {
+    await (await import('~/server/utils/zaraz-analytics')).reconcileZarazAnalytics(env, db)
+  }
 }
 
 // Releases the Cloudflare custom hostnames behind a set of organization_domains rows.
