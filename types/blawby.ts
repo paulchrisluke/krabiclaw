@@ -22,6 +22,26 @@ export function blawbyShieldVariant(path: string): BlawbyShieldVariant {
   return SHIELDS[path] ?? 'about'
 }
 
+/**
+ * A heading cut into the part before its emphasised phrase, the phrase, and the
+ * part after — so the phrase can carry colour where it actually sits rather
+ * than being repeated at the end. The hero and every section heading ask the
+ * same question of their own title, and they answered it twice: the section
+ * heading appended the accent instead of cutting it out, which is why the
+ * practice-area FAQ heading read "Frequently asked questions questions".
+ *
+ * A title that does not contain the phrase keeps no accent, so a heading in a
+ * locale the phrase was never translated into reads whole rather than gaining a
+ * stray English word.
+ */
+export function blawbySplitAccent(title: string, accent?: string | null): { before: string; accent: string; after: string } {
+  const phrase = accent ?? ''
+  const index = phrase ? title.indexOf(phrase) : -1
+  return index >= 0
+    ? { before: title.slice(0, index), accent: phrase, after: title.slice(index + phrase.length) }
+    : { before: title, accent: '', after: '' }
+}
+
 
 export interface PublicBlawbyPageLink {
   id: string

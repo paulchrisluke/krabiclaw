@@ -102,7 +102,7 @@
 import type { PublicTenantPage } from '~/server/utils/public-tenant-pages'
 import type { TenantPageBlock } from '~/utils/tenant-page-blocks'
 import { blockText, blockTextOrNull, blockMedia } from '~/utils/tenant-page-block-data'
-import { blawbyShieldVariant, type BlawbyShieldVariant } from '~/types/blawby'
+import { blawbyShieldVariant, blawbySplitAccent, type BlawbyShieldVariant } from '~/types/blawby'
 
 const props = defineProps<{ block: TenantPageBlock; page: PublicTenantPage }>()
 const { localePath } = useI18n()
@@ -136,18 +136,8 @@ const ctaUrl = computed(() => {
   return url && url.startsWith('/') ? localePath(url) : url
 })
 
-/**
- * The heading with its accent phrase cut out, so the phrase can carry colour.
- * `accent` is the phrase the firm chose to emphasise.
- */
-const splitTitle = computed(() => {
-  const full = title.value
-  const accent = blockText(props.block.data.accent)
-  const index = accent ? full.indexOf(accent) : -1
-  return index >= 0
-    ? { before: full.slice(0, index), accent, after: full.slice(index + accent.length) }
-    : { before: full, accent: '', after: '' }
-})
+/** The heading with the phrase the firm chose to emphasise cut out of it. */
+const splitTitle = computed(() => blawbySplitAccent(title.value, blockText(props.block.data.accent)))
 
 const backgroundClass = computed(() => {
   if (variant.value === 'schedule') return 'bg-[var(--blawby-primary-800)] [&_h1]:text-white [&_p]:text-gray-200'

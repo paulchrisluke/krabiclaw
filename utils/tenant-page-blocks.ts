@@ -294,6 +294,12 @@ export const TENANT_PAGE_BLOCK_REGISTRY: Record<TenantPageBlockType, TenantPageB
     },
     items: { kind: 'list', label: 'Items', section: 'items', of: GRID_ITEM_FIELDS, availableWhen: { field: 'source', equals: ['manual'] } },
     calculator: { kind: 'calculator', label: 'Calculator', translatable: false, section: 'calculator', availableWhen: { field: 'source', equals: ['calculator'] } },
+    // The one button a practice area's feature list carries over its picture.
+    // Declared here so the firm writes its words and its destination, the way
+    // every other button on a page is written, rather than a template holding
+    // an English label and a route no one can change.
+    cta_label: text('Button label', { section: 'button', pairedWith: 'cta_url' }),
+    cta_url: link('Button URL', { section: 'button', pairedWith: 'cta_label' }),
   }),
 
   // A comparison is one editorial thing — this without us, this with us — held
