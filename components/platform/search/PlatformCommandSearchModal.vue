@@ -370,7 +370,6 @@ async function runSearch() {
         q: normalized,
         surface: props.surface,
         orgSlug: typeof route.params.orgSlug === 'string' ? route.params.orgSlug : '',
-        siteSlug: typeof route.params.siteSlug === 'string' ? route.params.siteSlug : '',
         locationSlug: typeof route.params.locationSlug === 'string' ? route.params.locationSlug : '',
       },
     })

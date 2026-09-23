@@ -38,7 +38,7 @@ export default defineHandler(async (event) => {
 
     await notifyDomainLifecycle(env, db, {
       organizationId: organization.id, domain: domain.domain, status: domain.status, title: `Domain synced: ${domain.domain}`, message: `${domain.domain} is now ${domain.status}.`, dashboardUrl: buildDashboardUrl({
-        env, organizationId: organization.id, organizationSlug: organization.slug, subdomain: organization.subdomain, }, 'site.domains')
+        env, organizationId: organization.id, organizationSlug: organization.slug }, 'organization.domains')
     })
     return jsonResponse({ success: true, domain: { ...domain, instructions: domainInstructions(domain) } })
   } catch (error) {

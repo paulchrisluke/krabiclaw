@@ -48,7 +48,7 @@ export default defineHandler(async (event) => {
     })
 
     const dashboardUrl = buildDashboardUrl({
-      env, organizationId: organization.id, organizationSlug: organization.slug, subdomain: organization.subdomain, }, 'site.domains')
+      env, organizationId: organization.id, organizationSlug: organization.slug }, 'organization.domains')
     for (const domain of domains) {
       await notifyDomainLifecycle(env, db, {
         organizationId: organization.id, domain: domain.domain, status: domain.status, title: `Domain added: ${domain.domain}`, message: `DNS configuration is required for ${domain.domain}. Follow the dashboard instructions to complete setup.`, dashboardUrl

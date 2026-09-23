@@ -369,12 +369,10 @@ watch([threads, openThreadId], ([rows, open]) => {
   emit('first', first ? { path: threadRoute(first), query: route.query } : null)
 }, { immediate: true })
 
-// A thread belongs to a site, and every read and mutation for one is
-// site-scoped, so the organization index re-roots into the owning site's
-// messages. Within a site or location the thread opens beside this list.
+// One inbox per organization: a thread opens there whichever location it
+// belongs to. Within a location the thread opens beside this list.
 function threadRoute(thread: ThreadListItem) {
   if (!isOrganizationScope.value) return `${listRoute.value}/${encodeURIComponent(thread.id)}`
-  if (!thread.siteSlug) throw createError({ statusCode: 500, statusMessage: 'Thread site route is unavailable' })
   const orgSlug = encodeURIComponent(String(route.params.orgSlug))
   return `/dashboard/${orgSlug}/messages/${encodeURIComponent(thread.id)}`
 }

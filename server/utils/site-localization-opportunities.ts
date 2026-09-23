@@ -93,12 +93,12 @@ export async function getSiteLocalizationProgress(
   const params = [input.locale, input.organizationId]
   const [site, locations, catalog, collections, posts, blog, qa, media, links, pages] = await Promise.all([
     queryAll<LocalizableRow>(db, `SELECT s.id, s.name, s.brand_description, rl.values_json
-      FROM organization s LEFT JOIN resource_localizations rl ON rl.resource_type = 'site' AND rl.resource_id = s.id AND rl.locale = ?
-        AND rl.organization_id = s.organization_id AND rl.organization_id = s.id
-      WHERE s.organization_id = ? AND s.id = ?`, params),
+      FROM organization s LEFT JOIN resource_localizations rl ON rl.resource_type = 'organization' AND rl.resource_id = s.id AND rl.locale = ?
+        AND rl.organization_id = s.id
+      WHERE s.id = ?`, params),
     queryAll<LocalizableRow>(db, `SELECT l.id, l.slug AS location_slug, l.title, l.address, l.description, l.short_description, rl.values_json
       FROM business_locations l LEFT JOIN resource_localizations rl ON rl.resource_type = 'business_location' AND rl.resource_id = l.id AND rl.locale = ?
-        AND rl.organization_id = l.organization_id AND rl.organization_id = l.organization_id
+        AND rl.organization_id = l.organization_id
       WHERE l.organization_id = ? AND l.status = 'active' ORDER BY l.id`, params),
     // One catalog, one row per product. There is no separate experience query
     // and no category query: an experience is a product, and a collection is a

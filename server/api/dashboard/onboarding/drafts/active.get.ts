@@ -38,7 +38,7 @@ export default defineHandler(async (event) => {
   const site = row.organization_id && row.subdomain_candidate
     ? await queryFirst<{ id: string; subdomain: string | null }>(db, `
         SELECT id, subdomain FROM organization
-        WHERE organization_id = ? AND subdomain = ? AND onboarding_status = 'pending'
+        WHERE id = ? AND subdomain = ? AND onboarding_status = 'pending'
         LIMIT 1
       `, [row.organization_id, row.subdomain_candidate])
     : null

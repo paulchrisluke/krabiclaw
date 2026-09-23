@@ -78,7 +78,6 @@ const route = useRoute()
 const config = useRuntimeConfig()
 
 const orgSlug = route.params.orgSlug as string
-const siteSlug = route.params.siteSlug as string
 
 const dashboard = useDashboardOrganization()
 const siteData = computed(() => dashboard.organization.value as ApiRecord | null)

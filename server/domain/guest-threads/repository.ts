@@ -168,7 +168,6 @@ type GuestThreadListRow = GuestThreadRow & {
   guest_name: string
   location_title: string | null
   site_name?: string | null
-  site_slug?: string | null
   latest_message_body: string | null
   latest_message_kind: 'message' | null
   source_preview: string | null
@@ -365,7 +364,6 @@ export async function listOrganizationGuestThreads(
       ${SOURCE_GUEST_NAME_SQL} AS guest_name,
       bl.title AS location_title,
       s.name AS site_name,
-      s.subdomain AS site_slug,
       (
         SELECT body FROM activity_entries
         WHERE request_id = gt.id AND kind = 'message'
@@ -395,8 +393,6 @@ export async function listOrganizationGuestThreads(
   const items: GuestThreadListItemViewModel[] = []
   for (const row of rows ?? []) {
     const unread = unreadIds.has(row.id)
-    const siteSlug = row.site_slug?.trim()
-    if (!siteSlug) throw new Error(`Guest thread ${row.id} belongs to a site without a subdomain`)
     const contextLabel = row.site_name && row.location_title
       ? `${row.site_name} · ${row.location_title}`
       : row.site_name || row.location_title || ''
@@ -404,7 +400,6 @@ export async function listOrganizationGuestThreads(
     items.push({
       id: row.id,
       organizationId: row.organization_id,
-      siteSlug,
       guestName: row.guest_name,
       submissionType: row.kind,
       contextLabel,

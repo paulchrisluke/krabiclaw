@@ -490,7 +490,7 @@ function formatDateTime(value: string) {
   return formatTimestamp(value, 'en', 'UTC') + ' UTC'
 }
 
-watch(() => route.params.siteSlug, () => {
+watch(() => route.params.orgSlug, () => {
   expandedGroups.value = {}
   void loadDomains()
 })

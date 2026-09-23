@@ -31,11 +31,11 @@ const level = useRouteLevel()
 /**
  * The links page is a page in this list but a level of its own beside Pages,
  * so its row is resolved from the route it is rather than by assembling the
- * site's path a second time.
+ * organization's path a second time.
  */
 const linksPath = computed(() => router.resolve({
   name: 'dashboard-orgSlug-links',
-  params: { orgSlug: route.params.orgSlug, siteSlug: route.params.siteSlug },
+  params: { orgSlug: route.params.orgSlug },
 }).path)
 
 const { data, pending, error, refresh } = await useAsyncData(

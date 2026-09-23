@@ -59,12 +59,11 @@ export function appendPublicShellQueries(
                 LEFT JOIN media_assets social_ma ON social_mp.asset_id = social_ma.id
                   AND social_ma.status = 'active'
                   AND social_ma.organization_id = bl.organization_id
-                  AND social_ma.organization_id = bl.organization_id
                WHERE bl.organization_id = ?  AND bl.status = 'active'
                ORDER BY bl.title ASC`, [organizationId]),
     config: push(`SELECT setting.key, setting.value
                 FROM organization s, json_each(s.settings_json, '$.config') setting
-               WHERE s.organization_id = ? AND s.id = ?
+               WHERE s.id = ?
                  AND setting.key IN ('brand_color', 'font_preset', 'press_email', 'partnerships_email', 'catering_email', 'careers_email', 'google_site_verification', 'default_timezone')
               `, [organizationId]),
     locales: push(`SELECT locale, label, is_source, status

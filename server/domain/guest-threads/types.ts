@@ -89,7 +89,6 @@ export interface ThreadDetailSourceModel {
 export interface GuestThreadListItemViewModel {
   id: string
   organizationId?: string
-  siteSlug?: string | null
   guestName: string
   submissionType: GuestThreadSubmissionType
   contextLabel: string
