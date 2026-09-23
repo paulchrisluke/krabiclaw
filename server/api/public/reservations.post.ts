@@ -172,14 +172,8 @@ export default defineHandler(async (event) => {
     }),
   ])
 
-  try {
-    await notifyReservationCreated(env, db, {
-      organizationId: site.id, siteName: site.name, locationId: resolvedLocationId, locationName: location.title, reservationId: id, guestName: name, email, phone, date, time, guests, requests, cancelUrl, contactPhone, contactEmail, ownerInboxUrl, })
-  } catch (error) {
-    console.error('reservation_notification_failed', {
-      organizationId: site.id, reservationId: id, error: error instanceof Error ? error.message : String(error)
-    })
-  }
+  await notifyReservationCreated(env, db, {
+    organizationId: site.id, siteName: site.name, locationId: resolvedLocationId, locationName: location.title, reservationId: id, guestName: name, email, phone, date, time, guests, requests, cancelUrl, contactPhone, contactEmail, ownerInboxUrl, })
 
   const requestedLocale = cleanString(body.locale, 10)
   const [policy, locale] = await Promise.all([

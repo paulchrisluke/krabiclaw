@@ -47,7 +47,7 @@ export async function sendReviewRequestForBooking(
   const optOutUrl = `${reviewUrl}&optOut=1`
 
   try {
-    const sent = await notifyReviewRequest(env, db, {
+    await notifyReviewRequest(env, db, {
       organizationId: context.organization_id,
       siteName: context.site_name,
       locationId: context.location_id,
@@ -64,11 +64,6 @@ export async function sendReviewRequestForBooking(
       reviewUrl,
       optOutUrl,
     })
-    if (!sent) {
-      await markReviewRequestSendFailure(db, request.id, new Error('Email delivery failed'))
-      return { sent: false, requestId: request.id, error: 'Email delivery failed' }
-    }
-
     await markReviewRequestSendSuccess(db, request.id, kind)
     return { sent: true, requestId: request.id }
   } catch (error) {

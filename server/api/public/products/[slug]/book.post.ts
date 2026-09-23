@@ -174,23 +174,19 @@ export default defineHandler(async (event) => {
   // One instant, one zone: the message the guest reads and the record the
   // host sees are formatted from the same session row.
   const whenLabel = new Intl.DateTimeFormat('en-US', { timeZone: session.timezone, dateStyle: 'medium', timeStyle: 'short' }).format(new Date(session.starts_at))
-  try {
-    const [{ contactPhone, contactEmail }, ownerInboxUrl] = await Promise.all([
-      resolveLocationContact(db, organizationId, session.location_id),
-      buildOwnerThreadInboxUrl(env, db, { organizationId: site.id, locationId: session.location_id ?? undefined, threadId }),
-    ])
-    const siteBaseUrl = site.public_url?.replace(/\/$/, '')
-    const cancelUrl = siteBaseUrl ? `${siteBaseUrl}/bookings/cancel?id=${threadId}#${cancellation.token}` : null
-    await notifyBookingCreated(env, db, {
-      organizationId: site.id, siteName: site.name, locationId: session.location_id,
-      bookingId: threadId, guestName, email: guestEmail, guestPhone: normalizedGuestPhone,
-      productId: product.id, productTitle: product.name, startsAt: session.starts_at, timezone: session.timezone,
-      partySize, notes: notes || null,
-      cancelUrl, contactPhone, contactEmail, ownerInboxUrl,
-    })
-  } catch (error) {
-    console.error('booking_notification_failed', { organizationId: site.id, threadId, error: error instanceof Error ? error.message : String(error) })
-  }
+  const [{ contactPhone, contactEmail }, ownerInboxUrl] = await Promise.all([
+    resolveLocationContact(db, organizationId, session.location_id),
+    buildOwnerThreadInboxUrl(env, db, { organizationId: site.id, locationId: session.location_id ?? undefined, threadId }),
+  ])
+  const siteBaseUrl = site.public_url?.replace(/\/$/, '')
+  const cancelUrl = siteBaseUrl ? `${siteBaseUrl}/bookings/cancel?id=${threadId}#${cancellation.token}` : null
+  await notifyBookingCreated(env, db, {
+    organizationId: site.id, siteName: site.name, locationId: session.location_id,
+    bookingId: threadId, guestName, email: guestEmail, guestPhone: normalizedGuestPhone,
+    productId: product.id, productTitle: product.name, startsAt: session.starts_at, timezone: session.timezone,
+    partySize, notes: notes || null,
+    cancelUrl, contactPhone, contactEmail, ownerInboxUrl,
+  })
 
   const requestedLocale = cleanString(body.locale, 10)
   const [full, locale] = await Promise.all([

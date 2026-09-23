@@ -88,14 +88,8 @@ export default defineHandler(async (event) => {
       source: source || null, route_context: routeContext || null, suggested_summary: suggestedSummary || null, agent_metadata: agentMetadata }, created_at: now, updated_at: now }))
   await publishGuestInboxThreadEvent(env, db, { threadId: id, type: 'thread.created' })
 
-  try {
-    await notifyContactSubmitted(env, db, {
-      organizationId: site.id, locationId: assignedLocationId, siteName: site.name, contactId: id, guestName: name, email, subject: subject || topic || null, message, consentAcknowledged, })
-  } catch (error) {
-    console.error('contact_notification_failed', {
-      organizationId: site.id, contactId: id, error: error instanceof Error ? error.message : String(error)
-    })
-  }
+  await notifyContactSubmitted(env, db, {
+    organizationId: site.id, locationId: assignedLocationId, siteName: site.name, contactId: id, guestName: name, email, subject: subject || topic || null, message, consentAcknowledged, })
 
   await recordSubmissionConversionSafe(db, event, {
     organizationId: site.id,
