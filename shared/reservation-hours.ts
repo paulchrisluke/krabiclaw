@@ -155,6 +155,42 @@ export function getTodayHoursLabel(hours: OpeningHours, closedLabel: string, tim
   if (intervals === null) return null
   return intervals.length ? intervals.map(p => `${formatTime(toTimeString(Math.max(0, p.start)), locale)} – ${formatTime(toTimeString(p.end), locale)}`).join(', ') : closedLabel
 }
+export interface OpeningHoursSpecification {
+  '@type': 'OpeningHoursSpecification'
+  dayOfWeek: string
+  opens: string
+  closes: string
+}
+
+const SCHEMA_WEEKDAY = WEEKDAYS.map(day => `https://schema.org/${day[0]!.toUpperCase()}${day.slice(1)}`)
+
+/**
+ * The weekly hours as schema.org states them, read from the stored periods.
+ *
+ * This reads the canonical `periods` through the same interval logic the page
+ * renders from, so the markup and the visible table cannot disagree. It does
+ * not parse the formatted table back into times: that is display text, built
+ * for a locale and a reader, and a machine-readable claim must not be recovered
+ * from it.
+ *
+ * A period running past midnight is stated on the day it opens, closing at
+ * 23:59 — schema.org has no way to say "and on into tomorrow" on one entry.
+ */
+export function schemaOpeningHours(hours: OpeningHours): OpeningHoursSpecification[] {
+  if (hours === null) return []
+  // Seven consecutive dates, so every weekday is read once. 2024-01-01 is a
+  // Monday; the weekday is taken from the date rather than from the offset.
+  return Array.from({ length: 7 }, (_, index) => addLocalDays('2024-01-01', index)).flatMap((date) => {
+    const dayOfWeek = SCHEMA_WEEKDAY[new Date(`${date}T00:00:00Z`).getUTCDay()]!
+    return (getDateIntervals(hours, null, date) ?? []).map(interval => ({
+      '@type': 'OpeningHoursSpecification' as const,
+      dayOfWeek,
+      opens: toTimeString(Math.max(0, interval.start)),
+      closes: interval.end >= DAY ? '23:59' : toTimeString(interval.end),
+    }))
+  })
+}
+
 export function isOpenNow(hours: OpeningHours, timezone?: string | null, now = new Date(), special: SpecialHours = null): boolean | undefined {
   if (!timezone) return undefined
   const local = localNow(timezone, now)

@@ -1,5 +1,6 @@
 import { parseGoogleReviewMetadata, type GoogleReviewMetadata } from '~/shared/google-review'
 import { queryAll, queryFirst, type DbClient } from '~/server/db'
+import { bookingWindow, listSessions } from '~/server/utils/availability'
 import { resolveSiteCmsCapabilities } from '~/server/utils/cms-capabilities'
 import { getProductBySlug, hydrateProductMedia, listCollections, listLocationProducts } from '~/server/utils/product-management'
 import type { Collection, Product, ProductBookingConfig, ProductPresentation, ProductSurface } from '~/server/types/products'
@@ -30,6 +31,8 @@ export interface PublicProductLocation {
   slug: string
   title: string
   feature_overrides: string | null
+  /** The zone this branch states its times in — what turns a session into a wall clock. */
+  timezone: string | null
   /** Where a guest turns up: the branch's own address, phone and map, as the row stores them. */
   address: string | null
   phone: string | null
@@ -41,7 +44,7 @@ export interface PublicProductLocation {
 /** The branch as the product page sends it to the browser. */
 export function publicLocationPayload(location: PublicProductLocation): PublicProductLocationPayload {
   return {
-    id: location.id, slug: location.slug, title: location.title,
+    id: location.id, slug: location.slug, title: location.title, timezone: location.timezone,
     address: parsePostalAddress(location.address), phone: location.phone, maps_url: location.maps_url,
     latitude: location.latitude, longitude: location.longitude,
   }
@@ -65,6 +68,16 @@ export interface PublicProductCollection {
 
 /** What the page needs to know about this product's booking capability. */
 export type PublicProductBooking = ProductBookingConfig
+
+/** One occurrence, as the product page and its structured data read it. */
+export interface PublicProductSession {
+  id: string
+  starts_at: string
+  ends_at: string
+  timezone: string
+  remaining: number | null
+  is_full: boolean
+}
 
 export interface PublicProductDetail extends PublicProductCollection {
   location: PublicProductLocation
@@ -134,7 +147,7 @@ export async function loadPublicProductCollection(
   const resolved = await loadProductSite(db, organizationId, routeKind, previewAuthorized)
   if (!resolved) return null
   const locationRows = await queryAll<PublicProductLocation>(db, `
-    SELECT id, slug, title, feature_overrides, address, phone, maps_url, latitude, longitude
+    SELECT id, slug, title, feature_overrides, timezone, address, phone, maps_url, latitude, longitude
       FROM business_locations
      WHERE organization_id = ? AND status = 'active'
        ${locationSlug ? 'AND slug = ?' : ''}
@@ -210,7 +223,7 @@ export async function loadPublicProductDetail(
   const locationId = resolveLocalizedRouteResourceId(localizations, 'business_location', localizedLocationPath)
   if (!locationId) return null
   const sourceLocation = await queryFirst<PublicProductLocation>(db, `
-    SELECT id, slug, title, feature_overrides, address, phone, maps_url, latitude, longitude FROM business_locations
+    SELECT id, slug, title, feature_overrides, timezone, address, phone, maps_url, latitude, longitude FROM business_locations
      WHERE organization_id = ?  AND id = ? AND status = 'active' LIMIT 1
   `, [resolved.site.id, locationId])
   if (!sourceLocation) return null
@@ -281,7 +294,7 @@ export async function loadPublicExperienceDetail(
   if (!found.publications.some(entry => entry.organization_id === organizationId && entry.published)) return null
   const offeredAt = new Set(found.locations.filter(entry => entry.published && entry.active).map(entry => entry.location_id))
   const locationRows = await queryAll<PublicProductLocation>(db, `
-    SELECT id, slug, title, feature_overrides, address, phone, maps_url, latitude, longitude
+    SELECT id, slug, title, feature_overrides, timezone, address, phone, maps_url, latitude, longitude
       FROM business_locations
      WHERE organization_id = ?  AND status = 'active'
      ORDER BY title, id
@@ -331,6 +344,47 @@ export async function loadPublicProductApiDetail(
   const product = await getProductBySlug(db, site.id, productSlug)
   if (!product) return null
   return loadPublicProductDetail(env, db, organizationId, productSurfaceOf(site.vertical, product), previewAuthorized, locationSlug, productSlug, locale)
+}
+
+/**
+ * The occurrences of this product a guest can claim a seat on, at this branch.
+ *
+ * Read here, with the page, so the dates are in the HTML the server sends.
+ * Loading them after hydration meant a crawler was told "no availability"
+ * about a product with a full calendar, while a browser was shown the truth.
+ *
+ * Materialized sessions only, scoped to this branch and to the public booking
+ * window — the same three facts `/api/public/products/{slug}/sessions` reads,
+ * which the page still calls to refresh them. A product that takes no bookings
+ * has no calendar to read, so it costs no query.
+ */
+export async function loadPublicProductSessions(
+  db: DbClient,
+  detail: PublicProductDetail,
+): Promise<PublicProductSession[]> {
+  if (!detail.booking) return []
+  // A branch with no zone cannot state when anything starts, so it offers
+  // nothing here rather than a time in a zone nobody chose.
+  if (!detail.location.timezone) return []
+  const window = bookingWindow(detail.location.timezone)
+  const sessions = await listSessions(db, {
+    organizationId: detail.site.id,
+    productId: detail.product.id,
+    locationId: detail.location.id,
+    fromInstant: window.fromInstant,
+    toInstant: window.toInstant,
+    statuses: ['scheduled'],
+  })
+  return sessions
+    .filter(session => !session.is_full)
+    .map(session => ({
+      id: session.id,
+      starts_at: session.starts_at,
+      ends_at: session.ends_at,
+      timezone: session.timezone,
+      remaining: session.remaining,
+      is_full: session.is_full,
+    }))
 }
 
 /**
