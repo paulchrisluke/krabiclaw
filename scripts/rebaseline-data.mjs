@@ -123,6 +123,39 @@ export const TRANSFORMS = [
   // answered 422 — the entire Thai site, for a tenant that pays for the
   // language. The resource_type rename runs in either order, so both spellings
   // are matched.
+  // A block's place is its index, and the site-content migration wrote that
+  // index in the alphabetical order of the field names — so `story.title`
+  // sorted after `story.body` and `story.image` and a page ended on the heading
+  // that should have opened its own section. The authored order is not
+  // recoverable (`site_content` is gone), but a title above its body and an
+  // image after it is not a judgement call. Sections keep the order they are
+  // in; only the roles within one are put right, and each block stays inside
+  // the set of positions its own document already used, so a migrated block
+  // interleaved with native ones is not lifted out of place.
+  { name: 'migrated_site_content_roles_follow_their_section', sql: `WITH p AS (
+  SELECT b.id, b.document_id, b.position, b.type, COALESCE(b.data_json ->> '$.field','') AS field,
+         CASE WHEN instr(COALESCE(b.data_json ->> '$.field',''),'.')>0 THEN substr(COALESCE(b.data_json ->> '$.field',''),1,instr(COALESCE(b.data_json ->> '$.field',''),'.')-1) ELSE COALESCE(b.data_json ->> '$.field','') END AS section,
+         CASE WHEN instr(COALESCE(b.data_json ->> '$.field',''),'.')>0 THEN substr(COALESCE(b.data_json ->> '$.field',''),instr(COALESCE(b.data_json ->> '$.field',''),'.')+1) ELSE '' END AS role
+  FROM content_blocks b WHERE b.id LIKE 'migrated-site-content-block:%' AND b.data_json ->> '$.field' IS NOT NULL
+), r AS (
+  SELECT p.*, CASE role WHEN 'title' THEN 0 WHEN 'kicker' THEN 1 WHEN 'subtitle' THEN 2 WHEN 'body' THEN 3 WHEN 'image' THEN 4 ELSE 0 END AS rr,
+         MIN(position) OVER (PARTITION BY document_id, section) AS spos
+  FROM p
+), ranked AS (
+  SELECT id, document_id, position, type, field,
+         ROW_NUMBER() OVER (PARTITION BY document_id ORDER BY spos, rr, position) AS want
+  FROM r
+), slots AS (
+  SELECT document_id, position AS slot,
+         ROW_NUMBER() OVER (PARTITION BY document_id ORDER BY position) AS idx
+  FROM r
+)
+, map AS (
+  SELECT ranked.id AS id, slots.slot AS new_position
+  FROM ranked JOIN slots ON slots.document_id = ranked.document_id AND slots.idx = ranked.want
+)
+UPDATE content_blocks SET position = (SELECT new_position FROM map WHERE map.id = content_blocks.id)
+WHERE id IN (SELECT id FROM map) AND position <> (SELECT new_position FROM map WHERE map.id = content_blocks.id)` },
   { name: 'localized_brand_name_is_organization_name', sql: `UPDATE resource_localizations
       SET values_json = json_remove(json_set(values_json, '$.name', values_json ->> '$.brand_name'), '$.brand_name')
     WHERE resource_type IN ('site', 'organization')
