@@ -1,4 +1,4 @@
-// GET /api/editor/sites/[organizationId]/reservation-submissions
+// GET /api/editor/organizations/[organizationId]/reservation-submissions
 import { jsonResponse } from '~/server/utils/api-response'
 import { listReservationSubmissions } from '~/server/utils/mcp-workflows'
 import { queryFirst } from '~/server/db'

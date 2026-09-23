@@ -1,4 +1,4 @@
-// GET /api/public/sites/[organizationId]/locations/[slug]/qa
+// GET /api/public/locations/[slug]/qa
 import { queryAll, queryFirst } from '~/server/db'
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 

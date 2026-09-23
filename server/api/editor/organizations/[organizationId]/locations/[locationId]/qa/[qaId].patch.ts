@@ -1,4 +1,4 @@
-// PATCH /api/editor/sites/[organizationId]/locations/[locationId]/qa/[qaId]
+// PATCH /api/editor/organizations/[organizationId]/locations/[locationId]/qa/[qaId]
 import { cleanString, jsonResponse } from '~/server/utils/api-response'
 import { updateLocationQa } from '~/server/utils/mcp-workflows'
 import { requireLocationAccess } from '~/server/utils/location-access'

@@ -43,7 +43,7 @@ export function useOnboardingDraft() {
   function locationsAddFetch<T>(options: Parameters<typeof dashboardFetch<T>>[2]) {
     const scope = routeScope.value
     if (!scope) {
-      throw new Error('Adding a location needs a /dashboard/{orgSlug}/sites/{siteSlug} route.')
+      throw new Error('Adding a location needs a /dashboard/{orgSlug} route.')
     }
     return dashboardFetch<T>('/api/dashboard/locations', scope, options)
   }

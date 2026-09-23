@@ -2,7 +2,7 @@
 //
 // This was two routes. `/api/public/blog` served KrabiClaw's own articles
 // through `listPublicPlatformBlogPosts`, which was `listBlogPosts` with the
-// platform site looked up and hardcoded; `/api/public/sites/[organizationId]/blog`
+// platform site looked up and hardcoded; `/api/public/blog`
 // served everyone else's from a near-identical query. The platform is an
 // ordinary tenant, so that was one concept with two implementations, and the
 // tenant half took its site id from the URL instead of from the host that had

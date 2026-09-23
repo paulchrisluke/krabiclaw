@@ -226,7 +226,7 @@ export async function purgePublicResourceCache(kv: KVNamespace, organizationId: 
 }
 
 /**
- * Convenience wrapper for call sites outside /api/editor/sites/** and mcp.post.ts.
+ * Convenience wrapper for call sites outside /api/editor/organizations/** and mcp.post.ts.
  * When D1 is available it records a durable invalidation before attempting the
  * purge; a failed purge remains pending for the scheduled drain to retry.
  */

@@ -1,4 +1,4 @@
-// GET /api/editor/sites/[organizationId]/media?kind=image&limit=50&offset=0
+// GET /api/editor/organizations/[organizationId]/media?kind=image&limit=50&offset=0
 import { jsonResponse } from '~/server/utils/api-response'
 import { loadDashboardMedia } from '~/server/utils/dashboard-editor-resources'
 

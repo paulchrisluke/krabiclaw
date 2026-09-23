@@ -80,7 +80,6 @@ interface SourceRow {
   subtitle: string | null
   status: string
   organization_id: string
-  site_slug: string
   location_id: string | null
   location_slug: string | null
   location_title: string | null
@@ -214,7 +213,7 @@ export async function listAgenda(
     resourceTitle?: string
   } = {}) => `
     SELECT ${alias}.id, '${kind}' AS kind, ${fields}, ${alias}.organization_id,
-           COALESCE(s.subdomain, s.id) AS site_slug, ${alias}.location_id,
+           ${alias}.location_id,
            l.slug AS location_slug, l.title AS location_title,
            CASE WHEN ${alias}.location_id IS NULL THEN json_extract(s.settings_json, '$.config.default_timezone') ELSE l.timezone END AS timezone,
            NULL AS guest_image_url,
@@ -253,7 +252,7 @@ export async function listAgenda(
            CASE WHEN agenda_session.capacity IS NULL THEN printf('%d booked', COALESCE(agenda_claimed.claimed, 0))
                 ELSE printf('%d of %d booked', COALESCE(agenda_claimed.claimed, 0), agenda_session.capacity) END AS subtitle,
            agenda_session.capacity AS party_size, agenda_session.status,
-           pub.organization_id, COALESCE(s.subdomain, s.id) AS site_slug, agenda_session.location_id,
+           pub.organization_id, agenda_session.location_id,
            l.slug AS location_slug, l.title AS location_title,
            agenda_session.timezone AS timezone,
            NULL AS guest_image_url,
@@ -291,7 +290,7 @@ export async function listAgenda(
     const startsAt = instantDate(row.starts_at).toISOString()
     const dayKey = localDateAt(instantDate(startsAt), timeZone)
     if (dayKey < query.from || dayKey > query.to) return []
-    const siteBase = `/dashboard/${organizationSlug}/sites/${row.site_slug}`
+    const siteBase = `/dashboard/${organizationSlug}`
     const locationSegment = row.location_slug ? `/locations/${row.location_slug}` : ''
     const to = row.kind === 'reservation' || row.kind === 'booking'
       ? `/dashboard/${organizationSlug}/bookings/${row.kind}/${encodeURIComponent(row.id)}`

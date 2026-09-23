@@ -62,7 +62,7 @@ export async function useBlawbyDocument(
       }
       // The preview cookie travels with this request, so the API resolves the
       // same authorization the server render used.
-      return await publicApiRequest<BlawbyDocumentPayload>('/api/public/sites/' + encodeURIComponent(organizationId) + '/blawby/document', {
+      return await publicApiRequest<BlawbyDocumentPayload>('/api/public/blawby/document', {
         query: { recipe, locale: locale.value, ...(normalizedSlug ? { slug: normalizedSlug } : {}) },
         validate: value => isBlawbyDocumentPayload(value, recipe),
       })

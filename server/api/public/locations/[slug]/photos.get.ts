@@ -1,4 +1,4 @@
-// GET /api/public/sites/[organizationId]/locations/[slug]/photos
+// GET /api/public/locations/[slug]/photos
 // Public location gallery, shaped for the Saya photos page.
 import { queryFirst } from '~/server/db'
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'

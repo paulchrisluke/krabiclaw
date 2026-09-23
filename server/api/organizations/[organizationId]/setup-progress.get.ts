@@ -1,4 +1,4 @@
-// GET /api/sites/[organizationId]/setup-progress
+// GET /api/organizations/[organizationId]/setup-progress
 // Returns the ordered 10-step setup journey for the site overview card.
 import { cloudflareEnv, jsonResponse, rethrowHttpError } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
@@ -118,12 +118,10 @@ export default defineHandler(async (event) => {
     const hasPhotos = photoCount >= 3
     const hasAboutPage = !!aboutContent
     const hasContactEmail = !!site.contact_email
-    if (!site.slug || !site.subdomain) {
-      return jsonResponse({ error: 'Site routing context is incomplete' }, { status: 500 })
+    if (!site.slug) {
+      return jsonResponse({ error: 'Organization routing context is incomplete' }, { status: 500 })
     }
-    const orgSlug = site.slug
-    const siteSlug = site.subdomain
-    const siteBase = `/dashboard/${orgSlug}/sites/${siteSlug}`
+    const siteBase = `/dashboard/${site.slug}`
     const locationsBase = `${siteBase}/locations`
 
     const steps: SetupStep[] = [

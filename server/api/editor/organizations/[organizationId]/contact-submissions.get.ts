@@ -1,4 +1,4 @@
-// GET /api/editor/sites/[organizationId]/contact-submissions
+// GET /api/editor/organizations/[organizationId]/contact-submissions
 import { jsonResponse } from '~/server/utils/api-response'
 import { listContactSubmissions } from '~/server/utils/mcp-workflows'
 import { requireOrganizationAccess } from '~/server/utils/location-access'

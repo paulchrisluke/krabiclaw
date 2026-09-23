@@ -283,7 +283,7 @@ async function loadDomains({ background = false }: { background?: boolean } = {}
   loadError.value = null
   try {
     const response = await dashboardApi<DomainsResponse>(
-      `/api/sites/${organizationId.value}/domains`,
+      `/api/organizations/${organizationId.value}/domains`,
       { validate: isDomainsResponse },
     )
     domainGroups.value = response.domain_groups
@@ -315,7 +315,7 @@ async function addDomain() {
   adding.value = true
   addError.value = ''
   try {
-    const response = await dashboardApi<AddDomainResponse>(`/api/sites/${organizationId.value}/domains`, {
+    const response = await dashboardApi<AddDomainResponse>(`/api/organizations/${organizationId.value}/domains`, {
       method: 'POST',
       body: {
         domain: addForm.domain.trim(),
@@ -424,7 +424,7 @@ async function syncGroup(group: DomainGroup) {
   syncingGroupId.value = group.id
   actionError.value = null
   try {
-    await dashboardApi(`/api/sites/${organizationId.value}/domains/${group.primary_domain_id}/sync`, {
+    await dashboardApi(`/api/organizations/${organizationId.value}/domains/${group.primary_domain_id}/sync`, {
       method: 'POST',
       validate: (value): value is { success: true; domain: ApiRecord } =>
         isRecord(value) && value.success === true && isRecord(value.domain),
@@ -442,7 +442,7 @@ async function makePrimary(group: DomainGroup) {
   promotingGroupId.value = group.id
   actionError.value = null
   try {
-    await dashboardApi(`/api/sites/${organizationId.value}/domains/${group.primary_domain_id}`, {
+    await dashboardApi(`/api/organizations/${organizationId.value}/domains/${group.primary_domain_id}`, {
       method: 'PATCH',
       body: { role: 'canonical' },
       validate: (value): value is { success: true; domain: ApiRecord } =>
@@ -463,7 +463,7 @@ async function deleteGroup(group: DomainGroup) {
   actionError.value = null
   try {
     for (const domain of group.domains.filter((domain) => domain.type === 'custom')) {
-      await dashboardApi(`/api/sites/${organizationId.value}/domains/${domain.id}`, {
+      await dashboardApi(`/api/organizations/${organizationId.value}/domains/${domain.id}`, {
         method: 'DELETE',
         validate: (value): value is { success: true } =>
           isRecord(value) && value.success === true,

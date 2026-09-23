@@ -1,4 +1,4 @@
-// PATCH /api/editor/sites/[organizationId]/media/[assetId]
+// PATCH /api/editor/organizations/[organizationId]/media/[assetId]
 // Update mutable asset metadata. Ownership is managed through media placements.
 import { queryFirst } from '~/server/db'
 import { cloudflareEnv, jsonResponse, rethrowHttpError } from '~/server/utils/api-response'

@@ -1,4 +1,4 @@
-// POST /api/editor/sites/[organizationId]/locations/[locationId]/qa/reorder
+// POST /api/editor/organizations/[organizationId]/locations/[locationId]/qa/reorder
 import { jsonResponse } from '~/server/utils/api-response'
 import { reorderLocationQa } from '~/server/utils/mcp-workflows'
 import { requireLocationAccess } from '~/server/utils/location-access'

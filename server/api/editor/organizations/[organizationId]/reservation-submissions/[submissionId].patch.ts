@@ -1,4 +1,4 @@
-// PATCH /api/editor/sites/[organizationId]/reservation-submissions/[submissionId]
+// PATCH /api/editor/organizations/[organizationId]/reservation-submissions/[submissionId]
 //
 // Delegates to the same canonical guest-thread operation service the dashboard inbox
 // uses (issue #442 Locked Decision #4), so both surfaces share one state-mutation +

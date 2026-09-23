@@ -5,7 +5,7 @@
 // This is a separate hook from edge-cache.ts's HTML-cache purge on purpose:
 // that one is only wired to the MCP route (server/api/mcp.post.ts), not the
 // ~67 dashboard editor routes under
-// server/api/editor/sites/[organizationId]/**. Reusing it as-is would leave the
+// server/api/editor/organizations/[organizationId]/**. Reusing it as-is would leave the
 // public resource cache stale after every dashboard-originated edit — a regression
 // for dashboard editors, who see edits reflected immediately today because
 // there's no cache in front of bootstrap at all yet.
@@ -25,14 +25,14 @@ import type { DbClient } from '~/server/db'
 import { drainPublicResourceCacheInvalidations, purgeSiteCaches, type SiteChangeDrainEnv } from '~/server/utils/public-resource-cache'
 import { definePlugin } from 'nitro';
 
-const EDITOR_SITES_PREFIX = '/api/editor/sites/'
+const EDITOR_ORGANIZATIONS_PREFIX = '/api/editor/organizations/'
 
 export default definePlugin((nitroApp) => {
   nitroApp.hooks.hook('response', async (response, event: HTTPEvent) => {
     const request = event.req
     const path = new URL(request.url).pathname
     if (request.method === 'GET' || request.method === 'HEAD') return
-    if (!path.startsWith(EDITOR_SITES_PREFIX)) return
+    if (!path.startsWith(EDITOR_ORGANIZATIONS_PREFIX)) return
 
     const status = response.status
     if (status < 200 || status >= 300) return

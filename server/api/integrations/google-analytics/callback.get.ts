@@ -5,7 +5,7 @@ import { defineHandler } from 'nitro';
 import { cloudflareEnv } from '~/server/utils/api-response'
 import { exchangeGoogleAnalyticsCode, storeGoogleAnalyticsConnection } from '~/server/utils/google-analytics'
 import { verifyOAuthState } from '~/server/utils/encryption'
-import { getDashboardSiteRouteContext } from '~/server/utils/dashboard-redirects'
+import { resolveUserOrganization } from '~/server/utils/member-access'
 
 export default defineHandler(async (event) => {
   const env = cloudflareEnv(event)
@@ -38,19 +38,14 @@ export default defineHandler(async (event) => {
   }
 
   const connectionRedirect = async (status: string) => {
-    const db = env.DB
-    if (!db) return `/dashboard?ga=${status}`
-
     try {
-      const context = await getDashboardSiteRouteContext(db, env, userId, organizationId)
-      if (!context) return `/dashboard?ga=${status}`
-      const encodedOrgSlug = encodeURIComponent(context.organizationSlug)
-      return `/dashboard/${encodedOrgSlug}/sites/${encodeURIComponent(context.siteSlug)}/settings/analytics?ga=${status}`
+      const organization = await resolveUserOrganization(env, { userId, organizationId })
+      if (!organization) return `/dashboard?ga=${status}`
+      return `/dashboard/${encodeURIComponent(organization.slug)}/settings/analytics?ga=${status}`
     } catch (e) {
       console.error('Google Analytics redirect organization query failed:', e)
       return `/dashboard?ga=${status}`
     }
-
   }
 
   try {

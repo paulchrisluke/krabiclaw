@@ -48,7 +48,7 @@ export interface CatalogEntry {
 
 const restaurant = 'Ember & Slice'
 const studio = 'Pottery House Krabi'
-const inbox = 'https://demo.krabiclaw.com/dashboard/ember-slice/sites/ember-slice/messages/preview-1'
+const inbox = 'https://demo.krabiclaw.com/dashboard/ember-slice/messages/preview-1'
 
 const reservation = {
   guestName: 'Alex Carter',
@@ -132,7 +132,7 @@ export const NOTIFICATION_CATALOG: CatalogEntry[] = [
     message: reviewReceivedMessage({
       authorName: 'Alex Carter', rating: 5,
       content: 'The wood-fired pizza was outstanding and the team could not have been kinder.',
-      siteName: restaurant, reviewsUrl: 'https://demo.krabiclaw.com/dashboard/ember-slice/sites/ember-slice/reviews',
+      siteName: restaurant, reviewsUrl: 'https://demo.krabiclaw.com/dashboard/ember-slice/reviews',
     }),
   },
   {
@@ -155,7 +155,7 @@ export const NOTIFICATION_CATALOG: CatalogEntry[] = [
     message: domainUpdateMessage({
       headline: 'emberslice.com is live', message: 'Your custom domain is verified and serving traffic.',
       domain: 'emberslice.com', status: 'active',
-      dashboardUrl: 'https://demo.krabiclaw.com/dashboard/ember-slice/sites/ember-slice/settings/domains',
+      dashboardUrl: 'https://demo.krabiclaw.com/dashboard/ember-slice/settings/domains',
     }),
   },
 

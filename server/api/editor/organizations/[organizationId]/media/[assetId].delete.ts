@@ -1,4 +1,4 @@
-// DELETE /api/editor/sites/[organizationId]/media/[assetId]
+// DELETE /api/editor/organizations/[organizationId]/media/[assetId]
 // Soft-deletes in DB and hard-deletes from Cloudflare Images or R2.
 import { cloudflareEnv, jsonResponse, rethrowHttpError } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'

@@ -4,7 +4,7 @@ import { cloudflareEnv } from '../../../utils/api-response'
 import { verifyOAuthState } from '../../../utils/encryption'
 import {
   exchangeFacebookCode, getFacebookUserInfo, getFacebookPages, storeFacebookPagesConnection, } from '../../../utils/facebook-pages'
-import { getDashboardSiteRouteContext } from '~/server/utils/dashboard-redirects'
+import { resolveUserOrganization } from '~/server/utils/member-access'
 import { loadMemberOrganizationRow } from '~/server/utils/location-access'
 import { assertOrganizationWideAccess, memberAccessPrincipal } from '~/server/utils/member-access'
 
@@ -42,11 +42,9 @@ export default defineHandler(async (event) => {
   const { organizationId, userId } = stateData
   const settingsRedirect = async (status: string) => {
     try {
-      const db = env.DB
-      if (!db) return `/dashboard?fb=${status}`
-      const context = await getDashboardSiteRouteContext(db, env, userId, organizationId)
-      return context
-        ? `/dashboard/${encodeURIComponent(context.organizationSlug)}/sites/${encodeURIComponent(context.siteSlug)}/settings?fb=${status}`
+      const organization = await resolveUserOrganization(env, { userId, organizationId })
+      return organization
+        ? `/dashboard/${encodeURIComponent(organization.slug)}/settings?fb=${status}`
         : `/dashboard?fb=${status}`
     } catch (e) {
       console.error('Facebook Pages redirect organization query failed:', e)
