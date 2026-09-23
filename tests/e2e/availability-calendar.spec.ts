@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 import { loginAs } from './helpers/auth'
-import { devLoginHeaders, testBaseUrl } from './test-env'
+import { devLoginHeaders, tenantTestExtraHeaders, testBaseUrl } from './test-env'
 
 const baseURL = testBaseUrl()
 const writable = ['localhost', '127.0.0.1', 'preview.krabiclaw.com'].includes(new URL(baseURL).hostname)
@@ -46,6 +46,7 @@ test('reservation overrides close specific slots and never leak their private no
   // The guest-facing read shows the closure and never the note behind it.
   const publicResponse = await request.get(`${baseURL}/api/public/reservations/availability`, {
     params: { location_id: 'loc-demo', date, days: 1 },
+    headers: tenantTestExtraHeaders(),
   })
   expect(publicResponse.status(), await publicResponse.text()).toBe(200)
   const publicText = await publicResponse.text()
@@ -86,6 +87,7 @@ test('concurrent guests cannot claim the same final reservation seat', async ({ 
 
   const attempt = Date.now()
   const results = await Promise.all([1, 2].map(guest => request.post(`${baseURL}/api/public/reservations`, {
+    headers: tenantTestExtraHeaders(),
     data: {
       name: `Last seat guest ${guest}`,
       email: `last-seat-${attempt}-${guest}@playwright.example`,
