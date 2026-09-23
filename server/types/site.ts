@@ -25,7 +25,6 @@ export interface SiteSettings {
   default_currency: CurrencyCode | null
   google_analytics_measurement_id?: string
   google_site_verification?: string
-  last_published_at: string | null
   created_at: string
   updated_at: string
 }
@@ -37,7 +36,6 @@ export interface UpdateSiteSettingsRequest {
   brand_color?: string
   font_preset?: SiteFontPreset
   default_currency?: CurrencyCode
-  last_published_at?: string
   press_email?: string
   partnerships_email?: string
   catering_email?: string

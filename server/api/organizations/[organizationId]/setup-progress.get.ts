@@ -78,7 +78,7 @@ export default defineHandler(async (event) => {
 
     const locationProgress = await queryFirst<{ count: number; missing_address: number; missing_hours: number }>(db, `
       SELECT COUNT(*) AS count,
-             SUM(CASE WHEN NULLIF(trim(address), '') IS NULL AND NULLIF(trim(city), '') IS NULL THEN 1 ELSE 0 END) AS missing_address,
+             SUM(CASE WHEN address IS NULL THEN 1 ELSE 0 END) AS missing_address,
              SUM(CASE WHEN opening_hours IS NULL THEN 1 ELSE 0 END) AS missing_hours
       FROM business_locations WHERE organization_id = ? AND status = 'active'
     `, [organizationId])

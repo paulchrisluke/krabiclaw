@@ -9,19 +9,16 @@ import { getMediaPlacements } from '~/server/utils/media-placement'
 import { loadExactPublicLocalizations, projectExactLocalizedResource } from '~/server/utils/public-localization'
 import { listPublicLocaleRepresentations } from '~/server/utils/public-locale-representations'
 import type { PublicLocaleRepresentation } from '~/utils/public-resource-contracts'
-import { parseRobotsIntent, type RobotsIntent } from '~/shared/robots-directive'
 
 const LINK_ITEM_STATUSES = ['active', 'hidden'] as const
 
 export type LinkItemStatus = typeof LINK_ITEM_STATUSES[number]
-export type LinkPageRobots = RobotsIntent
 
 export interface SiteLinksPage {
   id: string
   organization_id: string
   path: string
   title: string
-  robots: LinkPageRobots
   seo_title: string | null
   seo_description: string | null
   created_at: string
@@ -60,7 +57,6 @@ export interface PublicSiteLinksPayload {
 
 export interface LinksPageUpdateInput {
   title?: unknown
-  robots?: unknown
   seo_title?: unknown
   seo_description?: unknown
 }
@@ -104,12 +100,6 @@ function normalizeItemStatus(value: unknown): LinkItemStatus {
   return status as LinkItemStatus
 }
 
-function normalizeRobots(value: unknown): LinkPageRobots {
-  const parsed = parseRobotsIntent(cleanString(value as ApiValue, 40))
-  if (!parsed.ok) throw new SiteLinksValidationError('Robots must be one of the approved directives.')
-  return parsed.intent ?? 'noindex,follow'
-}
-
 export function validateLinkDestination(value: unknown): string {
   const destination = requiredString(value, 2048, 'Destination')
 
@@ -140,15 +130,11 @@ function mapPage(row: ApiRecord): SiteLinksPage {
     if (typeof value !== 'string' || !value.trim()) throw new SiteLinksValidationError(`Stored links page ${field} is invalid.`)
     return value
   }
-  const parsedRobots = parseRobotsIntent(required(row.robots, 'robots'))
-  if (!parsedRobots.ok || !parsedRobots.intent) throw new SiteLinksValidationError('Stored links page robots directive is invalid.')
-  const robots = parsedRobots.intent
   return {
     id: required(row.id, 'id'),
     organization_id: required(row.organization_id, 'organization_id'),
     path: required(row.path, 'path'),
     title: required(row.title, 'title'),
-    robots,
     seo_title: typeof row.seo_title === 'string' ? row.seo_title : null,
     seo_description: typeof row.seo_description === 'string' ? row.seo_description : null,
     created_at: required(row.created_at, 'created_at'),
@@ -187,7 +173,6 @@ export function defaultLinksPage(input: { organizationId: string; name?: string 
     organization_id: input.organizationId,
     path: '/links',
     title: input.name || 'Links',
-    robots: 'noindex,follow',
     seo_title: null,
     seo_description: null,
     created_at: now,
@@ -283,7 +268,6 @@ export async function upsertLinksPage(db: DbClient, input: {
   const current = await getLinksPage(db, input.organizationId)
   const pageId = current.page?.id || idWith('linkpage')
   const title = requiredString(input.page.title, 160, 'Title')
-  const robots = normalizeRobots(input.page.robots)
 
   const knownItemIds = new Set(current.items.map(item => item.id))
   const createdItemIds: string[] = []

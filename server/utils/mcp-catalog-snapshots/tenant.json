@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:982a165c31a5b3241ec1b726e3d30cdf9ae25ae7ea4281fa8125c8b511da8487",
+  "fingerprint": "sha256:1e6cf070ecb2cd38a3d7596bec2b8637908e3233964bc404bbdf06a572ce217f",
   "tools": [
     {
       "name": "append_content_block",
@@ -1267,19 +1267,6 @@
           "organization_id": {
             "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
             "type": "string"
-          },
-          "robots": {
-            "enum": [
-              "index,follow",
-              "noindex,follow",
-              "index,nofollow",
-              "noindex,nofollow",
-              null
-            ],
-            "type": [
-              "string",
-              "null"
-            ]
           },
           "scheduled_for": {
             "description": "Optional future ISO 8601 datetime with timezone. With no status or schedule, creation saves a draft.",
@@ -4551,12 +4538,6 @@
               "id": {
                 "type": "string"
               },
-              "last_published_at": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
               "media": {
                 "items": {
                   "properties": {
@@ -5158,12 +5139,6 @@
               },
               "id": {
                 "type": "string"
-              },
-              "last_published_at": {
-                "type": [
-                  "string",
-                  "null"
-                ]
               },
               "media": {
                 "items": {
@@ -13473,19 +13448,6 @@
           },
           "reset_slug_override": {
             "type": "boolean"
-          },
-          "robots": {
-            "enum": [
-              "index,follow",
-              "noindex,follow",
-              "index,nofollow",
-              "noindex,nofollow",
-              null
-            ],
-            "type": [
-              "string",
-              "null"
-            ]
           },
           "seo_description": {
             "type": "string"

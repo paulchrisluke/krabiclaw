@@ -20,10 +20,10 @@ export async function listSitesForUser(
 
   return await queryAll<Record<string, unknown>>(db, `
     SELECT s.id, s.theme_id, s.name, s.slug, s.subdomain,
-           (SELECT domain FROM organization_domains WHERE organization_id = s.id AND role = 'canonical' AND status = 'active' AND type = 'custom') AS custom_domain, (SELECT 'https://' || domain FROM organization_domains WHERE organization_id = s.id AND role = 'canonical' AND status = 'active') AS public_url, s.status, s.created_at, s.updated_at, s.onboarding_status
+           (SELECT domain FROM organization_domains WHERE organization_id = s.id AND role = 'canonical' AND status = 'active' AND type = 'custom') AS custom_domain, (SELECT 'https://' || domain FROM organization_domains WHERE organization_id = s.id AND role = 'canonical' AND status = 'active') AS public_url, s.status, s."createdAt" AS created_at, s.updated_at, s.onboarding_status
     FROM organization s
     WHERE s.id IN (SELECT value FROM json_each(?))
-    ORDER BY s.created_at DESC
+    ORDER BY s."createdAt" DESC
   `, [d1JsonStringSet(orgIds)]);
 }
 

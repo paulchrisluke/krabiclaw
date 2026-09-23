@@ -55,7 +55,6 @@ interface FullSiteRow extends SiteSettingsRow {
   social_share_thumbnail_url: string | null
   social_share_kind: 'image' | 'video' | null
   contact_email: string | null
-  last_published_at: string | null
   seo_title: string | null
   seo_description: string | null
   canonical_url: string | null
@@ -99,7 +98,7 @@ export async function loadSettingsPayload(
            contact_email,
            seo_title, seo_description, canonical_url,
            social_facebook_url, social_instagram_url, social_tiktok_url,
-           feature_overrides, last_published_at, organization.created_at, organization.updated_at,
+           feature_overrides, organization."createdAt" AS created_at, organization.updated_at,
            vertical, theme_id
     FROM organization
     LEFT JOIN media_placements mp ON mp.organization_id = organization.id AND mp.owner_type = 'organization'
@@ -190,7 +189,6 @@ export async function loadSettingsPayload(
     careers_email: siteConfig.careers_email || '',
     google_analytics_measurement_id: siteConfig.google_analytics_measurement_id || '',
     google_site_verification: siteConfig.google_site_verification || '',
-    last_published_at: updatedSite.last_published_at,
     created_at: updatedSite.created_at,
     updated_at: updatedSite.updated_at,
   }
@@ -305,10 +303,6 @@ async function attemptSiteUpdate(
     }
     setParts.push('default_currency = ?')
     params.push(currency)
-  }
-  if (updates.last_published_at !== undefined) {
-    setParts.push('last_published_at = ?')
-    params.push(updates.last_published_at ?? null)
   }
   if (updates.seo_title !== undefined) {
     setParts.push('seo_title = ?')

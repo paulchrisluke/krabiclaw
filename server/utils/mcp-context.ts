@@ -91,7 +91,7 @@ export async function listAccessibleOrganizationsForMcp(
            status, onboarding_status
     FROM organization
     WHERE id IN (SELECT value FROM json_each(?))
-    ORDER BY updated_at DESC, created_at DESC
+    ORDER BY updated_at DESC, "createdAt" DESC
   `, [d1JsonStringSet(organizations.map(organization => organization.id))])
   return rows.flatMap((row) => {
     const role = roleByOrganizationId.get(row.id)

@@ -1,4 +1,4 @@
-// Get sites for authenticated user's organization
+// The organizations the authenticated user belongs to.
 import { cloudflareEnv, jsonResponse } from '../utils/api-response'
 import { getAuthSession } from '../utils/auth'
 import { DEMO_ORG_ID } from '../utils/demo'
@@ -35,7 +35,7 @@ export default defineHandler(async (event) => {
 
     if (!organization || organization.length === 0) {
       return jsonResponse({
-        sites: []
+        organizations: []
       })
     }
 
@@ -44,32 +44,31 @@ export default defineHandler(async (event) => {
     const orgIds = isPlatformAdmin ? allOrgIds : allOrgIds.filter((id: ApiValue) => id !== DEMO_ORG_ID)
 
     if (orgIds.length === 0) {
-      return jsonResponse({ sites: [] })
+      return jsonResponse({ organizations: [] })
     }
 
-    // Build WHERE clause for multiple organization IDs
-    const sites = await queryAll(db, `
+    const organizations = await queryAll(db, `
       SELECT id, theme_id, name, slug, subdomain,
-             (SELECT domain FROM organization_domains WHERE organization_id = organization.id AND role = 'canonical' AND status = 'active' AND type = 'custom') AS custom_domain, status, created_at, updated_at,
+             (SELECT domain FROM organization_domains WHERE organization_id = organization.id AND role = 'canonical' AND status = 'active' AND type = 'custom') AS custom_domain, status, "createdAt" AS created_at, updated_at,
              onboarding_status
       FROM organization
-      WHERE organization_id IN (SELECT value FROM json_each(?))
-      ORDER BY created_at DESC
+      WHERE id IN (SELECT value FROM json_each(?))
+      ORDER BY "createdAt" DESC
     `, [d1JsonStringSet(orgIds)])
 
-    const results = (sites || []).map((site: ApiValue) => ({
-      ...site as object,
-      is_demo: (site as { id: string }).id === DEMO_ORG_ID,
+    const results = (organizations || []).map((organization: ApiValue) => ({
+      ...organization as object,
+      is_demo: (organization as { id: string }).id === DEMO_ORG_ID,
     }))
 
     return jsonResponse({
-      sites: results
+      organizations: results
     })
     
   } catch (error) {
-    console.error('Failed to fetch sites:', error)
+    console.error('Failed to fetch organizations:', error)
     return jsonResponse({ 
-      error: 'Failed to fetch sites' 
+      error: 'Failed to fetch organizations' 
     }, { status: 500 })
   }
 })

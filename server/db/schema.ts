@@ -1455,10 +1455,14 @@ export const organization = sqliteTable("organization", {
 	deletionScheduledAt: integer({ mode: "timestamp" }),
 	createdAt: integer({ mode: "timestamp" }).default(sql`(unixepoch())`).notNull(),
 
+	// Better Auth's organization plugin declares this column and validates its
+	// own schema at runtime, so the table must carry it whether or not anything
+	// writes it: without it every organization call — sign-in included — fails
+	// with "Drizzle schema mismatch". The brand mark itself is the `logo` media
+	// placement, which is why this stays NULL.
+	logo: text(),
+
 	// ── Formerly `sites`. ────────────────────────────────────────────────────
-	// `sites.logo` never existed; the mark is the `logo` media placement. Better
-	// Auth's own `organization.logo` column is gone with it — nothing ever wrote
-	// it and it was NULL for every organization.
 	settings_json: text({ mode: "json" }).$type<SiteSettings>().default({ config: { default_timezone: 'UTC' } }).notNull(),
 	integrations_json: text({ mode: "json" }).$type<SiteIntegrations>().default({}).notNull(),
 	theme_id: text().default("saya-theme-v1").notNull(),

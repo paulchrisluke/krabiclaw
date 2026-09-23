@@ -808,6 +808,7 @@ CREATE TABLE `organization` (
 	`id` text PRIMARY KEY NOT NULL,
 	`name` text NOT NULL,
 	`slug` text NOT NULL,
+	`logo` text,
 	`metadata` text,
 	`stripeCustomerId` text,
 	`deletionScheduledAt` integer,
