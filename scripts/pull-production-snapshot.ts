@@ -23,11 +23,25 @@ import { join, resolve } from 'node:path'
 import { parseArgs } from 'node:util'
 import { rebaseline } from './rebaseline-data.mjs'
 
+// Staging is a release gate, so it has to hold what production holds. It had no
+// target here, so it was never refreshed and drifted to whatever an older
+// epoch's migration left in it — a Kikuzuki homepage of four blocks against
+// production's eight, three product sessions against production's 808. A gate
+// standing in front of `main` on data that does not resemble production is the
+// reason tenant rendering, booking and localisation defects kept reaching
+// production green. Staging is the same restore as preview with a different
+// `--env`; it is never a target while its schema is already released.
 const { values } = parseArgs({
-  options: { local: { type: 'boolean', default: false }, preview: { type: 'boolean', default: false } },
+  options: {
+    local: { type: 'boolean', default: false },
+    preview: { type: 'boolean', default: false },
+    staging: { type: 'boolean', default: false },
+  },
   strict: true,
 })
-if (values.local === values.preview) throw new Error('Choose exactly one of --local or --preview.')
+const targets = (['local', 'preview', 'staging'] as const).filter(name => values[name])
+if (targets.length !== 1) throw new Error('Choose exactly one of --local, --preview or --staging.')
+const target = targets[0]!
 
 const wrangler = resolve('node_modules/wrangler/bin/wrangler.js')
 
@@ -132,10 +146,10 @@ try {
   const payloadPath = join(directory, 'payload.sql')
   const manifest = rebaseline(dumpPath, join(directory, 'target.sqlite'), { payloadPath, withoutJwks: true })
 
-  const target = values.preview ? ['--env', 'preview', '--remote'] : ['--local']
-  run(['d1', 'execute', 'DB', ...target, '--file', payloadPath])
+  const destination = target === 'local' ? ['--local'] : ['--env', target, '--remote']
+  run(['d1', 'execute', 'DB', ...destination, '--file', payloadPath])
   const rows = manifest.tables.reduce((total, table) => total + table.target_rows, 0)
-  console.log(`Restored ${manifest.tables.length} tables (${rows} rows) from the production DB binding into ${values.preview ? 'preview' : 'local'} D1.`)
+  console.log(`Restored ${manifest.tables.length} tables (${rows} rows) from the production DB binding into ${target} D1.`)
 } finally {
   rmSync(directory, { recursive: true, force: true })
   rmSync(logDirectory, { recursive: true, force: true })

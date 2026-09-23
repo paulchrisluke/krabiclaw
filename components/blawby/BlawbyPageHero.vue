@@ -102,7 +102,7 @@
 import type { PublicTenantPage } from '~/server/utils/public-tenant-pages'
 import type { TenantPageBlock } from '~/utils/tenant-page-blocks'
 import { blockText, blockTextOrNull, blockMedia } from '~/utils/tenant-page-block-data'
-import type { BlawbyShieldVariant } from '~/types/blawby'
+import { blawbyShieldVariant, type BlawbyShieldVariant } from '~/types/blawby'
 
 const props = defineProps<{ block: TenantPageBlock; page: PublicTenantPage }>()
 const { localePath } = useI18n()
@@ -111,16 +111,7 @@ const title = computed(() => blockText(props.block.data.title))
 const description = computed(() => blockTextOrNull(props.block.data.subtitle))
 const eyebrow = computed(() => blockTextOrNull(props.block.data.eyebrow))
 
-/**
- * Which shield this page opens under. The page says, because the page is what
- * differs; it was a prop a dispatcher derived from the same path.
- */
-const SHIELDS: Record<string, BlawbyShieldVariant> = {
-  '/about': 'about', '/contact': 'contact', '/schedule': 'schedule', '/donate': 'donate', '/pricing': 'pricing',
-  '/blog': 'blog', '/policies/privacy': 'privacy', '/policies/terms': 'terms',
-  '/third-party-notices': 'third-party-notices',
-}
-const variant = computed<BlawbyShieldVariant>(() => SHIELDS[props.page.path] ?? 'about')
+const variant = computed<BlawbyShieldVariant>(() => blawbyShieldVariant(props.page.path))
 
 /** The page's own pictures, in the order the page carries them. */
 const gallery = computed(() => props.page.media

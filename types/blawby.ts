@@ -6,6 +6,22 @@ import type { PublicLocaleRepresentation } from '~/utils/public-resource-contrac
 
 export type BlawbyShieldVariant = 'about' | 'blog' | 'contact' | 'pricing' | 'schedule' | 'confirmation' | 'donate' | 'privacy' | 'terms' | 'third-party-notices'
 
+/**
+ * Which shield a page opens under. The page says, because the page is what
+ * differs. It lives here because two components ask the same question — the
+ * hero that draws the shield and the divider that repeats its fill — and a
+ * second copy of this map is a second answer waiting to disagree.
+ */
+const SHIELDS: Record<string, BlawbyShieldVariant> = {
+  '/about': 'about', '/contact': 'contact', '/schedule': 'schedule', '/donate': 'donate', '/pricing': 'pricing',
+  '/blog': 'blog', '/policies/privacy': 'privacy', '/policies/terms': 'terms',
+  '/third-party-notices': 'third-party-notices',
+}
+
+export function blawbyShieldVariant(path: string): BlawbyShieldVariant {
+  return SHIELDS[path] ?? 'about'
+}
+
 
 export interface PublicBlawbyPageLink {
   id: string

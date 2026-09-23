@@ -79,6 +79,7 @@
     "stripe:catalog:apply": "node scripts/seed-stripe.mjs --apply",
     "perf:lighthouse": "node scripts/lighthouse-check.mjs",
     "db:pull:local": "node --experimental-strip-types scripts/pull-production-snapshot.ts --local",
+    "db:pull:staging": "node --experimental-strip-types scripts/pull-production-snapshot.ts --staging",
     "lint:email-previews": "node --experimental-strip-types --import ./tests/unit/support/register-aliases.mjs scripts/check-email-previews.ts",
     "lint:notification-parity": "node --experimental-strip-types --import ./tests/unit/support/register-aliases.mjs scripts/check-notification-parity.ts"
   },

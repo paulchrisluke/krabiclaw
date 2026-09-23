@@ -16,8 +16,9 @@
 // Absence of an entry means the renderer's own markup, which is Saya's.
 
 import type { Component } from 'vue'
-import type { TenantPageBlockType } from '~/utils/tenant-page-blocks'
+import type { TenantPageBlock, TenantPageBlockType } from '~/utils/tenant-page-blocks'
 import type { PublicTemplateSlug } from '~/utils/template-registry'
+import type { PublicTenantPage } from '~/server/utils/public-tenant-pages'
 import PlatformMarketingHero from '~/components/platform/marketing/PlatformMarketingHero.vue'
 import PlatformFeatureCards from '~/components/platform/marketing/PlatformFeatureCards.vue'
 import PlatformComparison from '~/components/platform/marketing/PlatformComparison.vue'
@@ -54,7 +55,16 @@ import SayaCTA from '~/components/saya/SayaCTA.vue'
 // as a literal `<PlatformMarketingHero>` element with nothing inside it. They
 // are imported rather than loaded on demand, because an async component whose
 // import fails renders nothing at all and says nothing about why.
-const PRESENTATIONS: Readonly<Record<string, Component>> = {
+// Every entry is handed the block and the page by `TenantPageRenderer`, through
+// a dynamic `<component :is>` that checks nothing. Typing the map as bare
+// `Component` checked nothing either, which is how `BlawbyShieldDivider` kept
+// declaring a `variant` prop for seven weeks after the dispatcher that passed
+// it was deleted: it compiled, and rendered the wrong colour. The contract is
+// the map's value type, so a component that does not take a block and a page
+// fails `typecheck` rather than a customer's eye.
+type BlockPresentation = Component<{ block: TenantPageBlock, page: PublicTenantPage }>
+
+const PRESENTATIONS: Readonly<Record<string, BlockPresentation>> = {
   // KrabiClaw's own marketing template. One component per block type, and the
   // component reads its block — no dispatcher, and nothing in the document
   // choosing between them.
@@ -101,6 +111,6 @@ const PRESENTATIONS: Readonly<Record<string, Component>> = {
 export function tenantPageBlockPresentation(
   template: PublicTemplateSlug,
   type: TenantPageBlockType,
-): Component | null {
+): BlockPresentation | null {
   return PRESENTATIONS[`${template}:${type}`] ?? null
 }
