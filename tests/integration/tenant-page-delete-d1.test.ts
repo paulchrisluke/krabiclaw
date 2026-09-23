@@ -22,18 +22,17 @@ test('deleting a tenant page takes its translations, placements and redirects', 
     const db = await runtime.getD1Database('DB')
     const statements = await generateSQLiteMigration(await generateSQLiteDrizzleJson({}), await generateSQLiteDrizzleJson(schema))
     await db.batch(statements.map(statement => db.prepare(statement)))
-    await db.prepare('INSERT INTO organization (id,name,slug) VALUES (?,?,?)').bind('org', 'org', 'org').run()
-    await db.prepare('INSERT INTO sites (id,organization_id,slug,subdomain,theme_id,vertical) VALUES (?,?,?,?,?,?)')
-      .bind('site', 'org', 'site', 'site', 'saya-theme-v1', 'restaurant').run()
+    await db.prepare('INSERT INTO organization (id,name,slug,subdomain,theme_id,vertical) VALUES (?,?,?,?,?,?)')
+      .bind('org', 'org', 'org', 'org', 'saya-theme-v1', 'restaurant').run()
     for (const locale of ['en', 'th']) {
-      await db.prepare('INSERT INTO site_locales (id,organization_id,site_id,locale,is_source,status) VALUES (?,?,?,?,?,?)')
-        .bind('loc-' + locale, 'org', 'site', locale, Number(locale === 'en'), 'published').run()
+      await db.prepare('INSERT INTO organization_locales (id,organization_id,locale,is_source,status) VALUES (?,?,?,?,?)')
+        .bind('loc-' + locale, 'org', locale, Number(locale === 'en'), 'published').run()
     }
-    await db.prepare("INSERT INTO media_assets (id,organization_id,site_id,kind,provider,source,status) VALUES ('asset','org','site','image','cloudflare_r2','uploaded','active')").run()
+    await db.prepare("INSERT INTO media_assets (id,organization_id,kind,provider,source,status) VALUES ('asset','org','image','cloudflare_r2','uploaded','active')").run()
 
     const page = async (id: string, path: string, locale: string, rootId?: string) =>
       await createContentDocumentWithBlocks(db, {
-        id, organizationId: 'org', siteId: 'site', kind: 'page', locale,
+        id, organizationId: 'org', kind: 'page', locale,
         ...(rootId ? { rowRole: 'representation' as const, rootId } : { rowRole: 'root' as const, metadata: { page_type: 'custom' } }),
         path, title: id,
       }, [{ id: id + '-body', type: 'markdown', data: { markdown: id, editor_mode: 'rich' } }])
@@ -45,16 +44,16 @@ test('deleting a tenant page takes its translations, placements and redirects', 
     await page('keeper', '/kept', 'en')
     for (const [id, owner] of [['story-image', 'story'], ['story-th-image', 'story-th'], ['keeper-image', 'keeper']]) {
       await executeBatch(db, [buildMediaPlacementInsertQuery({
-        id, organizationId: 'org', siteId: 'site', ownerType: 'content_document', ownerId: owner, slot: 'cover', assetId: 'asset', sortOrder: 0,
+        id, organizationId: 'org', ownerType: 'content_document', ownerId: owner, slot: 'cover', assetId: 'asset', sortOrder: 0,
       })])
     }
-    await db.prepare(`INSERT INTO site_redirects (id,organization_id,site_id,locale,from_path,to_path,owner_type,owner_id)
-      VALUES ('r-story','org','site','en','/old-story','/our-story','content_document','story'),
-             ('r-th','org','site','th','/old-story-th','/our-story','content_document','story-th'),
-             ('r-keeper','org','site','en','/old-kept','/kept','content_document','keeper')`).run()
+    await db.prepare(`INSERT INTO organization_redirects (id,organization_id,locale,from_path,to_path,owner_type,owner_id)
+      VALUES ('r-story','org','en','/old-story','/our-story','content_document','story'),
+             ('r-th','org','th','/old-story-th','/our-story','content_document','story-th'),
+             ('r-keeper','org','en','/old-kept','/kept','content_document','keeper')`).run()
 
     const now = await db.prepare("SELECT updated_at FROM content_documents WHERE id = 'story'").first<string>('updated_at')
-    const scope = { siteId: 'site', organizationId: 'org' }
+    const scope = { organizationId: 'org' }
     const env = {} as Parameters<typeof deleteTenantPage>[2]['env']
 
     // A stale timestamp is refused, so a page edited since the read is not
@@ -76,7 +75,7 @@ test('deleting a tenant page takes its translations, placements and redirects', 
       'a stale batch aborts before any document, placement or redirect is removed',
     )
     assert.equal(await db.prepare('SELECT count(*) AS count FROM media_placements').first('count'), 3)
-    assert.equal(await db.prepare('SELECT count(*) AS count FROM site_redirects').first('count'), 3)
+    assert.equal(await db.prepare('SELECT count(*) AS count FROM organization_redirects').first('count'), 3)
 
     const result = await deleteTenantPage(db, 'story', { scope, expectedUpdatedAt: now!, env })
     assert.deepEqual(result.deleted.removed_locales, ['th'], 'the response names the translations going with the source')
@@ -89,7 +88,7 @@ test('deleting a tenant page takes its translations, placements and redirects', 
       'the translation kept no placement pointing at a deleted document',
     )
     assert.deepEqual(
-      (await db.prepare('SELECT id FROM site_redirects ORDER BY id').all()).results,
+      (await db.prepare('SELECT id FROM organization_redirects ORDER BY id').all()).results,
       [{ id: 'r-keeper' }],
       'the translation kept no redirect pointing at a deleted document',
     )
@@ -109,16 +108,15 @@ test('a translation deletes alone, and a page the template renders does not dele
     const db = await runtime.getD1Database('DB')
     const statements = await generateSQLiteMigration(await generateSQLiteDrizzleJson({}), await generateSQLiteDrizzleJson(schema))
     await db.batch(statements.map(statement => db.prepare(statement)))
-    await db.prepare('INSERT INTO organization (id,name,slug) VALUES (?,?,?)').bind('org', 'org', 'org').run()
-    await db.prepare('INSERT INTO sites (id,organization_id,slug,subdomain,theme_id,vertical) VALUES (?,?,?,?,?,?)')
-      .bind('site', 'org', 'site', 'site', 'saya-theme-v1', 'restaurant').run()
+    await db.prepare('INSERT INTO organization (id,name,slug,subdomain,theme_id,vertical) VALUES (?,?,?,?,?,?)')
+      .bind('org', 'org', 'org', 'org', 'saya-theme-v1', 'restaurant').run()
     for (const locale of ['en', 'th']) {
-      await db.prepare('INSERT INTO site_locales (id,organization_id,site_id,locale,is_source,status) VALUES (?,?,?,?,?,?)')
-        .bind('loc-' + locale, 'org', 'site', locale, Number(locale === 'en'), 'published').run()
+      await db.prepare('INSERT INTO organization_locales (id,organization_id,locale,is_source,status) VALUES (?,?,?,?,?)')
+        .bind('loc-' + locale, 'org', locale, Number(locale === 'en'), 'published').run()
     }
     const page = async (id: string, path: string, locale: string, rootId?: string) =>
       await createContentDocumentWithBlocks(db, {
-        id, organizationId: 'org', siteId: 'site', kind: 'page', locale,
+        id, organizationId: 'org', kind: 'page', locale,
         ...(rootId ? { rowRole: 'representation' as const, rootId } : { rowRole: 'root' as const, metadata: { page_type: 'custom' } }),
         path, title: id,
       }, [])
@@ -128,7 +126,7 @@ test('a translation deletes alone, and a page the template renders does not dele
     // to show without it.
     await page('about', '/about', 'en')
 
-    const scope = { siteId: 'site', organizationId: 'org' }
+    const scope = { organizationId: 'org' }
     const env = {} as Parameters<typeof deleteTenantPage>[2]['env']
     const stamp = async (id: string) => (await db.prepare('SELECT updated_at FROM content_documents WHERE id = ?').bind(id).first<string>('updated_at'))!
 

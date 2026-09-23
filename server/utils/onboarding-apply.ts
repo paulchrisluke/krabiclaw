@@ -349,7 +349,7 @@ export async function applyOnboardingDraft(
   }, []).queries)
   for (const post of payload.preview.posts) batchQueries.push(...prepareContentDocumentWithBlocks({
     id: post.id, organizationId, kind: 'social_post', rowRole: 'root', locale: 'en', locationId: locationRow.id,
-    title: post.title, summary: post.body, status: post.status, visibility: 'public', publishedAt: post.published_at, source: 'template',
+    title: post.title, summary: post.body, status: post.status, visibility: 'listed', publishedAt: post.published_at, source: 'template',
     createdBy: userId, metadata: { post_type: 'standard', channels: {} },
   }, []).queries)
 

@@ -279,7 +279,7 @@ async function hydrateBlocks(
       SELECT p.id, p.title, p.slug, p.summary AS excerpt, p.canonical_url, ${COVER_SELECT}
         FROM content_documents root JOIN content_documents p ON COALESCE(p.root_id,p.id) = root.id AND p.locale = ?
         ${coverJoinSql('p')}
-       WHERE root.kind = 'article' AND root.row_role = 'root' AND p.organization_id = ? AND root.status = 'published' AND root.visibility = 'public'
+       WHERE root.kind = 'article' AND root.row_role = 'root' AND p.organization_id = ? AND root.status = 'published' AND root.visibility = 'listed'
        ORDER BY root.published_at IS NULL, root.published_at DESC, p.id DESC
     `, [locale, organizationId]) : Promise.resolve([]),
     hasUpdateSource ? getPublishedPosts(db, organizationId, 12, undefined, locale) : Promise.resolve([]),

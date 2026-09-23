@@ -109,7 +109,7 @@ async function loadContentBodies(db: DbClient, platformSiteId: string, platform:
     FROM content_documents cd
     JOIN content_blocks cb ON cb.document_id = cd.id
     WHERE cd.row_role = 'root'
-      AND cd.kind = 'article' AND cd.status = 'published' AND cd.visibility = 'public'
+      AND cd.kind = 'article' AND cd.status = 'published' AND cd.visibility = 'listed'
       AND (cd.organization_id = ?) = ?${organizationId ? ' AND cd.organization_id = ?' : ''}
     ORDER BY cd.id, cb.position
   `, [platformSiteId, platform ? 1 : 0, ...(organizationId ? [organizationId] : [])])
@@ -430,7 +430,7 @@ export async function buildTenantBlogDocuments(db: DbClient, platformSiteId?: st
     SELECT d.id, d.organization_id, d.title, d.slug, d.summary AS excerpt, d.metadata_json ->> '$.category' AS category,
       d.metadata_json ->> '$.tags' AS tags_metadata, d.seo_description, d.seo_keywords, s.theme_id, s.vertical
     FROM content_documents d JOIN organization s ON s.id = d.organization_id
-    WHERE d.kind = 'article' AND d.row_role = 'root' AND d.status = 'published' AND d.organization_id <> ? AND d.visibility = 'public'${organizationId ? ' AND d.organization_id = ?' : ''}
+    WHERE d.kind = 'article' AND d.row_role = 'root' AND d.status = 'published' AND d.organization_id <> ? AND d.visibility = 'listed'${organizationId ? ' AND d.organization_id = ?' : ''}
     ORDER BY d.organization_id, d.published_at DESC, d.updated_at DESC
   `, [platformId, ...(organizationId ? [organizationId] : [])]), loadContentBodies(db, platformId, false, organizationId)])
 
@@ -703,14 +703,14 @@ export async function buildPlatformKnowledgeDocuments(db: DbClient): Promise<Pla
     queryAll<PlatformDocSearchRow>(db, `
       SELECT id, title, slug, metadata_json ->> '$.category' AS category, summary AS excerpt, seo_description, seo_keywords
       FROM content_documents
-      WHERE kind = 'article' AND row_role = 'root' AND status = 'published' AND visibility = 'public'
+      WHERE kind = 'article' AND row_role = 'root' AND status = 'published' AND visibility = 'listed'
         AND (metadata_json ->> '$.collection') = 'docs' AND organization_id = ?
       ORDER BY sort_order, title
     `, [platformSiteId]),
     queryAll<PlatformBlogSearchRow>(db, `
       SELECT id, title, slug, summary AS excerpt, metadata_json ->> '$.category' AS category, seo_description, seo_keywords
       FROM content_documents
-      WHERE kind = 'article' AND row_role = 'root' AND status = 'published' AND organization_id = ? AND visibility = 'public'
+      WHERE kind = 'article' AND row_role = 'root' AND status = 'published' AND organization_id = ? AND visibility = 'listed'
         AND (metadata_json ->> '$.collection') = 'blog'
       ORDER BY category, published_at DESC, updated_at DESC
     `, [platformSiteId]),
@@ -1181,7 +1181,7 @@ export async function searchPublicResources(
            LEFT JOIN content_blocks cb ON cb.document_id = p.id
            WHERE p.kind = 'article' AND p.row_role = 'root' AND p.status = 'published'
              AND p.organization_id = ?
-             AND p.visibility = 'public'
+             AND p.visibility = 'listed'
              AND (
                lower(p.title) LIKE lower(?) ESCAPE '\\'
                OR lower(COALESCE(cb.data_json, '')) LIKE lower(?) ESCAPE '\\'

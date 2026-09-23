@@ -62,7 +62,7 @@ export async function findAnnounceableArticle(db: DbClient, now = new Date()): P
       FROM content_documents p
       ${coverJoinSql('p')}
      WHERE p.kind = 'article' AND p.row_role = 'root' AND p.organization_id = ?
-       AND p.status = 'published' AND p.visibility = 'public'
+       AND p.status = 'published' AND p.visibility = 'listed'
        AND (p.metadata_json ->> '$.collection') = 'blog'
        AND p.first_published_at IS NOT NULL AND p.first_published_at >= ?
        AND NOT EXISTS (SELECT 1 FROM broadcasts b WHERE b.content_document_id = p.id)

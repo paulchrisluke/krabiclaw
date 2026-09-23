@@ -55,7 +55,7 @@ export type Post = PostTopic & {
   social_image?: SocialImageSource | null
   location_phone: string | null
   status: 'draft' | 'published' | 'scheduled'
-  visibility: 'public' | 'unlisted'
+  visibility: 'listed' | 'unlisted'
   scheduled_for: string | null
   published_at: string | null
   created_by: string
@@ -354,7 +354,7 @@ export async function createPost(
         id, rowRole: 'root', kind: 'social_post', locale: 'en', organizationId, 
         locationId: data.location_id ?? null, slug, title, summary: body,
         seoTitle: cleanString(data.seo_title), seoDescription: cleanString(data.seo_description),
-        status, visibility: data.visibility ?? 'public', source: 'manual', scheduledFor: data.scheduled_for ?? null, createdBy,
+        status, visibility: data.visibility ?? 'listed', source: 'manual', scheduledFor: data.scheduled_for ?? null, createdBy,
         metadata: { post_type: data.post_type, call_to_action: data.call_to_action, event: data.event,
           offer: data.offer, alert_type: data.alert_type, channels: {} },
       }, [], { additionalQueriesAfter: postMediaPlacementQueries(organizationId, id, media) })
@@ -724,7 +724,7 @@ export async function getPublishedPosts(
            json_extract(root.metadata_json, '$.call_to_action') AS call_to_action, CASE WHEN (root.metadata_json ->> '$.event') IS NULL THEN NULL ELSE json_patch(json_extract(root.metadata_json, '$.event'), COALESCE(json_extract(p.metadata_json, '$.event'), '{}')) END AS event, CASE WHEN (root.metadata_json ->> '$.offer') IS NULL THEN NULL ELSE json_patch(json_extract(root.metadata_json, '$.offer'), COALESCE(json_extract(p.metadata_json, '$.offer'), '{}')) END AS offer, (root.metadata_json ->> '$.alert_type') AS alert_type, root.published_at, p.created_at, p.updated_at
     FROM content_documents root JOIN content_documents p ON COALESCE(p.root_id,p.id) = root.id AND p.locale = ?
     LEFT JOIN business_locations bl ON root.location_id = bl.id
-    WHERE root.kind = 'social_post' AND root.row_role = 'root' AND p.organization_id = ? AND root.status = 'published' AND root.visibility = 'public' AND p.summary IS NOT NULL
+    WHERE root.kind = 'social_post' AND root.row_role = 'root' AND p.organization_id = ? AND root.status = 'published' AND root.visibility = 'listed' AND p.summary IS NOT NULL
       AND ((root.metadata_json ->> '$.event') IS NULL OR length(trim(p.metadata_json ->> '$.event.title')) > 0)
       AND ((root.metadata_json ->> '$.offer.terms_conditions') IS NULL OR length(trim(p.metadata_json ->> '$.offer.terms_conditions')) > 0)
   `

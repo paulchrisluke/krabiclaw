@@ -85,7 +85,7 @@ export async function listPublicBlogSummaries(db: DbClient, organizationId: stri
            ${COVER_SELECT}
       FROM content_documents root JOIN content_documents p ON COALESCE(p.root_id,p.id) = root.id AND p.locale = ?
       ${coverJoinSql('p')}
-     WHERE root.organization_id = ? AND root.kind = 'article' AND root.row_role = 'root' AND root.status = 'published' AND root.visibility = 'public'
+     WHERE root.organization_id = ? AND root.kind = 'article' AND root.row_role = 'root' AND root.status = 'published' AND root.visibility = 'listed'
      ORDER BY root.published_at IS NULL, root.published_at DESC, root.id DESC
      LIMIT ?
   `, [locale, organizationId, Math.max(1, Math.min(50, Math.trunc(limit)))])
@@ -455,7 +455,7 @@ function mapPublicBlogPost(row: ApiRecord | null): PublicBlogPost | null {
     seo_title: typeof row.seo_title === 'string' ? row.seo_title : null,
     seo_description: typeof row.seo_description === 'string' ? row.seo_description : null,
     robots: typeof row.robots === 'string' ? row.robots : null,
-    visibility: row.visibility === 'unlisted' ? 'unlisted' : 'public',
+    visibility: row.visibility === 'unlisted' ? 'unlisted' : 'listed',
     created_at: typeof row.created_at === 'string' ? row.created_at : null,
     updated_at: typeof row.updated_at === 'string' ? row.updated_at : null,
     content_blocks: Array.isArray(row.content_blocks) ? row.content_blocks as import('~/lib/components/workspace/blog/types').BlogEditorBlock[] : [],

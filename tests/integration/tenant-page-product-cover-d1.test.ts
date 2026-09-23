@@ -79,7 +79,7 @@ test('a product grid item carries the product cover, not whichever placement sor
 
     await createContentDocumentWithBlocks(db, {
       id: 'home', organizationId: ORG, siteId: SITE, kind: 'page', rowRole: 'root', locale: 'en',
-      title: 'Home', path: '/', status: 'published', visibility: 'public', metadata: { page_type: 'custom' },
+      title: 'Home', path: '/', status: 'published', visibility: 'listed', metadata: { page_type: 'custom' },
     }, [{ id: 'home-products', type: 'product_grid', data: { product_ids: [product.id] } }])
 
     const page = await getPublicTenantPageForPath({} as CloudflareEnv, db, SITE, '/')

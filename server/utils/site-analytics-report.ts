@@ -144,7 +144,7 @@ export async function aggregateSiteAnalyticsDate(db: DbClient, organizationId: s
     { query: "DELETE FROM analytics_summaries WHERE organization_id = ? AND date = ? AND kind IN ('page_day', 'dimension_day')", params: [organizationId, date] },
     {
       query: `INSERT INTO analytics_summaries (id, kind, organization_id, date, key, payload_json, created_at, updated_at)
-        SELECT lower(hex(randomblob(16))), kind, ?, ?, ?, key, payload_json, ?, ? FROM (${daySummariesSql}) WHERE true
+        SELECT lower(hex(randomblob(16))), kind, ?, ?, key, payload_json, ?, ? FROM (${daySummariesSql}) WHERE true
         ON CONFLICT(organization_id, kind, date, key) DO UPDATE SET organization_id = excluded.organization_id,
           payload_json = excluded.payload_json, updated_at = excluded.updated_at`,
       params: [context.organizationId, date, now, now, organizationId, start, end],

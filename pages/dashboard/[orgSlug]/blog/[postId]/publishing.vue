@@ -23,7 +23,7 @@
         <UInput v-model="editor.form.scheduled_for" type="datetime-local" step="any" class="w-full" />
       </UFormField>
       <UFormField label="Visibility">
-        <USelect v-model="editor.form.visibility" :items="['public', 'unlisted']" class="w-full" />
+        <USelect v-model="editor.form.visibility" :items="['listed', 'unlisted']" class="w-full" />
       </UFormField>
     </div>
   </DashboardLeafPanel>

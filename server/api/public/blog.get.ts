@@ -43,7 +43,7 @@ export default defineHandler(async (event) => {
     FROM content_documents p
     ${coverJoinSql('p')}
     WHERE p.kind = 'article' AND p.row_role = 'root' AND p.status = 'published'
-      AND p.organization_id = ? AND p.visibility = 'public'
+      AND p.organization_id = ? AND p.visibility = 'listed'
       ${collection === null ? '' : "AND (p.metadata_json ->> '$.collection') = ?"}
     ORDER BY ${collection === 'docs' ? 'p.sort_order, p.title' : 'p.published_at IS NULL, p.published_at DESC, p.id DESC'}
     LIMIT 200

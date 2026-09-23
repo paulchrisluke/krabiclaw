@@ -2110,8 +2110,6 @@ export const content_blocks = sqliteTable("content_blocks", {
 
 export const public_resource_cache_invalidations = sqliteTable("public_resource_cache_invalidations", {
 	id: text().primaryKey(),
-	// The only table that carried `organization_id` and no `organization_id`, so this is
-	// the one place where the tenant is derived rather than already present.
 	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
 	reason: text().notNull(),
 	status: text().default("pending").notNull(),

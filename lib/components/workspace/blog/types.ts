@@ -18,7 +18,7 @@ export interface BlogPost {
   slug_manually_overridden?: boolean | number | null
   scheduled_for?: string | null
   status?: 'draft' | 'published' | 'scheduled'
-  visibility?: 'public' | 'unlisted'
+  visibility?: 'listed' | 'unlisted'
   tags?: string[]
   seo_title?: string | null
   /** The leading image block's asset, or null when the article opens with text. */
@@ -60,7 +60,7 @@ export interface BlogPostCreateInput {
   seo_keywords?: string | null
   canonical_url?: string | null
   robots?: string | null
-  visibility?: 'public' | 'unlisted'
+  visibility?: 'listed' | 'unlisted'
   scheduled_for?: string | null
 }
 
@@ -75,7 +75,7 @@ export interface BlogPostUpdateInput {
   seo_keywords?: string | null
   canonical_url?: string | null
   robots?: string | null
-  visibility?: 'public' | 'unlisted'
+  visibility?: 'listed' | 'unlisted'
   slug?: string | null
   redirect_old_slug?: boolean
   reset_slug_override?: boolean

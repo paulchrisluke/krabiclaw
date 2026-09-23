@@ -259,7 +259,7 @@ export function renderTenantBlogMarkdown(post: TenantLlmBlogDetail, origin: stri
 
 const DOC_SUMMARY_SELECT = `SELECT id, title, slug, (metadata_json ->> '$.category') AS category, summary AS excerpt, canonical_url, seo_description, updated_at
      FROM content_documents
-     WHERE kind = 'article' AND row_role = 'root' AND status = 'published' AND visibility = 'public'
+     WHERE kind = 'article' AND row_role = 'root' AND status = 'published' AND visibility = 'listed'
        AND (metadata_json ->> '$.collection') = 'docs' AND organization_id = ?`
 
 function withDocPath<T extends { slug: string }>(row: T): T & { path: string } {
@@ -285,7 +285,7 @@ export async function listPublishedTenantBlogPostsForLlm(db: DbClient, organizat
     `SELECT
       p.id, p.title, p.slug, p.summary AS excerpt, (p.metadata_json ->> '$.category') AS category, p.canonical_url, p.seo_description, p.published_at, p.updated_at, p.author_id
      FROM content_documents p
-     WHERE p.kind = 'article' AND p.row_role = 'root' AND p.status = 'published' AND p.organization_id = ? AND p.visibility = 'public'
+     WHERE p.kind = 'article' AND p.row_role = 'root' AND p.status = 'published' AND p.organization_id = ? AND p.visibility = 'listed'
        ${collection ? "AND (p.metadata_json ->> '$.collection') = ?" : ''}
      ORDER BY p.published_at DESC, p.updated_at DESC`,
     collection ? [organizationId, collection] : [organizationId],
@@ -314,7 +314,7 @@ export async function getPublishedTenantBlogPostBySlug(db: DbClient, organizatio
     `SELECT
       p.id, p.title, p.slug, p.summary AS excerpt, (p.metadata_json ->> '$.category') AS category, p.canonical_url, p.seo_description, p.published_at, p.updated_at
      FROM content_documents p
-     WHERE p.kind = 'article' AND p.row_role = 'root' AND p.slug = ? AND p.status = 'published' AND p.organization_id = ? AND p.visibility = 'public'
+     WHERE p.kind = 'article' AND p.row_role = 'root' AND p.slug = ? AND p.status = 'published' AND p.organization_id = ? AND p.visibility = 'listed'
        ${collection ? "AND (p.metadata_json ->> '$.collection') = ?" : ''}`,
     collection ? [slug, organizationId, collection] : [slug, organizationId],
   )

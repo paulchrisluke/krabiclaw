@@ -127,7 +127,7 @@ export interface PlatformBlogCreateInput {
   seo_keywords?: string | null
   canonical_url?: string | null
   robots?: string | null
-  visibility?: 'public' | 'unlisted'
+  visibility?: 'listed' | 'unlisted'
   scheduled_for?: string | null
 }
 
@@ -142,7 +142,7 @@ export interface PlatformBlogUpdateInput {
   seo_keywords?: string | null
   canonical_url?: string | null
   robots?: string | null
-  visibility?: 'public' | 'unlisted'
+  visibility?: 'listed' | 'unlisted'
   slug?: string | null
   redirect_old_slug?: boolean
   reset_slug_override?: boolean
@@ -486,7 +486,7 @@ function validateBlogCommon(input: Partial<PlatformBlogCreateInput>, isTenant: b
   const unknown = Object.keys(input).find(field => !writable.has(field))
   if (unknown) badRequest(unknown + ' is not writable through article ' + operation)
   normalizeBlankToNull(input)
-  if ('visibility' in input && input.visibility !== undefined && !['public', 'unlisted'].includes(String(input.visibility))) badRequest('visibility must be public or unlisted')
+  if ('visibility' in input && input.visibility !== undefined && !['listed', 'unlisted'].includes(String(input.visibility))) badRequest('visibility must be listed or unlisted')
   if (input.title !== undefined) assertStringLength(input.title, BLOG_TITLE_MAX, 'title')
   if (input.excerpt !== undefined) assertStringLength(input.excerpt ?? null, BLOG_EXCERPT_MAX, 'excerpt')
   if (input.category !== undefined) assertStringLength(input.category ?? null, BLOG_CATEGORY_MAX, 'category')
@@ -513,7 +513,7 @@ export async function listPublicPlatformBlogPosts(db: DbClient, collection: Arti
       p.seo_description, p.seo_keywords, p.canonical_url, p.published_at, p.updated_at, p.sort_order, ${COVER_SELECT}
     FROM content_documents p
     ${coverJoinSql('p')}
-    WHERE p.kind = 'article' AND p.row_role = 'root' AND p.status = 'published' AND p.organization_id = ? AND p.visibility = 'public'
+    WHERE p.kind = 'article' AND p.row_role = 'root' AND p.status = 'published' AND p.organization_id = ? AND p.visibility = 'listed'
       AND (p.metadata_json ->> '$.collection') = ?
     ORDER BY ${collection === 'docs' ? 'p.sort_order, p.title' : 'p.published_at DESC'}
     LIMIT 200
@@ -726,7 +726,7 @@ export async function createBlogPost(
   if (status !== 'scheduled' && scheduledFor) badRequest('scheduled_for is only valid for scheduled articles')
   if (status !== 'published' && !env?.PREVIEW_SECRET) throw new HTTPError({ statusCode: 500, statusMessage: 'Article preview signing is not configured' })
   const publishedAt = status === 'published' ? now : null
-  if (input.visibility && !['public', 'unlisted'].includes(input.visibility)) badRequest('visibility must be public or unlisted')
+  if (input.visibility && !['listed', 'unlisted'].includes(input.visibility)) badRequest('visibility must be listed or unlisted')
   const canonicalBlocks = await normalizeCanonicalBlogBlocks(db, input, placementScope)
   const canonicalBody = renderCanonicalBlogBody(canonicalBlocks)
 
@@ -736,7 +736,7 @@ export async function createBlogPost(
     try {
       await createContentDocumentWithBlocks(db, {
         id, rowRole: 'root', locale: 'en', kind: 'article', organizationId,
-        title: input.title, slug, summary: input.excerpt ?? null, status, visibility: input.visibility ?? 'public',
+        title: input.title, slug, summary: input.excerpt ?? null, status, visibility: input.visibility ?? 'listed',
         authorId, scheduledFor, publishedAt, firstPublishedAt: publishedAt,
         seoTitle: input.seo_title, seoDescription: input.seo_description, seoKeywords: input.seo_keywords,
         canonicalUrl: input.canonical_url, robots: input.robots,

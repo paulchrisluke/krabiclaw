@@ -65,7 +65,7 @@ interface BlogPost {
   seo_keywords?: string | null
   canonical_url?: string | null
   robots?: string | null
-  visibility?: 'public' | 'unlisted'
+  visibility?: 'listed' | 'unlisted'
   published_at?: string | null
   created_at?: string | null
   updated_at?: string | null

@@ -29,7 +29,7 @@ const UPDATE_BLOG_MUTATION_FIELDS = [
 const BLOG_CONTENT_BLOCK_TYPES = new Set<string>(CONTENT_BLOCK_TYPES)
 
 const BLOG_POST_STATUSES = new Set(['draft', 'published', 'scheduled'])
-const BLOG_VISIBILITIES = new Set(['public', 'unlisted'])
+const BLOG_VISIBILITIES = new Set(['listed', 'unlisted'])
 
 function hasAnyField(args: Record<string, unknown>, fields: readonly string[]) {
   return fields.some(field => Object.prototype.hasOwnProperty.call(args, field))

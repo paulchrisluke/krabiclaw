@@ -2,7 +2,7 @@ import { instantDate, isValidInstant, localDateTimeToInstant } from './timezone'
 import { PUBLICATION_CONTENT_BLOCK_LOCALIZED_FIELDS, expandContentFieldPath, readContentFieldValue, type PublicationContentBlockType } from '~/shared/content-registries'
 import { normalizeRobotsIntent } from '~/shared/robots-directive'
 
-export type BlogVisibility = 'public' | 'unlisted'
+export type BlogVisibility = 'listed' | 'unlisted'
 
 export interface EditorContentBlock {
   id?: string

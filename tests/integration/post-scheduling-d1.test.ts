@@ -49,7 +49,7 @@ test('social drafts, unlisted publication and scheduled posts preserve lifecycle
 
     const post = await createPost(db, 'org-proof', 'site-proof', { body: 'Private first draft', slug: 'draft-first' }, 'user-proof', {})
     assert.equal(post.status, 'draft')
-    assert.equal(post.visibility, 'public')
+    assert.equal(post.visibility, 'listed')
     assert.equal(post.published_at, null)
     assert.equal(post.public_path, null)
     assert.equal(post.canonical_url, null)
@@ -70,7 +70,7 @@ test('social drafts, unlisted publication and scheduled posts preserve lifecycle
     assert(firstPublished)
     assert.equal((await getPublishedPost(db, 'site-proof', { slug: 'draft-renamed' }))?.id, post.id)
     assert(!(await getPublishedPosts(db, 'site-proof')).some(row => row.id === post.id))
-    await updatePost(db, 'org-proof', 'site-proof', post.id, { visibility: 'public' }, 'user-proof', {})
+    await updatePost(db, 'org-proof', 'site-proof', post.id, { visibility: 'listed' }, 'user-proof', {})
     assert((await getPublishedPosts(db, 'site-proof')).some(row => row.id === post.id))
     await assert.rejects(updatePost(db, 'org-proof', 'site-proof', post.id, { scheduled_for: '2099-02-01T00:00:00.000Z' }, 'user-proof', {}), /cannot be rescheduled/)
     await assert.rejects(updatePost(db, 'org-proof', 'site-proof', post.id, { status: 'draft' }, 'user-proof', {}), /unknown field status/)

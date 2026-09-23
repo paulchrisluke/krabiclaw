@@ -478,7 +478,7 @@ async function loadPublicPageSource(
               ), 0) / 5.0) / 200.0)) AS INTEGER) AS read_time_minutes
        FROM content_documents root JOIN content_documents p ON COALESCE(p.root_id,p.id) = root.id AND p.locale = ?
        ${coverJoinSql('p')}
-       WHERE root.row_role = 'root' AND root.kind = 'article' AND root.status = 'published' AND p.organization_id = ? AND root.visibility = 'public'
+       WHERE root.row_role = 'root' AND root.kind = 'article' AND root.status = 'published' AND p.organization_id = ? AND root.visibility = 'listed'
        ORDER BY root.published_at IS NULL, root.published_at DESC, p.id DESC
        LIMIT ?`,
       [localizedLocale ?? "en", organizationId, page === "home" ? 3 : 50],

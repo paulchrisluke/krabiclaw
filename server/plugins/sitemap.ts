@@ -78,7 +78,7 @@ export default definePlugin((nitroApp) => {
          FROM content_documents
          WHERE kind = 'article' AND row_role = 'root' AND status = 'published'
            AND organization_id = ?
-           AND visibility = 'public'
+           AND visibility = 'listed'
            AND (robots IS NULL OR robots NOT LIKE '%noindex%')`,
         [platformSiteId],
       )
@@ -155,8 +155,8 @@ export default definePlugin((nitroApp) => {
             JOIN content_documents root ON root.id = d.root_id AND root.row_role = 'root'
            WHERE d.organization_id = ? AND d.locale = ? AND d.row_role = 'representation' AND d.path IS NOT NULL
              AND (root.robots IS NULL OR root.robots NOT LIKE '%noindex%')
-             AND (root.kind = 'page' OR (root.kind = 'article' AND root.status = 'published' AND root.visibility = 'public')
-               OR (root.kind = 'social_post' AND root.status = 'published' AND root.visibility = 'public'))
+             AND (root.kind = 'page' OR (root.kind = 'article' AND root.status = 'published' AND root.visibility = 'listed')
+               OR (root.kind = 'social_post' AND root.status = 'published' AND root.visibility = 'listed'))
            ORDER BY d.path
         `, [organizationId, candidate.locale]),
       ])
@@ -216,7 +216,7 @@ export default definePlugin((nitroApp) => {
           `SELECT slug, updated_at
            FROM content_documents
            WHERE organization_id = ? AND kind = 'article' AND row_role = 'root' AND status = 'published'
-             AND visibility = 'public'
+             AND visibility = 'listed'
              AND (robots IS NULL OR robots NOT LIKE '%noindex%')`,
           [organizationId],
         ),
@@ -273,7 +273,7 @@ export default definePlugin((nitroApp) => {
          FROM content_documents
          WHERE organization_id = ? AND kind = 'article' AND row_role = 'root'
            AND status = 'published'
-           AND visibility = 'public'
+           AND visibility = 'listed'
            AND (robots IS NULL OR robots NOT LIKE '%noindex%')`,
         [organizationId],
       ),
