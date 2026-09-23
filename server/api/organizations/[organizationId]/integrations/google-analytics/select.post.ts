@@ -66,11 +66,10 @@ export default defineHandler(async (event) => {
       return jsonResponse({ error: 'Google Analytics connection changed. Reload before selecting a property.' }, { status: 409 })
     }
 
-    try {
-      await reconcileZarazAnalytics(env, db)
-    } catch (error) {
-      console.error('zaraz_reconciliation_failed', { organizationId: organization.id, error })
-    }
+    // The selection is only real once the tracking script carries it, so a failed
+    // reconciliation falls through to the 502 below rather than reporting a
+    // measurement id the site is not actually sending events to.
+    await reconcileZarazAnalytics(env, db)
 
     return jsonResponse({ success: true, ga4_measurement_id: measurementId })
   } catch (error) {

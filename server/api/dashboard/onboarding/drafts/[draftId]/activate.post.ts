@@ -144,11 +144,7 @@ export default defineHandler(async (event) => {
     // The homepage and its media are live now: generate the social card once so
     // its first real card uses the homepage hero. Deliberately one owner —
     // everything else is picked up by the social-card-backfill task.
-    try {
-      await refreshSocialCard({ db, env, owner: { owner_type: 'organization', owner_id: organizationId }, actorId: session.user.id })
-    } catch (cardError) {
-      console.error('onboarding_activate_social_card_failed', { organizationId, error: cardError instanceof Error ? cardError.message : String(cardError) })
-    }
+    await refreshSocialCard({ db, env, owner: { owner_type: 'organization', owner_id: organizationId }, actorId: session.user.id })
 
     const waitUntil = event.req.runtime?.cloudflare?.context?.waitUntil
     if (typeof waitUntil === 'function') {

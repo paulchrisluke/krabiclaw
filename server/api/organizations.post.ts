@@ -58,14 +58,10 @@ export default defineHandler(async (event) => {
     vertical: vertical as SiteVertical,
     defaultCurrency,
   })
-  if (result.status === 200) {
-    // The tenant is live at this point; a failed activation must not turn that
-    // into a 500. It is logged loudly and the caller still gets the result.
-    try {
-      await activateSessionOrganization(event, env, organization.id)
-    } catch (error) {
-      console.error('organization_provisioning_activate_session_failed', { organizationId: organization.id, error: error instanceof Error ? error.message : String(error) })
-    }
-  }
+  // Provisioning is not finished until the caller's session is on the new
+  // organization; without it they are returned to a dashboard that cannot see
+  // the tenant they just created. Swallowing this reported a completed
+  // provisioning that had half happened, which is worse to debug than a 500.
+  if (result.status === 200) await activateSessionOrganization(event, env, organization.id)
   return jsonResponse(result.data, { status: result.status })
 })

@@ -114,15 +114,14 @@ export default defineHandler(async (event) => {
     `, [documentId, organizationId])
     if (!page) return jsonResponse({ error: 'Donation page not found' }, { status: 404 })
     const blocks = await queryAll<{ data_json: string }>(db, `SELECT cb.data_json FROM content_documents cd JOIN content_blocks cb ON cb.document_id = cd.id WHERE cd.id = ? AND cb.type = 'donation_choices'`, [documentId])
+    // data_json is this tenant's own stored block. Unparseable means the row is
+    // corrupt, and dropping it turned that corruption into "Donation page not
+    // found" — a 404 that sent the reader looking for a page that exists.
     const choices = blocks.flatMap((row) => {
-      try {
-        const data = JSON.parse(row.data_json) as ApiRecord
-        const host = typeof data.destination === 'string' ? destinationHost(data.destination) : null
-        const tiers = Array.isArray(data.tiers) ? data.tiers : []
-        return host ? [{ host, tiers }] : []
-      } catch {
-        return []
-      }
+      const data = JSON.parse(row.data_json) as ApiRecord
+      const host = typeof data.destination === 'string' ? destinationHost(data.destination) : null
+      const tiers = Array.isArray(data.tiers) ? data.tiers : []
+      return host ? [{ host, tiers }] : []
     })
     const choice = choices.find(({ tiers }) => tierLabel === 'Custom Amount'
       ? tierAmount === null

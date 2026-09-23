@@ -34,9 +34,17 @@ export default defineHandler(async (event) => {
   const source = cleanString(body.source, 100)
   const routeContext = cleanString(body.route_context, 500)
   const suggestedSummary = cleanString(body.suggested_summary, 1000)
-  const agentMetadata = body.agent_metadata_json !== undefined && body.agent_metadata_json !== null
-    ? (() => { try { return JSON.parse(JSON.stringify(body.agent_metadata_json)) as ApiValue } catch { return null } })()
-    : null
+  // Metadata the caller sent but that cannot round-trip is the caller's error,
+  // so it is refused. Discarding it silently meant an escalation arrived stripped
+  // of the context the agent attached, with nothing anywhere saying so.
+  let agentMetadata: ApiValue = null
+  if (body.agent_metadata_json !== undefined && body.agent_metadata_json !== null) {
+    try {
+      agentMetadata = JSON.parse(JSON.stringify(body.agent_metadata_json)) as ApiValue
+    } catch {
+      return jsonResponse({ error: 'agent_metadata_json must be JSON-serialisable.' }, { status: 400 })
+    }
+  }
   if (agentMetadata !== null && JSON.stringify(agentMetadata).length > 10_000) return jsonResponse({ error: 'agent_metadata_json is too large.' }, { status: 400 })
   const locationIdInput = cleanString(body.location_id, 100) || cleanString(body.locationId, 100)
 
