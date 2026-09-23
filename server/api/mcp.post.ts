@@ -217,9 +217,9 @@ function createTenantMcpServer(ctx: McpRequestContext): McpServer {
     // handler (confirmed empirically: request.params arrives as {}). It has
     // to travel outside the validated params object — a request header,
     // which the SDK doesn't touch — instead.
-    const siteIdHeader = event.req.headers.get("x-krabiclaw-site-id");
-    const hasSiteIdParam = siteIdHeader !== null;
-    const organizationId = siteIdHeader?.trim() || null;
+    const organizationIdHeader = event.req.headers.get("x-krabiclaw-organization-id");
+    const hasOrganizationIdParam = organizationIdHeader !== null;
+    const organizationId = organizationIdHeader?.trim() || null;
     const siteCtx = organizationId ? await getVisibleSiteContext(event, organizationId) : null;
 
     const visibleSurfaceTools = visibleConversationalMcpTools(MCP_PUBLIC_TOOLS, cfEnv);
@@ -234,7 +234,7 @@ function createTenantMcpServer(ctx: McpRequestContext): McpServer {
     // The role gate is the permission matrix now, so resolve it once per tool
     // before filtering rather than awaiting inside a sync predicate.
     const roleAllowsTool = new Map<string, boolean>()
-    if (hasSiteIdParam && organizationId && siteCtx) {
+    if (hasOrganizationIdParam && organizationId && siteCtx) {
       await Promise.all(visibleSurfaceTools.map(async (tool) => {
         roleAllowsTool.set(tool.name, await roleSatisfies(siteCtx.organizationId, siteCtx.role, tool.minimumRole))
       }))
@@ -244,7 +244,7 @@ function createTenantMcpServer(ctx: McpRequestContext): McpServer {
       // Without a organization_id, return all tools so AI clients (e.g. ChatGPT) can discover
       // the full capability set on first connection. A supplied but inaccessible
       // site must fail closed instead of receiving the unscoped catalog.
-      if (!hasSiteIdParam) return true;
+      if (!hasOrganizationIdParam) return true;
       if (!organizationId) return false;
       if (!siteCtx) return false;
       if (!roleAllowsTool.get(tool.name)) return false;

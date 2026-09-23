@@ -138,15 +138,15 @@ function phase(name: string) {
 // [font-phase] markers.
 test('Mali saves through Brand, renders before hydration, and stays within the cold-mobile regression budget', async ({ browser, playwright }, testInfo) => {
   test.setTimeout(600_000)
-  const siteId = 'site-kikuzuki'
+  const organizationId = 'org-kikuzuki'
   const baseURL = testBaseUrl()
   const owner = await playwright.request.newContext({ baseURL })
   await loginAs(owner, baseURL, 'user-e2e-kikuzuki-owner')
-  const settingsUrl = `/api/sites/${siteId}/settings`
+  const settingsUrl = `/api/organizations/${organizationId}/settings`
   const initial = await owner.get(settingsUrl)
   await expectStatus(initial, 200)
   const original = (await initial.json() as { settings: { font_preset: 'default' | 'mali'; brand_color: string } }).settings
-  const localePath = `/api/editor/sites/${siteId}/locales`
+  const localePath = `/api/editor/organizations/${organizationId}/locales`
   const localesBefore = await owner.get(localePath)
   await expectStatus(localesBefore, 200)
     // LCP is only a font measurement where the LCP element is text the font
@@ -168,7 +168,7 @@ test('Mali saves through Brand, renders before hydration, and stays within the c
   try {
     await patch({ font_preset: 'default', brand_color: '' })
     const cms = await dashboard.newPage()
-    const brandPath = `${baseURL}/dashboard/org-bVY8SxxUuG6Ctk2CQnfCk8T2cPsj4jJX/sites/kikuzuki-krabi-thailand/brand/font`
+    const brandPath = `${baseURL}/dashboard/kikuzuki-krabi-thailand/brand/font`
     // The deployed dashboard DOES serve the Zaraz consent modal, whose
     // .cf_modal_container overlay intercepts pointer events until it is dismissed.
     // openTenantPage accepts it; plain goto left every click on this page blocked

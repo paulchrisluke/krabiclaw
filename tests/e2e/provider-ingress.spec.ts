@@ -54,17 +54,17 @@ test('compact signed email reply persists once and rejects a changed address', a
     })
   }
   const name = `E5 ${randomUUID().slice(0, 12)}`
-  const submitted = await fetchPhase('create contact', '/api/public/sites/site-demo/contact', {
+  const submitted = await fetchPhase('create contact', '/api/public/contact', {
     method: 'POST',
     data: { name, email: 'paulchrisluke@gmail.com', message: 'Please confirm the continuity check.', subject: 'general' },
   })
   expect(submitted.status(), await submitted.text()).toBe(201)
   await test.step('authenticate owner and select organization', () => loginAs(request, baseURL!, 'user-e2e-demo-owner'), { timeout: 30_000 })
-  const listed = await fetchPhase('find contact thread', '/api/dashboard/sites/site-demo/guest-threads', { params: { search: name } })
+  const listed = await fetchPhase('find contact thread', '/api/dashboard/organizations/org-demo/guest-threads', { params: { search: name } })
   expect(listed.status(), await listed.text()).toBe(200)
   const { threads } = await listed.json()
   expect(threads).toHaveLength(1)
-  const detailUrl = `/api/dashboard/sites/site-demo/guest-threads/${threads[0].id}`
+  const detailUrl = `/api/dashboard/organizations/org-demo/guest-threads/${threads[0].id}`
   const initialResponse = await fetchPhase('read initial entries', detailUrl, {})
   expect(initialResponse.status(), await initialResponse.text()).toBe(200)
   const { thread: initial } = await initialResponse.json()

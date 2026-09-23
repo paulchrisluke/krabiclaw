@@ -264,7 +264,7 @@ const MERGE_FIELDS = ['name', 'description', 'order_url', 'seo_title', 'seo_desc
  * and their old paths are redirected. Nothing is picked.
  */
 export function planProductIdentity(stage) {
-  const rows = stage.prepare(`SELECT p.id, p.organization_id, p.site_id, p.location_id, p.slug, ${MERGE_FIELDS.map(field => `p.${field}`).join(', ')},
+  const rows = stage.prepare(`SELECT p.id, p.organization_id, p.location_id, p.slug, ${MERGE_FIELDS.map(field => `p.${field}`).join(', ')},
       (SELECT l.slug FROM old.business_locations l WHERE l.id = p.location_id) AS location_slug
     FROM old.products p ORDER BY p.id`).all()
   const localized = stage.prepare("SELECT resource_id, locale, values_json FROM old.resource_localizations WHERE resource_type = 'product'").all()
@@ -279,7 +279,7 @@ export function planProductIdentity(stage) {
   const plan = []
   for (const group of groups.values()) {
     if (group.length === 1) {
-      plan.push({ old_id: group[0].id, new_id: group[0].id, new_slug: group[0].slug, merged_into: null, redirect_from: null, site_id: group[0].site_id, location_id: group[0].location_id })
+      plan.push({ old_id: group[0].id, new_id: group[0].id, new_slug: group[0].slug, merged_into: null, redirect_from: null, location_id: group[0].location_id })
       continue
     }
     const conflicts = MERGE_FIELDS.filter(field => only(group.map(member => member[field])) === undefined)
@@ -296,7 +296,7 @@ export function planProductIdentity(stage) {
       // never a choice between two authored values.
       const survivor = group.map(member => member.id).sort()[0]
       for (const member of group) {
-        plan.push({ old_id: member.id, new_id: survivor, new_slug: member.slug, merged_into: member.id === survivor ? null : survivor, redirect_from: null, site_id: member.site_id, location_id: member.location_id })
+        plan.push({ old_id: member.id, new_id: survivor, new_slug: member.slug, merged_into: member.id === survivor ? null : survivor, redirect_from: null, location_id: member.location_id })
       }
       continue
     }
@@ -304,7 +304,7 @@ export function planProductIdentity(stage) {
       assert(member.location_slug, `Product ${member.id} has no location slug to qualify the contested slug "${member.slug}" with`)
       plan.push({
         old_id: member.id, new_id: member.id, new_slug: `${member.slug}-${member.location_slug}`,
-        merged_into: null, redirect_from: member.slug, site_id: member.site_id, location_id: member.location_id,
+        merged_into: null, redirect_from: member.slug, location_id: member.location_id,
         conflicts: [...new Set(conflicts)].join(','),
       })
     }
@@ -324,9 +324,9 @@ const EXPERIENCE_METAFIELDS = {
 
 function deriveCatalog(stage, now, record) {
   const plan = planProductIdentity(stage)
-  stage.exec('CREATE TEMP TABLE product_map (old_id TEXT PRIMARY KEY, new_id TEXT NOT NULL, new_slug TEXT NOT NULL, merged_into TEXT, redirect_from TEXT, site_id TEXT NOT NULL, location_id TEXT NOT NULL)')
-  const insertMap = stage.prepare('INSERT INTO temp.product_map (old_id, new_id, new_slug, merged_into, redirect_from, site_id, location_id) VALUES (?, ?, ?, ?, ?, ?, ?)')
-  for (const row of plan) insertMap.run(row.old_id, row.new_id, row.new_slug, row.merged_into, row.redirect_from, row.site_id, row.location_id)
+  stage.exec('CREATE TEMP TABLE product_map (old_id TEXT PRIMARY KEY, new_id TEXT NOT NULL, new_slug TEXT NOT NULL, merged_into TEXT, redirect_from TEXT, location_id TEXT NOT NULL)')
+  const insertMap = stage.prepare('INSERT INTO temp.product_map (old_id, new_id, new_slug, merged_into, redirect_from, location_id) VALUES (?, ?, ?, ?, ?, ?)')
+  for (const row of plan) insertMap.run(row.old_id, row.new_id, row.new_slug, row.merged_into, row.redirect_from, row.location_id)
   record('products_merged', plan.filter(row => row.merged_into).length)
   record('products_slug_qualified', plan.filter(row => row.redirect_from).length)
 
@@ -357,16 +357,16 @@ function deriveCatalog(stage, now, record) {
     ))`).run().changes)
 
   // --- the three independent states the old `is_visible` flag stood for
-  record('product_publications', stage.prepare(`INSERT INTO product_publications (organization_id, product_id, site_id, published, created_at, updated_at, created_by, updated_by)
-    SELECT max(p.organization_id), m.new_id, p.site_id, max(p.is_visible), min(p.created_at), max(p.updated_at), max(p.created_by), max(p.updated_by)
-    FROM old.products p JOIN temp.product_map m ON m.old_id = p.id GROUP BY m.new_id, p.site_id`).run().changes)
+  record('product_publications', stage.prepare(`INSERT INTO product_publications (organization_id, product_id, published, created_at, updated_at, created_by, updated_by)
+    SELECT max(p.organization_id), m.new_id, max(p.is_visible), min(p.created_at), max(p.updated_at), max(p.created_by), max(p.updated_by)
+    FROM old.products p JOIN temp.product_map m ON m.old_id = p.id GROUP BY m.new_id`).run().changes)
   record('product_locations', stage.prepare(`INSERT INTO product_locations (organization_id, product_id, location_id, active, published, created_at, updated_at, created_by, updated_by)
     SELECT max(p.organization_id), m.new_id, p.location_id, max(p.available), max(p.is_visible), min(p.created_at), max(p.updated_at), max(p.created_by), max(p.updated_by)
     FROM old.products p JOIN temp.product_map m ON m.old_id = p.id GROUP BY m.new_id, p.location_id`).run().changes)
 
   // --- grouping
-  record('collections', stage.prepare(`INSERT INTO collections (id, organization_id, site_id, location_id, name, slug, description, sort_order, created_at, updated_at, created_by, updated_by)
-    SELECT id, organization_id, site_id, location_id, name, slug, NULL, sort_order, created_at, updated_at, created_by, updated_by FROM old.product_categories`).run().changes)
+  record('collections', stage.prepare(`INSERT INTO collections (id, organization_id, location_id, name, slug, description, sort_order, created_at, updated_at, created_by, updated_by)
+    SELECT id, organization_id, location_id, name, slug, NULL, sort_order, created_at, updated_at, created_by, updated_by FROM old.product_categories`).run().changes)
   record('collection_products', stage.prepare(`INSERT INTO collection_products (organization_id, collection_id, product_id, sort_order, created_at, updated_at, created_by, updated_by)
     SELECT max(p.organization_id), p.category_id, m.new_id, min(p.sort_order), min(p.created_at), max(p.updated_at), max(p.created_by), max(p.updated_by)
     FROM old.products p JOIN temp.product_map m ON m.old_id = p.id
@@ -874,20 +874,20 @@ function deriveBookingCapability(stage, now, record) {
 function deriveProductMedia(stage, record) {
   // Placements the catalog does not own transfer unchanged; a product's move
   // with it, and an offering's move with its page.
-  record('media_placements', stage.prepare(`INSERT INTO media_placements (id, organization_id, site_id, owner_type, owner_id, slot, asset_id, sort_order, status, created_at, updated_at)
-    SELECT id, organization_id, site_id, owner_type, owner_id, slot, asset_id, sort_order, status, created_at, updated_at
+  record('media_placements', stage.prepare(`INSERT INTO media_placements (id, organization_id, owner_type, owner_id, slot, asset_id, sort_order, status, created_at, updated_at)
+    SELECT id, organization_id, owner_type, owner_id, slot, asset_id, sort_order, status, created_at, updated_at
       FROM old.media_placements WHERE owner_type NOT IN ('product', 'offering')`).run().changes)
-  record('product_media_placements', stage.prepare(`INSERT INTO media_placements (id, organization_id, site_id, owner_type, owner_id, slot, asset_id, sort_order, status, created_at, updated_at)
-    SELECT id, organization_id, site_id, 'product', owner_id, slot, asset_id,
-      row_number() OVER (PARTITION BY site_id, owner_id, slot ORDER BY sort_order, asset_id) - 1,
+  record('product_media_placements', stage.prepare(`INSERT INTO media_placements (id, organization_id, owner_type, owner_id, slot, asset_id, sort_order, status, created_at, updated_at)
+    SELECT id, organization_id, 'product', owner_id, slot, asset_id,
+      row_number() OVER (PARTITION BY organization_id, owner_id, slot ORDER BY sort_order, asset_id) - 1,
       status, created_at, updated_at
     FROM (
-      SELECT min(mp.id) AS id, max(mp.organization_id) AS organization_id, mp.site_id AS site_id, m.new_id AS owner_id,
+      SELECT min(mp.id) AS id, max(mp.organization_id) AS organization_id, m.new_id AS owner_id,
              mp.slot AS slot, mp.asset_id AS asset_id, min(mp.sort_order) AS sort_order,
              max(mp.status) AS status, min(mp.created_at) AS created_at, max(mp.updated_at) AS updated_at
         FROM old.media_placements mp JOIN temp.product_map m ON m.old_id = mp.owner_id
        WHERE mp.owner_type = 'product' AND (mp.slot <> 'social_card' OR mp.owner_id = m.new_id)
-       GROUP BY mp.site_id, m.new_id, mp.slot, mp.asset_id)`).run().changes)
+       GROUP BY mp.organization_id, m.new_id, mp.slot, mp.asset_id)`).run().changes)
   record('product_social_cards_regenerated', stage.prepare(`SELECT count(*) AS n FROM old.media_placements mp JOIN temp.product_map m ON m.old_id = mp.owner_id
     WHERE mp.owner_type = 'product' AND mp.slot = 'social_card' AND mp.owner_id <> m.new_id`).get().n)
   const promoted = stage.prepare(PROMOTE_PRODUCT_COVERS_SQL).run().changes
@@ -906,15 +906,15 @@ function deriveProductMedia(stage, record) {
 function deriveOfferingPages(stage, now, record) {
   const offerings = stage.prepare('SELECT * FROM old.offerings ORDER BY sort_order, id').all()
   if (offerings.length === 0) return
-  const insertDocument = stage.prepare(`INSERT INTO content_documents (id, organization_id, site_id, kind, row_role, locale, location_id, product_id, scope_path, title, slug, path, summary, status, visibility, sort_order, source, created_by, updated_by, seo_title, seo_description, metadata_json, created_at, updated_at)
-    VALUES (?, ?, ?, ?, 'root', 'en', ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+  const insertDocument = stage.prepare(`INSERT INTO content_documents (id, organization_id, kind, row_role, locale, location_id, product_id, scope_path, title, slug, path, summary, status, visibility, sort_order, source, created_by, updated_by, seo_title, seo_description, metadata_json, created_at, updated_at)
+    VALUES (?, ?, ?, 'root', 'en', ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
   const insertBlock = stage.prepare('INSERT INTO content_blocks (id, document_id, parent_block_id, type, position, level, data_json, created_at, updated_at) VALUES (?, ?, NULL, ?, ?, NULL, ?, ?, ?)')
-  const insertPlacement = stage.prepare('INSERT INTO media_placements (id, organization_id, site_id, owner_type, owner_id, slot, asset_id, sort_order, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+  const insertPlacement = stage.prepare('INSERT INTO media_placements (id, organization_id, owner_type, owner_id, slot, asset_id, sort_order, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
   const sourcePlacements = stage.prepare("SELECT * FROM old.media_placements WHERE owner_type = 'offering' ORDER BY owner_id, slot, sort_order").all()
   const placementsFor = (ownerId, slot) => sourcePlacements.filter(row => row.owner_id === ownerId && row.slot === slot)
   let placements = 0
   const movePlacement = (row, ownerType, ownerId, slot, sortOrder) => {
-    insertPlacement.run(row.id, row.organization_id, row.site_id, ownerType, ownerId, slot, row.asset_id, sortOrder, row.status, row.created_at, row.updated_at)
+    insertPlacement.run(row.id, row.organization_id, ownerType, ownerId, slot, row.asset_id, sortOrder, row.status, row.created_at, row.updated_at)
     placements += 1
   }
   let blocks = 0
@@ -923,7 +923,7 @@ function deriveOfferingPages(stage, now, record) {
   for (const offering of offerings) {
     const path = `/services/${offering.slug}`
     const documentId = `page-${offering.id}`
-    insertDocument.run(documentId, offering.organization_id, offering.site_id, 'page', offering.location_id, null,
+    insertDocument.run(documentId, offering.organization_id, 'page', offering.location_id, null,
       offering.name, offering.slug, path, offering.summary, null, null, offering.sort_order, offering.source,
       offering.updated_by, offering.updated_by, offering.seo_title, offering.seo_description,
       JSON.stringify({ page_type: 'custom' }), offering.created_at, offering.updated_at)
@@ -961,7 +961,7 @@ function deriveOfferingPages(stage, now, record) {
     }
     const faqs = JSON.parse(offering.faqs ?? '[]').filter(entry => !blank(entry?.question))
     faqs.forEach((entry, index) => {
-      insertDocument.run(`qa-${offering.id}-${index}`, offering.organization_id, offering.site_id, 'qa', offering.location_id, path,
+      insertDocument.run(`qa-${offering.id}-${index}`, offering.organization_id, 'qa', offering.location_id, path,
         entry.question, null, null, entry.answer ?? null, 'published', null, index, 'import',
         offering.updated_by, offering.updated_by, null, null,
         JSON.stringify({ is_owner_answer: 1, upvote_count: 0 }), offering.created_at, offering.updated_at)
@@ -982,22 +982,22 @@ function deriveOfferingPages(stage, now, record) {
   record('offering_media_placements', placements)
   record('offering_media_placements_unmapped', sourcePlacements.length - placements)
 
-  // An offering grid said "list everything this site offers". A page grid names
-  // its pages, so the implicit set becomes the explicit one it stood for.
-  const grids = stage.prepare("SELECT b.id, b.data_json, d.site_id FROM content_blocks b JOIN content_documents d ON d.id = b.document_id WHERE b.type = 'offering_grid'").all()
+  // An offering grid said "list everything this tenant offers". A page grid
+  // names its pages, so the implicit set becomes the explicit one it stood for.
+  const grids = stage.prepare("SELECT b.id, b.data_json, d.organization_id FROM content_blocks b JOIN content_documents d ON d.id = b.document_id WHERE b.type = 'offering_grid'").all()
   const updateGrid = stage.prepare('UPDATE content_blocks SET type = ?, data_json = ? WHERE id = ?')
-  const bySite = new Map()
-  for (const offering of offerings) bySite.set(offering.site_id, [...(bySite.get(offering.site_id) ?? []), `page-${offering.id}`])
+  const byOrganization = new Map()
+  for (const offering of offerings) byOrganization.set(offering.organization_id, [...(byOrganization.get(offering.organization_id) ?? []), `page-${offering.id}`])
   let converted = 0
   let authored = 0
   for (const grid of grids) {
     const data = JSON.parse(grid.data_json)
-    // A grid that listed the site's offerings names the pages they became. One
-    // that carried its own cards is authored page content, and keeps them.
+    // A grid that listed the tenant's offerings names the pages they became.
+    // One that carried its own cards is authored page content, and keeps them.
     if (data.source === 'site_offerings') {
       delete data.source
       delete data.items
-      data.page_ids = bySite.get(grid.site_id) ?? []
+      data.page_ids = byOrganization.get(grid.organization_id) ?? []
       updateGrid.run('page_grid', JSON.stringify(data), grid.id)
       converted += 1
       continue
@@ -1025,12 +1025,12 @@ function deriveGuestRecords(stage, record) {
   const rows = stage.prepare(`SELECT r.*, (SELECT l.timezone FROM old.business_locations l WHERE l.id = r.location_id) AS timezone,
       (SELECT m.new_id FROM temp.product_map m WHERE m.old_id = r.product_id) AS mapped_product_id
     FROM old.requests r WHERE r.booking_date IS NOT NULL ORDER BY r.id`).all()
-  const insertReservation = stage.prepare(`INSERT INTO reservations (id, organization_id, site_id, location_id, customer_id, request_id, timezone, starts_at, ends_at, party_size, status, cancelled_at, completed_at, cancellation_reason, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)`)
+  const insertReservation = stage.prepare(`INSERT INTO reservations (id, organization_id, location_id, customer_id, request_id, timezone, starts_at, ends_at, party_size, status, cancelled_at, completed_at, cancellation_reason, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)`)
   const insertSession = stage.prepare(`INSERT INTO product_sessions (id, organization_id, product_id, location_id, availability_rule_id, source_occurrence_key, timezone, starts_at, ends_at, capacity, status, created_at, updated_at, created_by, updated_by)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'scheduled', ?, ?, 'rebaseline', 'rebaseline') ON CONFLICT (id) DO NOTHING`)
-  const insertBooking = stage.prepare(`INSERT INTO bookings (id, organization_id, site_id, product_id, product_session_id, product_variant_id, customer_id, request_id, party_size, status, hold_expires_at, cancelled_at, completed_at, cancellation_reason, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, NULL, ?, ?)`)
+  const insertBooking = stage.prepare(`INSERT INTO bookings (id, organization_id, product_id, product_session_id, product_variant_id, customer_id, request_id, party_size, status, hold_expires_at, cancelled_at, completed_at, cancellation_reason, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, NULL, ?, ?)`)
   let reservations = 0
   let bookings = 0
 
@@ -1043,7 +1043,7 @@ function deriveGuestRecords(stage, record) {
     const completedAt = row.status === 'completed' ? (row.resolved_at ?? row.updated_at) : null
 
     if (row.kind === 'reservation') {
-      insertReservation.run(`reservation-${row.id}`, row.organization_id, row.site_id, row.location_id, row.customer_id, row.id,
+      insertReservation.run(`reservation-${row.id}`, row.organization_id, row.location_id, row.customer_id, row.id,
         row.timezone, startsAt, new Date(Date.parse(startsAt) + RESERVATION_DURATION_MINUTES * 60_000).toISOString(),
         partySize, row.status, cancelledAt, completedAt, row.created_at, row.updated_at)
       reservations += 1
@@ -1062,7 +1062,7 @@ function deriveGuestRecords(stage, record) {
     insertSession.run(sessionId, row.organization_id, row.mapped_product_id, row.location_id, rule?.id ?? null,
       rule ? occurrenceKey(rule.id, row.booking_date, row.time_slot) : null, row.timezone, startsAt,
       new Date(Date.parse(startsAt) + duration * 60_000).toISOString(), config.default_capacity, row.created_at, row.updated_at)
-    insertBooking.run(`booking-${row.id}`, row.organization_id, row.site_id, row.mapped_product_id, sessionId,
+    insertBooking.run(`booking-${row.id}`, row.organization_id, row.mapped_product_id, sessionId,
       `${row.mapped_product_id}-default`, row.customer_id, row.id, partySize, row.status, cancelledAt, completedAt, row.created_at, row.updated_at)
     bookings += 1
   }
@@ -1098,8 +1098,8 @@ function deriveLocalizations(stage, record) {
     .all().map(row => [`${row.organization_id}:${row.key}`, row]))
   const rows = stage.prepare(`SELECT r.*, m.new_id AS product_id FROM old.resource_localizations r
     LEFT JOIN temp.product_map m ON m.old_id = r.resource_id AND r.resource_type = 'product'`).all()
-  const insert = stage.prepare(`INSERT INTO resource_localizations (id, organization_id, site_id, resource_type, resource_id, locale, values_json, route_path, created_at, created_by_user_id, updated_at, updated_by_user_id)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (organization_id, site_id, resource_type, resource_id, locale) DO NOTHING`)
+  const insert = stage.prepare(`INSERT INTO resource_localizations (id, organization_id, resource_type, resource_id, locale, values_json, route_path, created_at, created_by_user_id, updated_at, updated_by_user_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (organization_id, resource_type, resource_id, locale) DO NOTHING`)
   let dropped = 0
   let inserted = 0
   for (const row of rows) {
@@ -1124,7 +1124,7 @@ function deriveLocalizations(stage, record) {
     // A Product's localized route is derived from the location it is offered
     // at — one Product, one row, every location it reaches.
     const routePath = resourceType === 'product' ? null : row.route_path
-    inserted += insert.run(row.id, row.organization_id, row.site_id, resourceType, resourceId, row.locale, JSON.stringify(values),
+    inserted += insert.run(row.id, row.organization_id, resourceType, resourceId, row.locale, JSON.stringify(values),
       routePath, row.created_at, row.created_by_user_id, row.updated_at, row.updated_by_user_id).changes
   }
   record('resource_localizations', inserted)
@@ -1136,9 +1136,12 @@ function deriveLocalizations(stage, record) {
 
 /** A Product whose slug had to be qualified keeps its old path reachable. */
 function deriveSlugRedirects(stage, now, record) {
-  const rows = stage.prepare(`SELECT DISTINCT m.redirect_from, m.new_slug, m.site_id, m.location_id, p.organization_id,
+  // The vertical still lives on the source \`sites\` row here: this runs before
+  // the organization absorbs it, and the merge's one-site-per-organization
+  // check is what makes reading it by organization single-valued.
+  const rows = stage.prepare(`SELECT DISTINCT m.redirect_from, m.new_slug, m.location_id, p.organization_id,
       (SELECT l.slug FROM old.business_locations l WHERE l.id = m.location_id) AS location_slug,
-      (SELECT s.vertical FROM old.sites s WHERE s.id = m.site_id) AS vertical
+      (SELECT s.vertical FROM old.sites s WHERE s.organization_id = p.organization_id) AS vertical
     FROM temp.product_map m JOIN products p ON p.id = m.new_id WHERE m.redirect_from IS NOT NULL`).all()
   const insert = stage.prepare(`INSERT INTO organization_redirects (id, organization_id, locale, owner_type, owner_id, from_path, to_path, status_code, behavior, reason, source, created_at, updated_at)
     VALUES (?, ?, 'en', NULL, NULL, ?, ?, 301, 'redirect', ?, 'rebaseline', ?, ?)`)

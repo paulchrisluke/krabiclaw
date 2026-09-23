@@ -49,7 +49,7 @@ test('a page prefers its own media and never its neighbours', () => {
   assert.equal(selectSocialCardPlacements([{ ...video, thumbnail_url: null }], { owner_type: 'content_document', owner_id: 'post-1' }, 'org-1').source, null)
 })
 
-test('every page gets a card: an owner with no media of its own falls back to the organization's share image', () => {
+test('every page gets a card: an owner with no media of its own falls back to the organization share image', () => {
   const share = placedAsset('organization', 'org-1', 'social_share', 'org-share')
   // The page types that carry no picture of their own: tenant pages, docs, reviews.
   for (const owner of [

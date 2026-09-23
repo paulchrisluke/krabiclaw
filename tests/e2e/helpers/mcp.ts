@@ -37,9 +37,9 @@ function withMcpJson(response: APIResponse): APIResponse {
 export const MCP_VERSION = '2025-06-18'
 // Fixed fixture sites retained in the production snapshot with the matching plan already
 // active. Entitlement checks are site-scoped (hasSiteEntitlement), so a plan-gated tool
-// call needs the org's actual paid site, not a brand-new site from ensureSite() (which
-// always starts on `free` per the second-site billing rule).
-export const MCP_GROWTH_SITE_ID = 'site-demo'
+// call needs the org's actual paid organization, not a brand-new one from
+// ensureOrganization() (which always starts on `free`).
+export const MCP_GROWTH_ORGANIZATION_ID = 'org-demo'
 
 export async function mcpRequest(
   request: APIRequestContext,
@@ -47,7 +47,7 @@ export async function mcpRequest(
   options: {
     method: 'initialize' | 'notifications/initialized' | 'server/discover' | 'tools/list' | 'tools/call' | 'resources/list' | 'resources/read' | 'bad/method'
     id?: string | number
-    siteId?: string
+    organizationId?: string
     toolName?: string
     args?: Record<string, unknown>
     extraHeaders?: Record<string, string>
@@ -93,12 +93,12 @@ export async function mcpRequest(
         // response formats they accept; @modelcontextprotocol/server answers
         // 406 without this (the old hand-rolled route never checked Accept).
         accept: 'application/json, text/event-stream',
-        // site_id is a KrabiClaw extension for site-scoped tools/list
-        // discovery, not part of the MCP spec's ListToolsRequestParams —
-        // the SDK validates that against the spec's schema (only
-        // cursor/_meta) and silently drops anything else, so it has to
-        // travel as a header instead of a JSON-RPC param.
-        ...(options.siteId ? { 'x-krabiclaw-site-id': options.siteId } : {}),
+        // organization_id is a KrabiClaw extension for tenant-scoped
+        // tools/list discovery, not part of the MCP spec's
+        // ListToolsRequestParams — the SDK validates that against the spec's
+        // schema (only cursor/_meta) and silently drops anything else, so it
+        // has to travel as a header instead of a JSON-RPC param.
+        ...(options.organizationId ? { 'x-krabiclaw-organization-id': options.organizationId } : {}),
         ...(options.extraHeaders ?? {}),
         'x-request-id': requestId,
       },
@@ -145,16 +145,16 @@ export function mcpData<T>(body: { error?: unknown; result?: { isError?: boolean
   throw new Error('MCP tool response contained no result.structuredContent')
 }
 
-export async function ensureSite(request: APIRequestContext, baseURL: string) {
+export async function ensureOrganization(request: APIRequestContext, baseURL: string) {
   const suffix = `${Date.now()}-${Math.random().toString(36).substring(2, 8)}`
-  // POST /api/sites requires the target organization explicitly. loginAs() made the
+  // POST /api/organizations requires the target organization explicitly. loginAs() made the
   // fixture's membership the active organization; a fixture with no organization
   // (user-e2e-growth-service-owner) gets one through Better Auth's organization
   // API, which also makes it the session's active organization.
   const sessionRes = await request.get(`${baseURL}/api/auth/get-session`)
   expect(sessionRes.ok(), await sessionRes.text()).toBe(true)
   const body = await sessionRes.json() as { session?: { activeOrganizationId?: string | null } } | null
-  expect(body?.session, 'ensureSite requires an authenticated session').toBeTruthy()
+  expect(body?.session, 'ensureOrganization requires an authenticated session').toBeTruthy()
   let organizationId = body!.session!.activeOrganizationId ?? null
   if (!organizationId) {
     const created = await request.post(`${baseURL}/api/auth/organization/create`, {
@@ -164,53 +164,47 @@ export async function ensureSite(request: APIRequestContext, baseURL: string) {
     expect(created.ok(), await created.text()).toBe(true)
     organizationId = (await created.json() as { id: string }).id
   }
-  const res = await request.post(`${baseURL}/api/sites`, {
-    // A site created here is live immediately, so it states the currency its
+  const res = await request.post(`${baseURL}/api/organizations`, {
+    // A tenant created here is live immediately, so it states the currency its
     // prices are quoted in rather than inheriting one nobody chose.
     data: { name: `MCP E2E ${suffix}`, subdomain: `e2e-mcp-${suffix}`, vertical: 'restaurant', organizationId, defaultCurrency: 'THB' },
   })
   expect(res.ok(), await res.text()).toBe(true)
-  const { siteId } = await res.json() as { siteId: string }
-  expect(siteId).toEqual(expect.any(String))
-  return siteId
+  const created = await res.json() as { organizationId: string }
+  expect(created.organizationId).toEqual(expect.any(String))
+  return created.organizationId
 }
 
-export async function ensureLocation(request: APIRequestContext, baseURL: string, siteId: string) {
+export async function ensureLocation(request: APIRequestContext, baseURL: string, organizationId: string) {
   const locations = await mcpRequest(request, baseURL, {
     method: 'tools/call',
     toolName: 'list_locations',
-    args: { site_id: siteId },
+    args: { organization_id: organizationId },
   })
   expect(locations.status()).toBe(200)
   const locationsBody = await locations.json()
   const data = mcpData<{ locations: Array<{ id: string }> }>(locationsBody)
-  expect(data.locations, 'A newly provisioned test site has one seeded location').toHaveLength(1)
+  expect(data.locations, 'A newly provisioned tenant has one seeded location').toHaveLength(1)
   return data.locations[0]!.id
 }
 
 // Create disposable locations through the same API the CMS uses. That endpoint
-// is route-scoped: it reads the organization and site from the `org` and `site`
-// query the dashboard transport sends and refuses the request without them, so
-// the helper resolves the same pair the dashboard URL would carry. `site` is the
-// subdomain, which is what a /dashboard/{orgSlug}/sites/{siteSlug} route holds.
-async function dashboardScope(request: APIRequestContext, baseURL: string, siteId: string) {
+// is route-scoped: it reads the organization from the `org` query the dashboard
+// transport sends and refuses the request without it, so the helper resolves
+// the same slug the dashboard URL would carry.
+async function dashboardScope(request: APIRequestContext, baseURL: string, organizationId: string) {
   const orgRes = await request.get(`${baseURL}/api/auth/organization/get-full-organization`)
   expect(orgRes.ok(), await orgRes.text()).toBe(true)
-  const { slug: org } = await orgRes.json() as { slug: string }
+  const { id, slug: org } = await orgRes.json() as { id: string; slug: string }
   expect(org, 'The session has no active organization to scope the request to').toEqual(expect.any(String))
-
-  const contextRes = await request.get(`${baseURL}/api/dashboard/context?org=${encodeURIComponent(org)}`)
-  expect(contextRes.ok(), await contextRes.text()).toBe(true)
-  const { sites } = await contextRes.json() as { sites: Array<{ id: string; subdomain: string | null }> }
-  const site = sites.find(candidate => candidate.id === siteId)
-  expect(site?.subdomain, `Site ${siteId} is not in organization ${org}`).toEqual(expect.any(String))
-  return `org=${encodeURIComponent(org)}&site=${encodeURIComponent(site!.subdomain!)}`
+  expect(id, `Organization ${organizationId} is not the session's active organization`).toBe(organizationId)
+  return `org=${encodeURIComponent(org)}`
 }
 
 // The endpoint answers with the new location's slug; the id comes from the same
 // list the dashboard reads.
-export async function createScratchLocation(request: APIRequestContext, baseURL: string, siteId: string) {
-  const scope = await dashboardScope(request, baseURL, siteId)
+export async function createScratchLocation(request: APIRequestContext, baseURL: string, organizationId: string) {
+  const scope = await dashboardScope(request, baseURL, organizationId)
   const response = await request.post(`${baseURL}/api/dashboard/locations?${scope}`, {
     data: { name: `MCP Scratch Location ${Date.now()}`, details: { city: 'Krabi' } },
   })
