@@ -116,6 +116,17 @@ export const TRANSFORMS = [
   { name: 'localized_locations_drop_city_and_neighbourhood', sql: `UPDATE resource_localizations SET values_json = json_remove(values_json, '$.city', '$.neighborhood')
     WHERE resource_type = 'business_location'
       AND (json_type(values_json, '$.city') IS NOT NULL OR json_type(values_json, '$.neighborhood') IS NOT NULL)` },
+  // `brand_name` became `organization.name`, and the translation of it has to
+  // follow the column. Renaming the resource type alone left every organization
+  // localization keyed `brand_name`, which the registry no longer declares, so
+  // the localization validator refused the whole row and every localized route
+  // answered 422 — the entire Thai site, for a tenant that pays for the
+  // language. The resource_type rename runs in either order, so both spellings
+  // are matched.
+  { name: 'localized_brand_name_is_organization_name', sql: `UPDATE resource_localizations
+      SET values_json = json_remove(json_set(values_json, '$.name', values_json ->> '$.brand_name'), '$.brand_name')
+    WHERE resource_type IN ('site', 'organization')
+      AND json_type(values_json, '$.brand_name') IS NOT NULL` },
   { name: 'addresses_absorb_city_and_neighbourhood', requires: { table: 'business_locations', columns: ['city', 'neighborhood'] }, sql: `UPDATE business_locations SET address = (
       SELECT json_patch(business_locations.address, json_object(
         'locality', COALESCE(business_locations.address ->> '$.locality', nullif(trim(coalesce(o.city, '')), '')),
