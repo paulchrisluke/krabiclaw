@@ -50,8 +50,8 @@ const { data: publishedLocales, error: publishedLocalesError } = await useAsyncD
       const db = cloudflareEnv(requestEvent).db
       if (!db) throw createError({ statusCode: 503, statusMessage: 'Database unavailable' })
       const rows = await queryAll<{ locale: string }>(db, `
-        SELECT locale FROM site_locales
-         WHERE site_id = ? AND is_source = 0 AND status = 'published'
+        SELECT locale FROM organization_locales
+         WHERE organization_id = ? AND is_source = 0 AND status = 'published'
          ORDER BY locale
       `, [organizationId])
       return rows.map(row => row.locale)
@@ -81,9 +81,9 @@ const localizedData = localeSegment.value
         const env = cloudflareEnv(requestEvent)
         const db = env.db
         if (!db) throw createError({ statusCode: 503, statusMessage: 'Database unavailable' })
-        const currentSite = await queryFirst<{ organization_id: string }>(db, 'SELECT organization_id FROM sites WHERE id = ? AND status = \'active\' LIMIT 1', [organizationId])
-        if (!currentSite) throw createError({ statusCode: 404, statusMessage: 'Site not found' })
-        return { route: await resolveLocalizedPublicRoute(env, db, currentSite.organization_id, pagePath.value) }
+        const organization = await queryFirst<{ id: string }>(db, 'SELECT id FROM organization WHERE id = ? AND status = \'active\' LIMIT 1', [organizationId])
+        if (!organization) throw createError({ statusCode: 404, statusMessage: 'Organization not found' })
+        return { route: await resolveLocalizedPublicRoute(env, db, organization.id, pagePath.value) }
       }
       const endpoint: string = `/api/public/localized-route`
       return await publicApiRequest(endpoint, {

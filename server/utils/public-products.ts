@@ -139,7 +139,7 @@ export async function loadPublicProductCollection(
      WHERE organization_id = ? AND status = 'active'
        ${locationSlug ? 'AND slug = ?' : ''}
      ORDER BY title, id
-  `, [resolved.site.id, organizationId, ...(locationSlug ? [locationSlug] : [])])
+  `, [organizationId, ...(locationSlug ? [locationSlug] : [])])
   if (locationSlug && locationRows.length !== 1) return null
   const locations = locationRows.filter(location => locationHasProducts(resolved.site, location))
   if (locationSlug && locations.length !== 1) return null
