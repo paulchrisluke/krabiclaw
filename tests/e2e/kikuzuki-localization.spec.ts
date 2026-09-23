@@ -3,7 +3,7 @@ import { openTenantPage } from './helpers'
 import { loginAs } from './helpers/auth'
 import { kikuzukiTestBaseUrl, kikuzukiTestExtraHeaders, testBaseUrl } from './test-env'
 
-const siteId = 'site-kikuzuki'
+const organizationId = 'org-kikuzuki'
 const locale = 'th'
 
 async function expectStatus(response: APIResponse, expected: number) {
@@ -18,7 +18,7 @@ async function putLocalization(
   body: Record<string, unknown>,
 ) {
   await expectStatus(await request.put(
-    `/api/editor/sites/${siteId}/localization/${resourceType}/${resourceId}/${locale}`,
+    `/api/editor/organizations/${organizationId}/localization/${resourceType}/${resourceId}/${locale}`,
     { data: body },
   ), 200)
 }
@@ -43,15 +43,15 @@ test.beforeAll(async ({ playwright }, testInfo) => {
   await loginAs(owner, baseURL, 'user-e2e-kikuzuki-owner')
 
   try {
-    await expectStatus(await owner.post(`/api/editor/sites/${siteId}/locales/${locale}/add`), 200)
+    await expectStatus(await owner.post(`/api/editor/organizations/${organizationId}/locales/${locale}/add`), 200)
 
-    await putLocalization(owner, 'site', siteId, {
+    await putLocalization(owner, 'organization', organizationId, {
       values: {
         name: 'Kikuzuki กระบี่ ประเทศไทย',
         brand_description: 'อาหารญี่ปุ่นต้นตำรับในกระบี่',
       },
     })
-    const locationResponse = await owner.get('/api/sites/site-kikuzuki/locations/loc-kikuzuki')
+    const locationResponse = await owner.get('/api/organizations/org-kikuzuki/locations/loc-kikuzuki')
     await expectStatus(locationResponse, 200)
     expect(await locationResponse.json()).toMatchObject({
       location: {
@@ -74,7 +74,7 @@ test.beforeAll(async ({ playwright }, testInfo) => {
     // Menu sections are collections now; their names localize on the
     // collection. The id is read from the site rather than written here — a
     // tenant's own ids are its business, not a constant in a test.
-    const collectionsResponse = await owner.get(`/api/editor/sites/${siteId}/collections?location_id=loc-kikuzuki`)
+    const collectionsResponse = await owner.get(`/api/editor/organizations/${organizationId}/collections?location_id=loc-kikuzuki`)
     await expectStatus(collectionsResponse, 200)
     const { collections } = await collectionsResponse.json() as { collections: Array<{ id: string; slug: string }> }
     const sushi = collections.find(collection => collection.slug === 'sushi')
@@ -157,7 +157,7 @@ test('Kikuzuki Localize preserves its translated address', async ({ browser, pla
     const cms = await dashboardContext.newPage()
     try {
       // Languages is a row on the location's settings list; its control opens the sheet.
-      await openTenantPage(cms, `${baseURL}/dashboard/org-bVY8SxxUuG6Ctk2CQnfCk8T2cPsj4jJX/sites/kikuzuki-krabi-thailand/locations/kikuzuki-japanese-robatayaki-izakaya/settings`, {})
+      await openTenantPage(cms, `${baseURL}/dashboard/kikuzuki-krabi-thailand/locations/kikuzuki-japanese-robatayaki-izakaya/settings`, {})
       await cms.getByRole('button', { name: 'Localize' }).click()
       await cms.getByTestId('localize-language').click()
       await cms.getByRole('option', { name: /ไทย \(th\)/ }).click()

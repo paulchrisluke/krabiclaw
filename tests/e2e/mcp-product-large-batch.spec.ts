@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 import { loginAs } from './helpers/auth'
-import { ensureLocation, ensureSite, mcpData, mcpRequest } from './helpers/mcp'
+import { ensureLocation, ensureOrganization, mcpData, mcpRequest } from './helpers/mcp'
 import { MCP_GROWTH_USER_ID } from './helpers/plan-fixtures'
 
 interface CreatedProduct { id: string; name: string; description: string; active: boolean }
@@ -8,15 +8,15 @@ interface CreatedProduct { id: string; name: string; description: string; active
 test('Product batches validate and commit atomically at the supported limit', async ({ request, baseURL }) => {
   test.setTimeout(120_000)
   await loginAs(request, baseURL!, MCP_GROWTH_USER_ID)
-  const siteId = await ensureSite(request, baseURL!)
-  const locationId = await ensureLocation(request, baseURL!, siteId)
+  const organizationId = await ensureOrganization(request, baseURL!)
+  const locationId = await ensureLocation(request, baseURL!, organizationId)
 
   const collectionIds: string[] = []
   for (const name of ['First', 'Second']) {
     const response = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
       toolName: 'create_collection',
-      args: { site_id: siteId, name },
+      args: { organization_id: organizationId, name },
     })
     collectionIds.push(mcpData<{ collection: { id: string } }>(await response.json()).collection.id)
   }
@@ -35,18 +35,18 @@ test('Product batches validate and commit atomically at the supported limit', as
 
   const invalidCreate = await mcpRequest(request, baseURL!, {
     method: 'tools/call', toolName: 'batch_create_products',
-    args: { site_id: siteId, products: invalidProducts },
+    args: { organization_id: organizationId, products: invalidProducts },
   })
   expect((await invalidCreate.json()).result?.isError).toBe(true)
 
   const afterInvalid = await mcpRequest(request, baseURL!, {
-    method: 'tools/call', toolName: 'list_products', args: { site_id: siteId, limit: 100 },
+    method: 'tools/call', toolName: 'list_products', args: { organization_id: organizationId, limit: 100 },
   })
   expect(mcpData<{ products: unknown[] }>(await afterInvalid.json()).products).toHaveLength(0)
 
   const validCreate = await mcpRequest(request, baseURL!, {
     method: 'tools/call', toolName: 'batch_create_products',
-    args: { site_id: siteId, products },
+    args: { organization_id: organizationId, products },
   })
   const created = mcpData<{ products: CreatedProduct[] }>(await validCreate.json()).products
   expect(created).toHaveLength(100)
@@ -56,13 +56,13 @@ test('Product batches validate and commit atomically at the supported limit', as
     const slice = created.slice(index * 50, index * 50 + 50).map(product => product.id)
     const response = await mcpRequest(request, baseURL!, {
       method: 'tools/call', toolName: 'set_collection_products',
-      args: { site_id: siteId, collection_id: collectionId, product_ids: slice },
+      args: { organization_id: organizationId, collection_id: collectionId, product_ids: slice },
     })
     expect(mcpData<{ products: unknown[] }>(await response.json()).products).toHaveLength(50)
   }
   await mcpRequest(request, baseURL!, {
     method: 'tools/call', toolName: 'set_product_location',
-    args: { site_id: siteId, product_id: created[0]!.id, location_id: locationId, active: true, published: true },
+    args: { organization_id: organizationId, product_id: created[0]!.id, location_id: locationId, active: true, published: true },
   })
 
   const desired = created.slice(0, 95).map((product, index) => ({
@@ -73,7 +73,7 @@ test('Product batches validate and commit atomically at the supported limit', as
   }))
   const reconcileResponse = await mcpRequest(request, baseURL!, {
     method: 'tools/call', toolName: 'reconcile_products',
-    args: { site_id: siteId, products: desired, deactivate_missing: true },
+    args: { organization_id: organizationId, products: desired, deactivate_missing: true },
   })
   const reconciled = mcpData<{ products: CreatedProduct[] }>(await reconcileResponse.json()).products
   expect(reconciled).toHaveLength(100)

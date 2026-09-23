@@ -12,7 +12,7 @@ import { NOT_HANDLED, mutationContextPayload, requiredString } from './shared'
 
 export async function handleLocalesTools(ctx: McpExecutorContext): Promise<unknown> {
   const { toolName, args, site } = ctx
-  if (toolName === 'list_site_locales') {
+  if (toolName === 'list_organization_locales') {
     return await listSiteLocales(site.db, site.organizationId)
   }
   if (toolName === 'get_resource_localization') {

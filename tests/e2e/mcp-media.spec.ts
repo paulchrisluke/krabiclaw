@@ -1,10 +1,10 @@
 import { expect, test } from '@playwright/test'
 import { loginAs } from './helpers/auth'
 import { MCP_GROWTH_USER_ID } from './helpers/plan-fixtures'
-import { MCP_VERSION, MCP_GROWTH_SITE_ID, mcpRequest, mcpData, ensureSite, loginAsFreshMcpUser } from './helpers/mcp'
+import { MCP_VERSION, MCP_GROWTH_ORGANIZATION_ID, mcpRequest, mcpData, ensureOrganization, loginAsFreshMcpUser } from './helpers/mcp'
 import { devLoginHeaders } from './test-env'
 
-const MCP_VIDEO_ATTACHMENT_URL = 'https://media.krabiclaw.com/sites/site-demo/media/media-demo-pizza-prep-video.mp4'
+const MCP_VIDEO_ATTACHMENT_URL = 'https://media.krabiclaw.com/sites/org-demo/media/media-demo-pizza-prep-video.mp4'
 const MCP_VIDEO_POSTER_URL = 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/0762ea49-0bd2-4cc8-1044-d6c9b1f00100/public'
 
 test.describe('stateless MCP server', () => {
@@ -62,7 +62,7 @@ test.describe('stateless MCP server', () => {
     const locations = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
       toolName: 'list_locations',
-      args: { site_id: MCP_GROWTH_SITE_ID },
+      args: { organization_id: MCP_GROWTH_ORGANIZATION_ID },
     })
     expect(locations.status()).toBe(200)
     const locationId = mcpData<{ locations: Array<{ id: string }> }>(await locations.json()).locations[0]?.id
@@ -71,9 +71,9 @@ test.describe('stateless MCP server', () => {
     const mismatchedTarget = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
       toolName: 'set_media',
-      siteId: MCP_GROWTH_SITE_ID,
+      organizationId: MCP_GROWTH_ORGANIZATION_ID,
       args: {
-        site_id: MCP_GROWTH_SITE_ID,
+        organization_id: MCP_GROWTH_ORGANIZATION_ID,
         placement: { owner_type: 'business_location', owner_id: locationId, slot: 'hero' },
         location_id: locationId,
         asset_id: 'media-does-not-matter-for-this-check',
@@ -88,7 +88,7 @@ test.describe('stateless MCP server', () => {
   test('ChatGPT-shaped video and poster attachments produce an active public asset', async ({ request, baseURL }) => {
     test.setTimeout(90_000)
     await loginAsFreshMcpUser(request, baseURL!, 'media')
-    const siteId = await ensureSite(request, baseURL!)
+    const organizationId = await ensureOrganization(request, baseURL!)
     let assetId = ''
 
     try {
@@ -96,7 +96,7 @@ test.describe('stateless MCP server', () => {
         method: 'tools/call',
         toolName: 'upload_user_media',
         args: {
-          site_id: siteId,
+          organization_id: organizationId,
           category: 'other',
           file: {
             download_url: MCP_VIDEO_ATTACHMENT_URL,
@@ -130,7 +130,7 @@ test.describe('stateless MCP server', () => {
 
     } finally {
       if (assetId) {
-        const remove = await mcpRequest(request, baseURL!, { method: 'tools/call', toolName: 'delete_media_asset', args: { site_id: siteId, asset_id: assetId } })
+        const remove = await mcpRequest(request, baseURL!, { method: 'tools/call', toolName: 'delete_media_asset', args: { organization_id: organizationId, asset_id: assetId } })
         expect(mcpData<{ deleted: boolean }>(await remove.json()).deleted).toBe(true)
       }
     }

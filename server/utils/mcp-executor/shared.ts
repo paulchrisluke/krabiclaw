@@ -5,7 +5,7 @@ import { queryFirst } from "~/server/db";
 import { isIP } from "node:net";
 import { getMediaAsset } from "~/server/utils/media-asset-manager";
 import type { getMcpTool } from "~/server/utils/mcp-tools";
-import { requireMcpUser, type McpSiteContext, type McpUserContext } from "~/server/utils/mcp-auth";
+import { requireMcpUser, type McpOrganizationContext, type McpUserContext } from "~/server/utils/mcp-auth";
 import { mcpProtocolError, MCP_ERROR } from "~/server/utils/mcp-protocol";
 import {
   resolveMcpWorkspace,
@@ -129,7 +129,7 @@ export async function requireActiveVideoAsset(
   if (!asset || asset.status !== "active" || asset.kind !== "video") {
     throw mcpProtocolError(
       MCP_ERROR.invalidParams,
-      `${fieldName} must reference an active video asset from this site. Upload the video via the dashboard media library first, then call get_site_media_assets to find its asset id.`,
+      `${fieldName} must reference an active video asset from this site. Upload the video via the dashboard media library first, then call get_organization_media_assets to find its asset id.`,
     );
   }
   return asset;
@@ -432,9 +432,8 @@ export function workspaceContextPayload(
     organization_id: organization?.id ?? null,
     organization_name: organization?.name ?? null,
     organization_slug: organization?.slug ?? null,
-    site_name: organization?.name ?? organization?.subdomain ?? null,
-    site_subdomain: organization?.subdomain ?? null,
-    site_public_url: resolveSitePublicOrigin(organization),
+    organization_subdomain: organization?.subdomain ?? null,
+    organization_public_url: resolveSitePublicOrigin(organization),
     location_id: location?.id ?? null,
     location_slug: location?.slug ?? null,
     location_title: location?.title ?? null,
@@ -518,7 +517,7 @@ export function workspaceLocationsPayload(
 }
 
 export async function mutationContextPayload(
-  site: McpSiteContext,
+  site: McpOrganizationContext,
   options: {
     organizationId?: string | null;
     locationId?: string | null;
@@ -923,7 +922,7 @@ export interface McpExecutorContext {
   normalizedArguments?: Record<string, unknown>
   tool?: ReturnType<typeof getMcpTool>
   organizationId?: string
-  site: McpSiteContext
+  site: McpOrganizationContext
   args: Record<string, unknown>
 }
 

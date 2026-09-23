@@ -89,7 +89,7 @@ does.
   - Assignment happens through the canonical placement tools with a `{ owner_type, owner_id, slot }` placement: `set_media` for a single-valued slot (at most one asset — a cover, hero, or logo), or `attach_media`/`remove_media`/`reorder_media` for an ordered collection (a gallery or a compliance document list). Never resubmit a placement's full asset list to change one item — targeted attach/remove/reorder is required so a stale read can never resurrect an asset someone else removed.
   - Tenant-page media belongs to content-block placements. Block JSON never stores asset IDs or delivery URLs.
 - MCP tools should be coarse-grained and business-level:
-  - `get_site_media_assets`
+  - `get_organization_media_assets`
   - `upload_user_media`
   - `update_media_asset`
   - `delete_media_asset`

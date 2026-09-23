@@ -25,7 +25,7 @@ const localizationObject = { oneOf: [
 
 export const LOCALES_TOOLS: McpToolDefinition[] = [
   siteTool({
-    name: 'list_site_locales',
+    name: 'list_organization_locales',
     description: 'List the immutable English source locale and exact authored secondary locales for this site. Billing is managed only in the dashboard.',
     domain: 'locales',
     minimumRole: 'editor',

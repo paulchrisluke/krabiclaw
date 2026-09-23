@@ -94,7 +94,7 @@ export async function handleMediaTools(ctx: McpExecutorContext): Promise<unknown
         "Reordered media.",
       );
     }
-    case "get_site_media_assets": {
+    case "get_organization_media_assets": {
       const assets = await listMediaAssets(site.db, site.organizationId, {
           kind: optionalString(args, "kind") ?? undefined,
         });

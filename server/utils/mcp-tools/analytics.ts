@@ -7,7 +7,7 @@ const nullableString = { type: ['string', 'null'] } as const
 
 export const ANALYTICS_TOOLS: McpToolDefinition[] = [
   siteTool({
-    name: 'get_site_analytics',
+    name: 'get_organization_analytics',
     description: 'Get the canonical read-only traffic, attribution, and conversion report for the site. Dates are inclusive in the site reporting timezone and default to exactly 30 calendar dates.',
     domain: 'analytics',
     minimumRole: 'editor',

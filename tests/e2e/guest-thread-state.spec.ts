@@ -33,7 +33,7 @@ interface DeliveryList {
 }
 
 const baseURL = testBaseUrl()
-const siteId = 'site-pottery-house'
+const organizationId = 'org-pottery-house'
 const ownerId = 'user-e2e-pottery-owner'
 const secondOwnerId = 'user-e2e-pottery-location-owner'
 const foreignOwnerId = 'user-e2e-kikuzuki-owner'
@@ -72,7 +72,7 @@ function openableMinuteToday(local: { date: string; time: string }, taken: Reado
 }
 
 async function loadLocationDay(request: APIRequestContext, date: string) {
-  const response = await request.get('/api/editor/sites/site-demo/locations/loc-demo/reservation-availability', {
+  const response = await request.get('/api/editor/organizations/org-demo/locations/loc-demo/reservation-availability', {
     params: { from: date, to: date },
   })
   await expectStatus(response, 200)
@@ -81,7 +81,7 @@ async function loadLocationDay(request: APIRequestContext, date: string) {
 }
 
 function setLocationSlot(request: APIRequestContext, slot: LocationSlot, directive: 'set' | 'inherit') {
-  return request.put('/api/editor/sites/site-demo/locations/loc-demo/reservation-availability', {
+  return request.put('/api/editor/organizations/org-demo/locations/loc-demo/reservation-availability', {
     data: {
       changes: [{
         override_date: slot.date,
@@ -107,9 +107,9 @@ test.afterEach(async ({ page }) => {
 })
 
 // The list has no search of its own any more (search is the dashboard's one
-// palette), so the guest under test is picked out of the site's contact threads.
+// palette), so the guest under test is picked out of the tenant's contact threads.
 async function loadThreadList(request: APIRequestContext, guestName: string) {
-  const response = await request.get(`/api/dashboard/sites/${siteId}/guest-threads`, {
+  const response = await request.get(`/api/dashboard/organizations/${organizationId}/guest-threads`, {
     params: { type: 'contact' },
   })
   await expectStatus(response, 200)
@@ -120,9 +120,9 @@ async function loadThreadList(request: APIRequestContext, guestName: string) {
 async function loadThreadDetail(
   request: APIRequestContext,
   threadId: string,
-  targetSiteId = siteId,
+  targetOrganizationId = organizationId,
 ) {
-  const response = await request.get(`/api/dashboard/sites/${targetSiteId}/guest-threads/${threadId}`)
+  const response = await request.get(`/api/dashboard/organizations/${targetOrganizationId}/guest-threads/${threadId}`)
   await expectStatus(response, 200)
   return (await response.json() as { thread: GuestThreadDetailViewModel }).thread
 }
@@ -161,7 +161,7 @@ test('guest thread state stays source-owned, per-user, tenant-isolated, and idem
     const subject = 'partnerships'
     const message = `Canonical source detail proof ${nonce}`
     const startedAt = new Date().toISOString()
-    const submission = await owner.post(`/api/public/sites/${siteId}/contact`, {
+    const submission = await owner.post(`/api/public/contact`, {
       data: { name: guestName, email: guestEmail, subject, message },
     })
     await expectStatus(submission, 201)
@@ -233,16 +233,16 @@ test('guest thread state stays source-owned, per-user, tenant-isolated, and idem
     expect(secondOwnerListAfterRead.threads[0]).toMatchObject({ id: threadId, unread: false, unreadCount: 0 })
     expect(contactNotification(secondOwnerNotificationsAfterRead, guestName).read_at).toEqual(expect.any(String))
 
-    const foreignRead = await foreignOwner.get(`/api/dashboard/sites/${siteId}/guest-threads/${threadId}`)
+    const foreignRead = await foreignOwner.get(`/api/dashboard/organizations/${organizationId}/guest-threads/${threadId}`)
     expect([403, 404]).toContain(foreignRead.status())
-    const foreignMutation = await foreignOwner.post(`/api/dashboard/sites/${siteId}/guest-threads/${threadId}/operations/reply`, {
+    const foreignMutation = await foreignOwner.post(`/api/dashboard/organizations/${organizationId}/guest-threads/${threadId}/operations/reply`, {
       data: { body: `Foreign reply ${nonce}`, idempotencyKey: `foreign-reply-${nonce}` },
     })
     expect([403, 404]).toContain(foreignMutation.status())
 
     const replyBody = `Idempotent owner reply ${nonce}`
     const idempotencyKey = `guest-thread-reply-${nonce}`
-    const replyUrl = `/api/dashboard/sites/${siteId}/guest-threads/${threadId}/operations/reply`
+    const replyUrl = `/api/dashboard/organizations/${organizationId}/guest-threads/${threadId}/operations/reply`
     const sendReply = () => owner.post(replyUrl, {
       headers: { 'idempotency-key': idempotencyKey },
       data: { body: replyBody },
@@ -265,7 +265,7 @@ test('guest thread state stays source-owned, per-user, tenant-isolated, and idem
 
     const deliveryResponse = await owner.get('/api/dev/notifications', {
       headers: devLoginHeaders(),
-      params: { site_id: siteId, since: startedAt },
+      params: { organization_id: organizationId, since: startedAt },
     })
     await expectStatus(deliveryResponse, 200)
     const deliveries = (await deliveryResponse.json() as DeliveryList).deliveries.filter(row =>
@@ -299,7 +299,7 @@ test('Today uses the CMS patterns and sends one reservation change request', asy
   const firstName = `Maya${now}`
   const guestName = `${firstName} Chen`
   const guestEmail = `maya-${now}@example.test`
-  const availability = await page.request.get('/api/public/sites/site-demo/reservations/availability', {
+  const availability = await page.request.get('/api/public/reservations/availability', {
     params: { date: new Date(now).toISOString().slice(0, 10), location_id: 'loc-demo' },
   })
   await expectStatus(availability, 200)
@@ -338,7 +338,7 @@ test('Today uses the CMS patterns and sends one reservation change request', asy
       date = localDateAt(new Date(plan), timezone)
       for (let dayOffset = 0; dayOffset < 4 && !slot; dayOffset += 1) {
         date = localDateAt(new Date(plan + dayOffset * 86_400_000), timezone)
-        const day = await page.request.get('/api/public/sites/site-demo/reservations/availability', { params: { date, location_id: 'loc-demo' } })
+        const day = await page.request.get('/api/public/reservations/availability', { params: { date, location_id: 'loc-demo' } })
         await expectStatus(day, 200)
         // is_closed answers whether the location serves the time, not whether anyone is
         // left to seat: a slot at capacity comes back is_full with is_closed false, and
@@ -352,7 +352,7 @@ test('Today uses the CMS patterns and sends one reservation change request', asy
     } else {
       ({ date, time } = plan)
     }
-    const response = await page.request.post('/api/public/sites/site-demo/reservations', {
+    const response = await page.request.post('/api/public/reservations', {
       data: { name, email, phone: '+12025550123', date, time, guests: '2', location_id: 'loc-demo' },
     })
     await expectStatus(response, 201)
@@ -427,7 +427,7 @@ test('Today uses the CMS patterns and sends one reservation change request', asy
   expect(changeResponse.status(), await changeResponse.text()).toBe(200)
   await expect(page.getByRole('heading', { name: 'Coming up', exact: true })).toBeVisible({ timeout: 30_000 })
 
-  const detail = await loadThreadDetail(page.request, before.booking.threadId, 'site-demo')
+  const detail = await loadThreadDetail(page.request, before.booking.threadId, 'org-demo')
   const requests = detail.entries.filter(entry =>
     entry.eventName === 'booking_change.requested' && entry.occurredAt >= requestedAt,
   )
@@ -435,7 +435,7 @@ test('Today uses the CMS patterns and sends one reservation change request', asy
   expect(requests[0]!.payload).toMatchObject({ after: { partySize: targetPartySize } })
   const deliveryResponse = await page.request.get('/api/dev/notifications', {
     headers: devLoginHeaders(),
-    params: { site_id: 'site-demo', since: requestedAt },
+    params: { organization_id: 'org-demo', since: requestedAt },
   })
   await expectStatus(deliveryResponse, 200)
   const deliveries = (await deliveryResponse.json() as DeliveryList).deliveries.filter(row => row.entry_id === requests[0]!.id)
@@ -460,7 +460,7 @@ test('Today uses the CMS patterns and sends one reservation change request', asy
     )
     await expectStatus(afterResponse, 200)
     expect(await afterResponse.json()).toMatchObject({ booking: { partySize: targetPartySize } })
-    const afterDetail = await loadThreadDetail(page.request, before.booking.threadId, 'site-demo')
+    const afterDetail = await loadThreadDetail(page.request, before.booking.threadId, 'org-demo')
     expect(afterDetail.entries.filter(entry =>
       entry.eventName === 'booking_change.accepted'
       && entry.payload?.requestId === request.id,

@@ -3,7 +3,7 @@ import { pageInfoObject, paginationInputSchema, qaItemObject, siteTool } from '.
 
 export const QA_TOOLS: McpToolDefinition[] = [
   siteTool({
-    name: 'list_site_qa',
+    name: 'list_organization_qa',
     description: 'Read general tenant Q&A, or only the specified page Q&A when page_path is provided. Q&A is read-only; manage Google questions and answers in Google.',
     domain: 'qa',
     minimumRole: 'editor',

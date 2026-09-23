@@ -6,7 +6,7 @@ import { NOT_HANDLED, requiredString } from './shared'
 export async function handleQaTools(ctx: McpExecutorContext): Promise<unknown> {
   const { toolName, args, site } = ctx
   switch (toolName) {
-    case "list_site_qa":
+    case "list_organization_qa":
       {
         const items = await listQa(site.db, site.organizationId, null, false, typeof args.page_path === "string" ? args.page_path : null);
         const page = paginateMcpCollection(items, args, { resource: `site-qa:${site.organizationId}:${typeof args.page_path === 'string' ? args.page_path : ''}` });

@@ -18,7 +18,7 @@ import { catalogFingerprint, catalogMeta } from "~/server/utils/mcp-catalog";
 import { executeMcpToolCall } from "~/server/utils/mcp-executor";
 import { isMcpRenderResponse } from "~/server/utils/mcp-render";
 import {
-  getActiveEntitlements, getVisibleSiteContext, requireMcpUser, roleSatisfies, type McpUserContext, } from "~/server/utils/mcp-auth";
+  getActiveEntitlements, getVisibleOrganizationContext, requireMcpUser, roleSatisfies, type McpUserContext, } from "~/server/utils/mcp-auth";
 import { MCP_PUBLIC_TOOLS, MCP_TOOLS } from "~/server/utils/mcp-tools";
 import { MCP_PROMPTS, renderMcpPrompt } from "~/server/utils/mcp-prompts";
 import { cloudflareEnv } from "~/server/utils/api-response";
@@ -220,7 +220,7 @@ function createTenantMcpServer(ctx: McpRequestContext): McpServer {
     const organizationIdHeader = event.req.headers.get("x-krabiclaw-organization-id");
     const hasOrganizationIdParam = organizationIdHeader !== null;
     const organizationId = organizationIdHeader?.trim() || null;
-    const siteCtx = organizationId ? await getVisibleSiteContext(event, organizationId) : null;
+    const siteCtx = organizationId ? await getVisibleOrganizationContext(event, organizationId) : null;
 
     const visibleSurfaceTools = visibleConversationalMcpTools(MCP_PUBLIC_TOOLS, cfEnv);
 

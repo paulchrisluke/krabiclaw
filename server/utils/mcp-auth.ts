@@ -42,7 +42,7 @@ export interface McpUserContext {
   activeOrganizationId?: string
 }
 
-export interface McpSiteContext extends McpUserContext {
+export interface McpOrganizationContext extends McpUserContext {
   organizationId: string
   organizationSlug?: string
   subdomain?: string | null
@@ -97,7 +97,7 @@ export async function requireMcpUser(
 
   // Session-based auth has no token to derive scopes from, so the caller's
   // requested scopes are taken as granted; forbiddenScopes and the site
-  // membership check in requireMcpSite enforce the real restrictions.
+  // membership check in requireMcpOrganization enforce the real restrictions.
   const sessionRecord = session.session as typeof session.session & { activeOrganizationId?: string }
   const user = {
     env,
@@ -338,12 +338,12 @@ function ensureForbiddenScopesAbsent(scopes: string[], forbiddenScopes?: string[
 // all three are exact, unambiguous identifiers (unlike a free-text business
 // name), so resolving them directly here removes a list-then-match round trip
 // for every tenant-scoped tool.
-export async function requireMcpSite(
+export async function requireMcpOrganization(
   event: H3Event,
   organization: string,
   minimumRole: McpToolRole = 'editor',
   authenticatedUser?: McpUserContext,
-): Promise<McpSiteContext> {
+): Promise<McpOrganizationContext> {
   const user = authenticatedUser ?? await requireMcpUser(event)
 
   type TenantRow = { id: string; subdomain: string | null; custom_domain: string | null; public_url: string | null }
@@ -403,12 +403,12 @@ export async function requireMcpSite(
   }
 }
 
-export async function getVisibleSiteContext(
+export async function getVisibleOrganizationContext(
   event: H3Event,
   organization: string,
 ): Promise<{ role: McpToolRole; organizationId: string } | null> {
   try {
-    const site = await requireMcpSite(event, organization, 'editor')
+    const site = await requireMcpOrganization(event, organization, 'editor')
     return { role: site.role, organizationId: site.organizationId }
   } catch (error) {
     const statusCode = typeof (error as { statusCode?: unknown })?.statusCode === 'number'

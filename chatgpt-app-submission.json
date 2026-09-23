@@ -63,9 +63,9 @@
         "destructiveHint": false
       },
       "justifications": {
-        "read_only_justification": "Creates an empty collection for the selected site; products are added to it separately.",
-        "open_world_justification": "Creates an empty collection for the selected site; products are added to it separately. Its effects can change content or behavior on the public website.",
-        "destructive_justification": "Creates an empty collection for the selected site; products are added to it separately. Existing content is not deleted or overwritten."
+        "read_only_justification": "Creates an empty collection for the selected organization; products are added to it separately.",
+        "open_world_justification": "Creates an empty collection for the selected organization; products are added to it separately. Its effects can change content or behavior on the public website.",
+        "destructive_justification": "Creates an empty collection for the selected organization; products are added to it separately. Existing content is not deleted or overwritten."
       }
     },
     "create_metafield_definition": {
@@ -159,9 +159,9 @@
         "destructiveHint": true
       },
       "justifications": {
-        "read_only_justification": "Removes an asset and its site placements, and deletes backing Cloudflare storage when no other asset references it.",
-        "open_world_justification": "Removes an asset and its site placements, and deletes backing Cloudflare storage when no other asset references it. Its effects can change content or behavior on the public website.",
-        "destructive_justification": "Removes an asset and its site placements, and deletes backing Cloudflare storage when no other asset references it. Existing state is deleted, replaced or overwritten rather than only appended."
+        "read_only_justification": "Removes an asset and its placements, and deletes backing Cloudflare storage when no other asset references it.",
+        "open_world_justification": "Removes an asset and its placements, and deletes backing Cloudflare storage when no other asset references it. Its effects can change content or behavior on the public website.",
+        "destructive_justification": "Removes an asset and its placements, and deletes backing Cloudflare storage when no other asset references it. Existing state is deleted, replaced or overwritten rather than only appended."
       }
     },
     "delete_metafield_definition": {
@@ -260,6 +260,54 @@
         "destructive_justification": "Reads the selected location, including operational contact and notification settings. Existing content is not deleted or overwritten."
       }
     },
+    "get_organization": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Reads the selected accessible organization and workspace context.",
+        "open_world_justification": "Reads the selected accessible organization and workspace context. It does not publish content or write to an external service.",
+        "destructive_justification": "Reads the selected accessible organization and workspace context. Existing content is not deleted or overwritten."
+      }
+    },
+    "get_organization_analytics": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Reads website analytics reports from stored aggregates and retained raw events without creating aggregates.",
+        "open_world_justification": "Reads website analytics reports from stored aggregates and retained raw events without creating aggregates. It does not publish content or write to an external service.",
+        "destructive_justification": "Reads website analytics reports from stored aggregates and retained raw events without creating aggregates. Existing content is not deleted or overwritten."
+      }
+    },
+    "get_organization_media_assets": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Lists the selected organization media library and public asset URLs.",
+        "open_world_justification": "Lists the selected organization media library and public asset URLs. It does not publish content or write to an external service.",
+        "destructive_justification": "Lists the selected organization media library and public asset URLs. Existing content is not deleted or overwritten."
+      }
+    },
+    "get_organization_settings": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Reads the selected organization settings.",
+        "open_world_justification": "Reads the selected organization settings. It does not publish content or write to an external service.",
+        "destructive_justification": "Reads the selected organization settings. Existing content is not deleted or overwritten."
+      }
+    },
     "get_post": {
       "annotations": {
         "readOnlyHint": true,
@@ -291,9 +339,9 @@
         "destructiveHint": false
       },
       "justifications": {
-        "read_only_justification": "Reads product catalog translations for the selected site and locale.",
-        "open_world_justification": "Reads product catalog translations for the selected site and locale. It does not publish content or write to an external service.",
-        "destructive_justification": "Reads product catalog translations for the selected site and locale. Existing content is not deleted or overwritten."
+        "read_only_justification": "Reads product catalog translations for the selected organization and locale.",
+        "open_world_justification": "Reads product catalog translations for the selected organization and locale. It does not publish content or write to an external service.",
+        "destructive_justification": "Reads product catalog translations for the selected organization and locale. Existing content is not deleted or overwritten."
       }
     },
     "get_reservation_inquiries": {
@@ -332,54 +380,6 @@
         "destructive_justification": "Reads a resource translation and any existing authoring document. Existing content is not deleted or overwritten."
       }
     },
-    "get_site": {
-      "annotations": {
-        "readOnlyHint": true,
-        "openWorldHint": false,
-        "destructiveHint": false
-      },
-      "justifications": {
-        "read_only_justification": "Reads the selected accessible site and workspace context.",
-        "open_world_justification": "Reads the selected accessible site and workspace context. It does not publish content or write to an external service.",
-        "destructive_justification": "Reads the selected accessible site and workspace context. Existing content is not deleted or overwritten."
-      }
-    },
-    "get_site_analytics": {
-      "annotations": {
-        "readOnlyHint": true,
-        "openWorldHint": false,
-        "destructiveHint": false
-      },
-      "justifications": {
-        "read_only_justification": "Reads site analytics reports from stored aggregates and retained raw events without creating aggregates.",
-        "open_world_justification": "Reads site analytics reports from stored aggregates and retained raw events without creating aggregates. It does not publish content or write to an external service.",
-        "destructive_justification": "Reads site analytics reports from stored aggregates and retained raw events without creating aggregates. Existing content is not deleted or overwritten."
-      }
-    },
-    "get_site_media_assets": {
-      "annotations": {
-        "readOnlyHint": true,
-        "openWorldHint": false,
-        "destructiveHint": false
-      },
-      "justifications": {
-        "read_only_justification": "Lists the selected site media library and public asset URLs.",
-        "open_world_justification": "Lists the selected site media library and public asset URLs. It does not publish content or write to an external service.",
-        "destructive_justification": "Lists the selected site media library and public asset URLs. Existing content is not deleted or overwritten."
-      }
-    },
-    "get_site_settings": {
-      "annotations": {
-        "readOnlyHint": true,
-        "openWorldHint": false,
-        "destructiveHint": false
-      },
-      "justifications": {
-        "read_only_justification": "Reads the selected site settings.",
-        "open_world_justification": "Reads the selected site settings. It does not publish content or write to an external service.",
-        "destructive_justification": "Reads the selected site settings. Existing content is not deleted or overwritten."
-      }
-    },
     "get_tenant_page": {
       "annotations": {
         "readOnlyHint": true,
@@ -411,9 +411,9 @@
         "destructiveHint": false
       },
       "justifications": {
-        "read_only_justification": "Lists the selected site blog articles.",
-        "open_world_justification": "Lists the selected site blog articles. It does not publish content or write to an external service.",
-        "destructive_justification": "Lists the selected site blog articles. Existing content is not deleted or overwritten."
+        "read_only_justification": "Lists the selected organization blog articles.",
+        "open_world_justification": "Lists the selected organization blog articles. It does not publish content or write to an external service.",
+        "destructive_justification": "Lists the selected organization blog articles. Existing content is not deleted or overwritten."
       }
     },
     "list_collections": {
@@ -423,9 +423,9 @@
         "destructiveHint": false
       },
       "justifications": {
-        "read_only_justification": "Lists the collections of the selected site.",
-        "open_world_justification": "Lists the collections of the selected site. It does not publish content or write to an external service.",
-        "destructive_justification": "Lists the collections of the selected site. Existing content is not deleted or overwritten."
+        "read_only_justification": "Lists the collections of the selected organization.",
+        "open_world_justification": "Lists the collections of the selected organization. It does not publish content or write to an external service.",
+        "destructive_justification": "Lists the collections of the selected organization. Existing content is not deleted or overwritten."
       }
     },
     "list_location_products": {
@@ -471,9 +471,9 @@
         "destructiveHint": false
       },
       "justifications": {
-        "read_only_justification": "Lists locations accessible in the selected site.",
-        "open_world_justification": "Lists locations accessible in the selected site. It does not publish content or write to an external service.",
-        "destructive_justification": "Lists locations accessible in the selected site. Existing content is not deleted or overwritten."
+        "read_only_justification": "Lists locations accessible in the selected organization.",
+        "open_world_justification": "Lists locations accessible in the selected organization. It does not publish content or write to an external service.",
+        "destructive_justification": "Lists locations accessible in the selected organization. Existing content is not deleted or overwritten."
       }
     },
     "list_metafield_definitions": {
@@ -488,6 +488,54 @@
         "destructive_justification": "Lists the organization typed product attribute definitions. Existing content is not deleted or overwritten."
       }
     },
+    "list_organization_locales": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Reads the selected organization locale records without provisioning translations.",
+        "open_world_justification": "Reads the selected organization locale records without provisioning translations. It does not publish content or write to an external service.",
+        "destructive_justification": "Reads the selected organization locale records without provisioning translations. Existing content is not deleted or overwritten."
+      }
+    },
+    "list_organization_qa": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Lists questions and answers for the selected organization.",
+        "open_world_justification": "Lists questions and answers for the selected organization. It does not publish content or write to an external service.",
+        "destructive_justification": "Lists questions and answers for the selected organization. Existing content is not deleted or overwritten."
+      }
+    },
+    "list_organization_reviews": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Lists reviews and their provenance for the selected organization.",
+        "open_world_justification": "Lists reviews and their provenance for the selected organization. It does not publish content or write to an external service.",
+        "destructive_justification": "Lists reviews and their provenance for the selected organization. Existing content is not deleted or overwritten."
+      }
+    },
+    "list_organizations": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Lists organizations accessible to the authenticated user without provisioning one.",
+        "open_world_justification": "Lists organizations accessible to the authenticated user without provisioning one. It does not publish content or write to an external service.",
+        "destructive_justification": "Lists organizations accessible to the authenticated user without provisioning one. Existing content is not deleted or overwritten."
+      }
+    },
     "list_posts": {
       "annotations": {
         "readOnlyHint": true,
@@ -495,9 +543,9 @@
         "destructiveHint": false
       },
       "justifications": {
-        "read_only_justification": "Lists website announcements for the selected site.",
-        "open_world_justification": "Lists website announcements for the selected site. It does not publish content or write to an external service.",
-        "destructive_justification": "Lists website announcements for the selected site. Existing content is not deleted or overwritten."
+        "read_only_justification": "Lists website announcements for the selected organization.",
+        "open_world_justification": "Lists website announcements for the selected organization. It does not publish content or write to an external service.",
+        "destructive_justification": "Lists website announcements for the selected organization. Existing content is not deleted or overwritten."
       }
     },
     "list_products": {
@@ -507,57 +555,9 @@
         "destructiveHint": false
       },
       "justifications": {
-        "read_only_justification": "Lists the products of the selected site.",
-        "open_world_justification": "Lists the products of the selected site. It does not publish content or write to an external service.",
-        "destructive_justification": "Lists the products of the selected site. Existing content is not deleted or overwritten."
-      }
-    },
-    "list_site_locales": {
-      "annotations": {
-        "readOnlyHint": true,
-        "openWorldHint": false,
-        "destructiveHint": false
-      },
-      "justifications": {
-        "read_only_justification": "Reads the selected site locale records without provisioning translations.",
-        "open_world_justification": "Reads the selected site locale records without provisioning translations. It does not publish content or write to an external service.",
-        "destructive_justification": "Reads the selected site locale records without provisioning translations. Existing content is not deleted or overwritten."
-      }
-    },
-    "list_site_qa": {
-      "annotations": {
-        "readOnlyHint": true,
-        "openWorldHint": false,
-        "destructiveHint": false
-      },
-      "justifications": {
-        "read_only_justification": "Lists questions and answers for the selected site.",
-        "open_world_justification": "Lists questions and answers for the selected site. It does not publish content or write to an external service.",
-        "destructive_justification": "Lists questions and answers for the selected site. Existing content is not deleted or overwritten."
-      }
-    },
-    "list_site_reviews": {
-      "annotations": {
-        "readOnlyHint": true,
-        "openWorldHint": false,
-        "destructiveHint": false
-      },
-      "justifications": {
-        "read_only_justification": "Lists reviews and their provenance for the selected site.",
-        "open_world_justification": "Lists reviews and their provenance for the selected site. It does not publish content or write to an external service.",
-        "destructive_justification": "Lists reviews and their provenance for the selected site. Existing content is not deleted or overwritten."
-      }
-    },
-    "list_sites": {
-      "annotations": {
-        "readOnlyHint": true,
-        "openWorldHint": false,
-        "destructiveHint": false
-      },
-      "justifications": {
-        "read_only_justification": "Lists sites accessible to the authenticated user without provisioning a site.",
-        "open_world_justification": "Lists sites accessible to the authenticated user without provisioning a site. It does not publish content or write to an external service.",
-        "destructive_justification": "Lists sites accessible to the authenticated user without provisioning a site. Existing content is not deleted or overwritten."
+        "read_only_justification": "Lists the products of the selected organization.",
+        "open_world_justification": "Lists the products of the selected organization. It does not publish content or write to an external service.",
+        "destructive_justification": "Lists the products of the selected organization. Existing content is not deleted or overwritten."
       }
     },
     "list_tenant_pages": {
@@ -567,9 +567,9 @@
         "destructiveHint": false
       },
       "justifications": {
-        "read_only_justification": "Lists tenant pages for the selected site.",
-        "open_world_justification": "Lists tenant pages for the selected site. It does not publish content or write to an external service.",
-        "destructive_justification": "Lists tenant pages for the selected site. Existing content is not deleted or overwritten."
+        "read_only_justification": "Lists tenant pages for the selected organization.",
+        "open_world_justification": "Lists tenant pages for the selected organization. It does not publish content or write to an external service.",
+        "destructive_justification": "Lists tenant pages for the selected organization. Existing content is not deleted or overwritten."
       }
     },
     "publish_blog_post": {
@@ -651,9 +651,9 @@
         "destructiveHint": true
       },
       "justifications": {
-        "read_only_justification": "Overwrites the order collections are presented in on the selected site.",
-        "open_world_justification": "Overwrites the order collections are presented in on the selected site. Its effects can change content or behavior on the public website.",
-        "destructive_justification": "Overwrites the order collections are presented in on the selected site. Existing state is deleted, replaced or overwritten rather than only appended."
+        "read_only_justification": "Overwrites the order collections are presented in on the selected organization.",
+        "open_world_justification": "Overwrites the order collections are presented in on the selected organization. Its effects can change content or behavior on the public website.",
+        "destructive_justification": "Overwrites the order collections are presented in on the selected organization. Existing state is deleted, replaced or overwritten rather than only appended."
       }
     },
     "reorder_media": {
@@ -723,9 +723,9 @@
         "destructiveHint": true
       },
       "justifications": {
-        "read_only_justification": "Overwrites the selected site public brand color.",
-        "open_world_justification": "Overwrites the selected site public brand color. Its effects can change content or behavior on the public website.",
-        "destructive_justification": "Overwrites the selected site public brand color. Existing state is deleted, replaced or overwritten rather than only appended."
+        "read_only_justification": "Overwrites the selected organization public brand color.",
+        "open_world_justification": "Overwrites the selected organization public brand color. Its effects can change content or behavior on the public website.",
+        "destructive_justification": "Overwrites the selected organization public brand color. Existing state is deleted, replaced or overwritten rather than only appended."
       }
     },
     "set_collection_products": {
@@ -747,9 +747,9 @@
         "destructiveHint": true
       },
       "justifications": {
-        "read_only_justification": "Overwrites the selected site default currency setting.",
-        "open_world_justification": "Overwrites the selected site default currency setting. Its effects can change content or behavior on the public website.",
-        "destructive_justification": "Overwrites the selected site default currency setting. Existing state is deleted, replaced or overwritten rather than only appended."
+        "read_only_justification": "Overwrites the selected organization default currency setting.",
+        "open_world_justification": "Overwrites the selected organization default currency setting. Its effects can change content or behavior on the public website.",
+        "destructive_justification": "Overwrites the selected organization default currency setting. Existing state is deleted, replaced or overwritten rather than only appended."
       }
     },
     "set_media": {
@@ -783,9 +783,9 @@
         "destructiveHint": true
       },
       "justifications": {
-        "read_only_justification": "Creates or overwrites the selected product’s site publication setting, including removing it from public display.",
-        "open_world_justification": "Creates or overwrites the selected product’s site publication setting, including removing it from public display. Its effects can change content or behavior on the public website.",
-        "destructive_justification": "Creates or overwrites the selected product’s site publication setting, including removing it from public display. Existing state is deleted, replaced or overwritten rather than only appended."
+        "read_only_justification": "Creates or overwrites the selected product’s publication setting, including removing it from public display.",
+        "open_world_justification": "Creates or overwrites the selected product’s publication setting, including removing it from public display. Its effects can change content or behavior on the public website.",
+        "destructive_justification": "Creates or overwrites the selected product’s publication setting, including removing it from public display. Existing state is deleted, replaced or overwritten rather than only appended."
       }
     },
     "set_workspace_context": {
@@ -795,9 +795,9 @@
         "destructiveHint": true
       },
       "justifications": {
-        "read_only_justification": "Overwrites the authenticated user selected workspace site or location.",
-        "open_world_justification": "Overwrites the authenticated user selected workspace site or location. It does not publish content or write to an external service.",
-        "destructive_justification": "Overwrites the authenticated user selected workspace site or location. Existing state is deleted, replaced or overwritten rather than only appended."
+        "read_only_justification": "Overwrites the authenticated user selected workspace organization or location.",
+        "open_world_justification": "Overwrites the authenticated user selected workspace organization or location. It does not publish content or write to an external service.",
+        "destructive_justification": "Overwrites the authenticated user selected workspace organization or location. Existing state is deleted, replaced or overwritten rather than only appended."
       }
     },
     "update_blog_post": {
@@ -848,6 +848,18 @@
         "destructive_justification": "Overwrites media metadata such as alt text or category. Existing state is deleted, replaced or overwritten rather than only appended."
       }
     },
+    "update_organization_settings": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Overwrites supplied organization settings, including branding, currency, tracking, verification and indexing controls.",
+        "open_world_justification": "Overwrites supplied organization settings, including branding, currency, tracking, verification and indexing controls. Its effects can change content or behavior on the public website.",
+        "destructive_justification": "Overwrites supplied organization settings, including branding, currency, tracking, verification and indexing controls. Existing state is deleted, replaced or overwritten rather than only appended."
+      }
+    },
     "update_post": {
       "annotations": {
         "readOnlyHint": false,
@@ -882,18 +894,6 @@
         "read_only_justification": "Creates or overwrites the reservation policy of the selected location, which is what opens reservations there.",
         "open_world_justification": "Creates or overwrites the reservation policy of the selected location, which is what opens reservations there. Its effects can change content or behavior on the public website.",
         "destructive_justification": "Creates or overwrites the reservation policy of the selected location, which is what opens reservations there. Existing state is deleted, replaced or overwritten rather than only appended."
-      }
-    },
-    "update_site_settings": {
-      "annotations": {
-        "readOnlyHint": false,
-        "openWorldHint": true,
-        "destructiveHint": true
-      },
-      "justifications": {
-        "read_only_justification": "Overwrites supplied site settings, including branding, currency, tracking, verification and indexing controls.",
-        "open_world_justification": "Overwrites supplied site settings, including branding, currency, tracking, verification and indexing controls. Its effects can change content or behavior on the public website.",
-        "destructive_justification": "Overwrites supplied site settings, including branding, currency, tracking, verification and indexing controls. Existing state is deleted, replaced or overwritten rather than only appended."
       }
     },
     "update_tenant_page": {
@@ -958,7 +958,7 @@
       "description": "Publish a website announcement and return its canonical public URL.",
       "user_prompt": "On Ember & Slice, publish a website-only announcement titled Submission Welcome with text “Welcome to our updated website.” Show me the final public link. If that exact announcement exists, update and publish it instead of creating another.",
       "file_attachment_urls": null,
-      "tools_triggered": "list_sites, get_site, list_posts, create_post, update_post, publish_post",
+      "tools_triggered": "list_sites, get_organization, list_posts, create_post, update_post, publish_post",
       "expected_output": "Creates or updates the requested announcement and publishes it to the site channel after any required confirmation; returns the public URL supplied by the tool and does not claim Facebook or Instagram publication.",
       "expected_output_url": null
     }

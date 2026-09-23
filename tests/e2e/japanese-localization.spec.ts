@@ -12,7 +12,7 @@ let releaseTenantMutationLock: (() => Promise<void>) | undefined
 
 test.beforeAll(async ({ browser: _browser }, testInfo) => {
   test.setTimeout(700_000)
-  releaseTenantMutationLock = await acquireTenantMutationLock(testInfo, 'site-kikuzuki')
+  releaseTenantMutationLock = await acquireTenantMutationLock(testInfo, 'org-kikuzuki')
 })
 
 test.afterAll(async () => {
@@ -44,12 +44,12 @@ async function restoreAll(steps: Array<[string, () => Promise<APIResponse>]>) {
 
 test('Japanese is a second secondary language and keeps its public shell through hydration', async ({ playwright, page }) => {
   test.setTimeout(180_000)
-  const siteId = 'site-kikuzuki'
+  const organizationId = 'org-kikuzuki'
   const baseURL = testBaseUrl()
   const owner = await playwright.request.newContext({ baseURL })
   await loginAs(owner, baseURL, 'user-e2e-kikuzuki-owner')
-  const localePath = `/api/editor/sites/${siteId}/locales`
-  const settingsUrl = `/api/sites/${siteId}/settings`
+  const localePath = `/api/editor/organizations/${organizationId}/locales`
+  const settingsUrl = `/api/organizations/${organizationId}/settings`
   const originalSettingsResponse = await owner.get(settingsUrl)
   await expectStatus(originalSettingsResponse, 200)
   const originalFontPreset = (await originalSettingsResponse.json() as { settings: { font_preset: 'default' | 'mali' } }).settings.font_preset
@@ -74,10 +74,10 @@ test('Japanese is a second secondary language and keeps its public shell through
     expect(settings.languages.find(language => language.locale === 'ja')?.status).toBe('disabled')
 
 
-    await expectStatus(await owner.put(`/api/editor/sites/${siteId}/localization/site/${siteId}/ja`, {
+    await expectStatus(await owner.put(`/api/editor/organizations/${organizationId}/localization/organization/${organizationId}/ja`, {
       data: { values: { name: '菊月 クラビ', brand_description: 'クラビの日本料理店' } },
     }), 200)
-    await expectStatus(await owner.put(`/api/editor/sites/${siteId}/localization/business_location/loc-kikuzuki/ja`, {
+    await expectStatus(await owner.put(`/api/editor/organizations/${organizationId}/localization/business_location/loc-kikuzuki/ja`, {
       data: {
         route_path: '/ja/locations/kikuzuki-japanese-robatayaki-izakaya',
         values: {
@@ -95,13 +95,13 @@ test('Japanese is a second secondary language and keeps its public shell through
     // experiences became a surface of their own. Translate every bookable
     // product the site actually has, by its own id, the way the Thai journey
     // translates its sushi.
-    const productsResponse = await owner.get(`/api/editor/sites/${siteId}/products`)
+    const productsResponse = await owner.get(`/api/editor/organizations/${organizationId}/products`)
     await expectStatus(productsResponse, 200)
     const { products } = await productsResponse.json() as { products: Array<{ id: string; slug: string; booking: unknown | null }> }
     const bookable = products.filter(product => product.booking !== null)
     expect(bookable.map(product => product.slug), 'Kikuzuki has one bookable product to translate').toEqual(['teppanyaki-experience'])
     const japaneseExperience = { name: '鉄板焼き体験', description: 'シェフの目の前で楽しむ鉄板焼き', tags: [] as string[] }
-    await expectStatus(await owner.put(`/api/editor/sites/${siteId}/localization/product/${bookable[0]!.id}/ja`, {
+    await expectStatus(await owner.put(`/api/editor/organizations/${organizationId}/localization/product/${bookable[0]!.id}/ja`, {
       data: { values: japaneseExperience },
     }), 200)
 

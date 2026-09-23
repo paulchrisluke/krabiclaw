@@ -3,7 +3,7 @@ import { HTTPError } from 'nitro';
 import type { H3Event } from 'nitro'
 import { queryFirst } from '~/server/db'
 import { getMcpTool } from '~/server/utils/mcp-tools'
-import { requireMcpSite, requireMcpUser, type McpUserContext } from '~/server/utils/mcp-auth'
+import { requireMcpOrganization, requireMcpUser, type McpUserContext } from '~/server/utils/mcp-auth'
 import { resolveMcpWorkspace } from '~/server/utils/mcp-context'
 import { mcpProtocolError, MCP_ERROR } from '~/server/utils/mcp-protocol'
 import { renderStructuredResponse } from '~/server/utils/mcp-render'
@@ -174,7 +174,7 @@ export async function executeMcpToolCall(
   }
 
   const organizationId = requiredString(normalizedArguments, "organization_id");
-  const site = await requireMcpSite(event, organizationId, tool.minimumRole, authenticatedUser);
+  const site = await requireMcpOrganization(event, organizationId, tool.minimumRole, authenticatedUser);
   const args = omit(normalizedArguments, ["organization_id"]);
   const explicitLocationId = optionalString(rawArguments, "location_id");
   if (explicitLocationId) {

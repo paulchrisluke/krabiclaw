@@ -9,7 +9,7 @@ import { NOT_HANDLED, assertDomainSuccess, mutationContextPayload, requiredStrin
 export async function handleSitesTools(ctx: McpExecutorContext): Promise<unknown> {
   const { toolName, args, site } = ctx
   switch (toolName) {
-    case "get_site":
+    case "get_organization":
       {
         const siteRecord = await getSiteForMcp(
           site.db,
@@ -28,7 +28,7 @@ export async function handleSitesTools(ctx: McpExecutorContext): Promise<unknown
           context: workspaceContextPayload(workspace.organization, workspace.location),
         };
       }
-    case "get_site_settings":
+    case "get_organization_settings":
       return {
         settings: await loadSettingsPayload(
           site.db,
@@ -36,7 +36,7 @@ export async function handleSitesTools(ctx: McpExecutorContext): Promise<unknown
           
         ),
       };
-    case "update_site_settings": {
+    case "update_organization_settings": {
       const updates = args as Record<
         string,
         unknown

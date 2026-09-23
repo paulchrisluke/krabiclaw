@@ -1,5 +1,5 @@
 import type { McpToolDefinition } from './shared'
-import { ROBOTS_DIRECTIVE_ENUM, SUPPORTED_CURRENCIES, currentUserObject, globalTool, pageInfoObject, paginationInputSchema, siteListItem, siteTool, withToolAnnotations } from './shared'
+import { ROBOTS_DIRECTIVE_ENUM, SUPPORTED_CURRENCIES, currentUserObject, globalTool, pageInfoObject, paginationInputSchema, organizationSummaryItem, siteTool, withToolAnnotations } from './shared'
 
 const SITE_MEDIA_ITEM_SCHEMA = {
   type: 'object',
@@ -24,18 +24,18 @@ export const SITES_TOOLS: McpToolDefinition[] = [
       outputSchema: {
         type: 'object',
         properties: {
-          sites: {
+          organizations: {
             type: 'array',
-            items: siteListItem,
+            items: organizationSummaryItem,
           },
           currentUser: currentUserObject,
           page_info: pageInfoObject,
         },
-        required: ['sites', 'currentUser', 'page_info'],
+        required: ['organizations', 'currentUser', 'page_info'],
       },
     })),
   siteTool({
-      name: 'get_site',
+      name: 'get_organization',
       description: 'Get site details for an internal KrabiClaw organization_id. Do not pass a public URL, hostname, custom domain, subdomain, slug, or business name as organization_id; call get_workspace_context or list_organizations first and use the returned id.',
       domain: 'sites',
       minimumRole: 'editor',
@@ -66,7 +66,7 @@ export const SITES_TOOLS: McpToolDefinition[] = [
       },
     }),
   siteTool({
-      name: 'get_site_settings',
+      name: 'get_organization_settings',
       description: 'Get editable site settings for an internal KrabiClaw organization_id. Do not pass a public URL, hostname, custom domain, subdomain, slug, or business name as organization_id; call get_workspace_context or list_organizations first and use the returned id.',
       domain: 'sites',
       minimumRole: 'editor',
@@ -110,7 +110,7 @@ export const SITES_TOOLS: McpToolDefinition[] = [
       },
     }),
   siteTool({
-      name: 'update_site_settings',
+      name: 'update_organization_settings',
       description: 'Update editable site settings such as brand name, description, logo, contact email, currency, analytics IDs, and search defaults. For brand color changes, use the dedicated set_brand_color tool instead of this generic settings tool.',
       domain: 'sites',
       minimumRole: 'admin',
