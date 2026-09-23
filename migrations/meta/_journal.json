@@ -8,6 +8,13 @@
       "when": 1790071442779,
       "tag": "0000_baseline",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1790170273859,
+      "tag": "0001_boring_arclight",
+      "breakpoints": true
     }
   ]
 }

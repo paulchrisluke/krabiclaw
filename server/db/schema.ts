@@ -887,6 +887,12 @@ export const product_availability_rules = sqliteTable("product_availability_rule
 	weekday: integer().notNull(),
 	// Local wall-clock 'HH:MM'.
 	start_time: text().notNull(),
+	// A repeating slot: start_time, then every interval_minutes until the last
+	// start at or before end_time. Both null is a single start time, which is
+	// what a class is. A restaurant service is one row per weekday instead of
+	// one per seating.
+	end_time: text(),
+	interval_minutes: integer(),
 	interval_weeks: integer().default(1).notNull(),
 	effective_from_date: text(),
 	effective_until_date: text(),
