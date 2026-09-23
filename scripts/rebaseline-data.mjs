@@ -427,12 +427,28 @@ function deriveOrganizations(stage, record) {
   // configuration, so this fails rather than picking.
   const doubled = stage.prepare(`SELECT organization_id, count(*) AS n FROM old.sites GROUP BY organization_id HAVING n > 1`).all()
   assert(doubled.length === 0, `Organizations with more than one site cannot be collapsed: ${doubled.map(row => row.organization_id).join(', ')}`)
-  const orphanOrgs = stage.prepare(`SELECT id FROM main.organization WHERE id NOT IN (SELECT organization_id FROM old.sites)`).all()
-  assert(orphanOrgs.length === 0, `Organizations with no site have no configuration to carry: ${orphanOrgs.map(row => row.id).join(', ')}`)
+  // An organization with no site never finished provisioning: nothing claimed a
+  // subdomain for it and no website was ever served. It keeps its own name and
+  // the schema's defaults, which is what `onboarding_status = 'pending'` says.
+  // It must not go through the assignments below — every subquery would return
+  // NULL and blank the NOT NULL columns the defaults just filled.
+  const unprovisioned = stage.prepare(`SELECT id FROM main.organization WHERE id NOT IN (SELECT organization_id FROM old.sites)`).all()
+  record('organizations_unprovisioned', unprovisioned.length)
+
+  // Its locales came from the site too, so it has none — and every read of an
+  // organization resolves its source locale, which throws when there is not
+  // exactly one. English published-as-source is what provisioning would have
+  // written; it describes no content, because there is none yet.
+  record('unprovisioned_organizations_take_a_source_locale', stage.prepare(`
+    INSERT INTO main.organization_locales (id, organization_id, locale, label, is_source, status)
+    SELECT 'locale::' || o.id || '::en', o.id, 'en', 'English', 1, 'published'
+      FROM main.organization o
+     WHERE NOT EXISTS (SELECT 1 FROM main.organization_locales l WHERE l.organization_id = o.id)`).run().changes)
 
   const assignments = SITE_COLUMNS.map(name => `${qi(name)} = (SELECT s.${qi(name)} FROM old.sites s WHERE s.organization_id = main.organization.id)`)
   assignments.push(`"name" = (SELECT s."brand_name" FROM old.sites s WHERE s.organization_id = main.organization.id)`)
-  record('organizations_absorb_their_site', stage.prepare(`UPDATE main.organization SET ${assignments.join(', ')}`).run().changes)
+  record('organizations_absorb_their_site', stage.prepare(`UPDATE main.organization SET ${assignments.join(', ')}
+    WHERE EXISTS (SELECT 1 FROM old.sites s WHERE s.organization_id = main.organization.id)`).run().changes)
 
   // Three tables scoped their rows by site alone and left organization_id NULL —
   // analytics_events for 36,605 of them. Dropping site_id without reading the
