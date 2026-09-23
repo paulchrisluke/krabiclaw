@@ -2,7 +2,7 @@
  * Preview and local start from a copy of production instead of hand-maintained
  * seed definitions, so what they test against is what customers actually have.
  *
- * The row copy is transferred through scripts/rebaseline-data.mjs: every row is
+ * The row copy is transferred through scripts/transfer-database-export.mjs: every row is
  * copied into the current generated baseline, the catalog derivation and the
  * pending data transforms run, and the result is audited before anything is
  * written. Until production itself carries the baseline this is what makes a
@@ -21,7 +21,7 @@ import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'n
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { parseArgs } from 'node:util'
-import { rebaseline } from './rebaseline-data.mjs'
+import { transferDatabaseExport } from './transfer-database-export.mjs'
 
 // Staging is a release gate, so it has to hold what production holds. It had no
 // target here, so it was never refreshed and drifted to whatever an older
@@ -86,7 +86,7 @@ const run = (args: string[], json = false) => {
 
 // Cloudflare's export operation rejects concurrent application queries for the
 // duration of the export. Copy rows with ordinary SELECTs instead; the existing
-// rebaseline audit still validates the copy before either target is written.
+// transfer audit still validates the copy before either target is written.
 // https://developers.cloudflare.com/d1/best-practices/import-export-data/
 function sourceRows<T>(sql: string): T[] {
   const output = run(['d1', 'execute', 'DB', '--remote', '--command', sql, '--json'], true)
@@ -144,7 +144,7 @@ try {
   copyProductionRows(dumpPath)
 
   const payloadPath = join(directory, 'payload.sql')
-  const manifest = rebaseline(dumpPath, join(directory, 'target.sqlite'), { payloadPath, withoutJwks: true })
+  const manifest = transferDatabaseExport(dumpPath, join(directory, 'target.sqlite'), { payloadPath, withoutJwks: true })
 
   const destination = target === 'local' ? ['--local'] : ['--env', target, '--remote']
   run(['d1', 'execute', 'DB', ...destination, '--file', payloadPath])

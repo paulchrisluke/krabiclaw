@@ -182,8 +182,7 @@ Deployment follows the branches in `.github/workflows/ci.yml`:
    Worker, applies production migrations, and runs read-only production browser
    smoke.
 
-CI invokes native Wrangler commands only in the matching branch job. See
-[docs/operations/release-flow.md](docs/operations/release-flow.md).
+CI invokes native Wrangler commands only in the matching branch job.
 
 The **Zaraz GA4 Backfill Plan** workflow is read-only and accepts only preview or
 staging targets. It reads the target D1 connections and the current zone-level

@@ -2,7 +2,7 @@
 // Offline transfer of a database export into the current migrated schema.
 // Never imported by application runtime.
 //
-//   node scripts/rebaseline-data.mjs <source.sql|source.sqlite> <target.sqlite> [--payload <payload.sql>] [--without-jwks]
+//   node scripts/transfer-database-export.mjs <source.sql|source.sqlite> <target.sqlite> [--payload <payload.sql>] [--without-jwks]
 //
 // The target is created from the complete ordered migration chain, every table
 // the source and the current schema share is copied column-for-column, the transforms
@@ -872,7 +872,7 @@ function deriveMetafields(stage, now, record) {
   const insertDefinition = stage.prepare(`INSERT INTO metafield_definitions (id, organization_id, namespace, key, name, description, value_type, validations, localizable, created_at, updated_at, created_by, updated_by)
     VALUES (?, ?, ?, ?, ?, NULL, ?, '{}', 1, ?, ?, ?, ?)`)
   for (const definition of definitions.values()) {
-    insertDefinition.run(definition.id, definition.organization_id, definition.namespace, definition.key, definition.name, definition.value_type, now, now, 'rebaseline', 'rebaseline')
+    insertDefinition.run(definition.id, definition.organization_id, definition.namespace, definition.key, definition.name, definition.value_type, now, now, 'transfer', 'transfer')
   }
   const insertValue = stage.prepare(`INSERT INTO product_metafields (organization_id, product_id, definition_id, value, created_at, updated_at, created_by, updated_by)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (product_id, definition_id) DO NOTHING`)
@@ -1088,7 +1088,7 @@ function deriveGuestRecords(stage, record) {
   const insertReservation = stage.prepare(`INSERT INTO reservations (id, organization_id, location_id, customer_id, request_id, timezone, starts_at, ends_at, party_size, status, cancelled_at, completed_at, cancellation_reason, created_at, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)`)
   const insertSession = stage.prepare(`INSERT INTO product_sessions (id, organization_id, product_id, location_id, availability_rule_id, source_occurrence_key, timezone, starts_at, ends_at, capacity, status, created_at, updated_at, created_by, updated_by)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'scheduled', ?, ?, 'rebaseline', 'rebaseline') ON CONFLICT (id) DO NOTHING`)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'scheduled', ?, ?, 'transfer', 'transfer') ON CONFLICT (id) DO NOTHING`)
   const insertBooking = stage.prepare(`INSERT INTO bookings (id, organization_id, product_id, product_session_id, product_variant_id, customer_id, request_id, party_size, status, hold_expires_at, cancelled_at, completed_at, cancellation_reason, created_at, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, NULL, ?, ?)`)
   let reservations = 0
@@ -1142,7 +1142,7 @@ function deriveGuestRecords(stage, record) {
       json_extract(l.booking_json, '$.reservation.policy.additional_notes_html'),
       coalesce(json_extract(l.booking_json, '$.reservation.policy.created_at'), l.created_at),
       coalesce(json_extract(l.booking_json, '$.reservation.policy.updated_at'), l.updated_at),
-      'rebaseline', 'rebaseline'
+      'transfer', 'transfer'
     FROM old.business_locations l WHERE json_type(l.booking_json, '$.reservation.policy') = 'object'`).run().changes)
   record('reservations', reservations)
   record('bookings', bookings)
@@ -1204,7 +1204,7 @@ function deriveSlugRedirects(stage, now, record) {
       (SELECT s.vertical FROM old.sites s WHERE s.organization_id = p.organization_id) AS vertical
     FROM temp.product_map m JOIN products p ON p.id = m.new_id WHERE m.redirect_from IS NOT NULL`).all()
   const insert = stage.prepare(`INSERT INTO organization_redirects (id, organization_id, locale, owner_type, owner_id, from_path, to_path, status_code, behavior, reason, source, created_at, updated_at)
-    VALUES (?, ?, 'en', NULL, NULL, ?, ?, 301, 'redirect', ?, 'rebaseline', ?, ?)`)
+    VALUES (?, ?, 'en', NULL, NULL, ?, ?, 301, 'redirect', ?, 'transfer', ?, ?)`)
   for (const row of rows) {
     const segment = row.vertical === 'restaurant' ? 'menu' : 'products'
     const from = `/locations/${row.location_slug}/${segment}/${row.redirect_from}`
@@ -1267,16 +1267,16 @@ export function writePayload(target, payloadPath, schemaSql, { withoutJwks = fal
  * @typedef {{ table: string, source_rows: number, target_rows: number }} TableTransfer
  * @typedef {{ baseline_sha256: string, migration_chain_sha256: string, tables: TableTransfer[], retired_tables?: string[], retired_columns?: Record<string, string[]>,
  *   derived?: Record<string, number>, transforms: Array<{ name: string, changes: number, sql_sha256: string }>,
- *   invariants: Array<{ name: string, violations: number, sql_sha256: string }>, payload?: { tables: number, statements: number } }} RebaselineManifest
+ *   invariants: Array<{ name: string, violations: number, sql_sha256: string }>, payload?: { tables: number, statements: number } }} TransferManifest
  */
 
 /**
  * @param {string} sourcePath
  * @param {string} targetPath
  * @param {{ payloadPath?: string | null, withoutJwks?: boolean }} [options]
- * @returns {RebaselineManifest}
+ * @returns {TransferManifest}
  */
-export function rebaseline(sourcePath, targetPath, { payloadPath = null, withoutJwks = false } = {}) {
+export function transferDatabaseExport(sourcePath, targetPath, { payloadPath = null, withoutJwks = false } = {}) {
   assert(!existsSync(targetPath), `Target already exists: ${targetPath}`)
   const schemaSql = migrationChainSql()
   const source = openDatabase(resolve(sourcePath))
@@ -1292,7 +1292,7 @@ export function rebaseline(sourcePath, targetPath, { payloadPath = null, without
   const stage = new Database(':memory:')
   const target = new Database(targetPath)
   const now = new Date().toISOString()
-  /** @type {RebaselineManifest} */
+  /** @type {TransferManifest} */
   const manifest = {
     baseline_sha256: hash(readFileSync(resolve(MIGRATIONS_DIRECTORY, '0000_baseline.sql'), 'utf8')),
     migration_chain_sha256: hash(schemaSql),
@@ -1402,10 +1402,10 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   const withoutJwks = flag('--without-jwks')
   const payloadPath = option('--payload')
   const [sourcePath, targetPath] = args
-  if (!sourcePath || !targetPath) throw new Error('Usage: rebaseline-data.mjs <source.sql|source.sqlite> <target.sqlite> [--payload <payload.sql>] [--without-jwks]')
-  const manifest = rebaseline(sourcePath, targetPath, { payloadPath, withoutJwks })
+  if (!sourcePath || !targetPath) throw new Error('Usage: transfer-database-export.mjs <source.sql|source.sqlite> <target.sqlite> [--payload <payload.sql>] [--without-jwks]')
+  const manifest = transferDatabaseExport(sourcePath, targetPath, { payloadPath, withoutJwks })
   const rows = manifest.tables.reduce((total, entry) => total + entry.target_rows, 0)
-  console.log(`Rebaseline passed: ${manifest.tables.length} tables, ${rows} rows`)
+  console.log(`Transfer passed: ${manifest.tables.length} tables, ${rows} rows`)
   console.log(`Derived: ${Object.entries(manifest.derived).map(([name, count]) => `${name}=${count}`).join(', ')}`)
   console.log(`Transforms: ${manifest.transforms.map(transform => `${transform.name}=${transform.changes}`).join(', ')}`)
 }

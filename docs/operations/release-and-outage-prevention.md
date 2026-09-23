@@ -6,7 +6,7 @@ customer behavior, rather than release bookkeeping, the approval signal.
 
 ## Release rule
 
-KrabiClaw uses the branch-driven flow in [release-flow.md](release-flow.md): a
+KrabiClaw uses a branch-driven flow: a
 pull request deploys nothing, a push to `staging` deploys the staging Worker,
 and a push to `main` deploys production. Each environment receives one normal
 Cloudflare Worker deployment. Do not add candidate manifests, version-override
