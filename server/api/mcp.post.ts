@@ -359,14 +359,14 @@ function createTenantMcpServer(ctx: McpRequestContext): McpServer {
           // that reads public resources immediately after this mutation could still
           // see stale data.
           const cacheStartedAt = performance.now();
+          // A purge that failed is the edit not reaching the site: the tool
+          // reported the write and the reader kept being served what it replaced.
           try {
             await purgePublicResourceCacheSafe({
               DB: env.db,
               SITE_CACHE: kv,
               NUXT_PUBLIC_FREE_SITE_DOMAIN: env.NUXT_PUBLIC_FREE_SITE_DOMAIN,
             }, organizationId);
-          } catch (err: unknown) {
-            console.warn("[mcp-cache-purge] public resource purge failed:", String(err));
           } finally {
             recordRequestPhase(event, "mcp_cache_purge", cacheStartedAt);
           }

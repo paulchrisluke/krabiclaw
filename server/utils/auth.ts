@@ -615,21 +615,14 @@ export function createAuth(env: CloudflareEnv) {
             return false
           }
         },
+        // phoneNumberValidator above has already rejected anything unparseable, so
+        // these cannot fail on a real sign-up. They are left to throw because the
+        // fallbacks were worse than an error: every unparseable number produced
+        // the same phone-unknown@phone.krabiclaw.local, which is an account key,
+        // so two people signing in by WhatsApp would have shared one account.
         signUpOnVerification: {
-          getTempEmail: (phone) => {
-            try {
-              return `phone-${parsePhoneOrThrow(phone, { defaultCountry: 'TH' }).replace(/\D/g, '')}@phone.krabiclaw.local`
-            } catch {
-              return 'phone-unknown@phone.krabiclaw.local'
-            }
-          },
-          getTempName: (phone) => {
-            try {
-              return `WhatsApp ${parsePhoneOrThrow(phone, { defaultCountry: 'TH' })}`
-            } catch {
-              return 'WhatsApp Unknown'
-            }
-          },
+          getTempEmail: (phone) => `phone-${parsePhoneOrThrow(phone, { defaultCountry: 'TH' }).replace(/\D/g, '')}@phone.krabiclaw.local`,
+          getTempName: (phone) => `WhatsApp ${parsePhoneOrThrow(phone, { defaultCountry: 'TH' })}`,
         },
       }),
     ],

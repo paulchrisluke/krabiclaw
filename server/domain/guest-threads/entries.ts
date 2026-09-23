@@ -147,11 +147,9 @@ export async function getLatestEntryByKind(
   `, [threadId, d1JsonStringSet(kinds)])
 }
 
+// An absent payload is a real state; a payload_json that will not parse is a
+// corrupt row, and answering null for both read the guest's message as empty.
 export function parseEntryPayload(entry: GuestThreadEntryRow): Record<string, unknown> | null {
   if (!entry.payload_json) return null
-  try {
-    return JSON.parse(entry.payload_json) as Record<string, unknown>
-  } catch {
-    return null
-  }
+  return JSON.parse(entry.payload_json) as Record<string, unknown>
 }

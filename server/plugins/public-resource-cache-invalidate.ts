@@ -53,11 +53,7 @@ export default definePlugin((nitroApp) => {
     // resources right after an edit. The queue drain, which also brings the
     // site's search index up to date, outlives the response: a write's own
     // response is not made to wait on a list of index items.
-    try {
-      await purgeSiteCaches(runtimeEnv.DB, kv, organizationId, runtimeEnv.NUXT_PUBLIC_FREE_SITE_DOMAIN)
-    } catch (err: unknown) {
-      console.warn('[public-resource-cache] purge failed:', String(err))
-    }
+    await purgeSiteCaches(runtimeEnv.DB, kv, organizationId, runtimeEnv.NUXT_PUBLIC_FREE_SITE_DOMAIN)
     const drained = drainPublicResourceCacheInvalidations(runtimeEnv.DB, kv, runtimeEnv, { limit: 100 })
       .catch((err: unknown) => console.warn('[public-resource-cache] site change drain failed:', String(err)))
     const waitUntil = request.runtime?.cloudflare?.context?.waitUntil

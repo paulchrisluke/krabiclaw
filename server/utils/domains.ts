@@ -106,15 +106,6 @@ const MAX_RETRY_COUNT = 12
 const STUCK_AFTER_MS = 48 * 60 * 60 * 1000
 const DNS_QUERY_TIMEOUT_MS = 5_000
 
-async function reconcileZarazForDomainChange(env: DomainEnv, db: D1Database, organizationId: string): Promise<void> {
-  try {
-    const { reconcileZarazAnalytics } = await import('~/server/utils/zaraz-analytics')
-    await reconcileZarazAnalytics(env, db)
-  } catch (error) {
-    console.error('zaraz_reconciliation_failed', { organizationId, error })
-  }
-}
-
 const reservedDomains = [
   'app', 'api', 'admin', 'dashboard', 'login', 'signup',
   'pricing', 'billing', 'support', 'help', 'docs', 'blog', 'posts',
@@ -638,7 +629,10 @@ async function persistCloudflareState(
   const after = await queryFirst<DomainRecord>(db, `SELECT * FROM organization_domains WHERE id = ?`, [domainId]) as DomainRecord
 
   if (before.status !== after.status && (before.status === 'active' || after.status === 'active')) {
-    await reconcileZarazForDomainChange(env, db, after.organization_id)
+    // Reconciliation rewrites the analytics configuration this domain change
+    // invalidates. Swallowing it left the tenant's tracking pointing at the
+    // domain they had just stopped using, with the change reported as applied.
+    await (await import('~/server/utils/zaraz-analytics')).reconcileZarazAnalytics(env, db)
   }
 
   if (!before || before.status !== after.status || before.cloudflare_ssl_status !== after.cloudflare_ssl_status) {
@@ -936,7 +930,7 @@ export async function deleteCustomDomain(
   if (deleted.meta?.changes !== 1) throw new Error('Domain deletion was superseded')
 
   if (domain.status === 'active') {
-    await reconcileZarazForDomainChange(env, db, domain.organization_id)
+    await (await import('~/server/utils/zaraz-analytics')).reconcileZarazAnalytics(env, db)
   }
   await logDomainEvent(db, {
     organizationId: domain.organization_id,
