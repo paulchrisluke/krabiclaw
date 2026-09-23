@@ -38,26 +38,24 @@ async function fetchJson(request, url, options = {}) {
 async function main() {
   const baseUrl = env('CANARY_BASE_URL')
   const phone = env('CANARY_PHONE_E164')
-  const expectedSiteId = env('CANARY_SITE_ID')
-  const expectedOrgId = env('CANARY_ORG_ID', { optional: true })
+  const expectedOrgId = env('CANARY_ORG_ID')
 
   const membershipCheck = d1Query(`
     SELECT u.id AS user_id, m.role AS role, m.organizationId AS organization_id
     FROM user u
     JOIN member m ON m.userId = u.id
-    JOIN sites s ON s.organization_id = m.organizationId
     WHERE u.phoneNumber = '${sqlEscape(phone)}'
-      AND s.id = '${sqlEscape(expectedSiteId)}'
+      AND m.organizationId = '${sqlEscape(expectedOrgId)}'
     LIMIT 1
   `)[0]
 
   if (!membershipCheck) {
-    throw new Error(`Canary account is not scoped to canary site/org. Expected phone ${phone} to be a member on site ${expectedSiteId}.`)
+    throw new Error(`Canary account is not scoped to the canary organization. Expected phone ${phone} to be a member of ${expectedOrgId}.`)
   }
 
   const before = {
-    reservations: Number(d1Query(`SELECT COUNT(*) as c FROM requests WHERE kind = 'reservation' AND site_id = '${sqlEscape(expectedSiteId)}'`)[0]?.c ?? 0),
-    contacts: Number(d1Query(`SELECT COUNT(*) as c FROM requests WHERE kind = 'contact' AND site_id = '${sqlEscape(expectedSiteId)}'`)[0]?.c ?? 0),
+    reservations: Number(d1Query(`SELECT COUNT(*) as c FROM requests WHERE kind = 'reservation' AND organization_id = '${sqlEscape(expectedOrgId)}'`)[0]?.c ?? 0),
+    contacts: Number(d1Query(`SELECT COUNT(*) as c FROM requests WHERE kind = 'contact' AND organization_id = '${sqlEscape(expectedOrgId)}'`)[0]?.c ?? 0),
   }
 
   const browser = await chromium.launch({ headless: true })
@@ -118,7 +116,7 @@ async function main() {
     }
 
     const orgId = String(contextRes.body.organization.id)
-    if (expectedOrgId && orgId !== expectedOrgId) {
+    if (orgId !== expectedOrgId) {
       throw new Error(`Canary org mismatch: expected ${expectedOrgId}, got ${orgId}`)
     }
 
@@ -133,8 +131,8 @@ async function main() {
     }
 
     const after = {
-      reservations: Number(d1Query(`SELECT COUNT(*) as c FROM requests WHERE kind = 'reservation' AND site_id = '${sqlEscape(expectedSiteId)}'`)[0]?.c ?? 0),
-      contacts: Number(d1Query(`SELECT COUNT(*) as c FROM requests WHERE kind = 'contact' AND site_id = '${sqlEscape(expectedSiteId)}'`)[0]?.c ?? 0),
+      reservations: Number(d1Query(`SELECT COUNT(*) as c FROM requests WHERE kind = 'reservation' AND organization_id = '${sqlEscape(expectedOrgId)}'`)[0]?.c ?? 0),
+      contacts: Number(d1Query(`SELECT COUNT(*) as c FROM requests WHERE kind = 'contact' AND organization_id = '${sqlEscape(expectedOrgId)}'`)[0]?.c ?? 0),
     }
 
     if (JSON.stringify(before) !== JSON.stringify(after)) {
@@ -146,7 +144,6 @@ async function main() {
       checked_at: nowIso(),
       base_url: baseUrl,
       organization_id: orgId,
-      site_id: expectedSiteId,
       read_only_counts: before,
       user_id: session.body.user.id,
     }

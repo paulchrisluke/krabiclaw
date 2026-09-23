@@ -20,9 +20,9 @@
  *   - Demo data (Ember & Slice) must not appear
  *
  * Usage:
- *   node scripts/fixtures/pottery-house-krabi.fixture.mjs --url http://localhost:3000 --site-id site-pottery-house
- *   node scripts/fixtures/pottery-house-krabi.fixture.mjs --url https://www.potteryhousekrabi.com --site-id site-pottery-house
- *   node scripts/fixtures/pottery-house-krabi.fixture.mjs --url https://staging.krabiclaw.com --site-id site-pottery-house
+ *   node scripts/fixtures/pottery-house-krabi.fixture.mjs --url http://localhost:3000 --organization-id org-pottery-house
+ *   node scripts/fixtures/pottery-house-krabi.fixture.mjs --url https://www.potteryhousekrabi.com --organization-id org-pottery-house
+ *   node scripts/fixtures/pottery-house-krabi.fixture.mjs --url https://staging.krabiclaw.com --organization-id org-pottery-house
  *
  * Site identifiers default to the actual live production values (site id
  * `site-pottery-house`, subdomain `pottery-house`) — the client was originally
@@ -43,19 +43,19 @@ import { existsSync, readFileSync } from 'node:fs'
 const { values: args } = parseArgs({
   options: {
     url:       { type: 'string' },
-    'site-id': { type: 'string', default: 'site-pottery-house' },
+    'organization-id': { type: 'string', default: 'org-pottery-house' },
     slug:      { type: 'string', default: 'pottery-house' },
   },
   allowPositionals: false,
 })
 
 if (!args.url) {
-  console.error('Usage: node scripts/fixtures/pottery-house-krabi.fixture.mjs --url <site-url> [--site-id <id>]')
+  console.error('Usage: node scripts/fixtures/pottery-house-krabi.fixture.mjs --url <site-url> [--organization-id <id>]')
   process.exit(1)
 }
 
 const inputBase = args.url.replace(/\/$/, '')
-const SITE_ID = args['site-id']
+const ORGANIZATION_ID = args['organization-id']
 const SLUG    = args.slug
 const BLOG_SLUG = 'group-bookings-create-a-unique-pottery-experience-in-krabi'
 
@@ -135,7 +135,7 @@ async function get(path, opts = {}) {
 console.log(`\n┌─ Pottery House Krabi — Regression Fixture ${'─'.repeat(20)}`)
 console.log(`│  URL:      ${BASE}`)
 if (BASE !== inputBase) console.log(`│  Input:    ${inputBase}`)
-console.log(`│  Site ID:  ${SITE_ID}`)
+console.log(`│  Org ID:   ${ORGANIZATION_ID}`)
 console.log(`│  Vertical: experience`)
 console.log(`└${'─'.repeat(63)}`)
 
@@ -159,7 +159,7 @@ for (const route of REQUIRED_ROUTES) {
 
 section('Bootstrap: two locations (primary + beachfront)')
 
-const bootstrapRes = await get(`/api/public/sites/${SITE_ID}/shell`)
+const bootstrapRes = await get(`/api/public/shell`)
 let bootstrapData = null
 
 if (bootstrapRes.ok) {
@@ -184,7 +184,7 @@ if (bootstrapRes.ok) {
 
 section('Product slugs route correctly')
 
-const expRes = await get(`/api/public/sites/${SITE_ID}/page?page=products&datasets=products`)
+const expRes = await get(`/api/public/page?page=products&datasets=products`)
 if (expRes.ok) {
   const expData = await expRes.json()
   const products = expData.products ?? []

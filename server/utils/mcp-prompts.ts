@@ -167,7 +167,7 @@ export function renderMcpPrompt(name: string, args: Record<string, string>): { d
       return {
         description: "Check what's missing and guide the user through finishing setup",
         text: [
-          "Call get_workspace_context first. If there is no active site yet, call list_sites and help the user pick or create one before continuing.",
+          "Call get_workspace_context first. If there is no active site yet, call list_organizations and help the user pick or create one before continuing.",
           "Check what's in place: call get_organization_media_assets (kind=\"image\") to see available photos, call list_tenant_pages and get_tenant_page for the variants whose paths are \"/\" and \"/about\", call list_locations, then call every list_location_products page for each relevant location.",
           "Identify the single most important missing piece — a main photo, Products, the about/story text, or a first post — and ask the user if they want to work on that now.",
           "Guide them through completing just that one thing at a time. Don't ask for everything up front.",

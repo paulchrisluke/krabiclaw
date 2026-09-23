@@ -434,7 +434,6 @@ function scanForbiddenCopy(sql, vertical) {
 
 function generateSeedSql(places, mediaManifest) {
   const orgId = ORGANIZATION_ID;
-  const siteId = `site-${SLUG}`;
   const now = new Date().toISOString();
 
   const brandName = BRAND_NAME;
@@ -471,11 +470,11 @@ function generateSeedSql(places, mediaManifest) {
 
       return `-- Location: ${place.name}
 INSERT INTO business_locations (
-  id, site_id, organization_id, slug, title, address, phone, email,
+  id, organization_id, slug, title, address, phone, email,
   maps_url, latitude, longitude, opening_hours, timezone,
   rating, review_count, google_place_id, last_synced_at, status
 ) VALUES (
-  '${locId}', '${siteId}', '${orgId}',
+  '${locId}', '${orgId}',
   '${slug}', '${(place.name ?? "").replace(/'/g, "''")}',
   ${address}, ${phone === "NULL" ? "NULL" : `'${phone}'`}, ${email},
   ${mapsUrl}, ${lat}, ${lng}, ${hours}, ${timezone},
@@ -494,12 +493,12 @@ INSERT INTO business_locations (
   const mediaAssets = mediaManifest.files
     .map((f, i) => {
       const assetId = `asset-${SLUG}-${i}`;
-      const r2Key = `sites/${siteId}/media/${f.normalized_name}`;
+      const r2Key = `sites/${orgId}/media/${f.normalized_name}`;
       const publicUrl = `https://media.krabiclaw.com/${r2Key}`;
       const ext = f.normalized_name.split(".").pop()?.toLowerCase() ?? "";
       const mimeType = MIME_MAP[ext] ?? "application/octet-stream";
-      return `INSERT INTO media_assets (id, site_id, organization_id, r2_key, public_url, file_name, mime_type, alt_text, kind, provider, source, status)
-VALUES ('${assetId}', '${siteId}', '${orgId}', '${r2Key}', '${publicUrl}', '${f.normalized_name}', '${mimeType}', '${brandName.replace(/'/g, "''")}', 'image', 'cloudflare_r2', 'uploaded', 'active')
+      return `INSERT INTO media_assets (id, organization_id, r2_key, public_url, file_name, mime_type, alt_text, kind, provider, source, status)
+VALUES ('${assetId}', '${orgId}', '${r2Key}', '${publicUrl}', '${f.normalized_name}', '${mimeType}', '${brandName.replace(/'/g, "''")}', 'image', 'cloudflare_r2', 'uploaded', 'active')
 ON CONFLICT(id) DO UPDATE SET
   r2_key = excluded.r2_key,
   public_url = excluded.public_url,
@@ -512,13 +511,13 @@ ON CONFLICT(id) DO UPDATE SET
 
   const reviewInserts = places.flatMap((place, index) => place.reviews.map(review => {
     const locationId = `loc-${SLUG}-${index}`;
-    const values = [`gplaces-${locationId}-${review.google_review_id.replaceAll('/', '-')}`, orgId, siteId, locationId,
+    const values = [`gplaces-${locationId}-${review.google_review_id.replaceAll('/', '-')}`, orgId, locationId,
       review.google_review_id, review.author_name, review.rating, review.content, review.original_review_date,
       review.original_reference, JSON.stringify(review.google_review_metadata), now, now];
     const literal = value => value == null ? 'NULL' : typeof value === 'number' ? String(value) : `'${value.replaceAll("'", "''")}'`;
-    return `INSERT INTO reviews (id, organization_id, site_id, location_id, google_review_id, author_name, rating, content, original_review_date, original_reference, google_review_metadata, created_at, updated_at, source, status)
+    return `INSERT INTO reviews (id, organization_id, location_id, google_review_id, author_name, rating, content, original_review_date, original_reference, google_review_metadata, created_at, updated_at, source, status)
 VALUES (${values.map(literal).join(', ')}, 'google_places', 'approved')
-ON CONFLICT(organization_id, site_id, location_id, google_review_id) DO UPDATE SET
+ON CONFLICT(organization_id, location_id, google_review_id) DO UPDATE SET
   author_name=excluded.author_name, rating=excluded.rating, content=excluded.content, original_review_date=excluded.original_review_date,
   original_reference=excluded.original_reference, google_review_metadata=excluded.google_review_metadata, updated_at=excluded.updated_at;`;
   })).join('\n');
@@ -528,8 +527,8 @@ ON CONFLICT(organization_id, site_id, location_id, google_review_id) DO UPDATE S
     if (locationIndex < 0) throw new Error(`Image ${file.original_name} requires --images-place-id matching an imported place`);
     const locationId = `loc-${SLUG}-${locationIndex}`;
     const slot = index === 0 ? 'hero' : 'gallery';
-    return `INSERT INTO media_placements (id, organization_id, site_id, owner_type, owner_id, slot, asset_id, sort_order, status)
-VALUES ('placement-${SLUG}-${index}', '${orgId}', '${siteId}', 'business_location', '${locationId}', '${slot}', 'asset-${SLUG}-${index}', ${index === 0 ? 0 : index - 1}, 'active')
+    return `INSERT INTO media_placements (id, organization_id, owner_type, owner_id, slot, asset_id, sort_order, status)
+VALUES ('placement-${SLUG}-${index}', '${orgId}', 'business_location', '${locationId}', '${slot}', 'asset-${SLUG}-${index}', ${index === 0 ? 0 : index - 1}, 'active')
 ON CONFLICT(id) DO UPDATE SET owner_id=excluded.owner_id, slot=excluded.slot, asset_id=excluded.asset_id, sort_order=excluded.sort_order;`;
   }).join('\n');
 
@@ -539,35 +538,30 @@ ON CONFLICT(id) DO UPDATE SET owner_id=excluded.owner_id, slot=excluded.slot, as
 -- REVIEW CAREFULLY before applying — DO NOT run without checking
 -- ============================================================
 
--- Site
-INSERT INTO sites (
-  id, organization_id, theme_id, slug, subdomain,
-  brand_name, brand_description,
-  status, onboarding_status,
-  default_currency, vertical
-) VALUES (
-  '${siteId}', '${orgId}', '${resolvePublicTemplate({ vertical: VERTICAL }).themeId}', '${SLUG}', '${SLUG}',
-  '${brandName.replace(/'/g, "''")}', NULL,
-  'active', 'active',
-  'USD', '${VERTICAL}'
-) ON CONFLICT(id) DO UPDATE SET
-  brand_name = excluded.brand_name,
-  theme_id = excluded.theme_id,
-  vertical = excluded.vertical,
-  updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now');
+-- The tenant itself
+UPDATE organization SET
+  name = '${brandName.replace(/'/g, "''")}',
+  theme_id = '${resolvePublicTemplate({ vertical: VERTICAL }).themeId}',
+  subdomain = '${SLUG}',
+  status = 'active',
+  onboarding_status = 'active',
+  default_currency = 'USD',
+  vertical = '${VERTICAL}',
+  updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+WHERE id = '${orgId}';
 
 -- Domains
-INSERT INTO site_domains (id, organization_id, site_id, domain, type, role, status, dns_status)
+INSERT INTO organization_domains (id, organization_id, domain, type, role, status, dns_status)
 VALUES
-  ('domain-${SLUG}-local', '${orgId}', '${siteId}', '${SLUG}.localhost', 'subdomain', 'secondary', 'active', 'valid'),
-  ('domain-${SLUG}-prod', '${orgId}', '${siteId}', '${SLUG}.krabiclaw.com', 'subdomain', 'canonical', 'active', 'valid')
+  ('domain-${SLUG}-local', '${orgId}', '${SLUG}.localhost', 'subdomain', 'secondary', 'active', 'valid'),
+  ('domain-${SLUG}-prod', '${orgId}', '${SLUG}.krabiclaw.com', 'subdomain', 'canonical', 'active', 'valid')
 ON CONFLICT(id) DO NOTHING;
 
 -- Locales
-INSERT INTO site_locales (id, organization_id, site_id, locale, label, is_source, status)
+INSERT INTO organization_locales (id, organization_id, locale, label, is_source, status)
 VALUES
-  ('locale::${orgId}::${siteId}::en', '${orgId}', '${siteId}', 'en', 'English', 1, 'published'),
-  ('locale::${orgId}::${siteId}::th', '${orgId}', '${siteId}', 'th', 'ไทย', 0, 'published')
+  ('locale::${orgId}::en', '${orgId}', 'en', 'English', 1, 'published'),
+  ('locale::${orgId}::th', '${orgId}', 'th', 'ไทย', 0, 'published')
 ON CONFLICT(id) DO NOTHING;
 
 -- Locations
@@ -619,7 +613,7 @@ function generateRouteManifest(places) {
 
   if (VERTICAL === "experience") {
     manifest._note =
-      "Run client:verify --site-id to discover experience slugs via bootstrap API";
+      "Run client:verify --organization-id to discover experience slugs via bootstrap API";
   }
 
   return manifest;
@@ -643,7 +637,7 @@ function extractD1JsonArray(output) {
   }
 }
 
-function queryD1Count(table, siteId, remote) {
+function queryD1Count(table, organizationId, remote) {
   const flag = remote ? "--remote" : "--local";
   try {
     const result = spawnYarn(
@@ -654,7 +648,7 @@ function queryD1Count(table, siteId, remote) {
         "DB",
         flag,
         "--command",
-        `SELECT COUNT(*) as n FROM ${table} WHERE site_id = '${siteId}'`,
+        `SELECT COUNT(*) as n FROM ${table} WHERE organization_id = '${organizationId}'`,
         "--json",
       ],
       { encoding: "utf8", cwd: process.cwd() },
@@ -873,9 +867,8 @@ if (MODE === "apply") {
   }
 
   {
-    const siteId = `site-${SLUG}`;
     const org = queryD1Row(
-      `SELECT id FROM organization WHERE id = '${ORGANIZATION_ID}'`,
+      `SELECT id, subdomain FROM organization WHERE id = '${ORGANIZATION_ID}'`,
       REMOTE,
     );
     if (!org) {
@@ -884,16 +877,15 @@ if (MODE === "apply") {
       );
       process.exit(1);
     }
-    const existingSite = queryD1Row(
-      `SELECT organization_id FROM sites WHERE id = '${siteId}'`,
-      REMOTE,
-    );
-    if (existingSite && existingSite.organization_id !== ORGANIZATION_ID) {
+    // The subdomain is the tenant's address, and this import claims it. An
+    // organization already answering on a different one is not the tenant the
+    // caller named, so the import stops rather than moving someone's address.
+    if (org.subdomain && org.subdomain !== SLUG) {
       console.error(
-        `Error: site '${siteId}' already exists under organization '${existingSite.organization_id}', not '${ORGANIZATION_ID}'.`,
+        `Error: organization '${ORGANIZATION_ID}' already serves '${org.subdomain}', not '${SLUG}'.`,
       );
       console.error(
-        "  Re-check --slug and --organization-id — this import would otherwise cross tenant boundaries.",
+        "  Re-check --slug and --organization-id — this import would otherwise move a live address.",
       );
       process.exit(1);
     }
@@ -914,7 +906,6 @@ if (MODE === "apply") {
     if (result.status !== 0) throw new Error(`Client image upload failed: ${file.original_name}`);
   }
 
-  const siteId = `site-${SLUG}`;
   const TRACKED = [
     "business_locations",
     "reviews",
@@ -925,7 +916,7 @@ if (MODE === "apply") {
   const before = {};
   console.log("\n→ Querying current row counts...");
   for (const table of TRACKED) {
-    before[table] = queryD1Count(table, siteId, REMOTE) ?? "?";
+    before[table] = queryD1Count(table, ORGANIZATION_ID, REMOTE) ?? "?";
   }
 
   console.log(
@@ -950,7 +941,7 @@ if (MODE === "apply") {
   // Overwrite visibility — query after
   const after = {};
   for (const table of TRACKED) {
-    after[table] = queryD1Count(table, siteId, REMOTE) ?? "?";
+    after[table] = queryD1Count(table, ORGANIZATION_ID, REMOTE) ?? "?";
   }
 
   // Print diff table
@@ -973,11 +964,11 @@ if (MODE === "apply") {
     }
   }
 
-  const cardArgs = ["local:cards", "--base-url", baseUrl, "--site-id", siteId];
+  const cardArgs = ["local:cards", "--base-url", baseUrl, "--organization-id", ORGANIZATION_ID];
   if (rawArgs.email) cardArgs.push("--email", rawArgs.email);
   const cards = spawnYarn(cardArgs);
   if (cards.status !== 0) throw new Error("Seed applied, but social-card generation failed. Import handoff is incomplete.");
-  const verification = spawnYarn(["client:verify", "--url", baseUrl, "--vertical", VERTICAL, "--site-id", siteId, "--slug", SLUG, "--tenant-slug", SLUG]);
+  const verification = spawnYarn(["client:verify", "--url", baseUrl, "--vertical", VERTICAL, "--organization-id", ORGANIZATION_ID, "--slug", SLUG, "--tenant-slug", SLUG]);
   if (verification.status !== 0) throw new Error("Seed applied, but client verification failed. Import handoff is incomplete.");
   console.log("\nSeed, social cards, and public verification completed.");
   process.exit(0);
@@ -1265,10 +1256,10 @@ Next steps:
   2. Review image placement and hashes in client-imports/${SLUG}/media-manifest.json. Apply uploads approved images before database writes.
   3. Approve:  yarn client:import --slug ${SLUG} --organization-id ${ORGANIZATION_ID} --approve
   4. Apply:    yarn client:import --slug ${SLUG} --organization-id ${ORGANIZATION_ID} --apply
-  5. Verify:   yarn client:verify --url http://localhost:3000 --vertical ${VERTICAL} --site-id site-${SLUG} --slug ${SLUG}
+  5. Verify:   yarn client:verify --url http://localhost:3000 --vertical ${VERTICAL} --organization-id ${ORGANIZATION_ID} --slug ${SLUG}
   6. Release + verify prod:
                Merge through staging to main; CI deploys and verifies each environment.
-               yarn client:verify --url https://${SLUG}.krabiclaw.com --vertical ${VERTICAL} --site-id site-${SLUG} --slug ${SLUG}
+               yarn client:verify --url https://${SLUG}.krabiclaw.com --vertical ${VERTICAL} --organization-id ${ORGANIZATION_ID} --slug ${SLUG}
 
   Or use the onboard wrapper (steps 1-5 in one command):
                yarn client:onboard --slug ${SLUG} --organization-id ${ORGANIZATION_ID} --vertical ${VERTICAL}

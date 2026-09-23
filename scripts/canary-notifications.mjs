@@ -86,7 +86,6 @@ async function postJson(url, data, label) {
 
 async function main() {
   const baseUrl = env('CANARY_BASE_URL')
-  const siteId = env('CANARY_SITE_ID')
   const orgId = env('CANARY_ORG_ID')
   const canaryEmail = env('CANARY_NOTIFICATION_EMAIL')
   const canaryPhone = env('CANARY_NOTIFICATION_PHONE_E164')
@@ -94,7 +93,7 @@ async function main() {
   const since = nowIso()
   const suffix = Date.now()
 
-  const contactUrl = `${baseUrl}/api/public/sites/${encodeURIComponent(siteId)}/contact`
+  const contactUrl = `${baseUrl}/api/public/contact`
   const contact = await postJson(contactUrl, {
     name: `Prod Canary ${suffix}`,
     email: canaryEmail,
@@ -106,7 +105,7 @@ async function main() {
   }
 
   const reservationDate = new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10)
-  const reservationUrl = `${baseUrl}/api/public/sites/${encodeURIComponent(siteId)}/reservations`
+  const reservationUrl = `${baseUrl}/api/public/reservations`
   const reservation = await postJson(reservationUrl, {
     name: `Prod Canary ${suffix}`,
     email: canaryEmail,
@@ -133,7 +132,6 @@ async function main() {
       JOIN activity_entries e ON e.id = d.entry_id
       JOIN requests gt ON gt.id = e.request_id
       WHERE gt.organization_id = '${sqlEscape(orgId)}'
-        AND gt.site_id = '${sqlEscape(siteId)}'
         AND d.purpose = 'owner_alert'
         AND d.created_at >= '${sqlEscape(since)}'
       ORDER BY d.created_at DESC
@@ -158,7 +156,6 @@ async function main() {
       JOIN activity_entries e ON e.id = d.entry_id
       JOIN requests gt ON gt.id = e.request_id
       WHERE gt.organization_id = '${sqlEscape(orgId)}'
-        AND gt.site_id = '${sqlEscape(siteId)}'
         AND d.purpose = 'owner_alert'
         AND d.created_at >= '${sqlEscape(since)}'
       ORDER BY d.created_at DESC
@@ -174,7 +171,7 @@ async function main() {
   }
 
   const cancelSince = nowIso()
-  const cancelUrl = `${baseUrl}/api/public/sites/${encodeURIComponent(siteId)}/reservations/${encodeURIComponent(reservationId)}/cancel`
+  const cancelUrl = `${baseUrl}/api/public/booking-requests/${encodeURIComponent(reservationId)}/cancel`
   let cancelRes
   try {
     cancelRes = await fetch(cancelUrl, {
@@ -200,7 +197,6 @@ async function main() {
       JOIN activity_entries e ON e.id = d.entry_id
       JOIN requests gt ON gt.id = e.request_id
       WHERE gt.organization_id = '${sqlEscape(orgId)}'
-        AND gt.site_id = '${sqlEscape(siteId)}'
         AND gt.kind = 'reservation'
         AND d.purpose = 'owner_alert'
         AND d.created_at >= '${sqlEscape(cancelSince)}'
@@ -228,7 +224,6 @@ async function main() {
       JOIN activity_entries e ON e.id = d.entry_id
       JOIN requests gt ON gt.id = e.request_id
       WHERE gt.organization_id = '${sqlEscape(orgId)}'
-        AND gt.site_id = '${sqlEscape(siteId)}'
         AND gt.kind = 'reservation'
         AND d.purpose = 'owner_alert'
         AND d.created_at >= '${sqlEscape(cancelSince)}'

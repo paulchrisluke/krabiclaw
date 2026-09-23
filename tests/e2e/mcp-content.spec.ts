@@ -333,7 +333,7 @@ test.describe('stateless MCP server', () => {
     // at discovery.
     const allToolNames = listBody.result.tools.map(tool => tool.name)
     expect(allToolNames).toEqual(expect.arrayContaining([
-      'list_sites',
+      'list_organizations',
       'get_organization', 'list_locations', 'list_location_products', 'list_posts', 'get_organization_media_assets',
       'list_tenant_pages', 'list_products', 'list_collections', 'get_contact_inquiries',
     ]))

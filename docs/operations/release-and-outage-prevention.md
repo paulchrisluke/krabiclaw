@@ -87,7 +87,7 @@ For an auth or MCP change, exercise the deployed flow end to end:
 - OAuth protected-resource and authorization-server discovery;
 - credentialed authorization with PKCE and token exchange;
 - bearer-authenticated MCP `initialize` and `tools/list`;
-- `get_workspace_context` and a tenant-scoped read such as `list_sites`;
+- `get_workspace_context` and a tenant-scoped read such as `list_organizations`;
 - the affected safe write or media journey when tool behavior changed;
 - one real ChatGPT app session when the defect involves ChatGPT tool selection,
   attachment delivery, or host-provided file arguments.

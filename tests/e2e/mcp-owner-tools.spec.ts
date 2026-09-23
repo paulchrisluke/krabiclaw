@@ -16,7 +16,7 @@ test.describe('stateless MCP server', () => {
 
     const sitesList = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
-      toolName: 'list_sites',
+      toolName: 'list_organizations',
       args: {},
     })
     expect(sitesList.status()).toBe(200)

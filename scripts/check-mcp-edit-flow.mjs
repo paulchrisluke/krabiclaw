@@ -5,9 +5,9 @@ import { credentialSession } from './utils/e2e-auth.mjs'
 const BASE_URL = (process.argv.includes('--base-url')
   ? process.argv[process.argv.indexOf('--base-url') + 1]
   : process.env.MCP_BASE_URL ?? 'http://localhost:3000').replace(/\/$/, '')
-const SITE_ID = process.argv.includes('--site-id')
-  ? process.argv[process.argv.indexOf('--site-id') + 1]
-  : process.env.MCP_SITE_ID
+const ORGANIZATION_ID = process.argv.includes('--organization-id')
+  ? process.argv[process.argv.indexOf('--organization-id') + 1]
+  : process.env.MCP_ORGANIZATION_ID
 const USER_ID = process.argv.includes('--user-id')
   ? process.argv[process.argv.indexOf('--user-id') + 1]
   : process.env.MCP_USER_ID
@@ -94,31 +94,31 @@ async function main() {
   console.log(`Checking MCP edit flow at ${BASE_URL}`)
   const headers = await getAuthHeaders()
 
-  const welcome = await mcp(headers, 'list_sites')
-  expectStatus('list_sites succeeds', welcome)
+  const welcome = await mcp(headers, 'list_organizations')
+  expectStatus('list_organizations succeeds', welcome)
   const welcomeData = resultData(welcome.body)
-  if (Array.isArray(welcomeData?.sites)) pass('list_sites returns sites array')
-  else fail('list_sites did not return sites array', welcome.body)
+  if (Array.isArray(welcomeData?.organizations)) pass('list_organizations returns organizations array')
+  else fail('list_organizations did not return organizations array', welcome.body)
 
-  const siteId = SITE_ID
-  if (!siteId) throw new Error('Pass --site-id for a disposable site provisioned through local setup or the CMS.')
+  const organizationId = ORGANIZATION_ID
+  if (!organizationId) throw new Error('Pass --organization-id for a disposable organization provisioned through local setup or the CMS.')
 
-  const list = await mcp(headers, 'list_sites')
-  expectStatus('list_sites succeeds', list)
-  const sites = resultData(list.body)?.sites ?? []
-  if (sites.some(site => site?.id === siteId)) pass('list_sites includes editable site')
-  else fail('list_sites does not include editable site', { siteId, sites })
+  const list = await mcp(headers, 'list_organizations')
+  expectStatus('list_organizations succeeds', list)
+  const organizations = resultData(list.body)?.organizations ?? []
+  if (organizations.some(entry => entry?.id === organizationId)) pass('list_organizations includes the editable organization')
+  else fail('list_organizations does not include the editable organization', { organizationId, organizations })
 
-  const setWorkspace = await mcp(headers, 'set_workspace_context', { site_id: siteId })
+  const setWorkspace = await mcp(headers, 'set_workspace_context', { organization_id: organizationId })
   expectStatus('set_workspace_context succeeds', setWorkspace)
   const setWorkspaceData = resultData(setWorkspace.body)
-  expectValue('set_workspace_context stores active site', setWorkspaceData?.context?.site_id === siteId, setWorkspaceData)
+  expectValue('set_workspace_context stores the active organization', setWorkspaceData?.context?.organization_id === organizationId, setWorkspaceData)
 
   const getWorkspace = await mcp(headers, 'get_workspace_context')
   expectStatus('get_workspace_context succeeds', getWorkspace)
   const workspaceData = resultData(getWorkspace.body)
-  expectValue('get_workspace_context returns active site', workspaceData?.context?.site_id === siteId, workspaceData)
-  expectValue('get_workspace_context marks one active site', Array.isArray(workspaceData?.sites) && workspaceData.sites.filter(site => site?.active === true).length === 1 && workspaceData.sites.find(site => site?.active === true)?.id === siteId, workspaceData)
+  expectValue('get_workspace_context returns the active organization', workspaceData?.context?.organization_id === organizationId, workspaceData)
+  expectValue('get_workspace_context marks one active organization', Array.isArray(workspaceData?.organizations) && workspaceData.organizations.filter(entry => entry?.active === true).length === 1 && workspaceData.organizations.find(entry => entry?.active === true)?.id === organizationId, workspaceData)
 
   const draftTitle = `MCP edit check ${Date.now()}`
   const pageList = await mcp(headers, 'list_tenant_pages', { locale: 'en' })
