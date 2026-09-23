@@ -45,16 +45,17 @@ function expectOwnerDispatch(state: NotificationState) {
   expect(unsettled, `deliveries not settled as sent: ${JSON.stringify(unsettled)}`).toHaveLength(0)
 }
 
-// WhatsApp reaches an owner only when a member account is authorised for the
-// number, which is why resolveAuthorizedWhatsAppRecipient refuses to send to a
-// location's notification_phone on its own — it would put a guest's details on
-// a phone nobody has proven they hold. Local data comes from a production
-// snapshot where no member has a verified phone, so requiring a whatsapp row
-// here asserted a fixture that no longer exists rather than a behaviour. Email
-// is the channel the owner is always reachable on, and expectOwnerDispatch
-// above now fails any channel that was attempted and did not send.
+// A location that carries a notification_phone is a location whose owner asked
+// to be told on WhatsApp, so that is what this asserts. It was briefly weakened
+// to email-only because the local run could not satisfy it; production says the
+// assertion was right and the environment is what is wrong. Kikuzuki's
+// +66952932112 matches a verified member and its alerts deliver; Pottery House's
+// two numbers match no member account, so resolveAuthorizedWhatsAppRecipient
+// declines and writes whatsapp_delivery_blocked to a console the owner cannot
+// read. Until that is fixed this fails, and it should.
 const ownerAlertSent = (state: NotificationState) =>
-  state.deliveries.some(row => row.purpose === 'owner_alert' && row.channel === 'email' && row.status === 'sent')
+  state.deliveries.some(row => row.purpose === 'owner_alert' && row.channel === 'whatsapp' && row.status === 'sent')
+  && state.deliveries.some(row => row.purpose === 'owner_alert' && row.channel === 'email' && row.status === 'sent')
 
 async function chooseFirstAvailableTime(page: Page) {
   const slot = page.getByRole('button', { name: /\bAvailable$/ }).first()

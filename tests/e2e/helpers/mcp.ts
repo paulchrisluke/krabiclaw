@@ -194,13 +194,13 @@ export async function ensureLocation(request: APIRequestContext, baseURL: string
   expect(locations.status()).toBe(200)
   const locationsBody = await locations.json()
   const data = mcpData<{ locations: Array<{ id: string }> }>(locationsBody)
-  // This used to assert exactly one location on the premise that the tenant had
-  // just been provisioned. It is not: ensureOrganization reuses the fixture's
-  // existing tenant, which has two. What the caller needs is a location it can
-  // work against, so the assertion is that the tenant has one at all, and the
-  // choice is pinned by id so a second location cannot silently change which
-  // location a test edits.
-  expect(data.locations.length, 'The tenant has no location to exercise').toBeGreaterThan(0)
+  // The fixture tenant has exactly two locations, and that is a fact about the
+  // fixture rather than a range. Asserting "at least one" would pass if a test
+  // leaked a third, which is how the scratch locations this suite creates go
+  // unnoticed. The choice is pinned by id so a new location cannot silently
+  // change which one a test edits.
+  expect(data.locations.map(location => location.id).sort(), 'fixture tenant locations')
+    .toEqual(['loc-demo', 'loc-demo-2'])
   return [...data.locations].sort((left, right) => left.id.localeCompare(right.id))[0]!.id
 }
 
